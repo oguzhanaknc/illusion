@@ -1,0 +1,2 @@
+# Developer tools pinned for reproducible style checks (CI uses exactly these versions).
+clang-format==22.1.3

@@ -1,0 +1,31 @@
+# Build trees (keep them outside synced folders when possible; see docs/en/getting-started.md)
+/build/
+/out/
+CMakeUserPresets.json
+
+# IDE / editor
+.vs/
+.vscode/
+.idea/
+*.user
+*.suo
+
+# Generated docs
+/site/
+/docs/api/
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Steamworks SDK is supplied by the user and must never be committed
+/thirdparty/steamworks/
+
+# Claude Code local settings
+.claude/settings.local.json

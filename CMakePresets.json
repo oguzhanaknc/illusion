@@ -1,0 +1,1008 @@
+{
+  "version": 6,
+  "cmakeMinimumRequired": {
+    "major": 3,
+    "minor": 28,
+    "patch": 0
+  },
+  "configurePresets": [
+    {
+      "name": "base",
+      "hidden": true,
+      "generator": "Ninja Multi-Config",
+      "binaryDir": "${sourceDir}/build/${presetName}",
+      "cacheVariables": {
+        "CMAKE_EXPORT_COMPILE_COMMANDS": "ON",
+        "CMAKE_CONFIGURATION_TYPES": "Debug;Release;RelWithDebInfo"
+      }
+    },
+    {
+      "name": "ci",
+      "hidden": true,
+      "cacheVariables": {
+        "ILLUSION_WARNINGS_AS_ERRORS": "ON",
+        "ILLUSION_ENABLE_ASSERTS": "ON"
+      }
+    },
+    {
+      "name": "windows",
+      "hidden": true,
+      "inherits": "base",
+      "condition": {
+        "type": "equals",
+        "lhs": "${hostSystemName}",
+        "rhs": "Windows"
+      },
+      "architecture": {
+        "value": "x64",
+        "strategy": "external"
+      }
+    },
+    {
+      "name": "linux",
+      "hidden": true,
+      "inherits": "base",
+      "condition": {
+        "type": "equals",
+        "lhs": "${hostSystemName}",
+        "rhs": "Linux"
+      }
+    },
+    {
+      "name": "macos",
+      "hidden": true,
+      "inherits": "base",
+      "condition": {
+        "type": "equals",
+        "lhs": "${hostSystemName}",
+        "rhs": "Darwin"
+      }
+    },
+    {
+      "name": "windows-msvc",
+      "displayName": "Windows / MSVC",
+      "inherits": "windows",
+      "cacheVariables": {
+        "CMAKE_C_COMPILER": "cl",
+        "CMAKE_CXX_COMPILER": "cl"
+      }
+    },
+    {
+      "name": "windows-clang",
+      "displayName": "Windows / clang-cl",
+      "inherits": "windows",
+      "cacheVariables": {
+        "CMAKE_C_COMPILER": "clang-cl",
+        "CMAKE_CXX_COMPILER": "clang-cl"
+      }
+    },
+    {
+      "name": "linux-gcc",
+      "displayName": "Linux / GCC",
+      "inherits": "linux",
+      "cacheVariables": {
+        "CMAKE_C_COMPILER": "gcc",
+        "CMAKE_CXX_COMPILER": "g++"
+      }
+    },
+    {
+      "name": "linux-clang",
+      "displayName": "Linux / Clang",
+      "inherits": "linux",
+      "cacheVariables": {
+        "CMAKE_C_COMPILER": "clang",
+        "CMAKE_CXX_COMPILER": "clang++"
+      }
+    },
+    {
+      "name": "macos-clang",
+      "displayName": "macOS / AppleClang",
+      "inherits": "macos",
+      "cacheVariables": {
+        "CMAKE_C_COMPILER": "clang",
+        "CMAKE_CXX_COMPILER": "clang++"
+      }
+    },
+    {
+      "name": "linux-clang-asan",
+      "displayName": "Linux / Clang / ASan+UBSan",
+      "inherits": "linux-clang",
+      "cacheVariables": {
+        "ILLUSION_SANITIZER": "address",
+        "ILLUSION_BUILD_BENCHMARKS": "OFF"
+      }
+    },
+    {
+      "name": "linux-clang-tsan",
+      "displayName": "Linux / Clang / TSan",
+      "inherits": "linux-clang",
+      "cacheVariables": {
+        "ILLUSION_SANITIZER": "thread",
+        "ILLUSION_BUILD_BENCHMARKS": "OFF"
+      }
+    },
+    {
+      "name": "windows-msvc-profile",
+      "displayName": "Windows / MSVC / Tracy",
+      "inherits": "windows-msvc",
+      "cacheVariables": {
+        "ILLUSION_PROFILING": "ON"
+      }
+    },
+    {
+      "name": "linux-clang-profile",
+      "displayName": "Linux / Clang / Tracy",
+      "inherits": "linux-clang",
+      "cacheVariables": {
+        "ILLUSION_PROFILING": "ON"
+      }
+    },
+    {
+      "name": "macos-clang-profile",
+      "displayName": "macOS / AppleClang / Tracy",
+      "inherits": "macos-clang",
+      "cacheVariables": {
+        "ILLUSION_PROFILING": "ON"
+      }
+    },
+    {
+      "name": "ci-windows-msvc",
+      "displayName": "CI: windows-msvc",
+      "inherits": [
+        "ci",
+        "windows-msvc"
+      ]
+    },
+    {
+      "name": "ci-windows-clang",
+      "displayName": "CI: windows-clang",
+      "inherits": [
+        "ci",
+        "windows-clang"
+      ]
+    },
+    {
+      "name": "ci-linux-gcc",
+      "displayName": "CI: linux-gcc",
+      "inherits": [
+        "ci",
+        "linux-gcc"
+      ]
+    },
+    {
+      "name": "ci-linux-clang",
+      "displayName": "CI: linux-clang",
+      "inherits": [
+        "ci",
+        "linux-clang"
+      ]
+    },
+    {
+      "name": "ci-macos-clang",
+      "displayName": "CI: macos-clang",
+      "inherits": [
+        "ci",
+        "macos-clang"
+      ]
+    },
+    {
+      "name": "ci-linux-clang-asan",
+      "displayName": "CI: linux-clang-asan",
+      "inherits": [
+        "ci",
+        "linux-clang-asan"
+      ]
+    },
+    {
+      "name": "ci-linux-clang-tsan",
+      "displayName": "CI: linux-clang-tsan",
+      "inherits": [
+        "ci",
+        "linux-clang-tsan"
+      ]
+    }
+  ],
+  "buildPresets": [
+    {
+      "name": "windows-msvc-debug",
+      "configurePreset": "windows-msvc",
+      "configuration": "Debug"
+    },
+    {
+      "name": "windows-msvc-release",
+      "configurePreset": "windows-msvc",
+      "configuration": "Release"
+    },
+    {
+      "name": "windows-msvc-relwithdebinfo",
+      "configurePreset": "windows-msvc",
+      "configuration": "RelWithDebInfo"
+    },
+    {
+      "name": "windows-clang-debug",
+      "configurePreset": "windows-clang",
+      "configuration": "Debug"
+    },
+    {
+      "name": "windows-clang-release",
+      "configurePreset": "windows-clang",
+      "configuration": "Release"
+    },
+    {
+      "name": "windows-clang-relwithdebinfo",
+      "configurePreset": "windows-clang",
+      "configuration": "RelWithDebInfo"
+    },
+    {
+      "name": "linux-gcc-debug",
+      "configurePreset": "linux-gcc",
+      "configuration": "Debug"
+    },
+    {
+      "name": "linux-gcc-release",
+      "configurePreset": "linux-gcc",
+      "configuration": "Release"
+    },
+    {
+      "name": "linux-gcc-relwithdebinfo",
+      "configurePreset": "linux-gcc",
+      "configuration": "RelWithDebInfo"
+    },
+    {
+      "name": "linux-clang-debug",
+      "configurePreset": "linux-clang",
+      "configuration": "Debug"
+    },
+    {
+      "name": "linux-clang-release",
+      "configurePreset": "linux-clang",
+      "configuration": "Release"
+    },
+    {
+      "name": "linux-clang-relwithdebinfo",
+      "configurePreset": "linux-clang",
+      "configuration": "RelWithDebInfo"
+    },
+    {
+      "name": "macos-clang-debug",
+      "configurePreset": "macos-clang",
+      "configuration": "Debug"
+    },
+    {
+      "name": "macos-clang-release",
+      "configurePreset": "macos-clang",
+      "configuration": "Release"
+    },
+    {
+      "name": "macos-clang-relwithdebinfo",
+      "configurePreset": "macos-clang",
+      "configuration": "RelWithDebInfo"
+    },
+    {
+      "name": "linux-clang-asan-debug",
+      "configurePreset": "linux-clang-asan",
+      "configuration": "Debug"
+    },
+    {
+      "name": "linux-clang-asan-relwithdebinfo",
+      "configurePreset": "linux-clang-asan",
+      "configuration": "RelWithDebInfo"
+    },
+    {
+      "name": "linux-clang-tsan-debug",
+      "configurePreset": "linux-clang-tsan",
+      "configuration": "Debug"
+    },
+    {
+      "name": "linux-clang-tsan-relwithdebinfo",
+      "configurePreset": "linux-clang-tsan",
+      "configuration": "RelWithDebInfo"
+    },
+    {
+      "name": "windows-msvc-profile-debug",
+      "configurePreset": "windows-msvc-profile",
+      "configuration": "Debug"
+    },
+    {
+      "name": "windows-msvc-profile-release",
+      "configurePreset": "windows-msvc-profile",
+      "configuration": "Release"
+    },
+    {
+      "name": "windows-msvc-profile-relwithdebinfo",
+      "configurePreset": "windows-msvc-profile",
+      "configuration": "RelWithDebInfo"
+    },
+    {
+      "name": "linux-clang-profile-debug",
+      "configurePreset": "linux-clang-profile",
+      "configuration": "Debug"
+    },
+    {
+      "name": "linux-clang-profile-release",
+      "configurePreset": "linux-clang-profile",
+      "configuration": "Release"
+    },
+    {
+      "name": "linux-clang-profile-relwithdebinfo",
+      "configurePreset": "linux-clang-profile",
+      "configuration": "RelWithDebInfo"
+    },
+    {
+      "name": "macos-clang-profile-debug",
+      "configurePreset": "macos-clang-profile",
+      "configuration": "Debug"
+    },
+    {
+      "name": "macos-clang-profile-release",
+      "configurePreset": "macos-clang-profile",
+      "configuration": "Release"
+    },
+    {
+      "name": "macos-clang-profile-relwithdebinfo",
+      "configurePreset": "macos-clang-profile",
+      "configuration": "RelWithDebInfo"
+    },
+    {
+      "name": "ci-windows-msvc-debug",
+      "configurePreset": "ci-windows-msvc",
+      "configuration": "Debug"
+    },
+    {
+      "name": "ci-windows-msvc-release",
+      "configurePreset": "ci-windows-msvc",
+      "configuration": "Release"
+    },
+    {
+      "name": "ci-windows-msvc-relwithdebinfo",
+      "configurePreset": "ci-windows-msvc",
+      "configuration": "RelWithDebInfo"
+    },
+    {
+      "name": "ci-windows-clang-debug",
+      "configurePreset": "ci-windows-clang",
+      "configuration": "Debug"
+    },
+    {
+      "name": "ci-windows-clang-release",
+      "configurePreset": "ci-windows-clang",
+      "configuration": "Release"
+    },
+    {
+      "name": "ci-windows-clang-relwithdebinfo",
+      "configurePreset": "ci-windows-clang",
+      "configuration": "RelWithDebInfo"
+    },
+    {
+      "name": "ci-linux-gcc-debug",
+      "configurePreset": "ci-linux-gcc",
+      "configuration": "Debug"
+    },
+    {
+      "name": "ci-linux-gcc-release",
+      "configurePreset": "ci-linux-gcc",
+      "configuration": "Release"
+    },
+    {
+      "name": "ci-linux-gcc-relwithdebinfo",
+      "configurePreset": "ci-linux-gcc",
+      "configuration": "RelWithDebInfo"
+    },
+    {
+      "name": "ci-linux-clang-debug",
+      "configurePreset": "ci-linux-clang",
+      "configuration": "Debug"
+    },
+    {
+      "name": "ci-linux-clang-release",
+      "configurePreset": "ci-linux-clang",
+      "configuration": "Release"
+    },
+    {
+      "name": "ci-linux-clang-relwithdebinfo",
+      "configurePreset": "ci-linux-clang",
+      "configuration": "RelWithDebInfo"
+    },
+    {
+      "name": "ci-macos-clang-debug",
+      "configurePreset": "ci-macos-clang",
+      "configuration": "Debug"
+    },
+    {
+      "name": "ci-macos-clang-release",
+      "configurePreset": "ci-macos-clang",
+      "configuration": "Release"
+    },
+    {
+      "name": "ci-macos-clang-relwithdebinfo",
+      "configurePreset": "ci-macos-clang",
+      "configuration": "RelWithDebInfo"
+    },
+    {
+      "name": "ci-linux-clang-asan-debug",
+      "configurePreset": "ci-linux-clang-asan",
+      "configuration": "Debug"
+    },
+    {
+      "name": "ci-linux-clang-asan-relwithdebinfo",
+      "configurePreset": "ci-linux-clang-asan",
+      "configuration": "RelWithDebInfo"
+    },
+    {
+      "name": "ci-linux-clang-tsan-debug",
+      "configurePreset": "ci-linux-clang-tsan",
+      "configuration": "Debug"
+    },
+    {
+      "name": "ci-linux-clang-tsan-relwithdebinfo",
+      "configurePreset": "ci-linux-clang-tsan",
+      "configuration": "RelWithDebInfo"
+    }
+  ],
+  "testPresets": [
+    {
+      "name": "windows-msvc-debug",
+      "configurePreset": "windows-msvc",
+      "configuration": "Debug",
+      "output": {
+        "outputOnFailure": true
+      },
+      "execution": {
+        "noTestsAction": "error",
+        "jobs": 8
+      }
+    },
+    {
+      "name": "windows-msvc-release",
+      "configurePreset": "windows-msvc",
+      "configuration": "Release",
+      "output": {
+        "outputOnFailure": true
+      },
+      "execution": {
+        "noTestsAction": "error",
+        "jobs": 8
+      }
+    },
+    {
+      "name": "windows-msvc-relwithdebinfo",
+      "configurePreset": "windows-msvc",
+      "configuration": "RelWithDebInfo",
+      "output": {
+        "outputOnFailure": true
+      },
+      "execution": {
+        "noTestsAction": "error",
+        "jobs": 8
+      }
+    },
+    {
+      "name": "windows-clang-debug",
+      "configurePreset": "windows-clang",
+      "configuration": "Debug",
+      "output": {
+        "outputOnFailure": true
+      },
+      "execution": {
+        "noTestsAction": "error",
+        "jobs": 8
+      }
+    },
+    {
+      "name": "windows-clang-release",
+      "configurePreset": "windows-clang",
+      "configuration": "Release",
+      "output": {
+        "outputOnFailure": true
+      },
+      "execution": {
+        "noTestsAction": "error",
+        "jobs": 8
+      }
+    },
+    {
+      "name": "windows-clang-relwithdebinfo",
+      "configurePreset": "windows-clang",
+      "configuration": "RelWithDebInfo",
+      "output": {
+        "outputOnFailure": true
+      },
+      "execution": {
+        "noTestsAction": "error",
+        "jobs": 8
+      }
+    },
+    {
+      "name": "linux-gcc-debug",
+      "configurePreset": "linux-gcc",
+      "configuration": "Debug",
+      "output": {
+        "outputOnFailure": true
+      },
+      "execution": {
+        "noTestsAction": "error",
+        "jobs": 8
+      }
+    },
+    {
+      "name": "linux-gcc-release",
+      "configurePreset": "linux-gcc",
+      "configuration": "Release",
+      "output": {
+        "outputOnFailure": true
+      },
+      "execution": {
+        "noTestsAction": "error",
+        "jobs": 8
+      }
+    },
+    {
+      "name": "linux-gcc-relwithdebinfo",
+      "configurePreset": "linux-gcc",
+      "configuration": "RelWithDebInfo",
+      "output": {
+        "outputOnFailure": true
+      },
+      "execution": {
+        "noTestsAction": "error",
+        "jobs": 8
+      }
+    },
+    {
+      "name": "linux-clang-debug",
+      "configurePreset": "linux-clang",
+      "configuration": "Debug",
+      "output": {
+        "outputOnFailure": true
+      },
+      "execution": {
+        "noTestsAction": "error",
+        "jobs": 8
+      }
+    },
+    {
+      "name": "linux-clang-release",
+      "configurePreset": "linux-clang",
+      "configuration": "Release",
+      "output": {
+        "outputOnFailure": true
+      },
+      "execution": {
+        "noTestsAction": "error",
+        "jobs": 8
+      }
+    },
+    {
+      "name": "linux-clang-relwithdebinfo",
+      "configurePreset": "linux-clang",
+      "configuration": "RelWithDebInfo",
+      "output": {
+        "outputOnFailure": true
+      },
+      "execution": {
+        "noTestsAction": "error",
+        "jobs": 8
+      }
+    },
+    {
+      "name": "macos-clang-debug",
+      "configurePreset": "macos-clang",
+      "configuration": "Debug",
+      "output": {
+        "outputOnFailure": true
+      },
+      "execution": {
+        "noTestsAction": "error",
+        "jobs": 8
+      }
+    },
+    {
+      "name": "macos-clang-release",
+      "configurePreset": "macos-clang",
+      "configuration": "Release",
+      "output": {
+        "outputOnFailure": true
+      },
+      "execution": {
+        "noTestsAction": "error",
+        "jobs": 8
+      }
+    },
+    {
+      "name": "macos-clang-relwithdebinfo",
+      "configurePreset": "macos-clang",
+      "configuration": "RelWithDebInfo",
+      "output": {
+        "outputOnFailure": true
+      },
+      "execution": {
+        "noTestsAction": "error",
+        "jobs": 8
+      }
+    },
+    {
+      "name": "linux-clang-asan-debug",
+      "configurePreset": "linux-clang-asan",
+      "configuration": "Debug",
+      "output": {
+        "outputOnFailure": true
+      },
+      "execution": {
+        "noTestsAction": "error",
+        "jobs": 8
+      }
+    },
+    {
+      "name": "linux-clang-asan-relwithdebinfo",
+      "configurePreset": "linux-clang-asan",
+      "configuration": "RelWithDebInfo",
+      "output": {
+        "outputOnFailure": true
+      },
+      "execution": {
+        "noTestsAction": "error",
+        "jobs": 8
+      }
+    },
+    {
+      "name": "linux-clang-tsan-debug",
+      "configurePreset": "linux-clang-tsan",
+      "configuration": "Debug",
+      "output": {
+        "outputOnFailure": true
+      },
+      "execution": {
+        "noTestsAction": "error",
+        "jobs": 8
+      }
+    },
+    {
+      "name": "linux-clang-tsan-relwithdebinfo",
+      "configurePreset": "linux-clang-tsan",
+      "configuration": "RelWithDebInfo",
+      "output": {
+        "outputOnFailure": true
+      },
+      "execution": {
+        "noTestsAction": "error",
+        "jobs": 8
+      }
+    },
+    {
+      "name": "windows-msvc-profile-debug",
+      "configurePreset": "windows-msvc-profile",
+      "configuration": "Debug",
+      "output": {
+        "outputOnFailure": true
+      },
+      "execution": {
+        "noTestsAction": "error",
+        "jobs": 8
+      }
+    },
+    {
+      "name": "windows-msvc-profile-release",
+      "configurePreset": "windows-msvc-profile",
+      "configuration": "Release",
+      "output": {
+        "outputOnFailure": true
+      },
+      "execution": {
+        "noTestsAction": "error",
+        "jobs": 8
+      }
+    },
+    {
+      "name": "windows-msvc-profile-relwithdebinfo",
+      "configurePreset": "windows-msvc-profile",
+      "configuration": "RelWithDebInfo",
+      "output": {
+        "outputOnFailure": true
+      },
+      "execution": {
+        "noTestsAction": "error",
+        "jobs": 8
+      }
+    },
+    {
+      "name": "linux-clang-profile-debug",
+      "configurePreset": "linux-clang-profile",
+      "configuration": "Debug",
+      "output": {
+        "outputOnFailure": true
+      },
+      "execution": {
+        "noTestsAction": "error",
+        "jobs": 8
+      }
+    },
+    {
+      "name": "linux-clang-profile-release",
+      "configurePreset": "linux-clang-profile",
+      "configuration": "Release",
+      "output": {
+        "outputOnFailure": true
+      },
+      "execution": {
+        "noTestsAction": "error",
+        "jobs": 8
+      }
+    },
+    {
+      "name": "linux-clang-profile-relwithdebinfo",
+      "configurePreset": "linux-clang-profile",
+      "configuration": "RelWithDebInfo",
+      "output": {
+        "outputOnFailure": true
+      },
+      "execution": {
+        "noTestsAction": "error",
+        "jobs": 8
+      }
+    },
+    {
+      "name": "macos-clang-profile-debug",
+      "configurePreset": "macos-clang-profile",
+      "configuration": "Debug",
+      "output": {
+        "outputOnFailure": true
+      },
+      "execution": {
+        "noTestsAction": "error",
+        "jobs": 8
+      }
+    },
+    {
+      "name": "macos-clang-profile-release",
+      "configurePreset": "macos-clang-profile",
+      "configuration": "Release",
+      "output": {
+        "outputOnFailure": true
+      },
+      "execution": {
+        "noTestsAction": "error",
+        "jobs": 8
+      }
+    },
+    {
+      "name": "macos-clang-profile-relwithdebinfo",
+      "configurePreset": "macos-clang-profile",
+      "configuration": "RelWithDebInfo",
+      "output": {
+        "outputOnFailure": true
+      },
+      "execution": {
+        "noTestsAction": "error",
+        "jobs": 8
+      }
+    },
+    {
+      "name": "ci-windows-msvc-debug",
+      "configurePreset": "ci-windows-msvc",
+      "configuration": "Debug",
+      "output": {
+        "outputOnFailure": true
+      },
+      "execution": {
+        "noTestsAction": "error",
+        "jobs": 8
+      }
+    },
+    {
+      "name": "ci-windows-msvc-release",
+      "configurePreset": "ci-windows-msvc",
+      "configuration": "Release",
+      "output": {
+        "outputOnFailure": true
+      },
+      "execution": {
+        "noTestsAction": "error",
+        "jobs": 8
+      }
+    },
+    {
+      "name": "ci-windows-msvc-relwithdebinfo",
+      "configurePreset": "ci-windows-msvc",
+      "configuration": "RelWithDebInfo",
+      "output": {
+        "outputOnFailure": true
+      },
+      "execution": {
+        "noTestsAction": "error",
+        "jobs": 8
+      }
+    },
+    {
+      "name": "ci-windows-clang-debug",
+      "configurePreset": "ci-windows-clang",
+      "configuration": "Debug",
+      "output": {
+        "outputOnFailure": true
+      },
+      "execution": {
+        "noTestsAction": "error",
+        "jobs": 8
+      }
+    },
+    {
+      "name": "ci-windows-clang-release",
+      "configurePreset": "ci-windows-clang",
+      "configuration": "Release",
+      "output": {
+        "outputOnFailure": true
+      },
+      "execution": {
+        "noTestsAction": "error",
+        "jobs": 8
+      }
+    },
+    {
+      "name": "ci-windows-clang-relwithdebinfo",
+      "configurePreset": "ci-windows-clang",
+      "configuration": "RelWithDebInfo",
+      "output": {
+        "outputOnFailure": true
+      },
+      "execution": {
+        "noTestsAction": "error",
+        "jobs": 8
+      }
+    },
+    {
+      "name": "ci-linux-gcc-debug",
+      "configurePreset": "ci-linux-gcc",
+      "configuration": "Debug",
+      "output": {
+        "outputOnFailure": true
+      },
+      "execution": {
+        "noTestsAction": "error",
+        "jobs": 8
+      }
+    },
+    {
+      "name": "ci-linux-gcc-release",
+      "configurePreset": "ci-linux-gcc",
+      "configuration": "Release",
+      "output": {
+        "outputOnFailure": true
+      },
+      "execution": {
+        "noTestsAction": "error",
+        "jobs": 8
+      }
+    },
+    {
+      "name": "ci-linux-gcc-relwithdebinfo",
+      "configurePreset": "ci-linux-gcc",
+      "configuration": "RelWithDebInfo",
+      "output": {
+        "outputOnFailure": true
+      },
+      "execution": {
+        "noTestsAction": "error",
+        "jobs": 8
+      }
+    },
+    {
+      "name": "ci-linux-clang-debug",
+      "configurePreset": "ci-linux-clang",
+      "configuration": "Debug",
+      "output": {
+        "outputOnFailure": true
+      },
+      "execution": {
+        "noTestsAction": "error",
+        "jobs": 8
+      }
+    },
+    {
+      "name": "ci-linux-clang-release",
+      "configurePreset": "ci-linux-clang",
+      "configuration": "Release",
+      "output": {
+        "outputOnFailure": true
+      },
+      "execution": {
+        "noTestsAction": "error",
+        "jobs": 8
+      }
+    },
+    {
+      "name": "ci-linux-clang-relwithdebinfo",
+      "configurePreset": "ci-linux-clang",
+      "configuration": "RelWithDebInfo",
+      "output": {
+        "outputOnFailure": true
+      },
+      "execution": {
+        "noTestsAction": "error",
+        "jobs": 8
+      }
+    },
+    {
+      "name": "ci-macos-clang-debug",
+      "configurePreset": "ci-macos-clang",
+      "configuration": "Debug",
+      "output": {
+        "outputOnFailure": true
+      },
+      "execution": {
+        "noTestsAction": "error",
+        "jobs": 8
+      }
+    },
+    {
+      "name": "ci-macos-clang-release",
+      "configurePreset": "ci-macos-clang",
+      "configuration": "Release",
+      "output": {
+        "outputOnFailure": true
+      },
+      "execution": {
+        "noTestsAction": "error",
+        "jobs": 8
+      }
+    },
+    {
+      "name": "ci-macos-clang-relwithdebinfo",
+      "configurePreset": "ci-macos-clang",
+      "configuration": "RelWithDebInfo",
+      "output": {
+        "outputOnFailure": true
+      },
+      "execution": {
+        "noTestsAction": "error",
+        "jobs": 8
+      }
+    },
+    {
+      "name": "ci-linux-clang-asan-debug",
+      "configurePreset": "ci-linux-clang-asan",
+      "configuration": "Debug",
+      "output": {
+        "outputOnFailure": true
+      },
+      "execution": {
+        "noTestsAction": "error",
+        "jobs": 8
+      }
+    },
+    {
+      "name": "ci-linux-clang-asan-relwithdebinfo",
+      "configurePreset": "ci-linux-clang-asan",
+      "configuration": "RelWithDebInfo",
+      "output": {
+        "outputOnFailure": true
+      },
+      "execution": {
+        "noTestsAction": "error",
+        "jobs": 8
+      }
+    },
+    {
+      "name": "ci-linux-clang-tsan-debug",
+      "configurePreset": "ci-linux-clang-tsan",
+      "configuration": "Debug",
+      "output": {
+        "outputOnFailure": true
+      },
+      "execution": {
+        "noTestsAction": "error",
+        "jobs": 8
+      }
+    },
+    {
+      "name": "ci-linux-clang-tsan-relwithdebinfo",
+      "configurePreset": "ci-linux-clang-tsan",
+      "configuration": "RelWithDebInfo",
+      "output": {
+        "outputOnFailure": true
+      },
+      "execution": {
+        "noTestsAction": "error",
+        "jobs": 8
+      }
+    }
+  ]
+}

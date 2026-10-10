@@ -1,0 +1,50 @@
+# Doxygen configuration for the illusion API reference. Run from the repository root:
+#     doxygen docs/Doxyfile
+# Only public headers are documented. Undocumented public declarations are errors.
+
+PROJECT_NAME           = "illusion"
+PROJECT_BRIEF          = "3D game engine"
+OUTPUT_DIRECTORY       = build
+CREATE_SUBDIRS         = NO
+
+INPUT                  = engine/core/include docs/api-mainpage.md
+FILE_PATTERNS          = *.hpp *.md
+RECURSIVE              = YES
+USE_MDFILE_AS_MAINPAGE = docs/api-mainpage.md
+STRIP_FROM_PATH        = engine/core/include
+STRIP_FROM_INC_PATH    = engine/core/include
+FULL_PATH_NAMES        = YES
+
+EXTRACT_ALL            = NO
+EXTRACT_PRIVATE        = NO
+EXTRACT_STATIC         = NO
+EXTRACT_ANON_NSPACES   = NO
+HIDE_UNDOC_CLASSES     = NO
+EXCLUDE_SYMBOLS        = illusion::detail illusion::detail::* *::Impl
+JAVADOC_AUTOBRIEF      = YES
+MARKDOWN_SUPPORT       = YES
+BUILTIN_STL_SUPPORT    = YES
+INLINE_INHERITED_MEMB  = NO
+SORT_MEMBER_DOCS       = NO
+
+ENABLE_PREPROCESSING   = YES
+MACRO_EXPANSION        = YES
+EXPAND_ONLY_PREDEF     = YES
+PREDEFINED             = ILLUSION_ENABLE_ASSERTS=1 \
+                         ILL_FORCEINLINE=inline \
+                         ILL_NOINLINE= \
+                         "requires(x)="
+
+QUIET                  = YES
+WARNINGS               = YES
+WARN_IF_UNDOCUMENTED   = YES
+WARN_IF_DOC_ERROR      = YES
+WARN_NO_PARAMDOC       = NO
+WARN_AS_ERROR          = FAIL_ON_WARNINGS
+
+GENERATE_HTML          = YES
+HTML_OUTPUT            = api
+GENERATE_LATEX         = NO
+GENERATE_TREEVIEW      = YES
+HAVE_DOT               = NO
+SEARCHENGINE           = YES

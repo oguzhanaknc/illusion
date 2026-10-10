@@ -1,0 +1,62 @@
+# Mimariye Genel Bakış
+
+Bu sayfa illusion'ın nasıl yapılandırıldığını ve her modülün izlediği ilkeleri anlatır.
+
+## Katmanlar
+
+illusion katmanlar halinde inşa edilir. Bir katman yalnızca altındaki katmanlara bağımlı olabilir.
+
+| Katman | İçerik | Durum |
+| --- | --- | --- |
+| Core | Platform tespiti, assertion'lar, logging, bellek, Job System, ECS | Tamamlandı |
+| Platform | Pencere, klavye ve fare (GLFW), gamepad'ler (SDL3), dosya sistemi, zaman | Planlandı |
+| Runtime servisleri | Asset'ler ve streaming, input action'ları, ses (miniaudio), fizik (Jolt) | Planlandı |
+| Renderer | Vulkan üzerinde NVRHI (macOS'ta MoltenVK), PBR, gölgeler, post-processing | Planlandı |
+| Editör | Sahne düzenleme, gizmo'lar, AI komut API'si | Planlandı |
+| Oyun modülü | Oyunun kendi kodu; editörde hot-reload edilebilen paylaşımlı kütüphane | Planlandı |
+
+Core bir statik kütüphanedir. Editör ve export edilen oyunlar onu link eder; bir oyun modülü motor
+durumunun ikinci bir kopyasını asla barındırmaz (aşağıdaki "Süreç genelindeki servisler" bölümüne bakın).
+
+## İlkeler
+
+**Veri odaklı tasarım.** Veri, işlenme biçimine göre yerleştirilir. ECS, Component'leri
+structure-of-arrays Chunk'larda saklar; böylece System'ler belleği sıralı okur.
+
+**Kare başına heap ayırma yok.** Kare başına veriler arena ve pool'larda yaşar. Job'lar, log mesajları,
+ECS Query'leri ve command buffer'lar kararlı durumda bellek ayırmaz. Kritik yolları benchmark'lar korur.
+
+**Açık thread modeli.** İşler Job System üzerinde Job olarak çalışır. Yapısal ECS değişiklikleri tanımlı
+noktalarda tek bir thread üzerinde gerçekleşir; paralel kod yalnızca kendisine verilen Component'lere
+dokunur.
+
+**Programcı hatalarında yüksek sesle başarısız ol.** Değişmezler `ILL_ASSERT` (Debug ve CI) ve
+`ILL_CHECK` (her zaman) ile kontrol edilir. Motor kodu akış kontrolü için exception kullanmaz; bir Job'dan
+veya bir Component constructor'ından kaçan exception süreci sonlandırır.
+
+**Her karar kayıt altına alınır.** Önemli tasarım kararları Architecture Decision Record (ADR) olarak
+yazılır; bkz. [Kararlar](decisions.md).
+
+## Süreç genelindeki servisler
+
+Birkaç servis süreç geneline aittir: Logger, Component registry ve assert handler. Her birine
+değiştirilebilir bir instance pointer'ı üzerinden erişilir (`Logger::setInstance()`,
+`ComponentRegistry::setInstance()`, `setAssertHandler()`).
+
+Bu, hot reload için önemlidir. Editörde oyun modülü, statik core kütüphanesinin kendi kopyasını link eden
+bir paylaşımlı kütüphanedir. Modül yüklendiğinde editör kendi servis örneklerini modüle enjekte eder;
+böylece iki taraf da tek bir Logger ve tek bir Component registry paylaşır. Component tipleri tam
+nitelikli adlarının hash'i ile tanımlanır; bu yüzden bir Component her iki tarafta da aynı id'yi alır.
+
+## Depo yapısı
+
+| Yol | İçerik |
+| --- | --- |
+| `engine/core` | Core kütüphanesi: `include/illusion/{core,ecs}` ve `src/` |
+| `tests` | Unit test'ler (doctest), her özellik için bir dosya |
+| `benchmarks` | Performans bütçeli benchmark'lar (nanobench) |
+| `cmake` | Build seçenekleri, derleyici ayarları, sabitlenmiş bağımlılıklar |
+| `docs/content/{en,tr}` | Bu dokümantasyon, İngilizce ve Türkçe |
+| `docs/adr` | Architecture Decision Record'lar |
+| `tools` | Format, dokümantasyon ve platform yardımcı betikleri |
+| `.claude/skills` | AI agent'lar ve insanlar için adım adım rehberler |

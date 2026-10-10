@@ -1,0 +1,111 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+env:
+  # Shared runners are noisy; benchmarks may take up to 3x their budget before failing.
+  ILLUSION_BENCH_TOLERANCE: "3.0"
+  CTEST_OUTPUT_ON_FAILURE: "1"
+
+jobs:
+  format:
+    name: Format
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.12"
+      - run: pip install -r tools/requirements-dev.txt
+      - run: python tools/check_format.py
+
+  build:
+    name: ${{ matrix.name }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { name: Windows MSVC, os: windows-2025, preset: ci-windows-msvc }
+          - { name: Windows clang-cl, os: windows-2025, preset: ci-windows-clang }
+          - { name: Linux GCC, os: ubuntu-24.04, preset: ci-linux-gcc }
+          - { name: Linux Clang, os: ubuntu-24.04, preset: ci-linux-clang }
+          - { name: macOS AppleClang, os: macos-15, preset: ci-macos-clang }
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.12"
+      - name: Install Ninja
+        run: pip install ninja==1.13.2
+      - name: Set up MSVC environment
+        if: runner.os == 'Windows'
+        uses: ilammy/msvc-dev-cmd@0b201ec74fa43914dc39ae48a89fd1d8cb592756 # v1.13.0
+      - name: Configure
+        run: cmake --preset ${{ matrix.preset }}
+      - name: Build (Debug)
+        run: cmake --build --preset ${{ matrix.preset }}-debug
+      - name: Test (Debug)
+        run: ctest --preset ${{ matrix.preset }}-debug
+      - name: Build (Release)
+        run: cmake --build --preset ${{ matrix.preset }}-release
+      - name: Test + benchmarks (Release)
+        run: ctest --preset ${{ matrix.preset }}-release
+
+  sanitizers:
+    name: Linux Clang ${{ matrix.name }}
+    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { name: ASan+UBSan, preset: ci-linux-clang-asan }
+          - { name: TSan, preset: ci-linux-clang-tsan }
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.12"
+      - name: Install Ninja
+        run: pip install ninja==1.13.2
+      - name: Reduce ASLR entropy (required by TSan on recent kernels)
+        run: sudo sysctl vm.mmap_rnd_bits=28
+      - name: Configure
+        run: cmake --preset ${{ matrix.preset }}
+      - name: Build
+        run: cmake --build --preset ${{ matrix.preset }}-relwithdebinfo
+      - name: Test
+        env:
+          ASAN_OPTIONS: detect_leaks=1:abort_on_error=1
+          UBSAN_OPTIONS: print_stacktrace=1:halt_on_error=1
+          TSAN_OPTIONS: halt_on_error=1:second_deadlock_stack=1
+        run: ctest --preset ${{ matrix.preset }}-relwithdebinfo
+
+  docs:
+    name: Docs
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.12"
+      - run: pip install -r docs/requirements.txt
+      - name: English/Turkish parity
+        run: python tools/check_docs_parity.py
+      - name: Build site (strict)
+        run: mkdocs build --strict
+      - name: Install Doxygen
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends doxygen
+      - name: API reference (warnings are errors)
+        run: doxygen docs/Doxyfile
