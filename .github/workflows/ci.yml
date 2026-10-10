@@ -13,6 +13,11 @@ concurrency:
 permissions:
   contents: read
 
+defaults:
+  run:
+    # bash everywhere (Git Bash on Windows) so `| tee` + pipefail behave the same on all runners.
+    shell: bash
+
 env:
   # Shared runners are noisy; benchmarks may take up to 3x their budget before failing.
   ILLUSION_BENCH_TOLERANCE: "3.0"
@@ -53,15 +58,18 @@ jobs:
         if: runner.os == 'Windows'
         uses: ilammy/msvc-dev-cmd@0b201ec74fa43914dc39ae48a89fd1d8cb592756 # v1.13.0
       - name: Configure
-        run: cmake --preset ${{ matrix.preset }}
+        run: cmake --preset ${{ matrix.preset }} 2>&1 | tee configure.log
       - name: Build (Debug)
-        run: cmake --build --preset ${{ matrix.preset }}-debug
+        run: cmake --build --preset ${{ matrix.preset }}-debug 2>&1 | tee build-debug.log
       - name: Test (Debug)
-        run: ctest --preset ${{ matrix.preset }}-debug
+        run: ctest --preset ${{ matrix.preset }}-debug 2>&1 | tee test-debug.log
       - name: Build (Release)
-        run: cmake --build --preset ${{ matrix.preset }}-release
+        run: cmake --build --preset ${{ matrix.preset }}-release 2>&1 | tee build-release.log
       - name: Test + benchmarks (Release)
-        run: ctest --preset ${{ matrix.preset }}-release
+        run: ctest --preset ${{ matrix.preset }}-release 2>&1 | tee test-release.log
+      - name: Annotate failures
+        if: failure()
+        run: python tools/ci/annotate_log.py configure.log build-debug.log test-debug.log build-release.log test-release.log
 
   sanitizers:
     name: Linux Clang ${{ matrix.name }}
@@ -82,15 +90,18 @@ jobs:
       - name: Reduce ASLR entropy (required by TSan on recent kernels)
         run: sudo sysctl vm.mmap_rnd_bits=28
       - name: Configure
-        run: cmake --preset ${{ matrix.preset }}
+        run: cmake --preset ${{ matrix.preset }} 2>&1 | tee configure.log
       - name: Build
-        run: cmake --build --preset ${{ matrix.preset }}-relwithdebinfo
+        run: cmake --build --preset ${{ matrix.preset }}-relwithdebinfo 2>&1 | tee build.log
       - name: Test
         env:
           ASAN_OPTIONS: detect_leaks=1:abort_on_error=1
           UBSAN_OPTIONS: print_stacktrace=1:halt_on_error=1
           TSAN_OPTIONS: halt_on_error=1:second_deadlock_stack=1
-        run: ctest --preset ${{ matrix.preset }}-relwithdebinfo
+        run: ctest --preset ${{ matrix.preset }}-relwithdebinfo 2>&1 | tee test.log
+      - name: Annotate failures
+        if: failure()
+        run: python tools/ci/annotate_log.py configure.log build.log test.log
 
   docs:
     name: Docs
