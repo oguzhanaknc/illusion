@@ -60,11 +60,11 @@ jobs:
       - name: Configure
         run: cmake --preset ${{ matrix.preset }} 2>&1 | tee configure.log
       - name: Build (Debug)
-        run: cmake --build --preset ${{ matrix.preset }}-debug 2>&1 | tee build-debug.log
+        run: cmake --build --preset ${{ matrix.preset }}-debug -- -k 0 2>&1 | tee build-debug.log
       - name: Test (Debug)
         run: ctest --preset ${{ matrix.preset }}-debug 2>&1 | tee test-debug.log
       - name: Build (Release)
-        run: cmake --build --preset ${{ matrix.preset }}-release 2>&1 | tee build-release.log
+        run: cmake --build --preset ${{ matrix.preset }}-release -- -k 0 2>&1 | tee build-release.log
       - name: Test + benchmarks (Release)
         run: ctest --preset ${{ matrix.preset }}-release 2>&1 | tee test-release.log
       - name: Annotate failures
@@ -92,7 +92,7 @@ jobs:
       - name: Configure
         run: cmake --preset ${{ matrix.preset }} 2>&1 | tee configure.log
       - name: Build
-        run: cmake --build --preset ${{ matrix.preset }}-relwithdebinfo 2>&1 | tee build.log
+        run: cmake --build --preset ${{ matrix.preset }}-relwithdebinfo -- -k 0 2>&1 | tee build.log
       - name: Test
         env:
           ASAN_OPTIONS: detect_leaks=1:abort_on_error=1

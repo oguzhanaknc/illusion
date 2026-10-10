@@ -229,7 +229,7 @@ TEST_CASE("Randomized operations match a reference model")
 
     for (int step = 0; step < 20000; ++step)
     {
-        const u32 op = rng() % 6;
+        const auto op = static_cast<u32>(rng() % 6);
         if (op == 0 || alive.empty())
         {
             const Entity e = world.create();
@@ -237,7 +237,7 @@ TEST_CASE("Randomized operations match a reference model")
             model[e.toBits()] = Expected{};
             continue;
         }
-        const usize pick = rng() % alive.size();
+        const auto pick = static_cast<usize>(rng() % alive.size());
         const Entity e = alive[pick];
         Expected& expected = model[e.toBits()];
         switch (op)
