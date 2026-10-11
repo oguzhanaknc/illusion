@@ -41,3 +41,6 @@ doxygen docs/Doxyfile
 | `illusion/platform/Input.hpp` | `InputState`, `Key`, `MouseButton` |
 | `illusion/platform/Events.hpp` | Pencere ve input event'leri |
 | `illusion/platform/FileSystem.hpp` | `VirtualFileSystem`, platform dizinleri |
+| `illusion/render/RenderDevice.hpp` | `RenderDevice`, `GpuInfo`: NVRHI üzerinden Vulkan cihazı |
+| `illusion/render/Swapchain.hpp` | `Swapchain`: bir pencereye present etme |
+| `illusion/render/DebugTriangle.hpp` | Tanılama amaçlı üçgen renderer'ı |

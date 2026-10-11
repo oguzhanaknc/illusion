@@ -12,7 +12,8 @@ illusion katmanlar halinde inşa edilir. Bir katman yalnızca altındaki katmanl
 | Platform | Pencere, klavye ve fare (GLFW), sanal dosya sistemi | Tamamlandı |
 | Platform: gamepad'ler | SDL3 üzerinden Xbox ve DualSense | Planlandı |
 | Runtime servisleri | Asset'ler ve streaming, input action'ları, ses (miniaudio), fizik (Jolt) | Planlandı |
-| Renderer | Vulkan üzerinde NVRHI (macOS'ta MoltenVK), PBR, gölgeler, post-processing | Planlandı |
+| Renderer: temel | NVRHI üzerinden Vulkan 1.3 cihazı, swapchain'ler, Slang shader hattı | Tamamlandı |
+| Renderer: özellikler | Mesh'ler, PBR, IBL, gölgeler, GTAO, post-processing, culling | Planlandı |
 | Editör | Sahne düzenleme, gizmo'lar, AI komut API'si | Planlandı |
 | Oyun modülü | Oyunun kendi kodu; editörde hot-reload edilebilen paylaşımlı kütüphane | Planlandı |
 
@@ -55,6 +56,8 @@ nitelikli adlarının hash'i ile tanımlanır; bu yüzden bir Component her iki 
 | --- | --- |
 | `engine/core` | Core kütüphanesi: `include/illusion/{core,ecs}` ve `src/` |
 | `engine/platform` | Platform kütüphanesi: `include/illusion/platform` ve `src/` |
+| `engine/render` | Render kütüphanesi: `include/illusion/render`, `src/` ve `shaders/` |
+| `samples` | Motor özelliklerini çalıştıran küçük uygulamalar |
 | `tests` | Unit test'ler (doctest), her özellik için bir dosya |
 | `benchmarks` | Performans bütçeli benchmark'lar (nanobench) |
 | `cmake` | Build seçenekleri, derleyici ayarları, sabitlenmiş bağımlılıklar |

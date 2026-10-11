@@ -20,12 +20,17 @@ list(APPEND CMAKE_MODULE_PATH "${PROJECT_SOURCE_DIR}/cmake")
 include(IllusionOptions)
 include(IllusionCompilerSettings)
 include(Dependencies)
+include(IllusionShaders)
 
 add_subdirectory(engine)
 
 if(ILLUSION_BUILD_TESTS)
     enable_testing()
     add_subdirectory(tests)
+endif()
+
+if(ILLUSION_BUILD_SAMPLES)
+    add_subdirectory(samples)
 endif()
 
 if(ILLUSION_BUILD_BENCHMARKS)

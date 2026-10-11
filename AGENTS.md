@@ -27,6 +27,8 @@ decisions are in `docs/adr/`. Do not reverse an accepted ADR silently: write a n
 | `engine/core/include/illusion/{core,ecs}` | Public headers of the core library |
 | `engine/core/src` | Core implementation |
 | `engine/platform` | Platform layer: windows, input, events from the OS, virtual file system (GLFW is private) |
+| `engine/render` | Render device (Vulkan via NVRHI), swapchains, `shaders/` (Slang, built with `illusion_add_shaders`) |
+| `samples/` | Sample applications (`hello_triangle`) |
 | `tests/` | doctest unit tests; one `Test<Feature>.cpp` per feature; shared helpers in `TestSupport.hpp` |
 | `benchmarks/` | nanobench benchmarks with budgets (`ILL_BENCHMARK(name, nsPerOp)`) |
 | `cmake/` | `IllusionOptions`, `IllusionCompilerSettings`, `Dependencies` (pinned) |
@@ -50,6 +52,10 @@ doxygen docs/Doxyfile                        # undocumented public API is an err
 Windows: prefix commands with `tools\windows\vsdev.cmd` (sets up MSVC). Presets: `windows-msvc`,
 `windows-clang`, `ci-windows-msvc`, `ci-windows-clang`. If the checkout is in a synced folder
 (OneDrive/Dropbox), put the build tree elsewhere with a `CMakeUserPresets.json` (git-ignored).
+
+GPU tests (`tests/gpu`, CTest label `gpu`) need a Vulkan 1.3 driver; CI runs them on Mesa lavapipe
+under Xvfb. Render code must keep `RenderDevice::validationErrorCount()` at zero. Clip space is y-up
+with depth [0, 1] (ADR 0009).
 
 A change is done only when: both Debug and Release build with zero warnings, all tests pass, benchmarks
 are within budget, format and docs checks pass, and Doxygen reports nothing.

@@ -44,7 +44,15 @@ Useful ctest options: `-R <regex>` (by test name), `-L unit` / `-LE benchmark` (
 
 Run the test binary directly for doctest options: `illusion_tests -tc="*Query*" -s`.
 
-## 4. Benchmarks
+## 4. GPU tests and the sample
+
+- `illusion_gpu_tests` (CTest label `gpu`) needs a Vulkan 1.3 driver. Exclude with `-LE gpu` on machines
+  without one; run only them with `-L gpu`. They require zero validation errors.
+- The swapchain test opens a real window; on headless Linux run it under `xvfb-run -a`. CI does this
+  with Mesa lavapipe (`mesa-vulkan-drivers vulkan-validationlayers xvfb`).
+- Smoke-run the sample: `illusion_hello_triangle --frames 300` (exit code 2 means validation errors).
+
+## 5. Benchmarks
 
 - Binary: `<build>/benchmarks/Release/illusion_benchmarks [name-filter]`.
 - Each benchmark has a budget in ns/op; the runner exits 1 if a median exceeds
@@ -52,7 +60,7 @@ Run the test binary directly for doctest options: `illusion_tests -tc="*Query*" 
 - Never raise a budget to make a regression pass. Investigate with Tracy first; if the slowdown is an
   intended trade-off, explain it in the commit message.
 
-## 5. Sanitizers (Linux, Clang)
+## 6. Sanitizers (Linux, Clang)
 
 ```bash
 cmake --preset linux-clang-asan && cmake --build --preset linux-clang-asan-relwithdebinfo \
@@ -64,12 +72,17 @@ cmake --preset linux-clang-tsan && cmake --build --preset linux-clang-tsan-relwi
 On kernels with high ASLR entropy TSan aborts with "unexpected memory mapping": run
 `sudo sysctl vm.mmap_rnd_bits=28` first.
 
-## 6. Profiling build
+## 7. Profiling build
 
 Use a `*-profile` preset (sets `ILLUSION_PROFILING=ON`, fetches Tracy 0.14.1), build Release, run, and
 connect with the Tracy 0.14.1 GUI.
 
-## 7. Adding source files
+## 8. Shaders
+
+Write Slang in `<module>/shaders/` and register entry points with `illusion_add_shaders()` (see
+`engine/render/CMakeLists.txt`). Compile errors and warnings fail the build. Clip space is y-up.
+
+## 9. Adding source files
 
 - Library sources: list them in `engine/<module>/CMakeLists.txt` (no globbing).
 - Tests: add `tests/<area>/Test<Feature>.cpp` to `tests/CMakeLists.txt`.

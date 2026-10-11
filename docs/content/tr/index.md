@@ -5,8 +5,9 @@ Steam ve benzeri mağazalarda ticari oyunlar yayımlamak için tasarlanmıştır
 
 !!! warning "Erken geliştirme aşaması"
     illusion temel katman aşamasındadır. Core kütüphanesi (logging, bellek, Job System, ECS)
-    tamamlanmış ve test edilmiştir. Rendering, input, ses, fizik, editör ve export hattı planlanmıştır;
-    bkz. [yol haritası](https://github.com/oguzhanaknc/illusion/blob/main/ROADMAP.md).
+    tamamlanmış ve test edilmiştir; pencereler, klavye ve fare input'u, sanal dosya sistemi ve Vulkan 1.3
+    render cihazı da hazırdır. Gamepad'ler, tam renderer, ses, fizik, editör ve export hattı
+    planlanmıştır; bkz. [yol haritası](https://github.com/oguzhanaknc/illusion/blob/main/ROADMAP.md).
 
 ## Tasarım hedefleri
 

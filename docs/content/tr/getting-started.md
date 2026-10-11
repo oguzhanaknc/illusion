@@ -21,8 +21,11 @@ Derleyiciler:
   Wayland geliştirme paketleri:
   `sudo apt install libwayland-dev libxkbcommon-dev libx11-dev libxrandr-dev libxinerama-dev libxcursor-dev libxi-dev libxext-dev`.
 
-Üçüncü taraf kütüphaneler configure aşamasında otomatik olarak indirilir ve SHA-256 hash'leri ile
-doğrulanır. Elle kurulum gerekmez.
+Üçüncü taraf kütüphaneler (Slang shader derleyicisi dahil) configure aşamasında otomatik olarak
+indirilir ve SHA-256 hash'leri ile doğrulanır. Elle kurulum gerekmez.
+
+Grafik kodunu çalıştırmak için Vulkan 1.3 destekli bir GPU sürücüsü gerekir. Vulkan SDK isteğe bağlıdır;
+Debug build'lerinin kullandığı validation layer'larını elde etmek için kurun.
 
 ## Derleme ve test
 
@@ -49,6 +52,9 @@ Mevcut configure preset'leri:
 
 Her configure preset'inin `<preset>-debug`, `<preset>-release` ve `<preset>-relwithdebinfo` adlı build
 ve test preset'leri vardır.
+
+GPU test'leri `gpu` CTest etiketini taşır. Vulkan 1.3 sürücüsü olmayan bir makinede bunları
+`ctest --preset <preset> -LE gpu` ile hariç tutun.
 
 Windows'ta `tools\windows\vsdev.cmd` yardımcı betiği herhangi bir komutu Visual Studio developer
 ortamında çalıştırır; böylece önce bir developer shell açmanız gerekmez:
@@ -86,6 +92,8 @@ Ardından `cmake --preset dev` ve `cmake --build C:/dev/illusion-build/dev --con
 | --- | --- | --- |
 | `ILLUSION_BUILD_TESTS` | `ON` | Unit test'leri derler. |
 | `ILLUSION_BUILD_BENCHMARKS` | `ON` | Benchmark'ları derler (optimize yapılandırmalarda CTest test'i olarak kaydedilir). |
+| `ILLUSION_BUILD_SAMPLES` | `ON` | `samples/` içindeki örnek uygulamaları derler. |
+| `ILLUSION_SLANGC_EXECUTABLE` | boş | Sabitlenmiş Slang sürümü yerine bu `slangc`'yi kullanır. |
 | `ILLUSION_WARNINGS_AS_ERRORS` | `OFF` | Uyarıları hata olarak ele alır (CI preset'lerinde `ON`). |
 | `ILLUSION_ENABLE_ASSERTS` | `OFF` | `ILL_ASSERT`'ü tüm yapılandırmalarda açık tutar; Debug'da her zaman açıktır. |
 | `ILLUSION_PROFILING` | `OFF` | Motoru Tracy için enstrümante eder. |

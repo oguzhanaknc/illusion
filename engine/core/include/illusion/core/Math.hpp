@@ -1,9 +1,10 @@
 #pragma once
 
 /// @file
-/// Math types. illusion uses glm with Vulkan conventions: right-handed coordinates, depth range [0, 1],
-/// angles in radians. Include this header instead of including glm directly so the configuration is
-/// consistent everywhere.
+/// Math types, based on glm. Conventions: right-handed world coordinates, angles in radians, clip-space
+/// depth in [0, 1] and clip-space y pointing up (the renderer flips the Vulkan viewport, as Direct3D does),
+/// so glm::perspective() and glm::ortho() results can be used without a y flip. Include this header
+/// instead of including glm directly so the configuration is consistent everywhere.
 
 #include <glm/glm.hpp>
 

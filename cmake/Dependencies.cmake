@@ -80,13 +80,46 @@ FetchContent_Declare(miniaudio
     SYSTEM
     SOURCE_SUBDIR _illusion_no_cmake)
 
-# NVRHI (MIT): graphics abstraction over Vulkan. Pinned to a commit because it needs git submodules
-# (Vulkan-Headers).
+# NVRHI (MIT): graphics abstraction over Vulkan. No release tags; pinned to a commit archive.
 FetchContent_Declare(nvrhi
-    GIT_REPOSITORY https://github.com/NVIDIA-RTX/NVRHI.git
-    GIT_TAG 6b96fb03e07539f08327aea76c56d55f1de9d906
-    GIT_SUBMODULES_RECURSE TRUE
+    URL https://github.com/NVIDIA-RTX/NVRHI/archive/6b96fb03e07539f08327aea76c56d55f1de9d906.tar.gz
+    URL_HASH SHA256=f46c733ccc555fc457aaa3df510ee7df0ca089f5d1129d92903029e4fb67c560
+    DOWNLOAD_EXTRACT_TIMESTAMP TRUE
     SYSTEM)
+
+# Vulkan-Headers 1.4.352 (Apache-2.0 OR MIT): the version NVRHI is tested against. The Vulkan loader is
+# loaded at run time, so no Vulkan SDK is needed to build.
+FetchContent_Declare(vulkan_headers
+    URL https://github.com/KhronosGroup/Vulkan-Headers/archive/refs/tags/v1.4.352.tar.gz
+    URL_HASH SHA256=4850909d22a8a9767c27daea2b972e49d7c298560573d5b6221ee50db9bf49db
+    DOWNLOAD_EXTRACT_TIMESTAMP TRUE
+    SYSTEM)
+
+# Slang 2026.19 shader compiler (Apache-2.0 WITH LLVM-exception), prebuilt for the build host. Only the
+# compiler runs at build time; nothing from Slang is linked into the engine.
+set(ILLUSION_SLANG_VERSION 2026.19)
+if(CMAKE_HOST_WIN32)
+    set(illusion_slang_platform windows-x86_64)
+    set(illusion_slang_hash fa7629c9ce59c87c821614ae4b52e52f785d4c659a5a06a89fa9ec86d615eeee)
+elseif(CMAKE_HOST_APPLE AND CMAKE_HOST_SYSTEM_PROCESSOR MATCHES "arm64|aarch64")
+    set(illusion_slang_platform macos-aarch64)
+    set(illusion_slang_hash fa46822c92d81404a7951de3746093985c1e6f520f4b533e2aa3bea576f0f2f0)
+elseif(CMAKE_HOST_APPLE)
+    set(illusion_slang_platform macos-x86_64)
+    set(illusion_slang_hash 490b6447e3ea6c8fa9dfc45b1dc227db7cf80a60981c4390ed0fdc8ddbedee11)
+elseif(CMAKE_HOST_SYSTEM_PROCESSOR MATCHES "x86_64|AMD64")
+    set(illusion_slang_platform linux-x86_64)
+    set(illusion_slang_hash bd6cfc47b7353b2cffa36a866b1584749f76f4b2dbebf6dda26bc3fb40dc3c0e)
+else()
+    set(illusion_slang_platform "")
+endif()
+if(illusion_slang_platform)
+    FetchContent_Declare(slang
+        URL https://github.com/shader-slang/slang/releases/download/v${ILLUSION_SLANG_VERSION}/slang-${ILLUSION_SLANG_VERSION}-${illusion_slang_platform}.tar.gz
+        URL_HASH SHA256=${illusion_slang_hash}
+        DOWNLOAD_EXTRACT_TIMESTAMP TRUE
+        SOURCE_SUBDIR _illusion_no_cmake)
+endif()
 
 # --- Helpers ------------------------------------------------------------------------------------------
 
@@ -97,6 +130,8 @@ FetchContent_Declare(nvrhi
 #   tracy     -> Tracy::TracyClient
 #   glm       -> illusion::glm
 #   glfw      -> glfw
+#   nvrhi     -> nvrhi, nvrhi_vk (Vulkan backend only) and Vulkan::Headers
+#   slang     -> ILLUSION_SLANGC (path of the slangc executable)
 function(illusion_require_dependency name)
     get_property(done GLOBAL PROPERTY ILLUSION_DEP_${name})
     if(done)
@@ -136,6 +171,33 @@ function(illusion_require_dependency name)
         set(GLFW_BUILD_DOCS OFF CACHE BOOL "" FORCE)
         set(GLFW_INSTALL OFF CACHE BOOL "" FORCE)
         FetchContent_MakeAvailable(glfw)
+    elseif(name STREQUAL "nvrhi")
+        set(VULKAN_HEADERS_ENABLE_TESTS OFF CACHE BOOL "" FORCE)
+        set(VULKAN_HEADERS_ENABLE_INSTALL OFF CACHE BOOL "" FORCE)
+        set(VULKAN_HEADERS_ENABLE_MODULE OFF CACHE BOOL "" FORCE)
+        FetchContent_MakeAvailable(vulkan_headers)
+        set(NVRHI_WITH_VULKAN ON CACHE BOOL "" FORCE)
+        set(NVRHI_WITH_DX11 OFF CACHE BOOL "" FORCE)
+        set(NVRHI_WITH_DX12 OFF CACHE BOOL "" FORCE)
+        set(NVRHI_WITH_VALIDATION ON CACHE BOOL "" FORCE)
+        set(NVRHI_WITH_RTXMU OFF CACHE BOOL "" FORCE)
+        set(NVRHI_INSTALL OFF CACHE BOOL "" FORCE)
+        set(NVRHI_BUILD_TESTS OFF CACHE BOOL "" FORCE)
+        set(NVRHI_BUILD_SHARED OFF CACHE BOOL "" FORCE)
+        set(NVRHI_FETCH_VULKAN_HEADERS OFF CACHE BOOL "" FORCE)
+        FetchContent_MakeAvailable(nvrhi)
+        # nvrhi_vk uses nvrhi's common code but does not declare it; single-pass linkers (GNU ld) then
+        # fail when nvrhi precedes nvrhi_vk on the link line.
+        target_link_libraries(nvrhi_vk PUBLIC nvrhi)
+    elseif(name STREQUAL "slang")
+        if(ILLUSION_SLANGC_EXECUTABLE)
+            set(ILLUSION_SLANGC "${ILLUSION_SLANGC_EXECUTABLE}" CACHE INTERNAL "")
+        elseif(NOT illusion_slang_platform)
+            message(FATAL_ERROR "No prebuilt Slang for host ${CMAKE_HOST_SYSTEM_PROCESSOR}; set ILLUSION_SLANGC_EXECUTABLE")
+        else()
+            FetchContent_MakeAvailable(slang)
+            set(ILLUSION_SLANGC "${slang_SOURCE_DIR}/bin/slangc${CMAKE_EXECUTABLE_SUFFIX}" CACHE INTERNAL "")
+        endif()
     else()
         message(FATAL_ERROR "illusion_require_dependency: no integration written yet for '${name}'")
     endif()
