@@ -12,7 +12,8 @@ illusion is built in layers. A layer may depend only on layers below it.
 | Platform | Window, keyboard and mouse (GLFW), virtual file system | Implemented |
 | Platform: gamepads | Xbox and DualSense through SDL3 | Planned |
 | Runtime services | Assets and streaming, input actions, audio (miniaudio), physics (Jolt) | Planned |
-| Renderer | NVRHI on Vulkan (MoltenVK on macOS), PBR, shadows, post-processing | Planned |
+| Renderer: foundation | Vulkan 1.3 device through NVRHI, swapchains, Slang shader pipeline | Implemented |
+| Renderer: features | Meshes, PBR, IBL, shadows, GTAO, post-processing, culling | Planned |
 | Editor | Scene editing, gizmos, AI command API | Planned |
 | Game module | The game's own code, a hot-reloadable shared library in the editor | Planned |
 
@@ -54,6 +55,8 @@ by the hash of their fully qualified name, so a Component gets the same id on bo
 | --- | --- |
 | `engine/core` | Core library: `include/illusion/{core,ecs}` and `src/` |
 | `engine/platform` | Platform library: `include/illusion/platform` and `src/` |
+| `engine/render` | Render library: `include/illusion/render`, `src/` and `shaders/` |
+| `samples` | Small applications that exercise engine features |
 | `tests` | Unit tests (doctest), one file per feature |
 | `benchmarks` | Benchmarks with performance budgets (nanobench) |
 | `cmake` | Build options, compiler settings, pinned dependencies |

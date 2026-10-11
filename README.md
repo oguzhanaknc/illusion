@@ -5,9 +5,9 @@
 illusion is a performance-focused 3D game engine for Windows, macOS and Linux, written in C++20 and
 designed to ship commercial games on Steam and similar stores.
 
-> **Status: foundation phase.** The core library (logging, memory, Job System, archetype ECS) is
-> implemented, tested on all platforms and benchmarked. Rendering, input, audio, physics, the editor and
-> the export pipeline are next; see [ROADMAP.md](ROADMAP.md).
+> **Status: early development.** The core library (logging, memory, Job System, archetype ECS), the
+> platform layer and the render device are implemented and tested on all platforms. Gamepads, the full
+> renderer, audio, physics, the editor and the export pipeline are next; see [ROADMAP.md](ROADMAP.md).
 
 ## Highlights
 
@@ -16,6 +16,8 @@ designed to ship commercial games on Steam and similar stores.
 - Job System with an allocation-free, lock-free bounded queue; waiting threads help execute jobs.
 - Platform layer: windows with keyboard/mouse input (GLFW, headless mode for tests), event bus, frame
   timing, virtual file system with atomic writes.
+- Vulkan 1.3 render device through NVRHI (no SDK needed to build), swapchains, Slang shaders compiled
+  at build time; GPU tests run on Mesa lavapipe in CI.
 - No per-frame heap allocations: arenas, pools and an inline type-erased callable.
 - Tracy profiler integration and benchmark tests with performance budgets in CI.
 - CI on Windows (MSVC, clang-cl), Linux (GCC, Clang, ASan/UBSan, TSan) and macOS (Apple Clang).
@@ -58,6 +60,9 @@ world.query<Position, const Velocity>().each([](Position& p, const Velocity& v) 
 | Path | Contents |
 | --- | --- |
 | `engine/core` | Core library (`illusion::core`) |
+| `engine/platform` | Windows, input, file system (`illusion::platform`) |
+| `engine/render` | GPU device, swapchains, shaders (`illusion::render`) |
+| `samples` | Sample applications |
 | `tests` | Unit tests (doctest) |
 | `benchmarks` | Benchmarks with performance budgets (nanobench) |
 | `cmake` | Build options, compiler settings, pinned dependencies |

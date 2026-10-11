@@ -21,8 +21,11 @@ Compilers:
   packages used by GLFW:
   `sudo apt install libwayland-dev libxkbcommon-dev libx11-dev libxrandr-dev libxinerama-dev libxcursor-dev libxi-dev libxext-dev`.
 
-Third-party libraries are downloaded automatically at configure time and verified with SHA-256
-hashes. No manual installation is needed.
+Third-party libraries (including the Slang shader compiler) are downloaded automatically at configure
+time and verified with SHA-256 hashes. No manual installation is needed.
+
+To run graphics code you need a GPU driver with Vulkan 1.3. The Vulkan SDK is optional; install it to
+get the validation layers used by Debug builds.
 
 ## Build and test
 
@@ -49,6 +52,9 @@ Available configure presets:
 
 Every configure preset has build and test presets named `<preset>-debug`, `<preset>-release` and
 `<preset>-relwithdebinfo`.
+
+GPU tests carry the CTest label `gpu`. On a machine without a Vulkan 1.3 driver, exclude them with
+`ctest --preset <preset> -LE gpu`.
 
 On Windows, the helper script `tools\windows\vsdev.cmd` runs any command inside a Visual Studio
 developer environment, so you do not need to open a developer shell first:
@@ -85,6 +91,8 @@ Then build with `cmake --preset dev` and `cmake --build C:/dev/illusion-build/de
 | --- | --- | --- |
 | `ILLUSION_BUILD_TESTS` | `ON` | Build the unit tests. |
 | `ILLUSION_BUILD_BENCHMARKS` | `ON` | Build the benchmarks (registered as a CTest test in optimized configurations). |
+| `ILLUSION_BUILD_SAMPLES` | `ON` | Build the sample applications in `samples/`. |
+| `ILLUSION_SLANGC_EXECUTABLE` | empty | Use this `slangc` instead of the pinned Slang release. |
 | `ILLUSION_WARNINGS_AS_ERRORS` | `OFF` | Treat warnings as errors (`ON` in CI presets). |
 | `ILLUSION_ENABLE_ASSERTS` | `OFF` | Keep `ILL_ASSERT` in every configuration; it is always on in Debug. |
 | `ILLUSION_PROFILING` | `OFF` | Instrument the engine for Tracy. |

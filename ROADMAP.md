@@ -21,8 +21,10 @@ ADRs for its significant decisions. Items marked ✅ are done.
 - ✅ High-resolution timer, frame clock, fixed timestep
 - ✅ File system abstraction (virtual paths, atomic writes, platform user-data directories)
 - ✅ Event bus (immediate and queued delivery)
-- NVRHI device creation on Vulkan (Windows, Linux) and MoltenVK (macOS); swapchain; clear and triangle
-- Vulkan validation in Debug; GPU smoke test in CI where a software Vulkan driver is available (lavapipe)
+- ✅ NVRHI device creation on Vulkan 1.3 with a run-time loader; swapchain with resize and vsync control
+- ✅ Slang shader pipeline (build-time SPIR-V, embedded); diagnostic triangle and `hello_triangle` sample
+- ✅ Vulkan + NVRHI validation in Debug; GPU tests on Mesa lavapipe in CI (offscreen and swapchain under Xvfb)
+- macOS: bundle and verify MoltenVK (no GPU CI runner yet; tracked for M8 packaging)
 
 ## M2 — Input
 

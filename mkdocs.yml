@@ -63,6 +63,7 @@ plugins:
             Windows and Input: Pencereler ve Input
             Events and Time: Event'ler ve Zaman
             File System: Dosya Sistemi
+            Rendering: Rendering
             Architecture: Mimari
             Overview: Genel Bakış
             Decisions: Kararlar
@@ -93,6 +94,7 @@ nav:
       - Windows and Input: manual/platform.md
       - Events and Time: manual/events.md
       - File System: manual/filesystem.md
+      - Rendering: manual/rendering.md
       - Profiling: manual/profiling.md
   - Architecture:
       - Overview: architecture/overview.md
