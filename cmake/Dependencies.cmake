@@ -49,7 +49,7 @@ FetchContent_Declare(glfw
     DOWNLOAD_EXTRACT_TIMESTAMP TRUE
     SYSTEM)
 
-# SDL 3.4.18 (Zlib): gamepad subsystem only.
+# SDL 3.4.18 (Zlib): gamepad subsystem only (joystick, haptic, HIDAPI, sensors); no video or audio.
 FetchContent_Declare(sdl3
     URL https://github.com/libsdl-org/SDL/archive/refs/tags/release-3.4.18.tar.gz
     URL_HASH SHA256=c4b08b950bd29d83caae0ab8d884298d27046a9d30700fb42841c50992665c90
@@ -132,6 +132,7 @@ endif()
 #   glfw      -> glfw
 #   nvrhi     -> nvrhi, nvrhi_vk (Vulkan backend only) and Vulkan::Headers
 #   slang     -> ILLUSION_SLANGC (path of the slangc executable)
+#   sdl3      -> SDL3::SDL3-static (gamepad subsystems only)
 function(illusion_require_dependency name)
     get_property(done GLOBAL PROPERTY ILLUSION_DEP_${name})
     if(done)
@@ -189,6 +190,20 @@ function(illusion_require_dependency name)
         # nvrhi_vk uses nvrhi's common code but does not declare it; single-pass linkers (GNU ld) then
         # fail when nvrhi precedes nvrhi_vk on the link line.
         target_link_libraries(nvrhi_vk PUBLIC nvrhi)
+    elseif(name STREQUAL "sdl3")
+        set(SDL_SHARED OFF CACHE BOOL "" FORCE)
+        set(SDL_STATIC ON CACHE BOOL "" FORCE)
+        set(SDL_TEST_LIBRARY OFF CACHE BOOL "" FORCE)
+        set(SDL_TESTS OFF CACHE BOOL "" FORCE)
+        set(SDL_EXAMPLES OFF CACHE BOOL "" FORCE)
+        set(SDL_INSTALL OFF CACHE BOOL "" FORCE)
+        foreach(subsystem AUDIO VIDEO GPU RENDER CAMERA POWER DIALOG TRAY)
+            set(SDL_${subsystem} OFF CACHE BOOL "" FORCE)
+        endforeach()
+        foreach(subsystem JOYSTICK HAPTIC HIDAPI SENSOR VIRTUAL_JOYSTICK)
+            set(SDL_${subsystem} ON CACHE BOOL "" FORCE)
+        endforeach()
+        FetchContent_MakeAvailable(sdl3)
     elseif(name STREQUAL "slang")
         if(ILLUSION_SLANGC_EXECUTABLE)
             set(ILLUSION_SLANGC "${ILLUSION_SLANGC_EXECUTABLE}" CACHE INTERNAL "")

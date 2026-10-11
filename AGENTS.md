@@ -27,8 +27,9 @@ decisions are in `docs/adr/`. Do not reverse an accepted ADR silently: write a n
 | `engine/core/include/illusion/{core,ecs}` | Public headers of the core library |
 | `engine/core/src` | Core implementation |
 | `engine/platform` | Platform layer: windows, input, events from the OS, virtual file system (GLFW is private) |
+| `engine/input` | Gamepads (SDL3 private), `InputActions` mapping/rebinding/glyphs; tests use `attachVirtualGamepad()` |
 | `engine/render` | Render device (Vulkan via NVRHI), swapchains, `shaders/` (Slang, built with `illusion_add_shaders`) |
-| `samples/` | Sample applications (`hello_triangle`) |
+| `samples/` | Sample applications (`hello_triangle`, `input_viewer`) |
 | `tests/` | doctest unit tests; one `Test<Feature>.cpp` per feature; shared helpers in `TestSupport.hpp` |
 | `benchmarks/` | nanobench benchmarks with budgets (`ILL_BENCHMARK(name, nsPerOp)`) |
 | `cmake/` | `IllusionOptions`, `IllusionCompilerSettings`, `Dependencies` (pinned) |

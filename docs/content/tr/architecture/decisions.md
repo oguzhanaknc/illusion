@@ -17,6 +17,8 @@ Record (ADR) olarak kaydedilir. Her kayıt bağlamı, kararı ve sonuçlarını 
 | [0008](https://github.com/oguzhanaknc/illusion/blob/main/docs/adr/0008-virtual-file-system.md) | Mount noktalı sanal dosya sistemi |
 | [0009](https://github.com/oguzhanaknc/illusion/blob/main/docs/adr/0009-renderer-foundation.md) | Renderer temeli: Vulkan 1.3 üzerinde NVRHI, çalışma zamanı loader'ı, y-yukarı clip space |
 | [0010](https://github.com/oguzhanaknc/illusion/blob/main/docs/adr/0010-shader-pipeline.md) | Build sırasında SPIR-V'ye derlenen Slang shader'ları |
+| [0011](https://github.com/oguzhanaknc/illusion/blob/main/docs/adr/0011-gamepads-sdl3.md) | Test'ler için sanal cihazlarla, SDL3 üzerinden gamepad'ler |
+| [0012](https://github.com/oguzhanaknc/illusion/blob/main/docs/adr/0012-input-actions.md) | Metin tabanlı binding formatı ve kararlı glyph kimlikleriyle action eşleme |
 
 Yeni bir karar önermek için `docs/adr/0000-template.md` dosyasını kopyalayın ve
 [katkıda bulunma rehberini](../contributing.md#architecture-decision-recordlar) izleyin.

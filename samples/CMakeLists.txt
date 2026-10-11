@@ -1,3 +1,7 @@
 add_executable(illusion_hello_triangle hello_triangle/main.cpp)
 target_link_libraries(illusion_hello_triangle PRIVATE illusion::render)
 illusion_configure_target(illusion_hello_triangle)
+
+add_executable(illusion_input_viewer input_viewer/main.cpp)
+target_link_libraries(illusion_input_viewer PRIVATE illusion::input illusion::platform)
+illusion_configure_target(illusion_input_viewer)

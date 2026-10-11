@@ -64,6 +64,8 @@ plugins:
             Events and Time: Event'ler ve Zaman
             File System: Dosya Sistemi
             Rendering: Rendering
+            Gamepads: Gamepad'ler
+            Input Actions: Input Action'ları
             Architecture: Mimari
             Overview: Genel Bakış
             Decisions: Kararlar
@@ -92,6 +94,8 @@ nav:
       - Job System: manual/jobs.md
       - ECS: manual/ecs.md
       - Windows and Input: manual/platform.md
+      - Gamepads: manual/gamepads.md
+      - Input Actions: manual/actions.md
       - Events and Time: manual/events.md
       - File System: manual/filesystem.md
       - Rendering: manual/rendering.md

@@ -5,9 +5,10 @@ designed to ship commercial games on Steam and similar stores.
 
 !!! warning "Early development"
     illusion is in its foundation phase. The core library (logging, memory, Job System, ECS) is
-    implemented and tested, together with windows, keyboard and mouse input, a virtual file system and a
-    Vulkan 1.3 render device. Gamepads, the full renderer, audio, physics, the editor and the export
-    pipeline are planned; see the [roadmap](https://github.com/oguzhanaknc/illusion/blob/main/ROADMAP.md).
+    implemented and tested, together with windows, keyboard, mouse and gamepad input with action
+    mapping, a virtual file system and a Vulkan 1.3 render device. The full renderer, audio, physics, the
+    editor and the export pipeline are planned; see the
+    [roadmap](https://github.com/oguzhanaknc/illusion/blob/main/ROADMAP.md).
 
 ## Design goals
 
