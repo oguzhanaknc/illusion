@@ -8,8 +8,9 @@ illusion is built in layers. A layer may depend only on layers below it.
 
 | Layer | Contents | Status |
 | --- | --- | --- |
-| Core | Platform detection, assertions, logging, memory, Job System, ECS | Implemented |
-| Platform | Window, keyboard and mouse (GLFW), gamepads (SDL3), file system, time | Planned |
+| Core | Platform detection, assertions, logging, memory, Job System, ECS, event bus, time, math | Implemented |
+| Platform | Window, keyboard and mouse (GLFW), virtual file system | Implemented |
+| Platform: gamepads | Xbox and DualSense through SDL3 | Planned |
 | Runtime services | Assets and streaming, input actions, audio (miniaudio), physics (Jolt) | Planned |
 | Renderer | NVRHI on Vulkan (MoltenVK on macOS), PBR, shadows, post-processing | Planned |
 | Editor | Scene editing, gizmos, AI command API | Planned |
@@ -52,6 +53,7 @@ by the hash of their fully qualified name, so a Component gets the same id on bo
 | Path | Contents |
 | --- | --- |
 | `engine/core` | Core library: `include/illusion/{core,ecs}` and `src/` |
+| `engine/platform` | Platform library: `include/illusion/platform` and `src/` |
 | `tests` | Unit tests (doctest), one file per feature |
 | `benchmarks` | Benchmarks with performance budgets (nanobench) |
 | `cmake` | Build options, compiler settings, pinned dependencies |

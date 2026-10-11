@@ -4,6 +4,7 @@ add_executable(illusion_benchmarks
     main.cpp
     Budget.cpp
     BenchEcs.cpp
+    BenchEventBus.cpp
     BenchJobSystem.cpp)
 
 target_include_directories(illusion_benchmarks PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})

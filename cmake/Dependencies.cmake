@@ -56,12 +56,13 @@ FetchContent_Declare(sdl3
     DOWNLOAD_EXTRACT_TIMESTAMP TRUE
     SYSTEM)
 
-# glm 1.0.3 (MIT): math.
+# glm 1.0.3 (MIT): math. Header-only; we define our own target with the engine's configuration.
 FetchContent_Declare(glm
     URL https://github.com/g-truc/glm/archive/refs/tags/1.0.3.tar.gz
     URL_HASH SHA256=6775e47231a446fd086d660ecc18bcd076531cfedd912fbd66e576b118607001
     DOWNLOAD_EXTRACT_TIMESTAMP TRUE
-    SYSTEM)
+    SYSTEM
+    SOURCE_SUBDIR _illusion_no_cmake)
 
 # Jolt Physics 5.6.0 (MIT). Its CMake project lives in the Build/ subdirectory.
 FetchContent_Declare(jolt
@@ -94,6 +95,8 @@ FetchContent_Declare(nvrhi
 #   doctest   -> illusion::doctest (and ILLUSION_DOCTEST_SOURCE_DIR)
 #   nanobench -> illusion::nanobench
 #   tracy     -> Tracy::TracyClient
+#   glm       -> illusion::glm
+#   glfw      -> glfw
 function(illusion_require_dependency name)
     get_property(done GLOBAL PROPERTY ILLUSION_DEP_${name})
     if(done)
@@ -119,6 +122,20 @@ function(illusion_require_dependency name)
         set(TRACY_ON_DEMAND ON CACHE BOOL "" FORCE)
         set(TRACY_STATIC ON CACHE BOOL "" FORCE)
         FetchContent_MakeAvailable(tracy)
+    elseif(name STREQUAL "glm")
+        FetchContent_MakeAvailable(glm)
+        add_library(illusion_glm INTERFACE)
+        add_library(illusion::glm ALIAS illusion_glm)
+        target_include_directories(illusion_glm SYSTEM INTERFACE "${glm_SOURCE_DIR}")
+        # Vulkan conventions: depth in [0, 1]; angles in radians; no implicit experimental extensions.
+        target_compile_definitions(illusion_glm INTERFACE GLM_FORCE_DEPTH_ZERO_TO_ONE GLM_FORCE_RADIANS
+            GLM_FORCE_SILENT_WARNINGS)
+    elseif(name STREQUAL "glfw")
+        set(GLFW_BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)
+        set(GLFW_BUILD_TESTS OFF CACHE BOOL "" FORCE)
+        set(GLFW_BUILD_DOCS OFF CACHE BOOL "" FORCE)
+        set(GLFW_INSTALL OFF CACHE BOOL "" FORCE)
+        FetchContent_MakeAvailable(glfw)
     else()
         message(FATAL_ERROR "illusion_require_dependency: no integration written yet for '${name}'")
     endif()

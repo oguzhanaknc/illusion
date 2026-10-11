@@ -26,6 +26,7 @@ decisions are in `docs/adr/`. Do not reverse an accepted ADR silently: write a n
 | --- | --- |
 | `engine/core/include/illusion/{core,ecs}` | Public headers of the core library |
 | `engine/core/src` | Core implementation |
+| `engine/platform` | Platform layer: windows, input, events from the OS, virtual file system (GLFW is private) |
 | `tests/` | doctest unit tests; one `Test<Feature>.cpp` per feature; shared helpers in `TestSupport.hpp` |
 | `benchmarks/` | nanobench benchmarks with budgets (`ILL_BENCHMARK(name, nsPerOp)`) |
 | `cmake/` | `IllusionOptions`, `IllusionCompilerSettings`, `Dependencies` (pinned) |

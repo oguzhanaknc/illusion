@@ -17,7 +17,9 @@ Derleyiciler:
 - **Windows:** "Desktop development with C++" iş yükü kurulu Visual Studio 2022 17.10+ veya Visual
   Studio 2026. Aynı kurulumdaki clang-cl de çalışır.
 - **macOS:** Xcode 15+ (Apple Clang). Minimum deployment target macOS 13.3'tür.
-- **Linux:** GCC 13+ veya Clang 18+ (Ubuntu 24.04 ikisini de içerir).
+- **Linux:** GCC 13+ veya Clang 18+ (Ubuntu 24.04 ikisini de içerir) ve GLFW'nin kullandığı X11 ile
+  Wayland geliştirme paketleri:
+  `sudo apt install libwayland-dev libxkbcommon-dev libx11-dev libxrandr-dev libxinerama-dev libxcursor-dev libxi-dev libxext-dev`.
 
 Üçüncü taraf kütüphaneler configure aşamasında otomatik olarak indirilir ve SHA-256 hash'leri ile
 doğrulanır. Elle kurulum gerekmez.

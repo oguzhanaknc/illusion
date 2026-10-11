@@ -3,21 +3,26 @@ illusion_require_dependency(doctest)
 add_executable(illusion_tests
     main.cpp
     core/TestAssert.cpp
+    core/TestEventBus.cpp
     core/TestHash.cpp
     core/TestInplaceFunction.cpp
     core/TestJobSystem.cpp
     core/TestLog.cpp
     core/TestMemory.cpp
     core/TestThread.cpp
+    core/TestTime.cpp
     core/TestTypeName.cpp
     ecs/TestCommandBuffer.cpp
     ecs/TestComponent.cpp
     ecs/TestEntity.cpp
     ecs/TestQuery.cpp
-    ecs/TestWorld.cpp)
+    ecs/TestWorld.cpp
+    platform/TestFileSystem.cpp
+    platform/TestInput.cpp
+    platform/TestWindow.cpp)
 
 target_include_directories(illusion_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
-target_link_libraries(illusion_tests PRIVATE illusion::core illusion::doctest)
+target_link_libraries(illusion_tests PRIVATE illusion::core illusion::platform illusion::doctest)
 illusion_configure_target(illusion_tests)
 
 include(${ILLUSION_DOCTEST_SOURCE_DIR}/scripts/cmake/doctest.cmake)

@@ -28,8 +28,16 @@ doxygen docs/Doxyfile
 | `illusion/core/Hash.hpp` | Kararlı FNV-1a hash |
 | `illusion/core/TypeName.hpp` | Derleme zamanı tip isimleri |
 | `illusion/core/Profiler.hpp` | Tracy profiling makroları |
+| `illusion/core/EventBus.hpp` | `EventBus`, `Subscription` |
+| `illusion/core/Time.hpp` | `monotonicSeconds`, `Stopwatch`, `FrameClock`, `FixedTimestep` |
+| `illusion/core/Math.hpp` | glm tabanlı vektör ve matris tipleri |
 | `illusion/ecs/World.hpp` | `World`, `Query`, `ChunkView` |
 | `illusion/ecs/CommandBuffer.hpp` | Ertelenmiş yapısal değişiklikler |
 | `illusion/ecs/Component.hpp` | Component kaydı ve `ComponentRegistry` |
 | `illusion/ecs/Entity.hpp` | `Entity` handle'ı |
 | `illusion/ecs/Archetype.hpp` | Archetype depolaması (motor içi) |
+| `illusion/platform/Platform.hpp` | `Platform`: pencere sisteminin yaşam döngüsü ve event pompalama |
+| `illusion/platform/Window.hpp` | `Window`, `WindowDesc`, `CursorMode` |
+| `illusion/platform/Input.hpp` | `InputState`, `Key`, `MouseButton` |
+| `illusion/platform/Events.hpp` | Pencere ve input event'leri |
+| `illusion/platform/FileSystem.hpp` | `VirtualFileSystem`, platform dizinleri |

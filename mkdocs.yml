@@ -60,6 +60,9 @@ plugins:
             Job System: Job System
             ECS: ECS
             Profiling: Profiling
+            Windows and Input: Pencereler ve Input
+            Events and Time: Event'ler ve Zaman
+            File System: Dosya Sistemi
             Architecture: Mimari
             Overview: Genel Bakış
             Decisions: Kararlar
@@ -87,6 +90,9 @@ nav:
       - Memory: manual/memory.md
       - Job System: manual/jobs.md
       - ECS: manual/ecs.md
+      - Windows and Input: manual/platform.md
+      - Events and Time: manual/events.md
+      - File System: manual/filesystem.md
       - Profiling: manual/profiling.md
   - Architecture:
       - Overview: architecture/overview.md

@@ -17,9 +17,10 @@ ADRs for its significant decisions. Items marked ✅ are done.
 
 ## M1 — Platform and first pixels
 
-- Window and keyboard/mouse input (GLFW), high-resolution timer, frame loop
-- File system abstraction (virtual paths, platform user-data directories)
-- Event bus
+- ✅ Window and keyboard/mouse input (GLFW), headless backend for tests
+- ✅ High-resolution timer, frame clock, fixed timestep
+- ✅ File system abstraction (virtual paths, atomic writes, platform user-data directories)
+- ✅ Event bus (immediate and queued delivery)
 - NVRHI device creation on Vulkan (Windows, Linux) and MoltenVK (macOS); swapchain; clear and triangle
 - Vulkan validation in Debug; GPU smoke test in CI where a software Vulkan driver is available (lavapipe)
 
