@@ -97,7 +97,7 @@ TEST_CASE("the debug triangle renders the expected pixels")
         };
 
         // Corners keep the clear colour (0.1, 0.2, 0.3) -> (26, 51, 77) with rounding tolerance.
-        for (const auto [x, y] :
+        for (const auto& [x, y] :
              {std::pair{1u, 1u}, std::pair{62u, 1u}, std::pair{1u, 62u}, std::pair{62u, 62u}})
         {
             const Pixel p = pixel(x, y);
