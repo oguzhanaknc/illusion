@@ -14,6 +14,8 @@ illusion_require_dependency(glfw)
 target_link_libraries(illusion_platform
     PUBLIC illusion::core
     PRIVATE glfw)
+# The engine never uses OpenGL; stop glfw3.h from including GL/gl.h (absent on minimal Linux systems).
+target_compile_definitions(illusion_platform PRIVATE GLFW_INCLUDE_NONE)
 
 if(WIN32)
     # SHGetKnownFolderPath / CoTaskMemFree for userDataDirectory().
