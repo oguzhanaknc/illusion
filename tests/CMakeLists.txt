@@ -19,10 +19,13 @@ add_executable(illusion_tests
     ecs/TestWorld.cpp
     platform/TestFileSystem.cpp
     platform/TestInput.cpp
-    platform/TestWindow.cpp)
+    platform/TestWindow.cpp
+    input/TestGamepadState.cpp
+    input/TestGamepadSystem.cpp
+    input/TestInputActions.cpp)
 
 target_include_directories(illusion_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
-target_link_libraries(illusion_tests PRIVATE illusion::core illusion::platform illusion::doctest)
+target_link_libraries(illusion_tests PRIVATE illusion::core illusion::platform illusion::input illusion::doctest)
 illusion_configure_target(illusion_tests)
 
 include(${ILLUSION_DOCTEST_SOURCE_DIR}/scripts/cmake/doctest.cmake)

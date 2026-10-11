@@ -40,6 +40,9 @@ Open `build/api/index.html` in a browser.
 | `illusion/platform/Input.hpp` | `InputState`, `Key`, `MouseButton` |
 | `illusion/platform/Events.hpp` | Window and input events |
 | `illusion/platform/FileSystem.hpp` | `VirtualFileSystem`, platform directories |
+| `illusion/input/Gamepad.hpp` | `Gamepad`, `GamepadState`, `TriggerEffect`, gamepad events |
+| `illusion/input/GamepadSystem.hpp` | `GamepadSystem`, `VirtualGamepad` |
+| `illusion/input/InputActions.hpp` | `InputActions`, `InputBinding`, `BindingCapture`, glyphs |
 | `illusion/render/RenderDevice.hpp` | `RenderDevice`, `GpuInfo`: Vulkan device through NVRHI |
 | `illusion/render/Swapchain.hpp` | `Swapchain`: presentation to a window |
 | `illusion/render/DebugTriangle.hpp` | Diagnostic triangle renderer |

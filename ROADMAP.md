@@ -15,7 +15,7 @@ ADRs for its significant decisions. Items marked ✅ are done.
 - ✅ Tracy integration, benchmark harness with budgets
 - ✅ Documentation site (EN/TR, parity check), ADRs 0001–0006, AGENTS.md and skills
 
-## M1 — Platform and first pixels
+## M1 — Platform and first pixels ✅
 
 - ✅ Window and keyboard/mouse input (GLFW), headless backend for tests
 - ✅ High-resolution timer, frame clock, fixed timestep
@@ -26,10 +26,12 @@ ADRs for its significant decisions. Items marked ✅ are done.
 - ✅ Vulkan + NVRHI validation in Debug; GPU tests on Mesa lavapipe in CI (offscreen and swapchain under Xvfb)
 - macOS: bundle and verify MoltenVK (no GPU CI runner yet; tracked for M8 packaging)
 
-## M2 — Input
+## M2 — Input ✅
 
-- SDL3 gamepad subsystem: Xbox and DualSense, hot-plug, rumble, LED, gyro, touchpad, adaptive triggers
-- Action-mapping layer, rebinding with persistence, per-device glyphs
+- ✅ SDL3 gamepad subsystem: Xbox and DualSense, hot-plug, player slots, rumble, trigger rumble, LED, gyro,
+  touchpad, adaptive triggers; virtual gamepads for tests and automation
+- ✅ Action-mapping layer (button/axis/vector actions), rebinding capture, text persistence, per-device glyphs
+- `input_viewer` sample for manual verification with real controllers
 
 ## M3 — Renderer core
 

@@ -10,8 +10,8 @@ illusion is built in layers. A layer may depend only on layers below it.
 | --- | --- | --- |
 | Core | Platform detection, assertions, logging, memory, Job System, ECS, event bus, time, math | Implemented |
 | Platform | Window, keyboard and mouse (GLFW), virtual file system | Implemented |
-| Platform: gamepads | Xbox and DualSense through SDL3 | Planned |
-| Runtime services | Assets and streaming, input actions, audio (miniaudio), physics (Jolt) | Planned |
+| Input | Gamepads through SDL3 (rumble, LED, motion, touchpad, adaptive triggers), action mapping, rebinding, glyphs | Implemented |
+| Runtime services | Assets and streaming, audio (miniaudio), physics (Jolt) | Planned |
 | Renderer: foundation | Vulkan 1.3 device through NVRHI, swapchains, Slang shader pipeline | Implemented |
 | Renderer: features | Meshes, PBR, IBL, shadows, GTAO, post-processing, culling | Planned |
 | Editor | Scene editing, gizmos, AI command API | Planned |
@@ -55,6 +55,7 @@ by the hash of their fully qualified name, so a Component gets the same id on bo
 | --- | --- |
 | `engine/core` | Core library: `include/illusion/{core,ecs}` and `src/` |
 | `engine/platform` | Platform library: `include/illusion/platform` and `src/` |
+| `engine/input` | Input library: `include/illusion/input` and `src/` |
 | `engine/render` | Render library: `include/illusion/render`, `src/` and `shaders/` |
 | `samples` | Small applications that exercise engine features |
 | `tests` | Unit tests (doctest), one file per feature |

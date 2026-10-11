@@ -17,6 +17,8 @@ records rather than user documentation.
 | [0008](https://github.com/oguzhanaknc/illusion/blob/main/docs/adr/0008-virtual-file-system.md) | Virtual file system with mount points |
 | [0009](https://github.com/oguzhanaknc/illusion/blob/main/docs/adr/0009-renderer-foundation.md) | Renderer foundation: NVRHI on Vulkan 1.3, run-time loader, y-up clip space |
 | [0010](https://github.com/oguzhanaknc/illusion/blob/main/docs/adr/0010-shader-pipeline.md) | Slang shaders compiled to SPIR-V at build time |
+| [0011](https://github.com/oguzhanaknc/illusion/blob/main/docs/adr/0011-gamepads-sdl3.md) | Gamepads through SDL3, with virtual devices for tests |
+| [0012](https://github.com/oguzhanaknc/illusion/blob/main/docs/adr/0012-input-actions.md) | Action mapping with a text binding format and stable glyph identifiers |
 
 To propose a new decision, copy `docs/adr/0000-template.md` and follow the
 [contributing guide](../contributing.md#architecture-decision-records).
