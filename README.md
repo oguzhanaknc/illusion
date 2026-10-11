@@ -14,6 +14,8 @@ designed to ship commercial games on Steam and similar stores.
 - Data-oriented, archetype-based ECS with 16 KiB structure-of-arrays chunks, cached queries, chunk
   iteration, parallel iteration and command buffers.
 - Job System with an allocation-free, lock-free bounded queue; waiting threads help execute jobs.
+- Platform layer: windows with keyboard/mouse input (GLFW, headless mode for tests), event bus, frame
+  timing, virtual file system with atomic writes.
 - No per-frame heap allocations: arenas, pools and an inline type-erased callable.
 - Tracy profiler integration and benchmark tests with performance budgets in CI.
 - CI on Windows (MSVC, clang-cl), Linux (GCC, Clang, ASan/UBSan, TSan) and macOS (Apple Clang).

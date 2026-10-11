@@ -27,8 +27,16 @@ Open `build/api/index.html` in a browser.
 | `illusion/core/Hash.hpp` | Stable FNV-1a hashing |
 | `illusion/core/TypeName.hpp` | Compile-time type names |
 | `illusion/core/Profiler.hpp` | Tracy profiling macros |
+| `illusion/core/EventBus.hpp` | `EventBus`, `Subscription` |
+| `illusion/core/Time.hpp` | `monotonicSeconds`, `Stopwatch`, `FrameClock`, `FixedTimestep` |
+| `illusion/core/Math.hpp` | glm-based vector and matrix types |
 | `illusion/ecs/World.hpp` | `World`, `Query`, `ChunkView` |
 | `illusion/ecs/CommandBuffer.hpp` | Deferred structural changes |
 | `illusion/ecs/Component.hpp` | Component registration and `ComponentRegistry` |
 | `illusion/ecs/Entity.hpp` | `Entity` handle |
 | `illusion/ecs/Archetype.hpp` | Archetype storage (engine internal) |
+| `illusion/platform/Platform.hpp` | `Platform`: windowing system lifetime and event pumping |
+| `illusion/platform/Window.hpp` | `Window`, `WindowDesc`, `CursorMode` |
+| `illusion/platform/Input.hpp` | `InputState`, `Key`, `MouseButton` |
+| `illusion/platform/Events.hpp` | Window and input events |
+| `illusion/platform/FileSystem.hpp` | `VirtualFileSystem`, platform directories |

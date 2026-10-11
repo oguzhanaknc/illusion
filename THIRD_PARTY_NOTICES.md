@@ -9,9 +9,9 @@ must be included with distributed games (the export pipeline will collect them a
 | [doctest](https://github.com/doctest/doctest) | 2.5.3 | MIT | Unit tests | No |
 | [nanobench](https://github.com/martinus/nanobench) | 4.6.0 | MIT | Benchmarks | No |
 | [Tracy](https://github.com/wolfpld/tracy) | 0.14.1 | BSD-3-Clause | Profiling (only in `ILLUSION_PROFILING` builds) | Profiling builds only |
-| [GLFW](https://github.com/glfw/glfw) | 3.5.1 | Zlib | Window, keyboard, mouse (planned) | Yes |
+| [GLFW](https://github.com/glfw/glfw) | 3.5.1 | Zlib | Window, keyboard, mouse | Yes |
 | [SDL](https://github.com/libsdl-org/SDL) | 3.4.18 | Zlib | Gamepads (planned) | Yes |
-| [glm](https://github.com/g-truc/glm) | 1.0.3 | MIT | Math (planned) | Yes |
+| [glm](https://github.com/g-truc/glm) | 1.0.3 | MIT | Math | Yes |
 | [Jolt Physics](https://github.com/jrouwe/JoltPhysics) | 5.6.0 | MIT | Physics (planned) | Yes |
 | [miniaudio](https://github.com/mackron/miniaudio) | 0.11.25 | Public domain or MIT-0 | Audio (planned) | Yes |
 | [NVRHI](https://github.com/NVIDIA-RTX/NVRHI) | commit `6b96fb0` | MIT | Graphics abstraction (planned) | Yes |

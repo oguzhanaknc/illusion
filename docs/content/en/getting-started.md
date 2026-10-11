@@ -17,7 +17,9 @@ Compilers:
 - **Windows:** Visual Studio 2022 17.10+ or Visual Studio 2026 with the "Desktop development with C++"
   workload. clang-cl from the same installation also works.
 - **macOS:** Xcode 15+ (Apple Clang). The minimum deployment target is macOS 13.3.
-- **Linux:** GCC 13+ or Clang 18+ (Ubuntu 24.04 ships both).
+- **Linux:** GCC 13+ or Clang 18+ (Ubuntu 24.04 ships both), plus the X11 and Wayland development
+  packages used by GLFW:
+  `sudo apt install libwayland-dev libxkbcommon-dev libx11-dev libxrandr-dev libxinerama-dev libxcursor-dev libxi-dev libxext-dev`.
 
 Third-party libraries are downloaded automatically at configure time and verified with SHA-256
 hashes. No manual installation is needed.

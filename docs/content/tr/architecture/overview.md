@@ -8,8 +8,9 @@ illusion katmanlar halinde inşa edilir. Bir katman yalnızca altındaki katmanl
 
 | Katman | İçerik | Durum |
 | --- | --- | --- |
-| Core | Platform tespiti, assertion'lar, logging, bellek, Job System, ECS | Tamamlandı |
-| Platform | Pencere, klavye ve fare (GLFW), gamepad'ler (SDL3), dosya sistemi, zaman | Planlandı |
+| Core | Platform tespiti, assertion'lar, logging, bellek, Job System, ECS, event bus, zaman, matematik | Tamamlandı |
+| Platform | Pencere, klavye ve fare (GLFW), sanal dosya sistemi | Tamamlandı |
+| Platform: gamepad'ler | SDL3 üzerinden Xbox ve DualSense | Planlandı |
 | Runtime servisleri | Asset'ler ve streaming, input action'ları, ses (miniaudio), fizik (Jolt) | Planlandı |
 | Renderer | Vulkan üzerinde NVRHI (macOS'ta MoltenVK), PBR, gölgeler, post-processing | Planlandı |
 | Editör | Sahne düzenleme, gizmo'lar, AI komut API'si | Planlandı |
@@ -53,6 +54,7 @@ nitelikli adlarının hash'i ile tanımlanır; bu yüzden bir Component her iki 
 | Yol | İçerik |
 | --- | --- |
 | `engine/core` | Core kütüphanesi: `include/illusion/{core,ecs}` ve `src/` |
+| `engine/platform` | Platform kütüphanesi: `include/illusion/platform` ve `src/` |
 | `tests` | Unit test'ler (doctest), her özellik için bir dosya |
 | `benchmarks` | Performans bütçeli benchmark'lar (nanobench) |
 | `cmake` | Build seçenekleri, derleyici ayarları, sabitlenmiş bağımlılıklar |

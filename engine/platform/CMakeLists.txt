@@ -1,0 +1,23 @@
+# illusion::platform — windows, keyboard/mouse input, OS events, file system.
+
+add_library(illusion_platform STATIC
+    src/FileSystem.cpp
+    src/Input.cpp
+    src/Platform.cpp
+    src/Window.cpp)
+add_library(illusion::platform ALIAS illusion_platform)
+
+target_include_directories(illusion_platform PUBLIC
+    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>)
+
+illusion_require_dependency(glfw)
+target_link_libraries(illusion_platform
+    PUBLIC illusion::core
+    PRIVATE glfw)
+
+if(WIN32)
+    # SHGetKnownFolderPath / CoTaskMemFree for userDataDirectory().
+    target_link_libraries(illusion_platform PRIVATE shell32 ole32)
+endif()
+
+illusion_configure_target(illusion_platform)
