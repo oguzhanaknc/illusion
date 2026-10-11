@@ -203,6 +203,8 @@ function(illusion_require_dependency name)
         foreach(subsystem JOYSTICK HAPTIC HIDAPI SENSOR VIRTUAL_JOYSTICK)
             set(SDL_${subsystem} ON CACHE BOOL "" FORCE)
         endforeach()
+        # Video is disabled on purpose (GLFW owns windows); tell SDL's Linux build not to require X11/Wayland.
+        set(SDL_UNIX_CONSOLE_BUILD ON CACHE BOOL "" FORCE)
         FetchContent_MakeAvailable(sdl3)
     elseif(name STREQUAL "slang")
         if(ILLUSION_SLANGC_EXECUTABLE)
