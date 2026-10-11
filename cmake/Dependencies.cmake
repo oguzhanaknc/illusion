@@ -186,6 +186,9 @@ function(illusion_require_dependency name)
         set(NVRHI_BUILD_SHARED OFF CACHE BOOL "" FORCE)
         set(NVRHI_FETCH_VULKAN_HEADERS OFF CACHE BOOL "" FORCE)
         FetchContent_MakeAvailable(nvrhi)
+        # nvrhi_vk uses nvrhi's common code but does not declare it; single-pass linkers (GNU ld) then
+        # fail when nvrhi precedes nvrhi_vk on the link line.
+        target_link_libraries(nvrhi_vk PUBLIC nvrhi)
     elseif(name STREQUAL "slang")
         if(ILLUSION_SLANGC_EXECUTABLE)
             set(ILLUSION_SLANGC "${ILLUSION_SLANGC_EXECUTABLE}" CACHE INTERNAL "")
