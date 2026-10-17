@@ -67,12 +67,12 @@ TEST_CASE("reflection describes fields by stable name, type and offset")
 
     const FieldInfo* vec3 = reflection->field("vec3");
     REQUIRE(vec3 != nullptr);
-    CHECK(vec3->type == FieldType::Vec3);
+    CHECK(vec3->type == FieldType::Vector3);
     CHECK(vec3->offset == offsetIn(&Everything::vec3));
     CHECK(vec3->offset > reflection->fields[0].offset);
     CHECK(reflection->field("text")->type == FieldType::String);
     CHECK(reflection->field("target")->type == FieldType::Entity);
-    CHECK(reflection->field("quat")->type == FieldType::Quat);
+    CHECK(reflection->field("quat")->type == FieldType::Quaternion);
     CHECK(reflection->field("missing") == nullptr);
 
     const FieldInfo* team = reflection->field("team");
@@ -91,7 +91,7 @@ TEST_CASE("reflection describes fields by stable name, type and offset")
     CHECK(tag->fields.empty());
     CHECK(registry.reflection(componentId<Unreflected>()) == nullptr);
 
-    CHECK(fieldTypeName(FieldType::Vec3) == "Vec3");
+    CHECK(fieldTypeName(FieldType::Vector3) == "Vector3");
     CHECK(fieldTypeName(FieldType::Enum) == "Enum");
 }
 
@@ -154,8 +154,8 @@ TEST_CASE("core components are reflected under illusion names")
     REQUIRE(reflection->fields.size() == 3);
     CHECK(reflection->field("position")->offset == offsetIn(&Transform::position));
     CHECK(reflection->field("scale")->offset == offsetIn(&Transform::scale));
-    CHECK(reflection->field("rotation")->type == FieldType::Quat);
-    CHECK(reflection->field("scale")->type == FieldType::Vec3);
+    CHECK(reflection->field("rotation")->type == FieldType::Quaternion);
+    CHECK(reflection->field("scale")->type == FieldType::Vector3);
 }
 
 TEST_CASE("component info default-constructs default constructible types")

@@ -266,15 +266,17 @@ private:
             const f64 value = *static_cast<const f64*>(data);
             return std::isfinite(value) ? yyjson_mut_double(doc, value) : nullptr;
         }
-        case FieldType::Vec2:
-        case FieldType::Vec3:
-        case FieldType::Vec4:
+        case FieldType::Vector2:
+        case FieldType::Vector3:
+        case FieldType::Vector4:
         {
-            const usize count = field.type == FieldType::Vec2 ? 2 : field.type == FieldType::Vec3 ? 3 : 4;
+            const usize count = field.type == FieldType::Vector2   ? 2
+                                : field.type == FieldType::Vector3 ? 3
+                                                                   : 4;
             const std::span<const f32> values(static_cast<const f32*>(data), count);
             return isFinite(values) ? floatArray(doc, values) : nullptr;
         }
-        case FieldType::Quat:
+        case FieldType::Quaternion:
         {
             // Written as [x, y, z, w], the order used by glTF.
             const Quat& q = *static_cast<const Quat*>(data);
@@ -614,13 +616,13 @@ private:
             }
             *static_cast<f64*>(data) = yyjson_get_num(value);
             return true;
-        case FieldType::Vec2:
+        case FieldType::Vector2:
             return readFloats(value, &static_cast<Vec2*>(data)->x, 2);
-        case FieldType::Vec3:
+        case FieldType::Vector3:
             return readFloats(value, &static_cast<Vec3*>(data)->x, 3);
-        case FieldType::Vec4:
+        case FieldType::Vector4:
             return readFloats(value, &static_cast<Vec4*>(data)->x, 4);
-        case FieldType::Quat:
+        case FieldType::Quaternion:
         {
             f32 values[4] = {};
             if (!readFloats(value, values, 4))

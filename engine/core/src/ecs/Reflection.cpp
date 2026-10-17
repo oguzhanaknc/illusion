@@ -24,14 +24,14 @@ std::string_view fieldTypeName(FieldType type) noexcept
         return "F32";
     case FieldType::F64:
         return "F64";
-    case FieldType::Vec2:
-        return "Vec2";
-    case FieldType::Vec3:
-        return "Vec3";
-    case FieldType::Vec4:
-        return "Vec4";
-    case FieldType::Quat:
-        return "Quat";
+    case FieldType::Vector2:
+        return "Vector2";
+    case FieldType::Vector3:
+        return "Vector3";
+    case FieldType::Vector4:
+        return "Vector4";
+    case FieldType::Quaternion:
+        return "Quaternion";
     case FieldType::String:
         return "String";
     case FieldType::Entity:

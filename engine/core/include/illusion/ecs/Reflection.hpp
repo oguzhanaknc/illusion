@@ -30,23 +30,23 @@ namespace illusion
 /// Type of a reflected field.
 enum class FieldType : u8
 {
-    Bool,   ///< bool
-    I32,    ///< i32
-    U32,    ///< u32
-    I64,    ///< i64
-    U64,    ///< u64
-    F32,    ///< f32
-    F64,    ///< f64
-    Vec2,   ///< Vec2
-    Vec3,   ///< Vec3
-    Vec4,   ///< Vec4
-    Quat,   ///< Quat
-    String, ///< std::string
-    Entity, ///< Entity (a reference to another entity)
-    Enum,   ///< An enumeration with an EnumReflection specialization
+    Bool,       ///< bool
+    I32,        ///< i32
+    U32,        ///< u32
+    I64,        ///< i64
+    U64,        ///< u64
+    F32,        ///< f32
+    F64,        ///< f64
+    Vector2,    ///< Vec2
+    Vector3,    ///< Vec3
+    Vector4,    ///< Vec4
+    Quaternion, ///< Quat
+    String,     ///< std::string
+    Entity,     ///< Entity (a reference to another entity)
+    Enum,       ///< An enumeration with an EnumReflection specialization
 };
 
-/// Returns the name of @p type, e.g. "Vec3".
+/// Returns the name of @p type, e.g. "Vector3".
 [[nodiscard]] std::string_view fieldTypeName(FieldType type) noexcept;
 
 /// A named value of a reflected enumeration.
@@ -138,19 +138,19 @@ constexpr FieldType fieldTypeOf() noexcept
     }
     else if constexpr (std::is_same_v<M, Vec2>)
     {
-        return FieldType::Vec2;
+        return FieldType::Vector2;
     }
     else if constexpr (std::is_same_v<M, Vec3>)
     {
-        return FieldType::Vec3;
+        return FieldType::Vector3;
     }
     else if constexpr (std::is_same_v<M, Vec4>)
     {
-        return FieldType::Vec4;
+        return FieldType::Vector4;
     }
     else if constexpr (std::is_same_v<M, Quat>)
     {
-        return FieldType::Quat;
+        return FieldType::Quaternion;
     }
     else if constexpr (std::is_same_v<M, std::string>)
     {
