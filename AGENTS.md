@@ -29,7 +29,7 @@ decisions are in `docs/adr/`. Do not reverse an accepted ADR silently: write a n
 | `engine/platform` | Platform layer: windows, input, events from the OS, virtual file system (GLFW is private) |
 | `engine/input` | Gamepads (SDL3 private), `InputActions` mapping/rebinding/glyphs; tests use `attachVirtualGamepad()` |
 | `engine/assets` | CPU-side assets: `Image`, `MeshData`, glTF via `loadGltf`, environments (SH, sky) (cgltf/stb private); no GPU code |
-| `engine/physics` | `PhysicsWorld`, `RigidBody`/`Collider` Components (Jolt is private, runs on the Job System) |
+| `engine/physics` | `PhysicsWorld`, `RigidBody`/`Collider`/`CharacterController`/`Joint` Components (Jolt is private, runs on the Job System); test helpers in `tests/physics/PhysicsTestSupport.hpp` |
 | `engine/audio` | `AudioWorld`, `AudioSource`/`AudioListener` Components (miniaudio is private; the audio thread owns it); tests use `AudioOutput::Offline` + `render()` |
 | `engine/render` | Render device (Vulkan via NVRHI), swapchains, `RenderResources`, `SceneRenderer`, render Components, `shaders/` (Slang, built with `illusion_add_shaders`) |
 | `samples/` | Sample applications (`hello_triangle`, `input_viewer`, `gltf_viewer`, `physics_playground`); shared helpers in `common/` |

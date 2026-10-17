@@ -24,6 +24,27 @@ void reflectPhysicsComponents(ComponentRegistry& registry)
         .field("halfHeight", &Collider::halfHeight)
         .field("offset", &Collider::offset)
         .field("rotation", &Collider::rotation);
+    reflect<CharacterController>("illusion.CharacterController", 1, registry)
+        .field("radius", &CharacterController::radius)
+        .field("height", &CharacterController::height)
+        .field("maxSlope", &CharacterController::maxSlope)
+        .field("stepHeight", &CharacterController::stepHeight)
+        .field("mass", &CharacterController::mass)
+        .field("maxPushForce", &CharacterController::maxPushForce)
+        .field("gravityFactor", &CharacterController::gravityFactor)
+        .field("layer", &CharacterController::layer);
+    reflect<Joint>("illusion.Joint", 1, registry)
+        .field("type", &Joint::type)
+        .field("connected", &Joint::connected)
+        .field("anchor", &Joint::anchor)
+        .field("connectedAnchor", &Joint::connectedAnchor)
+        .field("axis", &Joint::axis)
+        .field("limited", &Joint::limited)
+        .field("minLimit", &Joint::minLimit)
+        .field("maxLimit", &Joint::maxLimit)
+        .field("motorSpeed", &Joint::motorSpeed)
+        .field("motorMaxForce", &Joint::motorMaxForce)
+        .field("breakForce", &Joint::breakForce);
 }
 
 } // namespace illusion

@@ -37,6 +37,7 @@ add_executable(illusion_tests
     assets/TestGltf.cpp
     assets/TestImageMesh.cpp
     audio/TestAudioWorld.cpp
+    physics/TestPhysicsExtensions.cpp
     physics/TestPhysicsWorld.cpp
     render/TestPostProcess.cpp
     render/TestRenderComponents.cpp

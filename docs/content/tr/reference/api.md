@@ -58,8 +58,8 @@ doxygen docs/Doxyfile
 | `illusion/assets/AssetStreamer.hpp` | `AssetStreamer`, `AssetHandle`: asenkron yükleme |
 | `illusion/assets/AssetCooker.hpp` | `cookAssets`: bir dizini önceden içe aktarma |
 | `illusion/assets/Environment.hpp` | Equirectangular eşleme, `ShIrradiance`, `makeSkyImage` |
-| `illusion/physics/PhysicsWorld.hpp` | `PhysicsWorld`: simülasyon, cisim kontrolü, raycast'ler, temas olayları |
-| `illusion/physics/PhysicsComponents.hpp` | `RigidBody`, `Collider`, `PhysicsBody` Component'leri |
+| `illusion/physics/PhysicsWorld.hpp` | `PhysicsWorld`: simülasyon, cisim ve karakter kontrolü, Mesh ve hull geometrisi, joint'ler, raycast'ler, shape cast'ler, örtüşmeler, temas olayları |
+| `illusion/physics/PhysicsComponents.hpp` | `RigidBody`, `Collider`, `CharacterController`, `Joint` Component'leri ve çalışma zamanı durumları (`PhysicsBody`, `CharacterBody`, `PhysicsJoint`); `PhysicsMeshHandle` |
 | `illusion/audio/AudioWorld.hpp` | `AudioWorld`: clip'ler, çalma, tek seferlik sesler, mikser bus'ları, çıkış; `AudioWorldDesc`, `AudioStats` |
 | `illusion/audio/AudioComponents.hpp` | `AudioSource`, `AudioListener`, `AudioPlayback` Component'leri; `AudioBus`, `AudioAttenuation` |
 | `illusion/render/RenderDevice.hpp` | `RenderDevice`, `GpuInfo` (bindless ve multi-draw desteği dahil): NVRHI üzerinden Vulkan cihazı |
