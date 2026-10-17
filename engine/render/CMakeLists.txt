@@ -4,6 +4,7 @@ add_library(illusion_render STATIC
     src/Components.cpp
     src/DebugTriangle.cpp
     src/EnvironmentBaker.cpp
+    src/GpuCulling.cpp
     src/PostProcessor.cpp
     src/RenderDevice.cpp
     src/RenderResources.cpp
@@ -34,7 +35,10 @@ illusion_add_shaders(illusion_render
         debugTriangleFragment shaders/DebugTriangle.slang fragmentMain fragment
         forwardPbrVertex shaders/ForwardPbr.slang vertexMain vertex
         forwardPbrFragment shaders/ForwardPbr.slang fragmentMain fragment
+        prepassFragment shaders/ForwardPbr.slang prepassMain fragment
         prepassMaskedFragment shaders/ForwardPbr.slang prepassMaskedMain fragment
+        occlusionCull shaders/OcclusionCull.slang cullMain compute
+        hizReduce shaders/HiZ.slang hizReduceMain compute
         gtao shaders/Gtao.slang gtaoMain compute
         gtaoBlur shaders/GtaoBlur.slang gtaoBlurMain compute
         taa shaders/Taa.slang taaMain compute

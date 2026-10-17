@@ -43,9 +43,10 @@ ADRs for its significant decisions. Items marked ✅ are done.
   alpha-masked casters, blocker search sized by the light's angular diameter (ADR 0015)
 - M3d: ✅ HDR pipeline with depth prepass, GTAO, energy-preserving bloom, ACES tonemapping, optional TAA
   (camera reprojection, variance clipping) (ADR 0016)
-- M3e: Bindless resources, GPU-driven draw submission where supported, occlusion culling, per-object
-  motion vectors for TAA
-- Render benchmarks with frame-time budgets
+- M3e: ✅ Two-phase GPU occlusion culling with indirect draws, per-object motion vectors for TAA, GPU
+  frame-time benchmarks (ADR 0017)
+- M3f: Bindless resources (mesh and texture pools, descriptor indexing) and multi-draw indirect where
+  supported
 
 ## M4 — Assets and streaming
 

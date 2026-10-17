@@ -8,8 +8,8 @@ Headers: `#include <illusion/render/RenderDevice.hpp>`, `<illusion/render/Swapch
 
 !!! note "In progress"
     The scene renderer draws Meshes with PBR Materials, direct and image-based lighting, soft shadows,
-    ambient occlusion and post-processing. Bindless resources, GPU-driven submission and occlusion
-    culling follow in the last step of the renderer milestone (see the roadmap).
+    ambient occlusion, post-processing and GPU occlusion culling. Bindless resources and multi-draw
+    indirect follow in the last step of the renderer milestone (see the roadmap).
 
 ## Requirements
 
@@ -124,10 +124,9 @@ ILL_LOG_DEBUG("Game", "{} draw calls", renderer->stats().drawCalls);
   default white, rough Material).
 - Lights shine along their Transform's -z axis (`DirectionalLight`) or from its position
   (`PointLight`, fading to zero at `range`). The first 4 directional and 16 point lights are used.
-- `render()` clears the target, culls Entities against the view frustum (on the Job System when you
-  pass one), sorts them by Pipeline, Material and Mesh, and issues one instanced draw call for each run
-  of identical (Mesh, submesh, Material). `stats()` reports candidates, visible Entities, draw calls
-  and triangles.
+- `render()` culls Entities (see [Culling](#culling)), sorts them by Pipeline, Material and Mesh, and
+  draws each run of identical (Mesh, submesh, Material) with one instanced draw per pass. `stats()`
+  reports candidates, Entities inside the frustum, draw calls and triangles.
 - The renderer owns a depth buffer that follows the size of the target. Create a `SceneRenderer` per
   colour format you render to.
 - Colour targets with an sRGB format receive linear colour; UNORM targets receive sRGB-encoded colour,
@@ -143,6 +142,33 @@ tonemapping. Indirect light comes from a `SkyLight` (see below).
 
 To draw a glTF model, load it with `loadGltf()` (see [Assets and Models](assets.md)), upload it with
 `RenderResources::uploadModel()` and create its Entities with `spawnModel()`.
+
+### Culling
+
+Each frame the renderer culls in two steps:
+
+1. **Frustum culling** on the CPU, in parallel on the Job System: Entities outside the view (and outside
+   every shadow cascade) are skipped.
+2. **Occlusion culling** on the GPU for opaque and alpha-masked Meshes: objects hidden behind others
+   are not drawn. It works in two phases. First, objects are tested against the depth of the previous
+   frame and the survivors are drawn into the depth prepass. Then the remaining objects are tested
+   against a depth pyramid of that new depth and drawn if they are visible after all. An object that
+   comes into view is therefore drawn in the same frame; nothing pops in late.
+
+```cpp
+renderer->setOcclusionCulling(true); // the default
+renderer->render(commands, target, world, view, &jobs);
+// ... after the GPU finished the frame (for example in a statistics overlay one frame later):
+ILL_LOG_INFO("Game", "{} of {} opaque instances drawn", renderer->readGpuDrawnInstances(),
+             renderer->stats().visible);
+```
+
+- The GPU writes the instance counts of indirect draws, so the CPU does not wait for culling results.
+  `readGpuDrawnInstances()` reads them back for tools and statistics; call it only after the GPU has
+  finished the frame.
+- Occlusion culling pays off with many objects and real occluders (buildings, terrain). For scenes of
+  a few large objects, `setOcclusionCulling(false)` saves the depth-pyramid passes.
+- Blended Meshes and shadow casters are culled against the frustum only.
 
 ### Shadows
 
@@ -234,9 +260,13 @@ renderer->resetTemporalHistory();
   everything else.
 - Bloom preserves energy: it replaces `bloom.intensity` of the image with its blurred copy instead of
   adding light.
-- TAA is off by default. It reprojects using camera motion only, so fast-moving objects can leave a
-  faint trail; it works best for slow scenes and still shots until per-object motion vectors arrive.
-- `stats().drawCalls` counts both the depth prepass and shading draws.
+- TAA follows moving objects with per-pixel motion vectors from the depth prepass. The renderer keeps
+  each MeshRenderer's previous world matrix in a `MotionHistory` Component that it adds itself; after
+  teleporting an object, set `MotionHistory::previousWorld` to its new matrix so the jump is not
+  smeared. TAA is off by default; it suits scenes that need smooth edges more than the sharpest image.
+- `motionVectors()` returns the motion-vector texture for debug views.
+- `stats().drawCalls` counts every draw: with occlusion culling, an opaque batch has one indirect draw
+  per culling phase in both the depth prepass and shading.
 
 ### The glTF viewer
 

@@ -85,6 +85,7 @@ bool PostProcessor::initialize(nvrhi::IDevice* device, nvrhi::Format outputForma
         nvrhi::BindingLayoutItem::Texture_SRV(0),
         nvrhi::BindingLayoutItem::Texture_SRV(1),
         nvrhi::BindingLayoutItem::Texture_SRV(2),
+        nvrhi::BindingLayoutItem::Texture_SRV(3),
         nvrhi::BindingLayoutItem::Sampler(0),
         nvrhi::BindingLayoutItem::Texture_UAV(0),
         nvrhi::BindingLayoutItem::PushConstants(1, sizeof(Push)),
@@ -146,7 +147,8 @@ bool PostProcessor::initialize(nvrhi::IDevice* device, nvrhi::Format outputForma
 nvrhi::BindingSetHandle PostProcessor::computeSet(nvrhi::ITexture* t0, nvrhi::TextureSubresourceSet t0Range,
                                                   nvrhi::ITexture* t1, nvrhi::ITexture* t2,
                                                   nvrhi::ITexture* output,
-                                                  nvrhi::TextureSubresourceSet outputRange) const
+                                                  nvrhi::TextureSubresourceSet outputRange,
+                                                  nvrhi::ITexture* t3) const
 {
     nvrhi::BindingSetDesc set;
     set.bindings = {
@@ -154,6 +156,7 @@ nvrhi::BindingSetHandle PostProcessor::computeSet(nvrhi::ITexture* t0, nvrhi::Te
         nvrhi::BindingSetItem::Texture_SRV(0, t0, nvrhi::Format::UNKNOWN, t0Range),
         nvrhi::BindingSetItem::Texture_SRV(1, t1 != nullptr ? t1 : m_dummy.Get()),
         nvrhi::BindingSetItem::Texture_SRV(2, t2 != nullptr ? t2 : m_dummy.Get()),
+        nvrhi::BindingSetItem::Texture_SRV(3, t3 != nullptr ? t3 : m_dummy.Get()),
         nvrhi::BindingSetItem::Sampler(0, m_linearClamp),
         nvrhi::BindingSetItem::Texture_UAV(0, output, nvrhi::Format::UNKNOWN, outputRange),
         nvrhi::BindingSetItem::PushConstants(1, sizeof(Push)),
@@ -161,7 +164,8 @@ nvrhi::BindingSetHandle PostProcessor::computeSet(nvrhi::ITexture* t0, nvrhi::Te
     return m_device->createBindingSet(set, m_computeLayout);
 }
 
-void PostProcessor::resize(nvrhi::ITexture* hdr, nvrhi::ITexture* depth, const PostProcessSettings& settings)
+void PostProcessor::resize(nvrhi::ITexture* hdr, nvrhi::ITexture* depth, nvrhi::ITexture* motion,
+                           const PostProcessSettings& settings)
 {
     ILL_PROFILE_SCOPE();
     m_width = hdr->getDesc().width;
@@ -181,7 +185,7 @@ void PostProcessor::resize(nvrhi::ITexture* hdr, nvrhi::ITexture* depth, const P
     m_gtaoBlurSet = computeSet(m_rawAmbientOcclusion, all, depth, nullptr, m_ambientOcclusion, mip(0));
     for (u32 i = 0; i < 2; ++i)
     {
-        m_taaSets[i] = computeSet(hdr, all, depth, m_history[1 - i], m_history[i], mip(0));
+        m_taaSets[i] = computeSet(hdr, all, depth, m_history[1 - i], m_history[i], mip(0), motion);
     }
     const std::array<nvrhi::ITexture*, kSourceCount> sources = {hdr, m_history[0], m_history[1]};
     m_bloomDownsampleSets.assign(m_bloomLevels, nullptr);

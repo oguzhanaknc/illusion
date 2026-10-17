@@ -31,7 +31,8 @@ public:
 
     // Recreates the size-dependent textures and binding sets for `hdr` and `depth` (both of the render
     // size). Call when they change.
-    void resize(nvrhi::ITexture* hdr, nvrhi::ITexture* depth, const PostProcessSettings& settings);
+    void resize(nvrhi::ITexture* hdr, nvrhi::ITexture* depth, nvrhi::ITexture* motion,
+                const PostProcessSettings& settings);
 
     // Screen-space ambient occlusion texture (R32F, 1 = unoccluded) read by the forward pass.
     [[nodiscard]] nvrhi::ITexture* ambientOcclusion() const noexcept { return m_ambientOcclusion; }
@@ -75,7 +76,8 @@ private:
 
     [[nodiscard]] nvrhi::BindingSetHandle
     computeSet(nvrhi::ITexture* t0, nvrhi::TextureSubresourceSet t0Range, nvrhi::ITexture* t1,
-               nvrhi::ITexture* t2, nvrhi::ITexture* output, nvrhi::TextureSubresourceSet outputRange) const;
+               nvrhi::ITexture* t2, nvrhi::ITexture* output, nvrhi::TextureSubresourceSet outputRange,
+               nvrhi::ITexture* t3 = nullptr) const;
     void dispatch(nvrhi::ICommandList* commands, nvrhi::IComputePipeline* pipeline, nvrhi::IBindingSet* set,
                   const Push& push, u32 width, u32 height) const;
 

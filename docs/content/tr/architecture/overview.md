@@ -14,8 +14,8 @@ illusion katmanlar halinde inşa edilir. Bir katman yalnızca altındaki katmanl
 | Asset'ler | Görüntüler, Mesh'ler, glTF modelleri, ortamlar (CPU tarafı) | Tamamlandı |
 | Runtime servisleri | Asset streaming, ses (miniaudio), fizik (Jolt) | Planlandı |
 | Renderer: temel | NVRHI üzerinden Vulkan 1.3 cihazı, swapchain'ler, Slang shader hattı | Tamamlandı |
-| Renderer: sahne | Mesh'ler, PBR Material'ler, doğrudan ve görüntü tabanlı aydınlatma, yumuşak gölgeler, GTAO, HDR post-processing (TAA, bloom, tonemapping), frustum culling, instancing | Tamamlandı |
-| Renderer: özellikler | Bindless kaynaklar, GPU-driven gönderim, occlusion culling | Planlandı |
+| Renderer: sahne | Mesh'ler, PBR Material'ler, doğrudan ve görüntü tabanlı aydınlatma, yumuşak gölgeler, GTAO, HDR post-processing (TAA, bloom, tonemapping), frustum culling, indirect draw'lı GPU occlusion culling, instancing | Tamamlandı |
+| Renderer: özellikler | Bindless kaynaklar, multi-draw indirect | Planlandı |
 | Editör | Sahne düzenleme, gizmo'lar, AI komut API'si | Planlandı |
 | Oyun modülü | Oyunun kendi kodu; editörde hot-reload edilebilen paylaşımlı kütüphane | Planlandı |
 

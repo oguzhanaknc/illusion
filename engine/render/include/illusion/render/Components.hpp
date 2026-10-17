@@ -57,6 +57,14 @@ struct SkyLight
     bool background = true;        ///< Draw the environment behind the scene instead of the clear colour.
 };
 
+/// World matrix of a MeshRenderer entity in the previous frame, for motion vectors (temporal
+/// anti-aliasing). The SceneRenderer adds and updates it; set it to the current matrix after teleporting
+/// an object so the jump is not treated as motion.
+struct MotionHistory
+{
+    Mat4 previousWorld{1.0f}; ///< World matrix used by the previous render() call.
+};
+
 /// Creates one Entity per mesh-bearing node and submesh of @p model (Transform + MeshRenderer), placed
 /// relative to @p root. Returns the created entities.
 std::vector<Entity> spawnModel(World& world, const ModelData& model, const ModelHandles& handles,
