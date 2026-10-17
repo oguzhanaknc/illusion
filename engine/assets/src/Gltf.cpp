@@ -23,6 +23,7 @@ namespace
 struct FileContext
 {
     const VirtualFileSystem* files;
+    std::vector<std::string>* dependencies; // may be null
 };
 
 cgltf_result readFile(const cgltf_memory_options* /*memory*/, const cgltf_file_options* file,
@@ -38,6 +39,10 @@ cgltf_result readFile(const cgltf_memory_options* /*memory*/, const cgltf_file_o
     if (context->files->readFile(*normalized, bytes) != FileError::None)
     {
         return cgltf_result_file_not_found;
+    }
+    if (context->dependencies != nullptr)
+    {
+        context->dependencies->push_back(*normalized);
     }
     void* copy = std::malloc(std::max<usize>(bytes.size(), 1));
     if (copy == nullptr)
@@ -113,10 +118,12 @@ TextureWrap wrapFromGl(cgltf_int mode) noexcept
 class Importer
 {
 public:
-    Importer(const VirtualFileSystem& files, const cgltf_data& data, std::string_view path)
+    Importer(const VirtualFileSystem& files, const cgltf_data& data, std::string_view path,
+             std::vector<std::string>* dependencies)
         : m_files(files)
         , m_data(data)
         , m_directory(directoryOf(path))
+        , m_dependencies(dependencies)
     {
     }
 
@@ -415,6 +422,10 @@ private:
                     error = std::format("cannot read image '{}'", uri);
                     return false;
                 }
+                if (m_dependencies != nullptr)
+                {
+                    m_dependencies->push_back(*path);
+                }
             }
             std::string decodeError;
             auto decoded = decodeImage(encoded, used->second, &decodeError);
@@ -475,6 +486,7 @@ private:
     const VirtualFileSystem& m_files;
     const cgltf_data& m_data;
     std::string m_directory;
+    std::vector<std::string>* m_dependencies;
     std::unordered_map<usize, bool> m_imageSrgb;
 };
 
@@ -507,7 +519,7 @@ Aabb ModelData::bounds() const
 }
 
 std::optional<ModelData> loadGltf(const VirtualFileSystem& files, std::string_view virtualPath,
-                                  std::string* error)
+                                  std::string* error, std::vector<std::string>* dependencies)
 {
     ILL_PROFILE_SCOPE();
     const auto fail = [&](std::string message) -> std::optional<ModelData> {
@@ -524,7 +536,15 @@ std::optional<ModelData> loadGltf(const VirtualFileSystem& files, std::string_vi
         return fail(std::string(fileErrorName(result)));
     }
 
-    FileContext context{&files};
+    if (dependencies != nullptr)
+    {
+        dependencies->clear();
+        if (const auto normalized = VirtualFileSystem::normalizePath(virtualPath))
+        {
+            dependencies->push_back(*normalized);
+        }
+    }
+    FileContext context{&files, dependencies};
     cgltf_options options{};
     options.file.read = &readFile;
     options.file.release = &releaseFile;
@@ -559,7 +579,7 @@ std::optional<ModelData> loadGltf(const VirtualFileSystem& files, std::string_vi
 
     ModelData model;
     std::string message;
-    Importer importer(files, *data, virtualPath);
+    Importer importer(files, *data, virtualPath, dependencies);
     if (!importer.run(model, message))
     {
         return fail(message);

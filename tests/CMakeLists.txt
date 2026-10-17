@@ -10,6 +10,7 @@ add_executable(illusion_tests
     core/TestLog.cpp
     core/TestMath.cpp
     core/TestMemory.cpp
+    core/TestSerialization.cpp
     core/TestThread.cpp
     core/TestTime.cpp
     core/TestTypeName.cpp
@@ -24,6 +25,8 @@ add_executable(illusion_tests
     input/TestGamepadState.cpp
     input/TestGamepadSystem.cpp
     input/TestInputActions.cpp
+    assets/TestAssetDatabase.cpp
+    assets/TestAssetFormat.cpp
     assets/TestEnvironment.cpp
     assets/TestGltf.cpp
     assets/TestImageMesh.cpp

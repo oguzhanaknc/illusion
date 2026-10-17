@@ -3,6 +3,7 @@
 add_library(illusion_core STATIC
     src/core/Assert.cpp
     src/core/EventBus.cpp
+    src/core/Hash.cpp
     src/core/JobSystem.cpp
     src/core/Log.cpp
     src/core/Memory.cpp

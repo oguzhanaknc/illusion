@@ -96,3 +96,46 @@ const illusion::Vec3 fromAbove = irradiance.evaluate(illusion::Vec3(0.0f, 1.0f, 
   `RenderResources::createEnvironment()` bunu sizin için çağırır.
 - `makeSkyImage()` prototipler, test'ler ve yedek olarak prosedürel bir gökyüzü (zenitten ufka bir
   geçiş, zemin ve isteğe bağlı bir güneş diski) oluşturur.
+
+## Asset veritabanı
+
+PNG'leri çözmek, mip zincirleri oluşturmak ve glTF dosyalarını dönüştürmek zaman alır. `AssetDatabase`
+bunu her kaynak dosya için bir kez yapar ve sonucu bir önbellekte tutar; sonraki yüklemeler bunun yerine
+hazırlanmış (cooked) dosyayı okur.
+
+Header: `<illusion/assets/AssetDatabase.hpp>`
+
+```cpp
+illusion::VirtualFileSystem files;
+files.mount("game", illusion::executableDirectory() / "data");
+files.mount("cache", illusion::userDataDirectory("MyStudio", "MyGame") / "cache",
+            illusion::MountAccess::ReadWrite);
+
+illusion::AssetDatabase assets(files, "cache");
+std::optional<illusion::ModelData> helmet = assets.loadModel("game:/models/helmet.glb");
+
+illusion::ImageImportSettings normalMap;
+normalMap.srgb = false;
+std::optional<illusion::Image> bumps = assets.loadImage("game:/textures/rock_normal.png", normalMap);
+```
+
+- Önbellek mount'u yazılabilir olmalıdır. Önbellek mount adı boş verilirse her yükleme kaynaktan içe
+  aktarır.
+- Bir önbellek kaydı, Asset'in geldiği her dosyanın içerik hash'ini hatırlar (glTF için: model, buffer'ları
+  ve görüntüleri). Bunlardan biri değiştiğinde sonraki yükleme yeniden içe aktarır ve kaydı yeniler; elle
+  hiçbir şeyin temizlenmesi gerekmez.
+- Her içe aktarma ayarı kendi kaydını alır; böylece aynı görüntü hem sRGB renk hem de doğrusal veri olarak
+  yüklenebilir.
+- Mip'leriyle birlikte önbellekteki 512x512 bir Texture'ı yüklemek, PNG'yi çözmekten yaklaşık on kat
+  hızlıdır.
+- `statistics()` önbellek isabetlerini, içe aktarmaları ve önbellek yazmalarını sayar.
+
+Asset'ler, normalleştirilmiş sanal yolun kararlı bir hash'i olan `AssetId` ile tanımlanır:
+
+```cpp
+const illusion::AssetId id = illusion::AssetId::fromPath("game:/models/helmet.glb");
+```
+
+Hazırlanmış dosyalar (`<illusion/assets/AssetFormat.hpp>` içindeki `AssetFile`, `serializeImage()`,
+`serializeModel()`) sürümlüdür, checksum içerir ve okunurken tamamen doğrulanır; bu yüzden hasarlı bir
+önbellek dosyasına güvenilmez, yok sayılır.

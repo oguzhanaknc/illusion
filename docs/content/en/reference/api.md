@@ -24,7 +24,8 @@ Open `build/api/index.html` in a browser.
 | `illusion/core/JobSystem.hpp` | `JobSystem`, `JobCounter`, `Job` |
 | `illusion/core/InplaceFunction.hpp` | Allocation-free type-erased callable |
 | `illusion/core/Thread.hpp` | Thread names, thread indices, spin-wait hint |
-| `illusion/core/Hash.hpp` | Stable FNV-1a hashing |
+| `illusion/core/Hash.hpp` | Stable FNV-1a and xxHash64 hashing |
+| `illusion/core/Serialization.hpp` | `BinaryWriter`, `BinaryReader` (bounds-checked, little-endian) |
 | `illusion/core/TypeName.hpp` | Compile-time type names |
 | `illusion/core/Profiler.hpp` | Tracy profiling macros |
 | `illusion/core/EventBus.hpp` | `EventBus`, `Subscription` |
@@ -47,6 +48,8 @@ Open `build/api/index.html` in a browser.
 | `illusion/assets/Image.hpp` | `Image`, decoding, PNG encoding, mip generation |
 | `illusion/assets/Mesh.hpp` | `MeshData`, `Vertex`, procedural Meshes |
 | `illusion/assets/Model.hpp` | `ModelData`, `MaterialData`, `loadGltf` |
+| `illusion/assets/AssetFormat.hpp` | `AssetId`, `AssetFile`, cooked image and model formats |
+| `illusion/assets/AssetDatabase.hpp` | `AssetDatabase`: import cache for images and models |
 | `illusion/assets/Environment.hpp` | Equirectangular mapping, `ShIrradiance`, `makeSkyImage` |
 | `illusion/render/RenderDevice.hpp` | `RenderDevice`, `GpuInfo` (including bindless and multi-draw support): Vulkan device through NVRHI |
 | `illusion/render/Swapchain.hpp` | `Swapchain`: presentation to a window |

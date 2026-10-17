@@ -50,8 +50,10 @@ ADRs for its significant decisions. Items marked ✅ are done.
 
 ## M4 — Assets and streaming
 
-- Asset database, import cache, async streaming on the Job System and dedicated I/O threads
-- Packed asset archives for export
+- M4a: ✅ Binary serialization, stable asset ids, cooked image and model formats, import cache validated by
+  source content hashes (xxHash64) (ADR 0019)
+- M4b: Async streaming on the Job System and a dedicated I/O thread, asset handles, GPU upload queue
+- M4c: Packed asset archives for export (VFS archive mounts, packer tool)
 
 ## M5 — Gameplay services
 
