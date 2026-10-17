@@ -28,8 +28,9 @@ decisions are in `docs/adr/`. Do not reverse an accepted ADR silently: write a n
 | `engine/core/src` | Core implementation |
 | `engine/platform` | Platform layer: windows, input, events from the OS, virtual file system (GLFW is private) |
 | `engine/input` | Gamepads (SDL3 private), `InputActions` mapping/rebinding/glyphs; tests use `attachVirtualGamepad()` |
-| `engine/render` | Render device (Vulkan via NVRHI), swapchains, `shaders/` (Slang, built with `illusion_add_shaders`) |
-| `samples/` | Sample applications (`hello_triangle`, `input_viewer`) |
+| `engine/assets` | CPU-side assets: `Image`, `MeshData`, glTF via `loadGltf` (cgltf/stb private); no GPU code |
+| `engine/render` | Render device (Vulkan via NVRHI), swapchains, `RenderResources`, `SceneRenderer`, render Components, `shaders/` (Slang, built with `illusion_add_shaders`) |
+| `samples/` | Sample applications (`hello_triangle`, `input_viewer`, `gltf_viewer`) |
 | `tests/` | doctest unit tests; one `Test<Feature>.cpp` per feature; shared helpers in `TestSupport.hpp` |
 | `benchmarks/` | nanobench benchmarks with budgets (`ILL_BENCHMARK(name, nsPerOp)`) |
 | `cmake/` | `IllusionOptions`, `IllusionCompilerSettings`, `Dependencies` (pinned) |
@@ -56,7 +57,7 @@ Windows: prefix commands with `tools\windows\vsdev.cmd` (sets up MSVC). Presets:
 
 GPU tests (`tests/gpu`, CTest label `gpu`) need a Vulkan 1.3 driver; CI runs them on Mesa lavapipe
 under Xvfb. Render code must keep `RenderDevice::validationErrorCount()` at zero. Clip space is y-up
-with depth [0, 1] (ADR 0009).
+with depth [0, 1] (ADR 0009); the scene renderer uses reversed-Z (ADR 0013).
 
 A change is done only when: both Debug and Release build with zero warnings, all tests pass, benchmarks
 are within budget, format and docs checks pass, and Doxygen reports nothing.

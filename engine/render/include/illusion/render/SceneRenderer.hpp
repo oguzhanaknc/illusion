@@ -1,0 +1,86 @@
+#pragma once
+
+/// @file
+/// Forward PBR renderer for ECS scenes: frustum culling (parallel on the Job System), sorting into
+/// instanced batches, opaque then back-to-front transparent drawing, reversed-Z depth.
+
+#include <illusion/core/Base.hpp>
+#include <illusion/core/Math.hpp>
+#include <illusion/ecs/Transform.hpp>
+#include <illusion/render/Components.hpp>
+
+#include <nvrhi/nvrhi.h>
+
+#include <memory>
+
+namespace illusion
+{
+
+class JobSystem;
+class RenderDevice;
+class RenderResources;
+class World;
+
+/// Camera matrices for one rendered view.
+struct RenderView
+{
+    Mat4 view{1.0f};       ///< World to view.
+    Mat4 projection{1.0f}; ///< View to clip (reversed-Z, see perspectiveReversedZ()).
+    Vec3 position{0.0f};   ///< Camera position in world space.
+    f32 exposure = 1.0f;   ///< Exposure multiplier.
+
+    /// View looking through @p camera placed at @p transform, for a target with @p aspect (width / height).
+    [[nodiscard]] static RenderView fromCamera(const Transform& transform, const Camera& camera,
+                                               f32 aspect) noexcept;
+};
+
+/// Counters from the last SceneRenderer::render() call.
+struct RenderStats
+{
+    u32 candidates = 0; ///< MeshRenderer entities considered.
+    u32 visible = 0;    ///< Entities that passed frustum culling.
+    u32 drawCalls = 0;  ///< Instanced draw calls issued.
+    u64 triangles = 0;  ///< Triangles submitted.
+};
+
+/// Creation parameters for SceneRenderer.
+struct SceneRendererDesc
+{
+    nvrhi::Format colorFormat = nvrhi::Format::SBGRA8_UNORM; ///< Format of the targets passed to render().
+    Vec3 ambient{0.03f};                                     ///< Constant ambient light (until IBL).
+    Vec4 clearColor{0.02f, 0.02f, 0.03f, 1.0f};              ///< Background colour (linear for sRGB targets).
+};
+
+/// Renders World entities that have Transform + MeshRenderer, lit by DirectionalLight and PointLight
+/// entities. Use on the render thread.
+class SceneRenderer : NonCopyable
+{
+public:
+    /// Maximum lights used per frame (the first ones found).
+    static constexpr u32 kMaxDirectionalLights = 4;
+    /// @copydoc kMaxDirectionalLights
+    static constexpr u32 kMaxPointLights = 16;
+
+    /// Creates the renderer. Returns nullptr (and logs why) on failure.
+    [[nodiscard]] static std::unique_ptr<SceneRenderer>
+    create(RenderDevice& device, RenderResources& resources, const SceneRendererDesc& desc = {});
+    ~SceneRenderer();
+
+    /// Clears @p colorTarget and renders @p world into it as seen from @p view. Culling runs on @p jobs
+    /// when given. The renderer owns a matching depth buffer, resized automatically.
+    void render(nvrhi::ICommandList* commandList, nvrhi::ITexture* colorTarget, World& world,
+                const RenderView& view, JobSystem* jobs = nullptr);
+
+    /// Counters from the last render() call.
+    [[nodiscard]] const RenderStats& stats() const noexcept;
+
+    /// Changes the constant ambient light.
+    void setAmbient(Vec3 ambient) noexcept;
+
+private:
+    SceneRenderer();
+    struct Impl;
+    std::unique_ptr<Impl> m_impl;
+};
+
+} // namespace illusion

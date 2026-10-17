@@ -35,11 +35,12 @@ ADRs for its significant decisions. Items marked ✅ are done.
 
 ## M3 — Renderer core
 
-- Bindless resources, GPU-driven draw submission where supported, instancing
-- glTF 2.0 import (meshes, materials, textures) through the asset pipeline
-- PBR shading, IBL from HDRIs, CSM + PCSS soft shadows, GTAO
-- HDR pipeline, bloom, tonemapping, optional TAA
-- Frustum and occlusion culling (Job System parallel)
+- M3a: ✅ glTF 2.0 import (meshes, materials, textures), forward PBR, reversed-Z, parallel frustum culling,
+  instancing, `gltf_viewer` sample (ADR 0013)
+- M3b: IBL from HDRIs (Poly Haven)
+- M3c: CSM + PCSS soft shadows
+- M3d: HDR pipeline, GTAO, bloom, tonemapping, optional TAA
+- M3e: Bindless resources, GPU-driven draw submission where supported, occlusion culling
 - Render benchmarks with frame-time budgets
 
 ## M4 — Assets and streaming

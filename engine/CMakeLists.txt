@@ -1,4 +1,5 @@
 add_subdirectory(core)
 add_subdirectory(platform)
 add_subdirectory(input)
+add_subdirectory(assets)
 add_subdirectory(render)

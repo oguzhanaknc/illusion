@@ -16,6 +16,8 @@ must be included with distributed games (the export pipeline will collect them a
 | [miniaudio](https://github.com/mackron/miniaudio) | 0.11.25 | Public domain or MIT-0 | Audio (planned) | Yes |
 | [NVRHI](https://github.com/NVIDIA-RTX/NVRHI) | commit `6b96fb0` | MIT | Graphics abstraction | Yes |
 | [Vulkan-Headers](https://github.com/KhronosGroup/Vulkan-Headers) | 1.4.352 | Apache-2.0 OR MIT | Vulkan API headers | Yes (headers only) |
+| [cgltf](https://github.com/jkuhlmann/cgltf) | 1.15 | MIT | glTF 2.0 import | Yes |
+| [stb_image](https://github.com/nothings/stb) | commit `2c980bb` (v2.30) | Public domain or MIT | PNG, JPEG and HDR decoding | Yes |
 | [Slang](https://github.com/shader-slang/slang) | 2026.19 | Apache-2.0 WITH LLVM-exception | Shader compiler, run at build time only | No |
 
 Development tools that are not linked: CMake, Ninja, clang-format, Doxygen, MkDocs, Material for MkDocs,

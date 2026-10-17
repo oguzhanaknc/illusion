@@ -11,9 +11,11 @@ illusion katmanlar halinde inşa edilir. Bir katman yalnızca altındaki katmanl
 | Core | Platform tespiti, assertion'lar, logging, bellek, Job System, ECS, event bus, zaman, matematik | Tamamlandı |
 | Platform | Pencere, klavye ve fare (GLFW), sanal dosya sistemi | Tamamlandı |
 | Input | SDL3 üzerinden gamepad'ler (titreşim, LED, hareket, touchpad, adaptive trigger'lar), action eşleme, yeniden atama, glyph'ler | Tamamlandı |
-| Runtime servisleri | Asset'ler ve streaming, ses (miniaudio), fizik (Jolt) | Planlandı |
+| Asset'ler | Görüntüler, Mesh'ler, glTF modelleri (CPU tarafı) | Tamamlandı |
+| Runtime servisleri | Asset streaming, ses (miniaudio), fizik (Jolt) | Planlandı |
 | Renderer: temel | NVRHI üzerinden Vulkan 1.3 cihazı, swapchain'ler, Slang shader hattı | Tamamlandı |
-| Renderer: özellikler | Mesh'ler, PBR, IBL, gölgeler, GTAO, post-processing, culling | Planlandı |
+| Renderer: sahne | Mesh'ler, PBR Material'ler, doğrudan ışıklar, frustum culling, instancing | Tamamlandı |
+| Renderer: özellikler | IBL, gölgeler, GTAO, post-processing, bindless, occlusion culling | Planlandı |
 | Editör | Sahne düzenleme, gizmo'lar, AI komut API'si | Planlandı |
 | Oyun modülü | Oyunun kendi kodu; editörde hot-reload edilebilen paylaşımlı kütüphane | Planlandı |
 
@@ -57,6 +59,7 @@ nitelikli adlarının hash'i ile tanımlanır; bu yüzden bir Component her iki 
 | `engine/core` | Core kütüphanesi: `include/illusion/{core,ecs}` ve `src/` |
 | `engine/platform` | Platform kütüphanesi: `include/illusion/platform` ve `src/` |
 | `engine/input` | Input kütüphanesi: `include/illusion/input` ve `src/` |
+| `engine/assets` | Assets kütüphanesi: `include/illusion/assets` ve `src/` |
 | `engine/render` | Render kütüphanesi: `include/illusion/render`, `src/` ve `shaders/` |
 | `samples` | Motor özelliklerini çalıştıran küçük uygulamalar |
 | `tests` | Unit test'ler (doctest), her özellik için bir dosya |

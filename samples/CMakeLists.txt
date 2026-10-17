@@ -5,3 +5,7 @@ illusion_configure_target(illusion_hello_triangle)
 add_executable(illusion_input_viewer input_viewer/main.cpp)
 target_link_libraries(illusion_input_viewer PRIVATE illusion::input illusion::platform)
 illusion_configure_target(illusion_input_viewer)
+
+add_executable(illusion_gltf_viewer gltf_viewer/main.cpp)
+target_link_libraries(illusion_gltf_viewer PRIVATE illusion::render illusion::input illusion::assets)
+illusion_configure_target(illusion_gltf_viewer)

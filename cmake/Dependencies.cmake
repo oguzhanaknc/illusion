@@ -40,6 +40,23 @@ FetchContent_Declare(tracy
     DOWNLOAD_EXTRACT_TIMESTAMP TRUE
     SYSTEM)
 
+# cgltf 1.15 (MIT): glTF 2.0 parser (single header).
+FetchContent_Declare(cgltf
+    URL https://github.com/jkuhlmann/cgltf/archive/refs/tags/v1.15.tar.gz
+    URL_HASH SHA256=84e352092e5cd6aab7f66de62ddb66beb5e6f18d412ca9d12950d7a55bfef25a
+    DOWNLOAD_EXTRACT_TIMESTAMP TRUE
+    SYSTEM
+    SOURCE_SUBDIR _illusion_no_cmake)
+
+# stb (public domain / MIT): stb_image for PNG, JPEG and Radiance HDR decoding. No release tags;
+# pinned to a commit archive.
+FetchContent_Declare(stb
+    URL https://github.com/nothings/stb/archive/2c980bb59875b0d32144a71867fbdebb2f77cd20.tar.gz
+    URL_HASH SHA256=9a955b1b49a4410088a2e0ee2a9c057c3c907d0c1d75454144cb980aca0ba515
+    DOWNLOAD_EXTRACT_TIMESTAMP TRUE
+    SYSTEM
+    SOURCE_SUBDIR _illusion_no_cmake)
+
 # --- Declared for upcoming modules (see ROADMAP.md) ---------------------------------------------------
 
 # GLFW 3.5.1 (Zlib): window, keyboard, mouse.
@@ -133,6 +150,8 @@ endif()
 #   nvrhi     -> nvrhi, nvrhi_vk (Vulkan backend only) and Vulkan::Headers
 #   slang     -> ILLUSION_SLANGC (path of the slangc executable)
 #   sdl3      -> SDL3::SDL3-static (gamepad subsystems only)
+#   cgltf     -> illusion::cgltf (headers; the implementation is compiled in illusion::assets)
+#   stb       -> illusion::stb (headers; the implementation is compiled in illusion::assets)
 function(illusion_require_dependency name)
     get_property(done GLOBAL PROPERTY ILLUSION_DEP_${name})
     if(done)
@@ -206,6 +225,16 @@ function(illusion_require_dependency name)
         # Video is disabled on purpose (GLFW owns windows); tell SDL's Linux build not to require X11/Wayland.
         set(SDL_UNIX_CONSOLE_BUILD ON CACHE BOOL "" FORCE)
         FetchContent_MakeAvailable(sdl3)
+    elseif(name STREQUAL "cgltf")
+        FetchContent_MakeAvailable(cgltf)
+        add_library(illusion_cgltf INTERFACE)
+        add_library(illusion::cgltf ALIAS illusion_cgltf)
+        target_include_directories(illusion_cgltf SYSTEM INTERFACE "${cgltf_SOURCE_DIR}")
+    elseif(name STREQUAL "stb")
+        FetchContent_MakeAvailable(stb)
+        add_library(illusion_stb INTERFACE)
+        add_library(illusion::stb ALIAS illusion_stb)
+        target_include_directories(illusion_stb SYSTEM INTERFACE "${stb_SOURCE_DIR}")
     elseif(name STREQUAL "slang")
         if(ILLUSION_SLANGC_EXECUTABLE)
             set(ILLUSION_SLANGC "${ILLUSION_SLANGC_EXECUTABLE}" CACHE INTERNAL "")

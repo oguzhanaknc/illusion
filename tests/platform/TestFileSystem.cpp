@@ -139,6 +139,25 @@ TEST_CASE("read-only mounts reject writes and missing files report NotFound")
     CHECK(vfs.readText("game:/", text) == FileError::NotFound); // a directory is not a file
 }
 
+TEST_CASE("normalizePath resolves dot components without leaving the mount")
+{
+    CHECK(VirtualFileSystem::normalizePath("game:/models/../textures/./a.png") == "game:/textures/a.png");
+    CHECK(VirtualFileSystem::normalizePath("game:/a//b/") == "game:/a/b");
+    CHECK(VirtualFileSystem::normalizePath("game:/") == "game:/");
+    CHECK(VirtualFileSystem::normalizePath("game:/a/..") == "game:/");
+    CHECK_FALSE(VirtualFileSystem::normalizePath("game:/../secret").has_value());
+    CHECK_FALSE(VirtualFileSystem::normalizePath("game:/a/../../b").has_value());
+    CHECK_FALSE(VirtualFileSystem::normalizePath("no-mount/a").has_value());
+    CHECK_FALSE(VirtualFileSystem::normalizePath("game:/con").has_value());
+}
+
+TEST_CASE("utf8Path keeps non-ASCII characters on every platform")
+{
+    const std::filesystem::path path = utf8Path("klasör/dosya-ğüş.txt");
+    CHECK(path.filename().u8string() == u8"dosya-ğüş.txt");
+    CHECK(path.parent_path().u8string() == u8"klasör");
+}
+
 TEST_CASE("fileErrorName covers every error")
 {
     CHECK(fileErrorName(FileError::None) == "None");
