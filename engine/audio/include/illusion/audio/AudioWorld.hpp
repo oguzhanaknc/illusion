@@ -14,6 +14,7 @@
 /// audio.update(frameSeconds); // starts new sources, moves 3D sounds, hands the mix to the audio thread
 /// @endcode
 
+#include <illusion/assets/AssetStreamer.hpp>
 #include <illusion/audio/AudioComponents.hpp>
 #include <illusion/core/Base.hpp>
 #include <illusion/core/Math.hpp>
@@ -46,6 +47,10 @@ struct AudioWorldDesc
     u32 maxVoices = 128;         ///< Sounds that can play at the same time.
     u32 periodMilliseconds = 10; ///< Device buffer period: lower means less latency, more wake-ups.
     f32 speedOfSound = 343.3f;   ///< In m/s, for the doppler effect.
+    /// Loads the clips of AudioSources and of AudioWorld::requestClip() in the background. Null loads
+    /// them on the calling thread. The streamer must outlive the AudioWorld, and the game calls its
+    /// update() (which publishes finished loads) before AudioWorld::update().
+    AssetStreamer* streamer = nullptr;
 };
 
 /// How a clip is kept in memory.
@@ -80,6 +85,25 @@ struct AudioPlayParams
     f32 maxDistance = 1000.0f;                                ///< No further attenuation beyond it.
     f32 rolloff = 1.0f;                                       ///< Steepness of the attenuation.
     u32 priority = 128;                                       ///< Voice priority.
+    f32 lowPassCutoff = 0.0f;                                 ///< Low-pass filter cutoff in Hz; 0 is off.
+    f32 reverbSend = 0.0f;                                    ///< Share sent to the reverb, in [0, 1].
+};
+
+/// The reverb that sounds feed through AudioSource::reverbSend (a Freeverb-style room reverb).
+struct AudioReverbSettings
+{
+    f32 roomSize = 0.5f; ///< Size of the room in [0, 1]: larger rooms ring longer.
+    f32 damping = 0.25f; ///< Absorption of high frequencies in [0, 1].
+    f32 width = 1.0f;    ///< Stereo width of the reverb in [0, 1].
+    f32 volume = 1.0f;   ///< Linear gain of the reverb (at least 0).
+};
+
+/// Filters applied to everything a bus plays, for example to muffle the game under a pause menu or to
+/// make dialogue sound like a radio.
+struct AudioBusFilter
+{
+    f32 lowPassCutoff = 0.0f;  ///< Removes frequencies above this cutoff in Hz; 0 is off.
+    f32 highPassCutoff = 0.0f; ///< Removes frequencies below this cutoff in Hz; 0 is off.
 };
 
 /// Handle to a sound started with AudioWorld::playOneShot().
@@ -99,6 +123,7 @@ struct AudioStats
     u32 droppedSounds = 0;    ///< Sounds that could not start because every voice had a higher priority.
     u32 stolenVoices = 0;     ///< Voices taken from lower-priority sounds.
     u32 clips = 0;            ///< Loaded clips.
+    u32 loadingClips = 0;     ///< Clips loading in the background.
     usize clipBytes = 0;      ///< Memory held by loaded clips.
     u64 mixerAllocations = 0; ///< Blocks the mixer took from the system allocator; constant after start-up.
 };
@@ -120,8 +145,10 @@ public:
     ~AudioWorld();
 
     /// Synchronizes the mixer with the World and publishes the result to the audio thread:
-    /// - AudioSource Entities seen for the first time get an AudioPlayback component and load their clip;
-    ///   those with AudioSource::playOnStart start playing.
+    /// - AudioSource Entities seen for the first time get an AudioPlayback component and load their clip
+    ///   (in the background with AudioWorldDesc::streamer); those with AudioSource::playOnStart start
+    ///   playing, or start once their clip has loaded.
+    /// - Clips that finished loading in the background become ready.
     /// - Sounds of destroyed Entities, or of Entities that lost their AudioSource, stop.
     /// - Volumes, pitches, buses and the positions and velocities of spatial sounds and of the listener
     ///   are updated. Velocities are the Transform movement divided by @p deltaSeconds.
@@ -132,8 +159,18 @@ public:
     /// @{
 
     /// Loads (or returns the already loaded) clip at @p virtualPath. Returns an invalid handle and logs a
-    /// warning if the file cannot be read or decoded. Clips stay loaded until unloadClip().
+    /// warning if the file cannot be read or decoded. Clips stay loaded until unloadClip(). If the clip is
+    /// still loading in the background (requestClip()), returns its handle without waiting.
     AudioClipHandle loadClip(std::string_view virtualPath, AudioClipMode mode = AudioClipMode::Decode);
+
+    /// Starts loading the clip at @p virtualPath through AudioWorldDesc::streamer and returns its handle
+    /// at once; clipState() tells when it is ready (after a later update()). Without a streamer this is
+    /// loadClip(). Requests for a clip that is loaded or loading return the same handle.
+    AudioClipHandle requestClip(std::string_view virtualPath, AudioClipMode mode = AudioClipMode::Decode);
+
+    /// Loading state of @p clip: Ready once it can play, Loading while it loads in the background, and
+    /// Failed for invalid or unloaded handles and clips that could not be loaded.
+    [[nodiscard]] AssetState clipState(AudioClipHandle clip) const noexcept;
 
     /// Creates a clip from interleaved PCM samples in [-1, 1] with @p channels channels at @p sampleRate Hz
     /// (converted to the mixing rate; more than two channels are downmixed to stereo).
@@ -142,7 +179,8 @@ public:
     /// Unloads a clip. Its handle becomes invalid at once; its memory is freed when no voice plays it.
     void unloadClip(AudioClipHandle clip);
 
-    /// Properties of a loaded clip, or std::nullopt for an invalid or unloaded handle.
+    /// Properties of a loaded clip, or std::nullopt for an invalid or unloaded handle (or a clip that is
+    /// not ready yet).
     [[nodiscard]] std::optional<AudioClipInfo> clipInfo(AudioClipHandle clip) const;
 
     /// @}
@@ -159,8 +197,8 @@ public:
     /// True if the sound of @p entity is playing, as of the last update().
     [[nodiscard]] bool isPlaying(Entity entity) const;
 
-    /// Plays @p clip without an Entity. Returns an invalid handle if the clip is invalid or no voice is
-    /// free for its priority.
+    /// Plays @p clip without an Entity. Returns an invalid handle if the clip is invalid or not ready yet,
+    /// or if no voice is free for its priority.
     AudioVoiceHandle playOneShot(AudioClipHandle clip, const AudioPlayParams& params = {});
 
     /// Stops a sound started with playOneShot().
@@ -191,6 +229,19 @@ public:
 
     /// True if @p bus is paused.
     [[nodiscard]] bool isBusPaused(AudioBus bus) const noexcept;
+
+    /// Sets the filters of @p bus (cutoffs are clamped below half the mixing rate).
+    void setBusFilter(AudioBus bus, const AudioBusFilter& filter);
+
+    /// Filters of @p bus.
+    [[nodiscard]] AudioBusFilter busFilter(AudioBus bus) const noexcept;
+
+    /// Sets the reverb that AudioSource::reverbSend and AudioPlayParams::reverbSend feed. Sounds on a
+    /// paused bus stop feeding it; the tail of the reverb keeps ringing.
+    void setReverb(const AudioReverbSettings& settings);
+
+    /// The reverb settings.
+    [[nodiscard]] const AudioReverbSettings& reverb() const noexcept;
 
     /// @}
 

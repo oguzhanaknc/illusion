@@ -132,4 +132,26 @@ DecoderPtr openAudioStream(std::span<const std::byte> data, u32 channels, u32 sa
     return DecoderPtr(decoder);
 }
 
+bool loadClipData(std::vector<std::byte>&& bytes, bool stream, u32 sampleRate, ClipData& out)
+{
+    if (stream)
+    {
+        if (!probeAudio(bytes, sampleRate, out.channels, out.frames))
+        {
+            return false;
+        }
+        out.encoded = std::move(bytes);
+        return true;
+    }
+    PcmAudio pcm;
+    if (!decodeAudio(bytes, sampleRate, pcm))
+    {
+        return false;
+    }
+    out.samples = std::move(pcm.samples);
+    out.channels = pcm.channels;
+    out.frames = pcm.frames;
+    return true;
+}
+
 } // namespace illusion::detail

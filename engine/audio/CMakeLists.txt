@@ -19,7 +19,7 @@ target_include_directories(illusion_audio PUBLIC
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>)
 
 target_link_libraries(illusion_audio
-    PUBLIC illusion::core illusion::platform
+    PUBLIC illusion::core illusion::platform illusion::assets
     PRIVATE illusion_audio_backend)
 
 illusion_configure_target(illusion_audio)

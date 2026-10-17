@@ -70,8 +70,9 @@ ADRs for its significant decisions. Items marked ✅ are done.
 - M5d: ✅ Physics extensions: triangle mesh and convex hull colliders, character controller (steps, slopes,
   platforms, pushing), fixed/point/hinge/slider/distance joints with limits, motors and break forces, shape
   casts and overlaps (ADR 0025)
-- M5e: Audio extensions: asynchronous clip loading through the asset streamer, effects (reverb, filters),
-  sound cones, impact sounds in `physics_playground`
+- M5e: ✅ Audio extensions: clips loaded in the background through the asset streamer (`loadFile`),
+  per-sound low-pass filters, bus low/high-pass filters, a room reverb fed by per-sound sends, sound cones,
+  contact events with impact speeds and impact sounds in `physics_playground` (ADR 0026)
 
 ## M6 — Game modules and hot reload
 

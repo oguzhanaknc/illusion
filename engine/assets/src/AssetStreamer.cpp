@@ -11,6 +11,7 @@
 #include <condition_variable>
 #include <deque>
 #include <format>
+#include <functional>
 #include <mutex>
 #include <thread>
 #include <unordered_map>
@@ -26,6 +27,7 @@ enum class Kind : u8
 {
     Image,
     Model,
+    File, // read the file and run a decoder from another module (AssetStreamer::loadFile())
 };
 
 // One load moving through the stages: I/O thread (reads) -> job (verify, decode) -> completion.
@@ -36,6 +38,7 @@ struct Request
     std::string path; // normalized
     std::string cachePath;
     ImageImportSettings settings;
+    std::function<bool(std::vector<std::byte>&&, detail::AssetSlotBase&)> decode; // Kind::File
     bool forceImport = false; // the cache entry was stale; import from source
     bool skipCache = false;   // the cache entry could not be used; read the source instead
 
@@ -189,7 +192,7 @@ void AssetStreamer::Impl::ioLoop()
             {
                 importModel(std::move(load));
             }
-            else if (load->kind == Kind::Image && !load->cached && load->source.empty())
+            else if (load->kind != Kind::Model && !load->cached && load->source.empty())
             {
                 finish(std::move(load), false);
             }
@@ -209,6 +212,18 @@ void AssetStreamer::Impl::ioLoop()
 void AssetStreamer::Impl::read(Request& request)
 {
     ILL_PROFILE_SCOPE_N("Asset read");
+    if (request.kind == Kind::File)
+    {
+        if (const FileError result = files->readFile(request.path, request.source); result != FileError::None)
+        {
+            request.slot->error = std::format("{}: {}", request.path, fileErrorName(result));
+        }
+        else if (request.source.empty())
+        {
+            request.slot->error = std::format("{}: the file is empty", request.path);
+        }
+        return;
+    }
     const AssetType type = request.kind == Kind::Image ? AssetType::Image : AssetType::Model;
     const u32 version = request.kind == Kind::Image ? kImageFormatVersion : kModelFormatVersion;
     std::vector<std::byte> bytes;
@@ -262,6 +277,12 @@ void AssetStreamer::Impl::process(Request* raw)
 {
     ILL_PROFILE_SCOPE_N("Asset process");
     std::unique_ptr<Request> request(raw);
+    if (request->kind == Kind::File)
+    {
+        const bool ok = request->decode(std::move(request->source), *request->slot);
+        finish(std::move(request), ok);
+        return;
+    }
     if (request->cached &&
         (!desc.verifySources || detail::dependenciesUnchanged(*request->cached, request->dependencies)))
     {
@@ -403,6 +424,36 @@ AssetHandle<ModelData> AssetStreamer::loadModel(std::string_view virtualPath)
     ++impl.pendingCount;
     impl.queueLoad(std::move(request));
     return AssetHandle<ModelData>(std::move(slot));
+}
+
+std::shared_ptr<detail::AssetSlotBase> AssetStreamer::requestFile(std::string_view virtualPath,
+                                                                  std::string_view decoderName,
+                                                                  std::shared_ptr<detail::AssetSlotBase> slot,
+                                                                  FileDecoder decode)
+{
+    Impl& impl = *m_impl;
+    const std::optional<std::string> path = VirtualFileSystem::normalizePath(virtualPath);
+    const std::string key = std::format("{}|{}", decoderName, path.value_or(std::string(virtualPath)));
+    if (auto existing = impl.requests[key].lock())
+    {
+        return existing;
+    }
+    slot->id = AssetId::fromPath(virtualPath);
+    impl.requests[key] = slot;
+    if (!path)
+    {
+        slot->state = AssetState::Failed;
+        slot->error = std::format("{}: invalid path", virtualPath);
+        return slot;
+    }
+    auto request = std::make_unique<Request>();
+    request->slot = slot;
+    request->kind = Kind::File;
+    request->path = *path;
+    request->decode = std::move(decode);
+    ++impl.pendingCount;
+    impl.queueLoad(std::move(request));
+    return slot;
 }
 
 u32 AssetStreamer::update()

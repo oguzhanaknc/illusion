@@ -55,13 +55,13 @@ doxygen docs/Doxyfile
 | `illusion/assets/Model.hpp` | `ModelData`, `MaterialData`, `loadGltf` |
 | `illusion/assets/AssetFormat.hpp` | `AssetId`, `AssetFile`, hazırlanmış görüntü ve model formatları |
 | `illusion/assets/AssetDatabase.hpp` | `AssetDatabase`: görüntüler ve modeller için içe aktarma önbelleği |
-| `illusion/assets/AssetStreamer.hpp` | `AssetStreamer`, `AssetHandle`: asenkron yükleme |
+| `illusion/assets/AssetStreamer.hpp` | `AssetStreamer`, `AssetHandle`: görüntülerin, modellerin ve diğer dosyaların (`loadFile`) asenkron yüklenmesi |
 | `illusion/assets/AssetCooker.hpp` | `cookAssets`: bir dizini önceden içe aktarma |
 | `illusion/assets/Environment.hpp` | Equirectangular eşleme, `ShIrradiance`, `makeSkyImage` |
-| `illusion/physics/PhysicsWorld.hpp` | `PhysicsWorld`: simülasyon, cisim ve karakter kontrolü, Mesh ve hull geometrisi, joint'ler, raycast'ler, shape cast'ler, örtüşmeler, temas olayları |
+| `illusion/physics/PhysicsWorld.hpp` | `PhysicsWorld`: simülasyon, cisim ve karakter kontrolü, Mesh ve hull geometrisi, joint'ler, raycast'ler, shape cast'ler, örtüşmeler, çarpma hızlarıyla temas olayları |
 | `illusion/physics/PhysicsComponents.hpp` | `RigidBody`, `Collider`, `CharacterController`, `Joint` Component'leri ve çalışma zamanı durumları (`PhysicsBody`, `CharacterBody`, `PhysicsJoint`); `PhysicsMeshHandle` |
-| `illusion/audio/AudioWorld.hpp` | `AudioWorld`: clip'ler, çalma, tek seferlik sesler, mikser bus'ları, çıkış; `AudioWorldDesc`, `AudioStats` |
-| `illusion/audio/AudioComponents.hpp` | `AudioSource`, `AudioListener`, `AudioPlayback` Component'leri; `AudioBus`, `AudioAttenuation` |
+| `illusion/audio/AudioWorld.hpp` | `AudioWorld`: clip'ler (arka planda yükleme dahil), çalma, tek seferlik sesler, mikser bus'ları, bus filtreleri, reverb, çıkış; `AudioWorldDesc`, `AudioStats` |
+| `illusion/audio/AudioComponents.hpp` | `AudioSource` (filtreler, reverb gönderimi ve konilerle), `AudioListener`, `AudioPlayback` Component'leri; `AudioBus`, `AudioAttenuation` |
 | `illusion/render/RenderDevice.hpp` | `RenderDevice`, `GpuInfo` (bindless ve multi-draw desteği dahil): NVRHI üzerinden Vulkan cihazı |
 | `illusion/render/Swapchain.hpp` | `Swapchain`: bir pencereye present etme |
 | `illusion/render/DebugTriangle.hpp` | Tanılama amaçlı üçgen renderer'ı |

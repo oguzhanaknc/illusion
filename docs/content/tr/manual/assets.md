@@ -186,6 +186,29 @@ while (running)
 - Streamer'ı yok etmek, başlamamış yüklemeleri atlar, çalışanları bitirir ve onların önbellek
   kayıtlarını yazar.
 
+### Diğer dosya türleri
+
+`loadFile()`, başka modüllerin çözdüğü dosyaları stream eder. Dosyayı I/O thread'i okur, sizin
+decoder'ınız Job System üzerinde çalışır; bu yüzden herhangi bir thread'den çağrılmaya uygun olmalıdır:
+
+```cpp
+// Any file, turned into any type on the Job System; the audio module loads its clips this way.
+const illusion::AssetHandle<std::string> credits = streamer.loadFile<std::string>(
+    "game:/text/credits.txt", "game.text",
+    [](std::vector<std::byte>&& bytes, std::string& error) -> std::optional<std::string> {
+        if (bytes.empty())
+        {
+            error = "no credits";
+            return std::nullopt;
+        }
+        return std::string(reinterpret_cast<const char*>(bytes.data()), bytes.size());
+    });
+```
+
+Aynı yol ve decoder adıyla yapılan istekler bir handle'ı paylaşır; bu yüzden ad, decoder'ı, ayarlarını ve
+sonuç türünü tanımlamalıdır. İçe aktarma önbelleği kullanılmaz. Okunamayan, boş olan ya da decoder'ın
+reddettiği bir dosya, nedeni `error()` içinde olacak şekilde `Failed` olur.
+
 ## Hazırlanmış Asset'leri dağıtma
 
 Dağıtılan bir oyunun kaynak görüntülerine ve modellerine ihtiyacı yoktur: bunları önceden hazırlayın

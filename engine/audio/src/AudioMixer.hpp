@@ -6,8 +6,13 @@
 // MixerSnapshot and publishes it through a lock-free triple buffer; the audio thread applies the newest
 // snapshot at the start of each render() (starting, stopping and updating sounds), mixes, and reports
 // voices that reached their end and the newest snapshot it applied through atomics.
+//
+// Graph: sound -> [low-pass] -> splitter -> bus group -> [bus low-pass] -> [bus high-pass] -> endpoint, and
+// the splitter's second output -> reverb -> endpoint. Bracketed filters are bypassed while off, and the
+// reverb is only connected while sounds feed it or its tail rings.
 
 #include <illusion/audio/AudioComponents.hpp>
+#include <illusion/audio/AudioWorld.hpp>
 #include <illusion/core/Base.hpp>
 #include <illusion/core/Math.hpp>
 
@@ -15,6 +20,7 @@
 
 #include <array>
 #include <atomic>
+#include <extras/nodes/ma_reverb_node/ma_reverb_node.h>
 #include <memory>
 #include <vector>
 
@@ -40,8 +46,14 @@ struct VoiceState
     f32 maxDistance = 1000.0f;
     f32 rolloff = 1.0f;
     f32 dopplerFactor = 1.0f;
+    f32 lowPassCutoff = 0.0f; // Hz; 0 is off
+    f32 reverbSend = 0.0f;
+    f32 coneInnerAngle = kAudioFullCone;
+    f32 coneOuterAngle = kAudioFullCone;
+    f32 coneOuterVolume = 0.0f;
     Vec3 position{0.0f};
     Vec3 velocity{0.0f};
+    Vec3 direction{0.0f, 0.0f, -1.0f};
 };
 
 struct ListenerState
@@ -59,6 +71,8 @@ struct MixerSnapshot
     f32 masterVolume = 1.0f;
     std::array<f32, kAudioBusCount> busVolumes{};
     std::array<bool, kAudioBusCount> busPaused{};
+    std::array<AudioBusFilter, kAudioBusCount> busFilters{};
+    AudioReverbSettings reverb;
     std::vector<VoiceState> voices; // One entry per voice; sized once.
 };
 
@@ -149,32 +163,64 @@ public:
     // Blocks the mixer took from the system allocator (for tests).
     [[nodiscard]] u64 systemAllocations() const noexcept { return m_heap.systemAllocations(); }
 
+    // True if the reverb could be created (it needs a mixing rate of at least 22050 Hz).
+    [[nodiscard]] bool hasReverb() const noexcept { return m_reverbReady; }
+
+    // Audio thread (tests): true while the reverb is connected to the output.
+    [[nodiscard]] bool reverbConnected() const noexcept { return m_reverbConnected; }
+
 private:
     struct Voice
     {
         ma_sound sound;
         ma_audio_buffer_ref buffer;
-        u32 serial = 0; // serial of the last sound started on this voice
+        ma_lpf_node lowPass;
+        ma_splitter_node splitter; // output 0: the bus; output 1: the reverb
+        u32 serial = 0;            // serial of the last sound started on this voice
         bool active = false;
         AudioBus bus = AudioBus::Sfx;
+        f32 lowPassCutoff = 0.0f; // in effect; 0 while the filter is bypassed
+        bool sending = false;     // output 1 is connected to the reverb
+    };
+
+    struct Bus
+    {
+        ma_sound_group group;
+        ma_lpf_node lowPass;
+        ma_hpf_node highPass;
+        AudioBusFilter filter; // in effect
+        bool paused = false;
+        f32 volume = 1.0f;
     };
 
     void apply(const MixerSnapshot& snapshot) noexcept;
     void start(u32 index, const VoiceState& state) noexcept;
     void stop(Voice& voice) noexcept;
     void update(Voice& voice, const VoiceState& state) noexcept;
+    void routeVoice(Voice& voice, const VoiceState& state) noexcept;
+    void routeBus(Bus& bus, const AudioBusFilter& filter) noexcept;
+    void applyReverb(const AudioReverbSettings& settings) noexcept;
+    void connectReverb(u32 frameCount) noexcept;
+    [[nodiscard]] f32 clampCutoff(f32 cutoff) const noexcept;
     void warmPools(u32 maxVoices);
 
     VoiceHeap m_heap;
     ma_engine m_engine{};
-    std::array<ma_sound_group, kAudioBusCount> m_buses{};
-    std::array<bool, kAudioBusCount> m_busPaused{};
+    std::array<Bus, kAudioBusCount> m_buses{};
     std::unique_ptr<Voice[]> m_voices; // fixed addresses: miniaudio's node graph points into them
     std::unique_ptr<std::atomic<u32>[]> m_finished;
+    std::unique_ptr<ma_reverb_node> m_reverb; // large (fixed delay lines): kept off the Mixer object
+    AudioReverbSettings m_reverbSettings;     // in effect
     u32 m_voiceCount = 0;
     u32 m_sampleRate = 0;
-    u32 m_busCount = 0; // buses initialized so far
+    u32 m_busCount = 0;         // bus groups initialized so far
+    u32 m_busFilterCount = 0;   // buses whose filter nodes are initialized
+    u32 m_voiceNodeCount = 0;   // voices whose filter and splitter nodes are initialized
+    u32 m_sendingVoices = 0;    // voices connected to the reverb
+    u64 m_reverbTailFrames = 0; // frames the reverb stays connected after the last send stops
     bool m_engineReady = false;
+    bool m_reverbReady = false;
+    bool m_reverbConnected = false;
     bool m_valid = false;
     SnapshotExchange m_exchange;
     std::atomic<u64> m_acknowledged{0};

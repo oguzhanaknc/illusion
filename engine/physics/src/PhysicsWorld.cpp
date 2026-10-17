@@ -220,8 +220,13 @@ public:
         event.a = Entity::fromBits(body1.GetUserData());
         event.b = Entity::fromBits(body2.GetUserData());
         event.sensor = body1.IsSensor() || body2.IsSensor();
-        event.point = fromJolt(JPH::Vec3(manifold.GetWorldSpaceContactPointOn1(0)));
+        const JPH::RVec3 point = manifold.GetWorldSpaceContactPointOn1(0);
+        event.point = fromJolt(JPH::Vec3(point));
         event.normal = fromJolt(manifold.mWorldSpaceNormal);
+        // Called before the solver runs, so these are the velocities of the impact. The normal points
+        // from body 1 to body 2.
+        const JPH::Vec3 approach = body1.GetPointVelocity(point) - body2.GetPointVelocity(point);
+        event.speed = std::max(approach.Dot(manifold.mWorldSpaceNormal), 0.0f);
         push(event);
     }
 

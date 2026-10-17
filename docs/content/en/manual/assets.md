@@ -180,6 +180,29 @@ while (running)
 - Destroying the streamer skips loads that have not started, finishes the running ones and writes their
   cache entries.
 
+### Other file types
+
+`loadFile()` streams files that other modules decode. The I/O thread reads the file and your decoder
+runs on the Job System, so it must be safe to call from any thread:
+
+```cpp
+// Any file, turned into any type on the Job System; the audio module loads its clips this way.
+const illusion::AssetHandle<std::string> credits = streamer.loadFile<std::string>(
+    "game:/text/credits.txt", "game.text",
+    [](std::vector<std::byte>&& bytes, std::string& error) -> std::optional<std::string> {
+        if (bytes.empty())
+        {
+            error = "no credits";
+            return std::nullopt;
+        }
+        return std::string(reinterpret_cast<const char*>(bytes.data()), bytes.size());
+    });
+```
+
+Requests with the same path and decoder name share a handle, so the name must identify the decoder, its
+settings and its result type. The import cache is not used. A file that cannot be read, is empty or that
+the decoder rejects becomes `Failed` with the reason in `error()`.
+
 ## Shipping cooked assets
 
 A shipped game does not need its source images and models: cook them ahead of time and ship the import

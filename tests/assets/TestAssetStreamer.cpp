@@ -5,7 +5,9 @@
 
 #include <doctest/doctest.h>
 
+#include <atomic>
 #include <format>
+#include <optional>
 #include <string>
 #include <vector>
 
@@ -193,6 +195,52 @@ TEST_CASE("released assets are forgotten and can be loaded again")
     CHECK(again.state() == AssetState::Loading); // a new request, not the released one
     streamer.waitIdle();
     CHECK(again.ready());
+}
+
+TEST_CASE("loadFile reads a file on the I/O thread and decodes it on the Job System")
+{
+    test::AssetProject project;
+    JobSystem jobs(smallPool());
+    AssetStreamer streamer(project.files, jobs);
+    REQUIRE(
+        project.files.writeFile("game:/notes.txt", std::vector<std::byte>{std::byte{'h'}, std::byte{'i'}}) ==
+        FileError::None);
+    REQUIRE(project.files.writeFile("game:/empty.txt", std::vector<std::byte>{}) == FileError::None);
+
+    std::atomic<int> decodes{0};
+    const AssetFileDecoder<std::string> asText =
+        [&decodes](std::vector<std::byte>&& bytes, std::string& error) -> std::optional<std::string> {
+        decodes.fetch_add(1, std::memory_order_relaxed);
+        if (bytes.size() > 8)
+        {
+            error = "too long";
+            return std::nullopt;
+        }
+        return std::string(reinterpret_cast<const char*>(bytes.data()), bytes.size());
+    };
+    const AssetHandle<std::string> notes = streamer.loadFile("game:/notes.txt", "test.text", asText);
+    const AssetHandle<std::string> same = streamer.loadFile("game:/./notes.txt", "test.text", asText);
+    const AssetHandle<std::string> missing = streamer.loadFile("game:/missing.txt", "test.text", asText);
+    const AssetHandle<std::string> empty = streamer.loadFile("game:/empty.txt", "test.text", asText);
+    const AssetHandle<std::string> tooLong =
+        streamer.loadFile("game:/scene/two_nodes.gltf", "test.text", asText);
+    const AssetHandle<std::string> invalid = streamer.loadFile("../outside.txt", "test.text", asText);
+    CHECK(notes == same);
+    CHECK(notes.state() == AssetState::Loading);
+    CHECK(invalid.state() == AssetState::Failed);
+
+    streamer.waitIdle();
+    REQUIRE(notes.ready());
+    CHECK(notes.value() == "hi");
+    CHECK(notes.id() == AssetId::fromPath("game:/notes.txt"));
+    CHECK(missing.state() == AssetState::Failed);
+    CHECK(missing.error().find("game:/missing.txt") != std::string::npos);
+    CHECK(empty.state() == AssetState::Failed);
+    CHECK(empty.error().find("empty") != std::string::npos);
+    CHECK(tooLong.state() == AssetState::Failed);
+    CHECK(tooLong.error() == "too long");
+    CHECK(decodes.load() == 2); // notes once, and the long file; failed reads never reach the decoder
+    CHECK(streamer.statistics().imports == 0);
 }
 
 #if ILL_ASSERTS_ENABLED

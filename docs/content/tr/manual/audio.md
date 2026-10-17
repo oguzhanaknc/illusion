@@ -1,7 +1,8 @@
 # Ses
 
-illusion sesi [miniaudio](https://github.com/mackron/miniaudio) ile çalar: mesafe zayıflaması, panlama ve
-doppler etkisiyle 3D ses, müzik streaming ve bus'lı bir mikser. Sesler, `AudioSource` taşıyan sıradan
+illusion sesi [miniaudio](https://github.com/mackron/miniaudio) ile çalar: mesafe zayıflaması, panlama,
+ses konileri ve doppler etkisiyle 3D ses, müzik streaming, bus'lı, filtreli ve reverb'lü bir mikser ve
+arka planda yüklenen clip'ler. Sesler, `AudioSource` taşıyan sıradan
 Entity'lerdir; `AudioListener` ise kamera Entity'sinde durur.
 
 Header'lar: `<illusion/audio/AudioWorld.hpp>`, `<illusion/audio/AudioComponents.hpp>`
@@ -44,7 +45,7 @@ while (running)
 
 1. İlk kez görülen `AudioSource` Entity'leri clip'lerini yükler ve bir `AudioPlayback` Component'i alır
    (çalışma zamanı bağlantısı; kendiniz eklemeyin). `playOnStart` (varsayılan) açık olanlar çalmaya
-   başlar.
+   başlar ya da clip'leri arka planda yüklenince başlar (aşağıya bakın).
 2. Yok edilen Entity'lerin ya da `AudioSource`'unu kaybeden Entity'lerin sesleri durur; biten sesler
    voice'larını serbest bırakır.
 3. Ses seviyeleri, pitch'ler, bus'lar ve uzamsal seslerle listener'ın konum ve hızları ses thread'ine
@@ -88,6 +89,38 @@ audio.unloadClip(explosion); // the handle is invalid at once; memory is freed w
 `loadClip()`, yol daha önce yüklendiyse önbellekteki clip'i döndürür. Okunamayan veya çözülemeyen bir
 clip bir uyarı yazar ve geçersiz bir handle verir; böyle bir clip'e sahip `AudioSource` sessiz kalır.
 
+### Arka planda yükleme
+
+`AudioWorld`'e bir [AssetStreamer](assets.md) verirseniz clip'ler oyunu durdurmadan yüklenir: dosya
+streamer'ın I/O thread'inde okunur ve Job System üzerinde çözülür.
+
+```cpp
+illusion::JobSystem jobs;
+illusion::AssetStreamer streamer(files, jobs);
+illusion::AudioWorldDesc desc;
+desc.streamer = &streamer; // AudioSource clips now load in the background
+illusion::AudioWorld audio(world, files, desc);
+
+const illusion::AudioClipHandle thunder = audio.requestClip("game:/audio/thunder.ogg");
+while (running)
+{
+    streamer.update(); // publishes finished loads first
+    audio.update(frameSeconds);
+    if (audio.clipState(thunder) == illusion::AssetState::Ready)
+    {
+        audio.playOneShot(thunder);
+    }
+}
+```
+
+- `requestClip()` hemen bir handle döndürür; `clipState()`, sonraki bir `update()` biten yüklemeyi görene
+  kadar `Loading`, sonra `Ready` olur (ya da log'a bir uyarıyla `Failed`). Streamer yoksa `loadClip()`
+  gibi davranır.
+- `AudioSource` clip'leri de bu yolla istenir. Çalması gereken bir kaynak clip'ini bekler
+  (`AudioPlayback::pendingStart`) ve hazır olur olmaz başlar; `stop()` beklemeyi iptal eder.
+- `playOneShot()` ve `clipInfo()` hazır bir clip ister. Yüklenmekte olan bir clip için `loadClip()`
+  beklemeden handle'ını döndürür.
+
 ## Kaynaklar
 
 | `AudioSource` alanı | Anlamı |
@@ -102,6 +135,9 @@ clip bir uyarı yazar ve geçersiz bir handle verir; böyle bir clip'e sahip `Au
 | `attenuation`, `minDistance`, `maxDistance`, `rolloff` | Mesafe zayıflaması (aşağıda) |
 | `dopplerFactor` | Doppler etkisinin gücü; 0 kapatır |
 | `priority` | Tüm voice'lar doluyken voice'u kimin koruyacağı |
+| `lowPassCutoff` | Sesi boğuklaştıran low-pass filtresinin Hz cinsinden kesim frekansı; 0 (varsayılan) kapalı ([Efektler](#efektler)) |
+| `reverbSend` | Sesin reverb'e gönderilen payı, [0, 1] ([Efektler](#efektler)) |
+| `coneInnerAngle`, `coneOuterAngle`, `coneOuterVolume` | Yönlü ses ([Ses konileri](#ses-konileri)) |
 
 ```cpp
 audio.play(door);           // starts or restarts; a changed clip path is loaded now
@@ -143,6 +179,23 @@ doppler etkisini izler (ses hızı: `AudioWorldDesc::speedOfSound`, 343,3 m/s). 
 `Transform`'unu tek karede çok uzağa taşımak çok hızlı bir hareket gibi görünür; ışınlanan sesler için
 `dopplerFactor`'ı 0 yapın.
 
+### Ses konileri
+
+Konisi olan bir kaynak, bir hoparlör ya da bir insan sesi gibi önünde yüksek, arkasında kısık duyulur.
+İleri ekseni `Transform`'unun -z eksenidir.
+
+```cpp
+illusion::AudioSource speaker;
+speaker.clip = "game:/audio/announcement.ogg";
+speaker.coneInnerAngle = 1.5f;  // full volume within ~86 degrees around the speaker's forward axis
+speaker.coneOuterAngle = 3.0f;  // quiet behind it
+speaker.coneOuterVolume = 0.2f;
+```
+
+`coneInnerAngle` (radyan, açıklık açısının tamamı) içinde ses seviyesi değişmez; `coneOuterAngle`
+ötesinde `coneOuterVolume` olur; arada kademeli olarak azalır. Varsayılan açılar (`kAudioFullCone`)
+kaynağı her yöne eşit duyulur yapar.
+
 ## Mikser
 
 Her ses, hepsi bir master ses seviyesinin altında olan beş bus'tan birinden çalar:
@@ -160,6 +213,39 @@ audio.setMasterVolume(settings.masterVolume);
 audio.setBusVolume(illusion::AudioBus::Music, settings.musicVolume);
 audio.setBusPaused(illusion::AudioBus::Sfx, true); // pause menu: effects freeze in place
 ```
+
+## Efektler
+
+```cpp
+// A sound behind a wall: muffled, and a little of it in the room's reverb.
+illusion::AudioSource& radio = world.get<illusion::AudioSource>(radioEntity);
+radio.lowPassCutoff = 800.0f;
+radio.reverbSend = 0.3f;
+
+// Pause menu: muffle the game and keep the menu sounds clear.
+audio.setBusFilter(illusion::AudioBus::Sfx, illusion::AudioBusFilter{600.0f, 0.0f});
+audio.setBusFilter(illusion::AudioBus::Ambience, illusion::AudioBusFilter{600.0f, 0.0f});
+
+// A radio voice: only the middle of the spectrum.
+audio.setBusFilter(illusion::AudioBus::Dialogue, illusion::AudioBusFilter{3500.0f, 400.0f});
+
+// A large hall.
+illusion::AudioReverbSettings hall;
+hall.roomSize = 0.85f;
+hall.damping = 0.4f;
+audio.setReverb(hall);
+```
+
+| Efekt | Nasıl ayarlanır | Notlar |
+| --- | --- | --- |
+| Ses başına low-pass | `AudioSource::lowPassCutoff`, `AudioPlayParams::lowPassCutoff` | Oktav başına 12 dB; her karede değişebilir |
+| Bus filtreleri | `setBusFilter(bus, AudioBusFilter{lowPass, highPass})` | Bus'taki her şeye uygulanır; 0 filtreyi kapatır |
+| Reverb | Seslerde `reverbSend`, oda için `setReverb()` | Tüm seslerin paylaştığı tek bir oda reverb'ü (Freeverb) |
+
+Kesim frekansları [10 Hz, miksaj hızının %45'i] aralığına sıkıştırılır. Reverb her sesi bus'ının ses
+seviyesiyle duyar; bu yüzden bir bus'ı kısmak ya da duraklatmak gönderdiğini de susturur, reverb'ün
+kuyruğu ise çalmaya devam eder. Reverb yalnızca sesler onu beslerken ve kuyruğu sönene kadar çalışır;
+en az 22050 Hz miksaj hızı gerektirir.
 
 ## Voice'lar ve çıkış
 
@@ -192,4 +278,4 @@ offline.render(frames);
 - `AudioWorld` thread-safe değildir: onu tek bir thread'den, World Query'lerinin dışında çağırın. World ve
   sanal dosya sistemi ondan uzun yaşamalıdır; onu yok etmek `AudioPlayback` Component'lerini kaldırır.
 - Stream edilen bir clip'i başlatmak bir decoder açar (bir bellek ayırma); her karede çalışan diğer her
-  şey, clip'ler yüklendikten sonra bellek ayırmaz.
+  şey, filtreler ve reverb dahil, clip'ler yüklendikten sonra bellek ayırmaz.

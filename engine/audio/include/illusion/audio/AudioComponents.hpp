@@ -14,6 +14,9 @@
 namespace illusion
 {
 
+/// Cone angle in radians that covers every direction: a sound cone this wide has no effect.
+inline constexpr f32 kAudioFullCone = 6.28318531f;
+
 /// Mixer bus. Every sound plays through one bus; each bus has its own volume and can be paused (see
 /// AudioWorld::setBusVolume()), for example for a settings menu or a pause screen.
 enum class AudioBus : u8
@@ -82,6 +85,18 @@ struct AudioSource
     f32 rolloff = 1.0f;        ///< Steepness of the attenuation.
     f32 dopplerFactor = 1.0f;  ///< Strength of the doppler effect (0 disables it).
     u32 priority = 128; ///< When all voices are in use, a sound takes the voice of a lower or equal one.
+    /// Cutoff in Hz of a low-pass filter that muffles the sound (behind walls, under water); 0 turns the
+    /// filter off.
+    f32 lowPassCutoff = 0.0f;
+    f32 reverbSend =
+        0.0f; ///< Share of the sound sent to the reverb (see AudioWorld::setReverb()), in [0, 1].
+    /// Spatial: the sound is at full volume within this angle in radians around the Entity's forward
+    /// axis (-z of its Transform). kAudioFullCone (the default) makes the sound omnidirectional.
+    f32 coneInnerAngle = kAudioFullCone;
+    /// Spatial: outside this angle (at least coneInnerAngle) the volume is coneOuterVolume; between the
+    /// two angles it fades.
+    f32 coneOuterAngle = kAudioFullCone;
+    f32 coneOuterVolume = 0.0f; ///< Spatial: linear gain behind the cone, in [0, 1].
 };
 
 /// Runtime state of an AudioSource. Added and removed by AudioWorld; not saved in scenes.
@@ -93,6 +108,7 @@ struct AudioPlayback
     u32 voice = kNoVoice;        ///< Voice playing the sound.
     u32 serial = 0;              ///< Identifies the playback on that voice.
     Vec3 previousPosition{0.0f}; ///< Transform position at the previous update (for the velocity).
+    bool pendingStart = false;   ///< Waiting for its clip to finish loading before it starts.
 };
 
 /// Reflects AudioSource ("illusion.AudioSource") and AudioListener ("illusion.AudioListener").

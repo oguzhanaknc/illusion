@@ -55,6 +55,9 @@ struct ContactEvent
     bool sensor = false;                             ///< True if one of the bodies is a sensor.
     Vec3 point{0.0f};                                ///< Begin: a contact point in world space.
     Vec3 normal{0.0f};                               ///< Begin: contact normal, pointing from a to b.
+    /// Begin: speed in m/s at which the bodies approached each other along the normal when they touched
+    /// (0 if they were moving apart), for impact sounds and effects.
+    f32 speed = 0.0f;
 };
 
 /// Result of PhysicsWorld::raycast().

@@ -128,7 +128,9 @@ for (const illusion::ContactEvent& contact : physics.contactEvents())
 - `raycast()`, sensör olmayan en yakın isabeti Entity'si, noktası, normali ve uzaklığıyla döndürür.
 - `contactEvents()`, son `update()` sırasında başlayan veya biten temasları, sıra thread zamanlamasına
   bağlı olmayacak şekilde sıralanmış olarak listeler. Her olayda `a` daha küçük Entity kimliğine sahiptir
-  ve normal `a`'dan `b`'ye doğrudur.
+  ve normal `a`'dan `b`'ye doğrudur. `speed`, cisimlerin temas anında normal boyunca birbirine ne hızla
+  yaklaştığıdır ve solver onları ayırmadan önce ölçülür: çarpma seslerini ve efektlerini ölçeklemek için
+  kullanın (`physics_playground` sample'ı bunu yapar).
 
 ### Şekil taramaları (shape cast) ve örtüşmeler (overlap)
 
@@ -253,4 +255,5 @@ physics.setLayersCollide(1, 0, false); // layer 1 passes through layer 0
 ## Örnek
 
 `illusion_physics_playground` kutulardan bir kule dizer; Space (veya gamepad'in güney düğmesi) kuleye ağır
-bir top fırlatır, R kuleyi yeniden kurar.
+bir top fırlatır, R kuleyi yeniden kurar. Her çarpma, olduğu yerden ve daha hızlı çarpmalarda daha yüksek
+(`ContactEvent::speed`) bir tok ses çalar; ses, biraz reverb'le [ses](audio.md) mikserinden geçer.
