@@ -37,6 +37,10 @@ illusion_add_shaders(illusion_render
         forwardPbrFragment shaders/ForwardPbr.slang fragmentMain fragment
         prepassFragment shaders/ForwardPbr.slang prepassMain fragment
         prepassMaskedFragment shaders/ForwardPbr.slang prepassMaskedMain fragment
+        forwardPbrBindlessVertex shaders/ForwardPbrBindless.slang vertexMain vertex
+        forwardPbrBindlessFragment shaders/ForwardPbrBindless.slang fragmentMain fragment
+        prepassBindlessFragment shaders/ForwardPbrBindless.slang prepassMain fragment
+        prepassMaskedBindlessFragment shaders/ForwardPbrBindless.slang prepassMaskedMain fragment
         occlusionCull shaders/OcclusionCull.slang cullMain compute
         hizReduce shaders/HiZ.slang hizReduceMain compute
         gtao shaders/Gtao.slang gtaoMain compute

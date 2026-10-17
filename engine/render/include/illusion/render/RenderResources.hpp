@@ -139,6 +139,15 @@ public:
     /// The environment of @p handle, or a black environment for an invalid handle.
     [[nodiscard]] const GpuEnvironment& environment(EnvironmentHandle handle) const noexcept;
     [[nodiscard]] nvrhi::ITexture* brdfLut() const noexcept;
+    [[nodiscard]] nvrhi::IBuffer* vertexPool() const noexcept;
+    [[nodiscard]] nvrhi::IBuffer* indexPool() const noexcept;
+    [[nodiscard]] nvrhi::IBuffer* materialTable() const noexcept;
+    [[nodiscard]] nvrhi::ISampler* materialSampler(u32 index) const noexcept;
+    [[nodiscard]] bool bindless() const noexcept;
+    [[nodiscard]] nvrhi::IBindingLayout* bindlessLayout() const noexcept;
+    [[nodiscard]] nvrhi::IDescriptorTable* bindlessTextures() const noexcept;
+    // Increments whenever a pool or the material table is recreated (binding sets must be rebuilt).
+    [[nodiscard]] u32 generation() const noexcept;
     /// @endcond
 
 private:

@@ -61,7 +61,14 @@ struct GpuInfo
     u32 apiVersion = 0;     ///< Supported Vulkan version (VK_MAKE_API_VERSION encoding).
     bool discrete = false;  ///< True for discrete GPUs.
     bool software = false;  ///< True for CPU implementations such as lavapipe.
+    /// Descriptor indexing with update-after-bind sampled images (bindless textures) is available.
+    bool bindless = false;
+    /// Multi-draw indirect with a first-instance offset per draw is available.
+    bool multiDrawIndirect = false;
 };
+
+/// Number of textures a bindless texture table can hold; GpuInfo::bindless requires the device to allow it.
+inline constexpr u32 kBindlessTextureCapacity = 16384;
 
 /// Owns the Vulkan instance and device and the NVRHI device. See the file documentation.
 class RenderDevice : NonCopyable

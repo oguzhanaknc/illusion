@@ -35,6 +35,41 @@ SamplerState g_clampSampler : register(s0, space0);
 
 #include "ShadowReceiver.slang"
 
+// Material slots, used by sampleMaterial().
+static const uint kBaseColor = 0;
+static const uint kMetallicRoughness = 1;
+static const uint kNormal = 2;
+static const uint kOcclusion = 3;
+static const uint kEmissive = 4;
+
+#if defined(ILLUSION_BINDLESS)
+// Bindless (ForwardPbrBindless.slang): every material is a record in one table, textures come from one
+// descriptor array, and each instance names its material.
+struct MaterialRecord
+{
+    MaterialConstants constants;
+    uint textures[5]; // indices into g_textures, by slot
+    uint samplerIndex;
+    uint2 padding;
+};
+StructuredBuffer<MaterialRecord> g_materials : register(t7, space0);
+SamplerState g_materialSamplers[9] : register(s2, space0);
+Texture2D g_textures[] : register(t0, space1);
+
+MaterialConstants materialConstants(uint material)
+{
+    return g_materials[material].constants;
+}
+
+float4 sampleMaterial(uint material, uint slot, float2 uv)
+{
+    const MaterialRecord record = g_materials[material];
+    // The material varies per instance inside one draw, hence the non-uniform indexing.
+    return g_textures[NonUniformResourceIndex(record.textures[slot])].Sample(
+        g_materialSamplers[NonUniformResourceIndex(record.samplerIndex)], uv);
+}
+#else
+// One binding set per material (set 1).
 ConstantBuffer<MaterialConstants> g_material : register(b0, space1);
 Texture2D g_baseColorTexture : register(t0, space1);
 Texture2D g_metallicRoughnessTexture : register(t1, space1);
@@ -42,6 +77,24 @@ Texture2D g_normalTexture : register(t2, space1);
 Texture2D g_occlusionTexture : register(t3, space1);
 Texture2D g_emissiveTexture : register(t4, space1);
 SamplerState g_sampler : register(s0, space1);
+
+MaterialConstants materialConstants(uint material)
+{
+    return g_material;
+}
+
+float4 sampleMaterial(uint material, uint slot, float2 uv)
+{
+    switch (slot)
+    {
+    case kBaseColor: return g_baseColorTexture.Sample(g_sampler, uv);
+    case kMetallicRoughness: return g_metallicRoughnessTexture.Sample(g_sampler, uv);
+    case kNormal: return g_normalTexture.Sample(g_sampler, uv);
+    case kOcclusion: return g_occlusionTexture.Sample(g_sampler, uv);
+    default: return g_emissiveTexture.Sample(g_sampler, uv);
+    }
+}
+#endif
 
 struct VertexInput
 {
@@ -60,12 +113,15 @@ struct VertexOutput
     float2 uv : TEXCOORD0;
     float4 currentClip : TEXCOORD1;  // unjittered, for motion vectors
     float4 previousClip : TEXCOORD2; // previous frame
+    nointerpolation uint material : MATERIAL; // material table index (bindless)
 };
 
 [shader("vertex")]
-VertexOutput vertexMain(VertexInput input, uint instanceId: SV_InstanceID)
+VertexOutput vertexMain(VertexInput input, uint instanceId: SV_InstanceID, uint firstInstance: SV_StartInstanceLocation)
 {
-    const InstanceData instance = g_instances[g_drawList[g_push.instanceOffset + instanceId]];
+    // Multi-draw indirect passes each draw's draw-list offset as its first instance; single draws pass
+    // it as a push constant.
+    const InstanceData instance = g_instances[g_drawList[g_push.instanceOffset + firstInstance + instanceId]];
     const float4 world = mul(instance.world, float4(input.position, 1.0));
     VertexOutput output;
     output.position = mul(g_view.viewProjection, world);
@@ -73,6 +129,7 @@ VertexOutput vertexMain(VertexInput input, uint instanceId: SV_InstanceID)
     output.normal = mul((float3x3)instance.normalMatrix, input.normal);
     output.tangent = float4(mul((float3x3)instance.world, input.tangent.xyz), input.tangent.w);
     output.uv = input.uv;
+    output.material = instance.extra.x;
     output.currentClip = mul(g_view.unjitteredViewProjection, world);
     output.previousClip =
         mul(g_view.previousViewProjection, mul(instance.previousWorld, float4(input.position, 1.0)));
@@ -140,8 +197,8 @@ float3 surfaceNormal(VertexOutput input, bool frontFace)
     {
         n = -n;
     }
-    float3 sampled = g_normalTexture.Sample(g_sampler, input.uv).xyz * 2.0 - 1.0;
-    sampled.xy *= g_material.emissiveFactor.w;
+    float3 sampled = sampleMaterial(input.material, kNormal, input.uv).xyz * 2.0 - 1.0;
+    sampled.xy *= materialConstants(input.material).emissiveFactor.w;
     float3 t;
     float3 b;
     if (input.tangent.w != 0.0)
@@ -193,16 +250,18 @@ float3 environmentLighting(Surface surface, float roughness, float occlusion)
 [shader("fragment")]
 float4 fragmentMain(VertexOutput input, bool frontFace: SV_IsFrontFace) : SV_Target
 {
-    const float4 baseColor = g_baseColorTexture.Sample(g_sampler, input.uv) * g_material.baseColorFactor;
-    if (g_material.alphaCutoff >= 0.0 && baseColor.a < g_material.alphaCutoff)
+    const MaterialConstants material = materialConstants(input.material);
+    const float4 baseColor = sampleMaterial(input.material, kBaseColor, input.uv) * material.baseColorFactor;
+    if (material.alphaCutoff >= 0.0 && baseColor.a < material.alphaCutoff)
     {
         discard;
     }
-    const float4 metallicRoughness = g_metallicRoughnessTexture.Sample(g_sampler, input.uv);
-    const float metallic = saturate(metallicRoughness.b * g_material.metallicFactor);
-    const float roughness = clamp(metallicRoughness.g * g_material.roughnessFactor, 0.045, 1.0);
-    const float occlusion = lerp(1.0, g_occlusionTexture.Sample(g_sampler, input.uv).r, g_material.occlusionStrength);
-    const float3 emissive = g_emissiveTexture.Sample(g_sampler, input.uv).rgb * g_material.emissiveFactor.rgb;
+    const float4 metallicRoughness = sampleMaterial(input.material, kMetallicRoughness, input.uv);
+    const float metallic = saturate(metallicRoughness.b * material.metallicFactor);
+    const float roughness = clamp(metallicRoughness.g * material.roughnessFactor, 0.045, 1.0);
+    const float occlusion =
+        lerp(1.0, sampleMaterial(input.material, kOcclusion, input.uv).r, material.occlusionStrength);
+    const float3 emissive = sampleMaterial(input.material, kEmissive, input.uv).rgb * material.emissiveFactor.rgb;
 
     Surface surface;
     surface.albedo = baseColor.rgb * (1.0 - metallic);
@@ -260,8 +319,9 @@ float2 prepassMain(VertexOutput input) : SV_Target
 [shader("fragment")]
 float2 prepassMaskedMain(VertexOutput input) : SV_Target
 {
-    const float alpha = g_baseColorTexture.Sample(g_sampler, input.uv).a * g_material.baseColorFactor.a;
-    if (alpha < g_material.alphaCutoff)
+    const MaterialConstants material = materialConstants(input.material);
+    const float alpha = sampleMaterial(input.material, kBaseColor, input.uv).a * material.baseColorFactor.a;
+    if (alpha < material.alphaCutoff)
     {
         discard;
     }

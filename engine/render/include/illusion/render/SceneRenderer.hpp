@@ -58,6 +58,9 @@ struct SceneRendererDesc
     ShadowSettings shadows;       ///< Shadow quality.
     PostProcessSettings post;     ///< Ambient occlusion, bloom and anti-aliasing.
     bool occlusionCulling = true; ///< Skip opaque objects hidden behind others (GPU, two-phase Hi-Z).
+    /// Use bindless materials and multi-draw indirect when the device supports them (GpuInfo::bindless and
+    /// GpuInfo::multiDrawIndirect); otherwise, or when false, draw each batch with its material's bindings.
+    bool bindless = true;
 };
 
 /// Renders World entities that have Transform + MeshRenderer, lit by DirectionalLight, PointLight and
@@ -107,6 +110,9 @@ public:
     /// Opaque instances the GPU drew in the last render() (after occlusion culling). Maps a readback
     /// buffer, so call it only when the GPU has finished that frame (tools, tests, statistics overlays).
     [[nodiscard]] u32 readGpuDrawnInstances() const;
+
+    /// True if the last render() used bindless materials and multi-draw indirect.
+    [[nodiscard]] bool usesBindless() const noexcept;
 
     /// Forgets the accumulated TAA history, for example after a camera cut.
     void resetTemporalHistory() noexcept;

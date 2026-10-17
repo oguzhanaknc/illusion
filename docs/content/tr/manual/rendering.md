@@ -9,8 +9,8 @@ Header'lar: `#include <illusion/render/RenderDevice.hpp>`, `<illusion/render/Swa
 
 !!! note "Geliştirme sürüyor"
     Sahne renderer'ı Mesh'leri PBR Material'ler, doğrudan ve görüntü tabanlı aydınlatma, yumuşak
-    gölgeler, ambient occlusion, post-processing ve GPU occlusion culling ile çizer. Bindless kaynaklar
-    ve multi-draw indirect renderer milestone'unun son adımında gelecek (yol haritasına bakın).
+    gölgeler, ambient occlusion, post-processing, GPU occlusion culling ve bindless multi-draw rendering
+    ile çizer. Sırada streaming'li Asset hattı var (yol haritasına bakın).
 
 ## Gereksinimler
 
@@ -175,6 +175,35 @@ ILL_LOG_INFO("Game", "{} of {} opaque instances drawn", renderer->readGpuDrawnIn
   büyük nesneden oluşan sahnelerde `setOcclusionCulling(false)` derinlik piramidi geçişlerinden
   tasarruf sağlar.
 - Blend Mesh'ler ve gölge düşürenler yalnızca frustum'a göre elenir.
+
+### Bindless rendering
+
+Destekleyen GPU'larda renderer tüm opak Mesh'leri birkaç çağrıyla çizer:
+
+- Tüm Mesh'ler tek bir vertex havuzunu ve tek bir index havuzunu paylaşır; bu yüzden Mesh değiştirmek
+  yeni buffer gerektirmez.
+- Tüm Material'ler tek bir tablodaki kayıtlardır ve tüm Texture'lar tek bir bindless descriptor
+  dizisindedir; böylece bir draw Material'leri karıştırabilir: her instance kendi Material'ini belirtir.
+- Aynı Pipeline'a (opak veya alpha-mask'li, tek veya çift yüzlü) sahip batch'ler, geçiş başına tek bir
+  multi-draw indirect çağrısıyla çizilir.
+
+```cpp
+const illusion::GpuInfo& gpu = device->gpu();
+ILL_LOG_INFO("Game", "bindless: {}, multi-draw indirect: {}", gpu.bindless, gpu.multiDrawIndirect);
+
+illusion::SceneRendererDesc desc;
+desc.bindless = true; // the default; set false to force the per-material path
+auto renderer = illusion::SceneRenderer::create(*device, resources, desc);
+// After the first render():
+ILL_LOG_INFO("Game", "rendering bindless: {}", renderer->usesBindless());
+```
+
+- Descriptor indexing ve multi-draw indirect gerektirir (`GpuInfo::bindless`,
+  `GpuInfo::multiDrawIndirect`); güncel NVIDIA, AMD ve Intel sürücülerinde ve Mesa'da mevcuttur. Diğer
+  durumlarda veya `SceneRendererDesc::bindless = false` ile her batch kendi Material bağlamalarıyla
+  çizilir; görüntü aynıdır.
+- En fazla `kBindlessTextureCapacity` (16384) Texture kullanılabilir.
+- Blend Mesh'ler ve gölge düşürenler her iki modda da batch başına çizilir.
 
 ### Gölgeler
 
