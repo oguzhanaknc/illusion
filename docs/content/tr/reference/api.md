@@ -42,6 +42,7 @@ doxygen docs/Doxyfile
 | `illusion/platform/Window.hpp` | `Window`, `WindowDesc`, `CursorMode` |
 | `illusion/platform/Input.hpp` | `InputState`, `Key`, `MouseButton` |
 | `illusion/platform/Events.hpp` | Pencere ve input event'leri |
+| `illusion/platform/Archive.hpp` | `ArchiveReader`, `writeArchive`, `packDirectory` |
 | `illusion/platform/FileSystem.hpp` | `VirtualFileSystem`, platform dizinleri |
 | `illusion/input/Gamepad.hpp` | `Gamepad`, `GamepadState`, `TriggerEffect`, gamepad event'leri |
 | `illusion/input/GamepadSystem.hpp` | `GamepadSystem`, `VirtualGamepad` |
@@ -52,6 +53,7 @@ doxygen docs/Doxyfile
 | `illusion/assets/AssetFormat.hpp` | `AssetId`, `AssetFile`, hazırlanmış görüntü ve model formatları |
 | `illusion/assets/AssetDatabase.hpp` | `AssetDatabase`: görüntüler ve modeller için içe aktarma önbelleği |
 | `illusion/assets/AssetStreamer.hpp` | `AssetStreamer`, `AssetHandle`: asenkron yükleme |
+| `illusion/assets/AssetCooker.hpp` | `cookAssets`: bir dizini önceden içe aktarma |
 | `illusion/assets/Environment.hpp` | Equirectangular eşleme, `ShIrradiance`, `makeSkyImage` |
 | `illusion/render/RenderDevice.hpp` | `RenderDevice`, `GpuInfo` (bindless ve multi-draw desteği dahil): NVRHI üzerinden Vulkan cihazı |
 | `illusion/render/Swapchain.hpp` | `Swapchain`: bir pencereye present etme |

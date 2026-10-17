@@ -11,9 +11,10 @@
 namespace illusion
 {
 
-AssetDatabase::AssetDatabase(VirtualFileSystem& files, std::string cacheMount)
+AssetDatabase::AssetDatabase(VirtualFileSystem& files, std::string cacheMount, bool verifySources)
     : m_files(&files)
     , m_cacheMount(std::move(cacheMount))
+    , m_verifySources(verifySources)
 {
 }
 
@@ -34,9 +35,9 @@ std::optional<AssetFile> AssetDatabase::readCache(const std::string& path, Asset
         return std::nullopt;
     }
     std::optional<AssetFile> file = detail::parseCache(bytes, type, version);
-    if (!file)
+    if (!file || !m_verifySources)
     {
-        return std::nullopt;
+        return file;
     }
     // Valid only while every source file still has the content it was imported from.
     std::vector<std::vector<std::byte>> contents(file->dependencies.size());

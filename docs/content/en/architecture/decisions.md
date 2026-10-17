@@ -27,6 +27,7 @@ records rather than user documentation.
 | [0018](https://github.com/oguzhanaknc/illusion/blob/main/docs/adr/0018-bindless-multi-draw.md) | Bindless materials, geometry pools and multi-draw indirect |
 | [0019](https://github.com/oguzhanaknc/illusion/blob/main/docs/adr/0019-asset-ids-cooked-formats-import-cache.md) | Asset ids, cooked asset files and a content-hashed import cache |
 | [0020](https://github.com/oguzhanaknc/illusion/blob/main/docs/adr/0020-asset-streaming.md) | Asset streaming: an I/O thread, the Job System and main-thread publication |
+| [0021](https://github.com/oguzhanaknc/illusion/blob/main/docs/adr/0021-packed-archives.md) | Packed archives, archive mounts and cooked shipping |
 
 To propose a new decision, copy `docs/adr/0000-template.md` and follow the
 [contributing guide](../contributing.md#architecture-decision-records).

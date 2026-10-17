@@ -5,7 +5,12 @@
 #include <illusion/assets/Image.hpp>
 #include <illusion/assets/Mesh.hpp>
 #include <illusion/core/Hash.hpp>
+#include <illusion/platform/Archive.hpp>
 
+#include <filesystem>
+#include <format>
+#include <memory>
+#include <random>
 #include <vector>
 
 using namespace illusion;
@@ -85,4 +90,37 @@ ILL_BENCHMARK("assets/model-load", 250.0)
     bench.batch(vertices).unit("vertex").run("deserialize model (16 spheres, validated)", [&] {
         ankerl::nanobench::doNotOptimizeAway(deserializeModel(bytes));
     });
+}
+
+ILL_BENCHMARK("platform/archive", 2000.0)
+{
+    // 10k small files in one archive: lookups are binary searches over the sorted table of contents.
+    std::vector<ArchiveInput> files;
+    for (int i = 0; i < 10000; ++i)
+    {
+        files.push_back(ArchiveInput{std::format("assets/dir{}/file{}.bin", i % 100, i),
+                                     std::vector<std::byte>(256, std::byte{static_cast<unsigned char>(i)})});
+    }
+    const std::filesystem::path path = std::filesystem::temp_directory_path() /
+                                       std::format("illusion-bench-{}.illpak", std::random_device{}());
+    if (writeArchive(path, files) != FileError::None)
+    {
+        return;
+    }
+    {
+        const std::unique_ptr<ArchiveReader> reader = ArchiveReader::open(path);
+        u32 index = 0;
+        bench.run("find among 10k entries", [&] {
+            ankerl::nanobench::doNotOptimizeAway(reader->find(files[index].path));
+            index = (index + 7919) % 10000;
+        });
+        std::vector<std::byte> out;
+        bench.run("find + read a 256-byte file", [&] {
+            reader->read(*reader->find(files[index].path), out);
+            ankerl::nanobench::doNotOptimizeAway(out.data());
+            index = (index + 7919) % 10000;
+        });
+    }
+    std::error_code ignored;
+    std::filesystem::remove(path, ignored);
 }

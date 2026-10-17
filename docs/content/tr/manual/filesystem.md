@@ -61,6 +61,32 @@ Yazma işlemleri atomiktir: veri önce geçici bir dosyaya yazılır, ardından 
 böylece bir çökme veya elektrik kesintisi asla yarım yazılmış bir kayıt dosyası bırakmaz. Üst dizinler
 otomatik olarak oluşturulur.
 
+## Arşivler
+
+Bir arşiv (`.illpak`), tüm bir dizin ağacını tek bir dosyada tutar. Onu `mountArchive()` ile mount edin
+ve mount edilmiş bir dizin gibi okuyun:
+
+Header: `<illusion/platform/Archive.hpp>`
+
+```cpp
+illusion::VirtualFileSystem files;
+files.mountArchive("game", illusion::executableDirectory() / "data.illpak");
+
+std::string config;
+files.readText("game:/config/defaults.json", config); // same path as with a directory mount
+```
+
+- Arşiv mount'ları salt okunurdur: yazma işlemleri `FileError::ReadOnly` döndürür; dosyaların kendi
+  yolları olmadığı için `resolve()` de `FileError::Unsupported` döndürür.
+- Her dosyanın içerik hash'i okunurken denetlenir; hasarlı veri `FileError::IoError` verir.
+- Arşiv belleğe eşlenir (memory-mapped); bu yüzden okumalar hızlıdır ve birden fazla thread'den
+  güvenlidir.
+- Arşivleri `illusion_pack` aracıyla ya da koddan `writeArchive()` ve `packDirectory()` ile oluşturun:
+
+```bash
+illusion_pack data/ build/data.illpak
+```
+
 ## Platform dizinleri
 
 | Fonksiyon | Windows | macOS | Linux |

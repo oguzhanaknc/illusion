@@ -185,3 +185,33 @@ while (running)
 - `waitIdle()`, istenen her şey yayımlanana kadar bekler: yükleme ekranları ve araçlar için kullanışlıdır.
 - Streamer'ı yok etmek, başlamamış yüklemeleri atlar, çalışanları bitirir ve onların önbellek
   kayıtlarını yazar.
+
+## Hazırlanmış Asset'leri dağıtma
+
+Dağıtılan bir oyunun kaynak görüntülerine ve modellerine ihtiyacı yoktur: bunları önceden hazırlayın
+(cook) ve içe aktarma önbelleğini bir arşiv olarak dağıtın.
+
+```bash
+illusion_pack --cook game data/ build/cooked.illpak
+```
+
+`--cook`, `game` olarak mount edilen `data/` altındaki her görüntüyü ve glTF modelini içe aktarır
+(oyununuzun kullandığı mount adını verin) ve oluşan önbelleği paketler. Oyunda arşivi önbellek olarak
+mount edin ve kaynak doğrulamayı kapatın:
+
+```cpp
+illusion::VirtualFileSystem files;
+files.mountArchive("cache", illusion::executableDirectory() / "cooked.illpak");
+
+illusion::AssetStreamerDesc desc;
+desc.verifySources = false; // trust the cooked archive; the sources are not shipped
+illusion::AssetStreamer streamer(files, jobs, desc);
+auto helmet = streamer.loadModel("game:/models/helmet.glb"); // served from the cooked archive
+```
+
+- İstekler geliştirme sırasındaki sanal yolların aynısını kullanır; `game` mount'unun kendisinin var
+  olması gerekmez.
+- Tek başına görüntüler varsayılan içe aktarma ayarlarıyla hazırlanır; başka ayarlarla yüklenen
+  görüntüler kaynaklarına (ya da bu ayarları bilen bir hazırlama adımına) ihtiyaç duyar.
+- `cookAssets()` aynısını koddan yapar ve neyi hazırladığını ve hangi dosyaların başarısız olduğunu
+  bildirir.

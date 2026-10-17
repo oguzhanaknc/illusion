@@ -9,7 +9,7 @@ illusion katmanlar halinde inşa edilir. Bir katman yalnızca altındaki katmanl
 | Katman | İçerik | Durum |
 | --- | --- | --- |
 | Core | Platform tespiti, assertion'lar, logging, bellek, Job System, ECS, event bus, zaman, matematik | Tamamlandı |
-| Platform | Pencere, klavye ve fare (GLFW), sanal dosya sistemi | Tamamlandı |
+| Platform | Pencere, klavye ve fare (GLFW), sanal dosya sistemi, paketlenmiş arşivler | Tamamlandı |
 | Input | SDL3 üzerinden gamepad'ler (titreşim, LED, hareket, touchpad, adaptive trigger'lar), action eşleme, yeniden atama, glyph'ler | Tamamlandı |
 | Asset'ler | Görüntüler, Mesh'ler, glTF modelleri, ortamlar, hazırlanmış formatlar, bir içe aktarma önbelleği ve asenkron streaming | Tamamlandı |
 | Runtime servisleri | Ses (miniaudio), fizik (Jolt) | Planlandı |
@@ -62,6 +62,7 @@ nitelikli adlarının hash'i ile tanımlanır; bu yüzden bir Component her iki 
 | `engine/render` | Render kütüphanesi: `include/illusion/render`, `src/` ve `shaders/` |
 | `samples` | Motor özelliklerini çalıştıran küçük uygulamalar |
 | `tests` | Unit test'ler (doctest), her özellik için bir dosya |
+| `tools/pack` | `illusion_pack`: arşiv paketleyici ve Asset hazırlayıcı |
 | `benchmarks` | Performans bütçeli benchmark'lar (nanobench) |
 | `cmake` | Build seçenekleri, derleyici ayarları, sabitlenmiş bağımlılıklar |
 | `docs/content/{en,tr}` | Bu dokümantasyon, İngilizce ve Türkçe |

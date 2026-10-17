@@ -7,8 +7,9 @@ designed to ship commercial games on Steam and similar stores.
 
 > **Status: early development.** The core library (logging, memory, Job System, archetype ECS), the
 > platform layer, input (keyboard, mouse, gamepads, actions), glTF loading and a forward PBR scene renderer
-> with image-based lighting, soft shadows and HDR post-processing are implemented and tested on all
-> platforms. Audio, physics, the editor and the export pipeline are next; see [ROADMAP.md](ROADMAP.md).
+> with image-based lighting, soft shadows and HDR post-processing, and an asset pipeline (import cache,
+> streaming, packed archives) are implemented and tested on all platforms. Audio, physics, the editor and
+> the export pipeline are next; see [ROADMAP.md](ROADMAP.md).
 
 ## Highlights
 
@@ -25,6 +26,8 @@ designed to ship commercial games on Steam and similar stores.
   instanced draws, image-based lighting from HDRIs, cascaded soft shadows (CSM + PCSS), GTAO, bloom,
   ACES tonemapping, optional TAA with per-object motion vectors, two-phase GPU occlusion culling and
   bindless multi-draw indirect rendering.
+- Asset pipeline: content-hashed import cache, asynchronous streaming on an I/O thread and the Job
+  System, memory-mapped `.illpak` archives and cooked builds that ship without sources.
 - No per-frame heap allocations: arenas, pools and an inline type-erased callable.
 - Tracy profiler integration and benchmark tests with performance budgets in CI.
 - CI on Windows (MSVC, clang-cl), Linux (GCC, Clang, ASan/UBSan, TSan) and macOS (Apple Clang).
@@ -73,6 +76,7 @@ world.query<Position, const Velocity>().each([](Position& p, const Velocity& v) 
 | `engine/render` | GPU device, swapchains, shaders, scene renderer (`illusion::render`) |
 | `samples` | Sample applications |
 | `tests` | Unit tests (doctest) |
+| `tools/pack` | `illusion_pack` archive packer and asset cooker |
 | `benchmarks` | Benchmarks with performance budgets (nanobench) |
 | `cmake` | Build options, compiler settings, pinned dependencies |
 | `docs` | MkDocs site (en/tr), ADRs, Doxygen configuration |

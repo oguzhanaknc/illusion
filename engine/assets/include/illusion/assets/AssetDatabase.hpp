@@ -38,9 +38,10 @@ struct AssetDatabaseStatistics
 class AssetDatabase : NonCopyable
 {
 public:
-    /// Uses @p files for sources and the writable mount @p cacheMount (for example "cache") for cooked
-    /// files. With an empty @p cacheMount every load imports from source.
-    AssetDatabase(VirtualFileSystem& files, std::string cacheMount);
+    /// Uses @p files for sources and the mount @p cacheMount (for example "cache") for cooked files. With
+    /// an empty @p cacheMount every load imports from source. With @p verifySources false, cached files are
+    /// used without checking their sources (shipped games that mount a cooked archive and no sources).
+    AssetDatabase(VirtualFileSystem& files, std::string cacheMount, bool verifySources = true);
 
     /// Loads the image at @p virtualPath (PNG, JPEG, TGA, BMP, Radiance HDR).
     [[nodiscard]] std::optional<Image> loadImage(std::string_view virtualPath,
@@ -66,6 +67,7 @@ private:
 
     VirtualFileSystem* m_files;
     std::string m_cacheMount;
+    bool m_verifySources = true;
     AssetDatabaseStatistics m_statistics;
 };
 
