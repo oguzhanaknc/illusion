@@ -97,6 +97,7 @@ Ardından `cmake --preset dev` ve `cmake --build C:/dev/illusion-build/dev --con
 | `ILLUSION_WARNINGS_AS_ERRORS` | `OFF` | Uyarıları hata olarak ele alır (CI preset'lerinde `ON`). |
 | `ILLUSION_ENABLE_ASSERTS` | `OFF` | `ILL_ASSERT`'ü tüm yapılandırmalarda açık tutar; Debug'da her zaman açıktır. |
 | `ILLUSION_PROFILING` | `OFF` | Motoru Tracy için enstrümante eder. |
+| `ILLUSION_SHARED_MODULES` | `ON` (profiling'de `OFF`) | Oyun modüllerini hot-reload edilebilen paylaşımlı kütüphaneler olarak derler; `OFF` onları statik linkler. |
 | `ILLUSION_SANITIZER` | boş | `address` (ASan + UBSan) veya `thread` (TSan); yalnızca GCC/Clang. |
 
 ## Benchmark'lar

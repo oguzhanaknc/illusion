@@ -74,12 +74,15 @@ ADRs for its significant decisions. Items marked ✅ are done.
   per-sound low-pass filters, bus low/high-pass filters, a room reverb fed by per-sound sends, sound cones,
   contact events with impact speeds and impact sounds in `physics_playground` (ADR 0026)
 
-## M6 — Game modules and hot reload
+## M6 — Game modules and hot reload ✅
 
-- Module/plugin system with semver; game module as hot-reloadable shared library in the editor and
-  statically linked in exports
-- Service injection into modules (ADR 0003): Logger, ComponentRegistry, assert handler; re-registration
-  of module-owned component types on reload
+- ✅ Module/plugin system with semver and dependencies; a module is a hot-reloadable shared library in
+  development and linked statically in exports (`illusion_add_module`, `ModuleHost`) (ADR 0027)
+- ✅ Service injection into modules (ADR 0003): Logger, ComponentRegistry, assert handler, thread and
+  worker indices; module-owned component types handed over to the new code on reload, dropped types
+  stripped from the World, failed reloads rolled back
+- Reflection-based migration of module Components whose layout changed, so that such a change survives a
+  hot reload instead of needing a restart (with the editor, M7)
 
 ## M7 — Editor and AI control
 

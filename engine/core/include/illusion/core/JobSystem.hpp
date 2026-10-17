@@ -118,4 +118,14 @@ private:
     std::unique_ptr<Impl> m_impl;
 };
 
+/// Implementation details. Not part of the public API.
+namespace detail
+{
+
+/// Makes JobSystem::currentWorkerIndex() return @p source() (nullptr restores the built-in value). A
+/// shared module uses the host's function, whose threads run the module's jobs (see ModuleServices).
+void setWorkerIndexSource(i32 (*source)() noexcept) noexcept;
+
+} // namespace detail
+
 } // namespace illusion

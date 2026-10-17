@@ -21,6 +21,7 @@ include(IllusionOptions)
 include(IllusionCompilerSettings)
 include(Dependencies)
 include(IllusionShaders)
+include(IllusionModules)
 
 add_subdirectory(engine)
 

@@ -32,6 +32,8 @@ doxygen docs/Doxyfile
 | `illusion/core/EventBus.hpp` | `EventBus`, `Subscription` |
 | `illusion/core/Time.hpp` | `monotonicSeconds`, `Stopwatch`, `FrameClock`, `FixedTimestep` |
 | `illusion/core/Version.hpp` | `SemanticVersion`, `engineVersion` |
+| `illusion/core/Module.hpp` | `ModuleApi`, `ModuleContext`, `ModuleDependency`, `makeModuleApi`, `ILL_MODULE`: oyun modüllerinin modül tarafı |
+| `illusion/modules/ModuleHost.hpp` | `ModuleHost`: modülleri yükler, denetler, çalıştırır ve hot-reload eder; `ModuleInfo` |
 | `illusion/core/Math.hpp` | glm tabanlı vektör, matris ve quaternion tipleri, `Aabb`, `Sphere`, `Frustum`, `perspectiveReversedZ` |
 | `illusion/ecs/World.hpp` | `World`, `Query`, `ChunkView` |
 | `illusion/ecs/CommandBuffer.hpp` | Ertelenmiş yapısal değişiklikler |

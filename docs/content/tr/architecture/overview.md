@@ -17,7 +17,7 @@ illusion katmanlar halinde inşa edilir. Bir katman yalnızca altındaki katmanl
 | Renderer: temel | NVRHI üzerinden Vulkan 1.3 cihazı, swapchain'ler, Slang shader hattı | Tamamlandı |
 | Renderer: sahne | Mesh'ler, PBR Material'ler, doğrudan ve görüntü tabanlı aydınlatma, yumuşak gölgeler, GTAO, HDR post-processing (TAA, bloom, tonemapping), frustum culling, indirect draw'lı GPU occlusion culling, instancing, bindless multi-draw | Tamamlandı |
 | Editör | Sahne düzenleme, gizmo'lar, AI komut API'si | Planlandı |
-| Oyun modülü | Oyunun kendi kodu; editörde hot-reload edilebilen paylaşımlı kütüphane | Planlandı |
+| Oyun modülleri | Oyunun kendi kodu: geliştirmede hot-reload edilebilen paylaşımlı kütüphaneler, dışa aktarılan oyunlarda statik linklenir ([Oyun Modülleri](../manual/modules.md)) | Tamamlandı |
 
 Core bir statik kütüphanedir. Editör ve export edilen oyunlar onu link eder; bir oyun modülü motor
 durumunun ikinci bir kopyasını asla barındırmaz (aşağıdaki "Süreç genelindeki servisler" bölümüne bakın).
@@ -43,14 +43,16 @@ yazılır; bkz. [Kararlar](decisions.md).
 
 ## Süreç genelindeki servisler
 
-Birkaç servis süreç geneline aittir: Logger, Component registry ve assert handler. Her birine
-değiştirilebilir bir instance pointer'ı üzerinden erişilir (`Logger::setInstance()`,
-`ComponentRegistry::setInstance()`, `setAssertHandler()`).
+Birkaç servis süreç geneline aittir: Logger, Component registry, assert handler ve thread ile Worker
+indeksleri. Her birine değiştirilebilir bir instance pointer'ı ya da fonksiyon üzerinden erişilir
+(`Logger::setInstance()`, `ComponentRegistry::setInstance()`, `setAssertHandler()`).
 
 Bu, hot reload için önemlidir. Editörde oyun modülü, statik core kütüphanesinin kendi kopyasını link eden
-bir paylaşımlı kütüphanedir. Modül yüklendiğinde editör kendi servis örneklerini modüle enjekte eder;
+bir paylaşımlı kütüphanedir. Modül yüklendiğinde `ModuleHost` kendi servislerini modüle enjekte eder;
 böylece iki taraf da tek bir Logger ve tek bir Component registry paylaşır. Component tipleri tam
 nitelikli adlarının hash'i ile tanımlanır; bu yüzden bir Component her iki tarafta da aynı id'yi alır.
+Registry her tipin hangi modülün kodunu kullandığını kaydeder; böylece bir yeniden yükleme tipi yeni koda
+devredebilir (ADR 0027).
 
 ## Depo yapısı
 
@@ -62,6 +64,7 @@ nitelikli adlarının hash'i ile tanımlanır; bu yüzden bir Component her iki 
 | `engine/assets` | Assets kütüphanesi: `include/illusion/assets` ve `src/` |
 | `engine/physics` | Fizik kütüphanesi: `include/illusion/physics` ve `src/` |
 | `engine/audio` | Ses kütüphanesi: `include/illusion/audio` ve `src/` |
+| `engine/modules` | Modül host'u: `include/illusion/modules` ve `src/` |
 | `engine/render` | Render kütüphanesi: `include/illusion/render`, `src/` ve `shaders/` |
 | `samples` | Motor özelliklerini çalıştıran küçük uygulamalar |
 | `tests` | Unit test'ler (doctest), her özellik için bir dosya |

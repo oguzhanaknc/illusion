@@ -47,6 +47,10 @@ namespace detail
 
 [[noreturn]] void assertFailed(const char* expression, const char* file, int line, std::string_view message);
 
+/// Calls the handler installed in this binary at the time of the call. Modules use the host's copy as
+/// their handler, so that later setAssertHandler() calls in the host reach them too.
+[[noreturn]] void dispatchAssertion(const AssertInfo& info);
+
 [[noreturn]] inline void assertFailed(const char* expression, const char* file, int line)
 {
     assertFailed(expression, file, line, std::string_view{});

@@ -17,13 +17,24 @@ namespace
 {
 
 std::atomic<u32> g_nextThreadIndex{0};
+std::atomic<u32 (*)() noexcept> g_threadIndexSource{nullptr};
 
 } // namespace
 
 u32 currentThreadIndex() noexcept
 {
+    if (u32(*source)() noexcept = g_threadIndexSource.load(std::memory_order_relaxed))
+    {
+        return source();
+    }
     thread_local const u32 index = g_nextThreadIndex.fetch_add(1, std::memory_order_relaxed);
     return index;
+}
+
+void detail::setThreadIndexSource(u32 (*source)() noexcept) noexcept
+{
+    // The host's own function never forwards, so installing it into the host is harmless.
+    g_threadIndexSource.store(source == &currentThreadIndex ? nullptr : source, std::memory_order_relaxed);
 }
 
 void setCurrentThreadName(const char* name) noexcept

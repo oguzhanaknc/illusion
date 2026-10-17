@@ -17,7 +17,7 @@ illusion is built in layers. A layer may depend only on layers below it.
 | Renderer: foundation | Vulkan 1.3 device through NVRHI, swapchains, Slang shader pipeline | Implemented |
 | Renderer: scene | Meshes, PBR Materials, direct and image-based lighting, soft shadows, GTAO, HDR post-processing (TAA, bloom, tonemapping), frustum culling, GPU occlusion culling with indirect draws, instancing, bindless multi-draw | Implemented |
 | Editor | Scene editing, gizmos, AI command API | Planned |
-| Game module | The game's own code, a hot-reloadable shared library in the editor | Planned |
+| Game modules | The game's own code: hot-reloadable shared libraries in development, linked statically into exported games ([Game Modules](../manual/modules.md)) | Implemented |
 
 The core is a static library. The editor and exported games link it; a game module never contains a
 second copy of engine state (see "Process-wide services" below).
@@ -42,14 +42,15 @@ Records (ADRs); see [Decisions](decisions.md).
 
 ## Process-wide services
 
-A few services are process-wide: the Logger, the Component registry and the assert handler. Each is
-reached through an instance pointer that can be replaced (`Logger::setInstance()`,
-`ComponentRegistry::setInstance()`, `setAssertHandler()`).
+A few services are process-wide: the Logger, the Component registry, the assert handler and the thread
+and worker indices. Each is reached through an instance pointer or function that can be replaced
+(`Logger::setInstance()`, `ComponentRegistry::setInstance()`, `setAssertHandler()`).
 
 This matters for hot reload. In the editor the game module is a shared library that links its own copy
-of the static core library. When the module loads, the editor injects its own service instances into
-the module, so both sides share one Logger and one Component registry. Component types are identified
-by the hash of their fully qualified name, so a Component gets the same id on both sides.
+of the static core library. When the module loads, the `ModuleHost` injects its own services into the
+module, so both sides share one Logger and one Component registry. Component types are identified by the
+hash of their fully qualified name, so a Component gets the same id on both sides. The registry records
+which module's code each type uses, so that a reload can hand the type over to the new code (ADR 0027).
 
 ## Repository layout
 
@@ -61,6 +62,7 @@ by the hash of their fully qualified name, so a Component gets the same id on bo
 | `engine/assets` | Assets library: `include/illusion/assets` and `src/` |
 | `engine/physics` | Physics library: `include/illusion/physics` and `src/` |
 | `engine/audio` | Audio library: `include/illusion/audio` and `src/` |
+| `engine/modules` | Module host: `include/illusion/modules` and `src/` |
 | `engine/render` | Render library: `include/illusion/render`, `src/` and `shaders/` |
 | `samples` | Small applications that exercise engine features |
 | `tests` | Unit tests (doctest), one file per feature |

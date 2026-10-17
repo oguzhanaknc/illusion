@@ -2,6 +2,7 @@
 #include <illusion/ecs/Component.hpp>
 #include <illusion/ecs/Reflection.hpp>
 
+#include <algorithm>
 #include <deque>
 #include <mutex>
 #include <unordered_map>
@@ -15,6 +16,8 @@ struct ComponentRegistry::Lookup
     mutable std::mutex mutex;
     std::unordered_map<u64, ComponentId> byHash;
     std::unordered_map<std::string, ComponentId> byStableName;
+    std::vector<u32> retiredModules; // their types are taken over by the next registration
+    std::vector<std::string> layoutConflicts;
 };
 
 // Owns the strings and arrays that the public ComponentReflection view points into. Deques keep element
@@ -32,6 +35,25 @@ namespace
 {
 
 std::atomic<ComponentRegistry*> g_registry{nullptr};
+
+// Owner of orphaned types: always retired, never a real module id.
+constexpr u32 kOrphaned = 0xFFFFFFFFu;
+
+[[noreturn]] void orphanedLifetime() noexcept
+{
+    ILL_CHECK(false, "a component type of an unloaded module was used; its module must register it again");
+    ILL_UNREACHABLE();
+}
+
+void orphanedRelocate(void*, void*) noexcept
+{
+    orphanedLifetime();
+}
+
+void orphanedDestroy(void*) noexcept
+{
+    orphanedLifetime();
+}
 
 ComponentRegistry& defaultRegistry()
 {
@@ -70,11 +92,34 @@ ComponentId ComponentRegistry::registerType(const ComponentInfo& info)
     std::scoped_lock lock(m_lookup->mutex);
     if (const auto it = m_lookup->byHash.find(info.hash); it != m_lookup->byHash.end())
     {
-        const ComponentInfo& existing = (*m_entries)[it->second].info;
-        ILL_CHECK(existing.name == info.name, "component hash collision between '{}' and '{}'", existing.name,
+        ComponentInfo& entry = (*m_entries)[it->second].info;
+        ILL_CHECK(entry.name == info.name, "component hash collision between '{}' and '{}'", entry.name,
                   info.name);
-        ILL_CHECK(existing.size == info.size && existing.alignment == info.alignment,
-                  "component '{}' re-registered with a different layout", info.name);
+        const auto& retired = m_lookup->retiredModules;
+        const bool takeover = entry.module != info.module &&
+                              (entry.module == kOrphaned ||
+                               std::find(retired.begin(), retired.end(), entry.module) != retired.end());
+        const bool sameLayout = entry.size == info.size && entry.alignment == info.alignment;
+        if (takeover && !sameLayout)
+        {
+            // A reloaded module changed the type: existing Components cannot be reinterpreted. The module
+            // host rolls the reload back.
+            auto& conflicts = m_lookup->layoutConflicts;
+            if (std::find(conflicts.begin(), conflicts.end(), entry.name) == conflicts.end())
+            {
+                conflicts.emplace_back(entry.name);
+            }
+            return it->second;
+        }
+        ILL_CHECK(sameLayout, "component '{}' re-registered with a different layout", info.name);
+        if (takeover)
+        {
+            entry.relocate = info.relocate;
+            entry.destroy = info.destroy;
+            entry.construct = info.construct;
+            entry.trivial = info.trivial;
+            entry.module = info.module;
+        }
         return it->second;
     }
 
@@ -91,6 +136,81 @@ ComponentId ComponentRegistry::registerType(const ComponentInfo& info)
     // Publish the entry: readers that observe the new count also observe the entry contents.
     m_count.store(index + 1, std::memory_order_release);
     return id;
+}
+
+void ComponentRegistry::retireModule(u32 module)
+{
+    ILL_ASSERT(module != 0, "the host cannot be retired");
+    std::scoped_lock lock(m_lookup->mutex);
+    if (std::find(m_lookup->retiredModules.begin(), m_lookup->retiredModules.end(), module) ==
+        m_lookup->retiredModules.end())
+    {
+        m_lookup->retiredModules.push_back(module);
+    }
+}
+
+void ComponentRegistry::restoreModule(u32 module)
+{
+    std::scoped_lock lock(m_lookup->mutex);
+    std::erase(m_lookup->retiredModules, module);
+}
+
+void ComponentRegistry::restoreType(ComponentId id, const ComponentInfo& info)
+{
+    std::scoped_lock lock(m_lookup->mutex);
+    ILL_ASSERT(id < count(), "unknown component id {}", id);
+    ComponentInfo& entry = (*m_entries)[id].info;
+    ILL_ASSERT(entry.hash == info.hash && entry.size == info.size && entry.alignment == info.alignment,
+               "restoreType() needs a copy of the same type's info");
+    entry.relocate = info.relocate;
+    entry.destroy = info.destroy;
+    entry.construct = info.construct;
+    entry.trivial = info.trivial;
+    entry.module = info.module;
+}
+
+bool ComponentRegistry::takeLayoutConflicts(std::vector<std::string>& out)
+{
+    std::scoped_lock lock(m_lookup->mutex);
+    const bool any = !m_lookup->layoutConflicts.empty();
+    for (std::string& name : m_lookup->layoutConflicts)
+    {
+        out.push_back(std::move(name));
+    }
+    m_lookup->layoutConflicts.clear();
+    return any;
+}
+
+void ComponentRegistry::typesOfModule(u32 module, std::vector<ComponentId>& out) const
+{
+    std::scoped_lock lock(m_lookup->mutex);
+    const u32 total = count();
+    for (u32 id = 0; id < total; ++id)
+    {
+        if ((*m_entries)[id].info.module == module)
+        {
+            out.push_back(static_cast<ComponentId>(id));
+        }
+    }
+}
+
+void ComponentRegistry::orphanModule(u32 module)
+{
+    ILL_ASSERT(module != 0, "the host cannot be orphaned");
+    std::scoped_lock lock(m_lookup->mutex);
+    const u32 total = count();
+    for (u32 id = 0; id < total; ++id)
+    {
+        ComponentInfo& info = (*m_entries)[id].info;
+        if (info.module == module)
+        {
+            info.relocate = &orphanedRelocate;
+            info.destroy = &orphanedDestroy;
+            info.construct = nullptr;
+            info.module = kOrphaned;
+        }
+    }
+    std::erase(m_lookup->retiredModules, module);
 }
 
 ComponentId ComponentRegistry::find(u64 hash) const

@@ -8,8 +8,8 @@ designed to ship commercial games on Steam and similar stores.
 > **Status: early development.** The core library (logging, memory, Job System, archetype ECS), the
 > platform layer, input (keyboard, mouse, gamepads, actions), glTF loading and a forward PBR scene renderer
 > with image-based lighting, soft shadows and HDR post-processing, an asset pipeline (import cache,
-> streaming, packed archives), scene files, rigid-body physics and 3D audio are implemented and tested on
-> all platforms. The game module system, the editor and the export pipeline are next; see
+> streaming, packed archives), scene files, rigid-body physics, 3D audio and hot-reloadable game modules are
+> implemented and tested on all platforms. The editor and the export pipeline are next; see
 > [ROADMAP.md](ROADMAP.md).
 
 ## Highlights
@@ -34,6 +34,8 @@ designed to ship commercial games on Steam and similar stores.
   streaming, clips loaded in the background, a mixer with buses, low/high-pass filters and a room reverb,
   mixed on its own thread without allocations; WAV, FLAC, MP3 and Ogg Vorbis.
 - Component reflection with stable names and JSON scene files that survive code changes.
+- Game modules: hot-reloadable shared libraries in development (World data survives a reload, broken
+  builds are rolled back), linked statically into shipped games; semver and dependencies.
 - Asset pipeline: content-hashed import cache, asynchronous streaming on an I/O thread and the Job
   System, memory-mapped `.illpak` archives and cooked builds that ship without sources.
 - No per-frame heap allocations: arenas, pools and an inline type-erased callable.
@@ -83,6 +85,7 @@ world.query<Position, const Velocity>().each([](Position& p, const Velocity& v) 
 | `engine/assets` | Images, Meshes, glTF loading (`illusion::assets`) |
 | `engine/physics` | Rigid-body physics with Jolt (`illusion::physics`) |
 | `engine/audio` | Sound playback, 3D audio and mixing with miniaudio (`illusion::audio`) |
+| `engine/modules` | Game and plugin modules: loading, checks, hot reload (`illusion::modules`) |
 | `engine/render` | GPU device, swapchains, shaders, scene renderer (`illusion::render`) |
 | `samples` | Sample applications |
 | `tests` | Unit tests (doctest) |

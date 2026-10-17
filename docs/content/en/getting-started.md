@@ -96,6 +96,7 @@ Then build with `cmake --preset dev` and `cmake --build C:/dev/illusion-build/de
 | `ILLUSION_WARNINGS_AS_ERRORS` | `OFF` | Treat warnings as errors (`ON` in CI presets). |
 | `ILLUSION_ENABLE_ASSERTS` | `OFF` | Keep `ILL_ASSERT` in every configuration; it is always on in Debug. |
 | `ILLUSION_PROFILING` | `OFF` | Instrument the engine for Tracy. |
+| `ILLUSION_SHARED_MODULES` | `ON` (`OFF` with profiling) | Build game modules as hot-reloadable shared libraries; `OFF` links them statically. |
 | `ILLUSION_SANITIZER` | empty | `address` (ASan + UBSan) or `thread` (TSan); GCC/Clang only. |
 
 ## Benchmarks

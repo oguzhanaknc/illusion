@@ -3,27 +3,26 @@
 Terse agent notes. Rules: CLAUDE.md, AGENTS.md, .claude/skills/*. Plan: ROADMAP.md.
 
 ## State
-- main: M0..M5d merged (#16 M5d, #17 job-queue fix). CI green.
-- Branch claude/upbeat-cray-5vm0mp: M5e (audio extensions), ADR 0026. PR opened from this branch.
+- main: M0..M5e merged (#16 M5d, #17 job-queue fix, #18 M5e). ROADMAP has M9 (FSR/DLSS/XeSS upscaling,
+  DLSS as optional user-supplied SDK module) and M10 (hybrid ray tracing) at the end.
+- Branch claude/upbeat-cray-5vm0mp: M6 (game modules + hot reload), ADR 0027.
 
-## M5e (done on the branch)
-- AssetStreamer::loadFile<T>(path, decoderName, decoder): I/O-thread read + Job System decode, no cache.
-- AudioWorldDesc::streamer; requestClip()/clipState(); AudioSource clips load in background,
-  AudioPlayback::pendingStart until ready. Clip plays from the AssetHandle data (no copy).
-- Mixer graph per voice: sound -> [lpf] -> splitter -> bus group -> [bus lpf] -> [bus hpf] -> endpoint;
-  splitter out1 -> shared verblib reverb (miniaudio extras, MIT-0/PD). Nodes created once; routing on the
-  audio thread; reverb connected only while fed + decay; delay lines cleared on disconnect
-  (illusion_clear_reverb in MiniaudioImpl.c).
-- AudioSource: lowPassCutoff, reverbSend, coneInnerAngle/coneOuterAngle/coneOuterVolume (reflected).
-  AudioPlayParams: lowPassCutoff, reverbSend. AudioWorld: setBusFilter/busFilter, setReverb/reverb.
-- ContactEvent::speed (approach speed before solve). physics_playground plays impact knocks.
-- Tests: tests/audio/TestAudioEffects.cpp (+ AudioTestSupport.hpp), streamer loadFile, impact speed.
-- Benchmark audio/mix-effects: ~28 ns/voice-frame on the 4-vCPU box (plain mix ~6), budget 120.
+## M6 (on the branch)
+- Module side: illusion/core/Module.hpp (ModuleApi, makeModuleApi, ILL_MODULE, ModuleContext,
+  ModuleServices). Host: engine/modules ModuleHost (shadow copy, validation: API/engine version/build
+  key/name/semver/deps, service install, load/update/unload, reload, reloadChanged).
+- Services injected: Logger, ComponentRegistry, assert dispatcher (follows host's current handler),
+  thread index + worker index forwarding (Thread.cpp, JobSystem.cpp).
+- ComponentInfo::module + registry retire/restore/restoreType/typesOfModule/orphan/takeLayoutConflicts.
+  Reload: snapshot old types, old unload, retire, new load takes over; leftovers stripped from World and
+  orphaned; failures (incl. layout change) roll back to old version.
+- cmake/IllusionModules.cmake illusion_add_module(); ILLUSION_SHARED_MODULES (OFF with profiling).
+- Tests: tests/modules (TestModule.cpp variants 1-4, NotAModule.cpp), registry tests in
+  tests/ecs/TestComponent.cpp; benchmark modules/update (~2.5 ns/module, budget 25).
 
 ## Next
-- Merge M5e PR. Then M6 (module system; ADR 0003 hooks exist: Logger/ComponentRegistry::setInstance,
-  setAssertHandler; PIC on; Version.hpp semver). Re-registration of module-owned component types on reload.
-- Follow-up ideas: parallel unit tests in CI (the #17 race only showed under ctest -j); per-zone reverbs.
+- Merge M6 PR, then M7 (editor + AI command API). Open follow-up: reflection-based migration for module
+  Components whose layout changed (listed under M6 in ROADMAP).
 
 ## Cloud box notes (if another cloud session repeats this)
 - Proxy blocks github archive URLs (FetchContent URL deps) -> 403. git clone + release assets work.

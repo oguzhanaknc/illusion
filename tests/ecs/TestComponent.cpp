@@ -115,3 +115,90 @@ TEST_CASE("Concurrent registration yields one id per type")
     }
     CHECK(registry.count() == 1);
 }
+
+namespace component_test
+{
+
+// Lifetime functions that tell which "module" registered a type.
+int g_destroyedBy = 0;
+
+template <int Module>
+void destroyFrom(void*) noexcept
+{
+    g_destroyedBy = Module;
+}
+
+ComponentInfo moduleInfo(u32 module, void (*destroy)(void*) noexcept)
+{
+    ComponentInfo info = makeComponentInfo<OnlyHere>();
+    info.module = module;
+    info.destroy = destroy;
+    return info;
+}
+
+} // namespace component_test
+
+TEST_CASE("a retired module's types are taken over by the next registration")
+{
+    using namespace component_test;
+    ComponentRegistry registry;
+    const ComponentId id = registry.registerType(moduleInfo(1, &destroyFrom<1>));
+    CHECK(registry.info(id).module == 1);
+
+    // Without retirement another registration does not take over.
+    CHECK(registry.registerType(moduleInfo(2, &destroyFrom<2>)) == id);
+    CHECK(registry.info(id).module == 1);
+
+    std::vector<ComponentId> owned;
+    registry.typesOfModule(1, owned);
+    CHECK(owned == std::vector<ComponentId>{id});
+
+    const ComponentInfo before = registry.info(id);
+    registry.retireModule(1);
+    CHECK(registry.registerType(moduleInfo(2, &destroyFrom<2>)) == id);
+    CHECK(registry.info(id).module == 2);
+    registry.info(id).destroy(nullptr);
+    CHECK(g_destroyedBy == 2);
+
+    // A rollback gives the type back.
+    registry.restoreType(id, before);
+    registry.restoreModule(1);
+    CHECK(registry.info(id).module == 1);
+    registry.info(id).destroy(nullptr);
+    CHECK(g_destroyedBy == 1);
+    CHECK(registry.registerType(moduleInfo(3, &destroyFrom<2>)) == id); // no longer retired
+    CHECK(registry.info(id).module == 1);
+}
+
+TEST_CASE("orphaned types are taken over by any later registration")
+{
+    using namespace component_test;
+    ComponentRegistry registry;
+    const ComponentId id = registry.registerType(moduleInfo(4, &destroyFrom<1>));
+    registry.orphanModule(4);
+    std::vector<ComponentId> owned;
+    registry.typesOfModule(4, owned);
+    CHECK(owned.empty());
+    CHECK(registry.info(id).construct == nullptr);
+    CHECK(registry.registerType(moduleInfo(5, &destroyFrom<2>)) == id);
+    CHECK(registry.info(id).module == 5);
+    registry.info(id).destroy(nullptr);
+    CHECK(g_destroyedBy == 2);
+}
+
+TEST_CASE("a takeover with another layout is reported instead of applied")
+{
+    using namespace component_test;
+    ComponentRegistry registry;
+    const ComponentId id = registry.registerType(moduleInfo(6, &destroyFrom<1>));
+    registry.retireModule(6);
+    ComponentInfo wider = moduleInfo(7, &destroyFrom<2>);
+    wider.size += 8;
+    CHECK(registry.registerType(wider) == id);
+    CHECK(registry.registerType(wider) == id);
+    CHECK(registry.info(id).module == 6); // not taken over
+    std::vector<std::string> conflicts;
+    CHECK(registry.takeLayoutConflicts(conflicts));
+    CHECK(conflicts == std::vector<std::string>{std::string(typeName<OnlyHere>())});
+    CHECK_FALSE(registry.takeLayoutConflicts(conflicts));
+}

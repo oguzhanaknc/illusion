@@ -33,6 +33,7 @@ records rather than user documentation.
 | [0024](https://github.com/oguzhanaknc/illusion/blob/main/docs/adr/0024-audio-with-miniaudio.md) | Audio with miniaudio, mixed on an audio thread that owns its state |
 | [0025](https://github.com/oguzhanaknc/illusion/blob/main/docs/adr/0025-physics-extensions.md) | Mesh and hull geometry, characters, joints and shape queries |
 | [0026](https://github.com/oguzhanaknc/illusion/blob/main/docs/adr/0026-audio-effects-and-background-loading.md) | Audio effects, sound cones and clips loaded through the asset streamer |
+| [0027](https://github.com/oguzhanaknc/illusion/blob/main/docs/adr/0027-module-system-and-hot-reload.md) | Game modules: a C entry point, service injection and hot reload that hands Component types over |
 
 To propose a new decision, copy `docs/adr/0000-template.md` and follow the
 [contributing guide](../contributing.md#architecture-decision-records).

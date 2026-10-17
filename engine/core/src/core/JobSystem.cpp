@@ -14,6 +14,7 @@ namespace
 {
 
 thread_local i32 t_workerIndex = -1;
+std::atomic<i32 (*)() noexcept> g_workerIndexSource{nullptr};
 
 // Number of failed polls before an idle worker goes to sleep.
 constexpr u32 kSpinsBeforeSleep = 256;
@@ -317,7 +318,18 @@ u32 JobSystem::workerCount() const noexcept
 
 i32 JobSystem::currentWorkerIndex() noexcept
 {
+    if (i32(*source)() noexcept = g_workerIndexSource.load(std::memory_order_relaxed))
+    {
+        return source();
+    }
     return t_workerIndex;
+}
+
+void detail::setWorkerIndexSource(i32 (*source)() noexcept) noexcept
+{
+    // The host's own function never forwards, so installing it into the host is harmless.
+    g_workerIndexSource.store(source == &JobSystem::currentWorkerIndex ? nullptr : source,
+                              std::memory_order_relaxed);
 }
 
 } // namespace illusion
