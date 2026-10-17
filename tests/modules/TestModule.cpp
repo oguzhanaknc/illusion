@@ -40,6 +40,7 @@ bool loadModule(ModuleContext& context)
     world.query<const test::ModuleCounter>().each([&](const test::ModuleCounter&) { haveCounter = true; });
     if (!haveCounter)
     {
+        world.create(test::SharedComponent{11});
         world.create(test::ModuleCounter{});
         if (kVariant == 1)
         {

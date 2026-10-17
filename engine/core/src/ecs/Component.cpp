@@ -95,12 +95,15 @@ ComponentId ComponentRegistry::registerType(const ComponentInfo& info)
         ComponentInfo& entry = (*m_entries)[it->second].info;
         ILL_CHECK(entry.name == info.name, "component hash collision between '{}' and '{}'", entry.name,
                   info.name);
+        // A reloaded module's (retired) or an unloaded module's (orphaned) type goes to whoever registers it
+        // next; the host's code is never unloaded, so it takes any type over from a module.
         const auto& retired = m_lookup->retiredModules;
-        const bool takeover = entry.module != info.module &&
-                              (entry.module == kOrphaned ||
-                               std::find(retired.begin(), retired.end(), entry.module) != retired.end());
+        const bool replaceable = entry.module == kOrphaned ||
+                                 std::find(retired.begin(), retired.end(), entry.module) != retired.end();
+        const bool hostTakesOver = info.module == 0 && entry.module != 0;
+        const bool takeover = entry.module != info.module && (replaceable || hostTakesOver);
         const bool sameLayout = entry.size == info.size && entry.alignment == info.alignment;
-        if (takeover && !sameLayout)
+        if (replaceable && !hostTakesOver && takeover && !sameLayout)
         {
             // A reloaded module changed the type: existing Components cannot be reinterpreted. The module
             // host rolls the reload back.

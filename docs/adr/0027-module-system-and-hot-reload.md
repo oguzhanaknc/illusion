@@ -39,7 +39,10 @@ struct of function pointers is the smallest boundary.
   the host). The registry can retire a module (its types are taken over by the next registration of the
   same type from another module), restore a retired module or single types (rollback), list a module's
   types, and orphan them (their lifetime functions become fatal errors until someone registers them again).
-  A takeover with a different size or alignment is not applied but recorded as a layout conflict.
+  A takeover with a different size or alignment is not applied but recorded as a layout conflict. A
+  registration by the host (module 0) always takes a type over from a module, because the host's code is
+  never unloaded: engine types that a module happened to register first return to the host as soon as host
+  code uses them, and `ModuleHost` reflects the core Components when it is created.
 - **Host** (`illusion::modules`, `ModuleHost`): loads a shared module from a copy in a shadow directory
   (the build can overwrite the original, Windows does not lock it, and a reload never gets the cached image
   back), validates the API version, engine version, build key, name, version and dependencies (semantic

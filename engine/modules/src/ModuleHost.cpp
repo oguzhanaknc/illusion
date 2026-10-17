@@ -3,6 +3,7 @@
 #include <illusion/core/Log.hpp>
 #include <illusion/core/Profiler.hpp>
 #include <illusion/ecs/Component.hpp>
+#include <illusion/ecs/Reflection.hpp>
 #include <illusion/ecs/World.hpp>
 #include <illusion/modules/ModuleHost.hpp>
 
@@ -413,6 +414,9 @@ struct ModuleHost::Impl
 ModuleHost::ModuleHost(World& world, JobSystem& jobs, ModuleHostDesc desc)
     : m_impl(std::make_unique<Impl>(world, jobs, std::move(desc)))
 {
+    // The host's own code must own the engine's types, or they would go away with the first module that
+    // happened to use them first.
+    reflectCoreComponents();
 }
 
 ModuleHost::~ModuleHost() = default;

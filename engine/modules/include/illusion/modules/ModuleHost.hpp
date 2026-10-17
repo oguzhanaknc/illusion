@@ -68,7 +68,9 @@ struct ModuleHostDesc
 class ModuleHost : NonCopyable
 {
 public:
-    /// Creates a host whose modules work on @p world and @p jobs.
+    /// Creates a host whose modules work on @p world and @p jobs. Reflects the core Components so that the
+    /// host owns them; reflect the Components of the other engine libraries the game uses
+    /// (reflectPhysicsComponents(), reflectAudioComponents(), ...) before loading modules as well.
     ModuleHost(World& world, JobSystem& jobs, ModuleHostDesc desc = {});
 
     /// Unloads every module, the last loaded first.

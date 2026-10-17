@@ -37,11 +37,27 @@ void install(const std::filesystem::path& library, const std::filesystem::path& 
                                                      : std::filesystem::last_write_time(target));
 }
 
+// The id of a module's Component type. The tests reach module types the way an editor does, by stable
+// name: host code that used them as C++ types would make the host own them.
+ComponentId moduleType(std::string_view stableName)
+{
+    return ComponentRegistry::instance().findByStableName(stableName);
+}
+
+// Sum of the "value" fields (an i32 at offset 0) of every test.ModuleCounter.
 i32 counterTotal(World& world)
 {
+    const ComponentId counter = moduleType("test.ModuleCounter");
+    std::vector<Entity> entities;
+    world.entities(entities);
     i32 total = 0;
-    world.query<const test::ModuleCounter>().each(
-        [&](const test::ModuleCounter& counter) { total += counter.value; });
+    for (const Entity entity : entities)
+    {
+        if (const void* data = world.componentData(entity, counter))
+        {
+            total += *static_cast<const i32*>(data);
+        }
+    }
     return total;
 }
 
@@ -150,12 +166,13 @@ TEST_CASE("a shared module loads with the host's services and runs every update"
     CHECK(f.control.updates == 1);
     CHECK(f.control.logger == &Logger::instance());
     CHECK(f.control.registry == &ComponentRegistry::instance());
-    CHECK(f.control.counterId == componentId<test::ModuleCounter>());
+    CHECK(f.control.counterId == moduleType("test.ModuleCounter"));
     CHECK(f.control.transformId == componentId<Transform>());
     CHECK(f.control.threadIndex == currentThreadIndex());
     CHECK(f.control.workerIndex.load() >= 0);
     CHECK(counterTotal(f.world) == 2); // two counters, +1 each
 
+#if ILL_ASSERTS_ENABLED
     {
         // Assertions in the module reach the handler the host installs, even after the module loaded.
         test::ScopedAssertCatcher catcher;
@@ -163,12 +180,35 @@ TEST_CASE("a shared module loads with the host's services and runs every update"
         CHECK_THROWS_AS(f.host->update(0.0), test::AssertionFailure);
         f.control.assertInUpdate = false;
     }
+#endif
 
     CHECK(f.host->unload("test_module"));
     CHECK(f.control.unloads == 1);
     CHECK(f.host->count() == 0);
-    CHECK(countWith(f.world, componentId<test::ModuleCounter>()) == 0); // its Components went with its code
+    CHECK(countWith(f.world, moduleType("test.ModuleCounter")) == 0); // its Components went with its code
     CHECK_FALSE(f.host->unload("test_module"));
+}
+
+TEST_CASE("types the host uses belong to the host and their Components outlive the module")
+{
+    Fixture f;
+    install(TEST_MODULE_V1, f.library);
+    REQUIRE_FALSE(f.host->load(f.library));
+    const ComponentId shared = componentId<test::SharedComponent>(); // the host takes the type over
+    CHECK(ComponentRegistry::instance().info(shared).module == 0);
+    CHECK(ComponentRegistry::instance().info(componentId<Transform>()).module == 0);
+    CHECK(f.host->unload("test_module"));
+    REQUIRE(countWith(f.world, shared) == 1);
+    std::vector<Entity> entities;
+    f.world.entities(entities);
+    for (const Entity entity : entities)
+    {
+        if (const test::SharedComponent* component = f.world.tryGet<test::SharedComponent>(entity))
+        {
+            CHECK(component->value == 11);
+        }
+        f.world.destroy(entity); // destroys it with the host's code
+    }
 }
 
 TEST_CASE("hot reload swaps the code, keeps World data and removes types the new version dropped")
@@ -178,7 +218,7 @@ TEST_CASE("hot reload swaps the code, keeps World data and removes types the new
     REQUIRE_FALSE(f.host->load(f.library));
     f.host->update(0.0);
     CHECK(counterTotal(f.world) == 2);
-    const ComponentId legacy = componentId<test::LegacyComponent>();
+    const ComponentId legacy = moduleType("test.LegacyComponent");
     CHECK(countWith(f.world, legacy) == 1);
     CHECK(f.host->reloadChanged() == 0); // nothing changed yet
 
@@ -191,8 +231,8 @@ TEST_CASE("hot reload swaps the code, keeps World data and removes types the new
     CHECK(f.control.unloads == 1);
     CHECK(f.control.loads == 2);
     CHECK(f.control.reloadingSeen);
-    CHECK(countWith(f.world, legacy) == 0);                             // dropped by version 2
-    CHECK(countWith(f.world, componentId<test::ModuleCounter>()) == 2); // kept
+    CHECK(countWith(f.world, legacy) == 0);                           // dropped by version 2
+    CHECK(countWith(f.world, moduleType("test.ModuleCounter")) == 2); // kept
 
     f.host->update(0.0);
     CHECK(f.control.variant == 2);
@@ -228,7 +268,7 @@ TEST_CASE("a reload that changes a component's layout is rolled back")
     f.host->update(0.0);
     CHECK(f.control.variant == 1);
     CHECK(counterTotal(f.world) == 4);
-    CHECK(countWith(f.world, componentId<test::LegacyComponent>()) == 1);
+    CHECK(countWith(f.world, moduleType("test.LegacyComponent")) == 1);
 
     install(TEST_MODULE_V2, f.library); // a fixed build reloads
     CHECK(f.host->reloadChanged() == 1);
@@ -341,6 +381,6 @@ TEST_CASE("destroying the host unloads every module")
     REQUIRE_FALSE(f.host->add(kStaticModule));
     f.host.reset();
     CHECK(f.control.unloads == 1);
-    CHECK(countWith(f.world, componentId<test::ModuleCounter>()) == 0); // the entities stay, empty
+    CHECK(countWith(f.world, moduleType("test.ModuleCounter")) == 0); // the entities stay, empty
     CHECK_FALSE(std::filesystem::exists(f.directory.path / "shadow" / f.library.filename()));
 }

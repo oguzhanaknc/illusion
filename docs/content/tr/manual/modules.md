@@ -122,6 +122,11 @@ devam eder; hata log'a yazılır ve aynı dosya değişene kadar yeniden denenme
 
 Yeniden yüklenebilir modüller için kurallar:
 
+- Host, kendi kodunun kullandığı her Component türünün sahibidir ve `ModuleHost` constructor'ı core
+  Component'lerini yansıtır. Hiçbir engine türü bir modülün koduna bağlı kalmasın diye oyunun kullandığı
+  diğer engine kütüphanelerinin Component'lerini (`reflectPhysicsComponents()`, `reflectAudioComponents()`,
+  ...) modülleri yüklemeden önce yansıtın. Araçlar bir modülün kendi türlerini C++ türü olarak değil,
+  registry üzerinden (stable name ile) görür.
 - Modülün her Component türünü `load`'da kaydedin (veya yansıtın).
 - `load`'da modülün kendi türlerinin var olan Component'lerine dokunmayın; bunu `update`'te yapın.
 - Modülün içini gösteren şeyleri `unload`'da geri alın: event handler'ları, host'a verilen callback'ler.

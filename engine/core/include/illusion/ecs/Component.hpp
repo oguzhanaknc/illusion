@@ -120,9 +120,10 @@ public:
     static void setInstance(ComponentRegistry* registry) noexcept;
 
     /// Registers a type described by @p info and returns its id. Registering a type again (same hash)
-    /// returns the existing id; it is a fatal error if size or alignment differ. If the type was
-    /// registered by a module that is being reloaded (retireModule()), @p info takes over: its lifetime
-    /// functions and module replace the old ones, so no function of the old module is called again.
+    /// returns the existing id; it is a fatal error if size or alignment differ. @p info takes the type
+    /// over (its lifetime functions and module replace the old ones) if it comes from the host (module 0)
+    /// and the type was registered by a module, or if the type was registered by a module that is being
+    /// reloaded (retireModule()) or was unloaded (orphanModule()).
     ComponentId registerType(const ComponentInfo& info);
 
     /// Registers @p T. See registerType(const ComponentInfo&).

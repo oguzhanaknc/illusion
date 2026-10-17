@@ -121,6 +121,11 @@ running; the error is logged, and the same file is not tried again until it chan
 
 Rules for reloadable modules:
 
+- The host owns every Component type its own code uses, and the `ModuleHost` constructor reflects the core
+  Components. Reflect the Components of the other engine libraries the game uses
+  (`reflectPhysicsComponents()`, `reflectAudioComponents()`, ...) before loading modules, so that no
+  engine type depends on a module's code. Tools see a module's own types through the registry (by stable
+  name), not as C++ types.
 - Register (or reflect) every Component type of the module in `load`.
 - Do not touch existing Components of the module's own types in `load`; do that in `update`.
 - Undo in `unload` what points into the module: event handlers, callbacks given to the host.

@@ -25,6 +25,13 @@ struct LegacyComponent
     i32 value = 0;
 };
 
+// Used by the host too (like an engine Component): the module creates one, the host takes the type over
+// when it uses it, and the Components outlive the module.
+struct SharedComponent
+{
+    i32 value = 0;
+};
+
 // Shared through ModuleHost::provide(): the host steers the module and reads what it saw.
 struct ModuleControl
 {

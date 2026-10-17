@@ -202,3 +202,18 @@ TEST_CASE("a takeover with another layout is reported instead of applied")
     CHECK(conflicts == std::vector<std::string>{std::string(typeName<OnlyHere>())});
     CHECK_FALSE(registry.takeLayoutConflicts(conflicts));
 }
+
+TEST_CASE("a registration by the host takes a type over from a module")
+{
+    using namespace component_test;
+    ComponentRegistry registry;
+    const ComponentId id = registry.registerType(moduleInfo(8, &destroyFrom<1>));
+    CHECK(registry.registerType(moduleInfo(0, &destroyFrom<2>)) == id);
+    CHECK(registry.info(id).module == 0);
+    registry.info(id).destroy(nullptr);
+    CHECK(g_destroyedBy == 2);
+    registry.orphanModule(8); // the module unloads: the host keeps the type
+    CHECK(registry.info(id).module == 0);
+    CHECK(registry.registerType(moduleInfo(9, &destroyFrom<1>)) == id);
+    CHECK(registry.info(id).module == 0);
+}
