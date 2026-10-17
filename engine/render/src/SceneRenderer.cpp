@@ -22,7 +22,8 @@ namespace illusion
 namespace
 {
 
-// GPU layouts; must match ForwardPbr.slang (std140 for the constant buffer, std430 for instances).
+// GPU layouts; must match Common.slang and ForwardPbr.slang (std140 for the constant buffer, std430 for
+// instances).
 struct GpuDirectionalLight
 {
     Vec4 direction;
@@ -39,15 +40,21 @@ struct GpuViewConstants
 {
     Mat4 viewProjection;
     Vec4 cameraPosition; // w: exposure
-    Vec4 ambient;        // w: 1 if the shader encodes sRGB
+    Vec4 output;         // x: 1 if the shader encodes sRGB
     u32 directionalCount;
     u32 pointCount;
     u32 padding[2];
     GpuDirectionalLight directional[SceneRenderer::kMaxDirectionalLights];
     GpuPointLight points[SceneRenderer::kMaxPointLights];
+    Mat4 inverseViewProjection;
+    Mat4 skyRotation; // world direction -> environment direction
+    Vec4 sky;         // x: specular intensity, y: last specular mip, z: background intensity
+    Vec4 sh[9];       // diffuse irradiance, intensity applied
 };
 static_assert(offsetof(GpuViewConstants, directional) == 112);
 static_assert(offsetof(GpuViewConstants, points) == 240);
+static_assert(offsetof(GpuViewConstants, inverseViewProjection) == 752);
+static_assert(offsetof(GpuViewConstants, sh) == 896);
 
 struct GpuInstance
 {
@@ -89,12 +96,17 @@ struct SceneRenderer::Impl
 
     nvrhi::ShaderHandle vertexShader;
     nvrhi::ShaderHandle fragmentShader;
+    nvrhi::ShaderHandle skyboxVertexShader;
+    nvrhi::ShaderHandle skyboxFragmentShader;
+    nvrhi::GraphicsPipelineHandle skyboxPipeline;
+    nvrhi::SamplerHandle clampSampler;
     nvrhi::InputLayoutHandle inputLayout;
     nvrhi::BindingLayoutHandle viewLayout;
     nvrhi::BufferHandle viewConstants;
     nvrhi::BufferHandle instanceBuffer;
     u32 instanceCapacity = 0;
-    nvrhi::BindingSetHandle viewSet;
+    // View binding sets by environment index (0 = no sky); rebuilt when the instance buffer grows.
+    std::unordered_map<u32, nvrhi::BindingSetHandle> viewSets;
     // [blend][doubleSided]
     std::array<std::array<nvrhi::GraphicsPipelineHandle, 2>, 2> pipelines{};
 
@@ -112,6 +124,7 @@ struct SceneRenderer::Impl
     void ensureInstanceCapacity(u32 count);
     void cull(World& world, const RenderView& view, JobSystem* jobs);
     void gatherLights(World& world, GpuViewConstants& constants);
+    nvrhi::IBindingSet* viewSetFor(EnvironmentHandle environment);
 };
 
 bool SceneRenderer::Impl::initialize()
@@ -124,10 +137,20 @@ bool SceneRenderer::Impl::initialize()
     fragmentShader = device->createShader(
         nvrhi::ShaderDesc().setShaderType(nvrhi::ShaderType::Pixel).setDebugName("ForwardPbr FS"), fs.data(),
         fs.size());
-    if (!vertexShader || !fragmentShader)
+    const std::span<const std::byte> skyVs = shaders::skyboxVertex();
+    const std::span<const std::byte> skyFs = shaders::skyboxFragment();
+    skyboxVertexShader = device->createShader(
+        nvrhi::ShaderDesc().setShaderType(nvrhi::ShaderType::Vertex).setDebugName("Skybox VS"), skyVs.data(),
+        skyVs.size());
+    skyboxFragmentShader = device->createShader(
+        nvrhi::ShaderDesc().setShaderType(nvrhi::ShaderType::Pixel).setDebugName("Skybox FS"), skyFs.data(),
+        skyFs.size());
+    if (!vertexShader || !fragmentShader || !skyboxVertexShader || !skyboxFragmentShader)
     {
         return false;
     }
+    clampSampler = device->createSampler(
+        nvrhi::SamplerDesc().setAllFilters(true).setAllAddressModes(nvrhi::SamplerAddressMode::Clamp));
 
     const nvrhi::VertexAttributeDesc attributes[] = {
         nvrhi::VertexAttributeDesc()
@@ -161,6 +184,10 @@ bool SceneRenderer::Impl::initialize()
     layout.bindings = {
         nvrhi::BindingLayoutItem::VolatileConstantBuffer(0),
         nvrhi::BindingLayoutItem::StructuredBuffer_SRV(0),
+        nvrhi::BindingLayoutItem::Texture_SRV(1), // specular cube map
+        nvrhi::BindingLayoutItem::Texture_SRV(2), // BRDF table
+        nvrhi::BindingLayoutItem::Texture_SRV(3), // background cube map
+        nvrhi::BindingLayoutItem::Sampler(0),
         // Push constants take a constant-buffer slot in NVRHI, so they cannot share b0 with the view.
         nvrhi::BindingLayoutItem::PushConstants(1, sizeof(u32)),
     };
@@ -173,6 +200,15 @@ bool SceneRenderer::Impl::initialize()
         nvrhi::utils::CreateVolatileConstantBufferDesc(sizeof(GpuViewConstants), "View constants", 16));
 
     encodeSrgb = !nvrhi::getFormatInfo(desc.colorFormat).isSRGB;
+    nvrhi::GraphicsPipelineDesc skybox;
+    skybox.primType = nvrhi::PrimitiveType::TriangleList;
+    skybox.VS = skyboxVertexShader;
+    skybox.PS = skyboxFragmentShader;
+    skybox.bindingLayouts = {viewLayout};
+    skybox.renderState.rasterState.setCullNone();
+    // Depth 0 is both the cleared value and infinity with reversed-Z, so only uncovered pixels pass.
+    skybox.renderState.depthStencilState.setDepthTestEnable(true).setDepthWriteEnable(false).setDepthFunc(
+        nvrhi::ComparisonFunc::GreaterOrEqual);
     const nvrhi::FramebufferInfo info =
         nvrhi::FramebufferInfo().addColorFormat(desc.colorFormat).setDepthFormat(kDepthFormat);
     for (u32 blend = 0; blend < 2; ++blend)
@@ -213,6 +249,11 @@ bool SceneRenderer::Impl::initialize()
             }
         }
     }
+    skyboxPipeline = device->createGraphicsPipeline(skybox, info);
+    if (!skyboxPipeline)
+    {
+        return false;
+    }
     ensureInstanceCapacity(1024);
     return true;
 }
@@ -230,14 +271,28 @@ void SceneRenderer::Impl::ensureInstanceCapacity(u32 count)
     bufferDesc.debugName = "Instances";
     bufferDesc.enableAutomaticStateTracking(nvrhi::ResourceStates::ShaderResource);
     instanceBuffer = device->createBuffer(bufferDesc);
+    viewSets.clear();
+}
 
-    nvrhi::BindingSetDesc set;
-    set.bindings = {
-        nvrhi::BindingSetItem::ConstantBuffer(0, viewConstants),
-        nvrhi::BindingSetItem::StructuredBuffer_SRV(0, instanceBuffer),
-        nvrhi::BindingSetItem::PushConstants(1, sizeof(u32)),
-    };
-    viewSet = device->createBindingSet(set, viewLayout);
+nvrhi::IBindingSet* SceneRenderer::Impl::viewSetFor(EnvironmentHandle environment)
+{
+    nvrhi::BindingSetHandle& set = viewSets[environment.index];
+    if (!set)
+    {
+        const RenderResources::GpuEnvironment& gpu = resources->environment(environment);
+        nvrhi::BindingSetDesc setDesc;
+        setDesc.bindings = {
+            nvrhi::BindingSetItem::ConstantBuffer(0, viewConstants),
+            nvrhi::BindingSetItem::StructuredBuffer_SRV(0, instanceBuffer),
+            nvrhi::BindingSetItem::Texture_SRV(1, gpu.specular),
+            nvrhi::BindingSetItem::Texture_SRV(2, resources->brdfLut()),
+            nvrhi::BindingSetItem::Texture_SRV(3, gpu.background),
+            nvrhi::BindingSetItem::Sampler(0, clampSampler),
+            nvrhi::BindingSetItem::PushConstants(1, sizeof(u32)),
+        };
+        set = device->createBindingSet(setDesc, viewLayout);
+    }
+    return set;
 }
 
 nvrhi::IFramebuffer* SceneRenderer::Impl::framebufferFor(nvrhi::ITexture* color)
@@ -405,9 +460,35 @@ void SceneRenderer::render(nvrhi::ICommandList* commandList, nvrhi::ITexture* co
 
     GpuViewConstants constants{};
     constants.viewProjection = view.projection * view.view;
+    constants.inverseViewProjection = glm::inverse(constants.viewProjection);
     constants.cameraPosition = Vec4(view.position, view.exposure);
-    constants.ambient = Vec4(impl.desc.ambient, impl.encodeSrgb ? 1.0f : 0.0f);
+    constants.output = Vec4(impl.encodeSrgb ? 1.0f : 0.0f, 0.0f, 0.0f, 0.0f);
     impl.gatherLights(world, constants);
+
+    // The first SkyLight provides image-based lighting; without one, the constant ambient light does.
+    const SkyLight* skyLight = nullptr;
+    Quat skyOrientation(1.0f, 0.0f, 0.0f, 0.0f);
+    world.query<const Transform, const SkyLight>().each([&](const Transform& transform, const SkyLight& sky) {
+        if (skyLight == nullptr)
+        {
+            skyLight = &sky;
+            skyOrientation = transform.rotation;
+        }
+    });
+    const EnvironmentHandle environment = skyLight != nullptr ? skyLight->environment : EnvironmentHandle{};
+    const RenderResources::GpuEnvironment& gpuEnvironment = impl.resources->environment(environment);
+    const f32 skyIntensity = skyLight != nullptr ? skyLight->intensity : 0.0f;
+    const ShIrradiance irradiance =
+        skyLight != nullptr ? gpuEnvironment.irradiance : ShIrradiance::uniform(impl.desc.ambient);
+    const f32 irradianceScale = skyLight != nullptr ? skyIntensity : 1.0f;
+    for (usize i = 0; i < irradiance.coefficients.size(); ++i)
+    {
+        constants.sh[i] = Vec4(irradiance.coefficients[i] * irradianceScale, 0.0f);
+    }
+    constants.skyRotation = glm::mat4_cast(glm::inverse(glm::normalize(skyOrientation)));
+    constants.sky = Vec4(skyIntensity, static_cast<f32>(gpuEnvironment.specularMips - 1), skyIntensity, 0.0f);
+    const bool drawBackground = skyLight != nullptr && skyLight->background;
+    nvrhi::IBindingSet* viewSet = impl.viewSetFor(environment);
 
     commandList->beginMarker("SceneRenderer");
     commandList->clearTextureFloat(colorTarget, nvrhi::AllSubresources,
@@ -422,11 +503,30 @@ void SceneRenderer::render(nvrhi::ICommandList* commandList, nvrhi::ITexture* co
     }
 
     const nvrhi::Viewport viewport = framebuffer->getFramebufferInfo().getViewport();
+    bool backgroundDone = !drawBackground;
+    // Drawn after opaque geometry (so covered pixels fail the depth test) and before blended geometry.
+    const auto drawBackgroundPass = [&] {
+        nvrhi::GraphicsState state;
+        state.pipeline = impl.skyboxPipeline;
+        state.framebuffer = framebuffer;
+        state.bindings = {viewSet};
+        state.viewport.addViewportAndScissorRect(viewport);
+        commandList->setGraphicsState(state);
+        const u32 unused = 0;
+        commandList->setPushConstants(&unused, sizeof(unused));
+        commandList->draw(nvrhi::DrawArguments().setVertexCount(3));
+        ++impl.stats.drawCalls;
+        backgroundDone = true;
+    };
     u32 begin = 0;
     while (begin < visibleCount)
     {
         const VisibleItem& first = impl.visible[impl.order[begin]];
         const bool blend = first.material->alphaMode == AlphaMode::Blend;
+        if (blend && !backgroundDone)
+        {
+            drawBackgroundPass();
+        }
         u32 end = begin + 1;
         // Transparent objects are drawn one by one to keep the back-to-front order.
         while (!blend && end < visibleCount)
@@ -442,7 +542,7 @@ void SceneRenderer::render(nvrhi::ICommandList* commandList, nvrhi::ITexture* co
         nvrhi::GraphicsState state;
         state.pipeline = impl.pipelines[blend ? 1 : 0][first.material->doubleSided ? 1 : 0];
         state.framebuffer = framebuffer;
-        state.bindings = {impl.viewSet, first.material->bindingSet};
+        state.bindings = {viewSet, first.material->bindingSet};
         state.vertexBuffers = {
             nvrhi::VertexBufferBinding().setBuffer(first.mesh->vertexBuffer).setSlot(0).setOffset(0)};
         state.indexBuffer =
@@ -460,6 +560,10 @@ void SceneRenderer::render(nvrhi::ICommandList* commandList, nvrhi::ITexture* co
         ++impl.stats.drawCalls;
         impl.stats.triangles += static_cast<u64>(submesh.indexCount / 3) * (end - begin);
         begin = end;
+    }
+    if (!backgroundDone)
+    {
+        drawBackgroundPass();
     }
     commandList->endMarker();
 }

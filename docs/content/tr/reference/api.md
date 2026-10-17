@@ -48,9 +48,10 @@ doxygen docs/Doxyfile
 | `illusion/assets/Image.hpp` | `Image`, çözme, PNG kodlama, mip üretimi |
 | `illusion/assets/Mesh.hpp` | `MeshData`, `Vertex`, prosedürel Mesh'ler |
 | `illusion/assets/Model.hpp` | `ModelData`, `MaterialData`, `loadGltf` |
+| `illusion/assets/Environment.hpp` | Equirectangular eşleme, `ShIrradiance`, `makeSkyImage` |
 | `illusion/render/RenderDevice.hpp` | `RenderDevice`, `GpuInfo`: NVRHI üzerinden Vulkan cihazı |
 | `illusion/render/Swapchain.hpp` | `Swapchain`: bir pencereye present etme |
 | `illusion/render/DebugTriangle.hpp` | Tanılama amaçlı üçgen renderer'ı |
-| `illusion/render/RenderResources.hpp` | `RenderResources`: GPU Mesh'leri, Texture'ları, Material'leri ve Handle'ları |
+| `illusion/render/RenderResources.hpp` | `RenderResources`: GPU Mesh'leri, Texture'ları, Material'leri, ortamlar ve Handle'ları |
 | `illusion/render/SceneRenderer.hpp` | `SceneRenderer`, `RenderView`, `RenderStats` |
-| `illusion/render/Components.hpp` | `MeshRenderer`, `Camera`, `DirectionalLight`, `PointLight`, `spawnModel` |
+| `illusion/render/Components.hpp` | `MeshRenderer`, `Camera`, `DirectionalLight`, `PointLight`, `SkyLight`, `spawnModel` |

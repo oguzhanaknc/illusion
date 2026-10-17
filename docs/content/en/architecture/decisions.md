@@ -20,6 +20,7 @@ records rather than user documentation.
 | [0011](https://github.com/oguzhanaknc/illusion/blob/main/docs/adr/0011-gamepads-sdl3.md) | Gamepads through SDL3, with virtual devices for tests |
 | [0012](https://github.com/oguzhanaknc/illusion/blob/main/docs/adr/0012-input-actions.md) | Action mapping with a text binding format and stable glyph identifiers |
 | [0013](https://github.com/oguzhanaknc/illusion/blob/main/docs/adr/0013-forward-pbr-renderer.md) | Forward PBR renderer with reversed-Z, CPU culling and instancing |
+| [0014](https://github.com/oguzhanaknc/illusion/blob/main/docs/adr/0014-image-based-lighting.md) | Image-based lighting: GPU-baked cube maps, SH irradiance, multiple-scattering split sum |
 
 To propose a new decision, copy `docs/adr/0000-template.md` and follow the
 [contributing guide](../contributing.md#architecture-decision-records).

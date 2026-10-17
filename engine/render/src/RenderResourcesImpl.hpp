@@ -28,6 +28,14 @@ struct RenderResources::GpuMesh
     std::vector<Submesh> submeshes;
 };
 
+struct RenderResources::GpuEnvironment
+{
+    nvrhi::TextureHandle background; // RGBA16F cube map with a full mip chain
+    nvrhi::TextureHandle specular;   // RGBA16F cube map, mip i prefiltered for roughness i / (mips - 1)
+    u32 specularMips = 1;
+    ShIrradiance irradiance;
+};
+
 struct RenderResources::GpuMaterial
 {
     nvrhi::BufferHandle constants;

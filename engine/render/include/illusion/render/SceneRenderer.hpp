@@ -47,12 +47,12 @@ struct RenderStats
 struct SceneRendererDesc
 {
     nvrhi::Format colorFormat = nvrhi::Format::SBGRA8_UNORM; ///< Format of the targets passed to render().
-    Vec3 ambient{0.03f};                                     ///< Constant ambient light (until IBL).
-    Vec4 clearColor{0.02f, 0.02f, 0.03f, 1.0f};              ///< Background colour (linear for sRGB targets).
+    Vec3 ambient{0.03f}; ///< Uniform ambient radiance, used when the scene has no SkyLight.
+    Vec4 clearColor{0.02f, 0.02f, 0.03f, 1.0f}; ///< Background colour (linear for sRGB targets).
 };
 
-/// Renders World entities that have Transform + MeshRenderer, lit by DirectionalLight and PointLight
-/// entities. Use on the render thread.
+/// Renders World entities that have Transform + MeshRenderer, lit by DirectionalLight, PointLight and
+/// SkyLight entities, with the SkyLight's environment as background. Use on the render thread.
 class SceneRenderer : NonCopyable
 {
 public:
@@ -74,7 +74,7 @@ public:
     /// Counters from the last render() call.
     [[nodiscard]] const RenderStats& stats() const noexcept;
 
-    /// Changes the constant ambient light.
+    /// Changes the ambient radiance used without a SkyLight.
     void setAmbient(Vec3 ambient) noexcept;
 
 private:

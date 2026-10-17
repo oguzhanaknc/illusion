@@ -47,9 +47,10 @@ Open `build/api/index.html` in a browser.
 | `illusion/assets/Image.hpp` | `Image`, decoding, PNG encoding, mip generation |
 | `illusion/assets/Mesh.hpp` | `MeshData`, `Vertex`, procedural Meshes |
 | `illusion/assets/Model.hpp` | `ModelData`, `MaterialData`, `loadGltf` |
+| `illusion/assets/Environment.hpp` | Equirectangular mapping, `ShIrradiance`, `makeSkyImage` |
 | `illusion/render/RenderDevice.hpp` | `RenderDevice`, `GpuInfo`: Vulkan device through NVRHI |
 | `illusion/render/Swapchain.hpp` | `Swapchain`: presentation to a window |
 | `illusion/render/DebugTriangle.hpp` | Diagnostic triangle renderer |
-| `illusion/render/RenderResources.hpp` | `RenderResources`: GPU Meshes, Textures, Materials and their Handles |
+| `illusion/render/RenderResources.hpp` | `RenderResources`: GPU Meshes, Textures, Materials, environments and their Handles |
 | `illusion/render/SceneRenderer.hpp` | `SceneRenderer`, `RenderView`, `RenderStats` |
-| `illusion/render/Components.hpp` | `MeshRenderer`, `Camera`, `DirectionalLight`, `PointLight`, `spawnModel` |
+| `illusion/render/Components.hpp` | `MeshRenderer`, `Camera`, `DirectionalLight`, `PointLight`, `SkyLight`, `spawnModel` |

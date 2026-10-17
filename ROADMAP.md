@@ -37,7 +37,8 @@ ADRs for its significant decisions. Items marked ✅ are done.
 
 - M3a: ✅ glTF 2.0 import (meshes, materials, textures), forward PBR, reversed-Z, parallel frustum culling,
   instancing, `gltf_viewer` sample (ADR 0013)
-- M3b: IBL from HDRIs (Poly Haven)
+- M3b: ✅ IBL from HDRIs (Poly Haven): GPU-baked background and prefiltered specular cube maps, SH
+  irradiance, multiple-scattering split sum, `SkyLight`, procedural sky (ADR 0014)
 - M3c: CSM + PCSS soft shadows
 - M3d: HDR pipeline, GTAO, bloom, tonemapping, optional TAA
 - M3e: Bindless resources, GPU-driven draw submission where supported, occlusion culling

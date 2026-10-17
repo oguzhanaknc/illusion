@@ -24,6 +24,7 @@ add_executable(illusion_tests
     input/TestGamepadState.cpp
     input/TestGamepadSystem.cpp
     input/TestInputActions.cpp
+    assets/TestEnvironment.cpp
     assets/TestGltf.cpp
     assets/TestImageMesh.cpp)
 

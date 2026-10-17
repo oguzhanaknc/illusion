@@ -11,11 +11,11 @@ illusion is built in layers. A layer may depend only on layers below it.
 | Core | Platform detection, assertions, logging, memory, Job System, ECS, event bus, time, math | Implemented |
 | Platform | Window, keyboard and mouse (GLFW), virtual file system | Implemented |
 | Input | Gamepads through SDL3 (rumble, LED, motion, touchpad, adaptive triggers), action mapping, rebinding, glyphs | Implemented |
-| Assets | Images, Meshes, glTF models (CPU side) | Implemented |
+| Assets | Images, Meshes, glTF models, environments (CPU side) | Implemented |
 | Runtime services | Asset streaming, audio (miniaudio), physics (Jolt) | Planned |
 | Renderer: foundation | Vulkan 1.3 device through NVRHI, swapchains, Slang shader pipeline | Implemented |
-| Renderer: scene | Meshes, PBR Materials, direct lights, frustum culling, instancing | Implemented |
-| Renderer: features | IBL, shadows, GTAO, post-processing, bindless, occlusion culling | Planned |
+| Renderer: scene | Meshes, PBR Materials, direct and image-based lighting, frustum culling, instancing | Implemented |
+| Renderer: features | Shadows, GTAO, post-processing, bindless, occlusion culling | Planned |
 | Editor | Scene editing, gizmos, AI command API | Planned |
 | Game module | The game's own code, a hot-reloadable shared library in the editor | Planned |
 

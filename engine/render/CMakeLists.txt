@@ -3,6 +3,7 @@
 add_library(illusion_render STATIC
     src/Components.cpp
     src/DebugTriangle.cpp
+    src/EnvironmentBaker.cpp
     src/RenderDevice.cpp
     src/RenderResources.cpp
     src/SceneRenderer.cpp
@@ -30,6 +31,12 @@ illusion_add_shaders(illusion_render
         debugTriangleVertex shaders/DebugTriangle.slang vertexMain vertex
         debugTriangleFragment shaders/DebugTriangle.slang fragmentMain fragment
         forwardPbrVertex shaders/ForwardPbr.slang vertexMain vertex
-        forwardPbrFragment shaders/ForwardPbr.slang fragmentMain fragment)
+        forwardPbrFragment shaders/ForwardPbr.slang fragmentMain fragment
+        skyboxVertex shaders/Skybox.slang vertexMain vertex
+        skyboxFragment shaders/Skybox.slang fragmentMain fragment
+        iblEquirectToCube shaders/IblEquirectToCube.slang equirectToCube compute
+        iblDownsample shaders/IblDownsample.slang downsampleCube compute
+        iblPrefilter shaders/IblPrefilter.slang prefilterSpecular compute
+        iblBrdfLut shaders/IblBrdfLut.slang integrateBrdf compute)
 
 illusion_configure_target(illusion_render)

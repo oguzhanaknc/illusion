@@ -45,6 +45,15 @@ struct PointLight
     f32 range = 10.0f;     ///< Distance at which the light fades to zero.
 };
 
+/// Image-based lighting and background from an environment. The renderer uses the first SkyLight it
+/// finds; the Transform's rotation turns the environment (position and scale are ignored).
+struct SkyLight
+{
+    EnvironmentHandle environment; ///< Environment from RenderResources::createEnvironment().
+    f32 intensity = 1.0f;          ///< Multiplier for the environment's radiance.
+    bool background = true;        ///< Draw the environment behind the scene instead of the clear colour.
+};
+
 /// Creates one Entity per mesh-bearing node and submesh of @p model (Transform + MeshRenderer), placed
 /// relative to @p root. Returns the created entities.
 std::vector<Entity> spawnModel(World& world, const ModelData& model, const ModelHandles& handles,
