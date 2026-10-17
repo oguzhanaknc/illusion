@@ -2,13 +2,14 @@
 
 /// @file
 /// Forward PBR renderer for ECS scenes: frustum culling (parallel on the Job System), sorting into
-/// instanced batches, cascaded soft shadows, opaque then back-to-front transparent drawing, reversed-Z
-/// depth.
+/// instanced batches, cascaded soft shadows, a depth prepass, HDR shading (opaque, then
+/// back-to-front transparent), reversed-Z depth, then ambient occlusion, TAA, bloom and tonemapping.
 
 #include <illusion/core/Base.hpp>
 #include <illusion/core/Math.hpp>
 #include <illusion/ecs/Transform.hpp>
 #include <illusion/render/Components.hpp>
+#include <illusion/render/PostProcess.hpp>
 #include <illusion/render/Shadows.hpp>
 
 #include <nvrhi/nvrhi.h>
@@ -52,8 +53,10 @@ struct SceneRendererDesc
 {
     nvrhi::Format colorFormat = nvrhi::Format::SBGRA8_UNORM; ///< Format of the targets passed to render().
     Vec3 ambient{0.03f}; ///< Uniform ambient radiance, used when the scene has no SkyLight.
-    Vec4 clearColor{0.02f, 0.02f, 0.03f, 1.0f}; ///< Background colour (linear for sRGB targets).
-    ShadowSettings shadows;                     ///< Shadow quality.
+    Vec4 clearColor{0.02f, 0.02f, 0.03f,
+                    1.0f};    ///< Background radiance where nothing is drawn (before tonemapping).
+    ShadowSettings shadows;   ///< Shadow quality.
+    PostProcessSettings post; ///< Ambient occlusion, bloom and anti-aliasing.
 };
 
 /// Renders World entities that have Transform + MeshRenderer, lit by DirectionalLight, PointLight and
@@ -87,6 +90,15 @@ public:
 
     /// Changes the shadow settings; GPU resources are recreated at the next render() if needed.
     void setShadowSettings(const ShadowSettings& settings) noexcept;
+
+    /// Current post-processing settings.
+    [[nodiscard]] const PostProcessSettings& postProcessSettings() const noexcept;
+
+    /// Changes the post-processing settings; textures are recreated at the next render() if needed.
+    void setPostProcessSettings(const PostProcessSettings& settings) noexcept;
+
+    /// Forgets the accumulated TAA history, for example after a camera cut.
+    void resetTemporalHistory() noexcept;
 
     /// Cascades used by the last render() call (count 0 when nothing cast shadows).
     [[nodiscard]] const ShadowCascades& shadowCascades() const noexcept;

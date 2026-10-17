@@ -1,3 +1,4 @@
+#include "PostProcessor.hpp"
 #include "RenderResourcesImpl.hpp"
 
 #include <illusion/core/JobSystem.hpp>
@@ -45,8 +46,8 @@ struct GpuShadowCascade
 struct GpuViewConstants
 {
     Mat4 viewProjection;
-    Vec4 cameraPosition; // w: exposure
-    Vec4 output;         // x: 1 if the shader encodes sRGB
+    Vec4 cameraPosition; // xyz
+    Vec4 effects;        // x: 1 if screen-space ambient occlusion is applied
     u32 directionalCount;
     u32 pointCount;
     u32 padding[2];
@@ -87,6 +88,12 @@ struct DrawItem
     f32 distanceSquared;
 };
 
+struct ForwardPush
+{
+    u32 instanceOffset;
+    u32 flags; // bit 0: apply screen-space ambient occlusion
+};
+
 struct ShadowPush
 {
     u32 instanceOffset;
@@ -94,6 +101,7 @@ struct ShadowPush
 };
 
 constexpr nvrhi::Format kDepthFormat = nvrhi::Format::D32;
+constexpr nvrhi::Format kHdrFormat = nvrhi::Format::RGBA16_FLOAT;
 
 nvrhi::ShaderHandle createShader(nvrhi::IDevice* device, nvrhi::ShaderType type,
                                  std::span<const std::byte> code, const char* name)
@@ -121,7 +129,6 @@ struct SceneRenderer::Impl
     nvrhi::IDevice* device = nullptr;
     RenderResources* resources = nullptr;
     SceneRendererDesc desc;
-    bool encodeSrgb = false;
 
     nvrhi::ShaderHandle vertexShader;
     nvrhi::ShaderHandle fragmentShader;
@@ -129,6 +136,7 @@ struct SceneRenderer::Impl
     nvrhi::ShaderHandle skyboxFragmentShader;
     nvrhi::ShaderHandle shadowVertexShader;
     nvrhi::ShaderHandle shadowFragmentShader;
+    nvrhi::ShaderHandle prepassMaskedShader;
     nvrhi::GraphicsPipelineHandle skyboxPipeline;
     nvrhi::SamplerHandle clampSampler;
     nvrhi::SamplerHandle shadowSampler;
@@ -145,6 +153,8 @@ struct SceneRenderer::Impl
     nvrhi::BindingSetHandle shadowSet;
     // [blend][doubleSided]
     std::array<std::array<nvrhi::GraphicsPipelineHandle, 2>, 2> pipelines{};
+    // Depth prepass, [alpha masked][doubleSided]
+    std::array<std::array<nvrhi::GraphicsPipelineHandle, 2>, 2> prepassPipelines{};
 
     // Shadow map: one array layer per cascade (a 1x1 placeholder while shadows are off).
     nvrhi::TextureHandle shadowMap;
@@ -153,8 +163,19 @@ struct SceneRenderer::Impl
     bool shadowResourcesDirty = true;
     ShadowCascades cascades;
 
+    // Render-size targets: HDR colour and depth, with the forward and prepass framebuffers.
+    nvrhi::TextureHandle hdr;
     nvrhi::TextureHandle depth;
+    nvrhi::FramebufferHandle sceneFramebuffer;
+    nvrhi::FramebufferHandle prepassFramebuffer;
+    // Output framebuffers by target texture (tonemapping writes the caller's target).
     std::unordered_map<nvrhi::ITexture*, nvrhi::FramebufferHandle> framebuffers;
+
+    PostProcessor post;
+    bool postDirty = true;
+    u32 frameIndex = 0;
+    Mat4 previousViewProjection{1.0f};
+    bool historyValid = false;
 
     // Per-frame scratch, kept across frames so steady state does not allocate.
     std::vector<DrawItem> items;
@@ -165,7 +186,7 @@ struct SceneRenderer::Impl
 
     bool initialize();
     bool updateShadowResources();
-    nvrhi::IFramebuffer* framebufferFor(nvrhi::ITexture* color);
+    nvrhi::IFramebuffer* outputFramebufferFor(nvrhi::ITexture* color);
     void ensureInstanceCapacity(u32 count);
     void cull(World& world, const RenderView& view, JobSystem* jobs);
     i32 gatherLights(World& world, GpuViewConstants& constants, f32& angularDiameter);
@@ -189,8 +210,10 @@ bool SceneRenderer::Impl::initialize()
         createShader(device, nvrhi::ShaderType::Vertex, shaders::shadowCasterVertex(), "Shadow caster VS");
     shadowFragmentShader =
         createShader(device, nvrhi::ShaderType::Pixel, shaders::shadowCasterFragment(), "Shadow caster FS");
+    prepassMaskedShader =
+        createShader(device, nvrhi::ShaderType::Pixel, shaders::prepassMaskedFragment(), "Prepass masked FS");
     if (!vertexShader || !fragmentShader || !skyboxVertexShader || !skyboxFragmentShader ||
-        !shadowVertexShader || !shadowFragmentShader)
+        !shadowVertexShader || !shadowFragmentShader || !prepassMaskedShader)
     {
         return false;
     }
@@ -234,10 +257,11 @@ bool SceneRenderer::Impl::initialize()
         nvrhi::BindingLayoutItem::Texture_SRV(2), // BRDF table
         nvrhi::BindingLayoutItem::Texture_SRV(3), // background cube map
         nvrhi::BindingLayoutItem::Texture_SRV(4), // shadow map
+        nvrhi::BindingLayoutItem::Texture_SRV(5), // screen-space ambient occlusion
         nvrhi::BindingLayoutItem::Sampler(0),
         nvrhi::BindingLayoutItem::Sampler(1), // shadow comparison
         // Push constants take a constant-buffer slot in NVRHI, so they cannot share b0 with the view.
-        nvrhi::BindingLayoutItem::PushConstants(1, sizeof(u32)),
+        nvrhi::BindingLayoutItem::PushConstants(1, sizeof(ForwardPush)),
     };
     viewLayout = device->createBindingLayout(layout);
     nvrhi::BindingLayoutDesc shadowLayoutDesc;
@@ -257,9 +281,9 @@ bool SceneRenderer::Impl::initialize()
     viewConstants = device->createBuffer(
         nvrhi::utils::CreateVolatileConstantBufferDesc(sizeof(GpuViewConstants), "View constants", 16));
 
-    encodeSrgb = !nvrhi::getFormatInfo(desc.colorFormat).isSRGB;
     const nvrhi::FramebufferInfo info =
-        nvrhi::FramebufferInfo().addColorFormat(desc.colorFormat).setDepthFormat(kDepthFormat);
+        nvrhi::FramebufferInfo().addColorFormat(kHdrFormat).setDepthFormat(kDepthFormat);
+    const nvrhi::FramebufferInfo depthOnly = nvrhi::FramebufferInfo().setDepthFormat(kDepthFormat);
     for (u32 blend = 0; blend < 2; ++blend)
     {
         for (u32 doubleSided = 0; doubleSided < 2; ++doubleSided)
@@ -279,8 +303,9 @@ bool SceneRenderer::Impl::initialize()
             {
                 pipeline.renderState.rasterState.setCullBack();
             }
+            // Opaque depth comes from the prepass (same vertex shader, so equal depths pass).
             pipeline.renderState.depthStencilState.setDepthTestEnable(true)
-                .setDepthWriteEnable(blend == 0)
+                .setDepthWriteEnable(false)
                 .setDepthFunc(nvrhi::ComparisonFunc::GreaterOrEqual); // reversed-Z
             if (blend != 0)
             {
@@ -293,6 +318,17 @@ bool SceneRenderer::Impl::initialize()
             }
             pipelines[blend][doubleSided] = device->createGraphicsPipeline(pipeline, info);
             if (!pipelines[blend][doubleSided])
+            {
+                return false;
+            }
+
+            // Prepass variant: index 0/1 here means opaque/alpha masked.
+            nvrhi::GraphicsPipelineDesc prepass = pipeline;
+            prepass.PS = blend != 0 ? prepassMaskedShader.Get() : nullptr;
+            prepass.renderState.blendState = nvrhi::BlendState();
+            prepass.renderState.depthStencilState.setDepthWriteEnable(true);
+            prepassPipelines[blend][doubleSided] = device->createGraphicsPipeline(prepass, depthOnly);
+            if (!prepassPipelines[blend][doubleSided])
             {
                 return false;
             }
@@ -314,6 +350,10 @@ bool SceneRenderer::Impl::initialize()
         return false;
     }
     ensureInstanceCapacity(1024);
+    if (!post.initialize(device, desc.colorFormat))
+    {
+        return false;
+    }
     return updateShadowResources();
 }
 
@@ -403,16 +443,17 @@ nvrhi::IBindingSet* SceneRenderer::Impl::viewSetFor(EnvironmentHandle environmen
             nvrhi::BindingSetItem::Texture_SRV(2, resources->brdfLut()),
             nvrhi::BindingSetItem::Texture_SRV(3, gpu.background),
             nvrhi::BindingSetItem::Texture_SRV(4, shadowMap),
+            nvrhi::BindingSetItem::Texture_SRV(5, post.ambientOcclusion()),
             nvrhi::BindingSetItem::Sampler(0, clampSampler),
             nvrhi::BindingSetItem::Sampler(1, shadowSampler),
-            nvrhi::BindingSetItem::PushConstants(1, sizeof(u32)),
+            nvrhi::BindingSetItem::PushConstants(1, sizeof(ForwardPush)),
         };
         set = device->createBindingSet(setDesc, viewLayout);
     }
     return set;
 }
 
-nvrhi::IFramebuffer* SceneRenderer::Impl::framebufferFor(nvrhi::ITexture* color)
+nvrhi::IFramebuffer* SceneRenderer::Impl::outputFramebufferFor(nvrhi::ITexture* color)
 {
     const nvrhi::TextureDesc& colorDesc = color->getDesc();
     if (!depth || depth->getDesc().width != colorDesc.width || depth->getDesc().height != colorDesc.height)
@@ -425,7 +466,24 @@ nvrhi::IFramebuffer* SceneRenderer::Impl::framebufferFor(nvrhi::ITexture* color)
         depthDesc.debugName = "Scene depth";
         depthDesc.enableAutomaticStateTracking(nvrhi::ResourceStates::DepthWrite);
         depth = device->createTexture(depthDesc);
+        nvrhi::TextureDesc hdrDesc = depthDesc;
+        hdrDesc.format = kHdrFormat;
+        hdrDesc.debugName = "Scene HDR";
+        hdrDesc.setClearValue(nvrhi::Color(0.0f));
+        hdrDesc.enableAutomaticStateTracking(nvrhi::ResourceStates::RenderTarget);
+        hdr = device->createTexture(hdrDesc);
+        sceneFramebuffer = device->createFramebuffer(
+            nvrhi::FramebufferDesc().addColorAttachment(hdr).setDepthAttachment(depth));
+        prepassFramebuffer = device->createFramebuffer(nvrhi::FramebufferDesc().setDepthAttachment(depth));
         framebuffers.clear();
+        postDirty = true;
+    }
+    if (postDirty)
+    {
+        post.resize(hdr, depth, desc.post);
+        postDirty = false;
+        historyValid = false;
+        viewSets.clear();
     }
     // Swapchain recreation produces new textures; drop stale framebuffers before the cache grows.
     if (framebuffers.size() > 8)
@@ -435,8 +493,7 @@ nvrhi::IFramebuffer* SceneRenderer::Impl::framebufferFor(nvrhi::ITexture* color)
     nvrhi::FramebufferHandle& framebuffer = framebuffers[color];
     if (!framebuffer)
     {
-        framebuffer = device->createFramebuffer(
-            nvrhi::FramebufferDesc().addColorAttachment(color).setDepthAttachment(depth));
+        framebuffer = device->createFramebuffer(nvrhi::FramebufferDesc().addColorAttachment(color));
     }
     return framebuffer;
 }
@@ -653,14 +710,24 @@ void SceneRenderer::render(nvrhi::ICommandList* commandList, nvrhi::ITexture* co
         ILL_LOG_ERROR("Render", "SceneRenderer: cannot create shadow resources");
         return;
     }
-    nvrhi::IFramebuffer* framebuffer = impl.framebufferFor(colorTarget);
+    nvrhi::IFramebuffer* outputFramebuffer = impl.outputFramebufferFor(colorTarget);
+    nvrhi::IFramebuffer* framebuffer = impl.sceneFramebuffer;
+    const PostProcessSettings& post = impl.desc.post;
+
+    // With TAA the projection moves by a sub-pixel offset every frame; culling and shadows use the
+    // unjittered one.
+    const Vec2 size(static_cast<f32>(colorTarget->getDesc().width),
+                    static_cast<f32>(colorTarget->getDesc().height));
+    const Mat4 projection = post.temporalAntiAliasing.enabled
+                                ? jitterProjection(view.projection, temporalJitter(impl.frameIndex), size)
+                                : view.projection;
 
     GpuViewConstants constants{};
-    constants.viewProjection = view.projection * view.view;
+    constants.viewProjection = projection * view.view;
     constants.inverseViewProjection = glm::inverse(constants.viewProjection);
-    constants.cameraPosition = Vec4(view.position, view.exposure);
+    constants.cameraPosition = Vec4(view.position, 0.0f);
     constants.cameraForward = Vec4(-view.view[0][2], -view.view[1][2], -view.view[2][2], 0.0f);
-    constants.output = Vec4(impl.encodeSrgb ? 1.0f : 0.0f, 0.0f, 0.0f, 0.0f);
+    constants.effects = Vec4(post.ambientOcclusion.enabled ? 1.0f : 0.0f, 0.0f, 0.0f, 0.0f);
     f32 angularDiameter = 0.0f;
     const i32 shadowedLight = impl.gatherLights(world, constants, angularDiameter);
 
@@ -774,6 +841,15 @@ void SceneRenderer::render(nvrhi::ICommandList* commandList, nvrhi::ITexture* co
         commandList->writeBuffer(impl.instanceBuffer, impl.instances.data(),
                                  static_cast<usize>(instanceCount) * sizeof(GpuInstance));
     }
+    PostProcessor::Frame postFrame;
+    postFrame.projection = projection;
+    postFrame.viewProjection = constants.viewProjection;
+    postFrame.previousViewProjection =
+        impl.historyValid ? impl.previousViewProjection : view.projection * view.view;
+    postFrame.exposure = view.exposure;
+    postFrame.historyValid = impl.historyValid;
+    postFrame.frameIndex = impl.frameIndex;
+    impl.post.beginFrame(commandList, postFrame, post);
 
     commandList->clearDepthStencilTexture(impl.shadowMap, nvrhi::AllSubresources, true, 1.0f, false, 0);
     if (impl.cascades.count > 0)
@@ -786,11 +862,77 @@ void SceneRenderer::render(nvrhi::ICommandList* commandList, nvrhi::ITexture* co
         commandList->endMarker();
     }
 
-    commandList->clearTextureFloat(colorTarget, nvrhi::AllSubresources,
+    const nvrhi::Viewport viewport = framebuffer->getFramebufferInfo().getViewport();
+    // Runs of identical (mesh, submesh, material) form one instanced draw; blended items draw alone to
+    // keep their back-to-front order. Calls `draw(begin, end, first)` for each run of the camera order.
+    const auto forEachBatch = [&](u32 count, auto&& draw) {
+        u32 begin = 0;
+        while (begin < count)
+        {
+            const DrawItem& first = impl.items[impl.cameraOrder[begin]];
+            const bool blend = first.material->alphaMode == AlphaMode::Blend;
+            u32 end = begin + 1;
+            while (!blend && end < count)
+            {
+                const DrawItem& next = impl.items[impl.cameraOrder[end]];
+                if (next.material != first.material || next.mesh != first.mesh ||
+                    next.submesh != first.submesh)
+                {
+                    break;
+                }
+                ++end;
+            }
+            draw(begin, end, first);
+            begin = end;
+        }
+    };
+    const auto drawBatch = [&](nvrhi::IGraphicsPipeline* pipeline, nvrhi::IFramebuffer* target, u32 begin,
+                               u32 end, const DrawItem& first, u32 flags) {
+        nvrhi::GraphicsState state;
+        state.pipeline = pipeline;
+        state.framebuffer = target;
+        state.bindings = {viewSet, first.material->bindingSet};
+        state.vertexBuffers = {
+            nvrhi::VertexBufferBinding().setBuffer(first.mesh->vertexBuffer).setSlot(0).setOffset(0)};
+        state.indexBuffer =
+            nvrhi::IndexBufferBinding().setBuffer(first.mesh->indexBuffer).setFormat(nvrhi::Format::R32_UINT);
+        state.viewport.addViewportAndScissorRect(viewport);
+        commandList->setGraphicsState(state);
+        const ForwardPush push{begin, flags};
+        commandList->setPushConstants(&push, sizeof(push));
+        const Submesh& submesh = first.mesh->submeshes[first.submesh];
+        commandList->drawIndexed(nvrhi::DrawArguments()
+                                     .setVertexCount(submesh.indexCount)
+                                     .setInstanceCount(end - begin)
+                                     .setStartIndexLocation(submesh.indexOffset));
+    };
+    // Opaque and masked items come first in the camera order.
+    u32 opaqueCount = 0;
+    while (opaqueCount < visibleCount &&
+           impl.items[impl.cameraOrder[opaqueCount]].material->alphaMode != AlphaMode::Blend)
+    {
+        ++opaqueCount;
+    }
+
+    // Depth prepass: fills depth for ambient occlusion and removes overdraw from the shading pass.
+    commandList->beginMarker("Depth prepass");
+    commandList->clearDepthStencilTexture(impl.depth, nvrhi::AllSubresources, true, 0.0f, false, 0);
+    forEachBatch(opaqueCount, [&](u32 begin, u32 end, const DrawItem& first) {
+        const bool masked = first.material->alphaMode == AlphaMode::Mask;
+        drawBatch(impl.prepassPipelines[masked ? 1 : 0][first.material->doubleSided ? 1 : 0],
+                  impl.prepassFramebuffer, begin, end, first, 0);
+        ++impl.stats.drawCalls;
+    });
+    commandList->endMarker();
+    if (post.ambientOcclusion.enabled)
+    {
+        impl.post.computeAmbientOcclusion(commandList);
+    }
+
+    commandList->beginMarker("Shading");
+    commandList->clearTextureFloat(impl.hdr, nvrhi::AllSubresources,
                                    nvrhi::Color(impl.desc.clearColor.r, impl.desc.clearColor.g,
                                                 impl.desc.clearColor.b, impl.desc.clearColor.a));
-    commandList->clearDepthStencilTexture(impl.depth, nvrhi::AllSubresources, true, 0.0f, false, 0);
-    const nvrhi::Viewport viewport = framebuffer->getFramebufferInfo().getViewport();
     bool backgroundDone = !drawBackground;
     // Drawn after opaque geometry (so covered pixels fail the depth test) and before blended geometry.
     const auto drawBackgroundPass = [&] {
@@ -800,60 +942,38 @@ void SceneRenderer::render(nvrhi::ICommandList* commandList, nvrhi::ITexture* co
         state.bindings = {viewSet};
         state.viewport.addViewportAndScissorRect(viewport);
         commandList->setGraphicsState(state);
-        const u32 unused = 0;
+        const ForwardPush unused{0, 0};
         commandList->setPushConstants(&unused, sizeof(unused));
         commandList->draw(nvrhi::DrawArguments().setVertexCount(3));
         ++impl.stats.drawCalls;
         backgroundDone = true;
     };
-    u32 begin = 0;
-    while (begin < visibleCount)
-    {
-        const DrawItem& first = impl.items[impl.cameraOrder[begin]];
+    forEachBatch(visibleCount, [&](u32 begin, u32 end, const DrawItem& first) {
         const bool blend = first.material->alphaMode == AlphaMode::Blend;
         if (blend && !backgroundDone)
         {
             drawBackgroundPass();
         }
-        u32 end = begin + 1;
-        // Transparent objects are drawn one by one to keep the back-to-front order.
-        while (!blend && end < visibleCount)
-        {
-            const DrawItem& next = impl.items[impl.cameraOrder[end]];
-            if (next.material != first.material || next.mesh != first.mesh || next.submesh != first.submesh)
-            {
-                break;
-            }
-            ++end;
-        }
-
-        nvrhi::GraphicsState state;
-        state.pipeline = impl.pipelines[blend ? 1 : 0][first.material->doubleSided ? 1 : 0];
-        state.framebuffer = framebuffer;
-        state.bindings = {viewSet, first.material->bindingSet};
-        state.vertexBuffers = {
-            nvrhi::VertexBufferBinding().setBuffer(first.mesh->vertexBuffer).setSlot(0).setOffset(0)};
-        state.indexBuffer =
-            nvrhi::IndexBufferBinding().setBuffer(first.mesh->indexBuffer).setFormat(nvrhi::Format::R32_UINT);
-        state.viewport.addViewportAndScissorRect(viewport);
-        commandList->setGraphicsState(state);
-        const u32 instanceOffset = begin;
-        commandList->setPushConstants(&instanceOffset, sizeof(instanceOffset));
-
-        const Submesh& submesh = first.mesh->submeshes[first.submesh];
-        commandList->drawIndexed(nvrhi::DrawArguments()
-                                     .setVertexCount(submesh.indexCount)
-                                     .setInstanceCount(end - begin)
-                                     .setStartIndexLocation(submesh.indexOffset));
+        drawBatch(impl.pipelines[blend ? 1 : 0][first.material->doubleSided ? 1 : 0], framebuffer, begin, end,
+                  first, blend ? 0u : 1u);
         ++impl.stats.drawCalls;
+        const Submesh& submesh = first.mesh->submeshes[first.submesh];
         impl.stats.triangles += static_cast<u64>(submesh.indexCount / 3) * (end - begin);
-        begin = end;
-    }
+    });
     if (!backgroundDone)
     {
         drawBackgroundPass();
     }
     commandList->endMarker();
+
+    commandList->beginMarker("Post-processing");
+    impl.post.resolve(commandList, outputFramebuffer, post);
+    commandList->endMarker();
+    commandList->endMarker();
+
+    impl.previousViewProjection = view.projection * view.view;
+    impl.historyValid = post.temporalAntiAliasing.enabled;
+    ++impl.frameIndex;
 }
 
 const RenderStats& SceneRenderer::stats() const noexcept
@@ -875,6 +995,22 @@ void SceneRenderer::setShadowSettings(const ShadowSettings& settings) noexcept
 {
     m_impl->desc.shadows = settings;
     m_impl->shadowResourcesDirty = true;
+}
+
+const PostProcessSettings& SceneRenderer::postProcessSettings() const noexcept
+{
+    return m_impl->desc.post;
+}
+
+void SceneRenderer::setPostProcessSettings(const PostProcessSettings& settings) noexcept
+{
+    m_impl->desc.post = settings;
+    m_impl->postDirty = true;
+}
+
+void SceneRenderer::resetTemporalHistory() noexcept
+{
+    m_impl->historyValid = false;
 }
 
 void SceneRenderer::setAmbient(Vec3 ambient) noexcept

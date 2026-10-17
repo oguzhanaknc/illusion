@@ -31,5 +31,5 @@ float4 fragmentMain(VertexOutput input) : SV_Target
     const float3 direction = normalize(nearPoint.xyz / nearPoint.w - g_view.cameraPosition.xyz);
     const float3 environmentDirection = mul((float3x3)g_view.skyRotation, direction);
     const float3 radiance = g_skybox.SampleLevel(g_clampSampler, environmentDirection, 0.0).rgb * g_view.sky.z;
-    return float4(finalColor(g_view, radiance), 1.0);
+    return float4(radiance, 1.0);
 }

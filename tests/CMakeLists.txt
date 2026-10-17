@@ -27,6 +27,7 @@ add_executable(illusion_tests
     assets/TestEnvironment.cpp
     assets/TestGltf.cpp
     assets/TestImageMesh.cpp
+    render/TestPostProcess.cpp
     render/TestShadows.cpp)
 
 target_include_directories(illusion_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})

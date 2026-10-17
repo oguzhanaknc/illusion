@@ -22,6 +22,7 @@ records rather than user documentation.
 | [0013](https://github.com/oguzhanaknc/illusion/blob/main/docs/adr/0013-forward-pbr-renderer.md) | Forward PBR renderer with reversed-Z, CPU culling and instancing |
 | [0014](https://github.com/oguzhanaknc/illusion/blob/main/docs/adr/0014-image-based-lighting.md) | Image-based lighting: GPU-baked cube maps, SH irradiance, multiple-scattering split sum |
 | [0015](https://github.com/oguzhanaknc/illusion/blob/main/docs/adr/0015-cascaded-soft-shadows.md) | Cascaded shadow maps with PCSS for one directional light |
+| [0016](https://github.com/oguzhanaknc/illusion/blob/main/docs/adr/0016-hdr-post-processing.md) | HDR pipeline with depth prepass, GTAO, TAA, bloom and tonemapping |
 
 To propose a new decision, copy `docs/adr/0000-template.md` and follow the
 [contributing guide](../contributing.md#architecture-decision-records).

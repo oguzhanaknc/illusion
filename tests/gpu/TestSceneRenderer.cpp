@@ -95,6 +95,7 @@ TEST_CASE("the scene renderer lights, culls and instances meshes")
         desc.colorFormat = nvrhi::Format::RGBA8_UNORM;
         desc.clearColor = Vec4(0.0f, 0.0f, 0.0f, 1.0f);
         desc.ambient = Vec3(0.0f);
+        desc.post.bloom.enabled = false; // exact clear-colour checks below
         auto renderer = SceneRenderer::create(*device, resources, desc);
         REQUIRE(renderer != nullptr);
 
@@ -116,7 +117,7 @@ TEST_CASE("the scene renderer lights, culls and instances meshes")
         const std::vector<u8> pixels = renderScene(*device, *renderer, world, &jobs);
         CHECK(renderer->stats().candidates == 2);
         CHECK(renderer->stats().visible == 1);
-        CHECK(renderer->stats().drawCalls == 1);
+        CHECK(renderer->stats().drawCalls == 2); // depth prepass + shading
 
         // Red diffuse plus a neutral (white) specular highlight: the light comes from the camera's
         // direction, so at the center GGX gives ~0.074 linear specular, ~79/255 after ACES and sRGB.
@@ -141,7 +142,7 @@ TEST_CASE("the scene renderer lights, culls and instances meshes")
         }
         renderScene(*device, *renderer, world, nullptr);
         CHECK(renderer->stats().visible == 4);
-        CHECK(renderer->stats().drawCalls == 1);
+        CHECK(renderer->stats().drawCalls == 2); // one instanced draw per pass
         CHECK(renderer->stats().triangles == 4ull * resources.submeshCount(sphere) * 32 * 16 * 2);
     }
     device->waitIdle();
@@ -308,7 +309,9 @@ TEST_CASE("the environment background and lighting follow the SkyLight orientati
     REQUIRE(device != nullptr);
     {
         RenderResources resources(*device);
-        auto renderer = SceneRenderer::create(*device, resources, unormTarget());
+        SceneRendererDesc desc = unormTarget();
+        desc.post.bloom.enabled = false; // exact clear-colour check at the end
+        auto renderer = SceneRenderer::create(*device, resources, desc);
         REQUIRE(renderer != nullptr);
         // Red towards -x (west), blue towards +x (east).
         const EnvironmentHandle environment = resources.createEnvironment(
@@ -410,6 +413,131 @@ TEST_CASE("a directional light casts soft shadows from casters outside the view"
         pixels = renderScene(*device, *renderer, world, nullptr);
         CHECK(std::abs(pixelAt(pixels, kShadowX, kGroundY).r - lit) <= 3);
         CHECK(renderer->stats().shadowCasters == 0);
+    }
+    device->waitIdle();
+    CHECK(device->validationErrorCount() == 0);
+}
+
+TEST_CASE("ambient occlusion darkens indirect light in creases")
+{
+    auto device = RenderDevice::create(headless());
+    REQUIRE(device != nullptr);
+    {
+        RenderResources resources(*device);
+        SceneRendererDesc desc = unormTarget();
+        desc.post.bloom.enabled = false;
+        auto renderer = SceneRenderer::create(*device, resources, desc);
+        REQUIRE(renderer != nullptr);
+        const EnvironmentHandle environment = resources.createEnvironment(
+            makeEnvironment(64, [](Vec3) { return Vec3(0.6f); }), smallEnvironment());
+
+        // A sphere resting on the ground, lit only by a uniform sky.
+        World world;
+        world.create(Transform{}, SkyLight{environment, 1.0f, true});
+        world.create(Transform{}, MeshRenderer{resources.createMesh(makeSphere(1.0f, 48, 24), "Sphere"), 0,
+                                               MaterialHandle{}});
+        Transform ground;
+        ground.position = Vec3(0.0f, -1.0f, 0.0f);
+        world.create(ground,
+                     MeshRenderer{resources.createMesh(makePlane(20.0f, 1), "Ground"), 0, MaterialHandle{}});
+
+        // Row 44 is the ground just in front of the contact point; x = 32 is next to the sphere, x = 55
+        // far from it.
+        constexpr u32 kGroundY = 44;
+        std::vector<u8> pixels = renderScene(*device, *renderer, world, nullptr);
+        const int crease = pixelAt(pixels, 32, kGroundY).r;
+        const int open = pixelAt(pixels, 55, kGroundY).r;
+        CHECK(crease < open - 20);
+
+        PostProcessSettings settings = renderer->postProcessSettings();
+        settings.ambientOcclusion.enabled = false;
+        renderer->setPostProcessSettings(settings);
+        pixels = renderScene(*device, *renderer, world, nullptr);
+        CHECK(std::abs(pixelAt(pixels, 32, kGroundY).r - pixelAt(pixels, 55, kGroundY).r) <= 3);
+        CHECK(std::abs(pixelAt(pixels, 55, kGroundY).r - open) <= 3);
+    }
+    device->waitIdle();
+    CHECK(device->validationErrorCount() == 0);
+}
+
+TEST_CASE("bloom spreads light from bright pixels")
+{
+    auto device = RenderDevice::create(headless());
+    REQUIRE(device != nullptr);
+    {
+        RenderResources resources(*device);
+        auto renderer = SceneRenderer::create(*device, resources, unormTarget());
+        REQUIRE(renderer != nullptr);
+        MaterialDesc glowing;
+        glowing.parameters.baseColorFactor = Vec4(0.0f, 0.0f, 0.0f, 1.0f);
+        glowing.parameters.emissiveFactor = Vec3(40.0f);
+        World world;
+        world.create(Transform{}, MeshRenderer{resources.createMesh(makeSphere(0.5f, 32, 16), "Sphere"), 0,
+                                               resources.createMaterial(glowing)});
+
+        // The sphere covers about 5.5 pixels around the centre; x = 42 is outside it.
+        std::vector<u8> pixels = renderScene(*device, *renderer, world, nullptr);
+        CHECK(pixelAt(pixels, 32, 32).r == 255);
+        CHECK(pixelAt(pixels, 42, 32).r > 5);
+        CHECK(pixelAt(pixels, 42, 32).r < 200);
+
+        PostProcessSettings settings = renderer->postProcessSettings();
+        settings.bloom.enabled = false;
+        renderer->setPostProcessSettings(settings);
+        pixels = renderScene(*device, *renderer, world, nullptr);
+        CHECK(pixelAt(pixels, 42, 32).r == 0);
+    }
+    device->waitIdle();
+    CHECK(device->validationErrorCount() == 0);
+}
+
+TEST_CASE("temporal anti-aliasing smooths edges and keeps flat areas")
+{
+    auto device = RenderDevice::create(headless());
+    REQUIRE(device != nullptr);
+    {
+        RenderResources resources(*device);
+        SceneRendererDesc desc = unormTarget();
+        desc.post.bloom.enabled = false;
+        desc.post.ambientOcclusion.enabled = false;
+        desc.ambient = Vec3(0.0f);
+        auto renderer = SceneRenderer::create(*device, resources, desc);
+        REQUIRE(renderer != nullptr);
+        // A flat (emissive only) disc-like sphere: every covered pixel has the same value.
+        MaterialDesc flat;
+        flat.parameters.baseColorFactor = Vec4(0.0f, 0.0f, 0.0f, 1.0f);
+        flat.parameters.emissiveFactor = Vec3(0.5f);
+        World world;
+        world.create(Transform{}, MeshRenderer{resources.createMesh(makeSphere(1.5f, 64, 32), "Sphere"), 0,
+                                               resources.createMaterial(flat)});
+
+        const std::vector<u8> aliased = renderScene(*device, *renderer, world, nullptr);
+        PostProcessSettings settings = renderer->postProcessSettings();
+        settings.temporalAntiAliasing.enabled = true;
+        renderer->setPostProcessSettings(settings);
+        std::vector<u8> smooth;
+        for (int frame = 0; frame < 24; ++frame)
+        {
+            smooth = renderScene(*device, *renderer, world, nullptr);
+        }
+        // Inside the sphere both images agree.
+        CHECK(std::abs(pixelAt(smooth, 32, 32).r - pixelAt(aliased, 32, 32).r) <= 4);
+        // Along a row crossing the silhouette, the aliased image jumps from surface to background while
+        // the anti-aliased one has partially covered pixels in between.
+        const int inside = pixelAt(aliased, 32, 32).r;
+        bool aliasedHasPartial = false;
+        bool smoothHasPartial = false;
+        for (u32 x = 40; x < 64; ++x)
+        {
+            const int a = pixelAt(aliased, x, 36).r;
+            const int s = pixelAt(smooth, x, 36).r;
+            aliasedHasPartial |= a > inside / 5 && a < inside * 4 / 5;
+            smoothHasPartial |= s > inside / 5 && s < inside * 4 / 5;
+        }
+        CHECK_FALSE(aliasedHasPartial);
+        CHECK(smoothHasPartial);
+        renderer->resetTemporalHistory();
+        renderScene(*device, *renderer, world, nullptr);
     }
     device->waitIdle();
     CHECK(device->validationErrorCount() == 0);

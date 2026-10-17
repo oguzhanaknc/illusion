@@ -4,6 +4,7 @@ add_library(illusion_render STATIC
     src/Components.cpp
     src/DebugTriangle.cpp
     src/EnvironmentBaker.cpp
+    src/PostProcessor.cpp
     src/RenderDevice.cpp
     src/RenderResources.cpp
     src/SceneRenderer.cpp
@@ -33,6 +34,14 @@ illusion_add_shaders(illusion_render
         debugTriangleFragment shaders/DebugTriangle.slang fragmentMain fragment
         forwardPbrVertex shaders/ForwardPbr.slang vertexMain vertex
         forwardPbrFragment shaders/ForwardPbr.slang fragmentMain fragment
+        prepassMaskedFragment shaders/ForwardPbr.slang prepassMaskedMain fragment
+        gtao shaders/Gtao.slang gtaoMain compute
+        gtaoBlur shaders/GtaoBlur.slang gtaoBlurMain compute
+        taa shaders/Taa.slang taaMain compute
+        bloomDownsample shaders/BloomDownsample.slang downsampleMain compute
+        bloomUpsample shaders/BloomUpsample.slang upsampleMain compute
+        tonemapVertex shaders/Tonemap.slang vertexMain vertex
+        tonemapFragment shaders/Tonemap.slang fragmentMain fragment
         shadowCasterVertex shaders/ShadowCaster.slang vertexMain vertex
         shadowCasterFragment shaders/ShadowCaster.slang fragmentMain fragment
         skyboxVertex shaders/Skybox.slang vertexMain vertex
