@@ -3,6 +3,7 @@ illusion_require_dependency(nanobench)
 add_executable(illusion_benchmarks
     main.cpp
     Budget.cpp
+    BenchAssets.cpp
     BenchEcs.cpp
     BenchEventBus.cpp
     BenchInput.cpp

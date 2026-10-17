@@ -94,3 +94,43 @@ const illusion::Vec3 fromAbove = irradiance.evaluate(illusion::Vec3(0.0f, 1.0f, 
   `RenderResources::createEnvironment()` calls it for you.
 - `makeSkyImage()` creates a procedural sky (zenith-to-horizon gradient, ground and an optional sun
   disc) for prototypes, tests and as a fallback.
+
+## Asset database
+
+Decoding PNGs, building mip chains and converting glTF files takes time. The `AssetDatabase` does it once
+per source file and keeps the result in a cache; later loads read the cooked file instead.
+
+Header: `<illusion/assets/AssetDatabase.hpp>`
+
+```cpp
+illusion::VirtualFileSystem files;
+files.mount("game", illusion::executableDirectory() / "data");
+files.mount("cache", illusion::userDataDirectory("MyStudio", "MyGame") / "cache",
+            illusion::MountAccess::ReadWrite);
+
+illusion::AssetDatabase assets(files, "cache");
+std::optional<illusion::ModelData> helmet = assets.loadModel("game:/models/helmet.glb");
+
+illusion::ImageImportSettings normalMap;
+normalMap.srgb = false;
+std::optional<illusion::Image> bumps = assets.loadImage("game:/textures/rock_normal.png", normalMap);
+```
+
+- The cache mount must be writable. With an empty cache mount name, every load imports from source.
+- A cache entry remembers the content hash of every file the asset came from (for glTF: the model, its
+  buffers and its images). When any of them changes, the next load imports again and refreshes the
+  entry; nothing has to be cleared by hand.
+- Each import setting gets its own entry, so the same image can be loaded as sRGB colour and as linear
+  data.
+- Loading a cached 512x512 texture with mips is about ten times faster than decoding the PNG.
+- `statistics()` counts cache hits, imports and cache writes.
+
+Assets are identified by `AssetId`, a stable hash of the normalized virtual path:
+
+```cpp
+const illusion::AssetId id = illusion::AssetId::fromPath("game:/models/helmet.glb");
+```
+
+Cooked files (`AssetFile`, `serializeImage()`, `serializeModel()` in `<illusion/assets/AssetFormat.hpp>`)
+are versioned, checksummed and fully validated when read, so a damaged cache file is ignored rather than
+trusted.

@@ -25,7 +25,8 @@ doxygen docs/Doxyfile
 | `illusion/core/JobSystem.hpp` | `JobSystem`, `JobCounter`, `Job` |
 | `illusion/core/InplaceFunction.hpp` | Bellek ayırmayan, tipi silinmiş (type-erased) çağrılabilir nesne |
 | `illusion/core/Thread.hpp` | Thread isimleri, thread indeksleri, spin-wait ipucu |
-| `illusion/core/Hash.hpp` | Kararlı FNV-1a hash |
+| `illusion/core/Hash.hpp` | Kararlı FNV-1a ve xxHash64 hash'leri |
+| `illusion/core/Serialization.hpp` | `BinaryWriter`, `BinaryReader` (sınır denetimli, little-endian) |
 | `illusion/core/TypeName.hpp` | Derleme zamanı tip isimleri |
 | `illusion/core/Profiler.hpp` | Tracy profiling makroları |
 | `illusion/core/EventBus.hpp` | `EventBus`, `Subscription` |
@@ -48,6 +49,8 @@ doxygen docs/Doxyfile
 | `illusion/assets/Image.hpp` | `Image`, çözme, PNG kodlama, mip üretimi |
 | `illusion/assets/Mesh.hpp` | `MeshData`, `Vertex`, prosedürel Mesh'ler |
 | `illusion/assets/Model.hpp` | `ModelData`, `MaterialData`, `loadGltf` |
+| `illusion/assets/AssetFormat.hpp` | `AssetId`, `AssetFile`, hazırlanmış görüntü ve model formatları |
+| `illusion/assets/AssetDatabase.hpp` | `AssetDatabase`: görüntüler ve modeller için içe aktarma önbelleği |
 | `illusion/assets/Environment.hpp` | Equirectangular eşleme, `ShIrradiance`, `makeSkyImage` |
 | `illusion/render/RenderDevice.hpp` | `RenderDevice`, `GpuInfo` (bindless ve multi-draw desteği dahil): NVRHI üzerinden Vulkan cihazı |
 | `illusion/render/Swapchain.hpp` | `Swapchain`: bir pencereye present etme |

@@ -4,6 +4,9 @@
 
 #include <illusion/core/Assert.hpp>
 
+#include <atomic>
+#include <filesystem>
+#include <random>
 #include <stdexcept>
 #include <string>
 
@@ -78,6 +81,28 @@ struct LifetimeCounter
     {
         alive = 0;
         constructed = 0;
+    }
+};
+
+/// Creates a unique empty directory under the system temp directory and deletes it afterwards.
+struct TempDirectory
+{
+    std::filesystem::path path;
+
+    TempDirectory()
+    {
+        // CTest runs test cases as parallel processes, so names must be unique across processes.
+        static std::atomic<int> counter{0};
+        const auto unique = std::random_device{}();
+        path = std::filesystem::temp_directory_path() /
+               ("illusion-test-" + std::to_string(unique) + "-" + std::to_string(counter.fetch_add(1)));
+        std::filesystem::remove_all(path);
+        std::filesystem::create_directories(path);
+    }
+    ~TempDirectory()
+    {
+        std::error_code ignored;
+        std::filesystem::remove_all(path, ignored);
     }
 };
 

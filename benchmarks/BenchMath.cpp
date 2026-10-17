@@ -1,6 +1,5 @@
 #include "Budget.hpp"
 
-#include <illusion/assets/Environment.hpp>
 #include <illusion/core/Math.hpp>
 #include <illusion/ecs/Transform.hpp>
 
@@ -48,14 +47,5 @@ ILL_BENCHMARK("math/frustum-cull-spheres", 50.0)
             visible += frustum.intersects(local.transformed(matrix)) ? 1u : 0u;
         }
         ankerl::nanobench::doNotOptimizeAway(visible);
-    });
-}
-
-ILL_BENCHMARK("assets/sh-irradiance", 200.0)
-{
-    const Image sky = makeSkyImage(512);
-    const usize texels = static_cast<usize>(sky.width()) * sky.height();
-    bench.batch(texels).unit("texel").run("computeShIrradiance (512x256)", [&] {
-        ankerl::nanobench::doNotOptimizeAway(computeShIrradiance(sky));
     });
 }

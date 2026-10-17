@@ -92,8 +92,10 @@ struct ModelData
 /// Loads a glTF 2.0 file (.gltf with external or embedded buffers, or binary .glb) through @p files.
 /// Supports triangle meshes, metallic-roughness materials, PNG and JPEG textures, and the node
 /// hierarchy of the default scene. Unsupported required extensions (Draco, meshopt, KTX2) are errors.
-/// Returns std::nullopt and sets @p error on failure.
+/// Returns std::nullopt and sets @p error on failure. When @p dependencies is given, it receives the
+/// normalized virtual paths of every file read (the model, external buffers and images).
 [[nodiscard]] std::optional<ModelData> loadGltf(const VirtualFileSystem& files, std::string_view virtualPath,
-                                                std::string* error = nullptr);
+                                                std::string* error = nullptr,
+                                                std::vector<std::string>* dependencies = nullptr);
 
 } // namespace illusion
