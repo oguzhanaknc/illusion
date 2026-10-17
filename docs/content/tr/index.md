@@ -4,10 +4,11 @@ illusion; Windows, macOS ve Linux için C++20 ile yazılmış, performans odakl�
 Steam ve benzeri mağazalarda ticari oyunlar yayımlamak için tasarlanmıştır.
 
 !!! warning "Erken geliştirme aşaması"
-    illusion temel katman aşamasındadır. Core kütüphanesi (logging, bellek, Job System, ECS)
-    tamamlanmış ve test edilmiştir; pencereler, action eşlemeli klavye, fare ve gamepad input'u, sanal
-    dosya sistemi ve Vulkan 1.3 render cihazı da hazırdır. Tam renderer, ses, fizik, editör ve export hattı
-    planlanmıştır; bkz. [yol haritası](https://github.com/oguzhanaknc/illusion/blob/main/ROADMAP.md).
+    Core kütüphanesi (logging, bellek, Job System, ECS, reflection ve sahne dosyaları), pencereler,
+    action eşlemeli klavye, fare ve gamepad input'u, paketlenmiş arşivli sanal dosya sistemi, asset hattı,
+    Vulkan 1.3 üzerinde forward PBR renderer, katı cisim fiziği ve 3D ses tamamlanmış ve test edilmiştir.
+    Hot reload'lu oyun modülleri, editör ve export hattı planlanmıştır; bkz.
+    [yol haritası](https://github.com/oguzhanaknc/illusion/blob/main/ROADMAP.md).
 
 ## Tasarım hedefleri
 

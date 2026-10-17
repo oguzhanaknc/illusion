@@ -30,6 +30,7 @@ records rather than user documentation.
 | [0021](https://github.com/oguzhanaknc/illusion/blob/main/docs/adr/0021-packed-archives.md) | Packed archives, archive mounts and cooked shipping |
 | [0022](https://github.com/oguzhanaknc/illusion/blob/main/docs/adr/0022-reflection-and-scene-files.md) | Component reflection with stable names and JSON scene files |
 | [0023](https://github.com/oguzhanaknc/illusion/blob/main/docs/adr/0023-jolt-physics-integration.md) | Jolt Physics on the Job System, ECS-driven bodies and a fixed step |
+| [0024](https://github.com/oguzhanaknc/illusion/blob/main/docs/adr/0024-audio-with-miniaudio.md) | Audio with miniaudio, mixed on an audio thread that owns its state |
 
 To propose a new decision, copy `docs/adr/0000-template.md` and follow the
 [contributing guide](../contributing.md#architecture-decision-records).

@@ -67,6 +67,7 @@ plugins:
             Rendering: Rendering
             Assets and Models: Asset'ler ve Modeller
             Physics: Fizik
+            Audio: Ses
             Gamepads: Gamepad'ler
             Input Actions: Input Action'ları
             Architecture: Mimari
@@ -105,6 +106,7 @@ nav:
       - Rendering: manual/rendering.md
       - Assets and Models: manual/assets.md
       - Physics: manual/physics.md
+      - Audio: manual/audio.md
       - Profiling: manual/profiling.md
   - Architecture:
       - Overview: architecture/overview.md

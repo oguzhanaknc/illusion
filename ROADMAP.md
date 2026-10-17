@@ -63,8 +63,13 @@ ADRs for its significant decisions. Items marked ✅ are done.
   access; semantic versions (ADR 0022)
 - M5b: ✅ Jolt Physics on the Job System: RigidBody/Collider Components, fixed step with interpolation,
   forces and impulses, raycasts, contact events, collision layers, `physics_playground` sample (ADR 0023)
+- M5c: ✅ Audio with miniaudio: AudioSource/AudioListener Components, 3D attenuation, panning and doppler,
+  decoded and streamed clips through the VFS (WAV, FLAC, MP3, Ogg Vorbis), mixer buses, voice priorities,
+  allocation-free mixing on an audio thread fed by lock-free snapshots, offline rendering for tests
+  (ADR 0024)
 - M5d: Physics extensions: mesh and convex-hull colliders, character controller, joints, shape casts
-- M5c: miniaudio integration (3D sound, mixer)
+- M5e: Audio extensions: asynchronous clip loading through the asset streamer, effects (reverb, filters),
+  sound cones, impact sounds in `physics_playground`
 
 ## M6 — Game modules and hot reload
 

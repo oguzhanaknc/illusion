@@ -13,7 +13,7 @@ illusion katmanlar halinde inşa edilir. Bir katman yalnızca altındaki katmanl
 | Input | SDL3 üzerinden gamepad'ler (titreşim, LED, hareket, touchpad, adaptive trigger'lar), action eşleme, yeniden atama, glyph'ler | Tamamlandı |
 | Asset'ler | Görüntüler, Mesh'ler, glTF modelleri, ortamlar, hazırlanmış formatlar, bir içe aktarma önbelleği ve asenkron streaming | Tamamlandı |
 | Fizik | Job System üzerinde Jolt Physics ile katı cisimler, collider'lar, raycast'ler ve temaslar | Tamamlandı |
-| Ses | miniaudio ile 3D ses ve miksaj | Planlandı |
+| Ses | miniaudio ile 3D ses, streaming ve bus'lı mikser; kendi thread'inde miksajlanır | Tamamlandı |
 | Renderer: temel | NVRHI üzerinden Vulkan 1.3 cihazı, swapchain'ler, Slang shader hattı | Tamamlandı |
 | Renderer: sahne | Mesh'ler, PBR Material'ler, doğrudan ve görüntü tabanlı aydınlatma, yumuşak gölgeler, GTAO, HDR post-processing (TAA, bloom, tonemapping), frustum culling, indirect draw'lı GPU occlusion culling, instancing, bindless multi-draw | Tamamlandı |
 | Editör | Sahne düzenleme, gizmo'lar, AI komut API'si | Planlandı |
@@ -61,6 +61,7 @@ nitelikli adlarının hash'i ile tanımlanır; bu yüzden bir Component her iki 
 | `engine/input` | Input kütüphanesi: `include/illusion/input` ve `src/` |
 | `engine/assets` | Assets kütüphanesi: `include/illusion/assets` ve `src/` |
 | `engine/physics` | Fizik kütüphanesi: `include/illusion/physics` ve `src/` |
+| `engine/audio` | Ses kütüphanesi: `include/illusion/audio` ve `src/` |
 | `engine/render` | Render kütüphanesi: `include/illusion/render`, `src/` ve `shaders/` |
 | `samples` | Motor özelliklerini çalıştıran küçük uygulamalar |
 | `tests` | Unit test'ler (doctest), her özellik için bir dosya |

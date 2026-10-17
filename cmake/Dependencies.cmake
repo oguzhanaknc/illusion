@@ -97,7 +97,8 @@ FetchContent_Declare(jolt
     SYSTEM
     SOURCE_SUBDIR Build)
 
-# miniaudio 0.11.25 (Public Domain / MIT-0): audio.
+# miniaudio 0.11.25 (Public Domain / MIT-0): audio devices, mixing, WAV/FLAC/MP3 decoding, and Ogg Vorbis
+# through the stb_vorbis copy in its extras/ directory (public domain / MIT).
 FetchContent_Declare(miniaudio
     URL https://github.com/mackron/miniaudio/archive/refs/tags/0.11.25.tar.gz
     URL_HASH SHA256=b900edcffe979816e2560a0580b9b1216d674b4f17fbadeca8f777a7f8ab0274
@@ -162,6 +163,7 @@ endif()
 #   stb       -> illusion::stb (headers; the implementation is compiled in illusion::assets)
 #   yyjson    -> illusion::yyjson (static library; strict JSON only)
 #   jolt      -> Jolt::Jolt (static library)
+#   miniaudio -> illusion::miniaudio (headers; the implementation is compiled in illusion::audio)
 function(illusion_require_dependency name)
     get_property(done GLOBAL PROPERTY ILLUSION_DEP_${name})
     if(done)
@@ -263,6 +265,27 @@ function(illusion_require_dependency name)
         FetchContent_MakeAvailable(jolt)
         # Jolt's jobs synchronize inside the library, so sanitizer builds instrument it too.
         illusion_apply_sanitizer(Jolt)
+    elseif(name STREQUAL "miniaudio")
+        FetchContent_MakeAvailable(miniaudio)
+        # Headers only; illusion::audio compiles the implementation (with stb_vorbis from miniaudio's
+        # extras for Ogg Vorbis). The definitions below change miniaudio's structures, so every user of the
+        # header must see them: no resource manager (clips come through the VFS), encoders or generators.
+        add_library(illusion_miniaudio INTERFACE)
+        add_library(illusion::miniaudio ALIAS illusion_miniaudio)
+        target_include_directories(illusion_miniaudio SYSTEM INTERFACE "${miniaudio_SOURCE_DIR}")
+        target_compile_definitions(illusion_miniaudio INTERFACE MA_NO_RESOURCE_MANAGER MA_NO_ENCODING
+            MA_NO_GENERATION)
+        find_package(Threads REQUIRED)
+        target_link_libraries(illusion_miniaudio INTERFACE Threads::Threads)
+        if(APPLE)
+            # Link Core Audio at build time instead of loading it at run time, so apps pass notarization.
+            target_compile_definitions(illusion_miniaudio INTERFACE MA_NO_RUNTIME_LINKING)
+            target_link_libraries(illusion_miniaudio INTERFACE "-framework CoreFoundation"
+                "-framework CoreAudio" "-framework AudioToolbox")
+        elseif(UNIX)
+            # ALSA, PulseAudio and JACK are loaded at run time, so no development packages are needed.
+            target_link_libraries(illusion_miniaudio INTERFACE ${CMAKE_DL_LIBS} m)
+        endif()
     elseif(name STREQUAL "yyjson")
         FetchContent_MakeAvailable(yyjson)
         add_library(illusion_yyjson STATIC "${yyjson_SOURCE_DIR}/src/yyjson.c")

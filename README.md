@@ -8,8 +8,9 @@ designed to ship commercial games on Steam and similar stores.
 > **Status: early development.** The core library (logging, memory, Job System, archetype ECS), the
 > platform layer, input (keyboard, mouse, gamepads, actions), glTF loading and a forward PBR scene renderer
 > with image-based lighting, soft shadows and HDR post-processing, an asset pipeline (import cache,
-> streaming, packed archives), scene files and rigid-body physics are implemented and tested on all
-> platforms. Audio, the editor and the export pipeline are next; see [ROADMAP.md](ROADMAP.md).
+> streaming, packed archives), scene files, rigid-body physics and 3D audio are implemented and tested on
+> all platforms. The game module system, the editor and the export pipeline are next; see
+> [ROADMAP.md](ROADMAP.md).
 
 ## Highlights
 
@@ -28,6 +29,8 @@ designed to ship commercial games on Steam and similar stores.
   bindless multi-draw indirect rendering.
 - Rigid-body physics with Jolt on the engine Job System: ECS Components, fixed step with interpolation,
   raycasts and contact events.
+- Audio with miniaudio: ECS sound sources, 3D attenuation, panning and doppler, music streaming, a mixer
+  with buses, mixed on its own thread without allocations; WAV, FLAC, MP3 and Ogg Vorbis.
 - Component reflection with stable names and JSON scene files that survive code changes.
 - Asset pipeline: content-hashed import cache, asynchronous streaming on an I/O thread and the Job
   System, memory-mapped `.illpak` archives and cooked builds that ship without sources.
@@ -76,6 +79,8 @@ world.query<Position, const Velocity>().each([](Position& p, const Velocity& v) 
 | `engine/platform` | Windows, input, file system (`illusion::platform`) |
 | `engine/input` | Gamepads, action mapping, rebinding, glyphs (`illusion::input`) |
 | `engine/assets` | Images, Meshes, glTF loading (`illusion::assets`) |
+| `engine/physics` | Rigid-body physics with Jolt (`illusion::physics`) |
+| `engine/audio` | Sound playback, 3D audio and mixing with miniaudio (`illusion::audio`) |
 | `engine/render` | GPU device, swapchains, shaders, scene renderer (`illusion::render`) |
 | `samples` | Sample applications |
 | `tests` | Unit tests (doctest) |
