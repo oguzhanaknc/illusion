@@ -139,3 +139,49 @@ const illusion::AssetId id = illusion::AssetId::fromPath("game:/models/helmet.gl
 Hazırlanmış dosyalar (`<illusion/assets/AssetFormat.hpp>` içindeki `AssetFile`, `serializeImage()`,
 `serializeModel()`) sürümlüdür, checksum içerir ve okunurken tamamen doğrulanır; bu yüzden hasarlı bir
 önbellek dosyasına güvenilmez, yok sayılır.
+
+## Streaming
+
+`AssetStreamer` arka planda yükler; böylece Asset'ler gelirken oyun çalışmaya devam eder.
+`AssetDatabase` ile aynı içe aktarma önbelleğini kullanır.
+
+Header'lar: `<illusion/assets/AssetStreamer.hpp>`, `<illusion/render/UploadQueue.hpp>`
+
+```cpp
+illusion::AssetStreamer streamer(files, jobs); // the import cache defaults to the "cache" mount
+illusion::UploadQueue uploads(resources);
+
+const illusion::AssetHandle<illusion::ModelData> helmet = streamer.loadModel("game:/models/helmet.glb");
+const std::shared_ptr<const illusion::ModelUpload> upload = uploads.upload(helmet);
+bool spawned = false;
+
+while (running)
+{
+    streamer.update();          // publishes finished loads
+    uploads.process(16 << 20);  // at most ~16 MiB of GPU uploads this frame
+    if (upload->uploaded && !spawned)
+    {
+        illusion::spawnModel(world, helmet.value(), upload->handles);
+        spawned = true;
+    }
+    if (helmet.state() == illusion::AssetState::Failed)
+    {
+        ILL_LOG_ERROR("Game", "{}", helmet.error());
+    }
+    // ... render ...
+}
+```
+
+- `loadImage()` ve `loadModel()` hemen bir handle döndürür. Bir handle, `update()` sonucunu `Ready`
+  (bu durumda `value()` veriyi döndürür) veya `Failed` (bu durumda `error()` nedenini söyler) olarak
+  yayımlayana kadar `Loading` durumundadır. Durumlar yalnızca `update()` içinde değişir; böylece bir
+  handle asla bir karenin ortasında değişmez.
+- Aynı dosya (ve aynı içe aktarma ayarları) için yapılan istekler tek bir handle'ı paylaşır. Son handle
+  ortadan kalktığında veri serbest bırakılır.
+- Ayrılmış bir I/O thread'i dosyaları okur; Job System önbelleği denetler, çözer ve deserialize eder. Bir
+  glTF dosyasının ilk kez içe aktarılması I/O thread'inde gerçekleşir.
+- `UploadQueue`, GPU yüklemelerini karelere yayar: `process()`, yüklenmiş modelleri istek sırasıyla byte
+  bütçesi bitene kadar yükler, ancak her çağrıda en az bir tane yükler.
+- `waitIdle()`, istenen her şey yayımlanana kadar bekler: yükleme ekranları ve araçlar için kullanışlıdır.
+- Streamer'ı yok etmek, başlamamış yüklemeleri atlar, çalışanları bitirir ve onların önbellek
+  kayıtlarını yazar.

@@ -134,3 +134,48 @@ const illusion::AssetId id = illusion::AssetId::fromPath("game:/models/helmet.gl
 Cooked files (`AssetFile`, `serializeImage()`, `serializeModel()` in `<illusion/assets/AssetFormat.hpp>`)
 are versioned, checksummed and fully validated when read, so a damaged cache file is ignored rather than
 trusted.
+
+## Streaming
+
+`AssetStreamer` loads in the background, so the game keeps running while assets arrive. It uses the
+same import cache as the `AssetDatabase`.
+
+Headers: `<illusion/assets/AssetStreamer.hpp>`, `<illusion/render/UploadQueue.hpp>`
+
+```cpp
+illusion::AssetStreamer streamer(files, jobs); // the import cache defaults to the "cache" mount
+illusion::UploadQueue uploads(resources);
+
+const illusion::AssetHandle<illusion::ModelData> helmet = streamer.loadModel("game:/models/helmet.glb");
+const std::shared_ptr<const illusion::ModelUpload> upload = uploads.upload(helmet);
+bool spawned = false;
+
+while (running)
+{
+    streamer.update();          // publishes finished loads
+    uploads.process(16 << 20);  // at most ~16 MiB of GPU uploads this frame
+    if (upload->uploaded && !spawned)
+    {
+        illusion::spawnModel(world, helmet.value(), upload->handles);
+        spawned = true;
+    }
+    if (helmet.state() == illusion::AssetState::Failed)
+    {
+        ILL_LOG_ERROR("Game", "{}", helmet.error());
+    }
+    // ... render ...
+}
+```
+
+- `loadImage()` and `loadModel()` return a handle immediately. A handle is `Loading` until `update()`
+  publishes its result as `Ready` (then `value()` returns the data) or `Failed` (then `error()` says why).
+  States change only in `update()`, so a handle never changes in the middle of a frame.
+- Requests for the same file (and the same import settings) share one handle. The data is freed when
+  the last handle is gone.
+- A dedicated I/O thread reads the files; the Job System checks the cache, decodes and deserializes.
+  Importing a glTF file for the first time happens on the I/O thread.
+- `UploadQueue` spreads GPU uploads over frames: `process()` uploads loaded models in request order until
+  its byte budget is spent, but always at least one per call.
+- `waitIdle()` blocks until everything requested is published: useful for loading screens and tools.
+- Destroying the streamer skips loads that have not started, finishes the running ones and writes their
+  cache entries.

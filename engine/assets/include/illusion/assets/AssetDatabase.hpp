@@ -59,13 +59,10 @@ public:
     [[nodiscard]] const AssetDatabaseStatistics& statistics() const noexcept { return m_statistics; }
 
 private:
-    // Returns the cached payload of `type`/`version` for `path` if every dependency is unchanged.
+    // Returns the cached file of `type`/`version` at `cachePath` if every source is unchanged.
     [[nodiscard]] std::optional<AssetFile> readCache(const std::string& cachePath, AssetType type,
                                                      u32 version) const;
-    // Hashes each dependency's current content; false if one cannot be read.
-    [[nodiscard]] bool hashDependencies(const std::vector<std::string>& paths,
-                                        std::vector<AssetDependency>& out) const;
-    void writeCache(const std::string& cachePath, AssetFile file);
+    void writeCache(const std::string& cachePath, const AssetFile& file);
 
     VirtualFileSystem* m_files;
     std::string m_cacheMount;

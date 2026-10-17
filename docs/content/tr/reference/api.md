@@ -51,6 +51,7 @@ doxygen docs/Doxyfile
 | `illusion/assets/Model.hpp` | `ModelData`, `MaterialData`, `loadGltf` |
 | `illusion/assets/AssetFormat.hpp` | `AssetId`, `AssetFile`, hazırlanmış görüntü ve model formatları |
 | `illusion/assets/AssetDatabase.hpp` | `AssetDatabase`: görüntüler ve modeller için içe aktarma önbelleği |
+| `illusion/assets/AssetStreamer.hpp` | `AssetStreamer`, `AssetHandle`: asenkron yükleme |
 | `illusion/assets/Environment.hpp` | Equirectangular eşleme, `ShIrradiance`, `makeSkyImage` |
 | `illusion/render/RenderDevice.hpp` | `RenderDevice`, `GpuInfo` (bindless ve multi-draw desteği dahil): NVRHI üzerinden Vulkan cihazı |
 | `illusion/render/Swapchain.hpp` | `Swapchain`: bir pencereye present etme |
@@ -58,5 +59,6 @@ doxygen docs/Doxyfile
 | `illusion/render/RenderResources.hpp` | `RenderResources`: GPU Mesh'leri, Texture'ları, Material'leri, ortamlar ve Handle'ları |
 | `illusion/render/SceneRenderer.hpp` | `SceneRenderer`, `RenderView`, `RenderStats` |
 | `illusion/render/Shadows.hpp` | `ShadowSettings`, `ShadowCascades`, `computeShadowCascades` |
+| `illusion/render/UploadQueue.hpp` | `UploadQueue`: streaming ile gelen modellerin byte bütçeli GPU yüklemesi |
 | `illusion/render/PostProcess.hpp` | `PostProcessSettings` (ambient occlusion, bloom, TAA), `temporalJitter` |
 | `illusion/render/Components.hpp` | `MeshRenderer`, `Camera`, `DirectionalLight`, `PointLight`, `SkyLight`, `MotionHistory`, `spawnModel` |

@@ -11,6 +11,7 @@ add_library(illusion_render STATIC
     src/SceneRenderer.cpp
     src/Shadows.cpp
     src/Swapchain.cpp
+    src/UploadQueue.cpp
     src/VulkanDispatch.cpp)
 add_library(illusion::render ALIAS illusion_render)
 
