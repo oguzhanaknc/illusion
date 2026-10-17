@@ -53,7 +53,9 @@ Choose a batch size that gives each Job at least a few microseconds of work.
 - **Jobs must not throw.** An exception escaping a Job terminates the process.
 - **Jobs must not block** on anything other than `JobSystem::wait()`. Do not hold a mutex across a wait
   and do not perform blocking I/O in a Job; use a dedicated thread for that.
-- When the queue is full, `submit()` runs the Job immediately on the calling thread.
+- When the queue is full, `submit()` runs the Job immediately on the calling thread. `trySubmit()` returns
+  `false` instead; use it where a Job must never run on the calling thread (the physics module does this
+  for Jolt's jobs).
 - A `JobCounter` must outlive every Job submitted with it.
 
 `JobSystem::currentWorkerIndex()` returns the index of the calling worker (or -1 on other threads),

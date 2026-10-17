@@ -4,7 +4,10 @@
 
 #include <doctest/doctest.h>
 
+#include <atomic>
 #include <cmath>
+#include <thread>
+#include <vector>
 
 using namespace illusion;
 using namespace illusion::test;
@@ -344,6 +347,56 @@ TEST_CASE("simulation results do not depend on the number of worker threads")
         return positions;
     };
     CHECK(run(1) == run(4));
+}
+
+TEST_CASE("simulation runs on the waiting thread when the job queue is full")
+{
+    const auto run = [](bool queueFull) {
+        JobSystem jobs(JobSystemDesc{1, 2});
+        // Occupying the only worker keeps the two queue slots taken, so most physics jobs do not fit.
+        std::atomic<bool> started{false};
+        std::atomic<bool> release{false};
+        JobCounter blocker;
+        if (queueFull)
+        {
+            jobs.submit(
+                [&started, &release] {
+                    started.store(true, std::memory_order_release);
+                    while (!release.load(std::memory_order_acquire))
+                    {
+                        std::this_thread::yield();
+                    }
+                },
+                &blocker);
+            while (!started.load(std::memory_order_acquire))
+            {
+                std::this_thread::yield();
+            }
+        }
+        World world;
+        std::vector<Entity> cubes;
+        {
+            PhysicsWorld physics(world, jobs);
+            createGround(world);
+            for (int i = 0; i < 16; ++i)
+            {
+                Transform transform =
+                    at(Vec3(static_cast<f32>(i % 4) * 0.3f, 1.0f + static_cast<f32>(i) * 1.1f,
+                            static_cast<f32>(i % 3) * 0.2f));
+                cubes.push_back(world.create(transform, body(MotionType::Dynamic), box(Vec3(0.5f))));
+            }
+            simulate(physics, 1.0);
+            release.store(true, std::memory_order_release);
+            jobs.wait(blocker);
+        }
+        std::vector<Vec3> positions;
+        for (const Entity cube : cubes)
+        {
+            positions.push_back(world.get<Transform>(cube).position);
+        }
+        return positions;
+    };
+    CHECK(run(true) == run(false));
 }
 
 TEST_CASE("physics components are saved in scenes and the runtime link is not")
