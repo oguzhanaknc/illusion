@@ -28,7 +28,8 @@ designed to ship commercial games on Steam and similar stores.
   ACES tonemapping, optional TAA with per-object motion vectors, two-phase GPU occlusion culling and
   bindless multi-draw indirect rendering.
 - Rigid-body physics with Jolt on the engine Job System: ECS Components, fixed step with interpolation,
-  raycasts and contact events.
+  convex hull and triangle mesh colliders, character controllers, joints (fixed, point, hinge, slider,
+  distance; motors, limits, breaking), raycasts, shape casts, overlaps and contact events.
 - Audio with miniaudio: ECS sound sources, 3D attenuation, panning and doppler, music streaming, a mixer
   with buses, mixed on its own thread without allocations; WAV, FLAC, MP3 and Ogg Vorbis.
 - Component reflection with stable names and JSON scene files that survive code changes.

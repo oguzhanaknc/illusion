@@ -18,6 +18,7 @@
 #include <memory>
 #include <optional>
 #include <span>
+#include <vector>
 
 namespace illusion
 {
@@ -65,6 +66,15 @@ struct RaycastHit
     f32 distance = 0.0f; ///< Distance from the ray origin.
 };
 
+/// Result of PhysicsWorld::shapeCast().
+struct ShapeCastHit
+{
+    Entity entity;       ///< The Entity that was hit.
+    Vec3 point{0.0f};    ///< Contact point on the hit body in world space.
+    Vec3 normal{0.0f};   ///< Contact normal, pointing from the hit body towards the cast shape.
+    f32 distance = 0.0f; ///< How far the shape moved before touching (0 if it started overlapping).
+};
+
 /// Simulates the RigidBody + Collider Entities of a World. The World must outlive the PhysicsWorld.
 /// Not thread-safe: call it from one thread, outside of World queries. Simulation work runs on the
 /// JobSystem.
@@ -78,19 +88,29 @@ public:
     ~PhysicsWorld();
 
     /// Synchronizes bodies with the World, advances the simulation by @p deltaSeconds in fixed steps and
-    /// writes the Transforms of dynamic bodies, interpolated between the last two steps:
-    /// - Entities with Transform, RigidBody and Collider get a body (and a PhysicsBody component).
-    /// - Bodies of destroyed Entities, or of Entities that lost RigidBody or Collider, are removed.
-    /// - Kinematic and static bodies follow their Transforms; a dynamic body whose Transform was
-    ///   changed by game code is teleported there.
+    /// writes the Transforms of dynamic bodies and characters, interpolated between the last two steps:
+    /// - Entities with Transform, RigidBody and Collider get a body (and a PhysicsBody component);
+    ///   Entities with Transform and CharacterController get a character (and a CharacterBody); Entities
+    ///   with a Joint get a joint once its bodies exist (and a PhysicsJoint).
+    /// - Bodies, characters and joints of destroyed Entities, or of Entities that lost their components,
+    ///   are removed; joints are also removed with their bodies.
+    /// - Kinematic and static bodies follow their Transforms; a dynamic body or a character whose
+    ///   Transform was changed by game code is teleported there.
     void update(f64 deltaSeconds);
 
-    /// Recreates the body of @p entity on the next update(), applying changes to its RigidBody and
-    /// Collider (and the Transform's scale).
+    /// Recreates the body, character and joint of @p entity on the next update(), applying changes to
+    /// its RigidBody, Collider, CharacterController and Joint (and the Transform's scale). Joints
+    /// attached to a rebuilt body are recreated too.
     void rebuild(Entity entity);
 
-    /// Number of bodies.
+    /// Number of bodies (characters count one each).
     [[nodiscard]] u32 bodyCount() const noexcept;
+
+    /// Number of characters.
+    [[nodiscard]] u32 characterCount() const noexcept;
+
+    /// Number of joints, including broken ones.
+    [[nodiscard]] u32 jointCount() const noexcept;
 
     /// Number of fixed steps simulated so far.
     [[nodiscard]] u64 stepCount() const noexcept;
@@ -141,11 +161,79 @@ public:
 
     /// @}
 
+    /// @name Collision geometry
+    /// @{
+
+    /// Creates triangle-mesh geometry for Collider::mesh with ColliderShape::Mesh, from @p vertices and
+    /// three indices per triangle (counter-clockwise seen from the front; both sides collide). Mesh
+    /// colliders only work on static and kinematic bodies. Returns an invalid handle (and logs a warning)
+    /// for empty or out-of-range input.
+    PhysicsMeshHandle createMesh(std::span<const Vec3> vertices, std::span<const u32> indices);
+
+    /// Creates the convex hull of @p points for Collider::mesh with ColliderShape::ConvexHull (any motion
+    /// type). Returns an invalid handle (and logs a warning) if the points are degenerate, for example
+    /// all on one plane.
+    PhysicsMeshHandle createConvexHull(std::span<const Vec3> points);
+
+    /// Releases geometry. Bodies already using it keep it until they are rebuilt or removed.
+    void destroyMesh(PhysicsMeshHandle mesh);
+
+    /// True if @p mesh is a live handle.
+    [[nodiscard]] bool isMeshValid(PhysicsMeshHandle mesh) const noexcept;
+
+    /// @}
+
+    /// @name Characters
+    /// These act on the CharacterController of @p entity and do nothing (returning zero) if it has no
+    /// character yet.
+    /// @{
+
+    /// Sets the velocity in m/s. Gravity is added while the character is in the air, and a downward
+    /// velocity stops on the ground; to walk, set the horizontal part every frame, to jump, set an upward
+    /// one (see isCharacterGrounded()).
+    void setCharacterVelocity(Entity entity, const Vec3& velocity);
+
+    /// Velocity in m/s.
+    [[nodiscard]] Vec3 characterVelocity(Entity entity) const;
+
+    /// True if the character stands on walkable ground.
+    [[nodiscard]] bool isCharacterGrounded(Entity entity) const;
+
+    /// @}
+
+    /// @name Joints
+    /// @{
+
+    /// Current hinge angle in radians, slider position in m or distance between the anchors in m, relative
+    /// to the pose when the joint was created (Distance: absolute). 0 for other joints and Entities
+    /// without a joint.
+    [[nodiscard]] f32 jointPosition(Entity entity) const;
+
+    /// Entities whose Joint broke during the last update() (see Joint::breakForce), sorted.
+    [[nodiscard]] std::span<const Entity> brokenJoints() const noexcept;
+
+    /// @}
+
     /// Casts a ray from @p origin along @p direction (need not be normalized) up to @p maxDistance and
-    /// returns the closest hit on a body whose layer is in @p layerMask (bit i = layer i). Sensors are
-    /// ignored.
+    /// returns the closest hit on a body whose layer is in @p layerMask (bit i = layer i). Sensors and
+    /// the body of @p ignore are skipped.
     [[nodiscard]] std::optional<RaycastHit> raycast(const Vec3& origin, const Vec3& direction,
-                                                    f32 maxDistance, u32 layerMask = 0xFFFFFFFFu) const;
+                                                    f32 maxDistance, u32 layerMask = 0xFFFFFFFFu,
+                                                    Entity ignore = kNullEntity) const;
+
+    /// Moves @p shape (any shape except Mesh; Collider::offset and rotation apply) from @p position with
+    /// @p rotation along @p direction (need not be normalized) up to @p maxDistance and returns the first
+    /// body it touches whose layer is in @p layerMask. Sensors and the body of @p ignore are skipped.
+    [[nodiscard]] std::optional<ShapeCastHit> shapeCast(const Collider& shape, const Vec3& position,
+                                                        const Quat& rotation, const Vec3& direction,
+                                                        f32 maxDistance, u32 layerMask = 0xFFFFFFFFu,
+                                                        Entity ignore = kNullEntity) const;
+
+    /// Replaces @p out with the Entities whose bodies overlap @p shape (any shape except Mesh) placed at
+    /// @p position with @p rotation, sorted, each once. Sensors, bodies outside @p layerMask and the body
+    /// of @p ignore are skipped. Returns the count. Reuse @p out to avoid allocations.
+    u32 overlap(const Collider& shape, const Vec3& position, const Quat& rotation, std::vector<Entity>& out,
+                u32 layerMask = 0xFFFFFFFFu, Entity ignore = kNullEntity) const;
 
     /// Contact events of the last update(), sorted by type and entities.
     [[nodiscard]] std::span<const ContactEvent> contactEvents() const noexcept;

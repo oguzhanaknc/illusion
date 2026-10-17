@@ -67,7 +67,9 @@ ADRs for its significant decisions. Items marked ✅ are done.
   decoded and streamed clips through the VFS (WAV, FLAC, MP3, Ogg Vorbis), mixer buses, voice priorities,
   allocation-free mixing on an audio thread fed by lock-free snapshots, offline rendering for tests
   (ADR 0024)
-- M5d: Physics extensions: mesh and convex-hull colliders, character controller, joints, shape casts
+- M5d: ✅ Physics extensions: triangle mesh and convex hull colliders, character controller (steps, slopes,
+  platforms, pushing), fixed/point/hinge/slider/distance joints with limits, motors and break forces, shape
+  casts and overlaps (ADR 0025)
 - M5e: Audio extensions: asynchronous clip loading through the asset streamer, effects (reverb, filters),
   sound cones, impact sounds in `physics_playground`
 

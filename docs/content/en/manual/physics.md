@@ -69,10 +69,36 @@ while (running)
 | `Sphere` | `radius` |
 | `Capsule` | `halfHeight` (straight part along local Y), `radius` |
 | `Cylinder` | `halfHeight` (along local Y), `radius` |
+| `ConvexHull` | `mesh` from `createConvexHull()` |
+| `Mesh` | `mesh` from `createMesh()`; static and kinematic bodies only |
 
 `offset` and `rotation` place the shape relative to the Entity. The `Transform`'s scale scales the
 shape; spheres and capsules use a uniform scale. An invalid collider (for example a negative radius)
 logs a warning and gets a `PhysicsBody` without a body; fix it and call `rebuild()`.
+
+### Mesh and convex hull colliders
+
+Triangle meshes make level geometry; convex hulls fit props of any shape and can be dynamic. Both are
+cooked once and shared by every body that uses them:
+
+```cpp
+// Level geometry: vertices and three indices per triangle (counter-clockwise seen from the front).
+const illusion::PhysicsMeshHandle level = physics.createMesh(positions, indices);
+illusion::Collider levelShape;
+levelShape.shape = illusion::ColliderShape::Mesh;
+levelShape.mesh = level;
+world.create(illusion::Transform{}, groundBody, levelShape); // a static RigidBody
+
+// A dynamic rock: the convex hull of its vertices.
+illusion::Collider rockShape;
+rockShape.shape = illusion::ColliderShape::ConvexHull;
+rockShape.mesh = physics.createConvexHull(rockPositions);
+world.create(rockTransform, illusion::RigidBody{}, rockShape);
+```
+
+- Mesh colliders on dynamic bodies are rejected (Jolt cannot compute their mass); use a convex hull.
+- `destroyMesh()` releases a handle; bodies that already use the geometry keep it.
+- The handle is runtime data and is not saved in scenes; set it again after loading a scene.
 
 ## Velocities, forces, queries and contacts
 
@@ -103,6 +129,104 @@ for (const illusion::ContactEvent& contact : physics.contactEvents())
   order does not depend on thread timing. In each event `a` has the lower Entity id and the normal
   points from `a` to `b`.
 
+### Shape casts and overlaps
+
+```cpp
+illusion::Collider ball;
+ball.shape = illusion::ColliderShape::Sphere;
+ball.radius = 0.3f;
+const illusion::Quat identity(1.0f, 0.0f, 0.0f, 0.0f);
+
+// Sweep a sphere forward: where would a thrown grenade first touch something?
+if (const auto hit = physics.shapeCast(ball, start, identity, forward, 20.0f, allLayers, player))
+{
+    // hit->entity, hit->point, hit->normal, hit->distance
+}
+
+// Every body within 3 m of an explosion, sorted, each once.
+std::vector<illusion::Entity> inRange; // reuse it between calls
+ball.radius = 3.0f;
+physics.overlap(ball, explosionCenter, identity, inRange);
+```
+
+- Queries take any `Collider` except `Mesh`; its `offset` and `rotation` apply.
+- Sensors are skipped; `ignore` (the last argument of `raycast()`, `shapeCast()` and `overlap()`) skips
+  one Entity's body, for example the player's own character.
+- `shapeCast()` reports the first contact; a shape that starts inside a body hits it at distance 0.
+
+## Characters
+
+A `CharacterController` makes an Entity a player or NPC character: an upright capsule moved by game code
+instead of by forces. It walks up steps and slopes, slides along walls, rides moving platforms and pushes
+dynamic bodies. The `Transform` position is at the character's feet; its rotation is left to game code.
+
+```cpp
+illusion::CharacterController controller; // 1.8 m tall, 0.3 m radius, 0.35 m steps, 50° slopes
+const illusion::Entity player = world.create(spawnTransform, controller);
+
+// Every frame, before physics.update():
+illusion::Vec3 velocity = physics.characterVelocity(player);
+velocity.x = input.x * 5.0f; // walk
+velocity.z = input.y * 5.0f;
+if (jumpPressed && physics.isCharacterGrounded(player))
+{
+    velocity.y = 5.0f; // jump
+}
+physics.setCharacterVelocity(player, velocity);
+```
+
+- Gravity (times `gravityFactor`) accelerates the character in the air; landing stops the downward
+  velocity and a ceiling stops the upward velocity. The horizontal velocity stays until you change it.
+- Slopes steeper than `maxSlope` are not walkable; the character slides down them.
+- `CharacterBody` (added by `PhysicsWorld`) holds the velocity, whether the character is `grounded`, the
+  ground normal and the `ground` Entity after the last update.
+- Characters collide with each other and have an inner body, so raycasts, sensors and contact events see
+  them. Setting the `Transform` teleports the character.
+
+## Joints
+
+A `Joint` connects the body of its Entity to the body of `connected` (or to the world when `connected` is
+null). Both Entities need a body, and at least one of them must be dynamic. The joint is created in the
+bodies' poses at that moment.
+
+| `JointType` | Allows | Uses |
+| --- | --- | --- |
+| `Fixed` | Nothing: the bodies move as one | `anchor` |
+| `Point` | Rotation around the anchor (ball and socket) | `anchor` |
+| `Hinge` | Rotation around `axis` (doors, wheels) | `anchor`, `axis`, limits, motor |
+| `Slider` | Movement along `axis` (pistons, drawers) | `anchor`, `axis`, limits, motor |
+| `Distance` | Anchors between `minLimit` and `maxLimit` apart (ropes, rods) | `anchor`, `connectedAnchor`, limits |
+
+```cpp
+// A door hinged at its left edge, opening with a motor.
+illusion::Joint hinge;
+hinge.type = illusion::JointType::Hinge;
+hinge.anchor = {-0.5f, 0.0f, 0.0f};   // in the door's local space
+hinge.axis = {0.0f, 1.0f, 0.0f};
+hinge.limited = true;
+hinge.minLimit = 0.0f;                // radians
+hinge.maxLimit = 1.6f;
+hinge.motorSpeed = 1.0f;              // rad/s; change it any frame
+hinge.motorMaxForce = 500.0f;         // N·m; 0 turns the motor off
+world.create(doorTransform, illusion::RigidBody{}, doorCollider, hinge);
+
+// A lamp on a 2 m chain, which breaks when pulled with more than 2000 N.
+illusion::Joint chain;
+chain.type = illusion::JointType::Distance;
+chain.connectedAnchor = ceilingHook; // world space: no connected body
+chain.maxLimit = 2.0f;
+chain.breakForce = 2000.0f;
+world.create(lampTransform, illusion::RigidBody{}, lampCollider, chain);
+```
+
+- `jointPosition(entity)` returns the hinge angle, the slider position (both relative to the start) or
+  the distance between the anchors. Positive values and motor speeds mean this Entity moves along or
+  around +`axis`.
+- A joint whose force exceeds `breakForce` is disabled: its `PhysicsJoint::broken` is set and the Entity
+  is listed in `brokenJoints()` for that update.
+- Joints are removed with either body and recreated when a body is rebuilt. A joint that cannot be
+  created (no body, two static bodies) logs a warning; fix it and call `rebuild()`.
+
 ## Collision layers
 
 Every body has a layer in [0, 16). All layers collide by default:
@@ -115,10 +239,12 @@ physics.setLayersCollide(1, 0, false); // layer 1 passes through layer 0
 
 ## Scenes and threads
 
-- `reflectPhysicsComponents()` reflects `RigidBody` (`illusion.RigidBody`) and `Collider`
-  (`illusion.Collider`) for scene files; `PhysicsBody` is runtime state and is not saved.
+- `reflectPhysicsComponents()` reflects `RigidBody` (`illusion.RigidBody`), `Collider`
+  (`illusion.Collider`), `CharacterController` (`illusion.CharacterController`) and `Joint`
+  (`illusion.Joint`, with `connected` remapped on load) for scene files; `PhysicsBody`, `CharacterBody`
+  and `PhysicsJoint` are runtime state and are not saved.
 - `PhysicsWorld` is not thread-safe: call it from one thread, outside of World queries. The World must
-  outlive it; destroying it removes the `PhysicsBody` Components.
+  outlive it; destroying it removes the runtime Components.
 - Results are deterministic for the same inputs, independent of the number of Job System Workers.
 
 ## Sample

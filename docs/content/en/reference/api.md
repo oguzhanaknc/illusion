@@ -57,8 +57,8 @@ Open `build/api/index.html` in a browser.
 | `illusion/assets/AssetStreamer.hpp` | `AssetStreamer`, `AssetHandle`: asynchronous loading |
 | `illusion/assets/AssetCooker.hpp` | `cookAssets`: import a directory ahead of time |
 | `illusion/assets/Environment.hpp` | Equirectangular mapping, `ShIrradiance`, `makeSkyImage` |
-| `illusion/physics/PhysicsWorld.hpp` | `PhysicsWorld`: simulation, body control, raycasts, contact events |
-| `illusion/physics/PhysicsComponents.hpp` | `RigidBody`, `Collider`, `PhysicsBody` Components |
+| `illusion/physics/PhysicsWorld.hpp` | `PhysicsWorld`: simulation, body and character control, mesh and hull geometry, joints, raycasts, shape casts, overlaps, contact events |
+| `illusion/physics/PhysicsComponents.hpp` | `RigidBody`, `Collider`, `CharacterController`, `Joint` Components and their runtime state (`PhysicsBody`, `CharacterBody`, `PhysicsJoint`); `PhysicsMeshHandle` |
 | `illusion/audio/AudioWorld.hpp` | `AudioWorld`: clips, playback, one-shots, mixer buses, output; `AudioWorldDesc`, `AudioStats` |
 | `illusion/audio/AudioComponents.hpp` | `AudioSource`, `AudioListener`, `AudioPlayback` Components; `AudioBus`, `AudioAttenuation` |
 | `illusion/render/RenderDevice.hpp` | `RenderDevice`, `GpuInfo` (including bindless and multi-draw support): Vulkan device through NVRHI |

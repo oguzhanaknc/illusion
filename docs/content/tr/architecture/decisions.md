@@ -31,6 +31,7 @@ Record (ADR) olarak kaydedilir. Her kayıt bağlamı, kararı ve sonuçlarını 
 | [0022](https://github.com/oguzhanaknc/illusion/blob/main/docs/adr/0022-reflection-and-scene-files.md) | Kararlı adlarla Component reflection ve JSON sahne dosyaları |
 | [0023](https://github.com/oguzhanaknc/illusion/blob/main/docs/adr/0023-jolt-physics-integration.md) | Job System üzerinde Jolt Physics, ECS ile yönetilen cisimler ve sabit adım |
 | [0024](https://github.com/oguzhanaknc/illusion/blob/main/docs/adr/0024-audio-with-miniaudio.md) | miniaudio ile ses; durumunun sahibi olan bir ses thread'inde miksaj |
+| [0025](https://github.com/oguzhanaknc/illusion/blob/main/docs/adr/0025-physics-extensions.md) | Mesh ve hull geometrisi, karakterler, joint'ler ve şekil sorguları |
 
 Yeni bir karar önermek için `docs/adr/0000-template.md` dosyasını kopyalayın ve
 [katkıda bulunma rehberini](../contributing.md#architecture-decision-recordlar) izleyin.

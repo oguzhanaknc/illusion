@@ -31,6 +31,7 @@ records rather than user documentation.
 | [0022](https://github.com/oguzhanaknc/illusion/blob/main/docs/adr/0022-reflection-and-scene-files.md) | Component reflection with stable names and JSON scene files |
 | [0023](https://github.com/oguzhanaknc/illusion/blob/main/docs/adr/0023-jolt-physics-integration.md) | Jolt Physics on the Job System, ECS-driven bodies and a fixed step |
 | [0024](https://github.com/oguzhanaknc/illusion/blob/main/docs/adr/0024-audio-with-miniaudio.md) | Audio with miniaudio, mixed on an audio thread that owns its state |
+| [0025](https://github.com/oguzhanaknc/illusion/blob/main/docs/adr/0025-physics-extensions.md) | Mesh and hull geometry, characters, joints and shape queries |
 
 To propose a new decision, copy `docs/adr/0000-template.md` and follow the
 [contributing guide](../contributing.md#architecture-decision-records).
