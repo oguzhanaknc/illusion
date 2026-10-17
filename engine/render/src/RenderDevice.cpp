@@ -429,6 +429,11 @@ bool RenderDevice::Impl::createLogicalDevice()
     enabled.v12.shaderSampledImageArrayNonUniformIndexing =
         supported.v12.shaderSampledImageArrayNonUniformIndexing;
     enabled.v12.scalarBlockLayout = supported.v12.scalarBlockLayout;
+    // NVRHI's bindless descriptor tables are written while command buffers that bind them are pending.
+    enabled.v12.descriptorBindingSampledImageUpdateAfterBind =
+        supported.v12.descriptorBindingSampledImageUpdateAfterBind;
+    enabled.v12.descriptorBindingUpdateUnusedWhilePending =
+        supported.v12.descriptorBindingUpdateUnusedWhilePending;
     enabled.v11.shaderDrawParameters = VK_TRUE;
     enabled.core.features.samplerAnisotropy = supported.core.features.samplerAnisotropy;
     enabled.core.features.fillModeNonSolid = supported.core.features.fillModeNonSolid;
@@ -437,6 +442,23 @@ bool RenderDevice::Impl::createLogicalDevice()
     enabled.core.features.shaderInt16 = supported.core.features.shaderInt16;
     enabled.core.features.multiDrawIndirect = supported.core.features.multiDrawIndirect;
     enabled.core.features.drawIndirectFirstInstance = supported.core.features.drawIndirectFirstInstance;
+
+    VkPhysicalDeviceVulkan12Properties properties12 = detail::vkStruct<VkPhysicalDeviceVulkan12Properties>(
+        VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_2_PROPERTIES);
+    VkPhysicalDeviceProperties2 properties =
+        detail::vkStruct<VkPhysicalDeviceProperties2>(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PROPERTIES_2);
+    properties.pNext = &properties12;
+    d.vkGetPhysicalDeviceProperties2(physicalDevice, &properties);
+    gpu.bindless =
+        supported.v12.descriptorIndexing && supported.v12.runtimeDescriptorArray &&
+        supported.v12.descriptorBindingPartiallyBound &&
+        supported.v12.shaderSampledImageArrayNonUniformIndexing &&
+        supported.v12.descriptorBindingSampledImageUpdateAfterBind &&
+        supported.v12.descriptorBindingUpdateUnusedWhilePending &&
+        properties12.maxPerStageDescriptorUpdateAfterBindSampledImages >= kBindlessTextureCapacity &&
+        properties12.maxDescriptorSetUpdateAfterBindSampledImages >= kBindlessTextureCapacity;
+    gpu.multiDrawIndirect =
+        supported.core.features.multiDrawIndirect && supported.core.features.drawIndirectFirstInstance;
 
     const std::vector<std::string> available = availableDeviceExtensions(physicalDevice);
     if (!headless)

@@ -48,7 +48,7 @@ Open `build/api/index.html` in a browser.
 | `illusion/assets/Mesh.hpp` | `MeshData`, `Vertex`, procedural Meshes |
 | `illusion/assets/Model.hpp` | `ModelData`, `MaterialData`, `loadGltf` |
 | `illusion/assets/Environment.hpp` | Equirectangular mapping, `ShIrradiance`, `makeSkyImage` |
-| `illusion/render/RenderDevice.hpp` | `RenderDevice`, `GpuInfo`: Vulkan device through NVRHI |
+| `illusion/render/RenderDevice.hpp` | `RenderDevice`, `GpuInfo` (including bindless and multi-draw support): Vulkan device through NVRHI |
 | `illusion/render/Swapchain.hpp` | `Swapchain`: presentation to a window |
 | `illusion/render/DebugTriangle.hpp` | Diagnostic triangle renderer |
 | `illusion/render/RenderResources.hpp` | `RenderResources`: GPU Meshes, Textures, Materials, environments and their Handles |

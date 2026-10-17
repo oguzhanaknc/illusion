@@ -24,6 +24,7 @@ records rather than user documentation.
 | [0015](https://github.com/oguzhanaknc/illusion/blob/main/docs/adr/0015-cascaded-soft-shadows.md) | Cascaded shadow maps with PCSS for one directional light |
 | [0016](https://github.com/oguzhanaknc/illusion/blob/main/docs/adr/0016-hdr-post-processing.md) | HDR pipeline with depth prepass, GTAO, TAA, bloom and tonemapping |
 | [0017](https://github.com/oguzhanaknc/illusion/blob/main/docs/adr/0017-gpu-occlusion-culling-and-motion-vectors.md) | Two-phase GPU occlusion culling, indirect draws and per-object motion vectors |
+| [0018](https://github.com/oguzhanaknc/illusion/blob/main/docs/adr/0018-bindless-multi-draw.md) | Bindless materials, geometry pools and multi-draw indirect |
 
 To propose a new decision, copy `docs/adr/0000-template.md` and follow the
 [contributing guide](../contributing.md#architecture-decision-records).

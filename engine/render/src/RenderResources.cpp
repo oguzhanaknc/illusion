@@ -9,6 +9,7 @@
 #include <glm/gtc/packing.hpp>
 #include <nvrhi/utils.h>
 
+#include <algorithm>
 #include <array>
 #include <format>
 
@@ -54,6 +55,19 @@ struct RenderResources::Impl
     nvrhi::BindingLayoutHandle materialLayout;
     std::array<nvrhi::SamplerHandle, 9> samplers{}; // [wrapU * 3 + wrapV]
 
+    // Shared geometry pools (grown by copying), the material table and the bindless texture table.
+    nvrhi::BufferHandle vertexPool;
+    nvrhi::BufferHandle indexPool;
+    u32 vertexCount = 0;
+    u32 indexCount = 0;
+    nvrhi::BufferHandle materialTable;
+    u32 materialCapacity = 0;
+    std::vector<GpuMaterialRecord> records{1};
+    bool bindless = false;
+    nvrhi::BindingLayoutHandle bindlessLayout;
+    nvrhi::DescriptorTableHandle bindlessTextures;
+    u32 generation = 0;
+
     // Slot 0 of each vector is unused so that handle index 0 means "none".
     std::vector<GpuMesh> meshes{1};
     std::vector<nvrhi::TextureHandle> textures{1};
@@ -67,19 +81,78 @@ struct RenderResources::Impl
     TextureHandle white;
     TextureHandle flatNormal;
 
-    nvrhi::ISampler* sampler(TextureWrap u, TextureWrap v)
+    static u32 samplerIndex(TextureWrap u, TextureWrap v) noexcept
     {
-        nvrhi::SamplerHandle& slot = samplers[static_cast<usize>(u) * 3 + static_cast<usize>(v)];
-        if (!slot)
+        return static_cast<u32>(u) * 3 + static_cast<u32>(v);
+    }
+
+    void createSamplers()
+    {
+        for (u32 u = 0; u < 3; ++u)
         {
-            nvrhi::SamplerDesc desc;
-            desc.setAllFilters(true).setMaxAnisotropy(16.0f);
-            desc.addressU = addressOf(u);
-            desc.addressV = addressOf(v);
-            desc.addressW = nvrhi::SamplerAddressMode::Wrap;
-            slot = device->createSampler(desc);
+            for (u32 v = 0; v < 3; ++v)
+            {
+                nvrhi::SamplerDesc desc;
+                desc.setAllFilters(true).setMaxAnisotropy(16.0f);
+                desc.addressU = addressOf(static_cast<TextureWrap>(u));
+                desc.addressV = addressOf(static_cast<TextureWrap>(v));
+                desc.addressW = nvrhi::SamplerAddressMode::Wrap;
+                samplers[u * 3 + v] = device->createSampler(desc);
+            }
         }
-        return slot;
+    }
+
+    // Recreates `pool` with room for `required` elements of `stride` bytes, copying `used` elements.
+    void growPool(nvrhi::BufferHandle& pool, u32 used, u32 required, u32 stride, bool vertex,
+                  const char* name)
+    {
+        const u64 capacity = pool ? pool->getDesc().byteSize / stride : 0;
+        if (pool && required <= capacity)
+        {
+            return;
+        }
+        nvrhi::BufferDesc desc;
+        desc.byteSize =
+            static_cast<u64>(std::max<u64>(required, std::max<u64>(capacity * 2, 65536))) * stride;
+        desc.isVertexBuffer = vertex;
+        desc.isIndexBuffer = !vertex;
+        desc.debugName = name;
+        desc.enableAutomaticStateTracking(vertex ? nvrhi::ResourceStates::VertexBuffer
+                                                 : nvrhi::ResourceStates::IndexBuffer);
+        nvrhi::BufferHandle grown = device->createBuffer(desc);
+        if (pool && used > 0)
+        {
+            uploads->copyBuffer(grown, 0, pool, 0, static_cast<u64>(used) * stride);
+        }
+        pool = grown;
+        ++generation;
+    }
+
+    // Writes the material record of `index`, growing the table when needed.
+    void storeRecord(u32 index, const GpuMaterialRecord& record)
+    {
+        if (records.size() <= index)
+        {
+            records.resize(index + 1);
+        }
+        records[index] = record;
+        if (index >= materialCapacity)
+        {
+            materialCapacity = std::max(index + 1, std::max(materialCapacity * 2, 256u));
+            nvrhi::BufferDesc desc;
+            desc.byteSize = static_cast<u64>(materialCapacity) * sizeof(GpuMaterialRecord);
+            desc.structStride = sizeof(GpuMaterialRecord);
+            desc.debugName = "Material table";
+            desc.enableAutomaticStateTracking(nvrhi::ResourceStates::ShaderResource);
+            materialTable = device->createBuffer(desc);
+            uploads->writeBuffer(materialTable, records.data(), records.size() * sizeof(GpuMaterialRecord));
+            ++generation;
+        }
+        else
+        {
+            uploads->writeBuffer(materialTable, &record, sizeof(record),
+                                 static_cast<u64>(index) * sizeof(GpuMaterialRecord));
+        }
     }
 
     nvrhi::ITexture* texture(TextureHandle handle, TextureHandle fallback) const
@@ -95,6 +168,20 @@ RenderResources::RenderResources(RenderDevice& renderDevice)
     Impl& impl = *m_impl;
     impl.device = renderDevice.device();
     impl.uploads = impl.device->createCommandList();
+    impl.createSamplers();
+    impl.bindless = renderDevice.gpu().bindless;
+    if (impl.bindless)
+    {
+        nvrhi::BindlessLayoutDesc bindlessDesc;
+        bindlessDesc.visibility = nvrhi::ShaderType::Pixel;
+        bindlessDesc.firstSlot = 0;
+        bindlessDesc.maxCapacity = kBindlessTextureCapacity;
+        bindlessDesc.registerSpaces = {nvrhi::BindingLayoutItem::Texture_SRV(1)};
+        impl.bindlessLayout = impl.device->createBindlessLayout(bindlessDesc);
+        impl.bindlessTextures =
+            impl.bindlessLayout ? impl.device->createDescriptorTable(impl.bindlessLayout) : nullptr;
+        impl.bindless = impl.bindlessTextures != nullptr;
+    }
 
     nvrhi::BindingLayoutDesc layout;
     layout.visibility = nvrhi::ShaderType::Pixel;
@@ -129,30 +216,29 @@ MeshHandle RenderResources::createMesh(const MeshData& mesh, const char* debugNa
     ILL_PROFILE_SCOPE();
     ILL_CHECK(!mesh.vertices.empty() && !mesh.indices.empty() && !mesh.submeshes.empty(),
               "createMesh: empty mesh");
+    static_cast<void>(debugName); // meshes share the pools; names would apply to the whole pool
     Impl& impl = *m_impl;
-
-    nvrhi::BufferDesc vertexDesc;
-    vertexDesc.byteSize = mesh.vertices.size() * sizeof(Vertex);
-    vertexDesc.isVertexBuffer = true;
-    vertexDesc.debugName = std::format("{} vertices", debugName);
-    vertexDesc.enableAutomaticStateTracking(nvrhi::ResourceStates::VertexBuffer);
-    nvrhi::BufferDesc indexDesc;
-    indexDesc.byteSize = mesh.indices.size() * sizeof(u32);
-    indexDesc.isIndexBuffer = true;
-    indexDesc.debugName = std::format("{} indices", debugName);
-    indexDesc.enableAutomaticStateTracking(nvrhi::ResourceStates::IndexBuffer);
-
-    GpuMesh gpu;
-    gpu.vertexBuffer = impl.device->createBuffer(vertexDesc);
-    gpu.indexBuffer = impl.device->createBuffer(indexDesc);
-    gpu.submeshes = mesh.submeshes;
+    const auto vertices = static_cast<u32>(mesh.vertices.size());
+    const auto indices = static_cast<u32>(mesh.indices.size());
 
     impl.uploads->open();
-    impl.uploads->writeBuffer(gpu.vertexBuffer, mesh.vertices.data(), vertexDesc.byteSize);
-    impl.uploads->writeBuffer(gpu.indexBuffer, mesh.indices.data(), indexDesc.byteSize);
+    impl.growPool(impl.vertexPool, impl.vertexCount, impl.vertexCount + vertices, sizeof(Vertex), true,
+                  "Vertex pool");
+    impl.growPool(impl.indexPool, impl.indexCount, impl.indexCount + indices, sizeof(u32), false,
+                  "Index pool");
+    impl.uploads->writeBuffer(impl.vertexPool, mesh.vertices.data(), mesh.vertices.size() * sizeof(Vertex),
+                              static_cast<u64>(impl.vertexCount) * sizeof(Vertex));
+    impl.uploads->writeBuffer(impl.indexPool, mesh.indices.data(), mesh.indices.size() * sizeof(u32),
+                              static_cast<u64>(impl.indexCount) * sizeof(u32));
     impl.uploads->close();
     impl.device->executeCommandList(impl.uploads);
 
+    GpuMesh gpu;
+    gpu.vertexOffset = impl.vertexCount;
+    gpu.indexOffset = impl.indexCount;
+    gpu.submeshes = mesh.submeshes;
+    impl.vertexCount += vertices;
+    impl.indexCount += indices;
     impl.meshes.push_back(std::move(gpu));
     return MeshHandle{static_cast<u32>(impl.meshes.size() - 1)};
 }
@@ -183,7 +269,20 @@ TextureHandle RenderResources::createTexture(const Image& image, const char* deb
     impl.device->executeCommandList(impl.uploads);
 
     impl.textures.push_back(texture);
-    return TextureHandle{static_cast<u32>(impl.textures.size() - 1)};
+    const auto index = static_cast<u32>(impl.textures.size() - 1);
+    if (impl.bindless)
+    {
+        ILL_CHECK(index < kBindlessTextureCapacity, "too many textures for the bindless table");
+        if (impl.bindlessTextures->getCapacity() <= index)
+        {
+            impl.device->resizeDescriptorTable(
+                impl.bindlessTextures, std::min(std::max(index + 1, impl.bindlessTextures->getCapacity() * 2),
+                                                kBindlessTextureCapacity));
+        }
+        impl.device->writeDescriptorTable(impl.bindlessTextures,
+                                          nvrhi::BindingSetItem::Texture_SRV(index, texture));
+    }
+    return TextureHandle{index};
 }
 
 MaterialHandle RenderResources::createMaterial(const MaterialDesc& desc)
@@ -200,19 +299,33 @@ MaterialHandle RenderResources::createMaterial(const MaterialDesc& desc)
     constants.alphaCutoff = p.alphaMode == AlphaMode::Mask ? p.alphaCutoff : -1.0f;
 
     GpuMaterial material;
+    material.index = static_cast<u32>(impl.materials.size());
     material.alphaMode = p.alphaMode;
     material.doubleSided = p.doubleSided;
     material.constants = impl.device->createBuffer(
         nvrhi::utils::CreateStaticConstantBufferDesc(sizeof(GpuMaterialConstants), "Material constants")
             .setInitialState(nvrhi::ResourceStates::ConstantBuffer)
             .setKeepInitialState(true));
+    const TextureWrap wrapU = p.baseColorTexture.wrapU;
+    const TextureWrap wrapV = p.baseColorTexture.wrapV;
+    const auto textureIndex = [&](TextureHandle handle, TextureHandle fallback) {
+        return handle.index != 0 && handle.index < impl.textures.size() ? handle.index : fallback.index;
+    };
+    GpuMaterialRecord record{};
+    record.constants = constants;
+    record.baseColorTexture = textureIndex(desc.baseColor, impl.white);
+    record.metallicRoughnessTexture = textureIndex(desc.metallicRoughness, impl.white);
+    record.normalTexture = textureIndex(desc.normal, impl.flatNormal);
+    record.occlusionTexture = textureIndex(desc.occlusion, impl.white);
+    record.emissiveTexture = textureIndex(desc.emissive, impl.white);
+    record.sampler = Impl::samplerIndex(wrapU, wrapV);
+
     impl.uploads->open();
     impl.uploads->writeBuffer(material.constants, &constants, sizeof(constants));
+    impl.storeRecord(material.index, record);
     impl.uploads->close();
     impl.device->executeCommandList(impl.uploads);
 
-    const TextureWrap wrapU = p.baseColorTexture.wrapU;
-    const TextureWrap wrapV = p.baseColorTexture.wrapV;
     nvrhi::BindingSetDesc set;
     set.bindings = {
         nvrhi::BindingSetItem::ConstantBuffer(0, material.constants),
@@ -221,7 +334,7 @@ MaterialHandle RenderResources::createMaterial(const MaterialDesc& desc)
         nvrhi::BindingSetItem::Texture_SRV(2, impl.texture(desc.normal, impl.flatNormal)),
         nvrhi::BindingSetItem::Texture_SRV(3, impl.texture(desc.occlusion, impl.white)),
         nvrhi::BindingSetItem::Texture_SRV(4, impl.texture(desc.emissive, impl.white)),
-        nvrhi::BindingSetItem::Sampler(0, impl.sampler(wrapU, wrapV)),
+        nvrhi::BindingSetItem::Sampler(0, impl.samplers[Impl::samplerIndex(wrapU, wrapV)]),
     };
     material.bindingSet = impl.device->createBindingSet(set, impl.materialLayout);
 
@@ -364,6 +477,46 @@ const RenderResources::GpuEnvironment& RenderResources::environment(EnvironmentH
 nvrhi::ITexture* RenderResources::brdfLut() const noexcept
 {
     return m_impl->brdfLut;
+}
+
+nvrhi::IBuffer* RenderResources::vertexPool() const noexcept
+{
+    return m_impl->vertexPool;
+}
+
+nvrhi::IBuffer* RenderResources::indexPool() const noexcept
+{
+    return m_impl->indexPool;
+}
+
+nvrhi::IBuffer* RenderResources::materialTable() const noexcept
+{
+    return m_impl->materialTable;
+}
+
+nvrhi::ISampler* RenderResources::materialSampler(u32 index) const noexcept
+{
+    return m_impl->samplers[index];
+}
+
+bool RenderResources::bindless() const noexcept
+{
+    return m_impl->bindless;
+}
+
+nvrhi::IBindingLayout* RenderResources::bindlessLayout() const noexcept
+{
+    return m_impl->bindlessLayout;
+}
+
+nvrhi::IDescriptorTable* RenderResources::bindlessTextures() const noexcept
+{
+    return m_impl->bindlessTextures;
+}
+
+u32 RenderResources::generation() const noexcept
+{
+    return m_impl->generation;
 }
 
 nvrhi::IBindingLayout* RenderResources::materialBindingLayout() const noexcept

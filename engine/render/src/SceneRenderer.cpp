@@ -78,6 +78,7 @@ struct GpuInstance
     Mat4 world;
     Mat4 normalMatrix;
     Mat4 previousWorld;
+    u32 extra[4]; // [0]: material table index
 };
 
 // Bit 0: visible to the camera; bit 1 + c: casts a shadow into cascade c.
@@ -145,6 +146,16 @@ struct SceneRenderer::Impl
     nvrhi::ShaderHandle shadowFragmentShader;
     nvrhi::ShaderHandle prepassShader;
     nvrhi::ShaderHandle prepassMaskedShader;
+    // Bindless variants (material table + texture descriptor array, multi-draw indirect).
+    bool multiDrawIndirect = false;
+    nvrhi::ShaderHandle bindlessVertexShader;
+    nvrhi::ShaderHandle bindlessFragmentShader;
+    nvrhi::ShaderHandle bindlessPrepassShader;
+    nvrhi::ShaderHandle bindlessPrepassMaskedShader;
+    std::array<nvrhi::GraphicsPipelineHandle, 2> bindlessPipelines{}; // [doubleSided]
+    std::array<std::array<nvrhi::GraphicsPipelineHandle, 2>, 2>
+        bindlessPrepassPipelines{}; // [masked][doubleSided]
+    u32 resourceGeneration = ~0u;
     nvrhi::GraphicsPipelineHandle skyboxPipeline;
     nvrhi::SamplerHandle clampSampler;
     nvrhi::SamplerHandle shadowSampler;
@@ -278,6 +289,8 @@ bool SceneRenderer::Impl::initialize()
         nvrhi::BindingLayoutItem::Texture_SRV(4),          // shadow map
         nvrhi::BindingLayoutItem::Texture_SRV(5),          // screen-space ambient occlusion
         nvrhi::BindingLayoutItem::StructuredBuffer_SRV(6), // draw list
+        nvrhi::BindingLayoutItem::StructuredBuffer_SRV(7), // material table
+        nvrhi::BindingLayoutItem::Sampler(2).setSize(9),   // material samplers
         nvrhi::BindingLayoutItem::Sampler(0),
         nvrhi::BindingLayoutItem::Sampler(1), // shadow comparison
         // Push constants take a constant-buffer slot in NVRHI, so they cannot share b0 with the view.
@@ -369,6 +382,49 @@ bool SceneRenderer::Impl::initialize()
     if (!skyboxPipeline)
     {
         return false;
+    }
+    if (resources->bindless() && multiDrawIndirect)
+    {
+        bindlessVertexShader = createShader(device, nvrhi::ShaderType::Vertex,
+                                            shaders::forwardPbrBindlessVertex(), "ForwardPbr bindless VS");
+        bindlessFragmentShader =
+            createShader(device, nvrhi::ShaderType::Pixel, shaders::forwardPbrBindlessFragment(),
+                         "ForwardPbr bindless FS");
+        bindlessPrepassShader = createShader(device, nvrhi::ShaderType::Pixel,
+                                             shaders::prepassBindlessFragment(), "Prepass bindless FS");
+        bindlessPrepassMaskedShader =
+            createShader(device, nvrhi::ShaderType::Pixel, shaders::prepassMaskedBindlessFragment(),
+                         "Prepass masked bindless FS");
+        for (u32 doubleSided = 0; doubleSided < 2; ++doubleSided)
+        {
+            nvrhi::GraphicsPipelineDesc pipeline;
+            pipeline.primType = nvrhi::PrimitiveType::TriangleList;
+            pipeline.inputLayout = inputLayout;
+            pipeline.VS = bindlessVertexShader;
+            pipeline.PS = bindlessFragmentShader;
+            pipeline.bindingLayouts = {viewLayout, resources->bindlessLayout()};
+            pipeline.renderState.rasterState.setFrontCounterClockwise(true);
+            if (doubleSided != 0)
+            {
+                pipeline.renderState.rasterState.setCullNone();
+            }
+            else
+            {
+                pipeline.renderState.rasterState.setCullBack();
+            }
+            pipeline.renderState.depthStencilState.setDepthTestEnable(true)
+                .setDepthWriteEnable(false)
+                .setDepthFunc(nvrhi::ComparisonFunc::GreaterOrEqual);
+            bindlessPipelines[doubleSided] = device->createGraphicsPipeline(pipeline, info);
+            for (u32 masked = 0; masked < 2; ++masked)
+            {
+                nvrhi::GraphicsPipelineDesc prepass = pipeline;
+                prepass.PS = masked != 0 ? bindlessPrepassMaskedShader.Get() : bindlessPrepassShader.Get();
+                prepass.renderState.depthStencilState.setDepthWriteEnable(true);
+                bindlessPrepassPipelines[masked][doubleSided] =
+                    device->createGraphicsPipeline(prepass, prepassInfo);
+            }
+        }
     }
     ensureInstanceCapacity(1024);
     if (!post.initialize(device, desc.colorFormat) || !culling.initialize(device))
@@ -466,10 +522,16 @@ nvrhi::IBindingSet* SceneRenderer::Impl::viewSetFor(EnvironmentHandle environmen
             nvrhi::BindingSetItem::Texture_SRV(4, shadowMap),
             nvrhi::BindingSetItem::Texture_SRV(5, post.ambientOcclusion()),
             nvrhi::BindingSetItem::StructuredBuffer_SRV(6, culling.drawList()),
+            nvrhi::BindingSetItem::StructuredBuffer_SRV(7, resources->materialTable()),
             nvrhi::BindingSetItem::Sampler(0, clampSampler),
             nvrhi::BindingSetItem::Sampler(1, shadowSampler),
             nvrhi::BindingSetItem::PushConstants(1, sizeof(ForwardPush)),
         };
+        for (u32 i = 0; i < 9; ++i)
+        {
+            setDesc.bindings.push_back(
+                nvrhi::BindingSetItem::Sampler(2, resources->materialSampler(i)).setArrayElement(i));
+        }
         set = device->createBindingSet(setDesc, viewLayout);
     }
     return set;
@@ -565,14 +627,14 @@ void SceneRenderer::Impl::cull(World& world, const RenderView& view, JobSystem* 
             return;
         }
         const Vec3 offset = bounds.center - view.position;
-        items[count.fetch_add(1, std::memory_order_relaxed)] =
-            DrawItem{GpuInstance{matrix, glm::transpose(glm::inverse(matrix)), previous},
-                     mesh,
-                     material,
-                     renderer.submesh,
-                     passes,
-                     glm::dot(offset, offset),
-                     bounds};
+        items[count.fetch_add(1, std::memory_order_relaxed)] = DrawItem{
+            GpuInstance{matrix, glm::transpose(glm::inverse(matrix)), previous, {material->index, 0, 0, 0}},
+            mesh,
+            material,
+            renderer.submesh,
+            passes,
+            glm::dot(offset, offset),
+            bounds};
     };
     const auto tracked = [&](const Transform& transform, const MeshRenderer& renderer,
                              MotionHistory& history) {
@@ -714,9 +776,9 @@ void SceneRenderer::Impl::drawShadows(nvrhi::ICommandList* commandList, u32 casc
         // The material set is bound for opaque casters too: the pipeline layout includes it.
         state.bindings = {shadowSet, masked != nullptr ? masked->bindingSet : first.material->bindingSet};
         state.vertexBuffers = {
-            nvrhi::VertexBufferBinding().setBuffer(first.mesh->vertexBuffer).setSlot(0).setOffset(0)};
+            nvrhi::VertexBufferBinding().setBuffer(resources->vertexPool()).setSlot(0).setOffset(0)};
         state.indexBuffer =
-            nvrhi::IndexBufferBinding().setBuffer(first.mesh->indexBuffer).setFormat(nvrhi::Format::R32_UINT);
+            nvrhi::IndexBufferBinding().setBuffer(resources->indexPool()).setFormat(nvrhi::Format::R32_UINT);
         state.viewport.addViewportAndScissorRect(viewport);
         commandList->setGraphicsState(state);
         const ShadowPush push{instanceOffset + begin, cascade};
@@ -725,7 +787,8 @@ void SceneRenderer::Impl::drawShadows(nvrhi::ICommandList* commandList, u32 casc
         commandList->drawIndexed(nvrhi::DrawArguments()
                                      .setVertexCount(submesh.indexCount)
                                      .setInstanceCount(end - begin)
-                                     .setStartIndexLocation(submesh.indexOffset));
+                                     .setStartIndexLocation(first.mesh->indexOffset + submesh.indexOffset)
+                                     .setStartVertexLocation(first.mesh->vertexOffset));
         ++stats.shadowDrawCalls;
         begin = end;
     }
@@ -746,6 +809,7 @@ std::unique_ptr<SceneRenderer> SceneRenderer::create(RenderDevice& device, Rende
     impl.device = device.device();
     impl.resources = &resources;
     impl.desc = desc;
+    impl.multiDrawIndirect = device.gpu().multiDrawIndirect;
     if (!impl.initialize())
     {
         ILL_LOG_ERROR("Render", "SceneRenderer: pipeline creation failed");
@@ -817,7 +881,13 @@ void SceneRenderer::render(nvrhi::ICommandList* commandList, nvrhi::ITexture* co
     impl.cull(world, view, jobs);
     const u32 visibleCount = impl.stats.visible;
 
-    // Opaque and masked first, grouped by material and mesh; then blended back to front.
+    // Bindless rendering draws each pipeline's batches with one multi-draw; materials vary per instance.
+    const bool bindless = impl.desc.bindless && impl.resources->bindless() && impl.multiDrawIndirect;
+    const auto pipelineKey = [](const DrawItem& item) {
+        return (item.material->alphaMode == AlphaMode::Mask ? 2u : 0u) +
+               (item.material->doubleSided ? 1u : 0u);
+    };
+    // Opaque and masked first, grouped by material (or pipeline) and mesh; then blended back to front.
     std::sort(impl.cameraOrder.begin(), impl.cameraOrder.end(), [&](u32 a, u32 b) {
         const DrawItem& x = impl.items[a];
         const DrawItem& y = impl.items[b];
@@ -831,7 +901,11 @@ void SceneRenderer::render(nvrhi::ICommandList* commandList, nvrhi::ITexture* co
         {
             return x.distanceSquared > y.distanceSquared;
         }
-        if (x.material != y.material)
+        if (bindless && pipelineKey(x) != pipelineKey(y))
+        {
+            return pipelineKey(x) < pipelineKey(y);
+        }
+        if (!bindless && x.material != y.material)
         {
             return x.material < y.material;
         }
@@ -909,7 +983,9 @@ void SceneRenderer::render(nvrhi::ICommandList* commandList, nvrhi::ITexture* co
         while (end < opaqueCount)
         {
             const DrawItem& next = impl.items[impl.cameraOrder[end]];
-            if (next.material != first.material || next.mesh != first.mesh || next.submesh != first.submesh)
+            const bool sameState =
+                bindless ? pipelineKey(next) == pipelineKey(first) : next.material == first.material;
+            if (!sameState || next.mesh != first.mesh || next.submesh != first.submesh)
             {
                 break;
             }
@@ -917,7 +993,9 @@ void SceneRenderer::render(nvrhi::ICommandList* commandList, nvrhi::ITexture* co
         }
         const auto batch = static_cast<u32>(impl.cullBatches.size());
         const Submesh& submesh = first.mesh->submeshes[first.submesh];
-        impl.cullBatches.push_back(GpuCulling::Batch{submesh.indexCount, submesh.indexOffset});
+        impl.cullBatches.push_back(GpuCulling::Batch{submesh.indexCount,
+                                                     first.mesh->indexOffset + submesh.indexOffset,
+                                                     first.mesh->vertexOffset, begin});
         impl.batchStarts.push_back(begin);
         for (u32 i = begin; i < end; ++i)
         {
@@ -937,13 +1015,15 @@ void SceneRenderer::render(nvrhi::ICommandList* commandList, nvrhi::ITexture* co
     cullFrame.viewProjection = constants.unjitteredViewProjection;
     cullFrame.previousViewProjection = constants.previousViewProjection;
     cullFrame.occlusion = impl.desc.occlusionCulling;
+    cullFrame.firstInstanceOffsets = bindless;
     impl.culling.begin(commandList, impl.cullCandidates, impl.cullBatches, visibleCount - opaqueCount,
                        cullFrame);
     const u32 blendedSlotBase = 2 * opaqueCount;
     impl.culling.writeDrawList(commandList, blendedSlotBase, impl.blendedSlots);
-    if (impl.culling.takeBuffersChanged())
+    if (impl.culling.takeBuffersChanged() || impl.resourceGeneration != impl.resources->generation())
     {
         impl.viewSets.clear();
+        impl.resourceGeneration = impl.resources->generation();
     }
     nvrhi::IBindingSet* viewSet = impl.viewSetFor(environment);
 
@@ -981,11 +1061,19 @@ void SceneRenderer::render(nvrhi::ICommandList* commandList, nvrhi::ITexture* co
         nvrhi::GraphicsState state;
         state.pipeline = pipeline;
         state.framebuffer = target;
-        state.bindings = {viewSet, first.material->bindingSet};
+        if (bindless && indirect)
+        {
+            state.bindings = {viewSet, impl.resources->bindlessTextures()};
+        }
+        else
+        {
+            state.bindings = {viewSet, first.material->bindingSet};
+        }
         state.vertexBuffers = {
-            nvrhi::VertexBufferBinding().setBuffer(first.mesh->vertexBuffer).setSlot(0).setOffset(0)};
-        state.indexBuffer =
-            nvrhi::IndexBufferBinding().setBuffer(first.mesh->indexBuffer).setFormat(nvrhi::Format::R32_UINT);
+            nvrhi::VertexBufferBinding().setBuffer(impl.resources->vertexPool()).setSlot(0).setOffset(0)};
+        state.indexBuffer = nvrhi::IndexBufferBinding()
+                                .setBuffer(impl.resources->indexPool())
+                                .setFormat(nvrhi::Format::R32_UINT);
         state.viewport.addViewportAndScissorRect(viewport);
         if (indirect)
         {
@@ -995,25 +1083,44 @@ void SceneRenderer::render(nvrhi::ICommandList* commandList, nvrhi::ITexture* co
         const ForwardPush push{slot, flags};
         commandList->setPushConstants(&push, sizeof(push));
     };
-    // One indirect draw of an opaque batch's instances that survived culling in `phase`.
-    const auto drawCulled = [&](nvrhi::IGraphicsPipeline* pipeline, nvrhi::IFramebuffer* target, u32 batch,
-                                u32 phase, u32 flags) {
-        const u32 start = impl.batchStarts[batch];
-        setDrawState(pipeline, target, impl.items[impl.cameraOrder[start]], true,
-                     (phase == 1 ? 0u : impl.culling.phase2Offset()) + start, flags);
-        commandList->drawIndexedIndirect(impl.culling.argumentOffset(batch, phase));
-        ++impl.stats.drawCalls;
-    };
+    // Opaque batches are drawn in groups: with bindless rendering a group is every consecutive batch with
+    // the same pipeline, drawn by one multi-draw indirect call; otherwise each batch is its own group.
     const auto batchFirst = [&](u32 batch) -> const DrawItem& {
         return impl.items[impl.cameraOrder[impl.batchStarts[batch]]];
     };
     const auto batchCount = static_cast<u32>(impl.cullBatches.size());
-    const auto prepassPipeline = [&](u32 batch) {
-        const DrawItem& first = batchFirst(batch);
-        return impl
-            .prepassPipelines[first.material->alphaMode == AlphaMode::Mask ? 1 : 0]
-                             [first.material->doubleSided ? 1 : 0]
-            .Get();
+    const auto forEachGroup = [&](auto&& draw) {
+        for (u32 first = 0; first < batchCount;)
+        {
+            u32 last = first + 1;
+            while (bindless && last < batchCount &&
+                   pipelineKey(batchFirst(last)) == pipelineKey(batchFirst(first)))
+            {
+                ++last;
+            }
+            draw(first, last - first, batchFirst(first));
+            first = last;
+        }
+    };
+    const auto drawGroup = [&](nvrhi::IGraphicsPipeline* pipeline, nvrhi::IFramebuffer* target,
+                               u32 firstBatch, u32 count, u32 phase, u32 flags) {
+        const u32 start = impl.batchStarts[firstBatch];
+        // Single draws carry their draw-list offset in a push constant; multi-draws in each draw's
+        // first-instance field.
+        const u32 slot = bindless ? 0u : (phase == 1 ? 0u : impl.culling.phase2Offset()) + start;
+        setDrawState(pipeline, target, batchFirst(firstBatch), true, slot, flags);
+        commandList->drawIndexedIndirect(impl.culling.argumentOffset(firstBatch, phase), count);
+        ++impl.stats.drawCalls;
+    };
+    const auto prepassPipeline = [&](const DrawItem& first) {
+        const u32 masked = first.material->alphaMode == AlphaMode::Mask ? 1 : 0;
+        const u32 doubleSided = first.material->doubleSided ? 1 : 0;
+        return bindless ? impl.bindlessPrepassPipelines[masked][doubleSided].Get()
+                        : impl.prepassPipelines[masked][doubleSided].Get();
+    };
+    const auto shadingPipeline = [&](const DrawItem& first) {
+        const u32 doubleSided = first.material->doubleSided ? 1 : 0;
+        return bindless ? impl.bindlessPipelines[doubleSided].Get() : impl.pipelines[0][doubleSided].Get();
     };
 
     // Depth prepass in two culling phases: draw what last frame's depth does not hide, build a Hi-Z of
@@ -1022,18 +1129,16 @@ void SceneRenderer::render(nvrhi::ICommandList* commandList, nvrhi::ITexture* co
     commandList->clearDepthStencilTexture(impl.depth, nvrhi::AllSubresources, true, 0.0f, false, 0);
     commandList->clearTextureFloat(impl.motion, nvrhi::AllSubresources, nvrhi::Color(0.0f));
     impl.culling.cull(commandList, 1);
-    for (u32 batch = 0; batch < batchCount; ++batch)
-    {
-        drawCulled(prepassPipeline(batch), impl.prepassFramebuffer, batch, 1, 0);
-    }
+    forEachGroup([&](u32 first, u32 count, const DrawItem& item) {
+        drawGroup(prepassPipeline(item), impl.prepassFramebuffer, first, count, 1, 0);
+    });
     if (impl.desc.occlusionCulling)
     {
         impl.culling.buildHiZ(commandList);
         impl.culling.cull(commandList, 2);
-        for (u32 batch = 0; batch < batchCount; ++batch)
-        {
-            drawCulled(prepassPipeline(batch), impl.prepassFramebuffer, batch, 2, 0);
-        }
+        forEachGroup([&](u32 first, u32 count, const DrawItem& item) {
+            drawGroup(prepassPipeline(item), impl.prepassFramebuffer, first, count, 2, 0);
+        });
         impl.culling.buildHiZ(commandList);
     }
     commandList->endMarker();
@@ -1046,19 +1151,18 @@ void SceneRenderer::render(nvrhi::ICommandList* commandList, nvrhi::ITexture* co
     commandList->clearTextureFloat(impl.hdr, nvrhi::AllSubresources,
                                    nvrhi::Color(impl.desc.clearColor.r, impl.desc.clearColor.g,
                                                 impl.desc.clearColor.b, impl.desc.clearColor.a));
-    for (u32 batch = 0; batch < batchCount; ++batch)
-    {
-        const DrawItem& first = batchFirst(batch);
-        nvrhi::IGraphicsPipeline* pipeline = impl.pipelines[0][first.material->doubleSided ? 1 : 0];
-        drawCulled(pipeline, framebuffer, batch, 1, 1);
+    forEachGroup([&](u32 first, u32 count, const DrawItem& item) {
+        drawGroup(shadingPipeline(item), framebuffer, first, count, 1, 1);
         if (impl.desc.occlusionCulling)
         {
-            drawCulled(pipeline, framebuffer, batch, 2, 1);
+            drawGroup(shadingPipeline(item), framebuffer, first, count, 2, 1);
         }
-        const Submesh& submesh = first.mesh->submeshes[first.submesh];
+    });
+    for (u32 batch = 0; batch < batchCount; ++batch)
+    {
         const u32 instances =
             (batch + 1 < batchCount ? impl.batchStarts[batch + 1] : opaqueCount) - impl.batchStarts[batch];
-        impl.stats.triangles += static_cast<u64>(submesh.indexCount / 3) * instances;
+        impl.stats.triangles += static_cast<u64>(impl.cullBatches[batch].indexCount / 3) * instances;
     }
     // The sky after opaque geometry (covered pixels fail the depth test) and before blended geometry.
     if (drawBackground)
@@ -1083,7 +1187,8 @@ void SceneRenderer::render(nvrhi::ICommandList* commandList, nvrhi::ITexture* co
         const Submesh& submesh = item.mesh->submeshes[item.submesh];
         commandList->drawIndexed(nvrhi::DrawArguments()
                                      .setVertexCount(submesh.indexCount)
-                                     .setStartIndexLocation(submesh.indexOffset));
+                                     .setStartIndexLocation(item.mesh->indexOffset + submesh.indexOffset)
+                                     .setStartVertexLocation(item.mesh->vertexOffset));
         ++impl.stats.drawCalls;
         impl.stats.triangles += submesh.indexCount / 3;
     }
@@ -1136,6 +1241,11 @@ void SceneRenderer::setPostProcessSettings(const PostProcessSettings& settings) 
 {
     m_impl->desc.post = settings;
     m_impl->postDirty = true;
+}
+
+bool SceneRenderer::usesBindless() const noexcept
+{
+    return m_impl->desc.bindless && m_impl->resources->bindless() && m_impl->multiDrawIndirect;
 }
 
 bool SceneRenderer::occlusionCulling() const noexcept

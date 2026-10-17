@@ -11,6 +11,7 @@
 #include <doctest/doctest.h>
 #include <glm/gtc/packing.hpp>
 
+#include <algorithm>
 #include <cmath>
 #include <cstdlib>
 #include <cstring>
@@ -681,6 +682,89 @@ TEST_CASE("occlusion culling skips hidden objects without popping when they appe
         CHECK(renderer->readGpuDrawnInstances() == 101);
         renderScene(*device, *renderer, world, nullptr);
         CHECK(renderer->readGpuDrawnInstances() == 101);
+    }
+    device->waitIdle();
+    CHECK(device->validationErrorCount() == 0);
+}
+
+TEST_CASE("bindless multi-draw rendering matches per-material rendering")
+{
+    auto device = RenderDevice::create(headless());
+    REQUIRE(device != nullptr);
+    {
+        RenderResources resources(*device);
+        SceneRendererDesc desc = unormTarget();
+        desc.post.bloom.enabled = false;
+        desc.post.ambientOcclusion.enabled = false;
+        desc.ambient = Vec3(0.5f);
+        auto bindlessRenderer = SceneRenderer::create(*device, resources, desc);
+        desc.bindless = false;
+        auto classicRenderer = SceneRenderer::create(*device, resources, desc);
+        REQUIRE(bindlessRenderer != nullptr);
+        REQUIRE(classicRenderer != nullptr);
+
+        // Several materials on two meshes: colours, a texture, alpha masking and double-sided faces.
+        Image stripes = makeSolidImage(4, 4, Vec4(0.0f), ImageFormat::RGBA8Srgb);
+        for (u32 i = 0; i < 16; ++i)
+        {
+            const bool on = (i % 4) % 2 == 0;
+            std::memset(stripes.data.data() + i * 4, on ? 255 : 40, 3);
+            stripes.data[i * 4 + 3] = std::byte{static_cast<unsigned char>(on ? 255 : 0)};
+        }
+        const TextureHandle texture = resources.createTexture(stripes, "Stripes");
+        std::vector<MaterialHandle> materials;
+        for (int m = 0; m < 6; ++m)
+        {
+            MaterialDesc material;
+            material.parameters.baseColorFactor =
+                Vec4(0.2f + 0.15f * static_cast<f32>(m), 0.8f - 0.1f * static_cast<f32>(m), 0.3f, 1.0f);
+            material.parameters.metallicFactor = 0.0f;
+            if (m == 3)
+            {
+                material.baseColor = texture;
+            }
+            if (m == 4)
+            {
+                material.baseColor = texture;
+                material.parameters.alphaMode = AlphaMode::Mask;
+            }
+            material.parameters.doubleSided = m == 5;
+            materials.push_back(resources.createMaterial(material));
+        }
+        const MeshHandle cube = resources.createMesh(makeCube(0.5f), "Cube");
+        const MeshHandle sphere = resources.createMesh(makeSphere(0.3f, 24, 12), "Sphere");
+        World world;
+        world.create(Transform{}, DirectionalLight{});
+        for (int i = 0; i < 24; ++i)
+        {
+            Transform t;
+            t.position =
+                Vec3(-2.0f + 0.8f * static_cast<f32>(i % 6), -1.2f + 0.8f * static_cast<f32>(i / 6), -1.0f);
+            t.rotation = glm::angleAxis(0.3f * static_cast<f32>(i), glm::normalize(Vec3(1.0f, 1.0f, 0.0f)));
+            world.create(t, MeshRenderer{i % 2 == 0 ? cube : sphere, 0,
+                                         materials[static_cast<usize>(i) % materials.size()]});
+        }
+
+        const std::vector<u8> bindless = renderScene(*device, *bindlessRenderer, world, nullptr);
+        const u32 bindlessDraws = bindlessRenderer->stats().drawCalls;
+        const std::vector<u8> classic = renderScene(*device, *classicRenderer, world, nullptr);
+        const u32 classicDraws = classicRenderer->stats().drawCalls;
+        CHECK_FALSE(classicRenderer->usesBindless());
+        const GpuInfo& gpu = device->gpu();
+        CHECK(bindlessRenderer->usesBindless() == (gpu.bindless && gpu.multiDrawIndirect));
+        if (bindlessRenderer->usesBindless())
+        {
+            CHECK(bindlessDraws < classicDraws);
+        }
+        int maxDifference = 0;
+        int covered = 0;
+        for (usize i = 0; i < bindless.size(); ++i)
+        {
+            maxDifference = std::max(maxDifference, std::abs(int(bindless[i]) - int(classic[i])));
+            covered += i % 4 == 0 && bindless[i] > 0 ? 1 : 0;
+        }
+        CHECK(maxDifference <= 2);
+        CHECK(covered > 500); // the scene is actually drawn
     }
     device->waitIdle();
     CHECK(device->validationErrorCount() == 0);

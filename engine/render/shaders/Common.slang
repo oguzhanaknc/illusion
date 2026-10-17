@@ -29,6 +29,7 @@ struct InstanceData
     float4x4 world;
     float4x4 normalMatrix;
     float4x4 previousWorld; // world matrix of the previous frame, for motion vectors
+    uint4 extra;            // x: material table index
 };
 
 struct ViewConstants

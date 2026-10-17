@@ -8,8 +8,8 @@ Headers: `#include <illusion/render/RenderDevice.hpp>`, `<illusion/render/Swapch
 
 !!! note "In progress"
     The scene renderer draws Meshes with PBR Materials, direct and image-based lighting, soft shadows,
-    ambient occlusion, post-processing and GPU occlusion culling. Bindless resources and multi-draw
-    indirect follow in the last step of the renderer milestone (see the roadmap).
+    ambient occlusion, post-processing, GPU occlusion culling and bindless multi-draw rendering. The
+    asset pipeline with streaming comes next (see the roadmap).
 
 ## Requirements
 
@@ -169,6 +169,34 @@ ILL_LOG_INFO("Game", "{} of {} opaque instances drawn", renderer->readGpuDrawnIn
 - Occlusion culling pays off with many objects and real occluders (buildings, terrain). For scenes of
   a few large objects, `setOcclusionCulling(false)` saves the depth-pyramid passes.
 - Blended Meshes and shadow casters are culled against the frustum only.
+
+### Bindless rendering
+
+On GPUs that support it, the renderer draws all opaque Meshes with a handful of calls:
+
+- All Meshes share one vertex pool and one index pool, so switching Meshes needs no new buffers.
+- All Materials are records in one table and all Textures sit in one bindless descriptor array, so a
+  draw can mix Materials: each instance names its own.
+- Batches with the same Pipeline (opaque or alpha-masked, single- or double-sided) are drawn by one
+  multi-draw indirect call per pass.
+
+```cpp
+const illusion::GpuInfo& gpu = device->gpu();
+ILL_LOG_INFO("Game", "bindless: {}, multi-draw indirect: {}", gpu.bindless, gpu.multiDrawIndirect);
+
+illusion::SceneRendererDesc desc;
+desc.bindless = true; // the default; set false to force the per-material path
+auto renderer = illusion::SceneRenderer::create(*device, resources, desc);
+// After the first render():
+ILL_LOG_INFO("Game", "rendering bindless: {}", renderer->usesBindless());
+```
+
+- It needs descriptor indexing and multi-draw indirect (`GpuInfo::bindless`, `GpuInfo::multiDrawIndirect`),
+  available on current NVIDIA, AMD and Intel drivers and in Mesa. Elsewhere, or with
+  `SceneRendererDesc::bindless = false`, each batch is drawn with its Material's bindings; the image is
+  the same.
+- Up to `kBindlessTextureCapacity` (16384) Textures can be used.
+- Blended Meshes and shadow casters are drawn per batch in both modes.
 
 ### Shadows
 

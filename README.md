@@ -23,7 +23,8 @@ designed to ship commercial games on Steam and similar stores.
   at build time; GPU tests run on Mesa lavapipe in CI.
 - glTF 2.0 import and a forward PBR renderer driven by the ECS: reversed-Z, parallel frustum culling,
   instanced draws, image-based lighting from HDRIs, cascaded soft shadows (CSM + PCSS), GTAO, bloom,
-  ACES tonemapping, optional TAA with per-object motion vectors and two-phase GPU occlusion culling.
+  ACES tonemapping, optional TAA with per-object motion vectors, two-phase GPU occlusion culling and
+  bindless multi-draw indirect rendering.
 - No per-frame heap allocations: arenas, pools and an inline type-erased callable.
 - Tracy profiler integration and benchmark tests with performance budgets in CI.
 - CI on Windows (MSVC, clang-cl), Linux (GCC, Clang, ASan/UBSan, TSan) and macOS (Apple Clang).

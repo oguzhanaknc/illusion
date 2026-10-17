@@ -33,7 +33,7 @@ ADRs for its significant decisions. Items marked ✅ are done.
 - ✅ Action-mapping layer (button/axis/vector actions), rebinding capture, text persistence, per-device glyphs
 - `input_viewer` sample for manual verification with real controllers
 
-## M3 — Renderer core
+## M3 — Renderer core ✅
 
 - M3a: ✅ glTF 2.0 import (meshes, materials, textures), forward PBR, reversed-Z, parallel frustum culling,
   instancing, `gltf_viewer` sample (ADR 0013)
@@ -45,8 +45,8 @@ ADRs for its significant decisions. Items marked ✅ are done.
   (camera reprojection, variance clipping) (ADR 0016)
 - M3e: ✅ Two-phase GPU occlusion culling with indirect draws, per-object motion vectors for TAA, GPU
   frame-time benchmarks (ADR 0017)
-- M3f: Bindless resources (mesh and texture pools, descriptor indexing) and multi-draw indirect where
-  supported
+- M3f: ✅ Bindless materials and textures, shared geometry pools, multi-draw indirect where supported
+  (ADR 0018)
 
 ## M4 — Assets and streaming
 

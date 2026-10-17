@@ -29,13 +29,18 @@ public:
     struct Batch
     {
         u32 indexCount;
-        u32 firstIndex;
+        u32 firstIndex;   // in the index pool
+        u32 vertexOffset; // added to every index (the mesh's place in the vertex pool)
+        u32 start;        // first draw-list slot of the batch within a phase region
     };
     struct Frame
     {
         Mat4 viewProjection;         // unjittered
         Mat4 previousViewProjection; // unjittered
         bool occlusion = true;
+        // Multi-draw: each batch's draw-list offset goes into its first-instance field instead of a push
+        // constant.
+        bool firstInstanceOffsets = false;
     };
 
     bool initialize(nvrhi::IDevice* device);

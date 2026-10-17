@@ -202,6 +202,11 @@ void GpuCulling::begin(nvrhi::ICommandList* commands, std::span<const Candidate>
             u32* arguments = m_argumentScratch.data() + (static_cast<usize>(phase) * m_batchCount + b) * 5;
             arguments[0] = batches[b].indexCount;
             arguments[2] = batches[b].firstIndex;
+            arguments[3] = batches[b].vertexOffset;
+            if (frame.firstInstanceOffsets)
+            {
+                arguments[4] = (phase == 0 ? 0u : m_candidateCount) + batches[b].start;
+            }
         }
     }
     commands->writeBuffer(m_arguments, m_argumentScratch.data(), m_argumentScratch.size() * sizeof(u32));
