@@ -33,8 +33,8 @@ struct InstanceData
 struct ViewConstants
 {
     float4x4 viewProjection;
-    float4 cameraPosition; // xyz; w: exposure
-    float4 output;         // x: 1 if the shader must encode sRGB itself
+    float4 cameraPosition; // xyz
+    float4 effects;        // x: 1 if screen-space ambient occlusion is applied
     uint directionalCount;
     uint pointCount;
     uint2 padding;
@@ -64,26 +64,4 @@ float3 shIrradiance(float4 sh[9], float3 n)
     e += sh[7].rgb * (1.092548 * n.x * n.z);
     e += sh[8].rgb * (0.546274 * (n.x * n.x - n.y * n.y));
     return max(e, 0.0);
-}
-
-float3 tonemapAces(float3 x)
-{
-    // Narkowicz 2015 fit of the ACES filmic curve.
-    return saturate((x * (2.51 * x + 0.03)) / (x * (2.43 * x + 0.59) + 0.14));
-}
-
-float3 linearToSrgb(float3 c)
-{
-    return select(c <= 0.0031308, c * 12.92, 1.055 * pow(c, 1.0 / 2.4) - 0.055);
-}
-
-// Exposure, tonemapping and (for UNORM targets) sRGB encoding.
-float3 finalColor(ViewConstants view, float3 color)
-{
-    float3 mapped = tonemapAces(color * view.cameraPosition.w);
-    if (view.output.x > 0.5)
-    {
-        mapped = linearToSrgb(mapped);
-    }
-    return mapped;
 }

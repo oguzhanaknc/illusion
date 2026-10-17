@@ -41,8 +41,10 @@ ADRs for its significant decisions. Items marked ✅ are done.
   irradiance, multiple-scattering split sum, `SkyLight`, procedural sky (ADR 0014)
 - M3c: ✅ CSM + PCSS soft shadows: up to 4 stable, texel-snapped cascades, per-pass culling masks,
   alpha-masked casters, blocker search sized by the light's angular diameter (ADR 0015)
-- M3d: HDR pipeline, GTAO, bloom, tonemapping, optional TAA
-- M3e: Bindless resources, GPU-driven draw submission where supported, occlusion culling
+- M3d: ✅ HDR pipeline with depth prepass, GTAO, energy-preserving bloom, ACES tonemapping, optional TAA
+  (camera reprojection, variance clipping) (ADR 0016)
+- M3e: Bindless resources, GPU-driven draw submission where supported, occlusion culling, per-object
+  motion vectors for TAA
 - Render benchmarks with frame-time budgets
 
 ## M4 — Assets and streaming

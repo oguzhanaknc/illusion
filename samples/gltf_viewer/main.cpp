@@ -1,11 +1,11 @@
 // gltf_viewer: renders a glTF model (or a PBR test scene) with an orbit camera.
 //
-// Usage: illusion_gltf_viewer [path/to/model.gltf|.glb] [--environment sky.hdr] [--frames N]
+// Usage: illusion_gltf_viewer [path/to/model.gltf|.glb] [--environment sky.hdr] [--taa] [--frames N]
 //                             [--screenshot out.png]
 //   Without a model, a grid of spheres with varying metallic (x) and roughness (y) is shown.
 //   Orbit: left mouse drag or right stick. Zoom: mouse wheel or triggers. Escape quits.
 //   --environment lights the scene with an equirectangular HDR image (for example from polyhaven.com);
-//   without it, a procedural sky is used.
+//   without it, a procedural sky is used. --taa turns on temporal anti-aliasing.
 //   --screenshot renders the final view offscreen at 1280x720 and saves it as PNG.
 
 #include <illusion/assets/Environment.hpp>
@@ -132,6 +132,7 @@ int main(int argc, char** argv)
     std::string modelPath;
     std::string screenshotPath;
     std::string environmentPath;
+    bool temporalAntiAliasing = false;
     u64 frameLimit = 0;
     for (int i = 1; i < argc; ++i)
     {
@@ -144,6 +145,10 @@ int main(int argc, char** argv)
         else if (arg == "--screenshot" && i + 1 < argc)
         {
             screenshotPath = argv[++i];
+        }
+        else if (arg == "--taa")
+        {
+            temporalAntiAliasing = true;
         }
         else if (arg == "--environment" && i + 1 < argc)
         {
@@ -179,6 +184,7 @@ int main(int argc, char** argv)
     RenderResources resources(*device);
     SceneRendererDesc rendererDesc;
     rendererDesc.colorFormat = swapchain->format();
+    rendererDesc.post.temporalAntiAliasing.enabled = temporalAntiAliasing;
     auto renderer = SceneRenderer::create(*device, resources, rendererDesc);
     if (!renderer)
     {

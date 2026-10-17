@@ -8,9 +8,9 @@ list'leri ile kaydeder.
 Header'lar: `#include <illusion/render/RenderDevice.hpp>`, `<illusion/render/Swapchain.hpp>`
 
 !!! note "Geliştirme sürüyor"
-    Sahne renderer'ı Mesh'leri PBR Material'ler, doğrudan ışıklar, görüntü tabanlı aydınlatma ve yumuşak
-    gölgelerle çizer. Ambient occlusion ve post-processing renderer milestone'unun sonraki adımlarında
-    gelecek (yol haritasına bakın).
+    Sahne renderer'ı Mesh'leri PBR Material'ler, doğrudan ve görüntü tabanlı aydınlatma, yumuşak
+    gölgeler, ambient occlusion ve post-processing ile çizer. Bindless kaynaklar, GPU-driven gönderim
+    ve occlusion culling renderer milestone'unun son adımında gelecek (yol haritasına bakın).
 
 ## Gereksinimler
 
@@ -213,13 +213,48 @@ world.create(orientation, illusion::SkyLight{environment, 1.0f, true});
   metalness değeri ne olursa olsun arka planla aynı görünür (GPU test'lerindeki "white furnace"
   testi).
 
+### HDR ve post-processing
+
+Renderer, sahneyi dahili bir HDR görüntüye çizer ve her kareyi post-processing ile bitirir:
+
+1. Opak ve alpha-mask'li Mesh'ler için bir depth prepass; bu, gölgelendirmedeki overdraw'ı da ortadan
+   kaldırır.
+2. **Ambient occlusion** (GTAO), depth buffer'dan hesaplanır ve kıvrımlarda ve temas noktalarında
+   dolaylı ışığı karartır.
+3. Gölgelendirme, gökyüzü, ardından blend Mesh'ler.
+4. **Temporal anti-aliasing** (isteğe bağlı), kamerayı her karede bir pikselin küçük bir kesri kadar
+   kaydırıp kareleri biriktirerek kenarları ve yumuşak gölgelerin gürültüsünü yumuşatır.
+5. **Bloom**, parlak piksellerden ışığı çevreye yayar.
+6. Pozlama (`Camera::exposure`), ACES tonemapping ve UNORM hedefler için sRGB kodlaması;
+   sonuç `render()`'a verilen hedefe yazılır.
+
+```cpp
+illusion::PostProcessSettings post = renderer->postProcessSettings();
+post.ambientOcclusion.radius = 1.0f;
+post.bloom.intensity = 0.06f;
+post.temporalAntiAliasing.enabled = true;
+renderer->setPostProcessSettings(post);
+
+// After a camera cut, start the TAA history again so the old view does not smear into the new one.
+renderer->resetTemporalHistory();
+```
+
+- `SceneRendererDesc::clearColor` bir radiance değeridir: diğer her şey gibi pozlama ve tonemapping'den
+  geçer.
+- Bloom enerjiyi korur: ışık eklemek yerine görüntünün `bloom.intensity` kadarını bulanık kopyasıyla
+  değiştirir.
+- TAA varsayılan olarak kapalıdır. Yalnızca kamera hareketiyle yeniden izdüşüm yapar; bu yüzden hızlı
+  hareket eden nesneler hafif bir iz bırakabilir. Nesne başına hareket vektörleri gelene kadar en iyi
+  sonucu yavaş sahnelerde ve sabit çekimlerde verir.
+- `stats().drawCalls`, hem depth prepass hem de gölgelendirme draw call'larını sayar.
+
 ### glTF görüntüleyici
 
 `illusion_gltf_viewer` bir modeli yörünge kamerasıyla gösterir (döndürmek için sol fare sürükleme veya
 sağ çubuk, yakınlaştırmak için fare tekerleği veya tetikler). Model verilmezse, metallic değeri soldan
 sağa artan ve roughness değeri yukarıdan aşağıya azalan bir küre ızgarası gösterir. `--environment`,
-sahneyi yerleşik prosedürel gökyüzü yerine bir HDR dosyasıyla aydınlatır. `--screenshot` son görüntüyü
-1280x720 PNG olarak kaydeder.
+sahneyi yerleşik prosedürel gökyüzü yerine bir HDR dosyasıyla aydınlatır; `--taa` temporal
+anti-aliasing'i açar. `--screenshot` son görüntüyü 1280x720 PNG olarak kaydeder.
 
 ```bash
 ./build/linux-clang/samples/Debug/illusion_gltf_viewer path/to/model.glb

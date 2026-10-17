@@ -1,7 +1,8 @@
 // Forward PBR shading (glTF metallic-roughness): Cook-Torrance GGX specular with height-correlated
 // Smith visibility and Schlick Fresnel, Lambert diffuse, directional and point lights, image-based
 // lighting (SH irradiance + prefiltered specular cube map + split-sum BRDF table with multiple-scattering
-// compensation), cascaded PCSS shadows for one directional light, exposure and ACES tonemapping.
+// compensation), screen-space ambient occlusion on indirect light and cascaded PCSS shadows for one
+// directional light. Writes linear HDR radiance; exposure and tonemapping happen in Tonemap.slang.
 // Must match the C++ layouts in SceneRenderer.cpp and RenderResources.cpp.
 
 #include "Common.slang"
@@ -9,6 +10,7 @@
 struct PushConstants
 {
     uint instanceOffset;
+    uint flags; // bit 0: apply screen-space ambient occlusion (off for blended surfaces)
 };
 
 struct MaterialConstants
@@ -25,6 +27,7 @@ ConstantBuffer<ViewConstants> g_view : register(b0, space0);
 StructuredBuffer<InstanceData> g_instances : register(t0, space0);
 TextureCube g_specularCube : register(t1, space0);
 Texture2D g_brdfLut : register(t2, space0);
+Texture2D<float> g_ambientOcclusion : register(t5, space0);
 SamplerState g_clampSampler : register(s0, space0);
 [[vk::push_constant]] ConstantBuffer<PushConstants> g_push;
 
@@ -148,8 +151,9 @@ float3 surfaceNormal(VertexOutput input, bool frontFace)
     return normalize(t * sampled.x + b * sampled.y + n * sampled.z);
 }
 
-// Image-based lighting (Fdez-Aguera 2019 multiple-scattering split sum).
-float3 environmentLighting(Surface surface, float roughness)
+// Image-based lighting (Fdez-Aguera 2019 multiple-scattering split sum). `occlusion` darkens diffuse
+// light directly and specular light through the specular-occlusion fit of Lagarde and de Rousiers 2014.
+float3 environmentLighting(Surface surface, float roughness, float occlusion)
 {
     const float nDotV = max(dot(surface.normal, surface.view), 1e-4);
     const float2 brdf = g_brdfLut.SampleLevel(g_clampSampler, float2(nDotV, roughness), 0.0).xy;
@@ -165,7 +169,10 @@ float3 environmentLighting(Surface surface, float roughness)
     const float3 radiance =
         g_specularCube.SampleLevel(g_clampSampler, mul(toEnvironment, reflected), roughness * g_view.sky.y).rgb *
         g_view.sky.x;
-    return singleScatter * radiance + (multiScatter * multiScatterEnergy + diffuseWeight) * irradiance;
+    const float specularOcclusion =
+        saturate(pow(nDotV + occlusion, exp2(-16.0 * roughness - 1.0)) - 1.0 + occlusion);
+    return singleScatter * radiance * specularOcclusion +
+           (multiScatter * multiScatterEnergy + diffuseWeight) * irradiance * occlusion;
 }
 
 [shader("fragment")]
@@ -189,7 +196,12 @@ float4 fragmentMain(VertexOutput input, bool frontFace: SV_IsFrontFace) : SV_Tar
     surface.normal = surfaceNormal(input, frontFace);
     surface.view = normalize(g_view.cameraPosition.xyz - input.worldPosition);
 
-    float3 color = environmentLighting(surface, roughness) * occlusion;
+    float ambientOcclusion = occlusion;
+    if ((g_push.flags & 1u) != 0u && g_view.effects.x > 0.5)
+    {
+        ambientOcclusion *= g_ambientOcclusion.Load(int3(int2(input.position.xy), 0));
+    }
+    float3 color = environmentLighting(surface, roughness, ambientOcclusion);
     const uint shadowedLight = uint(g_view.shadow.y);
     for (uint i = 0; i < g_view.directionalCount; ++i)
     {
@@ -219,5 +231,16 @@ float4 fragmentMain(VertexOutput input, bool frontFace: SV_IsFrontFace) : SV_Tar
     }
     color += emissive;
 
-    return float4(finalColor(g_view, color), baseColor.a);
+    return float4(color, baseColor.a);
+}
+
+// Depth prepass for alpha-masked materials (opaque ones use no fragment shader).
+[shader("fragment")]
+void prepassMaskedMain(VertexOutput input)
+{
+    const float alpha = g_baseColorTexture.Sample(g_sampler, input.uv).a * g_material.baseColorFactor.a;
+    if (alpha < g_material.alphaCutoff)
+    {
+        discard;
+    }
 }

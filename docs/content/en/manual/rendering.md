@@ -7,9 +7,9 @@ physically based materials. It is built on [NVRHI](https://github.com/NVIDIA-RTX
 Headers: `#include <illusion/render/RenderDevice.hpp>`, `<illusion/render/Swapchain.hpp>`
 
 !!! note "In progress"
-    The scene renderer draws Meshes with PBR Materials, direct lights, image-based lighting and soft
-    shadows. Ambient occlusion and post-processing follow in later steps of the renderer milestone (see
-    the roadmap).
+    The scene renderer draws Meshes with PBR Materials, direct and image-based lighting, soft shadows,
+    ambient occlusion and post-processing. Bindless resources, GPU-driven submission and occlusion
+    culling follow in the last step of the renderer milestone (see the roadmap).
 
 ## Requirements
 
@@ -206,13 +206,45 @@ world.create(orientation, illusion::SkyLight{environment, 1.0f, true});
 - The shading is energy-conserving: in a uniform white environment, every white Material looks like the
   background, whatever its roughness or metalness (the "white furnace" test in the GPU tests).
 
+### HDR and post-processing
+
+The renderer shades into an internal HDR image and finishes each frame with post-processing:
+
+1. A depth prepass for opaque and alpha-masked Meshes, which also removes overdraw from shading.
+2. **Ambient occlusion** (GTAO) from the depth buffer darkens indirect light in creases and contacts.
+3. Shading, the sky, then blended Meshes.
+4. **Temporal anti-aliasing** (optional) smooths edges and the noise of soft shadows by jittering the
+   camera by a fraction of a pixel every frame and accumulating frames.
+5. **Bloom** spreads light from bright pixels.
+6. Exposure (`Camera::exposure`), ACES tonemapping and, for UNORM targets, sRGB encoding into the
+   target passed to `render()`.
+
+```cpp
+illusion::PostProcessSettings post = renderer->postProcessSettings();
+post.ambientOcclusion.radius = 1.0f;
+post.bloom.intensity = 0.06f;
+post.temporalAntiAliasing.enabled = true;
+renderer->setPostProcessSettings(post);
+
+// After a camera cut, start the TAA history again so the old view does not smear into the new one.
+renderer->resetTemporalHistory();
+```
+
+- `SceneRendererDesc::clearColor` is radiance: it goes through exposure and tonemapping like
+  everything else.
+- Bloom preserves energy: it replaces `bloom.intensity` of the image with its blurred copy instead of
+  adding light.
+- TAA is off by default. It reprojects using camera motion only, so fast-moving objects can leave a
+  faint trail; it works best for slow scenes and still shots until per-object motion vectors arrive.
+- `stats().drawCalls` counts both the depth prepass and shading draws.
+
 ### The glTF viewer
 
 `illusion_gltf_viewer` shows a model with an orbit camera (left mouse drag or right stick to orbit,
 mouse wheel or triggers to zoom). Without a model it shows a grid of spheres with increasing metallic
 (left to right) and decreasing roughness (top to bottom). `--environment` lights the scene with an
-HDR file instead of the built-in procedural sky. `--screenshot` saves the final view as a 1280x720
-PNG.
+HDR file instead of the built-in procedural sky, and `--taa` turns on temporal anti-aliasing.
+`--screenshot` saves the final view as a 1280x720 PNG.
 
 ```bash
 ./build/linux-clang/samples/Debug/illusion_gltf_viewer path/to/model.glb
