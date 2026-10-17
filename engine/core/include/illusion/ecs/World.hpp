@@ -186,6 +186,35 @@ public:
     /// Destroys every entity. Outstanding handles become stale.
     void clear();
 
+    /// @name Type-erased access
+    /// For serialization, the editor and tools, which work with ComponentIds instead of C++ types.
+    /// @{
+
+    /// Replaces @p out with every live entity, ordered by index.
+    void entities(std::vector<Entity>& out) const;
+
+    /// Component types of @p entity (sorted ids, tags included). Invalidated by structural changes.
+    [[nodiscard]] std::span<const ComponentId> componentsOf(Entity entity) const;
+
+    /// Returns the component @p id of @p entity, or nullptr if it has none (or @p id is a tag).
+    /// Invalidated by structural changes.
+    [[nodiscard]] void* componentData(Entity entity, ComponentId id) noexcept;
+
+    /// @copydoc componentData
+    [[nodiscard]] const void* componentData(Entity entity, ComponentId id) const noexcept;
+
+    /// Adds a default-constructed component @p id (the type must be default constructible) and
+    /// returns it (nullptr for tags). The entity must not already have it.
+    void* emplaceDefault(Entity entity, ComponentId id);
+
+    /// Removes component @p id. Returns false if the entity did not have it.
+    bool remove(Entity entity, ComponentId id);
+
+    /// The registry whose ids this world uses.
+    [[nodiscard]] const ComponentRegistry& registry() const noexcept { return m_registry; }
+
+    /// @}
+
     /// Number of live entities.
     [[nodiscard]] u32 aliveCount() const noexcept { return m_aliveCount; }
 

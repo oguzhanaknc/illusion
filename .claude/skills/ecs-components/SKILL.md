@@ -30,6 +30,10 @@ Checklist:
 - [ ] Alignment ≤ 64. Size well below 16 KiB (a chunk must hold at least one row; aim for many).
 - [ ] Prefer small, focused components. Split hot and cold data into separate components.
 - [ ] Types used as ECS components in shared engine code belong in a public header of their module.
+- [ ] Saved in scenes? Reflect it at startup with a stable, prefixed name and every persistent field
+      (`reflect<T>("module.Name").field("name", &T::member)`); add it to the module's `reflect*Components()`
+      function and to a scene round-trip test. Bump the reflection version when the meaning of saved data
+      changes. Enum fields need an `EnumReflection` specialization declared before use.
 
 ## Systems (for now: free functions)
 

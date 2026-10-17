@@ -1,8 +1,12 @@
 #include "Budget.hpp"
 
 #include <illusion/ecs/CommandBuffer.hpp>
+#include <illusion/ecs/Reflection.hpp>
+#include <illusion/ecs/SceneSerializer.hpp>
+#include <illusion/ecs/Transform.hpp>
 #include <illusion/ecs/World.hpp>
 
+#include <string>
 #include <vector>
 
 using namespace illusion;
@@ -144,5 +148,28 @@ ILL_BENCHMARK("ecs/command-buffer", 250.0)
             commands.remove<Health>(e);
         }
         commands.apply(world);
+    });
+}
+
+ILL_BENCHMARK("ecs/scene", 5000.0)
+{
+    reflectCoreComponents();
+    World world;
+    constexpr u32 kSceneEntities = 10000;
+    for (u32 i = 0; i < kSceneEntities; ++i)
+    {
+        Transform transform;
+        transform.position = Vec3(static_cast<f32>(i), 0.5f, -2.25f);
+        world.create(transform);
+    }
+    std::string json;
+    bench.batch(kSceneEntities).unit("entity").run("save a Transform scene", [&] {
+        json = saveScene(world).json;
+        ankerl::nanobench::doNotOptimizeAway(json);
+    });
+    bench.batch(kSceneEntities).unit("entity").run("load a Transform scene", [&] {
+        World loaded;
+        const SceneLoadResult result = loadScene(loaded, json);
+        ankerl::nanobench::doNotOptimizeAway(result);
     });
 }

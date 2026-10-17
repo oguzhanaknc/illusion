@@ -1,9 +1,27 @@
+#include <illusion/ecs/Reflection.hpp>
 #include <illusion/ecs/Transform.hpp>
 #include <illusion/ecs/World.hpp>
 #include <illusion/render/Components.hpp>
 
 namespace illusion
 {
+
+void reflectRenderComponents(ComponentRegistry& registry)
+{
+    reflect<Camera>("illusion.Camera", 1, registry)
+        .field("fovY", &Camera::fovY)
+        .field("nearPlane", &Camera::nearPlane)
+        .field("exposure", &Camera::exposure);
+    reflect<DirectionalLight>("illusion.DirectionalLight", 1, registry)
+        .field("color", &DirectionalLight::color)
+        .field("intensity", &DirectionalLight::intensity)
+        .field("castShadows", &DirectionalLight::castShadows)
+        .field("angularDiameter", &DirectionalLight::angularDiameter);
+    reflect<PointLight>("illusion.PointLight", 1, registry)
+        .field("color", &PointLight::color)
+        .field("intensity", &PointLight::intensity)
+        .field("range", &PointLight::range);
+}
 
 std::vector<Entity> spawnModel(World& world, const ModelData& model, const ModelHandles& handles,
                                const Mat4& root)

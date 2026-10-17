@@ -9,9 +9,12 @@ add_library(illusion_core STATIC
     src/core/Memory.cpp
     src/core/Thread.cpp
     src/core/Time.cpp
+    src/core/Version.cpp
     src/ecs/Archetype.cpp
     src/ecs/CommandBuffer.cpp
     src/ecs/Component.cpp
+    src/ecs/Reflection.cpp
+    src/ecs/SceneSerializer.cpp
     src/ecs/World.cpp)
 add_library(illusion::core ALIAS illusion_core)
 
@@ -21,7 +24,12 @@ target_compile_features(illusion_core PUBLIC cxx_std_20)
 
 find_package(Threads REQUIRED)
 illusion_require_dependency(glm)
-target_link_libraries(illusion_core PUBLIC Threads::Threads illusion::glm)
+illusion_require_dependency(yyjson)
+target_link_libraries(illusion_core PUBLIC Threads::Threads illusion::glm PRIVATE illusion::yyjson)
+
+# engineVersion() reports the project version.
+set_source_files_properties(src/core/Version.cpp PROPERTIES COMPILE_DEFINITIONS
+    "ILLUSION_VERSION_MAJOR=${PROJECT_VERSION_MAJOR};ILLUSION_VERSION_MINOR=${PROJECT_VERSION_MINOR};ILLUSION_VERSION_PATCH=${PROJECT_VERSION_PATCH}")
 
 # Asserts are always on in Debug; ILLUSION_ENABLE_ASSERTS turns them on in every configuration.
 if(ILLUSION_ENABLE_ASSERTS)

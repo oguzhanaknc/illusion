@@ -96,6 +96,8 @@ are within budget, format and docs checks pass, and Doxygen reports nothing.
 - Components are plain data, nothrow-movable, with unique fully qualified names (never in anonymous
   namespaces or local scopes). Empty structs are tags.
 - No structural changes while a query iterates; use `CommandBuffer`.
+- Components that belong in scene files are reflected with a stable, prefixed name
+  (`reflect<T>("module.Name")`); never persist C++ type names.
 - Do not keep references to components across structural changes.
 - See `.claude/skills/ecs-components/SKILL.md`.
 

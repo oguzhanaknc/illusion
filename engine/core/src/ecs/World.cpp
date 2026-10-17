@@ -250,6 +250,57 @@ bool World::removeComponentRaw(Entity entity, ComponentId id)
     return true;
 }
 
+void World::entities(std::vector<Entity>& out) const
+{
+    out.clear();
+    out.reserve(m_aliveCount);
+    for (u32 index = 0; index < m_slots.size(); ++index)
+    {
+        const EntitySlot& slot = m_slots[index];
+        if (slot.archetype != nullptr)
+        {
+            out.push_back(Entity{index, slot.generation});
+        }
+    }
+}
+
+std::span<const ComponentId> World::componentsOf(Entity entity) const
+{
+    ILL_ASSERT(isAlive(entity), "componentsOf() on a dead entity");
+    if (!isAlive(entity))
+    {
+        return {};
+    }
+    return m_slots[entity.index].archetype->signature();
+}
+
+void* World::componentData(Entity entity, ComponentId id) noexcept
+{
+    return componentRaw(entity, id);
+}
+
+const void* World::componentData(Entity entity, ComponentId id) const noexcept
+{
+    return const_cast<World*>(this)->componentRaw(entity, id);
+}
+
+void* World::emplaceDefault(Entity entity, ComponentId id)
+{
+    const ComponentInfo& info = m_registry.info(id);
+    ILL_CHECK(info.construct != nullptr, "component '{}' is not default constructible", info.name);
+    void* storage = addComponentRaw(entity, id);
+    if (storage != nullptr)
+    {
+        info.construct(storage);
+    }
+    return storage;
+}
+
+bool World::remove(Entity entity, ComponentId id)
+{
+    return removeComponentRaw(entity, id);
+}
+
 void* World::componentRaw(Entity entity, ComponentId id) noexcept
 {
     ILL_ASSERT(isAlive(entity), "accessing a component of a dead entity");

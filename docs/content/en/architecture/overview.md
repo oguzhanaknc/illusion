@@ -8,7 +8,7 @@ illusion is built in layers. A layer may depend only on layers below it.
 
 | Layer | Contents | Status |
 | --- | --- | --- |
-| Core | Platform detection, assertions, logging, memory, Job System, ECS, event bus, time, math | Implemented |
+| Core | Platform detection, assertions, logging, memory, Job System, ECS, reflection and scene files, event bus, time, math, semantic versions | Implemented |
 | Platform | Window, keyboard and mouse (GLFW), virtual file system, packed archives | Implemented |
 | Input | Gamepads through SDL3 (rumble, LED, motion, touchpad, adaptive triggers), action mapping, rebinding, glyphs | Implemented |
 | Assets | Images, Meshes, glTF models, environments, cooked formats, an import cache and asynchronous streaming | Implemented |

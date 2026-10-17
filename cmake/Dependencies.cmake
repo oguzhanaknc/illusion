@@ -57,6 +57,14 @@ FetchContent_Declare(stb
     SYSTEM
     SOURCE_SUBDIR _illusion_no_cmake)
 
+# yyjson 0.13.0 (MIT): JSON reader and writer (scene files). Compiled as a small static library.
+FetchContent_Declare(yyjson
+    URL https://github.com/ibireme/yyjson/archive/refs/tags/0.13.0.tar.gz
+    URL_HASH SHA256=34e0f62a2bc11ab20d601e8ca1cc2b2079503aa45119a19133d89d19b94a0fae
+    DOWNLOAD_EXTRACT_TIMESTAMP TRUE
+    SYSTEM
+    SOURCE_SUBDIR _illusion_no_cmake)
+
 # --- Declared for upcoming modules (see ROADMAP.md) ---------------------------------------------------
 
 # GLFW 3.5.1 (Zlib): window, keyboard, mouse.
@@ -152,6 +160,7 @@ endif()
 #   sdl3      -> SDL3::SDL3-static (gamepad subsystems only)
 #   cgltf     -> illusion::cgltf (headers; the implementation is compiled in illusion::assets)
 #   stb       -> illusion::stb (headers; the implementation is compiled in illusion::assets)
+#   yyjson    -> illusion::yyjson (static library; strict JSON only)
 function(illusion_require_dependency name)
     get_property(done GLOBAL PROPERTY ILLUSION_DEP_${name})
     if(done)
@@ -235,6 +244,14 @@ function(illusion_require_dependency name)
         add_library(illusion_stb INTERFACE)
         add_library(illusion::stb ALIAS illusion_stb)
         target_include_directories(illusion_stb SYSTEM INTERFACE "${stb_SOURCE_DIR}")
+    elseif(name STREQUAL "yyjson")
+        FetchContent_MakeAvailable(yyjson)
+        add_library(illusion_yyjson STATIC "${yyjson_SOURCE_DIR}/src/yyjson.c")
+        add_library(illusion::yyjson ALIAS illusion_yyjson)
+        target_include_directories(illusion_yyjson SYSTEM PUBLIC "${yyjson_SOURCE_DIR}/src")
+        # Only standard JSON and the DOM reader/writer are used.
+        target_compile_definitions(illusion_yyjson PUBLIC YYJSON_DISABLE_NON_STANDARD=1
+            YYJSON_DISABLE_INCR_READER=1 YYJSON_DISABLE_UTILS=1)
     elseif(name STREQUAL "slang")
         if(ILLUSION_SLANGC_EXECUTABLE)
             set(ILLUSION_SLANGC "${ILLUSION_SLANGC_EXECUTABLE}" CACHE INTERNAL "")

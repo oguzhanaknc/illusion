@@ -37,7 +37,8 @@ Rules:
 - Empty types are **tags**: they take no memory and are used for filtering.
 - Alignment up to 64 bytes is supported.
 
-Component types are registered automatically the first time they are used.
+Component types are registered automatically the first time they are used. To save Components in
+scene files, reflect them (see [Reflection and Scenes](scenes.md)).
 
 ## Entities
 

@@ -59,9 +59,10 @@ ADRs for its significant decisions. Items marked ✅ are done.
 
 ## M5 — Gameplay services
 
-- Jolt Physics integration (ECS components, fixed-step simulation)
-- miniaudio integration (3D sound, mixer)
-- Component reflection with stable, explicit names; serialization; semver for modules
+- M5a: ✅ Component reflection with stable, explicit names; JSON scene files (yyjson); type-erased World
+  access; semantic versions (ADR 0022)
+- M5b: Jolt Physics integration (ECS components, fixed-step simulation)
+- M5c: miniaudio integration (3D sound, mixer)
 
 ## M6 — Game modules and hot reload
 
@@ -73,6 +74,7 @@ ADRs for its significant decisions. Items marked ✅ are done.
 ## M7 — Editor and AI control
 
 - Editor UI, scene editing, gizmos
+- Asset references in scenes, so that `MeshRenderer` and `SkyLight` are saved (ADR 0022)
 - Command/tool API (JSON-RPC and MCP) covering every editor operation
 - Acceptance test: an agent builds a Tetris-like game end to end without human input
 - Test scene exercising every component and the whole scripting API

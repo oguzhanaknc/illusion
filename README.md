@@ -26,6 +26,7 @@ designed to ship commercial games on Steam and similar stores.
   instanced draws, image-based lighting from HDRIs, cascaded soft shadows (CSM + PCSS), GTAO, bloom,
   ACES tonemapping, optional TAA with per-object motion vectors, two-phase GPU occlusion culling and
   bindless multi-draw indirect rendering.
+- Component reflection with stable names and JSON scene files that survive code changes.
 - Asset pipeline: content-hashed import cache, asynchronous streaming on an I/O thread and the Job
   System, memory-mapped `.illpak` archives and cooked builds that ship without sources.
 - No per-frame heap allocations: arenas, pools and an inline type-erased callable.
