@@ -36,13 +36,15 @@ add_executable(illusion_tests
     assets/TestEnvironment.cpp
     assets/TestGltf.cpp
     assets/TestImageMesh.cpp
+    physics/TestPhysicsWorld.cpp
     render/TestPostProcess.cpp
     render/TestRenderComponents.cpp
     render/TestShadows.cpp)
 
 target_include_directories(illusion_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
 target_link_libraries(illusion_tests PRIVATE
-    illusion::core illusion::platform illusion::input illusion::assets illusion::render illusion::doctest)
+    illusion::core illusion::platform illusion::input illusion::assets illusion::physics illusion::render
+    illusion::doctest)
 target_compile_definitions(illusion_tests PRIVATE ILLUSION_TEST_DATA_DIR="${CMAKE_CURRENT_SOURCE_DIR}/data")
 illusion_configure_target(illusion_tests)
 

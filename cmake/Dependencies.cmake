@@ -89,7 +89,7 @@ FetchContent_Declare(glm
     SYSTEM
     SOURCE_SUBDIR _illusion_no_cmake)
 
-# Jolt Physics 5.6.0 (MIT). Its CMake project lives in the Build/ subdirectory.
+# Jolt Physics 5.6.0 (MIT): rigid-body physics. Its CMake project lives in the Build/ subdirectory.
 FetchContent_Declare(jolt
     URL https://github.com/jrouwe/JoltPhysics/archive/refs/tags/v5.6.0.tar.gz
     URL_HASH SHA256=6e069ee0172478cc78182047aac87e5310ba14a67a53348ae14cc37801fd3f8e
@@ -161,6 +161,7 @@ endif()
 #   cgltf     -> illusion::cgltf (headers; the implementation is compiled in illusion::assets)
 #   stb       -> illusion::stb (headers; the implementation is compiled in illusion::assets)
 #   yyjson    -> illusion::yyjson (static library; strict JSON only)
+#   jolt      -> Jolt::Jolt (static library)
 function(illusion_require_dependency name)
     get_property(done GLOBAL PROPERTY ILLUSION_DEP_${name})
     if(done)
@@ -244,6 +245,22 @@ function(illusion_require_dependency name)
         add_library(illusion_stb INTERFACE)
         add_library(illusion::stb ALIAS illusion_stb)
         target_include_directories(illusion_stb SYSTEM INTERFACE "${stb_SOURCE_DIR}")
+    elseif(name STREQUAL "jolt")
+        # Library only, built with the engine's flags and runtime. The instruction set baseline is SSE4.2
+        # (x86-64) so games run on every CPU Steam supports; GPU compute, the debug renderer, the
+        # profiler and object streams are not used.
+        foreach(option USE_AVX USE_AVX2 USE_AVX512 USE_LZCNT USE_TZCNT USE_F16C USE_FMADD
+                GENERATE_DEBUG_SYMBOLS OVERRIDE_CXX_FLAGS INTERPROCEDURAL_OPTIMIZATION ENABLE_ALL_WARNINGS ENABLE_INSTALL
+                USE_STATIC_MSVC_RUNTIME_LIBRARY FLOATING_POINT_EXCEPTIONS_ENABLED ENABLE_OBJECT_STREAM
+                DEBUG_RENDERER_IN_DEBUG_AND_RELEASE PROFILER_IN_DEBUG_AND_RELEASE
+                JPH_USE_DX12 JPH_USE_VK JPH_USE_MTL JPH_USE_CPU_COMPUTE)
+            set(${option} OFF CACHE BOOL "" FORCE)
+        endforeach()
+        set(USE_SSE4_1 ON CACHE BOOL "" FORCE)
+        set(USE_SSE4_2 ON CACHE BOOL "" FORCE)
+        FetchContent_MakeAvailable(jolt)
+        # Jolt's jobs synchronize inside the library, so sanitizer builds instrument it too.
+        illusion_apply_sanitizer(Jolt)
     elseif(name STREQUAL "yyjson")
         FetchContent_MakeAvailable(yyjson)
         add_library(illusion_yyjson STATIC "${yyjson_SOURCE_DIR}/src/yyjson.c")

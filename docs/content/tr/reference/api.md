@@ -58,6 +58,8 @@ doxygen docs/Doxyfile
 | `illusion/assets/AssetStreamer.hpp` | `AssetStreamer`, `AssetHandle`: asenkron yükleme |
 | `illusion/assets/AssetCooker.hpp` | `cookAssets`: bir dizini önceden içe aktarma |
 | `illusion/assets/Environment.hpp` | Equirectangular eşleme, `ShIrradiance`, `makeSkyImage` |
+| `illusion/physics/PhysicsWorld.hpp` | `PhysicsWorld`: simülasyon, cisim kontrolü, raycast'ler, temas olayları |
+| `illusion/physics/PhysicsComponents.hpp` | `RigidBody`, `Collider`, `PhysicsBody` Component'leri |
 | `illusion/render/RenderDevice.hpp` | `RenderDevice`, `GpuInfo` (bindless ve multi-draw desteği dahil): NVRHI üzerinden Vulkan cihazı |
 | `illusion/render/Swapchain.hpp` | `Swapchain`: bir pencereye present etme |
 | `illusion/render/DebugTriangle.hpp` | Tanılama amaçlı üçgen renderer'ı |
