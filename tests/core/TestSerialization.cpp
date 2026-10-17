@@ -65,7 +65,7 @@ TEST_CASE("binary reader failures are sticky and never read out of bounds")
     writer.write(u32{5});
     writer.writeString("abcdef");
 
-    BinaryReader reader(std::span(bytes).first(6)); // the string is truncated
+    BinaryReader reader{std::span(bytes).first(6)}; // the string is truncated
     u32 value = 0;
     std::string text;
     CHECK(reader.read(value));
