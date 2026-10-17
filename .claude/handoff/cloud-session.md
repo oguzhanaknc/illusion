@@ -21,7 +21,9 @@ Terse agent notes. Rules: CLAUDE.md, AGENTS.md, .claude/skills/*. Plan: ROADMAP.
 
 ## Fix (branch claude/upbeat-cray-5vm0mp, from main): DONE, commit fix(physics)
 - Verified: regression test traps 5/5 on old code, passes 20/20 new; ctest -j4 8/8 clean; format,
-  docs parity, doxygen, mkdocs strict clean. TSan + Release/benchmarks: see later commit/PR notes.
+  docs parity, doxygen, mkdocs strict clean. TSan 249/249 no races; Release unit+GPU pass.
+  Local benchmark misses are box noise: submit+wait A/B main 1150-1650 vs fix 555-2490 ns (err 30-60%);
+  GPU benchmarks on lavapipe are software rendering. CI tolerance 3.0.
 
 ## Fix plan (as implemented)
 1. `JobSystem::trySubmit(Job, JobCounter*) -> bool`: queue or return false, never inline. `submit()`
