@@ -53,4 +53,5 @@ Open `build/api/index.html` in a browser.
 | `illusion/render/DebugTriangle.hpp` | Diagnostic triangle renderer |
 | `illusion/render/RenderResources.hpp` | `RenderResources`: GPU Meshes, Textures, Materials, environments and their Handles |
 | `illusion/render/SceneRenderer.hpp` | `SceneRenderer`, `RenderView`, `RenderStats` |
+| `illusion/render/Shadows.hpp` | `ShadowSettings`, `ShadowCascades`, `computeShadowCascades` |
 | `illusion/render/Components.hpp` | `MeshRenderer`, `Camera`, `DirectionalLight`, `PointLight`, `SkyLight`, `spawnModel` |

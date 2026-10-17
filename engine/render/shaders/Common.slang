@@ -16,6 +16,20 @@ struct PointLightData
     float4 color;         // rgb: colour * intensity
 };
 
+static const uint kMaxShadowCascades = 4;
+
+struct ShadowCascadeData
+{
+    float4x4 viewProjection; // world -> shadow clip (depth 0 nearest the light)
+    float4 params;           // x: split far distance, y: world size, z: depth range
+};
+
+struct InstanceData
+{
+    float4x4 world;
+    float4x4 normalMatrix;
+};
+
 struct ViewConstants
 {
     float4x4 viewProjection;
@@ -30,6 +44,10 @@ struct ViewConstants
     float4x4 skyRotation; // world direction -> environment direction
     float4 sky;           // x: specular intensity, y: last specular mip, z: background intensity
     float4 sh[9];         // diffuse irradiance (SH, intensity applied), rgb
+    ShadowCascadeData cascades[kMaxShadowCascades];
+    float4 shadow;        // x: cascade count (0 = off), y: shadowed directional light, z: tan(light angular radius), w: map resolution
+    float4 shadowBias;    // x: depth bias (world), y: normal bias (texels), z: max distance
+    float4 cameraForward; // xyz: camera forward axis
 };
 
 // Irradiance from the 9 SH coefficients (order Y00, Y1-1, Y10, Y11, Y2-2, Y2-1, Y20, Y21, Y22); see

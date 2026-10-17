@@ -21,6 +21,7 @@ Record (ADR) olarak kaydedilir. Her kayıt bağlamı, kararı ve sonuçlarını 
 | [0012](https://github.com/oguzhanaknc/illusion/blob/main/docs/adr/0012-input-actions.md) | Metin tabanlı binding formatı ve kararlı glyph kimlikleriyle action eşleme |
 | [0013](https://github.com/oguzhanaknc/illusion/blob/main/docs/adr/0013-forward-pbr-renderer.md) | Reversed-Z, CPU culling ve instancing ile forward PBR renderer |
 | [0014](https://github.com/oguzhanaknc/illusion/blob/main/docs/adr/0014-image-based-lighting.md) | Görüntü tabanlı aydınlatma: GPU'da hazırlanan cube map'ler, SH irradiance, çoklu saçılımlı split sum |
+| [0015](https://github.com/oguzhanaknc/illusion/blob/main/docs/adr/0015-cascaded-soft-shadows.md) | Tek bir yönlü ışık için PCSS'li cascaded shadow map'ler |
 
 Yeni bir karar önermek için `docs/adr/0000-template.md` dosyasını kopyalayın ve
 [katkıda bulunma rehberini](../contributing.md#architecture-decision-recordlar) izleyin.

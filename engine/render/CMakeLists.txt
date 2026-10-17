@@ -7,6 +7,7 @@ add_library(illusion_render STATIC
     src/RenderDevice.cpp
     src/RenderResources.cpp
     src/SceneRenderer.cpp
+    src/Shadows.cpp
     src/Swapchain.cpp
     src/VulkanDispatch.cpp)
 add_library(illusion::render ALIAS illusion_render)
@@ -32,6 +33,8 @@ illusion_add_shaders(illusion_render
         debugTriangleFragment shaders/DebugTriangle.slang fragmentMain fragment
         forwardPbrVertex shaders/ForwardPbr.slang vertexMain vertex
         forwardPbrFragment shaders/ForwardPbr.slang fragmentMain fragment
+        shadowCasterVertex shaders/ShadowCaster.slang vertexMain vertex
+        shadowCasterFragment shaders/ShadowCaster.slang fragmentMain fragment
         skyboxVertex shaders/Skybox.slang vertexMain vertex
         skyboxFragment shaders/Skybox.slang fragmentMain fragment
         iblEquirectToCube shaders/IblEquirectToCube.slang equirectToCube compute

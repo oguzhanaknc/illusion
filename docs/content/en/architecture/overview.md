@@ -14,8 +14,8 @@ illusion is built in layers. A layer may depend only on layers below it.
 | Assets | Images, Meshes, glTF models, environments (CPU side) | Implemented |
 | Runtime services | Asset streaming, audio (miniaudio), physics (Jolt) | Planned |
 | Renderer: foundation | Vulkan 1.3 device through NVRHI, swapchains, Slang shader pipeline | Implemented |
-| Renderer: scene | Meshes, PBR Materials, direct and image-based lighting, frustum culling, instancing | Implemented |
-| Renderer: features | Shadows, GTAO, post-processing, bindless, occlusion culling | Planned |
+| Renderer: scene | Meshes, PBR Materials, direct and image-based lighting, soft shadows, frustum culling, instancing | Implemented |
+| Renderer: features | GTAO, post-processing, bindless, occlusion culling | Planned |
 | Editor | Scene editing, gizmos, AI command API | Planned |
 | Game module | The game's own code, a hot-reloadable shared library in the editor | Planned |
 

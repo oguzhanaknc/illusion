@@ -54,4 +54,5 @@ doxygen docs/Doxyfile
 | `illusion/render/DebugTriangle.hpp` | Tanılama amaçlı üçgen renderer'ı |
 | `illusion/render/RenderResources.hpp` | `RenderResources`: GPU Mesh'leri, Texture'ları, Material'leri, ortamlar ve Handle'ları |
 | `illusion/render/SceneRenderer.hpp` | `SceneRenderer`, `RenderView`, `RenderStats` |
+| `illusion/render/Shadows.hpp` | `ShadowSettings`, `ShadowCascades`, `computeShadowCascades` |
 | `illusion/render/Components.hpp` | `MeshRenderer`, `Camera`, `DirectionalLight`, `PointLight`, `SkyLight`, `spawnModel` |

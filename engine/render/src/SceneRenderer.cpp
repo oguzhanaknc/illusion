@@ -13,6 +13,7 @@
 #include <algorithm>
 #include <array>
 #include <atomic>
+#include <cmath>
 #include <cstddef>
 #include <unordered_map>
 #include <vector>
@@ -22,8 +23,7 @@ namespace illusion
 namespace
 {
 
-// GPU layouts; must match Common.slang and ForwardPbr.slang (std140 for the constant buffer, std430 for
-// instances).
+// GPU layouts; must match Common.slang (std140 for the constant buffer, std430 for instances).
 struct GpuDirectionalLight
 {
     Vec4 direction;
@@ -34,6 +34,12 @@ struct GpuPointLight
 {
     Vec4 positionRange;
     Vec4 color;
+};
+
+struct GpuShadowCascade
+{
+    Mat4 viewProjection;
+    Vec4 params; // x: split far, y: world size, z: depth range
 };
 
 struct GpuViewConstants
@@ -50,11 +56,17 @@ struct GpuViewConstants
     Mat4 skyRotation; // world direction -> environment direction
     Vec4 sky;         // x: specular intensity, y: last specular mip, z: background intensity
     Vec4 sh[9];       // diffuse irradiance, intensity applied
+    GpuShadowCascade cascades[kMaxShadowCascades];
+    Vec4 shadow;        // x: cascade count, y: shadowed light index, z: tan(angular radius), w: resolution
+    Vec4 shadowBias;    // x: depth bias, y: normal bias (texels), z: max distance
+    Vec4 cameraForward; // xyz
 };
 static_assert(offsetof(GpuViewConstants, directional) == 112);
 static_assert(offsetof(GpuViewConstants, points) == 240);
 static_assert(offsetof(GpuViewConstants, inverseViewProjection) == 752);
 static_assert(offsetof(GpuViewConstants, sh) == 896);
+static_assert(offsetof(GpuViewConstants, cascades) == 1040);
+static_assert(offsetof(GpuViewConstants, cameraForward) == 1392);
 
 struct GpuInstance
 {
@@ -62,16 +74,33 @@ struct GpuInstance
     Mat4 normalMatrix;
 };
 
-struct VisibleItem
+// Bit 0: visible to the camera; bit 1 + c: casts a shadow into cascade c.
+constexpr u32 kCameraPass = 1;
+
+struct DrawItem
 {
     GpuInstance instance; // computed by the (parallel) culling jobs
     const RenderResources::GpuMesh* mesh;
     const RenderResources::GpuMaterial* material;
     u32 submesh;
+    u32 passes;
     f32 distanceSquared;
 };
 
+struct ShadowPush
+{
+    u32 instanceOffset;
+    u32 cascade;
+};
+
 constexpr nvrhi::Format kDepthFormat = nvrhi::Format::D32;
+
+nvrhi::ShaderHandle createShader(nvrhi::IDevice* device, nvrhi::ShaderType type,
+                                 std::span<const std::byte> code, const char* name)
+{
+    return device->createShader(nvrhi::ShaderDesc().setShaderType(type).setDebugName(name), code.data(),
+                                code.size());
+}
 
 } // namespace
 
@@ -98,84 +127,101 @@ struct SceneRenderer::Impl
     nvrhi::ShaderHandle fragmentShader;
     nvrhi::ShaderHandle skyboxVertexShader;
     nvrhi::ShaderHandle skyboxFragmentShader;
+    nvrhi::ShaderHandle shadowVertexShader;
+    nvrhi::ShaderHandle shadowFragmentShader;
     nvrhi::GraphicsPipelineHandle skyboxPipeline;
     nvrhi::SamplerHandle clampSampler;
+    nvrhi::SamplerHandle shadowSampler;
     nvrhi::InputLayoutHandle inputLayout;
+    nvrhi::InputLayoutHandle shadowInputLayout;
     nvrhi::BindingLayoutHandle viewLayout;
+    nvrhi::BindingLayoutHandle shadowLayout;
     nvrhi::BufferHandle viewConstants;
     nvrhi::BufferHandle instanceBuffer;
     u32 instanceCapacity = 0;
-    // View binding sets by environment index (0 = no sky); rebuilt when the instance buffer grows.
+    // View binding sets by environment index (0 = no sky); rebuilt when the instance buffer or the
+    // shadow map changes.
     std::unordered_map<u32, nvrhi::BindingSetHandle> viewSets;
+    nvrhi::BindingSetHandle shadowSet;
     // [blend][doubleSided]
     std::array<std::array<nvrhi::GraphicsPipelineHandle, 2>, 2> pipelines{};
+
+    // Shadow map: one array layer per cascade (a 1x1 placeholder while shadows are off).
+    nvrhi::TextureHandle shadowMap;
+    std::array<nvrhi::FramebufferHandle, kMaxShadowCascades> shadowFramebuffers{};
+    std::array<nvrhi::GraphicsPipelineHandle, 2> shadowPipelines{}; // [alpha masked]
+    bool shadowResourcesDirty = true;
+    ShadowCascades cascades;
 
     nvrhi::TextureHandle depth;
     std::unordered_map<nvrhi::ITexture*, nvrhi::FramebufferHandle> framebuffers;
 
     // Per-frame scratch, kept across frames so steady state does not allocate.
-    std::vector<VisibleItem> visible;
-    std::vector<u32> order;
+    std::vector<DrawItem> items;
+    std::vector<u32> cameraOrder;
+    std::array<std::vector<u32>, kMaxShadowCascades> shadowOrders;
     std::vector<GpuInstance> instances;
     RenderStats stats;
 
     bool initialize();
+    bool updateShadowResources();
     nvrhi::IFramebuffer* framebufferFor(nvrhi::ITexture* color);
     void ensureInstanceCapacity(u32 count);
     void cull(World& world, const RenderView& view, JobSystem* jobs);
-    void gatherLights(World& world, GpuViewConstants& constants);
+    i32 gatherLights(World& world, GpuViewConstants& constants, f32& angularDiameter);
     nvrhi::IBindingSet* viewSetFor(EnvironmentHandle environment);
+    [[nodiscard]] const RenderResources::GpuMaterial* shadowMaterial(const DrawItem& item) const noexcept;
+    void sortShadowCasters(u32 cascade);
+    void drawShadows(nvrhi::ICommandList* commandList, u32 cascade, u32 instanceOffset);
 };
 
 bool SceneRenderer::Impl::initialize()
 {
-    const std::span<const std::byte> vs = shaders::forwardPbrVertex();
-    const std::span<const std::byte> fs = shaders::forwardPbrFragment();
-    vertexShader = device->createShader(
-        nvrhi::ShaderDesc().setShaderType(nvrhi::ShaderType::Vertex).setDebugName("ForwardPbr VS"), vs.data(),
-        vs.size());
-    fragmentShader = device->createShader(
-        nvrhi::ShaderDesc().setShaderType(nvrhi::ShaderType::Pixel).setDebugName("ForwardPbr FS"), fs.data(),
-        fs.size());
-    const std::span<const std::byte> skyVs = shaders::skyboxVertex();
-    const std::span<const std::byte> skyFs = shaders::skyboxFragment();
-    skyboxVertexShader = device->createShader(
-        nvrhi::ShaderDesc().setShaderType(nvrhi::ShaderType::Vertex).setDebugName("Skybox VS"), skyVs.data(),
-        skyVs.size());
-    skyboxFragmentShader = device->createShader(
-        nvrhi::ShaderDesc().setShaderType(nvrhi::ShaderType::Pixel).setDebugName("Skybox FS"), skyFs.data(),
-        skyFs.size());
-    if (!vertexShader || !fragmentShader || !skyboxVertexShader || !skyboxFragmentShader)
+    vertexShader =
+        createShader(device, nvrhi::ShaderType::Vertex, shaders::forwardPbrVertex(), "ForwardPbr VS");
+    fragmentShader =
+        createShader(device, nvrhi::ShaderType::Pixel, shaders::forwardPbrFragment(), "ForwardPbr FS");
+    skyboxVertexShader =
+        createShader(device, nvrhi::ShaderType::Vertex, shaders::skyboxVertex(), "Skybox VS");
+    skyboxFragmentShader =
+        createShader(device, nvrhi::ShaderType::Pixel, shaders::skyboxFragment(), "Skybox FS");
+    shadowVertexShader =
+        createShader(device, nvrhi::ShaderType::Vertex, shaders::shadowCasterVertex(), "Shadow caster VS");
+    shadowFragmentShader =
+        createShader(device, nvrhi::ShaderType::Pixel, shaders::shadowCasterFragment(), "Shadow caster FS");
+    if (!vertexShader || !fragmentShader || !skyboxVertexShader || !skyboxFragmentShader ||
+        !shadowVertexShader || !shadowFragmentShader)
     {
         return false;
     }
     clampSampler = device->createSampler(
         nvrhi::SamplerDesc().setAllFilters(true).setAllAddressModes(nvrhi::SamplerAddressMode::Clamp));
+    shadowSampler = device->createSampler(nvrhi::SamplerDesc()
+                                              .setAllFilters(true)
+                                              .setAllAddressModes(nvrhi::SamplerAddressMode::Clamp)
+                                              .setReductionType(nvrhi::SamplerReductionType::Comparison));
 
+    const auto attribute = [](const char* name, nvrhi::Format format, usize offset) {
+        return nvrhi::VertexAttributeDesc()
+            .setName(name)
+            .setFormat(format)
+            .setOffset(static_cast<u32>(offset))
+            .setElementStride(sizeof(Vertex));
+    };
     const nvrhi::VertexAttributeDesc attributes[] = {
-        nvrhi::VertexAttributeDesc()
-            .setName("POSITION")
-            .setFormat(nvrhi::Format::RGB32_FLOAT)
-            .setOffset(offsetof(Vertex, position))
-            .setElementStride(sizeof(Vertex)),
-        nvrhi::VertexAttributeDesc()
-            .setName("NORMAL")
-            .setFormat(nvrhi::Format::RGB32_FLOAT)
-            .setOffset(offsetof(Vertex, normal))
-            .setElementStride(sizeof(Vertex)),
-        nvrhi::VertexAttributeDesc()
-            .setName("TANGENT")
-            .setFormat(nvrhi::Format::RGBA32_FLOAT)
-            .setOffset(offsetof(Vertex, tangent))
-            .setElementStride(sizeof(Vertex)),
-        nvrhi::VertexAttributeDesc()
-            .setName("TEXCOORD")
-            .setFormat(nvrhi::Format::RG32_FLOAT)
-            .setOffset(offsetof(Vertex, uv))
-            .setElementStride(sizeof(Vertex)),
+        attribute("POSITION", nvrhi::Format::RGB32_FLOAT, offsetof(Vertex, position)),
+        attribute("NORMAL", nvrhi::Format::RGB32_FLOAT, offsetof(Vertex, normal)),
+        attribute("TANGENT", nvrhi::Format::RGBA32_FLOAT, offsetof(Vertex, tangent)),
+        attribute("TEXCOORD", nvrhi::Format::RG32_FLOAT, offsetof(Vertex, uv)),
     };
     inputLayout =
         device->createInputLayout(attributes, static_cast<u32>(std::size(attributes)), vertexShader);
+    const nvrhi::VertexAttributeDesc shadowAttributes[] = {
+        attribute("POSITION", nvrhi::Format::RGB32_FLOAT, offsetof(Vertex, position)),
+        attribute("TEXCOORD", nvrhi::Format::RG32_FLOAT, offsetof(Vertex, uv)),
+    };
+    shadowInputLayout = device->createInputLayout(
+        shadowAttributes, static_cast<u32>(std::size(shadowAttributes)), shadowVertexShader);
 
     nvrhi::BindingLayoutDesc layout;
     layout.visibility = nvrhi::ShaderType::All;
@@ -187,12 +233,24 @@ bool SceneRenderer::Impl::initialize()
         nvrhi::BindingLayoutItem::Texture_SRV(1), // specular cube map
         nvrhi::BindingLayoutItem::Texture_SRV(2), // BRDF table
         nvrhi::BindingLayoutItem::Texture_SRV(3), // background cube map
+        nvrhi::BindingLayoutItem::Texture_SRV(4), // shadow map
         nvrhi::BindingLayoutItem::Sampler(0),
+        nvrhi::BindingLayoutItem::Sampler(1), // shadow comparison
         // Push constants take a constant-buffer slot in NVRHI, so they cannot share b0 with the view.
         nvrhi::BindingLayoutItem::PushConstants(1, sizeof(u32)),
     };
     viewLayout = device->createBindingLayout(layout);
-    if (!viewLayout)
+    nvrhi::BindingLayoutDesc shadowLayoutDesc;
+    shadowLayoutDesc.visibility = nvrhi::ShaderType::All;
+    shadowLayoutDesc.registerSpace = 0;
+    shadowLayoutDesc.registerSpaceIsDescriptorSet = true;
+    shadowLayoutDesc.bindings = {
+        nvrhi::BindingLayoutItem::VolatileConstantBuffer(0),
+        nvrhi::BindingLayoutItem::StructuredBuffer_SRV(0),
+        nvrhi::BindingLayoutItem::PushConstants(1, sizeof(ShadowPush)),
+    };
+    shadowLayout = device->createBindingLayout(shadowLayoutDesc);
+    if (!viewLayout || !shadowLayout)
     {
         return false;
     }
@@ -200,15 +258,6 @@ bool SceneRenderer::Impl::initialize()
         nvrhi::utils::CreateVolatileConstantBufferDesc(sizeof(GpuViewConstants), "View constants", 16));
 
     encodeSrgb = !nvrhi::getFormatInfo(desc.colorFormat).isSRGB;
-    nvrhi::GraphicsPipelineDesc skybox;
-    skybox.primType = nvrhi::PrimitiveType::TriangleList;
-    skybox.VS = skyboxVertexShader;
-    skybox.PS = skyboxFragmentShader;
-    skybox.bindingLayouts = {viewLayout};
-    skybox.renderState.rasterState.setCullNone();
-    // Depth 0 is both the cleared value and infinity with reversed-Z, so only uncovered pixels pass.
-    skybox.renderState.depthStencilState.setDepthTestEnable(true).setDepthWriteEnable(false).setDepthFunc(
-        nvrhi::ComparisonFunc::GreaterOrEqual);
     const nvrhi::FramebufferInfo info =
         nvrhi::FramebufferInfo().addColorFormat(desc.colorFormat).setDepthFormat(kDepthFormat);
     for (u32 blend = 0; blend < 2; ++blend)
@@ -249,13 +298,71 @@ bool SceneRenderer::Impl::initialize()
             }
         }
     }
+
+    nvrhi::GraphicsPipelineDesc skybox;
+    skybox.primType = nvrhi::PrimitiveType::TriangleList;
+    skybox.VS = skyboxVertexShader;
+    skybox.PS = skyboxFragmentShader;
+    skybox.bindingLayouts = {viewLayout};
+    skybox.renderState.rasterState.setCullNone();
+    // Depth 0 is both the cleared value and infinity with reversed-Z, so only uncovered pixels pass.
+    skybox.renderState.depthStencilState.setDepthTestEnable(true).setDepthWriteEnable(false).setDepthFunc(
+        nvrhi::ComparisonFunc::GreaterOrEqual);
     skyboxPipeline = device->createGraphicsPipeline(skybox, info);
     if (!skyboxPipeline)
     {
         return false;
     }
     ensureInstanceCapacity(1024);
-    return true;
+    return updateShadowResources();
+}
+
+bool SceneRenderer::Impl::updateShadowResources()
+{
+    if (!shadowResourcesDirty)
+    {
+        return true;
+    }
+    shadowResourcesDirty = false;
+    const ShadowSettings& settings = desc.shadows;
+    const u32 size = settings.enabled ? std::max(settings.resolution, 1u) : 1u;
+    const u32 layers = settings.enabled ? std::clamp(settings.cascadeCount, 1u, kMaxShadowCascades) : 1u;
+
+    nvrhi::TextureDesc mapDesc;
+    mapDesc.dimension = nvrhi::TextureDimension::Texture2DArray;
+    mapDesc.width = size;
+    mapDesc.height = size;
+    mapDesc.arraySize = layers;
+    mapDesc.format = kDepthFormat;
+    mapDesc.isRenderTarget = true;
+    mapDesc.debugName = "Shadow map";
+    mapDesc.enableAutomaticStateTracking(nvrhi::ResourceStates::ShaderResource);
+    shadowMap = device->createTexture(mapDesc);
+    shadowFramebuffers = {};
+    for (u32 layer = 0; layer < layers; ++layer)
+    {
+        shadowFramebuffers[layer] = device->createFramebuffer(nvrhi::FramebufferDesc().setDepthAttachment(
+            shadowMap, nvrhi::TextureSubresourceSet(0, 1, layer, 1)));
+    }
+
+    const nvrhi::FramebufferInfo shadowInfo = nvrhi::FramebufferInfo().setDepthFormat(kDepthFormat);
+    for (u32 masked = 0; masked < 2; ++masked)
+    {
+        nvrhi::GraphicsPipelineDesc pipeline;
+        pipeline.primType = nvrhi::PrimitiveType::TriangleList;
+        pipeline.inputLayout = shadowInputLayout;
+        pipeline.VS = shadowVertexShader;
+        pipeline.PS = masked != 0 ? shadowFragmentShader.Get() : nullptr;
+        pipeline.bindingLayouts = {shadowLayout, resources->materialBindingLayout()};
+        // Both faces cast: single-sided geometry must not leak light.
+        pipeline.renderState.rasterState.setCullNone().setSlopeScaleDepthBias(settings.slopeBias);
+        pipeline.renderState.depthStencilState.setDepthTestEnable(true)
+            .setDepthWriteEnable(true)
+            .setDepthFunc(nvrhi::ComparisonFunc::LessOrEqual);
+        shadowPipelines[masked] = device->createGraphicsPipeline(pipeline, shadowInfo);
+    }
+    viewSets.clear();
+    return shadowMap && shadowPipelines[0] && shadowPipelines[1];
 }
 
 void SceneRenderer::Impl::ensureInstanceCapacity(u32 count)
@@ -272,6 +379,14 @@ void SceneRenderer::Impl::ensureInstanceCapacity(u32 count)
     bufferDesc.enableAutomaticStateTracking(nvrhi::ResourceStates::ShaderResource);
     instanceBuffer = device->createBuffer(bufferDesc);
     viewSets.clear();
+
+    nvrhi::BindingSetDesc shadowSetDesc;
+    shadowSetDesc.bindings = {
+        nvrhi::BindingSetItem::ConstantBuffer(0, viewConstants),
+        nvrhi::BindingSetItem::StructuredBuffer_SRV(0, instanceBuffer),
+        nvrhi::BindingSetItem::PushConstants(1, sizeof(ShadowPush)),
+    };
+    shadowSet = device->createBindingSet(shadowSetDesc, shadowLayout);
 }
 
 nvrhi::IBindingSet* SceneRenderer::Impl::viewSetFor(EnvironmentHandle environment)
@@ -287,7 +402,9 @@ nvrhi::IBindingSet* SceneRenderer::Impl::viewSetFor(EnvironmentHandle environmen
             nvrhi::BindingSetItem::Texture_SRV(1, gpu.specular),
             nvrhi::BindingSetItem::Texture_SRV(2, resources->brdfLut()),
             nvrhi::BindingSetItem::Texture_SRV(3, gpu.background),
+            nvrhi::BindingSetItem::Texture_SRV(4, shadowMap),
             nvrhi::BindingSetItem::Sampler(0, clampSampler),
+            nvrhi::BindingSetItem::Sampler(1, shadowSampler),
             nvrhi::BindingSetItem::PushConstants(1, sizeof(u32)),
         };
         set = device->createBindingSet(setDesc, viewLayout);
@@ -330,11 +447,17 @@ void SceneRenderer::Impl::cull(World& world, const RenderView& view, JobSystem* 
     auto query = world.query<const Transform, const MeshRenderer>();
     const u32 candidates = query.count();
     stats.candidates = candidates;
-    if (visible.size() < candidates)
+    if (items.size() < candidates)
     {
-        visible.resize(candidates);
+        items.resize(candidates);
     }
     const Frustum frustum = Frustum::fromViewProjection(view.projection * view.view);
+    std::array<Frustum, kMaxShadowCascades> cascadeFrusta{};
+    for (u32 c = 0; c < cascades.count; ++c)
+    {
+        cascadeFrusta[c] = Frustum::fromViewProjection(cascades.cascades[c].viewProjection);
+    }
+    const u32 cascadeCount = cascades.count;
     std::atomic<u32> count{0};
     const auto test = [&](const Transform& transform, const MeshRenderer& renderer) {
         const RenderResources::GpuMesh* mesh = resources->mesh(renderer.mesh);
@@ -342,16 +465,29 @@ void SceneRenderer::Impl::cull(World& world, const RenderView& view, JobSystem* 
         {
             return;
         }
+        const RenderResources::GpuMaterial* material = resources->material(renderer.material);
         const Mat4 matrix = transform.matrix();
         const Sphere bounds = Sphere::fromAabb(mesh->submeshes[renderer.submesh].bounds).transformed(matrix);
-        if (!frustum.intersects(bounds))
+        u32 passes = frustum.intersects(bounds) ? kCameraPass : 0u;
+        if (material->alphaMode != AlphaMode::Blend)
+        {
+            for (u32 c = 0; c < cascadeCount; ++c)
+            {
+                passes |= cascadeFrusta[c].intersects(bounds) ? (2u << c) : 0u;
+            }
+        }
+        if (passes == 0)
         {
             return;
         }
         const Vec3 offset = bounds.center - view.position;
-        visible[count.fetch_add(1, std::memory_order_relaxed)] =
-            VisibleItem{GpuInstance{matrix, glm::transpose(glm::inverse(matrix))}, mesh,
-                        resources->material(renderer.material), renderer.submesh, glm::dot(offset, offset)};
+        items[count.fetch_add(1, std::memory_order_relaxed)] =
+            DrawItem{GpuInstance{matrix, glm::transpose(glm::inverse(matrix))},
+                     mesh,
+                     material,
+                     renderer.submesh,
+                     passes,
+                     glm::dot(offset, offset)};
     };
     if (jobs != nullptr)
     {
@@ -361,16 +497,44 @@ void SceneRenderer::Impl::cull(World& world, const RenderView& view, JobSystem* 
     {
         query.each(test);
     }
-    stats.visible = count.load();
+    const u32 itemCount = count.load();
+
+    cameraOrder.clear();
+    for (std::vector<u32>& order : shadowOrders)
+    {
+        order.clear();
+    }
+    for (u32 i = 0; i < itemCount; ++i)
+    {
+        const u32 passes = items[i].passes;
+        if ((passes & kCameraPass) != 0)
+        {
+            cameraOrder.push_back(i);
+        }
+        for (u32 c = 0; c < cascadeCount; ++c)
+        {
+            if ((passes & (2u << c)) != 0)
+            {
+                shadowOrders[c].push_back(i);
+            }
+        }
+    }
+    stats.visible = static_cast<u32>(cameraOrder.size());
 }
 
-void SceneRenderer::Impl::gatherLights(World& world, GpuViewConstants& constants)
+i32 SceneRenderer::Impl::gatherLights(World& world, GpuViewConstants& constants, f32& angularDiameter)
 {
+    i32 shadowed = -1;
     constants.directionalCount = 0;
     world.query<const Transform, const DirectionalLight>().each(
         [&](const Transform& transform, const DirectionalLight& light) {
             if (constants.directionalCount < kMaxDirectionalLights)
             {
+                if (shadowed < 0 && light.castShadows)
+                {
+                    shadowed = static_cast<i32>(constants.directionalCount);
+                    angularDiameter = light.angularDiameter;
+                }
                 constants.directional[constants.directionalCount++] = GpuDirectionalLight{
                     Vec4(transform.forward(), 0.0f), Vec4(light.color * light.intensity, 0.0f)};
             }
@@ -385,6 +549,74 @@ void SceneRenderer::Impl::gatherLights(World& world, GpuViewConstants& constants
                                   Vec4(light.color * light.intensity, 0.0f)};
             }
         });
+    return shadowed;
+}
+
+// Opaque casters ignore their material, so they batch by mesh alone; masked casters need it.
+const RenderResources::GpuMaterial* SceneRenderer::Impl::shadowMaterial(const DrawItem& item) const noexcept
+{
+    return item.material->alphaMode == AlphaMode::Mask ? item.material : nullptr;
+}
+
+void SceneRenderer::Impl::sortShadowCasters(u32 cascade)
+{
+    std::sort(shadowOrders[cascade].begin(), shadowOrders[cascade].end(), [&](u32 a, u32 b) {
+        const DrawItem& x = items[a];
+        const DrawItem& y = items[b];
+        if (shadowMaterial(x) != shadowMaterial(y))
+        {
+            return shadowMaterial(x) < shadowMaterial(y);
+        }
+        if (x.mesh != y.mesh)
+        {
+            return x.mesh < y.mesh;
+        }
+        return x.submesh < y.submesh;
+    });
+}
+
+void SceneRenderer::Impl::drawShadows(nvrhi::ICommandList* commandList, u32 cascade, u32 instanceOffset)
+{
+    const std::vector<u32>& order = shadowOrders[cascade];
+    nvrhi::IFramebuffer* framebuffer = shadowFramebuffers[cascade];
+    const nvrhi::Viewport viewport = framebuffer->getFramebufferInfo().getViewport();
+    const u32 count = static_cast<u32>(order.size());
+    u32 begin = 0;
+    while (begin < count)
+    {
+        const DrawItem& first = items[order[begin]];
+        const RenderResources::GpuMaterial* masked = shadowMaterial(first);
+        u32 end = begin + 1;
+        while (end < count)
+        {
+            const DrawItem& next = items[order[end]];
+            if (shadowMaterial(next) != masked || next.mesh != first.mesh || next.submesh != first.submesh)
+            {
+                break;
+            }
+            ++end;
+        }
+        nvrhi::GraphicsState state;
+        state.pipeline = shadowPipelines[masked != nullptr ? 1 : 0];
+        state.framebuffer = framebuffer;
+        // The material set is bound for opaque casters too: the pipeline layout includes it.
+        state.bindings = {shadowSet, masked != nullptr ? masked->bindingSet : first.material->bindingSet};
+        state.vertexBuffers = {
+            nvrhi::VertexBufferBinding().setBuffer(first.mesh->vertexBuffer).setSlot(0).setOffset(0)};
+        state.indexBuffer =
+            nvrhi::IndexBufferBinding().setBuffer(first.mesh->indexBuffer).setFormat(nvrhi::Format::R32_UINT);
+        state.viewport.addViewportAndScissorRect(viewport);
+        commandList->setGraphicsState(state);
+        const ShadowPush push{instanceOffset + begin, cascade};
+        commandList->setPushConstants(&push, sizeof(push));
+        const Submesh& submesh = first.mesh->submeshes[first.submesh];
+        commandList->drawIndexed(nvrhi::DrawArguments()
+                                     .setVertexCount(submesh.indexCount)
+                                     .setInstanceCount(end - begin)
+                                     .setStartIndexLocation(submesh.indexOffset));
+        ++stats.shadowDrawCalls;
+        begin = end;
+    }
 }
 
 SceneRenderer::SceneRenderer()
@@ -416,20 +648,54 @@ void SceneRenderer::render(nvrhi::ICommandList* commandList, nvrhi::ITexture* co
     ILL_PROFILE_SCOPE();
     Impl& impl = *m_impl;
     impl.stats = RenderStats{};
+    if (!impl.updateShadowResources())
+    {
+        ILL_LOG_ERROR("Render", "SceneRenderer: cannot create shadow resources");
+        return;
+    }
     nvrhi::IFramebuffer* framebuffer = impl.framebufferFor(colorTarget);
+
+    GpuViewConstants constants{};
+    constants.viewProjection = view.projection * view.view;
+    constants.inverseViewProjection = glm::inverse(constants.viewProjection);
+    constants.cameraPosition = Vec4(view.position, view.exposure);
+    constants.cameraForward = Vec4(-view.view[0][2], -view.view[1][2], -view.view[2][2], 0.0f);
+    constants.output = Vec4(impl.encodeSrgb ? 1.0f : 0.0f, 0.0f, 0.0f, 0.0f);
+    f32 angularDiameter = 0.0f;
+    const i32 shadowedLight = impl.gatherLights(world, constants, angularDiameter);
+
+    // Shadow cascades for the first shadow-casting directional light.
+    const ShadowSettings& shadowSettings = impl.desc.shadows;
+    impl.cascades = ShadowCascades{};
+    if (shadowSettings.enabled && shadowedLight >= 0)
+    {
+        const Vec3 lightDirection = Vec3(constants.directional[shadowedLight].direction);
+        impl.cascades = computeShadowCascades(view.view, view.projection, lightDirection, shadowSettings);
+        for (u32 c = 0; c < impl.cascades.count; ++c)
+        {
+            const ShadowCascade& cascade = impl.cascades.cascades[c];
+            constants.cascades[c] = GpuShadowCascade{
+                cascade.viewProjection, Vec4(cascade.splitFar, cascade.worldSize, cascade.depthRange, 0.0f)};
+        }
+        constants.shadow =
+            Vec4(static_cast<f32>(impl.cascades.count), static_cast<f32>(shadowedLight),
+                 std::tan(angularDiameter * 0.5f), static_cast<f32>(std::max(shadowSettings.resolution, 1u)));
+        constants.shadowBias = Vec4(shadowSettings.depthBias, shadowSettings.normalBias,
+                                    std::max(shadowSettings.maxDistance, 1e-3f), 0.0f);
+    }
+    else
+    {
+        // No cascades; the light index is out of range so no light is treated as shadowed.
+        constants.shadow = Vec4(0.0f, static_cast<f32>(kMaxDirectionalLights), 0.0f, 1.0f);
+    }
 
     impl.cull(world, view, jobs);
     const u32 visibleCount = impl.stats.visible;
 
     // Opaque and masked first, grouped by material and mesh; then blended back to front.
-    impl.order.resize(visibleCount);
-    for (u32 i = 0; i < visibleCount; ++i)
-    {
-        impl.order[i] = i;
-    }
-    std::sort(impl.order.begin(), impl.order.end(), [&](u32 a, u32 b) {
-        const VisibleItem& x = impl.visible[a];
-        const VisibleItem& y = impl.visible[b];
+    std::sort(impl.cameraOrder.begin(), impl.cameraOrder.end(), [&](u32 a, u32 b) {
+        const DrawItem& x = impl.items[a];
+        const DrawItem& y = impl.items[b];
         const bool xBlend = x.material->alphaMode == AlphaMode::Blend;
         const bool yBlend = y.material->alphaMode == AlphaMode::Blend;
         if (xBlend != yBlend)
@@ -451,19 +717,30 @@ void SceneRenderer::render(nvrhi::ICommandList* commandList, nvrhi::ITexture* co
         return x.submesh < y.submesh;
     });
 
-    impl.instances.resize(visibleCount);
+    // Instance data: the camera's instances, then each cascade's casters.
+    std::array<u32, kMaxShadowCascades> shadowOffsets{};
+    u32 instanceCount = visibleCount;
+    for (u32 c = 0; c < impl.cascades.count; ++c)
+    {
+        impl.sortShadowCasters(c);
+        shadowOffsets[c] = instanceCount;
+        instanceCount += static_cast<u32>(impl.shadowOrders[c].size());
+        impl.stats.shadowCasters += static_cast<u32>(impl.shadowOrders[c].size());
+    }
+    impl.instances.resize(instanceCount);
     for (u32 i = 0; i < visibleCount; ++i)
     {
-        impl.instances[i] = impl.visible[impl.order[i]].instance;
+        impl.instances[i] = impl.items[impl.cameraOrder[i]].instance;
     }
-    impl.ensureInstanceCapacity(visibleCount);
-
-    GpuViewConstants constants{};
-    constants.viewProjection = view.projection * view.view;
-    constants.inverseViewProjection = glm::inverse(constants.viewProjection);
-    constants.cameraPosition = Vec4(view.position, view.exposure);
-    constants.output = Vec4(impl.encodeSrgb ? 1.0f : 0.0f, 0.0f, 0.0f, 0.0f);
-    impl.gatherLights(world, constants);
+    for (u32 c = 0; c < impl.cascades.count; ++c)
+    {
+        const std::vector<u32>& order = impl.shadowOrders[c];
+        for (usize i = 0; i < order.size(); ++i)
+        {
+            impl.instances[shadowOffsets[c] + i] = impl.items[order[i]].instance;
+        }
+    }
+    impl.ensureInstanceCapacity(instanceCount);
 
     // The first SkyLight provides image-based lighting; without one, the constant ambient light does.
     const SkyLight* skyLight = nullptr;
@@ -491,17 +768,28 @@ void SceneRenderer::render(nvrhi::ICommandList* commandList, nvrhi::ITexture* co
     nvrhi::IBindingSet* viewSet = impl.viewSetFor(environment);
 
     commandList->beginMarker("SceneRenderer");
+    commandList->writeBuffer(impl.viewConstants, &constants, sizeof(constants));
+    if (instanceCount > 0)
+    {
+        commandList->writeBuffer(impl.instanceBuffer, impl.instances.data(),
+                                 static_cast<usize>(instanceCount) * sizeof(GpuInstance));
+    }
+
+    commandList->clearDepthStencilTexture(impl.shadowMap, nvrhi::AllSubresources, true, 1.0f, false, 0);
+    if (impl.cascades.count > 0)
+    {
+        commandList->beginMarker("Shadows");
+        for (u32 c = 0; c < impl.cascades.count; ++c)
+        {
+            impl.drawShadows(commandList, c, shadowOffsets[c]);
+        }
+        commandList->endMarker();
+    }
+
     commandList->clearTextureFloat(colorTarget, nvrhi::AllSubresources,
                                    nvrhi::Color(impl.desc.clearColor.r, impl.desc.clearColor.g,
                                                 impl.desc.clearColor.b, impl.desc.clearColor.a));
     commandList->clearDepthStencilTexture(impl.depth, nvrhi::AllSubresources, true, 0.0f, false, 0);
-    commandList->writeBuffer(impl.viewConstants, &constants, sizeof(constants));
-    if (visibleCount > 0)
-    {
-        commandList->writeBuffer(impl.instanceBuffer, impl.instances.data(),
-                                 visibleCount * sizeof(GpuInstance));
-    }
-
     const nvrhi::Viewport viewport = framebuffer->getFramebufferInfo().getViewport();
     bool backgroundDone = !drawBackground;
     // Drawn after opaque geometry (so covered pixels fail the depth test) and before blended geometry.
@@ -521,7 +809,7 @@ void SceneRenderer::render(nvrhi::ICommandList* commandList, nvrhi::ITexture* co
     u32 begin = 0;
     while (begin < visibleCount)
     {
-        const VisibleItem& first = impl.visible[impl.order[begin]];
+        const DrawItem& first = impl.items[impl.cameraOrder[begin]];
         const bool blend = first.material->alphaMode == AlphaMode::Blend;
         if (blend && !backgroundDone)
         {
@@ -531,7 +819,7 @@ void SceneRenderer::render(nvrhi::ICommandList* commandList, nvrhi::ITexture* co
         // Transparent objects are drawn one by one to keep the back-to-front order.
         while (!blend && end < visibleCount)
         {
-            const VisibleItem& next = impl.visible[impl.order[end]];
+            const DrawItem& next = impl.items[impl.cameraOrder[end]];
             if (next.material != first.material || next.mesh != first.mesh || next.submesh != first.submesh)
             {
                 break;
@@ -571,6 +859,22 @@ void SceneRenderer::render(nvrhi::ICommandList* commandList, nvrhi::ITexture* co
 const RenderStats& SceneRenderer::stats() const noexcept
 {
     return m_impl->stats;
+}
+
+const ShadowCascades& SceneRenderer::shadowCascades() const noexcept
+{
+    return m_impl->cascades;
+}
+
+const ShadowSettings& SceneRenderer::shadowSettings() const noexcept
+{
+    return m_impl->desc.shadows;
+}
+
+void SceneRenderer::setShadowSettings(const ShadowSettings& settings) noexcept
+{
+    m_impl->desc.shadows = settings;
+    m_impl->shadowResourcesDirty = true;
 }
 
 void SceneRenderer::setAmbient(Vec3 ambient) noexcept
