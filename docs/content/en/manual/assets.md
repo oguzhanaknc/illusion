@@ -5,7 +5,7 @@ Meshes and whole glTF models. It does not touch the GPU; `RenderResources` uploa
 [Rendering](rendering.md#drawing-a-scene)).
 
 Headers: `#include <illusion/assets/Model.hpp>`, `<illusion/assets/Mesh.hpp>`,
-`<illusion/assets/Image.hpp>`
+`<illusion/assets/Image.hpp>`, `<illusion/assets/Environment.hpp>`
 
 ## Loading a glTF model
 
@@ -45,7 +45,8 @@ read files outside it.
 
 `Image` stores RGBA pixels with a mip chain: `RGBA8` (linear data such as normal maps), `RGBA8Srgb`
 (colours) or `RGBA32F` (HDR environments). `decodeImage()` reads PNG, JPEG, TGA, BMP and Radiance HDR;
-`encodePng()` writes 8-bit images, for example for screenshots.
+`encodePng()` writes 8-bit images, for example for screenshots. `readPixel()` returns any pixel as
+linear RGBA, whatever the format.
 
 ```cpp
 std::vector<std::byte> bytes;
@@ -73,3 +74,23 @@ const illusion::MeshHandle groundMesh = resources.createMesh(ground, "Ground");
 ```
 
 All Meshes use counter-clockwise front faces in a right-handed, y-up space.
+
+## Environments
+
+Header: `<illusion/assets/Environment.hpp>`
+
+Environment images use the equirectangular layout of Poly Haven and most HDRI libraries: the image
+centre faces -z (where an unrotated camera looks), u grows towards +x and the top row is straight up.
+`decodeImage()` reads Radiance `.hdr` files into `RGBA32F` images.
+
+```cpp
+const illusion::Vec3 front = illusion::equirectDirection(illusion::Vec2(0.5f, 0.5f)); // (0, 0, -1)
+const illusion::ShIrradiance irradiance = illusion::computeShIrradiance(*sky);
+const illusion::Vec3 fromAbove = irradiance.evaluate(illusion::Vec3(0.0f, 1.0f, 0.0f));
+```
+
+- `computeShIrradiance()` projects an environment onto 9 spherical-harmonics coefficients with the
+  cosine convolution applied, so `evaluate()` returns the irradiance on a surface facing a direction.
+  `RenderResources::createEnvironment()` calls it for you.
+- `makeSkyImage()` creates a procedural sky (zenith-to-horizon gradient, ground and an optional sun
+  disc) for prototypes, tests and as a fallback.

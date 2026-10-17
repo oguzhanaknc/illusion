@@ -1,34 +1,10 @@
 // Forward PBR shading (glTF metallic-roughness): Cook-Torrance GGX specular with height-correlated
-// Smith visibility and Schlick Fresnel, Lambert diffuse, directional and point lights, constant ambient,
-// exposure and ACES tonemapping. Must match the C++ layouts in SceneRenderer.cpp and RenderResources.cpp.
+// Smith visibility and Schlick Fresnel, Lambert diffuse, directional and point lights, image-based
+// lighting (SH irradiance + prefiltered specular cube map + split-sum BRDF table with multiple-scattering
+// compensation), exposure and ACES tonemapping. Must match the C++ layouts in SceneRenderer.cpp and
+// RenderResources.cpp.
 
-static const uint kMaxDirectionalLights = 4;
-static const uint kMaxPointLights = 16;
-static const float kPi = 3.14159265358979;
-
-struct DirectionalLightData
-{
-    float4 direction; // xyz: direction the light travels (normalized)
-    float4 color;     // rgb: colour * intensity
-};
-
-struct PointLightData
-{
-    float4 positionRange; // xyz: position, w: range
-    float4 color;         // rgb: colour * intensity
-};
-
-struct ViewConstants
-{
-    float4x4 viewProjection;
-    float4 cameraPosition; // xyz; w: exposure
-    float4 ambient;        // rgb: ambient light; w: 1 if the shader must encode sRGB itself
-    uint directionalCount;
-    uint pointCount;
-    uint2 padding;
-    DirectionalLightData directional[kMaxDirectionalLights];
-    PointLightData points[kMaxPointLights];
-};
+#include "Common.slang"
 
 struct InstanceData
 {
@@ -53,6 +29,9 @@ struct MaterialConstants
 
 ConstantBuffer<ViewConstants> g_view : register(b0, space0);
 StructuredBuffer<InstanceData> g_instances : register(t0, space0);
+TextureCube g_specularCube : register(t1, space0);
+Texture2D g_brdfLut : register(t2, space0);
+SamplerState g_clampSampler : register(s0, space0);
 [[vk::push_constant]] ConstantBuffer<PushConstants> g_push;
 
 ConstantBuffer<MaterialConstants> g_material : register(b0, space1);
@@ -173,15 +152,24 @@ float3 surfaceNormal(VertexOutput input, bool frontFace)
     return normalize(t * sampled.x + b * sampled.y + n * sampled.z);
 }
 
-float3 tonemapAces(float3 x)
+// Image-based lighting (Fdez-Aguera 2019 multiple-scattering split sum).
+float3 environmentLighting(Surface surface, float roughness)
 {
-    // Narkowicz 2015 fit of the ACES filmic curve.
-    return saturate((x * (2.51 * x + 0.03)) / (x * (2.43 * x + 0.59) + 0.14));
-}
+    const float nDotV = max(dot(surface.normal, surface.view), 1e-4);
+    const float2 brdf = g_brdfLut.SampleLevel(g_clampSampler, float2(nDotV, roughness), 0.0).xy;
+    const float3 singleScatter = surface.f0 * brdf.x + brdf.y;
+    const float multiScatterEnergy = 1.0 - (brdf.x + brdf.y);
+    const float3 averageFresnel = surface.f0 + (1.0 - surface.f0) / 21.0;
+    const float3 multiScatter = singleScatter * averageFresnel / (1.0 - multiScatterEnergy * averageFresnel);
+    const float3 diffuseWeight = surface.albedo * (1.0 - singleScatter - multiScatter * multiScatterEnergy);
 
-float3 linearToSrgb(float3 c)
-{
-    return select(c <= 0.0031308, c * 12.92, 1.055 * pow(c, 1.0 / 2.4) - 0.055);
+    const float3x3 toEnvironment = (float3x3)g_view.skyRotation;
+    const float3 irradiance = shIrradiance(g_view.sh, mul(toEnvironment, surface.normal)) / kPi;
+    const float3 reflected = reflect(-surface.view, surface.normal);
+    const float3 radiance =
+        g_specularCube.SampleLevel(g_clampSampler, mul(toEnvironment, reflected), roughness * g_view.sky.y).rgb *
+        g_view.sky.x;
+    return singleScatter * radiance + (multiScatter * multiScatterEnergy + diffuseWeight) * irradiance;
 }
 
 [shader("fragment")]
@@ -205,7 +193,7 @@ float4 fragmentMain(VertexOutput input, bool frontFace: SV_IsFrontFace) : SV_Tar
     surface.normal = surfaceNormal(input, frontFace);
     surface.view = normalize(g_view.cameraPosition.xyz - input.worldPosition);
 
-    float3 color = g_view.ambient.rgb * baseColor.rgb * occlusion;
+    float3 color = environmentLighting(surface, roughness) * occlusion;
     for (uint i = 0; i < g_view.directionalCount; ++i)
     {
         const DirectionalLightData light = g_view.directional[i];
@@ -224,10 +212,5 @@ float4 fragmentMain(VertexOutput input, bool frontFace: SV_IsFrontFace) : SV_Tar
     }
     color += emissive;
 
-    float3 mapped = tonemapAces(color * g_view.cameraPosition.w);
-    if (g_view.ambient.w > 0.5)
-    {
-        mapped = linearToSrgb(mapped);
-    }
-    return float4(mapped, baseColor.a);
+    return float4(finalColor(g_view, color), baseColor.a);
 }

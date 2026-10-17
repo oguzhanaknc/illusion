@@ -1,10 +1,14 @@
 // gltf_viewer: renders a glTF model (or a PBR test scene) with an orbit camera.
 //
-// Usage: illusion_gltf_viewer [path/to/model.gltf|.glb] [--frames N] [--screenshot out.png]
+// Usage: illusion_gltf_viewer [path/to/model.gltf|.glb] [--environment sky.hdr] [--frames N]
+//                             [--screenshot out.png]
 //   Without a model, a grid of spheres with varying metallic (x) and roughness (y) is shown.
 //   Orbit: left mouse drag or right stick. Zoom: mouse wheel or triggers. Escape quits.
+//   --environment lights the scene with an equirectangular HDR image (for example from polyhaven.com);
+//   without it, a procedural sky is used.
 //   --screenshot renders the final view offscreen at 1280x720 and saves it as PNG.
 
+#include <illusion/assets/Environment.hpp>
 #include <illusion/assets/Model.hpp>
 #include <illusion/core/EventBus.hpp>
 #include <illusion/core/JobSystem.hpp>
@@ -28,6 +32,8 @@
 #include <filesystem>
 #include <format>
 #include <fstream>
+#include <iterator>
+#include <span>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -125,6 +131,7 @@ int main(int argc, char** argv)
 {
     std::string modelPath;
     std::string screenshotPath;
+    std::string environmentPath;
     u64 frameLimit = 0;
     for (int i = 1; i < argc; ++i)
     {
@@ -137,6 +144,10 @@ int main(int argc, char** argv)
         else if (arg == "--screenshot" && i + 1 < argc)
         {
             screenshotPath = argv[++i];
+        }
+        else if (arg == "--environment" && i + 1 < argc)
+        {
+            environmentPath = argv[++i];
         }
         else
         {
@@ -217,6 +228,27 @@ int main(int argc, char** argv)
     Transform sun;
     sun.rotation = glm::quatLookAt(glm::normalize(Vec3(-0.4f, -1.0f, -0.6f)), Vec3(0.0f, 1.0f, 0.0f));
     world.create(sun, DirectionalLight{Vec3(1.0f, 0.95f, 0.9f), 3.0f});
+
+    Image environmentImage = makeSkyImage(2048);
+    if (!environmentPath.empty())
+    {
+        std::ifstream file(utf8Path(environmentPath), std::ios::binary);
+        const std::vector<char> bytes{std::istreambuf_iterator<char>(file), std::istreambuf_iterator<char>()};
+        std::string error;
+        auto decoded = decodeImage(std::as_bytes(std::span(bytes)), false, &error);
+        if (!decoded)
+        {
+            ILL_LOG_ERROR("Sample", "cannot load {}: {}", environmentPath, error);
+            return 1;
+        }
+        environmentImage = std::move(*decoded);
+    }
+    Stopwatch bakeTimer;
+    const EnvironmentHandle environment = resources.createEnvironment(environmentImage);
+    device->waitIdle();
+    ILL_LOG_INFO("Sample", "environment {}x{} baked in {:.1f} ms", environmentImage.width(),
+                 environmentImage.height(), bakeTimer.elapsedSeconds() * 1000.0);
+    world.create(Transform{}, SkyLight{environment, 1.0f, true});
 
     InputActions actions;
     const ActionId orbit = actions.addAction("Orbit", ActionType::Vector2);

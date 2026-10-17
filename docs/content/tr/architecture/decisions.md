@@ -20,6 +20,7 @@ Record (ADR) olarak kaydedilir. Her kayıt bağlamı, kararı ve sonuçlarını 
 | [0011](https://github.com/oguzhanaknc/illusion/blob/main/docs/adr/0011-gamepads-sdl3.md) | Test'ler için sanal cihazlarla, SDL3 üzerinden gamepad'ler |
 | [0012](https://github.com/oguzhanaknc/illusion/blob/main/docs/adr/0012-input-actions.md) | Metin tabanlı binding formatı ve kararlı glyph kimlikleriyle action eşleme |
 | [0013](https://github.com/oguzhanaknc/illusion/blob/main/docs/adr/0013-forward-pbr-renderer.md) | Reversed-Z, CPU culling ve instancing ile forward PBR renderer |
+| [0014](https://github.com/oguzhanaknc/illusion/blob/main/docs/adr/0014-image-based-lighting.md) | Görüntü tabanlı aydınlatma: GPU'da hazırlanan cube map'ler, SH irradiance, çoklu saçılımlı split sum |
 
 Yeni bir karar önermek için `docs/adr/0000-template.md` dosyasını kopyalayın ve
 [katkıda bulunma rehberini](../contributing.md#architecture-decision-recordlar) izleyin.

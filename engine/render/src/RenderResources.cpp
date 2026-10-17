@@ -1,3 +1,4 @@
+#include "EnvironmentBaker.hpp"
 #include "RenderResourcesImpl.hpp"
 
 #include <illusion/core/Assert.hpp>
@@ -5,6 +6,7 @@
 #include <illusion/core/Profiler.hpp>
 #include <illusion/render/RenderDevice.hpp>
 
+#include <glm/gtc/packing.hpp>
 #include <nvrhi/utils.h>
 
 #include <array>
@@ -56,6 +58,11 @@ struct RenderResources::Impl
     std::vector<GpuMesh> meshes{1};
     std::vector<nvrhi::TextureHandle> textures{1};
     std::vector<GpuMaterial> materials{1};
+    std::vector<GpuEnvironment> environments{1};
+
+    EnvironmentBaker baker;
+    GpuEnvironment blackEnvironment;
+    nvrhi::TextureHandle brdfLut;
 
     TextureHandle white;
     TextureHandle flatNormal;
@@ -106,6 +113,13 @@ RenderResources::RenderResources(RenderDevice& renderDevice)
                                     "Default normal");
     const MaterialHandle defaultMaterial = createMaterial(MaterialDesc{});
     ILL_CHECK(defaultMaterial.index == 1, "default material must be the first material");
+
+    ILL_CHECK(impl.baker.initialize(impl.device), "cannot create the image-based lighting pipelines");
+    impl.uploads->open();
+    impl.blackEnvironment = impl.baker.makeBlack(impl.uploads);
+    impl.brdfLut = impl.baker.bakeBrdfLut(impl.uploads, 128);
+    impl.uploads->close();
+    impl.device->executeCommandList(impl.uploads);
 }
 
 RenderResources::~RenderResources() = default;
@@ -252,6 +266,49 @@ ModelHandles RenderResources::uploadModel(const ModelData& model)
     return handles;
 }
 
+EnvironmentHandle RenderResources::createEnvironment(const Image& equirect, const EnvironmentDesc& desc,
+                                                     const char* debugName)
+{
+    ILL_PROFILE_SCOPE();
+    ILL_CHECK(equirect.isValid(), "createEnvironment: invalid image");
+    Impl& impl = *m_impl;
+
+    // Half floats: filterable on every GPU (32-bit float filtering is optional in Vulkan).
+    const u32 width = equirect.width();
+    const u32 height = equirect.height();
+    std::vector<u64> halves(static_cast<usize>(width) * height);
+    for (u32 y = 0; y < height; ++y)
+    {
+        for (u32 x = 0; x < width; ++x)
+        {
+            const Vec4 pixel = glm::min(readPixel(equirect, x, y), Vec4(65504.0f));
+            halves[static_cast<usize>(y) * width + x] = glm::packHalf4x16(pixel);
+        }
+    }
+    nvrhi::TextureDesc sourceDesc;
+    sourceDesc.width = width;
+    sourceDesc.height = height;
+    sourceDesc.format = nvrhi::Format::RGBA16_FLOAT;
+    sourceDesc.debugName = std::format("{} source", debugName);
+    sourceDesc.enableAutomaticStateTracking(nvrhi::ResourceStates::ShaderResource);
+    nvrhi::TextureHandle source = impl.device->createTexture(sourceDesc);
+
+    impl.uploads->open();
+    impl.uploads->writeTexture(source, 0, 0, halves.data(), static_cast<usize>(width) * sizeof(u64));
+    GpuEnvironment environment = impl.baker.bake(impl.uploads, source, desc, debugName);
+    impl.uploads->close();
+    impl.device->executeCommandList(impl.uploads);
+
+    environment.irradiance = computeShIrradiance(equirect);
+    impl.environments.push_back(std::move(environment));
+    return EnvironmentHandle{static_cast<u32>(impl.environments.size() - 1)};
+}
+
+const ShIrradiance& RenderResources::irradiance(EnvironmentHandle environment) const noexcept
+{
+    return this->environment(environment).irradiance;
+}
+
 u32 RenderResources::submeshCount(MeshHandle mesh) const noexcept
 {
     const GpuMesh* gpu = this->mesh(mesh);
@@ -290,6 +347,23 @@ const RenderResources::GpuMaterial* RenderResources::material(MaterialHandle han
 {
     const u32 index = handle.index != 0 && handle.index < m_impl->materials.size() ? handle.index : 1;
     return &m_impl->materials[index];
+}
+
+u32 RenderResources::environmentCount() const noexcept
+{
+    return static_cast<u32>(m_impl->environments.size() - 1);
+}
+
+const RenderResources::GpuEnvironment& RenderResources::environment(EnvironmentHandle handle) const noexcept
+{
+    return handle.index != 0 && handle.index < m_impl->environments.size()
+               ? m_impl->environments[handle.index]
+               : m_impl->blackEnvironment;
+}
+
+nvrhi::ITexture* RenderResources::brdfLut() const noexcept
+{
+    return m_impl->brdfLut;
 }
 
 nvrhi::IBindingLayout* RenderResources::materialBindingLayout() const noexcept

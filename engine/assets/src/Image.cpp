@@ -177,6 +177,25 @@ std::vector<std::byte> encodePng(const Image& image)
     return png;
 }
 
+Vec4 readPixel(const Image& image, u32 x, u32 y) noexcept
+{
+    ILL_ASSERT(x < image.width() && y < image.height(), "readPixel outside the image");
+    const usize index = static_cast<usize>(y) * image.width() + x;
+    if (image.format == ImageFormat::RGBA32F)
+    {
+        Vec4 pixel;
+        std::memcpy(&pixel.x, image.data.data() + index * 16, 16);
+        return pixel;
+    }
+    const auto* p = reinterpret_cast<const u8*>(image.data.data()) + index * 4;
+    if (image.format == ImageFormat::RGBA8Srgb)
+    {
+        const std::array<f32, 256>& toLinear = srgbToLinearTable();
+        return Vec4(toLinear[p[0]], toLinear[p[1]], toLinear[p[2]], static_cast<f32>(p[3]) / 255.0f);
+    }
+    return Vec4(p[0], p[1], p[2], p[3]) / 255.0f;
+}
+
 void generateMips(Image& image)
 {
     ILL_ASSERT(image.isValid(), "generateMips on an empty image");

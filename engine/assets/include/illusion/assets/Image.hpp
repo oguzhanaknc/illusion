@@ -75,6 +75,10 @@ struct Image
 /// Encodes mip 0 of an RGBA8 or RGBA8Srgb image as PNG. Returns an empty vector for other formats.
 [[nodiscard]] std::vector<std::byte> encodePng(const Image& image);
 
+/// Pixel (@p x, @p y) of mip 0 as linear RGBA: sRGB images are decoded, 8-bit values are scaled to
+/// [0, 1]. Coordinates must be inside the image.
+[[nodiscard]] Vec4 readPixel(const Image& image, u32 x, u32 y) noexcept;
+
 /// Replaces the mip chain below level 0 with a full chain down to 1x1, using a 2x2 box filter.
 /// sRGB images are filtered in linear space.
 void generateMips(Image& image);

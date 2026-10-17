@@ -7,7 +7,7 @@ physically based materials. It is built on [NVRHI](https://github.com/NVIDIA-RTX
 Headers: `#include <illusion/render/RenderDevice.hpp>`, `<illusion/render/Swapchain.hpp>`
 
 !!! note "In progress"
-    The scene renderer draws Meshes with PBR Materials and direct lights. Image-based lighting, shadows,
+    The scene renderer draws Meshes with PBR Materials, direct lights and image-based lighting. Shadows,
     ambient occlusion and post-processing follow in later steps of the renderer milestone (see the
     roadmap).
 
@@ -139,21 +139,54 @@ Materials follow the glTF 2.0 metallic-roughness model: base colour, metallic, r
 occlusion and emissive, each a factor with an optional Texture. Alpha modes are opaque, mask (with a
 cutoff) and blend; double-sided Materials disable back-face culling. Lighting uses the GGX
 distribution, height-correlated Smith visibility and Schlick Fresnel, followed by exposure and ACES
-tonemapping. Until image-based lighting arrives, `SceneRendererDesc::ambient` adds a constant ambient
-term, so metals look dark without bright surroundings.
+tonemapping. Indirect light comes from a `SkyLight` (see below).
 
 To draw a glTF model, load it with `loadGltf()` (see [Assets and Models](assets.md)), upload it with
 `RenderResources::uploadModel()` and create its Entities with `spawnModel()`.
+
+### Image-based lighting
+
+A `SkyLight` lights the scene with an environment: an equirectangular image of everything around it,
+usually an HDR photo. Free, high-quality HDRIs (CC0) are available from
+[Poly Haven](https://polyhaven.com/hdris); download them as `.hdr` files.
+
+```cpp
+std::vector<std::byte> bytes;
+files.readFile("game:/skies/meadow_2k.hdr", bytes);
+std::optional<illusion::Image> sky = illusion::decodeImage(bytes, /*srgb=*/false);
+if (!sky)
+{
+    sky = illusion::makeSkyImage(1024); // procedural fallback
+}
+const illusion::EnvironmentHandle environment = resources.createEnvironment(*sky);
+
+illusion::Transform orientation;
+orientation.rotation = glm::angleAxis(glm::radians(90.0f), illusion::Vec3(0.0f, 1.0f, 0.0f));
+world.create(orientation, illusion::SkyLight{environment, 1.0f, true});
+```
+
+- `createEnvironment()` bakes the image on the GPU once: a background cube map, a specular cube map
+  prefiltered for increasing roughness, and the diffuse irradiance as spherical harmonics (on the
+  CPU). Bake environments at load time: a 2K HDRI takes under 100 ms on a desktop machine.
+  `EnvironmentDesc` sets the resolutions and sample count.
+- The renderer uses the first `SkyLight`. Its Transform rotates the environment; `intensity` scales
+  it, and `background = false` keeps the clear colour behind the scene.
+- Without a `SkyLight`, `SceneRendererDesc::ambient` adds uniform ambient light instead.
+- Metals reflect their surroundings, so they look right only with an environment.
+- The shading is energy-conserving: in a uniform white environment, every white Material looks like the
+  background, whatever its roughness or metalness (the "white furnace" test in the GPU tests).
 
 ### The glTF viewer
 
 `illusion_gltf_viewer` shows a model with an orbit camera (left mouse drag or right stick to orbit,
 mouse wheel or triggers to zoom). Without a model it shows a grid of spheres with increasing metallic
-(left to right) and decreasing roughness (top to bottom). `--screenshot` saves the final view as a
-1280x720 PNG.
+(left to right) and decreasing roughness (top to bottom). `--environment` lights the scene with an
+HDR file instead of the built-in procedural sky. `--screenshot` saves the final view as a 1280x720
+PNG.
 
 ```bash
 ./build/linux-clang/samples/Debug/illusion_gltf_viewer path/to/model.glb
+./build/linux-clang/samples/Debug/illusion_gltf_viewer path/to/model.glb --environment meadow_2k.hdr
 ./build/linux-clang/samples/Debug/illusion_gltf_viewer --frames 60 --screenshot scene.png
 ```
 

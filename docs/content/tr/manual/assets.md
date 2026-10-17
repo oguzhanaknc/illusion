@@ -5,7 +5,7 @@ dönüştürür: görüntüler, Mesh'ler ve tüm glTF modelleri. GPU'ya dokunmaz
 yükler ([Rendering](rendering.md#bir-sahne-cizme) sayfasına bakın).
 
 Header'lar: `#include <illusion/assets/Model.hpp>`, `<illusion/assets/Mesh.hpp>`,
-`<illusion/assets/Image.hpp>`
+`<illusion/assets/Image.hpp>`, `<illusion/assets/Environment.hpp>`
 
 ## Bir glTF modeli yükleme
 
@@ -46,7 +46,8 @@ asla onun dışındaki dosyaları okuyamaz.
 
 `Image`, RGBA piksellerini bir mip zinciriyle saklar: `RGBA8` (normal map gibi doğrusal veriler),
 `RGBA8Srgb` (renkler) veya `RGBA32F` (HDR ortamlar). `decodeImage()` PNG, JPEG, TGA, BMP ve Radiance
-HDR okur; `encodePng()` 8 bitlik görüntüleri yazar, örneğin ekran görüntüleri için.
+HDR okur; `encodePng()` 8 bitlik görüntüleri yazar, örneğin ekran görüntüleri için. `readPixel()` formatı ne
+olursa olsun herhangi bir pikseli doğrusal RGBA olarak döndürür.
 
 ```cpp
 std::vector<std::byte> bytes;
@@ -74,3 +75,24 @@ const illusion::MeshHandle groundMesh = resources.createMesh(ground, "Ground");
 ```
 
 Tüm Mesh'ler sağ elli, y yukarı bir uzayda saat yönünün tersindeki ön yüzleri kullanır.
+
+## Ortamlar
+
+Header: `<illusion/assets/Environment.hpp>`
+
+Ortam görüntüleri Poly Haven ve çoğu HDRI kütüphanesinin equirectangular düzenini kullanır: görüntünün
+merkezi -z yönüne (döndürülmemiş bir kameranın baktığı yöne) bakar, u değeri +x yönüne doğru artar ve
+en üst satır tam yukarıyı gösterir. `decodeImage()`, Radiance `.hdr` dosyalarını `RGBA32F`
+görüntülere okur.
+
+```cpp
+const illusion::Vec3 front = illusion::equirectDirection(illusion::Vec2(0.5f, 0.5f)); // (0, 0, -1)
+const illusion::ShIrradiance irradiance = illusion::computeShIrradiance(*sky);
+const illusion::Vec3 fromAbove = irradiance.evaluate(illusion::Vec3(0.0f, 1.0f, 0.0f));
+```
+
+- `computeShIrradiance()` bir ortamı, kosinüs konvolüsyonu uygulanmış 9 spherical harmonics
+  katsayısına izdüşürür; böylece `evaluate()` bir yöne bakan yüzeydeki irradiance değerini döndürür.
+  `RenderResources::createEnvironment()` bunu sizin için çağırır.
+- `makeSkyImage()` prototipler, test'ler ve yedek olarak prosedürel bir gökyüzü (zenitten ufka bir
+  geçiş, zemin ve isteğe bağlı bir güneş diski) oluşturur.

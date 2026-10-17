@@ -8,9 +8,9 @@ list'leri ile kaydeder.
 Header'lar: `#include <illusion/render/RenderDevice.hpp>`, `<illusion/render/Swapchain.hpp>`
 
 !!! note "Geliştirme sürüyor"
-    Sahne renderer'ı Mesh'leri PBR Material'ler ve doğrudan ışıklarla çizer. Görüntü tabanlı
-    aydınlatma, gölgeler, ambient occlusion ve post-processing renderer milestone'unun sonraki
-    adımlarında gelecek (yol haritasına bakın).
+    Sahne renderer'ı Mesh'leri PBR Material'ler, doğrudan ışıklar ve görüntü tabanlı aydınlatmayla
+    çizer. Gölgeler, ambient occlusion ve post-processing renderer milestone'unun sonraki adımlarında
+    gelecek (yol haritasına bakın).
 
 ## Gereksinimler
 
@@ -143,23 +143,56 @@ Material'ler glTF 2.0 metallic-roughness modelini izler: base colour, metallic, 
 occlusion ve emissive; her biri isteğe bağlı bir Texture'la birlikte bir çarpandır. Alpha modları
 opak, mask (bir eşik değeriyle) ve blend'dir; çift yüzlü Material'ler arka yüz elemeyi kapatır.
 Aydınlatma GGX dağılımı, yüksekliğe bağlı Smith görünürlüğü ve Schlick Fresnel kullanır; ardından
-pozlama ve ACES tonemapping uygulanır. Görüntü tabanlı aydınlatma (IBL) gelene kadar
-`SceneRendererDesc::ambient` sabit bir ortam ışığı ekler; bu yüzden parlak bir çevre olmadan metaller
-koyu görünür.
+pozlama ve ACES tonemapping uygulanır. Dolaylı ışık bir `SkyLight`'tan gelir (aşağıya bakın).
 
 Bir glTF modelini çizmek için onu `loadGltf()` ile yükleyin ([Asset'ler ve Modeller](assets.md)
 sayfasına bakın), `RenderResources::uploadModel()` ile GPU'ya yükleyin ve Entity'lerini `spawnModel()`
 ile oluşturun.
 
+### Görüntü tabanlı aydınlatma
+
+Bir `SkyLight`, sahneyi bir ortamla aydınlatır: çevredeki her şeyin equirectangular bir görüntüsü,
+genellikle bir HDR fotoğraf. Ücretsiz ve yüksek kaliteli HDRI'ler (CC0)
+[Poly Haven](https://polyhaven.com/hdris) adresinden `.hdr` dosyası olarak indirilebilir.
+
+```cpp
+std::vector<std::byte> bytes;
+files.readFile("game:/skies/meadow_2k.hdr", bytes);
+std::optional<illusion::Image> sky = illusion::decodeImage(bytes, /*srgb=*/false);
+if (!sky)
+{
+    sky = illusion::makeSkyImage(1024); // procedural fallback
+}
+const illusion::EnvironmentHandle environment = resources.createEnvironment(*sky);
+
+illusion::Transform orientation;
+orientation.rotation = glm::angleAxis(glm::radians(90.0f), illusion::Vec3(0.0f, 1.0f, 0.0f));
+world.create(orientation, illusion::SkyLight{environment, 1.0f, true});
+```
+
+- `createEnvironment()` görüntüyü GPU'da bir kez işler (bake): bir arka plan cube map'i, artan
+  roughness için önceden filtrelenmiş bir specular cube map ve spherical harmonics olarak diffuse
+  irradiance (CPU'da). Ortamları yükleme sırasında hazırlayın: 2K bir HDRI masaüstü bir makinede
+  100 ms'den kısa sürer. `EnvironmentDesc` çözünürlükleri ve örnek sayısını belirler.
+- Renderer ilk `SkyLight`'ı kullanır. Transform'u ortamı döndürür; `intensity` onu ölçekler ve
+  `background = false` sahnenin arkasında temizleme rengini bırakır.
+- `SkyLight` yoksa onun yerine `SceneRendererDesc::ambient` tekdüze bir ortam ışığı ekler.
+- Metaller çevrelerini yansıtır; bu yüzden ancak bir ortamla doğru görünürler.
+- Gölgelendirme enerjiyi korur: tekdüze beyaz bir ortamda her beyaz Material, roughness veya
+  metalness değeri ne olursa olsun arka planla aynı görünür (GPU test'lerindeki "white furnace"
+  testi).
+
 ### glTF görüntüleyici
 
 `illusion_gltf_viewer` bir modeli yörünge kamerasıyla gösterir (döndürmek için sol fare sürükleme veya
 sağ çubuk, yakınlaştırmak için fare tekerleği veya tetikler). Model verilmezse, metallic değeri soldan
-sağa artan ve roughness değeri yukarıdan aşağıya azalan bir küre ızgarası gösterir. `--screenshot` son
-görüntüyü 1280x720 PNG olarak kaydeder.
+sağa artan ve roughness değeri yukarıdan aşağıya azalan bir küre ızgarası gösterir. `--environment`,
+sahneyi yerleşik prosedürel gökyüzü yerine bir HDR dosyasıyla aydınlatır. `--screenshot` son görüntüyü
+1280x720 PNG olarak kaydeder.
 
 ```bash
 ./build/linux-clang/samples/Debug/illusion_gltf_viewer path/to/model.glb
+./build/linux-clang/samples/Debug/illusion_gltf_viewer path/to/model.glb --environment meadow_2k.hdr
 ./build/linux-clang/samples/Debug/illusion_gltf_viewer --frames 60 --screenshot scene.png
 ```
 
