@@ -57,6 +57,8 @@ Open `build/api/index.html` in a browser.
 | `illusion/assets/AssetStreamer.hpp` | `AssetStreamer`, `AssetHandle`: asynchronous loading |
 | `illusion/assets/AssetCooker.hpp` | `cookAssets`: import a directory ahead of time |
 | `illusion/assets/Environment.hpp` | Equirectangular mapping, `ShIrradiance`, `makeSkyImage` |
+| `illusion/physics/PhysicsWorld.hpp` | `PhysicsWorld`: simulation, body control, raycasts, contact events |
+| `illusion/physics/PhysicsComponents.hpp` | `RigidBody`, `Collider`, `PhysicsBody` Components |
 | `illusion/render/RenderDevice.hpp` | `RenderDevice`, `GpuInfo` (including bindless and multi-draw support): Vulkan device through NVRHI |
 | `illusion/render/Swapchain.hpp` | `Swapchain`: presentation to a window |
 | `illusion/render/DebugTriangle.hpp` | Diagnostic triangle renderer |

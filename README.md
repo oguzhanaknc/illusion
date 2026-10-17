@@ -7,9 +7,9 @@ designed to ship commercial games on Steam and similar stores.
 
 > **Status: early development.** The core library (logging, memory, Job System, archetype ECS), the
 > platform layer, input (keyboard, mouse, gamepads, actions), glTF loading and a forward PBR scene renderer
-> with image-based lighting, soft shadows and HDR post-processing, and an asset pipeline (import cache,
-> streaming, packed archives) are implemented and tested on all platforms. Audio, physics, the editor and
-> the export pipeline are next; see [ROADMAP.md](ROADMAP.md).
+> with image-based lighting, soft shadows and HDR post-processing, an asset pipeline (import cache,
+> streaming, packed archives), scene files and rigid-body physics are implemented and tested on all
+> platforms. Audio, the editor and the export pipeline are next; see [ROADMAP.md](ROADMAP.md).
 
 ## Highlights
 
@@ -26,6 +26,8 @@ designed to ship commercial games on Steam and similar stores.
   instanced draws, image-based lighting from HDRIs, cascaded soft shadows (CSM + PCSS), GTAO, bloom,
   ACES tonemapping, optional TAA with per-object motion vectors, two-phase GPU occlusion culling and
   bindless multi-draw indirect rendering.
+- Rigid-body physics with Jolt on the engine Job System: ECS Components, fixed step with interpolation,
+  raycasts and contact events.
 - Component reflection with stable names and JSON scene files that survive code changes.
 - Asset pipeline: content-hashed import cache, asynchronous streaming on an I/O thread and the Job
   System, memory-mapped `.illpak` archives and cooked builds that ship without sources.

@@ -29,8 +29,9 @@ decisions are in `docs/adr/`. Do not reverse an accepted ADR silently: write a n
 | `engine/platform` | Platform layer: windows, input, events from the OS, virtual file system (GLFW is private) |
 | `engine/input` | Gamepads (SDL3 private), `InputActions` mapping/rebinding/glyphs; tests use `attachVirtualGamepad()` |
 | `engine/assets` | CPU-side assets: `Image`, `MeshData`, glTF via `loadGltf`, environments (SH, sky) (cgltf/stb private); no GPU code |
+| `engine/physics` | `PhysicsWorld`, `RigidBody`/`Collider` Components (Jolt is private, runs on the Job System) |
 | `engine/render` | Render device (Vulkan via NVRHI), swapchains, `RenderResources`, `SceneRenderer`, render Components, `shaders/` (Slang, built with `illusion_add_shaders`) |
-| `samples/` | Sample applications (`hello_triangle`, `input_viewer`, `gltf_viewer`) |
+| `samples/` | Sample applications (`hello_triangle`, `input_viewer`, `gltf_viewer`, `physics_playground`); shared helpers in `common/` |
 | `tests/` | doctest unit tests; one `Test<Feature>.cpp` per feature; shared helpers in `TestSupport.hpp` |
 | `benchmarks/` | nanobench benchmarks with budgets (`ILL_BENCHMARK(name, nsPerOp)`) |
 | `cmake/` | `IllusionOptions`, `IllusionCompilerSettings`, `Dependencies` (pinned) |

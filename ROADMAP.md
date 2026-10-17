@@ -61,7 +61,9 @@ ADRs for its significant decisions. Items marked ✅ are done.
 
 - M5a: ✅ Component reflection with stable, explicit names; JSON scene files (yyjson); type-erased World
   access; semantic versions (ADR 0022)
-- M5b: Jolt Physics integration (ECS components, fixed-step simulation)
+- M5b: ✅ Jolt Physics on the Job System: RigidBody/Collider Components, fixed step with interpolation,
+  forces and impulses, raycasts, contact events, collision layers, `physics_playground` sample (ADR 0023)
+- M5d: Physics extensions: mesh and convex-hull colliders, character controller, joints, shape casts
 - M5c: miniaudio integration (3D sound, mixer)
 
 ## M6 — Game modules and hot reload

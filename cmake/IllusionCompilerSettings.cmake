@@ -42,6 +42,12 @@ function(illusion_configure_target target)
         endif()
     endif()
 
+    illusion_apply_sanitizer(${target})
+endfunction()
+
+# Instruments <target> with ILLUSION_SANITIZER. Also used for third-party code whose synchronization the
+# sanitizer must see (a thread sanitizer reports false races across uninstrumented code).
+function(illusion_apply_sanitizer target)
     if(ILLUSION_SANITIZER STREQUAL "address")
         target_compile_options(${target} PRIVATE -fsanitize=address,undefined -fno-omit-frame-pointer
             -fno-sanitize-recover=all)

@@ -46,10 +46,15 @@ IncludeCategories:
     Priority: 1
   - Regex: '^<illusion/'
     Priority: 2
+  # Jolt requires its prefix header before any other Jolt header.
+  - Regex: '^<Jolt/Jolt\.h>'
+    Priority: 3
+    SortPriority: 3
   - Regex: '^<(doctest|nanobench|tracy|glm|GLFW|SDL3|nvrhi|Jolt|miniaudio)'
     Priority: 3
+    SortPriority: 4
   - Regex: '^<.*>'
-    Priority: 4
+    Priority: 5
 SortIncludes: CaseSensitive
 InsertNewlineAtEOF: true
 KeepEmptyLines:
