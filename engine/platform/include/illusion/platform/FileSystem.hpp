@@ -32,7 +32,8 @@ enum class FileError : u8
     NotFound,     ///< The file or directory does not exist.
     ReadOnly,     ///< Writing to a read-only mount.
     AccessDenied, ///< The operating system refused access.
-    IoError,      ///< Any other I/O failure.
+    IoError,      ///< Any other I/O failure (including damaged archive data).
+    Unsupported,  ///< The mount cannot do this (e.g. resolve() on an archive mount).
 };
 
 /// Human-readable name of @p error, e.g. "NotFound".
@@ -66,6 +67,11 @@ public:
     /// existing name replaces it.
     FileError mount(std::string_view name, const std::filesystem::path& root,
                     MountAccess access = MountAccess::ReadOnly);
+
+    /// Mounts the archive file @p archive (see Archive.hpp) as @p name, read-only. Paths inside it work
+    /// exactly like paths in a mounted directory. Returns FileError::NotFound if the file is missing and
+    /// FileError::IoError if it is not a valid archive.
+    FileError mountArchive(std::string_view name, const std::filesystem::path& archive);
 
     /// Removes a mount. Returns false if it did not exist.
     bool unmount(std::string_view name);

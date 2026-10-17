@@ -138,6 +138,11 @@ TEST_CASE("fileErrorName covers every error")
     CHECK(fileErrorName(FileError::None) == "None");
     CHECK(fileErrorName(FileError::NotFound) == "NotFound");
     CHECK(fileErrorName(FileError::ReadOnly) == "ReadOnly");
+    for (u8 value = 0; value <= static_cast<u8>(FileError::Unsupported); ++value)
+    {
+        CHECK(fileErrorName(static_cast<FileError>(value)) != "Unknown");
+    }
+    CHECK(fileErrorName(FileError::Unsupported) == "Unsupported");
 }
 
 TEST_CASE("platform directories are absolute")

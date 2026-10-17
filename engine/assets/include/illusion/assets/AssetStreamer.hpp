@@ -104,7 +104,10 @@ private:
 /// Creation parameters of an AssetStreamer.
 struct AssetStreamerDesc
 {
-    std::string cacheMount = "cache"; ///< Writable mount for the import cache; empty disables caching.
+    std::string cacheMount = "cache"; ///< Mount for the import cache; empty disables caching.
+    /// Check cached files against their sources (development). False trusts the cache, for shipped games
+    /// that mount a cooked archive without sources.
+    bool verifySources = true;
 };
 
 /// Loads images and models in the background through the import cache (see AssetDatabase).

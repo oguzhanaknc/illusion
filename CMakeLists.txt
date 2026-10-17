@@ -33,6 +33,10 @@ if(ILLUSION_BUILD_SAMPLES)
     add_subdirectory(samples)
 endif()
 
+if(ILLUSION_BUILD_TOOLS)
+    add_subdirectory(tools/pack)
+endif()
+
 if(ILLUSION_BUILD_BENCHMARKS)
     if(NOT ILLUSION_BUILD_TESTS)
         enable_testing()

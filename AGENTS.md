@@ -36,7 +36,7 @@ decisions are in `docs/adr/`. Do not reverse an accepted ADR silently: write a n
 | `cmake/` | `IllusionOptions`, `IllusionCompilerSettings`, `Dependencies` (pinned) |
 | `docs/content/{en,tr}` | MkDocs pages (must stay in sync) |
 | `docs/adr/` | Architecture Decision Records (English only) |
-| `tools/` | `check_format.py`, `check_docs_parity.py`, `windows/vsdev.cmd` |
+| `tools/` | `check_format.py`, `check_docs_parity.py`, `windows/vsdev.cmd`; `pack/` builds `illusion_pack` |
 
 ## Build, test, check
 

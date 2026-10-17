@@ -42,6 +42,7 @@ Open `build/api/index.html` in a browser.
 | `illusion/platform/Input.hpp` | `InputState`, `Key`, `MouseButton` |
 | `illusion/platform/Events.hpp` | Window and input events |
 | `illusion/platform/FileSystem.hpp` | `VirtualFileSystem`, platform directories |
+| `illusion/platform/Archive.hpp` | `ArchiveReader`, `writeArchive`, `packDirectory` |
 | `illusion/input/Gamepad.hpp` | `Gamepad`, `GamepadState`, `TriggerEffect`, gamepad events |
 | `illusion/input/GamepadSystem.hpp` | `GamepadSystem`, `VirtualGamepad` |
 | `illusion/input/InputActions.hpp` | `InputActions`, `InputBinding`, `BindingCapture`, glyphs |
@@ -51,6 +52,7 @@ Open `build/api/index.html` in a browser.
 | `illusion/assets/AssetFormat.hpp` | `AssetId`, `AssetFile`, cooked image and model formats |
 | `illusion/assets/AssetDatabase.hpp` | `AssetDatabase`: import cache for images and models |
 | `illusion/assets/AssetStreamer.hpp` | `AssetStreamer`, `AssetHandle`: asynchronous loading |
+| `illusion/assets/AssetCooker.hpp` | `cookAssets`: import a directory ahead of time |
 | `illusion/assets/Environment.hpp` | Equirectangular mapping, `ShIrradiance`, `makeSkyImage` |
 | `illusion/render/RenderDevice.hpp` | `RenderDevice`, `GpuInfo` (including bindless and multi-draw support): Vulkan device through NVRHI |
 | `illusion/render/Swapchain.hpp` | `Swapchain`: presentation to a window |

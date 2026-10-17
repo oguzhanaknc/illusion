@@ -1,4 +1,5 @@
 #include <illusion/core/Assert.hpp>
+#include <illusion/platform/Archive.hpp>
 #include <illusion/platform/FileSystem.hpp>
 
 #include <algorithm>
@@ -164,6 +165,12 @@ FileError readBytes(const std::filesystem::path& path, Container& out)
     return FileError::None;
 }
 
+// The part of an already validated virtual path after "mount:/": an archive entry path.
+std::string archivePath(std::string_view virtualPath)
+{
+    return std::string(virtualPath.substr(virtualPath.find(":/") + 2));
+}
+
 std::atomic<u64> g_tempCounter{0};
 
 // Random per-process token: temporary names must not collide when several processes (editor and game,
@@ -197,6 +204,8 @@ std::string_view fileErrorName(FileError error) noexcept
         return "AccessDenied";
     case FileError::IoError:
         return "IoError";
+    case FileError::Unsupported:
+        return "Unsupported";
     }
     return "Unknown";
 }
@@ -204,8 +213,9 @@ std::string_view fileErrorName(FileError error) noexcept
 struct VirtualFileSystem::Mount
 {
     std::string name;
-    std::filesystem::path root;
+    std::filesystem::path root; // directory mounts
     MountAccess access;
+    std::shared_ptr<ArchiveReader> archive; // archive mounts (read-only)
 };
 
 struct VirtualFileSystem::Impl
@@ -245,7 +255,28 @@ FileError VirtualFileSystem::mount(std::string_view name, const std::filesystem:
         return errorFromCode(code);
     }
     unmount(name);
-    m_impl->mounts.push_back(Mount{std::string(name), absolute.lexically_normal(), access});
+    m_impl->mounts.push_back(Mount{std::string(name), absolute.lexically_normal(), access, nullptr});
+    return FileError::None;
+}
+
+FileError VirtualFileSystem::mountArchive(std::string_view name, const std::filesystem::path& archive)
+{
+    if (!isValidMountName(name))
+    {
+        return FileError::InvalidPath;
+    }
+    std::error_code code;
+    if (!std::filesystem::is_regular_file(archive, code))
+    {
+        return FileError::NotFound;
+    }
+    std::unique_ptr<ArchiveReader> reader = ArchiveReader::open(archive);
+    if (!reader)
+    {
+        return FileError::IoError;
+    }
+    unmount(name);
+    m_impl->mounts.push_back(Mount{std::string(name), {}, MountAccess::ReadOnly, std::move(reader)});
     return FileError::None;
 }
 
@@ -273,32 +304,55 @@ FileError VirtualFileSystem::resolveMount(std::string_view virtualPath, const Mo
     {
         return FileError::UnknownMount;
     }
-    out = relative.empty() ? mount->root : mount->root / pathFromUtf8(relative);
+    out = mount->archive     ? std::filesystem::path()
+          : relative.empty() ? mount->root
+                             : mount->root / pathFromUtf8(relative);
     return FileError::None;
 }
 
 FileError VirtualFileSystem::resolve(std::string_view virtualPath, std::filesystem::path& out) const
 {
     const Mount* mount = nullptr;
-    return resolveMount(virtualPath, mount, out);
+    if (const FileError error = resolveMount(virtualPath, mount, out); error != FileError::None)
+    {
+        return error;
+    }
+    return mount->archive ? FileError::Unsupported : FileError::None;
 }
 
 FileError VirtualFileSystem::readFile(std::string_view virtualPath, std::vector<std::byte>& out) const
 {
+    const Mount* mount = nullptr;
     std::filesystem::path path;
-    if (const FileError error = resolve(virtualPath, path); error != FileError::None)
+    if (const FileError error = resolveMount(virtualPath, mount, path); error != FileError::None)
     {
         return error;
+    }
+    if (mount->archive)
+    {
+        const ArchiveEntry* entry = mount->archive->find(archivePath(virtualPath));
+        return entry != nullptr ? mount->archive->read(*entry, out) : FileError::NotFound;
     }
     return readBytes(path, out);
 }
 
 FileError VirtualFileSystem::readText(std::string_view virtualPath, std::string& out) const
 {
+    const Mount* mount = nullptr;
     std::filesystem::path path;
-    if (const FileError error = resolve(virtualPath, path); error != FileError::None)
+    if (const FileError error = resolveMount(virtualPath, mount, path); error != FileError::None)
     {
         return error;
+    }
+    if (mount->archive)
+    {
+        std::vector<std::byte> bytes;
+        if (const FileError error = readFile(virtualPath, bytes); error != FileError::None)
+        {
+            return error;
+        }
+        out.assign(reinterpret_cast<const char*>(bytes.data()), bytes.size());
+        return FileError::None;
     }
     return readBytes(path, out);
 }
@@ -365,10 +419,16 @@ FileError VirtualFileSystem::writeText(std::string_view virtualPath, std::string
 
 bool VirtualFileSystem::exists(std::string_view virtualPath) const
 {
+    const Mount* mount = nullptr;
     std::filesystem::path path;
-    if (resolve(virtualPath, path) != FileError::None)
+    if (resolveMount(virtualPath, mount, path) != FileError::None)
     {
         return false;
+    }
+    if (mount->archive)
+    {
+        const std::string relative = archivePath(virtualPath);
+        return mount->archive->find(relative) != nullptr || mount->archive->isDirectory(relative);
     }
     std::error_code code;
     return std::filesystem::exists(path, code);
@@ -376,10 +436,15 @@ bool VirtualFileSystem::exists(std::string_view virtualPath) const
 
 FileError VirtualFileSystem::list(std::string_view virtualPath, std::vector<DirectoryEntry>& out) const
 {
+    const Mount* mount = nullptr;
     std::filesystem::path path;
-    if (const FileError error = resolve(virtualPath, path); error != FileError::None)
+    if (const FileError error = resolveMount(virtualPath, mount, path); error != FileError::None)
     {
         return error;
+    }
+    if (mount->archive)
+    {
+        return mount->archive->list(archivePath(virtualPath), out);
     }
     std::error_code code;
     if (!std::filesystem::is_directory(path, code))

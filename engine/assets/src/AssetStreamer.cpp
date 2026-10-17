@@ -37,6 +37,7 @@ struct Request
     std::string cachePath;
     ImageImportSettings settings;
     bool forceImport = false; // the cache entry was stale; import from source
+    bool skipCache = false;   // the cache entry could not be used; read the source instead
 
     // Filled on the I/O thread.
     std::optional<AssetFile> cached;
@@ -211,10 +212,11 @@ void AssetStreamer::Impl::read(Request& request)
     const AssetType type = request.kind == Kind::Image ? AssetType::Image : AssetType::Model;
     const u32 version = request.kind == Kind::Image ? kImageFormatVersion : kModelFormatVersion;
     std::vector<std::byte> bytes;
-    if (!desc.cacheMount.empty() && files->readFile(request.cachePath, bytes) == FileError::None)
+    if (!request.skipCache && !desc.cacheMount.empty() &&
+        files->readFile(request.cachePath, bytes) == FileError::None)
     {
         request.cached = detail::parseCache(bytes, type, version);
-        if (request.cached)
+        if (request.cached && desc.verifySources)
         {
             request.dependencies.resize(request.cached->dependencies.size());
             for (usize i = 0; i < request.dependencies.size(); ++i)
@@ -260,7 +262,8 @@ void AssetStreamer::Impl::process(Request* raw)
 {
     ILL_PROFILE_SCOPE_N("Asset process");
     std::unique_ptr<Request> request(raw);
-    if (request->cached && detail::dependenciesUnchanged(*request->cached, request->dependencies))
+    if (request->cached &&
+        (!desc.verifySources || detail::dependenciesUnchanged(*request->cached, request->dependencies)))
     {
         bool ok = false;
         if (request->kind == Kind::Image)
@@ -300,6 +303,7 @@ void AssetStreamer::Impl::process(Request* raw)
         // The cache entry was valid on disk but its payload was not: read the source on the I/O thread.
         request->cached.reset();
         request->dependencies.clear();
+        request->skipCache = true;
         queueLoad(std::move(request));
         return;
     }

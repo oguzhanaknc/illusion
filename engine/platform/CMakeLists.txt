@@ -1,6 +1,7 @@
 # illusion::platform — windows, keyboard/mouse input, OS events, file system.
 
 add_library(illusion_platform STATIC
+    src/Archive.cpp
     src/FileSystem.cpp
     src/Input.cpp
     src/Platform.cpp

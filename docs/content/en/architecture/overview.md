@@ -9,7 +9,7 @@ illusion is built in layers. A layer may depend only on layers below it.
 | Layer | Contents | Status |
 | --- | --- | --- |
 | Core | Platform detection, assertions, logging, memory, Job System, ECS, event bus, time, math | Implemented |
-| Platform | Window, keyboard and mouse (GLFW), virtual file system | Implemented |
+| Platform | Window, keyboard and mouse (GLFW), virtual file system, packed archives | Implemented |
 | Input | Gamepads through SDL3 (rumble, LED, motion, touchpad, adaptive triggers), action mapping, rebinding, glyphs | Implemented |
 | Assets | Images, Meshes, glTF models, environments, cooked formats, an import cache and asynchronous streaming | Implemented |
 | Runtime services | Audio (miniaudio), physics (Jolt) | Planned |
@@ -61,6 +61,7 @@ by the hash of their fully qualified name, so a Component gets the same id on bo
 | `engine/render` | Render library: `include/illusion/render`, `src/` and `shaders/` |
 | `samples` | Small applications that exercise engine features |
 | `tests` | Unit tests (doctest), one file per feature |
+| `tools/pack` | `illusion_pack`: archive packer and asset cooker |
 | `benchmarks` | Benchmarks with performance budgets (nanobench) |
 | `cmake` | Build options, compiler settings, pinned dependencies |
 | `docs/content/{en,tr}` | This documentation, in English and Turkish |

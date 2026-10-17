@@ -179,3 +179,32 @@ while (running)
 - `waitIdle()` blocks until everything requested is published: useful for loading screens and tools.
 - Destroying the streamer skips loads that have not started, finishes the running ones and writes their
   cache entries.
+
+## Shipping cooked assets
+
+A shipped game does not need its source images and models: cook them ahead of time and ship the import
+cache as an archive.
+
+```bash
+illusion_pack --cook game data/ build/cooked.illpak
+```
+
+`--cook` imports every image and glTF model under `data/`, mounted as `game` (use the mount name your
+game uses), and packs the resulting cache. In the game, mount the archive as the cache and turn source
+verification off:
+
+```cpp
+illusion::VirtualFileSystem files;
+files.mountArchive("cache", illusion::executableDirectory() / "cooked.illpak");
+
+illusion::AssetStreamerDesc desc;
+desc.verifySources = false; // trust the cooked archive; the sources are not shipped
+illusion::AssetStreamer streamer(files, jobs, desc);
+auto helmet = streamer.loadModel("game:/models/helmet.glb"); // served from the cooked archive
+```
+
+- Requests use the same virtual paths as during development; the `game` mount itself does not have to
+  exist.
+- Standalone images are cooked with the default import settings; images loaded with other settings need
+  their source (or a cooking step that knows those settings).
+- `cookAssets()` does the same from code and reports what it cooked and which files failed.

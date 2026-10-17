@@ -48,13 +48,14 @@ ADRs for its significant decisions. Items marked ✅ are done.
 - M3f: ✅ Bindless materials and textures, shared geometry pools, multi-draw indirect where supported
   (ADR 0018)
 
-## M4 — Assets and streaming
+## M4 — Assets and streaming ✅
 
 - M4a: ✅ Binary serialization, stable asset ids, cooked image and model formats, import cache validated by
   source content hashes (xxHash64) (ADR 0019)
 - M4b: ✅ Async streaming (dedicated I/O thread, Job System), shared asset handles published in update(),
   GPU upload queue with a byte budget (ADR 0020)
-- M4c: Packed asset archives for export (VFS archive mounts, packer tool)
+- M4c: ✅ Packed archives (`.illpak`, memory-mapped, hash-checked), VFS archive mounts, `illusion_pack` with
+  asset cooking, shipping without sources (ADR 0021)
 
 ## M5 — Gameplay services
 

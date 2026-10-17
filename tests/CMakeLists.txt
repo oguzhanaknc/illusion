@@ -19,12 +19,14 @@ add_executable(illusion_tests
     ecs/TestEntity.cpp
     ecs/TestQuery.cpp
     ecs/TestWorld.cpp
+    platform/TestArchive.cpp
     platform/TestFileSystem.cpp
     platform/TestInput.cpp
     platform/TestWindow.cpp
     input/TestGamepadState.cpp
     input/TestGamepadSystem.cpp
     input/TestInputActions.cpp
+    assets/TestAssetCooker.cpp
     assets/TestAssetDatabase.cpp
     assets/TestAssetFormat.cpp
     assets/TestAssetStreamer.cpp

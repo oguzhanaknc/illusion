@@ -60,6 +60,32 @@ logs.
 Writes are atomic: the data is written to a temporary file that then replaces the target, so a crash
 or power loss never leaves a half-written save file. Parent directories are created automatically.
 
+## Archives
+
+An archive (`.illpak`) holds a whole directory tree in one file. Mount it with `mountArchive()` and read
+it exactly like a mounted directory:
+
+Header: `<illusion/platform/Archive.hpp>`
+
+```cpp
+illusion::VirtualFileSystem files;
+files.mountArchive("game", illusion::executableDirectory() / "data.illpak");
+
+std::string config;
+files.readText("game:/config/defaults.json", config); // same path as with a directory mount
+```
+
+- Archive mounts are read-only: writes return `FileError::ReadOnly`, and `resolve()` returns
+  `FileError::Unsupported` because the files have no path of their own.
+- Every file's content hash is checked when it is read; damaged data gives `FileError::IoError`.
+- The archive is memory-mapped, so reads are fast and safe from several threads.
+- Create archives with the `illusion_pack` tool, or from code with `writeArchive()` and
+  `packDirectory()`:
+
+```bash
+illusion_pack data/ build/data.illpak
+```
+
 ## Platform directories
 
 | Function | Windows | macOS | Linux |
