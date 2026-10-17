@@ -96,3 +96,24 @@ ADRs for its significant decisions. Items marked ✅ are done.
   "sniper" compatible)
 - Optional Steamworks module (achievements, cloud saves, Steam Input); SDK supplied by the user
 - Release and Steam guide (EN/TR)
+
+## M9 — Upscaling and frame generation
+
+- Render resolution decoupled from output resolution; one upscaler interface (quality modes, jitter,
+  motion vectors, depth, exposure, reactive mask), with the existing TAA as the fallback on every GPU
+- AMD FidelityFX FSR (MIT): temporal upscaling and frame generation on every vendor through Vulkan
+- NVIDIA DLSS (Super Resolution, Ray Reconstruction, Frame Generation) as an optional module, like
+  Steamworks: the SDK is supplied by the user under NVIDIA's licence and never committed; an ADR records
+  the exception to the permissive-licence rule
+- Optional Intel XeSS module on the same interface
+- GPU tests and benchmarks per upscaler where the CI hardware allows it; documentation (EN/TR)
+
+## M10 — Hybrid ray tracing
+
+- Acceleration structures (BLAS/TLAS) built and refit from the shared geometry pools and the ECS, through
+  NVRHI on Vulkan ray queries; raster rendering stays the fallback where they are unavailable (MoltenVK)
+- Ray-traced shadows (sun and local lights) and ambient occlusion
+- Ray-traced reflections
+- Ray-traced global illumination, denoised (DLSS Ray Reconstruction where the module is present)
+- Verify ray query support of Mesa lavapipe for CI GPU tests; ADRs for the acceleration structure and
+  denoising design
