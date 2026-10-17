@@ -404,18 +404,18 @@ struct PhysicsWorld::Impl
         JPH::BodyID body;
     };
 
-    Impl(World& world, JobSystem& jobs, const PhysicsWorldDesc& desc)
-        : world(world)
-        , desc(desc)
-        , timestep(desc.stepSeconds, desc.maxStepsPerUpdate)
-        , joltJobs(jobs, kMaxPhysicsJobs, kMaxPhysicsBarriers)
-        , tempAllocator(static_cast<JPH::uint>(desc.tempMemoryBytes))
-        , slots(desc.maxBodies)
-        , contacts(slots, desc.maxContactEvents)
+    Impl(World& targetWorld, JobSystem& jobSystem, const PhysicsWorldDesc& settings)
+        : world(targetWorld)
+        , desc(settings)
+        , timestep(settings.stepSeconds, settings.maxStepsPerUpdate)
+        , joltJobs(jobSystem, kMaxPhysicsJobs, kMaxPhysicsBarriers)
+        , tempAllocator(static_cast<JPH::uint>(settings.tempMemoryBytes))
+        , slots(settings.maxBodies)
+        , contacts(slots, settings.maxContactEvents)
     {
-        physics.Init(desc.maxBodies, 0, desc.maxBodyPairs, desc.maxContactConstraints, broadPhaseLayers,
-                     objectVsBroadPhase, layerPairs);
-        physics.SetGravity(toJolt(desc.gravity));
+        physics.Init(settings.maxBodies, 0, settings.maxBodyPairs, settings.maxContactConstraints,
+                     broadPhaseLayers, objectVsBroadPhase, layerPairs);
+        physics.SetGravity(toJolt(settings.gravity));
         physics.SetContactListener(&contacts);
     }
 

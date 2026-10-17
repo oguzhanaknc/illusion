@@ -258,6 +258,8 @@ function(illusion_require_dependency name)
         endforeach()
         set(USE_SSE4_1 ON CACHE BOOL "" FORCE)
         set(USE_SSE4_2 ON CACHE BOOL "" FORCE)
+        # Our JoltJobSystem derives from a Jolt class, so Jolt must emit its typeinfo like the engine does.
+        set(CPP_RTTI_ENABLED ON CACHE BOOL "" FORCE)
         FetchContent_MakeAvailable(jolt)
         # Jolt's jobs synchronize inside the library, so sanitizer builds instrument it too.
         illusion_apply_sanitizer(Jolt)
