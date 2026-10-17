@@ -137,6 +137,18 @@ struct JobSystem::Impl
 
     static void finish(JobCounter* counter) noexcept;
 
+    // Queues @p job and wakes a worker; false if the queue is full (@p job is left untouched).
+    bool tryQueue(Job& job, JobCounter* counter)
+    {
+        if (!queue.tryPush(job, counter))
+        {
+            return false;
+        }
+        queued.fetch_add(1, std::memory_order_seq_cst);
+        wakeOne();
+        return true;
+    }
+
     bool runOne() noexcept
     {
         Job job;
@@ -253,15 +265,27 @@ void JobSystem::submit(Job job, JobCounter* counter)
     {
         counter->m_pending.fetch_add(1, std::memory_order_acq_rel);
     }
-    if (!m_impl->queue.tryPush(job, counter))
+    if (!m_impl->tryQueue(job, counter))
     {
         // Queue full: run inline. This keeps submit() non-blocking and allocation-free.
         job();
         Impl::finish(counter);
-        return;
     }
-    m_impl->queued.fetch_add(1, std::memory_order_seq_cst);
-    m_impl->wakeOne();
+}
+
+bool JobSystem::trySubmit(Job job, JobCounter* counter)
+{
+    ILL_ASSERT(static_cast<bool>(job), "submitting an empty job");
+    if (counter != nullptr)
+    {
+        counter->m_pending.fetch_add(1, std::memory_order_acq_rel);
+    }
+    if (!m_impl->tryQueue(job, counter))
+    {
+        Impl::finish(counter);
+        return false;
+    }
+    return true;
 }
 
 void JobSystem::wait(JobCounter& counter)

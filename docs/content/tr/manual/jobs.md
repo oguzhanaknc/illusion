@@ -52,7 +52,9 @@ Her Job'a en az birkaç mikrosaniyelik iş düşecek bir batch boyutu seçin.
 - **Job'lar exception fırlatmamalıdır.** Bir Job'dan kaçan exception süreci sonlandırır.
 - **Job'lar** `JobSystem::wait()` dışında hiçbir şeyde **bloklanmamalıdır**. Bir bekleme boyunca mutex
   tutmayın ve Job içinde bloklayan I/O yapmayın; bunun için ayrı bir thread kullanın.
-- Kuyruk doluysa `submit()` Job'ı hemen çağıran thread üzerinde çalıştırır.
+- Kuyruk doluysa `submit()` Job'ı hemen çağıran thread üzerinde çalıştırır. `trySubmit()` ise `false`
+  döndürür; bir Job'ın çağıran thread üzerinde asla çalışmaması gereken yerlerde onu kullanın (physics modülü
+  Jolt'un Job'ları için bunu yapar).
 - Bir `JobCounter`, onunla gönderilen tüm Job'lardan daha uzun yaşamalıdır.
 
 `JobSystem::currentWorkerIndex()` çağıran worker'ın indeksini (diğer thread'lerde -1) döndürür; bu,

@@ -6,6 +6,7 @@
 #include <mutex>
 #include <numeric>
 #include <set>
+#include <thread>
 #include <vector>
 
 using namespace illusion;
@@ -37,6 +38,45 @@ TEST_CASE("JobSystem runs jobs inline when the queue is full")
     }
     jobs.wait(counter);
     CHECK(count.load() == 10000);
+}
+
+TEST_CASE("trySubmit refuses jobs when the queue is full instead of running them")
+{
+    JobSystem jobs(JobSystemDesc{1, 2});
+    // Occupy the only worker so that queued jobs stay in the queue.
+    std::atomic<bool> started{false};
+    std::atomic<bool> release{false};
+    JobCounter blocker;
+    jobs.submit(
+        [&started, &release] {
+            started.store(true, std::memory_order_release);
+            while (!release.load(std::memory_order_acquire))
+            {
+                std::this_thread::yield();
+            }
+        },
+        &blocker);
+    while (!started.load(std::memory_order_acquire))
+    {
+        std::this_thread::yield();
+    }
+
+    std::atomic<int> count{0};
+    JobCounter counter;
+    const auto increment = [&count] {
+        count.fetch_add(1, std::memory_order_relaxed);
+    };
+    CHECK(jobs.trySubmit(increment, &counter));
+    CHECK(jobs.trySubmit(increment, &counter));
+    CHECK_FALSE(jobs.trySubmit(increment, &counter));
+    CHECK_FALSE(jobs.trySubmit(increment));
+    CHECK(counter.pending() == 2);
+    CHECK(count.load() == 0);
+
+    release.store(true, std::memory_order_release);
+    jobs.wait(blocker);
+    jobs.wait(counter);
+    CHECK(count.load() == 2);
 }
 
 TEST_CASE("Jobs can submit and wait for nested jobs")
