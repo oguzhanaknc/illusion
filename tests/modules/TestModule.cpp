@@ -62,7 +62,12 @@ void unloadModule(ModuleContext& context)
 
 void updateModule(ModuleContext& context, f64)
 {
-    test::ModuleControl& control = *context.service<test::ModuleControl>();
+    test::ModuleControl* service = context.service<test::ModuleControl>();
+    if (service == nullptr)
+    {
+        return; // load() refuses to run without it
+    }
+    test::ModuleControl& control = *service;
     ++control.updates;
     control.variant = kVariant;
     control.logger = &Logger::instance();
