@@ -30,11 +30,12 @@ doxygen docs/Doxyfile
 | `illusion/core/Profiler.hpp` | Tracy profiling makroları |
 | `illusion/core/EventBus.hpp` | `EventBus`, `Subscription` |
 | `illusion/core/Time.hpp` | `monotonicSeconds`, `Stopwatch`, `FrameClock`, `FixedTimestep` |
-| `illusion/core/Math.hpp` | glm tabanlı vektör ve matris tipleri |
+| `illusion/core/Math.hpp` | glm tabanlı vektör, matris ve quaternion tipleri, `Aabb`, `Sphere`, `Frustum`, `perspectiveReversedZ` |
 | `illusion/ecs/World.hpp` | `World`, `Query`, `ChunkView` |
 | `illusion/ecs/CommandBuffer.hpp` | Ertelenmiş yapısal değişiklikler |
 | `illusion/ecs/Component.hpp` | Component kaydı ve `ComponentRegistry` |
 | `illusion/ecs/Entity.hpp` | `Entity` handle'ı |
+| `illusion/ecs/Transform.hpp` | `Transform` Component'i (konum, dönüş, ölçek) |
 | `illusion/ecs/Archetype.hpp` | Archetype depolaması (motor içi) |
 | `illusion/platform/Platform.hpp` | `Platform`: pencere sisteminin yaşam döngüsü ve event pompalama |
 | `illusion/platform/Window.hpp` | `Window`, `WindowDesc`, `CursorMode` |
@@ -44,6 +45,12 @@ doxygen docs/Doxyfile
 | `illusion/input/Gamepad.hpp` | `Gamepad`, `GamepadState`, `TriggerEffect`, gamepad event'leri |
 | `illusion/input/GamepadSystem.hpp` | `GamepadSystem`, `VirtualGamepad` |
 | `illusion/input/InputActions.hpp` | `InputActions`, `InputBinding`, `BindingCapture`, glyph'ler |
+| `illusion/assets/Image.hpp` | `Image`, çözme, PNG kodlama, mip üretimi |
+| `illusion/assets/Mesh.hpp` | `MeshData`, `Vertex`, prosedürel Mesh'ler |
+| `illusion/assets/Model.hpp` | `ModelData`, `MaterialData`, `loadGltf` |
 | `illusion/render/RenderDevice.hpp` | `RenderDevice`, `GpuInfo`: NVRHI üzerinden Vulkan cihazı |
 | `illusion/render/Swapchain.hpp` | `Swapchain`: bir pencereye present etme |
 | `illusion/render/DebugTriangle.hpp` | Tanılama amaçlı üçgen renderer'ı |
+| `illusion/render/RenderResources.hpp` | `RenderResources`: GPU Mesh'leri, Texture'ları, Material'leri ve Handle'ları |
+| `illusion/render/SceneRenderer.hpp` | `SceneRenderer`, `RenderView`, `RenderStats` |
+| `illusion/render/Components.hpp` | `MeshRenderer`, `Camera`, `DirectionalLight`, `PointLight`, `spawnModel` |

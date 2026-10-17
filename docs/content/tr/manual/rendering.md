@@ -1,15 +1,16 @@
 # Rendering
 
-Render modülü GPU cihazını oluşturur ve görüntüleri pencerelere sunar (present). Vulkan 1.3 (macOS'ta
-MoltenVK) üzerinde [NVRHI](https://github.com/NVIDIA-RTX/NVRHI) ile kuruludur; oyun kodu GPU işlerini
-NVRHI command list'leri ile kaydeder.
+Render modülü GPU cihazını oluşturur, görüntüleri pencerelere sunar (present) ve ECS sahnelerini
+fiziksel tabanlı Material'lerle çizer. Vulkan 1.3 (macOS'ta MoltenVK) üzerinde
+[NVRHI](https://github.com/NVIDIA-RTX/NVRHI) ile kuruludur; oyun kodu GPU işlerini NVRHI command
+list'leri ile kaydeder.
 
 Header'lar: `#include <illusion/render/RenderDevice.hpp>`, `<illusion/render/Swapchain.hpp>`
 
-!!! note "Erken aşama"
-    Bu milestone cihazı, swapchain'leri, shader build hattını ve tanılama amaçlı bir üçgeni sağlar.
-    Mesh'ler, Material'ler, PBR aydınlatma ve gölgeler renderer milestone'unda gelecek (yol haritasına
-    bakın).
+!!! note "Geliştirme sürüyor"
+    Sahne renderer'ı Mesh'leri PBR Material'ler ve doğrudan ışıklarla çizer. Görüntü tabanlı
+    aydınlatma, gölgeler, ambient occlusion ve post-processing renderer milestone'unun sonraki
+    adımlarında gelecek (yol haritasına bakın).
 
 ## Gereksinimler
 
@@ -78,11 +79,101 @@ device->waitIdle();
 - `vsync` (varsayılan açık) FIFO present modunu seçer; vsync kapalıyken mailbox veya immediate mod
   kullanılır. `setVsync()` bunu bir sonraki karede değiştirir.
 
+## Bir sahne çizme
+
+`SceneRenderer`, `Transform` ve `MeshRenderer` Component'lerine sahip her Entity'yi, `DirectionalLight`
+ve `PointLight` Entity'leri ile aydınlatarak çizer. `RenderResources` GPU'daki Mesh, Texture ve
+Material'lerin sahibidir ve Component'lerin sakladığı küçük Handle'lar verir.
+
+Header'lar: `<illusion/render/RenderResources.hpp>`, `<illusion/render/SceneRenderer.hpp>`,
+`<illusion/render/Components.hpp>`, `<illusion/ecs/Transform.hpp>`
+
+```cpp
+illusion::RenderResources resources(*device);
+illusion::SceneRendererDesc rendererDesc;
+rendererDesc.colorFormat = swapchain->format();
+auto renderer = illusion::SceneRenderer::create(*device, resources, rendererDesc);
+
+illusion::World world;
+const illusion::MeshHandle sphere = resources.createMesh(illusion::makeSphere(0.5f), "Sphere");
+illusion::MaterialDesc gold;
+gold.parameters.baseColorFactor = illusion::Vec4(1.0f, 0.77f, 0.34f, 1.0f);
+gold.parameters.metallicFactor = 1.0f;
+gold.parameters.roughnessFactor = 0.3f;
+const illusion::MaterialHandle material = resources.createMaterial(gold);
+
+world.create(illusion::Transform{}, illusion::MeshRenderer{sphere, 0, material});
+
+illusion::Transform sun;
+sun.rotation = glm::quatLookAt(glm::normalize(illusion::Vec3(-0.4f, -1.0f, -0.6f)), illusion::Vec3(0.0f, 1.0f, 0.0f));
+world.create(sun, illusion::DirectionalLight{illusion::Vec3(1.0f), 3.0f});
+```
+
+Her karede kameradan bir `RenderView` oluşturun ve bir renk hedefine çizin:
+
+```cpp
+illusion::Transform camera;
+camera.position = illusion::Vec3(0.0f, 1.0f, 4.0f);
+const illusion::UVec2 size = swapchain->size();
+const auto view = illusion::RenderView::fromCamera(camera, illusion::Camera{},
+                                                   static_cast<float>(size.x) / static_cast<float>(size.y));
+commands->open();
+renderer->render(commands, swapchain->currentBackBuffer(), world, view, &jobs);
+commands->close();
+device->device()->executeCommandList(commands);
+ILL_LOG_DEBUG("Game", "{} draw calls", renderer->stats().drawCalls);
+```
+
+- `MeshRenderer` bir Mesh'i, onun submesh'lerinden birini ve bir Material'i belirtir (atanmamış
+  Material varsayılan beyaz, pürüzlü Material'i kullanır).
+- Işıklar Transform'larının -z ekseni boyunca (`DirectionalLight`) veya konumlarından (`PointLight`,
+  `range` mesafesinde sıfıra iner) yayılır. İlk 4 yönlü ve 16 noktasal ışık kullanılır.
+- `render()` hedefi temizler, Entity'leri görüş frustum'una göre eler (verirseniz Job System
+  üzerinde), Pipeline, Material ve Mesh'e göre sıralar ve aynı (Mesh, submesh, Material) üçlüsünün her
+  dizisi için tek bir instanced draw call yapar. `stats()` adayları, görünen Entity'leri, draw
+  call'ları ve üçgenleri raporlar.
+- Renderer, hedefin boyutunu izleyen bir derinlik buffer'ına sahiptir. Çizdiğiniz her renk formatı için
+  ayrı bir `SceneRenderer` oluşturun.
+- sRGB formatlı renk hedefleri doğrusal renk alır; UNORM hedefler sRGB kodlanmış renk alır, böylece
+  ikisi de aynı görünür.
+
+### Material'ler ve gölgelendirme
+
+Material'ler glTF 2.0 metallic-roughness modelini izler: base colour, metallic, roughness, normal,
+occlusion ve emissive; her biri isteğe bağlı bir Texture'la birlikte bir çarpandır. Alpha modları
+opak, mask (bir eşik değeriyle) ve blend'dir; çift yüzlü Material'ler arka yüz elemeyi kapatır.
+Aydınlatma GGX dağılımı, yüksekliğe bağlı Smith görünürlüğü ve Schlick Fresnel kullanır; ardından
+pozlama ve ACES tonemapping uygulanır. Görüntü tabanlı aydınlatma (IBL) gelene kadar
+`SceneRendererDesc::ambient` sabit bir ortam ışığı ekler; bu yüzden parlak bir çevre olmadan metaller
+koyu görünür.
+
+Bir glTF modelini çizmek için onu `loadGltf()` ile yükleyin ([Asset'ler ve Modeller](assets.md)
+sayfasına bakın), `RenderResources::uploadModel()` ile GPU'ya yükleyin ve Entity'lerini `spawnModel()`
+ile oluşturun.
+
+### glTF görüntüleyici
+
+`illusion_gltf_viewer` bir modeli yörünge kamerasıyla gösterir (döndürmek için sol fare sürükleme veya
+sağ çubuk, yakınlaştırmak için fare tekerleği veya tetikler). Model verilmezse, metallic değeri soldan
+sağa artan ve roughness değeri yukarıdan aşağıya azalan bir küre ızgarası gösterir. `--screenshot` son
+görüntüyü 1280x720 PNG olarak kaydeder.
+
+```bash
+./build/linux-clang/samples/Debug/illusion_gltf_viewer path/to/model.glb
+./build/linux-clang/samples/Debug/illusion_gltf_viewer --frames 60 --screenshot scene.png
+```
+
 ## Koordinat kuralları
 
 Renderer, Direct3D tarzı clip space'i izler: **y yukarıyı gösterir** ve derinlik 0'dan 1'e gider. NVRHI
-bunu sağlamak için Vulkan viewport'unu çevirir; bu yüzden `glm::perspective()` ile üretilen projeksiyon
-matrisleri y çevirmesi olmadan çalışır. Texture koordinatlarının başlangıç noktası sol üst köşedir.
+bunu sağlamak için Vulkan viewport'unu çevirir; bu yüzden projeksiyon matrislerinde y çevirmesi
+gerekmez. Texture koordinatlarının başlangıç noktası sol üst köşedir.
+
+Dünya uzayı sağ elli ve y yukarıdır; kameralar kendi -z eksenleri boyunca bakar ve ön yüzler saat
+yönünün tersindedir. Sahne renderer'ı sonsuz uzak düzlemli **reversed-Z** kullanır: yakın düzlem
+derinlik 1'e, sonsuz ise 0'a eşlenir; bu, derinlik hassasiyetini mesafe boyunca neredeyse eşit tutar.
+Projeksiyon matrislerini `glm::perspective()` ile değil, `perspectiveReversedZ()` (veya
+`RenderView::fromCamera()`) ile oluşturun.
 
 ## Shader'lar
 

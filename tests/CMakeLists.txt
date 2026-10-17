@@ -8,6 +8,7 @@ add_executable(illusion_tests
     core/TestInplaceFunction.cpp
     core/TestJobSystem.cpp
     core/TestLog.cpp
+    core/TestMath.cpp
     core/TestMemory.cpp
     core/TestThread.cpp
     core/TestTime.cpp
@@ -22,10 +23,14 @@ add_executable(illusion_tests
     platform/TestWindow.cpp
     input/TestGamepadState.cpp
     input/TestGamepadSystem.cpp
-    input/TestInputActions.cpp)
+    input/TestInputActions.cpp
+    assets/TestGltf.cpp
+    assets/TestImageMesh.cpp)
 
 target_include_directories(illusion_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
-target_link_libraries(illusion_tests PRIVATE illusion::core illusion::platform illusion::input illusion::doctest)
+target_link_libraries(illusion_tests PRIVATE
+    illusion::core illusion::platform illusion::input illusion::assets illusion::doctest)
+target_compile_definitions(illusion_tests PRIVATE ILLUSION_TEST_DATA_DIR="${CMAKE_CURRENT_SOURCE_DIR}/data")
 illusion_configure_target(illusion_tests)
 
 include(${ILLUSION_DOCTEST_SOURCE_DIR}/scripts/cmake/doctest.cmake)
@@ -38,6 +43,7 @@ doctest_discover_tests(illusion_tests
 add_executable(illusion_gpu_tests
     gpu/main.cpp
     gpu/TestRenderDevice.cpp
+    gpu/TestSceneRenderer.cpp
     gpu/TestSwapchain.cpp)
 target_link_libraries(illusion_gpu_tests PRIVATE illusion::render illusion::doctest)
 illusion_configure_target(illusion_gpu_tests)

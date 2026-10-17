@@ -27,6 +27,23 @@ per-user save locations, and a path can never escape its mount:
   rejected with `FileError::InvalidPath`.
 - Paths are UTF-8 on every platform.
 
+File formats often refer to other files relatively (`../textures/a.png`). Combine such a reference
+with the referring file's directory, then call `normalizePath()`, which resolves `.` and `..` but never
+lets the path leave its mount:
+
+```cpp
+const auto path = illusion::VirtualFileSystem::normalizePath("game:/models/../textures/./a.png");
+// path == "game:/textures/a.png"; "game:/../secret" gives std::nullopt
+```
+
+Real paths that come from UTF-8 text (configuration, command lines on macOS and Linux) should be built
+with `utf8Path()`. Constructing `std::filesystem::path` from a narrow string uses the system code page
+on Windows and garbles non-ASCII names:
+
+```cpp
+vfs.mount("mods", illusion::utf8Path(modDirectoryFromConfig));
+```
+
 ## Reading and writing
 
 | Function | Description |

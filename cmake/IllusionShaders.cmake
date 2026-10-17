@@ -9,11 +9,19 @@
 # Each shader entry point is compiled with Slang to SPIR-V and embedded in <target>. The generated
 # header declares one function per shader:
 #     std::span<const std::byte> <function>() noexcept;
-# returning the SPIR-V bytecode (entry point renamed to "main"). Shader compile errors fail the build.
+# returning the SPIR-V bytecode (entry point renamed to "main"). Shader compile errors and warnings fail
+# the build.
 
 include_guard(GLOBAL)
 
 set(ILLUSION_SHADERS_EMBED_SCRIPT "${CMAKE_CURRENT_LIST_DIR}/EmbedShader.cmake")
+
+# Register shifts match NVRHI's default Vulkan binding offsets (t: 0, s: 128, b: 256, u: 384), so
+# HLSL-style registers map to the bindings NVRHI creates. Matrices are column-major like glm, so
+# mul(matrix, vector) in shaders equals matrix * vector in C++.
+set(ILLUSION_SHADER_FLAGS
+    -fvk-t-shift 0 all -fvk-s-shift 128 all -fvk-b-shift 256 all -fvk-u-shift 384 all
+    -matrix-layout-column-major -warnings-as-errors all)
 
 function(illusion_add_shaders target)
     cmake_parse_arguments(PARSE_ARGV 1 arg "" "NAMESPACE;HEADER" "SHADERS")
@@ -51,7 +59,7 @@ function(illusion_add_shaders target)
         add_custom_command(
             OUTPUT "${spv}"
             COMMAND "${ILLUSION_SLANGC}" "${source}" -target spirv -entry ${entry} -stage ${stage}
-                    -warnings-as-errors all -depfile "${spv}.d" -o "${spv}"
+                    ${ILLUSION_SHADER_FLAGS} -depfile "${spv}.d" -o "${spv}"
             DEPENDS "${source}"
             DEPFILE "${spv}.d"
             COMMENT "Compiling shader ${source_name}:${entry} (${stage})"

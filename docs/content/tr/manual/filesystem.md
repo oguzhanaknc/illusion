@@ -27,6 +27,23 @@ başına kayıt konumlarıyla çalışır; ayrıca bir yol asla kendi mount'unun
   `FileError::InvalidPath` ile reddedilir.
 - Yollar her platformda UTF-8'dir.
 
+Dosya formatları çoğu zaman başka dosyalara göreli olarak başvurur (`../textures/a.png`). Böyle bir
+referansı başvuran dosyanın diziniyle birleştirin, ardından `.` ve `..` bileşenlerini çözen ama yolun
+mount'undan çıkmasına asla izin vermeyen `normalizePath()`'i çağırın:
+
+```cpp
+const auto path = illusion::VirtualFileSystem::normalizePath("game:/models/../textures/./a.png");
+// path == "game:/textures/a.png"; "game:/../secret" gives std::nullopt
+```
+
+UTF-8 metinden gelen gerçek yollar (yapılandırma, macOS ve Linux'ta komut satırları) `utf8Path()` ile
+oluşturulmalıdır. `std::filesystem::path`'i dar (narrow) bir string'den oluşturmak Windows'ta sistem
+kod sayfasını kullanır ve ASCII dışı adları bozar:
+
+```cpp
+vfs.mount("mods", illusion::utf8Path(modDirectoryFromConfig));
+```
+
 ## Okuma ve yazma
 
 | Fonksiyon | Açıklama |

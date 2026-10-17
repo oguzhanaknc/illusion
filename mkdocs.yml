@@ -64,6 +64,7 @@ plugins:
             Events and Time: Event'ler ve Zaman
             File System: Dosya Sistemi
             Rendering: Rendering
+            Assets and Models: Asset'ler ve Modeller
             Gamepads: Gamepad'ler
             Input Actions: Input Action'ları
             Architecture: Mimari
@@ -99,6 +100,7 @@ nav:
       - Events and Time: manual/events.md
       - File System: manual/filesystem.md
       - Rendering: manual/rendering.md
+      - Assets and Models: manual/assets.md
       - Profiling: manual/profiling.md
   - Architecture:
       - Overview: architecture/overview.md

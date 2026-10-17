@@ -14,6 +14,7 @@
 #include <cstddef>
 #include <filesystem>
 #include <memory>
+#include <optional>
 #include <span>
 #include <string>
 #include <string_view>
@@ -94,6 +95,13 @@ public:
     /// Lists a directory's entries in @p out, sorted by name.
     FileError list(std::string_view virtualPath, std::vector<DirectoryEntry>& out) const;
 
+    /// Resolves dot components and repeated slashes in a virtual path.
+    ///
+    /// For example `game:/models/../textures/./a.png` becomes `game:/textures/a.png`, so paths built by
+    /// combining a base path with a relative reference (as file formats like glTF do) can be used.
+    /// Returns std::nullopt if the path is malformed or a parent reference would leave the mount.
+    [[nodiscard]] static std::optional<std::string> normalizePath(std::string_view virtualPath);
+
 private:
     struct Mount;
     FileError resolveMount(std::string_view virtualPath, const Mount*& mount,
@@ -102,6 +110,10 @@ private:
     struct Impl;
     std::unique_ptr<Impl> m_impl;
 };
+
+/// Converts UTF-8 text to a filesystem path. Use this instead of `std::filesystem::path(const char*)`,
+/// which interprets narrow strings in the system code page on Windows and garbles non-ASCII characters.
+[[nodiscard]] std::filesystem::path utf8Path(std::string_view utf8);
 
 /// Directory containing the running executable.
 [[nodiscard]] std::filesystem::path executableDirectory();

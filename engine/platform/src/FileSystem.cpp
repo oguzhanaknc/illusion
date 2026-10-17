@@ -409,6 +409,54 @@ FileError VirtualFileSystem::list(std::string_view virtualPath, std::vector<Dire
     return FileError::None;
 }
 
+std::optional<std::string> VirtualFileSystem::normalizePath(std::string_view virtualPath)
+{
+    const usize separator = virtualPath.find(":/");
+    if (separator == std::string_view::npos || !isValidMountName(virtualPath.substr(0, separator)))
+    {
+        return std::nullopt;
+    }
+    std::vector<std::string_view> components;
+    usize start = separator + 2;
+    while (start <= virtualPath.size())
+    {
+        const usize end = std::min(virtualPath.find('/', start), virtualPath.size());
+        const std::string_view component = virtualPath.substr(start, end - start);
+        if (component == "..")
+        {
+            if (components.empty())
+            {
+                return std::nullopt; // would leave the mount
+            }
+            components.pop_back();
+        }
+        else if (!component.empty() && component != ".")
+        {
+            components.push_back(component);
+        }
+        start = end + 1;
+    }
+    std::string result(virtualPath.substr(0, separator + 2));
+    for (usize i = 0; i < components.size(); ++i)
+    {
+        if (i > 0)
+        {
+            result.push_back('/');
+        }
+        result.append(components[i]);
+    }
+    if (!isValidRelativePath(std::string_view(result).substr(separator + 2)))
+    {
+        return std::nullopt;
+    }
+    return result;
+}
+
+std::filesystem::path utf8Path(std::string_view utf8)
+{
+    return pathFromUtf8(utf8);
+}
+
 std::filesystem::path executableDirectory()
 {
 #if defined(ILL_PLATFORM_WINDOWS)
