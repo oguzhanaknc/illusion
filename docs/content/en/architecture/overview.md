@@ -13,7 +13,7 @@ illusion is built in layers. A layer may depend only on layers below it.
 | Input | Gamepads through SDL3 (rumble, LED, motion, touchpad, adaptive triggers), action mapping, rebinding, glyphs | Implemented |
 | Assets | Images, Meshes, glTF models, environments, cooked formats, an import cache and asynchronous streaming | Implemented |
 | Physics | Rigid bodies, colliders, raycasts and contacts with Jolt Physics on the Job System | Implemented |
-| Audio | 3D sound and mixing with miniaudio | Planned |
+| Audio | 3D sound, streaming and a mixer with buses with miniaudio, mixed on its own thread | Implemented |
 | Renderer: foundation | Vulkan 1.3 device through NVRHI, swapchains, Slang shader pipeline | Implemented |
 | Renderer: scene | Meshes, PBR Materials, direct and image-based lighting, soft shadows, GTAO, HDR post-processing (TAA, bloom, tonemapping), frustum culling, GPU occlusion culling with indirect draws, instancing, bindless multi-draw | Implemented |
 | Editor | Scene editing, gizmos, AI command API | Planned |
@@ -60,6 +60,7 @@ by the hash of their fully qualified name, so a Component gets the same id on bo
 | `engine/input` | Input library: `include/illusion/input` and `src/` |
 | `engine/assets` | Assets library: `include/illusion/assets` and `src/` |
 | `engine/physics` | Physics library: `include/illusion/physics` and `src/` |
+| `engine/audio` | Audio library: `include/illusion/audio` and `src/` |
 | `engine/render` | Render library: `include/illusion/render`, `src/` and `shaders/` |
 | `samples` | Small applications that exercise engine features |
 | `tests` | Unit tests (doctest), one file per feature |

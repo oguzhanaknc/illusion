@@ -13,7 +13,8 @@ must be included with distributed games (the export pipeline will collect them a
 | [SDL](https://github.com/libsdl-org/SDL) | 3.4.18 | Zlib | Gamepads (joystick, haptic, HIDAPI, sensors only) | Yes |
 | [glm](https://github.com/g-truc/glm) | 1.0.3 | MIT | Math | Yes |
 | [Jolt Physics](https://github.com/jrouwe/JoltPhysics) | 5.6.0 | MIT | Physics | Yes |
-| [miniaudio](https://github.com/mackron/miniaudio) | 0.11.25 | Public domain or MIT-0 | Audio (planned) | Yes |
+| [miniaudio](https://github.com/mackron/miniaudio) | 0.11.25 | Public domain or MIT-0 | Audio devices, mixing, WAV/FLAC/MP3 decoding | Yes |
+| [stb_vorbis](https://github.com/nothings/stb) | v1.22 (from miniaudio 0.11.25 `extras/`) | Public domain or MIT | Ogg Vorbis decoding | Yes |
 | [NVRHI](https://github.com/NVIDIA-RTX/NVRHI) | commit `6b96fb0` | MIT | Graphics abstraction | Yes |
 | [Vulkan-Headers](https://github.com/KhronosGroup/Vulkan-Headers) | 1.4.352 | Apache-2.0 OR MIT | Vulkan API headers | Yes (headers only) |
 | [cgltf](https://github.com/jkuhlmann/cgltf) | 1.15 | MIT | glTF 2.0 import | Yes |

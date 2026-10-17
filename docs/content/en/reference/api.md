@@ -59,6 +59,8 @@ Open `build/api/index.html` in a browser.
 | `illusion/assets/Environment.hpp` | Equirectangular mapping, `ShIrradiance`, `makeSkyImage` |
 | `illusion/physics/PhysicsWorld.hpp` | `PhysicsWorld`: simulation, body control, raycasts, contact events |
 | `illusion/physics/PhysicsComponents.hpp` | `RigidBody`, `Collider`, `PhysicsBody` Components |
+| `illusion/audio/AudioWorld.hpp` | `AudioWorld`: clips, playback, one-shots, mixer buses, output; `AudioWorldDesc`, `AudioStats` |
+| `illusion/audio/AudioComponents.hpp` | `AudioSource`, `AudioListener`, `AudioPlayback` Components; `AudioBus`, `AudioAttenuation` |
 | `illusion/render/RenderDevice.hpp` | `RenderDevice`, `GpuInfo` (including bindless and multi-draw support): Vulkan device through NVRHI |
 | `illusion/render/Swapchain.hpp` | `Swapchain`: presentation to a window |
 | `illusion/render/DebugTriangle.hpp` | Diagnostic triangle renderer |

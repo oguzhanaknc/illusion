@@ -4,6 +4,7 @@ add_executable(illusion_benchmarks
     main.cpp
     Budget.cpp
     BenchAssets.cpp
+    BenchAudio.cpp
     BenchEcs.cpp
     BenchEventBus.cpp
     BenchInput.cpp
@@ -13,7 +14,7 @@ add_executable(illusion_benchmarks
 
 target_include_directories(illusion_benchmarks PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
 target_link_libraries(illusion_benchmarks PRIVATE
-    illusion::core illusion::input illusion::assets illusion::physics illusion::nanobench)
+    illusion::core illusion::input illusion::assets illusion::audio illusion::physics illusion::nanobench)
 illusion_configure_target(illusion_benchmarks)
 
 # Perf budgets are only meaningful for optimized builds. The tolerance multiplier absorbs noise on
