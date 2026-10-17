@@ -31,6 +31,8 @@ Open `build/api/index.html` in a browser.
 | `illusion/core/EventBus.hpp` | `EventBus`, `Subscription` |
 | `illusion/core/Time.hpp` | `monotonicSeconds`, `Stopwatch`, `FrameClock`, `FixedTimestep` |
 | `illusion/core/Version.hpp` | `SemanticVersion`, `engineVersion` |
+| `illusion/core/Module.hpp` | `ModuleApi`, `ModuleContext`, `ModuleDependency`, `makeModuleApi`, `ILL_MODULE`: the module side of game modules |
+| `illusion/modules/ModuleHost.hpp` | `ModuleHost`: loads, checks, runs and hot-reloads modules; `ModuleInfo` |
 | `illusion/core/Math.hpp` | glm-based vector, matrix and quaternion types, `Aabb`, `Sphere`, `Frustum`, `perspectiveReversedZ` |
 | `illusion/ecs/World.hpp` | `World`, `Query`, `ChunkView` |
 | `illusion/ecs/CommandBuffer.hpp` | Deferred structural changes |

@@ -22,6 +22,16 @@ namespace illusion
 /// Names longer than 15 characters are truncated on Linux.
 void setCurrentThreadName(const char* name) noexcept;
 
+/// Implementation details. Not part of the public API.
+namespace detail
+{
+
+/// Makes currentThreadIndex() return @p source() (nullptr restores the built-in counter). A shared module
+/// uses the host's function, so both number threads the same way (see ModuleServices).
+void setThreadIndexSource(u32 (*source)() noexcept) noexcept;
+
+} // namespace detail
+
 /// Returns the number of hardware threads (at least 1).
 [[nodiscard]] u32 hardwareThreadCount() noexcept;
 

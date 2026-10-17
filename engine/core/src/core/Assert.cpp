@@ -64,6 +64,12 @@ AssertHandler assertHandler() noexcept
 namespace detail
 {
 
+void dispatchAssertion(const AssertInfo& info)
+{
+    g_assertHandler.load()(info);
+    std::abort();
+}
+
 void assertFailed(const char* expression, const char* file, int line, std::string_view message)
 {
     const AssertInfo info{expression, message, file, line};

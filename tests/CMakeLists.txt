@@ -38,6 +38,7 @@ add_executable(illusion_tests
     assets/TestImageMesh.cpp
     audio/TestAudioEffects.cpp
     audio/TestAudioWorld.cpp
+    modules/TestModules.cpp
     physics/TestPhysicsExtensions.cpp
     physics/TestPhysicsWorld.cpp
     render/TestPostProcess.cpp
@@ -47,9 +48,24 @@ add_executable(illusion_tests
 target_include_directories(illusion_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
 target_link_libraries(illusion_tests PRIVATE
     illusion::core illusion::platform illusion::input illusion::assets illusion::audio illusion::physics
-    illusion::render illusion::doctest)
+    illusion::render illusion::modules illusion::doctest)
 target_compile_definitions(illusion_tests PRIVATE ILLUSION_TEST_DATA_DIR="${CMAKE_CURRENT_SOURCE_DIR}/data")
 illusion_configure_target(illusion_tests)
+
+# Shared libraries loaded by tests/modules/TestModules.cpp (see TestModule.cpp for the variants).
+foreach(variant 1 2 3 4)
+    illusion_add_module(illusion_test_module_v${variant} SHARED SOURCES modules/TestModule.cpp)
+    target_include_directories(illusion_test_module_v${variant} PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/modules)
+    target_compile_definitions(illusion_test_module_v${variant} PRIVATE TEST_MODULE_VARIANT=${variant})
+    target_compile_definitions(illusion_tests PRIVATE
+        TEST_MODULE_V${variant}="$<TARGET_FILE:illusion_test_module_v${variant}>")
+    add_dependencies(illusion_tests illusion_test_module_v${variant})
+endforeach()
+target_compile_definitions(illusion_test_module_v3 PRIVATE TEST_MODULE_WIDE_COUNTER=1)
+add_library(illusion_test_not_a_module MODULE modules/NotAModule.cpp)
+illusion_configure_target(illusion_test_not_a_module)
+target_compile_definitions(illusion_tests PRIVATE TEST_NOT_A_MODULE="$<TARGET_FILE:illusion_test_not_a_module>")
+add_dependencies(illusion_tests illusion_test_not_a_module)
 
 include(${ILLUSION_DOCTEST_SOURCE_DIR}/scripts/cmake/doctest.cmake)
 doctest_discover_tests(illusion_tests

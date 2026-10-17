@@ -74,12 +74,15 @@ ADRs for its significant decisions. Items marked ✅ are done.
   per-sound low-pass filters, bus low/high-pass filters, a room reverb fed by per-sound sends, sound cones,
   contact events with impact speeds and impact sounds in `physics_playground` (ADR 0026)
 
-## M6 — Game modules and hot reload
+## M6 — Game modules and hot reload ✅
 
-- Module/plugin system with semver; game module as hot-reloadable shared library in the editor and
-  statically linked in exports
-- Service injection into modules (ADR 0003): Logger, ComponentRegistry, assert handler; re-registration
-  of module-owned component types on reload
+- ✅ Module/plugin system with semver and dependencies; a module is a hot-reloadable shared library in
+  development and linked statically in exports (`illusion_add_module`, `ModuleHost`) (ADR 0027)
+- ✅ Service injection into modules (ADR 0003): Logger, ComponentRegistry, assert handler, thread and
+  worker indices; module-owned component types handed over to the new code on reload, dropped types
+  stripped from the World, failed reloads rolled back
+- Reflection-based migration of module Components whose layout changed, so that such a change survives a
+  hot reload instead of needing a restart (with the editor, M7)
 
 ## M7 — Editor and AI control
 
@@ -96,3 +99,24 @@ ADRs for its significant decisions. Items marked ✅ are done.
   "sniper" compatible)
 - Optional Steamworks module (achievements, cloud saves, Steam Input); SDK supplied by the user
 - Release and Steam guide (EN/TR)
+
+## M9 — Upscaling and frame generation
+
+- Render resolution decoupled from output resolution; one upscaler interface (quality modes, jitter,
+  motion vectors, depth, exposure, reactive mask), with the existing TAA as the fallback on every GPU
+- AMD FidelityFX FSR (MIT): temporal upscaling and frame generation on every vendor through Vulkan
+- NVIDIA DLSS (Super Resolution, Ray Reconstruction, Frame Generation) as an optional module, like
+  Steamworks: the SDK is supplied by the user under NVIDIA's licence and never committed; an ADR records
+  the exception to the permissive-licence rule
+- Optional Intel XeSS module on the same interface
+- GPU tests and benchmarks per upscaler where the CI hardware allows it; documentation (EN/TR)
+
+## M10 — Hybrid ray tracing
+
+- Acceleration structures (BLAS/TLAS) built and refit from the shared geometry pools and the ECS, through
+  NVRHI on Vulkan ray queries; raster rendering stays the fallback where they are unavailable (MoltenVK)
+- Ray-traced shadows (sun and local lights) and ambient occlusion
+- Ray-traced reflections
+- Ray-traced global illumination, denoised (DLSS Ray Reconstruction where the module is present)
+- Verify ray query support of Mesa lavapipe for CI GPU tests; ADRs for the acceleration structure and
+  denoising design

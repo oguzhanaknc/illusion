@@ -7,6 +7,7 @@ add_library(illusion_core STATIC
     src/core/JobSystem.cpp
     src/core/Log.cpp
     src/core/Memory.cpp
+    src/core/Module.cpp
     src/core/Thread.cpp
     src/core/Time.cpp
     src/core/Version.cpp
@@ -27,9 +28,9 @@ illusion_require_dependency(glm)
 illusion_require_dependency(yyjson)
 target_link_libraries(illusion_core PUBLIC Threads::Threads illusion::glm PRIVATE illusion::yyjson)
 
-# engineVersion() reports the project version.
-set_source_files_properties(src/core/Version.cpp PROPERTIES COMPILE_DEFINITIONS
-    "ILLUSION_VERSION_MAJOR=${PROJECT_VERSION_MAJOR};ILLUSION_VERSION_MINOR=${PROJECT_VERSION_MINOR};ILLUSION_VERSION_PATCH=${PROJECT_VERSION_PATCH}")
+# engineVersion() reports the project version; modules record the version they were built against.
+target_compile_definitions(illusion_core PUBLIC ILLUSION_VERSION_MAJOR=${PROJECT_VERSION_MAJOR}
+    ILLUSION_VERSION_MINOR=${PROJECT_VERSION_MINOR} ILLUSION_VERSION_PATCH=${PROJECT_VERSION_PATCH})
 
 # Asserts are always on in Debug; ILLUSION_ENABLE_ASSERTS turns them on in every configuration.
 if(ILLUSION_ENABLE_ASSERTS)

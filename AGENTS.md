@@ -31,11 +31,12 @@ decisions are in `docs/adr/`. Do not reverse an accepted ADR silently: write a n
 | `engine/assets` | CPU-side assets: `Image`, `MeshData`, glTF via `loadGltf`, environments (SH, sky) (cgltf/stb private); no GPU code |
 | `engine/physics` | `PhysicsWorld`, `RigidBody`/`Collider`/`CharacterController`/`Joint` Components (Jolt is private, runs on the Job System); test helpers in `tests/physics/PhysicsTestSupport.hpp` |
 | `engine/audio` | `AudioWorld`, `AudioSource`/`AudioListener` Components, filters, reverb, background clip loading via `AssetStreamer` (miniaudio is private; the audio thread owns it); tests use `AudioOutput::Offline` + `render()` |
+| `engine/modules` | `ModuleHost`: loads, checks, runs and hot-reloads game modules (`illusion/core/Module.hpp` is the module side; `illusion_add_module` in `cmake/IllusionModules.cmake`); tests load `tests/modules/TestModule.cpp` variants |
 | `engine/render` | Render device (Vulkan via NVRHI), swapchains, `RenderResources`, `SceneRenderer`, render Components, `shaders/` (Slang, built with `illusion_add_shaders`) |
 | `samples/` | Sample applications (`hello_triangle`, `input_viewer`, `gltf_viewer`, `physics_playground`); shared helpers in `common/` |
 | `tests/` | doctest unit tests; one `Test<Feature>.cpp` per feature; shared helpers in `TestSupport.hpp` |
 | `benchmarks/` | nanobench benchmarks with budgets (`ILL_BENCHMARK(name, nsPerOp)`) |
-| `cmake/` | `IllusionOptions`, `IllusionCompilerSettings`, `Dependencies` (pinned) |
+| `cmake/` | `IllusionOptions`, `IllusionCompilerSettings`, `Dependencies` (pinned), `IllusionModules` |
 | `docs/content/{en,tr}` | MkDocs pages (must stay in sync) |
 | `docs/adr/` | Architecture Decision Records (English only) |
 | `tools/` | `check_format.py`, `check_docs_parity.py`, `windows/vsdev.cmd`; `pack/` builds `illusion_pack` |
