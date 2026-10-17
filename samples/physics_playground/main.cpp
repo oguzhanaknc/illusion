@@ -1,5 +1,6 @@
 // physics_playground: a tower of boxes on the ground, simulated by PhysicsWorld and rendered by the
-// SceneRenderer.
+// SceneRenderer. Impacts make sounds through the AudioWorld: louder for faster impacts, from where they
+// happen, with a little room reverb.
 //
 // Usage: illusion_physics_playground [--frames N] [--screenshot out.png]
 //   Space or the gamepad's south button shoots a ball from the camera. R rebuilds the tower.
@@ -9,6 +10,7 @@
 #include "common/Screenshot.hpp"
 
 #include <illusion/assets/Environment.hpp>
+#include <illusion/audio/AudioWorld.hpp>
 #include <illusion/core/EventBus.hpp>
 #include <illusion/core/JobSystem.hpp>
 #include <illusion/core/Log.hpp>
@@ -18,6 +20,7 @@
 #include <illusion/input/GamepadSystem.hpp>
 #include <illusion/input/InputActions.hpp>
 #include <illusion/physics/PhysicsWorld.hpp>
+#include <illusion/platform/FileSystem.hpp>
 #include <illusion/platform/Platform.hpp>
 #include <illusion/platform/Window.hpp>
 #include <illusion/render/RenderDevice.hpp>
@@ -29,6 +32,7 @@
 #include <charconv>
 #include <cmath>
 #include <format>
+#include <numbers>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -80,6 +84,55 @@ std::vector<Entity> buildTower(World& world, const Assets& assets)
         }
     }
     return boxes;
+}
+
+// A short knock: a low thump with a burst of noise, both decaying quickly. Generated, so the sample needs
+// no audio files.
+std::vector<f32> makeImpactSound(u32 sampleRate)
+{
+    const u32 frames = sampleRate / 6;
+    std::vector<f32> samples(frames);
+    u32 noise = 0x12345678u;
+    for (u32 i = 0; i < frames; ++i)
+    {
+        const f32 t = static_cast<f32>(i) / static_cast<f32>(sampleRate);
+        noise = noise * 1664525u + 1013904223u;
+        const f32 random = static_cast<f32>(noise >> 8) / static_cast<f32>(1u << 24) * 2.0f - 1.0f;
+        const f32 thump = std::sin(2.0f * std::numbers::pi_v<f32> * 110.0f * t) * std::exp(-t * 30.0f);
+        const f32 click = random * std::exp(-t * 90.0f);
+        samples[i] = 0.7f * thump + 0.3f * click;
+    }
+    return samples;
+}
+
+// Plays a knock for each new contact that hits hard enough. Returns the number of sounds started.
+u32 playImpacts(AudioWorld& audio, const PhysicsWorld& physics, AudioClipHandle knock)
+{
+    constexpr f32 kQuietestImpact = 0.8f; // m/s; slower contacts are silent (resting, sliding)
+    constexpr f32 kLoudestImpact = 8.0f;
+    constexpr u32 kMaxPerFrame = 8; // a collapsing tower touches hundreds of times
+    u32 played = 0;
+    for (const ContactEvent& event : physics.contactEvents())
+    {
+        if (event.type != ContactEventType::Begin || event.sensor || event.speed < kQuietestImpact)
+        {
+            continue;
+        }
+        AudioPlayParams params;
+        params.spatial = true;
+        params.position = event.point;
+        params.volume = std::min(event.speed / kLoudestImpact, 1.0f);
+        // Vary the pitch per pair of bodies so that a pile of boxes does not sound like one.
+        params.pitch =
+            0.85f + 0.3f * static_cast<f32>((event.a.index * 7u + event.b.index * 13u) % 16u) / 15.0f;
+        params.reverbSend = 0.3f;
+        params.priority = static_cast<u32>(params.volume * 255.0f);
+        if (audio.playOneShot(knock, params).valid() && ++played == kMaxPerFrame)
+        {
+            break;
+        }
+    }
+    return played;
 }
 
 } // namespace
@@ -134,6 +187,16 @@ int main(int argc, char** argv)
 
     World world;
     PhysicsWorld physics(world, jobs);
+    VirtualFileSystem files;
+    AudioWorldDesc audioDesc;
+    // Screenshot runs are headless (CI): mix without a sound card.
+    audioDesc.output = screenshotPath.empty() ? AudioOutput::Device : AudioOutput::Null;
+    AudioWorld audio(world, files, audioDesc);
+    const std::vector<f32> knockSamples = makeImpactSound(audio.sampleRate());
+    const AudioClipHandle knock = audio.createClip(knockSamples, 1, audio.sampleRate());
+    AudioReverbSettings room;
+    room.roomSize = 0.6f;
+    audio.setReverb(room);
     Assets assets;
     assets.cube = resources.createMesh(makeCube(1.0f), "Box");
     assets.ball = resources.createMesh(makeSphere(0.5f, 32, 16), "Ball");
@@ -175,7 +238,9 @@ int main(int argc, char** argv)
     f32 pitch = -0.3f;
     constexpr f32 kDistance = 9.0f;
     Transform camera;
+    const Entity ears = world.create(Transform{}, AudioListener{});
     u64 frames = 0;
+    u64 impacts = 0;
     u64 framesSinceTitle = 0;
     std::vector<const GamepadState*> pads;
     while (!window->shouldClose() && (frameLimit == 0 || frames < frameLimit))
@@ -248,6 +313,9 @@ int main(int argc, char** argv)
         }
 
         physics.update(dt);
+        impacts += playImpacts(audio, physics, knock);
+        world.get<Transform>(ears) = camera;
+        audio.update(dt);
 
         if (swapchain->beginFrame())
         {
@@ -281,7 +349,7 @@ int main(int argc, char** argv)
     }
     device->waitIdle();
     const u32 errors = device->validationErrorCount();
-    ILL_LOG_INFO("Sample", "simulated {} steps over {} frames, {} validation error(s)", physics.stepCount(),
-                 frames, errors);
+    ILL_LOG_INFO("Sample", "simulated {} steps over {} frames, {} impact sounds, {} validation error(s)",
+                 physics.stepCount(), frames, impacts, errors);
     return errors == 0 ? 0 : 2;
 }

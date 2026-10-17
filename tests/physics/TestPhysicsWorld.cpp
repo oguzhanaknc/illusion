@@ -273,6 +273,27 @@ TEST_CASE("contact events report touching bodies and sensors")
     CHECK(leftGround);
 }
 
+TEST_CASE("contact events report the speed of the impact")
+{
+    Fixture f;
+    createGround(f.world);
+    // Falls 4.75 m before touching the ground: about sqrt(2 * 9.81 * 4.75) = 9.65 m/s.
+    f.world.create(at(Vec3(0.0f, 5.0f, 0.0f)), body(MotionType::Dynamic), sphere(0.25f));
+    f32 impact = -1.0f;
+    for (int i = 0; i < 180 && impact < 0.0f; ++i)
+    {
+        f.physics.update(kStep);
+        for (const ContactEvent& event : f.physics.contactEvents())
+        {
+            if (event.type == ContactEventType::Begin)
+            {
+                impact = event.speed;
+            }
+        }
+    }
+    CHECK(impact == doctest::Approx(9.65f).epsilon(0.1));
+}
+
 TEST_CASE("collision layers can be disabled pairwise")
 {
     Fixture f;

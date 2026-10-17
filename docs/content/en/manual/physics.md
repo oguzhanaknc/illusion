@@ -127,7 +127,9 @@ for (const illusion::ContactEvent& contact : physics.contactEvents())
 - `raycast()` returns the closest non-sensor hit with its Entity, point, normal and distance.
 - `contactEvents()` lists the contacts that began or ended during the last `update()`, sorted so the
   order does not depend on thread timing. In each event `a` has the lower Entity id and the normal
-  points from `a` to `b`.
+  points from `a` to `b`. `speed` is how fast the bodies approached along the normal when they touched,
+  measured before the solver separates them: use it to scale impact sounds and effects (the
+  `physics_playground` sample does).
 
 ### Shape casts and overlaps
 
@@ -250,4 +252,5 @@ physics.setLayersCollide(1, 0, false); // layer 1 passes through layer 0
 ## Sample
 
 `illusion_physics_playground` stacks a tower of boxes; Space (or the gamepad's south button) shoots a
-heavy ball at it and R rebuilds the tower.
+heavy ball at it and R rebuilds the tower. Every impact plays a knock from where it happened, louder for
+faster impacts (`ContactEvent::speed`), through the [audio](audio.md) mixer with a little reverb.

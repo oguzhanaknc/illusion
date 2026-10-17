@@ -54,13 +54,13 @@ Open `build/api/index.html` in a browser.
 | `illusion/assets/Model.hpp` | `ModelData`, `MaterialData`, `loadGltf` |
 | `illusion/assets/AssetFormat.hpp` | `AssetId`, `AssetFile`, cooked image and model formats |
 | `illusion/assets/AssetDatabase.hpp` | `AssetDatabase`: import cache for images and models |
-| `illusion/assets/AssetStreamer.hpp` | `AssetStreamer`, `AssetHandle`: asynchronous loading |
+| `illusion/assets/AssetStreamer.hpp` | `AssetStreamer`, `AssetHandle`: asynchronous loading of images, models and other files (`loadFile`) |
 | `illusion/assets/AssetCooker.hpp` | `cookAssets`: import a directory ahead of time |
 | `illusion/assets/Environment.hpp` | Equirectangular mapping, `ShIrradiance`, `makeSkyImage` |
-| `illusion/physics/PhysicsWorld.hpp` | `PhysicsWorld`: simulation, body and character control, mesh and hull geometry, joints, raycasts, shape casts, overlaps, contact events |
+| `illusion/physics/PhysicsWorld.hpp` | `PhysicsWorld`: simulation, body and character control, mesh and hull geometry, joints, raycasts, shape casts, overlaps, contact events with impact speeds |
 | `illusion/physics/PhysicsComponents.hpp` | `RigidBody`, `Collider`, `CharacterController`, `Joint` Components and their runtime state (`PhysicsBody`, `CharacterBody`, `PhysicsJoint`); `PhysicsMeshHandle` |
-| `illusion/audio/AudioWorld.hpp` | `AudioWorld`: clips, playback, one-shots, mixer buses, output; `AudioWorldDesc`, `AudioStats` |
-| `illusion/audio/AudioComponents.hpp` | `AudioSource`, `AudioListener`, `AudioPlayback` Components; `AudioBus`, `AudioAttenuation` |
+| `illusion/audio/AudioWorld.hpp` | `AudioWorld`: clips (also loaded in the background), playback, one-shots, mixer buses, bus filters, reverb, output; `AudioWorldDesc`, `AudioStats` |
+| `illusion/audio/AudioComponents.hpp` | `AudioSource` (with filters, reverb send and cones), `AudioListener`, `AudioPlayback` Components; `AudioBus`, `AudioAttenuation` |
 | `illusion/render/RenderDevice.hpp` | `RenderDevice`, `GpuInfo` (including bindless and multi-draw support): Vulkan device through NVRHI |
 | `illusion/render/Swapchain.hpp` | `Swapchain`: presentation to a window |
 | `illusion/render/DebugTriangle.hpp` | Diagnostic triangle renderer |

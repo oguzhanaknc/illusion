@@ -89,12 +89,17 @@ AudioWorldDesc offline(u32 maxVoices)
     return desc;
 }
 
-// Looping spatial sources spread around the listener.
-void createSources(World& world, u32 count)
+// Looping spatial sources spread around the listener, optionally through a low-pass filter and the reverb.
+void createSources(World& world, u32 count, bool effects = false)
 {
     AudioSource source;
     source.clip = "bench:/tone.wav";
     source.loop = true;
+    if (effects)
+    {
+        source.lowPassCutoff = 2000.0f;
+        source.reverbSend = 0.3f;
+    }
     for (u32 i = 0; i < count; ++i)
     {
         const f32 angle = static_cast<f32>(i) * 0.37f;
@@ -126,6 +131,29 @@ ILL_BENCHMARK("audio/mix", 60.0)
         audio.render(out);
         ankerl::nanobench::doNotOptimizeAway(out.data());
     });
+}
+
+ILL_BENCHMARK("audio/mix-effects", 120.0)
+{
+    constexpr u32 kVoices = 64;
+    constexpr u32 kFrames = 512;
+    ToneFiles tone;
+    if (!tone.ready)
+    {
+        return;
+    }
+    World world;
+    AudioWorld audio(world, tone.files, offline(kVoices));
+    createSources(world, kVoices, true);
+    audio.setBusFilter(AudioBus::Sfx, AudioBusFilter{8000.0f, 60.0f});
+    audio.update(0.0);
+    std::vector<f32> out(kFrames * AudioWorld::channelCount());
+    bench.batch(kVoices * kFrames)
+        .unit("voice-frame")
+        .run("mix 64 spatial voices with low-pass, bus filters and reverb, 512 frames", [&] {
+            audio.render(out);
+            ankerl::nanobench::doNotOptimizeAway(out.data());
+        });
 }
 
 ILL_BENCHMARK("audio/update", 120.0)

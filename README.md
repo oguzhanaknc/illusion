@@ -30,8 +30,9 @@ designed to ship commercial games on Steam and similar stores.
 - Rigid-body physics with Jolt on the engine Job System: ECS Components, fixed step with interpolation,
   convex hull and triangle mesh colliders, character controllers, joints (fixed, point, hinge, slider,
   distance; motors, limits, breaking), raycasts, shape casts, overlaps and contact events.
-- Audio with miniaudio: ECS sound sources, 3D attenuation, panning and doppler, music streaming, a mixer
-  with buses, mixed on its own thread without allocations; WAV, FLAC, MP3 and Ogg Vorbis.
+- Audio with miniaudio: ECS sound sources, 3D attenuation, panning, doppler and sound cones, music
+  streaming, clips loaded in the background, a mixer with buses, low/high-pass filters and a room reverb,
+  mixed on its own thread without allocations; WAV, FLAC, MP3 and Ogg Vorbis.
 - Component reflection with stable names and JSON scene files that survive code changes.
 - Asset pipeline: content-hashed import cache, asynchronous streaming on an I/O thread and the Job
   System, memory-mapped `.illpak` archives and cooked builds that ship without sources.

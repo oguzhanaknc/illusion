@@ -20,7 +20,12 @@ void reflectAudioComponents(ComponentRegistry& registry)
         .field("maxDistance", &AudioSource::maxDistance)
         .field("rolloff", &AudioSource::rolloff)
         .field("dopplerFactor", &AudioSource::dopplerFactor)
-        .field("priority", &AudioSource::priority);
+        .field("priority", &AudioSource::priority)
+        .field("lowPassCutoff", &AudioSource::lowPassCutoff)
+        .field("reverbSend", &AudioSource::reverbSend)
+        .field("coneInnerAngle", &AudioSource::coneInnerAngle)
+        .field("coneOuterAngle", &AudioSource::coneOuterAngle)
+        .field("coneOuterVolume", &AudioSource::coneOuterVolume);
     reflect<AudioListener>("illusion.AudioListener", 1, registry);
 }
 

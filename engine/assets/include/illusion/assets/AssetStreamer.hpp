@@ -9,10 +9,13 @@
 #include <illusion/core/Assert.hpp>
 #include <illusion/core/Base.hpp>
 
+#include <cstddef>
+#include <functional>
 #include <memory>
 #include <optional>
 #include <string>
 #include <string_view>
+#include <vector>
 
 namespace illusion
 {
@@ -101,6 +104,11 @@ private:
     std::shared_ptr<detail::AssetSlot<T>> m_slot;
 };
 
+/// Turns the bytes of a file into an asset of type T for AssetStreamer::loadFile(). Runs on the Job
+/// System, so it must be safe to call from any thread. Returns std::nullopt (and sets @p error) on failure.
+template <class T>
+using AssetFileDecoder = std::function<std::optional<T>(std::vector<std::byte>&& bytes, std::string& error)>;
+
 /// Creation parameters of an AssetStreamer.
 struct AssetStreamerDesc
 {
@@ -132,6 +140,24 @@ public:
     /// Requests the glTF model at @p virtualPath. Requests for the same path share a handle.
     [[nodiscard]] AssetHandle<ModelData> loadModel(std::string_view virtualPath);
 
+    /// Requests the file at @p virtualPath and turns it into a T with @p decode on the Job System, for
+    /// asset types that other modules define (audio clips, for example). The import cache is not used.
+    /// @p decoderName identifies the decoder, its settings and T: requests with the same path and name
+    /// share a handle (and @p decode of later requests is not called).
+    template <class T>
+    [[nodiscard]] AssetHandle<T> loadFile(std::string_view virtualPath, std::string_view decoderName,
+                                          AssetFileDecoder<T> decode)
+    {
+        auto slot = requestFile(
+            virtualPath, decoderName, std::make_shared<detail::AssetSlot<T>>(),
+            [decode = std::move(decode)](std::vector<std::byte>&& bytes, detail::AssetSlotBase& base) {
+                auto& typed = static_cast<detail::AssetSlot<T>&>(base);
+                typed.value = decode(std::move(bytes), typed.error);
+                return typed.value.has_value();
+            });
+        return AssetHandle<T>(std::static_pointer_cast<detail::AssetSlot<T>>(std::move(slot)));
+    }
+
     /// Publishes finished loads (their handles become Ready or Failed). Call once per frame. Returns the
     /// number of loads published.
     u32 update();
@@ -146,6 +172,13 @@ public:
     [[nodiscard]] AssetDatabaseStatistics statistics() const noexcept;
 
 private:
+    using FileDecoder = std::function<bool(std::vector<std::byte>&&, detail::AssetSlotBase&)>;
+
+    std::shared_ptr<detail::AssetSlotBase> requestFile(std::string_view virtualPath,
+                                                       std::string_view decoderName,
+                                                       std::shared_ptr<detail::AssetSlotBase> slot,
+                                                       FileDecoder decode);
+
     struct Impl;
     std::unique_ptr<Impl> m_impl;
 };

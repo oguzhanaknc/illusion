@@ -15,6 +15,7 @@
 #include <array>
 #include <cfloat>
 #include <cmath>
+#include <format>
 #include <string>
 #include <type_traits>
 #include <unordered_map>
@@ -32,6 +33,7 @@ constexpr f32 kMinPitch = 1.0f / 16.0f;
 constexpr f32 kMaxPitch = 16.0f;
 constexpr f32 kMinDistance = 0.01f;
 constexpr u32 kMaxRenderFrames = 1u << 20;
+constexpr std::string_view kSupportedFormats = "supported: WAV, FLAC, MP3, Ogg Vorbis";
 
 // Values from game code and scene files are clamped; non-finite values fall back to @p fallback.
 f32 sanitize(f32 value, f32 low, f32 high, f32 fallback) noexcept
@@ -96,10 +98,33 @@ void writeParams(detail::VoiceState& state, const Params& params) noexcept
     state.minDistance = sanitize(params.minDistance, kMinDistance, FLT_MAX, 1.0f);
     state.maxDistance = sanitize(params.maxDistance, state.minDistance, FLT_MAX, FLT_MAX);
     state.rolloff = sanitize(params.rolloff, 0.0f, FLT_MAX, 1.0f);
+    state.lowPassCutoff = sanitize(params.lowPassCutoff, 0.0f, FLT_MAX, 0.0f);
+    state.reverbSend = sanitize(params.reverbSend, 0.0f, 1.0f, 0.0f);
     if constexpr (std::is_same_v<Params, AudioSource>)
     {
         state.dopplerFactor = sanitize(params.dopplerFactor, 0.0f, FLT_MAX, 0.0f);
+        state.coneInnerAngle = sanitize(params.coneInnerAngle, 0.0f, kAudioFullCone, kAudioFullCone);
+        state.coneOuterAngle =
+            sanitize(params.coneOuterAngle, state.coneInnerAngle, kAudioFullCone, kAudioFullCone);
+        state.coneOuterVolume = sanitize(params.coneOuterVolume, 0.0f, 1.0f, 0.0f);
     }
+}
+
+// Spatial state of a sound taken from its Entity's Transform: position and forward axis (-z).
+void writePose(detail::VoiceState& state, const Transform& transform) noexcept
+{
+    state.position = transform.position;
+    state.direction = transform.rotation * Vec3(0.0f, 0.0f, -1.0f);
+}
+
+AudioReverbSettings sanitizeReverb(const AudioReverbSettings& settings) noexcept
+{
+    AudioReverbSettings result;
+    result.roomSize = sanitize(settings.roomSize, 0.0f, 1.0f, 0.5f);
+    result.damping = sanitize(settings.damping, 0.0f, 1.0f, 0.25f);
+    result.width = sanitize(settings.width, 0.0f, 1.0f, 1.0f);
+    result.volume = sanitize(settings.volume, 0.0f, FLT_MAX, 0.0f);
+    return result;
 }
 
 } // namespace
@@ -108,16 +133,21 @@ struct AudioWorld::Impl
 {
     struct Clip
     {
-        std::string path; // empty for clips made with createClip()
-        std::vector<f32> samples;
-        std::vector<std::byte> encoded;
-        u32 channels = 0;
-        u64 frames = 0;
+        std::string path;                    // empty for clips made with createClip()
+        detail::ClipData owned;              // data of clips loaded on the game thread
+        AssetHandle<detail::ClipData> asset; // data of clips loaded by the streamer
         AudioClipMode mode = AudioClipMode::Decode;
         u32 generation = 1;
         u32 users = 0;       // voices playing the clip
         bool loaded = false; // false for free slots and unloaded clips waiting to be freed
+        bool ready = true;   // false while the streamer loads the clip
         u64 freeAfter = 0;   // snapshot serial after which an unloaded clip can be freed
+
+        [[nodiscard]] const detail::ClipData& data() const noexcept
+        {
+            const detail::ClipData* streamed = asset.get();
+            return streamed != nullptr ? *streamed : owned;
+        }
     };
 
     // Game-thread bookkeeping of one voice.
@@ -269,7 +299,8 @@ struct AudioWorld::Impl
 
     // --- Clips ----------------------------------------------------------------------------------------
 
-    [[nodiscard]] const Clip* clipOf(AudioClipHandle handle) const noexcept
+    // The clip of @p handle if it is loaded or loading.
+    [[nodiscard]] const Clip* slotOf(AudioClipHandle handle) const noexcept
     {
         if (handle.index >= clips.size())
         {
@@ -277,6 +308,23 @@ struct AudioWorld::Impl
         }
         const Clip& clip = clips[handle.index];
         return clip.loaded && clip.generation == handle.generation ? &clip : nullptr;
+    }
+
+    // The clip of @p handle if it is ready to play.
+    [[nodiscard]] const Clip* clipOf(AudioClipHandle handle) const noexcept
+    {
+        const Clip* clip = slotOf(handle);
+        return clip != nullptr && clip->ready ? clip : nullptr;
+    }
+
+    [[nodiscard]] AssetState stateOf(AudioClipHandle handle) const noexcept
+    {
+        const Clip* clip = slotOf(handle);
+        if (clip == nullptr)
+        {
+            return AssetState::Failed;
+        }
+        return clip->ready ? AssetState::Ready : AssetState::Loading;
     }
 
     AudioClipHandle handleOf(u32 index) const noexcept
@@ -322,35 +370,91 @@ struct AudioWorld::Impl
         Clip clip;
         clip.path = path;
         clip.mode = mode;
-        if (mode == AudioClipMode::Decode)
+        if (!detail::loadClipData(std::move(bytes), mode == AudioClipMode::Stream, mixer->sampleRate(),
+                                  clip.owned))
         {
-            detail::PcmAudio pcm;
-            if (!detail::decodeAudio(bytes, mixer->sampleRate(), pcm))
-            {
-                ILL_LOG_WARN("Audio", "cannot decode clip '{}' (supported: WAV, FLAC, MP3, Ogg Vorbis)",
-                             path);
-                return {};
-            }
-            clip.samples = std::move(pcm.samples);
-            clip.channels = pcm.channels;
-            clip.frames = pcm.frames;
-        }
-        else
-        {
-            if (!detail::probeAudio(bytes, mixer->sampleRate(), clip.channels, clip.frames))
-            {
-                ILL_LOG_WARN("Audio", "cannot decode clip '{}' (supported: WAV, FLAC, MP3, Ogg Vorbis)",
-                             path);
-                return {};
-            }
-            clip.encoded = std::move(bytes);
+            ILL_LOG_WARN("Audio", "cannot decode clip '{}' ({})", path, kSupportedFormats);
+            return {};
         }
         return addClip(std::move(clip));
     }
 
+    AudioClipHandle requestClip(std::string_view path, AudioClipMode mode)
+    {
+        if (desc.streamer == nullptr)
+        {
+            return loadClip(path, mode);
+        }
+        if (const auto found = clipsByPath.find(path); found != clipsByPath.end())
+        {
+            return handleOf(found->second);
+        }
+        const u32 rate = mixer->sampleRate();
+        const bool stream = mode == AudioClipMode::Stream;
+        Clip clip;
+        clip.path = path;
+        clip.mode = mode;
+        clip.asset = desc.streamer->loadFile<detail::ClipData>(
+            path, std::format("illusion.audio.{}@{}", stream ? "stream" : "decode", rate),
+            [rate, stream](std::vector<std::byte>&& bytes,
+                           std::string& error) -> std::optional<detail::ClipData> {
+                detail::ClipData data;
+                if (!detail::loadClipData(std::move(bytes), stream, rate, data))
+                {
+                    error = std::format("cannot decode the clip ({})", kSupportedFormats);
+                    return std::nullopt;
+                }
+                return data;
+            });
+        if (clip.asset.state() == AssetState::Failed)
+        {
+            ILL_LOG_WARN("Audio", "cannot load clip '{}': {}", path, clip.asset.error());
+            return {};
+        }
+        clip.ready = clip.asset.ready();
+        const AudioClipHandle handle = addClip(std::move(clip));
+        if (!clips[handle.index].ready)
+        {
+            loadingClips.push_back(handle);
+        }
+        return handle;
+    }
+
+    // Publishes clips the streamer finished. Returns true if any finished (ready, failed or unloaded), so
+    // that the sources waiting for them can start or give up.
+    bool pollLoadingClips()
+    {
+        bool finished = false;
+        std::erase_if(loadingClips, [&](AudioClipHandle handle) {
+            if (slotOf(handle) == nullptr)
+            {
+                finished = true; // unloaded while loading
+                return true;
+            }
+            const u32 index = handle.index;
+            Clip& clip = clips[index];
+            const AssetState state = clip.asset.state();
+            if (state == AssetState::Loading)
+            {
+                return false;
+            }
+            finished = true;
+            if (state == AssetState::Ready)
+            {
+                clip.ready = true;
+                return true;
+            }
+            ILL_LOG_WARN("Audio", "cannot load clip '{}': {}", clip.path, clip.asset.error());
+            clip.asset = {}; // so that the streamer forgets the request and a later one tries again
+            unloadClip(handle);
+            return true;
+        });
+        return finished;
+    }
+
     void unloadClip(AudioClipHandle handle)
     {
-        if (clipOf(handle) == nullptr)
+        if (slotOf(handle) == nullptr)
         {
             return;
         }
@@ -425,12 +529,13 @@ struct AudioWorld::Impl
     bool beginVoice(u32 voice, u32 clipIndex, Entity owner, u32 priority)
     {
         Clip& clip = clips[clipIndex];
+        const detail::ClipData& data = clip.data();
         VoiceRecord& record = records[voice];
         detail::VoiceState& state = voices[voice];
         state = detail::VoiceState{};
         if (clip.mode == AudioClipMode::Stream)
         {
-            record.decoder = detail::openAudioStream(clip.encoded, clip.channels, mixer->sampleRate());
+            record.decoder = detail::openAudioStream(data.encoded, data.channels, mixer->sampleRate());
             if (!record.decoder)
             {
                 ILL_LOG_WARN("Audio", "cannot stream clip '{}'", clip.path);
@@ -441,10 +546,10 @@ struct AudioWorld::Impl
         }
         else
         {
-            state.samples = clip.samples.data();
-            state.frames = clip.frames;
+            state.samples = data.samples.data();
+            state.frames = data.frames;
         }
-        state.channels = clip.channels;
+        state.channels = data.channels;
         state.serial = newSerial();
         record.serial = state.serial;
         record.owner = owner;
@@ -493,7 +598,7 @@ struct AudioWorld::Impl
             ILL_LOG_WARN("Audio", "the AudioSource of entity {} has no clip", entity.index);
             return {};
         }
-        return loadClip(source.clip, source.stream ? AudioClipMode::Stream : AudioClipMode::Decode);
+        return requestClip(source.clip, source.stream ? AudioClipMode::Stream : AudioClipMode::Decode);
     }
 
     void startSource(Entity entity)
@@ -505,6 +610,7 @@ struct AudioWorld::Impl
             releaseVoice(playback.voice);
         }
         playback.clip = resolveClip(source, entity);
+        playback.pendingStart = stateOf(playback.clip) == AssetState::Loading;
         if (clipOf(playback.clip) == nullptr)
         {
             return;
@@ -518,7 +624,7 @@ struct AudioWorld::Impl
         writeParams(state, source);
         if (const Transform* transform = world.tryGet<Transform>(entity))
         {
-            state.position = transform->position;
+            writePose(state, *transform);
         }
         playback.voice = voice;
         playback.serial = state.serial;
@@ -618,7 +724,7 @@ struct AudioWorld::Impl
                 {
                     detail::VoiceState& state = voices[playback.voice];
                     writeParams(state, source);
-                    state.position = transform.position;
+                    writePose(state, transform);
                     state.velocity = velocity;
                 }
             });
@@ -631,6 +737,28 @@ struct AudioWorld::Impl
             });
     }
 
+    // Starts the sources that waited for a clip that has now loaded (or gives up on failed ones).
+    void startPendingSources()
+    {
+        scratch.clear();
+        world.query<const AudioPlayback>().with<AudioSource>().each(
+            [&](Entity entity, const AudioPlayback& playback) {
+                if (playback.pendingStart && stateOf(playback.clip) != AssetState::Loading)
+                {
+                    scratch.push_back(entity);
+                }
+            });
+        for (const Entity entity : scratch)
+        {
+            AudioPlayback& playback = world.get<AudioPlayback>(entity);
+            playback.pendingStart = false;
+            if (stateOf(playback.clip) == AssetState::Ready)
+            {
+                startSource(entity);
+            }
+        }
+    }
+
     void publish()
     {
         detail::MixerSnapshot& snapshot = mixer->exchange().back();
@@ -639,6 +767,8 @@ struct AudioWorld::Impl
         snapshot.masterVolume = masterVolume;
         snapshot.busVolumes = busVolumes;
         snapshot.busPaused = busPaused;
+        snapshot.busFilters = busFilters;
+        snapshot.reverb = reverb;
         std::copy(voices.begin(), voices.end(), snapshot.voices.begin());
         mixer->exchange().publish();
     }
@@ -686,6 +816,9 @@ struct AudioWorld::Impl
     f32 masterVolume = 1.0f;
     std::array<f32, kAudioBusCount> busVolumes{};
     std::array<bool, kAudioBusCount> busPaused{};
+    std::array<AudioBusFilter, kAudioBusCount> busFilters{};
+    AudioReverbSettings reverb;
+    std::vector<AudioClipHandle> loadingClips; // clips the streamer is loading
 
     u32 nextSerial = 0;
     u64 nextOrder = 0;
@@ -719,6 +852,10 @@ void AudioWorld::update(f64 deltaSeconds)
     impl.collectFinished();
     impl.syncListener(deltaSeconds);
     impl.removeStaleSources();
+    if (impl.pollLoadingClips())
+    {
+        impl.startPendingSources();
+    }
     impl.addNewSources();
     impl.updateSources(deltaSeconds);
     impl.publish();
@@ -728,6 +865,16 @@ void AudioWorld::update(f64 deltaSeconds)
 AudioClipHandle AudioWorld::loadClip(std::string_view virtualPath, AudioClipMode mode)
 {
     return m_impl->loadClip(virtualPath, mode);
+}
+
+AudioClipHandle AudioWorld::requestClip(std::string_view virtualPath, AudioClipMode mode)
+{
+    return m_impl->requestClip(virtualPath, mode);
+}
+
+AssetState AudioWorld::clipState(AudioClipHandle clip) const noexcept
+{
+    return m_impl->stateOf(clip);
 }
 
 AudioClipHandle AudioWorld::createClip(std::span<const f32> samples, u32 channels, u32 sampleRate)
@@ -742,9 +889,9 @@ AudioClipHandle AudioWorld::createClip(std::span<const f32> samples, u32 channel
         return {};
     }
     Impl::Clip clip;
-    clip.samples = std::move(pcm.samples);
-    clip.channels = pcm.channels;
-    clip.frames = pcm.frames;
+    clip.owned.samples = std::move(pcm.samples);
+    clip.owned.channels = pcm.channels;
+    clip.owned.frames = pcm.frames;
     return m_impl->addClip(std::move(clip));
 }
 
@@ -760,11 +907,12 @@ std::optional<AudioClipInfo> AudioWorld::clipInfo(AudioClipHandle clip) const
     {
         return std::nullopt;
     }
+    const detail::ClipData& data = found->data();
     AudioClipInfo info;
-    info.channels = found->channels;
-    info.frames = found->frames;
+    info.channels = data.channels;
+    info.frames = data.frames;
     info.mode = found->mode;
-    info.memoryBytes = found->samples.size() * sizeof(f32) + found->encoded.size();
+    info.memoryBytes = data.memoryBytes();
     return info;
 }
 
@@ -794,10 +942,13 @@ void AudioWorld::stop(Entity entity)
     {
         return;
     }
-    if (const AudioPlayback* playback = impl.world.tryGet<AudioPlayback>(entity);
-        playback && impl.isActive(*playback))
+    if (AudioPlayback* playback = impl.world.tryGet<AudioPlayback>(entity))
     {
-        impl.releaseVoice(playback->voice);
+        playback->pendingStart = false;
+        if (impl.isActive(*playback))
+        {
+            impl.releaseVoice(playback->voice);
+        }
     }
 }
 
@@ -877,6 +1028,29 @@ bool AudioWorld::isBusPaused(AudioBus bus) const noexcept
     return m_impl->busPaused[static_cast<u32>(sanitizeBus(bus))];
 }
 
+void AudioWorld::setBusFilter(AudioBus bus, const AudioBusFilter& filter)
+{
+    ILL_ASSERT(static_cast<u32>(bus) < kAudioBusCount, "invalid audio bus");
+    AudioBusFilter& target = m_impl->busFilters[static_cast<u32>(bus)];
+    target.lowPassCutoff = sanitize(filter.lowPassCutoff, 0.0f, FLT_MAX, 0.0f);
+    target.highPassCutoff = sanitize(filter.highPassCutoff, 0.0f, FLT_MAX, 0.0f);
+}
+
+AudioBusFilter AudioWorld::busFilter(AudioBus bus) const noexcept
+{
+    return m_impl->busFilters[static_cast<u32>(sanitizeBus(bus))];
+}
+
+void AudioWorld::setReverb(const AudioReverbSettings& settings)
+{
+    m_impl->reverb = sanitizeReverb(settings);
+}
+
+const AudioReverbSettings& AudioWorld::reverb() const noexcept
+{
+    return m_impl->reverb;
+}
+
 AudioOutput AudioWorld::output() const noexcept
 {
     return m_impl->output;
@@ -897,12 +1071,13 @@ AudioStats AudioWorld::stats() const noexcept
     stats.mixerAllocations = impl.mixer->systemAllocations();
     for (const Impl::Clip& clip : impl.clips)
     {
-        if (clip.loaded)
+        if (clip.loaded && clip.ready)
         {
             ++stats.clips;
-            stats.clipBytes += clip.samples.size() * sizeof(f32) + clip.encoded.size();
+            stats.clipBytes += clip.data().memoryBytes();
         }
     }
+    stats.loadingClips = static_cast<u32>(impl.loadingClips.size());
     return stats;
 }
 
