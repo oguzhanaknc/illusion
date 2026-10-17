@@ -50,6 +50,7 @@ Open `build/api/index.html` in a browser.
 | `illusion/assets/Model.hpp` | `ModelData`, `MaterialData`, `loadGltf` |
 | `illusion/assets/AssetFormat.hpp` | `AssetId`, `AssetFile`, cooked image and model formats |
 | `illusion/assets/AssetDatabase.hpp` | `AssetDatabase`: import cache for images and models |
+| `illusion/assets/AssetStreamer.hpp` | `AssetStreamer`, `AssetHandle`: asynchronous loading |
 | `illusion/assets/Environment.hpp` | Equirectangular mapping, `ShIrradiance`, `makeSkyImage` |
 | `illusion/render/RenderDevice.hpp` | `RenderDevice`, `GpuInfo` (including bindless and multi-draw support): Vulkan device through NVRHI |
 | `illusion/render/Swapchain.hpp` | `Swapchain`: presentation to a window |
@@ -57,5 +58,6 @@ Open `build/api/index.html` in a browser.
 | `illusion/render/RenderResources.hpp` | `RenderResources`: GPU Meshes, Textures, Materials, environments and their Handles |
 | `illusion/render/SceneRenderer.hpp` | `SceneRenderer`, `RenderView`, `RenderStats` |
 | `illusion/render/Shadows.hpp` | `ShadowSettings`, `ShadowCascades`, `computeShadowCascades` |
+| `illusion/render/UploadQueue.hpp` | `UploadQueue`: GPU uploads of streamed models with a byte budget |
 | `illusion/render/PostProcess.hpp` | `PostProcessSettings` (ambient occlusion, bloom, TAA), `temporalJitter` |
 | `illusion/render/Components.hpp` | `MeshRenderer`, `Camera`, `DirectionalLight`, `PointLight`, `SkyLight`, `MotionHistory`, `spawnModel` |

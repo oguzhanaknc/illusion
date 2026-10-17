@@ -27,6 +27,7 @@ add_executable(illusion_tests
     input/TestInputActions.cpp
     assets/TestAssetDatabase.cpp
     assets/TestAssetFormat.cpp
+    assets/TestAssetStreamer.cpp
     assets/TestEnvironment.cpp
     assets/TestGltf.cpp
     assets/TestImageMesh.cpp
@@ -50,8 +51,11 @@ add_executable(illusion_gpu_tests
     gpu/main.cpp
     gpu/TestRenderDevice.cpp
     gpu/TestSceneRenderer.cpp
-    gpu/TestSwapchain.cpp)
+    gpu/TestSwapchain.cpp
+    gpu/TestUploadQueue.cpp)
+target_include_directories(illusion_gpu_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
 target_link_libraries(illusion_gpu_tests PRIVATE illusion::render illusion::doctest)
+target_compile_definitions(illusion_gpu_tests PRIVATE ILLUSION_TEST_DATA_DIR="${CMAKE_CURRENT_SOURCE_DIR}/data")
 illusion_configure_target(illusion_gpu_tests)
 doctest_discover_tests(illusion_gpu_tests
     PROPERTIES LABELS "gpu"

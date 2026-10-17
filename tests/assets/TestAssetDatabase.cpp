@@ -1,4 +1,4 @@
-#include "TestSupport.hpp"
+#include "AssetTestProject.hpp"
 
 #include <illusion/assets/AssetDatabase.hpp>
 #include <illusion/platform/FileSystem.hpp>
@@ -9,26 +9,7 @@
 
 using namespace illusion;
 
-namespace
-{
-
-// A writable copy of the glTF test data mounted as "game", plus a "cache" mount.
-struct Project
-{
-    test::TempDirectory directory;
-    VirtualFileSystem files;
-
-    Project()
-    {
-        const std::filesystem::path source = utf8Path(ILLUSION_TEST_DATA_DIR) / "gltf";
-        std::filesystem::copy(source, directory.path / "game", std::filesystem::copy_options::recursive);
-        std::filesystem::create_directories(directory.path / "cache");
-        REQUIRE(files.mount("game", directory.path / "game", MountAccess::ReadWrite) == FileError::None);
-        REQUIRE(files.mount("cache", directory.path / "cache", MountAccess::ReadWrite) == FileError::None);
-    }
-};
-
-} // namespace
+using Project = test::AssetProject;
 
 TEST_CASE("the asset database imports once and then loads from the cache")
 {

@@ -11,8 +11,8 @@ illusion is built in layers. A layer may depend only on layers below it.
 | Core | Platform detection, assertions, logging, memory, Job System, ECS, event bus, time, math | Implemented |
 | Platform | Window, keyboard and mouse (GLFW), virtual file system | Implemented |
 | Input | Gamepads through SDL3 (rumble, LED, motion, touchpad, adaptive triggers), action mapping, rebinding, glyphs | Implemented |
-| Assets | Images, Meshes, glTF models, environments, cooked formats and an import cache (CPU side) | Implemented |
-| Runtime services | Asset streaming, audio (miniaudio), physics (Jolt) | Planned |
+| Assets | Images, Meshes, glTF models, environments, cooked formats, an import cache and asynchronous streaming | Implemented |
+| Runtime services | Audio (miniaudio), physics (Jolt) | Planned |
 | Renderer: foundation | Vulkan 1.3 device through NVRHI, swapchains, Slang shader pipeline | Implemented |
 | Renderer: scene | Meshes, PBR Materials, direct and image-based lighting, soft shadows, GTAO, HDR post-processing (TAA, bloom, tonemapping), frustum culling, GPU occlusion culling with indirect draws, instancing, bindless multi-draw | Implemented |
 | Editor | Scene editing, gizmos, AI command API | Planned |

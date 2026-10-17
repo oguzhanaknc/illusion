@@ -3,6 +3,8 @@
 add_library(illusion_assets STATIC
     src/AssetDatabase.cpp
     src/AssetFormat.cpp
+    src/AssetImport.cpp
+    src/AssetStreamer.cpp
     src/Environment.cpp
     src/Gltf.cpp
     src/Image.cpp
