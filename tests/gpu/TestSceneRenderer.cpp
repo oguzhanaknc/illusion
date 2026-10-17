@@ -108,7 +108,7 @@ TEST_CASE("the scene renderer lights, culls and instances meshes")
         World world;
         world.create(Transform{}, MeshRenderer{sphere, 0, redMaterial});
         Transform behind;
-        behind.position = Vec3(0.0f, 0.0f, 20.0f); // behind the camera
+        behind.position = Vec3(10.0f, 0.0f, 20.0f); // behind the camera, off the light's path (no shadow)
         world.create(behind, MeshRenderer{sphere, 0, redMaterial});
         world.create(Transform{}, DirectionalLight{Vec3(1.0f), 3.0f}); // shines along -z, towards the sphere
 
@@ -342,6 +342,74 @@ TEST_CASE("the environment background and lighting follow the SkyLight orientati
         CHECK(right.r > right.b + 40);
         CHECK(left.b > left.r + 40);
         CHECK(pixelAt(pixels, 1, 1).r == 0); // background disabled: clear colour
+    }
+    device->waitIdle();
+    CHECK(device->validationErrorCount() == 0);
+}
+
+TEST_CASE("a directional light casts soft shadows from casters outside the view")
+{
+    auto device = RenderDevice::create(headless());
+    REQUIRE(device != nullptr);
+    {
+        RenderResources resources(*device);
+        SceneRendererDesc desc = unormTarget();
+        desc.ambient = Vec3(0.05f);
+        desc.shadows.resolution = 512;
+        auto renderer = SceneRenderer::create(*device, resources, desc);
+        REQUIRE(renderer != nullptr);
+
+        World world;
+        Transform ground;
+        ground.position = Vec3(0.0f, -1.0f, 0.0f);
+        world.create(ground,
+                     MeshRenderer{resources.createMesh(makePlane(40.0f, 1), "Ground"), 0, MaterialHandle{}});
+        // A 2 m wide roof high above the view: invisible, but it shades the ground for x in [-1, 1].
+        Transform roof;
+        roof.position = Vec3(0.0f, 10.0f, 0.0f);
+        world.create(roof,
+                     MeshRenderer{resources.createMesh(makePlane(2.0f, 1), "Roof"), 0, MaterialHandle{}});
+        Transform sun; // pointing straight down
+        sun.rotation = glm::angleAxis(-std::numbers::pi_v<f32> / 2.0f, Vec3(1.0f, 0.0f, 0.0f));
+        const Entity light = world.create(sun, DirectionalLight{Vec3(1.0f), 3.0f});
+
+        // Ground points (0, -1, 0), (0.7, -1, 0) (0.3 m inside the shadow edge) and (1.8, -1, 0) seen
+        // from the test camera.
+        constexpr u32 kShadowX = 32;
+        constexpr u32 kNearEdgeX = 40;
+        constexpr u32 kLitX = 54;
+        constexpr u32 kGroundY = 43;
+        std::vector<u8> pixels = renderScene(*device, *renderer, world, nullptr);
+        CHECK(renderer->stats().visible == 1);
+        CHECK(renderer->stats().shadowCasters >= 2);
+        CHECK(renderer->stats().shadowDrawCalls >= 1);
+        CHECK(renderer->shadowCascades().count == 4);
+        const int shadowed = pixelAt(pixels, kShadowX, kGroundY).r;
+        const int lit = pixelAt(pixels, kLitX, kGroundY).r;
+        CHECK(lit > 150);
+        CHECK(shadowed < lit / 3);
+        const int nearEdge = pixelAt(pixels, kNearEdgeX, kGroundY).r;
+        CHECK(nearEdge < lit / 3);
+
+        // A light with a large angular size gives a wide penumbra that reaches into the shadow.
+        world.get<DirectionalLight>(light).angularDiameter = 0.4f;
+        pixels = renderScene(*device, *renderer, world, nullptr);
+        const int soft = pixelAt(pixels, kNearEdgeX, kGroundY).r;
+        CHECK(soft > nearEdge + 20);
+        CHECK(soft < lit);
+
+        // Turning shadows off, per light or for the renderer, lights the ground evenly.
+        world.get<DirectionalLight>(light).castShadows = false;
+        pixels = renderScene(*device, *renderer, world, nullptr);
+        CHECK(std::abs(pixelAt(pixels, kShadowX, kGroundY).r - lit) <= 3);
+        CHECK(renderer->shadowCascades().count == 0);
+        world.get<DirectionalLight>(light).castShadows = true;
+        ShadowSettings off = renderer->shadowSettings();
+        off.enabled = false;
+        renderer->setShadowSettings(off);
+        pixels = renderScene(*device, *renderer, world, nullptr);
+        CHECK(std::abs(pixelAt(pixels, kShadowX, kGroundY).r - lit) <= 3);
+        CHECK(renderer->stats().shadowCasters == 0);
     }
     device->waitIdle();
     CHECK(device->validationErrorCount() == 0);

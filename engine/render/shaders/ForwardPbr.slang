@@ -1,16 +1,10 @@
 // Forward PBR shading (glTF metallic-roughness): Cook-Torrance GGX specular with height-correlated
 // Smith visibility and Schlick Fresnel, Lambert diffuse, directional and point lights, image-based
 // lighting (SH irradiance + prefiltered specular cube map + split-sum BRDF table with multiple-scattering
-// compensation), exposure and ACES tonemapping. Must match the C++ layouts in SceneRenderer.cpp and
-// RenderResources.cpp.
+// compensation), cascaded PCSS shadows for one directional light, exposure and ACES tonemapping.
+// Must match the C++ layouts in SceneRenderer.cpp and RenderResources.cpp.
 
 #include "Common.slang"
-
-struct InstanceData
-{
-    float4x4 world;
-    float4x4 normalMatrix;
-};
 
 struct PushConstants
 {
@@ -33,6 +27,8 @@ TextureCube g_specularCube : register(t1, space0);
 Texture2D g_brdfLut : register(t2, space0);
 SamplerState g_clampSampler : register(s0, space0);
 [[vk::push_constant]] ConstantBuffer<PushConstants> g_push;
+
+#include "ShadowReceiver.slang"
 
 ConstantBuffer<MaterialConstants> g_material : register(b0, space1);
 Texture2D g_baseColorTexture : register(t0, space1);
@@ -194,10 +190,21 @@ float4 fragmentMain(VertexOutput input, bool frontFace: SV_IsFrontFace) : SV_Tar
     surface.view = normalize(g_view.cameraPosition.xyz - input.worldPosition);
 
     float3 color = environmentLighting(surface, roughness) * occlusion;
+    const uint shadowedLight = uint(g_view.shadow.y);
     for (uint i = 0; i < g_view.directionalCount; ++i)
     {
         const DirectionalLightData light = g_view.directional[i];
-        color += shade(surface, -light.direction.xyz, light.color.rgb);
+        float visibility = 1.0;
+        if (i == shadowedLight)
+        {
+            float3 geometricNormal = normalize(input.normal);
+            if (!frontFace)
+            {
+                geometricNormal = -geometricNormal;
+            }
+            visibility = shadowVisibility(input.worldPosition, geometricNormal, input.position.xy);
+        }
+        color += shade(surface, -light.direction.xyz, light.color.rgb * visibility);
     }
     for (uint i = 0; i < g_view.pointCount; ++i)
     {

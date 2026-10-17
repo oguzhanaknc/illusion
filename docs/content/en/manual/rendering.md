@@ -7,9 +7,9 @@ physically based materials. It is built on [NVRHI](https://github.com/NVIDIA-RTX
 Headers: `#include <illusion/render/RenderDevice.hpp>`, `<illusion/render/Swapchain.hpp>`
 
 !!! note "In progress"
-    The scene renderer draws Meshes with PBR Materials, direct lights and image-based lighting. Shadows,
-    ambient occlusion and post-processing follow in later steps of the renderer milestone (see the
-    roadmap).
+    The scene renderer draws Meshes with PBR Materials, direct lights, image-based lighting and soft
+    shadows. Ambient occlusion and post-processing follow in later steps of the renderer milestone (see
+    the roadmap).
 
 ## Requirements
 
@@ -143,6 +143,36 @@ tonemapping. Indirect light comes from a `SkyLight` (see below).
 
 To draw a glTF model, load it with `loadGltf()` (see [Assets and Models](assets.md)), upload it with
 `RenderResources::uploadModel()` and create its Entities with `spawnModel()`.
+
+### Shadows
+
+The first `DirectionalLight` with `castShadows` (on by default) casts soft shadows from every opaque or
+alpha-masked Mesh. Blended Materials do not cast shadows.
+
+```cpp
+illusion::Transform sun;
+sun.rotation = glm::quatLookAt(glm::normalize(illusion::Vec3(-0.4f, -1.0f, -0.6f)), illusion::Vec3(0.0f, 1.0f, 0.0f));
+illusion::DirectionalLight light{illusion::Vec3(1.0f, 0.95f, 0.9f), 3.0f};
+light.angularDiameter = 0.02f; // a little softer than the real sun
+world.create(sun, light);
+
+illusion::ShadowSettings shadows = renderer->shadowSettings();
+shadows.maxDistance = 120.0f;
+shadows.resolution = 4096;
+renderer->setShadowSettings(shadows);
+```
+
+- Shadows use up to four cascades that cover the view up to `maxDistance`, each with its own
+  `resolution`² shadow map. Nearer cascades are smaller, so nearby shadows are sharper. Cascades are
+  fitted so their edges do not shimmer when the camera moves or turns.
+- `angularDiameter` is the apparent size of the light in radians (the sun is about 0.0093). Shadows
+  are sharp where the caster touches the receiver and grow softer with distance, like real shadows
+  (percentage-closer soft shadows). Penumbrae are limited to 5% of a cascade's width.
+- Objects outside the view still cast shadows into it, up to `casterDistance` towards the light.
+- If you see acne (stripes on lit surfaces) raise `depthBias` or `normalBias`; if shadows detach from
+  their casters, lower them.
+- `stats()` reports `shadowCasters` and `shadowDrawCalls`; `shadowCascades()` returns the cascades of
+  the last frame.
 
 ### Image-based lighting
 

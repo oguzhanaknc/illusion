@@ -2,12 +2,14 @@
 
 /// @file
 /// Forward PBR renderer for ECS scenes: frustum culling (parallel on the Job System), sorting into
-/// instanced batches, opaque then back-to-front transparent drawing, reversed-Z depth.
+/// instanced batches, cascaded soft shadows, opaque then back-to-front transparent drawing, reversed-Z
+/// depth.
 
 #include <illusion/core/Base.hpp>
 #include <illusion/core/Math.hpp>
 #include <illusion/ecs/Transform.hpp>
 #include <illusion/render/Components.hpp>
+#include <illusion/render/Shadows.hpp>
 
 #include <nvrhi/nvrhi.h>
 
@@ -37,10 +39,12 @@ struct RenderView
 /// Counters from the last SceneRenderer::render() call.
 struct RenderStats
 {
-    u32 candidates = 0; ///< MeshRenderer entities considered.
-    u32 visible = 0;    ///< Entities that passed frustum culling.
-    u32 drawCalls = 0;  ///< Instanced draw calls issued.
-    u64 triangles = 0;  ///< Triangles submitted.
+    u32 candidates = 0;      ///< MeshRenderer entities considered.
+    u32 visible = 0;         ///< Entities that passed frustum culling.
+    u32 drawCalls = 0;       ///< Instanced draw calls issued.
+    u64 triangles = 0;       ///< Triangles submitted.
+    u32 shadowCasters = 0;   ///< Shadow-caster instances, summed over cascades.
+    u32 shadowDrawCalls = 0; ///< Instanced draw calls issued for shadows.
 };
 
 /// Creation parameters for SceneRenderer.
@@ -49,6 +53,7 @@ struct SceneRendererDesc
     nvrhi::Format colorFormat = nvrhi::Format::SBGRA8_UNORM; ///< Format of the targets passed to render().
     Vec3 ambient{0.03f}; ///< Uniform ambient radiance, used when the scene has no SkyLight.
     Vec4 clearColor{0.02f, 0.02f, 0.03f, 1.0f}; ///< Background colour (linear for sRGB targets).
+    ShadowSettings shadows;                     ///< Shadow quality.
 };
 
 /// Renders World entities that have Transform + MeshRenderer, lit by DirectionalLight, PointLight and
@@ -76,6 +81,15 @@ public:
 
     /// Changes the ambient radiance used without a SkyLight.
     void setAmbient(Vec3 ambient) noexcept;
+
+    /// Current shadow settings.
+    [[nodiscard]] const ShadowSettings& shadowSettings() const noexcept;
+
+    /// Changes the shadow settings; GPU resources are recreated at the next render() if needed.
+    void setShadowSettings(const ShadowSettings& settings) noexcept;
+
+    /// Cascades used by the last render() call (count 0 when nothing cast shadows).
+    [[nodiscard]] const ShadowCascades& shadowCascades() const noexcept;
 
 private:
     SceneRenderer();

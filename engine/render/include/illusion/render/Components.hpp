@@ -33,8 +33,11 @@ struct Camera
 /// Sun-like light. It shines along the Transform's -z axis.
 struct DirectionalLight
 {
-    Vec3 color{1.0f};     ///< Linear colour.
-    f32 intensity = 3.0f; ///< Illuminance multiplier.
+    Vec3 color{1.0f};        ///< Linear colour.
+    f32 intensity = 3.0f;    ///< Illuminance multiplier.
+    bool castShadows = true; ///< The first DirectionalLight with this set casts shadows.
+    f32 angularDiameter =
+        0.0093f; ///< Apparent size in radians (the sun: 0.0093); larger gives softer shadows.
 };
 
 /// Omnidirectional light at the Transform's position.

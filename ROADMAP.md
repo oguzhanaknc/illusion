@@ -39,7 +39,8 @@ ADRs for its significant decisions. Items marked ✅ are done.
   instancing, `gltf_viewer` sample (ADR 0013)
 - M3b: ✅ IBL from HDRIs (Poly Haven): GPU-baked background and prefiltered specular cube maps, SH
   irradiance, multiple-scattering split sum, `SkyLight`, procedural sky (ADR 0014)
-- M3c: CSM + PCSS soft shadows
+- M3c: ✅ CSM + PCSS soft shadows: up to 4 stable, texel-snapped cascades, per-pass culling masks,
+  alpha-masked casters, blocker search sized by the light's angular diameter (ADR 0015)
 - M3d: HDR pipeline, GTAO, bloom, tonemapping, optional TAA
 - M3e: Bindless resources, GPU-driven draw submission where supported, occlusion culling
 - Render benchmarks with frame-time budgets

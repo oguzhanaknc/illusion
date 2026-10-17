@@ -8,8 +8,8 @@ list'leri ile kaydeder.
 Header'lar: `#include <illusion/render/RenderDevice.hpp>`, `<illusion/render/Swapchain.hpp>`
 
 !!! note "Geliştirme sürüyor"
-    Sahne renderer'ı Mesh'leri PBR Material'ler, doğrudan ışıklar ve görüntü tabanlı aydınlatmayla
-    çizer. Gölgeler, ambient occlusion ve post-processing renderer milestone'unun sonraki adımlarında
+    Sahne renderer'ı Mesh'leri PBR Material'ler, doğrudan ışıklar, görüntü tabanlı aydınlatma ve yumuşak
+    gölgelerle çizer. Ambient occlusion ve post-processing renderer milestone'unun sonraki adımlarında
     gelecek (yol haritasına bakın).
 
 ## Gereksinimler
@@ -148,6 +148,37 @@ pozlama ve ACES tonemapping uygulanır. Dolaylı ışık bir `SkyLight`'tan geli
 Bir glTF modelini çizmek için onu `loadGltf()` ile yükleyin ([Asset'ler ve Modeller](assets.md)
 sayfasına bakın), `RenderResources::uploadModel()` ile GPU'ya yükleyin ve Entity'lerini `spawnModel()`
 ile oluşturun.
+
+### Gölgeler
+
+`castShadows` ayarı açık olan (varsayılan) ilk `DirectionalLight`, opak veya alpha-mask'li her Mesh'ten
+yumuşak gölgeler düşürür. Blend Material'ler gölge düşürmez.
+
+```cpp
+illusion::Transform sun;
+sun.rotation = glm::quatLookAt(glm::normalize(illusion::Vec3(-0.4f, -1.0f, -0.6f)), illusion::Vec3(0.0f, 1.0f, 0.0f));
+illusion::DirectionalLight light{illusion::Vec3(1.0f, 0.95f, 0.9f), 3.0f};
+light.angularDiameter = 0.02f; // a little softer than the real sun
+world.create(sun, light);
+
+illusion::ShadowSettings shadows = renderer->shadowSettings();
+shadows.maxDistance = 120.0f;
+shadows.resolution = 4096;
+renderer->setShadowSettings(shadows);
+```
+
+- Gölgeler, görüşü `maxDistance` mesafesine kadar kaplayan en fazla dört cascade kullanır; her birinin
+  kendi `resolution`² boyutunda shadow map'i vardır. Yakın cascade'ler daha küçüktür; bu yüzden yakındaki
+  gölgeler daha keskindir. Cascade'ler, kamera hareket ettiğinde veya döndüğünde kenarları titremeyecek
+  şekilde yerleştirilir.
+- `angularDiameter`, ışığın radyan cinsinden görünür boyutudur (güneş yaklaşık 0.0093). Gölgeler,
+  gölgeyi düşüren nesnenin yüzeye değdiği yerde keskindir ve uzaklaştıkça gerçek gölgeler gibi
+  yumuşar (percentage-closer soft shadows). Yarı gölgeler bir cascade genişliğinin %5'iyle sınırlıdır.
+- Görüş dışındaki nesneler de ışığa doğru `casterDistance` mesafesine kadar görüşe gölge düşürür.
+- Aydınlık yüzeylerde çizgiler (shadow acne) görürseniz `depthBias` veya `normalBias` değerini
+  artırın; gölgeler nesnelerden kopuyorsa azaltın.
+- `stats()`, `shadowCasters` ve `shadowDrawCalls` değerlerini raporlar; `shadowCascades()` son karenin
+  cascade'lerini döndürür.
 
 ### Görüntü tabanlı aydınlatma
 
