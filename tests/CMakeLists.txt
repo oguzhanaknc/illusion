@@ -14,10 +14,13 @@ add_executable(illusion_tests
     core/TestThread.cpp
     core/TestTime.cpp
     core/TestTypeName.cpp
+    core/TestVersion.cpp
     ecs/TestCommandBuffer.cpp
     ecs/TestComponent.cpp
     ecs/TestEntity.cpp
     ecs/TestQuery.cpp
+    ecs/TestReflection.cpp
+    ecs/TestSceneSerializer.cpp
     ecs/TestWorld.cpp
     platform/TestArchive.cpp
     platform/TestFileSystem.cpp
@@ -34,6 +37,7 @@ add_executable(illusion_tests
     assets/TestGltf.cpp
     assets/TestImageMesh.cpp
     render/TestPostProcess.cpp
+    render/TestRenderComponents.cpp
     render/TestShadows.cpp)
 
 target_include_directories(illusion_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})

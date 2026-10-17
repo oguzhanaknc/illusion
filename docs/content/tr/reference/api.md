@@ -31,11 +31,14 @@ doxygen docs/Doxyfile
 | `illusion/core/Profiler.hpp` | Tracy profiling makroları |
 | `illusion/core/EventBus.hpp` | `EventBus`, `Subscription` |
 | `illusion/core/Time.hpp` | `monotonicSeconds`, `Stopwatch`, `FrameClock`, `FixedTimestep` |
+| `illusion/core/Version.hpp` | `SemanticVersion`, `engineVersion` |
 | `illusion/core/Math.hpp` | glm tabanlı vektör, matris ve quaternion tipleri, `Aabb`, `Sphere`, `Frustum`, `perspectiveReversedZ` |
 | `illusion/ecs/World.hpp` | `World`, `Query`, `ChunkView` |
 | `illusion/ecs/CommandBuffer.hpp` | Ertelenmiş yapısal değişiklikler |
 | `illusion/ecs/Component.hpp` | Component kaydı ve `ComponentRegistry` |
 | `illusion/ecs/Entity.hpp` | `Entity` handle'ı |
+| `illusion/ecs/Reflection.hpp` | `reflect`, `ComponentReflection`, `FieldInfo`, `EnumReflection` |
+| `illusion/ecs/SceneSerializer.hpp` | `saveScene`, `loadScene` (JSON sahne dosyaları) |
 | `illusion/ecs/Transform.hpp` | `Transform` Component'i (konum, dönüş, ölçek) |
 | `illusion/ecs/Archetype.hpp` | Archetype depolaması (motor içi) |
 | `illusion/platform/Platform.hpp` | `Platform`: pencere sisteminin yaşam döngüsü ve event pompalama |

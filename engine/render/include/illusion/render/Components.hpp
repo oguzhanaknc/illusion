@@ -4,6 +4,7 @@
 /// ECS components read by the SceneRenderer. Combine them with illusion::Transform.
 
 #include <illusion/core/Math.hpp>
+#include <illusion/ecs/Component.hpp>
 #include <illusion/render/RenderResources.hpp>
 
 #include <vector>
@@ -64,6 +65,11 @@ struct MotionHistory
 {
     Mat4 previousWorld{1.0f}; ///< World matrix used by the previous render() call.
 };
+
+/// Reflects the render components that hold plain data: Camera ("illusion.Camera"), DirectionalLight
+/// ("illusion.DirectionalLight") and PointLight ("illusion.PointLight"). MeshRenderer and SkyLight refer to
+/// GPU resources and are not saved in scenes.
+void reflectRenderComponents(ComponentRegistry& registry = ComponentRegistry::instance());
 
 /// Creates one Entity per mesh-bearing node and submesh of @p model (Transform + MeshRenderer), placed
 /// relative to @p root. Returns the created entities.

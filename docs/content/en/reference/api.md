@@ -30,11 +30,14 @@ Open `build/api/index.html` in a browser.
 | `illusion/core/Profiler.hpp` | Tracy profiling macros |
 | `illusion/core/EventBus.hpp` | `EventBus`, `Subscription` |
 | `illusion/core/Time.hpp` | `monotonicSeconds`, `Stopwatch`, `FrameClock`, `FixedTimestep` |
+| `illusion/core/Version.hpp` | `SemanticVersion`, `engineVersion` |
 | `illusion/core/Math.hpp` | glm-based vector, matrix and quaternion types, `Aabb`, `Sphere`, `Frustum`, `perspectiveReversedZ` |
 | `illusion/ecs/World.hpp` | `World`, `Query`, `ChunkView` |
 | `illusion/ecs/CommandBuffer.hpp` | Deferred structural changes |
 | `illusion/ecs/Component.hpp` | Component registration and `ComponentRegistry` |
 | `illusion/ecs/Entity.hpp` | `Entity` handle |
+| `illusion/ecs/Reflection.hpp` | `reflect`, `ComponentReflection`, `FieldInfo`, `EnumReflection` |
+| `illusion/ecs/SceneSerializer.hpp` | `saveScene`, `loadScene` (JSON scene files) |
 | `illusion/ecs/Transform.hpp` | `Transform` Component (position, rotation, scale) |
 | `illusion/ecs/Archetype.hpp` | Archetype storage (engine internal) |
 | `illusion/platform/Platform.hpp` | `Platform`: windowing system lifetime and event pumping |

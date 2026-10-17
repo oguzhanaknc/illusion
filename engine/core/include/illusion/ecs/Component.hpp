@@ -28,6 +28,9 @@
 namespace illusion
 {
 
+struct ComponentReflection;
+struct FieldInfo;
+
 /// Dense identifier of a component type within a ComponentRegistry.
 using ComponentId = u16;
 
@@ -63,6 +66,9 @@ struct ComponentInfo
     /// Destroys the object at @p ptr.
     void (*destroy)(void* ptr) noexcept = nullptr;
 
+    /// Default-constructs an object at @p ptr. Null if T is not default constructible.
+    void (*construct)(void* ptr) noexcept = nullptr;
+
     /// Returns true for empty (tag) types without storage.
     [[nodiscard]] bool isTag() const noexcept { return size == 0; }
 };
@@ -85,6 +91,12 @@ template <ComponentType T>
     info.destroy = [](void* ptr) noexcept {
         std::destroy_at(std::launder(static_cast<T*>(ptr)));
     };
+    if constexpr (std::is_default_constructible_v<T>)
+    {
+        info.construct = [](void* ptr) noexcept {
+            ::new (ptr) T();
+        };
+    }
     return info;
 }
 
@@ -123,11 +135,28 @@ public:
     /// Number of registered types.
     [[nodiscard]] u32 count() const noexcept { return m_count.load(std::memory_order_acquire); }
 
+    /// Starts the reflection of @p id under @p stableName (see Reflection.hpp), replacing any earlier
+    /// reflection of the same type. Stable names must be unique; reusing one for another type is a fatal
+    /// error. Reflect types during startup, before other threads read their reflection.
+    void beginReflection(ComponentId id, std::string_view stableName, u32 version);
+
+    /// Appends a field to the reflection of @p id. The name and enum values are copied.
+    void addReflectedField(ComponentId id, const FieldInfo& field);
+
+    /// Returns the reflection of @p id, or nullptr if the type is not reflected.
+    [[nodiscard]] const ComponentReflection* reflection(ComponentId id) const noexcept;
+
+    /// Returns the id of the type reflected under @p stableName, or kInvalidComponentId.
+    [[nodiscard]] ComponentId findByStableName(std::string_view stableName) const;
+
 private:
+    struct Reflection;
+
     struct Entry
     {
         std::string name;
         ComponentInfo info;
+        std::unique_ptr<Reflection> reflection;
     };
 
     struct Lookup;

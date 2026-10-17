@@ -59,6 +59,7 @@ plugins:
             Memory: Bellek
             Job System: Job System
             ECS: ECS
+            Reflection and Scenes: Reflection ve Sahneler
             Profiling: Profiling
             Windows and Input: Pencereler ve Input
             Events and Time: Event'ler ve Zaman
@@ -94,6 +95,7 @@ nav:
       - Memory: manual/memory.md
       - Job System: manual/jobs.md
       - ECS: manual/ecs.md
+      - Reflection and Scenes: manual/scenes.md
       - Windows and Input: manual/platform.md
       - Gamepads: manual/gamepads.md
       - Input Actions: manual/actions.md

@@ -38,7 +38,8 @@ Kurallar:
 - Boş tipler **tag**'dir: bellek kaplamazlar ve filtreleme için kullanılırlar.
 - 64 byte'a kadar alignment desteklenir.
 
-Component tipleri ilk kullanıldıklarında otomatik olarak kaydedilir.
+Component tipleri ilk kullanıldıklarında otomatik olarak kaydedilir. Component'leri sahne
+dosyalarına kaydetmek için onları yansıtın ([Reflection ve Sahneler](scenes.md) sayfasına bakın).
 
 ## Entity'ler
 
