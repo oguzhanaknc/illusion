@@ -19,7 +19,11 @@ Terse agent notes. Rules: CLAUDE.md, AGENTS.md, .claude/skills/*. Plan: ROADMAP.
 - gdb trace: PhysicsWorld::update -> Barrier::Wait -> JobFindCollisions -> QueueJob -> submit(inline)
   -> JobFinalizeIslands -> Grant assert.
 
-## Fix plan (branch claude/upbeat-cray-5vm0mp, from main)
+## Fix (branch claude/upbeat-cray-5vm0mp, from main): DONE, commit fix(physics)
+- Verified: regression test traps 5/5 on old code, passes 20/20 new; ctest -j4 8/8 clean; format,
+  docs parity, doxygen, mkdocs strict clean. TSan + Release/benchmarks: see later commit/PR notes.
+
+## Fix plan (as implemented)
 1. `JobSystem::trySubmit(Job, JobCounter*) -> bool`: queue or return false, never inline. `submit()`
    shares the push path.
 2. `JoltJobSystem::QueueJob`: use trySubmit; on false release the ref and leave the job to the barrier

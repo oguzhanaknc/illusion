@@ -41,13 +41,20 @@ JPH::JobSystem::JobHandle JoltJobSystem::CreateJob(const char* name, JPH::ColorA
 void JoltJobSystem::QueueJob(Job* job)
 {
     // Execute() runs a job at most once, so the barrier's waiting thread and a worker may both try.
+    // Jolt queues jobs from inside other jobs, so a job must never run here: nesting jobs on one thread
+    // breaks Jolt's per-thread body access checks. When the engine queue is full the job is left to the
+    // barrier's waiting thread, which executes every job that is ready (all of ours belong to the
+    // barrier of PhysicsSystem::Update) and wakes up whenever one of them finishes.
     job->AddRef();
-    m_jobs.submit(
-        [job] {
-            job->Execute();
-            job->Release();
-        },
-        &m_pending);
+    if (!m_jobs.trySubmit(
+            [job] {
+                job->Execute();
+                job->Release();
+            },
+            &m_pending))
+    {
+        job->Release();
+    }
 }
 
 void JoltJobSystem::QueueJobs(Job** jobs, JPH::uint count)

@@ -55,7 +55,7 @@ struct JobSystemDesc
     u32 workerCount = 0;
 
     /// Maximum number of queued jobs (rounded up to a power of two). When the queue is full, submit()
-    /// runs the job immediately on the calling thread.
+    /// runs the job immediately on the calling thread and trySubmit() returns false.
     u32 queueCapacity = 4096;
 };
 
@@ -72,6 +72,11 @@ public:
     /// Queues @p job. If @p counter is not null it is incremented now and decremented when the job
     /// has finished.
     void submit(Job job, JobCounter* counter = nullptr);
+
+    /// Queues @p job like submit(), but returns false (and leaves @p counter unchanged) instead of
+    /// running the job when the queue is full. Use it when running a job on the calling thread is not
+    /// allowed, for example from inside a library's own job scheduler.
+    [[nodiscard]] bool trySubmit(Job job, JobCounter* counter = nullptr);
 
     /// Returns when @p counter reaches zero. The calling thread executes queued jobs while waiting.
     void wait(JobCounter& counter);
