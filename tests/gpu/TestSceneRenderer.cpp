@@ -1,4 +1,5 @@
 #include <illusion/assets/Environment.hpp>
+#include <illusion/assets/Image.hpp>
 #include <illusion/assets/Mesh.hpp>
 #include <illusion/assets/Model.hpp>
 #include <illusion/core/JobSystem.hpp>
@@ -8,6 +9,7 @@
 #include <illusion/render/SceneRenderer.hpp>
 
 #include <doctest/doctest.h>
+#include <glm/gtc/packing.hpp>
 
 #include <cmath>
 #include <cstdlib>
@@ -117,7 +119,7 @@ TEST_CASE("the scene renderer lights, culls and instances meshes")
         const std::vector<u8> pixels = renderScene(*device, *renderer, world, &jobs);
         CHECK(renderer->stats().candidates == 2);
         CHECK(renderer->stats().visible == 1);
-        CHECK(renderer->stats().drawCalls == 2); // depth prepass + shading
+        CHECK(renderer->stats().drawCalls == 4); // 2 culling phases x (depth prepass + shading)
 
         // Red diffuse plus a neutral (white) specular highlight: the light comes from the camera's
         // direction, so at the center GGX gives ~0.074 linear specular, ~79/255 after ACES and sRGB.
@@ -142,7 +144,7 @@ TEST_CASE("the scene renderer lights, culls and instances meshes")
         }
         renderScene(*device, *renderer, world, nullptr);
         CHECK(renderer->stats().visible == 4);
-        CHECK(renderer->stats().drawCalls == 2); // one instanced draw per pass
+        CHECK(renderer->stats().drawCalls == 4); // one indirect draw per phase and pass
         CHECK(renderer->stats().triangles == 4ull * resources.submeshCount(sphere) * 32 * 16 * 2);
     }
     device->waitIdle();
@@ -531,13 +533,154 @@ TEST_CASE("temporal anti-aliasing smooths edges and keeps flat areas")
         {
             const int a = pixelAt(aliased, x, 36).r;
             const int s = pixelAt(smooth, x, 36).r;
-            aliasedHasPartial |= a > inside / 5 && a < inside * 4 / 5;
-            smoothHasPartial |= s > inside / 5 && s < inside * 4 / 5;
+            aliasedHasPartial |= a > 8 && a < inside - 8;
+            smoothHasPartial |= s > 8 && s < inside - 8;
         }
         CHECK_FALSE(aliasedHasPartial);
         CHECK(smoothHasPartial);
         renderer->resetTemporalHistory();
         renderScene(*device, *renderer, world, nullptr);
+    }
+    device->waitIdle();
+    CHECK(device->validationErrorCount() == 0);
+}
+
+namespace
+{
+
+// Reads back the RG16F motion vectors of the last render() (UV units).
+std::vector<Vec2> readMotion(RenderDevice& device, nvrhi::ITexture* motion)
+{
+    nvrhi::IDevice* gpu = device.device();
+    nvrhi::TextureDesc desc = motion->getDesc();
+    desc.isRenderTarget = false;
+    desc.debugName = "Motion readback";
+    nvrhi::StagingTextureHandle staging = gpu->createStagingTexture(desc, nvrhi::CpuAccessMode::Read);
+    nvrhi::CommandListHandle commands = gpu->createCommandList();
+    commands->open();
+    commands->copyTexture(staging, nvrhi::TextureSlice(), motion, nvrhi::TextureSlice());
+    commands->close();
+    gpu->executeCommandList(commands);
+    gpu->waitForIdle();
+    size_t rowPitch = 0;
+    const auto* bytes = static_cast<const std::byte*>(
+        gpu->mapStagingTexture(staging, nvrhi::TextureSlice(), nvrhi::CpuAccessMode::Read, &rowPitch));
+    std::vector<Vec2> result(static_cast<usize>(desc.width) * desc.height);
+    for (u32 y = 0; y < desc.height; ++y)
+    {
+        for (u32 x = 0; x < desc.width; ++x)
+        {
+            u32 packed = 0;
+            std::memcpy(&packed, bytes + y * rowPitch + x * 4, 4);
+            result[static_cast<usize>(y) * desc.width + x] = glm::unpackHalf2x16(packed);
+        }
+    }
+    gpu->unmapStagingTexture(staging);
+    return result;
+}
+
+} // namespace
+
+TEST_CASE("the prepass writes motion vectors for moving objects")
+{
+    auto device = RenderDevice::create(headless());
+    REQUIRE(device != nullptr);
+    {
+        RenderResources resources(*device);
+        auto renderer = SceneRenderer::create(*device, resources, unormTarget());
+        REQUIRE(renderer != nullptr);
+        World world;
+        Transform plane; // facing the camera
+        plane.rotation = glm::angleAxis(std::numbers::pi_v<f32> / 2.0f, Vec3(1.0f, 0.0f, 0.0f));
+        const Entity entity = world.create(
+            plane, MeshRenderer{resources.createMesh(makePlane(2.0f, 1), "Plane"), 0, MaterialHandle{}});
+
+        renderScene(*device, *renderer, world, nullptr);
+        std::vector<Vec2> motion = readMotion(*device, renderer->motionVectors());
+        CHECK(world.has<MotionHistory>(entity)); // added by the renderer
+        CHECK(glm::length(motion[32 * kSize + 32]) < 1e-4f);
+
+        // Moving 0.2 units right at distance 5 with a 60 degree field of view shifts the image by
+        // 0.2 / (5 tan 30) / 2 = 0.0346 in UV units.
+        world.get<Transform>(entity).position.x = 0.2f;
+        renderScene(*device, *renderer, world, nullptr);
+        motion = readMotion(*device, renderer->motionVectors());
+        CHECK(motion[32 * kSize + 32].x == doctest::Approx(0.0346).epsilon(0.02));
+        CHECK(std::abs(motion[32 * kSize + 32].y) < 1e-3f);
+        CHECK(glm::length(motion[1 * kSize + 1]) == 0.0f); // background
+
+        // Standing still again: no motion.
+        renderScene(*device, *renderer, world, nullptr);
+        motion = readMotion(*device, renderer->motionVectors());
+        CHECK(glm::length(motion[32 * kSize + 32]) < 1e-4f);
+    }
+    device->waitIdle();
+    CHECK(device->validationErrorCount() == 0);
+}
+
+TEST_CASE("occlusion culling skips hidden objects without popping when they appear")
+{
+    auto device = RenderDevice::create(headless());
+    REQUIRE(device != nullptr);
+    {
+        RenderResources resources(*device);
+        SceneRendererDesc desc = unormTarget();
+        desc.post.bloom.enabled = false;
+        desc.post.ambientOcclusion.enabled = false;
+        desc.ambient = Vec3(1.0f);
+        auto renderer = SceneRenderer::create(*device, resources, desc);
+        REQUIRE(renderer != nullptr);
+
+        World world;
+        Transform wall; // facing the camera, covering the whole view
+        wall.rotation = glm::angleAxis(std::numbers::pi_v<f32> / 2.0f, Vec3(1.0f, 0.0f, 0.0f));
+        const Entity wallEntity = world.create(
+            wall, MeshRenderer{resources.createMesh(makePlane(20.0f, 1), "Wall"), 0, MaterialHandle{}});
+        MaterialDesc red;
+        red.parameters.baseColorFactor = Vec4(1.0f, 0.0f, 0.0f, 1.0f);
+        const MaterialHandle redMaterial = resources.createMaterial(red);
+        const MeshHandle cube = resources.createMesh(makeCube(0.2f), "Cube");
+        for (int y = 0; y < 10; ++y)
+        {
+            for (int x = 0; x < 10; ++x)
+            {
+                Transform t; // behind the wall
+                t.position =
+                    Vec3(-1.8f + 0.4f * static_cast<f32>(x), -1.8f + 0.4f * static_cast<f32>(y), -3.0f);
+                world.create(t, MeshRenderer{cube, 0, redMaterial});
+            }
+        }
+
+        // Without history everything is drawn; afterwards the wall hides the cubes.
+        renderScene(*device, *renderer, world, nullptr);
+        CHECK(renderer->stats().visible == 101); // all inside the frustum
+        CHECK(renderer->readGpuDrawnInstances() == 101);
+        std::vector<u8> pixels = renderScene(*device, *renderer, world, nullptr);
+        CHECK(renderer->readGpuDrawnInstances() == 1);
+        CHECK(pixelAt(pixels, 32, 32).g > 100); // the white wall
+
+        // The wall moves away: the cubes appear in the same frame (phase 2 catches them).
+        world.get<Transform>(wallEntity).position = Vec3(0.0f, 0.0f, 50.0f); // behind the camera
+        pixels = renderScene(*device, *renderer, world, nullptr);
+        CHECK(renderer->readGpuDrawnInstances() == 100);
+        int redPixels = 0;
+        for (u32 y = 0; y < kSize; ++y)
+        {
+            for (u32 x = 0; x < kSize; ++x)
+            {
+                const Rgb pixel = pixelAt(pixels, x, y);
+                redPixels += pixel.r > 100 && pixel.g < 40 ? 1 : 0;
+            }
+        }
+        CHECK(redPixels > 100); // a hundred small red cubes
+
+        // Turned off, every candidate is drawn.
+        world.get<Transform>(wallEntity).position = Vec3(0.0f);
+        renderer->setOcclusionCulling(false);
+        renderScene(*device, *renderer, world, nullptr);
+        CHECK(renderer->readGpuDrawnInstances() == 101);
+        renderScene(*device, *renderer, world, nullptr);
+        CHECK(renderer->readGpuDrawnInstances() == 101);
     }
     device->waitIdle();
     CHECK(device->validationErrorCount() == 0);

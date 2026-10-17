@@ -9,8 +9,8 @@ Header'lar: `#include <illusion/render/RenderDevice.hpp>`, `<illusion/render/Swa
 
 !!! note "Geliştirme sürüyor"
     Sahne renderer'ı Mesh'leri PBR Material'ler, doğrudan ve görüntü tabanlı aydınlatma, yumuşak
-    gölgeler, ambient occlusion ve post-processing ile çizer. Bindless kaynaklar, GPU-driven gönderim
-    ve occlusion culling renderer milestone'unun son adımında gelecek (yol haritasına bakın).
+    gölgeler, ambient occlusion, post-processing ve GPU occlusion culling ile çizer. Bindless kaynaklar
+    ve multi-draw indirect renderer milestone'unun son adımında gelecek (yol haritasına bakın).
 
 ## Gereksinimler
 
@@ -128,10 +128,9 @@ ILL_LOG_DEBUG("Game", "{} draw calls", renderer->stats().drawCalls);
   Material varsayılan beyaz, pürüzlü Material'i kullanır).
 - Işıklar Transform'larının -z ekseni boyunca (`DirectionalLight`) veya konumlarından (`PointLight`,
   `range` mesafesinde sıfıra iner) yayılır. İlk 4 yönlü ve 16 noktasal ışık kullanılır.
-- `render()` hedefi temizler, Entity'leri görüş frustum'una göre eler (verirseniz Job System
-  üzerinde), Pipeline, Material ve Mesh'e göre sıralar ve aynı (Mesh, submesh, Material) üçlüsünün her
-  dizisi için tek bir instanced draw call yapar. `stats()` adayları, görünen Entity'leri, draw
-  call'ları ve üçgenleri raporlar.
+- `render()` Entity'leri eler ([Culling](#culling) bölümüne bakın), Pipeline, Material ve Mesh'e göre
+  sıralar ve aynı (Mesh, submesh, Material) üçlüsünün her dizisini geçiş başına tek bir instanced draw
+  ile çizer. `stats()` adayları, frustum içindeki Entity'leri, draw call'ları ve üçgenleri raporlar.
 - Renderer, hedefin boyutunu izleyen bir derinlik buffer'ına sahiptir. Çizdiğiniz her renk formatı için
   ayrı bir `SceneRenderer` oluşturun.
 - sRGB formatlı renk hedefleri doğrusal renk alır; UNORM hedefler sRGB kodlanmış renk alır, böylece
@@ -148,6 +147,34 @@ pozlama ve ACES tonemapping uygulanır. Dolaylı ışık bir `SkyLight`'tan geli
 Bir glTF modelini çizmek için onu `loadGltf()` ile yükleyin ([Asset'ler ve Modeller](assets.md)
 sayfasına bakın), `RenderResources::uploadModel()` ile GPU'ya yükleyin ve Entity'lerini `spawnModel()`
 ile oluşturun.
+
+### Culling
+
+Renderer her karede iki adımda eleme yapar:
+
+1. CPU'da, Job System üzerinde paralel olarak **frustum culling**: görüşün (ve tüm gölge
+   cascade'lerinin) dışındaki Entity'ler atlanır.
+2. Opak ve alpha-mask'li Mesh'ler için GPU'da **occlusion culling**: başka nesnelerin arkasında
+   kalan nesneler çizilmez. İki aşamada çalışır. Önce nesneler önceki karenin derinliğine karşı test
+   edilir ve geçenler depth prepass'e çizilir. Ardından kalan nesneler bu yeni derinliğin bir derinlik
+   piramidine karşı test edilir ve sonuçta görünürlerse çizilir. Böylece görüşe giren bir nesne aynı
+   karede çizilir; hiçbir şey geç belirmez.
+
+```cpp
+renderer->setOcclusionCulling(true); // the default
+renderer->render(commands, target, world, view, &jobs);
+// ... after the GPU finished the frame (for example in a statistics overlay one frame later):
+ILL_LOG_INFO("Game", "{} of {} opaque instances drawn", renderer->readGpuDrawnInstances(),
+             renderer->stats().visible);
+```
+
+- GPU, indirect draw'ların instance sayılarını kendisi yazar; bu yüzden CPU, culling sonuçlarını
+  beklemez. `readGpuDrawnInstances()` bunları araçlar ve istatistikler için geri okur; yalnızca GPU
+  kareyi bitirdikten sonra çağırın.
+- Occlusion culling, çok sayıda nesne ve gerçek engeller (binalar, arazi) olduğunda kazandırır. Birkaç
+  büyük nesneden oluşan sahnelerde `setOcclusionCulling(false)` derinlik piramidi geçişlerinden
+  tasarruf sağlar.
+- Blend Mesh'ler ve gölge düşürenler yalnızca frustum'a göre elenir.
 
 ### Gölgeler
 
@@ -243,10 +270,14 @@ renderer->resetTemporalHistory();
   geçer.
 - Bloom enerjiyi korur: ışık eklemek yerine görüntünün `bloom.intensity` kadarını bulanık kopyasıyla
   değiştirir.
-- TAA varsayılan olarak kapalıdır. Yalnızca kamera hareketiyle yeniden izdüşüm yapar; bu yüzden hızlı
-  hareket eden nesneler hafif bir iz bırakabilir. Nesne başına hareket vektörleri gelene kadar en iyi
-  sonucu yavaş sahnelerde ve sabit çekimlerde verir.
-- `stats().drawCalls`, hem depth prepass hem de gölgelendirme draw call'larını sayar.
+- TAA, depth prepass'in yazdığı piksel başına hareket vektörleriyle hareket eden nesneleri izler.
+  Renderer, her MeshRenderer'ın önceki dünya matrisini kendi eklediği bir `MotionHistory`
+  Component'inde tutar; bir nesneyi ışınladıktan sonra, sıçramanın bulanıklaşmaması için
+  `MotionHistory::previousWorld` değerini yeni matrisine ayarlayın. TAA varsayılan olarak kapalıdır;
+  en keskin görüntüden çok yumuşak kenarlara ihtiyaç duyan sahnelere uygundur.
+- `motionVectors()`, hata ayıklama görünümleri için hareket vektörü Texture'ını döndürür.
+- `stats().drawCalls` her draw'ı sayar: occlusion culling ile opak bir batch, hem depth prepass'te hem de
+  gölgelendirmede culling aşaması başına bir indirect draw'a sahiptir.
 
 ### glTF görüntüleyici
 

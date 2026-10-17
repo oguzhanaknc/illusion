@@ -1,4 +1,5 @@
-// Shared definitions of the post-processing passes. Layout must match PostProcessor.cpp.
+// Shared definitions of the post-processing passes. Layout must match PostProcessor.cpp. Compute passes
+// bind t0-t3, s0 and u0; unused slots hold a placeholder texture.
 
 static const float kPi = 3.14159265358979;
 

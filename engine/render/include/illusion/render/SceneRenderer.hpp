@@ -54,9 +54,10 @@ struct SceneRendererDesc
     nvrhi::Format colorFormat = nvrhi::Format::SBGRA8_UNORM; ///< Format of the targets passed to render().
     Vec3 ambient{0.03f}; ///< Uniform ambient radiance, used when the scene has no SkyLight.
     Vec4 clearColor{0.02f, 0.02f, 0.03f,
-                    1.0f};    ///< Background radiance where nothing is drawn (before tonemapping).
-    ShadowSettings shadows;   ///< Shadow quality.
-    PostProcessSettings post; ///< Ambient occlusion, bloom and anti-aliasing.
+                    1.0f};        ///< Background radiance where nothing is drawn (before tonemapping).
+    ShadowSettings shadows;       ///< Shadow quality.
+    PostProcessSettings post;     ///< Ambient occlusion, bloom and anti-aliasing.
+    bool occlusionCulling = true; ///< Skip opaque objects hidden behind others (GPU, two-phase Hi-Z).
 };
 
 /// Renders World entities that have Transform + MeshRenderer, lit by DirectionalLight, PointLight and
@@ -97,8 +98,22 @@ public:
     /// Changes the post-processing settings; textures are recreated at the next render() if needed.
     void setPostProcessSettings(const PostProcessSettings& settings) noexcept;
 
+    /// Whether hidden opaque objects are culled on the GPU.
+    [[nodiscard]] bool occlusionCulling() const noexcept;
+
+    /// Turns GPU occlusion culling on or off.
+    void setOcclusionCulling(bool enabled) noexcept;
+
+    /// Opaque instances the GPU drew in the last render() (after occlusion culling). Maps a readback
+    /// buffer, so call it only when the GPU has finished that frame (tools, tests, statistics overlays).
+    [[nodiscard]] u32 readGpuDrawnInstances() const;
+
     /// Forgets the accumulated TAA history, for example after a camera cut.
     void resetTemporalHistory() noexcept;
+
+    /// Screen-space motion vectors written by the last render() (RG16F, UV units, current minus previous
+    /// position; zero where nothing moved or nothing was drawn). For debug views and tools.
+    [[nodiscard]] nvrhi::ITexture* motionVectors() const noexcept;
 
     /// Cascades used by the last render() call (count 0 when nothing cast shadows).
     [[nodiscard]] const ShadowCascades& shadowCascades() const noexcept;

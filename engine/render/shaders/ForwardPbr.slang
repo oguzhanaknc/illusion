@@ -25,6 +25,8 @@ struct MaterialConstants
 
 ConstantBuffer<ViewConstants> g_view : register(b0, space0);
 StructuredBuffer<InstanceData> g_instances : register(t0, space0);
+// Instance indices per draw: written by GPU culling for opaque batches, by the CPU for blended items.
+StructuredBuffer<uint> g_drawList : register(t6, space0);
 TextureCube g_specularCube : register(t1, space0);
 Texture2D g_brdfLut : register(t2, space0);
 Texture2D<float> g_ambientOcclusion : register(t5, space0);
@@ -56,12 +58,14 @@ struct VertexOutput
     float3 normal : NORMAL;
     float4 tangent : TANGENT;
     float2 uv : TEXCOORD0;
+    float4 currentClip : TEXCOORD1;  // unjittered, for motion vectors
+    float4 previousClip : TEXCOORD2; // previous frame
 };
 
 [shader("vertex")]
 VertexOutput vertexMain(VertexInput input, uint instanceId: SV_InstanceID)
 {
-    const InstanceData instance = g_instances[g_push.instanceOffset + instanceId];
+    const InstanceData instance = g_instances[g_drawList[g_push.instanceOffset + instanceId]];
     const float4 world = mul(instance.world, float4(input.position, 1.0));
     VertexOutput output;
     output.position = mul(g_view.viewProjection, world);
@@ -69,7 +73,18 @@ VertexOutput vertexMain(VertexInput input, uint instanceId: SV_InstanceID)
     output.normal = mul((float3x3)instance.normalMatrix, input.normal);
     output.tangent = float4(mul((float3x3)instance.world, input.tangent.xyz), input.tangent.w);
     output.uv = input.uv;
+    output.currentClip = mul(g_view.unjitteredViewProjection, world);
+    output.previousClip =
+        mul(g_view.previousViewProjection, mul(instance.previousWorld, float4(input.position, 1.0)));
     return output;
+}
+
+// Screen-space motion from the previous frame to this one, in UV units (origin top-left).
+float2 motionVector(VertexOutput input)
+{
+    const float2 current = input.currentClip.xy / input.currentClip.w;
+    const float2 previous = input.previousClip.xy / input.previousClip.w;
+    return (current - previous) * float2(0.5, -0.5);
 }
 
 float distributionGgx(float nDotH, float alpha)
@@ -234,13 +249,21 @@ float4 fragmentMain(VertexOutput input, bool frontFace: SV_IsFrontFace) : SV_Tar
     return float4(color, baseColor.a);
 }
 
-// Depth prepass for alpha-masked materials (opaque ones use no fragment shader).
+// Depth prepass: depth plus motion vectors for TAA.
 [shader("fragment")]
-void prepassMaskedMain(VertexOutput input)
+float2 prepassMain(VertexOutput input) : SV_Target
+{
+    return motionVector(input);
+}
+
+// Depth prepass for alpha-masked materials.
+[shader("fragment")]
+float2 prepassMaskedMain(VertexOutput input) : SV_Target
 {
     const float alpha = g_baseColorTexture.Sample(g_sampler, input.uv).a * g_material.baseColorFactor.a;
     if (alpha < g_material.alphaCutoff)
     {
         discard;
     }
+    return motionVector(input);
 }

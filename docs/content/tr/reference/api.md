@@ -56,4 +56,4 @@ doxygen docs/Doxyfile
 | `illusion/render/SceneRenderer.hpp` | `SceneRenderer`, `RenderView`, `RenderStats` |
 | `illusion/render/Shadows.hpp` | `ShadowSettings`, `ShadowCascades`, `computeShadowCascades` |
 | `illusion/render/PostProcess.hpp` | `PostProcessSettings` (ambient occlusion, bloom, TAA), `temporalJitter` |
-| `illusion/render/Components.hpp` | `MeshRenderer`, `Camera`, `DirectionalLight`, `PointLight`, `SkyLight`, `spawnModel` |
+| `illusion/render/Components.hpp` | `MeshRenderer`, `Camera`, `DirectionalLight`, `PointLight`, `SkyLight`, `MotionHistory`, `spawnModel` |
