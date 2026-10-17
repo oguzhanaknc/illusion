@@ -38,11 +38,11 @@ TEST_CASE("the asset streamer loads in the background and publishes in update")
     streamer.waitIdle();
     CHECK(streamer.pending() == 0);
     REQUIRE(image.ready());
-    CHECK(image.get()->width() == 2);
-    CHECK(image.get()->format == ImageFormat::RGBA8Srgb);
+    CHECK(image.value().width() == 2);
+    CHECK(image.value().format == ImageFormat::RGBA8Srgb);
     REQUIRE(model.ready());
-    CHECK(model.get()->meshes.size() == 1);
-    CHECK(model.get()->images.size() == 1);
+    CHECK(model.value().meshes.size() == 1);
+    CHECK(model.value().images.size() == 1);
     CHECK(streamer.statistics().imports == 2);
     CHECK(image.error().empty());
 }
@@ -63,7 +63,7 @@ TEST_CASE("identical requests share a handle; different settings do not")
     CHECK(streamer.pending() == 2);
     streamer.waitIdle();
     CHECK(a.get() == b.get());
-    CHECK(c.get()->format == ImageFormat::RGBA8);
+    CHECK(c.value().format == ImageFormat::RGBA8);
 }
 
 TEST_CASE("streamed loads use and refresh the import cache")
@@ -101,9 +101,9 @@ TEST_CASE("streamed loads use and refresh the import cache")
     REQUIRE(image.ready());
     REQUIRE(model.ready());
     CHECK(streamer.statistics().imports == 2);
-    CHECK(static_cast<u8>(image.get()->mip(0)[0]) == 255);
-    CHECK(static_cast<u8>(image.get()->mip(0)[1]) == 0);
-    CHECK(static_cast<u8>(model.get()->images[0].mip(0)[1]) == 0);
+    CHECK(static_cast<u8>(image.value().mip(0)[0]) == 255);
+    CHECK(static_cast<u8>(image.value().mip(0)[1]) == 0);
+    CHECK(static_cast<u8>(model.value().images[0].mip(0)[1]) == 0);
 }
 
 TEST_CASE("failed streamed loads report why")
@@ -150,7 +150,7 @@ TEST_CASE("many concurrent loads all complete with the right data")
     for (int i = 0; i < kCount; ++i)
     {
         REQUIRE(handles[static_cast<usize>(i)].ready());
-        const u8 red = static_cast<u8>(handles[static_cast<usize>(i)].get()->mip(0)[0]);
+        const u8 red = static_cast<u8>(handles[static_cast<usize>(i)].value().mip(0)[0]);
         CHECK(std::abs(int(red) - int(255.0f * static_cast<f32>(i) / kCount + 0.5f)) <= 1);
     }
 }
@@ -194,3 +194,20 @@ TEST_CASE("released assets are forgotten and can be loaded again")
     streamer.waitIdle();
     CHECK(again.ready());
 }
+
+#if ILL_ASSERTS_ENABLED
+TEST_CASE("reading the value of an asset that is not loaded asserts")
+{
+    test::AssetProject project;
+    JobSystem jobs(smallPool());
+    AssetStreamer streamer(project.files, jobs);
+    const AssetHandle<Image> loading = streamer.loadImage("game:/textures/checker.png");
+    {
+        test::ScopedAssertCatcher catcher;
+        CHECK_THROWS_AS(static_cast<void>(loading.value()), test::AssertionFailure);
+        CHECK_THROWS_AS(static_cast<void>(AssetHandle<Image>().value()), test::AssertionFailure);
+    }
+    streamer.waitIdle();
+    CHECK(loading.value().width() == 2);
+}
+#endif

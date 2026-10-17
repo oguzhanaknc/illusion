@@ -6,6 +6,7 @@
 
 #include <illusion/assets/AssetDatabase.hpp>
 #include <illusion/assets/AssetFormat.hpp>
+#include <illusion/core/Assert.hpp>
 #include <illusion/core/Base.hpp>
 
 #include <memory>
@@ -69,6 +70,13 @@ public:
 
     /// The loaded asset, or nullptr unless ready().
     [[nodiscard]] const T* get() const noexcept { return ready() ? &*m_slot->value : nullptr; }
+
+    /// The loaded asset. The handle must be ready() (asserted); use get() when that is not known.
+    [[nodiscard]] const T& value() const
+    {
+        ILL_ASSERT(ready(), "AssetHandle::value() on an asset that is not loaded");
+        return *m_slot->value;
+    }
 
     /// Why loading failed (empty otherwise).
     [[nodiscard]] const std::string& error() const noexcept

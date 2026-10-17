@@ -156,7 +156,7 @@ while (running)
     uploads.process(16 << 20);  // at most ~16 MiB of GPU uploads this frame
     if (upload->uploaded && !spawned)
     {
-        illusion::spawnModel(world, *helmet.get(), upload->handles);
+        illusion::spawnModel(world, helmet.value(), upload->handles);
         spawned = true;
     }
     if (helmet.state() == illusion::AssetState::Failed)
@@ -168,7 +168,7 @@ while (running)
 ```
 
 - `loadImage()` and `loadModel()` return a handle immediately. A handle is `Loading` until `update()`
-  publishes its result as `Ready` (then `get()` returns the data) or `Failed` (then `error()` says why).
+  publishes its result as `Ready` (then `value()` returns the data) or `Failed` (then `error()` says why).
   States change only in `update()`, so a handle never changes in the middle of a frame.
 - Requests for the same file (and the same import settings) share one handle. The data is freed when
   the last handle is gone.

@@ -46,7 +46,7 @@ TEST_CASE("the upload queue uploads streamed models within a byte budget")
         REQUIRE(first->handles.meshes.size() == 1);
         CHECK(resources.submeshCount(first->handles.meshes[0]) == 1);
         CHECK(first->handles.materials.size() == 1);
-        CHECK(UploadQueue::uploadSize(*glb.get()) > 0);
+        CHECK(UploadQueue::uploadSize(glb.value()) > 0);
     }
     device->waitIdle();
     CHECK(device->validationErrorCount() == 0);

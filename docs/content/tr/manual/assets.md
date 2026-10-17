@@ -161,7 +161,7 @@ while (running)
     uploads.process(16 << 20);  // at most ~16 MiB of GPU uploads this frame
     if (upload->uploaded && !spawned)
     {
-        illusion::spawnModel(world, *helmet.get(), upload->handles);
+        illusion::spawnModel(world, helmet.value(), upload->handles);
         spawned = true;
     }
     if (helmet.state() == illusion::AssetState::Failed)
@@ -173,7 +173,7 @@ while (running)
 ```
 
 - `loadImage()` ve `loadModel()` hemen bir handle döndürür. Bir handle, `update()` sonucunu `Ready`
-  (bu durumda `get()` veriyi döndürür) veya `Failed` (bu durumda `error()` nedenini söyler) olarak
+  (bu durumda `value()` veriyi döndürür) veya `Failed` (bu durumda `error()` nedenini söyler) olarak
   yayımlayana kadar `Loading` durumundadır. Durumlar yalnızca `update()` içinde değişir; böylece bir
   handle asla bir karenin ortasında değişmez.
 - Aynı dosya (ve aynı içe aktarma ayarları) için yapılan istekler tek bir handle'ı paylaşır. Son handle

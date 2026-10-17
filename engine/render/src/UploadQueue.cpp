@@ -47,7 +47,7 @@ u32 UploadQueue::process(u64 byteBudget)
             ++finished;
             continue;
         }
-        const ModelData& model = *it->model.get();
+        const ModelData& model = it->model.value();
         const u64 size = uploadSize(model);
         if (finished > 0 && spent + size > byteBudget)
         {
