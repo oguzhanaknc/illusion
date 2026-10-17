@@ -265,10 +265,13 @@ private:
             const cgltf_size count = positions->count;
             mesh.vertices.resize(mesh.vertices.size() + count);
             Vertex* vertices = mesh.vertices.data() + baseVertex;
-            std::vector<f32> scratch;
+            // One buffer for the widest attribute, zeroed before each unpack so that accessors with fewer
+            // components than expected read as zero. (A plain array also avoids a GCC 13 -O3
+            // -Wnull-dereference false positive in std::vector::resize.)
+            const std::unique_ptr<f32[]> scratch = std::make_unique<f32[]>(count * 4);
             const auto unpack = [&](const cgltf_accessor* accessor, cgltf_size components) {
-                scratch.resize(accessor->count * components);
-                cgltf_accessor_unpack_floats(accessor, scratch.data(), scratch.size());
+                std::fill_n(scratch.get(), count * 4, 0.0f);
+                cgltf_accessor_unpack_floats(accessor, scratch.get(), accessor->count * components);
             };
             unpack(positions, 3);
             for (cgltf_size v = 0; v < count; ++v)
