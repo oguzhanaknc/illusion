@@ -50,6 +50,15 @@ static_assert(std::is_nothrow_move_constructible_v<Expected<std::unique_ptr<int>
 static_assert(!std::is_copy_constructible_v<Expected<std::unique_ptr<int>, int>>);
 static_assert(std::is_nothrow_move_constructible_v<Expected<void, std::string>>);
 static_assert(!std::is_convertible_v<Expected<int, int>, bool>, "operator bool is explicit");
+static_assert(std::is_same_v<decltype(unexpected("message")), Unexpected<const char*>>,
+              "unexpected() decays arrays");
+
+TEST_CASE("unexpected() accepts string literals and converts them to the error type")
+{
+    const Expected<int, std::string> error = unexpected("message");
+    REQUIRE_FALSE(error.hasValue());
+    CHECK(error.error() == "message");
+}
 
 TEST_CASE("Expected holds a value or an error")
 {

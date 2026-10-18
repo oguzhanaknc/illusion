@@ -68,11 +68,12 @@ private:
 template <class E>
 Unexpected(E) -> Unexpected<E>;
 
-/// Returns @p error wrapped in an Unexpected: `return unexpected(JsonError{...});`.
+/// Returns @p error wrapped in an Unexpected: `return unexpected(JsonError{...});`. The error type decays,
+/// so `unexpected("message")` holds a `const char*`.
 template <class E>
-[[nodiscard]] constexpr Unexpected<std::remove_cvref_t<E>> unexpected(E&& error)
+[[nodiscard]] constexpr Unexpected<std::decay_t<E>> unexpected(E&& error)
 {
-    return Unexpected<std::remove_cvref_t<E>>(std::forward<E>(error));
+    return Unexpected<std::decay_t<E>>(std::forward<E>(error));
 }
 
 /// Implementation details. Not part of the public API.

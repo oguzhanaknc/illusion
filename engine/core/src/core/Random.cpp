@@ -3,8 +3,9 @@
 #include <algorithm>
 
 #if defined(ILL_PLATFORM_WINDOWS)
-#include <bcrypt.h>
 #include <windows.h>
+// bcrypt.h uses types from windows.h without including it.
+#include <bcrypt.h>
 #elif defined(ILL_PLATFORM_LINUX)
 #include <cerrno>
 #include <sys/random.h>
