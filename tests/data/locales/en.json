@@ -1,0 +1,17 @@
+{
+  "format": "illusion.locale",
+  "version": 1,
+  "locale": "en",
+  "displayName": "English",
+  "plural": "en",
+  "number": {"decimal": ".", "group": ","},
+  "strings": {
+    "test.files.count": {"text": "{count, plural, =0 {No files} one {# file} other {# files}}", "comment": "Status bar: number of files in the folder"},
+    "test.files.size": "Size: {bytes, number} bytes",
+    "test.greeting": "Hello, {name}!",
+    "test.menu.quit": "Quit",
+    "test.menu.save": {"text": "Save", "comment": "File menu: save the active scene"},
+    "test.player.joined": "{gender, select, female {{name} joined her team} male {{name} joined his team} other {{name} joined their team}}",
+    "test.quote": "It''s '{'literal'}'"
+  }
+}

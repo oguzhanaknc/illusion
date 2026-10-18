@@ -107,3 +107,13 @@ const std::string icon = illusion::glyphId(binding, family);
 ```
 
 Glyph kimliklerini kendi UI görsellerinize eşleyin; motor sürümleri arasında asla değişmezler.
+
+`glyphLabel(binding, family)` sabit İngilizce etiketler döndürür. Oyuncuların okuduğu etiketler için,
+etiketi bir [Localization](localization.md) nesnesinin etkin dilinde biçimlendiren çevrilebilir
+overload'u kullanın; `glyphLabelKey()` string tablosu anahtarını verir:
+
+```cpp
+illusion::text::Localization localization;
+localization.addTable(illusion::input::strings::kTable); // #include <illusion/input/InputStrings.hpp>
+const std::string label = illusion::glyphLabel(binding, family, localization);
+```

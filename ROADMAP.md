@@ -91,8 +91,9 @@ Plan: `docs/plans/m7-editor.md` (sub-milestones, command API, localization, them
 - M7a: ✅ Core toolkit for tools: non-throwing JSON API with canonical writing and arena allocation,
   `Expected`, deterministic `Random` and secure random bytes, log ring sink, stderr-only console, World
   structural version (ADR 0028)
-- M7b: Localization runtime (`illusion::text`): UTF-8, plural rules, MessageFormat subset, string tables with
-  compiled English, pseudo-locale, `illusion_textc` and the locale check (ADR 0029)
+- M7b: ✅ Localization runtime (`illusion::text`): UTF-8, search folding and fuzzy matching, CLDR plural rules,
+  MessageFormat subset, string tables with compiled English, pseudo-locale, `illusion_textc` and the locale
+  check, translatable input glyph labels (ADR 0029)
 - M7c: Platform services: clipboard, cursor shapes, window state, file drops, monitors, `wake()`, key names
 - M7d: UI foundation: editor tree and export boundary, Dear ImGui docking with NVRHI and platform backends,
   theme tokens, fonts and icons, widget kit, `illusion_ui_gallery` (ADRs 0030, 0031)

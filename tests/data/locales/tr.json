@@ -1,0 +1,15 @@
+{
+  "format": "illusion.locale",
+  "version": 1,
+  "locale": "tr",
+  "displayName": "Türkçe",
+  "plural": "tr",
+  "number": {"decimal": ",", "group": "."},
+  "fallback": "en",
+  "strings": {
+    "test.files.count": {"text": "{count, plural, =0 {Dosya yok} one {# dosya} other {# dosya}}", "source": "e904f5e6c2b656f2"},
+    "test.greeting": {"text": "Merhaba, {name}!", "source": "d90e66709bc7789d"},
+    "test.menu.save": {"text": "Kaydet", "source": "ec296e929343dd06"},
+    "test.player.joined": {"text": "{gender, select, other {{name} takıma katıldı}}", "source": "2e04ef6cca6dd816"}
+  }
+}

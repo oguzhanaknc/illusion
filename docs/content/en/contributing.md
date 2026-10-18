@@ -46,6 +46,20 @@ The Turkish documentation keeps technical terms in English, for example Entity, 
 Archetype, Chunk, Query, Job, Shader, Render Pass, Mesh, Material, Texture, Asset and Sink. Write them
 exactly as in the English text.
 
+## User-visible strings
+
+Text that players or editor users see goes through a string table, never a string literal in code (see
+[Localization](manual/localization.md)):
+
+- Add the key and its English text to the table's `en.json`, keeping keys sorted, with a `comment` when the
+  context is not obvious.
+- Give each sentence one key and pass values as arguments; never join strings into sentences.
+- Use plural forms (`{n, plural, one {...} other {...}}`) for anything that is counted.
+- Run `illusion_textc check` (CTest `text.locales` does it in CI). Changing English text makes existing
+  translations stale; their `source` hash shows which ones.
+
+Log messages, assertion messages and text for AI agents stay English and are not localized.
+
 ## Architecture Decision Records
 
 Record any decision that is hard to reverse or affects several modules (dependencies, data formats,

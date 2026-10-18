@@ -1,4 +1,7 @@
 add_subdirectory(core)
+add_subdirectory(text)
+# illusion_textc generates the string tables of the libraries below.
+add_subdirectory(${PROJECT_SOURCE_DIR}/tools/textc ${PROJECT_BINARY_DIR}/tools/textc)
 add_subdirectory(platform)
 add_subdirectory(input)
 add_subdirectory(assets)

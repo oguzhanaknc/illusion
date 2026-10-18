@@ -3,18 +3,26 @@
 Terse agent notes. Rules: CLAUDE.md, AGENTS.md, .claude/skills/*. Plan: ROADMAP.md, docs/plans/m7-editor.md.
 
 ## State
-- main: M0..M6 merged (#19 M6). ROADMAP ends with M9 (FSR/DLSS/XeSS) and M10 (hybrid RT).
-- Branch claude/upbeat-cray-5vm0mp: M7 plan, M7a, the bcrypt/unexpected() fix, and the fix of every M7a
-  review finding (MSVC debug allocations, LogRingSink re-entry, arena lifetimes, cross-document asserts,
-  depth pre-scan, missing tests, nits, docs). PR "M7a: core toolkit for tools" opened from it.
-- Local Windows checks after the fixes: MSVC Debug (413 tests) and Release (415, benchmarks), clang-cl Debug
-  (397), format, docs parity, Doxygen and mkdocs --strict green.
+- main: M0..M6 and M7a merged (#20 M7a core toolkit). ROADMAP ends with M9 (FSR/DLSS/XeSS) and M10 (hybrid RT).
+- Branch feat/m7b-localization: M7b (engine/text: Utf8, SearchFold, FuzzyMatcher, LocaleId, NumberFormat,
+  PluralRules, MessageFormat, StringTable/TextKey, LocaleFile, Localization with en-XA; tools/textc with
+  generate/check; cmake/IllusionText.cmake; input string table + glyphLabelKey/keyLabelKey; CTest
+  text.locales; ADR 0029; docs manual/localization.md EN/TR; skill localization). PR opened from it.
 
 ## Next (in order)
-1. Merge the M7a PR when CI is green (merge commit title "Merge M7a: ... (#N)").
-2. M7b (localization runtime) per the plan, then M7c, M7d (UI foundation: show gallery screenshots to owner).
+1. Merge the M7b PR when CI is green (merge commit title "Merge M7b: ... (#N)").
+2. M7c (platform services: clipboard, cursors, window state, file drops, monitors, wake(), key names) per
+   the plan, then M7d (UI foundation: show gallery screenshots to owner).
 3. Owner decisions defaulted to the plan's recommendations (plan header). Live-agent CI (M7x) needs the
    owner's API key + budget: ask then.
+
+## Lessons from M7b
+- Localization keeps raw pointers to compiled messages; replaced locale files stay alive until the next
+  resolve (superseded flag). Never store pointers into a std::vector that grows.
+- Paths with non-ASCII characters: tools take UTF-8 arguments (wmain on Windows) and convert with
+  std::filesystem::path(std::u8string_view); tests read data files the same way.
+- Local only: multi-config Ninja 1.13.2 asserted on C++20 dyndep files after reconfigures; the local
+  presets set CMAKE_CXX_SCAN_FOR_MODULES=OFF (the project uses no modules).
 
 ## Lessons from the M7a review
 - MSVC debug builds allocate when a standard container is constructed: allocation-free code keeps heap

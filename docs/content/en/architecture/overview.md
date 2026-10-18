@@ -10,7 +10,8 @@ illusion is built in layers. A layer may depend only on layers below it.
 | --- | --- | --- |
 | Core | Platform detection, assertions, logging (console, memory and ring Sinks), memory, Job System, ECS, reflection and scene files, event bus, time, math, semantic versions, JSON, `Expected`, deterministic and secure random numbers | Implemented |
 | Platform | Window, keyboard and mouse (GLFW), virtual file system, packed archives | Implemented |
-| Input | Gamepads through SDL3 (rumble, LED, motion, touchpad, adaptive triggers), action mapping, rebinding, glyphs | Implemented |
+| Text | UTF-8, search folding, fuzzy matching, CLDR plural rules, MessageFormat, string tables and localization | Implemented |
+| Input | Gamepads through SDL3 (rumble, LED, motion, touchpad, adaptive triggers), action mapping, rebinding, glyphs and their translatable labels | Implemented |
 | Assets | Images, Meshes, glTF models, environments, cooked formats, an import cache and asynchronous streaming | Implemented |
 | Physics | Rigid bodies, primitive, convex hull and mesh colliders, characters, joints, raycasts, shape casts and contacts with Jolt Physics on the Job System | Implemented |
 | Audio | 3D sound with cones, streaming, background loading and a mixer with buses, filters and reverb with miniaudio, mixed on its own thread | Implemented |
@@ -57,6 +58,7 @@ which module's code each type uses, so that a reload can hand the type over to t
 | Path | Contents |
 | --- | --- |
 | `engine/core` | Core library: `include/illusion/{core,ecs}` and `src/` |
+| `engine/text` | Text library: `include/illusion/text` and `src/` |
 | `engine/platform` | Platform library: `include/illusion/platform` and `src/` |
 | `engine/input` | Input library: `include/illusion/input` and `src/` |
 | `engine/assets` | Assets library: `include/illusion/assets` and `src/` |
@@ -67,6 +69,7 @@ which module's code each type uses, so that a reload can hand the type over to t
 | `samples` | Small applications that exercise engine features |
 | `tests` | Unit tests (doctest), one file per feature |
 | `tools/pack` | `illusion_pack`: archive packer and asset cooker |
+| `tools/textc` | `illusion_textc`: string table generator and locale file check |
 | `benchmarks` | Benchmarks with performance budgets (nanobench) |
 | `cmake` | Build options, compiler settings, pinned dependencies |
 | `docs/content/{en,tr}` | This documentation, in English and Turkish |

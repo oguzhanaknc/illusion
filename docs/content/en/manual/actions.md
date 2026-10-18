@@ -106,3 +106,13 @@ const std::string icon = illusion::glyphId(binding, family);
 ```
 
 Map glyph identifiers to your UI art; they never change between engine versions.
+
+`glyphLabel(binding, family)` returns stable English labels. For labels that players read, use the
+translatable overload, which formats the label in the active language of a
+[Localization](localization.md); `glyphLabelKey()` gives the string table key:
+
+```cpp
+illusion::text::Localization localization;
+localization.addTable(illusion::input::strings::kTable); // #include <illusion/input/InputStrings.hpp>
+const std::string label = illusion::glyphLabel(binding, family, localization);
+```
