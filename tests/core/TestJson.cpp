@@ -6,6 +6,7 @@
 #include <doctest/doctest.h>
 
 #include <cstdint>
+#include <cstring>
 #include <limits>
 #include <ranges>
 #include <string>
@@ -341,6 +342,51 @@ TEST_CASE("JSON parsing enforces the depth limit without recursion")
     CHECK(parseError(nested('[', ']', 201), shallow).offset == 200);
 }
 
+TEST_CASE("the JSON depth limit ignores brackets in strings")
+{
+    JsonReadOptions options;
+    options.maxDepth = 2;
+    const JsonDocument doc = parseOrFail(R"([{"[[[{": "]]]}}{{{", "\"[[[": "\\[[["}])", options);
+    CHECK(doc.root()[0].find("[[[{").asString() == "]]]}}{{{"sv);
+    CHECK(doc.root()[0].find("\"[[[").asString() == "\\[[["sv);
+}
+
+TEST_CASE("the JSON depth limit is checked before the document is built")
+{
+    // A megabyte of brackets in a small arena fails on depth, not on memory: no DOM was built.
+    LinearAllocator arena(64 * 1024);
+    const auto deep = JsonDocument::parse(std::string(1024 * 1024, '['), arena);
+    REQUIRE_FALSE(deep.hasValue());
+    CHECK(deep.error().message == "nesting is deeper than 128 levels");
+    CHECK(deep.error().offset == 128);
+    CHECK(arena.used() == 0);
+
+    // Even when the text before the bracket does not fit the arena.
+    LinearAllocator tiny(64);
+    const auto wide = JsonDocument::parse("[" + std::string(4096, ' ') + nested('[', ']', 200) + "]", tiny);
+    REQUIRE_FALSE(wide.hasValue());
+    CHECK(wide.error().message == "nesting is deeper than 128 levels");
+}
+
+TEST_CASE("a JSON syntax error before the depth limit is reported first")
+{
+    JsonReadOptions options;
+    options.maxDepth = 3;
+    const JsonError syntax = parseError("[1 2, [[[[]]]]]", options);
+    CHECK(syntax.offset == 3);
+    CHECK(syntax.message != "nesting is deeper than 3 levels");
+
+    // An error after the bracket that breaks the limit comes second.
+    const JsonError depth = parseError("[[[[ x ]]]]", options);
+    CHECK(depth.offset == 3);
+    CHECK(depth.message == "nesting is deeper than 3 levels");
+
+    // With depth 0, a complete scalar before the bracket is fine up to that point.
+    options.maxDepth = 0;
+    CHECK(parseError("1 []", options).offset == 2);
+    CHECK(parseError("  []", options).offset == 2);
+}
+
 TEST_CASE("JSON parsing enforces the size limit")
 {
     JsonReadOptions small;
@@ -349,6 +395,11 @@ TEST_CASE("JSON parsing enforces the size limit")
     const JsonError error = parseError("[1, 2, 3, 4]", small);
     CHECK(error.offset == 8);
     CHECK(error.message == "the document is larger than 8 bytes");
+
+    // The limit itself is allowed.
+    small.maxBytes = 6;
+    CHECK(parseOrFail("[1, 2]", small).root().size() == 2);
+    CHECK(parseError("[1, 22]", small).offset == 6);
 }
 
 TEST_CASE("duplicate JSON keys are rejected at the position of the repeated key")
@@ -379,6 +430,16 @@ TEST_CASE("duplicate JSON keys are rejected at the position of the repeated key"
 
     // Keys may repeat in different objects.
     CHECK(parseOrFail(R"([{"a": 1}, {"a": 2}, {"b": {"a": 3}}])").root().size() == 3);
+}
+
+TEST_CASE("duplicate JSON key messages escape and shorten the key")
+{
+    CHECK(parseError(R"({"q\"\\\n\u0001": 1, "q\"\\\n\u0001": 2})").message ==
+          R"(duplicate key "q\"\\\n\u0001")");
+
+    const std::string key(100, 'k');
+    const JsonError error = parseError("{\"" + key + "\": 1, \"" + key + "\": 2}");
+    CHECK(error.message == "duplicate key \"" + std::string(64, 'k') + "...\"");
 }
 
 TEST_CASE("duplicate JSON keys can be allowed explicitly")
@@ -416,6 +477,55 @@ TEST_CASE("JSON documents parse into a caller arena")
     const auto failed = JsonDocument::parse(text, tiny);
     REQUIRE_FALSE(failed.hasValue());
     CHECK(failed.error().message == "out of memory");
+}
+
+TEST_CASE("JSON documents parse into an arena without the heap")
+{
+    // A large object (sorted duplicate check) and nesting deeper than any inline stack.
+    std::string text = "{";
+    for (int i = 0; i < 40; ++i)
+    {
+        text += "\"k" + std::to_string(i) + "\": " + std::to_string(i) + ", ";
+    }
+    text += "\"deep\": " + nested('[', ']', 300) + "}";
+    JsonReadOptions options;
+    options.maxDepth = 400;
+    LinearAllocator arena(256 * 1024);
+    for (int round = 0; round < 3; ++round)
+    {
+        arena.reset();
+        test::ScopedAllocationCounter allocations;
+        {
+            auto parsed = JsonDocument::parse(text, arena, options);
+            REQUIRE(parsed.hasValue());
+            CHECK(parsed->root().find("k39").asI64() == 39);
+        }
+        CHECK(allocations.count() == 0);
+    }
+}
+
+TEST_CASE("arena-backed JSON documents can be destroyed after the arena is reset")
+{
+    LinearAllocator arena(64 * 1024);
+    auto parsed = JsonDocument::parse(R"({"a": [1, 2, 3]})", arena);
+    REQUIRE(parsed.hasValue());
+    JsonDocument doc = std::move(parsed).value();
+    JsonDocument assigned = JsonDocument::parse("[4]", arena).value();
+    JsonMutDocument built(arena);
+    built.setRoot(built.makeArray());
+    JsonMutDocument builtAssigned(arena);
+
+    // Reuse every byte of the arena, so that reading the old documents would find garbage.
+    arena.reset();
+    void* all = arena.allocate(arena.capacity(), 1);
+    REQUIRE(all != nullptr);
+    std::memset(all, 0xCD, arena.capacity());
+
+    // Assigning and destroying must not touch the arena.
+    assigned = JsonDocument();
+    builtAssigned = JsonMutDocument();
+    CHECK(assigned.empty());
+    CHECK(builtAssigned.root().isAbsent());
 }
 
 // --- Writing ---------------------------------------------------------------------------------------------
@@ -506,6 +616,40 @@ TEST_CASE("sortKeys orders members by key bytes at every level")
     // File order is kept without sortKeys.
     CHECK(written(doc.root(), {.pretty = false}) ==
           R"({"b":{"z":1,"a":2},"a":[{"y":1,"x":2}],"B":0,"":1,"aa":3})");
+}
+
+TEST_CASE("sortKeys handles more open members than its inline storage")
+{
+    // 150 members, the last of which is an object with another 150: 300 sorted members are open at once.
+    const auto keyOf = [](int i) {
+        std::string key = std::to_string(i);
+        return std::string(3 - key.size(), '0') + key;
+    };
+    JsonMutDocument doc;
+    JsonMutValue root = doc.makeObject();
+    doc.setRoot(root);
+    for (int i = 149; i > 0; --i)
+    {
+        root.add(keyOf(i), doc.makeI64(i));
+    }
+    JsonMutValue inner = root.addObject("000");
+    for (int i = 149; i >= 0; --i)
+    {
+        inner.add(keyOf(i), doc.makeI64(-i));
+    }
+
+    std::string expected = "{\"000\":{";
+    for (int i = 0; i < 150; ++i)
+    {
+        expected += (i == 0 ? "\"" : ",\"") + keyOf(i) + "\":" + std::to_string(-i);
+    }
+    expected += "}";
+    for (int i = 1; i < 150; ++i)
+    {
+        expected += ",\"" + keyOf(i) + "\":" + std::to_string(i);
+    }
+    expected += "}";
+    CHECK(written(doc, {.pretty = false, .sortKeys = true}) == expected);
 }
 
 TEST_CASE("writing very deep JSON does not recurse")
@@ -704,6 +848,28 @@ TEST_CASE("a JSON document without a root cannot be written")
     CHECK(doc.write(out).error().message == "the document has no root value");
 }
 
+TEST_CASE("an absent JSON handle passed to a builder marks the document as failed")
+{
+    const auto failsWith = [](auto&& build) {
+        JsonMutDocument doc;
+        JsonMutValue array = doc.makeArray();
+        JsonMutValue object = doc.makeObject();
+        doc.setRoot(object);
+        object.add("list", array);
+        CHECK_FALSE(doc.failed());
+        build(doc, array, object);
+        CHECK(doc.failed());
+        std::string out;
+        CHECK(doc.write(out).error().message.find("incomplete") != std::string::npos);
+    };
+    failsWith([](JsonMutDocument&, JsonMutValue& array, JsonMutValue&) { array.push(JsonMutValue()); });
+    failsWith([](JsonMutDocument&, JsonMutValue&, JsonMutValue& object) { object.add("x", JsonMutValue()); });
+    failsWith([](JsonMutDocument&, JsonMutValue&, JsonMutValue& object) { object.set("x", JsonMutValue()); });
+    failsWith([](JsonMutDocument& doc, JsonMutValue&, JsonMutValue&) { doc.setRoot(JsonMutValue()); });
+    failsWith(
+        [](JsonMutDocument& doc, JsonMutValue&, JsonMutValue&) { JsonMutValue().push(doc.makeNull()); });
+}
+
 TEST_CASE("arena-backed JSON documents fail softly when the arena is full")
 {
     LinearAllocator arena(16 * 1024);
@@ -775,6 +941,21 @@ TEST_CASE("JSON builder calls on the wrong kind of value assert")
     CHECK_THROWS_AS(array.add("key", doc.makeNull()), test::AssertionFailure);
     CHECK_THROWS_AS(object.push(doc.makeNull()), test::AssertionFailure);
     CHECK_THROWS_AS((void)array.remove("key"), test::AssertionFailure);
+}
+
+TEST_CASE("JSON values from another document assert")
+{
+    test::ScopedAssertCatcher catcher;
+    JsonMutDocument doc;
+    JsonMutValue array = doc.makeArray();
+    JsonMutValue object = doc.makeObject();
+    JsonMutDocument other;
+    CHECK_THROWS_AS(array.push(other.makeNull()), test::AssertionFailure);
+    CHECK_THROWS_AS(object.add("key", other.makeNull()), test::AssertionFailure);
+    CHECK_THROWS_AS(object.set("key", other.makeNull()), test::AssertionFailure);
+    CHECK_THROWS_AS(doc.setRoot(other.makeArray()), test::AssertionFailure);
+    CHECK(object.size() == 0);
+    CHECK(array.size() == 0);
 }
 #endif
 

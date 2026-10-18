@@ -79,8 +79,8 @@ public:
 
     /// Writes to @p output and @p error instead of stdout and stderr (tests use temporary files). With
     /// ConsoleStreams::StderrOnly, @p output is never written or flushed and may be nullptr. The streams
-    /// must stay open while the sink is in use.
-    ConsoleSink(ConsoleStreams streams, std::FILE* output, std::FILE* error) noexcept;
+    /// must stay open while the sink is in use. Asserts that the streams it writes to are not null.
+    ConsoleSink(ConsoleStreams streams, std::FILE* output, std::FILE* error);
 
     /// @copydoc LogSink::write
     void write(const LogMessage& message) override;
@@ -96,7 +96,8 @@ private:
     std::FILE* m_error;
 };
 
-/// Keeps the most recent messages in memory. Used by tests and the editor console.
+/// Keeps copies of the most recent messages in memory, for tests. Consoles and tools that poll use
+/// LogRingSink, which does not allocate.
 class MemorySink final : public LogSink
 {
 public:
@@ -179,11 +180,13 @@ public:
     /// @copydoc LogSink::write
     void write(const LogMessage& message) override;
 
-    /// Calls @p visitor(const LogRecord&) for every stored record with a sequence greater than @p after,
-    /// oldest first, and returns the sequence of the last record visited (@p after if none). Records are
-    /// visited in place while the sink's lock is held: writers wait, so @p visitor must be quick, must not
-    /// log to a Logger this sink belongs to, and must not keep references to the records. Records that
-    /// were overwritten before this call are skipped (see droppedCount()).
+    /// Calls @p visitor(const LogRecord&) for every stored record with a sequence greater than @p after, up
+    /// to the newest record at the time of the call, oldest first, and returns the sequence of the last
+    /// record visited (@p after if none). Records are copied out in small batches and visited without the
+    /// sink's lock, so @p visitor may log (also to a Logger this sink belongs to), read this sink again and
+    /// take its time; writers only wait for the copies. The record passed to @p visitor is a copy that is
+    /// valid only during the call. Records overwritten before they were copied are skipped (see
+    /// droppedCount()), so the visited sequences can have gaps.
     template <class Visitor>
     u64 readSince(u64 after, Visitor&& visitor) const
     {
@@ -202,8 +205,8 @@ public:
     [[nodiscard]] u64 latestSequence() const;
 
     /// Number of records that were overwritten by newer ones before any readSince() call had read past
-    /// them: a record counts as read once a readSince() call returns a sequence at or above its own,
-    /// whether or not it was in range of that call. Without readers, every overwritten record is dropped.
+    /// them: a record counts as read once a readSince() call has copied it or was given a cursor at or
+    /// above its sequence. Without readers, every overwritten record is dropped.
     [[nodiscard]] u64 droppedCount() const;
 
     /// Maximum number of records kept.

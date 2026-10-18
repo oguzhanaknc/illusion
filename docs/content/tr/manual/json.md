@@ -76,7 +76,9 @@ Okuyucu katıdır. Şunları reddeder:
   baştaki sıfırlar, bayt sırası işareti (BOM);
 - geçersiz UTF-8 ve belgeden sonra gelen içerik;
 - bir nesnede tekrarlanan anahtarlar (hata, tekrarlanan anahtarı gösterir);
-- `maxDepth`'ten (varsayılan 128) derin iç içe yapılar ve `maxBytes`'tan (64 MiB) büyük girdiler.
+- `maxDepth`'ten (varsayılan 128) derin iç içe yapılar ve `maxBytes`'tan (64 MiB) büyük girdiler. İkisi
+  de belge oluşturulmadan önce kontrol edilir; bu yüzden fazla büyük veya fazla derin bir girdi, metni
+  üzerinden en fazla bir geçişe mal olur.
 
 Sınırları `JsonReadOptions` ile değiştirin. `allowDuplicateKeys = true` tekrarlanan anahtarları kabul
 eder; aramalar o zaman ilkini döndürür.
@@ -129,7 +131,8 @@ if (const auto written = doc.write(text); !written)
 
 `add()` bir üye ekler ve yeni bir anahtar bekler; `set()` var olan bir üyeyi değiştirir; `remove()`
 onu siler. `copy()`, ayrıştırılmış bir belgedeki bir `JsonValue`'nun derin kopyasını oluşturur; böylece
-bir belge okunabilir, düzenlenebilir ve geri yazılabilir. `makeF32()`, aynı `f32` olarak geri okunan en
+bir belge okunabilir, düzenlenebilir ve geri yazılabilir. Bir değer onu oluşturan belgeye aittir: onu
+başka bir belgeye eklemek assert tetikler. `makeF32()`, aynı `f32` olarak geri okunan en
 kısa metni yazar (`0.10000000149011612` değil, `0.1`).
 
 `write(out, options)`, `out`'un içeriğini değiştirir. Sonlu olmayan sayılar ve geçerli UTF-8 olmayan
@@ -137,7 +140,7 @@ metinler için yazma başarısız olur. `JsonValue::write()`, ayrıştırılmı�
 
 | `JsonWriteOptions` | Etkisi |
 | --- | --- |
-| `pretty = true` (varsayılan) | Standart düzen: iki boşluk girinti, skaler dizileri tek satırda, sonda bir satır sonu. |
+| `pretty = true` (varsayılan) | Kanonik düzen: iki boşluk girinti, skaler dizileri tek satırda, sonda bir satır sonu. |
 | `pretty = false` | Sıkışık: hiç boşluk yok. |
 | `sortKeys = true` | Nesne üyeleri, her seviyede anahtarlarının baytlarına göre sıralanır. |
 
@@ -163,11 +166,15 @@ auto parsed = illusion::JsonDocument::parse(text, arena);
 illusion::JsonMutDocument reply(arena);
 ```
 
-Arena, belgeden daha uzun yaşamalıdır. Tipik belgeler metnin boyutunun 2 ila 4 katına ihtiyaç duyar; her
-değer 16 bayt tuttuğu için küçük sayılardan oluşan yoğun diziler 10 katına kadar ihtiyaç duyar. Arena
-dolduğunda `parse()` "out of memory" ile başarısız olur. `JsonMutDocument` ise absent değerler döndürür,
-hatayı hatırlar (`failed()`) ve `write()` bunu bildirir; böylece bir oluşturucu yalnızca sonda tek bir
-kontrole ihtiyaç duyar.
+Ayrıştırılmış bir belge, metnin bir kopyasını ve her değer (anahtar, skaler, dizi, nesne) için 16 bayt
+tutar. Tipik belgeler metnin boyutunun 3 ila 5 katına, tek basamaklı sayılardan oluşan diziler ise 11
+katına kadar ihtiyaç duyar. Arena dolduğunda `parse()` "out of memory" ile başarısız olur.
+`JsonMutDocument` ise absent değerler döndürür, hatayı hatırlar (`failed()`) ve `write()` bunu bildirir;
+böylece bir oluşturucu yalnızca sonda tek bir kontrole ihtiyaç duyar.
+
+Arena sıfırlandıktan veya belgenin altına geri sarıldıktan sonra belgeyi ve değerlerini kullanmayın. Böyle
+bir belgeyi yok etmek veya ona atama yapmak sorun değildir: arena belleğine hiç dokunmaz; bu yüzden bir
+kare arenası, içinde oluşturulan belgeler kapsam dışına çıkmadan önce sıfırlanabilir.
 
 Yazma, çıktı metninin kapasitesini yeniden kullanır ve çalışma belleğini stack'te tutar; bu yüzden aynı
 metne tekrar yazmak heap'e dokunmaz. Yalnızca 64 seviyeden derin iç içe belgeler ve `sortKeys` ile aynı

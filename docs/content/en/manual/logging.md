@@ -57,7 +57,7 @@ private:
 illusion::Logger::instance().addSink(std::make_shared<FileSink>("game.log"));
 ```
 
-`MemorySink` keeps the most recent messages in memory; tests use it.
+`MemorySink` keeps copies of the most recent messages in memory; tests use it.
 
 ### Console streams
 
@@ -93,15 +93,18 @@ void showNewMessages()
 }
 ```
 
-The callback runs while the sink's lock is held: keep it short, do not log from it, and copy what you
-need to keep. A record stores bounded copies of the category (32 bytes), the end of the source file path
+The callback receives copies of the records and runs without the sink's lock, so it may take its time,
+log (also to the Logger that feeds the sink) or read the sink again. Records written while it runs are
+visited by the next call. The record passed to it is valid only during the call: copy what you need to
+keep. A record stores bounded copies of the category (32 bytes), the end of the source file path
 (96 bytes) and the text (864 bytes), cut at a UTF-8 character boundary; `truncated` tells when the text
 was cut. Because the strings are copies, records stay valid after the game module that logged them is
 unloaded.
 
-When writers are faster than readers, the oldest records are overwritten. `droppedCount()` counts the
-records that were overwritten before any `readSince()` call had read past them; `latestSequence()` is
-the sequence of the newest record.
+When writers are faster than readers, the oldest records are overwritten and readers skip them, so
+the sequences a reader sees can have gaps. `droppedCount()` counts the records that were overwritten
+before any `readSince()` call had read past them; `latestSequence()` is the sequence of the newest
+record.
 
 ## Threading
 

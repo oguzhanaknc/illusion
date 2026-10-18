@@ -75,7 +75,9 @@ The reader is strict. It rejects:
   Infinity, leading zeros, a byte order mark;
 - invalid UTF-8, and content after the document;
 - duplicate keys in an object (the error points at the repeated key);
-- nesting deeper than `maxDepth` (128 by default) and input larger than `maxBytes` (64 MiB).
+- nesting deeper than `maxDepth` (128 by default) and input larger than `maxBytes` (64 MiB). Both are
+  checked before the document is built, so oversized or overly deep input costs at most one pass over
+  its text.
 
 Change the limits with `JsonReadOptions`. `allowDuplicateKeys = true` accepts repeated keys; lookups
 then return the first one.
@@ -128,7 +130,7 @@ if (const auto written = doc.write(text); !written)
 
 `add()` appends a member and expects a new key; `set()` replaces an existing one; `remove()` deletes it.
 `copy()` makes a deep copy of a `JsonValue` from a parsed document, so a document can be read, edited
-and written back. `makeF32()` writes the shortest text that reads back as the same `f32` (`0.1`, not
+and written back. A value belongs to the document that made it: adding it to another document asserts. `makeF32()` writes the shortest text that reads back as the same `f32` (`0.1`, not
 `0.10000000149011612`).
 
 `write(out, options)` replaces the contents of `out`. Writing fails for non-finite numbers and strings
@@ -162,10 +164,15 @@ auto parsed = illusion::JsonDocument::parse(text, arena);
 illusion::JsonMutDocument reply(arena);
 ```
 
-The arena must outlive the document. Typical documents need 2 to 4 times the size of the text; every
-value takes 16 bytes, so dense arrays of small numbers need up to 10 times. When the arena is full,
-`parse()` fails with "out of memory". A `JsonMutDocument` instead returns absent values, remembers the
-failure (`failed()`), and `write()` reports it, so a builder needs only one check at the end.
+A parsed document keeps a copy of the text and 16 bytes for every value (key, scalar, array, object).
+Typical documents need 3 to 5 times the size of the text, and arrays of one-digit numbers up to 11
+times. When the arena is full, `parse()` fails with "out of memory". A `JsonMutDocument` instead returns
+absent values, remembers the failure (`failed()`), and `write()` reports it, so a builder needs only one
+check at the end.
+
+Do not use a document or its values after the arena was reset or rewound below it. Destroying or
+assigning to such a document is fine: it never touches arena memory, so a frame arena may be reset
+before the documents built in it go out of scope.
 
 Writing reuses the capacity of the output string and keeps its working memory on the stack, so writing
 into the same string again does not touch the heap. Only documents nested more than 64 levels deep, and

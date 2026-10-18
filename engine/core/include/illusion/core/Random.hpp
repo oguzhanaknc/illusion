@@ -105,7 +105,7 @@ public:
 
     /// Returns a uniformly distributed value in [0, @p n). @p n must be greater than 0. Unbiased: uses
     /// Lemire's multiply-and-shift with rejection, which almost never needs a second draw.
-    constexpr u64 below(u64 n)
+    [[nodiscard]] constexpr u64 below(u64 n)
     {
         ILL_ASSERT(n > 0, "Random::below(0)");
         u64 low = 0;
@@ -123,7 +123,7 @@ public:
 
     /// Returns a uniformly distributed value in [@p min, @p max] (both inclusive). @p min must not be
     /// greater than @p max.
-    constexpr i64 range(i64 min, i64 max)
+    [[nodiscard]] constexpr i64 range(i64 min, i64 max)
     {
         ILL_ASSERT(min <= max, "Random::range({}, {}): min is greater than max", min, max);
         const u64 span = static_cast<u64>(max) - static_cast<u64>(min);
@@ -132,17 +132,17 @@ public:
     }
 
     /// Returns a uniformly distributed double in [0, 1) built from the top 53 bits of next().
-    constexpr f64 uniform01() noexcept { return static_cast<f64>(next() >> 11) * 0x1.0p-53; }
+    [[nodiscard]] constexpr f64 uniform01() noexcept { return static_cast<f64>(next() >> 11) * 0x1.0p-53; }
 
     /// Returns a uniformly distributed float in [0, 1) built from the top 24 bits of next().
-    constexpr f32 uniformF32() noexcept { return static_cast<f32>(next() >> 40) * 0x1.0p-24f; }
+    [[nodiscard]] constexpr f32 uniformF32() noexcept { return static_cast<f32>(next() >> 40) * 0x1.0p-24f; }
 
     /// Returns true or false with equal probability (the top bit of next()).
-    constexpr bool boolean() noexcept { return (next() >> 63) != 0; }
+    [[nodiscard]] constexpr bool boolean() noexcept { return (next() >> 63) != 0; }
 
     /// Returns true with probability @p probability. Values at or below 0 never and values at or above 1
     /// always return true; one value of the sequence is consumed either way.
-    constexpr bool chance(f64 probability) noexcept { return uniform01() < probability; }
+    [[nodiscard]] constexpr bool chance(f64 probability) noexcept { return uniform01() < probability; }
 
     /// The current state. Restoring it with setState() continues the sequence from this point.
     [[nodiscard]] constexpr State state() const noexcept { return m_state; }

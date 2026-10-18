@@ -77,8 +77,9 @@ are within budget, format and docs checks pass, and Doxygen reports nothing.
 - Prefer `[[nodiscard]]`, `noexcept` (where truthful), `constexpr`, `std::span`, `std::string_view`.
 - Use fixed-width aliases from `illusion/core/Base.hpp` (`u32`, `f32`, `usize`, ...).
 - Errors: programmer errors → `ILL_ASSERT` (with a message). Unrecoverable runtime failures (out of
-  memory, corrupted state) → `ILL_CHECK`. Recoverable failures → return values (`bool`, `std::optional`,
-  or an expected-like type), never exceptions. Do not throw in engine code.
+  memory, corrupted state) → `ILL_CHECK`. Recoverable failures → return values: `bool`, `std::optional`,
+  or `Expected<T, E>` (`illusion/core/Expected.hpp`) when the caller needs to know why; never exceptions.
+  Do not throw in engine code.
 - Platform-specific code is isolated behind a small function in a `.cpp` with `#if defined(ILL_PLATFORM_*)`.
   Include `<windows.h>` only in `.cpp` files.
 
@@ -110,6 +111,9 @@ are within budget, format and docs checks pass, and Doxygen reports nothing.
 - Test public behaviour, edge cases (empty, one, many, chunk boundaries), lifetimes
   (`test::LifetimeCounter`), and threading (TSan runs in CI). Use `test::ScopedAssertCatcher` to check
   that asserts fire (only through functions that are not `noexcept`).
+- Prove that allocation-free paths stay allocation-free with `test::ScopedAllocationCounter`. MSVC debug
+  builds allocate when a standard container is constructed, even an empty one: construct containers
+  before the counter, and in such paths create heap blocks only when needed (`std::unique_ptr<T[]>`).
 - Tests must be deterministic: fixed seeds, no sleeps for synchronization, no reliance on timing.
 
 ## Documentation rules

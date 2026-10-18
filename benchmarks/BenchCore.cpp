@@ -1,5 +1,6 @@
 #include "Budget.hpp"
 
+#include <illusion/core/Assert.hpp>
 #include <illusion/core/Json.hpp>
 #include <illusion/core/Log.hpp>
 #include <illusion/core/Memory.hpp>
@@ -53,7 +54,7 @@ std::string sceneText()
     JsonMutDocument doc;
     buildScene(doc);
     std::string text;
-    (void)doc.write(text);
+    ILL_CHECK(doc.write(text).hasValue(), "the benchmark scene cannot be written");
     return text;
 }
 
@@ -64,10 +65,11 @@ std::string sceneText()
 ILL_BENCHMARK("json/parse", 10.0)
 {
     const std::string text = sceneText();
-    LinearAllocator arena(4 * text.size());
+    LinearAllocator arena(8 * text.size());
     bench.batch(text.size()).unit("byte").run("parse a 64 KiB scene into an arena", [&] {
         arena.reset();
         auto doc = JsonDocument::parse(text, arena);
+        ILL_CHECK(doc.hasValue(), "the benchmark scene does not parse: {}", doc.error().message);
         ankerl::nanobench::doNotOptimizeAway(doc);
     });
 }
@@ -77,10 +79,12 @@ ILL_BENCHMARK("json/write", 16.0)
     LinearAllocator arena(1024 * 1024);
     JsonMutDocument doc(arena);
     buildScene(doc);
+    ILL_CHECK(!doc.failed(), "the benchmark scene does not fit its arena");
     std::string out;
-    (void)doc.write(out);
+    ILL_CHECK(doc.write(out).hasValue(), "the benchmark scene cannot be written");
     bench.batch(out.size()).unit("byte").run("write a 64 KiB scene (pretty)", [&] {
-        (void)doc.write(out);
+        const auto written = doc.write(out);
+        ILL_CHECK(written.hasValue(), "the benchmark scene cannot be written");
         ankerl::nanobench::doNotOptimizeAway(out);
     });
 }

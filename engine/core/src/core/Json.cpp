@@ -4,13 +4,15 @@
 #include <illusion/core/Profiler.hpp>
 
 #include <algorithm>
+#include <array>
 #include <cmath>
 #include <cstring>
 #include <format>
 #include <memory>
+#include <new>
+#include <optional>
 #include <type_traits>
 #include <utility>
-#include <vector>
 #include <yyjson.h>
 
 namespace illusion
@@ -82,11 +84,12 @@ yyjson_alc arenaAllocator(LinearAllocator& arena) noexcept
 }
 
 // Stack that lives inline up to N elements and moves to the heap beyond, so that typical documents are
-// read and written without allocating. Elements stay contiguous.
+// written without allocating. Elements stay contiguous. The heap block is created only when the stack
+// outgrows N: a std::vector member would allocate on construction in MSVC debug builds.
 template <class T, usize N>
 class SmallStack
 {
-    static_assert(std::is_trivially_copyable_v<T>);
+    static_assert(std::is_trivially_copyable_v<T> && std::is_trivially_default_constructible_v<T>);
 
 public:
     SmallStack() = default;
@@ -125,21 +128,16 @@ private:
     void grow(usize needed)
     {
         const usize capacity = std::max(needed, m_capacity * 2);
-        if (m_data == m_inline)
-        {
-            m_heap.resize(capacity);
-            std::memcpy(m_heap.data(), m_inline, m_size * sizeof(T));
-        }
-        else
-        {
-            m_heap.resize(capacity);
-        }
-        m_data = m_heap.data();
+        std::unique_ptr<T[]> heap(new (std::nothrow) T[capacity]);
+        ILL_CHECK(heap != nullptr, "out of memory growing a JSON stack to {} entries", capacity);
+        std::memcpy(heap.get(), m_data, m_size * sizeof(T));
+        m_heap = std::move(heap);
+        m_data = m_heap.get();
         m_capacity = capacity;
     }
 
     T m_inline[N];
-    std::vector<T> m_heap;
+    std::unique_ptr<T[]> m_heap;
     T* m_data = m_inline;
     usize m_size = 0;
     usize m_capacity = N;
@@ -255,6 +253,173 @@ std::string_view excerpt(std::string_view key) noexcept
     return key.substr(0, length);
 }
 
+// True for UTF-8 sequences that yyjson accepts: no overlong forms, no surrogates, at most U+10FFFF.
+// Returns the length of the sequence at @p s (with @p available bytes), or 0 if it is invalid.
+usize utf8SequenceLength(const u8* s, usize available) noexcept
+{
+    const u8 lead = s[0];
+    const auto continuation = [&](usize i) {
+        return i < available && (s[i] & 0xC0) == 0x80;
+    };
+    if (lead >= 0xC2 && lead <= 0xDF)
+    {
+        return continuation(1) ? 2 : 0;
+    }
+    if (lead >= 0xE0 && lead <= 0xEF)
+    {
+        if (available < 3 || !continuation(1) || !continuation(2))
+        {
+            return 0;
+        }
+        if ((lead == 0xE0 && s[1] < 0xA0) || (lead == 0xED && s[1] > 0x9F))
+        {
+            return 0;
+        }
+        return 3;
+    }
+    if (lead >= 0xF0 && lead <= 0xF4)
+    {
+        if (available < 4 || !continuation(1) || !continuation(2) || !continuation(3))
+        {
+            return 0;
+        }
+        if ((lead == 0xF0 && s[1] < 0x90) || (lead == 0xF4 && s[1] > 0x8F))
+        {
+            return 0;
+        }
+        return 4;
+    }
+    return 0;
+}
+
+// Appends @p text to @p out escaped as the contents of a JSON string, exactly as yyjson escapes it (no
+// escaping of '/' or non-ASCII characters, short escapes where JSON has them, uppercase \u00XX otherwise).
+// Returns false, with part of the text appended, if @p text is not valid UTF-8.
+bool appendEscaped(std::string& out, std::string_view view)
+{
+    static constexpr char kHex[] = "0123456789ABCDEF";
+    const auto* text = reinterpret_cast<const u8*>(view.data());
+    const usize length = view.size();
+    usize runStart = 0;
+    usize i = 0;
+    const auto flush = [&] {
+        out.append(view.data() + runStart, i - runStart);
+    };
+    while (i < length)
+    {
+        const u8 c = text[i];
+        if (c >= 0x20 && c != '"' && c != '\\' && c < 0x80)
+        {
+            ++i;
+            continue;
+        }
+        if (c >= 0x80)
+        {
+            const usize sequence = utf8SequenceLength(text + i, length - i);
+            if (sequence == 0)
+            {
+                flush();
+                return false;
+            }
+            i += sequence;
+            continue;
+        }
+        flush();
+        char escape[6] = {'\\', 'u', '0', '0', kHex[c >> 4], kHex[c & 0xF]};
+        usize escapeLength = 6;
+        switch (c)
+        {
+        case '"':
+        case '\\':
+            escape[1] = static_cast<char>(c);
+            escapeLength = 2;
+            break;
+        case '\b':
+            escape[1] = 'b';
+            escapeLength = 2;
+            break;
+        case '\t':
+            escape[1] = 't';
+            escapeLength = 2;
+            break;
+        case '\n':
+            escape[1] = 'n';
+            escapeLength = 2;
+            break;
+        case '\f':
+            escape[1] = 'f';
+            escapeLength = 2;
+            break;
+        case '\r':
+            escape[1] = 'r';
+            escapeLength = 2;
+            break;
+        default:
+            break;
+        }
+        out.append(escape, escapeLength);
+        ++i;
+        runStart = i;
+    }
+    flush();
+    return true;
+}
+
+// Offset of the first bracket in @p text that opens a container nested deeper than @p maxDepth, ignoring
+// brackets in strings, or nullopt. Runs before yyjson, so that a document that breaks the limit is
+// rejected without building its DOM first. Exact for valid JSON; the parser rejects invalid JSON anyway.
+std::optional<usize> findTooDeep(std::string_view text, u32 maxDepth) noexcept
+{
+    // 1: opening bracket, 2: closing bracket, 3: quote, 4: backslash.
+    static constexpr auto kClasses = [] {
+        std::array<u8, 256> classes{};
+        classes[static_cast<u8>('[')] = 1;
+        classes[static_cast<u8>('{')] = 1;
+        classes[static_cast<u8>(']')] = 2;
+        classes[static_cast<u8>('}')] = 2;
+        classes[static_cast<u8>('"')] = 3;
+        classes[static_cast<u8>('\\')] = 4;
+        return classes;
+    }();
+    usize depth = 0;
+    bool inString = false;
+    for (usize i = 0; i < text.size(); ++i)
+    {
+        const u8 c = kClasses[static_cast<u8>(text[i])];
+        if (c == 0)
+        {
+            continue;
+        }
+        if (inString)
+        {
+            if (c == 4)
+            {
+                ++i; // skip the escaped character
+            }
+            else if (c == 3)
+            {
+                inString = false;
+            }
+        }
+        else if (c == 3)
+        {
+            inString = true;
+        }
+        else if (c == 1)
+        {
+            if (++depth > maxDepth)
+            {
+                return i;
+            }
+        }
+        else if (c == 2 && depth > 0)
+        {
+            --depth;
+        }
+    }
+    return std::nullopt;
+}
+
 // --- Validation after parsing ------------------------------------------------------------------------
 
 struct KeyEntry
@@ -270,14 +435,13 @@ bool keyLess(const KeyEntry& a, const KeyEntry& b) noexcept
     return order != 0 ? order < 0 : a.key < b.key; // equal keys in document order
 }
 
-// Checks the depth limit and duplicate keys on the flat value array of a parsed document, without
-// recursion. Reports the problem that comes first in the document.
-class Validator
+// Finds duplicate keys on the flat value array of a parsed document, without recursion. Reports the one
+// that comes first in the document.
+class DuplicateKeyCheck
 {
 public:
-    Validator(std::string_view text, const JsonReadOptions& options, LinearAllocator* arena)
+    DuplicateKeyCheck(std::string_view text, LinearAllocator* arena) noexcept
         : m_text(text)
-        , m_options(options)
         , m_arena(arena)
     {
     }
@@ -293,39 +457,29 @@ public:
             {
                 break;
             }
-            while (!m_ends.empty() && value >= m_ends.back())
-            {
-                m_ends.pop();
-            }
-            if (!unsafe_yyjson_is_ctn(value))
+            if (!unsafe_yyjson_is_obj(value) || unsafe_yyjson_get_len(value) < 2)
             {
                 continue;
             }
-            if (m_ends.size() + 1 > m_options.maxDepth)
+            const yyjson_val* found = nullptr;
+            if (!findDuplicate(value, found))
             {
-                return unexpected(
-                    makeError(m_text, valueOffset(m_text, static_cast<usize>(value - root)),
-                              std::format("nesting is deeper than {} levels", m_options.maxDepth)));
+                return unexpected(makeError(m_text, 0, "out of memory"));
             }
-            m_ends.push(unsafe_yyjson_get_next(value));
-            if (!m_options.allowDuplicateKeys && unsafe_yyjson_is_obj(value) &&
-                unsafe_yyjson_get_len(value) > 1)
+            if (found != nullptr && (duplicate == nullptr || found < duplicate))
             {
-                const yyjson_val* found = nullptr;
-                if (!findDuplicate(value, found))
-                {
-                    return unexpected(makeError(m_text, 0, "out of memory"));
-                }
-                if (found != nullptr && (duplicate == nullptr || found < duplicate))
-                {
-                    duplicate = found;
-                }
+                duplicate = found;
             }
         }
         if (duplicate != nullptr)
         {
+            const std::string_view key = stringOf(duplicate);
+            const std::string_view shown = excerpt(key);
+            std::string message = "duplicate key \"";
+            appendEscaped(message, shown); // keys of a parsed document are valid UTF-8
+            message.append(shown.size() < key.size() ? "...\"" : "\"");
             return unexpected(makeError(m_text, valueOffset(m_text, static_cast<usize>(duplicate - root)),
-                                        std::format("duplicate key \"{}\"", excerpt(stringOf(duplicate)))));
+                                        std::move(message)));
         }
         return {};
     }
@@ -369,8 +523,13 @@ private:
         }
         else
         {
-            m_heapEntries.resize(count);
-            entries = m_heapEntries.data();
+            if (count > m_heapCapacity)
+            {
+                m_heapEntries.reset(new (std::nothrow) KeyEntry[count]);
+                ILL_CHECK(m_heapEntries != nullptr, "out of memory checking {} JSON keys", count);
+                m_heapCapacity = count;
+            }
+            entries = m_heapEntries.get();
         }
         const yyjson_val* key = object + 1;
         for (usize i = 0; i < count; ++i, key = unsafe_yyjson_get_next(key + 1))
@@ -398,11 +557,64 @@ private:
     }
 
     std::string_view m_text;
-    const JsonReadOptions& m_options;
     LinearAllocator* m_arena;
-    SmallStack<const yyjson_val*, 256> m_ends;
-    std::vector<KeyEntry> m_heapEntries;
+    std::unique_ptr<KeyEntry[]> m_heapEntries; // created for the first object with many keys
+    usize m_heapCapacity = 0;
 };
+
+// Runs yyjson on @p text. Returns the document, or the error yyjson reported (with its code in @p code).
+Expected<yyjson_doc*, JsonError> readDocument(std::string_view text, LinearAllocator* arena,
+                                              yyjson_read_code& code)
+{
+    const yyjson_alc allocator = arena != nullptr ? arenaAllocator(*arena) : yyjson_alc{};
+    yyjson_read_err error{};
+    // Without YYJSON_READ_INSITU the input is only read, never modified.
+    char* data = const_cast<char*>(dataOf(text));
+    yyjson_doc* doc = yyjson_read_opts(data, text.size(), YYJSON_READ_NOFLAG,
+                                       arena != nullptr ? &allocator : nullptr, &error);
+    code = error.code;
+    if (doc == nullptr)
+    {
+        if (error.code == YYJSON_READ_ERROR_MEMORY_ALLOCATION)
+        {
+            ILL_CHECK(arena != nullptr, "out of memory parsing {} bytes of JSON", text.size());
+            return unexpected(makeError(text, 0, "out of memory"));
+        }
+        return unexpected(makeError(text, error.pos, error.msg != nullptr ? error.msg : "invalid JSON"));
+    }
+    return doc;
+}
+
+// The error for a document whose bracket at @p offset breaks the depth limit: a syntax error before that
+// bracket if there is one, otherwise the depth error.
+JsonError tooDeepError(std::string_view text, usize offset, const JsonReadOptions& options,
+                       LinearAllocator* arena)
+{
+    const usize firstValue = std::min(text.find_first_not_of(" \t\n\r"), text.size());
+    if (offset > firstValue)
+    {
+        // The text up to the bracket is valid JSON if yyjson only finds it truncated.
+        const LinearAllocator::Marker marker = arena != nullptr ? arena->mark() : 0;
+        yyjson_read_code code = YYJSON_READ_SUCCESS;
+        auto prefix = readDocument(text.substr(0, offset), arena, code);
+        if (prefix)
+        {
+            // Only with maxDepth 0: a complete scalar, followed by the bracket.
+            yyjson_doc_free(*prefix);
+        }
+        if (arena != nullptr)
+        {
+            arena->rewind(marker);
+        }
+        // A prefix that does not fit the arena proves nothing; the depth error is certain.
+        if (!prefix && code != YYJSON_READ_ERROR_UNEXPECTED_END &&
+            code != YYJSON_READ_ERROR_MEMORY_ALLOCATION)
+        {
+            return std::move(prefix).error();
+        }
+    }
+    return makeError(text, offset, std::format("nesting is deeper than {} levels", options.maxDepth));
+}
 
 Expected<yyjson_doc*, JsonError> parseDocument(std::string_view text, const JsonReadOptions& options,
                                                LinearAllocator* arena)
@@ -413,26 +625,27 @@ Expected<yyjson_doc*, JsonError> parseDocument(std::string_view text, const Json
         return unexpected(makeError(text, options.maxBytes,
                                     std::format("the document is larger than {} bytes", options.maxBytes)));
     }
-    const yyjson_alc allocator = arena != nullptr ? arenaAllocator(*arena) : yyjson_alc{};
-    yyjson_read_err error{};
-    // Without YYJSON_READ_INSITU the input is only read, never modified.
-    char* data = const_cast<char*>(dataOf(text));
-    yyjson_doc* doc = yyjson_read_opts(data, text.size(), YYJSON_READ_NOFLAG,
-                                       arena != nullptr ? &allocator : nullptr, &error);
-    if (doc == nullptr)
+    if (const std::optional<usize> tooDeep = findTooDeep(text, options.maxDepth))
     {
-        if (error.code == YYJSON_READ_ERROR_MEMORY_ALLOCATION)
-        {
-            ILL_CHECK(arena != nullptr, "out of memory parsing {} bytes of JSON", text.size());
-            return unexpected(makeError(text, 0, "out of memory"));
-        }
-        return unexpected(makeError(text, error.pos, error.msg != nullptr ? error.msg : "invalid JSON"));
+        return unexpected(tooDeepError(text, *tooDeep, options, arena));
     }
-    auto valid = Validator(text, options, arena).run(doc);
-    if (!valid)
+    yyjson_read_code code = YYJSON_READ_SUCCESS;
+    auto doc = readDocument(text, arena, code);
+    if (!doc || options.allowDuplicateKeys)
     {
-        yyjson_doc_free(doc);
-        return unexpected(std::move(valid).error());
+        return doc;
+    }
+    // The document is complete, so the check's scratch memory at the top of the arena can be released.
+    const LinearAllocator::Marker marker = arena != nullptr ? arena->mark() : 0;
+    auto unique = DuplicateKeyCheck(text, arena).run(*doc);
+    if (arena != nullptr)
+    {
+        arena->rewind(marker);
+    }
+    if (!unique)
+    {
+        yyjson_doc_free(*doc);
+        return unexpected(std::move(unique).error());
     }
     return doc;
 }
@@ -480,45 +693,6 @@ bool isContainer(Node node) noexcept
 {
     const u8 type = static_cast<u8>(node->tag & YYJSON_TYPE_MASK);
     return type == YYJSON_TYPE_ARR || type == YYJSON_TYPE_OBJ;
-}
-
-// True for UTF-8 sequences that yyjson accepts: no overlong forms, no surrogates, at most U+10FFFF.
-// Returns the length of the sequence at @p s (with @p available bytes), or 0 if it is invalid.
-usize utf8SequenceLength(const u8* s, usize available) noexcept
-{
-    const u8 lead = s[0];
-    const auto continuation = [&](usize i) {
-        return i < available && (s[i] & 0xC0) == 0x80;
-    };
-    if (lead >= 0xC2 && lead <= 0xDF)
-    {
-        return continuation(1) ? 2 : 0;
-    }
-    if (lead >= 0xE0 && lead <= 0xEF)
-    {
-        if (available < 3 || !continuation(1) || !continuation(2))
-        {
-            return 0;
-        }
-        if ((lead == 0xE0 && s[1] < 0xA0) || (lead == 0xED && s[1] > 0x9F))
-        {
-            return 0;
-        }
-        return 3;
-    }
-    if (lead >= 0xF0 && lead <= 0xF4)
-    {
-        if (available < 4 || !continuation(1) || !continuation(2) || !continuation(3))
-        {
-            return 0;
-        }
-        if ((lead == 0xF0 && s[1] < 0x90) || (lead == 0xF4 && s[1] > 0x8F))
-        {
-            return 0;
-        }
-        return 4;
-    }
-    return 0;
 }
 
 struct SortedMember
@@ -691,7 +865,7 @@ private:
                 }
                 std::sort(members, members + count, [](const SortedMember& a, const SortedMember& b) {
                     const int order =
-                        keyView(static_cast<Node>(a.key)).compare(keyView(static_cast<Node>(b.key)));
+                        stringView(static_cast<Node>(a.key)).compare(stringView(static_cast<Node>(b.key)));
                     return order != 0 ? order < 0 : a.index < b.index;
                 });
             }
@@ -719,7 +893,7 @@ private:
         return true;
     }
 
-    static std::string_view keyView(Node key) noexcept { return {key->uni.str, lengthOf(key)}; }
+    static std::string_view stringView(Node node) noexcept { return {node->uni.str, lengthOf(node)}; }
 
     bool writeNumber(Node node)
     {
@@ -735,76 +909,15 @@ private:
         return true;
     }
 
-    // Writes a quoted, escaped string exactly as yyjson does (no escaping of '/' or non-ASCII characters,
-    // short escapes where JSON has them, uppercase \u00XX otherwise). Fails on invalid UTF-8.
+    // Writes a quoted, escaped string. Fails on invalid UTF-8.
     bool writeString(Node node)
     {
-        static constexpr char kHex[] = "0123456789ABCDEF";
-        const auto* text = reinterpret_cast<const u8*>(node->uni.str);
-        const usize length = lengthOf(node);
         m_out.push_back('"');
-        usize runStart = 0;
-        usize i = 0;
-        const auto flush = [&] {
-            m_out.append(reinterpret_cast<const char*>(text) + runStart, i - runStart);
-        };
-        while (i < length)
+        if (!appendEscaped(m_out, stringView(node)))
         {
-            const u8 c = text[i];
-            if (c >= 0x20 && c != '"' && c != '\\' && c < 0x80)
-            {
-                ++i;
-                continue;
-            }
-            if (c >= 0x80)
-            {
-                const usize sequence = utf8SequenceLength(text + i, length - i);
-                if (sequence == 0)
-                {
-                    m_error = "cannot write a string that is not valid UTF-8";
-                    return false;
-                }
-                i += sequence;
-                continue;
-            }
-            flush();
-            char escape[6] = {'\\', 'u', '0', '0', kHex[c >> 4], kHex[c & 0xF]};
-            usize escapeLength = 6;
-            switch (c)
-            {
-            case '"':
-            case '\\':
-                escape[1] = static_cast<char>(c);
-                escapeLength = 2;
-                break;
-            case '\b':
-                escape[1] = 'b';
-                escapeLength = 2;
-                break;
-            case '\t':
-                escape[1] = 't';
-                escapeLength = 2;
-                break;
-            case '\n':
-                escape[1] = 'n';
-                escapeLength = 2;
-                break;
-            case '\f':
-                escape[1] = 'f';
-                escapeLength = 2;
-                break;
-            case '\r':
-                escape[1] = 'r';
-                escapeLength = 2;
-                break;
-            default:
-                break;
-            }
-            m_out.append(escape, escapeLength);
-            ++i;
-            runStart = i;
+            m_error = "cannot write a string that is not valid UTF-8";
+            return false;
         }
-        flush();
         m_out.push_back('"');
         return true;
     }
@@ -1116,11 +1229,12 @@ std::string JsonValue::dump() const
 
 JsonDocument::~JsonDocument()
 {
-    yyjson_doc_free(m_doc);
+    release();
 }
 
 JsonDocument::JsonDocument(JsonDocument&& other) noexcept
     : m_doc(std::exchange(other.m_doc, nullptr))
+    , m_arenaBacked(std::exchange(other.m_arenaBacked, false))
 {
 }
 
@@ -1128,10 +1242,21 @@ JsonDocument& JsonDocument::operator=(JsonDocument&& other) noexcept
 {
     if (this != &other)
     {
-        yyjson_doc_free(m_doc);
+        release();
         m_doc = std::exchange(other.m_doc, nullptr);
+        m_arenaBacked = std::exchange(other.m_arenaBacked, false);
     }
     return *this;
+}
+
+void JsonDocument::release() noexcept
+{
+    // An arena-backed document is released by the arena; its memory may already be reused, so it is
+    // not touched here.
+    if (!m_arenaBacked)
+    {
+        yyjson_doc_free(m_doc);
+    }
 }
 
 Expected<JsonDocument, JsonError> JsonDocument::parse(std::string_view text, const JsonReadOptions& options)
@@ -1141,7 +1266,7 @@ Expected<JsonDocument, JsonError> JsonDocument::parse(std::string_view text, con
     {
         return unexpected(std::move(doc).error());
     }
-    return JsonDocument(*doc);
+    return JsonDocument(*doc, false);
 }
 
 Expected<JsonDocument, JsonError> JsonDocument::parse(std::string_view text, LinearAllocator& arena,
@@ -1152,7 +1277,7 @@ Expected<JsonDocument, JsonError> JsonDocument::parse(std::string_view text, Lin
     {
         return unexpected(std::move(doc).error());
     }
-    return JsonDocument(*doc);
+    return JsonDocument(*doc, true);
 }
 
 JsonValue JsonDocument::root() const noexcept
@@ -1205,6 +1330,7 @@ JsonMutValue& JsonMutValue::push(JsonMutValue value)
         return *this;
     }
     ILL_ASSERT(yyjson_mut_is_arr(m_value), "push() on a JSON {}", jsonTypeName(type()));
+    ILL_ASSERT(value.m_state == m_state, "push() of a value from another JSON document");
     yyjson_mut_arr_append(m_value, value.m_value);
     return *this;
 }
@@ -1217,6 +1343,7 @@ JsonMutValue& JsonMutValue::add(std::string_view key, JsonMutValue value)
         return *this;
     }
     ILL_ASSERT(yyjson_mut_is_obj(m_value), "add() on a JSON {}", jsonTypeName(type()));
+    ILL_ASSERT(value.m_state == m_state, "add() of a value from another JSON document");
     yyjson_mut_val* name = checked(*m_state, yyjson_mut_strncpy(m_state->doc, dataOf(key), key.size()));
     if (name != nullptr)
     {
@@ -1233,6 +1360,7 @@ JsonMutValue& JsonMutValue::set(std::string_view key, JsonMutValue value)
         return *this;
     }
     ILL_ASSERT(yyjson_mut_is_obj(m_value), "set() on a JSON {}", jsonTypeName(type()));
+    ILL_ASSERT(value.m_state == m_state, "set() of a value from another JSON document");
     yyjson_mut_obj_iter iter = yyjson_mut_obj_iter_with(m_value);
     bool replaced = false;
     while (yyjson_mut_val* name = yyjson_mut_obj_iter_next(&iter))
@@ -1352,6 +1480,7 @@ JsonMutDocument::JsonMutDocument()
 
 JsonMutDocument::JsonMutDocument(LinearAllocator& arena)
     : m_state(arena.create<detail::JsonMutState>())
+    , m_arenaBacked(true)
 {
     if (m_state == nullptr)
     {
@@ -1365,19 +1494,19 @@ JsonMutDocument::JsonMutDocument(LinearAllocator& arena)
 
 JsonMutDocument::~JsonMutDocument()
 {
-    if (m_state == nullptr)
+    // The state of an arena-backed document lives in the arena, which releases it; its memory may already
+    // be reused, so it is not touched here.
+    if (m_state == nullptr || m_arenaBacked)
     {
         return;
     }
     yyjson_mut_doc_free(m_state->doc);
-    if (m_state->arena == nullptr)
-    {
-        delete m_state;
-    }
+    delete m_state;
 }
 
 JsonMutDocument::JsonMutDocument(JsonMutDocument&& other) noexcept
     : m_state(std::exchange(other.m_state, nullptr))
+    , m_arenaBacked(std::exchange(other.m_arenaBacked, false))
 {
 }
 
@@ -1387,6 +1516,7 @@ JsonMutDocument& JsonMutDocument::operator=(JsonMutDocument&& other) noexcept
     {
         JsonMutDocument old(std::move(*this));
         m_state = std::exchange(other.m_state, nullptr);
+        m_arenaBacked = std::exchange(other.m_arenaBacked, false);
     }
     return *this;
 }
@@ -1497,7 +1627,7 @@ JsonMutValue JsonMutDocument::root() const noexcept
     return value != nullptr ? JsonMutValue(m_state, value) : JsonMutValue();
 }
 
-void JsonMutDocument::setRoot(JsonMutValue value) noexcept
+void JsonMutDocument::setRoot(JsonMutValue value)
 {
     if (m_state == nullptr || m_state->doc == nullptr)
     {
@@ -1507,6 +1637,8 @@ void JsonMutDocument::setRoot(JsonMutValue value) noexcept
     {
         m_state->failed = true;
     }
+    ILL_ASSERT(value.isAbsent() || value.m_state == m_state,
+               "setRoot() of a value from another JSON document");
     yyjson_mut_doc_set_root(m_state->doc, value.m_value);
 }
 

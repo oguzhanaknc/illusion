@@ -183,6 +183,8 @@ TEST_CASE("ScopedAllocationCounter sees heap allocations on its thread only")
     };
     std::atomic<bool> go{false};
     std::atomic<bool> done{false};
+    // Constructed before counting: MSVC debug builds allocate when a std::vector is constructed.
+    std::vector<double> growing;
     std::thread other([&] {
         while (!go.load(std::memory_order_acquire))
         {
@@ -211,7 +213,6 @@ TEST_CASE("ScopedAllocationCounter sees heap allocations on its thread only")
     CHECK(allocations.count() == 3); // the other thread's allocation is not counted here
     {
         test::ScopedAllocationCounter nested;
-        std::vector<double> growing;
         growing.reserve(8);
         escape(growing.data());
         CHECK(nested.count() == 1);

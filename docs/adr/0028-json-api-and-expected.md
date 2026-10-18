@@ -16,6 +16,18 @@ The engine has no common type for "a value or an error": APIs return `bool` plus
 result struct with an `error` string (`SceneLoadResult`), or `std::optional`. C++20 has no
 `std::expected`.
 
+Options considered for errors:
+
+- **Keep `bool` or `std::optional` plus an out parameter for the details.** No new type, but the error
+  detail is easy to ignore or leave stale, and functions cannot return the value and the error in one
+  expression.
+- **A third-party `expected` (tl::expected).** Mature and close to `std::expected`, but it reports misuse
+  with exceptions unless configured otherwise, and it adds a dependency for about 400 lines of code.
+- **C++23 `std::expected`.** The engine is a C++20 code base; moving every target and module to C++23 for
+  one library type is a larger decision than this one. `Expected` follows the `std::expected` interface
+  closely enough that a later switch is mechanical.
+- **Error codes only.** Cheap, but parse errors need a position and a message, which a code cannot carry.
+
 Options considered for JSON:
 
 - **Expose yyjson in public headers.** Fast and complete, but every caller would depend on a C API with
@@ -43,15 +55,18 @@ Options considered for JSON:
     missing values are absent views, so lookups chain without checks.
   - **Strict input.** Only RFC 8259 JSON is accepted (yyjson is built with `YYJSON_DISABLE_NON_STANDARD`):
     no comments, trailing commas, NaN or Infinity, invalid UTF-8 or trailing content. `JsonReadOptions`
-    limits nesting (`maxDepth`, 128) and size (`maxBytes`, 64 MiB); the depth is checked on yyjson's flat
-    value array without recursion, so hostile input cannot overflow the stack.
+    limits nesting (`maxDepth`, 128) and size (`maxBytes`, 64 MiB). The depth is checked before yyjson
+    runs, by one pass over the text that skips strings, so a document that is too deep is rejected
+    without building its DOM, and nothing recurses. A syntax error before the offending bracket is still
+    reported first.
   - **Duplicate keys are rejected** by default, at the position of the repeated key, because JSON leaves
     their meaning undefined and parsers disagree (first wins, last wins, error). Files and protocol
     messages therefore mean the same to every tool. `allowDuplicateKeys` opts out; lookups then return the
     first occurrence.
   - Integers keep their exact `i64`/`u64` value; only numbers outside both ranges become reals.
   - `JsonMutDocument`/`JsonMutValue` build documents (strings and keys copied, deep copies from parsed
-    values). Handles stay valid when the document moves.
+    values). Handles stay valid when the document moves. Adding a value from another document asserts:
+    yyjson would link memory that the other document frees.
 - **Canonical formatting.** Pretty output is the scene file format: two-space indentation, arrays of
   scalars on one line, the shortest text that reads back to the same number (`f32` values in their `f32`
   form), yyjson's string escaping, and a final newline. Compact output has no whitespace. `sortKeys`
@@ -61,9 +76,12 @@ Options considered for JSON:
 - **Arena allocation.** Parsing and building accept a caller's `LinearAllocator`, plugged into yyjson
   through `yyjson_alc`; `LinearAllocator::reallocate()` grows the newest block in place so yyjson's
   `realloc` works on an arena. A full arena is a recoverable error: `parse()` returns "out of memory", and
-  a mutable document records the failure, returns absent handles and reports it from `write()`. Writing
-  reuses the output string's capacity and keeps its stacks inline, so steady-state writing does not
-  allocate. Heap exhaustion stays fatal (`ILL_CHECK`).
+  a mutable document records the failure, returns absent handles and reports it from `write()`. Documents
+  remember outside the arena that they are arena-backed, so they can be destroyed after the arena was
+  reset (frame arenas are reset before the objects that used them go out of scope). Writing reuses the
+  output string's capacity and keeps its stacks inline, so steady-state writing does not allocate. Heap
+  blocks are created only when needed: an empty `std::vector` member already allocates in MSVC debug
+  builds. Heap exhaustion stays fatal (`ILL_CHECK`).
 
 ## Consequences
 
@@ -73,5 +91,8 @@ Options considered for JSON:
   large object should iterate `members()` once instead.
 - Strictness may reject files that lenient tools accept (comments in hand-written settings). If that
   becomes a problem, a separate, explicit option will be added rather than relaxing the default.
-- Integers above 2^53 must be read with `asI64()`/`asU64()`; reading them with `asF64()` rounds.
+- Integers above 2^53 must be read with `asI64()`/`asU64()`; reading them with `asF64()` rounds. JSON
+  readers that store every number as a double (JavaScript, many agent runtimes) round them too, so the
+  value encoding of M7e writes u64 fields as decimal strings; the DOM itself keeps exact integers and has
+  no string mode.
 - The scene serializer still calls yyjson directly until M7e moves it onto this API.

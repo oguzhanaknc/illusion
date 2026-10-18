@@ -72,7 +72,9 @@ struct JsonError
 /// Limits and policies of JsonDocument::parse().
 struct JsonReadOptions
 {
-    /// Maximum nesting of arrays and objects: `[]` has depth 1, `[[]]` depth 2, a scalar depth 0.
+    /// Maximum nesting of arrays and objects: `[]` has depth 1, `[[]]` depth 2, a scalar depth 0. Checked
+    /// before the document is parsed, so a document that is too deep costs no more than one pass over its
+    /// text.
     u32 maxDepth = 128;
     /// Maximum size of the input in bytes.
     usize maxBytes = usize{64} * 1024 * 1024;
@@ -109,7 +111,7 @@ enum class JsonType : u8
 
 struct JsonMember;
 
-/// Read-only view of a value in a JsonDocument: two pointers, cheap to copy. A view is valid while its
+/// Read-only view of a value in a JsonDocument: one pointer, cheap to copy. A view is valid while its
 /// document lives (moving the document keeps it valid). A default-constructed view is absent.
 class JsonValue
 {
@@ -349,6 +351,10 @@ private:
 
 /// Owner of a parsed, immutable JSON document. Move-only. Views into it (JsonValue) stay valid until the
 /// document is destroyed or assigned to.
+///
+/// A document parsed into a LinearAllocator lives in that arena. Once the arena is reset or rewound below
+/// the document, the document and its views must not be used any more, but the document may still be
+/// destroyed or assigned to: that never touches arena memory.
 class JsonDocument
 {
 public:
@@ -364,14 +370,17 @@ public:
     JsonDocument& operator=(const JsonDocument&) = delete; ///< Not copyable.
 
     /// Parses @p text (UTF-8, without a byte order mark). The text is not referenced afterwards. Returns
-    /// the document, or the position and description of the first problem found.
+    /// the document, or the position and description of the first problem found: the size limit first,
+    /// then the earlier of the first syntax error and the first bracket that breaks the depth limit, and
+    /// last the first duplicate key.
     [[nodiscard]] static Expected<JsonDocument, JsonError> parse(std::string_view text,
                                                                  const JsonReadOptions& options = {});
 
     /// Like parse(std::string_view, const JsonReadOptions&), but takes every byte of the document and of
-    /// the validation from @p arena instead of the heap. @p arena must outlive the document; a full arena
-    /// fails with "out of memory". Typical documents need 2 to 4 times the size of the text; every value
-    /// takes 16 bytes, so dense arrays of small numbers need up to 10 times.
+    /// the validation from @p arena instead of the heap (error messages excepted). A full arena fails with
+    /// "out of memory". The document keeps a copy of the text and 16 bytes per value (every key, scalar,
+    /// array and object) with some room to spare, plus about 140 bytes: typical documents need 3 to 5 times
+    /// the size of the text, and arrays of one-digit numbers up to 11 times.
     [[nodiscard]] static Expected<JsonDocument, JsonError>
     parse(std::string_view text, LinearAllocator& arena, const JsonReadOptions& options = {});
 
@@ -388,17 +397,21 @@ public:
     }
 
 private:
-    explicit JsonDocument(yyjson_doc* doc) noexcept
+    JsonDocument(yyjson_doc* doc, bool arenaBacked) noexcept
         : m_doc(doc)
+        , m_arenaBacked(arenaBacked)
     {
     }
 
+    void release() noexcept;
+
     yyjson_doc* m_doc = nullptr;
+    bool m_arenaBacked = false; // kept outside the arena, which may be reset before the destructor runs
 };
 
 /// Handle to a value in a JsonMutDocument: two pointers, cheap to copy, valid while the document lives.
 /// A default-constructed handle is absent. Containers are filled with add()/push(); each value may be
-/// added to one container (or be the root) only once.
+/// added to one container (or be the root) only once, and only within the document that created it.
 class JsonMutValue
 {
 public:
@@ -415,16 +428,17 @@ public:
     [[nodiscard]] usize size() const noexcept;
 
     /// Appends @p value to this array. Ignored (and the document marked as failed) if either handle is
-    /// absent. Asserts that this is an array.
+    /// absent. Asserts that this is an array and that @p value belongs to the same document.
     JsonMutValue& push(JsonMutValue value);
 
     /// Appends a member to this object, copying @p key. The key must not already be present: duplicate
     /// keys would be written, and the reader rejects them (use set() to replace). Ignored (and the
-    /// document marked as failed) if either handle is absent. Asserts that this is an object.
+    /// document marked as failed) if either handle is absent. Asserts that this is an object and that
+    /// @p value belongs to the same document.
     JsonMutValue& add(std::string_view key, JsonMutValue value);
 
     /// Replaces the value of the member @p key, or appends the member if there is none. Linear in the
-    /// number of members. Asserts that this is an object.
+    /// number of members. Asserts that this is an object and that @p value belongs to the same document.
     JsonMutValue& set(std::string_view key, JsonMutValue value);
 
     /// Removes every member called @p key and returns true if there was one. Asserts that this is an
@@ -478,7 +492,9 @@ private:
 ///
 /// Memory comes from the heap or, with the arena constructor, from a caller's LinearAllocator. When the
 /// arena runs out, builder functions return absent handles, the document remembers the failure
-/// (failed()), and write() reports "out of memory".
+/// (failed()), and write() fails because the document is incomplete. Once the arena is reset or rewound
+/// below the document, the document and its handles must not be used any more, but the document may
+/// still be destroyed or assigned to: that never touches arena memory.
 class JsonMutDocument
 {
 public:
@@ -522,17 +538,20 @@ public:
     /// The root value (absent until setRoot()).
     [[nodiscard]] JsonMutValue root() const noexcept;
 
-    /// Makes @p value the root.
-    void setRoot(JsonMutValue value) noexcept;
+    /// Makes @p value the root. An absent @p value marks the document as failed. Asserts that @p value
+    /// belongs to this document.
+    void setRoot(JsonMutValue value);
 
     /// True once a builder function ran out of memory or received an absent handle.
     [[nodiscard]] bool failed() const noexcept;
 
-    /// Writes the root value, see JsonMutValue::write(). Fails with "out of memory" if failed().
+    /// Writes the root value, see JsonMutValue::write(). Fails if failed() (the document is incomplete)
+    /// or there is no root.
     Expected<void, JsonError> write(std::string& out, const JsonWriteOptions& options = {}) const;
 
 private:
     detail::JsonMutState* m_state = nullptr;
+    bool m_arenaBacked = false; // kept outside the arena, which may be reset before the destructor runs
 };
 
 } // namespace illusion

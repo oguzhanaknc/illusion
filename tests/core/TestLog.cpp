@@ -7,6 +7,7 @@
 #include <algorithm>
 #include <atomic>
 #include <cstdio>
+#include <limits>
 #include <string>
 #include <thread>
 #include <vector>
@@ -256,6 +257,17 @@ TEST_CASE("ConsoleSink with StderrOnly writes nothing to the output stream")
     CHECK(error.contents().ends_with("still fine\n"));
 }
 
+#if ILL_ASSERTS_ENABLED
+TEST_CASE("ConsoleSink asserts on null streams it would write to")
+{
+    test::ScopedAssertCatcher catcher;
+    TemporaryStream stream;
+    CHECK_THROWS_AS(ConsoleSink(ConsoleStreams::Split, nullptr, stream.file), test::AssertionFailure);
+    CHECK_THROWS_AS(ConsoleSink(ConsoleStreams::Split, stream.file, nullptr), test::AssertionFailure);
+    CHECK_THROWS_AS(ConsoleSink(ConsoleStreams::StderrOnly, stream.file, nullptr), test::AssertionFailure);
+}
+#endif
+
 // --- LogRingSink ---------------------------------------------------------------------------------------
 
 TEST_CASE("LogRingSink stores records with increasing sequence numbers")
@@ -353,6 +365,123 @@ TEST_CASE("LogRingSink counts records overwritten before anyone read them")
         sink.write(message(LogLevel::Info, std::to_string(i)));
     }
     CHECK(sink.droppedCount() == 8); // 16 was overwritten unread by 20
+
+    // The largest cursor does not wrap around to the oldest record.
+    const u64 kEnd = std::numeric_limits<u64>::max();
+    CHECK(sink.readSince(kEnd, [](const LogRecord&) { FAIL("nothing after the largest cursor"); }) == kEnd);
+    sink.write(message(LogLevel::Info, "21"));
+    CHECK(sink.droppedCount() == 8); // 17 had been read by the call above
+}
+
+TEST_CASE("LogRingSink keeps at least one record")
+{
+    for (const usize capacity : {usize{0}, usize{1}})
+    {
+        LogRingSink sink(capacity);
+        CHECK(sink.capacity() == 1);
+        sink.write(message(LogLevel::Info, "1"));
+        sink.write(message(LogLevel::Info, "2"));
+        sink.write(message(LogLevel::Info, "3"));
+        CHECK(sink.droppedCount() == 2);
+        std::vector<std::string> texts;
+        CHECK(sink.readSince(0, [&](const LogRecord& record) { texts.emplace_back(record.textView()); }) ==
+              3);
+        CHECK(texts == std::vector<std::string>{"3"});
+    }
+}
+
+TEST_CASE("LogRingSink visits long ranges in order across batches")
+{
+    LogRingSink sink(64);
+    for (int i = 1; i <= 50; ++i)
+    {
+        sink.write(message(LogLevel::Info, std::to_string(i)));
+    }
+    std::vector<u64> sequences;
+    CHECK(sink.readSince(3, [&](const LogRecord& record) { sequences.push_back(record.sequence); }) == 50);
+    REQUIRE(sequences.size() == 47);
+    for (usize i = 0; i < sequences.size(); ++i)
+    {
+        CHECK(sequences[i] == 4 + i);
+    }
+    CHECK(sink.droppedCount() == 0);
+}
+
+TEST_CASE("LogRingSink visitors may log to the Logger that feeds the sink")
+{
+    ScopedTestLogger scope;
+    auto ring = std::make_shared<LogRingSink>(64);
+    scope.logger.addSink(ring);
+    for (int i = 0; i < 20; ++i)
+    {
+        ILL_LOG_INFO("Source", "message {}", i);
+    }
+
+    // Each visit logs again. The records written during the call are not visited by it, so the call ends.
+    usize visited = 0;
+    const u64 last = ring->readSince(0, [&](const LogRecord& record) {
+        ++visited;
+        ILL_LOG_INFO("Echo", "saw {}", record.sequence);
+    });
+    CHECK(visited == 20);
+    CHECK(last == 20);
+    CHECK(ring->latestSequence() == 40);
+
+    // A visitor may also read the same sink again.
+    usize nested = 0;
+    (void)ring->readSince(last, [&](const LogRecord& record) {
+        CHECK(record.categoryView() == "Echo");
+        (void)ring->readSince(record.sequence, [&](const LogRecord&) { ++nested; });
+    });
+    CHECK(nested == 20 * 19 / 2);
+}
+
+TEST_CASE("LogRingSink records outlive the strings that were logged")
+{
+    LogRingSink sink(4);
+    {
+        std::string text = "temporary text";
+        std::string category = "Temporary";
+        std::string file = "engine/temporary/File.cpp";
+        sink.write(message(LogLevel::Info, text, category, file.c_str(), 3));
+        text.assign(text.size(), 'x');
+        category.assign(category.size(), 'y');
+        file.assign(file.size(), 'z');
+    }
+    (void)sink.readSince(0, [](const LogRecord& record) {
+        CHECK(record.textView() == "temporary text");
+        CHECK(record.categoryView() == "Temporary");
+        CHECK(record.fileView() == "engine/temporary/File.cpp");
+    });
+}
+
+TEST_CASE("LogRingSink starts a cut file path after a whole UTF-8 character")
+{
+    LogRingSink sink(2);
+    // The cut falls on the second byte of a three-byte character and of a four-byte character.
+    const std::string tail = std::string(LogRecord::kMaxFileBytes - 2, 'f');
+    sink.write(message(LogLevel::Info, "a", "C", ("\xE2\x82\xAC" + tail).c_str()));
+    sink.write(
+        message(LogLevel::Info, "b", "C", ("x\xF0\x9F\x98\x80" + std::string(tail.size() - 1, 'f')).c_str()));
+    std::vector<std::string> files;
+    (void)sink.readSince(0, [&](const LogRecord& record) { files.emplace_back(record.fileView()); });
+    REQUIRE(files.size() == 2);
+    CHECK(files[0] == tail);
+    CHECK(files[1] == std::string(tail.size() - 1, 'f'));
+}
+
+TEST_CASE("LogRingSink cuts invalid UTF-8 at the byte limit")
+{
+    LogRingSink sink(1);
+    // A run of continuation bytes has no character boundary to back up to.
+    const std::string text(LogRecord::kMaxTextBytes + 10, '\x80');
+    const std::string file(LogRecord::kMaxFileBytes + 10, '\x80');
+    sink.write(message(LogLevel::Info, text, "C", file.c_str()));
+    (void)sink.readSince(0, [](const LogRecord& record) {
+        CHECK(record.truncated);
+        CHECK(record.textView().size() == LogRecord::kMaxTextBytes);
+        CHECK(record.fileView().size() == LogRecord::kMaxFileBytes);
+    });
 }
 
 TEST_CASE("LogRingSink cuts long strings at UTF-8 character boundaries")
@@ -426,9 +555,8 @@ TEST_CASE("LogRingSink is safe with concurrent writers and a reader")
         const auto read = [&] {
             u64 previous = cursor;
             cursor = sink.readSince(cursor, [&](const LogRecord& record) {
-                // Sequences only grow: consecutive within a call, past the cursor across calls.
-                ordered = ordered && record.sequence > previous &&
-                          (previous == cursor || record.sequence == previous + 1);
+                // Sequences only grow; gaps are records that were overwritten before they were copied.
+                ordered = ordered && record.sequence > previous;
                 previous = record.sequence;
                 ++visited;
             });

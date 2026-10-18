@@ -7,6 +7,7 @@
 #include <algorithm>
 #include <array>
 #include <cstddef>
+#include <limits>
 #include <random>
 #include <vector>
 
@@ -68,6 +69,59 @@ TEST_CASE("below() is deterministic and stays within bounds")
         }
     }
     CHECK(random.below(1) == 0);
+}
+
+TEST_CASE("below() matches the reference for large bounds, rejected draws included")
+{
+    // Computed with an independent implementation of xoshiro256** and Lemire's method. For 2^63 + 1 almost
+    // half of the draws are rejected: these 8 values take 17 draws.
+    Random half(2024);
+    constexpr std::array<u64, 8> kHalf{0x093918a58af72800ull, 0x147191d355f15235ull, 0x1f57f8431e67aa7aull,
+                                       0x5c3442844f9c01f0ull, 0x70e54982cbd11b43ull, 0x2ee3bb2045338fbaull,
+                                       0x184ed98a65a11482ull, 0x057c3627be403684ull};
+    for (const u64 expected : kHalf)
+    {
+        CHECK(half.below((u64{1} << 63) + 1) == expected);
+    }
+    Random draws(2024);
+    for (int i = 0; i < 17; ++i)
+    {
+        (void)draws.next();
+    }
+    CHECK(draws.state() == half.state());
+
+    Random full(2024);
+    constexpr std::array<u64, 4> kFull{0x0e48715a13d7772dull, 0xc837f3ee8a7a1064ull, 0x1272314b15ee5000ull,
+                                       0x28e323a6abe2a46aull};
+    for (const u64 expected : kFull)
+    {
+        CHECK(full.below(~u64{0}) == expected);
+    }
+
+    Random prime(77);
+    for (const u64 expected : {u64{439300131}, u64{226941930}, u64{581270976}, u64{959587928}})
+    {
+        CHECK(prime.below(1000000007) == expected);
+    }
+}
+
+TEST_CASE("range() matches the reference for the full and wide i64 ranges")
+{
+    constexpr i64 kMin = std::numeric_limits<i64>::min();
+    constexpr i64 kMax = std::numeric_limits<i64>::max();
+    Random full(77);
+    for (const i64 expected : {i64{-1119714989705632749}, i64{-5037032361518627288}, i64{1499184836596177710},
+                               i64{8477900773371868717}})
+    {
+        CHECK(full.range(kMin, kMax) == expected);
+    }
+    Random wide(77);
+    constexpr i64 kQuarter = i64{1} << 62;
+    for (const i64 expected : {i64{-559857494852816375}, i64{749592418298088855}, i64{4233710448821951275},
+                               i64{-3414148242230769631}})
+    {
+        CHECK(wide.range(-kQuarter, kQuarter) == expected);
+    }
 }
 
 TEST_CASE("below() is uniform by a chi-square test at a fixed seed")

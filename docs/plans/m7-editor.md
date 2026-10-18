@@ -306,7 +306,7 @@ Needs: nothing.
   - `JsonValue` views offer typed getters, iteration in file order, `find`, and an in-house RFC 6901 `pointer()`.
   - `JsonMutDocument`/`JsonWriter` allocate from a caller `LinearAllocator` (`yyjson_alc`).
   - Canonical mode: two-space indent, scalar arrays on one line, shortest round-trip floats, optional sorted keys.
-  - Integers above 2^53 can be written as strings.
+  - Integers keep their exact 64-bit value. Writing u64 values as decimal strings belongs to the value encoding and moved to M7e.
   - Duplicate keys are rejected.
 - `Random.hpp`: `Random` is xoshiro256** seeded through splitmix64, with unbiased `below(n)` and `uniform01()`. It produces the same sequence on every platform. `secureRandomBytes(span)` uses BCryptGenRandom, getrandom or arc4random_buf behind `ILL_PLATFORM_*`.
 - `LogRingSink(capacity)`: fixed records `{seq, level, category, text (bounded), file, line, thread, time}`, `readSince(seq, fn)` without copying, a dropped count, and no allocation after construction. `ConsoleSink` gains a stream policy (`Split`, `StderrOnly`) and injectable streams for tests.
@@ -478,6 +478,7 @@ Needs: a.
   - `ComponentJson`: `write`/`read` in Replace or Merge mode; struct read/write.
   - `getPath`/`setPath` with dotted paths; per-field errors with JSON pointers.
   - Unit-tagged input `{"deg": 60}` and colour input `"#rrggbb"` (sRGB).
+  - U64 fields are written as decimal strings, so that readers that store numbers as doubles keep them exact (moved here from M7a).
   - An `EntityResolver` hook.
   - `SceneSerializer` is rebuilt on top of it with byte-identical v1 output.
 - **Migrations.** `migrate(fromVersion, fn(JsonMutValue&))` runs when a file is older; `renamedFrom` is applied first.

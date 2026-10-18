@@ -41,11 +41,14 @@ ConsoleSink::ConsoleSink(ConsoleStreams streams) noexcept
 {
 }
 
-ConsoleSink::ConsoleSink(ConsoleStreams streams, std::FILE* output, std::FILE* error) noexcept
+ConsoleSink::ConsoleSink(ConsoleStreams streams, std::FILE* output, std::FILE* error)
     : m_streams(streams)
     , m_output(output)
     , m_error(error)
 {
+    ILL_ASSERT(error != nullptr, "ConsoleSink needs an error stream");
+    ILL_ASSERT(output != nullptr || streams == ConsoleStreams::StderrOnly,
+               "ConsoleSink needs an output stream unless it writes to the error stream only");
 }
 
 void ConsoleSink::write(const LogMessage& message)
@@ -126,6 +129,10 @@ constexpr bool isContinuationByte(char c) noexcept
     return (static_cast<u8>(c) & 0xC0) == 0x80;
 }
 
+// A UTF-8 character has at most three continuation bytes. Longer runs are invalid UTF-8 and are cut
+// anywhere rather than searched for a boundary that does not exist.
+constexpr usize kMaxContinuationBytes = 3;
+
 // Longest prefix of @p text that fits in @p capacity bytes without splitting a UTF-8 character.
 std::string_view utf8Prefix(std::string_view text, usize capacity) noexcept
 {
@@ -133,13 +140,13 @@ std::string_view utf8Prefix(std::string_view text, usize capacity) noexcept
     {
         return text;
     }
+    // Back up over the continuation bytes of a character cut in the middle.
     usize length = capacity;
-    // Back up over the continuation bytes of a character cut in the middle (at most three).
-    while (length > 0 && isContinuationByte(text[length]))
+    while (length > 0 && capacity - length < kMaxContinuationBytes && isContinuationByte(text[length]))
     {
         --length;
     }
-    return text.substr(0, length);
+    return text.substr(0, isContinuationByte(text[length]) ? capacity : length);
 }
 
 // Longest suffix of @p text that fits in @p capacity bytes and starts at a UTF-8 character boundary.
@@ -149,12 +156,14 @@ std::string_view utf8Suffix(std::string_view text, usize capacity) noexcept
     {
         return text;
     }
-    usize start = text.size() - capacity;
-    while (start < text.size() && isContinuationByte(text[start]))
+    // Skip the continuation bytes of a character cut in the middle.
+    const usize cut = text.size() - capacity;
+    usize start = cut;
+    while (start - cut < kMaxContinuationBytes && start < text.size() && isContinuationByte(text[start]))
     {
         ++start;
     }
-    return text.substr(start);
+    return text.substr(start < text.size() && isContinuationByte(text[start]) ? cut : start);
 }
 
 } // namespace
@@ -199,17 +208,47 @@ void LogRingSink::write(const LogMessage& message)
 
 u64 LogRingSink::readSinceImpl(u64 after, RawVisitor visitor, void* context) const
 {
-    std::scoped_lock lock(m_mutex);
-    const u64 oldest = m_latest >= m_capacity ? m_latest - m_capacity + 1 : 1;
+    // Records are copied out in small batches and visited without the lock: a visitor may log (also to a
+    // Logger this sink belongs to, which would otherwise deadlock against writers holding that Logger's
+    // lock), assert, or read this sink again, and writers only wait for the copies.
+    constexpr usize kBatchSize = 8;
+    LogRecord batch[kBatchSize];
     u64 last = after;
-    for (u64 sequence = std::max(after + 1, oldest); sequence <= m_latest; ++sequence)
+    u64 end = 0; // newest record when the call started; later records wait for the next call
+    bool first = true;
+    for (;;)
     {
-        visitor(context, m_records[static_cast<usize>((sequence - 1) % m_capacity)]);
-        last = sequence;
+        usize count = 0;
+        {
+            std::scoped_lock lock(m_mutex);
+            if (first)
+            {
+                end = m_latest;
+                first = false;
+            }
+            const u64 oldest = m_latest >= m_capacity ? m_latest - m_capacity + 1 : 1;
+            // Records between `last` and `oldest` were overwritten and counted as dropped.
+            for (u64 sequence = last < end ? std::max(last + 1, oldest) : end + 1;
+                 sequence <= end && count < kBatchSize; ++sequence)
+            {
+                batch[count++] = m_records[static_cast<usize>((sequence - 1) % m_capacity)];
+            }
+            if (count > 0)
+            {
+                last = batch[count - 1].sequence;
+            }
+            // A cursor beyond the newest record does not mark future records as read.
+            m_readUpTo = std::max(m_readUpTo, std::min(last, m_latest));
+        }
+        for (usize i = 0; i < count; ++i)
+        {
+            visitor(context, batch[i]);
+        }
+        if (count < kBatchSize || last >= end)
+        {
+            return last;
+        }
     }
-    // A cursor beyond the newest record does not mark future records as read.
-    m_readUpTo = std::max(m_readUpTo, std::min(last, m_latest));
-    return last;
 }
 
 u64 LogRingSink::latestSequence() const

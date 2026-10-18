@@ -301,17 +301,15 @@ TEST_CASE("Destroying a dead entity asserts")
 
 TEST_CASE("structuralVersion changes when entities are created or destroyed")
 {
+    // Each change counts once, also a typed create() that adds several components at once.
     World world;
     CHECK(world.structuralVersion() == 0);
     const Entity a = world.create();
-    const u64 afterCreate = world.structuralVersion();
-    CHECK(afterCreate > 0);
+    CHECK(world.structuralVersion() == 1);
     const Entity b = world.create(Position{1, 2, 3}, Health{10});
-    const u64 afterTypedCreate = world.structuralVersion();
-    CHECK(afterTypedCreate > afterCreate);
+    CHECK(world.structuralVersion() == 2);
     world.destroy(a);
-    const u64 afterDestroy = world.structuralVersion();
-    CHECK(afterDestroy > afterTypedCreate);
+    CHECK(world.structuralVersion() == 3);
     CHECK(world.isAlive(b));
 }
 
@@ -322,7 +320,7 @@ TEST_CASE("structuralVersion changes when components are added or removed")
     u64 version = world.structuralVersion();
     const auto changed = [&] {
         const u64 now = world.structuralVersion();
-        const bool result = now != version;
+        const bool result = now == version + 1;
         version = now;
         return result;
     };
@@ -372,7 +370,7 @@ TEST_CASE("structuralVersion changes when a non-empty world is cleared")
     world.create(Position{0, 0, 0});
     const u64 version = world.structuralVersion();
     world.clear();
-    CHECK(world.structuralVersion() > version);
+    CHECK(world.structuralVersion() == version + 1);
     const u64 cleared = world.structuralVersion();
     world.clear();
     CHECK(world.structuralVersion() == cleared);
