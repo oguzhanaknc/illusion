@@ -15,8 +15,8 @@ Terse agent notes. Rules: CLAUDE.md, AGENTS.md, .claude/skills/*. Plan: ROADMAP.
     unexpected() decays (unexpected("msg") works) + test.
 - Local (Linux) checks on efc3713: clang/gcc Debug+Release, ASan/UBSan, TSan, format, docs, doxygen all green.
 - CI (workflow_dispatch, no PR): run 39113417716 on efc3713: all green except Windows MSVC + clang-cl Debug
-  build (expected: bcrypt order). Re-run queued on c5992f0: check Actions. Expect Windows Debug TEST failures
-  next (finding 1 below).
+  build (bcrypt order). Run 39114189808 on c5992f0: Windows MSVC + clang-cl Debug now build but Debug tests
+  fail (most likely finding 1 below: MSVC debug STL allocations); Linux/macOS/GPU/Docs/Format green so far.
 
 ## Next (in order)
 1. Fix M7a review findings below, re-run checks, open PR "M7a: core toolkit for tools", merge when green
