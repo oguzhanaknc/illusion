@@ -88,8 +88,9 @@ ADRs for its significant decisions. Items marked ✅ are done.
 
 Plan: `docs/plans/m7-editor.md` (sub-milestones, command API, localization, theme, acceptance test).
 
-- M7a: Core toolkit for tools: non-throwing JSON API, deterministic `Random`, log ring sink, stderr-only
-  console, World structural version (ADR 0028)
+- M7a: ✅ Core toolkit for tools: non-throwing JSON API with canonical writing and arena allocation,
+  `Expected`, deterministic `Random` and secure random bytes, log ring sink, stderr-only console, World
+  structural version (ADR 0028)
 - M7b: Localization runtime (`illusion::text`): UTF-8, plural rules, MessageFormat subset, string tables with
   compiled English, pseudo-locale, `illusion_textc` and the locale check (ADR 0029)
 - M7c: Platform services: clipboard, cursor shapes, window state, file drops, monitors, `wake()`, key names

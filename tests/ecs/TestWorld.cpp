@@ -1,6 +1,7 @@
 #include "TestComponents.hpp"
 #include "TestSupport.hpp"
 
+#include <illusion/ecs/CommandBuffer.hpp>
 #include <illusion/ecs/World.hpp>
 
 #include <doctest/doctest.h>
@@ -297,3 +298,124 @@ TEST_CASE("Destroying a dead entity asserts")
     CHECK_THROWS_AS(world.destroy(e), test::AssertionFailure);
 }
 #endif
+
+TEST_CASE("structuralVersion changes when entities are created or destroyed")
+{
+    World world;
+    CHECK(world.structuralVersion() == 0);
+    const Entity a = world.create();
+    const u64 afterCreate = world.structuralVersion();
+    CHECK(afterCreate > 0);
+    const Entity b = world.create(Position{1, 2, 3}, Health{10});
+    const u64 afterTypedCreate = world.structuralVersion();
+    CHECK(afterTypedCreate > afterCreate);
+    world.destroy(a);
+    const u64 afterDestroy = world.structuralVersion();
+    CHECK(afterDestroy > afterTypedCreate);
+    CHECK(world.isAlive(b));
+}
+
+TEST_CASE("structuralVersion changes when components are added or removed")
+{
+    World world;
+    const Entity e = world.create();
+    u64 version = world.structuralVersion();
+    const auto changed = [&] {
+        const u64 now = world.structuralVersion();
+        const bool result = now != version;
+        version = now;
+        return result;
+    };
+
+    world.emplace<Position>(e);
+    CHECK(changed());
+    world.set(e, Velocity{1, 0, 0}); // adds a missing component
+    CHECK(changed());
+    world.set(e, PlayerTag{}); // adds a missing tag
+    CHECK(changed());
+    world.emplaceDefault(e, componentId<Health>());
+    CHECK(changed());
+    CHECK(world.remove<Velocity>(e));
+    CHECK(changed());
+    CHECK(world.remove(e, componentId<Health>())); // type-erased removal
+    CHECK(changed());
+    CHECK(world.remove<PlayerTag>(e));
+    CHECK(changed());
+}
+
+TEST_CASE("structuralVersion ignores value writes and calls that change nothing")
+{
+    World world;
+    const Entity e = world.create(Position{0, 0, 0}, PlayerTag{});
+    const u64 version = world.structuralVersion();
+
+    world.get<Position>(e).x = 5.0f;
+    world.set(e, Position{1, 1, 1}); // assigns an existing component
+    world.set(e, PlayerTag{});       // the tag is already there
+    *static_cast<Position*>(world.componentData(e, componentId<Position>())) = Position{2, 2, 2};
+    CHECK_FALSE(world.remove<Velocity>(e)); // not present
+    CHECK_FALSE(world.remove(e, componentId<Velocity>()));
+    world.query<Position>().each([](Position& p) { p.y += 1.0f; });
+    std::vector<Entity> entities;
+    world.entities(entities);
+    (void)world.componentsOf(e);
+    CHECK(world.structuralVersion() == version);
+
+    World empty;
+    empty.clear(); // nothing to clear
+    CHECK(empty.structuralVersion() == 0);
+}
+
+TEST_CASE("structuralVersion changes when a non-empty world is cleared")
+{
+    World world;
+    world.create(Position{0, 0, 0});
+    const u64 version = world.structuralVersion();
+    world.clear();
+    CHECK(world.structuralVersion() > version);
+    const u64 cleared = world.structuralVersion();
+    world.clear();
+    CHECK(world.structuralVersion() == cleared);
+}
+
+TEST_CASE("structuralVersion follows the effects of CommandBuffer::apply")
+{
+    World world;
+    const Entity e = world.create(Position{0, 0, 0});
+    CommandBuffer commands;
+
+    u64 version = world.structuralVersion();
+    commands.set(e, Position{3, 3, 3}); // assignment only
+    commands.apply(world);
+    CHECK(world.structuralVersion() == version);
+    CHECK(world.get<Position>(e).x == 3.0f);
+
+    commands.set(e, Velocity{1, 1, 1});
+    commands.apply(world);
+    CHECK(world.structuralVersion() > version);
+    version = world.structuralVersion();
+
+    commands.remove<Velocity>(e);
+    commands.apply(world);
+    CHECK(world.structuralVersion() > version);
+    version = world.structuralVersion();
+
+    commands.remove<Velocity>(e); // already gone
+    commands.apply(world);
+    CHECK(world.structuralVersion() == version);
+
+    commands.create(Position{1, 1, 1});
+    commands.apply(world);
+    CHECK(world.structuralVersion() > version);
+    version = world.structuralVersion();
+
+    commands.destroy(e);
+    commands.apply(world);
+    CHECK(world.structuralVersion() > version);
+    version = world.structuralVersion();
+
+    commands.destroy(e); // already dead
+    commands.set(e, Position{});
+    commands.apply(world);
+    CHECK(world.structuralVersion() == version);
+}

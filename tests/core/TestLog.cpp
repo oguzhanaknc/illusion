@@ -1,7 +1,12 @@
+#include "TestSupport.hpp"
+
 #include <illusion/core/Log.hpp>
 
 #include <doctest/doctest.h>
 
+#include <algorithm>
+#include <atomic>
+#include <cstdio>
 #include <string>
 #include <thread>
 #include <vector>
@@ -169,4 +174,297 @@ TEST_CASE("logLevelName has fixed width")
     {
         CHECK(logLevelName(level).size() == 5);
     }
+}
+
+// --- ConsoleSink ---------------------------------------------------------------------------------------
+
+namespace
+{
+
+/// A temporary file used as a console stream.
+struct TemporaryStream
+{
+    std::FILE* file = std::tmpfile();
+
+    TemporaryStream() { REQUIRE(file != nullptr); }
+    ~TemporaryStream()
+    {
+        if (file != nullptr)
+        {
+            std::fclose(file);
+        }
+    }
+    TemporaryStream(const TemporaryStream&) = delete;
+    TemporaryStream& operator=(const TemporaryStream&) = delete;
+
+    std::string contents() const
+    {
+        std::fflush(file);
+        std::rewind(file);
+        std::string text;
+        char buffer[256];
+        for (usize read = 0; (read = std::fread(buffer, 1, sizeof(buffer), file)) > 0;)
+        {
+            text.append(buffer, read);
+        }
+        return text;
+    }
+};
+
+LogMessage message(LogLevel level, std::string_view text, std::string_view category = "Test",
+                   const char* file = nullptr, u32 line = 0)
+{
+    return LogMessage{level, category, text, file, line, 3, 1.5};
+}
+
+} // namespace
+
+TEST_CASE("ConsoleSink splits levels between output and error streams by default")
+{
+    TemporaryStream output;
+    TemporaryStream error;
+    ConsoleSink sink(ConsoleStreams::Split, output.file, error.file);
+    CHECK(sink.streams() == ConsoleStreams::Split);
+    sink.write(message(LogLevel::Info, "informational"));
+    sink.write(message(LogLevel::Warn, "warning"));
+    sink.flush();
+    CHECK(output.contents() == "[    1.5000] [INFO ] [T3] [Test] informational\n");
+    CHECK(error.contents() == "[    1.5000] [WARN ] [T3] [Test] warning\n");
+    CHECK(ConsoleSink().streams() == ConsoleStreams::Split);
+}
+
+TEST_CASE("ConsoleSink with StderrOnly writes nothing to the output stream")
+{
+    TemporaryStream output;
+    TemporaryStream error;
+    ConsoleSink sink(ConsoleStreams::StderrOnly, output.file, error.file);
+    for (const LogLevel level :
+         {LogLevel::Trace, LogLevel::Debug, LogLevel::Info, LogLevel::Warn, LogLevel::Error, LogLevel::Fatal})
+    {
+        sink.write(message(level, "text"));
+    }
+    sink.flush();
+    CHECK(output.contents().empty());
+    const std::string written = error.contents();
+    CHECK(std::count(written.begin(), written.end(), '\n') == 6);
+    CHECK(written.find("[INFO ]") != std::string::npos);
+
+    // The output stream is never touched, so it may be null.
+    ConsoleSink noOutput(ConsoleStreams::StderrOnly, nullptr, error.file);
+    noOutput.write(message(LogLevel::Info, "still fine"));
+    noOutput.flush();
+    CHECK(error.contents().ends_with("still fine\n"));
+}
+
+// --- LogRingSink ---------------------------------------------------------------------------------------
+
+TEST_CASE("LogRingSink stores records with increasing sequence numbers")
+{
+    LogRingSink sink(8);
+    CHECK(sink.capacity() == 8);
+    CHECK(sink.latestSequence() == 0);
+    CHECK(sink.readSince(0, [](const LogRecord&) { FAIL("no records yet"); }) == 0);
+
+    sink.write(message(LogLevel::Info, "first", "Core", "engine/core/src/Thing.cpp", 12));
+    sink.write(message(LogLevel::Error, "second", "Render"));
+    CHECK(sink.latestSequence() == 2);
+
+    std::vector<std::string> texts;
+    const u64 last = sink.readSince(0, [&](const LogRecord& record) {
+        texts.emplace_back(record.textView());
+        if (record.sequence == 1)
+        {
+            CHECK(record.level == LogLevel::Info);
+            CHECK(record.categoryView() == "Core");
+            CHECK(record.fileView() == "engine/core/src/Thing.cpp");
+            CHECK(record.line == 12);
+            CHECK(record.threadIndex == 3);
+            CHECK(record.timeSeconds == 1.5);
+            CHECK_FALSE(record.truncated);
+        }
+        else
+        {
+            CHECK(record.sequence == 2);
+            CHECK(record.fileView().empty());
+        }
+    });
+    CHECK(last == 2);
+    CHECK(texts == std::vector<std::string>{"first", "second"});
+
+    // Only newer records are visited.
+    sink.write(message(LogLevel::Info, "third"));
+    texts.clear();
+    CHECK(sink.readSince(last, [&](const LogRecord& record) { texts.emplace_back(record.textView()); }) == 3);
+    CHECK(texts == std::vector<std::string>{"third"});
+    CHECK(sink.readSince(3, [](const LogRecord&) { FAIL("nothing new"); }) == 3);
+    CHECK(sink.droppedCount() == 0);
+}
+
+namespace
+{
+int g_visitedByFunction = 0;
+void countRecord(const LogRecord&)
+{
+    ++g_visitedByFunction;
+}
+} // namespace
+
+TEST_CASE("LogRingSink readers can be functions and function pointers")
+{
+    LogRingSink sink(4);
+    sink.write(message(LogLevel::Info, "one"));
+    g_visitedByFunction = 0;
+    CHECK(sink.readSince(0, countRecord) == 1);
+    CHECK(sink.readSince(0, &countRecord) == 1);
+    const auto visitor = [](const LogRecord& record) {
+        CHECK(record.textView() == "one");
+    };
+    CHECK(sink.readSince(0, visitor) == 1); // a const lambda
+    CHECK(g_visitedByFunction == 2);
+}
+
+TEST_CASE("LogRingSink counts records overwritten before anyone read them")
+{
+    LogRingSink sink(4);
+    for (int i = 1; i <= 10; ++i)
+    {
+        sink.write(message(LogLevel::Info, std::to_string(i)));
+    }
+    CHECK(sink.droppedCount() == 6); // 1..6 were overwritten unread
+
+    std::vector<u64> sequences;
+    CHECK(sink.readSince(0, [&](const LogRecord& record) { sequences.push_back(record.sequence); }) == 10);
+    CHECK(sequences == std::vector<u64>{7, 8, 9, 10});
+
+    // Overwriting records that were read is not a drop.
+    for (int i = 11; i <= 14; ++i)
+    {
+        sink.write(message(LogLevel::Info, std::to_string(i)));
+    }
+    CHECK(sink.droppedCount() == 6);
+    sink.write(message(LogLevel::Info, "15")); // overwrites 11, which nobody read
+    CHECK(sink.droppedCount() == 7);
+
+    // A cursor at or past a record counts as having read it (12..15 here), but a cursor ahead of the newest
+    // record does not mark records written later as read.
+    CHECK(sink.readSince(100, [](const LogRecord&) { FAIL("nothing after 100"); }) == 100);
+    for (int i = 16; i <= 20; ++i)
+    {
+        sink.write(message(LogLevel::Info, std::to_string(i)));
+    }
+    CHECK(sink.droppedCount() == 8); // 16 was overwritten unread by 20
+}
+
+TEST_CASE("LogRingSink cuts long strings at UTF-8 character boundaries")
+{
+    LogRingSink sink(2);
+    // "\xC3\xA7" (two bytes) straddles the text limit; "\xE2\x82\xAC" (three bytes) straddles the category
+    // limit; the file keeps its end, starting after a cut character.
+    const std::string text = std::string(LogRecord::kMaxTextBytes - 1, 'a') + "\xC3\xA7" + "tail";
+    const std::string category = std::string(LogRecord::kMaxCategoryBytes - 1, 'c') + "\xE2\x82\xAC";
+    const std::string file = "\xE2\x82\xAC" + std::string(LogRecord::kMaxFileBytes - 2, 'f') + "/Name.cpp";
+    sink.write(message(LogLevel::Info, text, category, file.c_str(), 7));
+    sink.write(message(LogLevel::Info, "short"));
+    (void)sink.readSince(0, [&](const LogRecord& record) {
+        if (record.sequence != 1)
+        {
+            CHECK_FALSE(record.truncated);
+            return;
+        }
+        CHECK(record.truncated);
+        CHECK(record.textView() == std::string(LogRecord::kMaxTextBytes - 1, 'a'));
+        CHECK(record.categoryView() == std::string(LogRecord::kMaxCategoryBytes - 1, 'c'));
+        CHECK(record.fileView().ends_with("/Name.cpp"));
+        CHECK(record.fileView().size() <= LogRecord::kMaxFileBytes);
+        CHECK(static_cast<u8>(record.fileView()[0]) == 'f');
+    });
+}
+
+TEST_CASE("LogRingSink does not allocate after construction")
+{
+    LogRingSink sink(16);
+    const std::string text(4000, 'x');
+    test::ScopedAllocationCounter allocations;
+    for (int i = 0; i < 100; ++i)
+    {
+        sink.write(message(LogLevel::Warn, text, "Category", __FILE__, 1));
+    }
+    usize visited = 0;
+    (void)sink.readSince(0, [&](const LogRecord&) { ++visited; });
+    CHECK(visited == 16);
+    CHECK(allocations.count() == 0);
+}
+
+TEST_CASE("LogRingSink receives messages through a Logger")
+{
+    ScopedTestLogger scope;
+    auto ring = std::make_shared<LogRingSink>(32);
+    scope.logger.addSink(ring);
+    ILL_LOG_WARN("Ring", "value {}", 42);
+    bool found = false;
+    (void)ring->readSince(0, [&](const LogRecord& record) {
+        found = true;
+        CHECK(record.textView() == "value 42");
+        CHECK(record.categoryView() == "Ring");
+        CHECK(record.fileView().ends_with("TestLog.cpp"));
+        CHECK(record.line > 0);
+    });
+    CHECK(found);
+}
+
+TEST_CASE("LogRingSink is safe with concurrent writers and a reader")
+{
+    constexpr int kWriters = 8;
+    constexpr int kMessages = 2000;
+    LogRingSink sink(256);
+    std::atomic<int> finished{0};
+
+    u64 visited = 0;
+    u64 cursor = 0;
+    bool ordered = true;
+    std::thread reader([&] {
+        const auto read = [&] {
+            u64 previous = cursor;
+            cursor = sink.readSince(cursor, [&](const LogRecord& record) {
+                // Sequences only grow: consecutive within a call, past the cursor across calls.
+                ordered = ordered && record.sequence > previous &&
+                          (previous == cursor || record.sequence == previous + 1);
+                previous = record.sequence;
+                ++visited;
+            });
+        };
+        while (finished.load(std::memory_order_acquire) < kWriters)
+        {
+            read();
+            std::this_thread::yield();
+        }
+        read();
+    });
+
+    std::vector<std::thread> writers;
+    for (int w = 0; w < kWriters; ++w)
+    {
+        writers.emplace_back([&sink, &finished, w] {
+            char text[32];
+            for (int i = 0; i < kMessages; ++i)
+            {
+                const int length = std::snprintf(text, sizeof(text), "writer %d message %d", w, i);
+                sink.write(LogMessage{LogLevel::Info, "Thread",
+                                      std::string_view(text, static_cast<usize>(length)), nullptr, 0,
+                                      static_cast<u32>(w), 0.0});
+            }
+            finished.fetch_add(1, std::memory_order_release);
+        });
+    }
+    for (std::thread& writer : writers)
+    {
+        writer.join();
+    }
+    reader.join();
+
+    CHECK(ordered);
+    CHECK(sink.latestSequence() == u64{kWriters} * kMessages);
+    CHECK(cursor == sink.latestSequence());
+    // Every record was either read or counted as dropped.
+    CHECK(visited + sink.droppedCount() == sink.latestSequence());
 }

@@ -21,6 +21,9 @@ Open `build/api/index.html` in a browser.
 | `illusion/core/Assert.hpp` | `ILL_ASSERT`, `ILL_VERIFY`, `ILL_CHECK`, assert handlers |
 | `illusion/core/Log.hpp` | `Logger`, `LogSink`, `ILL_LOG_*` macros |
 | `illusion/core/Memory.hpp` | `LinearAllocator`, `PoolAllocator`, aligned allocation |
+| `illusion/core/Expected.hpp` | `Expected<T, E>`, `Unexpected`, `unexpected()`: values or errors for recoverable failures |
+| `illusion/core/Json.hpp` | `JsonDocument`, `JsonValue`, `JsonMutDocument`, `JsonMutValue`, `JsonError`: strict non-throwing JSON reading and canonical writing |
+| `illusion/core/Random.hpp` | `Random` (deterministic xoshiro256**), `secureRandomBytes` |
 | `illusion/core/JobSystem.hpp` | `JobSystem`, `JobCounter`, `Job` |
 | `illusion/core/InplaceFunction.hpp` | Allocation-free type-erased callable |
 | `illusion/core/Thread.hpp` | Thread names, thread indices, spin-wait hint |

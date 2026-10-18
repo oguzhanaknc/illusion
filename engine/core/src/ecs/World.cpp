@@ -67,6 +67,7 @@ Entity World::create()
     EntitySlot& slot = m_slots[entity.index];
     slot.archetype = m_root;
     slot.row = m_root->allocateRow(entity);
+    ++m_structuralVersion;
     return entity;
 }
 
@@ -89,11 +90,16 @@ void World::destroy(Entity entity)
     ++slot.generation;
     m_freeSlots.push_back(entity.index);
     --m_aliveCount;
+    ++m_structuralVersion;
 }
 
 void World::clear()
 {
     assertNotIterating();
+    if (m_aliveCount != 0)
+    {
+        ++m_structuralVersion;
+    }
     std::scoped_lock lock(m_queryMutex);
     m_queryCache.clear();
     m_archetypeLookup.clear();
@@ -229,6 +235,7 @@ void* World::addComponentRaw(Entity entity, ComponentId id)
     ILL_CHECK(!from->has(id), "entity already has component '{}'", m_registry.info(id).name);
     Archetype* to = archetypeWith(from, id);
     moveEntity(entity, to);
+    ++m_structuralVersion;
     const u16 column = to->columnIndex(id);
     return column == Archetype::kNoColumn ? nullptr : to->componentAt(m_slots[entity.index].row, column);
 }
@@ -247,6 +254,7 @@ bool World::removeComponentRaw(Entity entity, ComponentId id)
         return false;
     }
     moveEntity(entity, archetypeWithout(from, id));
+    ++m_structuralVersion;
     return true;
 }
 

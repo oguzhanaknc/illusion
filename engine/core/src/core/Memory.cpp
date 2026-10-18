@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <cstdlib>
+#include <cstring>
 
 namespace illusion
 {
@@ -54,6 +55,34 @@ void* LinearAllocator::allocate(usize size, usize alignment) noexcept
     m_offset = alignedOffset + size;
     m_peak = std::max(m_peak, m_offset);
     return m_buffer + alignedOffset;
+}
+
+void* LinearAllocator::reallocate(void* ptr, usize oldSize, usize newSize, usize alignment) noexcept
+{
+    if (ptr == nullptr)
+    {
+        return allocate(newSize, alignment);
+    }
+    ILL_ASSERT(owns(ptr), "reallocate() of a block from another allocator");
+    auto* block = static_cast<std::byte*>(ptr);
+    const auto offset = static_cast<usize>(block - m_buffer);
+    if (offset + oldSize == m_offset)
+    {
+        // The last allocation: resize in place.
+        if (newSize > m_capacity - offset)
+        {
+            return nullptr;
+        }
+        m_offset = offset + newSize;
+        m_peak = std::max(m_peak, m_offset);
+        return ptr;
+    }
+    void* moved = allocate(newSize, alignment);
+    if (moved != nullptr)
+    {
+        std::memcpy(moved, ptr, std::min(oldSize, newSize));
+    }
+    return moved;
 }
 
 // --- PoolAllocator ------------------------------------------------------------------------------------

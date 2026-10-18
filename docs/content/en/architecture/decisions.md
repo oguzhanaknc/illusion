@@ -34,6 +34,7 @@ records rather than user documentation.
 | [0025](https://github.com/oguzhanaknc/illusion/blob/main/docs/adr/0025-physics-extensions.md) | Mesh and hull geometry, characters, joints and shape queries |
 | [0026](https://github.com/oguzhanaknc/illusion/blob/main/docs/adr/0026-audio-effects-and-background-loading.md) | Audio effects, sound cones and clips loaded through the asset streamer |
 | [0027](https://github.com/oguzhanaknc/illusion/blob/main/docs/adr/0027-module-system-and-hot-reload.md) | Game modules: a C entry point, service injection and hot reload that hands Component types over |
+| [0028](https://github.com/oguzhanaknc/illusion/blob/main/docs/adr/0028-json-api-and-expected.md) | A non-throwing public JSON API over private yyjson, and Expected for recoverable errors |
 
 To propose a new decision, copy `docs/adr/0000-template.md` and follow the
 [contributing guide](../contributing.md#architecture-decision-records).

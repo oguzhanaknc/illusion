@@ -25,7 +25,9 @@ void update()
 
 `create<T>()` arenada bir nesne oluşturur; arena destructor çalıştırmadığı için `T` trivially
 destructible olmalıdır. `peak()` en yüksek kullanım seviyesini bildirir; bu, arena boyutlandırmaya
-yardımcı olur.
+yardımcı olur. `reallocate(ptr, oldSize, newSize)` bir bloğu yeniden boyutlandırır: en son yapılan
+ayırma yerinde büyür, diğer bloklar kopyalanır. JSON ayrıştırıcısı gibi `realloc` gerektiren
+kütüphaneler bu sayede bir arena üzerinde çalışabilir.
 
 ## PoolAllocator
 
@@ -51,4 +53,6 @@ bir alignment ile bellek ayırır.
 - Kare başına çalışan kod yollarında `new`, `malloc` çağırmayın veya container büyütmeyin. Kapasiteyi
   önceden ayırın veya bir arena kullanın.
 - Allocator'lar thread-safe değildir. Her thread'e veya Job'a kendi arenasını verin.
-- Bellek yetersizliği ölümcüldür: `ILL_CHECK` tetiklenir ve bir mesajla süreç sonlanır.
+- Heap belleğinin tükenmesi ölümcüldür: `ILL_CHECK` tetiklenir ve bir mesajla süreç sonlanır. Dolu bir
+  arena ise ölümcül değildir: `allocate()` `nullptr` döndürür ve arena alan API'ler (örneğin
+  [JSON](json.md#bellek)) hatayı bir dönüş değeri olarak bildirir.

@@ -1,11 +1,13 @@
 #include "ReflectedComponents.hpp"
 
+#include <illusion/core/Json.hpp>
 #include <illusion/ecs/SceneSerializer.hpp>
 #include <illusion/ecs/Transform.hpp>
 #include <illusion/ecs/World.hpp>
 
 #include <doctest/doctest.h>
 
+#include <initializer_list>
 #include <limits>
 #include <string>
 
@@ -287,4 +289,129 @@ TEST_CASE("long strings round-trip")
     const SceneLoadResult result = loadScene(loaded, saved.json);
     REQUIRE(result.ok());
     CHECK(loaded.get<Everything>(result.entities[0]).text == value.text);
+}
+
+// --- The JSON writer reproduces scene files (M7e rebuilds the serializer on top of it)
+// ----------------------
+
+namespace
+{
+
+std::string rewritten(std::string_view json)
+{
+    auto doc = JsonDocument::parse(json);
+    INFO((doc ? std::string() : doc.error().message));
+    REQUIRE(doc.hasValue());
+    std::string out;
+    REQUIRE(doc->write(out).hasValue());
+    return out;
+}
+
+} // namespace
+
+TEST_CASE("the JSON writer rewrites scene documents byte for byte")
+{
+    // The format documented in docs/content/en/manual/scenes.md.
+    constexpr std::string_view kDocumented = R"({
+  "format": "illusion.scene",
+  "version": 1,
+  "types": {
+    "illusion.Transform": 1,
+    "game.Spinner": 1
+  },
+  "entities": [
+    {
+      "illusion.Transform": {
+        "position": [0.0, 1.0, 0.0],
+        "rotation": [0.0, 0.0, 0.0, 1.0],
+        "scale": [1.0, 1.0, 1.0]
+      },
+      "game.Spinner": {
+        "axis": [0.0, 1.0, 0.0],
+        "speed": 2.5,
+        "team": "Blue",
+        "target": null
+      }
+    }
+  ]
+}
+)";
+    CHECK(rewritten(kDocumented) == kDocumented);
+
+    reflectAll();
+    World world;
+    Transform transform;
+    transform.position = Vec3(1.0f, 2.0f, 0.5f);
+    const Entity leader = world.create(transform);
+    world.create(Follow{leader, 0.1f});
+    const SceneSaveResult saved = saveScene(world);
+    REQUIRE(saved.ok());
+    CHECK(rewritten(saved.json) == saved.json);
+}
+
+TEST_CASE("the JSON writer matches saveScene() for every field type")
+{
+    reflectAll();
+    World world;
+    Everything value;
+    value.flag = true;
+    value.i32Value = std::numeric_limits<i32>::min();
+    value.u32Value = std::numeric_limits<u32>::max();
+    value.i64Value = std::numeric_limits<i64>::min();
+    value.u64Value = std::numeric_limits<u64>::max();
+    value.f32Value = 0.3f;
+    value.f64Value = 1.0 / 3.0;
+    value.vec2 = Vec2(-1.5f, 1e-7f);
+    value.vec3 = Vec3(1e30f, -0.0f, 3.25f);
+    value.vec4 = Vec4(0.1f, 0.2f, 0.3f, 0.4f);
+    value.quat = glm::normalize(Quat(0.9f, 0.1f, -0.3f, 0.2f));
+    value.text = "quote \" backslash \\ newline \n tab \t control \x01 unicode \xC3\xA7 / slash";
+    value.team = Team::Red;
+    value.flags = static_cast<Flags>(9); // no name: written as a number
+    const Entity first = world.create(value, Selected{});
+    world.get<Everything>(first).target = first;
+    world.create(Follow{first, 5.5f}, Transform{});
+    world.create(); // an entity without components
+    const SceneSaveResult saved = saveScene(world);
+    REQUIRE(saved.ok());
+    CHECK(rewritten(saved.json) == saved.json);
+}
+
+TEST_CASE("a scene built with JsonMutDocument matches saveScene()")
+{
+    reflectAll();
+    World world;
+    Transform transform;
+    transform.position = Vec3(1.0f, 2.0f, 0.5f);
+    const Entity leader = world.create(transform);
+    world.create(Follow{leader, 0.1f});
+    const SceneSaveResult saved = saveScene(world);
+    REQUIRE(saved.ok());
+
+    JsonMutDocument doc;
+    JsonMutValue root = doc.makeObject();
+    doc.setRoot(root);
+    root.add("format", doc.makeString("illusion.scene")).add("version", doc.makeU64(1));
+    root.addObject("types").add("illusion.Transform", doc.makeU64(1)).add("test.Follow", doc.makeU64(1));
+    JsonMutValue entities = root.addArray("entities");
+    JsonMutValue transformObject = entities.pushObject().addObject("illusion.Transform");
+    const auto vector = [&](std::initializer_list<f32> values) {
+        JsonMutValue array = doc.makeArray();
+        for (const f32 component : values)
+        {
+            array.push(doc.makeF32(component));
+        }
+        return array;
+    };
+    transformObject.add("position", vector({1.0f, 2.0f, 0.5f}))
+        .add("rotation", vector({0.0f, 0.0f, 0.0f, 1.0f}))
+        .add("scale", vector({1.0f, 1.0f, 1.0f}));
+    entities.pushObject()
+        .addObject("test.Follow")
+        .add("leader", doc.makeU64(0))
+        .add("distance", doc.makeF32(0.1f));
+
+    std::string out;
+    REQUIRE(doc.write(out).hasValue());
+    CHECK(out == saved.json);
 }

@@ -56,7 +56,51 @@ private:
 illusion::Logger::instance().addSink(std::make_shared<FileSink>("game.log"));
 ```
 
-`MemorySink` en son mesajları bellekte tutar; test'ler ve editör konsolu bunu kullanır.
+`MemorySink` en son mesajları bellekte tutar; test'ler bunu kullanır.
+
+### Konsol akışları
+
+`ConsoleSink`; Trace, Debug ve Info mesajlarını stdout'a, Warn, Error ve Fatal mesajlarını stderr'e
+yazar. stdout üzerinden bir protokol konuşan bir süreç (örneğin bir JSON-RPC veya MCP sunucusu)
+stdout'u temiz tutmalıdır; ona her seviyeyi stderr'e yazan bir konsol verin:
+
+```cpp
+illusion::Logger& logger = illusion::Logger::instance();
+logger.clearSinks();
+logger.addSink(std::make_shared<illusion::ConsoleSink>(illusion::ConsoleStreams::StderrOnly));
+```
+
+Test'ler kendi `FILE*` akışlarını verebilir: `ConsoleSink(ConsoleStreams::Split, output, error)`.
+
+### Halka Sink
+
+`LogRingSink`, konsollar, log takipçileri ve yoklama yapan araçlar için son mesajları sabit boyutlu
+kayıtlardan oluşan bir halkada tutar. Tüm belleğini oluşturulurken ayırır; bu yüzden ona log yazmak asla
+bellek ayırmaz. Diğer thread'ler yazarken okunması güvenlidir. Her kayıt bir sıra numarası alır; bir
+okuyucu gördüğü son numarayı hatırlar ve daha yeni kayıtları ister:
+
+```cpp
+auto ring = std::make_shared<illusion::LogRingSink>(4096);
+illusion::Logger::instance().addSink(ring);
+
+illusion::u64 cursor = 0;
+void showNewMessages()
+{
+    cursor = ring->readSince(cursor, [](const illusion::LogRecord& record) {
+        printLine(record.sequence, record.level, record.categoryView(), record.textView());
+    });
+}
+```
+
+Callback, Sink'in kilidi tutulurken çalışır: kısa tutun, içinden log yazmayın ve saklamanız gerekeni
+kopyalayın. Bir kayıt; kategorinin (32 bayt), kaynak dosya yolunun sonunun (96 bayt) ve metnin (864 bayt)
+sınırlı kopyalarını, bir UTF-8 karakter sınırında keserek saklar; `truncated`, metnin kesildiğini
+bildirir. Metinler kopya olduğu için kayıtlar, onları yazan oyun modülü kaldırıldıktan sonra da geçerli
+kalır.
+
+Yazanlar okuyuculardan hızlı olduğunda en eski kayıtların üzerine yazılır. `droppedCount()`, herhangi bir
+`readSince()` çağrısı onları geçmeden üzerine yazılan kayıtları sayar; `latestSequence()` en yeni kaydın
+sıra numarasıdır.
 
 ## Thread'ler
 

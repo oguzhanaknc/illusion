@@ -10,6 +10,7 @@
 #include <illusion/core/Base.hpp>
 
 #include <cstddef>
+#include <cstdio>
 #include <format>
 #include <memory>
 #include <mutex>
@@ -62,14 +63,37 @@ public:
     virtual void flush() {}
 };
 
-/// Writes messages to stdout (Trace..Info) and stderr (Warn..Fatal).
+/// Which streams a ConsoleSink writes to.
+enum class ConsoleStreams : u8
+{
+    Split,     ///< Trace..Info to the output stream (stdout), Warn..Fatal to the error stream (stderr).
+    StderrOnly ///< Every level to the error stream, so that a process can speak a protocol on stdout.
+};
+
+/// Writes messages to the console: by default Trace..Info to stdout and Warn..Fatal to stderr.
 class ConsoleSink final : public LogSink
 {
 public:
+    /// Writes to the process's stdout and stderr according to @p streams.
+    explicit ConsoleSink(ConsoleStreams streams = ConsoleStreams::Split) noexcept;
+
+    /// Writes to @p output and @p error instead of stdout and stderr (tests use temporary files). With
+    /// ConsoleStreams::StderrOnly, @p output is never written or flushed and may be nullptr. The streams
+    /// must stay open while the sink is in use.
+    ConsoleSink(ConsoleStreams streams, std::FILE* output, std::FILE* error) noexcept;
+
     /// @copydoc LogSink::write
     void write(const LogMessage& message) override;
     /// @copydoc LogSink::flush
     void flush() override;
+
+    /// The stream policy.
+    [[nodiscard]] ConsoleStreams streams() const noexcept { return m_streams; }
+
+private:
+    ConsoleStreams m_streams;
+    std::FILE* m_output;
+    std::FILE* m_error;
 };
 
 /// Keeps the most recent messages in memory. Used by tests and the editor console.
@@ -101,6 +125,100 @@ private:
     std::vector<Entry> m_entries;
     usize m_capacity;
     usize m_next = 0;
+};
+
+/// One message stored by LogRingSink. Fixed size: the strings are bounded copies, cut at a UTF-8 character
+/// boundary, so a record never points into memory that may go away (such as the image of an unloaded
+/// module that logged it).
+struct LogRecord
+{
+    /// Capacity of the category copy in bytes.
+    static constexpr usize kMaxCategoryBytes = 32;
+    /// Capacity of the file copy in bytes; longer paths keep their end (the file name).
+    static constexpr usize kMaxFileBytes = 96;
+    /// Capacity of the text copy in bytes; longer texts are cut and marked as truncated.
+    static constexpr usize kMaxTextBytes = 864;
+
+    u64 sequence = 0;                      ///< Position in the sink's stream, starting at 1.
+    f64 timeSeconds = 0.0;                 ///< Seconds since the logger was created.
+    u32 line = 0;                          ///< Source line (0 if unknown).
+    u32 threadIndex = 0;                   ///< Logical thread index of the writer.
+    LogLevel level{};                      ///< Severity.
+    bool truncated = false;                ///< True if the text was cut to kMaxTextBytes.
+    u8 categoryLength = 0;                 ///< Bytes used in category.
+    u8 fileLength = 0;                     ///< Bytes used in file.
+    u16 textLength = 0;                    ///< Bytes used in text.
+    char category[kMaxCategoryBytes] = {}; ///< Category bytes (not null-terminated).
+    char file[kMaxFileBytes] = {};         ///< End of the source file path (not null-terminated).
+    char text[kMaxTextBytes] = {};         ///< Text bytes (not null-terminated).
+
+    /// The stored category.
+    [[nodiscard]] std::string_view categoryView() const noexcept { return {category, categoryLength}; }
+    /// The stored end of the source file path (empty if unknown).
+    [[nodiscard]] std::string_view fileView() const noexcept { return {file, fileLength}; }
+    /// The stored text.
+    [[nodiscard]] std::string_view textView() const noexcept { return {text, textLength}; }
+};
+
+/// Keeps the most recent messages in a fixed ring of LogRecords for consoles, log tails and tools that
+/// poll. All memory is reserved by the constructor, so writing never allocates. Thread-safe for any
+/// number of concurrent writers and readers (it does not rely on the Logger's lock).
+///
+/// Every record gets the next sequence number. Readers remember the last sequence they saw and ask for
+/// newer records with readSince().
+class LogRingSink final : public LogSink
+{
+public:
+    /// Creates a sink that keeps the last @p capacity records (at least 1).
+    explicit LogRingSink(usize capacity);
+    ~LogRingSink() override;
+
+    LogRingSink(const LogRingSink&) = delete;            ///< Not copyable.
+    LogRingSink& operator=(const LogRingSink&) = delete; ///< Not copyable.
+
+    /// @copydoc LogSink::write
+    void write(const LogMessage& message) override;
+
+    /// Calls @p visitor(const LogRecord&) for every stored record with a sequence greater than @p after,
+    /// oldest first, and returns the sequence of the last record visited (@p after if none). Records are
+    /// visited in place while the sink's lock is held: writers wait, so @p visitor must be quick, must not
+    /// log to a Logger this sink belongs to, and must not keep references to the records. Records that
+    /// were overwritten before this call are skipped (see droppedCount()).
+    template <class Visitor>
+    u64 readSince(u64 after, Visitor&& visitor) const
+    {
+        // Wrapping the visitor gives the type-erased call an object to point at, whatever kind of
+        // callable (lambda, function, function pointer) was passed.
+        auto call = [&visitor](const LogRecord& record) {
+            visitor(record);
+        };
+        using Call = decltype(call);
+        return readSinceImpl(
+            after, [](void* context, const LogRecord& record) { (*static_cast<Call*>(context))(record); },
+            &call);
+    }
+
+    /// Sequence of the newest record, or 0 if nothing was written yet.
+    [[nodiscard]] u64 latestSequence() const;
+
+    /// Number of records that were overwritten by newer ones before any readSince() call had read past
+    /// them: a record counts as read once a readSince() call returns a sequence at or above its own,
+    /// whether or not it was in range of that call. Without readers, every overwritten record is dropped.
+    [[nodiscard]] u64 droppedCount() const;
+
+    /// Maximum number of records kept.
+    [[nodiscard]] usize capacity() const noexcept { return m_capacity; }
+
+private:
+    using RawVisitor = void (*)(void* context, const LogRecord& record);
+    u64 readSinceImpl(u64 after, RawVisitor visitor, void* context) const;
+
+    mutable std::mutex m_mutex;
+    std::unique_ptr<LogRecord[]> m_records;
+    usize m_capacity;
+    u64 m_latest = 0;           // sequence of the newest record
+    mutable u64 m_readUpTo = 0; // highest sequence returned by readSince()
+    u64 m_dropped = 0;
 };
 
 /// Process-wide logger. Hot-reloaded modules receive the host's instance via Logger::setInstance().

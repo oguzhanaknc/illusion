@@ -22,6 +22,9 @@ doxygen docs/Doxyfile
 | `illusion/core/Assert.hpp` | `ILL_ASSERT`, `ILL_VERIFY`, `ILL_CHECK`, assert handler'ları |
 | `illusion/core/Log.hpp` | `Logger`, `LogSink`, `ILL_LOG_*` makroları |
 | `illusion/core/Memory.hpp` | `LinearAllocator`, `PoolAllocator`, hizalanmış bellek ayırma |
+| `illusion/core/Expected.hpp` | `Expected<T, E>`, `Unexpected`, `unexpected()`: kurtarılabilir hatalar için değer veya hata |
+| `illusion/core/Json.hpp` | `JsonDocument`, `JsonValue`, `JsonMutDocument`, `JsonMutValue`, `JsonError`: katı, exception fırlatmayan JSON okuma ve standart biçimde yazma |
+| `illusion/core/Random.hpp` | `Random` (deterministik xoshiro256**), `secureRandomBytes` |
 | `illusion/core/JobSystem.hpp` | `JobSystem`, `JobCounter`, `Job` |
 | `illusion/core/InplaceFunction.hpp` | Bellek ayırmayan, tipi silinmiş (type-erased) çağrılabilir nesne |
 | `illusion/core/Thread.hpp` | Thread isimleri, thread indeksleri, spin-wait ipucu |

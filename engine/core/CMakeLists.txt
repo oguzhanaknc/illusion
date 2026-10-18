@@ -5,9 +5,11 @@ add_library(illusion_core STATIC
     src/core/EventBus.cpp
     src/core/Hash.cpp
     src/core/JobSystem.cpp
+    src/core/Json.cpp
     src/core/Log.cpp
     src/core/Memory.cpp
     src/core/Module.cpp
+    src/core/Random.cpp
     src/core/Thread.cpp
     src/core/Time.cpp
     src/core/Version.cpp
@@ -27,6 +29,10 @@ find_package(Threads REQUIRED)
 illusion_require_dependency(glm)
 illusion_require_dependency(yyjson)
 target_link_libraries(illusion_core PUBLIC Threads::Threads illusion::glm PRIVATE illusion::yyjson)
+if(WIN32)
+    # secureRandomBytes() uses BCryptGenRandom.
+    target_link_libraries(illusion_core PRIVATE bcrypt)
+endif()
 
 # engineVersion() reports the project version; modules record the version they were built against.
 target_compile_definitions(illusion_core PUBLIC ILLUSION_VERSION_MAJOR=${PROJECT_VERSION_MAJOR}

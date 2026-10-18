@@ -136,8 +136,15 @@ public:
     /// Returns the id registered for @p hash, or kInvalidComponentId.
     [[nodiscard]] ComponentId find(u64 hash) const;
 
-    /// Returns the description of a registered id.
+    /// Returns the description of a registered id (asserts that @p id is registered).
     [[nodiscard]] const ComponentInfo& info(ComponentId id) const noexcept;
+
+    /// Returns true if @p id is a registered id. Use it to validate ids from outside the program (tools,
+    /// files, remote commands) before passing them to functions that assert.
+    [[nodiscard]] bool contains(ComponentId id) const noexcept { return id < count(); }
+
+    /// Returns the description of @p id, or nullptr if @p id is not registered.
+    [[nodiscard]] const ComponentInfo* tryInfo(ComponentId id) const noexcept;
 
     /// Number of registered types.
     [[nodiscard]] u32 count() const noexcept { return m_count.load(std::memory_order_acquire); }
