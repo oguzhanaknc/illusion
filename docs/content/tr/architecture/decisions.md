@@ -34,6 +34,7 @@ Record (ADR) olarak kaydedilir. Her kayıt bağlamı, kararı ve sonuçlarını 
 | [0025](https://github.com/oguzhanaknc/illusion/blob/main/docs/adr/0025-physics-extensions.md) | Mesh ve hull geometrisi, karakterler, joint'ler ve şekil sorguları |
 | [0026](https://github.com/oguzhanaknc/illusion/blob/main/docs/adr/0026-audio-effects-and-background-loading.md) | Ses efektleri, ses konileri ve asset streamer üzerinden yüklenen clip'ler |
 | [0027](https://github.com/oguzhanaknc/illusion/blob/main/docs/adr/0027-module-system-and-hot-reload.md) | Oyun modülleri: bir C giriş noktası, servis enjeksiyonu ve Component türlerini devreden hot reload |
+| [0028](https://github.com/oguzhanaknc/illusion/blob/main/docs/adr/0028-json-api-and-expected.md) | Gizli yyjson üzerinde exception fırlatmayan public bir JSON API'si ve kurtarılabilir hatalar için Expected |
 
 Yeni bir karar önermek için `docs/adr/0000-template.md` dosyasını kopyalayın ve
 [katkıda bulunma rehberini](../contributing.md#architecture-decision-recordlar) izleyin.

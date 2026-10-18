@@ -24,6 +24,9 @@ void update()
 
 `create<T>()` constructs an object in the arena; `T` must be trivially destructible because the arena
 never runs destructors. `peak()` reports the high-water mark, which helps to size arenas.
+`reallocate(ptr, oldSize, newSize)` resizes a block: the most recent allocation grows in place, any
+other block is copied. Libraries that need a `realloc`, such as the JSON parser, can work on an arena
+this way.
 
 ## PoolAllocator
 
@@ -49,4 +52,6 @@ on every platform.
 - Do not call `new`, `malloc`, or grow containers in per-frame code paths. Reserve capacity up front or
   use an arena.
 - Allocators are not thread-safe. Give each thread or Job its own arena.
-- Out-of-memory conditions are fatal: they trigger `ILL_CHECK` and terminate with a message.
+- Running out of heap memory is fatal: it triggers `ILL_CHECK` and terminates with a message. A full
+  arena is not: `allocate()` returns `nullptr`, and APIs that take an arena (such as
+  [JSON](json.md#memory)) report the failure as a return value.

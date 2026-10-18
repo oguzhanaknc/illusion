@@ -143,6 +143,22 @@ commands.apply(world);
 kaydedildikleri sırayla çalışır. Buffer belleğini kullanımlar arasında korur; bu yüzden System başına
 bir buffer'ı yeniden kullanmak kararlı durumda bellek ayırmaz.
 
+## Yapısal sürüm
+
+`World::structuralVersion()`, Entity kümesi veya bir Entity'nin Component kümesi her değiştiğinde bir
+artar: bir Entity oluşturmak veya yok etmek, Entity'de olmayan bir Component eklemek, olan birini
+çıkarmak ve boş olmayan bir World'ü temizlemek; doğrudan ya da bir `CommandBuffer` üzerinden. Component
+değerlerini yazmak onu değiştirmez. Araçlar, önbelleklerini yalnızca World'ün düzeni değiştiğinde yeniden
+oluşturmak için bunu kullanır:
+
+```cpp
+if (world.structuralVersion() != m_outlinerVersion)
+{
+    rebuildOutliner(world);
+    m_outlinerVersion = world.structuralVersion();
+}
+```
+
 ## Nasıl çalışır
 
 Tam olarak aynı Component tipi kümesine sahip Entity'ler bir **Archetype**'ı paylaşır. Bir Archetype,

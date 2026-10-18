@@ -229,6 +229,11 @@ const ComponentInfo& ComponentRegistry::info(ComponentId id) const noexcept
     return (*m_entries)[id].info;
 }
 
+const ComponentInfo* ComponentRegistry::tryInfo(ComponentId id) const noexcept
+{
+    return contains(id) ? &(*m_entries)[id].info : nullptr;
+}
+
 namespace
 {
 

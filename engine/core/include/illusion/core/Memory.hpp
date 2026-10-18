@@ -40,6 +40,20 @@ public:
     /// Returns @p size bytes aligned to @p alignment, or nullptr when the arena is full.
     [[nodiscard]] void* allocate(usize size, usize alignment = alignof(std::max_align_t)) noexcept;
 
+    /// Resizes the block @p ptr of @p oldSize bytes (from this arena, aligned to @p alignment) to
+    /// @p newSize bytes and returns its new address, or nullptr when the arena is full (the old block is
+    /// then unchanged). The most recent allocation grows or shrinks in place; any other block is copied
+    /// to a new allocation and its old bytes stay used until rewind() or reset(). A null @p ptr allocates.
+    [[nodiscard]] void* reallocate(void* ptr, usize oldSize, usize newSize,
+                                   usize alignment = alignof(std::max_align_t)) noexcept;
+
+    /// Returns true if @p ptr points into this arena's buffer.
+    [[nodiscard]] bool owns(const void* ptr) const noexcept
+    {
+        const auto* byte = static_cast<const std::byte*>(ptr);
+        return byte >= m_buffer && byte < m_buffer + m_capacity;
+    }
+
     /// Allocates uninitialized storage for @p count objects of type T, or nullptr when full.
     template <class T>
     [[nodiscard]] T* allocateArray(usize count) noexcept

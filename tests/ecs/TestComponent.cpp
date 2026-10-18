@@ -84,6 +84,22 @@ TEST_CASE("A private registry deduplicates by hash and copies names")
     CHECK(registry.info(renamed).name == "component_test::Renamed");
 }
 
+TEST_CASE("contains() and tryInfo() validate ids without asserting")
+{
+    ComponentRegistry registry;
+    CHECK_FALSE(registry.contains(0));
+    CHECK(registry.tryInfo(0) == nullptr);
+    const ComponentId id = registry.registerType<component_test::OnlyHere>();
+    CHECK(registry.contains(id));
+    REQUIRE(registry.tryInfo(id) != nullptr);
+    CHECK(registry.tryInfo(id) == &registry.info(id));
+    CHECK(registry.tryInfo(id)->name == typeName<component_test::OnlyHere>());
+    CHECK_FALSE(registry.contains(static_cast<ComponentId>(id + 1)));
+    CHECK(registry.tryInfo(static_cast<ComponentId>(id + 1)) == nullptr);
+    CHECK_FALSE(registry.contains(kInvalidComponentId));
+    CHECK(registry.tryInfo(kInvalidComponentId) == nullptr);
+}
+
 TEST_CASE("Registering a type with a conflicting layout is fatal")
 {
     ComponentRegistry registry;

@@ -36,9 +36,25 @@ std::string_view logLevelName(LogLevel level) noexcept
 
 // --- ConsoleSink --------------------------------------------------------------------------------------
 
+ConsoleSink::ConsoleSink(ConsoleStreams streams) noexcept
+    : ConsoleSink(streams, stdout, stderr)
+{
+}
+
+ConsoleSink::ConsoleSink(ConsoleStreams streams, std::FILE* output, std::FILE* error)
+    : m_streams(streams)
+    , m_output(output)
+    , m_error(error)
+{
+    ILL_ASSERT(error != nullptr, "ConsoleSink needs an error stream");
+    ILL_ASSERT(output != nullptr || streams == ConsoleStreams::StderrOnly,
+               "ConsoleSink needs an output stream unless it writes to the error stream only");
+}
+
 void ConsoleSink::write(const LogMessage& message)
 {
-    std::FILE* stream = message.level >= LogLevel::Warn ? stderr : stdout;
+    const bool toError = m_streams == ConsoleStreams::StderrOnly || message.level >= LogLevel::Warn;
+    std::FILE* stream = toError ? m_error : m_output;
     const std::string_view level = logLevelName(message.level);
     std::fprintf(stream, "[%10.4f] [%.*s] [T%u] [%.*s] %.*s\n", message.timeSeconds,
                  static_cast<int>(level.size()), level.data(), message.threadIndex,
@@ -48,8 +64,11 @@ void ConsoleSink::write(const LogMessage& message)
 
 void ConsoleSink::flush()
 {
-    std::fflush(stdout);
-    std::fflush(stderr);
+    if (m_streams == ConsoleStreams::Split)
+    {
+        std::fflush(m_output);
+    }
+    std::fflush(m_error);
 }
 
 // --- MemorySink ---------------------------------------------------------------------------------------
@@ -96,6 +115,152 @@ void MemorySink::clear()
     std::scoped_lock lock(m_mutex);
     m_entries.clear();
     m_next = 0;
+}
+
+// --- LogRingSink -------------------------------------------------------------------------------------
+
+namespace
+{
+
+static_assert(sizeof(LogRecord) == 1024, "keep LogRecord at a power-of-two size");
+
+constexpr bool isContinuationByte(char c) noexcept
+{
+    return (static_cast<u8>(c) & 0xC0) == 0x80;
+}
+
+// A UTF-8 character has at most three continuation bytes. Longer runs are invalid UTF-8 and are cut
+// anywhere rather than searched for a boundary that does not exist.
+constexpr usize kMaxContinuationBytes = 3;
+
+// Longest prefix of @p text that fits in @p capacity bytes without splitting a UTF-8 character.
+std::string_view utf8Prefix(std::string_view text, usize capacity) noexcept
+{
+    if (text.size() <= capacity)
+    {
+        return text;
+    }
+    // Back up over the continuation bytes of a character cut in the middle.
+    usize length = capacity;
+    while (length > 0 && capacity - length < kMaxContinuationBytes && isContinuationByte(text[length]))
+    {
+        --length;
+    }
+    return text.substr(0, isContinuationByte(text[length]) ? capacity : length);
+}
+
+// Longest suffix of @p text that fits in @p capacity bytes and starts at a UTF-8 character boundary.
+std::string_view utf8Suffix(std::string_view text, usize capacity) noexcept
+{
+    if (text.size() <= capacity)
+    {
+        return text;
+    }
+    // Skip the continuation bytes of a character cut in the middle.
+    const usize cut = text.size() - capacity;
+    usize start = cut;
+    while (start - cut < kMaxContinuationBytes && start < text.size() && isContinuationByte(text[start]))
+    {
+        ++start;
+    }
+    return text.substr(start < text.size() && isContinuationByte(text[start]) ? cut : start);
+}
+
+} // namespace
+
+LogRingSink::LogRingSink(usize capacity)
+    : m_records(std::make_unique<LogRecord[]>(std::max<usize>(capacity, 1)))
+    , m_capacity(std::max<usize>(capacity, 1))
+{
+}
+
+LogRingSink::~LogRingSink() = default;
+
+void LogRingSink::write(const LogMessage& message)
+{
+    const std::string_view category = utf8Prefix(message.category, LogRecord::kMaxCategoryBytes);
+    const std::string_view text = utf8Prefix(message.text, LogRecord::kMaxTextBytes);
+    const std::string_view file =
+        message.file != nullptr ? utf8Suffix(message.file, LogRecord::kMaxFileBytes) : std::string_view{};
+
+    std::scoped_lock lock(m_mutex);
+    const u64 sequence = m_latest + 1;
+    LogRecord& record = m_records[static_cast<usize>((sequence - 1) % m_capacity)];
+    if (record.sequence != 0 && record.sequence > m_readUpTo)
+    {
+        ++m_dropped; // overwritten before any reader got past it
+    }
+    record.sequence = sequence;
+    record.timeSeconds = message.timeSeconds;
+    record.line = message.line;
+    record.threadIndex = message.threadIndex;
+    record.level = message.level;
+    record.truncated = text.size() < message.text.size();
+    record.categoryLength = static_cast<u8>(category.size());
+    record.fileLength = static_cast<u8>(file.size());
+    record.textLength = static_cast<u16>(text.size());
+    // copy_n, unlike memcpy, accepts the null data of an empty view.
+    std::copy_n(category.data(), category.size(), record.category);
+    std::copy_n(file.data(), file.size(), record.file);
+    std::copy_n(text.data(), text.size(), record.text);
+    m_latest = sequence;
+}
+
+u64 LogRingSink::readSinceImpl(u64 after, RawVisitor visitor, void* context) const
+{
+    // Records are copied out in small batches and visited without the lock: a visitor may log (also to a
+    // Logger this sink belongs to, which would otherwise deadlock against writers holding that Logger's
+    // lock), assert, or read this sink again, and writers only wait for the copies.
+    constexpr usize kBatchSize = 8;
+    LogRecord batch[kBatchSize];
+    u64 last = after;
+    u64 end = 0; // newest record when the call started; later records wait for the next call
+    bool first = true;
+    for (;;)
+    {
+        usize count = 0;
+        {
+            std::scoped_lock lock(m_mutex);
+            if (first)
+            {
+                end = m_latest;
+                first = false;
+            }
+            const u64 oldest = m_latest >= m_capacity ? m_latest - m_capacity + 1 : 1;
+            // Records between `last` and `oldest` were overwritten and counted as dropped.
+            for (u64 sequence = last < end ? std::max(last + 1, oldest) : end + 1;
+                 sequence <= end && count < kBatchSize; ++sequence)
+            {
+                batch[count++] = m_records[static_cast<usize>((sequence - 1) % m_capacity)];
+            }
+            if (count > 0)
+            {
+                last = batch[count - 1].sequence;
+            }
+            // A cursor beyond the newest record does not mark future records as read.
+            m_readUpTo = std::max(m_readUpTo, std::min(last, m_latest));
+        }
+        for (usize i = 0; i < count; ++i)
+        {
+            visitor(context, batch[i]);
+        }
+        if (count < kBatchSize || last >= end)
+        {
+            return last;
+        }
+    }
+}
+
+u64 LogRingSink::latestSequence() const
+{
+    std::scoped_lock lock(m_mutex);
+    return m_latest;
+}
+
+u64 LogRingSink::droppedCount() const
+{
+    std::scoped_lock lock(m_mutex);
+    return m_dropped;
 }
 
 // --- Logger -------------------------------------------------------------------------------------------

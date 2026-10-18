@@ -141,6 +141,21 @@ commands.apply(world);
 recording order. The buffer keeps its memory between uses, so reusing one per system does not
 allocate in steady state.
 
+## Structural version
+
+`World::structuralVersion()` grows by one whenever the set of Entities or the set of Components of an
+Entity changes: creating or destroying an Entity, adding a Component it did not have, removing one it
+had, and clearing a non-empty World, directly or through a `CommandBuffer`. Writing Component values does
+not change it. Tools use it to rebuild caches only when the layout of the World changed:
+
+```cpp
+if (world.structuralVersion() != m_outlinerVersion)
+{
+    rebuildOutliner(world);
+    m_outlinerVersion = world.structuralVersion();
+}
+```
+
 ## How it works
 
 Entities with exactly the same set of Component types share an **Archetype**. An Archetype stores its

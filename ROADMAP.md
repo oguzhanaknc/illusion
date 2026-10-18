@@ -82,15 +82,43 @@ ADRs for its significant decisions. Items marked ✅ are done.
   worker indices; module-owned component types handed over to the new code on reload, dropped types
   stripped from the World, failed reloads rolled back
 - Reflection-based migration of module Components whose layout changed, so that such a change survives a
-  hot reload instead of needing a restart (with the editor, M7)
+  hot reload instead of needing a restart (M7t)
 
 ## M7 — Editor and AI control
 
-- Editor UI, scene editing, gizmos
-- Asset references in scenes, so that `MeshRenderer` and `SkyLight` are saved (ADR 0022)
-- Command/tool API (JSON-RPC and MCP) covering every editor operation
-- Acceptance test: an agent builds a Tetris-like game end to end without human input
-- Test scene exercising every component and the whole scripting API
+Plan: `docs/plans/m7-editor.md` (sub-milestones, command API, localization, theme, acceptance test).
+
+- M7a: ✅ Core toolkit for tools: non-throwing JSON API with canonical writing and arena allocation,
+  `Expected`, deterministic `Random` and secure random bytes, log ring sink, stderr-only console, World
+  structural version (ADR 0028)
+- M7b: Localization runtime (`illusion::text`): UTF-8, plural rules, MessageFormat subset, string tables with
+  compiled English, pseudo-locale, `illusion_textc` and the locale check (ADR 0029)
+- M7c: Platform services: clipboard, cursor shapes, window state, file drops, monitors, `wake()`, key names
+- M7d: UI foundation: editor tree and export boundary, Dear ImGui docking with NVRHI and platform backends,
+  theme tokens, fonts and icons, widget kit, `illusion_ui_gallery` (ADRs 0030, 0031)
+- M7e: Reflection v2: field and type metadata, struct reflection, more field types, JSON value API,
+  migrations (ADR 0032)
+- M7f: Entity ids, names and scene format v2 (ADR 0033)
+- M7g: Transform hierarchy, `Disabled`/`Inactive`, spatial math (ADR 0034)
+- M7h: Asset references in scenes, so that `MeshRenderer` and `SkyLight` are saved; materials; built-in
+  assets (ADR 0035)
+- M7i: Headless editor core: projects, typed commands, transactions, undo, journal (ADR 0036)
+- M7j: JSON-RPC server, process API, `illusion_ctl`, acceptance skeleton (ADRs 0037, 0038)
+- M7k: MCP bridge `illusion_mcp` with tools generated from editor commands (ADR 0039)
+- M7l: Editor shell: layouts, menus, command palette, console, history, AI activity, preferences
+- M7m: Outliner and Inspector
+- M7n: Renderer extension points: entity ids, debug draw, orthographic cameras, view targets (ADR 0040)
+- M7o: Viewports: editor camera, grid, selection outline, picking, overlays
+- M7p: Gizmos, snapping and transform tools
+- M7q: Module API v3: lifecycle, multi-world host, host service interfaces (scripting API) (ADR 0041)
+- M7r: Play mode and the `GameSession` runtime (ADR 0042)
+- M7s: Project modules built from the editor (ADR 0043)
+- M7t: Component layout migration on hot reload, the M6 follow-up (ADR 0044)
+- M7u: Asset catalog, live reload and the asset browser (ADR 0045)
+- M7v: Prefabs with overrides and nesting (ADR 0046)
+- M7w: Engine feature panels: rendering, physics, audio mixer, input actions, gamepad tester, profiler,
+  diagnostics
+- M7x: Showcase scene covering every Component and the scripting API; Tetris built by an agent end to end
 
 ## M8 — Release pipeline
 

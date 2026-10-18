@@ -8,7 +8,7 @@ illusion katmanlar halinde inşa edilir. Bir katman yalnızca altındaki katmanl
 
 | Katman | İçerik | Durum |
 | --- | --- | --- |
-| Core | Platform tespiti, assertion'lar, logging, bellek, Job System, ECS, reflection ve sahne dosyaları, event bus, zaman, matematik, anlamsal sürümler | Tamamlandı |
+| Core | Platform tespiti, assertion'lar, logging (konsol, bellek ve ring Sink'leri), bellek, Job System, ECS, reflection ve sahne dosyaları, event bus, zaman, matematik, anlamsal sürümler, JSON, `Expected`, deterministik ve güvenli rastgele sayılar | Tamamlandı |
 | Platform | Pencere, klavye ve fare (GLFW), sanal dosya sistemi, paketlenmiş arşivler | Tamamlandı |
 | Input | SDL3 üzerinden gamepad'ler (titreşim, LED, hareket, touchpad, adaptive trigger'lar), action eşleme, yeniden atama, glyph'ler | Tamamlandı |
 | Asset'ler | Görüntüler, Mesh'ler, glTF modelleri, ortamlar, hazırlanmış formatlar, bir içe aktarma önbelleği ve asenkron streaming | Tamamlandı |

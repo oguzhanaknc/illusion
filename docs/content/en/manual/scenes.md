@@ -155,6 +155,10 @@ for (const illusion::Entity entity : entities)
 
 Use `readEnumField()` and `writeEnumField()` for enumeration fields, whose size depends on the type.
 
+Ids that come from outside the program (a file, a tool, a remote command) may be invalid, and functions
+such as `registry.info(id)` assert on them. Check them first with `registry.contains(id)`, or use
+`registry.tryInfo(id)`, which returns `nullptr` for an unknown id.
+
 ## Semantic versions
 
 `SemanticVersion` parses, compares and checks [semantic versions](https://semver.org) (2.0.0). The

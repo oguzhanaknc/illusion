@@ -73,6 +73,7 @@ public:
         slot.archetype = archetype;
         slot.row = row;
         (constructAt<std::decay_t<Ts>>(*archetype, row, std::forward<Ts>(components)), ...);
+        ++m_structuralVersion;
         return entity;
     }
 
@@ -218,6 +219,14 @@ public:
     /// Number of live entities.
     [[nodiscard]] u32 aliveCount() const noexcept { return m_aliveCount; }
 
+    /// Counter of structural changes, for caches built from the World's layout (editor outliners, query
+    /// results kept across frames). It starts at 0 and grows by one whenever the set of entities or the
+    /// set of components of an entity changes: create(), destroy(), adding a missing component (emplace(),
+    /// set(), emplaceDefault(), CommandBuffer::apply()), removing one (remove() when it was present) and
+    /// clear() of a non-empty world. Writing component values, assigning an existing component with
+    /// set(), and calls that change nothing leave it unchanged.
+    [[nodiscard]] u64 structuralVersion() const noexcept { return m_structuralVersion; }
+
     /// Number of archetypes created so far (archetypes are never destroyed before clear()).
     [[nodiscard]] u32 archetypeCount() const noexcept { return static_cast<u32>(m_archetypes.size()); }
 
@@ -316,6 +325,7 @@ private:
     std::vector<EntitySlot> m_slots;
     std::vector<u32> m_freeSlots;
     u32 m_aliveCount = 0;
+    u64 m_structuralVersion = 0;
     std::atomic<u32> m_iterationDepth{0};
     std::mutex m_queryMutex;
     std::unordered_map<QueryKey, QueryCache, QueryKeyHash> m_queryCache;

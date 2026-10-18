@@ -2,14 +2,18 @@ illusion_require_dependency(doctest)
 
 add_executable(illusion_tests
     main.cpp
+    AllocationCounter.cpp
     core/TestAssert.cpp
     core/TestEventBus.cpp
+    core/TestExpected.cpp
     core/TestHash.cpp
     core/TestInplaceFunction.cpp
     core/TestJobSystem.cpp
+    core/TestJson.cpp
     core/TestLog.cpp
     core/TestMath.cpp
     core/TestMemory.cpp
+    core/TestRandom.cpp
     core/TestSerialization.cpp
     core/TestThread.cpp
     core/TestTime.cpp

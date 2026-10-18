@@ -57,7 +57,54 @@ private:
 illusion::Logger::instance().addSink(std::make_shared<FileSink>("game.log"));
 ```
 
-`MemorySink` keeps the most recent messages in memory; tests and the editor console use it.
+`MemorySink` keeps copies of the most recent messages in memory; tests use it.
+
+### Console streams
+
+`ConsoleSink` writes Trace, Debug and Info to stdout and Warn, Error and Fatal to stderr. A process that
+speaks a protocol on stdout, such as a JSON-RPC or MCP server, must keep stdout clean; give it a
+console that writes every level to stderr:
+
+```cpp
+illusion::Logger& logger = illusion::Logger::instance();
+logger.clearSinks();
+logger.addSink(std::make_shared<illusion::ConsoleSink>(illusion::ConsoleStreams::StderrOnly));
+```
+
+Tests can pass their own `FILE*` streams: `ConsoleSink(ConsoleStreams::Split, output, error)`.
+
+### Ring sink
+
+`LogRingSink` keeps the last messages in a fixed ring of records for consoles, log tails and tools that
+poll. It reserves all its memory when it is created, so logging to it never allocates, and it is safe
+to read while other threads write. Every record gets a sequence number; a reader remembers the last one
+it has seen and asks for newer records:
+
+```cpp
+auto ring = std::make_shared<illusion::LogRingSink>(4096);
+illusion::Logger::instance().addSink(ring);
+
+illusion::u64 cursor = 0;
+void showNewMessages()
+{
+    cursor = ring->readSince(cursor, [](const illusion::LogRecord& record) {
+        printLine(record.sequence, record.level, record.categoryView(), record.textView());
+    });
+}
+```
+
+The callback receives copies of the records and runs without the sink's lock, so it may take its time,
+log (also to the Logger that feeds the sink) or read the sink again. Records written while it runs are
+visited by the next call. The record passed to it is valid only during the call: copy what you need to
+keep. A record stores bounded copies of the category (32 bytes), the end of the source file path
+(96 bytes) and the text (864 bytes), cut at a UTF-8 character boundary; `truncated` tells when the text
+was cut. Because the strings are copies, records stay valid after the game module that logged them is
+unloaded.
+
+When writers are faster than readers, the oldest records are overwritten and readers skip them, so
+the sequences a reader sees can have gaps. `droppedCount()` counts the records that were overwritten
+before any `readSince()` call had read past them; `latestSequence()` is the sequence of the newest
+record.
 
 ## Threading
 

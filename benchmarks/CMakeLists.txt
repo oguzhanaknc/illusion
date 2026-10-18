@@ -5,6 +5,7 @@ add_executable(illusion_benchmarks
     Budget.cpp
     BenchAssets.cpp
     BenchAudio.cpp
+    BenchCore.cpp
     BenchEcs.cpp
     BenchEventBus.cpp
     BenchInput.cpp

@@ -57,6 +57,8 @@ plugins:
             Manual: Kılavuz
             Logging: Logging
             Memory: Bellek
+            JSON and Expected: JSON ve Expected
+            Random Numbers: Rastgele Sayılar
             Job System: Job System
             ECS: ECS
             Reflection and Scenes: Reflection ve Sahneler
@@ -96,6 +98,8 @@ nav:
   - Manual:
       - Logging: manual/logging.md
       - Memory: manual/memory.md
+      - JSON and Expected: manual/json.md
+      - Random Numbers: manual/random.md
       - Job System: manual/jobs.md
       - ECS: manual/ecs.md
       - Reflection and Scenes: manual/scenes.md

@@ -158,6 +158,10 @@ for (const illusion::Entity entity : entities)
 
 Boyutu tipe bağlı olan enum alanları için `readEnumField()` ve `writeEnumField()` kullanın.
 
+Program dışından gelen id'ler (bir dosya, bir araç, uzaktan bir komut) geçersiz olabilir ve
+`registry.info(id)` gibi fonksiyonlar bu durumda assert tetikler. Önce `registry.contains(id)` ile kontrol
+edin veya bilinmeyen bir id için `nullptr` döndüren `registry.tryInfo(id)`'yi kullanın.
+
 ## Anlamsal sürümler
 
 `SemanticVersion`, [anlamsal sürümleri](https://semver.org) (2.0.0) ayrıştırır, karşılaştırır ve

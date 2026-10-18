@@ -3,6 +3,7 @@
 // Shared helpers for illusion unit tests.
 
 #include <illusion/core/Assert.hpp>
+#include <illusion/core/Base.hpp>
 
 #include <atomic>
 #include <filesystem>
@@ -82,6 +83,27 @@ struct LifetimeCounter
         alive = 0;
         constructed = 0;
     }
+};
+
+/// Counts the heap allocations made on the calling thread while it is alive: every form of global operator
+/// new, and in sanitizer builds malloc() as well. Implemented in AllocationCounter.cpp.
+///
+/// MSVC debug builds (_ITERATOR_DEBUG_LEVEL 2) allocate a proxy whenever a standard container is
+/// constructed, even an empty one. Construct containers before the counter, and keep them out of code that
+/// must not allocate: allocate heap blocks only when they are needed (std::unique_ptr<T[]>).
+class ScopedAllocationCounter
+{
+public:
+    ScopedAllocationCounter() noexcept;
+    ~ScopedAllocationCounter();
+    ScopedAllocationCounter(const ScopedAllocationCounter&) = delete;
+    ScopedAllocationCounter& operator=(const ScopedAllocationCounter&) = delete;
+
+    /// Allocations since construction.
+    [[nodiscard]] usize count() const noexcept;
+
+private:
+    usize m_start;
 };
 
 /// Creates a unique empty directory under the system temp directory and deletes it afterwards.

@@ -1,9 +1,15 @@
+#include "TestSupport.hpp"
+
 #include <illusion/core/Memory.hpp>
 
 #include <doctest/doctest.h>
 
+#include <atomic>
 #include <cstdint>
+#include <memory>
 #include <set>
+#include <thread>
+#include <vector>
 
 using namespace illusion;
 
@@ -13,6 +19,15 @@ namespace
 bool isAligned(const void* ptr, usize alignment)
 {
     return reinterpret_cast<std::uintptr_t>(ptr) % alignment == 0;
+}
+
+// Publishing a pointer through a volatile global keeps the compiler from eliding its allocation (C++14
+// allows removing new/delete pairs whose result does not escape).
+const void* volatile g_escaped = nullptr;
+
+void escape(const void* ptr)
+{
+    g_escaped = ptr;
 }
 
 } // namespace
@@ -59,6 +74,41 @@ TEST_CASE("LinearAllocator mark/rewind/reset reuse memory and track the peak")
     CHECK(arena.used() == 0);
     CHECK(arena.peak() == peak);
     CHECK(arena.allocate(32) == first);
+}
+
+TEST_CASE("LinearAllocator::reallocate grows the last block in place and copies others")
+{
+    LinearAllocator arena(1024);
+    auto* first = static_cast<char*>(arena.allocate(16, 16));
+    REQUIRE(first != nullptr);
+    first[0] = 'a';
+    first[15] = 'z';
+    // The most recent allocation grows and shrinks in place.
+    CHECK(arena.reallocate(first, 16, 64) == first);
+    CHECK(arena.used() == 64);
+    CHECK(arena.reallocate(first, 64, 32) == first);
+    CHECK(arena.used() == 32);
+
+    auto* second = static_cast<char*>(arena.allocate(8, 8));
+    REQUIRE(second != nullptr);
+    // An older block moves, keeping its contents.
+    auto* moved = static_cast<char*>(arena.reallocate(first, 32, 100));
+    REQUIRE(moved != nullptr);
+    CHECK(moved != first);
+    CHECK(moved[0] == 'a');
+    CHECK(moved[15] == 'z');
+
+    // Without room the old block stays as it is.
+    const usize used = arena.used();
+    CHECK(arena.reallocate(moved, 100, 4096) == nullptr);
+    CHECK(arena.used() == used);
+    CHECK(moved[0] == 'a');
+
+    // A null block is a plain allocation.
+    CHECK(arena.reallocate(nullptr, 0, 8) != nullptr);
+    CHECK(arena.owns(moved));
+    int outside = 0;
+    CHECK_FALSE(arena.owns(&outside));
 }
 
 TEST_CASE("LinearAllocator typed helpers")
@@ -123,4 +173,50 @@ TEST_CASE("PoolAllocator::reserve pre-allocates pages")
     {
         pool.deallocate(block);
     }
+}
+
+TEST_CASE("ScopedAllocationCounter sees heap allocations on its thread only")
+{
+    struct alignas(64) OverAligned
+    {
+        char bytes[64];
+    };
+    std::atomic<bool> go{false};
+    std::atomic<bool> done{false};
+    // Constructed before counting: MSVC debug builds allocate when a std::vector is constructed.
+    std::vector<double> growing;
+    std::thread other([&] {
+        while (!go.load(std::memory_order_acquire))
+        {
+            std::this_thread::yield();
+        }
+        auto elsewhere = std::make_unique<int>(2);
+        escape(elsewhere.get());
+        done.store(true, std::memory_order_release);
+    });
+
+    test::ScopedAllocationCounter allocations;
+    CHECK(allocations.count() == 0);
+    auto single = std::make_unique<int>(1);
+    auto array = std::make_unique<int[]>(16);
+    auto aligned = std::make_unique<OverAligned>();
+    escape(single.get());
+    escape(array.get());
+    escape(aligned.get());
+    CHECK(allocations.count() == 3);
+
+    go.store(true, std::memory_order_release);
+    while (!done.load(std::memory_order_acquire))
+    {
+        std::this_thread::yield();
+    }
+    CHECK(allocations.count() == 3); // the other thread's allocation is not counted here
+    {
+        test::ScopedAllocationCounter nested;
+        growing.reserve(8);
+        escape(growing.data());
+        CHECK(nested.count() == 1);
+    }
+    CHECK(allocations.count() == 4);
+    other.join();
 }
