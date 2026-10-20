@@ -22,6 +22,12 @@ public:
     JoltJobSystem& operator=(const JoltJobSystem&) = delete;
 
     [[nodiscard]] int GetMaxConcurrency() const override;
+
+    // Waits until every engine job that ran or still holds a Jolt job has finished. Call it after
+    // PhysicsSystem::Update(): Jolt learns that a job finished before it joined the barrier through a relaxed
+    // atomic, so without this wait nothing orders that job's reads of Update's stack-allocated context before
+    // the next Update reuses the stack (a data race under the C++ memory model, reported by TSan).
+    void waitForEngineJobs();
     JobHandle CreateJob(const char* name, JPH::ColorArg color, const JobFunction& function,
                         JPH::uint32 dependencies = 0) override;
 

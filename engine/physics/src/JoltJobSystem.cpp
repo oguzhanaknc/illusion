@@ -18,6 +18,11 @@ JoltJobSystem::~JoltJobSystem()
     m_jobs.wait(m_pending);
 }
 
+void JoltJobSystem::waitForEngineJobs()
+{
+    m_jobs.wait(m_pending);
+}
+
 int JoltJobSystem::GetMaxConcurrency() const
 {
     // The thread that waits for a barrier executes jobs too.

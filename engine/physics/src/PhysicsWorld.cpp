@@ -1556,6 +1556,7 @@ void PhysicsWorld::update(f64 deltaSeconds)
         impl.stepCharacters(stepSeconds);
         const JPH::EPhysicsUpdateError error =
             impl.physics.Update(stepSeconds, 1, &impl.tempAllocator, &impl.joltJobs);
+        impl.joltJobs.waitForEngineJobs();
         if (error != JPH::EPhysicsUpdateError::None)
         {
             ILL_LOG_WARN("Physics",
