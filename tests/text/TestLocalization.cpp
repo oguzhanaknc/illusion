@@ -151,7 +151,10 @@ TEST_CASE("the English fallback of a key is logged once at Debug level")
     usize mentions = 0;
     for (const MemorySink::Entry& entry : log.sink->entries())
     {
-        mentions += entry.text.find("test.menu.quit") != std::string::npos ? 1 : 0;
+        if (entry.text.find("test.menu.quit") != std::string::npos)
+        {
+            ++mentions;
+        }
     }
     CHECK(mentions == 1);
 }

@@ -197,7 +197,7 @@ struct Localization::Impl
             if (table.active[i] == nullptr)
             {
                 table.active[i] = pseudo ? &table.pseudo[i] : &table.english[i];
-                table.fellBack[i] = expectsTranslation ? 1 : 0;
+                table.fellBack[i] = static_cast<u8>(expectsTranslation ? 1 : 0);
             }
         }
     }
