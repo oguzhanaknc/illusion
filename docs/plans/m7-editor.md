@@ -156,7 +156,7 @@ Weaknesses:
 10. `acquireJolt()` (`PhysicsWorld.cpp:73`) installs Jolt's allocator and factory only in the binary copy that constructs a `PhysicsWorld`. Meanwhile `manual/modules.md` shows `illusion_add_module(tetris … LINK illusion::physics)`.
 11. Archetypes hold `const ComponentInfo*` into the registry, bake column sizes at construction (`Archetype.cpp:29`) and keep per-archetype edge maps. A layout can only be replaced after every archetype containing the type is purged.
 12. The test module creates Components in `load()` (`tests/modules/TestModule.cpp:39`), although the manual says not to.
-13. GPU benchmarks are Release-only with the `gpu` label. CI build jobs run `-LE gpu` and the gpu job runs Debug `-L gpu`, so **GPU budgets are local only**. Build jobs run every non-gpu test in both Debug and Release.
+13. GPU benchmarks are Release-only with the `gpu` label. CI build jobs run `-LE "gpu|display"` and the gpu job runs Debug `-L "gpu|display"`, so **GPU budgets are local only**. Build jobs run every non-gpu test in both Debug and Release.
 14. ADR 0019 already foresees "a GUID scheme … when the editor needs rename tracking". ADR 0035 records why paths are kept.
 15. The cloud box cannot download GitHub archive URLs (`.claude/handoff/cloud-session.md`), but `raw.githubusercontent.com` files work.
 16. MSVC builds use the dynamic CRT, so host and modules share one heap. That is required for `std::string`/`std::vector` crossing interfaces.

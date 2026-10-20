@@ -48,6 +48,8 @@ Run the test binary directly for doctest options: `illusion_tests -tc="*Query*" 
 
 - `illusion_gpu_tests` (CTest label `gpu`) needs a Vulkan 1.3 driver. Exclude with `-LE gpu` on machines
   without one; run only them with `-L gpu`. They require zero validation errors.
+- `illusion_display_tests` (CTest label `display`) needs a real window system (a desktop, or X11 under
+  `xvfb-run`). Machines without a display run `ctest -LE "gpu|display"`.
 - The swapchain test opens a real window; on headless Linux run it under `xvfb-run -a`. CI does this
   with Mesa lavapipe (`mesa-vulkan-drivers vulkan-validationlayers xvfb`).
 - Smoke-run the sample: `illusion_hello_triangle --frames 300` (exit code 2 means validation errors).

@@ -3,6 +3,8 @@
 add_library(illusion_platform STATIC
     src/Archive.cpp
     src/FileSystem.cpp
+    src/GlfwKeys.cpp
+    src/Ime.cpp
     src/Input.cpp
     src/Platform.cpp
     src/Window.cpp)
@@ -19,8 +21,8 @@ target_link_libraries(illusion_platform
 target_compile_definitions(illusion_platform PRIVATE GLFW_INCLUDE_NONE)
 
 if(WIN32)
-    # SHGetKnownFolderPath / CoTaskMemFree for userDataDirectory().
-    target_link_libraries(illusion_platform PRIVATE shell32 ole32)
+    # SHGetKnownFolderPath / CoTaskMemFree for userDataDirectory(); the input method API for setImeRect().
+    target_link_libraries(illusion_platform PRIVATE shell32 ole32 imm32)
 endif()
 
 illusion_configure_target(illusion_platform)

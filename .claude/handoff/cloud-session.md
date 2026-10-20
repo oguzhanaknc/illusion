@@ -3,16 +3,17 @@
 Terse agent notes. Rules: CLAUDE.md, AGENTS.md, .claude/skills/*. Plan: ROADMAP.md, docs/plans/m7-editor.md.
 
 ## State
-- main: M0..M6 and M7a merged (#20 M7a core toolkit). ROADMAP ends with M9 (FSR/DLSS/XeSS) and M10 (hybrid RT).
-- Branch feat/m7b-localization: M7b (engine/text: Utf8, SearchFold, FuzzyMatcher, LocaleId, NumberFormat,
-  PluralRules, MessageFormat, StringTable/TextKey, LocaleFile, Localization with en-XA; tools/textc with
-  generate/check; cmake/IllusionText.cmake; input string table + glyphLabelKey/keyLabelKey; CTest
-  text.locales; ADR 0029; docs manual/localization.md EN/TR; skill localization). PR opened from it.
+- main: M0..M6 and M7a merged (#20). M7b localization is PR #21 (branch feat/m7b-localization; also fixes a
+  Jolt TSan race: PhysicsWorld waits for the engine jobs of each step).
+- Branch feat/m7c-platform-services (stacked on M7b): Window clipboard, cursor shapes, cursor position,
+  position/maximize/restore/iconify/icon/IME rect, FilesDroppedEvent (+ Window::dropFiles), content-scale,
+  moved, cursor-entered and refresh events, Platform::monitors()/wake()/keyDisplayName(), display tests
+  (illusion_display_tests, label display, run with gpu under Xvfb). PR opened with base feat/m7b-localization.
 
 ## Next (in order)
-1. Merge the M7b PR when CI is green (merge commit title "Merge M7b: ... (#N)").
-2. M7c (platform services: clipboard, cursors, window state, file drops, monitors, wake(), key names) per
-   the plan, then M7d (UI foundation: show gallery screenshots to owner).
+1. Merge #21 when green; then `gh pr edit <M7c PR> --base main` and merge M7c when green.
+2. M7d (UI foundation: editor tree and export boundary, Dear ImGui docking with NVRHI and platform
+   backends, theme, fonts, icons, ui gallery; show gallery screenshots to the owner). Dependency pins below.
 3. Owner decisions defaulted to the plan's recommendations (plan header). Live-agent CI (M7x) needs the
    owner's API key + budget: ask then.
 

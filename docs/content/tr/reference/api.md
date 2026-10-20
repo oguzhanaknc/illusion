@@ -46,8 +46,8 @@ doxygen docs/Doxyfile
 | `illusion/ecs/SceneSerializer.hpp` | `saveScene`, `loadScene` (JSON sahne dosyaları) |
 | `illusion/ecs/Transform.hpp` | `Transform` Component'i (konum, dönüş, ölçek) |
 | `illusion/ecs/Archetype.hpp` | Archetype depolaması (motor içi) |
-| `illusion/platform/Platform.hpp` | `Platform`: pencere sisteminin yaşam döngüsü ve event pompalama |
-| `illusion/platform/Window.hpp` | `Window`, `WindowDesc`, `CursorMode` |
+| `illusion/platform/Platform.hpp` | `Platform`: pencere sisteminin yaşam döngüsü, event pompalama, `wake()`, `monitors()`, `keyDisplayName()` |
+| `illusion/platform/Window.hpp` | `Window`, `WindowDesc`, `CursorMode`, `CursorShape`, `WindowIcon`: pencere durumu, pano, bırakılan dosyalar |
 | `illusion/platform/Input.hpp` | `InputState`, `Key`, `MouseButton` |
 | `illusion/platform/Events.hpp` | Pencere ve input event'leri |
 | `illusion/platform/Archive.hpp` | `ArchiveReader`, `writeArchive`, `packDirectory` |
