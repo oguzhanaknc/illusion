@@ -96,6 +96,18 @@ doctest_discover_tests(illusion_tests
     PROPERTIES LABELS "unit"
     ADD_LABELS 0)
 
+# Display tests need a real window system (a desktop, or X11 under Xvfb in CI). They are labelled "display" so
+# that jobs without a display can exclude them with `ctest -LE "gpu|display"`.
+add_executable(illusion_display_tests
+    display/main.cpp
+    platform/TestWindowDisplay.cpp)
+target_include_directories(illusion_display_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
+target_link_libraries(illusion_display_tests PRIVATE illusion::platform illusion::doctest)
+illusion_configure_target(illusion_display_tests)
+doctest_discover_tests(illusion_display_tests
+    PROPERTIES LABELS "display"
+    ADD_LABELS 0)
+
 # GPU tests need a Vulkan 1.3 driver (a real GPU, or Mesa lavapipe in CI). They are a separate executable
 # labelled "gpu" so machines without Vulkan can exclude them with `ctest -LE gpu`.
 add_executable(illusion_gpu_tests

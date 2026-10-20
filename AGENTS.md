@@ -59,8 +59,9 @@ Windows: prefix commands with `tools\windows\vsdev.cmd` (sets up MSVC). Presets:
 `windows-clang`, `ci-windows-msvc`, `ci-windows-clang`. If the checkout is in a synced folder
 (OneDrive/Dropbox), put the build tree elsewhere with a `CMakeUserPresets.json` (git-ignored).
 
-GPU tests (`tests/gpu`, CTest label `gpu`) need a Vulkan 1.3 driver; CI runs them on Mesa lavapipe
-under Xvfb. Render code must keep `RenderDevice::validationErrorCount()` at zero. Clip space is y-up
+GPU tests (`tests/gpu`, CTest label `gpu`) need a Vulkan 1.3 driver, and display tests
+(`illusion_display_tests`, label `display`) a real window system; CI runs both on Mesa lavapipe under Xvfb
+and excludes them elsewhere with `-LE "gpu|display"`. Render code must keep `RenderDevice::validationErrorCount()` at zero. Clip space is y-up
 with depth [0, 1] (ADR 0009); the scene renderer uses reversed-Z (ADR 0013).
 
 A change is done only when: both Debug and Release build with zero warnings, all tests pass, benchmarks

@@ -1,3 +1,6 @@
+#include "GlfwKeys.hpp"
+#include "Ime.hpp"
+
 #include <illusion/core/Assert.hpp>
 #include <illusion/core/EventBus.hpp>
 #include <illusion/core/Log.hpp>
@@ -12,6 +15,7 @@
 #include <limits>
 #include <string>
 #include <utility>
+#include <vector>
 
 namespace illusion
 {
@@ -23,125 +27,6 @@ std::atomic<u32> g_nextWindowId{1};
 GLFWwindow* glfw(void* handle) noexcept
 {
     return static_cast<GLFWwindow*>(handle);
-}
-
-Key keyFromGlfw(int key) noexcept
-{
-    if (key >= GLFW_KEY_0 && key <= GLFW_KEY_9)
-    {
-        return static_cast<Key>(static_cast<int>(Key::Num0) + (key - GLFW_KEY_0));
-    }
-    if (key >= GLFW_KEY_A && key <= GLFW_KEY_Z)
-    {
-        return static_cast<Key>(static_cast<int>(Key::A) + (key - GLFW_KEY_A));
-    }
-    if (key >= GLFW_KEY_F1 && key <= GLFW_KEY_F24)
-    {
-        return static_cast<Key>(static_cast<int>(Key::F1) + (key - GLFW_KEY_F1));
-    }
-    if (key >= GLFW_KEY_KP_0 && key <= GLFW_KEY_KP_9)
-    {
-        return static_cast<Key>(static_cast<int>(Key::Keypad0) + (key - GLFW_KEY_KP_0));
-    }
-    switch (key)
-    {
-    case GLFW_KEY_SPACE:
-        return Key::Space;
-    case GLFW_KEY_APOSTROPHE:
-        return Key::Apostrophe;
-    case GLFW_KEY_COMMA:
-        return Key::Comma;
-    case GLFW_KEY_MINUS:
-        return Key::Minus;
-    case GLFW_KEY_PERIOD:
-        return Key::Period;
-    case GLFW_KEY_SLASH:
-        return Key::Slash;
-    case GLFW_KEY_SEMICOLON:
-        return Key::Semicolon;
-    case GLFW_KEY_EQUAL:
-        return Key::Equal;
-    case GLFW_KEY_LEFT_BRACKET:
-        return Key::LeftBracket;
-    case GLFW_KEY_BACKSLASH:
-        return Key::Backslash;
-    case GLFW_KEY_RIGHT_BRACKET:
-        return Key::RightBracket;
-    case GLFW_KEY_GRAVE_ACCENT:
-        return Key::GraveAccent;
-    case GLFW_KEY_ESCAPE:
-        return Key::Escape;
-    case GLFW_KEY_ENTER:
-        return Key::Enter;
-    case GLFW_KEY_TAB:
-        return Key::Tab;
-    case GLFW_KEY_BACKSPACE:
-        return Key::Backspace;
-    case GLFW_KEY_INSERT:
-        return Key::Insert;
-    case GLFW_KEY_DELETE:
-        return Key::Delete;
-    case GLFW_KEY_RIGHT:
-        return Key::Right;
-    case GLFW_KEY_LEFT:
-        return Key::Left;
-    case GLFW_KEY_DOWN:
-        return Key::Down;
-    case GLFW_KEY_UP:
-        return Key::Up;
-    case GLFW_KEY_PAGE_UP:
-        return Key::PageUp;
-    case GLFW_KEY_PAGE_DOWN:
-        return Key::PageDown;
-    case GLFW_KEY_HOME:
-        return Key::Home;
-    case GLFW_KEY_END:
-        return Key::End;
-    case GLFW_KEY_CAPS_LOCK:
-        return Key::CapsLock;
-    case GLFW_KEY_SCROLL_LOCK:
-        return Key::ScrollLock;
-    case GLFW_KEY_NUM_LOCK:
-        return Key::NumLock;
-    case GLFW_KEY_PRINT_SCREEN:
-        return Key::PrintScreen;
-    case GLFW_KEY_PAUSE:
-        return Key::Pause;
-    case GLFW_KEY_KP_DECIMAL:
-        return Key::KeypadDecimal;
-    case GLFW_KEY_KP_DIVIDE:
-        return Key::KeypadDivide;
-    case GLFW_KEY_KP_MULTIPLY:
-        return Key::KeypadMultiply;
-    case GLFW_KEY_KP_SUBTRACT:
-        return Key::KeypadSubtract;
-    case GLFW_KEY_KP_ADD:
-        return Key::KeypadAdd;
-    case GLFW_KEY_KP_ENTER:
-        return Key::KeypadEnter;
-    case GLFW_KEY_KP_EQUAL:
-        return Key::KeypadEqual;
-    case GLFW_KEY_LEFT_SHIFT:
-        return Key::LeftShift;
-    case GLFW_KEY_LEFT_CONTROL:
-        return Key::LeftControl;
-    case GLFW_KEY_LEFT_ALT:
-        return Key::LeftAlt;
-    case GLFW_KEY_LEFT_SUPER:
-        return Key::LeftSuper;
-    case GLFW_KEY_RIGHT_SHIFT:
-        return Key::RightShift;
-    case GLFW_KEY_RIGHT_CONTROL:
-        return Key::RightControl;
-    case GLFW_KEY_RIGHT_ALT:
-        return Key::RightAlt;
-    case GLFW_KEY_RIGHT_SUPER:
-        return Key::RightSuper;
-    case GLFW_KEY_MENU:
-        return Key::Menu;
-    default:
-        return Key::Unknown;
-    }
 }
 
 KeyModifiers modifiersFromGlfw(int mods) noexcept
@@ -161,6 +46,11 @@ Vec2 cursorPosition(GLFWwindow* window) noexcept
 UVec2 toSize(int width, int height) noexcept
 {
     return UVec2(static_cast<u32>(std::max(width, 0)), static_cast<u32>(std::max(height, 0)));
+}
+
+bool isWayland() noexcept
+{
+    return glfwGetPlatform() == GLFW_PLATFORM_WAYLAND;
 }
 
 } // namespace
@@ -233,7 +123,7 @@ struct WindowCallbacks
     static void onKey(GLFWwindow* handle, int glfwKey, int /*scancode*/, int action, int mods)
     {
         Window& window = self(handle);
-        const Key key = keyFromGlfw(glfwKey);
+        const Key key = detail::keyFromGlfw(glfwKey);
         const KeyModifiers modifiers = modifiersFromGlfw(mods);
         const bool down = action != GLFW_RELEASE;
         window.m_input.setModifiers(modifiers);
@@ -278,6 +168,42 @@ struct WindowCallbacks
         window.m_input.addScroll(delta);
         emit(window, MouseScrolledEvent{window.m_id, delta});
     }
+
+    static void onDrop(GLFWwindow* handle, int count, const char** paths)
+    {
+        Window& window = self(handle);
+        std::vector<std::string_view> views;
+        views.reserve(static_cast<usize>(std::max(count, 0)));
+        for (int i = 0; i < count; ++i)
+        {
+            views.emplace_back(paths[i] != nullptr ? paths[i] : "");
+        }
+        window.dropFiles(views, cursorPosition(handle));
+    }
+
+    static void onContentScale(GLFWwindow* handle, float x, float y)
+    {
+        Window& window = self(handle);
+        emit(window, ContentScaleChangedEvent{window.m_id, Vec2(x, y)});
+    }
+
+    static void onPosition(GLFWwindow* handle, int x, int y)
+    {
+        Window& window = self(handle);
+        emit(window, WindowMovedEvent{window.m_id, IVec2(x, y)});
+    }
+
+    static void onCursorEnter(GLFWwindow* handle, int entered)
+    {
+        Window& window = self(handle);
+        emit(window, CursorEnteredEvent{window.m_id, entered == GLFW_TRUE});
+    }
+
+    static void onRefresh(GLFWwindow* handle)
+    {
+        Window& window = self(handle);
+        emit(window, WindowRefreshEvent{window.m_id});
+    }
 };
 
 Window::Window(Platform& platform, void* handle, std::string title, EventBus* events) noexcept
@@ -303,6 +229,7 @@ std::unique_ptr<Window> Window::create(Platform& platform, const WindowDesc& des
     glfwWindowHint(GLFW_RESIZABLE, desc.resizable ? GLFW_TRUE : GLFW_FALSE);
     glfwWindowHint(GLFW_VISIBLE, desc.visible ? GLFW_TRUE : GLFW_FALSE);
     glfwWindowHint(GLFW_SCALE_TO_MONITOR, GLFW_TRUE);
+    glfwWindowHint(GLFW_MAXIMIZED, desc.maximized ? GLFW_TRUE : GLFW_FALSE);
 
     GLFWwindow* handle = glfwCreateWindow(static_cast<int>(desc.width), static_cast<int>(desc.height),
                                           desc.title.c_str(), nullptr, nullptr);
@@ -323,6 +250,11 @@ std::unique_ptr<Window> Window::create(Platform& platform, const WindowDesc& des
     glfwSetMouseButtonCallback(handle, &WindowCallbacks::onMouseButton);
     glfwSetCursorPosCallback(handle, &WindowCallbacks::onCursorPos);
     glfwSetScrollCallback(handle, &WindowCallbacks::onScroll);
+    glfwSetDropCallback(handle, &WindowCallbacks::onDrop);
+    glfwSetWindowContentScaleCallback(handle, &WindowCallbacks::onContentScale);
+    glfwSetWindowPosCallback(handle, &WindowCallbacks::onPosition);
+    glfwSetCursorEnterCallback(handle, &WindowCallbacks::onCursorEnter);
+    glfwSetWindowRefreshCallback(handle, &WindowCallbacks::onRefresh);
 
     window->m_input.setMousePosition(cursorPosition(handle));
     platform.registerWindow(window.get());
@@ -418,6 +350,132 @@ void Window::setCursorMode(CursorMode mode) noexcept
     }
     m_cursorMode = mode;
     m_input.resetMouseTracking();
+}
+
+void Window::setCursorShape(CursorShape shape) noexcept
+{
+    glfwSetCursor(glfw(m_handle), static_cast<GLFWcursor*>(m_platform.cursor(shape)));
+    m_cursorShape = shape;
+}
+
+bool Window::setCursorPosition(Vec2 position) noexcept
+{
+    if (isWayland() && m_cursorMode != CursorMode::Captured)
+    {
+        return false;
+    }
+    glfwSetCursorPos(glfw(m_handle), static_cast<double>(position.x), static_cast<double>(position.y));
+    return true;
+}
+
+std::optional<IVec2> Window::position() const noexcept
+{
+    if (isWayland())
+    {
+        return std::nullopt;
+    }
+    IVec2 position(0);
+    glfwGetWindowPos(glfw(m_handle), &position.x, &position.y);
+    return position;
+}
+
+bool Window::setPosition(IVec2 position) noexcept
+{
+    if (isWayland())
+    {
+        return false;
+    }
+    glfwSetWindowPos(glfw(m_handle), position.x, position.y);
+    return true;
+}
+
+void Window::maximize() noexcept
+{
+    glfwMaximizeWindow(glfw(m_handle));
+}
+
+void Window::restore() noexcept
+{
+    glfwRestoreWindow(glfw(m_handle));
+}
+
+void Window::iconify() noexcept
+{
+    glfwIconifyWindow(glfw(m_handle));
+}
+
+bool Window::isMaximized() const noexcept
+{
+    return glfwGetWindowAttrib(glfw(m_handle), GLFW_MAXIMIZED) == GLFW_TRUE;
+}
+
+bool Window::setIcon(std::span<const WindowIcon> images)
+{
+    const int platform = glfwGetPlatform();
+    if (platform == GLFW_PLATFORM_WAYLAND || platform == GLFW_PLATFORM_COCOA)
+    {
+        return false;
+    }
+    std::vector<GLFWimage> glfwImages;
+    glfwImages.reserve(images.size());
+    for (const WindowIcon& image : images)
+    {
+        constexpr u32 kMaxSide = 1u << 15;
+        if (image.size.x == 0 || image.size.y == 0 || image.size.x > kMaxSide || image.size.y > kMaxSide ||
+            image.rgba.size() != usize{image.size.x} * image.size.y * 4)
+        {
+            return false;
+        }
+        // GLFW copies the pixels and never writes to them.
+        glfwImages.push_back(GLFWimage{static_cast<int>(image.size.x), static_cast<int>(image.size.y),
+                                       const_cast<unsigned char*>(image.rgba.data())});
+    }
+    glfwSetWindowIcon(glfw(m_handle), static_cast<int>(glfwImages.size()),
+                      glfwImages.empty() ? nullptr : glfwImages.data());
+    return true;
+}
+
+void Window::setImeRect(Vec2 position, Vec2 size) noexcept
+{
+    detail::setImeRect(m_handle, position, size);
+}
+
+void Window::setClipboardText(std::string_view text)
+{
+    const std::string terminated(text); // GLFW needs a null-terminated string
+    glfwSetClipboardString(glfw(m_handle), terminated.c_str());
+}
+
+std::string Window::clipboardText() const
+{
+    const char* text = glfwGetClipboardString(glfw(m_handle));
+    return text != nullptr ? std::string(text) : std::string();
+}
+
+std::string_view Window::droppedPath(u32 index) const noexcept
+{
+    ILL_ASSERT(index < m_droppedPaths.size(), "dropped path {} of {}", index, m_droppedPaths.size());
+    return index < m_droppedPaths.size() ? std::string_view(m_droppedPaths[index]) : std::string_view();
+}
+
+void Window::dropFiles(std::span<const std::string_view> paths, Vec2 position)
+{
+    if (paths.empty())
+    {
+        return;
+    }
+    const auto first = static_cast<u32>(m_droppedPaths.size());
+    for (const std::string_view path : paths)
+    {
+        m_droppedPaths.emplace_back(path);
+    }
+    WindowCallbacks::emit(*this, FilesDroppedEvent{m_id, first, static_cast<u32>(paths.size()), position});
+}
+
+void Window::beginFrame() noexcept
+{
+    m_input.beginFrame();
+    m_droppedPaths.clear();
 }
 
 } // namespace illusion

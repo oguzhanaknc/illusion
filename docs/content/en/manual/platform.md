@@ -52,7 +52,19 @@ servers and command-line tools use it.
 | `contentScale()` | Pixels per window coordinate (for example 2.0 on Retina displays). |
 | `setTitle()`, `setSize()` | Change the title (UTF-8) and client size. |
 | `setCursorMode()` | `Normal`, `Hidden`, or `Captured` (locked, unbounded motion for camera control). |
-| `isFocused()`, `isMinimized()` | Window state. |
+| `setCursorShape()` | Arrow, text, resize (all, NS, EW, NESW, NWSE), hand, not-allowed or crosshair cursor. |
+| `setCursorPosition()` | Moves the cursor (window coordinates). |
+| `position()`, `setPosition()` | The client area's position on the screen. |
+| `maximize()`, `restore()`, `iconify()` | Change the window state; `WindowDesc::maximized` starts maximized. |
+| `isFocused()`, `isMinimized()`, `isMaximized()` | Window state. |
+| `setIcon()` | Sets the window icon from RGBA images of several sizes. |
+| `setImeRect()` | Tells the input method where text is typed, so its candidate list opens next to it (Windows). |
+| `setClipboardText()`, `clipboardText()` | The system clipboard (UTF-8). |
+
+Some systems do not allow everything: on Wayland, windows do not know their position (`position()`
+returns nullopt, `setPosition()` false) and the cursor can only be moved while it is captured; macOS and
+Wayland take the icon from the application bundle or desktop file (`setIcon()` returns false). Cursor
+shapes a system lacks show the arrow.
 
 ## Keyboard and mouse
 
@@ -97,6 +109,11 @@ Windows enqueue events on the `EventBus` passed to `Window::create()`. They are 
 | `KeyEvent` | A key goes down, repeats or goes up. |
 | `MouseButtonEvent`, `MouseMovedEvent`, `MouseScrolledEvent` | Mouse input. |
 | `TextInputEvent` | A character is typed. |
+| `FilesDroppedEvent` | Files or folders are dropped on the window. |
+| `ContentScaleChangedEvent` | The pixel scale changes, for example on a monitor with another DPI. |
+| `WindowMovedEvent` | The window moves (not on Wayland). |
+| `CursorEnteredEvent` | The cursor enters or leaves the client area. |
+| `WindowRefreshEvent` | The contents must be drawn again, for example during a resize. |
 
 ```cpp
 illusion::Subscription onResize = events.subscribe<illusion::FramebufferResizedEvent>(
@@ -107,3 +124,56 @@ Events identify their window with a `WindowId`; compare it with `window->id()`. 
 so an event delivered after its window was destroyed is harmless.
 
 Polling `InputState` suits gameplay; events suit UI and tools that must see every key press in order.
+
+### Dropped files
+
+A drop enqueues one `FilesDroppedEvent`; its paths (UTF-8) are read with `droppedPath()` and stay valid
+until the next `pollEvents()` or `waitEvents()`:
+
+```cpp
+illusion::Subscription onDrop = events.subscribe<illusion::FilesDroppedEvent>(
+    [&](const illusion::FilesDroppedEvent& e) {
+        for (illusion::u32 i = 0; i < e.count; ++i)
+        {
+            importAsset(window->droppedPath(e.first + i));
+        }
+    });
+```
+
+`Window::dropFiles()` delivers a drop the same way, for input playback and automation.
+
+### High-DPI displays
+
+`contentScale()` is the number of pixels per window coordinate. Render at `framebufferSize()`, lay out UI
+in window coordinates, and rebuild fonts when `ContentScaleChangedEvent` arrives.
+
+## Monitors
+
+`platform->monitors()` lists the connected displays, the primary one first, with their name, position,
+size, work area (without task bars and docks) and content scale. The headless backend reports one
+simulated monitor.
+
+## Waking the event loop
+
+Tools that only redraw on input sleep in `waitEvents()`. `wake()` ends the wait from any thread:
+
+```cpp
+// main thread: sleep until input arrives or a background task finishes
+platform->waitEvents(1.0);
+
+// worker thread, when a result is ready:
+platform->wake();
+```
+
+## Key names
+
+Key codes name physical positions. `keyDisplayName()` returns the character a key types in the active
+keyboard layout, so that shortcuts can be shown the way the user's keyboard prints them:
+
+```cpp
+const std::optional<std::string> character = platform->keyDisplayName(illusion::Key::Y);
+// "y" on a US layout, "z" on a German one; nullopt for keys like Space or Shift
+```
+
+Keys that type no character return nullopt; show their translated label instead (`glyphLabelKey()`, see
+[Localization](localization.md)).

@@ -45,8 +45,8 @@ Open `build/api/index.html` in a browser.
 | `illusion/ecs/SceneSerializer.hpp` | `saveScene`, `loadScene` (JSON scene files) |
 | `illusion/ecs/Transform.hpp` | `Transform` Component (position, rotation, scale) |
 | `illusion/ecs/Archetype.hpp` | Archetype storage (engine internal) |
-| `illusion/platform/Platform.hpp` | `Platform`: windowing system lifetime and event pumping |
-| `illusion/platform/Window.hpp` | `Window`, `WindowDesc`, `CursorMode` |
+| `illusion/platform/Platform.hpp` | `Platform`: windowing system lifetime, event pumping, `wake()`, `monitors()`, `keyDisplayName()` |
+| `illusion/platform/Window.hpp` | `Window`, `WindowDesc`, `CursorMode`, `CursorShape`, `WindowIcon`: window state, clipboard, dropped files |
 | `illusion/platform/Input.hpp` | `InputState`, `Key`, `MouseButton` |
 | `illusion/platform/Events.hpp` | Window and input events |
 | `illusion/platform/FileSystem.hpp` | `VirtualFileSystem`, platform directories |

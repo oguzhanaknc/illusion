@@ -53,8 +53,9 @@ Available configure presets:
 Every configure preset has build and test presets named `<preset>-debug`, `<preset>-release` and
 `<preset>-relwithdebinfo`.
 
-GPU tests carry the CTest label `gpu`. On a machine without a Vulkan 1.3 driver, exclude them with
-`ctest --preset <preset> -LE gpu`.
+GPU tests carry the CTest label `gpu`, and tests that need a real window system the label `display`. On a
+machine without a Vulkan 1.3 driver or without a display, exclude them with
+`ctest --preset <preset> -LE "gpu|display"`.
 
 On Windows, the helper script `tools\windows\vsdev.cmd` runs any command inside a Visual Studio
 developer environment, so you do not need to open a developer shell first:

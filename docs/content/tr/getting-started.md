@@ -53,8 +53,9 @@ Mevcut configure preset'leri:
 Her configure preset'inin `<preset>-debug`, `<preset>-release` ve `<preset>-relwithdebinfo` adlı build
 ve test preset'leri vardır.
 
-GPU test'leri `gpu` CTest etiketini taşır. Vulkan 1.3 sürücüsü olmayan bir makinede bunları
-`ctest --preset <preset> -LE gpu` ile hariç tutun.
+GPU test'leri `gpu`, gerçek bir pencere sistemi gerektiren test'ler ise `display` CTest etiketini taşır.
+Vulkan 1.3 sürücüsü veya ekranı olmayan bir makinede bunları
+`ctest --preset <preset> -LE "gpu|display"` ile hariç tutun.
 
 Windows'ta `tools\windows\vsdev.cmd` yardımcı betiği herhangi bir komutu Visual Studio developer
 ortamında çalıştırır; böylece önce bir developer shell açmanız gerekmez:

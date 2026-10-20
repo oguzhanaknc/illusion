@@ -88,4 +88,44 @@ struct TextInputEvent
     char32_t codepoint; ///< UTF-32 code point.
 };
 
+/// Files or folders were dropped on the window. The paths are Window::droppedPath(first) to
+/// Window::droppedPath(first + count - 1), valid until the next Platform::pollEvents() or waitEvents().
+struct FilesDroppedEvent
+{
+    WindowId window; ///< Source window (compare with Window::id()).
+    u32 first;       ///< Index of the first path in Window::droppedPath().
+    u32 count;       ///< Number of paths.
+    Vec2 position;   ///< Cursor position in window coordinates when the files were dropped.
+};
+
+/// The ratio between pixels and window coordinates changed, for example when the window moved to a monitor
+/// with another scale. Rebuild fonts and layouts that depend on it.
+struct ContentScaleChangedEvent
+{
+    WindowId window; ///< Source window (compare with Window::id()).
+    Vec2 scale;      ///< New content scale (see Window::contentScale()).
+};
+
+/// The window moved, in screen coordinates (the top-left corner of the client area). Not reported on
+/// Wayland, where windows do not know their position.
+struct WindowMovedEvent
+{
+    WindowId window; ///< Source window (compare with Window::id()).
+    IVec2 position;  ///< New position of the client area.
+};
+
+/// The cursor entered or left the window's client area.
+struct CursorEnteredEvent
+{
+    WindowId window; ///< Source window (compare with Window::id()).
+    bool entered;    ///< True if the cursor is now over the window.
+};
+
+/// The window's contents need to be drawn again (for example while the user resizes it, when the event loop
+/// does not run).
+struct WindowRefreshEvent
+{
+    WindowId window; ///< Source window (compare with Window::id()).
+};
+
 } // namespace illusion

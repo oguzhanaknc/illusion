@@ -69,11 +69,11 @@ jobs:
       - name: Build (Debug)
         run: cmake --build --preset ${{ matrix.preset }}-debug -- -k 0 2>&1 | tee build-debug.log
       - name: Test (Debug)
-        run: ctest --preset ${{ matrix.preset }}-debug -LE gpu 2>&1 | tee test-debug.log
+        run: ctest --preset ${{ matrix.preset }}-debug -LE "gpu|display" 2>&1 | tee test-debug.log
       - name: Build (Release)
         run: cmake --build --preset ${{ matrix.preset }}-release -- -k 0 2>&1 | tee build-release.log
       - name: Test + benchmarks (Release)
-        run: ctest --preset ${{ matrix.preset }}-release -LE gpu 2>&1 | tee test-release.log
+        run: ctest --preset ${{ matrix.preset }}-release -LE "gpu|display" 2>&1 | tee test-release.log
       - name: Annotate failures
         if: failure()
         run: python tools/ci/annotate_log.py configure.log build-debug.log test-debug.log build-release.log test-release.log
@@ -112,7 +112,7 @@ jobs:
           ASAN_OPTIONS: detect_leaks=1:abort_on_error=1
           UBSAN_OPTIONS: print_stacktrace=1:halt_on_error=1
           TSAN_OPTIONS: halt_on_error=1:second_deadlock_stack=1
-        run: ctest --preset ${{ matrix.preset }}-relwithdebinfo -LE gpu 2>&1 | tee test.log
+        run: ctest --preset ${{ matrix.preset }}-relwithdebinfo -LE "gpu|display" 2>&1 | tee test.log
       - name: Annotate failures
         if: failure()
         run: python tools/ci/annotate_log.py configure.log build.log test.log
@@ -138,7 +138,7 @@ jobs:
       - name: Build
         run: cmake --build --preset ci-linux-clang-debug -- -k 0 2>&1 | tee build.log
       - name: GPU tests (validation on)
-        run: xvfb-run -a ctest --preset ci-linux-clang-debug -L gpu 2>&1 | tee test.log
+        run: xvfb-run -a ctest --preset ci-linux-clang-debug -L "gpu|display" 2>&1 | tee test.log
       - name: Sample smoke run
         run: xvfb-run -a ./build/ci-linux-clang/samples/Debug/illusion_hello_triangle --frames 120 2>&1 | tee sample.log
       - name: Annotate failures

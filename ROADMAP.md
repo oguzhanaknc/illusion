@@ -94,7 +94,8 @@ Plan: `docs/plans/m7-editor.md` (sub-milestones, command API, localization, them
 - M7b: ✅ Localization runtime (`illusion::text`): UTF-8, search folding and fuzzy matching, CLDR plural rules,
   MessageFormat subset, string tables with compiled English, pseudo-locale, `illusion_textc` and the locale
   check, translatable input glyph labels (ADR 0029)
-- M7c: Platform services: clipboard, cursor shapes, window state, file drops, monitors, `wake()`, key names
+- M7c: ✅ Platform services: clipboard, cursor shapes, window state and icons, IME placement, file drops,
+  content-scale and move events, monitors, `wake()`, layout-aware key names; display tests
 - M7d: UI foundation: editor tree and export boundary, Dear ImGui docking with NVRHI and platform backends,
   theme tokens, fonts and icons, widget kit, `illusion_ui_gallery` (ADRs 0030, 0031)
 - M7e: Reflection v2: field and type metadata, struct reflection, more field types, JSON value API,
