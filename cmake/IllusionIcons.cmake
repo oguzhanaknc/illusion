@@ -9,6 +9,8 @@
 # The same file runs in script mode (cmake -P) to do the generation at build time.
 
 if(CMAKE_SCRIPT_MODE_FILE)
+    # Script mode starts without the project's policies.
+    cmake_policy(VERSION 3.28)
     foreach(required CODEPOINTS NAMESPACE HEADER CPP INCLUDE)
         if(NOT DEFINED ${required})
             message(FATAL_ERROR "IllusionIcons.cmake: -D${required}=... is required")
@@ -19,7 +21,6 @@ if(CMAKE_SCRIPT_MODE_FILE)
     get_filename_component(source_name "${CODEPOINTS}" NAME)
     set(constants "")
     set(entries "")
-    set(seen "")
     list(SORT lines)
     foreach(line IN LISTS lines)
         if(NOT line MATCHES "^([a-z0-9_]+) ([0-9a-f]+)$")
@@ -37,10 +38,10 @@ if(CMAKE_SCRIPT_MODE_FILE)
             string(TOUPPER "${first}" first)
             string(APPEND identifier "${first}${rest}")
         endforeach()
-        if(identifier IN_LIST seen)
+        if(DEFINED seen_${identifier})
             message(FATAL_ERROR "${CODEPOINTS}: '${name}' gives the identifier ${identifier} twice")
         endif()
-        list(APPEND seen "${identifier}")
+        set(seen_${identifier} TRUE)
 
         # UTF-8 encoding of the code point, as \x escapes.
         math(EXPR cp "0x${hex}")

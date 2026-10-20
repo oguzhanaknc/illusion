@@ -82,9 +82,9 @@ struct PlatformFixture
         frame([] {});
     }
 
-    void key(Key key, bool down, KeyModifiers modifiers = {})
+    void keyEvent(Key which, bool down, KeyModifiers modifiers = {})
     {
-        events.enqueue(KeyEvent{window->id(), key, down, false, modifiers});
+        events.enqueue(KeyEvent{window->id(), which, down, false, modifiers});
     }
 };
 
@@ -98,8 +98,8 @@ TEST_CASE("window input reaches Dear ImGui in order")
     CHECK(ImGui::GetIO().DisplaySize.y == doctest::Approx(600.0f));
 
     fixture.events.enqueue(MouseMovedEvent{fixture.window->id(), Vec2(120.0f, 45.0f)});
-    fixture.key(Key::A, true);
-    fixture.key(Key::LeftShift, true, KeyModifiers{.shift = true});
+    fixture.keyEvent(Key::A, true);
+    fixture.keyEvent(Key::LeftShift, true, KeyModifiers{.shift = true});
     fixture.frame([] {
         CHECK(ImGui::GetIO().MousePos.x == doctest::Approx(120.0f));
         CHECK(ImGui::GetIO().MousePos.y == doctest::Approx(45.0f));
@@ -109,8 +109,8 @@ TEST_CASE("window input reaches Dear ImGui in order")
         CHECK(ImGui::GetIO().KeyShift);
     });
 
-    fixture.key(Key::A, false);
-    fixture.key(Key::LeftShift, false);
+    fixture.keyEvent(Key::A, false);
+    fixture.keyEvent(Key::LeftShift, false);
     fixture.events.enqueue(
         MouseButtonEvent{fixture.window->id(), MouseButton::Right, true, {}, Vec2(10.0f, 20.0f)});
     fixture.events.enqueue(MouseScrolledEvent{fixture.window->id(), Vec2(0.0f, -2.0f)});
@@ -166,14 +166,14 @@ TEST_CASE("typed text goes into the focused text field and copying reaches the w
     CHECK(std::string_view(buffer.data()) == "Ağaç \xF0\x9F\x8C\xB2");
 
     const KeyModifiers control{.control = true};
-    fixture.key(Key::LeftControl, true, control);
-    fixture.key(Key::A, true, control);
+    fixture.keyEvent(Key::LeftControl, true, control);
+    fixture.keyEvent(Key::A, true, control);
     fixture.frame(ui);
-    fixture.key(Key::A, false, control);
-    fixture.key(Key::C, true, control);
+    fixture.keyEvent(Key::A, false, control);
+    fixture.keyEvent(Key::C, true, control);
     fixture.frame(ui);
-    fixture.key(Key::C, false, control);
-    fixture.key(Key::LeftControl, false);
+    fixture.keyEvent(Key::C, false, control);
+    fixture.keyEvent(Key::LeftControl, false);
     fixture.frame(ui);
     CHECK(fixture.window->clipboardText() == "Ağaç \xF0\x9F\x8C\xB2");
 }

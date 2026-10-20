@@ -63,6 +63,31 @@ bool parseNumber(std::string_view text, T& out)
     return result.ec == std::errc() && result.ptr == text.data() + text.size();
 }
 
+// Parses a UI scale with at most two decimals ("1.5", "0.75"). Apple's libc++ has no floating-point
+// std::from_chars, so the parts are read as integers.
+bool parseScale(std::string_view text, f32& out)
+{
+    const usize dot = text.find('.');
+    u32 whole = 0;
+    if (!parseNumber(text.substr(0, dot), whole))
+    {
+        return false;
+    }
+    if (dot == std::string_view::npos)
+    {
+        out = static_cast<f32>(whole);
+        return true;
+    }
+    const std::string_view fraction = text.substr(dot + 1);
+    u32 digits = 0;
+    if (fraction.empty() || fraction.size() > 2 || !parseNumber(fraction, digits))
+    {
+        return false;
+    }
+    out = static_cast<f32>(whole) + static_cast<f32>(digits) / (fraction.size() == 1 ? 10.0f : 100.0f);
+    return true;
+}
+
 bool parseOptions(int argc, char** argv, Options& options)
 {
     for (int i = 1; i < argc; ++i)
@@ -79,7 +104,7 @@ bool parseOptions(int argc, char** argv, Options& options)
         }
         else if (arg == "--scale" && hasValue)
         {
-            if (!parseNumber(argv[++i], options.scale) || options.scale < 0.75f || options.scale > 2.0f)
+            if (!parseScale(argv[++i], options.scale) || options.scale < 0.75f || options.scale > 2.0f)
             {
                 ILL_LOG_ERROR("Gallery", "--scale takes a number from 0.75 to 2");
                 return false;

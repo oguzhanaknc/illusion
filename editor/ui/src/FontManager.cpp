@@ -2,6 +2,7 @@
 #include <illusion/editor/ui/UiContext.hpp>
 #include <illusion/platform/FileSystem.hpp>
 
+#include <algorithm>
 #include <cmath>
 #include <cstring>
 #include <format>
@@ -35,7 +36,9 @@ ImFontConfig fontConfig(std::vector<std::byte>& data, const char* name, f32 size
     config.FontDataSize = static_cast<int>(data.size());
     config.FontDataOwnedByAtlas = false;
     config.SizePixels = size;
-    std::strncpy(config.Name, name, sizeof(config.Name) - 1);
+    const usize length = std::min(std::strlen(name), sizeof(config.Name) - 1);
+    std::memcpy(config.Name, name, length);
+    config.Name[length] = '\0';
     return config;
 }
 
