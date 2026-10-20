@@ -23,6 +23,7 @@ include(Dependencies)
 include(IllusionShaders)
 include(IllusionModules)
 include(IllusionText)
+include(IllusionEditor)
 
 add_subdirectory(engine)
 
@@ -44,4 +45,8 @@ if(ILLUSION_BUILD_BENCHMARKS)
         enable_testing()
     endif()
     add_subdirectory(benchmarks)
+endif()
+
+if(ILLUSION_BUILD_EDITOR)
+    add_subdirectory(editor)
 endif()

@@ -17,7 +17,7 @@ illusion is built in layers. A layer may depend only on layers below it.
 | Audio | 3D sound with cones, streaming, background loading and a mixer with buses, filters and reverb with miniaudio, mixed on its own thread | Implemented |
 | Renderer: foundation | Vulkan 1.3 device through NVRHI, swapchains, Slang shader pipeline | Implemented |
 | Renderer: scene | Meshes, PBR Materials, direct and image-based lighting, soft shadows, GTAO, HDR post-processing (TAA, bloom, tonemapping), frustum culling, GPU occlusion culling with indirect draws, instancing, bindless multi-draw | Implemented |
-| Editor | Scene editing, gizmos, AI command API | Planned |
+| Editor | Separate tree with a checked export boundary; UI foundation (Dear ImGui backends, theme, fonts, icons, widget kit, gallery) done; scene editing, gizmos and the AI command API in progress ([Editor Architecture](editor.md)) | In progress |
 | Game modules | The game's own code: hot-reloadable shared libraries in development, linked statically into exported games ([Game Modules](../manual/modules.md)) | Implemented |
 
 The core is a static library. The editor and exported games link it; a game module never contains a

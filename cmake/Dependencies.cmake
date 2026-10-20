@@ -147,6 +147,55 @@ if(illusion_slang_platform)
         SOURCE_SUBDIR _illusion_no_cmake)
 endif()
 
+# --- Editor only (never linked into games; see ADR 0030 and 0031) -------------------------------------
+
+# Dear ImGui 1.93.0, docking branch (MIT). The editor defines the illusion::imgui target with its own
+# configuration header (editor/ui/include/illusion/editor/ui/ImGuiConfig.hpp) and its own backends.
+FetchContent_Declare(imgui
+    URL https://github.com/ocornut/imgui/archive/refs/tags/v1.93.0-docking.tar.gz
+    URL_HASH SHA256=746c265540bd3aa109570f29492ef4d8f5b421dd9fd0049c35ca35f21496f1a5
+    DOWNLOAD_EXTRACT_TIMESTAMP TRUE
+    SYSTEM
+    SOURCE_SUBDIR _illusion_no_cmake)
+
+# ImPlot (MIT), pinned to a commit with the fixes for Dear ImGui 1.93.
+FetchContent_Declare(implot
+    URL https://github.com/epezent/implot/archive/851cdbdd60d1dfb64c23e987969694de0f547a6b.tar.gz
+    URL_HASH SHA256=e11623920915f2fea586773ee3be7340d4c405b943b0f526aafaf5a64bc7cbd1
+    DOWNLOAD_EXTRACT_TIMESTAMP TRUE
+    SYSTEM
+    SOURCE_SUBDIR _illusion_no_cmake)
+
+# Editor fonts, fetched as single files. Roboto v2.138 and the last Apache-2.0 commit of Roboto Mono:
+# never move to Roboto 3.x or a later Roboto Mono, which are under the OFL. Material Symbols Rounded is the
+# variable icon font (Apache-2.0); its .codepoints file generates editor/ui Icons.hpp.
+set(illusion_roboto_url "https://raw.githubusercontent.com/googlefonts/roboto/ab4876f650a4aeb9b661c83fee47f908c739bb70")
+set(illusion_roboto_mono_url "https://raw.githubusercontent.com/googlefonts/RobotoMono/30867cc8bedee415663cd39f5240b92453138840")
+set(illusion_symbols_url "https://raw.githubusercontent.com/google/material-design-icons/49d4db35df873165d6bd6ba09b063c7dafbac2f4")
+set(ILLUSION_EDITOR_FONT_FILES
+    "font_roboto_regular|${illusion_roboto_url}/src/hinted/Roboto-Regular.ttf|56a45233d29f11b4dfb86d248e921939d115778f87325e7ae8cc108383d6664d|Roboto-Regular.ttf"
+    "font_roboto_medium|${illusion_roboto_url}/src/hinted/Roboto-Medium.ttf|2879a5ecb7fbfa13a7fc3e2cdd7fecbf73aa45e91b541dfdfa2c442eed0aac21|Roboto-Medium.ttf"
+    "font_roboto_bold|${illusion_roboto_url}/src/hinted/Roboto-Bold.ttf|61f89f8db49261c2f6106e8dccc35df7b2f7ed909020db40a3fc905e95f99334|Roboto-Bold.ttf"
+    "font_roboto_license|${illusion_roboto_url}/LICENSE|c71d239df91726fc519c6eb72d318ec65820627232b2f796219e87dcf35d0ab4|Roboto-LICENSE.txt"
+    "font_roboto_mono_regular|${illusion_roboto_mono_url}/fonts/ttf/RobotoMono-Regular.ttf|7432e74ff02682c6e207be405f00381569ec96aa247d232762fe721ae41b39e2|RobotoMono-Regular.ttf"
+    "font_roboto_mono_license|${illusion_roboto_mono_url}/LICENSE.txt|c71d239df91726fc519c6eb72d318ec65820627232b2f796219e87dcf35d0ab4|RobotoMono-LICENSE.txt"
+    "font_symbols|${illusion_symbols_url}/variablefont/MaterialSymbolsRounded%5BFILL%2CGRAD%2Copsz%2Cwght%5D.ttf|32e4011709e055596eb8d2dd0f7cb547b47c1d40ac9ecb8fad54f7f7eac202e7|MaterialSymbolsRounded.ttf"
+    "font_symbols_codepoints|${illusion_symbols_url}/variablefont/MaterialSymbolsOutlined%5BFILL%2CGRAD%2Copsz%2Cwght%5D.codepoints|0c9dae3ed678a81549c3be046bc8045335e5f57f2cbe2287360fbf0c2cc1355f|MaterialSymbols.codepoints"
+    "font_symbols_license|${illusion_symbols_url}/LICENSE|58d1e17ffe5109a7ae296caafcadfdbe6a7d176f0bc4ab01e12a689b0499d8bd|MaterialSymbols-LICENSE.txt")
+foreach(entry IN LISTS ILLUSION_EDITOR_FONT_FILES)
+    string(REPLACE "|" ";" fields "${entry}")
+    list(GET fields 0 font_name)
+    list(GET fields 1 font_url)
+    list(GET fields 2 font_hash)
+    list(GET fields 3 font_file)
+    FetchContent_Declare(${font_name}
+        URL "${font_url}"
+        URL_HASH SHA256=${font_hash}
+        DOWNLOAD_NO_EXTRACT TRUE
+        DOWNLOAD_NAME "${font_file}"
+        SOURCE_SUBDIR _illusion_no_cmake)
+endforeach()
+
 # --- Helpers ------------------------------------------------------------------------------------------
 
 # illusion_require_dependency(<name>)
@@ -164,6 +213,9 @@ endif()
 #   yyjson    -> illusion::yyjson (static library; strict JSON only)
 #   jolt      -> Jolt::Jolt (static library)
 #   miniaudio -> illusion::miniaudio (headers; the implementation is compiled in illusion::audio)
+#   imgui     -> ILLUSION_IMGUI_SOURCE_DIR (sources; the editor defines illusion::imgui)
+#   implot    -> ILLUSION_IMPLOT_SOURCE_DIR (sources; the editor defines illusion::implot)
+#   fonts     -> ILLUSION_EDITOR_FONTS (list of downloaded font, codepoint and licence files)
 function(illusion_require_dependency name)
     get_property(done GLOBAL PROPERTY ILLUSION_DEP_${name})
     if(done)
@@ -303,6 +355,22 @@ function(illusion_require_dependency name)
             FetchContent_MakeAvailable(slang)
             set(ILLUSION_SLANGC "${slang_SOURCE_DIR}/bin/slangc${CMAKE_EXECUTABLE_SUFFIX}" CACHE INTERNAL "")
         endif()
+    elseif(name STREQUAL "imgui")
+        FetchContent_MakeAvailable(imgui)
+        set(ILLUSION_IMGUI_SOURCE_DIR "${imgui_SOURCE_DIR}" CACHE INTERNAL "")
+    elseif(name STREQUAL "implot")
+        FetchContent_MakeAvailable(implot)
+        set(ILLUSION_IMPLOT_SOURCE_DIR "${implot_SOURCE_DIR}" CACHE INTERNAL "")
+    elseif(name STREQUAL "fonts")
+        set(files "")
+        foreach(entry IN LISTS ILLUSION_EDITOR_FONT_FILES)
+            string(REPLACE "|" ";" fields "${entry}")
+            list(GET fields 0 font_name)
+            list(GET fields 3 font_file)
+            FetchContent_MakeAvailable(${font_name})
+            list(APPEND files "${${font_name}_SOURCE_DIR}/${font_file}")
+        endforeach()
+        set(ILLUSION_EDITOR_FONTS "${files}" CACHE INTERNAL "")
     else()
         message(FATAL_ERROR "illusion_require_dependency: no integration written yet for '${name}'")
     endif()

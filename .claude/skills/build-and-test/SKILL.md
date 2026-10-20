@@ -54,9 +54,21 @@ Run the test binary directly for doctest options: `illusion_tests -tc="*Query*" 
   with Mesa lavapipe (`mesa-vulkan-drivers vulkan-validationlayers xvfb`).
 - Smoke-run the sample: `illusion_hello_triangle --frames 300` (exit code 2 means validation errors).
 
+## 4a. Editor tests
+
+- The editor (`ILLUSION_BUILD_EDITOR`, on by default) adds `illusion_editor_tests` (label `unit`) and
+  `illusion_editor_gpu_tests` (label `gpu`) in `<build>/bin/<Config>/`, next to `editor-data/`.
+- The GPU tests compare gallery captures with `editor/tests/data/golden/*.png` and write every capture to
+  `<build>/ui-captures/` (or `ILLUSION_UI_CAPTURE_DIR`). After an intended visual change run them once with
+  `ILLUSION_UPDATE_GOLDENS=1`, look at the new images, and commit them.
+- Screenshots for reviews: `illusion_ui_gallery --headless --theme light --scale 1.5 --screenshot out.png`.
+- Check the engine/editor layering: `python tools/check_layering.py`; configure with
+  `-DILLUSION_BUILD_EDITOR=OFF` to build the engine alone, as the CI job "Runtime-only build" does.
+
 ## 5. Benchmarks
 
-- Binary: `<build>/benchmarks/Release/illusion_benchmarks [name-filter]`.
+- Binary: `<build>/benchmarks/Release/illusion_benchmarks [name-filter]`; editor benchmarks:
+  `<build>/bin/Release/illusion_editor_benchmarks`.
 - Each benchmark has a budget in ns/op; the runner exits 1 if a median exceeds
   `budget * ILLUSION_BENCH_TOLERANCE` (default 1.0, CI 3.0).
 - Never raise a budget to make a regression pass. Investigate with Tracy first; if the slowdown is an

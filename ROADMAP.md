@@ -96,8 +96,11 @@ Plan: `docs/plans/m7-editor.md` (sub-milestones, command API, localization, them
   check, translatable input glyph labels (ADR 0029)
 - M7c: ✅ Platform services: clipboard, cursor shapes, window state and icons, IME placement, file drops,
   content-scale and move events, monitors, `wake()`, layout-aware key names; display tests
-- M7d: UI foundation: editor tree and export boundary, Dear ImGui docking with NVRHI and platform backends,
-  theme tokens, fonts and icons, widget kit, `illusion_ui_gallery` (ADRs 0030, 0031)
+- M7d: ✅ UI foundation: editor tree and export boundary (configure-time check, layering check, runtime-only
+  CI build), Dear ImGui docking with NVRHI and platform backends, gamma-space UI target, theme tokens with
+  contrast tests, fonts and generated icon constants, per-frame localized labels with stable ids, widget kit
+  v1, `UiDriver`, `illusion_ui_gallery` with golden-image tests (ADRs 0030, 0031). Not yet: infinite drag
+  (cursor wrap) on vector fields; it follows with the inspector (M7m)
 - M7e: Reflection v2: field and type metadata, struct reflection, more field types, JSON value API,
   migrations (ADR 0032)
 - M7f: Entity ids, names and scene format v2 (ADR 0033)

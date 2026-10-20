@@ -22,9 +22,16 @@ must be included with distributed games (the export pipeline will collect them a
 | [yyjson](https://github.com/ibireme/yyjson) | 0.13.0 | MIT | JSON (scene files) | Yes |
 | [stb_image](https://github.com/nothings/stb) | commit `2c980bb` (v2.30) | Public domain or MIT | PNG, JPEG and HDR decoding | Yes |
 | [Slang](https://github.com/shader-slang/slang) | 2026.19 | Apache-2.0 WITH LLVM-exception | Shader compiler, run at build time only | No |
+| [Dear ImGui](https://github.com/ocornut/imgui) | 1.93.0 (docking) | MIT | Editor UI | No (editor only) |
+| [ImPlot](https://github.com/epezent/implot) | commit `851cdbd` | MIT | Editor plots | No (editor only) |
+| [Roboto](https://github.com/googlefonts/roboto) | v2.138 (commit `ab4876f`) | Apache-2.0 | Editor text font | No (editor only) |
+| [Roboto Mono](https://github.com/googlefonts/RobotoMono) | commit `30867cc` | Apache-2.0 | Editor monospace font | No (editor only) |
+| [Material Symbols](https://github.com/google/material-design-icons) | commit `49d4db3` (Rounded, variable) | Apache-2.0 | Editor icons | No (editor only) |
 
 The plural rules in `engine/text/src/PluralRules.cpp` implement the cardinal plural rules of the Unicode
 Common Locale Data Repository ([CLDR](https://cldr.unicode.org/), Unicode License V3).
+
+The editor copies the licences of its fonts to `editor-data/licenses/` next to the editor executables.
 
 Development tools that are not linked: CMake, Ninja, clang-format, Doxygen, MkDocs, Material for MkDocs,
 mkdocs-static-i18n.
