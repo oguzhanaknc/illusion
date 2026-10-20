@@ -99,7 +99,8 @@ jobs:
       - name: Configure (editor off)
         run: cmake --preset ci-linux-gcc -DILLUSION_BUILD_EDITOR=OFF 2>&1 | tee configure.log
       - name: No editor targets
-        run: "! grep -q 'illusion_editor\|illusion_imgui' build/ci-linux-gcc/*.ninja"
+        run: |
+          ! grep -qE 'illusion_editor|illusion_imgui' build/ci-linux-gcc/*.ninja
       - name: Build (Debug)
         run: cmake --build --preset ci-linux-gcc-debug -- -k 0 2>&1 | tee build.log
       - name: Test (Debug)
