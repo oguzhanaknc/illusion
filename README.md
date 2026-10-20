@@ -80,6 +80,7 @@ world.query<Position, const Velocity>().each([](Position& p, const Velocity& v) 
 | Path | Contents |
 | --- | --- |
 | `engine/core` | Core library (`illusion::core`) |
+| `engine/text` | UTF-8, plural rules, MessageFormat, string tables, localization (`illusion::text`) |
 | `engine/platform` | Windows, input, file system (`illusion::platform`) |
 | `engine/input` | Gamepads, action mapping, rebinding, glyphs (`illusion::input`) |
 | `engine/assets` | Images, Meshes, glTF loading (`illusion::assets`) |
@@ -90,6 +91,7 @@ world.query<Position, const Velocity>().each([](Position& p, const Velocity& v) 
 | `samples` | Sample applications |
 | `tests` | Unit tests (doctest) |
 | `tools/pack` | `illusion_pack` archive packer and asset cooker |
+| `tools/textc` | `illusion_textc` string table generator and locale check |
 | `benchmarks` | Benchmarks with performance budgets (nanobench) |
 | `cmake` | Build options, compiler settings, pinned dependencies |
 | `docs` | MkDocs site (en/tr), ADRs, Doxygen configuration |

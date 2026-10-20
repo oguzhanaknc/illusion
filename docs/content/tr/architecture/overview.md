@@ -10,7 +10,8 @@ illusion katmanlar halinde inşa edilir. Bir katman yalnızca altındaki katmanl
 | --- | --- | --- |
 | Core | Platform tespiti, assertion'lar, logging (konsol, bellek ve ring Sink'leri), bellek, Job System, ECS, reflection ve sahne dosyaları, event bus, zaman, matematik, anlamsal sürümler, JSON, `Expected`, deterministik ve güvenli rastgele sayılar | Tamamlandı |
 | Platform | Pencere, klavye ve fare (GLFW), sanal dosya sistemi, paketlenmiş arşivler | Tamamlandı |
-| Input | SDL3 üzerinden gamepad'ler (titreşim, LED, hareket, touchpad, adaptive trigger'lar), action eşleme, yeniden atama, glyph'ler | Tamamlandı |
+| Text | UTF-8, arama katlama, bulanık eşleştirme, CLDR çoğul kuralları, MessageFormat, string tabloları ve yerelleştirme | Tamamlandı |
+| Input | SDL3 üzerinden gamepad'ler (titreşim, LED, hareket, touchpad, adaptive trigger'lar), action eşleme, yeniden atama, glyph'ler ve çevrilebilir etiketleri | Tamamlandı |
 | Asset'ler | Görüntüler, Mesh'ler, glTF modelleri, ortamlar, hazırlanmış formatlar, bir içe aktarma önbelleği ve asenkron streaming | Tamamlandı |
 | Fizik | Job System üzerinde Jolt Physics ile katı cisimler, primitif, convex hull ve Mesh collider'ları, karakterler, joint'ler, raycast'ler, shape cast'ler ve temaslar | Tamamlandı |
 | Ses | miniaudio ile konili 3D ses, streaming, arka planda yükleme ve bus'lı, filtreli, reverb'lü mikser; kendi thread'inde miksajlanır | Tamamlandı |
@@ -60,6 +61,7 @@ devredebilir (ADR 0027).
 | --- | --- |
 | `engine/core` | Core kütüphanesi: `include/illusion/{core,ecs}` ve `src/` |
 | `engine/platform` | Platform kütüphanesi: `include/illusion/platform` ve `src/` |
+| `engine/text` | Text kütüphanesi: `include/illusion/text` ve `src/` |
 | `engine/input` | Input kütüphanesi: `include/illusion/input` ve `src/` |
 | `engine/assets` | Assets kütüphanesi: `include/illusion/assets` ve `src/` |
 | `engine/physics` | Fizik kütüphanesi: `include/illusion/physics` ve `src/` |
@@ -69,6 +71,7 @@ devredebilir (ADR 0027).
 | `samples` | Motor özelliklerini çalıştıran küçük uygulamalar |
 | `tests` | Unit test'ler (doctest), her özellik için bir dosya |
 | `tools/pack` | `illusion_pack`: arşiv paketleyici ve Asset hazırlayıcı |
+| `tools/textc` | `illusion_textc`: string tablosu üreteci ve locale dosyası kontrolü |
 | `benchmarks` | Performans bütçeli benchmark'lar (nanobench) |
 | `cmake` | Build seçenekleri, derleyici ayarları, sabitlenmiş bağımlılıklar |
 | `docs/content/{en,tr}` | Bu dokümantasyon, İngilizce ve Türkçe |

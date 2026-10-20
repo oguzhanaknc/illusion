@@ -47,6 +47,22 @@ Türkçe dokümantasyonda teknik terimler İngilizce bırakılır; örneğin Ent
 Archetype, Chunk, Query, Job, Shader, Render Pass, Mesh, Material, Texture, Asset ve Sink. Bunları
 İngilizce metindekiyle birebir aynı yazın.
 
+## Kullanıcıya görünen metinler
+
+Oyuncuların veya editör kullanıcılarının gördüğü metinler koddaki bir string değişmeziyle değil, her zaman
+bir string tablosu üzerinden gösterilir (bkz. [Yerelleştirme](manual/localization.md)):
+
+- Anahtarı ve İngilizce metnini tablonun `en.json` dosyasına ekleyin; anahtarları sıralı tutun, bağlam açık
+  değilse bir `comment` yazın.
+- Her cümleye tek bir anahtar verin ve değerleri argüman olarak geçin; metinleri birleştirerek cümle
+  kurmayın.
+- Sayılan her şey için çoğul biçimler (`{n, plural, one {...} other {...}}`) kullanın.
+- `illusion_textc check` komutunu çalıştırın (CI'da CTest `text.locales` bunu yapar). İngilizce bir metni
+  değiştirmek mevcut çevirileri eskitir; hangilerinin eskidiğini `source` hash'leri gösterir.
+
+Log mesajları, assertion mesajları ve yapay zekâ ajanlarına yönelik metinler İngilizce kalır ve
+yerelleştirilmez.
+
 ## Architecture Decision Record'lar
 
 Geri alınması zor veya birden fazla modülü etkileyen her kararı kaydedin (bağımlılıklar, veri

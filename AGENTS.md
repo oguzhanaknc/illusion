@@ -27,7 +27,8 @@ decisions are in `docs/adr/`. Do not reverse an accepted ADR silently: write a n
 | `engine/core/include/illusion/{core,ecs}` | Public headers of the core library |
 | `engine/core/src` | Core implementation |
 | `engine/platform` | Platform layer: windows, input, events from the OS, virtual file system (GLFW is private) |
-| `engine/input` | Gamepads (SDL3 private), `InputActions` mapping/rebinding/glyphs; tests use `attachVirtualGamepad()` |
+| `engine/text` | UTF-8, `searchFold`, `FuzzyMatcher`, plural rules, `MessageFormat`, string tables, `Localization` (core only) |
+| `engine/input` | Gamepads (SDL3 private), `InputActions` mapping/rebinding/glyphs, string table `data/locales/en.json`; tests use `attachVirtualGamepad()` |
 | `engine/assets` | CPU-side assets: `Image`, `MeshData`, glTF via `loadGltf`, environments (SH, sky) (cgltf/stb private); no GPU code |
 | `engine/physics` | `PhysicsWorld`, `RigidBody`/`Collider`/`CharacterController`/`Joint` Components (Jolt is private, runs on the Job System); test helpers in `tests/physics/PhysicsTestSupport.hpp` |
 | `engine/audio` | `AudioWorld`, `AudioSource`/`AudioListener` Components, filters, reverb, background clip loading via `AssetStreamer` (miniaudio is private; the audio thread owns it); tests use `AudioOutput::Offline` + `render()` |
@@ -39,7 +40,7 @@ decisions are in `docs/adr/`. Do not reverse an accepted ADR silently: write a n
 | `cmake/` | `IllusionOptions`, `IllusionCompilerSettings`, `Dependencies` (pinned), `IllusionModules` |
 | `docs/content/{en,tr}` | MkDocs pages (must stay in sync) |
 | `docs/adr/` | Architecture Decision Records (English only) |
-| `tools/` | `check_format.py`, `check_docs_parity.py`, `windows/vsdev.cmd`; `pack/` builds `illusion_pack` |
+| `tools/` | `check_format.py`, `check_docs_parity.py`, `windows/vsdev.cmd`; `pack/` builds `illusion_pack`; `textc/` builds `illusion_textc` (string tables, locale check) |
 
 ## Build, test, check
 
@@ -80,6 +81,8 @@ are within budget, format and docs checks pass, and Doxygen reports nothing.
   memory, corrupted state) → `ILL_CHECK`. Recoverable failures → return values: `bool`, `std::optional`,
   or `Expected<T, E>` (`illusion/core/Expected.hpp`) when the caller needs to know why; never exceptions.
   Do not throw in engine code.
+- Text shown to players or editor users comes from a string table (`illusion_add_string_table`), never a
+  string literal; see `.claude/skills/localization/SKILL.md`. Logs, asserts and agent-facing text stay English.
 - Platform-specific code is isolated behind a small function in a `.cpp` with `#if defined(ILL_PLATFORM_*)`.
   Include `<windows.h>` only in `.cpp` files.
 
@@ -147,5 +150,6 @@ The Steamworks SDK is never committed. See `.claude/skills/add-dependency/SKILL.
 | `ecs-components` | Writing components, systems, queries, command buffers |
 | `bilingual-docs` | Writing or changing documentation |
 | `write-adr` | Making a decision that is hard to reverse |
+| `localization` | Adding user-visible text, string tables or a language |
 | `add-dependency` | Adding or upgrading a third-party library |
 | `pre-commit-review` | Before every commit |

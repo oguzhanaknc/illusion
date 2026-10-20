@@ -23,6 +23,9 @@ must be included with distributed games (the export pipeline will collect them a
 | [stb_image](https://github.com/nothings/stb) | commit `2c980bb` (v2.30) | Public domain or MIT | PNG, JPEG and HDR decoding | Yes |
 | [Slang](https://github.com/shader-slang/slang) | 2026.19 | Apache-2.0 WITH LLVM-exception | Shader compiler, run at build time only | No |
 
+The plural rules in `engine/text/src/PluralRules.cpp` implement the cardinal plural rules of the Unicode
+Common Locale Data Repository ([CLDR](https://cldr.unicode.org/), Unicode License V3).
+
 Development tools that are not linked: CMake, Ninja, clang-format, Doxygen, MkDocs, Material for MkDocs,
 mkdocs-static-i18n.
 

@@ -54,7 +54,19 @@ doxygen docs/Doxyfile
 | `illusion/platform/FileSystem.hpp` | `VirtualFileSystem`, platform dizinleri |
 | `illusion/input/Gamepad.hpp` | `Gamepad`, `GamepadState`, `TriggerEffect`, gamepad event'leri |
 | `illusion/input/GamepadSystem.hpp` | `GamepadSystem`, `VirtualGamepad` |
-| `illusion/input/InputActions.hpp` | `InputActions`, `InputBinding`, `BindingCapture`, glyph'ler |
+| `illusion/input/InputActions.hpp` | `InputActions`, `InputBinding`, `BindingCapture`, glyph'ler, `glyphLabelKey`, `keyLabelKey` |
+| `illusion/input/InputStrings.hpp` | Üretilir: "input" string tablosunun `TextKey` sabitleri |
+| `illusion/text/Localization.hpp` | `Localization`: string tabloları, çeviriler, geri dönüş zinciri, `pseudoLocale()` |
+| `illusion/text/StringTable.hpp` | `StringTableData`, `TextKey`: `illusion_textc` ile üretilen derlenmiş string tabloları |
+| `illusion/text/LocaleFile.hpp` | `LocaleFile`, `LocaleEntry`, `LocaleError`: locale dosya biçimi |
+| `illusion/text/MessageFormat.hpp` | `MessageFormat`, `MessageArgument`, `MessageContext`: ICU MessageFormat alt kümesi |
+| `illusion/text/PluralRules.hpp` | `PluralRule`, `PluralCategory`, `PluralOperands`: CLDR kardinal çoğul kuralları |
+| `illusion/text/NumberFormat.hpp` | `NumberFormat`, `formatNumber`: yerel ayara göre sayı ayırıcıları |
+| `illusion/text/LocaleId.hpp` | `LocaleId`: BCP 47 dil etiketleri |
+| `illusion/text/TextOutput.hpp` | `TextOutput`: biçimlendirilmiş metni bir string'e veya arenaya yazar |
+| `illusion/text/SearchFold.hpp` | `searchFold`: yerel ayardan bağımsız büyük/küçük harf ve aksan katlama |
+| `illusion/text/FuzzyMatcher.hpp` | `FuzzyMatcher`: puanlı alt dizi eşleştirme |
+| `illusion/text/Utf8.hpp` | UTF-8 doğrulama, çözme, kodlama ve `Utf8View` |
 | `illusion/assets/Image.hpp` | `Image`, çözme, PNG kodlama, mip üretimi |
 | `illusion/assets/Mesh.hpp` | `MeshData`, `Vertex`, prosedürel Mesh'ler |
 | `illusion/assets/Model.hpp` | `ModelData`, `MaterialData`, `loadGltf` |

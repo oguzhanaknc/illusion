@@ -23,6 +23,7 @@
 #include <illusion/core/Math.hpp>
 #include <illusion/input/Gamepad.hpp>
 #include <illusion/platform/Input.hpp>
+#include <illusion/text/StringTable.hpp>
 
 #include <optional>
 #include <span>
@@ -32,6 +33,11 @@
 
 namespace illusion
 {
+
+namespace text
+{
+class Localization;
+} // namespace text
 
 /// Index of an action in an InputActions set.
 using ActionId = u32;
@@ -100,8 +106,26 @@ struct InputBinding
 /// "mouse_left", "xbox_a", "ps_cross", "switch_b", "gamepad_left_stick". Map these to your UI art.
 [[nodiscard]] std::string glyphId(const InputBinding& binding, GamepadFamily family);
 
-/// Short English label for @p binding, e.g. "Space", "A", "Cross", "LT", "ZR", "WASD".
+/// Short English label for @p binding, e.g. "Space", "A", "Cross", "LT", "ZR", "WASD". Keys use their stable
+/// names ("LeftControl"); see glyphLabel(const InputBinding&, GamepadFamily, const text::Localization&) for
+/// labels meant for players.
 [[nodiscard]] std::string glyphLabel(const InputBinding& binding, GamepadFamily family);
+
+/// String table key of the label of @p key in the "input" table ("input.key.*", e.g. "Left Ctrl").
+[[nodiscard]] text::TextKey keyLabelKey(Key key) noexcept;
+
+/// String table key of the label of @p binding on a @p family controller: "input.glyph." followed by the
+/// glyphId() for mouse and gamepad inputs, and keyLabelKey() for keys. For a KeyVector binding it is
+/// "input.glyph.key_vector", or "input.glyph.key_vector_compact" when the English labels of the four keys
+/// are single characters (as in "WASD"); their patterns take the four key labels as the arguments up, down,
+/// left and right.
+[[nodiscard]] text::TextKey glyphLabelKey(const InputBinding& binding, GamepadFamily family) noexcept;
+
+/// The label of @p binding in the active language of @p localization, e.g. "Sol Ctrl" in Turkish. The input
+/// table (`illusion::input::strings::kTable` from illusion/input/InputStrings.hpp) must be registered
+/// with Localization::addTable().
+[[nodiscard]] std::string glyphLabel(const InputBinding& binding, GamepadFamily family,
+                                     const text::Localization& localization);
 
 /// Kind of device used most recently, for choosing glyphs.
 enum class InputDevice : u8

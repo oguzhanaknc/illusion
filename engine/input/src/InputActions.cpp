@@ -1,5 +1,9 @@
 #include <illusion/core/Assert.hpp>
 #include <illusion/input/InputActions.hpp>
+#include <illusion/input/InputStrings.hpp>
+#include <illusion/text/Localization.hpp>
+#include <illusion/text/TextOutput.hpp>
+#include <illusion/text/Utf8.hpp>
 
 #include <algorithm>
 #include <cctype>
@@ -285,6 +289,226 @@ std::string_view mouseLabel(MouseButton button) noexcept
         break;
     }
     return "Mouse";
+}
+
+// Translatable labels (see engine/input/data/locales/en.json), in enum order.
+namespace strings = input::strings;
+
+constexpr std::array<text::TextKey, kKeyCount> kKeyLabels = {
+    strings::kKeyUnknown,
+    strings::kKeySpace,
+    strings::kKeyApostrophe,
+    strings::kKeyComma,
+    strings::kKeyMinus,
+    strings::kKeyPeriod,
+    strings::kKeySlash,
+    strings::kKeyNum0,
+    strings::kKeyNum1,
+    strings::kKeyNum2,
+    strings::kKeyNum3,
+    strings::kKeyNum4,
+    strings::kKeyNum5,
+    strings::kKeyNum6,
+    strings::kKeyNum7,
+    strings::kKeyNum8,
+    strings::kKeyNum9,
+    strings::kKeySemicolon,
+    strings::kKeyEqual,
+    strings::kKeyA,
+    strings::kKeyB,
+    strings::kKeyC,
+    strings::kKeyD,
+    strings::kKeyE,
+    strings::kKeyF,
+    strings::kKeyG,
+    strings::kKeyH,
+    strings::kKeyI,
+    strings::kKeyJ,
+    strings::kKeyK,
+    strings::kKeyL,
+    strings::kKeyM,
+    strings::kKeyN,
+    strings::kKeyO,
+    strings::kKeyP,
+    strings::kKeyQ,
+    strings::kKeyR,
+    strings::kKeyS,
+    strings::kKeyT,
+    strings::kKeyU,
+    strings::kKeyV,
+    strings::kKeyW,
+    strings::kKeyX,
+    strings::kKeyY,
+    strings::kKeyZ,
+    strings::kKeyLeftBracket,
+    strings::kKeyBackslash,
+    strings::kKeyRightBracket,
+    strings::kKeyGraveAccent,
+    strings::kKeyEscape,
+    strings::kKeyEnter,
+    strings::kKeyTab,
+    strings::kKeyBackspace,
+    strings::kKeyInsert,
+    strings::kKeyDelete,
+    strings::kKeyRight,
+    strings::kKeyLeft,
+    strings::kKeyDown,
+    strings::kKeyUp,
+    strings::kKeyPageUp,
+    strings::kKeyPageDown,
+    strings::kKeyHome,
+    strings::kKeyEnd,
+    strings::kKeyCapsLock,
+    strings::kKeyScrollLock,
+    strings::kKeyNumLock,
+    strings::kKeyPrintScreen,
+    strings::kKeyPause,
+    strings::kKeyF1,
+    strings::kKeyF2,
+    strings::kKeyF3,
+    strings::kKeyF4,
+    strings::kKeyF5,
+    strings::kKeyF6,
+    strings::kKeyF7,
+    strings::kKeyF8,
+    strings::kKeyF9,
+    strings::kKeyF10,
+    strings::kKeyF11,
+    strings::kKeyF12,
+    strings::kKeyF13,
+    strings::kKeyF14,
+    strings::kKeyF15,
+    strings::kKeyF16,
+    strings::kKeyF17,
+    strings::kKeyF18,
+    strings::kKeyF19,
+    strings::kKeyF20,
+    strings::kKeyF21,
+    strings::kKeyF22,
+    strings::kKeyF23,
+    strings::kKeyF24,
+    strings::kKeyKeypad0,
+    strings::kKeyKeypad1,
+    strings::kKeyKeypad2,
+    strings::kKeyKeypad3,
+    strings::kKeyKeypad4,
+    strings::kKeyKeypad5,
+    strings::kKeyKeypad6,
+    strings::kKeyKeypad7,
+    strings::kKeyKeypad8,
+    strings::kKeyKeypad9,
+    strings::kKeyKeypadDecimal,
+    strings::kKeyKeypadDivide,
+    strings::kKeyKeypadMultiply,
+    strings::kKeyKeypadSubtract,
+    strings::kKeyKeypadAdd,
+    strings::kKeyKeypadEnter,
+    strings::kKeyKeypadEqual,
+    strings::kKeyLeftShift,
+    strings::kKeyLeftControl,
+    strings::kKeyLeftAlt,
+    strings::kKeyLeftSuper,
+    strings::kKeyRightShift,
+    strings::kKeyRightControl,
+    strings::kKeyRightAlt,
+    strings::kKeyRightSuper,
+    strings::kKeyMenu,
+};
+
+constexpr std::array<text::TextKey, kGamepadButtonCount> kXboxButtonLabels = {
+    strings::kGlyphXboxA,        strings::kGlyphXboxB,        strings::kGlyphXboxX,
+    strings::kGlyphXboxY,        strings::kGlyphXboxView,     strings::kGlyphXboxGuide,
+    strings::kGlyphXboxMenu,     strings::kGlyphXboxLs,       strings::kGlyphXboxRs,
+    strings::kGlyphXboxLb,       strings::kGlyphXboxRb,       strings::kGlyphXboxDpadUp,
+    strings::kGlyphXboxDpadDown, strings::kGlyphXboxDpadLeft, strings::kGlyphXboxDpadRight,
+    strings::kGlyphXboxShare,    strings::kGlyphXboxP1,       strings::kGlyphXboxP2,
+    strings::kGlyphXboxP3,       strings::kGlyphXboxP4,       strings::kGlyphXboxTouchpad,
+};
+
+constexpr std::array<text::TextKey, kGamepadButtonCount> kPlayStationButtonLabels = {
+    strings::kGlyphPsCross,     strings::kGlyphPsCircle,    strings::kGlyphPsSquare,
+    strings::kGlyphPsTriangle,  strings::kGlyphPsShare,     strings::kGlyphPsPs,
+    strings::kGlyphPsOptions,   strings::kGlyphPsL3,        strings::kGlyphPsR3,
+    strings::kGlyphPsL1,        strings::kGlyphPsR1,        strings::kGlyphPsDpadUp,
+    strings::kGlyphPsDpadDown,  strings::kGlyphPsDpadLeft,  strings::kGlyphPsDpadRight,
+    strings::kGlyphPsMic,       strings::kGlyphPsRbPaddle,  strings::kGlyphPsLbPaddle,
+    strings::kGlyphPsRbPaddle2, strings::kGlyphPsLbPaddle2, strings::kGlyphPsTouchpad,
+};
+
+constexpr std::array<text::TextKey, kGamepadButtonCount> kNintendoButtonLabels = {
+    strings::kGlyphSwitchB,        strings::kGlyphSwitchA,        strings::kGlyphSwitchY,
+    strings::kGlyphSwitchX,        strings::kGlyphSwitchMinus,    strings::kGlyphSwitchHome,
+    strings::kGlyphSwitchPlus,     strings::kGlyphSwitchLs,       strings::kGlyphSwitchRs,
+    strings::kGlyphSwitchL,        strings::kGlyphSwitchR,        strings::kGlyphSwitchDpadUp,
+    strings::kGlyphSwitchDpadDown, strings::kGlyphSwitchDpadLeft, strings::kGlyphSwitchDpadRight,
+    strings::kGlyphSwitchCapture,  strings::kGlyphSwitchP1,       strings::kGlyphSwitchP2,
+    strings::kGlyphSwitchP3,       strings::kGlyphSwitchP4,       strings::kGlyphSwitchTouchpad,
+};
+
+constexpr std::array<text::TextKey, kGamepadButtonCount> kGenericButtonLabels = {
+    strings::kGlyphGamepadSouth,         strings::kGlyphGamepadEast,
+    strings::kGlyphGamepadWest,          strings::kGlyphGamepadNorth,
+    strings::kGlyphGamepadBack,          strings::kGlyphGamepadGuide,
+    strings::kGlyphGamepadStart,         strings::kGlyphGamepadLeftStick,
+    strings::kGlyphGamepadRightStick,    strings::kGlyphGamepadLeftShoulder,
+    strings::kGlyphGamepadRightShoulder, strings::kGlyphGamepadDpadUp,
+    strings::kGlyphGamepadDpadDown,      strings::kGlyphGamepadDpadLeft,
+    strings::kGlyphGamepadDpadRight,     strings::kGlyphGamepadMisc1,
+    strings::kGlyphGamepadRightPaddle1,  strings::kGlyphGamepadLeftPaddle1,
+    strings::kGlyphGamepadRightPaddle2,  strings::kGlyphGamepadLeftPaddle2,
+    strings::kGlyphGamepadTouchpad,
+};
+
+constexpr std::array<text::TextKey, static_cast<usize>(MouseButton::Count)> kMouseLabels = {
+    strings::kGlyphMouseLeft, strings::kGlyphMouseRight, strings::kGlyphMouseMiddle,
+    strings::kGlyphMouseButton4, strings::kGlyphMouseButton5};
+
+const std::array<text::TextKey, kGamepadButtonCount>& buttonLabels(GamepadFamily family) noexcept
+{
+    switch (family)
+    {
+    case GamepadFamily::Xbox:
+        return kXboxButtonLabels;
+    case GamepadFamily::PlayStation:
+        return kPlayStationButtonLabels;
+    case GamepadFamily::Nintendo:
+        return kNintendoButtonLabels;
+    case GamepadFamily::Generic:
+        break;
+    }
+    return kGenericButtonLabels;
+}
+
+text::TextKey triggerLabel(bool left, GamepadFamily family) noexcept
+{
+    switch (family)
+    {
+    case GamepadFamily::Xbox:
+        return left ? strings::kGlyphXboxLt : strings::kGlyphXboxRt;
+    case GamepadFamily::PlayStation:
+        return left ? strings::kGlyphPsL2 : strings::kGlyphPsR2;
+    case GamepadFamily::Nintendo:
+        return left ? strings::kGlyphSwitchZl : strings::kGlyphSwitchZr;
+    case GamepadFamily::Generic:
+        break;
+    }
+    return left ? strings::kGlyphGamepadLeftTrigger : strings::kGlyphGamepadRightTrigger;
+}
+
+text::TextKey stickLabel(bool left, GamepadFamily family) noexcept
+{
+    switch (family)
+    {
+    case GamepadFamily::Xbox:
+        return left ? strings::kGlyphXboxLeftStick : strings::kGlyphXboxRightStick;
+    case GamepadFamily::PlayStation:
+        return left ? strings::kGlyphPsLeftStick : strings::kGlyphPsRightStick;
+    case GamepadFamily::Nintendo:
+        return left ? strings::kGlyphSwitchLeftStick : strings::kGlyphSwitchRightStick;
+    case GamepadFamily::Generic:
+        break;
+    }
+    return left ? strings::kGlyphGamepadLeftStick : strings::kGlyphGamepadRightStick;
 }
 
 } // namespace
@@ -582,6 +806,79 @@ std::string glyphLabel(const InputBinding& binding, GamepadFamily family)
         return binding.code == static_cast<u16>(GamepadStick::Left) ? "Left Stick" : "Right Stick";
     }
     return {};
+}
+
+text::TextKey keyLabelKey(Key key) noexcept
+{
+    const auto index = static_cast<usize>(key);
+    return index < kKeyLabels.size() ? kKeyLabels[index] : kKeyLabels[0];
+}
+
+text::TextKey glyphLabelKey(const InputBinding& binding, GamepadFamily family) noexcept
+{
+    switch (binding.source)
+    {
+    case BindingSource::Key:
+        return keyLabelKey(static_cast<Key>(binding.code));
+    case BindingSource::MouseButton:
+    {
+        const auto index = static_cast<usize>(binding.code);
+        return index < kMouseLabels.size() ? kMouseLabels[index] : kMouseLabels[0];
+    }
+    case BindingSource::KeyVector:
+    {
+        bool singleCharacters = true;
+        for (const Key key : binding.keys)
+        {
+            singleCharacters = singleCharacters && text::utf8Length(keyLabelKey(key).english()) == 1;
+        }
+        return singleCharacters ? strings::kGlyphKeyVectorCompact : strings::kGlyphKeyVector;
+    }
+    case BindingSource::GamepadButton:
+    {
+        const auto index = static_cast<usize>(binding.code);
+        const auto& labels = buttonLabels(family);
+        return index < labels.size() ? labels[index] : labels[0];
+    }
+    case BindingSource::GamepadAxis:
+    {
+        const auto axis = static_cast<GamepadAxis>(binding.code);
+        if (isTriggerAxis(axis))
+        {
+            return triggerLabel(axis == GamepadAxis::LeftTrigger, family);
+        }
+        return stickLabel(axis == GamepadAxis::LeftX || axis == GamepadAxis::LeftY, family);
+    }
+    case BindingSource::GamepadStick:
+        return stickLabel(binding.code == static_cast<u16>(GamepadStick::Left), family);
+    }
+    return kKeyLabels[0];
+}
+
+std::string glyphLabel(const InputBinding& binding, GamepadFamily family,
+                       const text::Localization& localization)
+{
+    std::string label;
+    text::TextOutput out(label);
+    if (binding.source != BindingSource::KeyVector)
+    {
+        (void)localization.format(glyphLabelKey(binding, family), {}, out);
+        return label;
+    }
+    // The four key labels in the active language; they are joined without separators only if each is a
+    // single character.
+    std::string keys[4];
+    bool singleCharacters = true;
+    for (usize i = 0; i < 4; ++i)
+    {
+        text::TextOutput keyOut(keys[i]);
+        (void)localization.format(keyLabelKey(binding.keys[i]), {}, keyOut);
+        singleCharacters = singleCharacters && text::utf8Length(keys[i]) == 1;
+    }
+    (void)localization.format(singleCharacters ? strings::kGlyphKeyVectorCompact : strings::kGlyphKeyVector,
+                              {{"up", keys[0]}, {"down", keys[1]}, {"left", keys[2]}, {"right", keys[3]}},
+                              out);
+    return label;
 }
 
 // --- InputActions ---------------------------------------------------------------------------------------
