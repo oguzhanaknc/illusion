@@ -24,8 +24,7 @@ if (!model)
     ILL_LOG_ERROR("Game", "cannot load helmet: {}", error);
     return;
 }
-const illusion::ModelHandles handles = resources.uploadModel(*model);
-const std::vector<illusion::Entity> entities = illusion::spawnModel(world, *model, handles);
+const std::vector<illusion::Entity> entities = illusion::spawnModel(world, *model, "game:/models/helmet.glb");
 ```
 
 - Mesh'ler submesh'lerini (glTF primitive'leri) korur; her birinin kendi Material'i ve sınırlayıcı
@@ -37,9 +36,11 @@ const std::vector<illusion::Entity> entities = illusion::spawnModel(world, *mode
 - Node'lar varsayılan sahnenin hiyerarşisini korur; `ModelData::worldMatrices()` bunu çözer.
   `spawnModel()`, isteğe bağlı bir kök matrisle Entity'lerden aynı [hiyerarşiyi](ecs.md#transform-hiyerarsisi)
   oluşturur: her node için `Name`, `Hierarchy`, `LocalTransform` ve `Transform` taşıyan bir Entity. Mesh'i
-  tek submesh'li bir node `MeshRenderer`'ını alır; birden çok submesh'li bir Mesh her submesh için
+  tek submesh'li bir node, `<model>#mesh/N`'e başvuran bir `MeshRenderer` alır
+  ([Asset referansları](#asset-referanslar)); birden çok submesh'li bir Mesh her submesh için
   `<node> (<submesh>)` adlı bir çocuk alır. Oluşturulan tüm Entity'leri, önce ebeveynler olmak üzere
-  döndürür.
+  döndürür. World çizilirken modeli bir `RenderAssetResolver` yükler; `ModelHandles` alan `spawnModel()`
+  ise kodla yüklenmiş bir model için `RenderMesh` Component'leri yazar (hemen çizilirler ama kaydedilmezler).
 - Motorun desteklemediği zorunlu extension'lar (Draco, meshopt, KTX2 Texture'ları) bozuk görüntü
   çizmek yerine açık bir hatayla yüklemeyi başarısız kılar. `KHR_mesh_quantization` desteklenir.
 
@@ -70,8 +71,9 @@ böylece mip'ler kararmaz.
 ## Mesh'ler
 
 `MeshData`, 48 byte'lık vertex'lere (konum, normal, tangent, UV), submesh'lere ve sınırlara sahip,
-index'li bir üçgen listesidir. `makeCube()`, `makeSphere()` ve `makePlane()` prototipler ve test'ler
-için prosedürel Mesh'ler oluşturur; `computeNormals()` yumuşak normalleri doldurur.
+index'li bir üçgen listesidir. `makeCube()`, `makeSphere()`, `makePlane()`, `makeCapsule()` ve
+`makeCylinder()` prototipler ve test'ler için prosedürel Mesh'ler oluşturur (`makeBuiltinMesh()`
+`builtin:/mesh/...` Asset'lerini üretir); `computeNormals()` yumuşak normalleri doldurur.
 
 ```cpp
 illusion::MeshData ground = illusion::makePlane(20.0f);
@@ -100,6 +102,82 @@ const illusion::Vec3 fromAbove = irradiance.evaluate(illusion::Vec3(0.0f, 1.0f, 
   `RenderResources::createEnvironment()` bunu sizin için çağırır.
 - `makeSkyImage()` prototipler, test'ler ve yedek olarak prosedürel bir gökyüzü (zenitten ufka bir
   geçiş, zemin ve isteğe bağlı bir güneş diski) oluşturur.
+
+## Asset referansları
+
+Component'ler Asset'lere `AssetRef` ile başvurur; böylece sahneler çizdiklerini, çaldıklarını ve
+çarpıştıklarını kaydeder
+([ADR 0035](https://github.com/oguzhanaknc/illusion/blob/main/docs/adr/0035-asset-references.md)). Bir
+`AssetRef` bir yolun `AssetId`'sini tutar; süreç genelindeki `AssetPathTable` yolu hatırlar ve sahne
+dosyaları yolu metin olarak saklar.
+
+Header: `<illusion/core/AssetRef.hpp>`
+
+```cpp
+illusion::MeshRenderer ship;
+ship.mesh = illusion::AssetRef("game:/models/ship.glb#mesh/0");
+ship.material = illusion::AssetRef("game:/materials/hull.material");
+world.create(illusion::Transform{}, ship);
+
+ILL_LOG_INFO("Game", "{}", ship.mesh.path()); // game:/models/ship.glb#mesh/0
+```
+
+- Yollar kaydedilirken normalleştirilir (`game:/a/../b.png`, `game:/b.png` olur); bozuk bir yol boş bir
+  referans verir.
+- JSON'da bir `AssetRef` yolunun kendisidir, yoksa `""`; okurken `null` ve `{"path": "..."}` da kabul edilir.
+- Bir referansı diğer alanlar gibi reflect edin; `FieldMeta::assetKind`, editörlere hangi tür Asset'in
+  uyduğunu söyler.
+- Asset'leri resolver'lar yükler: `MeshRenderer` ve `SkyLight` için `RenderAssetResolver`
+  ([Rendering](rendering.md#meshrenderer-ve-rendermesh)), çarpışma Mesh'leri için `PhysicsAssetResolver`
+  ([Fizik](physics.md#mesh-ve-convex-hull-colliderlar)); `AudioSource::clip`'i `AudioWorld` yükler.
+- Eksik bir dosyaya başvuran bir sahne yine yüklenir ve referansı korur; `SceneLoadResult::missingAssets`
+  onu listeler ([Sahneler](scenes.md#sahneleri-kaydetme-ve-yukleme)).
+- Paylaşımlı [oyun modülleri](modules.md) host'un tablosunu kullanır; böylece referansları host'ta çözülür.
+
+### Alt Asset'ler ve yerleşik Asset'ler
+
+`#` sonrasındaki bir parça, bir modelin bir kısmını seçer:
+
+| Yol | Asset |
+| --- | --- |
+| `game:/ship.glb` | modelin tamamı (Mesh olarak: ilk Mesh'i) |
+| `game:/ship.glb#mesh/2` | 2 numaralı Mesh |
+| `game:/ship.glb#material/0` | 0 numaralı Material |
+| `game:/ship.glb#node/Hull` | `Hull` adlı node'un Mesh'i |
+
+Ayrılmış `builtin:` mount'u dosya gerektirmeyen Asset'ler sağlar; `VirtualFileSystem` onu mount etmeyi reddeder:
+
+| Yol | Asset |
+| --- | --- |
+| `builtin:/mesh/cube`, `sphere`, `plane`, `capsule`, `cylinder` | varsayılan boyutlarla `makeCube()` ... `makeCylinder()` |
+| `builtin:/material/default` | varsayılan Material (beyaz, pürüzlü, metal olmayan) |
+| `builtin:/sky/procedural` | Entity'nin `ProceduralSky`'ıyla şekillenen bir `makeSkyImage()` gökyüzü |
+
+### Material Asset'leri
+
+Bir `.material` dosyası bir Material'i model olmadan tanımlar; böylece birden çok Mesh onu paylaşabilir
+ve bir `MeshRenderer` bir modelin Material'ini değiştirebilir:
+
+```json
+{
+  "format": "illusion.material",
+  "version": 1,
+  "material": {"baseColorFactor": [0.8, 0.1, 0.1, 1], "roughnessFactor": 0.4, "metallicFactor": 0},
+  "textures": {"baseColor": "game:/textures/paint.png", "normal": "game:/textures/paint_n.png"}
+}
+```
+
+- `material`, `MaterialData` alanlarını adlarıyla tutar; eksik alanlar varsayılanlarını korur.
+  `...Texture` üyeleri yalnızca sarma (wrap) modlarını belirler.
+- `textures` görüntüleri adlandırır: `baseColor` ve `emissive` sRGB olarak, `metallicRoughness`, `normal`
+  ve `occlusion` doğrusal veri olarak yüklenir.
+- `parseMaterialAsset()` ve `writeMaterialAsset()` dosyaları okur ve yazar (önce bir kez
+  `reflectAssetStructs()` çağırın); `materialAssetDecoder()` onları `AssetStreamer::loadFile()` ile
+  akışla yükler.
+- `cookAssets()` Material dosyalarını denetler ve Texture'larını bu ayarlarla cook eder. `.material`
+  dosyalarının kendisi doğrudan okunur; onları oyunun dosyalarıyla birlikte gönderin.
+
+Header: `<illusion/assets/MaterialAsset.hpp>`
 
 ## Asset veritabanı
 
@@ -134,7 +212,8 @@ std::optional<illusion::Image> bumps = assets.loadImage("game:/textures/rock_nor
   hızlıdır.
 - `statistics()` önbellek isabetlerini, içe aktarmaları ve önbellek yazmalarını sayar.
 
-Asset'ler, normalleştirilmiş sanal yolun kararlı bir hash'i olan `AssetId` ile tanımlanır:
+Asset'ler, normalleştirilmiş sanal yolun kararlı bir hash'i olan `AssetId`
+(`<illusion/core/AssetId.hpp>`) ile tanımlanır:
 
 ```cpp
 const illusion::AssetId id = illusion::AssetId::fromPath("game:/models/helmet.glb");

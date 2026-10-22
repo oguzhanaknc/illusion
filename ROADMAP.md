@@ -120,8 +120,14 @@ Plan: `docs/plans/m7-editor.md` (sub-milestones, command API, localization, them
   physics and audio, scenes saved in hierarchy pre-order without derived child Transforms, `spawnModel()`
   keeping glTF nodes and names, and `Math.hpp` rays, intersections, `screenToRay`,
   `orthographicReversedZ` and Euler conversions (ADR 0034)
-- M7h: Asset references in scenes, so that `MeshRenderer` and `SkyLight` are saved; materials; built-in
-  assets (ADR 0035)
+- M7h: ✅ Asset references in scenes: `AssetId`, virtual paths and the thread-safe `AssetPathTable` in core
+  (shared with modules, module API v2), `AssetRef` fields (`FieldType::Asset`, `FieldMeta::assetKind`),
+  sub-asset fragments (`#mesh/N`, `#material/N`, `#node/name`) and `builtin:` meshes, material and
+  procedural sky; saved `MeshRenderer`/`SkyLight`/`ProceduralSky` with runtime `RenderMesh`/`RenderSky`,
+  `RenderAssetResolver` and a shared `RenderAssetCache` (parallel steady-state check, no allocations),
+  `.material` files, `PhysicsAssetResolver` for collision meshes, `AudioSource::clip` as an asset
+  reference, `SceneLoadResult::missingAssets` (ADR 0035). Not yet: freeing GPU memory of cache entries no
+  resolver uses (`RenderResources` cannot destroy resources yet); it comes with live reload (M7u)
 - M7i: Headless editor core: projects, typed commands, transactions, undo, journal (ADR 0036)
 - M7j: JSON-RPC server, process API, `illusion_ctl`, acceptance skeleton (ADRs 0037, 0038)
 - M7k: MCP bridge `illusion_mcp` with tools generated from editor commands (ADR 0039)
@@ -134,7 +140,8 @@ Plan: `docs/plans/m7-editor.md` (sub-milestones, command API, localization, them
 - M7r: Play mode and the `GameSession` runtime (ADR 0042)
 - M7s: Project modules built from the editor (ADR 0043)
 - M7t: Component layout migration on hot reload, the M6 follow-up (ADR 0044)
-- M7u: Asset catalog, live reload and the asset browser (ADR 0045)
+- M7u: Asset catalog, live reload and the asset browser (ADR 0045); GPU eviction of unused
+  `RenderAssetCache` entries (from M7h)
 - M7v: Prefabs with overrides and nesting (ADR 0046)
 - M7w: Engine feature panels: rendering, physics, audio mixer, input actions, gamepad tester, profiler,
   diagnostics

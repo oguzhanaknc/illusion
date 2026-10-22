@@ -1,6 +1,6 @@
 # 0019. Asset ids, cooked asset files and a content-hashed import cache
 
-- Status: Accepted
+- Status: Accepted; ids kept, `AssetId` moved to core and asset references added by [0035](0035-asset-references.md)
 - Date: 2026-10-17
 
 ## Context

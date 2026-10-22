@@ -22,13 +22,13 @@ world.create(cameraTransform, illusion::AudioListener{});
 
 // A crackling fire, positioned at its Transform.
 illusion::AudioSource fire;
-fire.clip = "game:/audio/fire.ogg";
+fire.clip = illusion::AssetRef("game:/audio/fire.ogg");
 fire.loop = true;
 world.create(fireTransform, fire);
 
 // Background music: not spatial, streamed, on the music bus.
 illusion::AudioSource music;
-music.clip = "game:/audio/theme.ogg";
+music.clip = illusion::AssetRef("game:/audio/theme.ogg");
 music.bus = illusion::AudioBus::Music;
 music.spatial = false;
 music.stream = true;
@@ -125,7 +125,7 @@ while (running)
 
 | `AudioSource` field | Meaning |
 | --- | --- |
-| `clip` | Virtual path of the clip |
+| `clip` | The clip, an `AssetRef` (saved as its virtual path) |
 | `bus` | Mixer bus (`Sfx` by default) |
 | `volume`, `pitch`, `pan` | Linear gain; playback speed (clamped to [1/16, 16]); stereo balance in [-1, 1] |
 | `loop` | Restart at the end instead of stopping |
@@ -186,7 +186,7 @@ the -z axis of its `Transform`.
 
 ```cpp
 illusion::AudioSource speaker;
-speaker.clip = "game:/audio/announcement.ogg";
+speaker.clip = illusion::AssetRef("game:/audio/announcement.ogg");
 speaker.coneInnerAngle = 1.5f;  // full volume within ~86 degrees around the speaker's forward axis
 speaker.coneOuterAngle = 3.0f;  // quiet behind it
 speaker.coneOuterVolume = 0.2f;

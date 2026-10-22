@@ -159,7 +159,7 @@ struct Fixture
 inline AudioSource sourceFor(std::string_view clip)
 {
     AudioSource source;
-    source.clip = clip;
+    source.clip = AssetRef(clip);
     return source;
 }
 

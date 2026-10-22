@@ -27,7 +27,7 @@
 ///
 /// A shared module contains its own copy of the engine's static libraries. Before any of its code runs,
 /// the host installs its process-wide services into that copy (see ModuleServices), so both sides share
-/// one logger, one component registry and one assert handler (ADR 0003).
+/// one logger, one component registry, one asset path table and one assert handler (ADR 0003).
 
 #include <illusion/core/Assert.hpp>
 #include <illusion/core/Base.hpp>
@@ -42,6 +42,7 @@
 namespace illusion
 {
 
+class AssetPathTable;
 class ComponentRegistry;
 class JobSystem;
 class Logger;
@@ -49,7 +50,7 @@ class World;
 
 /// Layout version of ModuleApi, ModuleServices and ModuleContext. A host only loads modules built with the
 /// same value.
-inline constexpr u32 kModuleApiVersion = 1;
+inline constexpr u32 kModuleApiVersion = 2;
 
 /// A module that must be loaded before this one.
 struct ModuleDependency
@@ -65,6 +66,7 @@ struct ModuleServices
 {
     Logger* logger = nullptr;                ///< The host's logger.
     ComponentRegistry* registry = nullptr;   ///< The host's component registry.
+    AssetPathTable* assetPaths = nullptr;    ///< The host's asset path table (since API version 2).
     AssertHandler assertHandler = nullptr;   ///< Calls the host's current assert handler.
     u32 (*threadIndex)() noexcept = nullptr; ///< The host's currentThreadIndex().
     i32 (*workerIndex)() noexcept = nullptr; ///< The host's JobSystem::currentWorkerIndex().

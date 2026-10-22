@@ -82,6 +82,7 @@ void registerGameTypes()
 | `std::vector<T>` (not `bool`) | `Array` | array |
 | `std::optional<T>` | `Optional` | `null` or the value |
 | `JsonText` | `Json` | any JSON value |
+| `AssetRef` | `Asset` | the asset's path, `""` for none ([asset references](assets.md#asset-references)) |
 
 `u64` values are written as strings so that readers which keep numbers as doubles (JavaScript, many MCP
 clients) stay exact; numbers are accepted when reading. Enumeration values without a name are kept as
@@ -110,6 +111,7 @@ must follow the member order.
 | `hint` | Widget: `Color`, `HdrColor`, `Angle`, `Slider`, `LogSlider`, `Multiline`, `Layer`, `LayerMask` |
 | `readOnly`, `hidden`, `advanced` | Shown but not editable; not shown; shown when advanced fields are expanded |
 | `renamedFrom` | Name of the field in older data |
+| `assetKind` | `Asset` fields: the kind of asset expected (`Mesh`, `Material`, `Texture`, ...), for asset pickers |
 | `validate` | Function that checks a value read from JSON; a rejected value fails the read with its message |
 
 | `TypeMeta` | Meaning |

@@ -1,7 +1,6 @@
 #include <illusion/assets/AssetFormat.hpp>
 #include <illusion/core/Hash.hpp>
 #include <illusion/core/Serialization.hpp>
-#include <illusion/platform/FileSystem.hpp>
 
 #include <format>
 #include <utility>
@@ -79,12 +78,6 @@ bool readImage(BinaryReader& reader, Image& image)
 }
 
 } // namespace
-
-AssetId AssetId::fromPath(std::string_view virtualPath)
-{
-    const std::optional<std::string> normalized = VirtualFileSystem::normalizePath(virtualPath);
-    return normalized ? AssetId{fnv1a64(*normalized)} : AssetId{};
-}
 
 std::vector<std::byte> writeAssetFile(const AssetFile& file)
 {

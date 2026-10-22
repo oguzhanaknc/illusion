@@ -99,6 +99,8 @@ public:
     ///   Inactive Entities (Hierarchy.hpp) are removed; joints are also removed with their bodies. Inactive
     ///   Entities get them again when they become active; a joint waits while its connected Entity is
     ///   Inactive.
+    /// - A ConvexHull or Mesh Collider with a mesh asset (Collider::mesh) gets its body once a
+    ///   PhysicsAssetResolver has cooked the asset.
     /// - Dynamic bodies and characters get the WorldSpaceAuthority tag (removed with the body), so that
     ///   updateTransformHierarchy() lets their children follow them.
     /// - Kinematic and static bodies follow their Transforms; a dynamic body or a character whose
@@ -121,6 +123,9 @@ public:
 
     /// Number of fixed steps simulated so far.
     [[nodiscard]] u64 stepCount() const noexcept;
+
+    /// The World whose bodies this PhysicsWorld simulates.
+    [[nodiscard]] World& world() const noexcept;
 
     /// Sets gravity in m/s².
     void setGravity(const Vec3& gravity);
@@ -171,13 +176,13 @@ public:
     /// @name Collision geometry
     /// @{
 
-    /// Creates triangle-mesh geometry for Collider::mesh with ColliderShape::Mesh, from @p vertices and
+    /// Creates triangle-mesh geometry for Collider::geometry with ColliderShape::Mesh, from @p vertices and
     /// three indices per triangle (counter-clockwise seen from the front; both sides collide). Mesh
     /// colliders only work on static and kinematic bodies. Returns an invalid handle (and logs a warning)
     /// for empty or out-of-range input.
     PhysicsMeshHandle createMesh(std::span<const Vec3> vertices, std::span<const u32> indices);
 
-    /// Creates the convex hull of @p points for Collider::mesh with ColliderShape::ConvexHull (any motion
+    /// Creates the convex hull of @p points for Collider::geometry with ColliderShape::ConvexHull (any motion
     /// type). Returns an invalid handle (and logs a warning) if the points are degenerate, for example
     /// all on one plane.
     PhysicsMeshHandle createConvexHull(std::span<const Vec3> points);

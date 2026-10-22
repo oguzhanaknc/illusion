@@ -96,8 +96,8 @@ original. It then checks the module and returns an error message if anything is 
 - a valid, unique name and a semantic version;
 - its dependencies.
 
-The host then gives the module its process-wide services (logger, Component registry, assert handler,
-thread and worker indices) and calls `load`. `update()` runs the modules in load order; `unload()` and
+The host then gives the module its process-wide services (logger, Component registry, asset path table,
+assert handler, thread and worker indices) and calls `load`. `update()` runs the modules in load order; `unload()` and
 the destructor unload them, the last one first.
 
 ## Hot reload

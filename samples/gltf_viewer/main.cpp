@@ -5,13 +5,16 @@
 //   Without a model, a grid of spheres with varying metallic (x) and roughness (y) is shown.
 //   Orbit: left mouse drag or right stick. Zoom: mouse wheel or triggers. Escape quits.
 //   --environment lights the scene with an equirectangular HDR image (for example from polyhaven.com);
-//   without it, a procedural sky is used. --taa turns on temporal anti-aliasing.
+//   without it, the built-in procedural sky (builtin:/sky/procedural) is used. The model and the image are
+//   loaded through asset references (MeshRenderer, SkyLight) by a RenderAssetResolver. --taa turns on
+//   temporal anti-aliasing.
 //   --screenshot renders the final view offscreen at 1280x720 and saves it as PNG.
 
 #include "common/Screenshot.hpp"
 
-#include <illusion/assets/Environment.hpp>
+#include <illusion/assets/AssetStreamer.hpp>
 #include <illusion/assets/Model.hpp>
+#include <illusion/core/AssetRef.hpp>
 #include <illusion/core/EventBus.hpp>
 #include <illusion/core/JobSystem.hpp>
 #include <illusion/core/Log.hpp>
@@ -23,6 +26,7 @@
 #include <illusion/platform/FileSystem.hpp>
 #include <illusion/platform/Platform.hpp>
 #include <illusion/platform/Window.hpp>
+#include <illusion/render/RenderAssets.hpp>
 #include <illusion/render/RenderDevice.hpp>
 #include <illusion/render/RenderResources.hpp>
 #include <illusion/render/SceneRenderer.hpp>
@@ -33,9 +37,7 @@
 #include <cstring>
 #include <filesystem>
 #include <format>
-#include <fstream>
-#include <iterator>
-#include <span>
+#include <optional>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -44,6 +46,21 @@ using namespace illusion;
 
 namespace
 {
+
+// Mounts the directory of the file @p path as @p mount and returns the file's virtual path.
+std::optional<std::string> mountFile(VirtualFileSystem& files, std::string_view mount, std::string_view path)
+{
+    const std::filesystem::path file = utf8Path(path);
+    std::error_code code;
+    if (files.mount(mount, std::filesystem::absolute(file, code).parent_path()) != FileError::None)
+    {
+        ILL_LOG_ERROR("Sample", "cannot open the directory of {}", path);
+        return std::nullopt;
+    }
+    const std::u8string name = file.filename().u8string();
+    return std::format("{}:/{}", mount,
+                       std::string_view(reinterpret_cast<const char*>(name.data()), name.size()));
+}
 
 void buildTestScene(World& world, RenderResources& resources)
 {
@@ -61,14 +78,14 @@ void buildTestScene(World& world, RenderResources& resources)
             Transform transform;
             transform.position =
                 Vec3((static_cast<f32>(x) - 2.0f) * 1.0f, static_cast<f32>(y) * 1.0f + 0.5f, 0.0f);
-            world.create(transform, MeshRenderer{sphere, 0, resources.createMaterial(material)});
+            world.create(transform, RenderMesh{sphere, 0, resources.createMaterial(material)});
         }
     }
     MaterialDesc ground;
     ground.parameters.baseColorFactor = Vec4(0.5f, 0.5f, 0.5f, 1.0f);
     ground.parameters.metallicFactor = 0.0f;
     ground.parameters.roughnessFactor = 0.9f;
-    world.create(Transform{}, MeshRenderer{plane, 0, resources.createMaterial(ground)});
+    world.create(Transform{}, RenderMesh{plane, 0, resources.createMaterial(ground)});
 
     Transform blueLight;
     blueLight.position = Vec3(-3.0f, 2.0f, 2.0f);
@@ -141,6 +158,12 @@ int main(int argc, char** argv)
         return 1;
     }
 
+    // The model and the environment are referenced by virtual path; the resolver loads them (ADR 0035).
+    VirtualFileSystem files;
+    AssetStreamer streamer(files, jobs, AssetStreamerDesc{.cacheMount = ""});
+    RenderAssetCache assetCache(resources, streamer);
+    RenderAssetResolver assets(assetCache);
+
     World world;
     Vec3 target(0.0f, 2.0f, 0.0f);
     f32 distance = 7.0f;
@@ -150,26 +173,19 @@ int main(int argc, char** argv)
     }
     else
     {
-        const std::filesystem::path path = utf8Path(modelPath);
-        VirtualFileSystem files;
-        std::error_code code;
-        const std::filesystem::path directory = std::filesystem::absolute(path, code).parent_path();
-        if (files.mount("model", directory) != FileError::None)
+        const std::optional<std::string> virtualPath = mountFile(files, "model", modelPath);
+        if (!virtualPath)
         {
-            ILL_LOG_ERROR("Sample", "cannot open directory of {}", modelPath);
             return 1;
         }
-        const std::u8string fileName = path.filename().u8string();
+        // The model is read once here for its bounds; the resolver loads it again through the streamer.
         std::string error;
-        const auto model = loadGltf(
-            files, "model:/" + std::string(reinterpret_cast<const char*>(fileName.data()), fileName.size()),
-            &error);
+        const auto model = loadGltf(files, *virtualPath, &error);
         if (!model)
         {
             ILL_LOG_ERROR("Sample", "{}", error);
             return 1;
         }
-        const ModelHandles handles = resources.uploadModel(*model);
         const Aabb bounds = model->bounds();
         // Scale the model to about 4 units and stand it on the ground.
         const f32 size = std::max(glm::length(bounds.max - bounds.min), 1e-3f);
@@ -177,7 +193,7 @@ int main(int argc, char** argv)
         const Mat4 root =
             glm::scale(Mat4(1.0f), Vec3(scale)) *
             glm::translate(Mat4(1.0f), -Vec3(bounds.center().x, bounds.min.y, bounds.center().z));
-        const auto entities = spawnModel(world, *model, handles, root);
+        const auto entities = spawnModel(world, *model, *virtualPath, root);
         target = Vec3(0.0f, (bounds.max.y - bounds.min.y) * scale * 0.5f, 0.0f);
         ILL_LOG_INFO("Sample", "loaded {} ({} entities)", modelPath, entities.size());
     }
@@ -185,26 +201,29 @@ int main(int argc, char** argv)
     sun.rotation = glm::quatLookAt(glm::normalize(Vec3(-0.4f, -1.0f, -0.6f)), Vec3(0.0f, 1.0f, 0.0f));
     world.create(sun, DirectionalLight{Vec3(1.0f, 0.95f, 0.9f), 3.0f});
 
-    Image environmentImage = makeSkyImage(2048);
-    if (!environmentPath.empty())
+    if (environmentPath.empty())
     {
-        std::ifstream file(utf8Path(environmentPath), std::ios::binary);
-        const std::vector<char> bytes{std::istreambuf_iterator<char>(file), std::istreambuf_iterator<char>()};
-        std::string error;
-        auto decoded = decodeImage(std::as_bytes(std::span(bytes)), false, &error);
-        if (!decoded)
+        world.create(Transform{}, SkyLight{.environment = AssetRef("builtin:/sky/procedural")},
+                     ProceduralSky{.resolution = 2048});
+    }
+    else
+    {
+        const std::optional<std::string> virtualPath = mountFile(files, "environment", environmentPath);
+        if (!virtualPath)
         {
-            ILL_LOG_ERROR("Sample", "cannot load {}: {}", environmentPath, error);
             return 1;
         }
-        environmentImage = std::move(*decoded);
+        world.create(Transform{}, SkyLight{.environment = AssetRef(*virtualPath)});
     }
-    Stopwatch bakeTimer;
-    const EnvironmentHandle environment = resources.createEnvironment(environmentImage);
+    Stopwatch loadTimer;
+    assets.waitIdle(world, &jobs);
+    if (assets.statistics().failures > 0)
+    {
+        return 1; // the cache logged why
+    }
     device->waitIdle();
-    ILL_LOG_INFO("Sample", "environment {}x{} baked in {:.1f} ms", environmentImage.width(),
-                 environmentImage.height(), bakeTimer.elapsedSeconds() * 1000.0);
-    world.create(Transform{}, SkyLight{environment, 1.0f, true});
+    ILL_LOG_INFO("Sample", "assets loaded and the environment baked in {:.1f} ms",
+                 loadTimer.elapsedSeconds() * 1000.0);
 
     InputActions actions;
     const ActionId orbit = actions.addAction("Orbit", ActionType::Vector2);
@@ -269,6 +288,9 @@ int main(int argc, char** argv)
             const UVec2 size = swapchain->size();
             const RenderView view =
                 RenderView::fromCamera(camera, Camera{}, static_cast<f32>(size.x) / static_cast<f32>(size.y));
+            streamer.update();
+            assetCache.update();
+            assets.update(world, &jobs);
             commands->open();
             renderer->render(commands, swapchain->currentBackBuffer(), world, view, &jobs);
             commands->close();

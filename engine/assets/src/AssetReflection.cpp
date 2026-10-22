@@ -1,4 +1,5 @@
 #include <illusion/assets/AssetReflection.hpp>
+#include <illusion/assets/MaterialAsset.hpp>
 #include <illusion/ecs/StructRegistry.hpp>
 
 namespace illusion
@@ -51,6 +52,17 @@ void reflectAssetStructs(ComponentRegistry& registry)
         .field("normalTexture", &MaterialData::normalTexture)
         .field("occlusionTexture", &MaterialData::occlusionTexture)
         .field("emissiveTexture", &MaterialData::emissiveTexture);
+    reflectStruct<MaterialTextures>("illusion.MaterialTextures", 1, structs)
+        .meta({.displayName = "Material textures", .docsAnchor = "manual/assets.md#material-assets"})
+        .field("baseColor", &MaterialTextures::baseColor, {.assetKind = AssetKind::Texture})
+        .field("metallicRoughness", &MaterialTextures::metallicRoughness, {.assetKind = AssetKind::Texture})
+        .field("normal", &MaterialTextures::normal, {.assetKind = AssetKind::Texture})
+        .field("occlusion", &MaterialTextures::occlusion, {.assetKind = AssetKind::Texture})
+        .field("emissive", &MaterialTextures::emissive, {.assetKind = AssetKind::Texture});
+    reflectStruct<MaterialAsset>("illusion.MaterialAsset", 1, structs)
+        .meta({.displayName = "Material asset", .docsAnchor = "manual/assets.md#material-assets"})
+        .field("material", &MaterialAsset::material)
+        .field("textures", &MaterialAsset::textures);
 }
 
 } // namespace illusion

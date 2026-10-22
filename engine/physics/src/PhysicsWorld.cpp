@@ -377,8 +377,16 @@ JPH::EMotionType toJolt(MotionType type) noexcept
     return JPH::EMotionType::Static;
 }
 
+// True for a ConvexHull or Mesh collider whose mesh asset a PhysicsAssetResolver has not cooked yet: it gets
+// its body once the geometry is there.
+bool waitsForAsset(const Collider& collider) noexcept
+{
+    return (collider.shape == ColliderShape::ConvexHull || collider.shape == ColliderShape::Mesh) &&
+           collider.mesh && collider.geometryKey == 0;
+}
+
 // Builds the collision shape of @p collider scaled by @p scale; @p geometry is the resolved
-// Collider::mesh of ConvexHull and Mesh colliders (null if the handle is invalid). Returns null and sets
+// Collider::geometry of ConvexHull and Mesh colliders (null if the handle is invalid). Returns null and sets
 // @p error if the collider is invalid.
 JPH::RefConst<JPH::Shape> createShape(const Collider& collider, const Vec3& scale, const JPH::Shape* geometry,
                                       std::string& error)
@@ -639,7 +647,7 @@ struct PhysicsWorld::Impl
         {
             return nullptr;
         }
-        const Geometry* found = geometryOf(collider.mesh);
+        const Geometry* found = geometryOf(collider.geometry);
         return found != nullptr && found->mesh == (collider.shape == ColliderShape::Mesh)
                    ? found->shape.GetPtr()
                    : nullptr;
@@ -1268,8 +1276,11 @@ struct PhysicsWorld::Impl
     {
         scratchEntities.clear();
         world.query<const Transform, const RigidBody, const Collider>().without<PhysicsBody, Inactive>().each(
-            [this](Entity entity, const Transform&, const RigidBody&, const Collider&) {
-                scratchEntities.push_back(entity);
+            [this](Entity entity, const Transform&, const RigidBody&, const Collider& collider) {
+                if (!waitsForAsset(collider))
+                {
+                    scratchEntities.push_back(entity);
+                }
             });
         if (scratchEntities.empty())
         {
@@ -1754,6 +1765,11 @@ std::span<const Entity> PhysicsWorld::brokenJoints() const noexcept
 u64 PhysicsWorld::stepCount() const noexcept
 {
     return m_impl->timestep.totalSteps();
+}
+
+World& PhysicsWorld::world() const noexcept
+{
+    return m_impl->world;
 }
 
 void PhysicsWorld::setGravity(const Vec3& gravity)

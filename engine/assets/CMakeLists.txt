@@ -10,6 +10,7 @@ add_library(illusion_assets STATIC
     src/Environment.cpp
     src/Gltf.cpp
     src/Image.cpp
+    src/MaterialAsset.cpp
     src/Mesh.cpp
     src/ThirdPartyImpl.cpp)
 add_library(illusion::assets ALIAS illusion_assets)

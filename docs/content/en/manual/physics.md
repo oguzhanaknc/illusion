@@ -69,8 +69,8 @@ while (running)
 | `Sphere` | `radius` |
 | `Capsule` | `halfHeight` (straight part along local Y), `radius` |
 | `Cylinder` | `halfHeight` (along local Y), `radius` |
-| `ConvexHull` | `mesh` from `createConvexHull()` |
-| `Mesh` | `mesh` from `createMesh()`; static and kinematic bodies only |
+| `ConvexHull` | `mesh` (an asset) or `geometry` from `createConvexHull()` |
+| `Mesh` | `mesh` (an asset) or `geometry` from `createMesh()`; static and kinematic bodies only |
 
 `offset` and `rotation` place the shape relative to the Entity. The `Transform`'s scale scales the
 shape; spheres and capsules use a uniform scale. An invalid collider (for example a negative radius)
@@ -79,26 +79,42 @@ logs a warning and gets a `PhysicsBody` without a body; fix it and call `rebuild
 ### Mesh and convex hull colliders
 
 Triangle meshes make level geometry; convex hulls fit props of any shape and can be dynamic. Both are
-cooked once and shared by every body that uses them:
+cooked once and shared by every body that uses them. Name a mesh asset in `Collider::mesh` (see
+[asset references](assets.md#asset-references)), or create the geometry in code and set
+`Collider::geometry`:
 
 ```cpp
-// Level geometry: vertices and three indices per triangle (counter-clockwise seen from the front).
-const illusion::PhysicsMeshHandle level = physics.createMesh(positions, indices);
+// From mesh assets: saved in scenes, cooked by a PhysicsAssetResolver.
+illusion::PhysicsAssetResolver colliders(physics, streamer);
 illusion::Collider levelShape;
 levelShape.shape = illusion::ColliderShape::Mesh;
-levelShape.mesh = level;
+levelShape.mesh = illusion::AssetRef("game:/levels/arena.glb#node/Collision");
 world.create(illusion::Transform{}, groundBody, levelShape); // a static RigidBody
 
-// A dynamic rock: the convex hull of its vertices.
+illusion::Collider crateShape;
+crateShape.shape = illusion::ColliderShape::ConvexHull;
+crateShape.mesh = illusion::AssetRef("builtin:/mesh/cube");
+world.create(crateTransform, illusion::RigidBody{}, crateShape);
+
+// Every frame, before physics.update():
+colliders.update();
+
+// From code: vertices and three indices per triangle (counter-clockwise seen from the front).
 illusion::Collider rockShape;
 rockShape.shape = illusion::ColliderShape::ConvexHull;
-rockShape.mesh = physics.createConvexHull(rockPositions);
+rockShape.geometry = physics.createConvexHull(rockPositions);
 world.create(rockTransform, illusion::RigidBody{}, rockShape);
 ```
 
 - Mesh colliders on dynamic bodies are rejected (Jolt cannot compute their mass); use a convex hull.
 - `destroyMesh()` releases a handle; bodies that already use the geometry keep it.
-- The handle is runtime data and is not saved in scenes; set it again after loading a scene.
+- The `PhysicsAssetResolver` cooks a triangle mesh of all submeshes, or the convex hull of all
+  vertices, once per asset, `meshIndex` (the mesh of a model path without a fragment) and shape kind.
+  A Collider waiting for its asset gets its body once the geometry is cooked; a Collider whose asset
+  changes is rebuilt. An asset that cannot be loaded logs a warning and counts in
+  `statistics().failures`.
+- `geometry` is runtime data and is not saved in scenes; `mesh` and `meshIndex` are. Geometry created in
+  code must be set again after loading a scene.
 
 ## Velocities, forces, queries and contacts
 

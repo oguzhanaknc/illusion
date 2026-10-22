@@ -64,6 +64,8 @@ std::string_view fieldTypeName(FieldType type) noexcept
         return "Optional";
     case FieldType::Json:
         return "Json";
+    case FieldType::Asset:
+        return "Asset";
     }
     return "Unknown";
 }
@@ -383,6 +385,8 @@ bool valuesEqual(const ValueType& type, const void* a, const void* b) noexcept
         return equalAs<Entity>(a, b);
     case FieldType::Json:
         return equalAs<JsonText>(a, b);
+    case FieldType::Asset:
+        return equalAs<AssetRef>(a, b);
     case FieldType::Enum:
     case FieldType::Flags:
         return readEnumValue(a, type) == readEnumValue(b, type);

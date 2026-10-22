@@ -22,13 +22,13 @@ world.create(cameraTransform, illusion::AudioListener{});
 
 // A crackling fire, positioned at its Transform.
 illusion::AudioSource fire;
-fire.clip = "game:/audio/fire.ogg";
+fire.clip = illusion::AssetRef("game:/audio/fire.ogg");
 fire.loop = true;
 world.create(fireTransform, fire);
 
 // Background music: not spatial, streamed, on the music bus.
 illusion::AudioSource music;
-music.clip = "game:/audio/theme.ogg";
+music.clip = illusion::AssetRef("game:/audio/theme.ogg");
 music.bus = illusion::AudioBus::Music;
 music.spatial = false;
 music.stream = true;
@@ -125,7 +125,7 @@ while (running)
 
 | `AudioSource` alanı | Anlamı |
 | --- | --- |
-| `clip` | Clip'in sanal yolu |
+| `clip` | Clip; bir `AssetRef` (sanal yolu olarak kaydedilir) |
 | `bus` | Mikser bus'ı (varsayılan `Sfx`) |
 | `volume`, `pitch`, `pan` | Doğrusal kazanç; çalma hızı ([1/16, 16] aralığına sıkıştırılır); [-1, 1] stereo denge |
 | `loop` | Sonda durmak yerine baştan başla |
@@ -186,7 +186,7 @@ Konisi olan bir kaynak, bir hoparlör ya da bir insan sesi gibi önünde yüksek
 
 ```cpp
 illusion::AudioSource speaker;
-speaker.clip = "game:/audio/announcement.ogg";
+speaker.clip = illusion::AssetRef("game:/audio/announcement.ogg");
 speaker.coneInnerAngle = 1.5f;  // full volume within ~86 degrees around the speaker's forward axis
 speaker.coneOuterAngle = 3.0f;  // quiet behind it
 speaker.coneOuterVolume = 0.2f;

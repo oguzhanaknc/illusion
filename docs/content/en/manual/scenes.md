@@ -99,8 +99,11 @@ for (const std::string& warning : loaded.warnings)
   is runtime state.
 - Only reflected Components are saved; `SceneSaveResult::skippedComponents` counts the others and the
   runtime state that is reflected as transient (`PhysicsBody`, `AudioPlayback`, ...), which is never
-  saved. `MeshRenderer` and `SkyLight` refer to GPU resources and are not saved yet (asset references in
-  scenes come with the editor).
+  saved. Components refer to assets by path ([asset references](assets.md#asset-references)), so
+  `MeshRenderer`, `SkyLight` and collision meshes are saved; their GPU and physics data are not.
+- A reference to a file that does not exist still loads, keeps its path and is saved again.
+  `SceneLoadResult::missingAssets` lists those paths when `SceneLoadOptions::assetExists` is set (for
+  example to `VirtualFileSystem::exists()`); built-in assets are always checked.
 - Saving fails if a floating-point field is infinite or NaN, since JSON cannot store it.
 - `loadScene()` adds the scene's entities to the World and returns them in file order. Entity fields
   are remapped to the new entities. If the file is invalid, nothing is added and `error` says where

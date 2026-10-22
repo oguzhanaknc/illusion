@@ -1,5 +1,6 @@
 #include <illusion/assets/AssetCooker.hpp>
 #include <illusion/assets/AssetDatabase.hpp>
+#include <illusion/assets/MaterialAsset.hpp>
 #include <illusion/core/Profiler.hpp>
 #include <illusion/platform/FileSystem.hpp>
 
@@ -26,6 +27,34 @@ bool isImage(std::string_view extension)
 {
     constexpr std::array<std::string_view, 6> kImages = {".png", ".jpg", ".jpeg", ".tga", ".bmp", ".hdr"};
     return std::find(kImages.begin(), kImages.end(), extension) != kImages.end();
+}
+
+// Checks a material file and cooks its textures with the settings the renderer loads them with.
+void cookMaterial(VirtualFileSystem& files, AssetDatabase& database, const std::string& path,
+                  CookResult& result)
+{
+    std::vector<std::byte> bytes;
+    if (const FileError error = files.readFile(path, bytes); error != FileError::None)
+    {
+        result.errors.push_back(std::format("{}: {}", path, fileErrorName(error)));
+        return;
+    }
+    const Expected<MaterialAsset, std::string> material =
+        parseMaterialAsset(std::string_view(reinterpret_cast<const char*>(bytes.data()), bytes.size()));
+    if (!material)
+    {
+        result.errors.push_back(std::format("{}: {}", path, material.error()));
+        return;
+    }
+    ++result.materials;
+    for (const MaterialTextureUse& use : materialTextureUses(material->textures))
+    {
+        std::string error;
+        if (use.texture && !database.loadImage(use.texture.path(), {.srgb = use.srgb}, &error))
+        {
+            result.errors.push_back(std::format("{}: {}", path, error));
+        }
+    }
 }
 
 void cookDirectory(VirtualFileSystem& files, AssetDatabase& database, const std::string& directory,
@@ -58,6 +87,10 @@ void cookDirectory(VirtualFileSystem& files, AssetDatabase& database, const std:
             {
                 result.errors.push_back(error);
             }
+        }
+        else if (extension == kMaterialAssetExtension)
+        {
+            cookMaterial(files, database, path, result);
         }
         else if (isImage(extension))
         {

@@ -100,8 +100,12 @@ for (const std::string& warning : loaded.warnings)
   `Inactive` çalışma zamanı durumudur.
 - Yalnızca yansıtılmış Component'ler kaydedilir; `SceneSaveResult::skippedComponents` diğerlerini ve
   transient olarak yansıtılan, hiçbir zaman kaydedilmeyen çalışma zamanı durumunu (`PhysicsBody`,
-  `AudioPlayback`, ...) sayar. `MeshRenderer` ve `SkyLight` GPU kaynaklarına başvurur ve henüz
-  kaydedilmez (sahnelerdeki Asset başvuruları editörle birlikte gelecek).
+  `AudioPlayback`, ...) sayar. Component'ler Asset'lere yol ile başvurur
+  ([Asset referansları](assets.md#asset-referanslar)); bu yüzden `MeshRenderer`, `SkyLight` ve çarpışma
+  Mesh'leri kaydedilir, GPU ve fizik verileri kaydedilmez.
+- Var olmayan bir dosyaya başvuru yine yüklenir, yolunu korur ve yeniden kaydedilir.
+  `SceneLoadOptions::assetExists` ayarlıysa (örneğin `VirtualFileSystem::exists()` ile)
+  `SceneLoadResult::missingAssets` bu yolları listeler; yerleşik Asset'ler her zaman denetlenir.
 - Bir kayan noktalı alan sonsuz veya NaN ise kaydetme başarısız olur, çünkü JSON bunu saklayamaz.
 - `loadScene()` sahnenin Entity'lerini World'e ekler ve onları dosyadaki sırayla döndürür. Entity
   alanları yeni Entity'lere eşlenir. Dosya geçersizse hiçbir şey eklenmez ve `error` sorunun nerede

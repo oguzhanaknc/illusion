@@ -27,6 +27,9 @@ Open `build/api/index.html` in a browser.
 | `illusion/core/JobSystem.hpp` | `JobSystem`, `JobCounter`, `Job` |
 | `illusion/core/InplaceFunction.hpp` | Allocation-free type-erased callable |
 | `illusion/core/Thread.hpp` | Thread names, thread indices, spin-wait hint |
+| `illusion/core/AssetId.hpp` | `AssetId`, asset paths with fragments, `builtinAssetPaths` |
+| `illusion/core/AssetRef.hpp` | `AssetRef`, `AssetPathTable`, `AssetKind` |
+| `illusion/core/VirtualPath.hpp` | Virtual path checks and `normalizeVirtualPath` |
 | `illusion/core/Hash.hpp` | Stable FNV-1a and xxHash64 hashing |
 | `illusion/core/Serialization.hpp` | `BinaryWriter`, `BinaryReader` (bounds-checked, little-endian) |
 | `illusion/core/TypeName.hpp` | Compile-time type names |
@@ -76,9 +79,11 @@ Open `build/api/index.html` in a browser.
 | `illusion/assets/AssetDatabase.hpp` | `AssetDatabase`: import cache for images and models |
 | `illusion/assets/AssetStreamer.hpp` | `AssetStreamer`, `AssetHandle`: asynchronous loading of images, models and other files (`loadFile`) |
 | `illusion/assets/AssetCooker.hpp` | `cookAssets`: import a directory ahead of time |
+| `illusion/assets/MaterialAsset.hpp` | `MaterialAsset`: `.material` files, `parseMaterialAsset`, `writeMaterialAsset` |
 | `illusion/assets/Environment.hpp` | Equirectangular mapping, `ShIrradiance`, `makeSkyImage` |
 | `illusion/physics/PhysicsWorld.hpp` | `PhysicsWorld`: simulation, body and character control, mesh and hull geometry, joints, raycasts, shape casts, overlaps, contact events with impact speeds |
 | `illusion/physics/PhysicsComponents.hpp` | `RigidBody`, `Collider`, `CharacterController`, `Joint` Components and their runtime state (`PhysicsBody`, `CharacterBody`, `PhysicsJoint`); `PhysicsMeshHandle` |
+| `illusion/physics/PhysicsAssetResolver.hpp` | `PhysicsAssetResolver`: cooks the mesh assets of Colliders |
 | `illusion/audio/AudioWorld.hpp` | `AudioWorld`: clips (also loaded in the background), playback, one-shots, mixer buses, bus filters, reverb, output; `AudioWorldDesc`, `AudioStats` |
 | `illusion/audio/AudioComponents.hpp` | `AudioSource` (with filters, reverb send and cones), `AudioListener`, `AudioPlayback` Components; `AudioBus`, `AudioAttenuation` |
 | `illusion/render/RenderDevice.hpp` | `RenderDevice`, `GpuInfo` (including bindless and multi-draw support): Vulkan device through NVRHI |
@@ -89,4 +94,6 @@ Open `build/api/index.html` in a browser.
 | `illusion/render/Shadows.hpp` | `ShadowSettings`, `ShadowCascades`, `computeShadowCascades` |
 | `illusion/render/UploadQueue.hpp` | `UploadQueue`: GPU uploads of streamed models with a byte budget |
 | `illusion/render/PostProcess.hpp` | `PostProcessSettings` (ambient occlusion, bloom, TAA), `temporalJitter` |
-| `illusion/render/Components.hpp` | `MeshRenderer`, `Camera`, `DirectionalLight`, `PointLight`, `SkyLight`, `MotionHistory`, `spawnModel` |
+| `illusion/render/SceneComponents.hpp` | Saved render Components: `MeshRenderer`, `Camera`, `DirectionalLight`, `PointLight`, `SkyLight`, `ProceduralSky` |
+| `illusion/render/Components.hpp` | Runtime `RenderMesh`, `RenderSky`, `MotionHistory`; `spawnModel` |
+| `illusion/render/RenderAssets.hpp` | `RenderAssetCache`, `RenderAssetResolver`: asset references to GPU resources |

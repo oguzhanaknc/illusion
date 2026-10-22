@@ -4,6 +4,7 @@
 #include <illusion/assets/Environment.hpp>
 #include <illusion/assets/Image.hpp>
 #include <illusion/assets/Mesh.hpp>
+#include <illusion/core/AssetRef.hpp>
 #include <illusion/core/Hash.hpp>
 #include <illusion/platform/Archive.hpp>
 
@@ -11,6 +12,7 @@
 #include <format>
 #include <memory>
 #include <random>
+#include <string>
 #include <vector>
 
 using namespace illusion;
@@ -123,4 +125,20 @@ ILL_BENCHMARK("platform/archive", 2000.0)
     }
     std::error_code ignored;
     std::filesystem::remove(path, ignored);
+}
+
+ILL_BENCHMARK("assets/path-intern", 300.0)
+{
+    AssetPathTable table;
+    std::vector<std::string> paths;
+    for (int i = 0; i < 1024; ++i)
+    {
+        paths.push_back(std::format("game:/models/props/crate_{}.glb#mesh/{}", i, i % 4));
+        (void)table.intern(paths.back());
+    }
+    usize next = 0;
+    bench.run("intern a recorded, normalized path (1024 paths)", [&] {
+        const AssetId id = table.intern(paths[next++ & 1023]);
+        ankerl::nanobench::doNotOptimizeAway(id);
+    });
 }

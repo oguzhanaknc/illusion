@@ -1,6 +1,8 @@
 # illusion::core — foundation library: logging, memory, jobs, events, time, math, ECS.
 
 add_library(illusion_core STATIC
+    src/core/AssetId.cpp
+    src/core/AssetRef.cpp
     src/core/Assert.cpp
     src/core/EventBus.cpp
     src/core/Hash.cpp
@@ -14,6 +16,7 @@ add_library(illusion_core STATIC
     src/core/Thread.cpp
     src/core/Time.cpp
     src/core/Version.cpp
+    src/core/VirtualPath.cpp
     src/ecs/Archetype.cpp
     src/ecs/CommandBuffer.cpp
     src/ecs/Component.cpp

@@ -44,7 +44,8 @@ void reflectAudioComponents(ComponentRegistry& registry)
                .description = "A sound emitted by the Entity.",
                .docsAnchor = "manual/audio.md#sources",
                .requiredComponents = kRequiresTransform})
-        .field("clip", &AudioSource::clip, {.description = "Virtual path of the clip."})
+        .field("clip", &AudioSource::clip,
+               {.description = "The clip to play.", .assetKind = AssetKind::AudioClip})
         .field("bus", &AudioSource::bus)
         .field("volume", &AudioSource::volume, {.min = 0.0, .softMax = 2.0, .hint = FieldHint::Slider})
         .field("pitch", &AudioSource::pitch, {.min = 0.0625, .max = 16.0, .hint = FieldHint::LogSlider})

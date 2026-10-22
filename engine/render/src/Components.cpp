@@ -1,3 +1,4 @@
+#include <illusion/core/VirtualPath.hpp>
 #include <illusion/ecs/Hierarchy.hpp>
 #include <illusion/ecs/Name.hpp>
 #include <illusion/ecs/Reflection.hpp>
@@ -9,6 +10,7 @@
 #include <illusion/render/Shadows.hpp>
 
 #include <format>
+#include <optional>
 #include <string>
 
 namespace illusion
@@ -67,6 +69,21 @@ void reflectRenderComponents(ComponentRegistry& registry)
         .field("specularSize", &EnvironmentDesc::specularSize, {.min = 1.0, .max = 8192.0})
         .field("sampleCount", &EnvironmentDesc::sampleCount, {.min = 1.0, .max = 65536.0});
 
+    reflect<MeshRenderer>("illusion.MeshRenderer", 1, registry)
+        .meta({.displayName = "Mesh renderer",
+               .category = "Rendering",
+               .icon = "deployed_code",
+               .description = "Draws a submesh of a mesh asset with a material asset.",
+               .docsAnchor = "manual/rendering.md#meshrenderer-and-rendermesh",
+               .requiredComponents = kRequiresTransform})
+        .field("mesh", &MeshRenderer::mesh, {.assetKind = AssetKind::Mesh})
+        .field("submesh", &MeshRenderer::submesh)
+        .field("material", &MeshRenderer::material,
+               {.description = "Empty uses the material the model assigns to the submesh.",
+                .assetKind = AssetKind::Material})
+        .field("layers", &MeshRenderer::layers, {.advanced = true})
+        .field("castShadows", &MeshRenderer::castShadows)
+        .field("visible", &MeshRenderer::visible);
     reflect<Camera>("illusion.Camera", 1, registry)
         .meta({.displayName = "Camera",
                .category = "Rendering",
@@ -109,6 +126,43 @@ void reflectRenderComponents(ComponentRegistry& registry)
         .field("color", &PointLight::color, {.min = 0.0, .hint = FieldHint::HdrColor})
         .field("intensity", &PointLight::intensity, {.min = 0.0})
         .field("range", &PointLight::range, {.unit = Unit::Meters, .min = 0.0});
+    reflect<SkyLight>("illusion.SkyLight", 1, registry)
+        .meta({.displayName = "Sky light",
+               .category = "Rendering/Lights",
+               .icon = "wb_twilight",
+               .description = "Image-based lighting and background from an environment.",
+               .docsAnchor = "manual/rendering.md#image-based-lighting",
+               .requiredComponents = kRequiresTransform})
+        .field("environment", &SkyLight::environment, {.assetKind = AssetKind::Environment})
+        .field("intensity", &SkyLight::intensity, {.min = 0.0, .hint = FieldHint::LogSlider})
+        .field("background", &SkyLight::background);
+    reflect<ProceduralSky>("illusion.ProceduralSky", 1, registry)
+        .meta({.displayName = "Procedural sky",
+               .category = "Rendering/Lights",
+               .icon = "partly_cloudy_day",
+               .description = "Gradient sky for a SkyLight whose environment is builtin:/sky/procedural.",
+               .docsAnchor = "manual/rendering.md#image-based-lighting"})
+        .field("zenith", &ProceduralSky::zenith, {.min = 0.0, .hint = FieldHint::HdrColor})
+        .field("horizon", &ProceduralSky::horizon, {.min = 0.0, .hint = FieldHint::HdrColor})
+        .field("ground", &ProceduralSky::ground, {.min = 0.0, .hint = FieldHint::HdrColor})
+        .field("sunDirection", &ProceduralSky::sunDirection)
+        .field("sunRadiance", &ProceduralSky::sunRadiance, {.min = 0.0, .hint = FieldHint::HdrColor})
+        .field("sunAngularRadius", &ProceduralSky::sunAngularRadius,
+               {.unit = Unit::Radians,
+                .displayUnit = Unit::Degrees,
+                .min = 0.0,
+                .max = 0.5,
+                .hint = FieldHint::Angle})
+        .field("resolution", &ProceduralSky::resolution, {.min = 8.0, .max = 8192.0, .advanced = true});
+    reflectRuntime<RenderMesh>(
+        "illusion.RenderMesh",
+        {.displayName = "Render mesh",
+         .description = "GPU mesh and material drawn by the renderer (runtime state)."},
+        registry);
+    reflectRuntime<RenderSky>(
+        "illusion.RenderSky",
+        {.displayName = "Render sky", .description = "GPU environment of a SkyLight (runtime state)."},
+        registry);
     reflectRuntime<MotionHistory>(
         "illusion.MotionHistory",
         {.displayName = "Motion history",
@@ -116,8 +170,13 @@ void reflectRenderComponents(ComponentRegistry& registry)
         registry);
 }
 
-std::vector<Entity> spawnModel(World& world, const ModelData& model, const ModelHandles& handles,
-                               const Mat4& root)
+namespace
+{
+
+// Creates the entities of spawnModel(); @p addRenderer gives a mesh entity its renderer for (mesh, submesh).
+template <class AddRenderer>
+std::vector<Entity> spawnNodes(World& world, const ModelData& model, const Mat4& root,
+                               AddRenderer addRenderer)
 {
     // The model's roots go after the World's existing roots.
     u32 rootOrder = 0;
@@ -149,36 +208,63 @@ std::vector<Entity> spawnModel(World& world, const ModelData& model, const Model
         entities.push_back(entity);
 
         const i32 meshIndex = node.mesh;
-        if (meshIndex < 0 || static_cast<usize>(meshIndex) >= handles.meshes.size() ||
-            handles.meshes[static_cast<usize>(meshIndex)].index == 0)
+        if (meshIndex < 0 || static_cast<usize>(meshIndex) >= model.meshes.size())
         {
             continue;
         }
-        const MeshData& data = model.meshes[static_cast<usize>(meshIndex)];
-        const auto rendererOf = [&](u32 submesh) {
-            const i32 material = data.submeshes[submesh].material;
-            MeshRenderer renderer;
-            renderer.mesh = handles.meshes[static_cast<usize>(meshIndex)];
-            renderer.submesh = submesh;
-            renderer.material = material >= 0 && static_cast<usize>(material) < handles.materials.size()
-                                    ? handles.materials[static_cast<usize>(material)]
-                                    : MaterialHandle{};
-            return renderer;
-        };
+        const auto mesh = static_cast<u32>(meshIndex);
+        const MeshData& data = model.meshes[mesh];
         if (data.submeshes.size() == 1)
         {
-            world.emplace<MeshRenderer>(entity, rendererOf(0));
+            addRenderer(entity, mesh, 0u);
             continue;
         }
         // Several submeshes: one child per submesh, at the node's origin.
         for (u32 s = 0; s < data.submeshes.size(); ++s)
         {
-            entities.push_back(world.create(Name{makeValidEntityName(std::format("{} ({})", name, s))},
-                                            Hierarchy{entity, s}, LocalTransform{}, transform,
-                                            rendererOf(s)));
+            const Entity child = world.create(Name{makeValidEntityName(std::format("{} ({})", name, s))},
+                                              Hierarchy{entity, s}, LocalTransform{}, transform);
+            entities.push_back(child);
+            addRenderer(child, mesh, s);
         }
     }
     return entities;
+}
+
+} // namespace
+
+std::vector<Entity> spawnModel(World& world, const ModelData& model, std::string_view modelPath,
+                               const Mat4& root)
+{
+    const std::optional<std::string> path = normalizeVirtualPath(modelPath);
+    ILL_ASSERT(path.has_value(), "spawnModel: '{}' is not a valid virtual path", modelPath);
+    std::vector<AssetRef> meshes(model.meshes.size());
+    for (usize m = 0; m < meshes.size(); ++m)
+    {
+        meshes[m] = AssetRef(std::format("{}#mesh/{}", path.value_or(""), m));
+    }
+    return spawnNodes(world, model, root, [&](Entity entity, u32 mesh, u32 submesh) {
+        world.emplace<MeshRenderer>(entity, MeshRenderer{.mesh = meshes[mesh], .submesh = submesh});
+    });
+}
+
+std::vector<Entity> spawnModel(World& world, const ModelData& model, const ModelHandles& handles,
+                               const Mat4& root)
+{
+    return spawnNodes(world, model, root, [&](Entity entity, u32 mesh, u32 submesh) {
+        if (mesh >= handles.meshes.size() || handles.meshes[mesh].index == 0)
+        {
+            return;
+        }
+        const i32 material = model.meshes[mesh].submeshes[submesh].material;
+        RenderMesh renderer;
+        renderer.mesh = handles.meshes[mesh];
+        renderer.submesh = submesh;
+        renderer.material = material >= 0 && static_cast<usize>(material) < handles.materials.size()
+                                ? handles.materials[static_cast<usize>(material)]
+                                : MaterialHandle{};
+        world.emplace<RenderMesh>(entity, renderer);
+    });
 }
 
 } // namespace illusion

@@ -15,8 +15,8 @@
 namespace illusion
 {
 
-/// Reflects ImageImportSettings, SkyDesc, TextureRef and MaterialData as "illusion.<Name>" in
-/// registry.structs().
+/// Reflects ImageImportSettings, SkyDesc, TextureRef, MaterialData, MaterialTextures and MaterialAsset as
+/// "illusion.<Name>" in registry.structs().
 void reflectAssetStructs(ComponentRegistry& registry = ComponentRegistry::instance());
 
 } // namespace illusion

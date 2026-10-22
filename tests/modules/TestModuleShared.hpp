@@ -42,8 +42,10 @@ struct ModuleControl
     i32 updates = 0;
     i32 variant = 0;
     bool reloadingSeen = false;
-    const void* logger = nullptr;   // &Logger::instance() as the module sees it
-    const void* registry = nullptr; // &ComponentRegistry::instance() as the module sees it
+    const void* logger = nullptr;     // &Logger::instance() as the module sees it
+    const void* registry = nullptr;   // &ComponentRegistry::instance() as the module sees it
+    const void* assetPaths = nullptr; // &AssetPathTable::instance() as the module sees it
+    u64 asset = 0;                    // id of an AssetRef the module created from a path
     ComponentId counterId = kInvalidComponentId;
     ComponentId transformId = kInvalidComponentId;
     u32 threadIndex = 0;

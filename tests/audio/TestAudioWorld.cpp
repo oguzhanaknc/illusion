@@ -359,7 +359,7 @@ TEST_CASE("play() starts and restarts sources and stop() stops them")
 
     SUBCASE("a source with a missing clip does not play")
     {
-        f.world.get<AudioSource>(entity).clip = "test:/missing.wav";
+        f.world.get<AudioSource>(entity).clip = AssetRef("test:/missing.wav");
         f.audio->play(entity);
         CHECK_FALSE(f.audio->isPlaying(entity));
         CHECK_FALSE(f.world.get<AudioPlayback>(entity).clip.valid());
@@ -486,7 +486,7 @@ TEST_CASE("audio components are saved in scenes and the runtime state is not")
     REQUIRE(result.ok());
     REQUIRE(result.entities.size() == 2);
     const AudioSource& copy = loaded.get<AudioSource>(result.entities[0]);
-    CHECK(copy.clip == "test:/wind.wav");
+    CHECK(copy.clip.path() == "test:/wind.wav");
     CHECK(copy.bus == AudioBus::Ambience);
     CHECK(copy.attenuation == AudioAttenuation::Linear);
     CHECK(copy.volume == 0.75f);
@@ -524,4 +524,23 @@ TEST_CASE("the null output mixes on its own thread")
     test::ScopedAssertCatcher catcher;
     CHECK_THROWS_AS(audio.render(out), test::AssertionFailure);
 #endif
+}
+
+TEST_CASE("version 1 scenes with an AudioSource clip path still load")
+{
+    reflectCoreComponents();
+    reflectAudioComponents();
+    constexpr std::string_view kVersion1 = R"({
+  "format": "illusion.scene",
+  "version": 1,
+  "types": {"illusion.AudioSource": 1},
+  "entities": [{"illusion.AudioSource": {"clip": "test:/audio/../wind.wav", "volume": 0.5}}]
+})";
+    World world;
+    const SceneLoadResult result = loadScene(world, kVersion1);
+    REQUIRE_MESSAGE(result.ok(), result.error);
+    REQUIRE(result.entities.size() == 1);
+    const AudioSource& source = world.get<AudioSource>(result.entities[0]);
+    CHECK(source.clip.path() == "test:/wind.wav");
+    CHECK(source.volume == 0.5f);
 }

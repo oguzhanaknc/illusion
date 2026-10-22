@@ -6,9 +6,9 @@
 
 #include <illusion/assets/Image.hpp>
 #include <illusion/assets/Model.hpp>
+#include <illusion/core/AssetId.hpp> // AssetId lives in core; included here for existing users
 #include <illusion/core/Base.hpp>
 
-#include <compare>
 #include <cstddef>
 #include <optional>
 #include <span>
@@ -18,22 +18,6 @@
 
 namespace illusion
 {
-
-/// Stable identifier of an asset: the 64-bit FNV-1a hash of its normalized virtual path.
-struct AssetId
-{
-    u64 value = 0; ///< Hash value; 0 means "no asset".
-
-    /// The id of the asset at @p virtualPath, after resolving dot components. Returns an empty id for a
-    /// malformed path.
-    [[nodiscard]] static AssetId fromPath(std::string_view virtualPath);
-
-    /// True for a non-empty id.
-    [[nodiscard]] explicit operator bool() const noexcept { return value != 0; }
-
-    /// Ids compare by value.
-    friend auto operator<=>(const AssetId&, const AssetId&) noexcept = default;
-};
 
 /// What a cooked asset file contains.
 enum class AssetType : u32

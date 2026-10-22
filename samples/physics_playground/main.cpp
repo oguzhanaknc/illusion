@@ -79,7 +79,7 @@ std::vector<Entity> buildTower(World& world, const Assets& assets)
                 transform.scale = Vec3(0.5f);
                 const MaterialHandle color = assets.boxMaterials[(level + i + j) % 3];
                 boxes.push_back(
-                    world.create(transform, RigidBody{}, Collider{}, MeshRenderer{assets.cube, 0, color}));
+                    world.create(transform, RigidBody{}, Collider{}, RenderMesh{assets.cube, 0, color}));
             }
         }
     }
@@ -213,15 +213,15 @@ int main(int argc, char** argv)
     Collider groundCollider;
     groundCollider.halfExtents = Vec3(20.0f, 0.5f, 20.0f);
     world.create(ground, groundBody, groundCollider);
-    world.create(Transform{}, MeshRenderer{resources.createMesh(makePlane(40.0f), "Ground"), 0,
-                                           material(resources, Vec4(0.45f, 0.45f, 0.45f, 1.0f), 0.9f)});
+    world.create(Transform{}, RenderMesh{resources.createMesh(makePlane(40.0f), "Ground"), 0,
+                                         material(resources, Vec4(0.45f, 0.45f, 0.45f, 1.0f), 0.9f)});
     std::vector<Entity> tower = buildTower(world, assets);
     std::vector<Entity> balls;
 
     Transform sun;
     sun.rotation = glm::quatLookAt(glm::normalize(Vec3(-0.4f, -1.0f, -0.6f)), Vec3(0.0f, 1.0f, 0.0f));
     world.create(sun, DirectionalLight{Vec3(1.0f, 0.95f, 0.9f), 3.0f});
-    world.create(Transform{}, SkyLight{resources.createEnvironment(makeSkyImage(1024)), 1.0f, true});
+    world.create(Transform{}, SkyLight{}, RenderSky{resources.createEnvironment(makeSkyImage(1024))});
 
     InputActions actions;
     const ActionId orbit = actions.addAction("Orbit", ActionType::Vector2);
@@ -293,7 +293,7 @@ int main(int argc, char** argv)
             Collider ballCollider;
             ballCollider.shape = ColliderShape::Sphere;
             const Entity ball = world.create(transform, ballBody, ballCollider,
-                                             MeshRenderer{assets.ball, 0, assets.ballMaterial});
+                                             RenderMesh{assets.ball, 0, assets.ballMaterial});
             balls.push_back(ball);
             physics.update(0.0); // create the body now so it can be launched
             physics.setLinearVelocity(ball, camera.forward() * 25.0f);

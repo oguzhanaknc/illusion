@@ -6,6 +6,7 @@ add_library(illusion_render STATIC
     src/EnvironmentBaker.cpp
     src/GpuCulling.cpp
     src/PostProcessor.cpp
+    src/RenderAssets.cpp
     src/RenderDevice.cpp
     src/RenderResources.cpp
     src/SceneRenderer.cpp

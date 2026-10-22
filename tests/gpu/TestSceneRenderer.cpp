@@ -111,10 +111,10 @@ TEST_CASE("the scene renderer lights, culls and instances meshes")
         const MaterialHandle redMaterial = resources.createMaterial(red);
 
         World world;
-        world.create(Transform{}, MeshRenderer{sphere, 0, redMaterial});
+        world.create(Transform{}, RenderMesh{sphere, 0, redMaterial});
         Transform behind;
         behind.position = Vec3(10.0f, 0.0f, 20.0f); // behind the camera, off the light's path (no shadow)
-        world.create(behind, MeshRenderer{sphere, 0, redMaterial});
+        world.create(behind, RenderMesh{sphere, 0, redMaterial});
         world.create(Transform{}, DirectionalLight{Vec3(1.0f), 3.0f}); // shines along -z, towards the sphere
 
         JobSystem jobs(JobSystemDesc{2, 256});
@@ -142,7 +142,7 @@ TEST_CASE("the scene renderer lights, culls and instances meshes")
         {
             Transform t;
             t.position = Vec3(x, x == 0.0f ? 2.5f : 0.0f, -2.0f);
-            world.create(t, MeshRenderer{sphere, 0, redMaterial});
+            world.create(t, RenderMesh{sphere, 0, redMaterial});
         }
         renderScene(*device, *renderer, world, nullptr);
         CHECK(renderer->stats().visible == 4);
@@ -170,7 +170,7 @@ TEST_CASE("one-sided surfaces are visible from the front only")
         World world;
         Transform facing; // rotate +y (the plane normal) to +z, towards the camera
         facing.rotation = glm::angleAxis(std::numbers::pi_v<f32> / 2.0f, Vec3(1.0f, 0.0f, 0.0f));
-        const Entity entity = world.create(facing, MeshRenderer{plane, 0, MaterialHandle{}});
+        const Entity entity = world.create(facing, RenderMesh{plane, 0, MaterialHandle{}});
         CHECK(pixelAt(renderScene(*device, *renderer, world, nullptr), 32, 32).r > 100);
 
         world.get<Transform>(entity).rotation =
@@ -197,8 +197,8 @@ TEST_CASE("disabled entities and their children are not drawn")
 
         World world;
         HierarchyIndex hierarchy;
-        const Entity parent = world.create(Transform{}, MeshRenderer{sphere, 0, MaterialHandle{}});
-        const Entity child = world.create(Transform{}, MeshRenderer{sphere, 0, MaterialHandle{}});
+        const Entity parent = world.create(Transform{}, RenderMesh{sphere, 0, MaterialHandle{}});
+        const Entity child = world.create(Transform{}, RenderMesh{sphere, 0, MaterialHandle{}});
         REQUIRE(setParent(world, child, parent));
         updateTransformHierarchy(world, hierarchy);
         CHECK(pixelAt(renderScene(*device, *renderer, world, nullptr), 32, 32).r > 100);
@@ -306,8 +306,8 @@ TEST_CASE("a uniform environment neither adds nor loses energy (white furnace)")
         const MeshHandle sphere = resources.createMesh(makeSphere(1.5f, 48, 24), "Sphere");
 
         World world;
-        world.create(Transform{}, SkyLight{environment, 1.0f, true});
-        const Entity entity = world.create(Transform{}, MeshRenderer{sphere, 0, MaterialHandle{}});
+        world.create(Transform{}, SkyLight{}, RenderSky{environment});
+        const Entity entity = world.create(Transform{}, RenderMesh{sphere, 0, MaterialHandle{}});
 
         // White surfaces in a uniform environment of radiance 1 reflect radiance 1 at every angle, the
         // same as the background: ACES(1) = 0.804 -> sRGB 231.
@@ -323,7 +323,7 @@ TEST_CASE("a uniform environment neither adds nor loses energy (white furnace)")
             MaterialDesc material;
             material.parameters.metallicFactor = c.metallic;
             material.parameters.roughnessFactor = c.roughness;
-            world.get<MeshRenderer>(entity).material = resources.createMaterial(material);
+            world.get<RenderMesh>(entity).material = resources.createMaterial(material);
             const std::vector<u8> pixels = renderScene(*device, *renderer, world, nullptr);
             const Rgb background = pixelAt(pixels, 1, 1);
             CHECK(std::abs(background.r - 231) <= 2);
@@ -356,7 +356,7 @@ TEST_CASE("the environment background and lighting follow the SkyLight orientati
                 64, [](Vec3 d) { return d.x < 0.0f ? Vec3(1.0f, 0.0f, 0.0f) : Vec3(0.0f, 0.0f, 1.0f); }),
             smallEnvironment());
         World world;
-        const Entity sky = world.create(Transform{}, SkyLight{environment, 1.0f, true});
+        const Entity sky = world.create(Transform{}, SkyLight{}, RenderSky{environment});
 
         std::vector<u8> pixels = renderScene(*device, *renderer, world, nullptr);
         CHECK(pixelAt(pixels, 2, 32).r > 150);
@@ -373,8 +373,8 @@ TEST_CASE("the environment background and lighting follow the SkyLight orientati
         // A rough white sphere is lit red on the side facing the red half (here +x after the rotation).
         MaterialDesc white;
         white.parameters.metallicFactor = 0.0f;
-        world.create(Transform{}, MeshRenderer{resources.createMesh(makeSphere(1.5f, 48, 24), "Sphere"), 0,
-                                               resources.createMaterial(white)});
+        world.create(Transform{}, RenderMesh{resources.createMesh(makeSphere(1.5f, 48, 24), "Sphere"), 0,
+                                             resources.createMaterial(white)});
         world.get<SkyLight>(sky).background = false;
         pixels = renderScene(*device, *renderer, world, nullptr);
         const Rgb left = pixelAt(pixels, 20, 32);
@@ -403,12 +403,11 @@ TEST_CASE("a directional light casts soft shadows from casters outside the view"
         Transform ground;
         ground.position = Vec3(0.0f, -1.0f, 0.0f);
         world.create(ground,
-                     MeshRenderer{resources.createMesh(makePlane(40.0f, 1), "Ground"), 0, MaterialHandle{}});
+                     RenderMesh{resources.createMesh(makePlane(40.0f, 1), "Ground"), 0, MaterialHandle{}});
         // A 2 m wide roof high above the view: invisible, but it shades the ground for x in [-1, 1].
         Transform roof;
         roof.position = Vec3(0.0f, 10.0f, 0.0f);
-        world.create(roof,
-                     MeshRenderer{resources.createMesh(makePlane(2.0f, 1), "Roof"), 0, MaterialHandle{}});
+        world.create(roof, RenderMesh{resources.createMesh(makePlane(2.0f, 1), "Roof"), 0, MaterialHandle{}});
         Transform sun; // pointing straight down
         sun.rotation = glm::angleAxis(-std::numbers::pi_v<f32> / 2.0f, Vec3(1.0f, 0.0f, 0.0f));
         const Entity light = world.create(sun, DirectionalLight{Vec3(1.0f), 3.0f});
@@ -470,13 +469,13 @@ TEST_CASE("ambient occlusion darkens indirect light in creases")
 
         // A sphere resting on the ground, lit only by a uniform sky.
         World world;
-        world.create(Transform{}, SkyLight{environment, 1.0f, true});
-        world.create(Transform{}, MeshRenderer{resources.createMesh(makeSphere(1.0f, 48, 24), "Sphere"), 0,
-                                               MaterialHandle{}});
+        world.create(Transform{}, SkyLight{}, RenderSky{environment});
+        world.create(Transform{}, RenderMesh{resources.createMesh(makeSphere(1.0f, 48, 24), "Sphere"), 0,
+                                             MaterialHandle{}});
         Transform ground;
         ground.position = Vec3(0.0f, -1.0f, 0.0f);
         world.create(ground,
-                     MeshRenderer{resources.createMesh(makePlane(20.0f, 1), "Ground"), 0, MaterialHandle{}});
+                     RenderMesh{resources.createMesh(makePlane(20.0f, 1), "Ground"), 0, MaterialHandle{}});
 
         // Row 44 is the ground just in front of the contact point; x = 32 is next to the sphere, x = 55
         // far from it.
@@ -509,8 +508,8 @@ TEST_CASE("bloom spreads light from bright pixels")
         glowing.parameters.baseColorFactor = Vec4(0.0f, 0.0f, 0.0f, 1.0f);
         glowing.parameters.emissiveFactor = Vec3(40.0f);
         World world;
-        world.create(Transform{}, MeshRenderer{resources.createMesh(makeSphere(0.5f, 32, 16), "Sphere"), 0,
-                                               resources.createMaterial(glowing)});
+        world.create(Transform{}, RenderMesh{resources.createMesh(makeSphere(0.5f, 32, 16), "Sphere"), 0,
+                                             resources.createMaterial(glowing)});
 
         // The sphere covers about 5.5 pixels around the centre; x = 42 is outside it.
         std::vector<u8> pixels = renderScene(*device, *renderer, world, nullptr);
@@ -545,8 +544,8 @@ TEST_CASE("temporal anti-aliasing smooths edges and keeps flat areas")
         flat.parameters.baseColorFactor = Vec4(0.0f, 0.0f, 0.0f, 1.0f);
         flat.parameters.emissiveFactor = Vec3(0.5f);
         World world;
-        world.create(Transform{}, MeshRenderer{resources.createMesh(makeSphere(1.5f, 64, 32), "Sphere"), 0,
-                                               resources.createMaterial(flat)});
+        world.create(Transform{}, RenderMesh{resources.createMesh(makeSphere(1.5f, 64, 32), "Sphere"), 0,
+                                             resources.createMaterial(flat)});
 
         const std::vector<u8> aliased = renderScene(*device, *renderer, world, nullptr);
         PostProcessSettings settings = renderer->postProcessSettings();
@@ -628,7 +627,7 @@ TEST_CASE("the prepass writes motion vectors for moving objects")
         Transform plane; // facing the camera
         plane.rotation = glm::angleAxis(std::numbers::pi_v<f32> / 2.0f, Vec3(1.0f, 0.0f, 0.0f));
         const Entity entity = world.create(
-            plane, MeshRenderer{resources.createMesh(makePlane(2.0f, 1), "Plane"), 0, MaterialHandle{}});
+            plane, RenderMesh{resources.createMesh(makePlane(2.0f, 1), "Plane"), 0, MaterialHandle{}});
 
         renderScene(*device, *renderer, world, nullptr);
         std::vector<Vec2> motion = readMotion(*device, renderer->motionVectors());
@@ -670,7 +669,7 @@ TEST_CASE("occlusion culling skips hidden objects without popping when they appe
         Transform wall; // facing the camera, covering the whole view
         wall.rotation = glm::angleAxis(std::numbers::pi_v<f32> / 2.0f, Vec3(1.0f, 0.0f, 0.0f));
         const Entity wallEntity = world.create(
-            wall, MeshRenderer{resources.createMesh(makePlane(20.0f, 1), "Wall"), 0, MaterialHandle{}});
+            wall, RenderMesh{resources.createMesh(makePlane(20.0f, 1), "Wall"), 0, MaterialHandle{}});
         MaterialDesc red;
         red.parameters.baseColorFactor = Vec4(1.0f, 0.0f, 0.0f, 1.0f);
         const MaterialHandle redMaterial = resources.createMaterial(red);
@@ -682,7 +681,7 @@ TEST_CASE("occlusion culling skips hidden objects without popping when they appe
                 Transform t; // behind the wall
                 t.position =
                     Vec3(-1.8f + 0.4f * static_cast<f32>(x), -1.8f + 0.4f * static_cast<f32>(y), -3.0f);
-                world.create(t, MeshRenderer{cube, 0, redMaterial});
+                world.create(t, RenderMesh{cube, 0, redMaterial});
             }
         }
 
@@ -775,8 +774,8 @@ TEST_CASE("bindless multi-draw rendering matches per-material rendering")
             t.position =
                 Vec3(-2.0f + 0.8f * static_cast<f32>(i % 6), -1.2f + 0.8f * static_cast<f32>(i / 6), -1.0f);
             t.rotation = glm::angleAxis(0.3f * static_cast<f32>(i), glm::normalize(Vec3(1.0f, 1.0f, 0.0f)));
-            world.create(t, MeshRenderer{i % 2 == 0 ? cube : sphere, 0,
-                                         materials[static_cast<usize>(i) % materials.size()]});
+            world.create(t, RenderMesh{i % 2 == 0 ? cube : sphere, 0,
+                                       materials[static_cast<usize>(i) % materials.size()]});
         }
 
         const std::vector<u8> bindless = renderScene(*device, *bindlessRenderer, world, nullptr);

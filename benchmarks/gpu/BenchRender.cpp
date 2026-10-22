@@ -79,7 +79,7 @@ struct Scene
         {
             Transform t;
             t.position = Vec3(static_cast<f32>(i % 100) - 50.0f, 0.0f, -static_cast<f32>(i / 100));
-            world.create(t, MeshRenderer{cube, 0, handles[i % materials]});
+            world.create(t, RenderMesh{cube, 0, handles[i % materials]});
         }
     }
 

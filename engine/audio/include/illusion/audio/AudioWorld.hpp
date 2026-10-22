@@ -7,7 +7,7 @@
 /// illusion::AudioWorld audio(world, files);
 /// world.create(illusion::Transform{}, illusion::AudioListener{}, camera);
 /// illusion::AudioSource fire;
-/// fire.clip = "game:/audio/fire.ogg";
+/// fire.clip = illusion::AssetRef("game:/audio/fire.ogg");
 /// fire.loop = true;
 /// world.create(fireTransform, fire);
 /// // every frame:

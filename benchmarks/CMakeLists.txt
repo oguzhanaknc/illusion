@@ -32,7 +32,8 @@ set_tests_properties(benchmarks PROPERTIES LABELS "benchmark" RUN_SERIAL TRUE TI
 add_executable(illusion_gpu_benchmarks
     main.cpp
     Budget.cpp
-    gpu/BenchRender.cpp)
+    gpu/BenchRender.cpp
+    gpu/BenchRenderAssets.cpp)
 target_include_directories(illusion_gpu_benchmarks PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
 target_link_libraries(illusion_gpu_benchmarks PRIVATE illusion::render illusion::nanobench)
 illusion_configure_target(illusion_gpu_benchmarks)

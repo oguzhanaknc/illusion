@@ -41,6 +41,7 @@ Record (ADR) olarak kaydedilir. Her kayıt bağlamı, kararı ve sonuçlarını 
 | [0032](https://github.com/oguzhanaknc/illusion/blob/main/docs/adr/0032-reflection-v2.md) | Reflection v2: metadata, struct reflection, bir JSON değer API'si ve migration'lar |
 | [0033](https://github.com/oguzhanaknc/illusion/blob/main/docs/adr/0033-entity-ids-names-scene-format-v2.md) | Kalıcı Entity id'leri, adlar ve sahne biçimi v2 |
 | [0034](https://github.com/oguzhanaknc/illusion/blob/main/docs/adr/0034-transform-hierarchy.md) | Dünya uzayı doğruluğuyla Transform hiyerarşisi, Disabled ve Inactive |
+| [0035](https://github.com/oguzhanaknc/illusion/blob/main/docs/adr/0035-asset-references.md) | Sanal yol ile Asset referansları ve yazım/çalışma zamanı render Component'leri |
 
 Yeni bir karar önermek için `docs/adr/0000-template.md` dosyasını kopyalayın ve
 [katkıda bulunma rehberini](../contributing.md#architecture-decision-recordlar) izleyin.

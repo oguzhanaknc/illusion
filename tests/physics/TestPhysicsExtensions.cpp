@@ -33,7 +33,7 @@ Collider meshCollider(ColliderShape shape, PhysicsMeshHandle mesh)
 {
     Collider collider;
     collider.shape = shape;
-    collider.mesh = mesh;
+    collider.geometry = mesh;
     return collider;
 }
 

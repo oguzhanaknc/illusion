@@ -82,6 +82,7 @@ void registerGameTypes()
 | `std::vector<T>` (`bool` değil) | `Array` | dizi |
 | `std::optional<T>` | `Optional` | `null` veya değer |
 | `JsonText` | `Json` | herhangi bir JSON değeri |
+| `AssetRef` | `Asset` | Asset'in yolu, yoksa `""` ([Asset referansları](assets.md#asset-referanslar)) |
 
 `u64` değerleri metin olarak yazılır; böylece sayıları double olarak tutan okuyucular (JavaScript,
 birçok MCP istemcisi) tam değeri korur. Okurken sayılar da kabul edilir. Adı olmayan enum değerleri sayı
@@ -110,6 +111,7 @@ initializer'lar üye sırasını izlemelidir.
 | `hint` | Widget: `Color`, `HdrColor`, `Angle`, `Slider`, `LogSlider`, `Multiline`, `Layer`, `LayerMask` |
 | `readOnly`, `hidden`, `advanced` | Gösterilir ama düzenlenemez; gösterilmez; gelişmiş alanlar açıldığında gösterilir |
 | `renamedFrom` | Alanın eski verideki adı |
+| `assetKind` | `Asset` alanları: beklenen Asset türü (`Mesh`, `Material`, `Texture`, ...), Asset seçiciler için |
 | `validate` | JSON'dan okunan bir değeri denetleyen fonksiyon; reddettiği değer, mesajıyla okumayı başarısız kılar |
 
 | `TypeMeta` | Anlamı |

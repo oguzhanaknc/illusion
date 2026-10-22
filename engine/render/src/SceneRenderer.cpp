@@ -592,7 +592,7 @@ nvrhi::IFramebuffer* SceneRenderer::Impl::outputFramebufferFor(nvrhi::ITexture* 
 void SceneRenderer::Impl::cull(World& world, const RenderView& view, JobSystem* jobs)
 {
     ILL_PROFILE_SCOPE_N("SceneRenderer::cull");
-    const u32 candidates = world.query<const Transform, const MeshRenderer>().without<Inactive>().count();
+    const u32 candidates = world.query<const Transform, const RenderMesh>().without<Inactive>().count();
     stats.candidates = candidates;
     if (items.size() < candidates)
     {
@@ -607,16 +607,17 @@ void SceneRenderer::Impl::cull(World& world, const RenderView& view, JobSystem* 
     const u32 cascadeCount = cascades.count;
     std::atomic<u32> count{0};
     // Tests one entity; `previous` is its world matrix from the last frame (equal to `matrix` when new).
-    const auto test = [&](const Mat4& matrix, const Mat4& previous, const MeshRenderer& renderer) {
+    const auto test = [&](const Mat4& matrix, const Mat4& previous, const RenderMesh& renderer) {
         const RenderResources::GpuMesh* mesh = resources->mesh(renderer.mesh);
-        if (mesh == nullptr || renderer.submesh >= mesh->submeshes.size())
+        if (mesh == nullptr || renderer.submesh >= mesh->submeshes.size() ||
+            (renderer.flags & RenderMesh::kVisible) == 0)
         {
             return;
         }
         const RenderResources::GpuMaterial* material = resources->material(renderer.material);
         const Sphere bounds = Sphere::fromAabb(mesh->submeshes[renderer.submesh].bounds).transformed(matrix);
         u32 passes = frustum.intersects(bounds) ? kCameraPass : 0u;
-        if (material->alphaMode != AlphaMode::Blend)
+        if (material->alphaMode != AlphaMode::Blend && (renderer.flags & RenderMesh::kCastShadows) != 0)
         {
             for (u32 c = 0; c < cascadeCount; ++c)
             {
@@ -637,28 +638,26 @@ void SceneRenderer::Impl::cull(World& world, const RenderView& view, JobSystem* 
             glm::dot(offset, offset),
             bounds};
     };
-    const auto tracked = [&](const Transform& transform, const MeshRenderer& renderer,
-                             MotionHistory& history) {
+    const auto tracked = [&](const Transform& transform, const RenderMesh& renderer, MotionHistory& history) {
         const Mat4 matrix = transform.matrix();
         test(matrix, history.previousWorld, renderer);
         history.previousWorld = matrix;
     };
     // Entities without history are recorded and receive one after iteration (no structural changes
     // while a query runs).
-    auto untrackedQuery =
-        world.query<const Transform, const MeshRenderer>().without<MotionHistory, Inactive>();
+    auto untrackedQuery = world.query<const Transform, const RenderMesh>().without<MotionHistory, Inactive>();
     const u32 untrackedCount = untrackedQuery.count();
     newMotionEntities.resize(untrackedCount);
     newMotionMatrices.resize(untrackedCount);
     std::atomic<u32> newCount{0};
-    const auto untracked = [&](Entity entity, const Transform& transform, const MeshRenderer& renderer) {
+    const auto untracked = [&](Entity entity, const Transform& transform, const RenderMesh& renderer) {
         const Mat4 matrix = transform.matrix();
         test(matrix, matrix, renderer);
         const u32 slot = newCount.fetch_add(1, std::memory_order_relaxed);
         newMotionEntities[slot] = entity;
         newMotionMatrices[slot] = matrix;
     };
-    auto trackedQuery = world.query<const Transform, const MeshRenderer, MotionHistory>().without<Inactive>();
+    auto trackedQuery = world.query<const Transform, const RenderMesh, MotionHistory>().without<Inactive>();
     if (jobs != nullptr)
     {
         trackedQuery.parallelEach(*jobs, tracked);
@@ -943,18 +942,20 @@ void SceneRenderer::render(nvrhi::ICommandList* commandList, nvrhi::ITexture* co
     }
     impl.ensureInstanceCapacity(instanceCount);
 
-    // The first SkyLight provides image-based lighting; without one, the constant ambient light does.
+    // The first SkyLight with an environment provides image-based lighting; without one, the constant
+    // ambient light does.
     const SkyLight* skyLight = nullptr;
+    EnvironmentHandle environment;
     Quat skyOrientation(1.0f, 0.0f, 0.0f, 0.0f);
-    world.query<const Transform, const SkyLight>().without<Inactive>().each(
-        [&](const Transform& transform, const SkyLight& sky) {
-            if (skyLight == nullptr)
+    world.query<const Transform, const SkyLight, const RenderSky>().without<Inactive>().each(
+        [&](const Transform& transform, const SkyLight& sky, const RenderSky& gpuSky) {
+            if (skyLight == nullptr && gpuSky.environment.index != 0)
             {
                 skyLight = &sky;
+                environment = gpuSky.environment;
                 skyOrientation = transform.rotation;
             }
         });
-    const EnvironmentHandle environment = skyLight != nullptr ? skyLight->environment : EnvironmentHandle{};
     const RenderResources::GpuEnvironment& gpuEnvironment = impl.resources->environment(environment);
     const f32 skyIntensity = skyLight != nullptr ? skyLight->intensity : 0.0f;
     const ShIrradiance irradiance =

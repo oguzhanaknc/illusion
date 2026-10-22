@@ -27,6 +27,7 @@
 #include <illusion/ecs/Reflection.hpp>
 #include <illusion/ecs/StructRegistry.hpp>
 
+#include <functional>
 #include <optional>
 #include <span>
 #include <string>
@@ -150,6 +151,10 @@ struct SceneLoadOptions
     /// SceneLoadResult::preservedSettings. Targets change only if the whole scene loads.
     std::span<const SceneSettingsTarget> settings{};
     GuidGenerator* guids = nullptr; ///< Makes new ids; nullptr uses GuidGenerator::shared().
+    /// Tells whether the file of an asset exists (called with the virtual path without its fragment, for
+    /// example through VirtualFileSystem::exists()). Assets for which it returns false are listed in
+    /// SceneLoadResult::missingAssets; without it only built-in references are checked.
+    std::function<bool(std::string_view path)> assetExists{};
 };
 
 /// Result of loadScene().
@@ -161,6 +166,9 @@ struct SceneLoadResult
     /// Settings that no SceneLoadOptions::settings target read, to pass to
     /// SceneSaveOptions::preservedSettings.
     std::vector<PreservedValue> preservedSettings;
+    /// Paths of referenced assets that do not exist (see SceneLoadOptions::assetExists), sorted. The scene
+    /// still loads and keeps the references, so saving it writes them again.
+    std::vector<std::string> missingAssets;
     std::string error;                 ///< Why loading failed (empty on success).
     std::vector<std::string> warnings; ///< Skipped fields and types, preserved types, version changes.
     u32 version = 0;                   ///< Format version of the file (0 if it could not be read).

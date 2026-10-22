@@ -27,6 +27,7 @@
 /// Reflecting a type again replaces its reflection, but the old one stays valid until the registry is
 /// destroyed, so pointers to TypeReflection and FieldInfo never dangle.
 
+#include <illusion/core/AssetRef.hpp>
 #include <illusion/core/Base.hpp>
 #include <illusion/core/Math.hpp>
 #include <illusion/core/TypeName.hpp>
@@ -80,6 +81,7 @@ enum class FieldType : u8
     Flags,      ///< An enumeration whose EnumReflection sets kFlags: a set of bits
     Optional,   ///< std::optional<T> of a reflectable T
     Json,       ///< JsonText: any JSON value
+    Asset,      ///< AssetRef: a reference to an asset, saved as its path
 };
 
 /// Returns the name of @p type, e.g. "Vector3".
@@ -155,6 +157,8 @@ struct FieldMeta
     bool advanced = false;            ///< Shown only when advanced fields are expanded.
     /// Name the field had in older data: reading JSON accepts it, and renames it before migrations run.
     std::string_view renamedFrom{};
+    /// Asset fields: what the reference should point to (for editors; reading does not check it).
+    AssetKind assetKind = AssetKind::Any;
     /// Rule that reading JSON checks after a value was read: a value it rejects fails the read with its
     /// message. Like min and max it applies through arrays and optionals, to every element. The function
     /// stays in the registering module's code (see the file documentation).
@@ -545,6 +549,10 @@ constexpr FieldType fieldTypeOf() noexcept
     else if constexpr (std::is_same_v<M, JsonText>)
     {
         return FieldType::Json;
+    }
+    else if constexpr (std::is_same_v<M, AssetRef>)
+    {
+        return FieldType::Asset;
     }
     else if constexpr (ReflectedFlags<M>)
     {

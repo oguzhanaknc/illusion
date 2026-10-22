@@ -31,7 +31,7 @@ ILL_BENCHMARK("reflection/component-json", 2500.0)
     reflectAudioComponents();
     const TypeReflection& type = *ComponentRegistry::instance().reflection(componentId<AudioSource>());
     AudioSource source;
-    source.clip = "game:/audio/footstep.ogg";
+    source.clip = AssetRef("game:/audio/footstep.ogg");
     source.bus = AudioBus::Ambience;
     source.volume = 0.75f;
 

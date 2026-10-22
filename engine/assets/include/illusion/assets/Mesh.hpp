@@ -6,6 +6,8 @@
 #include <illusion/core/Base.hpp>
 #include <illusion/core/Math.hpp>
 
+#include <optional>
+#include <string_view>
 #include <vector>
 
 namespace illusion
@@ -55,5 +57,17 @@ void computeNormals(MeshData& mesh);
 
 /// Plane in the XZ plane facing +y.
 [[nodiscard]] MeshData makePlane(f32 size = 1.0f, u32 subdivisions = 1);
+
+/// Capsule along the y axis: a cylinder of half height @p halfHeight capped by hemispheres of @p radius
+/// (total height 2 * (halfHeight + radius), like a Capsule Collider). @p rings counts both hemispheres.
+[[nodiscard]] MeshData makeCapsule(f32 radius = 0.5f, f32 halfHeight = 0.5f, u32 segments = 32,
+                                   u32 rings = 16);
+
+/// Closed cylinder along the y axis from -@p halfHeight to +@p halfHeight (like a Cylinder Collider).
+[[nodiscard]] MeshData makeCylinder(f32 radius = 0.5f, f32 halfHeight = 0.5f, u32 segments = 32);
+
+/// The mesh of the built-in asset @p path (`builtin:/mesh/cube`, `sphere`, `plane`, `capsule` or `cylinder`,
+/// made with the default arguments of makeCube() and the others), or std::nullopt for any other path.
+[[nodiscard]] std::optional<MeshData> makeBuiltinMesh(std::string_view path);
 
 } // namespace illusion
