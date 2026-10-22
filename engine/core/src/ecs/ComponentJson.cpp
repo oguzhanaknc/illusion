@@ -593,8 +593,6 @@ public:
         return false;
     }
 
-    ValuePath& path() noexcept { return m_path; }
-
 private:
     bool element(const ValueType& type, void* value, JsonValue json, usize index, const FieldMeta& meta)
     {

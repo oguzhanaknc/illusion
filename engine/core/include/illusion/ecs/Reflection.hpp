@@ -712,11 +712,11 @@ public:
         return *this;
     }
 
-    /// Registers @p migrate to convert JSON saved with @p fromVersion to @p fromVersion + 1. Data older than
+    /// Registers @p step to convert JSON saved with @p fromVersion to @p fromVersion + 1. Data older than
     /// the type's version runs every step from its version on, in order of versions.
-    TypeReflectionBuilder& migrate(u32 fromVersion, MigrationFn migrate)
+    TypeReflectionBuilder& migrate(u32 fromVersion, MigrationFn step)
     {
-        m_registry->addReflectionMigration(m_id, Migration{fromVersion, migrate});
+        m_registry->addReflectionMigration(m_id, Migration{fromVersion, step});
         return *this;
     }
 
