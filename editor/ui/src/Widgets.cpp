@@ -79,7 +79,11 @@ void copyText(std::span<char> destination, std::string_view source) noexcept
     {
         --length;
     }
-    std::memcpy(destination.data(), source.data(), length);
+    // An empty string_view may have a null data(), which memcpy must not receive.
+    if (length > 0)
+    {
+        std::memcpy(destination.data(), source.data(), length);
+    }
     destination[length] = '\0';
 }
 
