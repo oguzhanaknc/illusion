@@ -713,7 +713,10 @@ TEST_CASE("malformed JSON never asserts")
             CAPTURE(json);
             Gadget gadget;
             const ValueReadResult result = readGadget(gadget, json);
-            failures += result.ok() ? 0 : 1;
+            if (!result.ok())
+            {
+                ++failures;
+            }
             CHECK((result.ok() || !result.errors.front().message.empty()));
             const JsonDocument parsedValue = parsed(value);
             (void)setPath(type, &gadget, field.name, parsedValue.root());
