@@ -36,6 +36,8 @@ Record (ADR) olarak kaydedilir. Her kayıt bağlamı, kararı ve sonuçlarını 
 | [0027](https://github.com/oguzhanaknc/illusion/blob/main/docs/adr/0027-module-system-and-hot-reload.md) | Oyun modülleri: bir C giriş noktası, servis enjeksiyonu ve Component türlerini devreden hot reload |
 | [0028](https://github.com/oguzhanaknc/illusion/blob/main/docs/adr/0028-json-api-and-expected.md) | Gizli yyjson üzerinde exception fırlatmayan public bir JSON API'si ve kurtarılabilir hatalar için Expected |
 | [0029](https://github.com/oguzhanaknc/illusion/blob/main/docs/adr/0029-localization.md) | Sabit anahtarlar, derlenmiş İngilizce, veri dosyası olarak yerel ayarlar ve bir MessageFormat alt kümesiyle yerelleştirme |
+| [0030](https://github.com/oguzhanaknc/illusion/blob/main/docs/adr/0030-editor-tree-and-export-boundary.md) | Ayrı bir editör ağacı, komut öncelikli bir editör ve zorunlu kılınan bir export sınırı |
+| [0031](https://github.com/oguzhanaknc/illusion/blob/main/docs/adr/0031-editor-ui-stack.md) | Editör UI yığını: kendi backend'lerimizle Dear ImGui docking, gamma uzayında bir UI hedefi, tema token'ları, fontlar ve ikonlar |
 
 Yeni bir karar önermek için `docs/adr/0000-template.md` dosyasını kopyalayın ve
 [katkıda bulunma rehberini](../contributing.md#architecture-decision-recordlar) izleyin.

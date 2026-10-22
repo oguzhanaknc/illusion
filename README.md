@@ -9,7 +9,8 @@ designed to ship commercial games on Steam and similar stores.
 > platform layer, input (keyboard, mouse, gamepads, actions), glTF loading and a forward PBR scene renderer
 > with image-based lighting, soft shadows and HDR post-processing, an asset pipeline (import cache,
 > streaming, packed archives), scene files, rigid-body physics, 3D audio and hot-reloadable game modules are
-> implemented and tested on all platforms. The editor and the export pipeline are next; see
+> implemented and tested on all platforms. The editor is in progress (its UI foundation is done), followed
+> by the export pipeline; see
 > [ROADMAP.md](ROADMAP.md).
 
 ## Highlights
@@ -38,6 +39,10 @@ designed to ship commercial games on Steam and similar stores.
   builds are rolled back), linked statically into shipped games; semver and dependencies.
 - Asset pipeline: content-hashed import cache, asynchronous streaming on an I/O thread and the Job
   System, memory-mapped `.illpak` archives and cooked builds that ship without sources.
+- Editor foundation, kept out of shipped games by a checked boundary: Dear ImGui docking with NVRHI and
+  platform backends, theme tokens with WCAG-checked dark, light and high-contrast themes, Roboto and
+  Material Symbols fonts, a widget kit, localized labels with stable ids, and a UI gallery with golden-image
+  tests.
 - No per-frame heap allocations: arenas, pools and an inline type-erased callable.
 - Tracy profiler integration and benchmark tests with performance budgets in CI.
 - CI on Windows (MSVC, clang-cl), Linux (GCC, Clang, ASan/UBSan, TSan) and macOS (Apple Clang).
@@ -88,6 +93,7 @@ world.query<Position, const Velocity>().each([](Position& p, const Velocity& v) 
 | `engine/audio` | Sound playback, 3D audio and mixing with miniaudio (`illusion::audio`) |
 | `engine/modules` | Game and plugin modules: loading, checks, hot reload (`illusion::modules`) |
 | `engine/render` | GPU device, swapchains, shaders, scene renderer (`illusion::render`) |
+| `editor` | The editor, never linked into games: UI foundation, widget kit, UI gallery (`illusion::editor_ui`) |
 | `samples` | Sample applications |
 | `tests` | Unit tests (doctest) |
 | `tools/pack` | `illusion_pack` archive packer and asset cooker |
@@ -95,7 +101,7 @@ world.query<Position, const Velocity>().each([](Position& p, const Velocity& v) 
 | `benchmarks` | Benchmarks with performance budgets (nanobench) |
 | `cmake` | Build options, compiler settings, pinned dependencies |
 | `docs` | MkDocs site (en/tr), ADRs, Doxygen configuration |
-| `tools` | Format, docs parity and platform helper scripts |
+| `tools` | Format, docs parity, layering and platform helper scripts |
 | `.claude/skills` | Development guides for AI agents |
 
 ## Third-party software

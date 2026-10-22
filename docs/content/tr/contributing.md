@@ -19,6 +19,7 @@ bu sayfa onları özetler.
 ```bash
 python tools/check_format.py
 python tools/check_docs_parity.py
+python tools/check_layering.py
 cmake --preset ci-linux-clang
 cmake --build --preset ci-linux-clang-debug
 ctest --preset ci-linux-clang-debug
@@ -62,6 +63,24 @@ bir string tablosu üzerinden gösterilir (bkz. [Yerelleştirme](manual/localiza
 
 Log mesajları, assertion mesajları ve yapay zekâ ajanlarına yönelik metinler İngilizce kalır ve
 yerelleştirilmez.
+
+## Editör arayüzü
+
+Editör hiçbir zaman oyunlara link edilmez (bkz. [Editör Mimarisi](architecture/editor.md)). Editör arayüzü
+kodunu değiştirirken:
+
+- Editör hedeflerini `illusion_add_editor_library()` veya `illusion_add_editor_executable()` ile oluşturun;
+  `editor/` dışında asla editör veya Dear ImGui başlıklarını include etmeyin.
+- Renkleri tema token'larından (`ui::tokenColor()`, `Theme::color()`), boyutları stilden, metinleri editör
+  string tablosundan alın; renkleri, piksel boyutlarını veya metinleri koda gömmeyin.
+- Etkileşimli her öğeye `FrameText` ile kararlı bir id verin (`text.label(key, "panel.item")`); id'ler küçük
+  harfli, noktayla ayrılmış ve asla çevrilmeyen değerlerdir.
+- Yeni bir widget yazmadan önce `Icons.hpp` içindeki ikon sabitlerini ve `Widgets.hpp` içindeki widget'ları
+  kullanın; yeni bir widget kite ve galeriye eklenir.
+- Boşta geçen kareler bellek ayırmamalıdır: metni `FrameText` ile oluşturun, buffer'ları sabit boyutlu
+  dizilerde veya üyelerde tutun.
+- Bilinçli bir görsel değişiklikten sonra golden görüntüleri `ILLUSION_UPDATE_GOLDENS=1` ile yeniden yazın ve
+  yeni görüntüleri pull request'te inceleyin.
 
 ## Architecture Decision Record'lar
 

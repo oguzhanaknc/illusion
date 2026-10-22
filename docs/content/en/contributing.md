@@ -18,6 +18,7 @@ summarises them.
 ```bash
 python tools/check_format.py
 python tools/check_docs_parity.py
+python tools/check_layering.py
 cmake --preset ci-linux-clang
 cmake --build --preset ci-linux-clang-debug
 ctest --preset ci-linux-clang-debug
@@ -59,6 +60,23 @@ Text that players or editor users see goes through a string table, never a strin
   translations stale; their `source` hash shows which ones.
 
 Log messages, assertion messages and text for AI agents stay English and are not localized.
+
+## Editor UI
+
+The editor is never linked into games (see [Editor Architecture](architecture/editor.md)). When you change
+editor UI code:
+
+- Create editor targets with `illusion_add_editor_library()` or `illusion_add_editor_executable()`, and never
+  include editor or Dear ImGui headers outside `editor/`.
+- Take colours from theme tokens (`ui::tokenColor()`, `Theme::color()`), sizes from the style, and text from
+  the editor string table; never hard-code colours, pixel sizes or text.
+- Give every interactive item a stable id with `FrameText` (`text.label(key, "panel.item")`); ids are
+  lowercase, dot-separated and never translated.
+- Use icon constants from `Icons.hpp` and the widgets in `Widgets.hpp` before writing a new widget; a new
+  widget goes into the kit and the gallery.
+- Idle frames must not allocate: build text with `FrameText`, keep buffers in fixed-size arrays or members.
+- After an intended visual change, rewrite the golden images with `ILLUSION_UPDATE_GOLDENS=1` and review the
+  new images in the pull request.
 
 ## Architecture Decision Records
 

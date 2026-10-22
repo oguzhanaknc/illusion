@@ -70,6 +70,21 @@ illusion_add_string_table(illusion_tests
     NAMESPACE illusion::test::strings
     HEADER TestStrings.hpp)
 
+# The editor boundary (ADR 0030): a project whose engine target reaches an editor-only target must fail
+# to configure. CMake wraps long messages, so the expected path allows line breaks.
+add_test(NAME editor.boundary
+    COMMAND "${CMAKE_COMMAND}"
+        "-DFIXTURE=${CMAKE_CURRENT_SOURCE_DIR}/cmake/editor_boundary"
+        "-DBINARY_DIR=${CMAKE_CURRENT_BINARY_DIR}/editor_boundary"
+        "-DEXPECTED=fixture_engine[ 
+]+->[ 
+]+fixture_middle[ 
+]+->[ 
+]+fixture_editor_ui"
+        "-DILLUSION_CMAKE_DIR=${PROJECT_SOURCE_DIR}/cmake"
+        -P "${CMAKE_CURRENT_SOURCE_DIR}/cmake/ExpectConfigureFailure.cmake")
+set_tests_properties(editor.boundary PROPERTIES LABELS "unit")
+
 # Checks every string table and its translations (also part of the unit label, so every build job runs it).
 get_property(locale_dirs GLOBAL PROPERTY ILLUSION_LOCALE_DIRECTORIES)
 list(REMOVE_DUPLICATES locale_dirs)

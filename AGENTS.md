@@ -34,13 +34,14 @@ decisions are in `docs/adr/`. Do not reverse an accepted ADR silently: write a n
 | `engine/audio` | `AudioWorld`, `AudioSource`/`AudioListener` Components, filters, reverb, background clip loading via `AssetStreamer` (miniaudio is private; the audio thread owns it); tests use `AudioOutput::Offline` + `render()` |
 | `engine/modules` | `ModuleHost`: loads, checks, runs and hot-reloads game modules (`illusion/core/Module.hpp` is the module side; `illusion_add_module` in `cmake/IllusionModules.cmake`); tests load `tests/modules/TestModule.cpp` variants |
 | `engine/render` | Render device (Vulkan via NVRHI), swapchains, `RenderResources`, `SceneRenderer`, render Components, `shaders/` (Slang, built with `illusion_add_shaders`) |
+| `editor/` | The editor, never linked by games (ADR 0030): `thirdparty/` (Dear ImGui, ImPlot), `strings/` (string table from `data/locales/en.json`), `ui/` (backends, `Theme`, `FontManager`, `Icons.hpp`, `FrameText`, widget kit, `UiDriver`), `tools/ui_gallery`, `data/` (themes, locales), `tests/` (golden images in `tests/data/golden`), `benchmarks/` |
 | `samples/` | Sample applications (`hello_triangle`, `input_viewer`, `gltf_viewer`, `physics_playground`); shared helpers in `common/` |
 | `tests/` | doctest unit tests; one `Test<Feature>.cpp` per feature; shared helpers in `TestSupport.hpp` |
 | `benchmarks/` | nanobench benchmarks with budgets (`ILL_BENCHMARK(name, nsPerOp)`) |
-| `cmake/` | `IllusionOptions`, `IllusionCompilerSettings`, `Dependencies` (pinned), `IllusionModules` |
+| `cmake/` | `IllusionOptions`, `IllusionCompilerSettings`, `Dependencies` (pinned), `IllusionModules`, `IllusionEditor` (editor-only targets, boundary check), `IllusionIcons` |
 | `docs/content/{en,tr}` | MkDocs pages (must stay in sync) |
 | `docs/adr/` | Architecture Decision Records (English only) |
-| `tools/` | `check_format.py`, `check_docs_parity.py`, `windows/vsdev.cmd`; `pack/` builds `illusion_pack`; `textc/` builds `illusion_textc` (string tables, locale check) |
+| `tools/` | `check_format.py`, `check_docs_parity.py`, `check_layering.py`, `windows/vsdev.cmd`; `pack/` builds `illusion_pack`; `textc/` builds `illusion_textc` (string tables, locale check) |
 
 ## Build, test, check
 
@@ -51,6 +52,7 @@ ctest --preset ci-linux-clang-debug
 cmake --build --preset ci-linux-clang-release && ctest --preset ci-linux-clang-release  # + benchmarks
 python tools/check_format.py                 # --fix to apply; needs clang-format 22 (tools/requirements-dev.txt)
 python tools/check_docs_parity.py
+python tools/check_layering.py               # engine/editor boundary (ADR 0030)
 mkdocs build --strict                        # pip install -r docs/requirements.txt
 doxygen docs/Doxyfile                        # undocumented public API is an error
 ```
@@ -109,6 +111,16 @@ are within budget, format and docs checks pass, and Doxygen reports nothing.
 - Do not keep references to components across structural changes.
 - See `.claude/skills/ecs-components/SKILL.md`.
 
+## Editor rules
+
+- Editor code lives in `editor/` and is never linked by engine targets, samples, tools or games; create its
+  targets with `illusion_add_editor_library()` / `illusion_add_editor_executable()`. The configure-time
+  boundary check and `tools/check_layering.py` enforce this (ADR 0030).
+- UI colours come from theme tokens, text from the editor string table, icons from `Icons.hpp`; every
+  interactive item has a stable `###id` built with `FrameText`. Idle UI frames must not allocate.
+- Panels read editor state and change it only through commands, so agents and humans share one API.
+- See `.claude/skills/editor-ui/SKILL.md` and the [editor architecture](docs/content/en/architecture/editor.md).
+
 ## Testing rules
 
 - doctest. Test names are sentences describing behaviour.
@@ -152,5 +164,6 @@ The Steamworks SDK is never committed. See `.claude/skills/add-dependency/SKILL.
 | `bilingual-docs` | Writing or changing documentation |
 | `write-adr` | Making a decision that is hard to reverse |
 | `localization` | Adding user-visible text, string tables or a language |
+| `editor-ui` | Writing editor UI: widgets, panels, theme tokens, icons, stable ids, golden images |
 | `add-dependency` | Adding or upgrading a third-party library |
 | `pre-commit-review` | Before every commit |

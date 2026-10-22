@@ -17,7 +17,7 @@ illusion katmanlar halinde inşa edilir. Bir katman yalnızca altındaki katmanl
 | Ses | miniaudio ile konili 3D ses, streaming, arka planda yükleme ve bus'lı, filtreli, reverb'lü mikser; kendi thread'inde miksajlanır | Tamamlandı |
 | Renderer: temel | NVRHI üzerinden Vulkan 1.3 cihazı, swapchain'ler, Slang shader hattı | Tamamlandı |
 | Renderer: sahne | Mesh'ler, PBR Material'ler, doğrudan ve görüntü tabanlı aydınlatma, yumuşak gölgeler, GTAO, HDR post-processing (TAA, bloom, tonemapping), frustum culling, indirect draw'lı GPU occlusion culling, instancing, bindless multi-draw | Tamamlandı |
-| Editör | Sahne düzenleme, gizmo'lar, AI komut API'si | Planlandı |
+| Editör | Denetlenen bir export sınırına sahip ayrı ağaç; UI temeli (Dear ImGui backend'leri, tema, fontlar, ikonlar, widget kiti, galeri) tamamlandı; sahne düzenleme, gizmo'lar ve AI komut API'si sürüyor ([Editör Mimarisi](editor.md)) | Sürüyor |
 | Oyun modülleri | Oyunun kendi kodu: geliştirmede hot-reload edilebilen paylaşımlı kütüphaneler, dışa aktarılan oyunlarda statik linklenir ([Oyun Modülleri](../manual/modules.md)) | Tamamlandı |
 
 Core bir statik kütüphanedir. Editör ve export edilen oyunlar onu link eder; bir oyun modülü motor

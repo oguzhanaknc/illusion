@@ -34,6 +34,8 @@ jobs:
           python-version: "3.12"
       - run: pip install -r tools/requirements-dev.txt
       - run: python tools/check_format.py
+      - name: Engine/editor layering (ADR 0030)
+        run: python tools/check_layering.py
 
   build:
     name: ${{ matrix.name }}
@@ -77,6 +79,35 @@ jobs:
       - name: Annotate failures
         if: failure()
         run: python tools/ci/annotate_log.py configure.log build-debug.log test-debug.log build-release.log test-release.log
+
+  runtime-only:
+    # The engine without the editor (ADR 0030): proves that nothing outside editor/ needs it.
+    name: Runtime-only build (Linux GCC)
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.12"
+      - name: Install Ninja
+        run: pip install ninja==1.13.2
+      - name: Install Linux build dependencies
+        run: >
+          sudo apt-get update && sudo apt-get install -y --no-install-recommends
+          libwayland-dev libxkbcommon-dev libx11-dev libxrandr-dev libxinerama-dev libxcursor-dev
+          libxi-dev libxext-dev
+      - name: Configure (editor off)
+        run: cmake --preset ci-linux-gcc -DILLUSION_BUILD_EDITOR=OFF 2>&1 | tee configure.log
+      - name: No editor targets
+        run: |
+          ! grep -qE 'illusion_editor|illusion_imgui' build/ci-linux-gcc/*.ninja
+      - name: Build (Debug)
+        run: cmake --build --preset ci-linux-gcc-debug -- -k 0 2>&1 | tee build.log
+      - name: Test (Debug)
+        run: ctest --preset ci-linux-gcc-debug -LE "gpu|display" 2>&1 | tee test.log
+      - name: Annotate failures
+        if: failure()
+        run: python tools/ci/annotate_log.py configure.log build.log test.log
 
   sanitizers:
     name: Linux Clang ${{ matrix.name }}
@@ -141,9 +172,18 @@ jobs:
         run: xvfb-run -a ctest --preset ci-linux-clang-debug -L "gpu|display" 2>&1 | tee test.log
       - name: Sample smoke run
         run: xvfb-run -a ./build/ci-linux-clang/samples/Debug/illusion_hello_triangle --frames 120 2>&1 | tee sample.log
+      - name: UI gallery smoke run
+        run: xvfb-run -a ./build/ci-linux-clang/bin/Debug/illusion_ui_gallery --frames 60 2>&1 | tee gallery.log
+      - name: Upload UI captures for design review
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: ui-captures
+          path: build/ci-linux-clang/ui-captures/
+          if-no-files-found: warn
       - name: Annotate failures
         if: failure()
-        run: python tools/ci/annotate_log.py configure.log build.log test.log sample.log
+        run: python tools/ci/annotate_log.py configure.log build.log test.log sample.log gallery.log
 
   docs:
     name: Docs

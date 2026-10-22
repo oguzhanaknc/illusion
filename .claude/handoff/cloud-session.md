@@ -1,21 +1,31 @@
-# Handoff: local agent (2026-10-18)
+# Handoff: local agent (2026-10-20)
 
 Terse agent notes. Rules: CLAUDE.md, AGENTS.md, .claude/skills/*. Plan: ROADMAP.md, docs/plans/m7-editor.md.
 
 ## State
-- main: M0..M6 and M7a merged (#20). M7b localization is PR #21 (branch feat/m7b-localization; also fixes a
-  Jolt TSan race: PhysicsWorld waits for the engine jobs of each step).
-- Branch feat/m7c-platform-services (stacked on M7b): Window clipboard, cursor shapes, cursor position,
-  position/maximize/restore/iconify/icon/IME rect, FilesDroppedEvent (+ Window::dropFiles), content-scale,
-  moved, cursor-entered and refresh events, Platform::monitors()/wake()/keyDisplayName(), display tests
-  (illusion_display_tests, label display, run with gpu under Xvfb). PR opened with base feat/m7b-localization.
+- main: M0..M6, M7a (#20), M7b localization (#21), M7c platform services (#22) merged.
+- Branch feat/m7d-ui-foundation: editor tree + export boundary (cmake/IllusionEditor.cmake, boundary
+  fixture tests/cmake, tools/check_layering.py, CI Runtime-only build), Dear ImGui 1.93 docking + ImPlot,
+  UiPlatformBackend, UiRenderer (gamma-space UI target, present pass), Theme (3 themes, contrast tests),
+  FontManager, generated Icons.hpp (cmake/IllusionIcons.cmake), FrameText, widget kit v1, UiDriver,
+  illusion_ui_gallery, editor tests (editor/tests, goldens in editor/tests/data/golden), benchmark
+  ui/gallery-frame, ADRs 0030/0031, editor-ui skill.
 
 ## Next (in order)
-1. Merge #21 when green; then `gh pr edit <M7c PR> --base main` and merge M7c when green.
-2. M7d (UI foundation: editor tree and export boundary, Dear ImGui docking with NVRHI and platform
-   backends, theme, fonts, icons, ui gallery; show gallery screenshots to the owner). Dependency pins below.
+1. PR #23 (M7d): last full CI run was green on every job except ASan+UBSan (memcpy with a null
+   string_view in Widgets.cpp copyText). Fixed in the commit after it; check `gh pr checks 23` once and
+   merge when green (`gh pr merge 23 --merge --subject "Merge M7d: UI foundation (#23)"`). Golden images
+   pass on lavapipe. The owner approved the gallery look (2026-10-22).
+2. M7e (reflection v2: field/type metadata, struct reflection, more field types, JSON value API) on a new
+   branch from origin/main. Plan: docs/plans/m7-editor.md section 4.
 3. Owner decisions defaulted to the plan's recommendations (plan header). Live-agent CI (M7x) needs the
    owner's API key + budget: ask then.
+
+## Lessons from M7d
+- Dear ImGui reports ItemInfo before ItemAdd for tabs: UiItemRegistry keeps a pending label.
+- Slang/SPIR-V push constants: a uint3 after a uint starts at offset 16; use scalars to match C++ structs.
+- ImGui ini stores windows by the part of the title from "###" on (without "###").
+- Headless UI tests answer texture requests with HeadlessUi instead of a GPU renderer.
 
 ## Lessons from M7b
 - Localization keeps raw pointers to compiled messages; replaced locale files stay alive until the next
@@ -31,14 +41,6 @@ Terse agent notes. Rules: CLAUDE.md, AGENTS.md, .claude/skills/*. Plan: ROADMAP.
 - Never call user callbacks under a sink lock that writers also take through the Logger's lock (ABBA).
 - Objects living in an arena must not be touched by destructors that may run after arena.reset().
 - yyjson reports a valid but truncated prefix as YYJSON_READ_ERROR_UNEXPECTED_END (used for error order).
-
-## Planned dependency pins (M7d)
-- imgui v1.93.0-docking b916186e (archive sha256 746c265540bd3aa109570f29492ef4d8f5b421dd9fd0049c35ca35f21496f1a5;
-  fallback v1.92.9b-docking 90ded916bd57db2e0e171b6b098940a47c6f5042725dcdc67fb19940ca8bfdcc), ImPlot 851cdbd,
-  Roboto v2.138 / Roboto Mono last Apache-2.0 commit / Material Symbols Rounded (Apache-2.0); exact files and
-  hashes in the plan (section 5). No OFL fonts, no ImGuizmo (own gizmos).
-- GitHub archive hash from a clone: `git archive --format=tar --prefix=<repo>-<ver>/ <tag> | gzip -n -6 |
-  sha256sum` (reproduces GitHub's archive hash; checked against the doctest pin).
 
 ## Cloud box notes (only for cloud sessions)
 - Proxy blocks github archive URLs -> clone deps to /home/user/deps and configure with
