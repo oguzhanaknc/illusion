@@ -90,18 +90,20 @@ TEST_CASE("generators can be shared between threads")
     constexpr usize kThreads = 4;
     constexpr usize kPerThread = 20000;
     std::vector<std::vector<u64>> made(kThreads);
+    std::vector<std::thread> threads; // not std::jthread: Apple's libc++ does not have it
+    for (usize t = 0; t < kThreads; ++t)
     {
-        std::vector<std::jthread> threads;
-        for (usize t = 0; t < kThreads; ++t)
-        {
-            threads.emplace_back([&generator, &list = made[t]] {
-                list.reserve(kPerThread);
-                for (usize i = 0; i < kPerThread; ++i)
-                {
-                    list.push_back(generator.next().value);
-                }
-            });
-        }
+        threads.emplace_back([&generator, &list = made[t]] {
+            list.reserve(kPerThread);
+            for (usize i = 0; i < kPerThread; ++i)
+            {
+                list.push_back(generator.next().value);
+            }
+        });
+    }
+    for (std::thread& thread : threads)
+    {
+        thread.join();
     }
     std::vector<u64> all;
     for (const std::vector<u64>& list : made)
