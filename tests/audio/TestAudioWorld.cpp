@@ -443,7 +443,8 @@ TEST_CASE("audio components are saved in scenes and the runtime state is not")
     f.world.create(Transform{}, AudioListener{});
     f.audio->update(0.0);
 
-    const SceneSaveResult saved = saveScene(f.world);
+    assignMissingGuids(f.world);
+    const SceneSaveResult saved = saveScene(f.world, {.order = SceneOrder::AsGiven});
     REQUIRE(saved.ok());
     CHECK(saved.skippedComponents == 1); // AudioPlayback
     CHECK(saved.json.find("\"bus\": \"Ambience\"") != std::string::npos);

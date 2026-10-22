@@ -450,8 +450,28 @@ public:
         return ok;
     }
 
-    // Reads @p json into @p value, which already holds a value of @p type (merging into structs).
+    // Reads @p json into @p value, which already holds a value of @p type (merging into structs), and
+    // checks it with FieldMeta::validate.
     bool value(const ValueType& type, void* value, JsonValue json, const FieldMeta& meta)
+    {
+        if (!read(type, value, json, meta))
+        {
+            return false;
+        }
+        const bool container = type.type == FieldType::FixedArray || type.type == FieldType::Array ||
+                               type.type == FieldType::Optional;
+        if (meta.validate != nullptr && !container)
+        {
+            if (const std::string_view problem = meta.validate(value); !problem.empty())
+            {
+                return fail(std::string(problem));
+            }
+        }
+        return true;
+    }
+
+    // Reads @p json into @p value without validating it (see value()).
+    bool read(const ValueType& type, void* value, JsonValue json, const FieldMeta& meta)
     {
         switch (type.type)
         {

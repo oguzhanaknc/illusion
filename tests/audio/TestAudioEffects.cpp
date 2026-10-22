@@ -243,6 +243,7 @@ TEST_CASE("effect and cone settings of AudioSources are saved in scenes")
     source.coneOuterAngle = 2.0f;
     source.coneOuterVolume = 0.25f;
     world.create(source);
+    assignMissingGuids(world);
     const SceneSaveResult saved = saveScene(world);
     REQUIRE(saved.ok());
     World loaded;

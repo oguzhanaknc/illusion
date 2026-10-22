@@ -1,7 +1,8 @@
 # 0022. Component reflection with stable names and JSON scene files
 
 - Status: Accepted; field types, metadata, migrations and the JSON value API extended by
-  [0032](0032-reflection-v2.md)
+  [0032](0032-reflection-v2.md); dropping unknown types and index references superseded by
+  [0033](0033-entity-ids-names-scene-format-v2.md)
 - Date: 2026-10-17
 
 ## Context

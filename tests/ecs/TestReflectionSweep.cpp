@@ -284,6 +284,7 @@ TEST_CASE("runtime state Components are never saved")
     World world;
     world.create(Transform{}, MotionHistory{}, PhysicsBody{}, PhysicsJoint{}, CharacterBody{},
                  AudioPlayback{});
+    assignMissingGuids(world);
     const SceneSaveResult saved = saveScene(world);
     REQUIRE(saved.ok());
     CHECK(saved.skippedComponents == 5);

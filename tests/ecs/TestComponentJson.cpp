@@ -548,23 +548,20 @@ TEST_CASE("a component's JSON is the same as in scene files")
     everything.team = reflection_test::Team::Blue;
     const Entity entity = world.create(transform, everything);
     world.get<reflection_test::Everything>(entity).target = entity;
+    assignMissingGuids(world);
     const SceneSaveResult saved = saveScene(world);
     REQUIRE(saved.ok());
     const JsonDocument scene = parsed(saved.json);
 
-    struct SelfIndex final : EntityResolver
-    {
-        JsonMutValue writeEntity(JsonMutDocument& doc, Entity) const override { return doc.makeU64(0); }
-        Expected<Entity, std::string> readEntity(JsonValue) const override { return kNullEntity; }
-    };
-    const SelfIndex self;
-    const ValueWriteOptions sceneOptions{.entities = &self, .u64AsString = false};
+    // Scene files write references as ids, like the editor's resolver.
+    const GuidEntityResolver ids(world);
+    const ValueWriteOptions sceneOptions{.entities = &ids};
     const ComponentRegistry& registry = ComponentRegistry::instance();
     CHECK(written(*registry.reflection(componentId<Transform>()), &world.get<Transform>(entity),
-                  sceneOptions) == scene.root().pointer("/entities/0/illusion.Transform").dump());
+                  sceneOptions) == scene.root().pointer("/entities/0/components/illusion.Transform").dump());
     CHECK(written(*registry.reflection(componentId<reflection_test::Everything>()),
                   &world.get<reflection_test::Everything>(entity),
-                  sceneOptions) == scene.root().pointer("/entities/0/test.Everything").dump());
+                  sceneOptions) == scene.root().pointer("/entities/0/components/test.Everything").dump());
 }
 
 TEST_CASE("values are read and written by dotted paths")

@@ -23,6 +23,7 @@ add_executable(illusion_tests
     ecs/TestComponent.cpp
     ecs/TestComponentJson.cpp
     ecs/TestEntity.cpp
+    ecs/TestEntityGuid.cpp
     ecs/TestQuery.cpp
     ecs/TestReflection.cpp
     ecs/TestReflectionSweep.cpp

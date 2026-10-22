@@ -109,6 +109,8 @@ are within budget, format and docs checks pass, and Doxygen reports nothing.
 - Components that belong in scene files are reflected with a stable, prefixed name
   (`reflect<T>("module.Name")`) and metadata (units on angles, hints on colours, an icon); never persist C++
   type names. Runtime-only state uses `reflectRuntime<T>()`.
+- Refer to entities outside the running World (files, commands, undo records) by `EntityGuid`, never by
+  `Entity` handle or index; call `assignMissingGuids()` before `saveScene()` (ADR 0033).
 - Do not keep references to components across structural changes.
 - See `.claude/skills/ecs-components/SKILL.md`.
 

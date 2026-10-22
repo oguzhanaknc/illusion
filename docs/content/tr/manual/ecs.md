@@ -62,6 +62,10 @@ bool alive = world.isAlive(empty); // false: the handle is stale
 Bir Entity handle'ı bir indeks ve bir generation içerir. Bir Entity yok edildiğinde yuvası yeni bir
 generation ile yeniden kullanılır; böylece eski handle'lar `isAlive()` ile güvenle tespit edilir.
 
+Handle'lar yalnızca onları oluşturan World ve süreç içinde geçerlidir. Kaydedilen veya sahne dosyaları ya
+da editör gibi dışarıdan başvurulan Entity'ler ayrıca kalıcı bir id, yani `EntityGuid` Component'ini, ve
+isteğe bağlı olarak bir `Name` taşır; bkz. [Entity id'leri](scenes.md#entity-idleri).
+
 !!! warning "Referanslar kısa ömürlüdür"
     `get()`, `tryGet()` ve `emplace()` tarafından döndürülen referans ve pointer'lar bir sonraki yapısal
     değişiklikte (Entity oluşturma veya yok etme, Component ekleme veya çıkarma) geçersiz olur.
@@ -122,6 +126,9 @@ world.query<game::Position, const game::Velocity>().parallelEach(
 
 Çağrılabilir nesne eşzamanlı çalışır; yalnızca kendisine verilen Component'lere ve thread'ler arasında
 paylaşılması güvenli olan verilere dokunmalıdır.
+
+C++ tipleri yerine `ComponentId`'lerle çalışan serializer'lar ve araçlar aynı Chunk'ları
+`World::forEachMatching()` ile dolaşır; bkz. [Tipi silinmiş erişim](scenes.md#tipi-silinmis-erisim).
 
 ## İterasyon sırasında yapısal değişiklikler
 

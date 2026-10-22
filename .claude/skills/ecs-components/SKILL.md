@@ -35,6 +35,10 @@ Checklist:
       function and to a scene round-trip test. Enum fields need an `EnumReflection` specialization declared
       before use (`kFlags = true` for bit sets). Structs used as fields are reflected first with
       `reflectStruct<T>()`. See `docs/content/en/manual/reflection.md`.
+- [ ] Saved entities need an `EntityGuid`: call `assignMissingGuids(world)` before `saveScene()`. Entity
+      fields are saved as ids; keep other references to entities outside the World as `EntityGuid`s and
+      resolve them with `GuidEntityResolver`. Rules that values must follow when read (like `Name`) go in
+      `FieldMeta::validate`. Iterate by `ComponentId` with `World::forEachMatching()`.
 - [ ] Metadata is required for editor-visible types: `meta({.displayName, .category, .icon, .description,
       .docsAnchor})`; angles get `.unit = Unit::Radians, .displayUnit = Unit::Degrees, .hint =
       FieldHint::Angle`; colours get `FieldHint::Color` or `HdrColor`; physical quantities get a unit; valid

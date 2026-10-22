@@ -17,6 +17,8 @@ add_library(illusion_core STATIC
     src/ecs/CommandBuffer.cpp
     src/ecs/Component.cpp
     src/ecs/ComponentJson.cpp
+    src/ecs/EntityGuid.cpp
+    src/ecs/Name.cpp
     src/ecs/Reflection.cpp
     src/ecs/ReflectionData.cpp
     src/ecs/SceneSerializer.cpp

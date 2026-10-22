@@ -35,7 +35,8 @@ designed to ship commercial games on Steam and similar stores.
   streaming, clips loaded in the background, a mixer with buses, low/high-pass filters and a room reverb,
   mixed on its own thread without allocations; WAV, FLAC, MP3 and Ogg Vorbis.
 - Component and struct reflection with stable names, editor metadata, a JSON value API and migrations;
-  JSON scene files that survive code changes.
+  JSON scene files with persistent entity ids and names that survive code changes and keep the data of
+  unknown Component types.
 - Game modules: hot-reloadable shared libraries in development (World data survives a reload, broken
   builds are rolled back), linked statically into shipped games; semver and dependencies.
 - Asset pipeline: content-hashed import cache, asynchronous streaming on an I/O thread and the Job

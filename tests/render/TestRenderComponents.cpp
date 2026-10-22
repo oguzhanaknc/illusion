@@ -32,7 +32,8 @@ TEST_CASE("cameras and lights are saved in scenes; GPU-backed components are not
     world.create(Transform{}, sun);
     world.create(Transform{}, lamp, MeshRenderer{});
 
-    const SceneSaveResult saved = saveScene(world);
+    assignMissingGuids(world);
+    const SceneSaveResult saved = saveScene(world, {.order = SceneOrder::AsGiven});
     REQUIRE(saved.ok());
     CHECK(saved.skippedComponents == 1); // MeshRenderer
 

@@ -1,5 +1,8 @@
 #include <illusion/core/Assert.hpp>
+#include <illusion/ecs/EntityGuid.hpp>
+#include <illusion/ecs/Name.hpp>
 #include <illusion/ecs/Reflection.hpp>
+#include <illusion/ecs/SceneSerializer.hpp>
 #include <illusion/ecs/Transform.hpp>
 
 #include <cstring>
@@ -567,6 +570,16 @@ FieldValue defaultValue(const TypeReflection& type, const FieldInfo& field)
     return value;
 }
 
+namespace
+{
+
+std::string_view validateEntityName(const void* value) noexcept
+{
+    return entityNameError(*static_cast<const std::string*>(value));
+}
+
+} // namespace
+
 void reflectCoreComponents(ComponentRegistry& registry)
 {
     reflect<Transform>("illusion.Transform", 1, registry)
@@ -578,6 +591,28 @@ void reflectCoreComponents(ComponentRegistry& registry)
         .field("position", &Transform::position, {.unit = Unit::Meters})
         .field("rotation", &Transform::rotation)
         .field("scale", &Transform::scale, {.step = 0.01});
+    reflect<EntityGuid>("illusion.EntityGuid", 1, registry)
+        .meta({.displayName = "Entity id",
+               .category = "Core",
+               .icon = "fingerprint",
+               .description = "Persistent id of the Entity, saved as its id in scene files.",
+               .docsAnchor = "manual/scenes.md#entity-ids"})
+        .field("value", &EntityGuid::value, {.readOnly = true});
+    reflect<Name>("illusion.Name", 1, registry)
+        .meta({.displayName = "Name",
+               .category = "Core",
+               .icon = "label",
+               .description = "Name of the Entity, shown in the editor.",
+               .docsAnchor = "manual/scenes.md#names"})
+        .field("value", &Name::value, {.validate = validateEntityName});
+    reflectRuntime<UnknownComponents>("illusion.UnknownComponents",
+                                      {.displayName = "Unknown components",
+                                       .category = "Core",
+                                       .icon = "help",
+                                       .description = "Components of types that were not registered when the "
+                                                      "scene was loaded, saved again unchanged.",
+                                       .docsAnchor = "manual/scenes.md#unknown-types"},
+                                      registry);
 }
 
 } // namespace illusion

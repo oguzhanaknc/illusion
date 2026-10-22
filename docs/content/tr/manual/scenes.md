@@ -5,7 +5,7 @@ Sahne dosyaları Entity'leri ve Component'lerini JSON olarak kaydeder. Yansıtı
 adları derleyiciden derleyiciye farklıdır ve kod yeniden düzenlendiğinde değişir.
 
 Header'lar: `<illusion/ecs/Reflection.hpp>`, `<illusion/ecs/SceneSerializer.hpp>`,
-`<illusion/core/Version.hpp>`
+`<illusion/ecs/EntityGuid.hpp>`, `<illusion/ecs/Name.hpp>`, `<illusion/core/Version.hpp>`
 
 ## Component'leri yansıtma
 
@@ -65,6 +65,7 @@ void registerGameComponents()
 ## Sahneleri kaydetme ve yükleme
 
 ```cpp
+illusion::assignMissingGuids(world); // saving needs an EntityGuid on every entity
 const illusion::SceneSaveResult saved = illusion::saveScene(world);
 if (saved.ok())
 {
@@ -84,9 +85,13 @@ for (const std::string& warning : loaded.warnings)
 }
 ```
 
-- `saveScene(world)` canlı her Entity'yi kaydeder; `saveScene(world, entities)` bir listeyi kaydeder
-  (örneğin bir seçimi veya bir prefab'ı). Listenin dışını gösteren Entity alanları `null` olarak
+- `saveScene(world)` canlı her Entity'yi kaydeder. `SceneSaveOptions::subset` bunun yerine bir listeyi
+  kaydeder (örneğin bir seçimi veya bir prefab'ı); listenin dışını gösteren Entity alanları `null` olarak
   kaydedilir.
+- Kaydedilen her Entity'nin bir `EntityGuid`'i olmalıdır (bkz. [Entity id'leri](#entity-idleri));
+  birinde yoksa veya ikisi aynı id'yi paylaşıyorsa kaydetme başarısız olur. Entity'ler id sırasıyla
+  kaydedilir; böylece aynı sahne her zaman aynı dosyayı verir. `SceneOrder::AsGiven` alt kümenin sırasını,
+  alt küme yoksa `World::entities()` sırasını korur.
 - Yalnızca yansıtılmış Component'ler kaydedilir; `SceneSaveResult::skippedComponents` diğerlerini ve
   transient olarak yansıtılan, hiçbir zaman kaydedilmeyen çalışma zamanı durumunu (`PhysicsBody`,
   `AudioPlayback`, ...) sayar. `MeshRenderer` ve `SkyLight` GPU kaynaklarına başvurur ve henüz
@@ -97,7 +102,93 @@ for (const std::string& warning : loaded.warnings)
   olduğunu söyler; örneğin `entity 0: field 'quat' of 'test.Everything' must be a number (at
   /quat/3)`.
 - Yükleme kod değişikliklerine toleranslıdır: dosyada olmayan alanlar varsayılan değerlerini korur;
-  bilinmeyen Component tipleri ve alanlar ile çalışma zamanı Component tipleri bir uyarıyla atlanır.
+  bilinmeyen alanlar ve çalışma zamanı Component tipleri bir uyarıyla atlanır; bilinmeyen tiplerdeki
+  Component'ler [korunur](#bilinmeyen-tipler).
+
+## Entity id'leri
+
+Bir `Entity` handle'ı yalnızca onu oluşturan World ve süreç içinde geçerlidir. Kaydedilen Entity'lerin
+bunun yerine kalıcı bir id'si vardır: `EntityGuid` Component'i (`illusion.EntityGuid`, editörde salt
+okunur). Sahne dosyaları, editörün geri alma geçmişi ve Editor commands Entity'lere bu id ile başvurur:
+
+```cpp
+illusion::World world;
+const illusion::Entity player = world.create(illusion::Transform{}, illusion::Name{"Player"});
+illusion::assignMissingGuids(world); // every entity without an id gets one
+
+const illusion::EntityGuid id = world.get<illusion::EntityGuid>(player);
+ILL_LOG_INFO("Game", "player id: {}", illusion::toString(id)); // e.g. 3f9a0c1e5b7d2a40
+
+const illusion::GuidEntityResolver ids(world);
+const illusion::Entity found = ids.find(id); // == player
+```
+
+- Id'ler, 16 küçük harfli onaltılık rakamla yazılan 64 bitlik sayılardır; `0` "id yok" demektir.
+  `parseGuid()` metin biçimini geri okur.
+- Id'leri `GuidGenerator` üretir. Varsayılan üreteç anahtarını işletim sisteminin güvenli rastgele
+  kaynağından alır; böylece farklı oturumlarda ve makinelerde üretilen id'ler çakışmaz, tek bir üreteç de
+  bir id'yi asla tekrarlamaz. `GuidGenerator(seed)` her platformda aynı id'leri verir; testler ve
+  tekrarlanabilir araçlar içindir. `GuidGenerator::shared()` süreç genelindeki üreteçtir; `next()` birden
+  çok thread'den çağrılabilir.
+- `GuidEntityResolver` bir World'ün `EntityResolver`'ıdır (bkz. [Reflection](reflection.md#json)): onunla
+  `writeValue()` ve `readValue()` Entity alanlarını id olarak yazar ve geri okur. Yapısal değişikliklerden
+  sonra `refresh()` çağırın.
+
+Yüklenen Entity'lerin hangi id'leri alacağına `SceneLoadOptions::ids` karar verir:
+
+- `IdPolicy::Keep` (varsayılan; bir sahneyi açmak için) dosyadaki id'leri korur. World'deki bir
+  Entity'nin zaten sahip olduğu bir id yükleme hatasıdır.
+- `IdPolicy::Regenerate` (bir sahneyi yapıştırmak veya birden çok kez örneklemek için) her Entity'ye yeni
+  bir id verir. Dosyanın içindeki başvurular her iki durumda da yeniden eşlenir ve
+  `SceneLoadResult::fileIds` her Entity'nin dosyadaki id'sini tutar:
+
+```cpp
+const illusion::Entity selection[] = {door, frame};
+const illusion::SceneSaveResult copied = illusion::saveScene(world, {.subset = selection});
+
+const illusion::SceneLoadResult pasted =
+    illusion::loadScene(world, copied.json, {.ids = illusion::IdPolicy::Regenerate});
+// pasted.fileIds[i] is the id that pasted.entities[i] had in the copied text.
+```
+
+Tek bir dosyadaki yinelenen id'ler yükleme hatasıdır.
+
+## Adlar
+
+`Name` (`illusion.Name`), editörün gösterdiği isteğe bağlı bir etikettir; adların benzersiz olması
+gerekmez. Bir ad en fazla 256 bayt UTF-8'dir ve `/` (Entity yolları için ayrılmıştır) ile kontrol
+karakterleri içermez. Bir sahne dosyasından veya bir editör komutundan Name okunurken diğer adlar alanın
+doğrulayıcısıyla (`FieldMeta::validate`, bkz. [Reflection](reflection.md#metadata)) reddedilir;
+`isValidEntityName()` ve `entityNameError()` adları kodda denetler.
+
+## Bilinmeyen tipler
+
+Bir sahne, kayıtlı olmayan tiplerde Component'ler içerebilir; örneğin bir oyun modülü yüklü değilken. Bunlar
+kaybolmaz: yükleme JSON'larını ve kaydedildikleri sürümü, hiçbir motor System'inin sorgulamadığı çalışma
+zamanı Component'i `UnknownComponents` içinde saklar; kaydetme de onları değiştirmeden geri yazar. Böylece
+bir sahneyi açıp kaydetmek başka bir modülün verisini asla düşürmez. Tipleri bilinmediği için içlerindeki
+başvurular `IdPolicy::Regenerate` ile yeniden eşlenmez. Bilinen tiplerin bilinmeyen alanları ise
+[yeniden adlandırmalar](reflection.md#surumler-ve-migrationlar) uygulandıktan sonra yine bir uyarıyla
+atlanır.
+
+## Ayarlar
+
+Bir sahne, Component olmayan yansıtılmış struct'ları (bkz. [Reflection](reflection.md)), örneğin render
+veya hava durumu ayarlarını, bir `"settings"` nesnesinde taşıyabilir:
+
+```cpp
+game::Weather weather; // reflected with reflectStruct<game::Weather>("game.Weather")
+const illusion::SceneSettings settings[] = {illusion::sceneSettings(weather)};
+const illusion::SceneSaveResult saved = illusion::saveScene(world, {.settings = settings});
+
+game::Weather loadedWeather;
+const illusion::SceneSettingsTarget targets[] = {illusion::sceneSettingsTarget(loadedWeather)};
+const illusion::SceneLoadResult loaded = illusion::loadScene(otherWorld, saved.json, {.settings = targets});
+```
+
+Hedefler yalnızca sahnenin tamamı yüklenirse değişir. Hiçbir hedefin istemediği ayarlar, bilinmeyen
+tiplerdekiler dahil, `SceneLoadResult::preservedSettings` içinde döner; yeniden kaydetmek için onları
+`SceneSaveOptions::preservedSettings`'e verin.
 
 ## Dosya biçimi
 
@@ -107,36 +198,61 @@ birleştirilir:
 ```json
 {
   "format": "illusion.scene",
-  "version": 1,
+  "version": 2,
   "types": {
-    "illusion.Transform": 1,
-    "game.Spinner": 1
+    "game.Spinner": 1,
+    "illusion.Name": 1,
+    "illusion.Transform": 1
   },
+  "settings": {},
   "entities": [
     {
-      "illusion.Transform": {
-        "position": [0.0, 1.0, 0.0],
-        "rotation": [0.0, 0.0, 0.0, 1.0],
-        "scale": [1.0, 1.0, 1.0]
-      },
-      "game.Spinner": {
-        "axis": [0.0, 1.0, 0.0],
-        "speed": 2.5,
-        "team": "Blue",
-        "target": null
+      "id": "3f9a0c1e5b7d2a40",
+      "components": {
+        "game.Spinner": {
+          "axis": [0.0, 1.0, 0.0],
+          "speed": 2.5,
+          "team": "Blue",
+          "target": "9b21d07c4e6f1a35"
+        },
+        "illusion.Name": {
+          "value": "Turret"
+        },
+        "illusion.Transform": {
+          "position": [0.0, 1.0, 0.0],
+          "rotation": [0.0, 0.0, 0.0, 1.0],
+          "scale": [1.0, 1.0, 1.0]
+        }
+      }
+    },
+    {
+      "id": "9b21d07c4e6f1a35",
+      "components": {
+        "illusion.Name": {
+          "value": "Player"
+        }
       }
     }
   ]
 }
 ```
 
+- Her Entity, `id`'si ve kararlı ada göre sıralanmış `components`'idir. `types` tablosu dosyadaki her
+  Component ve ayar tipinin sürümünü listeler.
 - `rotation`, glTF'in kullandığı sırayla `[x, y, z, w]` olarak yazılır.
 - Enum değerleri adlarıyla yazılır; adı olmayan değerler sayı olarak yazılır.
-- Bir Entity alanı, `entities` dizisindeki bir Entity'nin indeksidir ya da `null`'dır.
-- Değerler [reflection](reflection.md#json) JSON biçimlerini kullanır; tek fark, sürüm 1 sahne
-  dosyalarının `u64` değerlerini sayı olarak yazmasıdır. Sahneler `writeValue()` ve `readValue()` ile
-  yazılıp okunur; böylece bir Component'in JSON'u sahne dosyasında ve editör komutlarında aynıdır.
+- Bir Entity alanı, dosyadaki bir Entity'nin `id`'sidir ya da `null`'dır.
+- Değerler [reflection](reflection.md#json) JSON biçimlerini kullanır. Sahneler `writeValue()` ve
+  `readValue()` ile yazılıp okunur; böylece bir Component'in JSON'u sahne dosyasında ve editör
+  komutlarında aynıdır.
 - Kayan noktalı sayılar en kısa kesin biçimleriyle yazılır; böylece bit bit aynı olarak geri yüklenir.
+
+### Sürüm 1 dosyaları
+
+Entity id'lerinden önce yazılan sahne dosyaları (`"version": 1`) hâlâ yüklenir. Entity'lerinin id'si
+olmadığı için yeni id alırlar; `entities` dizisine indeks olan Entity alanları yeniden eşlenir. Sonraki
+kaydetme sürüm 2 yazar. Sürüm 1 dosyalarında her Entity nesnesi Component'lerini doğrudan tutar ve `u64`
+değerleri sayıdır.
 
 ## Tipi silinmiş erişim
 
@@ -160,6 +276,23 @@ for (const illusion::Entity entity : entities)
         }
     }
 }
+```
+
+`World::forEachMatching(all, none, fn)`, `ComponentId` ile bir Query'dir: `all` içindeki her
+Component'e sahip olup `none` içindekilerin hiçbirine sahip olmayan Entity'lerin her Chunk'ı için `fn`'i
+bir kez, handle'ları ve ham sütun pointer'larıyla çağırır:
+
+```cpp
+illusion::ComponentMask all;
+const illusion::ComponentId guidId = illusion::componentId<illusion::EntityGuid>();
+all.set(guidId);
+world.forEachMatching(all, {}, [&](const illusion::RawChunk& chunk) {
+    const auto* guids = static_cast<const illusion::EntityGuid*>(chunk.column(guidId));
+    for (illusion::u32 i = 0; i < chunk.size(); ++i)
+    {
+        // chunk.entities()[i] has the id guids[i]
+    }
+});
 ```
 
 Boyutu tipe bağlı olan enum alanları için `readEnumField()` ve `writeEnumField()`, herhangi bir alan için

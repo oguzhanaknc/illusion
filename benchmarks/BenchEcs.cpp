@@ -1,6 +1,8 @@
 #include "Budget.hpp"
 
 #include <illusion/ecs/CommandBuffer.hpp>
+#include <illusion/ecs/EntityGuid.hpp>
+#include <illusion/ecs/Name.hpp>
 #include <illusion/ecs/Reflection.hpp>
 #include <illusion/ecs/SceneSerializer.hpp>
 #include <illusion/ecs/Transform.hpp>
@@ -151,23 +153,81 @@ ILL_BENCHMARK("ecs/command-buffer", 250.0)
     });
 }
 
-ILL_BENCHMARK("ecs/scene", 5000.0)
+ILL_BENCHMARK("ecs/for-each-matching", 2.0)
+{
+    World world;
+    for (u32 i = 0; i < kEntities; ++i)
+    {
+        world.create(Position{0, 0, 0}, EntityGuid{i + 1});
+    }
+    ComponentMask all;
+    const ComponentId guidId = componentId<EntityGuid>();
+    all.set(guidId);
+    u64 sum = 0;
+    bench.batch(kEntities).unit("entity").run("sum EntityGuid columns by ComponentId", [&] {
+        world.forEachMatching(all, {}, [&](const RawChunk& chunk) {
+            const auto* guids = static_cast<const EntityGuid*>(chunk.column(guidId));
+            for (u32 i = 0; i < chunk.size(); ++i)
+            {
+                sum += guids[i].value;
+            }
+        });
+        ankerl::nanobench::doNotOptimizeAway(sum);
+    });
+}
+
+ILL_BENCHMARK("guid/generate", 15.0)
+{
+    GuidGenerator generator;
+    constexpr int kIds = 10000;
+    u64 sum = 0;
+    bench.batch(kIds).unit("id").run("GuidGenerator::next", [&] {
+        for (int i = 0; i < kIds; ++i)
+        {
+            sum += generator.next().value;
+        }
+        ankerl::nanobench::doNotOptimizeAway(sum);
+    });
+}
+
+namespace
+{
+
+constexpr u32 kSceneEntities = 10000;
+
+// A scene of named entities with a Transform.
+void fillScene(World& world)
 {
     reflectCoreComponents();
-    World world;
-    constexpr u32 kSceneEntities = 10000;
     for (u32 i = 0; i < kSceneEntities; ++i)
     {
         Transform transform;
         transform.position = Vec3(static_cast<f32>(i), 0.5f, -2.25f);
-        world.create(transform);
+        world.create(transform, Name{"Crate"});
     }
+    GuidGenerator guids(1);
+    assignMissingGuids(world, guids);
+}
+
+} // namespace
+
+ILL_BENCHMARK("scene/save-v2", 10000.0)
+{
+    World world;
+    fillScene(world);
     std::string json;
-    bench.batch(kSceneEntities).unit("entity").run("save a Transform scene", [&] {
+    bench.batch(kSceneEntities).unit("entity").run("save a Transform + Name scene", [&] {
         json = saveScene(world).json;
         ankerl::nanobench::doNotOptimizeAway(json);
     });
-    bench.batch(kSceneEntities).unit("entity").run("load a Transform scene", [&] {
+}
+
+ILL_BENCHMARK("scene/load-v2", 10000.0)
+{
+    World world;
+    fillScene(world);
+    const std::string json = saveScene(world).json;
+    bench.batch(kSceneEntities).unit("entity").run("load a Transform + Name scene", [&] {
         World loaded;
         const SceneLoadResult result = loadScene(loaded, json);
         ankerl::nanobench::doNotOptimizeAway(result);

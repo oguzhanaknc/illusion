@@ -435,7 +435,8 @@ TEST_CASE("physics components are saved in scenes and the runtime link is not")
     f.world.create(at(Vec3(1.0f)), rigidBody, collider);
     f.physics.update(0.0);
 
-    const SceneSaveResult saved = saveScene(f.world);
+    assignMissingGuids(f.world);
+    const SceneSaveResult saved = saveScene(f.world, {.order = SceneOrder::AsGiven});
     REQUIRE(saved.ok());
     CHECK(saved.skippedComponents == 1); // PhysicsBody
     CHECK(saved.json.find("\"motionType\": \"Kinematic\"") != std::string::npos);

@@ -110,6 +110,7 @@ initializer'lar üye sırasını izlemelidir.
 | `hint` | Widget: `Color`, `HdrColor`, `Angle`, `Slider`, `LogSlider`, `Multiline`, `Layer`, `LayerMask` |
 | `readOnly`, `hidden`, `advanced` | Gösterilir ama düzenlenemez; gösterilmez; gelişmiş alanlar açıldığında gösterilir |
 | `renamedFrom` | Alanın eski verideki adı |
+| `validate` | JSON'dan okunan bir değeri denetleyen fonksiyon; reddettiği değer, mesajıyla okumayı başarısız kılar |
 
 | `TypeMeta` | Anlamı |
 | --- | --- |
