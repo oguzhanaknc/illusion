@@ -96,7 +96,8 @@ yazabilir. Ardından modülü denetler ve bir sorun varsa bir hata mesajı dönd
 - geçerli ve benzersiz bir ad ile semantik bir sürüm;
 - bağımlılıkları.
 
-Host daha sonra modüle süreç genelindeki servislerini (logger, Component registry'si, assert handler'ı,
+Host daha sonra modüle süreç genelindeki servislerini (logger, Component registry'si, Asset yol tablosu,
+assert handler'ı,
 thread ve Worker indeksleri) verir ve `load`'u çağırır. `update()` modülleri yükleme sırasıyla çalıştırır;
 `unload()` ve destructor onları, en son yükleneni önce olmak üzere kaldırır.
 

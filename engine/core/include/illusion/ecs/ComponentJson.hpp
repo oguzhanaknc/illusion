@@ -12,12 +12,17 @@
 /// | I8 ... I64, U8 ... U32 | numbers |
 /// | U64 | a decimal string such as `"18446744073709551615"` (numbers are accepted when reading) |
 /// | F32, F64 | numbers; with a FieldMeta::unit also `{"deg": 60}` (see unitFromSymbol()) |
-/// | Vector2/3/4 | `[x, y, z, w]`; colours (FieldHint::Color, HdrColor) also `"#rrggbb"` or `"#rrggbbaa"` in
-/// sRGB | | Quaternion | `[x, y, z, w]` | | String | a string | | Entity | through an EntityResolver; without
-/// one the process-local handle (EntityResolver docs) | | Enum | the value's name, or a number for values
-/// without a name | | Flags | an array of value names (and a number for bits without a name) | | Struct | an
-/// object keyed by field name | | FixedArray, Array | an array | | Optional | `null` when empty, otherwise
-/// the value | | Json | the JSON value itself |
+/// | Vector2/3/4 | `[x, y, z, w]`; colours (FieldHint::Color) also `"#rrggbb"` or `"#rrggbbaa"` (sRGB) |
+/// | Quaternion | `[x, y, z, w]` |
+/// | String | a string |
+/// | Entity | through an EntityResolver; without one the process-local handle |
+/// | Enum | the value's name, or a number for values without a name |
+/// | Flags | an array of value names (and a number for bits without a name) |
+/// | Struct | an object keyed by field name |
+/// | FixedArray, Array | an array |
+/// | Optional | `null` when empty, otherwise the value |
+/// | Json | the JSON value itself |
+/// | Asset | the asset's path, `""` for none (`null` and `{"path": "..."}` are accepted when reading) |
 ///
 /// Reading reports every problem with a JSON Pointer (RFC 6901) to the value, for example `/position/1`.
 /// Nothing asserts on malformed input.
@@ -82,6 +87,9 @@ struct ValueWriteOptions
     /// Write U64 values as decimal strings, so that readers which keep numbers as doubles stay exact.
     /// Scene files of version 1 write numbers.
     bool u64AsString = true;
+    /// Turns AssetRef ids into paths; nullptr uses AssetPathTable::instance(). Writing fails for an id
+    /// without a recorded path.
+    const AssetPathTable* assetPaths = nullptr;
 };
 
 /// How readValue() treats fields that the JSON does not mention.
@@ -105,6 +113,10 @@ struct ValueReadOptions
     /// Leave the object unchanged if reading fails. Without it, a failed read may leave some fields read;
     /// loaders that discard the whole object on failure skip the copy this costs.
     bool atomic = true;
+    /// Records the paths of AssetRef fields; nullptr uses AssetPathTable::instance().
+    AssetPathTable* assetPaths = nullptr;
+    /// If set, the id of every non-empty AssetRef read is appended (also when reading fails later).
+    std::vector<AssetId>* referencedAssets = nullptr;
 };
 
 /// Result of readValue().

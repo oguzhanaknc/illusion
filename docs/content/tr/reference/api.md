@@ -28,6 +28,9 @@ doxygen docs/Doxyfile
 | `illusion/core/JobSystem.hpp` | `JobSystem`, `JobCounter`, `Job` |
 | `illusion/core/InplaceFunction.hpp` | Bellek ayırmayan, tipi silinmiş (type-erased) çağrılabilir nesne |
 | `illusion/core/Thread.hpp` | Thread isimleri, thread indeksleri, spin-wait ipucu |
+| `illusion/core/AssetId.hpp` | `AssetId`, parçalı Asset yolları, `builtinAssetPaths` |
+| `illusion/core/AssetRef.hpp` | `AssetRef`, `AssetPathTable`, `AssetKind` |
+| `illusion/core/VirtualPath.hpp` | Sanal yol denetimleri ve `normalizeVirtualPath` |
 | `illusion/core/Hash.hpp` | Kararlı FNV-1a ve xxHash64 hash'leri |
 | `illusion/core/Serialization.hpp` | `BinaryWriter`, `BinaryReader` (sınır denetimli, little-endian) |
 | `illusion/core/TypeName.hpp` | Derleme zamanı tip isimleri |
@@ -77,9 +80,11 @@ doxygen docs/Doxyfile
 | `illusion/assets/AssetDatabase.hpp` | `AssetDatabase`: görüntüler ve modeller için içe aktarma önbelleği |
 | `illusion/assets/AssetStreamer.hpp` | `AssetStreamer`, `AssetHandle`: görüntülerin, modellerin ve diğer dosyaların (`loadFile`) asenkron yüklenmesi |
 | `illusion/assets/AssetCooker.hpp` | `cookAssets`: bir dizini önceden içe aktarma |
+| `illusion/assets/MaterialAsset.hpp` | `MaterialAsset`: `.material` dosyaları, `parseMaterialAsset`, `writeMaterialAsset` |
 | `illusion/assets/Environment.hpp` | Equirectangular eşleme, `ShIrradiance`, `makeSkyImage` |
 | `illusion/physics/PhysicsWorld.hpp` | `PhysicsWorld`: simülasyon, cisim ve karakter kontrolü, Mesh ve hull geometrisi, joint'ler, raycast'ler, shape cast'ler, örtüşmeler, çarpma hızlarıyla temas olayları |
 | `illusion/physics/PhysicsComponents.hpp` | `RigidBody`, `Collider`, `CharacterController`, `Joint` Component'leri ve çalışma zamanı durumları (`PhysicsBody`, `CharacterBody`, `PhysicsJoint`); `PhysicsMeshHandle` |
+| `illusion/physics/PhysicsAssetResolver.hpp` | `PhysicsAssetResolver`: Collider'ların Mesh Asset'lerini hazırlar |
 | `illusion/audio/AudioWorld.hpp` | `AudioWorld`: clip'ler (arka planda yükleme dahil), çalma, tek seferlik sesler, mikser bus'ları, bus filtreleri, reverb, çıkış; `AudioWorldDesc`, `AudioStats` |
 | `illusion/audio/AudioComponents.hpp` | `AudioSource` (filtreler, reverb gönderimi ve konilerle), `AudioListener`, `AudioPlayback` Component'leri; `AudioBus`, `AudioAttenuation` |
 | `illusion/render/RenderDevice.hpp` | `RenderDevice`, `GpuInfo` (bindless ve multi-draw desteği dahil): NVRHI üzerinden Vulkan cihazı |
@@ -90,4 +95,6 @@ doxygen docs/Doxyfile
 | `illusion/render/Shadows.hpp` | `ShadowSettings`, `ShadowCascades`, `computeShadowCascades` |
 | `illusion/render/UploadQueue.hpp` | `UploadQueue`: streaming ile gelen modellerin byte bütçeli GPU yüklemesi |
 | `illusion/render/PostProcess.hpp` | `PostProcessSettings` (ambient occlusion, bloom, TAA), `temporalJitter` |
-| `illusion/render/Components.hpp` | `MeshRenderer`, `Camera`, `DirectionalLight`, `PointLight`, `SkyLight`, `MotionHistory`, `spawnModel` |
+| `illusion/render/SceneComponents.hpp` | Kaydedilen render Component'leri: `MeshRenderer`, `Camera`, `DirectionalLight`, `PointLight`, `SkyLight`, `ProceduralSky` |
+| `illusion/render/Components.hpp` | Çalışma zamanı `RenderMesh`, `RenderSky`, `MotionHistory`; `spawnModel` |
+| `illusion/render/RenderAssets.hpp` | `RenderAssetCache`, `RenderAssetResolver`: Asset referanslarından GPU kaynaklarına |

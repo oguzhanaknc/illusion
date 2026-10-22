@@ -1,6 +1,7 @@
 #include "TestSupport.hpp"
 #include "modules/TestModuleShared.hpp"
 
+#include <illusion/core/AssetRef.hpp>
 #include <illusion/core/JobSystem.hpp>
 #include <illusion/core/Log.hpp>
 #include <illusion/core/Module.hpp>
@@ -167,6 +168,9 @@ TEST_CASE("a shared module loads with the host's services and runs every update"
     CHECK(f.control.updates == 1);
     CHECK(f.control.logger == &Logger::instance());
     CHECK(f.control.registry == &ComponentRegistry::instance());
+    // An AssetRef made in the module is recorded in the host's table.
+    CHECK(f.control.assetPaths == &AssetPathTable::instance());
+    CHECK(AssetPathTable::instance().path(AssetId{f.control.asset}) == "game:/module.glb#mesh/1");
     CHECK(f.control.counterId == moduleType("test.ModuleCounter"));
     CHECK(f.control.transformId == componentId<Transform>());
     CHECK(f.control.threadIndex == currentThreadIndex());

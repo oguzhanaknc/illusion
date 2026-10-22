@@ -599,7 +599,7 @@ struct AudioWorld::Impl
             ILL_LOG_WARN("Audio", "the AudioSource of entity {} has no clip", entity.index);
             return {};
         }
-        return requestClip(source.clip, source.stream ? AudioClipMode::Stream : AudioClipMode::Decode);
+        return requestClip(source.clip.path(), source.stream ? AudioClipMode::Stream : AudioClipMode::Decode);
     }
 
     void startSource(Entity entity)

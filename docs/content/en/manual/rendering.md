@@ -77,7 +77,7 @@ device->waitIdle();
 
 ## Drawing a scene
 
-`SceneRenderer` draws every Entity that has a `Transform` and a `MeshRenderer`, lit by
+`SceneRenderer` draws every Entity that has a `Transform` and a `RenderMesh`, lit by
 `DirectionalLight` and `PointLight` Entities. `RenderResources` owns the GPU Meshes, Textures and
 Materials and hands out small Handles that Components store.
 
@@ -98,7 +98,7 @@ gold.parameters.metallicFactor = 1.0f;
 gold.parameters.roughnessFactor = 0.3f;
 const illusion::MaterialHandle material = resources.createMaterial(gold);
 
-world.create(illusion::Transform{}, illusion::MeshRenderer{sphere, 0, material});
+world.create(illusion::Transform{}, illusion::RenderMesh{sphere, 0, material});
 
 illusion::Transform sun;
 sun.rotation = glm::quatLookAt(glm::normalize(illusion::Vec3(-0.4f, -1.0f, -0.6f)), illusion::Vec3(0.0f, 1.0f, 0.0f));
@@ -120,8 +120,8 @@ device->device()->executeCommandList(commands);
 ILL_LOG_DEBUG("Game", "{} draw calls", renderer->stats().drawCalls);
 ```
 
-- `MeshRenderer` names a Mesh, one of its submeshes and a Material (an unset Material uses the
-  default white, rough Material).
+- `RenderMesh` names a GPU Mesh, one of its submeshes and a Material (an unset Material uses the
+  default white, rough Material). Scenes use `MeshRenderer` with asset references instead (see below).
 - Lights shine along their Transform's -z axis (`DirectionalLight`) or from its position
   (`PointLight`, fading to zero at `range`). The first 4 directional and 16 point lights are used.
 - `render()` culls Entities (see [Culling](#culling)), sorts them by Pipeline, Material and Mesh, and
@@ -131,6 +131,44 @@ ILL_LOG_DEBUG("Game", "{} draw calls", renderer->stats().drawCalls);
   colour format you render to.
 - Colour targets with an sRGB format receive linear colour; UNORM targets receive sRGB-encoded colour,
   so both look the same.
+
+### MeshRenderer and RenderMesh
+
+Scenes describe what to draw with the saved Component `MeshRenderer`, which refers to assets by path
+([asset references](assets.md#asset-references)); the renderer draws the runtime Component `RenderMesh`,
+which holds GPU Handles. A `RenderAssetResolver` per World connects the two, through a `RenderAssetCache`
+shared by every World drawn with the same `RenderResources`:
+
+Header: `<illusion/render/RenderAssets.hpp>`
+
+```cpp
+illusion::RenderAssetCache cache(resources, streamer);
+illusion::RenderAssetResolver resolver(cache);
+
+world.create(illusion::Transform{}, illusion::MeshRenderer{.mesh = illusion::AssetRef("game:/models/ship.glb#mesh/0")});
+world.create(illusion::Transform{}, illusion::MeshRenderer{.mesh = illusion::AssetRef("builtin:/mesh/cube"),
+                                                           .material = illusion::AssetRef("game:/materials/paint.material")});
+resolver.waitIdle(world, &jobs); // optional: finish loading before the first frame
+
+// Every frame, before rendering:
+streamer.update();
+cache.update();
+resolver.update(world, &jobs);
+```
+
+- `MeshRenderer` holds `mesh`, `submesh`, `material` (empty: the model's material for that submesh),
+  `layers`, `castShadows` and `visible`. Every `update()` compares each one with the key its `RenderMesh`
+  was resolved from (in parallel, without allocating) and resolves only those that changed.
+- Assets load in the background: a renderer keeps drawing what it drew before until its new assets are
+  on the GPU (new renderers draw nothing until then). Streamed models are uploaded within
+  `RenderAssetCacheDesc::uploadBytesPerUpdate`.
+- A mesh that cannot be loaded draws nothing; a material that cannot be loaded draws with the default
+  material. The cache logs why, `RenderAssetCache::error()` returns it and
+  `RenderAssetResolver::statistics().failures` counts the renderers affected.
+- Removing a `MeshRenderer` removes its `RenderMesh`. Code that builds geometry at run time writes
+  `RenderMesh` directly (with `sourceKey` 0); the resolver leaves it alone. `RenderMesh` is not saved.
+- The cache shares every asset between renderers and Worlds (100 renderers of one mesh upload it once)
+  and counts the resolvers that use each asset (`references()`).
 
 ### Materials and shading
 
@@ -236,26 +274,29 @@ usually an HDR photo. Free, high-quality HDRIs (CC0) are available from
 [Poly Haven](https://polyhaven.com/hdris); download them as `.hdr` files.
 
 ```cpp
-std::vector<std::byte> bytes;
-files.readFile("game:/skies/meadow_2k.hdr", bytes);
-std::optional<illusion::Image> sky = illusion::decodeImage(bytes, /*srgb=*/false);
-if (!sky)
-{
-    sky = illusion::makeSkyImage(1024); // procedural fallback
-}
-const illusion::EnvironmentHandle environment = resources.createEnvironment(*sky);
-
+// From a file: a RenderAssetResolver loads and bakes it.
 illusion::Transform orientation;
 orientation.rotation = glm::angleAxis(glm::radians(90.0f), illusion::Vec3(0.0f, 1.0f, 0.0f));
-world.create(orientation, illusion::SkyLight{environment, 1.0f, true});
+world.create(orientation, illusion::SkyLight{.environment = illusion::AssetRef("game:/skies/meadow_2k.hdr")});
+
+// The built-in procedural sky, shaped by a ProceduralSky on the same Entity.
+world.create(illusion::Transform{}, illusion::SkyLight{.environment = illusion::AssetRef("builtin:/sky/procedural")},
+             illusion::ProceduralSky{.resolution = 1024});
+
+// Baked by code: add the RenderSky yourself.
+const illusion::EnvironmentHandle environment = resources.createEnvironment(illusion::makeSkyImage(1024));
+world.create(illusion::Transform{}, illusion::SkyLight{}, illusion::RenderSky{environment});
 ```
 
 - `createEnvironment()` bakes the image on the GPU once: a background cube map, a specular cube map
   prefiltered for increasing roughness, and the diffuse irradiance as spherical harmonics (on the
   CPU). Bake environments at load time: a 2K HDRI takes under 100 ms on a desktop machine.
   `EnvironmentDesc` sets the resolutions and sample count.
-- The renderer uses the first `SkyLight`. Its Transform rotates the environment; `intensity` scales
-  it, and `background = false` keeps the clear colour behind the scene.
+- A `RenderAssetResolver` gives a `SkyLight` with an `environment` asset its `RenderSky`; the file
+  is baked when it has loaded. `builtin:/sky/procedural` bakes `makeSkyImage()` with the Entity's
+  `ProceduralSky`, again whenever its fields change.
+- The renderer uses the first `SkyLight` whose environment is ready. Its Transform rotates the
+  environment; `intensity` scales it, and `background = false` keeps the clear colour behind the scene.
 - Without a `SkyLight`, `SceneRendererDesc::ambient` adds uniform ambient light instead.
 - Metals reflect their surroundings, so they look right only with an environment.
 - The shading is energy-conserving: in a uniform white environment, every white Material looks like the
@@ -290,7 +331,7 @@ renderer->resetTemporalHistory();
 - Bloom preserves energy: it replaces `bloom.intensity` of the image with its blurred copy instead of
   adding light.
 - TAA follows moving objects with per-pixel motion vectors from the depth prepass. The renderer keeps
-  each MeshRenderer's previous world matrix in a `MotionHistory` Component that it adds itself; after
+  each RenderMesh's previous world matrix in a `MotionHistory` Component that it adds itself; after
   teleporting an object, set `MotionHistory::previousWorld` to its new matrix so the jump is not
   smeared. TAA is off by default; it suits scenes that need smooth edges more than the sharpest image.
 - `motionVectors()` returns the motion-vector texture for debug views.

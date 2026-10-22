@@ -39,6 +39,9 @@ Checklist:
       fields are saved as ids; keep other references to entities outside the World as `EntityGuid`s and
       resolve them with `GuidEntityResolver`. Rules that values must follow when read (like `Name`) go in
       `FieldMeta::validate`. Iterate by `ComponentId` with `World::forEachMatching()`.
+- [ ] Refer to assets with `AssetRef` fields (`.assetKind` in `FieldMeta`), never with GPU, physics or audio
+      handles: keep handles in a separate runtime Component (`reflectRuntime<T>()`) that a resolver fills
+      and compares with a source key, like `MeshRenderer` → `RenderMesh` (ADR 0035).
 - [ ] Metadata is required for editor-visible types: `meta({.displayName, .category, .icon, .description,
       .docsAnchor})`; angles get `.unit = Unit::Radians, .displayUnit = Unit::Degrees, .hint =
       FieldHint::Angle`; colours get `FieldHint::Color` or `HdrColor`; physical quantities get a unit; valid

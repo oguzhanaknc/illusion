@@ -1,9 +1,11 @@
 #include <illusion/assets/Image.hpp>
 #include <illusion/assets/Mesh.hpp>
+#include <illusion/core/AssetId.hpp>
 
 #include <doctest/doctest.h>
 
 #include <cstring>
+#include <string_view>
 
 using namespace illusion;
 
@@ -115,6 +117,44 @@ TEST_CASE("procedural meshes are closed, consistent and bounded")
     CHECK(makeCube(2.0f).bounds.max == Vec3(1.0f));
     CHECK(makeSphere(1.0f).bounds.max.y == doctest::Approx(1.0));
     CHECK(makePlane(4.0f).bounds.min.x == doctest::Approx(-2.0));
+}
+
+TEST_CASE("capsules and cylinders are closed, face outwards and match their collider sizes")
+{
+    for (const MeshData& mesh : {makeCapsule(0.5f, 1.0f, 12, 6), makeCylinder(0.5f, 1.0f, 12)})
+    {
+        REQUIRE(mesh.submeshes.size() == 1);
+        CHECK(mesh.indices.size() % 3 == 0);
+        CHECK(mesh.submeshes[0].indexCount == mesh.indices.size());
+        for (usize i = 0; i < mesh.indices.size(); i += 3)
+        {
+            REQUIRE(mesh.indices[i + 2] < mesh.vertices.size());
+            const Vertex& a = mesh.vertices[mesh.indices[i]];
+            const Vertex& b = mesh.vertices[mesh.indices[i + 1]];
+            const Vertex& c = mesh.vertices[mesh.indices[i + 2]];
+            const Vec3 face = glm::cross(b.position - a.position, c.position - a.position);
+            if (glm::length(face) > 1e-6f)
+            {
+                CHECK(glm::dot(face, a.normal + b.normal + c.normal) > 0.0f);
+                // Closed around the origin: every face points away from the centre.
+                CHECK(glm::dot(face, a.position + b.position + c.position) > 0.0f);
+            }
+        }
+        CHECK(mesh.bounds.max.x == doctest::Approx(0.5));
+    }
+    CHECK(makeCapsule(0.5f, 1.0f).bounds.max.y == doctest::Approx(1.5));
+    CHECK(makeCylinder(0.5f, 1.0f).bounds.min.y == doctest::Approx(-1.0));
+}
+
+TEST_CASE("built-in meshes are made without files")
+{
+    for (const std::string_view path : builtinAssetPaths())
+    {
+        CHECK(makeBuiltinMesh(path).has_value() == path.starts_with("builtin:/mesh/"));
+    }
+    CHECK(makeBuiltinMesh("builtin:/mesh/cube")->vertices.size() == makeCube().vertices.size());
+    CHECK_FALSE(makeBuiltinMesh("builtin:/mesh/torus").has_value());
+    CHECK_FALSE(makeBuiltinMesh("game:/mesh/cube").has_value());
 }
 
 TEST_CASE("computeNormals produces face normals")

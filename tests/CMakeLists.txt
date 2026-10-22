@@ -4,6 +4,7 @@ add_executable(illusion_tests
     main.cpp
     AllocationCounter.cpp
     core/TestAssert.cpp
+    core/TestAssetRef.cpp
     core/TestEventBus.cpp
     core/TestExpected.cpp
     core/TestHash.cpp
@@ -44,9 +45,11 @@ add_executable(illusion_tests
     assets/TestEnvironment.cpp
     assets/TestGltf.cpp
     assets/TestImageMesh.cpp
+    assets/TestMaterialAsset.cpp
     audio/TestAudioEffects.cpp
     audio/TestAudioWorld.cpp
     modules/TestModules.cpp
+    physics/TestPhysicsAssets.cpp
     physics/TestPhysicsExtensions.cpp
     physics/TestPhysicsHierarchy.cpp
     physics/TestPhysicsWorld.cpp
@@ -132,6 +135,8 @@ doctest_discover_tests(illusion_display_tests
 # labelled "gpu" so machines without Vulkan can exclude them with `ctest -LE gpu`.
 add_executable(illusion_gpu_tests
     gpu/main.cpp
+    AllocationCounter.cpp
+    gpu/TestRenderAssets.cpp
     gpu/TestRenderDevice.cpp
     gpu/TestSceneRenderer.cpp
     gpu/TestSwapchain.cpp

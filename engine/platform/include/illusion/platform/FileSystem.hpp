@@ -63,14 +63,15 @@ public:
     ~VirtualFileSystem();
 
     /// Mounts directory @p root as @p name. Names use lowercase letters, digits, '_' and '-'. Returns
-    /// NotFound if @p root is not an existing directory and InvalidPath for bad names. Mounting an
-    /// existing name replaces it.
+    /// NotFound if @p root is not an existing directory and InvalidPath for bad names and for "builtin",
+    /// which is reserved for the engine's built-in assets (AssetId.hpp). Mounting an existing name replaces
+    /// it.
     FileError mount(std::string_view name, const std::filesystem::path& root,
                     MountAccess access = MountAccess::ReadOnly);
 
     /// Mounts the archive file @p archive (see Archive.hpp) as @p name, read-only. Paths inside it work
-    /// exactly like paths in a mounted directory. Returns FileError::NotFound if the file is missing and
-    /// FileError::IoError if it is not a valid archive.
+    /// exactly like paths in a mounted directory. Returns FileError::NotFound if the file is missing,
+    /// FileError::IoError if it is not a valid archive and FileError::InvalidPath for names mount() rejects.
     FileError mountArchive(std::string_view name, const std::filesystem::path& archive);
 
     /// Removes a mount. Returns false if it did not exist.

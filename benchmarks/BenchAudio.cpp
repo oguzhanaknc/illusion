@@ -93,7 +93,7 @@ AudioWorldDesc offline(u32 maxVoices)
 void createSources(World& world, u32 count, bool effects = false)
 {
     AudioSource source;
-    source.clip = "bench:/tone.wav";
+    source.clip = AssetRef("bench:/tone.wav");
     source.loop = true;
     if (effects)
     {

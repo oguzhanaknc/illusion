@@ -69,8 +69,8 @@ while (running)
 | `Sphere` | `radius` |
 | `Capsule` | `halfHeight` (yerel Y boyunca düz kısım), `radius` |
 | `Cylinder` | `halfHeight` (yerel Y boyunca), `radius` |
-| `ConvexHull` | `createConvexHull()`'dan gelen `mesh` |
-| `Mesh` | `createMesh()`'ten gelen `mesh`; yalnızca statik ve kinematik cisimler |
+| `ConvexHull` | `mesh` (bir Asset) veya `createConvexHull()`'dan gelen `geometry` |
+| `Mesh` | `mesh` (bir Asset) veya `createMesh()`'ten gelen `geometry`; yalnızca statik ve kinematik cisimler |
 
 `offset` ve `rotation`, şekli Entity'ye göre konumlandırır. `Transform` ölçeği şekli ölçekler; küreler
 ve kapsüller tek biçimli (uniform) ölçek kullanır. Geçersiz bir collider (örneğin negatif yarıçap) bir
@@ -79,27 +79,42 @@ uyarı yazar ve cismi olmayan bir `PhysicsBody` alır; düzeltip `rebuild()` ça
 ### Mesh ve convex hull collider'ları
 
 Üçgen Mesh'ler seviye geometrisi oluşturur; convex hull'lar her biçimdeki nesneye uyar ve dinamik
-olabilir. İkisi de bir kez hazırlanır ve onları kullanan tüm cisimler tarafından paylaşılır:
+olabilir. İkisi de bir kez hazırlanır ve onları kullanan tüm cisimler tarafından paylaşılır.
+`Collider::mesh` içinde bir Mesh Asset'i belirtin ([Asset referansları](assets.md#asset-referanslar))
+ya da geometriyi kodla oluşturup `Collider::geometry`'ye atayın:
 
 ```cpp
-// Level geometry: vertices and three indices per triangle (counter-clockwise seen from the front).
-const illusion::PhysicsMeshHandle level = physics.createMesh(positions, indices);
+// From mesh assets: saved in scenes, cooked by a PhysicsAssetResolver.
+illusion::PhysicsAssetResolver colliders(physics, streamer);
 illusion::Collider levelShape;
 levelShape.shape = illusion::ColliderShape::Mesh;
-levelShape.mesh = level;
+levelShape.mesh = illusion::AssetRef("game:/levels/arena.glb#node/Collision");
 world.create(illusion::Transform{}, groundBody, levelShape); // a static RigidBody
 
-// A dynamic rock: the convex hull of its vertices.
+illusion::Collider crateShape;
+crateShape.shape = illusion::ColliderShape::ConvexHull;
+crateShape.mesh = illusion::AssetRef("builtin:/mesh/cube");
+world.create(crateTransform, illusion::RigidBody{}, crateShape);
+
+// Every frame, before physics.update():
+colliders.update();
+
+// From code: vertices and three indices per triangle (counter-clockwise seen from the front).
 illusion::Collider rockShape;
 rockShape.shape = illusion::ColliderShape::ConvexHull;
-rockShape.mesh = physics.createConvexHull(rockPositions);
+rockShape.geometry = physics.createConvexHull(rockPositions);
 world.create(rockTransform, illusion::RigidBody{}, rockShape);
 ```
 
 - Dinamik cisimlerdeki Mesh collider'ları reddedilir (Jolt kütlelerini hesaplayamaz); convex hull
   kullanın.
 - `destroyMesh()` bir handle'ı serbest bırakır; geometriyi zaten kullanan cisimler onu korur.
-- Handle çalışma zamanı verisidir ve sahnelere kaydedilmez; bir sahne yükledikten sonra yeniden atayın.
+- `PhysicsAssetResolver`, her Asset, `meshIndex` (parçasız bir model yolunun Mesh'i) ve şekil türü
+  için bir kez, tüm submesh'lerden bir üçgen Mesh'i ya da tüm vertex'lerin convex hull'ünü hazırlar.
+  Asset'ini bekleyen bir Collider, geometri hazırlanınca cismini alır; Asset'i değişen bir Collider
+  yeniden kurulur. Yüklenemeyen bir Asset bir uyarı yazar ve `statistics().failures` içinde sayılır.
+- `geometry` çalışma zamanı verisidir ve sahnelere kaydedilmez; `mesh` ve `meshIndex` kaydedilir. Kodla
+  oluşturulan geometri, bir sahne yükledikten sonra yeniden atanmalıdır.
 
 ## Hızlar, kuvvetler, sorgular ve temaslar
 

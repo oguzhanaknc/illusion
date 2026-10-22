@@ -264,6 +264,8 @@ public:
             const auto parsed = JsonDocument::parse(as<JsonText>(value).text);
             return parsed ? m_doc.copy(parsed->root()) : fail("holds text that is not valid JSON");
         }
+        case FieldType::Asset:
+            return asset(as<AssetRef>(value));
         }
         return fail("has an unsupported type");
     }
@@ -316,6 +318,18 @@ private:
     JsonMutValue u64Value(u64 value)
     {
         return m_options.u64AsString ? m_doc.makeString(decimal(value)) : m_doc.makeU64(value);
+    }
+
+    JsonMutValue asset(AssetRef asset)
+    {
+        if (asset.empty())
+        {
+            return m_doc.makeString("");
+        }
+        const AssetPathTable& paths =
+            m_options.assetPaths != nullptr ? *m_options.assetPaths : AssetPathTable::instance();
+        const std::string_view path = paths.path(asset.id);
+        return path.empty() ? fail("refers to an asset id without a recorded path") : m_doc.makeString(path);
     }
 
     JsonMutValue entity(Entity entity)
@@ -602,6 +616,8 @@ public:
                 return fail("must be a JSON value");
             }
             return true;
+        case FieldType::Asset:
+            return asset(json, as<AssetRef>(value));
         }
         return fail("has an unsupported type");
     }
@@ -803,6 +819,40 @@ private:
             return false;
         }
         std::copy_n(values, count, out);
+        return true;
+    }
+
+    bool asset(JsonValue json, AssetRef& out)
+    {
+        // A path string, or {"path": "..."} (the form tools may use to add more members later).
+        const JsonValue pathValue = json.isObject() ? json.find("path") : json;
+        if (json.isNull())
+        {
+            out = AssetRef();
+            return true;
+        }
+        const std::optional<std::string_view> path = pathValue.asString();
+        if (!path)
+        {
+            return fail("must be an asset path such as \"game:/models/ship.glb#mesh/0\"");
+        }
+        if (path->empty())
+        {
+            out = AssetRef();
+            return true;
+        }
+        AssetPathTable& paths =
+            m_options.assetPaths != nullptr ? *m_options.assetPaths : AssetPathTable::instance();
+        const AssetId id = paths.intern(*path);
+        if (!id)
+        {
+            return fail(std::format("'{}' is not a valid asset path", *path));
+        }
+        out = AssetRef(id);
+        if (m_options.referencedAssets != nullptr)
+        {
+            m_options.referencedAssets->push_back(id);
+        }
         return true;
     }
 

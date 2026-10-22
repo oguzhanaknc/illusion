@@ -23,8 +23,7 @@ if (!model)
     ILL_LOG_ERROR("Game", "cannot load helmet: {}", error);
     return;
 }
-const illusion::ModelHandles handles = resources.uploadModel(*model);
-const std::vector<illusion::Entity> entities = illusion::spawnModel(world, *model, handles);
+const std::vector<illusion::Entity> entities = illusion::spawnModel(world, *model, "game:/models/helmet.glb");
 ```
 
 - Meshes keep their submeshes (glTF primitives), each with its own Material and bounding box. Missing
@@ -36,8 +35,11 @@ const std::vector<illusion::Entity> entities = illusion::spawnModel(world, *mode
 - Nodes keep the hierarchy of the default scene; `ModelData::worldMatrices()` resolves it.
   `spawnModel()` creates the same [hierarchy](ecs.md#transform-hierarchy) of Entities, with an optional
   root matrix: one Entity per node with its `Name`, `Hierarchy`, `LocalTransform` and `Transform`. A node
-  whose mesh has one submesh gets its `MeshRenderer`; a mesh with several submeshes gets one child per
-  submesh, named `<node> (<submesh>)`. It returns every created Entity, parents first.
+  whose mesh has one submesh gets a `MeshRenderer` that refers to `<model>#mesh/N` (see
+  [asset references](#asset-references)); a mesh with several submeshes gets one child per submesh, named
+  `<node> (<submesh>)`. It returns every created Entity, parents first. A `RenderAssetResolver` loads the
+  model when the World is drawn; `spawnModel()` with `ModelHandles` instead writes `RenderMesh` Components
+  for a model uploaded by code (they are drawn at once but not saved).
 - Required extensions the engine does not support (Draco, meshopt, KTX2 Textures) make loading fail
   with a clear error instead of rendering garbage. `KHR_mesh_quantization` is supported.
 
@@ -68,8 +70,9 @@ that mips do not darken.
 ## Meshes
 
 `MeshData` is an indexed triangle list with 48-byte vertices (position, normal, tangent, UV),
-submeshes and bounds. `makeCube()`, `makeSphere()` and `makePlane()` create procedural Meshes for
-prototypes and tests; `computeNormals()` fills in smooth normals.
+submeshes and bounds. `makeCube()`, `makeSphere()`, `makePlane()`, `makeCapsule()` and `makeCylinder()`
+create procedural Meshes for prototypes and tests (`makeBuiltinMesh()` makes the `builtin:/mesh/...`
+assets); `computeNormals()` fills in smooth normals.
 
 ```cpp
 illusion::MeshData ground = illusion::makePlane(20.0f);
@@ -97,6 +100,80 @@ const illusion::Vec3 fromAbove = irradiance.evaluate(illusion::Vec3(0.0f, 1.0f, 
   `RenderResources::createEnvironment()` calls it for you.
 - `makeSkyImage()` creates a procedural sky (zenith-to-horizon gradient, ground and an optional sun
   disc) for prototypes, tests and as a fallback.
+
+## Asset references
+
+Components refer to assets with `AssetRef`, so scenes save what they draw, play and collide with
+([ADR 0035](https://github.com/oguzhanaknc/illusion/blob/main/docs/adr/0035-asset-references.md)). An
+`AssetRef` holds the `AssetId` of a path; the process-wide `AssetPathTable` remembers the path, and scene
+files store the path as text.
+
+Header: `<illusion/core/AssetRef.hpp>`
+
+```cpp
+illusion::MeshRenderer ship;
+ship.mesh = illusion::AssetRef("game:/models/ship.glb#mesh/0");
+ship.material = illusion::AssetRef("game:/materials/hull.material");
+world.create(illusion::Transform{}, ship);
+
+ILL_LOG_INFO("Game", "{}", ship.mesh.path()); // game:/models/ship.glb#mesh/0
+```
+
+- Paths are normalized when they are recorded (`game:/a/../b.png` becomes `game:/b.png`); a malformed path
+  gives an empty reference.
+- In JSON an `AssetRef` is its path, `""` for none; reading also accepts `null` and `{"path": "..."}`.
+- Reflect a reference like any other field; `FieldMeta::assetKind` tells editors what kind of asset fits.
+- Resolvers load the assets: `RenderAssetResolver` for `MeshRenderer` and `SkyLight`
+  ([Rendering](rendering.md#meshrenderer-and-rendermesh)), `PhysicsAssetResolver` for collision meshes
+  ([Physics](physics.md#mesh-and-convex-hull-colliders)); `AudioWorld` loads `AudioSource::clip`.
+- A scene that refers to a missing file still loads and keeps the reference;
+  `SceneLoadResult::missingAssets` lists it ([Scenes](scenes.md#saving-and-loading-scenes)).
+- Shared [game modules](modules.md) use the host's table, so their references resolve in the host.
+
+### Sub-assets and built-in assets
+
+A fragment after `#` selects part of a model:
+
+| Path | Asset |
+| --- | --- |
+| `game:/ship.glb` | the whole model (as a mesh: its first mesh) |
+| `game:/ship.glb#mesh/2` | mesh 2 |
+| `game:/ship.glb#material/0` | material 0 |
+| `game:/ship.glb#node/Hull` | the mesh of the node named `Hull` |
+
+The reserved mount `builtin:` provides assets that need no files; `VirtualFileSystem` refuses to mount it:
+
+| Path | Asset |
+| --- | --- |
+| `builtin:/mesh/cube`, `sphere`, `plane`, `capsule`, `cylinder` | `makeCube()` to `makeCylinder()` with default sizes |
+| `builtin:/material/default` | the default Material (white, rough, non-metallic) |
+| `builtin:/sky/procedural` | a `makeSkyImage()` sky shaped by the Entity's `ProceduralSky` |
+
+### Material assets
+
+A `.material` file describes a Material without a model, so several Meshes can share it and a
+`MeshRenderer` can override a model's Material:
+
+```json
+{
+  "format": "illusion.material",
+  "version": 1,
+  "material": {"baseColorFactor": [0.8, 0.1, 0.1, 1], "roughnessFactor": 0.4, "metallicFactor": 0},
+  "textures": {"baseColor": "game:/textures/paint.png", "normal": "game:/textures/paint_n.png"}
+}
+```
+
+- `material` holds the fields of `MaterialData` by name; missing fields keep their defaults. Its
+  `...Texture` members only set wrap modes.
+- `textures` names the images: `baseColor` and `emissive` load as sRGB, `metallicRoughness`, `normal` and
+  `occlusion` as linear data.
+- `parseMaterialAsset()` and `writeMaterialAsset()` read and write the files (call
+  `reflectAssetStructs()` once first); `materialAssetDecoder()` streams them with
+  `AssetStreamer::loadFile()`.
+- `cookAssets()` checks material files and cooks their Textures with these settings. The `.material`
+  files themselves are read directly, so ship them with the game's files.
+
+Header: `<illusion/assets/MaterialAsset.hpp>`
 
 ## Asset database
 
@@ -128,7 +205,8 @@ std::optional<illusion::Image> bumps = assets.loadImage("game:/textures/rock_nor
 - Loading a cached 512x512 texture with mips is about ten times faster than decoding the PNG.
 - `statistics()` counts cache hits, imports and cache writes.
 
-Assets are identified by `AssetId`, a stable hash of the normalized virtual path:
+Assets are identified by `AssetId` (`<illusion/core/AssetId.hpp>`), a stable hash of the normalized
+virtual path:
 
 ```cpp
 const illusion::AssetId id = illusion::AssetId::fromPath("game:/models/helmet.glb");

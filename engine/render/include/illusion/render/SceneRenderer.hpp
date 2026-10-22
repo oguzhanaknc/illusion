@@ -40,7 +40,7 @@ struct RenderView
 /// Counters from the last SceneRenderer::render() call.
 struct RenderStats
 {
-    u32 candidates = 0;      ///< MeshRenderer entities considered.
+    u32 candidates = 0;      ///< RenderMesh entities considered.
     u32 visible = 0;         ///< Entities that passed frustum culling.
     u32 drawCalls = 0;       ///< Instanced draw calls issued.
     u64 triangles = 0;       ///< Triangles submitted.
@@ -63,8 +63,10 @@ struct SceneRendererDesc
     bool bindless = true;
 };
 
-/// Renders World entities that have Transform + MeshRenderer, lit by DirectionalLight, PointLight and
-/// SkyLight entities, with the SkyLight's environment as background. Use on the render thread.
+/// Renders World entities that have Transform + RenderMesh, lit by DirectionalLight, PointLight and
+/// SkyLight (+ RenderSky) entities, with the SkyLight's environment as background. A RenderAssetResolver
+/// turns the saved MeshRenderer and SkyLight Components into RenderMesh and RenderSky. Use on the render
+/// thread.
 class SceneRenderer : NonCopyable
 {
 public:

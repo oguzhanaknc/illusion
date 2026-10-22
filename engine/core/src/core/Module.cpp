@@ -1,3 +1,4 @@
+#include <illusion/core/AssetRef.hpp>
 #include <illusion/core/JobSystem.hpp>
 #include <illusion/core/Log.hpp>
 #include <illusion/core/Module.hpp>
@@ -29,6 +30,7 @@ void installModuleServices(const ModuleServices& services) noexcept
     // See docs/adr/0003-type-identity-across-modules.md and docs/adr/0027-module-system-and-hot-reload.md.
     Logger::setInstance(services.logger);
     ComponentRegistry::setInstance(services.registry);
+    AssetPathTable::setInstance(services.assetPaths);
     setAssertHandler(services.assertHandler);
     setThreadIndexSource(services.threadIndex);
     setWorkerIndexSource(services.workerIndex);
@@ -40,6 +42,7 @@ ModuleServices hostModuleServices() noexcept
     ModuleServices services;
     services.logger = &Logger::instance();
     services.registry = &ComponentRegistry::instance();
+    services.assetPaths = &AssetPathTable::instance();
     services.assertHandler = &dispatchAssertion; // follows later setAssertHandler() calls of the host
     services.threadIndex = &currentThreadIndex;
     services.workerIndex = &JobSystem::currentWorkerIndex;

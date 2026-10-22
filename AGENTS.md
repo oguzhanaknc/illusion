@@ -29,11 +29,11 @@ decisions are in `docs/adr/`. Do not reverse an accepted ADR silently: write a n
 | `engine/platform` | Platform layer: windows, input, events from the OS, virtual file system (GLFW is private) |
 | `engine/text` | UTF-8, `searchFold`, `FuzzyMatcher`, plural rules, `MessageFormat`, string tables, `Localization` (core only) |
 | `engine/input` | Gamepads (SDL3 private), `InputActions` mapping/rebinding/glyphs, string table `data/locales/en.json`; tests use `attachVirtualGamepad()` |
-| `engine/assets` | CPU-side assets: `Image`, `MeshData`, glTF via `loadGltf`, environments (SH, sky) (cgltf/stb private); no GPU code |
+| `engine/assets` | CPU-side assets: `Image`, `MeshData`, glTF via `loadGltf`, environments (SH, sky), `.material` files (cgltf/stb private); no GPU code. `AssetId`/`AssetRef` live in core |
 | `engine/physics` | `PhysicsWorld`, `RigidBody`/`Collider`/`CharacterController`/`Joint` Components (Jolt is private, runs on the Job System); test helpers in `tests/physics/PhysicsTestSupport.hpp` |
 | `engine/audio` | `AudioWorld`, `AudioSource`/`AudioListener` Components, filters, reverb, background clip loading via `AssetStreamer` (miniaudio is private; the audio thread owns it); tests use `AudioOutput::Offline` + `render()` |
 | `engine/modules` | `ModuleHost`: loads, checks, runs and hot-reloads game modules (`illusion/core/Module.hpp` is the module side; `illusion_add_module` in `cmake/IllusionModules.cmake`); tests load `tests/modules/TestModule.cpp` variants |
-| `engine/render` | Render device (Vulkan via NVRHI), swapchains, `RenderResources`, `SceneRenderer`, render Components, `shaders/` (Slang, built with `illusion_add_shaders`) |
+| `engine/render` | Render device (Vulkan via NVRHI), swapchains, `RenderResources`, `SceneRenderer`, saved render Components (`SceneComponents.hpp`, GPU-free) and runtime ones (`Components.hpp`), `RenderAssetResolver`, `shaders/` (Slang, built with `illusion_add_shaders`) |
 | `editor/` | The editor, never linked by games (ADR 0030): `thirdparty/` (Dear ImGui, ImPlot), `strings/` (string table from `data/locales/en.json`), `ui/` (backends, `Theme`, `FontManager`, `Icons.hpp`, `FrameText`, widget kit, `UiDriver`), `tools/ui_gallery`, `data/` (themes, locales), `tests/` (golden images in `tests/data/golden`), `benchmarks/` |
 | `samples/` | Sample applications (`hello_triangle`, `input_viewer`, `gltf_viewer`, `physics_playground`); shared helpers in `common/` |
 | `tests/` | doctest unit tests; one `Test<Feature>.cpp` per feature; shared helpers in `TestSupport.hpp` |
@@ -111,6 +111,8 @@ are within budget, format and docs checks pass, and Doxygen reports nothing.
   type names. Runtime-only state uses `reflectRuntime<T>()`.
 - Refer to entities outside the running World (files, commands, undo records) by `EntityGuid`, never by
   `Entity` handle or index; call `assignMissingGuids()` before `saveScene()` (ADR 0033).
+- Saved Components refer to assets with `AssetRef` (a path), never with GPU or physics handles; a resolver
+  turns them into runtime Components (`MeshRenderer` → `RenderMesh`, ADR 0035).
 - Systems read the world-space `Transform`. Change parents only through `Hierarchy.hpp` (`setParent`,
   `reorder`, `destroyRecursive`); code that writes `Hierarchy` values directly calls
   `world.markChanged<Hierarchy>()`. Engine Systems skip entities with the `Inactive` tag (ADR 0034).

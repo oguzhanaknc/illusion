@@ -1,12 +1,15 @@
 #pragma once
 
 /// @file
-/// ECS components read by the SceneRenderer. Combine them with illusion::Transform.
+/// Runtime ECS Components read by the SceneRenderer (the saved ones are in SceneComponents.hpp), their
+/// reflection, and spawning models as entities. Combine them with illusion::Transform.
 
 #include <illusion/core/Math.hpp>
 #include <illusion/ecs/Component.hpp>
 #include <illusion/render/RenderResources.hpp>
+#include <illusion/render/SceneComponents.hpp>
 
+#include <string_view>
 #include <vector>
 
 namespace illusion
@@ -15,50 +18,32 @@ namespace illusion
 class World;
 struct Entity;
 
-/// Draws one submesh of a mesh with a material.
-struct MeshRenderer
+/// What the SceneRenderer draws: one submesh of a GPU mesh with a material (runtime state, reflected as
+/// "illusion.RenderMesh", TypeMeta::transient). A RenderAssetResolver writes it for every MeshRenderer;
+/// procedural code writes it directly (leave sourceKey at 0 so no resolver touches it).
+struct RenderMesh
 {
-    MeshHandle mesh;         ///< Mesh to draw.
-    u32 submesh = 0;         ///< Submesh index.
-    MaterialHandle material; ///< Material (0 = default material).
+    static constexpr u32 kVisible = 1u << 0;     ///< flags: drawn at all.
+    static constexpr u32 kCastShadows = 1u << 1; ///< flags: drawn into shadow maps.
+
+    MeshHandle mesh{};                   ///< Mesh to draw (none: nothing is drawn).
+    u32 submesh = 0;                     ///< Submesh index.
+    MaterialHandle material{};           ///< Material (0 = default material).
+    u32 layers = 1;                      ///< Render layer bits (see MeshRenderer::layers).
+    u32 flags = kVisible | kCastShadows; ///< kVisible, kCastShadows.
+    u64 sourceKey = 0;                   ///< Key of the MeshRenderer it was resolved from; 0 for code.
 };
 
-/// Perspective camera. The renderer looks through the Transform's -z axis.
-struct Camera
+/// The lighting environment of a SkyLight on the GPU (runtime state, reflected as "illusion.RenderSky",
+/// TypeMeta::transient). A RenderAssetResolver writes it for a SkyLight with an environment asset; code that
+/// bakes its own environment adds it next to a SkyLight without one.
+struct RenderSky
 {
-    f32 fovY = 1.0471976f; ///< Vertical field of view in radians (60 degrees).
-    f32 nearPlane = 0.1f;  ///< Near clip distance. There is no far plane (reversed-Z, infinite).
-    f32 exposure = 1.0f;   ///< Linear exposure multiplier applied before tonemapping.
+    EnvironmentHandle environment{}; ///< Environment from RenderResources::createEnvironment().
+    u64 sourceKey = 0;               ///< Key of the SkyLight it was resolved from; 0 for code.
 };
 
-/// Sun-like light. It shines along the Transform's -z axis.
-struct DirectionalLight
-{
-    Vec3 color{1.0f};        ///< Linear colour.
-    f32 intensity = 3.0f;    ///< Illuminance multiplier.
-    bool castShadows = true; ///< The first DirectionalLight with this set casts shadows.
-    f32 angularDiameter =
-        0.0093f; ///< Apparent size in radians (the sun: 0.0093); larger gives softer shadows.
-};
-
-/// Omnidirectional light at the Transform's position.
-struct PointLight
-{
-    Vec3 color{1.0f};      ///< Linear colour.
-    f32 intensity = 10.0f; ///< Luminous intensity multiplier.
-    f32 range = 10.0f;     ///< Distance at which the light fades to zero.
-};
-
-/// Image-based lighting and background from an environment. The renderer uses the first SkyLight it
-/// finds; the Transform's rotation turns the environment (position and scale are ignored).
-struct SkyLight
-{
-    EnvironmentHandle environment; ///< Environment from RenderResources::createEnvironment().
-    f32 intensity = 1.0f;          ///< Multiplier for the environment's radiance.
-    bool background = true;        ///< Draw the environment behind the scene instead of the clear colour.
-};
-
-/// World matrix of a MeshRenderer entity in the previous frame, for motion vectors (temporal
+/// World matrix of a RenderMesh entity in the previous frame, for motion vectors (temporal
 /// anti-aliasing). The SceneRenderer adds and updates it; set it to the current matrix after teleporting
 /// an object so the jump is not treated as motion.
 struct MotionHistory
@@ -66,18 +51,24 @@ struct MotionHistory
     Mat4 previousWorld{1.0f}; ///< World matrix used by the previous render() call.
 };
 
-/// Reflects the render components that hold plain data: Camera ("illusion.Camera"), DirectionalLight
-/// ("illusion.DirectionalLight") and PointLight ("illusion.PointLight"), with editor metadata. MeshRenderer
-/// and SkyLight refer to GPU resources and are not saved in scenes; MotionHistory is reflected as runtime
-/// state ("illusion.MotionHistory", TypeMeta::transient). Also reflects the structs ShadowSettings,
-/// PostProcessSettings (with AmbientOcclusionSettings, BloomSettings and TemporalAntiAliasingSettings) and
-/// EnvironmentDesc as "illusion.<Name>" in registry.structs().
+/// Reflects the render Components of SceneComponents.hpp (MeshRenderer, Camera, DirectionalLight,
+/// PointLight, SkyLight and ProceduralSky as "illusion.<Name>") with editor metadata, and RenderMesh,
+/// RenderSky and MotionHistory as runtime state (TypeMeta::transient). Also reflects the structs
+/// ShadowSettings, PostProcessSettings (with AmbientOcclusionSettings, BloomSettings and
+/// TemporalAntiAliasingSettings) and EnvironmentDesc as "illusion.<Name>" in registry.structs().
 void reflectRenderComponents(ComponentRegistry& registry = ComponentRegistry::instance());
 
 /// Creates the node hierarchy of @p model: one Entity per node with its Name, Hierarchy, LocalTransform and
 /// Transform, placed relative to @p root (the model's roots become the World's last roots). A node with a
-/// mesh of one submesh gets its MeshRenderer; a mesh of several submeshes gets one child Entity per submesh,
-/// named "<node> (<submesh>)". Returns the created entities, parents before children.
+/// mesh of one submesh gets a MeshRenderer that refers to `<modelPath>#mesh/N` with the model's material
+/// (an empty MeshRenderer::material); a mesh of several submeshes gets one child Entity per submesh, named
+/// "<node> (<submesh>)". The entities are saved in scenes; a RenderAssetResolver loads the model. Returns
+/// the created entities, parents before children.
+std::vector<Entity> spawnModel(World& world, const ModelData& model, std::string_view modelPath,
+                               const Mat4& root = Mat4(1.0f));
+
+/// Like spawnModel() with a path, for a model uploaded by code: the entities get RenderMesh Components with
+/// the GPU @p handles instead of MeshRenderers, so they are drawn at once but not saved in scenes.
 std::vector<Entity> spawnModel(World& world, const ModelData& model, const ModelHandles& handles,
                                const Mat4& root = Mat4(1.0f));
 

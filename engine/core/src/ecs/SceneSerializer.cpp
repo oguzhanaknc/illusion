@@ -600,6 +600,31 @@ public:
         }
     }
 
+    // Fills SceneLoadResult::missingAssets from the asset references read; call after read() succeeded.
+    void findMissingAssets()
+    {
+        std::sort(m_assets.begin(), m_assets.end());
+        m_assets.erase(std::unique(m_assets.begin(), m_assets.end()), m_assets.end());
+        const AssetPathTable& paths = AssetPathTable::instance();
+        for (const AssetId id : m_assets)
+        {
+            const std::string_view path = paths.path(id);
+            const std::optional<AssetPathParts> parts = splitAssetPath(path);
+            if (!parts)
+            {
+                continue;
+            }
+            const bool exists = isOnBuiltinMount(parts->file)
+                                    ? parts->fragment == AssetFragment::None && isBuiltinAsset(parts->file)
+                                    : !m_options.assetExists || m_options.assetExists(parts->file);
+            if (!exists)
+            {
+                m_result.missingAssets.emplace_back(path);
+            }
+        }
+        std::sort(m_result.missingAssets.begin(), m_result.missingAssets.end());
+    }
+
 private:
     struct PendingSettings
     {
@@ -804,6 +829,7 @@ private:
             options.entities = &resolver;
             options.savedVersion = savedVersion(member.key);
             options.atomic = false; // a failed load removes the entity anyway
+            options.referencedAssets = &m_assets;
             const ValueReadResult read = readValue(reflection, data, member.value, options);
             if (!read.ok())
             {
@@ -897,6 +923,7 @@ private:
             options.entities = &resolver;
             options.savedVersion = version;
             options.atomic = false; // the scratch value is discarded on failure
+            options.referencedAssets = &m_assets;
             const ValueReadResult read = readValue(*target->type, value->data(), member.value, options);
             if (!read.ok())
             {
@@ -931,6 +958,7 @@ private:
     std::unordered_map<std::string_view, u32> m_typeVersions; // keys view the parsed document
     std::vector<PendingSettings> m_pending;
     std::unordered_set<std::string> m_warned;
+    std::vector<AssetId> m_assets;
 };
 
 } // namespace
@@ -961,6 +989,7 @@ SceneLoadResult loadScene(World& world, std::string_view json, const SceneLoadOp
     if (reader.read(doc->root()))
     {
         reader.commitSettings();
+        reader.findMissingAssets();
         return result;
     }
     for (const Entity entity : result.entities)

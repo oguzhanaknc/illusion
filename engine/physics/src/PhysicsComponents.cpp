@@ -46,7 +46,12 @@ void reflectPhysicsComponents(ComponentRegistry& registry)
         .field("radius", &Collider::radius, {.unit = Unit::Meters, .min = 0.0})
         .field("halfHeight", &Collider::halfHeight, {.unit = Unit::Meters, .min = 0.0})
         .field("offset", &Collider::offset, {.unit = Unit::Meters})
-        .field("rotation", &Collider::rotation);
+        .field("rotation", &Collider::rotation)
+        .field("mesh", &Collider::mesh,
+               {.description = "ConvexHull, Mesh: the mesh asset the shape is built from.",
+                .assetKind = AssetKind::Mesh})
+        .field("meshIndex", &Collider::meshIndex,
+               {.description = "Mesh of the model when the asset is a model file.", .advanced = true});
     reflect<CharacterController>("illusion.CharacterController", 1, registry)
         .meta({.displayName = "Character controller",
                .category = "Physics",

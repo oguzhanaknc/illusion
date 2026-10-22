@@ -3,7 +3,7 @@
 //   illusion_pack <directory> <archive.illpak>
 //       Packs every file under <directory>.
 //   illusion_pack --cook <mount> <directory> <archive.illpak>
-//       Imports every image and glTF model under <directory>, mounted as <mount> (the name the game uses,
+//       Imports every image, glTF model and material's textures under <directory>, mounted as <mount> (the name the game uses,
 //       e.g. "game"), and packs the resulting import cache. Mount the archive as the game's cache mount
 //       (with source verification off) to load the cooked assets without shipping the sources.
 
@@ -59,7 +59,8 @@ int cook(std::string_view mount, const std::filesystem::path& directory, const s
     {
         std::fprintf(stderr, "illusion_pack: %s\n", error.c_str());
     }
-    std::printf("cooked %u model(s) and %u image(s)\n", result.models, result.images);
+    std::printf("cooked %u model(s), %u image(s) and %u material(s)\n", result.models, result.images,
+                result.materials);
     const int status = result.errors.empty() ? pack(cache, archive) : 1;
     std::filesystem::remove_all(cache, code);
     return status;

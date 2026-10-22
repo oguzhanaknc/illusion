@@ -6,6 +6,7 @@
 
 #include "TestModuleShared.hpp"
 
+#include <illusion/core/AssetRef.hpp>
 #include <illusion/core/JobSystem.hpp>
 #include <illusion/core/Log.hpp>
 #include <illusion/core/Module.hpp>
@@ -75,6 +76,8 @@ void updateModule(ModuleContext& context, f64)
     control.variant = kVariant;
     control.logger = &Logger::instance();
     control.registry = &ComponentRegistry::instance();
+    control.assetPaths = &AssetPathTable::instance();
+    control.asset = AssetRef("game:/models/../module.glb#mesh/1").id.value;
     control.counterId = componentId<test::ModuleCounter>();
     control.transformId = componentId<Transform>();
     control.threadIndex = currentThreadIndex();

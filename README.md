@@ -36,7 +36,8 @@ designed to ship commercial games on Steam and similar stores.
   mixed on its own thread without allocations; WAV, FLAC, MP3 and Ogg Vorbis.
 - Component and struct reflection with stable names, editor metadata, a JSON value API and migrations;
   JSON scene files with persistent entity ids and names that survive code changes and keep the data of
-  unknown Component types.
+  unknown Component types; meshes, materials, skies, collision meshes and sounds referenced by asset path
+  (including built-in assets and `.material` files) and resolved in the background.
 - Transform hierarchy: parents and children with local transforms, propagated level by level on the Job
   System, enabling and disabling whole subtrees, glTF node hierarchies; rays, intersections and screen
   picking for tools.

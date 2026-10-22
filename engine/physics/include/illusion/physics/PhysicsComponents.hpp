@@ -4,6 +4,7 @@
 /// ECS components simulated by PhysicsWorld. An Entity with Transform, RigidBody and Collider gets a
 /// physics body on the next PhysicsWorld::update().
 
+#include <illusion/core/AssetRef.hpp>
 #include <illusion/core/Math.hpp>
 #include <illusion/ecs/Component.hpp>
 #include <illusion/ecs/Entity.hpp>
@@ -29,9 +30,10 @@ enum class ColliderShape : u8
     Sphere,     ///< Sphere with Collider::radius.
     Capsule,    ///< Capsule along the local Y axis: Collider::halfHeight (cylinder part) and radius.
     Cylinder,   ///< Cylinder along the local Y axis: Collider::halfHeight and radius.
-    ConvexHull, ///< Convex hull of points: Collider::mesh from PhysicsWorld::createConvexHull().
-    Mesh,       ///< Triangle mesh: Collider::mesh from PhysicsWorld::createMesh(); static and kinematic
-                ///< bodies only.
+    ConvexHull, ///< Convex hull of Collider::mesh, or Collider::geometry from
+                ///< PhysicsWorld::createConvexHull().
+    Mesh, ///< Triangle mesh of Collider::mesh, or Collider::geometry from PhysicsWorld::createMesh(); static
+          ///< and kinematic bodies only.
 };
 
 /// Handle to collision geometry created by PhysicsWorld::createMesh() or PhysicsWorld::createConvexHull().
@@ -74,7 +76,14 @@ struct Collider
     f32 halfHeight = 0.5f;                    ///< Capsule, Cylinder: half the height of the straight part.
     Vec3 offset{0.0f};                        ///< Shape position relative to the Entity.
     Quat rotation{1.0f, 0.0f, 0.0f, 0.0f};    ///< Shape rotation relative to the Entity.
-    PhysicsMeshHandle mesh; ///< ConvexHull, Mesh: the geometry. Runtime data, not saved in scenes.
+    /// ConvexHull, Mesh: the mesh asset to build the shape from (`model.glb#mesh/N`, `#node/<name>` or
+    /// `builtin:/mesh/...`), cooked by a PhysicsAssetResolver. Leave it empty to set geometry in code.
+    AssetRef mesh{};
+    u32 meshIndex = 0; ///< Mesh of the model when @ref mesh names a model file without a fragment.
+    /// ConvexHull, Mesh: the geometry, from PhysicsWorld::createMesh() / createConvexHull() or written by a
+    /// PhysicsAssetResolver for @ref mesh. Runtime data, not saved in scenes.
+    PhysicsMeshHandle geometry;
+    u64 geometryKey = 0; ///< Runtime: what a PhysicsAssetResolver cooked geometry from (0 for code).
 };
 
 /// Runtime link between an Entity and its physics body. Added and removed by PhysicsWorld; not saved in

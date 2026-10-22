@@ -81,7 +81,7 @@ device->waitIdle();
 
 ## Bir sahne çizme
 
-`SceneRenderer`, `Transform` ve `MeshRenderer` Component'lerine sahip her Entity'yi, `DirectionalLight`
+`SceneRenderer`, `Transform` ve `RenderMesh` Component'lerine sahip her Entity'yi, `DirectionalLight`
 ve `PointLight` Entity'leri ile aydınlatarak çizer. `RenderResources` GPU'daki Mesh, Texture ve
 Material'lerin sahibidir ve Component'lerin sakladığı küçük Handle'lar verir.
 
@@ -102,7 +102,7 @@ gold.parameters.metallicFactor = 1.0f;
 gold.parameters.roughnessFactor = 0.3f;
 const illusion::MaterialHandle material = resources.createMaterial(gold);
 
-world.create(illusion::Transform{}, illusion::MeshRenderer{sphere, 0, material});
+world.create(illusion::Transform{}, illusion::RenderMesh{sphere, 0, material});
 
 illusion::Transform sun;
 sun.rotation = glm::quatLookAt(glm::normalize(illusion::Vec3(-0.4f, -1.0f, -0.6f)), illusion::Vec3(0.0f, 1.0f, 0.0f));
@@ -124,8 +124,9 @@ device->device()->executeCommandList(commands);
 ILL_LOG_DEBUG("Game", "{} draw calls", renderer->stats().drawCalls);
 ```
 
-- `MeshRenderer` bir Mesh'i, onun submesh'lerinden birini ve bir Material'i belirtir (atanmamış
-  Material varsayılan beyaz, pürüzlü Material'i kullanır).
+- `RenderMesh` bir GPU Mesh'ini, onun submesh'lerinden birini ve bir Material'i belirtir (atanmamış
+  Material varsayılan beyaz, pürüzlü Material'i kullanır). Sahneler bunun yerine Asset referanslı
+  `MeshRenderer` kullanır (aşağıya bakın).
 - Işıklar Transform'larının -z ekseni boyunca (`DirectionalLight`) veya konumlarından (`PointLight`,
   `range` mesafesinde sıfıra iner) yayılır. İlk 4 yönlü ve 16 noktasal ışık kullanılır.
 - `render()` Entity'leri eler ([Culling](#culling) bölümüne bakın), Pipeline, Material ve Mesh'e göre
@@ -135,6 +136,44 @@ ILL_LOG_DEBUG("Game", "{} draw calls", renderer->stats().drawCalls);
   ayrı bir `SceneRenderer` oluşturun.
 - sRGB formatlı renk hedefleri doğrusal renk alır; UNORM hedefler sRGB kodlanmış renk alır, böylece
   ikisi de aynı görünür.
+
+### MeshRenderer ve RenderMesh
+
+Sahneler neyin çizileceğini, Asset'lere yol ile başvuran ([Asset referansları](assets.md#asset-referanslar))
+kaydedilen `MeshRenderer` Component'iyle tanımlar; renderer ise GPU Handle'larını tutan çalışma zamanı
+Component'i `RenderMesh`'i çizer. İkisini World başına bir `RenderAssetResolver` bağlar; aynı
+`RenderResources` ile çizilen tüm World'ler bir `RenderAssetCache`'i paylaşır:
+
+Header: `<illusion/render/RenderAssets.hpp>`
+
+```cpp
+illusion::RenderAssetCache cache(resources, streamer);
+illusion::RenderAssetResolver resolver(cache);
+
+world.create(illusion::Transform{}, illusion::MeshRenderer{.mesh = illusion::AssetRef("game:/models/ship.glb#mesh/0")});
+world.create(illusion::Transform{}, illusion::MeshRenderer{.mesh = illusion::AssetRef("builtin:/mesh/cube"),
+                                                           .material = illusion::AssetRef("game:/materials/paint.material")});
+resolver.waitIdle(world, &jobs); // optional: finish loading before the first frame
+
+// Every frame, before rendering:
+streamer.update();
+cache.update();
+resolver.update(world, &jobs);
+```
+
+- `MeshRenderer`; `mesh`, `submesh`, `material` (boşsa modelin o submesh için verdiği Material),
+  `layers`, `castShadows` ve `visible` alanlarını tutar. Her `update()` her birini, `RenderMesh`'inin
+  çözüldüğü anahtarla karşılaştırır (paralel ve bellek ayırmadan) ve yalnızca değişenleri yeniden çözer.
+- Asset'ler arka planda yüklenir: bir renderer, yeni Asset'leri GPU'ya ulaşana kadar önceden çizdiğini
+  çizmeye devam eder (yeni renderer'lar o zamana kadar hiçbir şey çizmez). Akışla gelen modeller
+  `RenderAssetCacheDesc::uploadBytesPerUpdate` sınırı içinde yüklenir.
+- Yüklenemeyen bir Mesh hiçbir şey çizmez; yüklenemeyen bir Material varsayılan Material ile çizilir.
+  Önbellek nedenini log'a yazar, `RenderAssetCache::error()` onu döndürür ve
+  `RenderAssetResolver::statistics().failures` etkilenen renderer'ları sayar.
+- Bir `MeshRenderer` kaldırılınca `RenderMesh`'i de kaldırılır. Çalışma zamanında geometri üreten kod
+  `RenderMesh`'i doğrudan yazar (`sourceKey` 0 ile); resolver ona dokunmaz. `RenderMesh` kaydedilmez.
+- Önbellek her Asset'i renderer'lar ve World'ler arasında paylaşır (tek Mesh'in 100 renderer'ı onu bir
+  kez yükler) ve her Asset'i kullanan resolver'ları sayar (`references()`).
 
 ### Material'ler ve gölgelendirme
 
@@ -244,26 +283,29 @@ genellikle bir HDR fotoğraf. Ücretsiz ve yüksek kaliteli HDRI'ler (CC0)
 [Poly Haven](https://polyhaven.com/hdris) adresinden `.hdr` dosyası olarak indirilebilir.
 
 ```cpp
-std::vector<std::byte> bytes;
-files.readFile("game:/skies/meadow_2k.hdr", bytes);
-std::optional<illusion::Image> sky = illusion::decodeImage(bytes, /*srgb=*/false);
-if (!sky)
-{
-    sky = illusion::makeSkyImage(1024); // procedural fallback
-}
-const illusion::EnvironmentHandle environment = resources.createEnvironment(*sky);
-
+// From a file: a RenderAssetResolver loads and bakes it.
 illusion::Transform orientation;
 orientation.rotation = glm::angleAxis(glm::radians(90.0f), illusion::Vec3(0.0f, 1.0f, 0.0f));
-world.create(orientation, illusion::SkyLight{environment, 1.0f, true});
+world.create(orientation, illusion::SkyLight{.environment = illusion::AssetRef("game:/skies/meadow_2k.hdr")});
+
+// The built-in procedural sky, shaped by a ProceduralSky on the same Entity.
+world.create(illusion::Transform{}, illusion::SkyLight{.environment = illusion::AssetRef("builtin:/sky/procedural")},
+             illusion::ProceduralSky{.resolution = 1024});
+
+// Baked by code: add the RenderSky yourself.
+const illusion::EnvironmentHandle environment = resources.createEnvironment(illusion::makeSkyImage(1024));
+world.create(illusion::Transform{}, illusion::SkyLight{}, illusion::RenderSky{environment});
 ```
 
 - `createEnvironment()` görüntüyü GPU'da bir kez işler (bake): bir arka plan cube map'i, artan
   roughness için önceden filtrelenmiş bir specular cube map ve spherical harmonics olarak diffuse
   irradiance (CPU'da). Ortamları yükleme sırasında hazırlayın: 2K bir HDRI masaüstü bir makinede
   100 ms'den kısa sürer. `EnvironmentDesc` çözünürlükleri ve örnek sayısını belirler.
-- Renderer ilk `SkyLight`'ı kullanır. Transform'u ortamı döndürür; `intensity` onu ölçekler ve
-  `background = false` sahnenin arkasında temizleme rengini bırakır.
+- Bir `RenderAssetResolver`, `environment` Asset'i olan bir `SkyLight`'a `RenderSky`'ını verir; dosya
+  yüklendiğinde bake edilir. `builtin:/sky/procedural`, Entity'nin `ProceduralSky`'ıyla `makeSkyImage()`
+  çıktısını bake eder; alanları her değiştiğinde yeniden.
+- Renderer, ortamı hazır olan ilk `SkyLight`'ı kullanır. Transform'u ortamı döndürür; `intensity` onu
+  ölçekler ve `background = false` sahnenin arkasında temizleme rengini bırakır.
 - `SkyLight` yoksa onun yerine `SceneRendererDesc::ambient` tekdüze bir ortam ışığı ekler.
 - Metaller çevrelerini yansıtır; bu yüzden ancak bir ortamla doğru görünürler.
 - Gölgelendirme enerjiyi korur: tekdüze beyaz bir ortamda her beyaz Material, roughness veya
@@ -301,7 +343,7 @@ renderer->resetTemporalHistory();
 - Bloom enerjiyi korur: ışık eklemek yerine görüntünün `bloom.intensity` kadarını bulanık kopyasıyla
   değiştirir.
 - TAA, depth prepass'in yazdığı piksel başına hareket vektörleriyle hareket eden nesneleri izler.
-  Renderer, her MeshRenderer'ın önceki dünya matrisini kendi eklediği bir `MotionHistory`
+  Renderer, her RenderMesh'in önceki dünya matrisini kendi eklediği bir `MotionHistory`
   Component'inde tutar; bir nesneyi ışınladıktan sonra, sıçramanın bulanıklaşmaması için
   `MotionHistory::previousWorld` değerini yeni matrisine ayarlayın. TAA varsayılan olarak kapalıdır;
   en keskin görüntüden çok yumuşak kenarlara ihtiyaç duyan sahnelere uygundur.

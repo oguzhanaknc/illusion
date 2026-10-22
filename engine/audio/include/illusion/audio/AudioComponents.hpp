@@ -4,6 +4,7 @@
 /// ECS components played by AudioWorld: AudioSource (a sound emitted by an Entity) and AudioListener (the
 /// ears, usually on the camera Entity).
 
+#include <illusion/core/AssetRef.hpp>
 #include <illusion/core/Math.hpp>
 #include <illusion/ecs/Component.hpp>
 #include <illusion/ecs/Reflection.hpp>
@@ -66,11 +67,11 @@ struct AudioClipHandle
 /// A sound emitted by an Entity. Spatial sounds are positioned at the Entity's Transform; AudioWorld
 /// derives their velocity (for the doppler effect) from how the Transform moves.
 ///
-/// Changes to the fields take effect on the next AudioWorld::update(); a new clip path takes effect on
-/// the next AudioWorld::play().
+/// Changes to the fields take effect on the next AudioWorld::update(); a new clip takes effect on the next
+/// AudioWorld::play().
 struct AudioSource
 {
-    std::string clip;             ///< Virtual path of the clip (WAV, FLAC, MP3, Ogg Vorbis).
+    AssetRef clip{};              ///< The clip: a WAV, FLAC, MP3 or Ogg Vorbis file (saved as its path).
     AudioBus bus = AudioBus::Sfx; ///< Mixer bus.
     f32 volume = 1.0f;            ///< Linear gain (at least 0).
     f32 pitch = 1.0f;             ///< Playback speed, clamped to [1/16, 16].
