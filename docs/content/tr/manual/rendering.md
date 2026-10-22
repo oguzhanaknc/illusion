@@ -150,7 +150,8 @@ ile oluşturun.
 
 ### Culling
 
-Renderer her karede iki adımda eleme yapar:
+`Inactive` etiketli Entity'ler (kendileri veya bir ataları [Disabled](ecs.md#disabled-ve-inactive)) çizilmez;
+ışıkları ve gökyüzü ışıkları da etki etmez. Renderer her karede iki adımda eleme yapar:
 
 1. CPU'da, Job System üzerinde paralel olarak **frustum culling**: görüşün (ve tüm gölge
    cascade'lerinin) dışındaki Entity'ler atlanır.

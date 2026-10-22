@@ -89,9 +89,15 @@ for (const std::string& warning : loaded.warnings)
   kaydeder (örneğin bir seçimi veya bir prefab'ı); listenin dışını gösteren Entity alanları `null` olarak
   kaydedilir.
 - Kaydedilen her Entity'nin bir `EntityGuid`'i olmalıdır (bkz. [Entity id'leri](#entity-idleri));
-  birinde yoksa veya ikisi aynı id'yi paylaşıyorsa kaydetme başarısız olur. Entity'ler id sırasıyla
-  kaydedilir; böylece aynı sahne her zaman aynı dosyayı verir. `SceneOrder::AsGiven` alt kümenin sırasını,
-  alt küme yoksa `World::entities()` sırasını korur.
+  birinde yoksa veya ikisi aynı id'yi paylaşıyorsa kaydetme başarısız olur. Entity'ler
+  [Transform hiyerarşisinin](ecs.md#transform-hiyerarsisi) derinlik öncelikli ön sırasıyla (pre-order)
+  kaydedilir: her ebeveyn çocuklarından önce, kardeşler `Hierarchy::order`'a göre, kökler (ebeveyni
+  kaydedilmeyen Entity'ler de) sıralarına göre ve `Hierarchy`'si olmayan kökler en sonda, eşitlikler id'ye
+  göre; böylece aynı sahne her zaman aynı dosyayı verir. `SceneOrder::ById` yalnızca id'ye göre sıralar,
+  `SceneOrder::AsGiven` ise alt kümenin sırasını, alt küme yoksa `World::entities()` sırasını korur.
+- Ebeveyni de kaydedilen ve `LocalTransform`'u olan bir Entity'nin `Transform`'u türetilmiştir; bu yüzden
+  kaydedilmez. Yüklemeden sonra `updateTransformHierarchy()` onu ekler ve hesaplar; `Disabled` kaydedilir,
+  `Inactive` çalışma zamanı durumudur.
 - Yalnızca yansıtılmış Component'ler kaydedilir; `SceneSaveResult::skippedComponents` diğerlerini ve
   transient olarak yansıtılan, hiçbir zaman kaydedilmeyen çalışma zamanı durumunu (`PhysicsBody`,
   `AudioPlayback`, ...) sayar. `MeshRenderer` ve `SkyLight` GPU kaynaklarına başvurur ve henüz
@@ -241,7 +247,8 @@ birleştirilir:
   Component ve ayar tipinin sürümünü listeler.
 - `rotation`, glTF'in kullandığı sırayla `[x, y, z, w]` olarak yazılır.
 - Enum değerleri adlarıyla yazılır; adı olmayan değerler sayı olarak yazılır.
-- Bir Entity alanı, dosyadaki bir Entity'nin `id`'sidir ya da `null`'dır.
+- Bir Entity alanı, dosyadaki bir Entity'nin `id`'sidir ya da `null`'dır. Bir çocuğun `illusion.Hierarchy`'si
+  ebeveynini bu şekilde belirtir; çocuklar dosyada ebeveynlerinin ardından gelir.
 - Değerler [reflection](reflection.md#json) JSON biçimlerini kullanır. Sahneler `writeValue()` ve
   `readValue()` ile yazılıp okunur; böylece bir Component'in JSON'u sahne dosyasında ve editör
   komutlarında aynıdır.

@@ -97,6 +97,10 @@ sceneSettingsTarget(T& value, const StructRegistry& structs = ComponentRegistry:
 /// Order of the entities in a saved scene.
 enum class SceneOrder : u8
 {
+    /// Depth-first pre-order of the transform hierarchy (Hierarchy.hpp): every parent before its children,
+    /// siblings by Hierarchy::order. Roots (including entities whose parent is not saved) come by order,
+    /// roots without a Hierarchy last, ties by EntityGuid. The same scene always gives the same file.
+    Hierarchy,
     ById, ///< By EntityGuid value: the same scene always gives the same file.
     /// In the order of SceneSaveOptions::subset, or without one in the order of World::entities() (by
     /// handle index): for tools that match saved entities to the World by position.
@@ -109,7 +113,7 @@ struct SceneSaveOptions
     /// Entities to save (they must be alive). nullopt saves every live entity. Entity fields that refer to
     /// entities outside the saved ones are written as null.
     std::optional<std::span<const Entity>> subset{};
-    SceneOrder order = SceneOrder::ById;       ///< Order of the entities.
+    SceneOrder order = SceneOrder::Hierarchy;  ///< Order of the entities.
     std::span<const SceneSettings> settings{}; ///< Settings to save.
     /// Settings of unknown types to save again (SceneLoadResult::preservedSettings).
     std::span<const PreservedValue> preservedSettings{};
@@ -165,8 +169,10 @@ struct SceneLoadResult
     [[nodiscard]] bool ok() const noexcept { return error.empty(); }
 };
 
-/// Saves the entities of @p world selected by @p options. Fails if a saved entity has no EntityGuid or
-/// shares one with another saved entity, or if a floating-point field is not finite (JSON cannot store it).
+/// Saves the entities of @p world selected by @p options. The Transform of an entity with a LocalTransform
+/// whose parent is saved too is not written: updateTransformHierarchy() derives it after loading. Fails if a
+/// saved entity has no EntityGuid or shares one with another saved entity, or if a floating-point field is
+/// not finite (JSON cannot store it).
 [[nodiscard]] SceneSaveResult saveScene(const World& world, const SceneSaveOptions& options = {});
 
 /// Creates the entities of the scene @p json in @p world, which keeps its existing entities. Entity

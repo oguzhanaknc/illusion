@@ -4,6 +4,7 @@
 #include <illusion/core/Log.hpp>
 #include <illusion/core/Profiler.hpp>
 #include <illusion/core/Time.hpp>
+#include <illusion/ecs/Hierarchy.hpp>
 #include <illusion/ecs/Transform.hpp>
 #include <illusion/ecs/World.hpp>
 #include <illusion/physics/PhysicsWorld.hpp>
@@ -46,6 +47,7 @@
 #include <numbers>
 #include <optional>
 #include <string_view>
+#include <type_traits>
 #include <vector>
 
 namespace illusion
@@ -698,7 +700,8 @@ struct PhysicsWorld::Impl
             const CharacterBody* link = alive ? world.tryGet<CharacterBody>(slot.entity) : nullptr;
             const bool keep = link != nullptr && link->id == id &&
                               world.has<CharacterController>(slot.entity) &&
-                              world.has<Transform>(slot.entity) && !isRebuilt(slot.entity);
+                              world.has<Transform>(slot.entity) && !world.has<Inactive>(slot.entity) &&
+                              !isRebuilt(slot.entity);
             if (!keep)
             {
                 if (link != nullptr)
@@ -720,13 +723,14 @@ struct PhysicsWorld::Impl
         for (const Entity entity : scratchEntities)
         {
             world.remove<CharacterBody>(entity);
+            world.remove<WorldSpaceAuthority>(entity);
         }
     }
 
     void createCharacters()
     {
         scratchEntities.clear();
-        world.query<const Transform, const CharacterController>().without<CharacterBody>().each(
+        world.query<const Transform, const CharacterController>().without<CharacterBody, Inactive>().each(
             [this](Entity entity, const Transform&, const CharacterController&) {
                 scratchEntities.push_back(entity);
             });
@@ -795,6 +799,7 @@ struct PhysicsWorld::Impl
             }
             link.id = id;
             world.emplace<CharacterBody>(entity, link);
+            world.set(entity, WorldSpaceAuthority{}); // the character moves it in world space
         }
     }
 
@@ -876,8 +881,8 @@ struct PhysicsWorld::Impl
                                                 destroyedBodies.end();
             };
             const bool keep = link != nullptr && link->id == id && world.has<Joint>(record.entity) &&
-                              !isRebuilt(record.entity) && !destroyed(record.bodyA) &&
-                              !destroyed(record.bodyB);
+                              !world.has<Inactive>(record.entity) && !isRebuilt(record.entity) &&
+                              !destroyed(record.bodyA) && !destroyed(record.bodyB);
             if (!keep)
             {
                 if (link != nullptr)
@@ -925,8 +930,15 @@ struct PhysicsWorld::Impl
     void createJoints()
     {
         scratchJoints.clear();
-        world.query<const Joint>().without<PhysicsJoint>().each(
-            [this](Entity entity, const Joint&) { scratchJoints.push_back(entity); });
+        // A joint whose connected Entity is Inactive waits until it is active again.
+        world.query<const Joint>().without<PhysicsJoint, Inactive>().each(
+            [this](Entity entity, const Joint& joint) {
+                if (joint.connected.isNull() || !world.isAlive(joint.connected) ||
+                    !world.has<Inactive>(joint.connected))
+                {
+                    scratchJoints.push_back(entity);
+                }
+            });
         for (const Entity entity : scratchJoints)
         {
             PhysicsJoint link;
@@ -1219,7 +1231,8 @@ struct PhysicsWorld::Impl
             const PhysicsBody* link = alive ? world.tryGet<PhysicsBody>(record.entity) : nullptr;
             const bool keep = link != nullptr && link->id == record.body.GetIndexAndSequenceNumber() &&
                               world.has<RigidBody>(record.entity) && world.has<Collider>(record.entity) &&
-                              world.has<Transform>(record.entity) && !isRebuilt(record.entity);
+                              world.has<Transform>(record.entity) && !world.has<Inactive>(record.entity) &&
+                              !isRebuilt(record.entity);
             if (keep)
             {
                 ++i;
@@ -1247,13 +1260,14 @@ struct PhysicsWorld::Impl
         for (const Entity entity : scratchEntities)
         {
             world.remove<PhysicsBody>(entity);
+            world.remove<WorldSpaceAuthority>(entity);
         }
     }
 
     void createBodies()
     {
         scratchEntities.clear();
-        world.query<const Transform, const RigidBody, const Collider>().without<PhysicsBody>().each(
+        world.query<const Transform, const RigidBody, const Collider>().without<PhysicsBody, Inactive>().each(
             [this](Entity entity, const Transform&, const RigidBody&, const Collider&) {
                 scratchEntities.push_back(entity);
             });
@@ -1330,6 +1344,10 @@ struct PhysicsWorld::Impl
                 records.push_back(Record{entity, id});
             }
             world.emplace<PhysicsBody>(entity, link);
+            if (link.id != PhysicsBody::kInvalidId && rigidBody.motionType == MotionType::Dynamic)
+            {
+                world.set(entity, WorldSpaceAuthority{}); // the body moves it in world space
+            }
         }
         if (!scratchIds.empty())
         {
@@ -1488,7 +1506,7 @@ PhysicsWorld::PhysicsWorld(World& world, JobSystem& jobs, const PhysicsWorldDesc
 namespace
 {
 
-// Removes component T from every Entity that has it.
+// Removes component T from every Entity that has it, and the WorldSpaceAuthority tag that bodies add.
 template <class T>
 void removeAll(World& world, std::vector<Entity>& scratch)
 {
@@ -1497,6 +1515,10 @@ void removeAll(World& world, std::vector<Entity>& scratch)
     for (const Entity entity : scratch)
     {
         world.remove<T>(entity);
+        if constexpr (!std::is_same_v<T, PhysicsJoint>)
+        {
+            world.remove<WorldSpaceAuthority>(entity);
+        }
     }
 }
 

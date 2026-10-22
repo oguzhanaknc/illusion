@@ -145,7 +145,8 @@ To draw a glTF model, load it with `loadGltf()` (see [Assets and Models](assets.
 
 ### Culling
 
-Each frame the renderer culls in two steps:
+Entities with the `Inactive` tag (they or an ancestor are [Disabled](ecs.md#disabled-and-inactive)) are not
+drawn, and their lights and sky lights do not shine. Each frame the renderer culls in two steps:
 
 1. **Frustum culling** on the CPU, in parallel on the Job System: Entities outside the view (and outside
    every shadow cascade) are skipped.

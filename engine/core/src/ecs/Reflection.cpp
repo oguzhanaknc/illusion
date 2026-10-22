@@ -1,5 +1,6 @@
 #include <illusion/core/Assert.hpp>
 #include <illusion/ecs/EntityGuid.hpp>
+#include <illusion/ecs/Hierarchy.hpp>
 #include <illusion/ecs/Name.hpp>
 #include <illusion/ecs/Reflection.hpp>
 #include <illusion/ecs/SceneSerializer.hpp>
@@ -578,6 +579,8 @@ std::string_view validateEntityName(const void* value) noexcept
     return entityNameError(*static_cast<const std::string*>(value));
 }
 
+constexpr std::string_view kRequiresHierarchy[] = {"illusion.Hierarchy"};
+
 } // namespace
 
 void reflectCoreComponents(ComponentRegistry& registry)
@@ -605,6 +608,47 @@ void reflectCoreComponents(ComponentRegistry& registry)
                .description = "Name of the Entity, shown in the editor.",
                .docsAnchor = "manual/scenes.md#names"})
         .field("value", &Name::value, {.validate = validateEntityName});
+    reflect<Hierarchy>("illusion.Hierarchy", 1, registry)
+        .meta({.displayName = "Hierarchy",
+               .category = "Core",
+               .icon = "account_tree",
+               .description = "Parent of the Entity and its position among its siblings.",
+               .docsAnchor = "manual/ecs.md#transform-hierarchy"})
+        .field("parent", &Hierarchy::parent, {.readOnly = true})
+        .field("order", &Hierarchy::order, {.readOnly = true});
+    reflect<LocalTransform>("illusion.LocalTransform", 1, registry)
+        .meta({.displayName = "Local transform",
+               .category = "Core",
+               .icon = "control_camera",
+               .description = "Position, rotation and scale of the Entity relative to its parent.",
+               .docsAnchor = "manual/ecs.md#transform-hierarchy",
+               .requiredComponents = kRequiresHierarchy})
+        .field("position", &LocalTransform::position, {.unit = Unit::Meters})
+        .field("rotation", &LocalTransform::rotation)
+        .field("scale", &LocalTransform::scale, {.step = 0.01});
+    reflect<Disabled>("illusion.Disabled", 1, registry)
+        .meta({.displayName = "Disabled",
+               .category = "Core",
+               .icon = "visibility_off",
+               .description = "Switches the Entity and its descendants off.",
+               .docsAnchor = "manual/ecs.md#disabled-and-inactive"});
+    reflectRuntime<Inactive>(
+        "illusion.Inactive",
+        {.displayName = "Inactive",
+         .category = "Core",
+         .icon = "block",
+         .description = "The Entity or one of its ancestors is Disabled (runtime state).",
+         .docsAnchor = "manual/ecs.md#disabled-and-inactive"},
+        registry);
+    reflectRuntime<WorldSpaceAuthority>(
+        "illusion.WorldSpaceAuthority",
+        {.displayName = "World-space authority",
+         .category = "Core",
+         .icon = "public",
+         .description =
+             "A System writes the Transform in world space; the LocalTransform follows it (runtime state).",
+         .docsAnchor = "manual/ecs.md#transform-hierarchy"},
+        registry);
     reflectRuntime<UnknownComponents>("illusion.UnknownComponents",
                                       {.displayName = "Unknown components",
                                        .category = "Core",

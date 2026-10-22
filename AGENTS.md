@@ -111,6 +111,9 @@ are within budget, format and docs checks pass, and Doxygen reports nothing.
   type names. Runtime-only state uses `reflectRuntime<T>()`.
 - Refer to entities outside the running World (files, commands, undo records) by `EntityGuid`, never by
   `Entity` handle or index; call `assignMissingGuids()` before `saveScene()` (ADR 0033).
+- Systems read the world-space `Transform`. Change parents only through `Hierarchy.hpp` (`setParent`,
+  `reorder`, `destroyRecursive`); code that writes `Hierarchy` values directly calls
+  `world.markChanged<Hierarchy>()`. Engine Systems skip entities with the `Inactive` tag (ADR 0034).
 - Do not keep references to components across structural changes.
 - See `.claude/skills/ecs-components/SKILL.md`.
 

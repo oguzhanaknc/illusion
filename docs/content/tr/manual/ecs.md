@@ -166,6 +166,94 @@ if (world.structuralVersion() != m_outlinerVersion)
 }
 ```
 
+`World::componentVersion<T>()` aynı fikri tek bir Component türü için uygular: bir Entity `T` kazandığında
+veya kaybettiğinde ve kod `world.markChanged<T>()` ile `T` değerlerini yazdığını bildirdiğinde artar.
+Aşağıdaki `HierarchyIndex` gibi tek bir türden oluşturulan önbellekler, ilgisiz değişikliklerin kendilerini
+geçersiz kılmaması için bunu kullanır.
+
+## Transform hiyerarşisi
+
+Header: `#include <illusion/ecs/Hierarchy.hpp>`
+
+`Hierarchy` Component'i olan bir Entity'nin bir ebeveyni vardır (ya da bir köktür) ve kardeşleri arasında
+bir sırası vardır. `LocalTransform`'u onu ebeveynine göre yerleştirir. `Transform`, her System'in okuduğu
+dünya uzayındaki yerleşim olarak kalır: `updateTransformHierarchy()` onu her karede bir kez
+`LocalTransform`'dan türetir.
+
+```cpp
+illusion::World world;
+illusion::HierarchyIndex hierarchy;
+
+const illusion::Entity car = world.create(illusion::Name{"Car"}, illusion::Transform{});
+const illusion::Entity wheel = world.create(illusion::Name{"Wheel"}, illusion::Transform{});
+if (auto attached = illusion::setParent(world, wheel, car); !attached)
+{
+    ILL_LOG_WARN("Game", "cannot attach: {}", illusion::hierarchyErrorMessage(attached.error()));
+}
+
+// Every frame, after game code and physics moved entities and before rendering:
+world.get<illusion::Transform>(car).position.x += 1.0f;
+illusion::updateTransformHierarchy(world, hierarchy, &jobs); // the wheel follows the car
+```
+
+- `setParent(child, parent, mode, index)`, `child`'ı `parent`'ın altına (null Entity onu kök yapar),
+  kardeşleri arasında `index` konumuna taşır (`kLastSibling` sona ekler). `ParentMode::KeepWorld` çocuğu
+  dünyadaki yerinde tutar ve `LocalTransform`'unu hesaplar; `KeepLocal` `LocalTransform`'u korur ve çocuğu
+  yeni ebeveyniyle birlikte taşır. Eksik `Hierarchy`, `LocalTransform` veya `Transform` eklenir. Döngüler ve
+  ölü Entity'ler bir `HierarchyError` ile reddedilir ve hiçbir şeyi değiştirmez.
+- `detach()` bir Entity'yi kök yapar, `reorder()` onu kardeşleri arasında taşır ve `destroyRecursive()` onu
+  tüm torunlarıyla birlikte yok eder. Kardeş sıraları sıkı kalır (0, 1, 2, ...).
+- `parentOf()` ebeveyni döndürür. Bu fonksiyonlar `Hierarchy`'si olan Entity'leri tarar; bu yüzden her
+  karede her Entity için değil, düzenleme ve oyun olayları için düşünülmüştür.
+- Bir kök için doğruluk `Transform`'dadır ve `LocalTransform`'u (varsa) ona eşit tutulur. `Transform`'u
+  olmayan bir ebeveyn birim dönüşüm sayılır.
+- Çalışma zamanı etiketi `WorldSpaceAuthority` olan bir Entity, bir System'in yazdığı `Transform`'u korur ve
+  `LocalTransform`'u ondan hesaplanır; böylece çocukları onu izler. Fizik bu etiketi dinamik gövdelere ve
+  karakterlere ekler.
+- Yerleşimler konum, dönüş ve ölçek olarak birleşir (`combine()`, tersi `relativeTo()`). Konumlar tamdır.
+  Bir `Transform` kaymayı (shear) ifade edemez; bu yüzden düzgün olmayan ölçekli bir ebeveynin altındaki
+  döndürülmüş bir çocuğun dönüşü ve ölçeği, matrislerinin çarpımına yalnızca yaklaşır.
+
+`HierarchyIndex` çocuk listelerini, derinlik öncelikli ön sırayı (pre-order) ve derinlik seviyelerini tutar.
+Yalnızca hiyerarşi değiştiğinde (`componentVersion<Hierarchy>()`) veya `Hierarchy`'si olmayan bir ebeveyn
+öldüğünde yeniden oluşturulur; bu yüzden `update()` her karede ucuzdur ve `Hierarchy`'si olmayan
+Entity'lerin hiçbir maliyeti yoktur. Ağacı dolaşmak için kullanın:
+
+```cpp
+hierarchy.update(world);
+for (const illusion::Entity root : hierarchy.roots())
+{
+    hierarchy.depthFirst(root, [&](illusion::Entity entity, illusion::u32 depth) {
+        drawOutlinerRow(entity, depth);
+    });
+}
+```
+
+Çocuklar önce `Hierarchy::order`'a, sonra `EntityGuid`'e göre sıralanır; `Hierarchy`'si olmayan kökler en
+sona gelir. `Hierarchy` değerlerini bu fonksiyonlar yerine doğrudan yazan kod, ardından
+`world.markChanged<illusion::Hierarchy>()` çağırmalıdır.
+
+## Disabled ve Inactive
+
+`setEnabled(world, entity, false)`, sahnelere kaydedilen `Disabled` etiketini ekler. Bir sonraki
+`updateTransformHierarchy()` çağrısında Entity ve tüm torunları çalışma zamanı etiketi `Inactive`'i alır;
+etkinleştirildiklerinde veya devre dışı alt ağaçtan çıkarıldıklarında onu yeniden kaybederler. Motor
+System'leri Inactive Entity'leri atlar:
+
+- renderer Inactive Mesh'leri, ışıkları ve gökyüzü ışıklarını çizmez;
+- fizik gövdelerini, karakterlerini ve eklemlerini kaldırır ve etkin olduklarında güncel `Transform`'dan
+  yeniden oluşturur (hızlar sıfırdan başlar);
+- ses kaynaklarını durdurur; `playOnStart` olan kaynaklar etkin olduklarında yeniden başlar.
+
+Oyun System'leri de onları atlamalıdır:
+
+```cpp
+world.query<Enemy, const illusion::Transform>().without<illusion::Inactive>().each(
+    [](Enemy& enemy, const illusion::Transform& transform) { enemy.think(transform); });
+```
+
+`isEnabledInHierarchy()`, ebeveyn zincirini dolaşarak bir sonraki güncellemeden önce hemen yanıt verir.
+
 ## Nasıl çalışır
 
 Tam olarak aynı Component tipi kümesine sahip Entity'ler bir **Archetype**'ı paylaşır. Bir Archetype,

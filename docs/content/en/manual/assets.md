@@ -33,8 +33,11 @@ const std::vector<illusion::Entity> entities = illusion::spawnModel(world, *mode
   and emissive Textures, alpha modes and `KHR_materials_emissive_strength`.
 - Images (PNG, JPEG) are decoded and get full mip chains. Colour Textures (base colour, emissive) are
   sRGB; the others are linear.
-- Nodes keep the hierarchy of the default scene; `ModelData::worldMatrices()` resolves it, and
-  `spawnModel()` creates one Entity per mesh node and submesh, with an optional root matrix.
+- Nodes keep the hierarchy of the default scene; `ModelData::worldMatrices()` resolves it.
+  `spawnModel()` creates the same [hierarchy](ecs.md#transform-hierarchy) of Entities, with an optional
+  root matrix: one Entity per node with its `Name`, `Hierarchy`, `LocalTransform` and `Transform`. A node
+  whose mesh has one submesh gets its `MeshRenderer`; a mesh with several submeshes gets one child per
+  submesh, named `<node> (<submesh>)`. It returns every created Entity, parents first.
 - Required extensions the engine does not support (Draco, meshopt, KTX2 Textures) make loading fail
   with a clear error instead of rendering garbage. `KHR_mesh_quantization` is supported.
 

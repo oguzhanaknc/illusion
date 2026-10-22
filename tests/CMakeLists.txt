@@ -24,6 +24,7 @@ add_executable(illusion_tests
     ecs/TestComponentJson.cpp
     ecs/TestEntity.cpp
     ecs/TestEntityGuid.cpp
+    ecs/TestHierarchy.cpp
     ecs/TestQuery.cpp
     ecs/TestReflection.cpp
     ecs/TestReflectionSweep.cpp
@@ -47,6 +48,7 @@ add_executable(illusion_tests
     audio/TestAudioWorld.cpp
     modules/TestModules.cpp
     physics/TestPhysicsExtensions.cpp
+    physics/TestPhysicsHierarchy.cpp
     physics/TestPhysicsWorld.cpp
     render/TestPostProcess.cpp
     render/TestRenderComponents.cpp

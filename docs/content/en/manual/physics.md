@@ -248,6 +248,13 @@ physics.setLayersCollide(1, 0, false); // layer 1 passes through layer 0
 - `PhysicsWorld` is not thread-safe: call it from one thread, outside of World queries. The World must
   outlive it; destroying it removes the runtime Components.
 - Results are deterministic for the same inputs, independent of the number of Job System Workers.
+- Bodies, characters and joints of `Inactive` entities (see [Disabled and Inactive](ecs.md#disabled-and-inactive))
+  are removed from the simulation and created again from the current `Transform` when the Entity becomes
+  active; velocities start from zero. A joint whose connected Entity is Inactive waits for it.
+- Dynamic bodies and characters get the runtime tag `WorldSpaceAuthority`: physics writes their
+  `Transform` in world space, and `updateTransformHierarchy()` writes their `LocalTransform` from it, so
+  their [children](ecs.md#transform-hierarchy) follow them. Run the hierarchy update after
+  `PhysicsWorld::update()`.
 
 ## Sample
 

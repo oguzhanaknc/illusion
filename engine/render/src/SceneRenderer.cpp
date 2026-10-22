@@ -5,6 +5,7 @@
 #include <illusion/core/JobSystem.hpp>
 #include <illusion/core/Log.hpp>
 #include <illusion/core/Profiler.hpp>
+#include <illusion/ecs/Hierarchy.hpp>
 #include <illusion/ecs/World.hpp>
 #include <illusion/render/BuiltinShaders.hpp>
 #include <illusion/render/RenderDevice.hpp>
@@ -591,7 +592,7 @@ nvrhi::IFramebuffer* SceneRenderer::Impl::outputFramebufferFor(nvrhi::ITexture* 
 void SceneRenderer::Impl::cull(World& world, const RenderView& view, JobSystem* jobs)
 {
     ILL_PROFILE_SCOPE_N("SceneRenderer::cull");
-    const u32 candidates = world.query<const Transform, const MeshRenderer>().count();
+    const u32 candidates = world.query<const Transform, const MeshRenderer>().without<Inactive>().count();
     stats.candidates = candidates;
     if (items.size() < candidates)
     {
@@ -644,7 +645,8 @@ void SceneRenderer::Impl::cull(World& world, const RenderView& view, JobSystem* 
     };
     // Entities without history are recorded and receive one after iteration (no structural changes
     // while a query runs).
-    auto untrackedQuery = world.query<const Transform, const MeshRenderer>().without<MotionHistory>();
+    auto untrackedQuery =
+        world.query<const Transform, const MeshRenderer>().without<MotionHistory, Inactive>();
     const u32 untrackedCount = untrackedQuery.count();
     newMotionEntities.resize(untrackedCount);
     newMotionMatrices.resize(untrackedCount);
@@ -656,7 +658,7 @@ void SceneRenderer::Impl::cull(World& world, const RenderView& view, JobSystem* 
         newMotionEntities[slot] = entity;
         newMotionMatrices[slot] = matrix;
     };
-    auto trackedQuery = world.query<const Transform, const MeshRenderer, MotionHistory>();
+    auto trackedQuery = world.query<const Transform, const MeshRenderer, MotionHistory>().without<Inactive>();
     if (jobs != nullptr)
     {
         trackedQuery.parallelEach(*jobs, tracked);
@@ -700,7 +702,7 @@ i32 SceneRenderer::Impl::gatherLights(World& world, GpuViewConstants& constants,
 {
     i32 shadowed = -1;
     constants.directionalCount = 0;
-    world.query<const Transform, const DirectionalLight>().each(
+    world.query<const Transform, const DirectionalLight>().without<Inactive>().each(
         [&](const Transform& transform, const DirectionalLight& light) {
             if (constants.directionalCount < kMaxDirectionalLights)
             {
@@ -714,7 +716,7 @@ i32 SceneRenderer::Impl::gatherLights(World& world, GpuViewConstants& constants,
             }
         });
     constants.pointCount = 0;
-    world.query<const Transform, const PointLight>().each(
+    world.query<const Transform, const PointLight>().without<Inactive>().each(
         [&](const Transform& transform, const PointLight& light) {
             if (constants.pointCount < kMaxPointLights)
             {
@@ -944,13 +946,14 @@ void SceneRenderer::render(nvrhi::ICommandList* commandList, nvrhi::ITexture* co
     // The first SkyLight provides image-based lighting; without one, the constant ambient light does.
     const SkyLight* skyLight = nullptr;
     Quat skyOrientation(1.0f, 0.0f, 0.0f, 0.0f);
-    world.query<const Transform, const SkyLight>().each([&](const Transform& transform, const SkyLight& sky) {
-        if (skyLight == nullptr)
-        {
-            skyLight = &sky;
-            skyOrientation = transform.rotation;
-        }
-    });
+    world.query<const Transform, const SkyLight>().without<Inactive>().each(
+        [&](const Transform& transform, const SkyLight& sky) {
+            if (skyLight == nullptr)
+            {
+                skyLight = &sky;
+                skyOrientation = transform.rotation;
+            }
+        });
     const EnvironmentHandle environment = skyLight != nullptr ? skyLight->environment : EnvironmentHandle{};
     const RenderResources::GpuEnvironment& gpuEnvironment = impl.resources->environment(environment);
     const f32 skyIntensity = skyLight != nullptr ? skyLight->intensity : 0.0f;

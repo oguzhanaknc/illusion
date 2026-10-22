@@ -121,6 +121,10 @@ public:
         slot.archetype = archetype;
         slot.row = row;
         (constructAt<std::decay_t<Ts>>(*archetype, row, std::forward<Ts>(components)), ...);
+        for (const ComponentId id : signature)
+        {
+            ++m_componentVersions[id];
+        }
         ++m_structuralVersion;
         return entity;
     }
@@ -303,6 +307,31 @@ public:
     /// set(), and calls that change nothing leave it unchanged.
     [[nodiscard]] u64 structuralVersion() const noexcept { return m_structuralVersion; }
 
+    /// Counter of changes to component @p id, for caches built from the values of one component type (such
+    /// as HierarchyIndex). It starts at 0 and grows whenever an entity gains or loses component @p id
+    /// (create(), destroy(), adding or removing it, clear(), CommandBuffer::apply()) and whenever
+    /// markChanged() announces that values of it were written. Writing values without markChanged() leaves
+    /// it unchanged.
+    [[nodiscard]] u64 componentVersion(ComponentId id) const noexcept { return m_componentVersions[id]; }
+
+    /// componentVersion() of component @p T.
+    template <ComponentType T>
+    [[nodiscard]] u64 componentVersion() const noexcept
+    {
+        return componentVersion(componentId<T>());
+    }
+
+    /// Announces that values of component @p id were written (grows componentVersion()). Like structural
+    /// changes, call it only from the thread that owns the World, not from parallel jobs.
+    void markChanged(ComponentId id) noexcept { ++m_componentVersions[id]; }
+
+    /// markChanged() for component @p T.
+    template <ComponentType T>
+    void markChanged() noexcept
+    {
+        markChanged(componentId<T>());
+    }
+
     /// Number of archetypes created so far (archetypes are never destroyed before clear()).
     [[nodiscard]] u32 archetypeCount() const noexcept { return static_cast<u32>(m_archetypes.size()); }
 
@@ -402,6 +431,7 @@ private:
     std::vector<u32> m_freeSlots;
     u32 m_aliveCount = 0;
     u64 m_structuralVersion = 0;
+    std::array<u64, kMaxComponentTypes> m_componentVersions{};
     std::atomic<u32> m_iterationDepth{0};
     std::mutex m_queryMutex;
     std::unordered_map<QueryKey, QueryCache, QueryKeyHash> m_queryCache;

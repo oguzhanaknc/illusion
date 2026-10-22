@@ -40,6 +40,7 @@ Record (ADR) olarak kaydedilir. Her kayıt bağlamı, kararı ve sonuçlarını 
 | [0031](https://github.com/oguzhanaknc/illusion/blob/main/docs/adr/0031-editor-ui-stack.md) | Editör UI yığını: kendi backend'lerimizle Dear ImGui docking, gamma uzayında bir UI hedefi, tema token'ları, fontlar ve ikonlar |
 | [0032](https://github.com/oguzhanaknc/illusion/blob/main/docs/adr/0032-reflection-v2.md) | Reflection v2: metadata, struct reflection, bir JSON değer API'si ve migration'lar |
 | [0033](https://github.com/oguzhanaknc/illusion/blob/main/docs/adr/0033-entity-ids-names-scene-format-v2.md) | Kalıcı Entity id'leri, adlar ve sahne biçimi v2 |
+| [0034](https://github.com/oguzhanaknc/illusion/blob/main/docs/adr/0034-transform-hierarchy.md) | Dünya uzayı doğruluğuyla Transform hiyerarşisi, Disabled ve Inactive |
 
 Yeni bir karar önermek için `docs/adr/0000-template.md` dosyasını kopyalayın ve
 [katkıda bulunma rehberini](../contributing.md#architecture-decision-recordlar) izleyin.

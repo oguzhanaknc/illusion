@@ -7,6 +7,7 @@ add_library(illusion_core STATIC
     src/core/JobSystem.cpp
     src/core/Json.cpp
     src/core/Log.cpp
+    src/core/Math.cpp
     src/core/Memory.cpp
     src/core/Module.cpp
     src/core/Random.cpp
@@ -18,6 +19,7 @@ add_library(illusion_core STATIC
     src/ecs/Component.cpp
     src/ecs/ComponentJson.cpp
     src/ecs/EntityGuid.cpp
+    src/ecs/Hierarchy.cpp
     src/ecs/Name.cpp
     src/ecs/Reflection.cpp
     src/ecs/ReflectionData.cpp

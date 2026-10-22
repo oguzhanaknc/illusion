@@ -59,6 +59,7 @@ plugins:
             Memory: Bellek
             JSON and Expected: JSON ve Expected
             Random Numbers: Rastgele Sayılar
+            Math: Matematik
             Localization: Yerelleştirme
             Job System: Job System
             ECS: ECS
@@ -103,6 +104,7 @@ nav:
       - Memory: manual/memory.md
       - JSON and Expected: manual/json.md
       - Random Numbers: manual/random.md
+      - Math: manual/math.md
       - Localization: manual/localization.md
       - Job System: manual/jobs.md
       - ECS: manual/ecs.md

@@ -46,6 +46,15 @@ Checklist:
       `tests/ecs/TestReflectionSweep.cpp` checks the engine's types.
 - [ ] Runtime-only state (handles, caches) is reflected with `reflectRuntime<T>("module.Name")`: it is
       transient and never saved.
+- [ ] Placement: read and write the world-space `Transform`; a child's `Transform` is derived from its
+      `LocalTransform` by `updateTransformHierarchy()` (run it after game code and physics, before
+      rendering). A System that writes `Transform` in world space for entities that may have a parent adds
+      the `WorldSpaceAuthority` tag. Reparent with `setParent()`/`reorder()`/`destroyRecursive()`; after
+      writing `Hierarchy` values directly call `world.markChanged<Hierarchy>()`. Caches built from one
+      Component type check `World::componentVersion<T>()`.
+- [ ] Engine and game Systems that act on entities skip `Inactive` ones (`.without<illusion::Inactive>()`);
+      a System that owns external resources (bodies, voices) releases them when an Entity becomes Inactive
+      and recreates them when it becomes active. Test it with `setEnabled()`.
 - [ ] Changed the meaning of saved data? Bump the reflection version and add `.migrate(oldVersion, fn)`;
       renamed a field? Add `.renamedFrom = "oldName"`. Test loading the old JSON.
 

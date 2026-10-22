@@ -37,6 +37,9 @@ designed to ship commercial games on Steam and similar stores.
 - Component and struct reflection with stable names, editor metadata, a JSON value API and migrations;
   JSON scene files with persistent entity ids and names that survive code changes and keep the data of
   unknown Component types.
+- Transform hierarchy: parents and children with local transforms, propagated level by level on the Job
+  System, enabling and disabling whole subtrees, glTF node hierarchies; rays, intersections and screen
+  picking for tools.
 - Game modules: hot-reloadable shared libraries in development (World data survives a reload, broken
   builds are rolled back), linked statically into shipped games; semver and dependencies.
 - Asset pipeline: content-hashed import cache, asynchronous streaming on an I/O thread and the Job

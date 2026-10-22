@@ -3,6 +3,7 @@
 #include <illusion/assets/Mesh.hpp>
 #include <illusion/assets/Model.hpp>
 #include <illusion/core/JobSystem.hpp>
+#include <illusion/ecs/Hierarchy.hpp>
 #include <illusion/ecs/World.hpp>
 #include <illusion/render/RenderDevice.hpp>
 #include <illusion/render/RenderResources.hpp>
@@ -175,6 +176,39 @@ TEST_CASE("one-sided surfaces are visible from the front only")
         world.get<Transform>(entity).rotation =
             glm::angleAxis(-std::numbers::pi_v<f32> / 2.0f, Vec3(1.0f, 0.0f, 0.0f)); // normal now faces away
         CHECK(pixelAt(renderScene(*device, *renderer, world, nullptr), 32, 32).r == 0);
+    }
+    device->waitIdle();
+    CHECK(device->validationErrorCount() == 0);
+}
+
+TEST_CASE("disabled entities and their children are not drawn")
+{
+    auto device = RenderDevice::create(headless());
+    REQUIRE(device != nullptr);
+    {
+        RenderResources resources(*device);
+        SceneRendererDesc desc;
+        desc.colorFormat = nvrhi::Format::RGBA8_UNORM;
+        desc.clearColor = Vec4(0.0f, 0.0f, 0.0f, 1.0f);
+        desc.ambient = Vec3(1.0f);
+        auto renderer = SceneRenderer::create(*device, resources, desc);
+        REQUIRE(renderer != nullptr);
+        const MeshHandle sphere = resources.createMesh(makeSphere(1.0f, 16, 8), "Sphere");
+
+        World world;
+        HierarchyIndex hierarchy;
+        const Entity parent = world.create(Transform{}, MeshRenderer{sphere, 0, MaterialHandle{}});
+        const Entity child = world.create(Transform{}, MeshRenderer{sphere, 0, MaterialHandle{}});
+        REQUIRE(setParent(world, child, parent));
+        updateTransformHierarchy(world, hierarchy);
+        CHECK(pixelAt(renderScene(*device, *renderer, world, nullptr), 32, 32).r > 100);
+        CHECK(renderer->stats().candidates == 2);
+
+        setEnabled(world, parent, false);
+        updateTransformHierarchy(world, hierarchy);
+        CHECK(pixelAt(renderScene(*device, *renderer, world, nullptr), 32, 32).r == 0);
+        CHECK(renderer->stats().candidates == 0);
+        CHECK(renderer->stats().visible == 0);
     }
     device->waitIdle();
     CHECK(device->validationErrorCount() == 0);

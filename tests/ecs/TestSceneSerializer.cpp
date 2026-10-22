@@ -2,6 +2,7 @@
 
 #include <illusion/core/Json.hpp>
 #include <illusion/ecs/EntityGuid.hpp>
+#include <illusion/ecs/Hierarchy.hpp>
 #include <illusion/ecs/Name.hpp>
 #include <illusion/ecs/SceneSerializer.hpp>
 #include <illusion/ecs/StructRegistry.hpp>
@@ -368,6 +369,80 @@ TEST_CASE("subsets can be saved in the given order")
     CHECK(ids(byId) == std::vector<u64>{1, 2, 3});
     CHECK(ids(asGiven) == std::vector<u64>{3, 2, 1});
     CHECK(ids(worldOrder) == std::vector<u64>{3, 1, 2});
+}
+
+namespace
+{
+
+// File ids of @p saved in file order.
+std::vector<u64> fileIdsOf(const SceneSaveResult& saved)
+{
+    World loaded;
+    const SceneLoadResult result = loadScene(loaded, saved.json, {.ids = IdPolicy::Regenerate});
+    REQUIRE(result.ok());
+    std::vector<u64> values;
+    for (const EntityGuid id : result.fileIds)
+    {
+        values.push_back(id.value);
+    }
+    return values;
+}
+
+} // namespace
+
+TEST_CASE("scenes save in hierarchy pre-order by default")
+{
+    reflectAll();
+    World world;
+    // Roots 9 and 5 (in that order), 5's children 3 then 1, 3's child 8; 7 and 2 have no Hierarchy.
+    const Entity loose = world.create(EntityGuid{7});
+    const Entity rootA = world.create(EntityGuid{9}, Transform{});
+    const Entity rootB = world.create(EntityGuid{5}, Transform{});
+    const Entity childLate = world.create(EntityGuid{1}, Transform{});
+    const Entity childEarly = world.create(EntityGuid{3}, Transform{});
+    const Entity grandchild = world.create(EntityGuid{8}, Transform{});
+    world.create(EntityGuid{2});
+    REQUIRE(reorder(world, rootA, kLastSibling));
+    REQUIRE(setParent(world, childEarly, rootB));
+    REQUIRE(setParent(world, childLate, rootB));
+    REQUIRE(setParent(world, grandchild, childEarly));
+    CHECK(fileIdsOf(saveScene(world)) == std::vector<u64>{9, 5, 3, 8, 1, 2, 7});
+    CHECK(fileIdsOf(saveScene(world, {.order = SceneOrder::ById})) == std::vector<u64>{1, 2, 3, 5, 7, 8, 9});
+
+    // A subset without the parent makes its children roots, ordered by their own order.
+    const Entity subset[] = {grandchild, childLate, childEarly, loose};
+    CHECK(fileIdsOf(saveScene(world, {.subset = subset})) == std::vector<u64>{3, 8, 1, 7});
+}
+
+TEST_CASE("the hierarchy save order is stable after deletes and slot reuse")
+{
+    reflectAll();
+    World world;
+    GuidGenerator guids(3);
+    std::vector<Entity> children;
+    const Entity root = world.create(Transform{});
+    for (int i = 0; i < 6; ++i)
+    {
+        children.push_back(world.create(Transform{}));
+        REQUIRE(setParent(world, children.back(), root));
+    }
+    assignMissingGuids(world, guids);
+    const std::vector<u64> before = fileIdsOf(saveScene(world));
+
+    // Delete two children; their slots are reused by new entities appended last.
+    world.destroy(children[1]);
+    world.destroy(children[4]);
+    REQUIRE(reorder(world, children[0], 0)); // closes the gaps
+    const Entity added = world.create(Transform{});
+    REQUIRE(setParent(world, added, root));
+    assignMissingGuids(world, guids);
+    std::vector<u64> expected = before;
+    expected.erase(expected.begin() + 5); // children[4]
+    expected.erase(expected.begin() + 2); // children[1]
+    expected.push_back(world.get<EntityGuid>(added).value);
+    const SceneSaveResult saved = saveScene(world);
+    CHECK(fileIdsOf(saved) == expected);
+    CHECK(saveScene(world).json == saved.json);
 }
 
 TEST_CASE("Regenerate gives loaded entities new ids and remaps references inside the file")
