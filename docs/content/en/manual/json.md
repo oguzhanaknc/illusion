@@ -130,7 +130,9 @@ if (const auto written = doc.write(text); !written)
 
 `add()` appends a member and expects a new key; `set()` replaces an existing one; `remove()` deletes it.
 `copy()` makes a deep copy of a `JsonValue` from a parsed document, so a document can be read, edited
-and written back. A value belongs to the document that made it: adding it to another document asserts. `makeF32()` writes the shortest text that reads back as the same `f32` (`0.1`, not
+and written back. `find()` and the readers `asBool()`, `asI64()`, `asU64()`, `asF64()` and `asString()`
+work as on `JsonValue`, for example in reflection migrations. A value belongs to the document that made
+it: adding it to another document asserts. `makeF32()` writes the shortest text that reads back as the same `f32` (`0.1`, not
 `0.10000000149011612`).
 
 `write(out, options)` replaces the contents of `out`. Writing fails for non-finite numbers and strings

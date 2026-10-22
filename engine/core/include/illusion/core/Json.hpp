@@ -427,6 +427,17 @@ public:
     /// Number of elements of an array or members of an object; 0 for anything else.
     [[nodiscard]] usize size() const noexcept;
 
+    /// The boolean, or nullopt if this is not a boolean.
+    [[nodiscard]] std::optional<bool> asBool() const noexcept;
+    /// The integer if it is in the range of i64, otherwise nullopt (reals are not converted).
+    [[nodiscard]] std::optional<i64> asI64() const noexcept;
+    /// The integer if it is in the range of u64, otherwise nullopt (reals are not converted).
+    [[nodiscard]] std::optional<u64> asU64() const noexcept;
+    /// The number as f64 (integers are converted, possibly rounded), or nullopt if this is not a number.
+    [[nodiscard]] std::optional<f64> asF64() const noexcept;
+    /// The string (valid while the document lives and the value is not changed), or nullopt.
+    [[nodiscard]] std::optional<std::string_view> asString() const noexcept;
+
     /// Appends @p value to this array. Ignored (and the document marked as failed) if either handle is
     /// absent. Asserts that this is an array and that @p value belongs to the same document.
     JsonMutValue& push(JsonMutValue value);
