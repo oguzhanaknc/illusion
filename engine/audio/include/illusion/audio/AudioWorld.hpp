@@ -149,7 +149,9 @@ public:
     ///   (in the background with AudioWorldDesc::streamer); those with AudioSource::playOnStart start
     ///   playing, or start once their clip has loaded.
     /// - Clips that finished loading in the background become ready.
-    /// - Sounds of destroyed Entities, or of Entities that lost their AudioSource, stop.
+    /// - Sounds of destroyed Entities, of Entities that lost their AudioSource and of Inactive Entities
+    ///   (Hierarchy.hpp) stop; an Inactive Entity counts as new when it becomes active again. An Inactive
+    ///   AudioListener is ignored.
     /// - Volumes, pitches, buses and the positions and velocities of spatial sounds and of the listener
     ///   are updated. Velocities are the Transform movement divided by @p deltaSeconds.
     /// - Finished sounds release their voices.

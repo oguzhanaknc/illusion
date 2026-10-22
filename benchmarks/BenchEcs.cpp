@@ -2,6 +2,7 @@
 
 #include <illusion/ecs/CommandBuffer.hpp>
 #include <illusion/ecs/EntityGuid.hpp>
+#include <illusion/ecs/Hierarchy.hpp>
 #include <illusion/ecs/Name.hpp>
 #include <illusion/ecs/Reflection.hpp>
 #include <illusion/ecs/SceneSerializer.hpp>
@@ -173,6 +174,45 @@ ILL_BENCHMARK("ecs/for-each-matching", 2.0)
             }
         });
         ankerl::nanobench::doNotOptimizeAway(sum);
+    });
+}
+
+ILL_BENCHMARK("hierarchy/propagate", 30.0)
+{
+    // A 4-ary forest of 100k entities, 9 levels deep; the wide levels run on the Job System.
+    JobSystem jobs;
+    World world;
+    std::vector<Entity> entities;
+    entities.reserve(kEntities);
+    for (u32 i = 0; i < kEntities; ++i)
+    {
+        const Entity parent = i == 0 ? Entity{} : entities[(i - 1) / 4];
+        const LocalTransform local{Vec3(1.0f, 0.5f, 0.0f), glm::angleAxis(0.1f, Vec3(0.0f, 1.0f, 0.0f)),
+                                   Vec3(1.0f)};
+        entities.push_back(world.create(Hierarchy{parent, i == 0 ? 0u : (i - 1) % 4}, local, Transform{}));
+    }
+    HierarchyIndex index;
+    updateTransformHierarchy(world, index, &jobs);
+    bench.batch(kEntities).unit("entity").run("updateTransformHierarchy", [&] {
+        world.get<Transform>(entities[0]).position.x += 0.001f;
+        updateTransformHierarchy(world, index, &jobs);
+        ankerl::nanobench::doNotOptimizeAway(world);
+    });
+}
+
+ILL_BENCHMARK("hierarchy/flat", 0.5)
+{
+    // Entities without a Hierarchy cost nothing.
+    World world;
+    for (u32 i = 0; i < kEntities; ++i)
+    {
+        world.create(Transform{});
+    }
+    HierarchyIndex index;
+    updateTransformHierarchy(world, index);
+    bench.batch(kEntities).unit("entity").run("updateTransformHierarchy", [&] {
+        updateTransformHierarchy(world, index);
+        ankerl::nanobench::doNotOptimizeAway(world);
     });
 }
 

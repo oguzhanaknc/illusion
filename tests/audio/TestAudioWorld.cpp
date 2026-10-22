@@ -1,6 +1,7 @@
 #include "AudioTestSupport.hpp"
 
 #include <illusion/audio/AudioWorld.hpp>
+#include <illusion/ecs/Hierarchy.hpp>
 #include <illusion/ecs/SceneSerializer.hpp>
 #include <illusion/ecs/Transform.hpp>
 #include <illusion/ecs/World.hpp>
@@ -270,6 +271,35 @@ TEST_CASE("the doppler effect raises the pitch of a sound that approaches the li
     const f64 expected = 343.3 / (343.3 - 40.0);
     CHECK(static_cast<f64>(zeroCrossings(out, 0, 0, 4800)) / stillCrossings ==
           doctest::Approx(expected).epsilon(0.03));
+}
+
+TEST_CASE("Inactive sources fall silent and start again when they become active")
+{
+    Fixture f;
+    HierarchyIndex hierarchy;
+    f.writeWav("test:/hum.wav", constant(0.5f, 480));
+    AudioSource source = sourceFor("test:/hum.wav");
+    source.loop = true;
+    source.spatial = false;
+    const Entity speaker = f.world.create(Transform{});
+    const Entity emitter = f.world.create(Transform{}, source);
+    REQUIRE(setParent(f.world, emitter, speaker));
+    updateTransformHierarchy(f.world, hierarchy);
+    CHECK(peak(f.mix(2400)) > 0.4f);
+
+    setEnabled(f.world, speaker, false); // disabling the parent silences the child
+    updateTransformHierarchy(f.world, hierarchy);
+    f.mix(480);
+    CHECK(peak(f.mix(2400)) == 0.0f);
+    CHECK_FALSE(f.audio->isPlaying(emitter));
+    CHECK_FALSE(f.world.has<AudioPlayback>(emitter));
+    CHECK(f.audio->stats().activeVoices == 0);
+
+    setEnabled(f.world, speaker, true);
+    updateTransformHierarchy(f.world, hierarchy);
+    f.mix(480);
+    CHECK(f.audio->isPlaying(emitter));
+    CHECK(peak(f.mix(2400)) > 0.4f);
 }
 
 TEST_CASE("AudioSource Entities start on update and stop when destroyed or when the source is removed")

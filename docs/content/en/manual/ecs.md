@@ -163,6 +163,91 @@ if (world.structuralVersion() != m_outlinerVersion)
 }
 ```
 
+`World::componentVersion<T>()` is the same idea for one Component type: it grows when an Entity gains or
+loses `T`, and when code announces with `world.markChanged<T>()` that it wrote values of `T`. Caches built
+from one type, such as the `HierarchyIndex` below, use it so that unrelated changes do not invalidate them.
+
+## Transform hierarchy
+
+Header: `#include <illusion/ecs/Hierarchy.hpp>`
+
+An Entity with a `Hierarchy` Component has a parent (or is a root) and a position among its siblings. Its
+`LocalTransform` places it relative to its parent. `Transform` stays the world-space placement that every
+System reads: `updateTransformHierarchy()` derives it from the `LocalTransform` once per frame.
+
+```cpp
+illusion::World world;
+illusion::HierarchyIndex hierarchy;
+
+const illusion::Entity car = world.create(illusion::Name{"Car"}, illusion::Transform{});
+const illusion::Entity wheel = world.create(illusion::Name{"Wheel"}, illusion::Transform{});
+if (auto attached = illusion::setParent(world, wheel, car); !attached)
+{
+    ILL_LOG_WARN("Game", "cannot attach: {}", illusion::hierarchyErrorMessage(attached.error()));
+}
+
+// Every frame, after game code and physics moved entities and before rendering:
+world.get<illusion::Transform>(car).position.x += 1.0f;
+illusion::updateTransformHierarchy(world, hierarchy, &jobs); // the wheel follows the car
+```
+
+- `setParent(child, parent, mode, index)` moves `child` under `parent` (the null Entity makes it a root) at
+  position `index` among its siblings (`kLastSibling` appends). `ParentMode::KeepWorld` keeps the child
+  where it is in the world and computes its `LocalTransform`; `KeepLocal` keeps the `LocalTransform` and
+  moves the child with its new parent. A missing `Hierarchy`, `LocalTransform` or `Transform` is added.
+  Cycles and dead entities are rejected with a `HierarchyError` and change nothing.
+- `detach()` makes an Entity a root, `reorder()` moves it among its siblings, and `destroyRecursive()`
+  destroys it with all its descendants. Sibling orders stay dense (0, 1, 2, ...).
+- `parentOf()` returns the parent. These functions scan the entities that have a `Hierarchy`, so they are
+  meant for editing and gameplay events, not for every Entity every frame.
+- For a root, `Transform` is the truth and its `LocalTransform` (if it has one) is kept equal to it. A
+  parent without a `Transform` counts as the identity.
+- An Entity with the runtime tag `WorldSpaceAuthority` keeps the `Transform` a System wrote, and its
+  `LocalTransform` is computed from it, so its children follow it. Physics adds the tag to dynamic bodies
+  and characters.
+- Placements combine as position, rotation and scale (`combine()`, inverted by `relativeTo()`). Positions
+  are exact. A `Transform` cannot express shear, so the rotation and scale of a rotated child under a
+  non-uniformly scaled parent only approximate the product of their matrices.
+
+`HierarchyIndex` holds the child lists, the depth-first pre-order and the depth levels. It is rebuilt only
+when the hierarchy changed (`componentVersion<Hierarchy>()`) or a parent without a `Hierarchy` died, so
+`update()` is cheap every frame and entities without a `Hierarchy` cost nothing. Use it to walk the tree:
+
+```cpp
+hierarchy.update(world);
+for (const illusion::Entity root : hierarchy.roots())
+{
+    hierarchy.depthFirst(root, [&](illusion::Entity entity, illusion::u32 depth) {
+        drawOutlinerRow(entity, depth);
+    });
+}
+```
+
+Children are ordered by `Hierarchy::order`, then by `EntityGuid`; roots without a `Hierarchy` come last.
+Code that writes `Hierarchy` values directly instead of through these functions must call
+`world.markChanged<illusion::Hierarchy>()` afterwards.
+
+## Disabled and Inactive
+
+`setEnabled(world, entity, false)` adds the `Disabled` tag, which is saved in scenes. At the next
+`updateTransformHierarchy()` the Entity and all its descendants get the runtime tag `Inactive`, and lose
+it again when they are enabled or moved out of the disabled subtree. Engine Systems skip Inactive
+entities:
+
+- the renderer does not draw Inactive meshes, lights or sky lights;
+- physics removes their bodies, characters and joints, and creates them again from the current `Transform`
+  when they become active (velocities start from zero);
+- audio stops their sources; sources with `playOnStart` start again when they become active.
+
+Game Systems should skip them too:
+
+```cpp
+world.query<Enemy, const illusion::Transform>().without<illusion::Inactive>().each(
+    [](Enemy& enemy, const illusion::Transform& transform) { enemy.think(transform); });
+```
+
+`isEnabledInHierarchy()` answers immediately, before the next update, by walking the parent chain.
+
 ## How it works
 
 Entities with exactly the same set of Component types share an **Archetype**. An Archetype stores its

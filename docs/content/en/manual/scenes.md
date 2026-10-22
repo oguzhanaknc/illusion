@@ -88,8 +88,15 @@ for (const std::string& warning : loaded.warnings)
 - `saveScene(world)` saves every live Entity. `SceneSaveOptions::subset` saves a list instead (for example
   a selection or a prefab); Entity fields that point outside the list are saved as `null`.
 - Every saved Entity needs an `EntityGuid` (see [Entity ids](#entity-ids)); saving fails if one has none
-  or two share one. Entities are saved in order of id, so the same scene always gives the same file.
-  `SceneOrder::AsGiven` keeps the order of the subset, or of `World::entities()` without one.
+  or two share one. Entities are saved in the depth-first pre-order of the
+  [transform hierarchy](ecs.md#transform-hierarchy): every parent before its children, siblings by
+  `Hierarchy::order`, roots (also entities whose parent is not saved) by order with roots without a
+  `Hierarchy` last, and ties by id, so the same scene always gives the same file. `SceneOrder::ById`
+  sorts by id only, and `SceneOrder::AsGiven` keeps the order of the subset, or of `World::entities()`
+  without one.
+- The `Transform` of an Entity with a `LocalTransform` whose parent is saved too is derived, so it is not
+  saved. After loading, `updateTransformHierarchy()` adds and computes it; `Disabled` is saved, `Inactive`
+  is runtime state.
 - Only reflected Components are saved; `SceneSaveResult::skippedComponents` counts the others and the
   runtime state that is reflected as transient (`PhysicsBody`, `AudioPlayback`, ...), which is never
   saved. `MeshRenderer` and `SkyLight` refer to GPU resources and are not saved yet (asset references in
@@ -236,7 +243,8 @@ Scene files are UTF-8 JSON with two-space indentation, so they diff and merge we
   version of every Component and settings type in the file.
 - `rotation` is written as `[x, y, z, w]`, the order used by glTF.
 - Enumeration values are written by name; values without a name are written as numbers.
-- An Entity field is the `id` of an entity in the file, or `null`.
+- An Entity field is the `id` of an entity in the file, or `null`. A child's `illusion.Hierarchy` names
+  its parent this way; children follow their parents in the file.
 - Values have the JSON forms of [reflection](reflection.md#json). Scenes are written and read through
   `writeValue()` and `readValue()`, so a Component's JSON is the same in a scene file and in the editor's
   commands.

@@ -5,6 +5,7 @@
 #include <illusion/core/Assert.hpp>
 #include <illusion/core/Log.hpp>
 #include <illusion/core/Profiler.hpp>
+#include <illusion/ecs/Hierarchy.hpp>
 #include <illusion/ecs/Transform.hpp>
 #include <illusion/ecs/World.hpp>
 #include <illusion/platform/FileSystem.hpp>
@@ -646,13 +647,14 @@ struct AudioWorld::Impl
     {
         bool found = false;
         Transform transform;
-        world.query<const Transform>().with<AudioListener>().each([&](const Transform& candidate) {
-            if (!found)
-            {
-                found = true;
-                transform = candidate;
-            }
-        });
+        world.query<const Transform>().with<AudioListener>().without<Inactive>().each(
+            [&](const Transform& candidate) {
+                if (!found)
+                {
+                    found = true;
+                    transform = candidate;
+                }
+            });
         if (!found)
         {
             listener = detail::ListenerState{};
@@ -674,13 +676,16 @@ struct AudioWorld::Impl
         {
             const Entity owner = records[voice].owner;
             if (records[voice].serial != 0 && !owner.isNull() &&
-                (!world.isAlive(owner) || !world.has<AudioSource>(owner)))
+                (!world.isAlive(owner) || !world.has<AudioSource>(owner) || world.has<Inactive>(owner)))
             {
                 releaseVoice(voice);
             }
         }
         scratch.clear();
+        // Inactive sources stop; they start again (playOnStart) when they become active.
         world.query<const AudioPlayback>().without<AudioSource>().each(
+            [&](Entity entity, const AudioPlayback&) { scratch.push_back(entity); });
+        world.query<const AudioPlayback>().with<AudioSource, Inactive>().each(
             [&](Entity entity, const AudioPlayback&) { scratch.push_back(entity); });
         for (const Entity entity : scratch)
         {
@@ -691,7 +696,7 @@ struct AudioWorld::Impl
     void addNewSources()
     {
         scratch.clear();
-        world.query<const AudioSource>().without<AudioPlayback>().each(
+        world.query<const AudioSource>().without<AudioPlayback, Inactive>().each(
             [&](Entity entity, const AudioSource&) { scratch.push_back(entity); });
         for (const Entity entity : scratch)
         {

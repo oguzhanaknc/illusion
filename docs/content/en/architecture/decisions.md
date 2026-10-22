@@ -40,6 +40,7 @@ records rather than user documentation.
 | [0031](https://github.com/oguzhanaknc/illusion/blob/main/docs/adr/0031-editor-ui-stack.md) | The editor UI stack: Dear ImGui docking with our backends, a gamma-space UI target, theme tokens, fonts and icons |
 | [0032](https://github.com/oguzhanaknc/illusion/blob/main/docs/adr/0032-reflection-v2.md) | Reflection v2: metadata, struct reflection, a JSON value API and migrations |
 | [0033](https://github.com/oguzhanaknc/illusion/blob/main/docs/adr/0033-entity-ids-names-scene-format-v2.md) | Persistent entity ids, names and scene format v2 |
+| [0034](https://github.com/oguzhanaknc/illusion/blob/main/docs/adr/0034-transform-hierarchy.md) | Transform hierarchy with world-space truth, Disabled and Inactive |
 
 To propose a new decision, copy `docs/adr/0000-template.md` and follow the
 [contributing guide](../contributing.md#architecture-decision-records).

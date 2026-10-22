@@ -37,7 +37,7 @@ doxygen docs/Doxyfile
 | `illusion/core/Version.hpp` | `SemanticVersion`, `engineVersion` |
 | `illusion/core/Module.hpp` | `ModuleApi`, `ModuleContext`, `ModuleDependency`, `makeModuleApi`, `ILL_MODULE`: oyun modüllerinin modül tarafı |
 | `illusion/modules/ModuleHost.hpp` | `ModuleHost`: modülleri yükler, denetler, çalıştırır ve hot-reload eder; `ModuleInfo` |
-| `illusion/core/Math.hpp` | glm tabanlı vektör, matris ve quaternion tipleri, `Aabb`, `Sphere`, `Frustum`, `perspectiveReversedZ` |
+| `illusion/core/Math.hpp` | glm tabanlı vektör, matris ve quaternion tipleri, `Aabb`, `Sphere`, `Obb`, `Plane`, `Frustum`, `Ray` ve kesişimler, `screenToRay`, `perspectiveReversedZ`, `orthographicReversedZ`, Euler dönüşümleri |
 | `illusion/ecs/World.hpp` | `World`, `Query`, `ChunkView`, `RawChunk` (`forEachMatching`) |
 | `illusion/ecs/CommandBuffer.hpp` | Ertelenmiş yapısal değişiklikler |
 | `illusion/ecs/Component.hpp` | Component kaydı ve `ComponentRegistry` |
@@ -46,7 +46,8 @@ doxygen docs/Doxyfile
 | `illusion/ecs/SceneSerializer.hpp` | `saveScene`, `loadScene` (JSON sahne dosyaları), `UnknownComponents`, sahne ayarları |
 | `illusion/ecs/EntityGuid.hpp` | `EntityGuid` Component'i, `GuidGenerator`, `assignMissingGuids`, `GuidEntityResolver` |
 | `illusion/ecs/Name.hpp` | `Name` Component'i, `isValidEntityName` |
-| `illusion/ecs/Transform.hpp` | `Transform` Component'i (konum, dönüş, ölçek) |
+| `illusion/ecs/Hierarchy.hpp` | `Hierarchy`, `LocalTransform`, `Disabled`, `Inactive`, `WorldSpaceAuthority`; `setParent`, `reorder`, `destroyRecursive`, `setEnabled`, `HierarchyIndex`, `updateTransformHierarchy` |
+| `illusion/ecs/Transform.hpp` | `Transform` Component'i (konum, dönüş, ölçek), `combine`, `relativeTo` |
 | `illusion/ecs/Archetype.hpp` | Archetype depolaması (motor içi) |
 | `illusion/platform/Platform.hpp` | `Platform`: pencere sisteminin yaşam döngüsü, event pompalama, `wake()`, `monitors()`, `keyDisplayName()` |
 | `illusion/platform/Window.hpp` | `Window`, `WindowDesc`, `CursorMode`, `CursorShape`, `WindowIcon`: pencere durumu, pano, bırakılan dosyalar |

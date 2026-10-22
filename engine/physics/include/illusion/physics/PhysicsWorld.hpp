@@ -95,8 +95,12 @@ public:
     /// - Entities with Transform, RigidBody and Collider get a body (and a PhysicsBody component);
     ///   Entities with Transform and CharacterController get a character (and a CharacterBody); Entities
     ///   with a Joint get a joint once its bodies exist (and a PhysicsJoint).
-    /// - Bodies, characters and joints of destroyed Entities, or of Entities that lost their components,
-    ///   are removed; joints are also removed with their bodies.
+    /// - Bodies, characters and joints of destroyed Entities, of Entities that lost their components and of
+    ///   Inactive Entities (Hierarchy.hpp) are removed; joints are also removed with their bodies. Inactive
+    ///   Entities get them again when they become active; a joint waits while its connected Entity is
+    ///   Inactive.
+    /// - Dynamic bodies and characters get the WorldSpaceAuthority tag (removed with the body), so that
+    ///   updateTransformHierarchy() lets their children follow them.
     /// - Kinematic and static bodies follow their Transforms; a dynamic body or a character whose
     ///   Transform was changed by game code is teleported there.
     void update(f64 deltaSeconds);

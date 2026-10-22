@@ -34,8 +34,12 @@ const std::vector<illusion::Entity> entities = illusion::spawnModel(world, *mode
   modları ve `KHR_materials_emissive_strength` ile metallic-roughness modelini kullanır.
 - Görüntüler (PNG, JPEG) çözülür ve tam mip zincirleri oluşturulur. Renk Texture'ları (base colour,
   emissive) sRGB'dir; diğerleri doğrusaldır (linear).
-- Node'lar varsayılan sahnenin hiyerarşisini korur; `ModelData::worldMatrices()` bunu çözer ve
-  `spawnModel()` her mesh node'u ve submesh için isteğe bağlı bir kök matrisle bir Entity oluşturur.
+- Node'lar varsayılan sahnenin hiyerarşisini korur; `ModelData::worldMatrices()` bunu çözer.
+  `spawnModel()`, isteğe bağlı bir kök matrisle Entity'lerden aynı [hiyerarşiyi](ecs.md#transform-hiyerarsisi)
+  oluşturur: her node için `Name`, `Hierarchy`, `LocalTransform` ve `Transform` taşıyan bir Entity. Mesh'i
+  tek submesh'li bir node `MeshRenderer`'ını alır; birden çok submesh'li bir Mesh her submesh için
+  `<node> (<submesh>)` adlı bir çocuk alır. Oluşturulan tüm Entity'leri, önce ebeveynler olmak üzere
+  döndürür.
 - Motorun desteklemediği zorunlu extension'lar (Draco, meshopt, KTX2 Texture'ları) bozuk görüntü
   çizmek yerine açık bir hatayla yüklemeyi başarısız kılar. `KHR_mesh_quantization` desteklenir.
 

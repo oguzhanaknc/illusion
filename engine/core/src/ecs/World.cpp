@@ -80,6 +80,10 @@ void World::destroy(Entity entity)
         return;
     }
     EntitySlot& slot = m_slots[entity.index];
+    for (const ComponentId id : slot.archetype->signature())
+    {
+        ++m_componentVersions[id];
+    }
     const Entity moved = slot.archetype->removeRow(slot.row, true);
     if (!moved.isNull())
     {
@@ -99,6 +103,16 @@ void World::clear()
     if (m_aliveCount != 0)
     {
         ++m_structuralVersion;
+    }
+    for (const std::unique_ptr<Archetype>& archetype : m_archetypes)
+    {
+        if (archetype->size() != 0)
+        {
+            for (const ComponentId id : archetype->signature())
+            {
+                ++m_componentVersions[id];
+            }
+        }
     }
     std::scoped_lock lock(m_queryMutex);
     m_queryCache.clear();
@@ -236,6 +250,7 @@ void* World::addComponentRaw(Entity entity, ComponentId id)
     Archetype* to = archetypeWith(from, id);
     moveEntity(entity, to);
     ++m_structuralVersion;
+    ++m_componentVersions[id];
     const u16 column = to->columnIndex(id);
     return column == Archetype::kNoColumn ? nullptr : to->componentAt(m_slots[entity.index].row, column);
 }
@@ -255,6 +270,7 @@ bool World::removeComponentRaw(Entity entity, ComponentId id)
     }
     moveEntity(entity, archetypeWithout(from, id));
     ++m_structuralVersion;
+    ++m_componentVersions[id];
     return true;
 }
 

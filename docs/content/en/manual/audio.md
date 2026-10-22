@@ -277,3 +277,6 @@ offline.render(frames);
   virtual file system must outlive it; destroying it removes the `AudioPlayback` Components.
 - Starting a streamed clip opens a decoder (an allocation); everything else that runs every frame is
   allocation-free once clips are loaded, including filters and the reverb.
+- Sources of `Inactive` entities (see [Disabled and Inactive](ecs.md#disabled-and-inactive)) stop, and an
+  Inactive listener is ignored. When the Entity becomes active again, a source with `playOnStart` starts
+  from the beginning.

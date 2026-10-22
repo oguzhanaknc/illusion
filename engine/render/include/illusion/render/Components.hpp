@@ -74,8 +74,10 @@ struct MotionHistory
 /// EnvironmentDesc as "illusion.<Name>" in registry.structs().
 void reflectRenderComponents(ComponentRegistry& registry = ComponentRegistry::instance());
 
-/// Creates one Entity per mesh-bearing node and submesh of @p model (Transform + MeshRenderer), placed
-/// relative to @p root. Returns the created entities.
+/// Creates the node hierarchy of @p model: one Entity per node with its Name, Hierarchy, LocalTransform and
+/// Transform, placed relative to @p root (the model's roots become the World's last roots). A node with a
+/// mesh of one submesh gets its MeshRenderer; a mesh of several submeshes gets one child Entity per submesh,
+/// named "<node> (<submesh>)". Returns the created entities, parents before children.
 std::vector<Entity> spawnModel(World& world, const ModelData& model, const ModelHandles& handles,
                                const Mat4& root = Mat4(1.0f));
 

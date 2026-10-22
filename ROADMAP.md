@@ -111,8 +111,15 @@ Plan: `docs/plans/m7-editor.md` (sub-milestones, command API, localization, them
   (secure key or seeded), `assignMissingGuids()`, `GuidEntityResolver`, field validators,
   `World::forEachMatching()`; version 2 scene files with ids and id references, deterministic order,
   settings, preserved unknown Components and settings, `IdPolicy::Keep`/`Regenerate`; version 1 files still
-  load (ADR 0033, which supersedes ADR 0022 in part). M7g replaces the id order with hierarchy pre-order
-- M7g: Transform hierarchy, `Disabled`/`Inactive`, spatial math (ADR 0034)
+  load (ADR 0033, which supersedes ADR 0022 in part)
+- M7g: ✅ Transform hierarchy, `Disabled`/`Inactive`, spatial math: `Hierarchy` and `LocalTransform`
+  Components with world-space `Transform` as the truth, `setParent` (keep world or local), `reorder`,
+  `detach`, `destroyRecursive`, `HierarchyIndex` (CSR child lists, pre-order, levels; rebuilt only on
+  hierarchy changes through the new `World::componentVersion()`), parallel `updateTransformHierarchy()`,
+  `WorldSpaceAuthority` for dynamic bodies and characters, `Disabled`/`Inactive` honoured by the renderer,
+  physics and audio, scenes saved in hierarchy pre-order without derived child Transforms, `spawnModel()`
+  keeping glTF nodes and names, and `Math.hpp` rays, intersections, `screenToRay`,
+  `orthographicReversedZ` and Euler conversions (ADR 0034)
 - M7h: Asset references in scenes, so that `MeshRenderer` and `SkyLight` are saved; materials; built-in
   assets (ADR 0035)
 - M7i: Headless editor core: projects, typed commands, transactions, undo, journal (ADR 0036)

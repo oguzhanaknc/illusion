@@ -2,6 +2,7 @@
 #include <illusion/core/Profiler.hpp>
 #include <illusion/ecs/ComponentJson.hpp>
 #include <illusion/ecs/EntityGuid.hpp>
+#include <illusion/ecs/Hierarchy.hpp>
 #include <illusion/ecs/Reflection.hpp>
 #include <illusion/ecs/SceneSerializer.hpp>
 #include <illusion/ecs/StructRegistry.hpp>
@@ -239,6 +240,18 @@ private:
         Entity entity;
     };
 
+    static constexpr u32 kNoItem = ~0u;
+
+    // One saved entity while orderByHierarchy() sorts.
+    struct OrderItem
+    {
+        u32 order = 0;
+        u32 parent = kNoItem;
+        u32 firstChild = 0;
+        u32 childCount = 0;
+        bool visited = false;
+    };
+
     // One value to write under a stable name: a reflected object or preserved JSON.
     struct Entry
     {
@@ -282,7 +295,126 @@ private:
             std::sort(m_order.begin(), m_order.end(),
                       [](const Saved& a, const Saved& b) { return a.guid < b.guid; });
         }
+        else if (m_options.order == SceneOrder::Hierarchy)
+        {
+            orderByHierarchy();
+        }
         return true;
+    }
+
+    // The saved parent of @p entity, or the null entity if it has none (or its parent is not saved).
+    [[nodiscard]] Entity savedParent(Entity entity) const
+    {
+        const Hierarchy* hierarchy = m_world.tryGet<Hierarchy>(entity);
+        if (hierarchy == nullptr || hierarchy->parent.isNull() || !m_world.isAlive(hierarchy->parent) ||
+            !m_ids.contains(hierarchy->parent))
+        {
+            return Entity{};
+        }
+        return hierarchy->parent;
+    }
+
+    // Sorts m_order into depth-first pre-order of the saved entities' hierarchy (see SceneOrder::Hierarchy).
+    void orderByHierarchy()
+    {
+        const auto count = static_cast<u32>(m_order.size());
+        std::unordered_map<Entity, u32> positions;
+        positions.reserve(count);
+        for (u32 i = 0; i < count; ++i)
+        {
+            positions.emplace(m_order[i].entity, i);
+        }
+        std::vector<OrderItem> items(count);
+        for (u32 i = 0; i < count; ++i)
+        {
+            const Hierarchy* hierarchy = m_world.tryGet<Hierarchy>(m_order[i].entity);
+            items[i].order = hierarchy != nullptr ? hierarchy->order : std::numeric_limits<u32>::max();
+            const Entity parent = savedParent(m_order[i].entity);
+            if (!parent.isNull())
+            {
+                items[i].parent = positions.at(parent);
+                ++items[items[i].parent].childCount;
+            }
+        }
+        u32 offset = 0;
+        for (OrderItem& item : items)
+        {
+            item.firstChild = offset;
+            offset += item.childCount;
+            item.childCount = 0;
+        }
+        std::vector<u32> children(offset);
+        std::vector<u32> roots;
+        for (u32 i = 0; i < count; ++i)
+        {
+            if (items[i].parent == kNoItem)
+            {
+                roots.push_back(i);
+            }
+            else
+            {
+                OrderItem& parent = items[items[i].parent];
+                children[parent.firstChild + parent.childCount++] = i;
+            }
+        }
+        const auto less = [&](u32 a, u32 b) {
+            return items[a].order != items[b].order ? items[a].order < items[b].order
+                                                    : m_order[a].guid < m_order[b].guid;
+        };
+        for (const OrderItem& item : items)
+        {
+            std::sort(children.begin() + item.firstChild,
+                      children.begin() + item.firstChild + item.childCount, less);
+        }
+        std::sort(roots.begin(), roots.end(), less);
+
+        std::vector<Saved> sorted;
+        sorted.reserve(count);
+        std::vector<u32> stack;
+        const auto visit = [&](u32 root) {
+            items[root].visited = true;
+            stack.assign(1, root);
+            while (!stack.empty())
+            {
+                const u32 i = stack.back();
+                stack.pop_back();
+                sorted.push_back(m_order[i]);
+                for (u32 c = items[i].childCount; c-- > 0;)
+                {
+                    const u32 child = children[items[i].firstChild + c];
+                    if (!items[child].visited)
+                    {
+                        items[child].visited = true;
+                        stack.push_back(child);
+                    }
+                }
+            }
+        };
+        for (const u32 root : roots)
+        {
+            visit(root);
+        }
+        if (sorted.size() != count)
+        {
+            // Parents that form a cycle: start from the first unvisited entity of each.
+            roots.clear();
+            for (u32 i = 0; i < count; ++i)
+            {
+                if (!items[i].visited)
+                {
+                    roots.push_back(i);
+                }
+            }
+            std::sort(roots.begin(), roots.end(), less);
+            for (const u32 root : roots)
+            {
+                if (!items[root].visited)
+                {
+                    visit(root);
+                }
+            }
+        }
+        m_order = std::move(sorted);
     }
 
     // Records the version of a type for the "types" table.
@@ -372,6 +504,11 @@ private:
             {
                 continue; // written as "id"
             }
+            if (component == m_transformId && m_world.has<LocalTransform>(saved.entity) &&
+                !savedParent(saved.entity).isNull())
+            {
+                continue; // derived from the LocalTransform and the parent's Transform
+            }
             if (component == m_unknownId)
             {
                 const auto& unknown =
@@ -399,6 +536,7 @@ private:
     SceneSaveResult& m_result;
     const ComponentId m_guidId = componentId<EntityGuid>();
     const ComponentId m_unknownId = componentId<UnknownComponents>();
+    const ComponentId m_transformId = componentId<Transform>();
     std::vector<Saved> m_order;
     std::unordered_map<Entity, u64> m_ids;
     SceneGuidWriter m_resolver;

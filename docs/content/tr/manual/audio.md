@@ -279,3 +279,6 @@ offline.render(frames);
   sanal dosya sistemi ondan uzun yaşamalıdır; onu yok etmek `AudioPlayback` Component'lerini kaldırır.
 - Stream edilen bir clip'i başlatmak bir decoder açar (bir bellek ayırma); her karede çalışan diğer her
   şey, filtreler ve reverb dahil, clip'ler yüklendikten sonra bellek ayırmaz.
+- `Inactive` Entity'lerin (bkz. [Disabled ve Inactive](ecs.md#disabled-ve-inactive)) kaynakları durur ve
+  Inactive bir dinleyici yok sayılır. Entity yeniden etkin olduğunda `playOnStart` olan bir kaynak baştan
+  başlar.

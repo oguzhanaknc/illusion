@@ -251,6 +251,13 @@ physics.setLayersCollide(1, 0, false); // layer 1 passes through layer 0
 - `PhysicsWorld` thread-safe değildir: onu tek bir thread'den, World Query'lerinin dışında çağırın. World
   ondan uzun yaşamalıdır; onu yok etmek çalışma zamanı Component'lerini kaldırır.
 - Aynı girdiler için sonuçlar deterministiktir ve Job System Worker sayısından bağımsızdır.
+- `Inactive` Entity'lerin (bkz. [Disabled ve Inactive](ecs.md#disabled-ve-inactive)) gövdeleri,
+  karakterleri ve eklemleri simülasyondan kaldırılır ve Entity etkin olduğunda güncel `Transform`'dan
+  yeniden oluşturulur; hızlar sıfırdan başlar. Bağlı Entity'si Inactive olan bir eklem onu bekler.
+- Dinamik gövdeler ve karakterler çalışma zamanı etiketi `WorldSpaceAuthority`'yi alır: fizik
+  `Transform`'larını dünya uzayında yazar ve `updateTransformHierarchy()` `LocalTransform`'larını ondan
+  yazar; böylece [çocukları](ecs.md#transform-hiyerarsisi) onları izler. Hiyerarşi güncellemesini
+  `PhysicsWorld::update()`'ten sonra çalıştırın.
 
 ## Örnek
 

@@ -43,4 +43,9 @@ struct Name
     return entityNameError(name).empty();
 }
 
+/// Turns @p text (UTF-8, for example a node name from an imported file) into a valid entity name: replaces
+/// '/' and control characters with '_' and cuts it to at most kMaxEntityNameBytes bytes without splitting a
+/// character.
+[[nodiscard]] std::string makeValidEntityName(std::string_view text);
+
 } // namespace illusion

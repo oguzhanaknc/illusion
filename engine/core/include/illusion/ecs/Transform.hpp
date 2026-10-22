@@ -52,4 +52,28 @@ struct Transform
     [[nodiscard]] Vec3 forward() const noexcept { return rotation * Vec3(0.0f, 0.0f, -1.0f); }
 };
 
+/// Places @p local, given relative to @p parent, in the parent's space: the world placement of a child.
+/// The position is exact (it equals `parent.matrix() * local.position`); rotations multiply and scales
+/// multiply per axis. A Transform cannot represent shear, so when a parent with non-uniform scale has a
+/// rotated child, the child's rotation and scale only approximate the matrix product
+/// `parent.matrix() * local.matrix()` (positions of grandchildren stay consistent with the result).
+[[nodiscard]] inline Transform combine(const Transform& parent, const Transform& local) noexcept
+{
+    return Transform{parent.position + parent.rotation * (parent.scale * local.position),
+                     parent.rotation * local.rotation, parent.scale * local.scale};
+}
+
+/// Inverse of combine(): the placement relative to @p parent that combine() turns into @p world. Axes on
+/// which the parent's scale is 0 get position and scale 0.
+[[nodiscard]] inline Transform relativeTo(const Transform& world, const Transform& parent) noexcept
+{
+    const auto divide = [](Vec3 value, Vec3 by) noexcept {
+        return Vec3(by.x != 0.0f ? value.x / by.x : 0.0f, by.y != 0.0f ? value.y / by.y : 0.0f,
+                    by.z != 0.0f ? value.z / by.z : 0.0f);
+    };
+    const Quat inverse = glm::inverse(parent.rotation);
+    return Transform{divide(inverse * (world.position - parent.position), parent.scale),
+                     glm::normalize(inverse * world.rotation), divide(world.scale, parent.scale)};
+}
+
 } // namespace illusion

@@ -538,7 +538,8 @@ TEST_CASE("characters and joints are saved in scenes and their runtime state is 
     assignMissingGuids(f.world);
     const SceneSaveResult saved = saveScene(f.world, {.order = SceneOrder::AsGiven});
     REQUIRE(saved.ok());
-    CHECK(saved.skippedComponents == 4); // two PhysicsBody, a PhysicsJoint and a CharacterBody
+    // Two PhysicsBody, a PhysicsJoint, a CharacterBody and three WorldSpaceAuthority tags.
+    CHECK(saved.skippedComponents == 7);
     CHECK(saved.json.find("\"type\": \"Hinge\"") != std::string::npos);
 
     World loaded;

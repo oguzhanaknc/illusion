@@ -1,3 +1,5 @@
+#include <illusion/ecs/Hierarchy.hpp>
+#include <illusion/ecs/Name.hpp>
 #include <illusion/ecs/Reflection.hpp>
 #include <illusion/ecs/StructRegistry.hpp>
 #include <illusion/ecs/Transform.hpp>
@@ -5,6 +7,9 @@
 #include <illusion/render/Components.hpp>
 #include <illusion/render/PostProcess.hpp>
 #include <illusion/render/Shadows.hpp>
+
+#include <format>
+#include <string>
 
 namespace illusion
 {
@@ -114,32 +119,63 @@ void reflectRenderComponents(ComponentRegistry& registry)
 std::vector<Entity> spawnModel(World& world, const ModelData& model, const ModelHandles& handles,
                                const Mat4& root)
 {
-    std::vector<Entity> entities;
+    // The model's roots go after the World's existing roots.
+    u32 rootOrder = 0;
+    world.query<const Hierarchy>().each([&](const Hierarchy& hierarchy) {
+        if (hierarchy.parent.isNull() || !world.isAlive(hierarchy.parent))
+        {
+            ++rootOrder;
+        }
+    });
+
     const std::vector<Mat4> matrices = model.worldMatrices();
+    std::vector<Entity> nodeEntities(model.nodes.size());
+    std::vector<u32> childCounts(model.nodes.size(), 0);
+    std::vector<Entity> entities;
+    entities.reserve(model.nodes.size());
     for (usize n = 0; n < model.nodes.size(); ++n)
     {
-        const i32 meshIndex = model.nodes[n].mesh;
-        if (meshIndex < 0 || static_cast<usize>(meshIndex) >= handles.meshes.size())
-        {
-            continue;
-        }
-        const MeshHandle mesh = handles.meshes[static_cast<usize>(meshIndex)];
-        if (mesh.index == 0)
-        {
-            continue;
-        }
+        const ModelNode& node = model.nodes[n];
+        const bool hasParent = node.parent >= 0 && static_cast<usize>(node.parent) < n; // parents come first
+        const auto parent = static_cast<usize>(hasParent ? node.parent : 0);
+        const Hierarchy hierarchy{hasParent ? nodeEntities[parent] : Entity{},
+                                  hasParent ? childCounts[parent]++ : rootOrder++};
         const Transform transform = Transform::fromMatrix(root * matrices[n]);
-        const MeshData& data = model.meshes[static_cast<usize>(meshIndex)];
-        for (u32 s = 0; s < data.submeshes.size(); ++s)
+        const LocalTransform local =
+            LocalTransform::from(hasParent ? Transform::fromMatrix(node.localMatrix) : transform);
+        const std::string name = makeValidEntityName(node.name);
+        const Entity entity = world.create(Name{name}, hierarchy, local, transform);
+        nodeEntities[n] = entity;
+        entities.push_back(entity);
+
+        const i32 meshIndex = node.mesh;
+        if (meshIndex < 0 || static_cast<usize>(meshIndex) >= handles.meshes.size() ||
+            handles.meshes[static_cast<usize>(meshIndex)].index == 0)
         {
-            const i32 material = data.submeshes[s].material;
+            continue;
+        }
+        const MeshData& data = model.meshes[static_cast<usize>(meshIndex)];
+        const auto rendererOf = [&](u32 submesh) {
+            const i32 material = data.submeshes[submesh].material;
             MeshRenderer renderer;
-            renderer.mesh = mesh;
-            renderer.submesh = s;
+            renderer.mesh = handles.meshes[static_cast<usize>(meshIndex)];
+            renderer.submesh = submesh;
             renderer.material = material >= 0 && static_cast<usize>(material) < handles.materials.size()
                                     ? handles.materials[static_cast<usize>(material)]
                                     : MaterialHandle{};
-            entities.push_back(world.create(transform, renderer));
+            return renderer;
+        };
+        if (data.submeshes.size() == 1)
+        {
+            world.emplace<MeshRenderer>(entity, rendererOf(0));
+            continue;
+        }
+        // Several submeshes: one child per submesh, at the node's origin.
+        for (u32 s = 0; s < data.submeshes.size(); ++s)
+        {
+            entities.push_back(world.create(Name{makeValidEntityName(std::format("{} ({})", name, s))},
+                                            Hierarchy{entity, s}, LocalTransform{}, transform,
+                                            rendererOf(s)));
         }
     }
     return entities;
