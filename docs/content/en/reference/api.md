@@ -37,12 +37,14 @@ Open `build/api/index.html` in a browser.
 | `illusion/core/Module.hpp` | `ModuleApi`, `ModuleContext`, `ModuleDependency`, `makeModuleApi`, `ILL_MODULE`: the module side of game modules |
 | `illusion/modules/ModuleHost.hpp` | `ModuleHost`: loads, checks, runs and hot-reloads modules; `ModuleInfo` |
 | `illusion/core/Math.hpp` | glm-based vector, matrix and quaternion types, `Aabb`, `Sphere`, `Frustum`, `perspectiveReversedZ` |
-| `illusion/ecs/World.hpp` | `World`, `Query`, `ChunkView` |
+| `illusion/ecs/World.hpp` | `World`, `Query`, `ChunkView`, `RawChunk` (`forEachMatching`) |
 | `illusion/ecs/CommandBuffer.hpp` | Deferred structural changes |
 | `illusion/ecs/Component.hpp` | Component registration and `ComponentRegistry` |
 | `illusion/ecs/Entity.hpp` | `Entity` handle |
 | `illusion/ecs/Reflection.hpp` | `reflect`, `ComponentReflection`, `FieldInfo`, `EnumReflection` |
-| `illusion/ecs/SceneSerializer.hpp` | `saveScene`, `loadScene` (JSON scene files) |
+| `illusion/ecs/SceneSerializer.hpp` | `saveScene`, `loadScene` (JSON scene files), `UnknownComponents`, scene settings |
+| `illusion/ecs/EntityGuid.hpp` | `EntityGuid` Component, `GuidGenerator`, `assignMissingGuids`, `GuidEntityResolver` |
+| `illusion/ecs/Name.hpp` | `Name` Component, `isValidEntityName` |
 | `illusion/ecs/Transform.hpp` | `Transform` Component (position, rotation, scale) |
 | `illusion/ecs/Archetype.hpp` | Archetype storage (engine internal) |
 | `illusion/platform/Platform.hpp` | `Platform`: windowing system lifetime, event pumping, `wake()`, `monitors()`, `keyDisplayName()` |

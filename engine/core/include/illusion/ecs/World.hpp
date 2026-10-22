@@ -40,6 +40,54 @@ class CommandBuffer;
 template <class... Ts>
 class Query;
 
+/// One chunk of entities passed to World::forEachMatching(): the type-erased counterpart of ChunkView. Valid
+/// only during the callback.
+class RawChunk
+{
+public:
+    /// Creates a view of chunk @p chunk of @p archetype; used by World.
+    RawChunk(Archetype& archetype, u32 chunk) noexcept
+        : m_archetype(&archetype)
+        , m_chunk(chunk)
+        , m_size(archetype.chunkSize(chunk))
+    {
+    }
+
+    /// Number of entities in the chunk.
+    [[nodiscard]] u32 size() const noexcept { return m_size; }
+
+    /// Entity handles of the chunk.
+    [[nodiscard]] std::span<const Entity> entities() const noexcept
+    {
+        return {m_archetype->entities(m_chunk), m_size};
+    }
+
+    /// Component types of the chunk's entities (sorted ids, tags included).
+    [[nodiscard]] std::span<const ComponentId> signature() const noexcept { return m_archetype->signature(); }
+
+    /// Returns true if the chunk's entities have component @p id (tags included).
+    [[nodiscard]] bool has(ComponentId id) const noexcept { return m_archetype->has(id); }
+
+    /// Start of the array of component @p id (size() elements of ComponentInfo::size bytes), or nullptr if
+    /// the entities do not have it or it is a tag.
+    [[nodiscard]] void* column(ComponentId id) noexcept
+    {
+        const u16 column = m_archetype->columnIndex(id);
+        return column == Archetype::kNoColumn ? nullptr : m_archetype->columnData(m_chunk, column);
+    }
+
+    /// @copydoc column
+    [[nodiscard]] const void* column(ComponentId id) const noexcept
+    {
+        return const_cast<RawChunk*>(this)->column(id);
+    }
+
+private:
+    Archetype* m_archetype;
+    u32 m_chunk;
+    u32 m_size;
+};
+
 /// Container of entities and components. Not thread-safe for structural changes; queries may run
 /// jobs in parallel (see Query::parallelEach()).
 class World : NonCopyable
@@ -213,6 +261,34 @@ public:
 
     /// The registry whose ids this world uses.
     [[nodiscard]] const ComponentRegistry& registry() const noexcept { return m_registry; }
+
+    /// Calls `fn(RawChunk&)` once per non-empty chunk of the entities that have every component in @p all
+    /// and none in @p none: a query by ComponentId. An empty @p all matches every entity. Structural changes
+    /// are not allowed during the iteration, as with Query.
+    template <class F>
+    void forEachMatching(const ComponentMask& all, const ComponentMask& none, F&& fn)
+    {
+        static_assert(std::is_invocable_v<F&, RawChunk&>,
+                      "forEachMatching() callable must accept (RawChunk&)");
+        IterationScope scope(*this);
+        for (Archetype* archetype : matchArchetypes(all, none))
+        {
+            for (u32 chunk = 0; chunk < archetype->chunkCount(); ++chunk)
+            {
+                RawChunk view(*archetype, chunk);
+                fn(view);
+            }
+        }
+    }
+
+    /// Calls `fn(const RawChunk&)`; see forEachMatching().
+    template <class F>
+    void forEachMatching(const ComponentMask& all, const ComponentMask& none, F&& fn) const
+    {
+        static_assert(std::is_invocable_v<F&, const RawChunk&>,
+                      "forEachMatching() callable must accept (const RawChunk&)");
+        const_cast<World*>(this)->forEachMatching(all, none, [&fn](const RawChunk& view) { fn(view); });
+    }
 
     /// @}
 

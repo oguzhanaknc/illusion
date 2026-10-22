@@ -107,7 +107,11 @@ Plan: `docs/plans/m7-editor.md` (sub-milestones, command API, localization, them
   dotted paths, JSON Pointer errors, unit-tagged numbers, sRGB colours, u64 as strings), migrations and
   `renamedFrom`, scenes rebuilt on it with byte-identical v1 output (ADR 0032). The `Asset` field type
   and `FieldMeta::assetKind` come with `AssetRef` in M7h
-- M7f: Entity ids, names and scene format v2 (ADR 0033)
+- M7f: ✅ Entity ids, names and scene format v2: `EntityGuid` and `Name` Components, `GuidGenerator`
+  (secure key or seeded), `assignMissingGuids()`, `GuidEntityResolver`, field validators,
+  `World::forEachMatching()`; version 2 scene files with ids and id references, deterministic order,
+  settings, preserved unknown Components and settings, `IdPolicy::Keep`/`Regenerate`; version 1 files still
+  load (ADR 0033, which supersedes ADR 0022 in part). M7g replaces the id order with hierarchy pre-order
 - M7g: Transform hierarchy, `Disabled`/`Inactive`, spatial math (ADR 0034)
 - M7h: Asset references in scenes, so that `MeshRenderer` and `SkyLight` are saved; materials; built-in
   assets (ADR 0035)

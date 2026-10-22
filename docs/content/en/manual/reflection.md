@@ -110,6 +110,7 @@ must follow the member order.
 | `hint` | Widget: `Color`, `HdrColor`, `Angle`, `Slider`, `LogSlider`, `Multiline`, `Layer`, `LayerMask` |
 | `readOnly`, `hidden`, `advanced` | Shown but not editable; not shown; shown when advanced fields are expanded |
 | `renamedFrom` | Name of the field in older data |
+| `validate` | Function that checks a value read from JSON; a rejected value fails the read with its message |
 
 | `TypeMeta` | Meaning |
 | --- | --- |

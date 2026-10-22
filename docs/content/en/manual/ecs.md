@@ -61,6 +61,10 @@ bool alive = world.isAlive(empty); // false: the handle is stale
 An Entity handle contains an index and a generation. When an Entity is destroyed its slot is reused
 with a new generation, so old handles are detected safely by `isAlive()`.
 
+Handles are valid only in the World and process that created them. Entities that are saved or referred
+to from outside, by scene files or the editor, also carry a persistent id, the `EntityGuid` Component, and
+optionally a `Name`; see [Entity ids](scenes.md#entity-ids).
+
 !!! warning "References are short-lived"
     References and pointers returned by `get()`, `tryGet()` and `emplace()` are invalidated by the next
     structural change (creating or destroying Entities, adding or removing Components).
@@ -120,6 +124,9 @@ world.query<game::Position, const game::Velocity>().parallelEach(
 
 The callable runs concurrently and must only touch the Components it receives plus data that is safe to
 share between threads.
+
+Serializers and tools that work with `ComponentId`s instead of C++ types iterate the same Chunks with
+`World::forEachMatching()`; see [Type-erased access](scenes.md#type-erased-access).
 
 ## Structural changes during iteration
 

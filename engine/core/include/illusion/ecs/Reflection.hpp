@@ -129,6 +129,10 @@ enum class FieldHint : u8
 /// Returns the name of @p hint, e.g. "HdrColor".
 [[nodiscard]] std::string_view fieldHintName(FieldHint hint) noexcept;
 
+/// Checks a value read from JSON (see FieldMeta::validate). Returns an empty string if @p value is valid,
+/// otherwise why it is not, in English and lower case, e.g. "must not contain '/'" (static storage).
+using ValidateFn = std::string_view (*)(const void* value) noexcept;
+
 /// Metadata of a reflected field, given to TypeReflectionBuilder::field(). Strings are copied. Designated
 /// initializers must follow the member order below.
 struct FieldMeta
@@ -151,6 +155,10 @@ struct FieldMeta
     bool advanced = false;            ///< Shown only when advanced fields are expanded.
     /// Name the field had in older data: reading JSON accepts it, and renames it before migrations run.
     std::string_view renamedFrom{};
+    /// Rule that reading JSON checks after a value was read: a value it rejects fails the read with its
+    /// message. Like min and max it applies through arrays and optionals, to every element. The function
+    /// stays in the registering module's code (see the file documentation).
+    ValidateFn validate = nullptr;
 };
 
 /// Metadata of a reflected type, given to TypeReflectionBuilder::meta(). Strings are copied. Designated

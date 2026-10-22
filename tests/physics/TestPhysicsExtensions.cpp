@@ -535,7 +535,8 @@ TEST_CASE("characters and joints are saved in scenes and their runtime state is 
     f.world.create(at(Vec3(5.0f, 0.0f, 0.0f)), controller);
     f.physics.update(0.0);
 
-    const SceneSaveResult saved = saveScene(f.world);
+    assignMissingGuids(f.world);
+    const SceneSaveResult saved = saveScene(f.world, {.order = SceneOrder::AsGiven});
     REQUIRE(saved.ok());
     CHECK(saved.skippedComponents == 4); // two PhysicsBody, a PhysicsJoint and a CharacterBody
     CHECK(saved.json.find("\"type\": \"Hinge\"") != std::string::npos);
