@@ -107,7 +107,8 @@ are within budget, format and docs checks pass, and Doxygen reports nothing.
   namespaces or local scopes). Empty structs are tags.
 - No structural changes while a query iterates; use `CommandBuffer`.
 - Components that belong in scene files are reflected with a stable, prefixed name
-  (`reflect<T>("module.Name")`); never persist C++ type names.
+  (`reflect<T>("module.Name")`) and metadata (units on angles, hints on colours, an icon); never persist C++
+  type names. Runtime-only state uses `reflectRuntime<T>()`.
 - Do not keep references to components across structural changes.
 - See `.claude/skills/ecs-components/SKILL.md`.
 

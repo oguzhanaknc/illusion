@@ -34,7 +34,8 @@ designed to ship commercial games on Steam and similar stores.
 - Audio with miniaudio: ECS sound sources, 3D attenuation, panning, doppler and sound cones, music
   streaming, clips loaded in the background, a mixer with buses, low/high-pass filters and a room reverb,
   mixed on its own thread without allocations; WAV, FLAC, MP3 and Ogg Vorbis.
-- Component reflection with stable names and JSON scene files that survive code changes.
+- Component and struct reflection with stable names, editor metadata, a JSON value API and migrations;
+  JSON scene files that survive code changes.
 - Game modules: hot-reloadable shared libraries in development (World data survives a reload, broken
   builds are rolled back), linked statically into shipped games; semver and dependencies.
 - Asset pipeline: content-hashed import cache, asynchronous streaming on an I/O thread and the Job

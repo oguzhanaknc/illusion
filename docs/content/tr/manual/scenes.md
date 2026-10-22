@@ -1,8 +1,8 @@
-# Reflection ve Sahneler
+# Sahneler
 
-Reflection, Component tiplerine açık ve kararlı bir ad ile adlandırılmış alanlardan oluşan bir liste
-verir. Sahne dosyaları, editör ve araçlar C++ tip adları yerine bunu kullanır; çünkü C++ tip adları
-derleyiciden derleyiciye farklıdır ve kod yeniden düzenlendiğinde değişir.
+Sahne dosyaları Entity'leri ve Component'lerini JSON olarak kaydeder. Yansıtılmış Component'leri (bkz.
+[Reflection](reflection.md)) C++ tip adları yerine kararlı tip ve alan adlarıyla saklarlar; çünkü C++ tip
+adları derleyiciden derleyiciye farklıdır ve kod yeniden düzenlendiğinde değişir.
 
 Header'lar: `<illusion/ecs/Reflection.hpp>`, `<illusion/ecs/SceneSerializer.hpp>`,
 `<illusion/core/Version.hpp>`
@@ -51,15 +51,16 @@ void registerGameComponents()
   Bir kararlı ad tek bir tipe aittir: başka bir tip için yeniden kullanmak ölümcül bir hatadır.
 - Alan adları harf, rakam ve `_` kullanır. Yansıtılan ad aynı kaldıkça bir C++ üyesini yeniden
   adlandırmak kaydedilmiş veriyi değiştirmez.
-- Desteklenen alan tipleri: `bool`, `i32`, `u32`, `i64`, `u64`, `f32`, `f64`, `Vec2`, `Vec3`, `Vec4`,
-  `Quat`, `std::string`, `Entity` ve `EnumReflection` özelleştirmesi olan enum'lar (özelleştirme, enum
-  yansıtılmadan önce bildirilmelidir). Diğer tipler derlenmez.
-- Yansıtılan Component'ler varsayılan olarak oluşturulabilir (default constructible) olmalıdır. Boş
-  struct'lar (tag'ler) da yansıtılabilir.
+- Alanlar sayı, vektör, metin, Entity, enum, flag, yansıtılmış struct, dizi, optional ve JSON değeri
+  olabilir; [Reflection](reflection.md#alan-tipleri) bunları JSON biçimleriyle listeler. Diğer tipler
+  derlenmez.
+- Yansıtılan Component'ler varsayılan olarak oluşturulabilir (default constructible) ve kopyalanabilir
+  olmalıdır. Boş struct'lar (tag'ler) da yansıtılabilir.
 - Bir tipi yeniden yansıtmak önceki yansıtmanın yerini alır. Tipleri, diğer thread'ler reflection
   verisini okumadan önce, başlangıçta yansıtın.
-- İsteğe bağlı sürüm (`reflect<T>("game.Spinner", 2)`) sahne dosyalarına yazılır; yüklerken farklı bir
-  sürüm bir uyarı üretir.
+- İsteğe bağlı sürüm (`reflect<T>("game.Spinner", 2)`) sahne dosyalarına yazılır. Eski veri yüklenirken
+  tipin [migration'ları](reflection.md#surumler-ve-migrationlar) çalışır; farklı bir sürüm ayrıca bir
+  uyarı üretir.
 
 ## Sahneleri kaydetme ve yükleme
 
@@ -86,15 +87,17 @@ for (const std::string& warning : loaded.warnings)
 - `saveScene(world)` canlı her Entity'yi kaydeder; `saveScene(world, entities)` bir listeyi kaydeder
   (örneğin bir seçimi veya bir prefab'ı). Listenin dışını gösteren Entity alanları `null` olarak
   kaydedilir.
-- Yalnızca yansıtılmış Component'ler kaydedilir; `SceneSaveResult::skippedComponents` diğerlerini
-  sayar. `MeshRenderer` ve `SkyLight` GPU kaynaklarına başvurur ve henüz kaydedilmez (sahnelerdeki
-  Asset başvuruları editörle birlikte gelecek).
+- Yalnızca yansıtılmış Component'ler kaydedilir; `SceneSaveResult::skippedComponents` diğerlerini ve
+  transient olarak yansıtılan, hiçbir zaman kaydedilmeyen çalışma zamanı durumunu (`PhysicsBody`,
+  `AudioPlayback`, ...) sayar. `MeshRenderer` ve `SkyLight` GPU kaynaklarına başvurur ve henüz
+  kaydedilmez (sahnelerdeki Asset başvuruları editörle birlikte gelecek).
 - Bir kayan noktalı alan sonsuz veya NaN ise kaydetme başarısız olur, çünkü JSON bunu saklayamaz.
 - `loadScene()` sahnenin Entity'lerini World'e ekler ve onları dosyadaki sırayla döndürür. Entity
   alanları yeni Entity'lere eşlenir. Dosya geçersizse hiçbir şey eklenmez ve `error` sorunun nerede
-  olduğunu söyler.
+  olduğunu söyler; örneğin `entity 0: field 'quat' of 'test.Everything' must be a number (at
+  /quat/3)`.
 - Yükleme kod değişikliklerine toleranslıdır: dosyada olmayan alanlar varsayılan değerlerini korur;
-  bilinmeyen Component tipleri ve alanlar bir uyarıyla atlanır.
+  bilinmeyen Component tipleri ve alanlar ile çalışma zamanı Component tipleri bir uyarıyla atlanır.
 
 ## Dosya biçimi
 
@@ -130,6 +133,9 @@ birleştirilir:
 - `rotation`, glTF'in kullandığı sırayla `[x, y, z, w]` olarak yazılır.
 - Enum değerleri adlarıyla yazılır; adı olmayan değerler sayı olarak yazılır.
 - Bir Entity alanı, `entities` dizisindeki bir Entity'nin indeksidir ya da `null`'dır.
+- Değerler [reflection](reflection.md#json) JSON biçimlerini kullanır; tek fark, sürüm 1 sahne
+  dosyalarının `u64` değerlerini sayı olarak yazmasıdır. Sahneler `writeValue()` ve `readValue()` ile
+  yazılıp okunur; böylece bir Component'in JSON'u sahne dosyasında ve editör komutlarında aynıdır.
 - Kayan noktalı sayılar en kısa kesin biçimleriyle yazılır; böylece bit bit aynı olarak geri yüklenir.
 
 ## Tipi silinmiş erişim
@@ -145,7 +151,7 @@ for (const illusion::Entity entity : entities)
 {
     for (const illusion::ComponentId id : world.componentsOf(entity))
     {
-        if (const illusion::ComponentReflection* reflection = registry.reflection(id))
+        if (const illusion::TypeReflection* reflection = registry.reflection(id))
         {
             for (const illusion::FieldInfo& field : reflection->fields)
             {
@@ -156,7 +162,9 @@ for (const illusion::Entity entity : entities)
 }
 ```
 
-Boyutu tipe bağlı olan enum alanları için `readEnumField()` ve `writeEnumField()` kullanın.
+Boyutu tipe bağlı olan enum alanları için `readEnumField()` ve `writeEnumField()`, herhangi bir alan için
+ise `readField()`, `writeField()` ve [Reflection](reflection.md) sayfasındaki JSON fonksiyonlarını
+kullanın.
 
 Program dışından gelen id'ler (bir dosya, bir araç, uzaktan bir komut) geçersiz olabilir ve
 `registry.info(id)` gibi fonksiyonlar bu durumda assert tetikler. Önce `registry.contains(id)` ile kontrol

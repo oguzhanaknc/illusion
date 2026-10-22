@@ -38,6 +38,7 @@ records rather than user documentation.
 | [0029](https://github.com/oguzhanaknc/illusion/blob/main/docs/adr/0029-localization.md) | Localization with stable keys, compiled English, data-file locales and a MessageFormat subset |
 | [0030](https://github.com/oguzhanaknc/illusion/blob/main/docs/adr/0030-editor-tree-and-export-boundary.md) | A separate editor tree, a command-first editor and an enforced export boundary |
 | [0031](https://github.com/oguzhanaknc/illusion/blob/main/docs/adr/0031-editor-ui-stack.md) | The editor UI stack: Dear ImGui docking with our backends, a gamma-space UI target, theme tokens, fonts and icons |
+| [0032](https://github.com/oguzhanaknc/illusion/blob/main/docs/adr/0032-reflection-v2.md) | Reflection v2: metadata, struct reflection, a JSON value API and migrations |
 
 To propose a new decision, copy `docs/adr/0000-template.md` and follow the
 [contributing guide](../contributing.md#architecture-decision-records).

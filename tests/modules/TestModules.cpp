@@ -5,6 +5,7 @@
 #include <illusion/core/Log.hpp>
 #include <illusion/core/Module.hpp>
 #include <illusion/core/Thread.hpp>
+#include <illusion/ecs/Reflection.hpp>
 #include <illusion/ecs/Transform.hpp>
 #include <illusion/ecs/World.hpp>
 #include <illusion/modules/ModuleHost.hpp>
@@ -187,6 +188,18 @@ TEST_CASE("a shared module loads with the host's services and runs every update"
     CHECK(f.host->count() == 0);
     CHECK(countWith(f.world, moduleType("test.ModuleCounter")) == 0); // its Components went with its code
     CHECK_FALSE(f.host->unload("test_module"));
+
+    // The reflection metadata the module registered outlives its code.
+    const TypeReflection* reflection =
+        ComponentRegistry::instance().reflection(moduleType("test.ModuleCounter"));
+    REQUIRE(reflection != nullptr);
+    CHECK(reflection->meta.displayName == "Module counter");
+    CHECK(reflection->meta.icon == "counter_1");
+    CHECK(reflection->meta.description == "Counts module updates.");
+    REQUIRE(reflection->fields.size() == 1);
+    CHECK(reflection->fields[0].name == "value");
+    CHECK(reflection->fields[0].meta.displayName == "Counter value");
+    CHECK(reflection->fields[0].meta.category == "State");
 }
 
 TEST_CASE("types the host uses belong to the host and their Components outlive the module")

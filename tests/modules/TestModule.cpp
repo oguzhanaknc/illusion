@@ -30,7 +30,10 @@ bool loadModule(ModuleContext& context)
     }
     ++control->loads;
     control->reloadingSeen = control->reloadingSeen || context.isReloading();
-    reflect<test::ModuleCounter>("test.ModuleCounter").field("value", &test::ModuleCounter::value);
+    // The metadata strings live in this module's memory; the registry must copy them.
+    reflect<test::ModuleCounter>("test.ModuleCounter")
+        .meta({.displayName = "Module counter", .icon = "counter_1", .description = "Counts module updates."})
+        .field("value", &test::ModuleCounter::value, {.displayName = "Counter value", .category = "State"});
     if (kVariant == 1)
     {
         reflect<test::LegacyComponent>("test.LegacyComponent").field("value", &test::LegacyComponent::value);

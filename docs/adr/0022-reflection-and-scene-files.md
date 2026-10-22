@@ -1,6 +1,7 @@
 # 0022. Component reflection with stable names and JSON scene files
 
-- Status: Accepted
+- Status: Accepted; field types, metadata, migrations and the JSON value API extended by
+  [0032](0032-reflection-v2.md)
 - Date: 2026-10-17
 
 ## Context

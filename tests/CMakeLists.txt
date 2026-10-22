@@ -21,9 +21,11 @@ add_executable(illusion_tests
     core/TestVersion.cpp
     ecs/TestCommandBuffer.cpp
     ecs/TestComponent.cpp
+    ecs/TestComponentJson.cpp
     ecs/TestEntity.cpp
     ecs/TestQuery.cpp
     ecs/TestReflection.cpp
+    ecs/TestReflectionSweep.cpp
     ecs/TestSceneSerializer.cpp
     ecs/TestWorld.cpp
     platform/TestArchive.cpp

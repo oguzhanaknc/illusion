@@ -111,7 +111,9 @@ struct AudioPlayback
     bool pendingStart = false;   ///< Waiting for its clip to finish loading before it starts.
 };
 
-/// Reflects AudioSource ("illusion.AudioSource") and AudioListener ("illusion.AudioListener").
+/// Reflects AudioSource ("illusion.AudioSource") and AudioListener ("illusion.AudioListener") with editor
+/// metadata, the runtime state AudioPlayback ("illusion.AudioPlayback", TypeMeta::transient), and the structs
+/// AudioReverbSettings and AudioBusFilter ("illusion.<Name>") in registry.structs().
 void reflectAudioComponents(ComponentRegistry& registry = ComponentRegistry::instance());
 
 } // namespace illusion

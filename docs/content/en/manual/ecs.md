@@ -38,7 +38,7 @@ Rules:
 - Alignment up to 64 bytes is supported.
 
 Component types are registered automatically the first time they are used. To save Components in
-scene files, reflect them (see [Reflection and Scenes](scenes.md)).
+scene files, reflect them (see [Reflection](reflection.md) and [Scenes](scenes.md)).
 
 ## Entities
 

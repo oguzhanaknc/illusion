@@ -13,6 +13,7 @@ add_executable(illusion_benchmarks
     BenchMath.cpp
     BenchModules.cpp
     BenchPhysics.cpp
+    BenchReflection.cpp
     BenchText.cpp)
 
 target_include_directories(illusion_benchmarks PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
