@@ -12,9 +12,12 @@ Terse agent notes. Rules: CLAUDE.md, AGENTS.md, .claude/skills/*. Plan: ROADMAP.
   ui/gallery-frame, ADRs 0030/0031, editor-ui skill.
 
 ## Next (in order)
-1. Merge M7d when green. Goldens were made on an NVIDIA GPU; if the lavapipe job fails the golden test,
-   compare the uploaded `ui-captures` artifact and widen the tolerance or regenerate on lavapipe.
-2. Owner signs off the gallery look before M7l. M7e (reflection v2) is next.
+1. PR #23 (M7d): last full CI run was green on every job except ASan+UBSan (memcpy with a null
+   string_view in Widgets.cpp copyText). Fixed in the commit after it; check `gh pr checks 23` once and
+   merge when green (`gh pr merge 23 --merge --subject "Merge M7d: UI foundation (#23)"`). Golden images
+   pass on lavapipe. The owner approved the gallery look (2026-10-22).
+2. M7e (reflection v2: field/type metadata, struct reflection, more field types, JSON value API) on a new
+   branch from origin/main. Plan: docs/plans/m7-editor.md section 4.
 3. Owner decisions defaulted to the plan's recommendations (plan header). Live-agent CI (M7x) needs the
    owner's API key + budget: ask then.
 
