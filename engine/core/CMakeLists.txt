@@ -16,8 +16,11 @@ add_library(illusion_core STATIC
     src/ecs/Archetype.cpp
     src/ecs/CommandBuffer.cpp
     src/ecs/Component.cpp
+    src/ecs/ComponentJson.cpp
     src/ecs/Reflection.cpp
+    src/ecs/ReflectionData.cpp
     src/ecs/SceneSerializer.cpp
+    src/ecs/StructRegistry.cpp
     src/ecs/World.cpp)
 add_library(illusion::core ALIAS illusion_core)
 

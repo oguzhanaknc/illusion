@@ -38,6 +38,7 @@ Record (ADR) olarak kaydedilir. Her kayıt bağlamı, kararı ve sonuçlarını 
 | [0029](https://github.com/oguzhanaknc/illusion/blob/main/docs/adr/0029-localization.md) | Sabit anahtarlar, derlenmiş İngilizce, veri dosyası olarak yerel ayarlar ve bir MessageFormat alt kümesiyle yerelleştirme |
 | [0030](https://github.com/oguzhanaknc/illusion/blob/main/docs/adr/0030-editor-tree-and-export-boundary.md) | Ayrı bir editör ağacı, komut öncelikli bir editör ve zorunlu kılınan bir export sınırı |
 | [0031](https://github.com/oguzhanaknc/illusion/blob/main/docs/adr/0031-editor-ui-stack.md) | Editör UI yığını: kendi backend'lerimizle Dear ImGui docking, gamma uzayında bir UI hedefi, tema token'ları, fontlar ve ikonlar |
+| [0032](https://github.com/oguzhanaknc/illusion/blob/main/docs/adr/0032-reflection-v2.md) | Reflection v2: metadata, struct reflection, bir JSON değer API'si ve migration'lar |
 
 Yeni bir karar önermek için `docs/adr/0000-template.md` dosyasını kopyalayın ve
 [katkıda bulunma rehberini](../contributing.md#architecture-decision-recordlar) izleyin.

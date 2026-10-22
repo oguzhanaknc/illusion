@@ -131,7 +131,9 @@ if (const auto written = doc.write(text); !written)
 
 `add()` bir üye ekler ve yeni bir anahtar bekler; `set()` var olan bir üyeyi değiştirir; `remove()`
 onu siler. `copy()`, ayrıştırılmış bir belgedeki bir `JsonValue`'nun derin kopyasını oluşturur; böylece
-bir belge okunabilir, düzenlenebilir ve geri yazılabilir. Bir değer onu oluşturan belgeye aittir: onu
+bir belge okunabilir, düzenlenebilir ve geri yazılabilir. `find()` ile `asBool()`, `asI64()`, `asU64()`,
+`asF64()` ve `asString()` okuyucuları `JsonValue`'daki gibi çalışır; örneğin reflection migration'larında.
+Bir değer onu oluşturan belgeye aittir: onu
 başka bir belgeye eklemek assert tetikler. `makeF32()`, aynı `f32` olarak geri okunan en
 kısa metni yazar (`0.10000000149011612` değil, `0.1`).
 

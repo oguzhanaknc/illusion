@@ -32,8 +32,18 @@ Checklist:
 - [ ] Types used as ECS components in shared engine code belong in a public header of their module.
 - [ ] Saved in scenes? Reflect it at startup with a stable, prefixed name and every persistent field
       (`reflect<T>("module.Name").field("name", &T::member)`); add it to the module's `reflect*Components()`
-      function and to a scene round-trip test. Bump the reflection version when the meaning of saved data
-      changes. Enum fields need an `EnumReflection` specialization declared before use.
+      function and to a scene round-trip test. Enum fields need an `EnumReflection` specialization declared
+      before use (`kFlags = true` for bit sets). Structs used as fields are reflected first with
+      `reflectStruct<T>()`. See `docs/content/en/manual/reflection.md`.
+- [ ] Metadata is required for editor-visible types: `meta({.displayName, .category, .icon, .description,
+      .docsAnchor})`; angles get `.unit = Unit::Radians, .displayUnit = Unit::Degrees, .hint =
+      FieldHint::Angle`; colours get `FieldHint::Color` or `HdrColor`; physical quantities get a unit; valid
+      ranges get `min`/`max` (rejected when reading JSON), slider ranges `softMin`/`softMax`.
+      `tests/ecs/TestReflectionSweep.cpp` checks the engine's types.
+- [ ] Runtime-only state (handles, caches) is reflected with `reflectRuntime<T>("module.Name")`: it is
+      transient and never saved.
+- [ ] Changed the meaning of saved data? Bump the reflection version and add `.migrate(oldVersion, fn)`;
+      renamed a field? Add `.renamedFrom = "oldName"`. Test loading the old JSON.
 
 ## Systems (for now: free functions)
 

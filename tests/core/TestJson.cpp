@@ -792,6 +792,24 @@ TEST_CASE("set() replaces members and remove() deletes them")
     CHECK(root.dump() == R"({"b":2})");
 }
 
+TEST_CASE("mutable JSON values can be read back")
+{
+    JsonMutDocument doc;
+    CHECK(doc.makeBool(true).asBool() == true);
+    CHECK(doc.makeI64(-5).asI64() == -5);
+    CHECK_FALSE(doc.makeI64(-5).asU64().has_value());
+    CHECK(doc.makeU64(7).asI64() == 7);
+    CHECK(doc.makeU64(~u64{0}).asU64() == ~u64{0});
+    CHECK_FALSE(doc.makeU64(~u64{0}).asI64().has_value());
+    CHECK(doc.makeF64(2.5).asF64() == 2.5);
+    CHECK(doc.makeI64(3).asF64() == 3.0);
+    CHECK_FALSE(doc.makeF64(2.5).asI64().has_value());
+    CHECK(doc.makeString("text").asString() == "text");
+    CHECK_FALSE(doc.makeNull().asString().has_value());
+    CHECK_FALSE(doc.makeString("1").asF64().has_value());
+    CHECK_FALSE(JsonMutValue().asBool().has_value());
+}
+
 TEST_CASE("deep copies of parsed values can be edited and written")
 {
     const JsonDocument source = parseOrFail(R"({"keep": [1, {"x": "y"}], "drop": true})");

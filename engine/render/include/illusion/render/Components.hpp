@@ -67,8 +67,11 @@ struct MotionHistory
 };
 
 /// Reflects the render components that hold plain data: Camera ("illusion.Camera"), DirectionalLight
-/// ("illusion.DirectionalLight") and PointLight ("illusion.PointLight"). MeshRenderer and SkyLight refer to
-/// GPU resources and are not saved in scenes.
+/// ("illusion.DirectionalLight") and PointLight ("illusion.PointLight"), with editor metadata. MeshRenderer
+/// and SkyLight refer to GPU resources and are not saved in scenes; MotionHistory is reflected as runtime
+/// state ("illusion.MotionHistory", TypeMeta::transient). Also reflects the structs ShadowSettings,
+/// PostProcessSettings (with AmbientOcclusionSettings, BloomSettings and TemporalAntiAliasingSettings) and
+/// EnvironmentDesc as "illusion.<Name>" in registry.structs().
 void reflectRenderComponents(ComponentRegistry& registry = ComponentRegistry::instance());
 
 /// Creates one Entity per mesh-bearing node and submesh of @p model (Transform + MeshRenderer), placed

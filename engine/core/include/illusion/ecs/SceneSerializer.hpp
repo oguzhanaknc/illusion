@@ -5,7 +5,9 @@
 ///
 /// Scene files store reflected components (see Reflection.hpp) by stable type and field name, so they
 /// survive code changes: fields missing from a file keep their default values, and unknown component
-/// types and fields are skipped with a warning. Components that are not reflected are not saved.
+/// types and fields are skipped with a warning. Components that are not reflected, or are runtime state
+/// (TypeMeta::transient), are not saved. Values use the JSON forms of ComponentJson.hpp, except that U64
+/// values are written as numbers in version 1 files; older type versions are migrated on load.
 ///
 /// @code
 /// const illusion::SceneSaveResult saved = illusion::saveScene(world);
@@ -36,7 +38,7 @@ struct SceneSaveResult
     std::string json;          ///< The scene file; empty on failure.
     std::string error;         ///< Why saving failed (empty on success).
     u32 entities = 0;          ///< Number of saved entities.
-    u32 skippedComponents = 0; ///< Components that were not saved because their type is not reflected.
+    u32 skippedComponents = 0; ///< Components not saved: their type is not reflected or is runtime state.
 
     /// True if the scene was saved.
     [[nodiscard]] bool ok() const noexcept { return error.empty(); }

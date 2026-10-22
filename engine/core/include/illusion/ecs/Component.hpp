@@ -30,8 +30,17 @@
 namespace illusion
 {
 
-struct ComponentReflection;
+struct TypeReflection;
 struct FieldInfo;
+struct TypeLayout;
+struct TypeMeta;
+struct Migration;
+class StructRegistry;
+
+namespace detail
+{
+class ReflectionData;
+} // namespace detail
 
 /// Dense identifier of a component type within a ComponentRegistry.
 using ComponentId = u16;
@@ -179,32 +188,54 @@ public:
 
     /// @}
 
-    /// Starts the reflection of @p id under @p stableName (see Reflection.hpp), replacing any earlier
-    /// reflection of the same type. Stable names must be unique; reusing one for another type is a fatal
-    /// error. Reflect types during startup, before other threads read their reflection.
-    void beginReflection(ComponentId id, std::string_view stableName, u32 version);
+    /// @name Reflection
+    /// See Reflection.hpp. Reflect types during startup, before other threads read their reflection.
+    /// @{
 
-    /// Appends a field to the reflection of @p id. The name and enum values are copied.
+    /// Starts the reflection of @p id, laid out as @p layout, under @p stableName, replacing any earlier
+    /// reflection of the same type (which stays valid until the registry is destroyed). Stable names must
+    /// be unique; reusing one for another type is a fatal error. A layout that differs from the registered
+    /// one (a reloaded module's layout conflict, see registerType()) is reflected but not published.
+    void beginReflection(ComponentId id, std::string_view stableName, u32 version, const TypeLayout& layout);
+
+    /// Appends a field to the reflection of @p id. Strings, enumeration values and element types are
+    /// copied; a struct field's type must be reflected in structs() first.
     void addReflectedField(ComponentId id, const FieldInfo& field);
 
+    /// Sets the metadata of the reflection of @p id (strings are copied).
+    void setReflectionMeta(ComponentId id, const TypeMeta& meta);
+
+    /// Appends a migration step to the reflection of @p id.
+    void addReflectionMigration(ComponentId id, const Migration& migration);
+
     /// Returns the reflection of @p id, or nullptr if the type is not reflected.
-    [[nodiscard]] const ComponentReflection* reflection(ComponentId id) const noexcept;
+    [[nodiscard]] const TypeReflection* reflection(ComponentId id) const noexcept;
 
     /// Returns the id of the type reflected under @p stableName, or kInvalidComponentId.
     [[nodiscard]] ComponentId findByStableName(std::string_view stableName) const;
 
-private:
-    struct Reflection;
+    /// The reflected structs that Components of this registry can use as fields.
+    [[nodiscard]] StructRegistry& structs() noexcept { return *m_structs; }
 
+    /// The reflected structs that Components of this registry can use as fields.
+    [[nodiscard]] const StructRegistry& structs() const noexcept { return *m_structs; }
+
+    /// @}
+
+private:
     struct Entry
     {
         std::string name;
         ComponentInfo info;
-        std::unique_ptr<Reflection> reflection;
+        detail::ReflectionData* reflection = nullptr; // published; owned by Lookup::reflections
+        detail::ReflectionData* building = nullptr;   // receives fields and metadata; usually the same
     };
+
+    detail::ReflectionData& reflectionData(ComponentId id) const;
 
     struct Lookup;
     std::unique_ptr<Lookup> m_lookup;
+    std::unique_ptr<StructRegistry> m_structs;
     std::unique_ptr<std::array<Entry, kMaxComponentTypes>> m_entries;
     std::atomic<u32> m_count{0};
 };

@@ -1322,6 +1322,59 @@ usize JsonMutValue::size() const noexcept
     return yyjson_mut_is_ctn(m_value) ? unsafe_yyjson_get_len(m_value) : 0;
 }
 
+std::optional<bool> JsonMutValue::asBool() const noexcept
+{
+    if (!yyjson_mut_is_bool(m_value))
+    {
+        return std::nullopt;
+    }
+    return yyjson_mut_get_bool(m_value);
+}
+
+std::optional<i64> JsonMutValue::asI64() const noexcept
+{
+    if (yyjson_mut_is_sint(m_value))
+    {
+        return yyjson_mut_get_sint(m_value);
+    }
+    if (yyjson_mut_is_uint(m_value) && yyjson_mut_get_uint(m_value) <= static_cast<u64>(INT64_MAX))
+    {
+        return static_cast<i64>(yyjson_mut_get_uint(m_value));
+    }
+    return std::nullopt;
+}
+
+std::optional<u64> JsonMutValue::asU64() const noexcept
+{
+    if (yyjson_mut_is_uint(m_value))
+    {
+        return yyjson_mut_get_uint(m_value);
+    }
+    if (yyjson_mut_is_sint(m_value) && yyjson_mut_get_sint(m_value) >= 0)
+    {
+        return static_cast<u64>(yyjson_mut_get_sint(m_value));
+    }
+    return std::nullopt;
+}
+
+std::optional<f64> JsonMutValue::asF64() const noexcept
+{
+    if (!yyjson_mut_is_num(m_value))
+    {
+        return std::nullopt;
+    }
+    return yyjson_mut_get_num(m_value);
+}
+
+std::optional<std::string_view> JsonMutValue::asString() const noexcept
+{
+    if (!yyjson_mut_is_str(m_value))
+    {
+        return std::nullopt;
+    }
+    return std::string_view(yyjson_mut_get_str(m_value), yyjson_mut_get_len(m_value));
+}
+
 JsonMutValue& JsonMutValue::push(JsonMutValue value)
 {
     if (m_value == nullptr || value.m_value == nullptr)

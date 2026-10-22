@@ -39,7 +39,7 @@ Kurallar:
 - 64 byte'a kadar alignment desteklenir.
 
 Component tipleri ilk kullanıldıklarında otomatik olarak kaydedilir. Component'leri sahne
-dosyalarına kaydetmek için onları yansıtın ([Reflection ve Sahneler](scenes.md) sayfasına bakın).
+dosyalarına kaydetmek için onları yansıtın ([Reflection](reflection.md) ve [Sahneler](scenes.md) sayfalarına bakın).
 
 ## Entity'ler
 

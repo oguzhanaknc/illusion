@@ -1,9 +1,11 @@
+#include "ReflectionData.hpp"
+
 #include <illusion/core/Assert.hpp>
 #include <illusion/ecs/Component.hpp>
 #include <illusion/ecs/Reflection.hpp>
+#include <illusion/ecs/StructRegistry.hpp>
 
 #include <algorithm>
-#include <deque>
 #include <mutex>
 #include <unordered_map>
 #include <vector>
@@ -18,17 +20,8 @@ struct ComponentRegistry::Lookup
     std::unordered_map<std::string, ComponentId> byStableName;
     std::vector<u32> retiredModules; // their types are taken over by the next registration
     std::vector<std::string> layoutConflicts;
-};
-
-// Owns the strings and arrays that the public ComponentReflection view points into. Deques keep element
-// addresses stable while fields are appended.
-struct ComponentRegistry::Reflection
-{
-    std::string name;
-    std::deque<std::string> strings;
-    std::deque<std::vector<EnumValue>> enums;
-    std::vector<FieldInfo> fields;
-    ComponentReflection view;
+    // Every reflection ever made, including replaced ones, so that views never dangle.
+    std::vector<std::unique_ptr<detail::ReflectionData>> reflections;
 };
 
 namespace
@@ -65,6 +58,7 @@ ComponentRegistry& defaultRegistry()
 
 ComponentRegistry::ComponentRegistry()
     : m_lookup(std::make_unique<Lookup>())
+    , m_structs(std::make_unique<StructRegistry>())
     , m_entries(std::make_unique<std::array<Entry, kMaxComponentTypes>>())
 {
 }
@@ -234,103 +228,70 @@ const ComponentInfo* ComponentRegistry::tryInfo(ComponentId id) const noexcept
     return contains(id) ? &(*m_entries)[id].info : nullptr;
 }
 
-namespace
-{
-
-bool isValidStableName(std::string_view name) noexcept
-{
-    if (name.empty())
-    {
-        return false;
-    }
-    for (const char c : name)
-    {
-        const bool valid = (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9') ||
-                           c == '_' || c == '.';
-        if (!valid)
-        {
-            return false;
-        }
-    }
-    return true;
-}
-
-bool isValidFieldName(std::string_view name) noexcept
-{
-    if (name.empty() || (name[0] >= '0' && name[0] <= '9'))
-    {
-        return false;
-    }
-    for (const char c : name)
-    {
-        const bool valid =
-            (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9') || c == '_';
-        if (!valid)
-        {
-            return false;
-        }
-    }
-    return true;
-}
-
-} // namespace
-
-void ComponentRegistry::beginReflection(ComponentId id, std::string_view stableName, u32 version)
+void ComponentRegistry::beginReflection(ComponentId id, std::string_view stableName, u32 version,
+                                        const TypeLayout& layout)
 {
     ILL_ASSERT(id < count(), "unknown component id {}", id);
-    ILL_ASSERT(isValidStableName(stableName), "invalid stable name '{}' (use letters, digits, '_' and '.')",
-               stableName);
+    ILL_ASSERT(detail::isValidStableName(stableName),
+               "invalid stable name '{}' (use letters, digits, '_' and '.')", stableName);
     std::scoped_lock lock(m_lookup->mutex);
     Entry& entry = (*m_entries)[id];
+    auto data = std::make_unique<detail::ReflectionData>(stableName, version, layout);
+    entry.building = m_lookup->reflections.emplace_back(std::move(data)).get();
+    if (layout.size != entry.info.size)
+    {
+        // A reloaded module changed the type's layout (see registerType()): the reload is rolled back, so
+        // the new reflection is built but not published.
+        return;
+    }
     const auto existing = m_lookup->byStableName.find(std::string(stableName));
     ILL_CHECK(existing == m_lookup->byStableName.end() || existing->second == id,
               "stable name '{}' is already used by component '{}'", stableName,
               existing == m_lookup->byStableName.end() ? std::string_view()
                                                        : (*m_entries)[existing->second].info.name);
-    if (entry.reflection)
+    if (entry.reflection != nullptr)
     {
-        m_lookup->byStableName.erase(entry.reflection->name);
+        m_lookup->byStableName.erase(std::string(entry.reflection->view().name));
     }
-    entry.reflection = std::make_unique<Reflection>();
-    entry.reflection->name.assign(stableName);
-    entry.reflection->view.name = entry.reflection->name;
-    entry.reflection->view.version = version;
-    m_lookup->byStableName.emplace(entry.reflection->name, id);
+    entry.reflection = entry.building;
+    m_lookup->byStableName.emplace(entry.reflection->view().name, id);
+}
+
+detail::ReflectionData& ComponentRegistry::reflectionData(ComponentId id) const
+{
+    ILL_ASSERT(id < count(), "unknown component id {}", id);
+    detail::ReflectionData* reflection = (*m_entries)[id].building;
+    ILL_ASSERT(reflection != nullptr, "component {} is not being reflected; call beginReflection() first",
+               id);
+    return *reflection;
 }
 
 void ComponentRegistry::addReflectedField(ComponentId id, const FieldInfo& field)
 {
-    ILL_ASSERT(id < count(), "unknown component id {}", id);
     std::scoped_lock lock(m_lookup->mutex);
-    Entry& entry = (*m_entries)[id];
-    ILL_ASSERT(entry.reflection != nullptr, "addReflectedField() before beginReflection()");
-    Reflection& reflection = *entry.reflection;
-    ILL_ASSERT(isValidFieldName(field.name), "invalid field name '{}' in '{}'", field.name, reflection.name);
-    ILL_ASSERT(reflection.view.field(field.name) == nullptr, "field '{}' reflected twice in '{}'", field.name,
-               reflection.name);
-    ILL_ASSERT(field.offset < entry.info.size, "field '{}' lies outside component '{}'", field.name,
-               reflection.name);
-
-    FieldInfo copy = field;
-    copy.name = reflection.strings.emplace_back(field.name);
-    if (field.type == FieldType::Enum)
-    {
-        std::vector<EnumValue>& values = reflection.enums.emplace_back();
-        for (const EnumValue& value : field.enumValues)
-        {
-            values.push_back(EnumValue{reflection.strings.emplace_back(value.name), value.value});
-        }
-        copy.enumValues = values;
-    }
-    reflection.fields.push_back(copy);
-    reflection.view.fields = reflection.fields;
+    const auto resolve = [](const void* context, u64 typeHash) {
+        return static_cast<const StructRegistry*>(context)->reflectionOf(typeHash);
+    };
+    reflectionData(id).addField(field, resolve, m_structs.get());
 }
 
-const ComponentReflection* ComponentRegistry::reflection(ComponentId id) const noexcept
+void ComponentRegistry::setReflectionMeta(ComponentId id, const TypeMeta& meta)
+{
+    std::scoped_lock lock(m_lookup->mutex);
+    reflectionData(id).setMeta(meta);
+}
+
+void ComponentRegistry::addReflectionMigration(ComponentId id, const Migration& migration)
+{
+    std::scoped_lock lock(m_lookup->mutex);
+    reflectionData(id).addMigration(migration);
+}
+
+const TypeReflection* ComponentRegistry::reflection(ComponentId id) const noexcept
 {
     ILL_ASSERT(id < count(), "unknown component id {}", id);
-    const Entry& entry = (*m_entries)[id];
-    return entry.reflection ? &entry.reflection->view : nullptr;
+    const detail::ReflectionData* reflection = (*m_entries)[id].reflection;
+    return reflection != nullptr ? &reflection->view() : nullptr;
 }
 
 ComponentId ComponentRegistry::findByStableName(std::string_view stableName) const
