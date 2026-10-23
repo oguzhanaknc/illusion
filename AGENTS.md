@@ -34,7 +34,7 @@ decisions are in `docs/adr/`. Do not reverse an accepted ADR silently: write a n
 | `engine/audio` | `AudioWorld`, `AudioSource`/`AudioListener` Components, filters, reverb, background clip loading via `AssetStreamer` (miniaudio is private; the audio thread owns it); tests use `AudioOutput::Offline` + `render()` |
 | `engine/modules` | `ModuleHost`: loads, checks, runs and hot-reloads game modules (`illusion/core/Module.hpp` is the module side; `illusion_add_module` in `cmake/IllusionModules.cmake`); tests load `tests/modules/TestModule.cpp` variants |
 | `engine/render` | Render device (Vulkan via NVRHI), swapchains, `RenderResources`, `SceneRenderer`, saved render Components (`SceneComponents.hpp`, GPU-free) and runtime ones (`Components.hpp`), `RenderAssetResolver`, `shaders/` (Slang, built with `illusion_add_shaders`) |
-| `editor/` | The editor, never linked by games (ADR 0030): `thirdparty/` (Dear ImGui, ImPlot), `strings/` (string table from `data/locales/en.json`), `ui/` (backends, `Theme`, `FontManager`, `Icons.hpp`, `FrameText`, widget kit, `UiDriver`), `tools/ui_gallery`, `data/` (themes, locales), `tests/` (golden images in `tests/data/golden`), `benchmarks/` |
+| `editor/` | The editor, never linked by games (ADR 0030): `core/` (headless core: projects, `EditorContext`, commands, `WorldEditor`, undo, journals; ADR 0036), `thirdparty/` (Dear ImGui, ImPlot), `strings/` (string table from `data/locales/en.json`), `ui/` (backends, `Theme`, `FontManager`, `Icons.hpp`, `FrameText`, widget kit, `UiDriver`), `tools/ui_gallery`, `tools/command_reference`, `data/` (themes, locales, project templates), `tests/` (golden images in `tests/data/golden`, command schemas in `tests/data/commands`; core tests in `tests/core`), `benchmarks/` |
 | `samples/` | Sample applications (`hello_triangle`, `input_viewer`, `gltf_viewer`, `physics_playground`); shared helpers in `common/` |
 | `tests/` | doctest unit tests; one `Test<Feature>.cpp` per feature; shared helpers in `TestSupport.hpp` |
 | `benchmarks/` | nanobench benchmarks with budgets (`ILL_BENCHMARK(name, nsPerOp)`) |
@@ -127,6 +127,12 @@ are within budget, format and docs checks pass, and Doxygen reports nothing.
 - UI colours come from theme tokens, text from the editor string table, icons from `Icons.hpp`; every
   interactive item has a stable `###id` built with `FrameText`. Idle UI frames must not allocate.
 - Panels read editor state and change it only through commands, so agents and humans share one API.
+- Commands change the World and project files only through `WorldEditor` (`CommandContext::edit()`), which
+  validates before it touches anything and records reversible operations. Validate every input; a command
+  must never reach `ILL_ASSERT`/`ILL_CHECK`, whatever the params (the fuzz test runs every command). After
+  adding or changing a command, run `illusion_editor_command_reference --write docs/content` and update
+  `editor/tests/data/commands/catalog.json` with `ILLUSION_UPDATE_GOLDENS=1`; bump the command's `version`
+  for incompatible changes. See `.claude/skills/editor-commands/SKILL.md`.
 - See `.claude/skills/editor-ui/SKILL.md` and the [editor architecture](docs/content/en/architecture/editor.md).
 
 ## Testing rules
@@ -173,5 +179,6 @@ The Steamworks SDK is never committed. See `.claude/skills/add-dependency/SKILL.
 | `write-adr` | Making a decision that is hard to reverse |
 | `localization` | Adding user-visible text, string tables or a language |
 | `editor-ui` | Writing editor UI: widgets, panels, theme tokens, icons, stable ids, golden images |
+| `editor-commands` | Adding or changing editor commands, their params and results, undo and the command reference |
 | `add-dependency` | Adding or upgrading a third-party library |
 | `pre-commit-review` | Before every commit |

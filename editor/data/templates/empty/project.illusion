@@ -1,0 +1,8 @@
+{
+  "format": "illusion.project",
+  "name": "Empty",
+  "version": "0.1.0",
+  "engineVersion": "",
+  "startupScene": "assets:/scenes/main.scene",
+  "modules": []
+}

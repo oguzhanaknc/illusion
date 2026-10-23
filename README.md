@@ -9,7 +9,7 @@ designed to ship commercial games on Steam and similar stores.
 > platform layer, input (keyboard, mouse, gamepads, actions), glTF loading and a forward PBR scene renderer
 > with image-based lighting, soft shadows and HDR post-processing, an asset pipeline (import cache,
 > streaming, packed archives), scene files, rigid-body physics, 3D audio and hot-reloadable game modules are
-> implemented and tested on all platforms. The editor is in progress (its UI foundation is done), followed
+> implemented and tested on all platforms. The editor is in progress (its UI foundation and headless command core are done), followed
 > by the export pipeline; see
 > [ROADMAP.md](ROADMAP.md).
 
@@ -49,6 +49,9 @@ designed to ship commercial games on Steam and similar stores.
   platform backends, theme tokens with WCAG-checked dark, light and high-contrast themes, Roboto and
   Material Symbols fonts, a widget kit, localized labels with stable ids, and a UI gallery with golden-image
   tests.
+- Headless editor core for humans and AI agents alike: projects from templates, typed commands with JSON
+  Schemas and structured errors, transactions with exact operation-log undo, a crash journal with recovery,
+  autosave, and a generated command reference.
 - No per-frame heap allocations: arenas, pools and an inline type-erased callable.
 - Tracy profiler integration and benchmark tests with performance budgets in CI.
 - CI on Windows (MSVC, clang-cl), Linux (GCC, Clang, ASan/UBSan, TSan) and macOS (Apple Clang).
@@ -99,7 +102,7 @@ world.query<Position, const Velocity>().each([](Position& p, const Velocity& v) 
 | `engine/audio` | Sound playback, 3D audio and mixing with miniaudio (`illusion::audio`) |
 | `engine/modules` | Game and plugin modules: loading, checks, hot reload (`illusion::modules`) |
 | `engine/render` | GPU device, swapchains, shaders, scene renderer (`illusion::render`) |
-| `editor` | The editor, never linked into games: UI foundation, widget kit, UI gallery (`illusion::editor_ui`) |
+| `editor` | The editor, never linked into games: command core (`illusion::editor_core`), UI foundation, widget kit, UI gallery (`illusion::editor_ui`) |
 | `samples` | Sample applications |
 | `tests` | Unit tests (doctest) |
 | `tools/pack` | `illusion_pack` archive packer and asset cooker |
