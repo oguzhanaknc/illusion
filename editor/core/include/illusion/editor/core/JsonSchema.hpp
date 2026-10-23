@@ -28,7 +28,7 @@ inline constexpr std::string_view kJsonSchemaDialect = "https://json-schema.org/
                                             const FieldMeta* meta);
 
 /// Writes the input schema of @p command, with `$schema`. Commands that are not read-only also accept the
-/// options `dryRun`, `mergeKey` and `expectRevision`.
+/// options `dryRun`, `mergeKey`, `clientToken` and `expectRevision`.
 [[nodiscard]] JsonMutValue writeCommandParamsSchema(JsonMutDocument& doc, const CommandDescriptor& command);
 
 /// Writes the output schema of @p command, with `$schema`: its result struct plus the `_editor` member that

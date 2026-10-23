@@ -655,6 +655,11 @@ Needs: b, d, h.
 ### M7j: JSON-RPC server, Process API, `illusion_ctl` and the acceptance skeleton
 Needs: i.
 
+> **Split (2026-10-23).** M7j landed the protocol, transports, security, limits, events, clients and the
+> board scenario. Async commands (`rpc.progress`, `rpc.cancel`), `editor.batch` with `$ref`, per-connection
+> transactions and scoped undo moved to **M7j-2** (ROADMAP), because they need transaction grouping in
+> `EditorContext`. The acceptance runner replays over RPC until `illusion_mcp` exists (`--via-mcp` in M7k).
+
 **Scope**
 
 - **Process API** in `engine/platform` (`Process.hpp`): spawn without a shell (arguments, working directory, added environment variables), stdio pipes drained into bounded buffers by reader threads, `poll`, `wait(timeout)`, `terminate` and exit codes. It uses `posix_spawn` and `CreateProcessW` with exact quoting.

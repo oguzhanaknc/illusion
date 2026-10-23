@@ -52,6 +52,11 @@ struct EditorContextOptions
     bool crashJournal = true;              ///< Write `.illusion/journal/<session>.jsonl` in projects.
     usize logCapacity = 1024;              ///< Log messages kept for `log.read` (0: none are kept).
     bool registerCoreCommands = true;      ///< Register the core command modules (registerCoreCommands()).
+    /// Directory in which `project.create` and `project.open` may create and open projects (empty: those
+    /// commands are unsupported). Agents name projects relative to it, so they cannot reach other files.
+    std::filesystem::path workspace{};
+    /// Project templates, one directory each (empty: `editor-data/templates` next to the executable).
+    std::filesystem::path templates{};
 };
 
 /// How a command is run.
@@ -62,6 +67,9 @@ struct CommandOptions
     std::string_view mergeKey{};         ///< Continuous edits with the same key become one undo step.
     std::optional<u64> expectRevision{}; ///< Fail with Conflict unless the scene is at this revision.
     std::string_view label{};            ///< Undo label (default: the command's English title).
+    /// Idempotency key of an RPC client: the RPC server answers a repeated token with the first result.
+    /// EditorContext only validates it.
+    std::string_view clientToken{};
 };
 
 /// Facts about the last command, returned in the `_editor` member of JSON results.
@@ -152,6 +160,9 @@ public:
     /// Opens the project in @p root: mounts it, starts the crash journal and opens the startup scene if
     /// it has one. Unsaved changes are discarded; journals of crashed sessions are kept for recover().
     [[nodiscard]] Expected<void, CommandError> openProject(const std::filesystem::path& root);
+
+    /// The options the editor was created with.
+    [[nodiscard]] const EditorContextOptions& options() const noexcept { return m_options; }
 
     /// The open project, or nullptr.
     [[nodiscard]] const Project* project() const noexcept { return m_project ? &*m_project : nullptr; }
@@ -274,7 +285,7 @@ public:
                                                                   const CommandOptions& options = {});
 
     /// Reads JSON params for @p descriptor into @p params (a default-constructed params struct). The reserved
-    /// members `dryRun`, `mergeKey` and `expectRevision` go to @p options.
+    /// members `dryRun`, `mergeKey`, `expectRevision` and `clientToken` go to @p options.
     [[nodiscard]] Expected<void, CommandError> readParams(const CommandDescriptor& descriptor, JsonValue json,
                                                           void* params, CommandOptions& options) const;
 

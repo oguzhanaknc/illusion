@@ -162,6 +162,22 @@ struct FilePathResult
     std::string path; ///< Virtual path.
 };
 
+/// Params of `project.create`.
+struct ProjectCreateParams
+{
+    std::string directory; ///< New project directory, relative to the workspace, e.g. "tetris".
+    std::string name;      ///< Display name.
+    std::optional<std::string> templateName{}; ///< Template (default "empty"), e.g. "3d-starter".
+    std::optional<bool> discardChanges{};      ///< Close a scene with unsaved changes (default false).
+};
+
+/// Params of `project.open`.
+struct ProjectOpenParams
+{
+    std::string directory;                ///< Project directory, relative to the workspace.
+    std::optional<bool> discardChanges{}; ///< Close a scene with unsaved changes (default false).
+};
+
 /// Params of `project.recover`.
 struct RecoverParams
 {
@@ -247,6 +263,8 @@ struct SceneInfoResult
     bool dirty = false; ///< Unsaved changes.
     u32 entities = 0;   ///< Number of entities.
     u32 roots = 0;      ///< Number of root entities.
+    std::string
+        hash{}; ///< xxhash64 of the scene's scene v2 JSON as 16 hex digits (equal content, equal hash).
 };
 
 /// Result of `scene.save` and `scene.save_as`.

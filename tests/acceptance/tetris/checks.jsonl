@@ -1,0 +1,16 @@
+{"check": "C1", "title": "Project: the manifest, the startup scene and eight materials exist", "call": "project.info", "expect": {"result": {"name": "Tetris", "startupScene": "assets:/scenes/main.scene"}}}
+{"check": "C1", "call": "project.file_stat", "params": {"path": "assets:/scenes/main.scene"}, "expect": {"result": {"exists": true, "isDirectory": false}}}
+{"check": "C1", "call": "asset.list", "params": {"path": "assets:/materials", "kind": "Material"}, "expect": {"result": {"assets": [{"path": "assets:/materials/frame.material"}, {"path": "assets:/materials/i.material"}, {"path": "assets:/materials/j.material"}, {"path": "assets:/materials/l.material"}, {"path": "assets:/materials/o.material"}, {"path": "assets:/materials/s.material"}, {"path": "assets:/materials/t.material"}, {"path": "assets:/materials/z.material"}]}}}
+{"check": "C1", "call": "material.get", "params": {"path": "assets:/materials/t.material"}, "expect": {"result": {"value": {"material": {"baseColorFactor": [{"$approx": 0.5}, 0, {"$approx": 0.5}, 1]}}}}}
+{"check": "C3", "title": "Scene: one camera, a sun, a sky that resolves and a board of three walls", "call": "scene.query", "params": {"has": ["illusion.Camera"]}, "expect": {"result": {"total": 1, "entities": [{"path": "/Camera"}]}}}
+{"check": "C3", "call": "scene.query", "params": {"has": ["illusion.DirectionalLight"]}, "expect": {"result": {"total": {"$oneOf": [1, 2, 3]}}}}
+{"check": "C3", "call": "component.get", "params": {"entity": "/Sky", "type": "illusion.SkyLight"}, "expect": {"result": {"value": {"environment": "builtin:/sky/procedural"}}}}
+{"check": "C3", "call": "hierarchy.children", "params": {"entity": "/Board"}, "expect": {"result": {"entities": [{"name": "Left wall"}, {"name": "Right wall"}, {"name": "Floor"}]}}}
+{"check": "C3", "call": "scene.query", "params": {"has": ["illusion.MeshRenderer"], "under": "/Board"}, "expect": {"result": {"total": 3}}}
+{"check": "C3", "call": "asset.dependencies", "params": {"path": "assets:/scenes/main.scene"}, "expect": {"result": {"dependencies": {"$contains": "assets:/materials/frame.material"}}}}
+{"check": "C3", "call": "asset.info", "params": {"path": "assets:/materials/frame.material"}, "expect": {"result": {"kind": "Material", "references": {"$oneOf": [3, 4]}}}}
+{"check": "C4", "title": "Persistence: after the restart the scene is unchanged and saves byte-identically", "call": "scene.info", "expect": {"result": {"path": "assets:/scenes/main.scene", "hash": "${hash}", "dirty": false, "entities": 7}}}
+{"check": "C4", "call": "entity.get", "params": {"entity": "${board}"}, "expect": {"result": {"entity": {"id": "${board}", "path": "/Board"}, "children": 3}}}
+{"check": "C4", "call": "component.get", "params": {"entity": "/Board/Floor", "type": "illusion.MeshRenderer"}, "expect": {"result": {"value": {"mesh": "builtin:/mesh/cube", "material": "assets:/materials/frame.material"}}}}
+{"check": "C4", "call": "scene.save", "expect": {"result": {"entities": 7}}}
+{"check": "C4", "call": "project.file_read", "params": {"path": "assets:/scenes/main.scene"}, "expect": {"result": {"text": "${sceneText}"}}}

@@ -3,8 +3,9 @@
 Başlık: `#include <illusion/editor/core/EditorContext.hpp>` (hedef `illusion::editor_core`, yalnızca editör)
 
 Editör çekirdeği, penceresi olmayan editördür: açık proje, düzenlenen sahne, seçim ve bunları değiştiren
-her komut. Paneller, kısayollar ve komut paleti onun komutlarını çağırır; AI ajanları da aynı komutları RPC
-ve MCP üzerinden çağırır (M7j'den itibaren). Her şey penceresiz çalışır; testler de onu böyle sürer.
+her komut. Paneller, kısayollar ve komut paleti onun komutlarını çağırır; AI ajanları da aynı komutları
+[RPC](automation.md) üzerinden çağırır (MCP M7k'den itibaren). Her şey penceresiz çalışır; testler de onu
+böyle sürer.
 
 ## Editör bağlamı
 
@@ -60,6 +61,7 @@ seçenekleri de alır:
 | `dryRun` | Hiçbir şeyi değiştirmeden doğrular ve kaç işlem yapacağını bildirir. |
 | `mergeKey` | Aynı anahtar ve kaynakla yapılan sürekli düzenlemeler (bir sürükleme) tek undo adımı olur. |
 | `expectRevision` | Sahne bu revizyonda değilse `conflict` ile başarısız olur. |
+| `clientToken` | Bir idempotency anahtarı: [RPC](automation.md) üzerinden aynı token tekrarlanırsa komut yeniden çalışmaz, ilk yanıt döner. |
 
 ## Entity referansları
 

@@ -18,6 +18,9 @@
         "mergeKey": {
           "type": "string"
         },
+        "clientToken": {
+          "type": "string"
+        },
         "expectRevision": {
           "anyOf": [
             {
@@ -101,6 +104,9 @@
           "type": "boolean"
         },
         "mergeKey": {
+          "type": "string"
+        },
+        "clientToken": {
           "type": "string"
         },
         "expectRevision": {
@@ -456,6 +462,9 @@
         "mergeKey": {
           "type": "string"
         },
+        "clientToken": {
+          "type": "string"
+        },
         "expectRevision": {
           "anyOf": [
             {
@@ -692,6 +701,9 @@
         "mergeKey": {
           "type": "string"
         },
+        "clientToken": {
+          "type": "string"
+        },
         "expectRevision": {
           "anyOf": [
             {
@@ -801,6 +813,9 @@
         "mergeKey": {
           "type": "string"
         },
+        "clientToken": {
+          "type": "string"
+        },
         "expectRevision": {
           "anyOf": [
             {
@@ -900,6 +915,9 @@
           "type": "boolean"
         },
         "mergeKey": {
+          "type": "string"
+        },
+        "clientToken": {
           "type": "string"
         },
         "expectRevision": {
@@ -1067,6 +1085,9 @@
         "mergeKey": {
           "type": "string"
         },
+        "clientToken": {
+          "type": "string"
+        },
         "expectRevision": {
           "anyOf": [
             {
@@ -1156,6 +1177,9 @@
           "type": "boolean"
         },
         "mergeKey": {
+          "type": "string"
+        },
+        "clientToken": {
           "type": "string"
         },
         "expectRevision": {
@@ -1316,6 +1340,9 @@
         "mergeKey": {
           "type": "string"
         },
+        "clientToken": {
+          "type": "string"
+        },
         "expectRevision": {
           "anyOf": [
             {
@@ -1412,6 +1439,9 @@
           "type": "boolean"
         },
         "mergeKey": {
+          "type": "string"
+        },
+        "clientToken": {
           "type": "string"
         },
         "expectRevision": {
@@ -1840,6 +1870,9 @@
         "mergeKey": {
           "type": "string"
         },
+        "clientToken": {
+          "type": "string"
+        },
         "expectRevision": {
           "anyOf": [
             {
@@ -1930,6 +1963,9 @@
         "mergeKey": {
           "type": "string"
         },
+        "clientToken": {
+          "type": "string"
+        },
         "expectRevision": {
           "anyOf": [
             {
@@ -2008,6 +2044,9 @@
           "type": "boolean"
         },
         "mergeKey": {
+          "type": "string"
+        },
+        "clientToken": {
           "type": "string"
         },
         "expectRevision": {
@@ -2306,6 +2345,9 @@
         "mergeKey": {
           "type": "string"
         },
+        "clientToken": {
+          "type": "string"
+        },
         "expectRevision": {
           "anyOf": [
             {
@@ -2395,6 +2437,9 @@
           "type": "boolean"
         },
         "mergeKey": {
+          "type": "string"
+        },
+        "clientToken": {
           "type": "string"
         },
         "expectRevision": {
@@ -2569,6 +2614,9 @@
         "mergeKey": {
           "type": "string"
         },
+        "clientToken": {
+          "type": "string"
+        },
         "expectRevision": {
           "anyOf": [
             {
@@ -2689,6 +2737,9 @@
         "mergeKey": {
           "type": "string"
         },
+        "clientToken": {
+          "type": "string"
+        },
         "expectRevision": {
           "anyOf": [
             {
@@ -2772,6 +2823,9 @@
           "type": "boolean"
         },
         "mergeKey": {
+          "type": "string"
+        },
+        "clientToken": {
           "type": "string"
         },
         "expectRevision": {
@@ -2867,6 +2921,9 @@
           "type": "boolean"
         },
         "mergeKey": {
+          "type": "string"
+        },
+        "clientToken": {
           "type": "string"
         },
         "expectRevision": {
@@ -3074,6 +3131,9 @@
         "mergeKey": {
           "type": "string"
         },
+        "clientToken": {
+          "type": "string"
+        },
         "expectRevision": {
           "anyOf": [
             {
@@ -3176,6 +3236,9 @@
         "mergeKey": {
           "type": "string"
         },
+        "clientToken": {
+          "type": "string"
+        },
         "expectRevision": {
           "anyOf": [
             {
@@ -3264,6 +3327,9 @@
           "type": "boolean"
         },
         "mergeKey": {
+          "type": "string"
+        },
+        "clientToken": {
           "type": "string"
         },
         "expectRevision": {
@@ -3531,6 +3597,9 @@
         "mergeKey": {
           "type": "string"
         },
+        "clientToken": {
+          "type": "string"
+        },
         "expectRevision": {
           "anyOf": [
             {
@@ -3634,6 +3703,9 @@
           "type": "boolean"
         },
         "mergeKey": {
+          "type": "string"
+        },
+        "clientToken": {
           "type": "string"
         },
         "expectRevision": {
@@ -3773,6 +3845,9 @@
         "mergeKey": {
           "type": "string"
         },
+        "clientToken": {
+          "type": "string"
+        },
         "expectRevision": {
           "anyOf": [
             {
@@ -3832,6 +3907,131 @@
       "additionalProperties": false
     }
   },
+  "project.create": {
+    "version": 1,
+    "permission": "files",
+    "mode": "edit",
+    "undoable": false,
+    "readOnly": false,
+    "params": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "type": "object",
+      "properties": {
+        "directory": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        },
+        "template": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "discardChanges": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "dryRun": {
+          "type": "boolean"
+        },
+        "mergeKey": {
+          "type": "string"
+        },
+        "clientToken": {
+          "type": "string"
+        },
+        "expectRevision": {
+          "anyOf": [
+            {
+              "type": "string",
+              "pattern": "^[0-9]+$"
+            },
+            {
+              "type": "integer",
+              "minimum": 0
+            }
+          ]
+        }
+      },
+      "required": ["directory", "name"],
+      "additionalProperties": false
+    },
+    "result": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "version": {
+          "type": "string"
+        },
+        "engineVersion": {
+          "type": "string"
+        },
+        "root": {
+          "type": "string"
+        },
+        "startupScene": {
+          "type": "string"
+        },
+        "modules": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "mounts": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "_editor": {
+          "type": "object",
+          "properties": {
+            "revision": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "transaction": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "dryRun": {
+              "type": "boolean"
+            },
+            "operations": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "warnings": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          },
+          "required": ["revision", "transaction", "dryRun", "operations", "warnings"],
+          "additionalProperties": false
+        }
+      },
+      "required": ["name", "version", "engineVersion", "root", "startupScene", "modules", "mounts", "_editor"],
+      "additionalProperties": false
+    }
+  },
   "project.file_delete": {
     "version": 1,
     "permission": "files",
@@ -3849,6 +4049,9 @@
           "type": "boolean"
         },
         "mergeKey": {
+          "type": "string"
+        },
+        "clientToken": {
           "type": "string"
         },
         "expectRevision": {
@@ -4018,6 +4221,9 @@
         "mergeKey": {
           "type": "string"
         },
+        "clientToken": {
+          "type": "string"
+        },
         "expectRevision": {
           "anyOf": [
             {
@@ -4094,6 +4300,9 @@
           "type": "boolean"
         },
         "mergeKey": {
+          "type": "string"
+        },
+        "clientToken": {
           "type": "string"
         },
         "expectRevision": {
@@ -4312,6 +4521,9 @@
         "mergeKey": {
           "type": "string"
         },
+        "clientToken": {
+          "type": "string"
+        },
         "expectRevision": {
           "anyOf": [
             {
@@ -4447,6 +4659,118 @@
       "additionalProperties": false
     }
   },
+  "project.open": {
+    "version": 1,
+    "permission": "system",
+    "mode": "edit",
+    "undoable": false,
+    "readOnly": false,
+    "params": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "type": "object",
+      "properties": {
+        "directory": {
+          "type": "string"
+        },
+        "discardChanges": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "dryRun": {
+          "type": "boolean"
+        },
+        "mergeKey": {
+          "type": "string"
+        },
+        "clientToken": {
+          "type": "string"
+        },
+        "expectRevision": {
+          "anyOf": [
+            {
+              "type": "string",
+              "pattern": "^[0-9]+$"
+            },
+            {
+              "type": "integer",
+              "minimum": 0
+            }
+          ]
+        }
+      },
+      "required": ["directory"],
+      "additionalProperties": false
+    },
+    "result": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "version": {
+          "type": "string"
+        },
+        "engineVersion": {
+          "type": "string"
+        },
+        "root": {
+          "type": "string"
+        },
+        "startupScene": {
+          "type": "string"
+        },
+        "modules": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "mounts": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "_editor": {
+          "type": "object",
+          "properties": {
+            "revision": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "transaction": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "dryRun": {
+              "type": "boolean"
+            },
+            "operations": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "warnings": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          },
+          "required": ["revision", "transaction", "dryRun", "operations", "warnings"],
+          "additionalProperties": false
+        }
+      },
+      "required": ["name", "version", "engineVersion", "root", "startupScene", "modules", "mounts", "_editor"],
+      "additionalProperties": false
+    }
+  },
   "project.recover": {
     "version": 1,
     "permission": "edit",
@@ -4471,6 +4795,9 @@
           "type": "boolean"
         },
         "mergeKey": {
+          "type": "string"
+        },
+        "clientToken": {
           "type": "string"
         },
         "expectRevision": {
@@ -4654,6 +4981,9 @@
         "mergeKey": {
           "type": "string"
         },
+        "clientToken": {
+          "type": "string"
+        },
         "expectRevision": {
           "anyOf": [
             {
@@ -4764,6 +5094,9 @@
           "minimum": 0,
           "maximum": 4294967295
         },
+        "hash": {
+          "type": "string"
+        },
         "_editor": {
           "type": "object",
           "properties": {
@@ -4793,7 +5126,7 @@
           "additionalProperties": false
         }
       },
-      "required": ["path", "name", "revision", "dirty", "entities", "roots", "_editor"],
+      "required": ["path", "name", "revision", "dirty", "entities", "roots", "hash", "_editor"],
       "additionalProperties": false
     }
   },
@@ -4821,6 +5154,9 @@
           "type": "boolean"
         },
         "mergeKey": {
+          "type": "string"
+        },
+        "clientToken": {
           "type": "string"
         },
         "expectRevision": {
@@ -4873,6 +5209,9 @@
           "minimum": 0,
           "maximum": 4294967295
         },
+        "hash": {
+          "type": "string"
+        },
         "_editor": {
           "type": "object",
           "properties": {
@@ -4902,7 +5241,7 @@
           "additionalProperties": false
         }
       },
-      "required": ["path", "name", "revision", "dirty", "entities", "roots", "_editor"],
+      "required": ["path", "name", "revision", "dirty", "entities", "roots", "hash", "_editor"],
       "additionalProperties": false
     }
   },
@@ -4933,6 +5272,9 @@
           "type": "boolean"
         },
         "mergeKey": {
+          "type": "string"
+        },
+        "clientToken": {
           "type": "string"
         },
         "expectRevision": {
@@ -4986,6 +5328,9 @@
           "minimum": 0,
           "maximum": 4294967295
         },
+        "hash": {
+          "type": "string"
+        },
         "_editor": {
           "type": "object",
           "properties": {
@@ -5015,7 +5360,7 @@
           "additionalProperties": false
         }
       },
-      "required": ["path", "name", "revision", "dirty", "entities", "roots", "_editor"],
+      "required": ["path", "name", "revision", "dirty", "entities", "roots", "hash", "_editor"],
       "additionalProperties": false
     }
   },
@@ -5187,6 +5532,9 @@
         "mergeKey": {
           "type": "string"
         },
+        "clientToken": {
+          "type": "string"
+        },
         "expectRevision": {
           "anyOf": [
             {
@@ -5274,6 +5622,9 @@
           "type": "boolean"
         },
         "mergeKey": {
+          "type": "string"
+        },
+        "clientToken": {
           "type": "string"
         },
         "expectRevision": {
@@ -5453,6 +5804,9 @@
           "type": "boolean"
         },
         "mergeKey": {
+          "type": "string"
+        },
+        "clientToken": {
           "type": "string"
         },
         "expectRevision": {
@@ -5644,6 +5998,9 @@
         "mergeKey": {
           "type": "string"
         },
+        "clientToken": {
+          "type": "string"
+        },
         "expectRevision": {
           "anyOf": [
             {
@@ -5730,6 +6087,9 @@
           "type": "boolean"
         },
         "mergeKey": {
+          "type": "string"
+        },
+        "clientToken": {
           "type": "string"
         },
         "expectRevision": {
@@ -5893,6 +6253,9 @@
         "mergeKey": {
           "type": "string"
         },
+        "clientToken": {
+          "type": "string"
+        },
         "expectRevision": {
           "anyOf": [
             {
@@ -5985,6 +6348,9 @@
           "type": "boolean"
         },
         "mergeKey": {
+          "type": "string"
+        },
+        "clientToken": {
           "type": "string"
         },
         "expectRevision": {
@@ -6224,6 +6590,9 @@
         "mergeKey": {
           "type": "string"
         },
+        "clientToken": {
+          "type": "string"
+        },
         "expectRevision": {
           "anyOf": [
             {
@@ -6385,6 +6754,9 @@
         "mergeKey": {
           "type": "string"
         },
+        "clientToken": {
+          "type": "string"
+        },
         "expectRevision": {
           "anyOf": [
             {
@@ -6511,6 +6883,9 @@
           "type": "boolean"
         },
         "mergeKey": {
+          "type": "string"
+        },
+        "clientToken": {
           "type": "string"
         },
         "expectRevision": {
@@ -6678,6 +7053,9 @@
         "mergeKey": {
           "type": "string"
         },
+        "clientToken": {
+          "type": "string"
+        },
         "expectRevision": {
           "anyOf": [
             {
@@ -6789,6 +7167,9 @@
           "type": "boolean"
         },
         "mergeKey": {
+          "type": "string"
+        },
+        "clientToken": {
           "type": "string"
         },
         "expectRevision": {

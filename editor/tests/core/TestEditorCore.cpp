@@ -54,6 +54,49 @@ TEST_CASE("project manifests round-trip and report what is wrong")
     CHECK(parseProjectManifest(R"({"format":"illusion.project","name":"x"})")->version == "0.1.0");
 }
 
+TEST_CASE("project.create and project.open work only inside the workspace")
+{
+    test::reflectEditorTestComponents();
+    test::TempDirectory directory;
+    EditorContext closed(EditorContextOptions{.seed = 3});
+    CHECK(test::fails(closed, "project.create", R"({"directory":"game","name":"Game"})").kind ==
+          ErrorKind::Unsupported);
+
+    EditorContext editor(EditorContextOptions{.seed = 3, .workspace = directory.path});
+    CHECK(test::fails(editor, "project.create", R"({"directory":"../escape","name":"Game"})").kind ==
+          ErrorKind::ValidationFailed);
+    CHECK(test::fails(editor, "project.create", R"({"directory":"/abs","name":"Game"})").kind ==
+          ErrorKind::ValidationFailed);
+    const CommandError unknown =
+        test::fails(editor, "project.create", R"({"directory":"game","name":"Game","template":"3d-startr"})");
+    CHECK(unknown.kind == ErrorKind::ValidationFailed);
+    REQUIRE_FALSE(unknown.suggestions.empty());
+    CHECK(unknown.suggestions[0] == "3d-starter");
+    const JsonDocument dry =
+        ok(editor, "project.create", R"({"directory":"game","name":"Game","dryRun":true})");
+    CHECK_FALSE(std::filesystem::exists(directory.path / "game"));
+    CHECK(dry.root().find("name").asString() == "Game");
+
+    const JsonDocument created = ok(
+        editor, "project.create", R"({"directory":"games/tetris","name":"Tetris","template":"3d-starter"})");
+    CHECK(created.root().find("name").asString() == "Tetris");
+    REQUIRE(editor.project() != nullptr);
+    CHECK(std::filesystem::equivalent(editor.project()->root(), directory.path / "games" / "tetris"));
+    CHECK(editor.document().path() == "assets:/scenes/main.scene");
+    CHECK(test::fails(editor, "project.create", R"({"directory":"games/tetris","name":"Again"})").kind ==
+          ErrorKind::AlreadyExists);
+
+    ok(editor, "project.create", R"({"directory":"second","name":"Second"})");
+    CHECK(editor.project()->manifest().name == "Second");
+    ok(editor, "entity.create", R"({"name":"Unsaved"})");
+    CHECK(test::fails(editor, "project.open", R"({"directory":"games/tetris"})").kind ==
+          ErrorKind::PreconditionFailed);
+    CHECK(test::fails(editor, "project.open", R"({"directory":"nothing","discardChanges":true})").kind ==
+          ErrorKind::NotFound);
+    ok(editor, "project.open", R"({"directory":"games/tetris","discardChanges":true})");
+    CHECK(editor.project()->manifest().name == "Tetris");
+}
+
 TEST_CASE("projects are created from templates and open with their mounts")
 {
     test::reflectEditorTestComponents();

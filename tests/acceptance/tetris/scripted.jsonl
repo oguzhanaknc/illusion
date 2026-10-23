@@ -1,0 +1,21 @@
+{"comment": "Board scenario (M7j): a project from the empty template, eight materials and the static board scene, saved; then a restart. checks.jsonl runs C1, C3 and C4 afterwards."}
+{"call": "project.create", "params": {"directory": "tetris", "name": "Tetris", "template": "empty"}, "capture": {"root": "/root"}, "expect": {"result": {"name": "Tetris", "startupScene": "assets:/scenes/main.scene"}}}
+{"call": "material.create", "params": {"path": "assets:/materials/i.material", "value": {"material": {"name": "I", "baseColorFactor": [0, 1, 1, 1]}}}}
+{"call": "material.create", "params": {"path": "assets:/materials/o.material", "value": {"material": {"name": "O", "baseColorFactor": [1, 1, 0, 1]}}}}
+{"call": "material.create", "params": {"path": "assets:/materials/t.material", "value": {"material": {"name": "T", "baseColorFactor": [0.5, 0, 0.5, 1]}}}}
+{"call": "material.create", "params": {"path": "assets:/materials/s.material", "value": {"material": {"name": "S", "baseColorFactor": [0, 1, 0, 1]}}}}
+{"call": "material.create", "params": {"path": "assets:/materials/z.material", "value": {"material": {"name": "Z", "baseColorFactor": [1, 0, 0, 1]}}}}
+{"call": "material.create", "params": {"path": "assets:/materials/j.material", "value": {"material": {"name": "J", "baseColorFactor": [0, 0, 1, 1]}}}}
+{"call": "material.create", "params": {"path": "assets:/materials/l.material", "value": {"material": {"name": "L", "baseColorFactor": [1, 0.5, 0, 1]}}}}
+{"call": "material.create", "params": {"path": "assets:/materials/frame.material", "value": {"material": {"name": "Frame", "baseColorFactor": [0.3, 0.3, 0.3, 1], "roughnessFactor": 0.8}}}}
+{"call": "entity.create", "params": {"name": "Camera", "components": {"illusion.Transform": {"position": [4.5, 9.5, 30]}, "illusion.Camera": {"fovY": {"deg": 45}}}}, "expect": {"result": {"entity": {"path": "/Camera"}}}}
+{"call": "entity.create", "params": {"name": "Sun", "components": {"illusion.Transform": {"rotation": [-0.3826834, 0, 0, 0.9238795]}, "illusion.DirectionalLight": {"intensity": 3}}}}
+{"call": "entity.create", "params": {"name": "Sky", "components": {"illusion.Transform": {}, "illusion.SkyLight": {"environment": "builtin:/sky/procedural"}, "illusion.ProceduralSky": {}}}}
+{"call": "entity.create", "params": {"name": "Board", "components": {"illusion.Transform": {}}}, "capture": {"board": "/entity/id"}}
+{"call": "entity.create", "params": {"name": "Left wall", "parent": "/Board", "components": {"illusion.Transform": {"position": [-1, 9.5, 0], "scale": [1, 22, 1]}, "illusion.MeshRenderer": {"mesh": "builtin:/mesh/cube", "material": "assets:/materials/frame.material"}}}}
+{"call": "entity.create", "params": {"name": "Right wall", "parent": "/Board", "components": {"illusion.Transform": {"position": [10, 9.5, 0], "scale": [1, 22, 1]}, "illusion.MeshRenderer": {"mesh": "builtin:/mesh/cube", "material": "assets:/materials/frame.material"}}}}
+{"call": "entity.create", "params": {"name": "Floor", "parent": "/Board", "components": {"illusion.Transform": {"position": [4.5, -1, 0], "scale": [10, 1, 1]}, "illusion.MeshRenderer": {"mesh": "builtin:/mesh/cube", "material": "assets:/materials/frame.material"}}}}
+{"call": "scene.save", "expect": {"result": {"path": "assets:/scenes/main.scene", "entities": 7}}}
+{"call": "scene.info", "capture": {"hash": "/hash"}, "expect": {"result": {"dirty": false, "entities": 7, "roots": 4}}}
+{"call": "project.file_read", "params": {"path": "assets:/scenes/main.scene"}, "capture": {"sceneText": "/text"}}
+{"restart": {"arguments": ["--project", "${root}"]}}

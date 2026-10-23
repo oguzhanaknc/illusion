@@ -1,0 +1,147 @@
+# Otomasyon
+
+Her editör komutu başka bir süreçten çağrılabilir: AI ajanları, betikler, CI işleri ve MCP köprüsü editörün
+kendi panelleriyle aynı komutları kullanır. Editör JSON-RPC 2.0 konuşur; her satırda bir JSON nesnesi, stdin
+ve stdout üzerinden ya da yerel bir soket üzerinden. Ağda hiçbir şey dinlemez.
+
+## Editörü penceresiz çalıştırmak
+
+Editör penceresi gelene kadar `illusion_editor` penceresiz çalışır:
+
+```bash
+illusion_editor --headless --workspace ~/games --rpc-stdio
+```
+
+| Seçenek | Anlamı |
+| --- | --- |
+| `--headless` | Pencere yok (şimdilik zorunlu). |
+| `--project <dir>` | Başlarken bu projeyi açar. |
+| `--workspace <dir>` | `project.create` ve `project.open` komutlarının çalışabileceği dizin (varsayılan: `--project`'in üst dizini ya da geçerli dizin). |
+| `--rpc-stdio` | Üst sürece stdin ve stdout üzerinden hizmet verir. stdin kapanınca editör sona erer. |
+| `--rpc-listen [<socket>]` | Yerel istemcilere bir `AF_UNIX` soketi üzerinden hizmet verir (varsayılan: projenin içinde, aşağıya bakın). |
+| `--permissions read-only\|ask\|auto` | İstemcilerin neleri çalıştırabileceği (varsayılan `auto`). |
+| `--deterministic`, `--seed <n>` | Tekrarlanabilir oturumlar için tohumlanmış Entity id'leri ve sabit 1/60 s frame adımı. |
+| `--no-gpu` | GPU olmadan çalışır; GPU gerektiren komutlar `unsupported` ile başarısız olur. |
+| `--frames <n>` | `n` frame sonra durur. |
+
+Log stderr'e gider; böylece stdout yalnızca protokolü taşır.
+
+## illusion_ctl
+
+`illusion_ctl` komut satırı istemcisidir. Tek bir komut için penceresiz bir editör başlatır ya da çalışan
+bir editöre bağlanır:
+
+```bash
+illusion_ctl --launch build/bin/Release/illusion_editor --editor-arg --workspace --editor-arg ~/games \
+    call project.create '{"directory": "tetris", "name": "Tetris"}'
+illusion_ctl --project ~/games/tetris call scene.info
+illusion_ctl --project ~/games/tetris subscribe scene.changed history.changed --count 10
+illusion_ctl --project ~/games/tetris dump-catalog > catalog.json
+```
+
+| Komut | Ne yapar |
+| --- | --- |
+| `call <method> [<params>]` | Bir komutu çalıştırır ve sonucunu yazar (başarısız olursa çıkış kodu 1, hata stderr'de). |
+| `batch <file.jsonl> [--keep-going]` | Satır başına bir `{"method", "params"}` nesnesini sırayla çalıştırır. |
+| `subscribe [<topic>...] [--count <n>]` | Editör olaylarını geldikçe yazar. |
+| `dump-catalog` | Her metodun OpenRPC belgesini yazar (`rpc.discover`). |
+| `replay <transcript> [--checks <file>]` | Bir transcript'i başlatılan bir editörde yeniden oynatır (bkz. [kabul testleri](#kabul-testleri)). |
+| `check <file>` | Bir kontrol dosyasını başlatılan bir editörde çalıştırır. |
+
+Bağlantılar: `--launch <editor>` (her editör argümanı için `--editor-arg` ile), `--project <dir>` (projenin
+endpoint dosyası), `--endpoint <file>` ya da `--socket <path> --token <token>`.
+
+## Python istemcisi
+
+`tools/editor/illusion_rpc.py` yalnızca Python standart kütüphanesine ihtiyaç duyar:
+
+```python
+from illusion_rpc import EditorClient, RpcError
+
+with EditorClient.launch("build/bin/Release/illusion_editor", ["--workspace", "/tmp/games"]) as editor:
+    editor.call("project.create", directory="tetris", name="Tetris")
+    board = editor.call("entity.create", name="Board")["entity"]
+    try:
+        editor.call("entity.get", entity="/Nope")
+    except RpcError as error:
+        print(error.code, error.data["kind"])  # 1200 not_found
+```
+
+`EditorClient.connect_project(path)` çalışan bir editöre endpoint dosyası üzerinden bağlanır.
+
+## Soketler ve endpoint dosyası
+
+`--rpc-listen` ve bir projeyle editör `<project>/.illusion/run/editor.sock` adresinde dinler ve
+`<project>/.illusion/run/editor-endpoint.json` dosyasını yazar:
+
+```json
+{"pid": 4242, "protocolVersion": "0.1.0", "editorVersion": "0.1.0", "transport": "unix", "address": "/home/me/games/tetris/.illusion/run/editor.sock", "token": "<64 hex digits>"}
+```
+
+`--project` olmadan bir soket yolu verin; endpoint dosyası o zaman onun yanına `<socket>.endpoint.json`
+olarak yazılır (`illusion_ctl --endpoint` ile kullanın). Run dizinini ve dosyayı yalnızca geçerli kullanıcı
+okuyabilir. Bir soket istemcisi ilk mesaj olarak 2 saniye
+içinde `rpc.authenticate {"token": ..., "client": "my-tool"}` göndermelidir; istemci adı undo geçmişinde
+`rpc:my-tool` kaynağı olarak görünür. Proje yolu bir soket adresi için fazla uzunsa (ya da Windows'ta ASCII
+değilse) soket, kullanıcıya özel runtime ya da temp dizinindeki `illusion-<hash>.sock` dosyasına taşınır;
+endpoint dosyası her zaman yerini söyler. Dosya editör kapanınca silinir; istemciler editör süreci artık
+olmayan bir dosyayı yok sayar.
+
+## İzinler ve güvenlik
+
+| Mod | Çalıştırdıkları |
+| --- | --- |
+| `read-only` | Yalnızca salt okunur komutlar. |
+| `ask` | Okuma ve düzenleme komutları; yıkıcı, dosya, Build ve sistem komutları bir kişinin onayını gerektirir, bu yüzden penceresiz bir editör onları reddeder. |
+| `auto` | Her şey (penceresiz varsayılan). |
+
+Reddedilen çağrılar `permission_denied` (1001) ile başarısız olur. Dosya komutları proje mount'larının, proje
+komutları da çalışma alanının içinde kalır. Kabuk çalıştıran bir komut yoktur.
+
+!!! warning "Ajanlar kod çalıştırabilir"
+    M7s'den itibaren `module.build` ve `module.load`, bir ajanın yazdığı C++ kodunu derler ve editör
+    sürecinin içinde yükler. Güvenmediğiniz ajanlar için `read-only` ya da `ask` kullanın.
+
+## Olaylar
+
+`editor.subscribe {"topics": ["scene.changed"], "mode": "push"}`, editörün her olay için frame ve konu başına
+bir kez bildirim göndermesini sağlar:
+
+```json
+{"jsonrpc": "2.0", "method": "event", "params": {"topic": "scene.changed", "payload": {"revision": 42}}}
+```
+
+`pull` modunda editör `editor.poll_events` için en fazla 1.024 olay saklar; daha fazlası gelirse yanıt
+`"overflow": true` der ve istemci sahneyi yeniden okur. Konular arasında `scene.changed`, `scene.opened`,
+`scene.saved`, `selection.changed`, `history.changed` ve `scene.autosaved` vardır; boş liste hepsi demektir.
+
+## Yeniden denemeler ve eşzamanlılık
+
+- Değişiklik yapan bir çağrıdaki `clientToken` onu yeniden denemeye güvenli kılar: editör her istemcinin son
+  1.024 token'ını hatırlar ve tekrarlanan birine ilk yanıtla karşılık verir.
+- `expectRevision`, siz okuduktan sonra başka biri sahneyi değiştirdiyse `conflict` (1203) ile başarısız olur.
+- `retryable: true` taşıyan `busy` (1002) ve `limit_exceeded` (1401) "sonra yeniden deneyin" demektir: editör
+  8 bağlantı, bağlantı başına bekleyen 64 istek ve toplamda 256 istek kabul eder.
+
+## Kabul testleri
+
+Ajan kabul testi, editör çağrılarından oluşan bir transcript'i yeniden oynatır ve sonucu kontrol eder
+(`tests/acceptance/tetris`). Bir transcript'in her satırı bir adımdır:
+
+```json
+{"call": "entity.create", "params": {"name": "Board"}, "capture": {"board": "/entity/id"}, "expect": {"result": {"entity": {"path": "/Board"}}}}
+{"call": "entity.get", "params": {"entity": "${board}"}}
+{"restart": {"arguments": ["--project", "${root}"]}}
+```
+
+`capture` bir yanıttaki değerleri JSON Pointer ile kaydeder; `${name}` onları sonra kullanır. `expect` yanıtı
+eşleştirir: nesneler en azından verilen üyelere sahipse eşleşir; `$approx`, `$regex`, `$length`, `$exists`,
+`$oneOf` ve `$contains` eşleşmeyi gevşetir. `"requires": "gpu"` ile işaretli bir adım, GPU'suz bir editörde
+`otherwise` ile eşleşmelidir (varsayılan: hata 1400). Şöyle çalıştırın:
+
+```bash
+illusion_ctl --launch build/bin/Release/illusion_editor --editor-arg --deterministic --editor-arg --no-gpu \
+    replay tests/acceptance/tetris/scripted.jsonl --checks tests/acceptance/tetris/checks.jsonl --temp-workspace
+```
+
+Protokolün kendisi [editör protokolü başvurusunda](../../reference/editor-protocol.md) anlatılır.

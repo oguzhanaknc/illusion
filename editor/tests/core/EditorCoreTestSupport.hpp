@@ -159,6 +159,10 @@ struct EditorFixture
     {
         editor.reset();
         options.seed = seed;
+        if (options.workspace.empty())
+        {
+            options.workspace = directory.path;
+        }
         editor = std::make_unique<editor::EditorContext>(options);
         const Expected<void, editor::CommandError> opened = editor->openProject(directory.path / "project");
         REQUIRE_MESSAGE(opened.hasValue(), (opened ? std::string() : opened.error().message));

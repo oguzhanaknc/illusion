@@ -9,7 +9,7 @@ designed to ship commercial games on Steam and similar stores.
 > platform layer, input (keyboard, mouse, gamepads, actions), glTF loading and a forward PBR scene renderer
 > with image-based lighting, soft shadows and HDR post-processing, an asset pipeline (import cache,
 > streaming, packed archives), scene files, rigid-body physics, 3D audio and hot-reloadable game modules are
-> implemented and tested on all platforms. The editor is in progress (its UI foundation and headless command core are done), followed
+> implemented and tested on all platforms. The editor is in progress (its UI foundation, headless command core and JSON-RPC automation are done), followed
 > by the export pipeline; see
 > [ROADMAP.md](ROADMAP.md).
 
@@ -52,6 +52,9 @@ designed to ship commercial games on Steam and similar stores.
 - Headless editor core for humans and AI agents alike: projects from templates, typed commands with JSON
   Schemas and structured errors, transactions with exact operation-log undo, a crash journal with recovery,
   autosave, and a generated command reference.
+- Editor automation for AI agents and tools: JSON-RPC 2.0 over stdio and local sockets with token
+  authentication and permission modes, `illusion_ctl`, a Python client, and replayable acceptance
+  transcripts.
 - No per-frame heap allocations: arenas, pools and an inline type-erased callable.
 - Tracy profiler integration and benchmark tests with performance budgets in CI.
 - CI on Windows (MSVC, clang-cl), Linux (GCC, Clang, ASan/UBSan, TSan) and macOS (Apple Clang).

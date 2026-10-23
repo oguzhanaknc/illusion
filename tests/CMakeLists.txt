@@ -34,6 +34,7 @@ add_executable(illusion_tests
     platform/TestArchive.cpp
     platform/TestFileSystem.cpp
     platform/TestInput.cpp
+    platform/TestProcess.cpp
     platform/TestWindow.cpp
     input/TestGamepadState.cpp
     input/TestGamepadSystem.cpp
@@ -98,6 +99,12 @@ get_property(locale_dirs GLOBAL PROPERTY ILLUSION_LOCALE_DIRECTORIES)
 list(REMOVE_DUPLICATES locale_dirs)
 add_test(NAME text.locales COMMAND illusion_textc check ${locale_dirs})
 set_tests_properties(text.locales PROPERTIES LABELS "unit")
+
+# Child program of tests/platform/TestProcess.cpp.
+add_executable(illusion_process_helper platform/ProcessHelper.cpp)
+illusion_configure_target(illusion_process_helper)
+target_compile_definitions(illusion_tests PRIVATE PROCESS_HELPER="$<TARGET_FILE:illusion_process_helper>")
+add_dependencies(illusion_tests illusion_process_helper)
 
 # Shared libraries loaded by tests/modules/TestModules.cpp (see TestModule.cpp for the variants).
 foreach(variant 1 2 3 4)

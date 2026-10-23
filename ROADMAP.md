@@ -145,7 +145,18 @@ Plan: `docs/plans/m7-editor.md` (sub-milestones, command API, localization, them
   clear, set_level over a log ring), scene and project settings through a `SettingsCatalog` (`SettingsChange`
   operations, `illusion.settings` files), scene settings kept on save, world Transforms of children derived
   after every change, and the `editor-commands` skill patterns (ADR 0036 addendum)
-- M7j: JSON-RPC server, process API, `illusion_ctl`, acceptance skeleton (ADRs 0037, 0038)
+- M7j: ✅ JSON-RPC 2.0 over NDJSON (ADR 0037): `Process` (spawn without a shell, bounded stdio buffers,
+  timeouts, termination), `illusion::editor_rpc` (framing, conformance errors, stdio and `AF_UNIX` transports,
+  endpoint file and owner-only permissions, 256-bit token authentication, permission modes, connection,
+  in-flight and queue limits, the main-thread pump, `clientToken` idempotency, push and pull events,
+  `rpc.discover` as OpenRPC 1.3), the headless `illusion_editor`, `project.create` and `project.open` inside
+  a workspace, `scene.info` content hashes, `illusion::editor_client` (`RpcClient`, launcher,
+  `TranscriptRunner` with captures and matchers), `illusion_ctl` (`call`, `batch`, `subscribe`, `replay`,
+  `check`, `dump-catalog`), the Python client and the acceptance skeleton with the board scenario (C1, C3, C4;
+  ADR 0038)
+- M7j-2: async commands with `rpc.progress` and `rpc.cancel`, `editor.batch` with `$` references,
+  per-connection transactions (`transaction.begin/commit/cancel`), `history.undo {scope: "mine"}`,
+  `commands.changed` and approval prompts for the ask mode once a window exists
 - M7k: MCP bridge `illusion_mcp` with tools generated from editor commands (ADR 0039)
 - M7l: Editor shell: layouts, menus, command palette, console, history, AI activity, preferences
 - M7m: Outliner and Inspector

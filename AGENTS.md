@@ -26,7 +26,7 @@ decisions are in `docs/adr/`. Do not reverse an accepted ADR silently: write a n
 | --- | --- |
 | `engine/core/include/illusion/{core,ecs}` | Public headers of the core library |
 | `engine/core/src` | Core implementation |
-| `engine/platform` | Platform layer: windows, input, events from the OS, virtual file system (GLFW is private) |
+| `engine/platform` | Platform layer: windows, input, events from the OS, virtual file system, child processes (`Process`; GLFW is private) |
 | `engine/text` | UTF-8, `searchFold`, `FuzzyMatcher`, plural rules, `MessageFormat`, string tables, `Localization` (core only) |
 | `engine/input` | Gamepads (SDL3 private), `InputActions` mapping/rebinding/glyphs, string table `data/locales/en.json`; tests use `attachVirtualGamepad()` |
 | `engine/assets` | CPU-side assets: `Image`, `MeshData`, glTF via `loadGltf`, environments (SH, sky), `.material` files (cgltf/stb private); no GPU code. `AssetId`/`AssetRef` live in core |
@@ -34,14 +34,15 @@ decisions are in `docs/adr/`. Do not reverse an accepted ADR silently: write a n
 | `engine/audio` | `AudioWorld`, `AudioSource`/`AudioListener` Components, filters, reverb, background clip loading via `AssetStreamer` (miniaudio is private; the audio thread owns it); tests use `AudioOutput::Offline` + `render()` |
 | `engine/modules` | `ModuleHost`: loads, checks, runs and hot-reloads game modules (`illusion/core/Module.hpp` is the module side; `illusion_add_module` in `cmake/IllusionModules.cmake`); tests load `tests/modules/TestModule.cpp` variants |
 | `engine/render` | Render device (Vulkan via NVRHI), swapchains, `RenderResources`, `SceneRenderer`, saved render Components (`SceneComponents.hpp`, GPU-free) and runtime ones (`Components.hpp`), `RenderAssetResolver`, `shaders/` (Slang, built with `illusion_add_shaders`) |
-| `editor/` | The editor, never linked by games (ADR 0030): `core/` (headless core: projects, `EditorContext`, commands, `WorldEditor`, undo, journals; ADR 0036), `thirdparty/` (Dear ImGui, ImPlot), `strings/` (string table from `data/locales/en.json`), `ui/` (backends, `Theme`, `FontManager`, `Icons.hpp`, `FrameText`, widget kit, `UiDriver`), `tools/ui_gallery`, `tools/command_reference`, `data/` (themes, locales, project templates), `tests/` (golden images in `tests/data/golden`, command schemas in `tests/data/commands`; core tests in `tests/core`), `benchmarks/` |
+| `editor/` | The editor, never linked by games (ADR 0030): `core/` (headless core: projects, `EditorContext`, commands, `WorldEditor`, undo, journals; ADR 0036), `rpc/` (JSON-RPC server, stdio/`AF_UNIX` streams, endpoint file; ADR 0037), `client/` (`RpcClient`, `TranscriptRunner`; ADR 0038), `app/` (`illusion_editor`, headless for now), `tools/ctl` (`illusion_ctl`), `thirdparty/` (Dear ImGui, ImPlot), `strings/` (string table from `data/locales/en.json`), `ui/` (backends, `Theme`, `FontManager`, `Icons.hpp`, `FrameText`, widget kit, `UiDriver`), `tools/ui_gallery`, `tools/command_reference`, `data/` (themes, locales, project templates), `tests/` (golden images in `tests/data/golden`, command schemas in `tests/data/commands`; core tests in `tests/core`, RPC and client tests in `tests/rpc`), `benchmarks/` |
 | `samples/` | Sample applications (`hello_triangle`, `input_viewer`, `gltf_viewer`, `physics_playground`); shared helpers in `common/` |
 | `tests/` | doctest unit tests; one `Test<Feature>.cpp` per feature; shared helpers in `TestSupport.hpp` |
 | `benchmarks/` | nanobench benchmarks with budgets (`ILL_BENCHMARK(name, nsPerOp)`) |
 | `cmake/` | `IllusionOptions`, `IllusionCompilerSettings`, `Dependencies` (pinned), `IllusionModules`, `IllusionEditor` (editor-only targets, boundary check), `IllusionIcons` |
 | `docs/content/{en,tr}` | MkDocs pages (must stay in sync) |
 | `docs/adr/` | Architecture Decision Records (English only) |
-| `tools/` | `check_format.py`, `check_docs_parity.py`, `check_layering.py`, `windows/vsdev.cmd`; `pack/` builds `illusion_pack`; `textc/` builds `illusion_textc` (string tables, locale check) |
+| `tests/acceptance` | Agent acceptance contract and transcripts (`tetris/SPEC.md`, `scripted.jsonl`, `checks.jsonl`; ADR 0038) |
+| `tools/` | `editor/illusion_rpc.py` (Python client of the editor protocol), `check_format.py`, `check_docs_parity.py`, `check_layering.py`, `windows/vsdev.cmd`; `pack/` builds `illusion_pack`; `textc/` builds `illusion_textc` (string tables, locale check) |
 
 ## Build, test, check
 

@@ -16,7 +16,7 @@ seçenekleri ve hataları anlatır. Özetler, ajanlar için yazıldıklarından 
 | I | Idempotent: iki kez çalıştırmak bir kez çalıştırmakla aynı etkiyi verir |
 
 İzin sınıfı (`read`, `edit`, `destructive`, `files`, `build`, `system`), bir izin modunun bir ajanın neyi
-çalıştırmasına izin vereceğini belirler (M7j'den itibaren).
+çalıştırmasına izin vereceğini belirler (bkz. [editör protokolü](editor-protocol.md)).
 
 ## Komutlar
 
@@ -65,6 +65,7 @@ seçenekleri ve hataları anlatır. Özetler, ajanlar için yazıldıklarından 
 | `material.create` | Material | U | files | - | Creates a .material file with default values and the given fields (MaterialData under "material", texture paths under "textures"). Example: `{"path": "assets:/materials/red.material", "value": {"material": {"baseColorFactor": [0.8, 0.1, 0.1, 1]}}}` |
 | `material.get` | Material | RI | read | - | Returns every field of a .material file. Example: `{"path": "assets:/materials/red.material"}` |
 | `material.set` | Material | UI | files | - | Merges fields into a .material file (colours as linear arrays or "#rrggbb"). Example: `{"path": "assets:/materials/red.material", "value": {"material": {"roughnessFactor": 0.2}, "textures": {"baseColor": "assets:/textures/red.png"}}}` |
+| `project.create` | Project | - | files | - | Creates a project from a template in a new directory of the editor's workspace and opens it. Templates: "empty", "3d-starter". Example: `{"directory":"tetris","name":"Tetris","template":"empty"}` |
 | `project.file_delete` | Project | UD | files | - | Deletes a file or a directory with its contents; undo restores them from the trash. Example: `{"path": "assets:/old"}` |
 | `project.file_list` | Project | RI | read | - | Lists a directory of a project mount (assets:, settings:, modules:, cache:). Example: `{"path": "assets:/scenes", "recursive": true}` |
 | `project.file_mkdir` | Project | U | files | - | Creates a directory and its missing parents. Example: `{"path": "assets:/levels"}` |
@@ -73,6 +74,7 @@ seçenekleri ve hataları anlatır. Özetler, ajanlar için yazıldıklarından 
 | `project.file_stat` | Project | RI | read | - | Tells whether a path exists, whether it is a directory and its size. Example: `{"path": "assets:/scenes/main.scene"}` |
 | `project.file_write` | Project | UDI | files | - | Creates or replaces a UTF-8 text file; undo restores the previous contents. Example: `{"path": "assets:/notes.txt", "text": "hello"}` |
 | `project.info` | Project | RI | read | - | Returns the project's name, version, root directory, startup scene, modules and mounts. Example: `{}` |
+| `project.open` | Project | - | system | - | Opens the project in a directory of the editor's workspace, closing the current one. Example: `{"directory":"tetris"}` |
 | `project.recover` | Project | - | edit | - | Replays the crash journal of a session that ended without saving, as one undo step on top of the scene it started from. Example: `{}` (the newest journal). |
 | `project.settings_get` | Project | RI | read | - | Returns the project settings: every registered project settings type with its file under settings: and all its fields. Example: `{}` |
 | `project.settings_set` | Project | UI | files | - | Merges fields into one project settings struct and writes its file (replace resets the others; null deletes the file). Example: `{"type": "game.Controls", "value": {"invertY": true}}` |

@@ -77,6 +77,18 @@ if (!project)
 the manifest. `EditorContext::openProject()` then mounts the project, starts the crash journal and opens
 the startup scene.
 
+Agents create and open projects with commands. They only reach directories inside the editor's
+**workspace** (`EditorContextOptions::workspace`, `--workspace` of `illusion_editor`), named by a relative
+path, so a call cannot write anywhere else on the disk:
+
+```json
+{"directory": "tetris", "name": "Tetris", "template": "empty"}
+```
+
+`project.create` takes these params, creates `<workspace>/tetris` from the template and opens it;
+`project.open {"directory": "tetris"}` opens an existing one. Both refuse to drop unsaved changes unless
+`discardChanges` is set. Without a workspace they fail with `unsupported`.
+
 ## Settings files
 
 Each project settings type registered in `EditorContext::settings()` has its own file under `settings:`,
