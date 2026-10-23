@@ -1,7 +1,11 @@
 #include "../PathText.hpp"
 #include "CommandSupport.hpp"
 
+#include <illusion/core/VirtualPath.hpp>
 #include <illusion/text/Utf8.hpp>
+
+#include <algorithm>
+#include <filesystem>
 
 namespace illusion::editor::detail
 {
@@ -29,13 +33,8 @@ CommandError atPath(CommandError error, std::string_view pointer)
     return error.kind == ErrorKind::ValidationFailed ? withPointerPrefix(std::move(error), pointer) : error;
 }
 
-Expected<ProjectInfoResult, CommandError> projectInfo(CommandContext& context, const NoParams&)
+ProjectInfoResult infoOf(const Project& project)
 {
-    if (Expected<void, CommandError> open = requireProject(context); !open)
-    {
-        return unexpected(std::move(open).error());
-    }
-    const Project& project = *context.editor().project();
     ProjectInfoResult result;
     result.name = project.manifest().name;
     result.version = project.manifest().version;
@@ -48,6 +47,145 @@ Expected<ProjectInfoResult, CommandError> projectInfo(CommandContext& context, c
         result.mounts.push_back(std::string(mount.name) + ":/");
     }
     return result;
+}
+
+Expected<ProjectInfoResult, CommandError> projectInfo(CommandContext& context, const NoParams&)
+{
+    if (Expected<void, CommandError> open = requireProject(context); !open)
+    {
+        return unexpected(std::move(open).error());
+    }
+    return infoOf(*context.editor().project());
+}
+
+// The directory @p relative (a relative path with '/' separators) in the workspace.
+Expected<std::filesystem::path, CommandError> workspaceDirectory(CommandContext& context,
+                                                                 std::string_view relative)
+{
+    const std::filesystem::path& workspace = context.editor().options().workspace;
+    if (workspace.empty())
+    {
+        return unexpected(CommandError::make(
+            ErrorKind::Unsupported, "this editor has no workspace for projects (start it with --workspace)"));
+    }
+    if (!isValidRelativePath(relative))
+    {
+        return unexpected(CommandError::invalid(
+            "/directory",
+            "must be a relative path inside the workspace, such as \"tetris\" or \"games/tetris\""));
+    }
+    return workspace / utf8Path(relative);
+}
+
+Expected<void, CommandError> checkDiscard(CommandContext& context, const std::optional<bool>& discard)
+{
+    if (context.editor().dirty() && !discard.value_or(false))
+    {
+        return unexpected(CommandError::make(
+            ErrorKind::PreconditionFailed, "the scene has unsaved changes; save it or pass discardChanges"));
+    }
+    return {};
+}
+
+Expected<ProjectInfoResult, CommandError> projectCreate(CommandContext& context,
+                                                        const ProjectCreateParams& params)
+{
+    Expected<std::filesystem::path, CommandError> root = workspaceDirectory(context, params.directory);
+    if (!root)
+    {
+        return unexpected(std::move(root).error());
+    }
+    if (params.name.empty() || !text::isValidUtf8(params.name))
+    {
+        return unexpected(CommandError::invalid("/name", "must be a non-empty UTF-8 name"));
+    }
+    std::filesystem::path templates = context.editor().options().templates;
+    if (templates.empty())
+    {
+        templates = executableDirectory() / "editor-data" / "templates";
+    }
+    const std::string templateName = params.templateName.value_or("empty");
+    std::error_code code;
+    if (!isValidRelativePath(templateName) || templateName.find('/') != std::string::npos ||
+        !std::filesystem::is_directory(templates / utf8Path(templateName), code))
+    {
+        std::vector<std::string> names;
+        for (const auto& entry : std::filesystem::directory_iterator(templates, code))
+        {
+            if (entry.is_directory(code))
+            {
+                names.push_back(pathText(entry.path().filename()));
+            }
+        }
+        std::sort(names.begin(), names.end());
+        std::vector<std::string_view> candidates(names.begin(), names.end());
+        CommandError error = CommandError::invalid("/template", "is not a project template");
+        error.suggestions = closestMatches(templateName, candidates);
+        if (error.suggestions.empty())
+        {
+            error.suggestions = names;
+        }
+        return unexpected(std::move(error));
+    }
+    if (std::filesystem::exists(*root, code) &&
+        (!std::filesystem::is_directory(*root, code) || !std::filesystem::is_empty(*root, code)))
+    {
+        return unexpected(CommandError::make(
+            ErrorKind::AlreadyExists, "'" + params.directory + "' exists and is not an empty directory"));
+    }
+    if (Expected<void, CommandError> discard = checkDiscard(context, params.discardChanges); !discard)
+    {
+        return unexpected(std::move(discard).error());
+    }
+    if (context.dryRun())
+    {
+        ProjectInfoResult result;
+        result.name = params.name;
+        result.root = pathText(*root);
+        return result;
+    }
+    Expected<Project, std::string> created =
+        Project::create(*root, params.name, templates / utf8Path(templateName));
+    if (!created)
+    {
+        return unexpected(CommandError::make(ErrorKind::IoError, std::move(created).error()));
+    }
+    if (Expected<void, CommandError> opened = context.editor().openProject(*root); !opened)
+    {
+        return unexpected(std::move(opened).error());
+    }
+    return infoOf(*context.editor().project());
+}
+
+Expected<ProjectInfoResult, CommandError> projectOpen(CommandContext& context,
+                                                      const ProjectOpenParams& params)
+{
+    Expected<std::filesystem::path, CommandError> root = workspaceDirectory(context, params.directory);
+    if (!root)
+    {
+        return unexpected(std::move(root).error());
+    }
+    std::error_code code;
+    if (!std::filesystem::is_regular_file(*root / utf8Path(kProjectFileName), code))
+    {
+        return unexpected(
+            CommandError::make(ErrorKind::NotFound, "'" + params.directory + "' is not a project directory"));
+    }
+    if (Expected<void, CommandError> discard = checkDiscard(context, params.discardChanges); !discard)
+    {
+        return unexpected(std::move(discard).error());
+    }
+    if (context.dryRun())
+    {
+        ProjectInfoResult result;
+        result.root = pathText(*root);
+        return result;
+    }
+    if (Expected<void, CommandError> opened = context.editor().openProject(*root); !opened)
+    {
+        return unexpected(std::move(opened).error());
+    }
+    return infoOf(*context.editor().project());
 }
 
 Expected<FileListResult, CommandError> fileList(CommandContext& context, const FileListParams& params)
@@ -192,6 +330,33 @@ void registerProjectCommands(CommandRegistry& registry)
         .icon = "info",
         .flags = {.readOnly = true, .idempotent = true},
         .mode = CommandMode::Any,
+    });
+    registry.add<&projectCreate>({
+        .name = "project.create",
+        .title = strings::kCommandProjectCreateTitle,
+        .description = strings::kCommandProjectCreateDescription,
+        .agentSummary =
+            "Creates a project from a template in a new directory of the editor's workspace and opens it. "
+            "Templates: \"empty\", \"3d-starter\". Example: {\"directory\":\"tetris\",\"name\":\"Tetris\","
+            "\"template\":\"empty\"}.",
+        .category = "Project",
+        .icon = "create_new_folder",
+        .flags = {},
+        .permission = PermissionClass::Files,
+        .palette = true,
+    });
+    registry.add<&projectOpen>({
+        .name = "project.open",
+        .title = strings::kCommandProjectOpenTitle,
+        .description = strings::kCommandProjectOpenDescription,
+        .agentSummary =
+            "Opens the project in a directory of the editor's workspace, closing the current one. "
+            "Example: {\"directory\":\"tetris\"}.",
+        .category = "Project",
+        .icon = "folder_open",
+        .flags = {},
+        .permission = PermissionClass::System,
+        .palette = true,
     });
     registry.add<&fileList>({
         .name = "project.file_list",

@@ -19,12 +19,19 @@ illusion_add_editor_executable(illusion_editor_tests
     core/TestEditorHistory.cpp
     core/TestEditorLog.cpp
     core/TestEditorSettings.cpp
-    core/TestEditorTransforms.cpp)
+    core/TestEditorTransforms.cpp
+    rpc/TestEditorClient.cpp
+    rpc/TestRpcProtocol.cpp
+    rpc/TestRpcServer.cpp
+    rpc/TestRpcTransport.cpp)
 target_include_directories(illusion_editor_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR} ${PROJECT_SOURCE_DIR}/tests)
-target_link_libraries(illusion_editor_tests PRIVATE illusion_ui_gallery_pages illusion::editor_core illusion::doctest)
+target_link_libraries(illusion_editor_tests PRIVATE
+    illusion_ui_gallery_pages illusion::editor_core illusion::editor_client illusion::doctest)
 # Golden files of the editor core (ILLUSION_UPDATE_GOLDENS=1 rewrites them).
 target_compile_definitions(illusion_editor_tests PRIVATE ILLUSION_EDITOR_TEST_DATA="${CMAKE_CURRENT_SOURCE_DIR}/data")
-add_dependencies(illusion_editor_tests illusion_editor_data)
+# The client tests launch the editor.
+target_compile_definitions(illusion_editor_tests PRIVATE ILLUSION_EDITOR_EXECUTABLE="$<TARGET_FILE:illusion_editor>")
+add_dependencies(illusion_editor_tests illusion_editor_data illusion_editor)
 illusion_configure_target(illusion_editor_tests)
 doctest_discover_tests(illusion_editor_tests
     PROPERTIES LABELS "unit"
@@ -45,3 +52,22 @@ illusion_configure_target(illusion_editor_gpu_tests)
 doctest_discover_tests(illusion_editor_gpu_tests
     PROPERTIES LABELS "gpu"
     ADD_LABELS 0)
+
+# The acceptance test of the agent workflow (ADR 0038): illusion_ctl replays the scripted Tetris transcript
+# against a launched headless editor and runs the checks. Optimized builds only (label "acceptance").
+add_test(NAME acceptance.tetris.board
+    COMMAND illusion_ctl --launch $<TARGET_FILE:illusion_editor>
+        --editor-arg --deterministic --editor-arg --seed --editor-arg 1 --editor-arg --no-gpu
+        replay ${PROJECT_SOURCE_DIR}/tests/acceptance/tetris/scripted.jsonl
+        --checks ${PROJECT_SOURCE_DIR}/tests/acceptance/tetris/checks.jsonl --temp-workspace
+    CONFIGURATIONS Release RelWithDebInfo)
+set_tests_properties(acceptance.tetris.board PROPERTIES LABELS "acceptance" TIMEOUT 360)
+
+# The Python client (tools/editor/illusion_rpc.py) against the editor.
+find_package(Python3 COMPONENTS Interpreter)
+if(Python3_Interpreter_FOUND)
+    add_test(NAME editor.python_client
+        COMMAND ${Python3_EXECUTABLE} ${PROJECT_SOURCE_DIR}/tools/editor/test_illusion_rpc.py
+            $<TARGET_FILE:illusion_editor>)
+    set_tests_properties(editor.python_client PROPERTIES LABELS "unit")
+endif()

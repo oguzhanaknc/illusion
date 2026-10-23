@@ -463,6 +463,7 @@ JsonMutValue writeCommandParamsSchema(JsonMutDocument& doc, const CommandDescrip
         JsonMutValue properties = schema.find("properties");
         properties.addObject("dryRun").add("type", doc.makeString("boolean"));
         properties.addObject("mergeKey").add("type", doc.makeString("string"));
+        properties.addObject("clientToken").add("type", doc.makeString("string"));
         properties.add("expectRevision",
                        writeValueSchema(doc, illusion::detail::valueTypeOf<u64>(), nullptr));
     }

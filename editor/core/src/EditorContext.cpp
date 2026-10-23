@@ -22,7 +22,7 @@ namespace illusion::editor
 namespace
 {
 
-constexpr std::string_view kReservedParams[] = {"dryRun", "mergeKey", "expectRevision"};
+constexpr std::string_view kReservedParams[] = {"dryRun", "mergeKey", "expectRevision", "clientToken"};
 
 u64 sessionSeed(u64 seed)
 {
@@ -388,6 +388,14 @@ Expected<void, CommandError> EditorContext::readParams(const CommandDescriptor& 
             errors.push_back(ValueError{"/mergeKey", "must be a string"});
         }
         options.mergeKey = mergeKey.asString().value_or("");
+    }
+    if (const JsonValue token = json.find("clientToken"); !token.isAbsent())
+    {
+        if (!token.isString())
+        {
+            errors.push_back(ValueError{"/clientToken", "must be a string"});
+        }
+        options.clientToken = token.asString().value_or("");
     }
     if (const JsonValue expect = json.find("expectRevision"); !expect.isAbsent())
     {

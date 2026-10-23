@@ -4,7 +4,7 @@ Header: `#include <illusion/editor/core/EditorContext.hpp>` (target `illusion::e
 
 The editor core is the editor without a window: the open project, the edited scene, the selection and
 every command that changes them. Panels, shortcuts and the command palette call its commands, and AI
-agents call the same commands over RPC and MCP (from M7j). Everything works headless, which is how the
+agents call the same commands over [RPC](automation.md) (and MCP from M7k). Everything works headless, which is how the
 tests drive it.
 
 ## The editor context
@@ -60,6 +60,7 @@ takes these options:
 | `dryRun` | Validate and report how many operations it would make, without changing anything. |
 | `mergeKey` | Continuous edits (a drag) with the same key and origin become one undo step. |
 | `expectRevision` | Fail with `conflict` unless the scene is at this revision. |
+| `clientToken` | An idempotency key: over [RPC](automation.md), repeating a token returns the first reply instead of running the command again. |
 
 ## Entity references
 

@@ -77,6 +77,18 @@ if (!project)
 `Project::create()` boş olmayan bir dizini reddeder; manifest'e ismi ve motor sürümünü yazar. Ardından
 `EditorContext::openProject()` projeyi mount eder, çökme journal'ını başlatır ve başlangıç sahnesini açar.
 
+Ajanlar projeleri komutlarla oluşturur ve açar. Yalnızca editörün **çalışma alanı** (workspace;
+`EditorContextOptions::workspace`, `illusion_editor`'ün `--workspace` seçeneği) içindeki dizinlere, göreli
+bir yolla ulaşabilirler; böylece bir çağrı diskte başka bir yere yazamaz:
+
+```json
+{"directory": "tetris", "name": "Tetris", "template": "empty"}
+```
+
+`project.create` bu parametreleri alır, şablondan `<workspace>/tetris` dizinini oluşturur ve açar;
+`project.open {"directory": "tetris"}` var olan bir projeyi açar. İkisi de `discardChanges` verilmedikçe
+kaydedilmemiş değişiklikleri atmayı reddeder. Çalışma alanı yoksa `unsupported` ile başarısız olurlar.
+
 ## Ayar dosyaları
 
 `EditorContext::settings()` içine kaydedilen her proje ayar türünün `settings:` altında kendi dosyası vardır;

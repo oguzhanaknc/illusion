@@ -1,9 +1,11 @@
 #include "CommandSupport.hpp"
 
+#include <illusion/core/Hash.hpp>
 #include <illusion/ecs/StructRegistry.hpp>
 #include <illusion/text/MessageFormat.hpp>
 #include <illusion/text/TextOutput.hpp>
 
+#include <format>
 #include <mutex>
 
 namespace illusion::editor
@@ -80,6 +82,14 @@ void reflectCoreCommandTypes(StructRegistry& structs)
             .field("to", &FileMoveParams::to);
         reflectStruct<FilePathResult>("editor.FilePathResult", 1, structs)
             .field("path", &FilePathResult::path);
+        reflectStruct<ProjectCreateParams>("editor.ProjectCreateParams", 1, structs)
+            .field("directory", &ProjectCreateParams::directory)
+            .field("name", &ProjectCreateParams::name)
+            .field("template", &ProjectCreateParams::templateName)
+            .field("discardChanges", &ProjectCreateParams::discardChanges);
+        reflectStruct<ProjectOpenParams>("editor.ProjectOpenParams", 1, structs)
+            .field("directory", &ProjectOpenParams::directory)
+            .field("discardChanges", &ProjectOpenParams::discardChanges);
         reflectStruct<RecoverParams>("editor.RecoverParams", 1, structs)
             .field("journal", &RecoverParams::journal);
         reflectStruct<RecoverResult>("editor.RecoverResult", 1, structs)
@@ -101,7 +111,8 @@ void reflectCoreCommandTypes(StructRegistry& structs)
             .field("revision", &SceneInfoResult::revision)
             .field("dirty", &SceneInfoResult::dirty)
             .field("entities", &SceneInfoResult::entities)
-            .field("roots", &SceneInfoResult::roots);
+            .field("roots", &SceneInfoResult::roots)
+            .field("hash", &SceneInfoResult::hash);
         reflectStruct<SceneFileResult>("editor.SceneFileResult", 1, structs)
             .field("path", &SceneFileResult::path)
             .field("entities", &SceneFileResult::entities);
@@ -531,6 +542,10 @@ SceneInfoResult sceneInfo(EditorContext& editor)
     std::vector<Entity> roots;
     editor.entities().children(Entity{}, roots);
     info.roots = static_cast<u32>(roots.size());
+    if (const Expected<std::string, CommandError> json = editor.sceneJson())
+    {
+        info.hash = std::format("{:016x}", xxhash64(std::as_bytes(std::span(json->data(), json->size()))));
+    }
     return info;
 }
 

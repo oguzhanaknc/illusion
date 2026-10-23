@@ -43,6 +43,8 @@ Record (ADR) olarak kaydedilir. Her kayıt bağlamı, kararı ve sonuçlarını 
 | [0034](https://github.com/oguzhanaknc/illusion/blob/main/docs/adr/0034-transform-hierarchy.md) | Dünya uzayı doğruluğuyla Transform hiyerarşisi, Disabled ve Inactive |
 | [0035](https://github.com/oguzhanaknc/illusion/blob/main/docs/adr/0035-asset-references.md) | Sanal yol ile Asset referansları ve yazım/çalışma zamanı render Component'leri |
 | [0036](https://github.com/oguzhanaknc/illusion/blob/main/docs/adr/0036-editor-command-core.md) | Tipli editör komut çekirdeği, transaction'lar, işlem günlüğüyle undo, çökme journal'ı ve proje yerleşimi |
+| [0037](https://github.com/oguzhanaknc/illusion/blob/main/docs/adr/0037-editor-rpc-protocol.md) | Editör RPC protokolü: stdio ve AF_UNIX üzerinde NDJSON ile JSON-RPC 2.0, token'lar ve izin modları |
+| [0038](https://github.com/oguzhanaknc/illusion/blob/main/docs/adr/0038-agent-acceptance-transcripts.md) | Yeniden oynatılabilir transcript'lerden ajan kabul testleri |
 
 Yeni bir karar önermek için `docs/adr/0000-template.md` dosyasını kopyalayın ve
 [katkıda bulunma rehberini](../contributing.md#architecture-decision-recordlar) izleyin.

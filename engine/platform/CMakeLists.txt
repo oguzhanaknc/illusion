@@ -7,6 +7,7 @@ add_library(illusion_platform STATIC
     src/Ime.cpp
     src/Input.cpp
     src/Platform.cpp
+    src/Process.cpp
     src/Window.cpp)
 add_library(illusion::platform ALIAS illusion_platform)
 
