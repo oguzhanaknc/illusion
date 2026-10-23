@@ -8,11 +8,13 @@
 #include <illusion/ecs/Component.hpp>
 #include <illusion/ecs/ComponentJson.hpp>
 #include <illusion/ecs/Hierarchy.hpp>
+#include <illusion/ecs/SceneSerializer.hpp>
 #include <illusion/editor/core/CommandError.hpp>
 #include <illusion/editor/core/Operation.hpp>
 
 #include <filesystem>
 #include <optional>
+#include <span>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -42,7 +44,8 @@ struct CreateEntityOptions
     EntityGuid guid{};          ///< Id to use (null: a new one).
 };
 
-/// Applies edits to one World (and, with setFiles(), to project files) and records them.
+/// Applies edits to one World, the settings of its scene (and, with setFiles(), project files) and records
+/// them.
 ///
 /// Every edit validates first and changes nothing when it fails. While a transaction is open (begin()),
 /// each edit appends the operations that redo it; commit() hands them over and rollback() undoes them.
@@ -115,6 +118,18 @@ public:
     /// Gives Component @p type its default value. Returns true if the value changed.
     [[nodiscard]] Expected<bool, CommandError> resetComponent(Entity entity, ComponentId type);
 
+    /// Copies @p value, an object of the C++ type of Component @p type, into the entity's Component (which it
+    /// must have). Returns true if the value changed.
+    [[nodiscard]] Expected<bool, CommandError> assignComponent(Entity entity, ComponentId type,
+                                                               const void* value);
+
+    /// Creates the entities of @p scene (scene v2 JSON, e.g. a clipboard copy) with new ids; entity fields
+    /// between them refer to the new entities. Its roots move under @p parent (null: they stay roots) from
+    /// position @p index on (nullopt: last), keeping their world placement. Returns the new roots in file
+    /// order.
+    [[nodiscard]] Expected<std::vector<Entity>, CommandError> paste(std::string_view scene, Entity parent,
+                                                                    std::optional<u32> index);
+
     /// Moves @p entity under @p parent (null: to the roots) at @p index (see illusion::setParent()).
     [[nodiscard]] Expected<void, CommandError> setParent(Entity entity, Entity parent, ParentMode mode,
                                                          u32 index = kLastSibling);
@@ -133,6 +148,17 @@ public:
 
     /// Creates a directory and any missing parents.
     [[nodiscard]] Expected<void, CommandError> createDirectory(std::string_view path);
+
+    /// The settings of the scene (its "settings" section), sorted by type.
+    [[nodiscard]] std::span<const PreservedValue> settings() const noexcept { return m_settings; }
+
+    /// Replaces the settings without recording anything (a scene was loaded).
+    void resetSettings(std::vector<PreservedValue> settings);
+
+    /// Sets the setting @p type to @p value (compact JSON of the settings struct, saved with @p version), or
+    /// removes it for std::nullopt. Returns true if it changed.
+    [[nodiscard]] Expected<bool, CommandError>
+    setSetting(std::string_view type, std::optional<std::string> value, std::optional<u32> version);
 
     /// Applies @p operation (undo, redo, journal recovery), recording it if a transaction is open.
     /// Returns an Internal error if the World or the files do not match the operation.
@@ -154,6 +180,7 @@ private:
     [[nodiscard]] Expected<void, CommandError> applyComponent(const ComponentChange& change);
     [[nodiscard]] Expected<void, CommandError> applyLifetime(const EntityLifetime& lifetime);
     [[nodiscard]] Expected<void, CommandError> applyFile(const FileChange& change);
+    [[nodiscard]] Expected<void, CommandError> applySettings(const SettingsChange& change);
     [[nodiscard]] Expected<std::optional<std::string>, CommandError> storeBlob(std::string_view path);
     [[nodiscard]] Expected<void, CommandError> createParents(std::string_view path);
     void watch(std::vector<Watch>& watches, Entity entity, ComponentId type) const;
@@ -172,6 +199,7 @@ private:
     u64 m_blobCounter = 0;
     bool m_recording = false;
     std::vector<Operation> m_operations;
+    std::vector<PreservedValue> m_settings;
     std::vector<i8> m_entityFieldCache; // per ComponentId: -1 unknown, 0 no Entity fields, 1 has some
 };
 

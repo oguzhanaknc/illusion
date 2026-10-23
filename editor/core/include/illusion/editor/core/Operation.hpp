@@ -66,8 +66,20 @@ struct FileChange
     std::optional<std::string> after;  ///< Replace: blob of the item after.
 };
 
+/// A setting of the open scene (its "settings" section) before and after a change, as compact JSON values of
+/// the reflected struct with the data version they are saved with. std::nullopt means the scene did not have
+/// the setting.
+struct SettingsChange
+{
+    std::string type;                   ///< Stable name of the settings struct, e.g. "game.Difficulty".
+    std::optional<std::string> before;  ///< The value before.
+    std::optional<std::string> after;   ///< The value after.
+    std::optional<u32> beforeVersion{}; ///< Data version of the value before (nullopt: none recorded).
+    std::optional<u32> afterVersion{};  ///< Data version of the value after (nullopt: none recorded).
+};
+
 /// One primitive operation.
-using Operation = std::variant<ComponentChange, EntityLifetime, FileChange>;
+using Operation = std::variant<ComponentChange, EntityLifetime, FileChange, SettingsChange>;
 
 /// The operation that undoes @p operation.
 [[nodiscard]] Operation inverted(const Operation& operation);

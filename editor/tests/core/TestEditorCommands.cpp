@@ -18,11 +18,13 @@ using test::ok;
 namespace
 {
 
-// The fixture scene plus one undo step and a journal of a crashed session, so that every command has
-// something to work on.
+// The fixture scene with its assets, a full clipboard, one undo step and a journal of a crashed session, so
+// that every command has something to work on.
 void prepare(EditorFixture& fixture)
 {
     fixture.buildScene();
+    fixture.addAssets();
+    ok(*fixture.editor, "clipboard.copy", R"({"entities":["/Game/Board"]})");
     ok(*fixture.editor, "entity.rename", R"({"entity":"/Game/Board/Cell 2","name":"Cell 3"})");
     const std::filesystem::path journal =
         fixture.directory.path / "project" / ".illusion" / "journal" / "crashed.jsonl";
@@ -122,7 +124,7 @@ TEST_CASE("every core command has a test case")
         cases.emplace(entry.name);
     }
     CHECK(registered == cases);
-    CHECK(registered.size() == 46);
+    CHECK(registered.size() == 72);
 }
 
 TEST_CASE("every command succeeds on the fixture and its params and result match their schemas")

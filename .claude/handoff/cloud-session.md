@@ -1,25 +1,25 @@
-# Handoff: local agent (2026-10-20)
+# Handoff: cloud agent (2026-10-23)
 
 Terse agent notes. Rules: CLAUDE.md, AGENTS.md, .claude/skills/*. Plan: ROADMAP.md, docs/plans/m7-editor.md.
 
 ## State
-- main: M0..M6, M7a (#20), M7b localization (#21), M7c platform services (#22) merged.
-- Branch feat/m7d-ui-foundation: editor tree + export boundary (cmake/IllusionEditor.cmake, boundary
-  fixture tests/cmake, tools/check_layering.py, CI Runtime-only build), Dear ImGui 1.93 docking + ImPlot,
-  UiPlatformBackend, UiRenderer (gamma-space UI target, present pass), Theme (3 themes, contrast tests),
-  FontManager, generated Icons.hpp (cmake/IllusionIcons.cmake), FrameText, widget kit v1, UiDriver,
-  illusion_ui_gallery, editor tests (editor/tests, goldens in editor/tests/data/golden), benchmark
-  ui/gallery-frame, ADRs 0030/0031, editor-ui skill.
+- main: M0..M6, M7a..M7h, M7i (#28, headless editor core) merged.
+- M7i-2 on its own branch: transform, clipboard, asset (+ ReferenceIndex), material, log, scene/project
+  settings (SettingsCatalog, SettingsChange op), 72 commands; ADR 0036 addendum; editor-commands skill patterns.
 
 ## Next (in order)
-1. PR #23 (M7d): last full CI run was green on every job except ASan+UBSan (memcpy with a null
-   string_view in Widgets.cpp copyText). Fixed in the commit after it; check `gh pr checks 23` once and
-   merge when green (`gh pr merge 23 --merge --subject "Merge M7d: UI foundation (#23)"`). Golden images
-   pass on lavapipe. The owner approved the gallery look (2026-10-22).
-2. M7e (reflection v2: field/type metadata, struct reflection, more field types, JSON value API) on a new
-   branch from origin/main. Plan: docs/plans/m7-editor.md section 4.
-3. Owner decisions defaulted to the plan's recommendations (plan header). Live-agent CI (M7x) needs the
-   owner's API key + budget: ask then.
+1. Get the M7i-2 PR green and merged (owner reviews; never merge without the owner's explicit go).
+2. M7j: JSON-RPC server, Process API, illusion_ctl, acceptance skeleton (plan section M7j, ADRs 0037, 0038).
+3. Live-agent CI (M7x) needs the owner's API key + budget: ask then.
+
+## Lessons from M7i-2
+- The editor must not run updateTransformHierarchy() after commands: it writes root LocalTransforms (saved
+  values) outside the operation log, and multi-step redo/journal replay then diverge. EntityIndex::
+  updateTransforms() derives only children's Transforms (not saved).
+- Results write u64 fields as decimal strings (`size`, `revision`, `last`): read them with asString() in tests.
+- project.file_write is an undo step, so the scene counts as dirty afterwards (scene.open needs discardChanges).
+- Asset references are found through reflection only: Components of types the editor does not register
+  (MeshRenderer without the render module) are not searched.
 
 ## Lessons from M7d
 - Dear ImGui reports ItemInfo before ItemAdd for tabs: UiItemRegistry keeps a pending label.
@@ -43,6 +43,10 @@ Terse agent notes. Rules: CLAUDE.md, AGENTS.md, .claude/skills/*. Plan: ROADMAP.
 - yyjson reports a valid but truncated prefix as YYJSON_READ_ERROR_UNEXPECTED_END (used for error order).
 
 ## Cloud box notes (only for cloud sessions)
-- Proxy blocks github archive URLs -> clone deps to /home/user/deps and configure with
-  `$(cat /home/user/deps/args.txt)`. TSan needs `sysctl -w vm.mmap_rnd_bits=28`. venv /home/user/venv has
+- Proxy blocks github archive URLs (release downloads and raw files work) -> `git clone --depth 1 --branch <tag>`
+  each archive dependency of cmake/Dependencies.cmake to /home/user/deps/<name> (commit-pinned ones: `git fetch
+  --depth 1 origin <sha>`), write `-DFETCHCONTENT_SOURCE_DIR_<NAME>=/home/user/deps/<name>` for each into
+  /home/user/deps/args.txt and configure with `$(cat /home/user/deps/args.txt)`. GLFW needs the apt packages of
+  the CI workflow (libwayland-dev libxkbcommon-dev libx11-dev libxrandr-dev libxinerama-dev libxcursor-dev
+  libxi-dev libxext-dev). TSan needs `sysctl -w vm.mmap_rnd_bits=28`. venv /home/user/venv has
   clang-format 22 and mkdocs (put it first on PATH for tools/check_format.py).

@@ -118,8 +118,8 @@ kinds have fixed codes, outside the JSON-RPC and MCP ranges:
 ## Changes and events
 
 Every commit, undo and redo increases the scene revision. `changes().changesSince(revision, out)` returns
-which entities were created, destroyed or changed (and which Components) since a revision a client
-remembers, or `false` when it must read the scene again. `events()` delivers `scene.changed`,
+which entities were created, destroyed or changed (and which Components), and which scene settings changed,
+since a revision a client remembers, or `false` when it must read the scene again. `events()` delivers `scene.changed`,
 `selection.changed`, `history.changed`, `history.trimmed`, `scene.opened`, `scene.saved` and
 `scene.autosaved` once per `endFrame()`.
 
@@ -130,6 +130,102 @@ flushed at the end of each frame. A clean shutdown deletes the file, so a journa
 belongs to a session that crashed. `project.recover` (or `EditorContext::recover()`) opens the scene that
 journal started from and replays it as one undo step. A dirty scene is also autosaved every 60 seconds to
 `.illusion/autosave/`, keeping three rotating copies.
+
+## Transforms
+
+The `transform` commands place entities without writing Component values by hand:
+
+| Command | What it does |
+| --- | --- |
+| `transform.get` | The placement in world space or relative to the parent, with the rotation also as Euler angles in degrees. |
+| `transform.set` | Sets position, rotation and scale in world space (default) or relative to the parent. |
+| `transform.translate` | Moves by an offset along the world axes, the parent's axes (`local`) or the entity's own (`self`). |
+| `transform.rotate` | Turns about each entity's own position, about their `center` or about a `point`. |
+| `transform.scale` | Multiplies the scale; with a pivot the positions spread from it too. |
+| `transform.reset` | Resets position, rotation and scale relative to the parent. |
+
+Rotations are quaternions `[x, y, z, w]` (`rotation`) or Euler angles in degrees (`euler`, applied as yaw,
+then pitch, then roll, like `quatFromEuler()`). For a child the commands write its `LocalTransform` (exactly,
+when the space is `local`) and its derived `Transform`; for a root they write `Transform` and keep its
+`LocalTransform` equal. An entity listed together with one of its ancestors moves once, with the ancestor.
+
+```json
+{"entities": ["/Game/Board", "/Game/Player"], "euler": [0, 90, 0], "pivot": "center"}
+```
+
+After every change, and after a scene opens, the editor derives the world `Transform` of every child from
+its `LocalTransform` (`EntityIndex::updateTransforms()`), so world placements are current for the next
+command: `hierarchy.set_parent` with `keepWorld` keeps an entity where it is even right after loading. Only
+derived values are written there; saved values change only through commands, so undo stays exact.
+
+## Clipboard
+
+`clipboard.copy` puts entities and their descendants on the editor's clipboard as scene v2 JSON and returns
+it; copied roots keep their world placement. `clipboard.paste` creates them again with new ids, under a
+`parent` if one is given, and selects them. Entity fields between the copied entities point at the new
+copies; fields that pointed outside the copy become null. `clipboard.cut` copies and destroys in one undo
+step. `clipboard.paste` also takes scene JSON in `text`, so agents can insert prepared entities.
+
+## Assets and references
+
+The `asset` commands work on files under `assets:/`: `asset.list` (with the kinds `Folder`, `Scene`,
+`Material`, `Model`, `Texture`, `Environment`, `AudioClip` and `Other`), `asset.info`,
+`asset.create_folder`, `asset.move`, `asset.delete`, `asset.references` and `asset.dependencies`.
+
+References are found through reflection: every `AssetRef` field of a saved Component, of the scene's
+settings, of `.material` files and of project settings files. `ReferenceIndex` reads every scene and
+material under `assets:/` and every settings file under `settings:/` (extensions in any case), and parses
+again only the files whose contents changed. The open scene is read from the edited World instead of its
+file, so unsaved changes count, and the manifest's startup scene counts as a reference from
+`project.illusion`. A reference to `assets:/models/ship.glb` also matches its sub-assets (`#mesh/0`), and a
+folder matches everything inside it.
+
+- `asset.move` moves a file or folder and rewrites every reference to it, in closed scenes, materials and
+  settings files (written again) and in the open scene (saved with it), as one undo step.
+- `asset.delete` refuses while something outside the deleted path refers to it; with `force` it deletes
+  anyway and returns the dangling references. Undo brings the files back.
+- Neither command moves or deletes the open scene's file: save the scene under another name first. The
+  startup scene cannot be moved either.
+
+Components and settings whose types are not registered (kept as they are in the file) are not searched;
+`asset.references` warns about files it cannot read.
+
+## Materials
+
+`material.create`, `material.get` and `material.set` read and write `.material` files through the
+reflection of `MaterialAsset`: the fields of `MaterialData` under `material`, texture paths under
+`textures`. `material.set` merges, and both writing commands are undoable file changes.
+
+```json
+{"path": "assets:/materials/red.material", "value": {"material": {"baseColorFactor": "#cc2222", "roughnessFactor": 0.4}}}
+```
+
+## Settings
+
+Settings types are reflected structs registered in `EditorContext::settings()`, each for scenes or for the
+project:
+
+```cpp
+illusion::reflectStruct<game::Difficulty>("game.Difficulty").field("enemies", &game::Difficulty::enemies);
+editor.settings().add("game.Difficulty", illusion::editor::SettingsScope::Scene);
+editor.settings().add("game.Controls", illusion::editor::SettingsScope::Project, "settings:/controls.json");
+```
+
+- **Scene settings** live in the `settings` section of the scene file. `scene.settings_get` lists every
+  registered type with all its fields (defaults when the scene does not set it) and settings of unknown
+  types as they are saved; `scene.settings_set` merges a patch as an undo step (`replace` resets the other
+  fields, `null` removes the setting). Settings of unknown types are saved again unchanged.
+- **Project settings** live in their own file under `settings:`, in the format `illusion.settings` with the
+  type and its data version, so older files migrate. `project.settings_get` and `project.settings_set` work
+  the same way; `null` deletes the file. Project settings cannot hold entity references.
+
+## Log
+
+The editor keeps the newest log messages of the process (`EditorContextOptions::logCapacity`, 1,024 by
+default). `log.read` returns them oldest first, filtered by `minLevel`, `category` or `contains`: without
+`since` the newest `limit` of them, with `since` the oldest after it, so that passing the returned `last` as
+`since` again reads on without losing any. `log.clear` hides what was logged so far, and
+`log.set_level` sets the lowest level the process logs.
 
 ## Writing a command
 

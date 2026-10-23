@@ -296,7 +296,9 @@ TEST_CASE("operations round-trip through the journal encoding and invert")
     const Operation spawn =
         EntityLifetime{{EntityRecord{EntityGuid{5}, R"({"illusion.Name":{"value":"B"}})"}}, true};
     const Operation file = FileChange{FileChange::Kind::Move, "assets:/a", "assets:/b", {}, {}};
-    for (const Operation& operation : {change, spawn, file})
+    const Operation settings =
+        SettingsChange{"test.Difficulty", R"({"enemies":2})", std::nullopt, 1u, std::nullopt};
+    for (const Operation& operation : {change, spawn, file, settings})
     {
         JsonMutDocument doc;
         doc.setRoot(writeOperation(doc, operation));
@@ -311,6 +313,23 @@ TEST_CASE("operations round-trip through the journal encoding and invert")
     CHECK(std::get<ComponentChange>(inverted(change)).before == R"({"value":"A"})");
     CHECK_FALSE(std::get<EntityLifetime>(inverted(spawn)).spawn);
     CHECK(std::get<FileChange>(inverted(file)).path == "assets:/b");
+    const SettingsChange undone = std::get<SettingsChange>(inverted(settings));
+    CHECK(undone.after == R"({"enemies":2})");
+    CHECK(undone.afterVersion == 1u);
+    CHECK_FALSE(undone.before.has_value());
+    CHECK_FALSE(undone.beforeVersion.has_value());
+    JsonMutDocument settingsDoc;
+    settingsDoc.setRoot(writeOperation(settingsDoc, settings));
+    std::string settingsText;
+    REQUIRE(settingsDoc.write(settingsText));
+    const Expected<Operation, std::string> settingsRead = readOperation(test::parseJson(settingsText).root());
+    REQUIRE(settingsRead.hasValue());
+    CHECK(std::get<SettingsChange>(*settingsRead).beforeVersion == 1u);
+    CHECK_FALSE(
+        readOperation(
+            test::parseJson(R"({"op":"settings","type":"t","before":null,"after":null,"afterVersion":-1})")
+                .root())
+            .hasValue());
     CHECK_FALSE(readOperation(test::parseJson(R"({"op":"nope"})").root()).hasValue());
     CHECK_FALSE(readOperation(test::parseJson(R"({"op":"component","entity":"x"})").root()).hasValue());
 }

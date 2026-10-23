@@ -137,10 +137,14 @@ Plan: `docs/plans/m7-editor.md` (sub-milestones, command API, localization, them
   journal with `project.recover`, autosave, and 46 commands in the `editor`, `project`, `scene`, `entity`,
   `component`, `hierarchy`, `selection` and `history` modules with a generated reference
   (`editor.command_reference`) and a schema golden file
-- M7i-2: The remaining command modules of the plan: `transform` (spaces, pivots, Euler input),
-  `clipboard`, `asset` with a `ReferenceIndex` (move with reference fix-up, delete with a reference check,
-  references, dependencies), `material`, `log`, scene and project settings, and the
-  `.claude/skills/editor-commands` examples for them
+- M7i-2: ✅ The remaining command modules (72 commands in all): `transform` (get, set, translate, rotate,
+  scale, reset; world, parent and own axes, individual, center and point pivots, Euler input in degrees),
+  `clipboard` (copy, cut, paste of scene v2 subtrees with new ids and world placement), `asset` (list, info,
+  create_folder, move with reference fix-up, delete with a reference check, references, dependencies) over a
+  reflection-based `ReferenceIndex` of scenes and materials, `material` (create, get, set), `log` (read,
+  clear, set_level over a log ring), scene and project settings through a `SettingsCatalog` (`SettingsChange`
+  operations, `illusion.settings` files), scene settings kept on save, world Transforms of children derived
+  after every change, and the `editor-commands` skill patterns (ADR 0036 addendum)
 - M7j: JSON-RPC server, process API, `illusion_ctl`, acceptance skeleton (ADRs 0037, 0038)
 - M7k: MCP bridge `illusion_mcp` with tools generated from editor commands (ADR 0039)
 - M7l: Editor shell: layouts, menus, command palette, console, history, AI activity, preferences

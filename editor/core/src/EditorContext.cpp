@@ -1,5 +1,7 @@
 #include "PathText.hpp"
+#include "ReflectedObject.hpp"
 
+#include <illusion/assets/AssetReflection.hpp>
 #include <illusion/core/Json.hpp>
 #include <illusion/core/Log.hpp>
 #include <illusion/core/Profiler.hpp>
@@ -42,44 +44,14 @@ void reflectOnce()
 {
     static const bool reflected = [] {
         reflectCoreComponents();
+        reflectAssetStructs(ComponentRegistry::instance());
         reflectCoreCommandTypes(ComponentRegistry::instance().structs());
         return true;
     }();
     (void)reflected;
 }
 
-// A default-constructed value of a reflected struct (or a stand-in for NoParams/NoResult).
-class ReflectedObject : NonCopyable
-{
-public:
-    explicit ReflectedObject(const TypeReflection* type)
-        : m_type(type)
-    {
-        if (m_type == nullptr)
-        {
-            m_data = &m_empty;
-            return;
-        }
-        m_data = ::operator new(m_type->size, std::align_val_t(m_type->alignment));
-        m_type->ops->construct(m_data);
-    }
-
-    ~ReflectedObject()
-    {
-        if (m_type != nullptr)
-        {
-            m_type->ops->destroy(m_data);
-            ::operator delete(m_data, std::align_val_t(m_type->alignment));
-        }
-    }
-
-    [[nodiscard]] void* data() noexcept { return m_data; }
-
-private:
-    const TypeReflection* m_type;
-    void* m_data = nullptr;
-    NoResult m_empty;
-};
+using detail::ReflectedObject;
 
 std::string compact(const JsonMutDocument& doc)
 {
@@ -159,6 +131,11 @@ EditorContext::EditorContext(const EditorContextOptions& options)
     , m_history(options.undoBudget)
 {
     reflectOnce();
+    if (options.logCapacity > 0)
+    {
+        m_log = std::make_shared<LogRingSink>(options.logCapacity);
+        Logger::instance().addSink(m_log);
+    }
     m_localization.addTable(strings::kTable);
     if (options.registerCoreCommands)
     {
@@ -176,6 +153,10 @@ EditorContext::~EditorContext()
         std::error_code code;
         std::filesystem::remove_all(m_project->stateDirectory() / "trash" / utf8Path(m_session), code);
         m_project->unmount(m_files);
+    }
+    if (m_log)
+    {
+        Logger::instance().removeSink(m_log.get());
     }
 }
 
@@ -199,6 +180,7 @@ Expected<void, CommandError> EditorContext::openProject(const std::filesystem::p
             ErrorKind::IoError, "cannot mount the project (" + std::string(fileErrorName(error)) + ")"));
     }
     m_project = std::move(project).value();
+    m_references.clear();
     m_editor.setFiles(&m_files, m_project->stateDirectory() / "trash", m_session);
     if (m_options.crashJournal)
     {
@@ -224,6 +206,7 @@ Expected<void, CommandError> EditorContext::openProject(const std::filesystem::p
 void EditorContext::sceneReplaced(std::string_view path)
 {
     m_index.rebuild();
+    m_index.updateTransforms(true);
     m_selection.clear();
     m_history.clear();
     m_changes.reset();
@@ -235,6 +218,7 @@ void EditorContext::sceneReplaced(std::string_view path)
 void EditorContext::newScene()
 {
     m_world.clear();
+    m_editor.resetSettings({});
     sceneReplaced("");
     m_journal.writeBase("");
 }
@@ -258,7 +242,8 @@ Expected<bool, CommandError> EditorContext::loadSceneText(std::string_view json,
         }
     }
     m_world.clear();
-    const SceneLoadResult result = loadScene(m_world, json, options);
+    SceneLoadResult result = loadScene(m_world, json, options);
+    m_editor.resetSettings(std::move(result.preservedSettings));
     if (warnings != nullptr)
     {
         warnings->insert(warnings->end(), result.warnings.begin(), result.warnings.end());
@@ -308,7 +293,9 @@ Expected<void, CommandError> EditorContext::openScene(std::string_view path,
 
 Expected<std::string, CommandError> EditorContext::sceneJson() const
 {
-    const SceneSaveResult saved = illusion::saveScene(m_world, SceneSaveOptions{});
+    SceneSaveOptions options;
+    options.preservedSettings = m_editor.settings();
+    const SceneSaveResult saved = illusion::saveScene(m_world, options);
     if (!saved.ok())
     {
         return unexpected(CommandError::make(ErrorKind::Internal, "cannot write the scene: " + saved.error));
@@ -326,7 +313,9 @@ Expected<u32, CommandError> EditorContext::saveScene(std::string_view path)
                                              "the scene has no file yet; use scene.save_as"));
     }
     assignMissingGuids(m_world, m_guids);
-    const SceneSaveResult saved = illusion::saveScene(m_world, SceneSaveOptions{});
+    SceneSaveOptions options;
+    options.preservedSettings = m_editor.settings();
+    const SceneSaveResult saved = illusion::saveScene(m_world, options);
     if (!saved.ok())
     {
         return unexpected(CommandError::make(ErrorKind::Internal, "cannot write the scene: " + saved.error));
@@ -346,6 +335,20 @@ Expected<u32, CommandError> EditorContext::saveScene(std::string_view path)
     m_journal.writeSaved(target);
     m_events.post("scene.saved", "{\"revision\":" + std::to_string(revision()) + "}");
     return saved.entities;
+}
+
+const ReferenceIndex& EditorContext::references()
+{
+    if (m_project)
+    {
+        m_references.refresh(m_files);
+    }
+    return m_references;
+}
+
+void EditorContext::clearLog()
+{
+    m_logCleared = m_log ? m_log->latestSequence() : 0;
 }
 
 CommandError EditorContext::unknownCommand(std::string_view name) const
@@ -467,17 +470,27 @@ Expected<std::string, CommandError> EditorContext::executeJson(std::string_view 
         return unexpected(unknownCommand(name));
     }
     CommandOptions effective = options;
-    ReflectedObject paramObject(descriptor->params);
-    if (Expected<void, CommandError> read = readParams(*descriptor, params, paramObject.data(), effective);
-        !read)
+    // Commands without params or a result take NoParams and NoResult objects.
+    NoParams noParams;
+    NoResult noResult;
+    std::optional<ReflectedObject> paramObject;
+    std::optional<ReflectedObject> resultObject;
+    void* paramData = &noParams;
+    void* resultData = &noResult;
+    if (descriptor->params != nullptr)
+    {
+        paramData = paramObject.emplace(descriptor->params).data();
+    }
+    if (descriptor->result != nullptr)
+    {
+        resultData = resultObject.emplace(descriptor->result).data();
+    }
+    if (Expected<void, CommandError> read = readParams(*descriptor, params, paramData, effective); !read)
     {
         return unexpected(std::move(read).error());
     }
-    ReflectedObject resultObject(descriptor->result);
     CommandReport report;
-    if (Expected<void, CommandError> ran =
-            run(*descriptor, paramObject.data(), resultObject.data(), effective, report);
-        !ran)
+    if (Expected<void, CommandError> ran = run(*descriptor, paramData, resultData, effective, report); !ran)
     {
         return unexpected(std::move(ran).error());
     }
@@ -485,8 +498,7 @@ Expected<std::string, CommandError> EditorContext::executeJson(std::string_view 
     JsonMutValue root;
     if (descriptor->result != nullptr)
     {
-        Expected<JsonMutValue, ValueError> written =
-            writeValue(doc, *descriptor->result, resultObject.data());
+        Expected<JsonMutValue, ValueError> written = writeValue(doc, *descriptor->result, resultData);
         if (!written)
         {
             return unexpected(CommandError::make(ErrorKind::Internal,
@@ -598,6 +610,7 @@ void EditorContext::commitStep(std::vector<Operation> operations, std::string_vi
 
 void EditorContext::afterChange()
 {
+    m_index.updateTransforms();
     m_changes.endRevision();
     m_events.post("scene.changed", "{\"revision\":" + std::to_string(revision()) + "}");
     m_events.post("history.changed", "{\"position\":" + std::to_string(m_history.position()) +

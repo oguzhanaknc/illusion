@@ -183,9 +183,17 @@ World + project files
 ```
 
 Operations are Component values before and after (scene v2 JSON), entity snapshots that appear or
-disappear, and file changes backed by blobs in `.illusion/trash`. Undo, redo, rollback of failed commands
-and dry runs, and crash recovery all replay them, so the scene after undoing everything is byte for byte the
-scene before. The manual describes [using it](../manual/editor/index.md).
+disappear, values of scene settings, and file changes backed by blobs in `.illusion/trash`. Undo, redo,
+rollback of failed commands and dry runs, and crash recovery all replay them, so the scene after undoing
+everything is byte for byte the scene before. After each change the editor derives the world Transforms of
+children again; it writes only those derived values, which scene files do not keep, so replaying operations
+stays exact.
+
+Two more parts sit beside the World: the `SettingsCatalog` (the reflected structs that scenes and the
+project keep as settings) and the `ReferenceIndex`, which knows the asset references of every scene and
+material file under `assets:/` (found through reflection, parsed again only when a file's contents change)
+so that `asset.move` can rewrite them and `asset.delete` can refuse. The manual describes
+[using it](../manual/editor/index.md).
 
 ## Performance
 
@@ -194,7 +202,9 @@ scene before. The manual describes [using it](../manual/editor/index.md).
 - The benchmark `ui/gallery-frame` measures the CPU cost of a frame of the densest gallery page (about 40 µs
   on a desktop; budget 400 µs).
 - The editor core's benchmarks: `editor/component-set` (one merged `component.set`), `editor/undo-capture-delete`
-  (destroying and restoring a subtree, per entity) and `editor/scene-query` (per entity searched).
+  (destroying and restoring a subtree, per entity), `editor/scene-query` (per entity searched),
+  `editor/transform-translate` (one merged `transform.translate` four levels deep, like a gizmo drag) and
+  `editor/reference-refresh` (checking an unchanged scene file for the reference index).
 
 ## Accessibility
 
