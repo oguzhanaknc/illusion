@@ -21,7 +21,6 @@
 
 #include <cstdio>
 #include <filesystem>
-#include <fstream>
 #include <optional>
 #include <random>
 #include <string>
@@ -71,14 +70,32 @@ std::string pretty(std::string_view json)
     return out;
 }
 
+// C stdio instead of iostreams: GCC 13 reports a false -Wnull-dereference inside <streambuf> at -O3.
 std::optional<std::string> readFile(const std::filesystem::path& path)
 {
-    std::ifstream in(path, std::ios::binary);
-    if (!in)
+#if defined(_WIN32)
+    std::FILE* file = nullptr;
+    if (_wfopen_s(&file, path.c_str(), L"rb") != 0)
+    {
+        file = nullptr;
+    }
+#else
+    std::FILE* file = std::fopen(path.c_str(), "rb");
+#endif
+    if (file == nullptr)
     {
         return std::nullopt;
     }
-    return std::string((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
+    std::string text;
+    char buffer[16 * 1024];
+    usize count = 0;
+    while ((count = std::fread(buffer, 1, sizeof(buffer), file)) > 0)
+    {
+        text.append(buffer, count);
+    }
+    const bool failed = std::ferror(file) != 0;
+    std::fclose(file);
+    return failed ? std::nullopt : std::optional<std::string>(std::move(text));
 }
 
 struct Options

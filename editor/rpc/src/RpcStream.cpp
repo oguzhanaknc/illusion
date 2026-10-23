@@ -9,12 +9,13 @@
 #include <array>
 #include <atomic>
 #include <condition_variable>
+#include <cstdio>
 #include <cstdlib>
 #include <cstring>
 #include <deque>
 #include <format>
-#include <fstream>
 #include <mutex>
+#include <optional>
 #include <thread>
 #include <vector>
 
@@ -60,6 +61,42 @@ std::chrono::milliseconds remaining(std::chrono::milliseconds timeout,
     const auto elapsed =
         std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - start);
     return elapsed >= timeout ? std::chrono::milliseconds(0) : timeout - elapsed;
+}
+
+// Opens @p path with the C runtime (UTF-8 safe on Windows); nullptr on failure. C stdio instead of iostreams:
+// GCC 13 reports a false -Wnull-dereference inside <streambuf> at -O3.
+std::FILE* openFile(const std::filesystem::path& path, bool write)
+{
+#if defined(ILL_PLATFORM_WINDOWS)
+    std::FILE* file = nullptr;
+    return _wfopen_s(&file, path.c_str(), write ? L"wb" : L"rb") == 0 ? file : nullptr;
+#else
+    return std::fopen(path.c_str(), write ? "wb" : "rb");
+#endif
+}
+
+// The whole contents of @p path, or nothing if it cannot be read.
+std::optional<std::string> readWholeFile(const std::filesystem::path& path)
+{
+    std::FILE* file = openFile(path, false);
+    if (file == nullptr)
+    {
+        return std::nullopt;
+    }
+    std::string text;
+    char buffer[16 * 1024];
+    usize count = 0;
+    while ((count = std::fread(buffer, 1, sizeof(buffer), file)) > 0)
+    {
+        text.append(buffer, count);
+    }
+    const bool failed = std::ferror(file) != 0;
+    std::fclose(file);
+    if (failed)
+    {
+        return std::nullopt;
+    }
+    return text;
 }
 
 // In-memory streams.
@@ -825,15 +862,20 @@ Expected<void, std::string> writeEndpointFile(const std::filesystem::path& file,
         file.parent_path() / utf8Path(std::format(".{}.{}.tmp", utf8Of(file.filename()), currentProcessId()));
 #if defined(ILL_PLATFORM_WINDOWS)
     // Restrict the empty file before the token goes into it.
-    if (!std::ofstream(temporary, std::ios::binary | std::ios::trunc) || !restrictToOwner(temporary))
+    std::FILE* created = openFile(temporary, true);
+    if (created == nullptr || std::fclose(created) != 0 || !restrictToOwner(temporary))
     {
         std::filesystem::remove(temporary, code);
         return unexpected("cannot create '" + utf8Of(temporary) + "' for the current user only");
     }
     {
-        std::ofstream out(temporary, std::ios::binary | std::ios::trunc);
-        out.write(text.data(), static_cast<std::streamsize>(text.size()));
-        if (!out)
+        std::FILE* out = openFile(temporary, true);
+        const bool written = out != nullptr && std::fwrite(text.data(), 1, text.size(), out) == text.size();
+        if (out != nullptr && std::fclose(out) != 0)
+        {
+            return unexpected("cannot write '" + utf8Of(temporary) + "'");
+        }
+        if (!written)
         {
             return unexpected("cannot write '" + utf8Of(temporary) + "'");
         }
@@ -867,14 +909,13 @@ Expected<void, std::string> writeEndpointFile(const std::filesystem::path& file,
 
 Expected<EndpointInfo, std::string> readEndpointFile(const std::filesystem::path& file)
 {
-    std::ifstream in(file, std::ios::binary);
-    if (!in)
+    const std::optional<std::string> contents = readWholeFile(file);
+    if (!contents)
     {
         return unexpected("no endpoint file at '" + utf8Of(file) +
                           "' (is the editor running with --rpc-listen?)");
     }
-    const std::string text((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
-    Expected<JsonDocument, JsonError> doc = JsonDocument::parse(text);
+    Expected<JsonDocument, JsonError> doc = JsonDocument::parse(*contents);
     if (!doc || !doc->root().isObject())
     {
         return unexpected("'" + utf8Of(file) + "' is not a valid endpoint file");
