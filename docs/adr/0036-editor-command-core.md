@@ -78,3 +78,27 @@ a stable id.
   materials and log commands are separate modules (M7i-2), built on this core.
 - Blobs of replaced and deleted files live until the session ends cleanly; a crashed session's blobs are
   kept with its journal so that recovery can replay file changes.
+
+## Addendum: the M7i-2 command modules (2026-10-23)
+
+These decisions add to the ones above; none of them changes them.
+
+- **Derived world placements.** After every commit, undo, redo, recovery and scene load the editor derives
+  the world `Transform` of every child from its `LocalTransform` (`EntityIndex::updateTransforms()`). It does
+  not run `updateTransformHierarchy()`, which also writes the `LocalTransform` of roots: that value is saved,
+  and a change made outside the operation log would make redo and journal replay diverge. Transform commands
+  compute world placements through the chain of `LocalTransform`s, so they are right even within a command
+  that moved a parent.
+- **Settings.** `SettingsCatalog` registers reflected structs as scene settings (saved in the scene's
+  `settings` section, changed through a new `SettingsChange` operation with the data versions before and
+  after) or as project settings (one `illusion.settings` file per type under `settings:`, changed as file
+  operations). Project settings cannot hold entity references. Scene settings of unregistered types are kept
+  and saved again unchanged.
+- **References.** `ReferenceIndex` finds asset references through reflection (`FieldType::Asset`) in scene
+  and material files under `assets:/` and project settings files under `settings:/`, rereading every file and
+  parsing again only files whose content hash changed (modification times can miss a same-length rewrite
+  within their resolution). The open scene is searched in the edited World, and the manifest's startup scene
+  counts as a reference (moving it is refused until the manifest can be edited through commands). Rewritten
+  scenes are saved through the scene serializer, so they come out in the current format.
+- **Clipboard.** The clipboard is scene v2 JSON of the copied subtrees, saved in the order given, with each
+  copied root's world placement written into it; pasting loads it with new ids (`IdPolicy::Regenerate`).

@@ -14,8 +14,10 @@
 #include <illusion/editor/core/CrashJournal.hpp>
 #include <illusion/editor/core/EntityIndex.hpp>
 #include <illusion/editor/core/Project.hpp>
+#include <illusion/editor/core/ReferenceIndex.hpp>
 #include <illusion/editor/core/SceneDocument.hpp>
 #include <illusion/editor/core/Selection.hpp>
+#include <illusion/editor/core/SettingsCatalog.hpp>
 #include <illusion/editor/core/UndoStack.hpp>
 #include <illusion/editor/core/WorldEditor.hpp>
 #include <illusion/platform/FileSystem.hpp>
@@ -24,9 +26,15 @@
 #include <filesystem>
 #include <memory>
 #include <optional>
+#include <span>
 #include <string>
 #include <string_view>
 #include <vector>
+
+namespace illusion
+{
+class LogRingSink;
+} // namespace illusion
 
 namespace illusion::editor
 {
@@ -42,6 +50,7 @@ struct EditorContextOptions
     f64 autosaveInterval = 60.0;           ///< Seconds between autosaves of a dirty scene (0: never).
     u32 autosaveCopies = 3;                ///< Autosave files kept per scene (rotating).
     bool crashJournal = true;              ///< Write `.illusion/journal/<session>.jsonl` in projects.
+    usize logCapacity = 1024;              ///< Log messages kept for `log.read` (0: none are kept).
     bool registerCoreCommands = true;      ///< Register the core command modules (registerCoreCommands()).
 };
 
@@ -127,8 +136,10 @@ struct RecoveryResult
 /// The editor without a window: everything humans and agents change goes through its commands.
 ///
 /// It owns a VirtualFileSystem (with the project mounts once a project is open), one World holding the
-/// open scene, the EntityIndex, the Selection, the UndoStack and the journals. Commands run on the thread
-/// that owns the context, at the command point of the frame, never while a Query iterates.
+/// open scene and its settings, the EntityIndex, the Selection, the UndoStack, the journals, the clipboard,
+/// the settings types, the asset reference index and a ring of recent log messages. Commands run on the
+/// thread that owns the context, at the command point of the frame, never while a Query iterates. After
+/// every change the world-space Transforms of children are derived again (EntityIndex::updateTransforms()).
 class EditorContext : NonCopyable
 {
 public:
@@ -180,6 +191,34 @@ public:
 
     /// Makes entity ids (seeded by EditorContextOptions::seed).
     [[nodiscard]] GuidGenerator& guids() noexcept { return m_guids; }
+
+    /// The settings of the open scene (the "settings" section of its file), sorted by type.
+    [[nodiscard]] std::span<const PreservedValue> sceneSettings() const noexcept
+    {
+        return m_editor.settings();
+    }
+
+    /// The settings types the settings commands accept.
+    [[nodiscard]] SettingsCatalog& settings() noexcept { return m_settings; }
+
+    /// The asset references of the project's scene and material files, brought up to date first (empty
+    /// without a project).
+    [[nodiscard]] const ReferenceIndex& references();
+
+    /// The editor's clipboard: scene v2 JSON of copied entities ("" when empty).
+    [[nodiscard]] const std::string& clipboard() const noexcept { return m_clipboard; }
+
+    /// Replaces the clipboard.
+    void setClipboard(std::string text) noexcept { m_clipboard = std::move(text); }
+
+    /// Recent log messages of the process (nullptr if EditorContextOptions::logCapacity is 0).
+    [[nodiscard]] const LogRingSink* log() const noexcept { return m_log.get(); }
+
+    /// Sequence of the last log message hidden by clearLog() (`log.read` returns newer ones).
+    [[nodiscard]] u64 logCleared() const noexcept { return m_logCleared; }
+
+    /// Hides the log messages written so far from `log.read`.
+    void clearLog();
 
     /// The session id: 16 hex digits, also the crash journal's file name.
     [[nodiscard]] const std::string& session() const noexcept { return m_session; }
@@ -294,6 +333,11 @@ private:
     CommandRegistry m_commands;
     text::Localization m_localization;
     CrashJournal m_journal;
+    SettingsCatalog m_settings;
+    ReferenceIndex m_references;
+    std::string m_clipboard;
+    std::shared_ptr<LogRingSink> m_log;
+    u64 m_logCleared = 0;
     f64 m_autosaveTimer = 0.0;
     u32 m_autosaveCounter = 0;
     bool m_running = false;

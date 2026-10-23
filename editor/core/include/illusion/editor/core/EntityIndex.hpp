@@ -75,6 +75,14 @@ public:
     /// The World's hierarchy, brought up to date first.
     [[nodiscard]] const HierarchyIndex& hierarchy();
 
+    /// Derives the world-space Transform of every child with a LocalTransform from its parent's Transform, as
+    /// illusion::updateTransformHierarchy() does for children; with @p addMissing, children without a
+    /// Transform get one (a scene was loaded: saved scenes leave out derived Transforms). Saved values (root
+    /// Transforms, LocalTransforms) are never written, so undo and the crash journal stay exact. Costs
+    /// nothing when no Transform, LocalTransform or Hierarchy changed since the last call. EditorContext
+    /// calls it after every change, so that world placements are current when the next command reads them.
+    void updateTransforms(bool addMissing = false);
+
     /// Appends the children of @p parent to @p out in order; for the null entity, the roots: entities with
     /// a Hierarchy and no parent in order, then entities without a Hierarchy by id.
     void children(Entity parent, std::vector<Entity>& out);
@@ -108,6 +116,7 @@ private:
     std::unordered_map<u64, Entity> m_entities;
     HierarchyIndex m_hierarchy;
     std::vector<Entity> m_scratch;
+    u64 m_placementVersions[3] = {~u64{0}, ~u64{0}, ~u64{0}}; // Transform, LocalTransform, Hierarchy
 };
 
 } // namespace illusion::editor

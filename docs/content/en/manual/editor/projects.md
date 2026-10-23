@@ -77,6 +77,23 @@ if (!project)
 the manifest. `EditorContext::openProject()` then mounts the project, starts the crash journal and opens
 the startup scene.
 
+## Settings files
+
+Each project settings type registered in `EditorContext::settings()` has its own file under `settings:`,
+written by `project.settings_set` (see [the editor core](index.md#settings)):
+
+```json
+{
+  "format": "illusion.settings",
+  "type": "game.Controls",
+  "version": 1,
+  "value": {"invertY": true, "sensitivity": 1.5}
+}
+```
+
+`version` is the data version of the struct, so files saved by an older version migrate when they are read
+(`readSettingsFile()`); fields the file does not mention keep their defaults.
+
 ## Recovering a crashed session
 
 When the editor opens a project, journals of other sessions in `.illusion/journal/` are sessions that

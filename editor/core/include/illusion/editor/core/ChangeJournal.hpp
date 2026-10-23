@@ -22,18 +22,20 @@ enum class ChangeKind : u8
     Created,   ///< The entity appeared.
     Destroyed, ///< The entity disappeared.
     Changed,   ///< One of its Components was added, removed or set.
+    Settings,  ///< A setting of the scene changed: the entity is null, the component is the settings type.
 };
 
 /// Stable lower-case name of @p kind, e.g. "created".
 [[nodiscard]] std::string_view changeKindName(ChangeKind kind) noexcept;
 
-/// One change of one entity.
+/// One change of one entity (or of a scene setting).
 struct EntityChange
 {
     u64 revision = 0;                      ///< Revision that made it.
     EntityGuid entity;                     ///< The entity.
     ChangeKind kind = ChangeKind::Changed; ///< What happened.
-    std::string component;                 ///< Changed: stable name of the Component ("" otherwise).
+    std::string
+        component; ///< Changed: stable name of the Component; Settings: the settings type ("" otherwise).
 };
 
 /// Revisions of the edited scene and the entity changes of each one.

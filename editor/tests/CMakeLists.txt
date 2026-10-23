@@ -11,10 +11,15 @@ illusion_add_editor_executable(illusion_editor_tests
     TestTheme.cpp
     TestUiPlatform.cpp
     TestWidgets.cpp
+    core/TestEditorAssets.cpp
+    core/TestEditorClipboard.cpp
     core/TestEditorCommands.cpp
     core/TestEditorCore.cpp
     core/TestEditorFuzz.cpp
-    core/TestEditorHistory.cpp)
+    core/TestEditorHistory.cpp
+    core/TestEditorLog.cpp
+    core/TestEditorSettings.cpp
+    core/TestEditorTransforms.cpp)
 target_include_directories(illusion_editor_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR} ${PROJECT_SOURCE_DIR}/tests)
 target_link_libraries(illusion_editor_tests PRIVATE illusion_ui_gallery_pages illusion::editor_core illusion::doctest)
 # Golden files of the editor core (ILLUSION_UPDATE_GOLDENS=1 rewrites them).

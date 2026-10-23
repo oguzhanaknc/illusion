@@ -121,7 +121,7 @@ döndürür. Türlerin JSON-RPC ve MCP aralıklarının dışında sabit kodlar�
 
 Her commit, undo ve redo sahne revizyonunu artırır. `changes().changesSince(revision, out)`, bir istemcinin
 hatırladığı revizyondan bu yana hangi Entity'lerin oluşturulduğunu, silindiğini veya değiştiğini (ve hangi
-Component'lerin) döndürür; istemcinin sahneyi yeniden okuması gerekiyorsa `false` döner. `events()`;
+Component'lerin), ayrıca hangi sahne ayarlarının değiştiğini döndürür; istemcinin sahneyi yeniden okuması gerekiyorsa `false` döner. `events()`;
 `scene.changed`, `selection.changed`, `history.changed`, `history.trimmed`, `scene.opened`, `scene.saved` ve
 `scene.autosaved` event'lerini her `endFrame()` çağrısında bir kez iletir.
 
@@ -132,6 +132,106 @@ karenin sonunda diske yazılır. Düzgün bir kapanış dosyayı siler; geride k
 aittir. `project.recover` (veya `EditorContext::recover()`) o journal'ın başladığı sahneyi açar ve journal'ı
 tek bir undo adımı olarak yeniden oynatır. Kaydedilmemiş değişiklikleri olan bir sahne ayrıca her 60 saniyede
 `.illusion/autosave/` içine kaydedilir; dönüşümlü üç kopya tutulur.
+
+## Transform'lar
+
+`transform` komutları Entity'leri Component değerlerini elle yazmadan yerleştirir:
+
+| Komut | Ne yapar |
+| --- | --- |
+| `transform.get` | Dünya uzayındaki ya da parent'a göre yerleşimi verir; dönüşü ayrıca derece cinsinden Euler açılarıyla verir. |
+| `transform.set` | Konumu, dönüşü ve ölçeği dünya uzayında (varsayılan) ya da parent'a göre ayarlar. |
+| `transform.translate` | Bir öteleme kadar taşır: dünya eksenleri, parent'ın eksenleri (`local`) ya da Entity'nin kendi eksenleri (`self`) boyunca. |
+| `transform.rotate` | Her Entity'yi kendi konumu, hepsinin merkezi (`center`) ya da bir nokta (`point`) etrafında döndürür. |
+| `transform.scale` | Ölçeği çarpar; bir pivot verilirse konumlar da ondan uzaklaşır. |
+| `transform.reset` | Parent'a göre konumu, dönüşü ve ölçeği sıfırlar. |
+
+Dönüşler quaternion `[x, y, z, w]` (`rotation`) ya da derece cinsinden Euler açılarıdır (`euler`;
+`quatFromEuler()` gibi önce yaw, sonra pitch, sonra roll uygulanır). Komutlar bir çocuk için `LocalTransform`
+değerini (uzay `local` ise tam olarak) ve türetilmiş `Transform` değerini yazar; bir kök için `Transform`
+yazar ve `LocalTransform` değerini ona eşit tutar. Atalarından biriyle birlikte listelenen bir Entity bir kez,
+atasıyla birlikte hareket eder.
+
+```json
+{"entities": ["/Game/Board", "/Game/Player"], "euler": [0, 90, 0], "pivot": "center"}
+```
+
+Editör her değişiklikten sonra ve bir sahne açıldığında her çocuğun dünya `Transform` değerini
+`LocalTransform` değerinden yeniden türetir (`EntityIndex::updateTransforms()`); böylece bir sonraki komut
+güncel dünya yerleşimlerini görür: `keepWorld` ile `hierarchy.set_parent`, yükledikten hemen sonra bile bir
+Entity'yi olduğu yerde tutar. Orada yalnızca türetilmiş değerler yazılır; kaydedilen değerler yalnızca
+komutlarla değişir, böylece undo tam kalır.
+
+## Pano
+
+`clipboard.copy` Entity'leri alt Entity'leriyle birlikte scene v2 JSON olarak editörün panosuna koyar ve bu
+metni döndürür; kopyalanan kökler dünya yerleşimlerini korur. `clipboard.paste` onları yeni id'lerle,
+verilmişse bir `parent` altında yeniden oluşturur ve seçer. Kopyalanan Entity'ler arasındaki Entity alanları
+yeni kopyalara işaret eder; kopyanın dışına işaret eden alanlar null olur. `clipboard.cut` tek bir undo
+adımında kopyalar ve siler. `clipboard.paste`, `text` içinde scene JSON da alır; böylece agent'lar hazırlanmış
+Entity'leri ekleyebilir.
+
+## Asset'ler ve referanslar
+
+`asset` komutları `assets:/` altındaki dosyalarla çalışır: `asset.list` (`Folder`, `Scene`, `Material`,
+`Model`, `Texture`, `Environment`, `AudioClip` ve `Other` türleriyle), `asset.info`, `asset.create_folder`,
+`asset.move`, `asset.delete`, `asset.references` ve `asset.dependencies`.
+
+Referanslar reflection ile bulunur: kaydedilen her Component'in, sahne ayarlarının, `.material` dosyalarının
+ve proje ayar dosyalarının her `AssetRef` alanı. `ReferenceIndex`, `assets:/` altındaki her sahneyi ve
+Material'i ve `settings:/` altındaki her ayar dosyasını okur (uzantıların büyük/küçük harfi fark etmez) ve
+yalnızca içeriği değişen dosyaları yeniden ayrıştırır. Açık sahne dosyasından değil, düzenlenen World'den
+okunur; böylece kaydedilmemiş değişiklikler de sayılır. Manifest'in başlangıç sahnesi de `project.illusion`
+kaynaklı bir referans sayılır. `assets:/models/ship.glb` referansı alt Asset'leriyle (`#mesh/0`) de eşleşir;
+bir klasör de içindeki her şeyle eşleşir.
+
+- `asset.move` bir dosyayı ya da klasörü taşır ve ona yapılan her referansı tek bir undo adımında yeniden
+  yazar: kapalı sahnelerde, Material'lerde ve ayar dosyalarında (yeniden yazılır) ve açık sahnede (onunla
+  birlikte kaydedilir).
+- `asset.delete`, silinen yolun dışındaki bir şey ona referans verdikçe reddeder; `force` ile yine de siler ve
+  boşta kalan referansları döndürür. Undo dosyaları geri getirir.
+- İki komut da açık sahnenin dosyasını taşımaz ya da silmez: önce sahneyi başka bir adla kaydedin.
+  Başlangıç sahnesi de taşınamaz.
+
+Türleri kayıtlı olmayan Component'ler ve ayarlar (dosyadaki hâlleriyle tutulur) aranmaz; `asset.references`
+okuyamadığı dosyalar için uyarı verir.
+
+## Material'ler
+
+`material.create`, `material.get` ve `material.set`, `.material` dosyalarını `MaterialAsset` reflection'ı
+üzerinden okur ve yazar: `material` altında `MaterialData` alanları, `textures` altında Texture yolları.
+`material.set` birleştirir; yazan iki komut da geri alınabilir dosya değişiklikleridir.
+
+```json
+{"path": "assets:/materials/red.material", "value": {"material": {"baseColorFactor": "#cc2222", "roughnessFactor": 0.4}}}
+```
+
+## Ayarlar
+
+Ayar türleri, `EditorContext::settings()` içine kaydedilen reflection'lı struct'lardır; her biri sahneler ya da
+proje içindir:
+
+```cpp
+illusion::reflectStruct<game::Difficulty>("game.Difficulty").field("enemies", &game::Difficulty::enemies);
+editor.settings().add("game.Difficulty", illusion::editor::SettingsScope::Scene);
+editor.settings().add("game.Controls", illusion::editor::SettingsScope::Project, "settings:/controls.json");
+```
+
+- **Sahne ayarları** sahne dosyasının `settings` bölümünde durur. `scene.settings_get` kayıtlı her türü tüm
+  alanlarıyla (sahne ayarlamıyorsa varsayılanlarla), türü bilinmeyen ayarları da kaydedildikleri gibi
+  listeler; `scene.settings_set` bir yamayı bir undo adımı olarak birleştirir (`replace` diğer alanları
+  sıfırlar, `null` ayarı kaldırır). Türü bilinmeyen ayarlar değişmeden yeniden kaydedilir.
+- **Proje ayarları** `settings:` altında kendi dosyalarında durur; `illusion.settings` biçiminde, tür ve veri
+  sürümüyle, böylece eski dosyalar taşınır (migrate). `project.settings_get` ve `project.settings_set` aynı
+  şekilde çalışır; `null` dosyayı siler. Proje ayarları Entity referansı tutamaz.
+
+## Log
+
+Editör, sürecin en yeni log mesajlarını tutar (`EditorContextOptions::logCapacity`, varsayılan 1.024).
+`log.read` onları en eskiden başlayarak, `minLevel`, `category` ya da `contains` ile süzerek döndürür:
+`since` yoksa en yeni `limit` tanesini, `since` varsa ondan sonraki en eskileri; böylece dönen `last`
+değerini yeniden `since` olarak vermek hiçbirini kaybetmeden okumaya devam eder. `log.clear` o ana kadar
+loglananları gizler; `log.set_level` sürecin logladığı en düşük seviyeyi ayarlar.
 
 ## Komut yazmak
 

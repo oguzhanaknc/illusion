@@ -1,9 +1,12 @@
+#include <illusion/core/Profiler.hpp>
 #include <illusion/ecs/Name.hpp>
+#include <illusion/ecs/Transform.hpp>
 #include <illusion/ecs/World.hpp>
 #include <illusion/editor/core/EntityIndex.hpp>
 #include <illusion/editor/core/Selection.hpp>
 
 #include <algorithm>
+#include <array>
 
 namespace illusion::editor
 {
@@ -99,6 +102,46 @@ const HierarchyIndex& EntityIndex::hierarchy()
 {
     m_hierarchy.update(*m_world);
     return m_hierarchy;
+}
+
+void EntityIndex::updateTransforms(bool addMissing)
+{
+    ILL_PROFILE_SCOPE();
+    const auto versions = [this] {
+        return std::array<u64, 3>{m_world->componentVersion<Transform>(),
+                                  m_world->componentVersion<LocalTransform>(),
+                                  m_world->componentVersion<Hierarchy>()};
+    };
+    if (!addMissing &&
+        std::equal(std::begin(m_placementVersions), std::end(m_placementVersions), versions().begin()))
+    {
+        return;
+    }
+    const HierarchyIndex& index = hierarchy();
+    // Parents come before their children in pre-order, so every parent's Transform is current when its
+    // children are derived from it.
+    for (const Entity entity : index.preOrder())
+    {
+        const Entity parent = index.parent(entity);
+        const LocalTransform* local = parent.isNull() ? nullptr : m_world->tryGet<LocalTransform>(entity);
+        if (local == nullptr)
+        {
+            continue;
+        }
+        const Transform* parentTransform = m_world->tryGet<Transform>(parent);
+        const Transform placed =
+            combine(parentTransform != nullptr ? *parentTransform : Transform{}, local->asTransform());
+        if (Transform* transform = m_world->tryGet<Transform>(entity))
+        {
+            *transform = placed;
+        }
+        else if (addMissing)
+        {
+            m_world->emplace<Transform>(entity, placed);
+        }
+    }
+    const std::array<u64, 3> current = versions();
+    std::copy(current.begin(), current.end(), std::begin(m_placementVersions));
 }
 
 void EntityIndex::children(Entity parent, std::vector<Entity>& out)

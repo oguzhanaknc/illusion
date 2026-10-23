@@ -239,6 +239,151 @@ void reflectCoreCommandTypes(StructRegistry& structs)
 
         reflectStruct<SelectionResult>("editor.SelectionResult", 1, structs)
             .field("entities", &SelectionResult::entities);
+
+        reflectStruct<SettingsGetParams>("editor.SettingsGetParams", 1, structs)
+            .field("type", &SettingsGetParams::type);
+        reflectStruct<SettingsEntry>("editor.SettingsEntry", 1, structs)
+            .field("type", &SettingsEntry::type)
+            .field("known", &SettingsEntry::known)
+            .field("present", &SettingsEntry::present)
+            .field("version", &SettingsEntry::version)
+            .field("file", &SettingsEntry::file)
+            .field("value", &SettingsEntry::value);
+        reflectStruct<SettingsGetResult>("editor.SettingsGetResult", 1, structs)
+            .field("settings", &SettingsGetResult::settings);
+        reflectStruct<SettingsSetParams>("editor.SettingsSetParams", 1, structs)
+            .field("type", &SettingsSetParams::type)
+            .field("value", &SettingsSetParams::value)
+            .field("replace", &SettingsSetParams::replace);
+        reflectStruct<SettingsSetResult>("editor.SettingsSetResult", 1, structs)
+            .field("type", &SettingsSetResult::type)
+            .field("changed", &SettingsSetResult::changed)
+            .field("present", &SettingsSetResult::present)
+            .field("value", &SettingsSetResult::value);
+
+        const FieldMeta degrees{.unit = Unit::Degrees};
+        reflectStruct<TransformGetParams>("editor.TransformGetParams", 1, structs)
+            .field("entity", &TransformGetParams::entity)
+            .field("space", &TransformGetParams::space);
+        reflectStruct<TransformGetResult>("editor.TransformGetResult", 1, structs)
+            .field("entity", &TransformGetResult::entity)
+            .field("position", &TransformGetResult::position)
+            .field("rotation", &TransformGetResult::rotation)
+            .field("euler", &TransformGetResult::euler, degrees)
+            .field("scale", &TransformGetResult::scale);
+        reflectStruct<TransformSetParams>("editor.TransformSetParams", 1, structs)
+            .field("entities", &TransformSetParams::entities)
+            .field("space", &TransformSetParams::space)
+            .field("position", &TransformSetParams::position)
+            .field("rotation", &TransformSetParams::rotation)
+            .field("euler", &TransformSetParams::euler, degrees)
+            .field("scale", &TransformSetParams::scale);
+        reflectStruct<TransformTranslateParams>("editor.TransformTranslateParams", 1, structs)
+            .field("entities", &TransformTranslateParams::entities)
+            .field("offset", &TransformTranslateParams::offset)
+            .field("space", &TransformTranslateParams::space);
+        reflectStruct<TransformRotateParams>("editor.TransformRotateParams", 1, structs)
+            .field("entities", &TransformRotateParams::entities)
+            .field("rotation", &TransformRotateParams::rotation)
+            .field("euler", &TransformRotateParams::euler, degrees)
+            .field("space", &TransformRotateParams::space)
+            .field("pivot", &TransformRotateParams::pivot)
+            .field("point", &TransformRotateParams::point);
+        reflectStruct<TransformScaleParams>("editor.TransformScaleParams", 1, structs)
+            .field("entities", &TransformScaleParams::entities)
+            .field("factor", &TransformScaleParams::factor)
+            .field("pivot", &TransformScaleParams::pivot)
+            .field("point", &TransformScaleParams::point);
+        reflectStruct<TransformResetParams>("editor.TransformResetParams", 1, structs)
+            .field("entities", &TransformResetParams::entities)
+            .field("position", &TransformResetParams::position)
+            .field("rotation", &TransformResetParams::rotation)
+            .field("scale", &TransformResetParams::scale);
+
+        reflectStruct<ClipboardResult>("editor.ClipboardResult", 1, structs)
+            .field("entities", &ClipboardResult::entities)
+            .field("text", &ClipboardResult::text);
+        reflectStruct<ClipboardPasteParams>("editor.ClipboardPasteParams", 1, structs)
+            .field("parent", &ClipboardPasteParams::parent)
+            .field("index", &ClipboardPasteParams::index)
+            .field("text", &ClipboardPasteParams::text);
+
+        reflectStruct<AssetReference>("editor.AssetReference", 1, structs)
+            .field("asset", &AssetReference::asset)
+            .field("source", &AssetReference::source)
+            .field("entity", &AssetReference::entity)
+            .field("owner", &AssetReference::owner)
+            .field("field", &AssetReference::field);
+        reflectStruct<AssetListParams>("editor.AssetListParams", 1, structs)
+            .field("path", &AssetListParams::path)
+            .field("recursive", &AssetListParams::recursive)
+            .field("kind", &AssetListParams::kind);
+        reflectStruct<AssetEntry>("editor.AssetEntry", 1, structs)
+            .field("path", &AssetEntry::path)
+            .field("kind", &AssetEntry::kind)
+            .field("size", &AssetEntry::size);
+        reflectStruct<AssetListResult>("editor.AssetListResult", 1, structs)
+            .field("assets", &AssetListResult::assets);
+        reflectStruct<AssetInfoResult>("editor.AssetInfoResult", 1, structs)
+            .field("path", &AssetInfoResult::path)
+            .field("kind", &AssetInfoResult::kind)
+            .field("size", &AssetInfoResult::size)
+            .field("references", &AssetInfoResult::references)
+            .field("dependencies", &AssetInfoResult::dependencies);
+        reflectStruct<AssetMoveParams>("editor.AssetMoveParams", 1, structs)
+            .field("from", &AssetMoveParams::from)
+            .field("to", &AssetMoveParams::to);
+        reflectStruct<AssetMoveResult>("editor.AssetMoveResult", 1, structs)
+            .field("from", &AssetMoveResult::from)
+            .field("to", &AssetMoveResult::to)
+            .field("references", &AssetMoveResult::references)
+            .field("updated", &AssetMoveResult::updated);
+        reflectStruct<AssetDeleteParams>("editor.AssetDeleteParams", 1, structs)
+            .field("path", &AssetDeleteParams::path)
+            .field("force", &AssetDeleteParams::force);
+        reflectStruct<AssetDeleteResult>("editor.AssetDeleteResult", 1, structs)
+            .field("path", &AssetDeleteResult::path)
+            .field("dangling", &AssetDeleteResult::dangling);
+        reflectStruct<AssetReferencesResult>("editor.AssetReferencesResult", 1, structs)
+            .field("references", &AssetReferencesResult::references);
+        reflectStruct<AssetDependenciesResult>("editor.AssetDependenciesResult", 1, structs)
+            .field("dependencies", &AssetDependenciesResult::dependencies);
+
+        reflectStruct<MaterialCreateParams>("editor.MaterialCreateParams", 1, structs)
+            .field("path", &MaterialCreateParams::path)
+            .field("value", &MaterialCreateParams::value)
+            .field("overwrite", &MaterialCreateParams::overwrite);
+        reflectStruct<MaterialGetResult>("editor.MaterialGetResult", 1, structs)
+            .field("path", &MaterialGetResult::path)
+            .field("value", &MaterialGetResult::value);
+        reflectStruct<MaterialSetParams>("editor.MaterialSetParams", 1, structs)
+            .field("path", &MaterialSetParams::path)
+            .field("value", &MaterialSetParams::value);
+        reflectStruct<MaterialSetResult>("editor.MaterialSetResult", 1, structs)
+            .field("path", &MaterialSetResult::path)
+            .field("changed", &MaterialSetResult::changed);
+
+        reflectStruct<LogReadParams>("editor.LogReadParams", 1, structs)
+            .field("since", &LogReadParams::since)
+            .field("minLevel", &LogReadParams::minLevel)
+            .field("category", &LogReadParams::category)
+            .field("contains", &LogReadParams::contains)
+            .field("limit", &LogReadParams::limit);
+        reflectStruct<LogEntry>("editor.LogEntry", 1, structs)
+            .field("sequence", &LogEntry::sequence)
+            .field("time", &LogEntry::time, {.unit = Unit::Seconds})
+            .field("level", &LogEntry::level)
+            .field("category", &LogEntry::category)
+            .field("text", &LogEntry::text);
+        reflectStruct<LogReadResult>("editor.LogReadResult", 1, structs)
+            .field("entries", &LogReadResult::entries)
+            .field("last", &LogReadResult::last)
+            .field("dropped", &LogReadResult::dropped);
+        reflectStruct<LogSetLevelParams>("editor.LogSetLevelParams", 1, structs)
+            .field("level", &LogSetLevelParams::level);
+        reflectStruct<LogStateResult>("editor.LogStateResult", 1, structs)
+            .field("level", &LogStateResult::level)
+            .field("last", &LogStateResult::last);
     });
 }
 
@@ -251,8 +396,14 @@ void registerCoreCommands(CommandRegistry& registry)
     detail::registerEntityCommands(registry);
     detail::registerComponentCommands(registry);
     detail::registerHierarchyCommands(registry);
+    detail::registerTransformCommands(registry);
     detail::registerSelectionCommands(registry);
     detail::registerHistoryCommands(registry);
+    detail::registerClipboardCommands(registry);
+    detail::registerAssetCommands(registry);
+    detail::registerMaterialCommands(registry);
+    detail::registerLogCommands(registry);
+    detail::registerSettingsCommands(registry);
 }
 
 namespace detail
@@ -332,6 +483,41 @@ std::string joinPath(std::string_view directory, std::string_view name)
     }
     out += name;
     return out;
+}
+
+Expected<std::vector<Entity>, CommandError> resolveEntityList(CommandContext& context,
+                                                              const std::vector<std::string>& references)
+{
+    std::vector<Entity> entities;
+    if (Expected<void, CommandError> resolved = context.entities(references, "/entities", entities);
+        !resolved)
+    {
+        return unexpected(std::move(resolved).error());
+    }
+    if (entities.empty())
+    {
+        return unexpected(CommandError::invalid("/entities", "must name at least one entity"));
+    }
+    return entities;
+}
+
+Expected<std::string, CommandError> writeReflected(const TypeReflection& type, const void* value,
+                                                   const EntityResolver* entities)
+{
+    JsonMutDocument doc;
+    Expected<JsonMutValue, ValueError> written = writeValue(doc, type, value, {.entities = entities});
+    if (!written)
+    {
+        return unexpected(CommandError::make(ErrorKind::Internal, "cannot write " + std::string(type.name) +
+                                                                      ": " + written.error().message));
+    }
+    doc.setRoot(*written);
+    std::string text;
+    if (!doc.write(text, JsonWriteOptions{.pretty = false}))
+    {
+        return unexpected(CommandError::make(ErrorKind::Internal, "cannot write " + std::string(type.name)));
+    }
+    return text;
 }
 
 SceneInfoResult sceneInfo(EditorContext& editor)

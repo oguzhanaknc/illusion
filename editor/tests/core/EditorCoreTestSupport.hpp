@@ -1,12 +1,14 @@
 #pragma once
 
-// Shared setup of the editor core tests: a test Component with an entity reference, a project made from the
-// empty template, and a fixture scene built through commands.
+// Shared setup of the editor core tests: test Components with entity and asset references, test settings
+// types, a project made from the empty template, and a fixture scene built through commands.
 
 #include "TestSupport.hpp"
 
+#include <illusion/core/AssetRef.hpp>
 #include <illusion/core/Json.hpp>
 #include <illusion/ecs/Reflection.hpp>
+#include <illusion/ecs/StructRegistry.hpp>
 #include <illusion/editor/core/CoreCommands.hpp>
 #include <illusion/editor/core/EditorContext.hpp>
 #include <illusion/platform/FileSystem.hpp>
@@ -17,6 +19,7 @@
 #include <memory>
 #include <string>
 #include <string_view>
+#include <vector>
 
 namespace editortest
 {
@@ -28,12 +31,37 @@ struct Link
     illusion::f32 weight = 1.0f; ///< A number to edit.
 };
 
+/// A Component with asset references (like MeshRenderer).
+struct Look
+{
+    illusion::AssetRef material;            ///< A material.
+    std::vector<illusion::AssetRef> extras; ///< More assets.
+};
+
+/// Scene settings with an asset and an entity reference.
+struct Difficulty
+{
+    illusion::u32 enemies = 3;  ///< A number.
+    illusion::f32 speed = 1.0f; ///< Another number.
+    illusion::AssetRef music;   ///< An asset.
+    illusion::Entity boss;      ///< An entity of the scene.
+};
+
+/// Project settings.
+struct Controls
+{
+    bool invertY = false;             ///< A flag.
+    illusion::f32 sensitivity = 1.0f; ///< A number.
+    illusion::AssetRef cursor;        ///< An asset.
+};
+
 } // namespace editortest
 
 namespace illusion::test
 {
 
-/// Reflects editortest::Link as "test.Link" (once).
+/// Reflects the test types (once): editortest::Link as "test.Link", editortest::Look as "test.Look" and the
+/// settings structs "test.Difficulty" and "test.Controls".
 inline void reflectEditorTestComponents()
 {
     static const bool reflected = [] {
@@ -42,9 +70,31 @@ inline void reflectEditorTestComponents()
             .meta({.displayName = "Link", .category = "Test"})
             .field("target", &editortest::Link::target)
             .field("weight", &editortest::Link::weight, {.min = 0.0, .max = 100.0});
+        reflect<editortest::Look>("test.Look")
+            .meta({.displayName = "Look", .category = "Test"})
+            .field("material", &editortest::Look::material, {.assetKind = AssetKind::Material})
+            .field("extras", &editortest::Look::extras);
+        reflectStruct<editortest::Difficulty>("test.Difficulty")
+            .field("enemies", &editortest::Difficulty::enemies, {.max = 1000.0})
+            .field("speed", &editortest::Difficulty::speed)
+            .field("music", &editortest::Difficulty::music, {.assetKind = AssetKind::AudioClip})
+            .field("boss", &editortest::Difficulty::boss);
+        reflectStruct<editortest::Controls>("test.Controls")
+            .field("invertY", &editortest::Controls::invertY)
+            .field("sensitivity", &editortest::Controls::sensitivity, {.min = 0.0})
+            .field("cursor", &editortest::Controls::cursor, {.assetKind = AssetKind::Texture});
         return true;
     }();
     (void)reflected;
+}
+
+/// Registers the test settings types in @p editor: "test.Difficulty" for scenes and "test.Controls" in
+/// "settings:/controls.json".
+inline void addTestSettings(editor::EditorContext& editor)
+{
+    reflectEditorTestComponents();
+    editor.settings().add("test.Difficulty", editor::SettingsScope::Scene);
+    editor.settings().add("test.Controls", editor::SettingsScope::Project, "settings:/controls.json");
 }
 
 /// editor-data next to the test executable.
@@ -112,6 +162,7 @@ struct EditorFixture
         editor = std::make_unique<editor::EditorContext>(options);
         const Expected<void, editor::CommandError> opened = editor->openProject(directory.path / "project");
         REQUIRE_MESSAGE(opened.hasValue(), (opened ? std::string() : opened.error().message));
+        addTestSettings(*editor);
     }
 
     /// Builds the fixture scene and saves it to assets:/scenes/main.scene (history cleared, not dirty):
@@ -137,6 +188,31 @@ struct EditorFixture
            R"({"name":"Player","parent":"/Game","components":{"test.Link":{"target":")" + boardId +
                R"("}}})");
         ok(e, "entity.create", R"({"name":"Light","components":{"illusion.Transform":{}}})");
+        ok(e, "scene.save");
+        ok(e, "history.clear");
+    }
+
+    /// Adds assets to the fixture scene (after buildScene()) and saves it again (history cleared, not dirty):
+    ///
+    ///     assets:/materials/red.material   textures.baseColor -> assets:/textures/red.png
+    ///     assets:/textures/red.png
+    ///     assets:/scenes/other.scene       an entity "Prop" with test.Look -> red.material
+    ///     /Light gets test.Look            material -> red.material, extras ->
+    ///     [assets:/models/ship.glb#mesh/0]
+    void addAssets()
+    {
+        editor::EditorContext& e = *editor;
+        ok(e, "project.file_write", R"({"path":"assets:/textures/red.png","text":"not really a png"})");
+        ok(e, "material.create",
+           R"({"path":"assets:/materials/red.material","value":{"material":{"baseColorFactor":[0.8,0.1,0.1,1]},)"
+           R"("textures":{"baseColor":"assets:/textures/red.png"}}})");
+        ok(e, "project.file_write",
+           R"({"path":"assets:/scenes/other.scene","text":"{\"format\":\"illusion.scene\",\"version\":2,)"
+           R"(\"entities\":[{\"id\":\"00000000000000a1\",\"components\":{\"illusion.Name\":)"
+           R"({\"value\":\"Prop\"},\"test.Look\":{\"material\":\"assets:/materials/red.material\"}}}]}"})");
+        ok(e, "component.add",
+           R"({"entity":"/Light","type":"test.Look","value":{"material":"assets:/materials/red.material",)"
+           R"("extras":["assets:/models/ship.glb#mesh/0"]}})");
         ok(e, "scene.save");
         ok(e, "history.clear");
     }

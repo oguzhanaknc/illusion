@@ -77,6 +77,23 @@ if (!project)
 `Project::create()` boş olmayan bir dizini reddeder; manifest'e ismi ve motor sürümünü yazar. Ardından
 `EditorContext::openProject()` projeyi mount eder, çökme journal'ını başlatır ve başlangıç sahnesini açar.
 
+## Ayar dosyaları
+
+`EditorContext::settings()` içine kaydedilen her proje ayar türünün `settings:` altında kendi dosyası vardır;
+`project.settings_set` onu yazar ([editör çekirdeğine](index.md#ayarlar) bakın):
+
+```json
+{
+  "format": "illusion.settings",
+  "type": "game.Controls",
+  "version": 1,
+  "value": {"invertY": true, "sensitivity": 1.5}
+}
+```
+
+`version`, struct'ın veri sürümüdür; böylece eski bir sürümün kaydettiği dosyalar okunurken taşınır (migrate,
+`readSettingsFile()`). Dosyanın söz etmediği alanlar varsayılan değerlerini korur.
+
 ## Çöken bir oturumu kurtarmak
 
 Editör bir projeyi açtığında `.illusion/journal/` içindeki diğer oturumların journal'ları, düzgün

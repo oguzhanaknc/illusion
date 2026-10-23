@@ -972,6 +972,159 @@ Expected<bool, CommandError> WorldEditor::resetComponent(Entity entity, Componen
     return changed;
 }
 
+Expected<bool, CommandError> WorldEditor::assignComponent(Entity entity, ComponentId type, const void* value)
+{
+    if (Expected<void, CommandError> editable = checkEditable(entity, type); !editable)
+    {
+        return unexpected(std::move(editable).error());
+    }
+    const TypeReflection& reflection = *m_world->registry().reflection(type);
+    if (!hasComponent(*m_world, entity, type))
+    {
+        return unexpected(
+            CommandError::make(ErrorKind::NotFound, "the entity has no " + std::string(reflection.name)));
+    }
+    if (reflection.size == 0)
+    {
+        return false;
+    }
+    std::vector<Watch> watches;
+    watch(watches, entity, type);
+    reflection.ops->assign(m_world->componentData(entity, type), value);
+    const bool changed = capture(entity, type) != watches.front().before;
+    finish(watches);
+    return changed;
+}
+
+Expected<std::vector<Entity>, CommandError> WorldEditor::paste(std::string_view scene, Entity parent,
+                                                               std::optional<u32> index)
+{
+    ILL_PROFILE_SCOPE();
+    if (!parent.isNull() && !m_world->isAlive(parent))
+    {
+        return unexpected(CommandError::make(ErrorKind::NotFound, "the parent does not exist"));
+    }
+    SceneLoadOptions options;
+    options.ids = IdPolicy::Regenerate;
+    options.guids = m_guids;
+    // loadScene() adds nothing when it fails.
+    const SceneLoadResult loaded = loadScene(*m_world, scene, options);
+    if (!loaded.ok())
+    {
+        return unexpected(CommandError::invalid("", "is not a scene: " + loaded.error));
+    }
+    std::unordered_set<u64> pasted;
+    for (const Entity entity : loaded.entities)
+    {
+        pasted.insert(entity.toBits());
+        m_index->insert(m_world->get<EntityGuid>(entity), entity);
+    }
+    std::vector<Entity> roots;
+    for (const Entity entity : loaded.entities)
+    {
+        const Hierarchy* hierarchy = m_world->tryGet<Hierarchy>(entity);
+        if (hierarchy == nullptr || !pasted.contains(hierarchy->parent.toBits()))
+        {
+            roots.push_back(entity);
+        }
+    }
+
+    // The new roots join the siblings under the parent; the existing siblings are recorded.
+    std::vector<Watch> siblings;
+    std::vector<Entity> existing;
+    m_index->children(parent, existing);
+    for (const Entity sibling : existing)
+    {
+        if (!pasted.contains(sibling.toBits()) && m_world->has<Hierarchy>(sibling))
+        {
+            watch(siblings, sibling, componentId<Hierarchy>());
+        }
+    }
+    watch(siblings, parent, componentId<Hierarchy>());
+    u32 position = index.value_or(kLastSibling);
+    for (const Entity root : roots)
+    {
+        if (parent.isNull() && !index && !m_world->has<Hierarchy>(root))
+        {
+            continue; // a root outside the hierarchy stays one
+        }
+        const Expected<void, HierarchyError> parented =
+            illusion::setParent(*m_world, root, parent, ParentMode::KeepWorld, position);
+        ILL_ASSERT(parented.hasValue(), "new entities cannot form a cycle with their parent");
+        if (position != kLastSibling)
+        {
+            ++position;
+        }
+    }
+    m_world->markChanged<Hierarchy>();
+    // Scene text leaves out the derived Transforms of children: derive them before the snapshot, so that the
+    // pasted entities (and their redo) have them.
+    const HierarchyIndex& hierarchy = m_index->hierarchy();
+    for (const Entity root : roots)
+    {
+        for (const Entity entity : hierarchy.subtree(root))
+        {
+            const LocalTransform* local = m_world->tryGet<LocalTransform>(entity);
+            const Entity above = hierarchy.parent(entity);
+            if (entity == root || local == nullptr || above.isNull() || m_world->has<Transform>(entity))
+            {
+                continue;
+            }
+            const Transform* parentTransform = m_world->tryGet<Transform>(above);
+            const Transform placed =
+                combine(parentTransform != nullptr ? *parentTransform : Transform{}, local->asTransform());
+            m_world->emplace<Transform>(entity, placed);
+        }
+    }
+
+    EntityLifetime lifetime;
+    for (const Entity entity : loaded.entities)
+    {
+        for (const ComponentId type : m_world->componentsOf(entity))
+        {
+            m_world->markChanged(type);
+        }
+        lifetime.entities.push_back(snapshot(entity));
+        m_changes->record(lifetime.entities.back().guid, ChangeKind::Created);
+    }
+    record(std::move(lifetime));
+    finish(siblings);
+    return roots;
+}
+
+void WorldEditor::resetSettings(std::vector<PreservedValue> settings)
+{
+    std::sort(settings.begin(), settings.end(),
+              [](const PreservedValue& a, const PreservedValue& b) { return a.type < b.type; });
+    m_settings = std::move(settings);
+}
+
+Expected<bool, CommandError> WorldEditor::setSetting(std::string_view type, std::optional<std::string> value,
+                                                     std::optional<u32> version)
+{
+    SettingsChange change;
+    change.type = std::string(type);
+    const auto it = std::find_if(m_settings.begin(), m_settings.end(),
+                                 [&](const PreservedValue& setting) { return setting.type == type; });
+    if (it != m_settings.end())
+    {
+        change.before = it->value.text;
+        change.beforeVersion = it->version;
+    }
+    change.after = std::move(value);
+    change.afterVersion = change.after ? version : std::nullopt;
+    if (change.before == change.after && change.beforeVersion == change.afterVersion)
+    {
+        return false;
+    }
+    if (Expected<void, CommandError> applied = applySettings(change); !applied)
+    {
+        return unexpected(std::move(applied).error());
+    }
+    record(std::move(change));
+    return true;
+}
+
 Expected<void, CommandError> WorldEditor::setParent(Entity entity, Entity parent, ParentMode mode, u32 index)
 {
     ILL_PROFILE_SCOPE();
@@ -1206,6 +1359,10 @@ Expected<void, CommandError> WorldEditor::apply(const Operation& operation)
             {
                 return applyLifetime(value);
             }
+            else if constexpr (std::is_same_v<T, SettingsChange>)
+            {
+                return applySettings(value);
+            }
             else
             {
                 return applyFile(value);
@@ -1369,6 +1526,39 @@ Expected<void, CommandError> WorldEditor::applyFile(const FileChange& change)
         return unexpected(CommandError::make(ErrorKind::IoError, "cannot restore '" + change.path +
                                                                      "' from the trash: " + code.message()));
     }
+    return {};
+}
+
+Expected<void, CommandError> WorldEditor::applySettings(const SettingsChange& change)
+{
+    const auto it = std::lower_bound(
+        m_settings.begin(), m_settings.end(), change.type,
+        [](const PreservedValue& setting, const std::string& type) { return setting.type < type; });
+    const bool present = it != m_settings.end() && it->type == change.type;
+    const std::optional<std::string> current =
+        present ? std::optional<std::string>(it->value.text) : std::nullopt;
+    if (current != change.before)
+    {
+        return unexpected(
+            CommandError::make(ErrorKind::Internal, "the scene setting " + change.type + " does not match"));
+    }
+    if (!change.after)
+    {
+        if (present)
+        {
+            m_settings.erase(it);
+        }
+    }
+    else if (present)
+    {
+        it->value.text = *change.after;
+        it->version = change.afterVersion;
+    }
+    else
+    {
+        m_settings.insert(it, PreservedValue{change.type, change.afterVersion, JsonText{*change.after}});
+    }
+    m_changes->record(EntityGuid{}, ChangeKind::Settings, change.type);
     return {};
 }
 

@@ -186,9 +186,16 @@ World + project files
 ```
 
 İşlemler; Component değerlerinin önceki ve sonraki hâlleri (scene v2 JSON), ortaya çıkan ya da kaybolan
-Entity anlık görüntüleri ve `.illusion/trash` içindeki blob'larla desteklenen dosya değişiklikleridir. Undo,
-redo, başarısız komutların ve dry run'ların geri alınması ve çökme sonrası kurtarma hepsi bunları yeniden
-oynatır; böylece her şey geri alındıktan sonraki sahne, öncekiyle byte byte aynıdır. Kılavuz
+Entity anlık görüntüleri, sahne ayarlarının değerleri ve `.illusion/trash` içindeki blob'larla desteklenen dosya
+değişiklikleridir. Undo, redo, başarısız komutların ve dry run'ların geri alınması ve çökme sonrası kurtarma
+hepsi bunları yeniden oynatır; böylece her şey geri alındıktan sonraki sahne, öncekiyle byte byte aynıdır.
+Editör her değişiklikten sonra çocukların dünya Transform'larını yeniden türetir; yalnızca sahne dosyalarının
+tutmadığı bu türetilmiş değerleri yazar, böylece işlemleri yeniden oynatmak tam kalır.
+
+World'ün yanında iki parça daha vardır: `SettingsCatalog` (sahnelerin ve projenin ayar olarak tuttuğu
+reflection'lı struct'lar) ve `assets:/` altındaki her sahne ve Material dosyasının Asset referanslarını bilen
+`ReferenceIndex` (reflection ile bulunur, yalnızca bir dosyanın içeriği değişince yeniden ayrıştırılır); böylece
+`asset.move` onları yeniden yazabilir, `asset.delete` de reddedebilir. Kılavuz
 [kullanımını](../manual/editor/index.md) anlatır.
 
 ## Performans
@@ -198,8 +205,10 @@ oynatır; böylece her şey geri alındıktan sonraki sahne, öncekiyle byte byt
 - `ui/gallery-frame` Benchmark'ı en yoğun galeri sayfasının bir karesinin CPU maliyetini ölçer (bir masaüstü
   makinede yaklaşık 40 µs; bütçe 400 µs).
 - Editör çekirdeğinin Benchmark'ları: `editor/component-set` (birleştirilen tek bir `component.set`),
-  `editor/undo-capture-delete` (bir alt ağacı silip geri getirmek, Entity başına) ve `editor/scene-query`
-  (aranan Entity başına).
+  `editor/undo-capture-delete` (bir alt ağacı silip geri getirmek, Entity başına), `editor/scene-query`
+  (aranan Entity başına), `editor/transform-translate` (bir gizmo sürüklemesi gibi dört seviye derinlikte
+  birleştirilen tek bir `transform.translate`) ve `editor/reference-refresh` (referans indeksi için değişmemiş
+  bir sahne dosyasını denetlemek).
 
 ## Erişilebilirlik
 

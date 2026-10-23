@@ -16,6 +16,8 @@ std::string_view changeKindName(ChangeKind kind) noexcept
         return "destroyed";
     case ChangeKind::Changed:
         return "changed";
+    case ChangeKind::Settings:
+        return "settings";
     }
     return "changed";
 }

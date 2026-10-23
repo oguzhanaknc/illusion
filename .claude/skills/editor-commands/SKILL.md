@@ -10,7 +10,9 @@ selection, files, history) is a command; panels, shortcuts, RPC and MCP all call
 
 ## 1. Where code goes
 
-- Core modules: `editor/core/src/commands/<Domain>Commands.cpp`, registered from `registerCoreCommands()`
+- Core modules: `editor/core/src/commands/<Domain>Commands.cpp` (`editor`, `project`, `scene`, `entity`,
+  `component`, `hierarchy`, `transform`, `selection`, `history`, `clipboard`, `asset`, `material`, `log` and the
+  scene and project `settings`), registered from `registerCoreCommands()`
   (`CoreCommands.cpp`). Params and result structs live in `editor/core/include/illusion/editor/core/
   CoreCommands.hpp` (each field with a `///` comment) and are reflected in `reflectCoreCommandTypes()`.
 - Titles and descriptions: `editor.command.<name>.title` / `.description` in `editor/data/locales/en.json`
@@ -40,8 +42,11 @@ selection, files, history) is a command; panels, shortcuts, RPC and MCP all call
 ## 3. Tests (editor/tests/core)
 
 - Add the command to `EditorCommandCases.hpp` with params valid on the fixture scene
-  (`EditorFixture::buildScene()`): the generic tests then run its success path against its output schema,
-  check that a dry run changes nothing, and fuzz its params (`TestEditorFuzz.cpp`).
+  (`EditorFixture::buildScene()` and `addAssets()`, with the test settings types `test.Difficulty` and
+  `test.Controls` registered and a full clipboard): the generic tests then run its success path against its
+  output schema, check that a dry run changes nothing, and fuzz its params (`TestEditorFuzz.cpp`).
+- Commands that change the scene belong in the random-command test (`TestEditorHistory.cpp`), which undoes and
+  redoes 2,000 of them byte for byte.
 - Add a behaviour test for every error kind it can return and for undo/redo of what it changes.
 - Regenerate the schema golden: `ILLUSION_UPDATE_GOLDENS=1 illusion_editor_tests -tc="the command catalogue*"`
   and review the diff. An incompatible change of params or result bumps the command's `version`.
@@ -52,7 +57,35 @@ selection, files, history) is a command; panels, shortcuts, RPC and MCP all call
   `reference/editor-commands.md` pages; the CTest `editor.command_reference` fails until you do.
 - Describe new concepts in `manual/editor/index.md` (EN and TR, identical code blocks).
 
-## 5. Checklist
+## 5. Patterns of the command modules
+
+- **Placements** (`TransformCommands.cpp`): compute world placements with `worldTransformOf()` (the chain of
+  `LocalTransform`s, right even after this command moved a parent), never from a child's `Transform`, which is
+  derived. Write a child's `LocalTransform`, and for a root its `Transform` plus an equal `LocalTransform`, with
+  `context.edit().assignComponent()`. Drop entities whose ancestor is also listed (`dropDescendants()`) before
+  applying a delta.
+- **Files** (`AssetCommands.cpp`, `MaterialCommands.cpp`): check the path first (mount, extension, `resolve()`),
+  then change files only through `writeFile()`, `moveFile()`, `deleteFile()` and `createDirectory()` so undo and
+  the journal see them. Commands that move or delete assets look references up with `context.editor().references()`
+  plus `worldReferences()` for the open scene, and never touch the open scene's own file.
+- **Settings** (`SettingsCommands.cpp`): look types up in `context.editor().settings()`; read the stored value
+  into a default object, merge the patch with `readValue()`, and store it with `setSetting()` (scene) or
+  `writeFile()` of `writeSettingsFile()` (project). Scene settings read entity fields through a
+  `GuidEntityResolver`.
+- **Editor state that is not undoable** (clipboard, log, selection): check `context.dryRun()` before changing it.
+
+```json
+{"entities": ["$selection"], "offset": [0, 1, 0], "space": "self", "mergeKey": "gizmo-drag"}
+```
+
+A new settings type needs no command: reflect the struct and register it.
+
+```cpp
+illusion::reflectStruct<game::Difficulty>("game.Difficulty").field("enemies", &game::Difficulty::enemies);
+editor.settings().add("game.Difficulty", illusion::editor::SettingsScope::Scene);
+```
+
+## 6. Checklist
 
 - [ ] Params validated before any change; fuzz test passes with no `internal` errors.
 - [ ] Undoing the command restores the scene byte for byte (the random-command test covers core edits).

@@ -100,6 +100,7 @@ TEST_CASE("invalid params of every command give structured errors and never reac
         CAPTURE(entry.name);
         EditorFixture fixture(3);
         fixture.buildScene();
+        fixture.addAssets();
         EditorContext& editor = *fixture.editor;
         const CommandDescriptor& command = *editor.commands().find(entry.name);
         JsonMutDocument schemaDoc;

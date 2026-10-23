@@ -35,7 +35,7 @@ void randomCommand(EditorContext& editor, std::mt19937& random)
     };
     std::string name;
     std::string params;
-    switch (random() % 11)
+    switch (random() % 15)
     {
     case 0:
     case 1:
@@ -78,6 +78,28 @@ void randomCommand(EditorContext& editor, std::mt19937& random)
     case 9:
         name = "entity.duplicate";
         params = R"({"entities":[")" + pick() + R"("]})";
+        break;
+    case 11:
+    {
+        constexpr std::string_view spaces[] = {"world", "local", "self"};
+        name = "transform.translate";
+        params = R"({"entities":[")" + pick() + R"("],"offset":[)" + number(10) + "," + number(10) +
+                 R"(,1],"space":")" + std::string(spaces[random() % 3]) + R"("})";
+        break;
+    }
+    case 12:
+        name = "transform.rotate";
+        params = R"({"entities":[")" + pick() + R"(",")" + pick() + R"("],"euler":[0,)" + number(360) +
+                 R"(,0],"pivot":")" + (random() % 2 == 0 ? "center" : "individual") + R"("})";
+        break;
+    case 13:
+        name = "scene.settings_set";
+        params = R"({"type":"test.Difficulty","value":{"enemies":)" + number(100) + "}}";
+        break;
+    case 14:
+        (void)test::run(editor, "clipboard.copy", R"({"entities":[")" + pick() + R"("]})");
+        name = "clipboard.paste";
+        params = random() % 2 == 0 ? std::string("{}") : R"({"parent":")" + pick() + R"("})";
         break;
     default:
         name = random() % 2 == 0 ? "component.remove" : "component.reset";
