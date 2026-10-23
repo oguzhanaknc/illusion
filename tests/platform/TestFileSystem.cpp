@@ -1,10 +1,12 @@
 #include "TestSupport.hpp"
 
+#include <illusion/platform/Archive.hpp>
 #include <illusion/platform/FileSystem.hpp>
 
 #include <doctest/doctest.h>
 
 #include <string>
+#include <vector>
 
 using namespace illusion;
 
@@ -155,4 +157,152 @@ TEST_CASE("platform directories are absolute")
     CHECK(user.is_absolute());
     CHECK(user.filename() == "Tests");
     CHECK(user.parent_path().filename() == "illusion");
+}
+
+TEST_CASE("stat reports files, directories and missing paths")
+{
+    TempDirectory dir;
+    VirtualFileSystem vfs;
+    REQUIRE(vfs.mount("user", dir.path, MountAccess::ReadWrite) == FileError::None);
+    REQUIRE(vfs.writeText("user:/a/b.txt", "hello") == FileError::None);
+
+    FileStat stat;
+    REQUIRE(vfs.stat("user:/a/b.txt", stat) == FileError::None);
+    CHECK_FALSE(stat.isDirectory);
+    CHECK(stat.size == 5);
+    CHECK(stat.modified != 0);
+    REQUIRE(vfs.stat("user:/a", stat) == FileError::None);
+    CHECK(stat.isDirectory);
+    CHECK(stat.size == 0);
+    CHECK(vfs.stat("user:/missing", stat) == FileError::NotFound);
+    CHECK(vfs.stat("user:/../x", stat) == FileError::InvalidPath);
+    CHECK(vfs.stat("other:/x", stat) == FileError::UnknownMount);
+}
+
+TEST_CASE("listRecursive lists every entry below a directory with relative names")
+{
+    TempDirectory dir;
+    VirtualFileSystem vfs;
+    REQUIRE(vfs.mount("user", dir.path, MountAccess::ReadWrite) == FileError::None);
+    REQUIRE(vfs.writeText("user:/root/b.txt", "b") == FileError::None);
+    REQUIRE(vfs.writeText("user:/root/sub/c.txt", "cc") == FileError::None);
+    REQUIRE(vfs.createDirectory("user:/root/empty") == FileError::None);
+
+    std::vector<DirectoryEntry> entries;
+    REQUIRE(vfs.listRecursive("user:/root", entries) == FileError::None);
+    REQUIRE(entries.size() == 4);
+    CHECK(entries[0].name == "b.txt");
+    CHECK(entries[1].name == "empty");
+    CHECK(entries[1].isDirectory);
+    CHECK(entries[2].name == "sub");
+    CHECK(entries[3].name == "sub/c.txt");
+    CHECK(entries[3].size == 2);
+    CHECK(vfs.listRecursive("user:/root/b.txt", entries) == FileError::NotFound);
+    CHECK(vfs.listRecursive("user:/nothing", entries) == FileError::NotFound);
+}
+
+TEST_CASE("createDirectory and remove report AlreadyExists, NotEmpty and NotFound")
+{
+    TempDirectory dir;
+    VirtualFileSystem vfs;
+    REQUIRE(vfs.mount("user", dir.path, MountAccess::ReadWrite) == FileError::None);
+
+    CHECK(vfs.createDirectory("user:/x/y") == FileError::None);
+    CHECK(vfs.exists("user:/x/y"));
+    CHECK(vfs.createDirectory("user:/x/y") == FileError::AlreadyExists);
+    REQUIRE(vfs.writeText("user:/x/y/file.txt", "1") == FileError::None);
+    CHECK(vfs.createDirectory("user:/x/y/file.txt") == FileError::AlreadyExists);
+
+    CHECK(vfs.remove("user:/x") == FileError::NotEmpty);
+    CHECK(vfs.remove("user:/x/y/file.txt") == FileError::None);
+    CHECK_FALSE(vfs.exists("user:/x/y/file.txt"));
+    CHECK(vfs.remove("user:/x/y") == FileError::None);
+    CHECK(vfs.remove("user:/x/y") == FileError::NotFound);
+    REQUIRE(vfs.writeText("user:/x/deep/a.txt", "1") == FileError::None);
+    CHECK(vfs.remove("user:/x", true) == FileError::None);
+    CHECK_FALSE(vfs.exists("user:/x"));
+    CHECK(vfs.remove("user:/") == FileError::InvalidPath);
+    CHECK(vfs.createDirectory("user:/") == FileError::InvalidPath);
+}
+
+TEST_CASE("rename moves files and directories within and across writable mounts")
+{
+    TempDirectory dir;
+    VirtualFileSystem vfs;
+    std::filesystem::create_directories(dir.path / "one");
+    std::filesystem::create_directories(dir.path / "two");
+    REQUIRE(vfs.mount("one", dir.path / "one", MountAccess::ReadWrite) == FileError::None);
+    REQUIRE(vfs.mount("two", dir.path / "two", MountAccess::ReadWrite) == FileError::None);
+    REQUIRE(vfs.writeText("one:/a.txt", "a") == FileError::None);
+    REQUIRE(vfs.writeText("one:/dir/b.txt", "b") == FileError::None);
+
+    CHECK(vfs.rename("one:/a.txt", "one:/new/place/a2.txt") == FileError::None);
+    CHECK_FALSE(vfs.exists("one:/a.txt"));
+    std::string text;
+    REQUIRE(vfs.readText("one:/new/place/a2.txt", text) == FileError::None);
+    CHECK(text == "a");
+    CHECK(vfs.rename("one:/dir", "two:/moved") == FileError::None);
+    REQUIRE(vfs.readText("two:/moved/b.txt", text) == FileError::None);
+    CHECK(text == "b");
+
+    CHECK(vfs.rename("one:/missing", "one:/x") == FileError::NotFound);
+    REQUIRE(vfs.writeText("one:/c.txt", "c") == FileError::None);
+    CHECK(vfs.rename("one:/c.txt", "one:/new/place/a2.txt") == FileError::AlreadyExists);
+    CHECK(vfs.rename("two:/moved", "two:/moved/inner") == FileError::InvalidPath);
+    CHECK(vfs.rename("one:/c.txt", "one:/../escape.txt") == FileError::InvalidPath);
+}
+
+TEST_CASE("copy duplicates files and directory trees, also out of read-only mounts")
+{
+    TempDirectory dir;
+    VirtualFileSystem vfs;
+    std::filesystem::create_directories(dir.path / "data");
+    std::filesystem::create_directories(dir.path / "user");
+    REQUIRE(vfs.mount("rw", dir.path / "data", MountAccess::ReadWrite) == FileError::None);
+    REQUIRE(vfs.writeText("rw:/tree/a.txt", "a") == FileError::None);
+    REQUIRE(vfs.writeText("rw:/tree/sub/b.txt", "b") == FileError::None);
+    REQUIRE(vfs.mount("game", dir.path / "data") == FileError::None);
+    REQUIRE(vfs.mount("user", dir.path / "user", MountAccess::ReadWrite) == FileError::None);
+
+    CHECK(vfs.copy("game:/tree/a.txt", "user:/a.txt") == FileError::None);
+    CHECK(vfs.copy("game:/tree", "user:/copy") == FileError::None);
+    std::string text;
+    REQUIRE(vfs.readText("user:/copy/sub/b.txt", text) == FileError::None);
+    CHECK(text == "b");
+    CHECK(vfs.exists("game:/tree/sub/b.txt"));
+
+    CHECK(vfs.copy("game:/tree", "user:/copy") == FileError::AlreadyExists);
+    CHECK(vfs.copy("game:/missing", "user:/x") == FileError::NotFound);
+    CHECK(vfs.copy("user:/a.txt", "game:/a.txt") == FileError::ReadOnly);
+    CHECK(vfs.copy("rw:/tree", "rw:/tree/inside") == FileError::InvalidPath);
+}
+
+TEST_CASE("file management refuses read-only mounts and archives")
+{
+    TempDirectory dir;
+    VirtualFileSystem vfs;
+    std::filesystem::create_directories(dir.path / "game");
+    REQUIRE(vfs.mount("game", dir.path / "game") == FileError::None);
+    std::vector<ArchiveInput> files(1);
+    files[0].path = "dir/one.txt";
+    files[0].data = {std::byte{'1'}};
+    REQUIRE(writeArchive(dir.path / "pack.ilpak", files) == FileError::None);
+    REQUIRE(vfs.mountArchive("pak", dir.path / "pack.ilpak") == FileError::None);
+
+    CHECK(vfs.createDirectory("game:/x") == FileError::ReadOnly);
+    CHECK(vfs.remove("pak:/dir/one.txt") == FileError::ReadOnly);
+    CHECK(vfs.rename("pak:/dir", "game:/dir") == FileError::ReadOnly);
+
+    FileStat stat;
+    REQUIRE(vfs.stat("pak:/dir/one.txt", stat) == FileError::None);
+    CHECK(stat.size == 1);
+    REQUIRE(vfs.stat("pak:/dir", stat) == FileError::None);
+    CHECK(stat.isDirectory);
+    std::vector<DirectoryEntry> entries;
+    REQUIRE(vfs.listRecursive("pak:/", entries) == FileError::None);
+    REQUIRE(entries.size() == 2);
+    CHECK(entries[0].name == "dir");
+    CHECK(entries[1].name == "dir/one.txt");
+    CHECK(fileErrorName(FileError::AlreadyExists) == "AlreadyExists");
+    CHECK(fileErrorName(FileError::NotEmpty) == "NotEmpty");
 }

@@ -42,6 +42,7 @@ records rather than user documentation.
 | [0033](https://github.com/oguzhanaknc/illusion/blob/main/docs/adr/0033-entity-ids-names-scene-format-v2.md) | Persistent entity ids, names and scene format v2 |
 | [0034](https://github.com/oguzhanaknc/illusion/blob/main/docs/adr/0034-transform-hierarchy.md) | Transform hierarchy with world-space truth, Disabled and Inactive |
 | [0035](https://github.com/oguzhanaknc/illusion/blob/main/docs/adr/0035-asset-references.md) | Asset references by virtual path, and authoring/runtime render Components |
+| [0036](https://github.com/oguzhanaknc/illusion/blob/main/docs/adr/0036-editor-command-core.md) | Typed editor command core, transactions, operation-log undo, crash journal and project layout |
 
 To propose a new decision, copy `docs/adr/0000-template.md` and follow the
 [contributing guide](../contributing.md#architecture-decision-records).

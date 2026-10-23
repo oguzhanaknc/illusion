@@ -52,10 +52,29 @@ vfs.mount("mods", illusion::utf8Path(modDirectoryFromConfig));
 | `writeFile()`, `writeText()` | Bir dosyanın tamamını yazar; yalnızca `ReadWrite` mount'larda. |
 | `exists()` | Bir dosya veya dizinin var olup olmadığını kontrol eder. |
 | `list()` | Bir dizini isme göre sıralı listeler. |
+| `listRecursive()` | Bir dizinin altındaki her şeyi listeler; isimler `sub/a.png` gibi göreli yollardır. |
+| `stat()` | Dosyayı dizinden ayırır; boyutunu ve değişiklik damgasını verir (`FileStat`). |
+| `createDirectory()` | Bir dizini ve eksik üst dizinlerini oluşturur. |
+| `remove()` | Bir dosyayı ya da bir dizini siler (içeriğiyle birlikte yalnızca `recursive` true ise). |
+| `rename()` | Bir dosyayı veya dizini taşır ya da yeniden adlandırır; yazılabilir mount'lar arasında da. |
+| `copy()` | Bir dosyayı veya dizin ağacını kopyalar; kaynak salt okunur ya da bir arşiv olabilir. |
 | `resolve()` | Gerçek yolu verir; örneğin üçüncü taraf bir kütüphaneye geçirmek için. |
 
 Her işlem exception fırlatmak yerine bir `FileError` döndürür. `fileErrorName()` bunu log'lar için metne
-dönüştürür.
+dönüştürür. Dosya yönetimi fonksiyonları hiçbir şeyin üzerine yazmaz: var olan bir hedef
+`FileError::AlreadyExists`, `recursive` olmadan içi dolu bir dizini silmek `FileError::NotEmpty` verir; bir
+mount'un kökü silinemez, taşınamaz ve değiştirilemez (`FileError::InvalidPath`). `FileStat::modified` yalnızca
+bir dosyanın değişip değişmediğini anlamak içindir; takvim zamanı değildir.
+
+```cpp
+vfs.createDirectory("user:/saves/slot2");
+vfs.copy("game:/defaults/profile.json", "user:/saves/slot2/profile.json");
+illusion::FileStat stat;
+if (vfs.stat("user:/saves/slot1", stat) == illusion::FileError::None && stat.isDirectory)
+{
+    vfs.remove("user:/saves/slot1", true);
+}
+```
 
 Yazma işlemleri atomiktir: veri önce geçici bir dosyaya yazılır, ardından bu dosya hedefin yerine geçer;
 böylece bir çökme veya elektrik kesintisi asla yarım yazılmış bir kayıt dosyası bırakmaz. Üst dizinler

@@ -6,6 +6,7 @@
 
 #include <algorithm>
 #include <atomic>
+#include <chrono>
 #include <cstdlib>
 #include <fstream>
 #include <random>
@@ -100,6 +101,19 @@ std::string archivePath(std::string_view virtualPath)
     return std::string(virtualPath.substr(virtualPath.find(":/") + 2));
 }
 
+// True if @p path is @p directory or inside it ("a" and "a/b" for "a").
+bool isInside(const std::filesystem::path& path, const std::filesystem::path& directory)
+{
+    const std::filesystem::path relative = path.lexically_relative(directory);
+    return !relative.empty() && *relative.begin() != "..";
+}
+
+std::string_view withoutTrailingSlash(std::string_view path) noexcept
+{
+    return !path.empty() && path.back() == '/' && !path.ends_with(":/") ? path.substr(0, path.size() - 1)
+                                                                        : path;
+}
+
 std::atomic<u64> g_tempCounter{0};
 
 // Random per-process token: temporary names must not collide when several processes (editor and game,
@@ -135,6 +149,10 @@ std::string_view fileErrorName(FileError error) noexcept
         return "IoError";
     case FileError::Unsupported:
         return "Unsupported";
+    case FileError::AlreadyExists:
+        return "AlreadyExists";
+    case FileError::NotEmpty:
+        return "NotEmpty";
     }
     return "Unknown";
 }
@@ -400,6 +418,293 @@ FileError VirtualFileSystem::list(std::string_view virtualPath, std::vector<Dire
     }
     std::sort(out.begin(), out.end(),
               [](const DirectoryEntry& a, const DirectoryEntry& b) { return a.name < b.name; });
+    return FileError::None;
+}
+
+FileError VirtualFileSystem::listRecursive(std::string_view virtualPath,
+                                           std::vector<DirectoryEntry>& out) const
+{
+    const Mount* mount = nullptr;
+    std::filesystem::path path;
+    if (const FileError error = resolveMount(virtualPath, mount, path); error != FileError::None)
+    {
+        return error;
+    }
+    out.clear();
+    if (mount->archive)
+    {
+        // Directory by directory: list() each one found, prefixing names with its relative path.
+        const std::string base = archivePath(virtualPath);
+        std::vector<std::string> pending{std::string()};
+        std::vector<DirectoryEntry> entries;
+        for (usize i = 0; i < pending.size(); ++i)
+        {
+            const std::string directory = pending[i];
+            const std::string relative =
+                directory.empty() ? base : (base.empty() ? directory : base + "/" + directory);
+            if (const FileError error = mount->archive->list(relative, entries); error != FileError::None)
+            {
+                return error;
+            }
+            for (DirectoryEntry& entry : entries)
+            {
+                entry.name = directory.empty() ? entry.name : directory + "/" + entry.name;
+                if (entry.isDirectory)
+                {
+                    pending.push_back(entry.name);
+                }
+                out.push_back(std::move(entry));
+            }
+        }
+    }
+    else
+    {
+        std::error_code code;
+        if (!std::filesystem::is_directory(path, code))
+        {
+            return code ? errorFromCode(code) : FileError::NotFound;
+        }
+        for (std::filesystem::recursive_directory_iterator it(path, code), end; !code && it != end;
+             it.increment(code))
+        {
+            DirectoryEntry entry;
+            const std::u8string relative = it->path().lexically_relative(path).generic_u8string();
+            entry.name.assign(reinterpret_cast<const char*>(relative.data()), relative.size());
+            std::error_code entryCode;
+            entry.isDirectory = it->is_directory(entryCode);
+            entry.size = entry.isDirectory ? 0 : static_cast<u64>(it->file_size(entryCode));
+            if (entryCode)
+            {
+                entry.size = 0;
+            }
+            out.push_back(std::move(entry));
+        }
+        if (code)
+        {
+            return errorFromCode(code);
+        }
+    }
+    // A directory's name is a prefix of its entries' names, so plain ordering puts it first.
+    std::sort(out.begin(), out.end(),
+              [](const DirectoryEntry& a, const DirectoryEntry& b) { return a.name < b.name; });
+    return FileError::None;
+}
+
+FileError VirtualFileSystem::stat(std::string_view virtualPath, FileStat& out) const
+{
+    const Mount* mount = nullptr;
+    std::filesystem::path path;
+    if (const FileError error = resolveMount(virtualPath, mount, path); error != FileError::None)
+    {
+        return error;
+    }
+    out = FileStat{};
+    if (mount->archive)
+    {
+        const std::string relative = archivePath(virtualPath);
+        if (const ArchiveEntry* entry = mount->archive->find(relative))
+        {
+            out.size = entry->size;
+            return FileError::None;
+        }
+        if (relative.empty() || mount->archive->isDirectory(relative))
+        {
+            out.isDirectory = true;
+            return FileError::None;
+        }
+        return FileError::NotFound;
+    }
+    std::error_code code;
+    const std::filesystem::file_status status = std::filesystem::status(path, code);
+    if (!std::filesystem::exists(status))
+    {
+        return FileError::NotFound;
+    }
+    if (code)
+    {
+        return errorFromCode(code);
+    }
+    out.isDirectory = std::filesystem::is_directory(status);
+    if (!out.isDirectory)
+    {
+        out.size = static_cast<u64>(std::filesystem::file_size(path, code));
+        if (code)
+        {
+            return errorFromCode(code);
+        }
+    }
+    const std::filesystem::file_time_type time = std::filesystem::last_write_time(path, code);
+    if (code)
+    {
+        return errorFromCode(code);
+    }
+    out.modified = static_cast<i64>(
+        std::chrono::duration_cast<std::chrono::nanoseconds>(time.time_since_epoch()).count());
+    return FileError::None;
+}
+
+FileError VirtualFileSystem::writablePath(std::string_view virtualPath, std::filesystem::path& out) const
+{
+    const Mount* mount = nullptr;
+    if (const FileError error = resolveMount(virtualPath, mount, out); error != FileError::None)
+    {
+        return error;
+    }
+    if (mount->access != MountAccess::ReadWrite)
+    {
+        return FileError::ReadOnly;
+    }
+    return out == mount->root ? FileError::InvalidPath : FileError::None;
+}
+
+FileError VirtualFileSystem::createDirectory(std::string_view virtualPath)
+{
+    std::filesystem::path path;
+    if (const FileError error = writablePath(virtualPath, path); error != FileError::None)
+    {
+        return error;
+    }
+    std::error_code code;
+    if (std::filesystem::exists(path, code))
+    {
+        return FileError::AlreadyExists;
+    }
+    std::filesystem::create_directories(path, code);
+    return code ? errorFromCode(code) : FileError::None;
+}
+
+FileError VirtualFileSystem::remove(std::string_view virtualPath, bool recursive)
+{
+    std::filesystem::path path;
+    if (const FileError error = writablePath(virtualPath, path); error != FileError::None)
+    {
+        return error;
+    }
+    std::error_code code;
+    const std::filesystem::file_status status = std::filesystem::symlink_status(path, code);
+    if (!std::filesystem::exists(status))
+    {
+        return FileError::NotFound;
+    }
+    if (std::filesystem::is_directory(status))
+    {
+        if (!recursive && !std::filesystem::is_empty(path, code))
+        {
+            return code ? errorFromCode(code) : FileError::NotEmpty;
+        }
+        std::filesystem::remove_all(path, code);
+    }
+    else
+    {
+        std::filesystem::remove(path, code);
+    }
+    return code ? errorFromCode(code) : FileError::None;
+}
+
+FileError VirtualFileSystem::rename(std::string_view from, std::string_view to)
+{
+    std::filesystem::path source;
+    std::filesystem::path target;
+    if (const FileError error = writablePath(from, source); error != FileError::None)
+    {
+        return error;
+    }
+    if (const FileError error = writablePath(to, target); error != FileError::None)
+    {
+        return error;
+    }
+    std::error_code code;
+    if (!std::filesystem::exists(source, code))
+    {
+        return FileError::NotFound;
+    }
+    if (std::filesystem::exists(target, code))
+    {
+        return FileError::AlreadyExists;
+    }
+    if (isInside(target, source))
+    {
+        return FileError::InvalidPath;
+    }
+    std::filesystem::create_directories(target.parent_path(), code);
+    if (code)
+    {
+        return errorFromCode(code);
+    }
+    std::filesystem::rename(source, target, code);
+    return code ? errorFromCode(code) : FileError::None;
+}
+
+FileError VirtualFileSystem::copy(std::string_view from, std::string_view to)
+{
+    std::filesystem::path target;
+    if (const FileError error = writablePath(to, target); error != FileError::None)
+    {
+        return error;
+    }
+    FileStat source;
+    if (const FileError error = stat(from, source); error != FileError::None)
+    {
+        return error;
+    }
+    std::error_code code;
+    if (std::filesystem::exists(target, code))
+    {
+        return FileError::AlreadyExists;
+    }
+    if (!source.isDirectory)
+    {
+        std::vector<std::byte> data;
+        if (const FileError error = readFile(from, data); error != FileError::None)
+        {
+            return error;
+        }
+        return writeFile(to, data);
+    }
+    std::filesystem::path sourcePath;
+    if (resolve(from, sourcePath) == FileError::None && isInside(target, sourcePath))
+    {
+        return FileError::InvalidPath;
+    }
+    std::vector<DirectoryEntry> entries;
+    if (const FileError error = listRecursive(from, entries); error != FileError::None)
+    {
+        return error;
+    }
+    std::filesystem::create_directories(target, code);
+    if (code)
+    {
+        return errorFromCode(code);
+    }
+    const std::string sourceBase(withoutTrailingSlash(from));
+    const std::string targetBase(withoutTrailingSlash(to));
+    std::vector<std::byte> data;
+    for (const DirectoryEntry& entry : entries)
+    {
+        const std::string targetPath = targetBase + "/" + entry.name;
+        if (entry.isDirectory)
+        {
+            std::filesystem::path directory;
+            if (const FileError error = writablePath(targetPath, directory); error != FileError::None)
+            {
+                return error;
+            }
+            std::filesystem::create_directories(directory, code);
+            if (code)
+            {
+                return errorFromCode(code);
+            }
+            continue;
+        }
+        if (const FileError error = readFile(sourceBase + "/" + entry.name, data); error != FileError::None)
+        {
+            return error;
+        }
+        if (const FileError error = writeFile(targetPath, data); error != FileError::None)
+        {
+            return error;
+        }
+    }
     return FileError::None;
 }
 

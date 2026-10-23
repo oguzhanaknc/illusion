@@ -52,10 +52,30 @@ vfs.mount("mods", illusion::utf8Path(modDirectoryFromConfig));
 | `writeFile()`, `writeText()` | Write a whole file; only on `ReadWrite` mounts. |
 | `exists()` | Check whether a file or directory exists. |
 | `list()` | List a directory, sorted by name. |
+| `listRecursive()` | List everything below a directory; names are relative paths such as `sub/a.png`. |
+| `stat()` | Tell a file from a directory and get its size and modification stamp (`FileStat`). |
+| `createDirectory()` | Create a directory and its missing parents. |
+| `remove()` | Remove a file, or a directory (with its contents only when `recursive` is true). |
+| `rename()` | Move or rename a file or directory, also between writable mounts. |
+| `copy()` | Copy a file or a directory tree; the source may be read-only or an archive. |
 | `resolve()` | Get the real path, for example to pass to a third-party library. |
 
 Every operation returns a `FileError` instead of throwing. `fileErrorName()` turns it into text for
-logs.
+logs. The file management functions never replace anything: a target that exists gives
+`FileError::AlreadyExists`, removing a directory that has entries without `recursive` gives
+`FileError::NotEmpty`, and the root of a mount cannot be removed, renamed or replaced
+(`FileError::InvalidPath`). `FileStat::modified` is only for telling whether a file changed; it is not a
+calendar time.
+
+```cpp
+vfs.createDirectory("user:/saves/slot2");
+vfs.copy("game:/defaults/profile.json", "user:/saves/slot2/profile.json");
+illusion::FileStat stat;
+if (vfs.stat("user:/saves/slot1", stat) == illusion::FileError::None && stat.isDirectory)
+{
+    vfs.remove("user:/saves/slot1", true);
+}
+```
 
 Writes are atomic: the data is written to a temporary file that then replaces the target, so a crash
 or power loss never leaves a half-written save file. Parent directories are created automatically.

@@ -1,0 +1,57 @@
+{
+  "format": "illusion.scene",
+  "version": 2,
+  "types": {
+    "illusion.Camera": 1,
+    "illusion.DirectionalLight": 1,
+    "illusion.MeshRenderer": 1,
+    "illusion.Name": 1,
+    "illusion.ProceduralSky": 1,
+    "illusion.SkyLight": 1,
+    "illusion.Transform": 1
+  },
+  "settings": {},
+  "entities": [
+    {
+      "id": "51a7e2c0d4b93f01",
+      "components": {
+        "illusion.Camera": {},
+        "illusion.Name": {"value": "Camera"},
+        "illusion.Transform": {"position": [0.0, 1.5, 6.0], "rotation": [0.0, 0.0, 0.0, 1.0], "scale": [1.0, 1.0, 1.0]}
+      }
+    },
+    {
+      "id": "51a7e2c0d4b93f02",
+      "components": {
+        "illusion.DirectionalLight": {"intensity": 3.0},
+        "illusion.Name": {"value": "Sun"},
+        "illusion.Transform": {"position": [0.0, 5.0, 0.0], "rotation": [-0.38268343, 0.0, 0.0, 0.92387953], "scale": [1.0, 1.0, 1.0]}
+      }
+    },
+    {
+      "id": "51a7e2c0d4b93f03",
+      "components": {
+        "illusion.Name": {"value": "Sky"},
+        "illusion.ProceduralSky": {},
+        "illusion.SkyLight": {"environment": "builtin:/sky/procedural"},
+        "illusion.Transform": {"position": [0.0, 0.0, 0.0], "rotation": [0.0, 0.0, 0.0, 1.0], "scale": [1.0, 1.0, 1.0]}
+      }
+    },
+    {
+      "id": "51a7e2c0d4b93f04",
+      "components": {
+        "illusion.MeshRenderer": {"mesh": "builtin:/mesh/plane", "material": "builtin:/material/default"},
+        "illusion.Name": {"value": "Ground"},
+        "illusion.Transform": {"position": [0.0, 0.0, 0.0], "rotation": [0.0, 0.0, 0.0, 1.0], "scale": [10.0, 1.0, 10.0]}
+      }
+    },
+    {
+      "id": "51a7e2c0d4b93f05",
+      "components": {
+        "illusion.MeshRenderer": {"mesh": "builtin:/mesh/cube", "material": "builtin:/material/default"},
+        "illusion.Name": {"value": "Cube"},
+        "illusion.Transform": {"position": [0.0, 0.5, 0.0], "rotation": [0.0, 0.0, 0.0, 1.0], "scale": [1.0, 1.0, 1.0]}
+      }
+    }
+  ]
+}

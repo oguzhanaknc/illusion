@@ -12,9 +12,11 @@ Editör kodu `editor/` altında yaşar:
 | --- | --- | --- |
 | `editor/thirdparty` | `illusion::imgui`, `illusion::implot` | Editörün yapılandırma başlığıyla Dear ImGui (docking) ve ImPlot |
 | `editor/strings` | `illusion::editor_strings` | Editörün İngilizce metni (`editor/data/locales/en.json`), string tablosu olarak |
+| `editor/core` | `illusion::editor_core` | Penceresiz editör çekirdeği: projeler, düzenlenen sahne, tipli komutlar, transaction'lar, undo, journal'lar (GPU, Dear ImGui veya socket yok) |
 | `editor/ui` | `illusion::editor_ui` | Backend'ler, tema, fontlar, ikonlar, kare başına metin, widget kiti, `UiDriver` |
 | `editor/tools/ui_gallery` | `illusion_ui_gallery` | Tasarım incelemeleri ve golden görüntü testleri için widget kataloğu |
-| `editor/data` | `editor-data/` | Temalar ve locale'ler; fontlarla birlikte editör çalıştırılabilirlerinin yanına kopyalanır |
+| `editor/tools/command_reference` | `illusion_editor_command_reference` | Üretilen [komut referansını](../reference/editor-commands.md) yazar ve kontrol eder |
+| `editor/data` | `editor-data/` | Temalar, locale'ler ve proje şablonları; fontlarla birlikte editör çalıştırılabilirlerinin yanına kopyalanır |
 | `editor/tests`, `editor/benchmarks` | | Editör testleri ve Benchmark'ları |
 
 `ILLUSION_BUILD_EDITOR` bu ağacı ekler; illusion en üst düzey proje olduğunda açıktır. Editör
@@ -162,12 +164,42 @@ Pencerede F2 temayı, F3 sayfayı, F4 dili (İngilizce ya da en-XA pseudo-locale
 testleri galeri görüntülerini `editor/tests/data/golden` içindeki golden görüntülerle karşılaştırır; CI de
 her görüntüyü `ui-captures` artifact'ı olarak yayımlar.
 
+## Editör çekirdeği
+
+`illusion::editor_core`, penceresi olmayan editördür. `EditorContext`; projenin `VirtualFileSystem`'ini, açık
+sahneyi tutan tek bir World'ü, `EntityIndex`'i (id'ler, yollar ve isimler), `Selection`'ı, `UndoStack`'i,
+`ChangeJournal`'ı, `EventHub`'ı ve `CommandRegistry`'yi sahiplenir
+([ADR 0036](https://github.com/oguzhanaknc/illusion/blob/main/docs/adr/0036-editor-command-core.md)). Her
+değişiklik bir komuttan geçer:
+
+```text
+UI widget / shortcut / palette / RPC / MCP
+        |  execute<Result>(name, params)  or  executeJson(name, json)
+        v
+EditorContext::run()  -- validate params (reflected structs, JSON Pointers, suggestions)
+        |  begin transaction, run the handler
+        v
+WorldEditor           -- validated primitives, each recording reversible operations
+        |  commit: UndoStep (merge keys, budget), crash journal line, change journal revision, events
+        v
+World + project files
+```
+
+İşlemler; Component değerlerinin önceki ve sonraki hâlleri (scene v2 JSON), ortaya çıkan ya da kaybolan
+Entity anlık görüntüleri ve `.illusion/trash` içindeki blob'larla desteklenen dosya değişiklikleridir. Undo,
+redo, başarısız komutların ve dry run'ların geri alınması ve çökme sonrası kurtarma hepsi bunları yeniden
+oynatır; böylece her şey geri alındıktan sonraki sahne, öncekiyle byte byte aynıdır. Kılavuz
+[kullanımını](../manual/editor/index.md) anlatır.
+
 ## Performans
 
 - Boşta geçen UI kareleri bellek ayırmaz: etiketler kare başına bir arenada oluşturulur, renderer buffer'ları
   yalnızca büyür ve bir test galeri kareleri boyunca hem genel hem Dear ImGui bellek ayırmalarını sayar.
 - `ui/gallery-frame` Benchmark'ı en yoğun galeri sayfasının bir karesinin CPU maliyetini ölçer (bir masaüstü
   makinede yaklaşık 40 µs; bütçe 400 µs).
+- Editör çekirdeğinin Benchmark'ları: `editor/component-set` (birleştirilen tek bir `component.set`),
+  `editor/undo-capture-delete` (bir alt ağacı silip geri getirmek, Entity başına) ve `editor/scene-query`
+  (aranan Entity başına).
 
 ## Erişilebilirlik
 

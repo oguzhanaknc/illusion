@@ -12,9 +12,11 @@ Editor code lives in `editor/`:
 | --- | --- | --- |
 | `editor/thirdparty` | `illusion::imgui`, `illusion::implot` | Dear ImGui (docking) and ImPlot with the editor's configuration header |
 | `editor/strings` | `illusion::editor_strings` | The editor's English text (`editor/data/locales/en.json`) as a string table |
+| `editor/core` | `illusion::editor_core` | The headless editor core: projects, the edited scene, typed commands, transactions, undo, journals (no GPU, Dear ImGui or sockets) |
 | `editor/ui` | `illusion::editor_ui` | Backends, theme, fonts, icons, per-frame text, widget kit, `UiDriver` |
 | `editor/tools/ui_gallery` | `illusion_ui_gallery` | The widget catalogue used for design reviews and golden-image tests |
-| `editor/data` | `editor-data/` | Themes and locales, copied next to the editor executables with the fonts |
+| `editor/tools/command_reference` | `illusion_editor_command_reference` | Writes and checks the generated [command reference](../reference/editor-commands.md) |
+| `editor/data` | `editor-data/` | Themes, locales and project templates, copied next to the editor executables with the fonts |
 | `editor/tests`, `editor/benchmarks` | | Editor tests and benchmarks |
 
 `ILLUSION_BUILD_EDITOR` adds the tree; it is on when illusion is the top-level project. Editor executables
@@ -159,12 +161,40 @@ In a window, F2 cycles the theme, F3 the page and F4 the locale (English or the 
 editor GPU tests compare gallery captures with the golden images in `editor/tests/data/golden`, and CI
 publishes every capture as the `ui-captures` artifact.
 
+## Editor core
+
+`illusion::editor_core` is the editor without a window. `EditorContext` owns the project's
+`VirtualFileSystem`, one World with the open scene, the `EntityIndex` (ids, paths and names), the
+`Selection`, the `UndoStack`, the `ChangeJournal`, the `EventHub` and the `CommandRegistry`
+([ADR 0036](https://github.com/oguzhanaknc/illusion/blob/main/docs/adr/0036-editor-command-core.md)). Every
+change goes through a command:
+
+```text
+UI widget / shortcut / palette / RPC / MCP
+        |  execute<Result>(name, params)  or  executeJson(name, json)
+        v
+EditorContext::run()  -- validate params (reflected structs, JSON Pointers, suggestions)
+        |  begin transaction, run the handler
+        v
+WorldEditor           -- validated primitives, each recording reversible operations
+        |  commit: UndoStep (merge keys, budget), crash journal line, change journal revision, events
+        v
+World + project files
+```
+
+Operations are Component values before and after (scene v2 JSON), entity snapshots that appear or
+disappear, and file changes backed by blobs in `.illusion/trash`. Undo, redo, rollback of failed commands
+and dry runs, and crash recovery all replay them, so the scene after undoing everything is byte for byte the
+scene before. The manual describes [using it](../manual/editor/index.md).
+
 ## Performance
 
 - Idle UI frames do not allocate: labels are built in a per-frame arena, renderer buffers only grow, and a
   test counts both global and Dear ImGui allocations over gallery frames.
 - The benchmark `ui/gallery-frame` measures the CPU cost of a frame of the densest gallery page (about 40 µs
   on a desktop; budget 400 µs).
+- The editor core's benchmarks: `editor/component-set` (one merged `component.set`), `editor/undo-capture-delete`
+  (destroying and restoring a subtree, per entity) and `editor/scene-query` (per entity searched).
 
 ## Accessibility
 

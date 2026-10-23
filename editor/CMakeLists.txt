@@ -5,6 +5,7 @@ include(IllusionIcons)
 
 add_subdirectory(thirdparty)
 add_subdirectory(strings)
+add_subdirectory(core)
 add_subdirectory(ui)
 
 # editor-data/ next to the editor executables (mounted read-only as "editor:"): themes, locales, fonts and
@@ -31,6 +32,7 @@ add_custom_target(illusion_editor_data DEPENDS ${editor_data_stamp})
 illusion_mark_editor_only(illusion_editor_data)
 
 add_subdirectory(tools/ui_gallery)
+add_subdirectory(tools/command_reference)
 
 if(ILLUSION_BUILD_TESTS)
     add_subdirectory(tests)

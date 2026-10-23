@@ -82,6 +82,9 @@ plugins:
             Editor: Editör
             Reference: Referans
             API Reference: API Referansı
+            Editor Core: Editör Çekirdeği
+            Projects: Projeler
+            Editor Commands: Editör Komutları
             Contributing: Katkıda Bulunma
 
 markdown_extensions:
@@ -121,10 +124,14 @@ nav:
       - Audio: manual/audio.md
       - Game Modules: manual/modules.md
       - Profiling: manual/profiling.md
+      - Editor:
+          - Editor Core: manual/editor/index.md
+          - Projects: manual/editor/projects.md
   - Architecture:
       - Overview: architecture/overview.md
       - Editor: architecture/editor.md
       - Decisions: architecture/decisions.md
   - Reference:
       - API Reference: reference/api.md
+      - Editor Commands: reference/editor-commands.md
   - Contributing: contributing.md

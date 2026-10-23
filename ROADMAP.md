@@ -128,7 +128,19 @@ Plan: `docs/plans/m7-editor.md` (sub-milestones, command API, localization, them
   `.material` files, `PhysicsAssetResolver` for collision meshes, `AudioSource::clip` as an asset
   reference, `SceneLoadResult::missingAssets` (ADR 0035). Not yet: freeing GPU memory of cache entries no
   resolver uses (`RenderResources` cannot destroy resources yet); it comes with live reload (M7u)
-- M7i: Headless editor core: projects, typed commands, transactions, undo, journal (ADR 0036)
+- M7i: ✅ Headless editor core (`illusion::editor_core`, ADR 0036): projects (`project.illusion`, mounts,
+  `empty` and `3d-starter` templates), VFS file management (`listRecursive`, `stat`, `createDirectory`,
+  `remove`, `rename`, `copy`), `EditorContext`, `EntityIndex` (ids, paths, `name:`, `$selection`),
+  `SceneDocument`, `Selection`, typed commands with reflected params and results, JSON Schema 2020-12,
+  validation with JSON Pointers and suggestions, `WorldEditor` primitives recorded as reversible operations,
+  `UndoStack` (merge keys, 256 MiB budget, selection restore), `ChangeJournal` and `EventHub`, a crash
+  journal with `project.recover`, autosave, and 46 commands in the `editor`, `project`, `scene`, `entity`,
+  `component`, `hierarchy`, `selection` and `history` modules with a generated reference
+  (`editor.command_reference`) and a schema golden file
+- M7i-2: The remaining command modules of the plan: `transform` (spaces, pivots, Euler input),
+  `clipboard`, `asset` with a `ReferenceIndex` (move with reference fix-up, delete with a reference check,
+  references, dependencies), `material`, `log`, scene and project settings, and the
+  `.claude/skills/editor-commands` examples for them
 - M7j: JSON-RPC server, process API, `illusion_ctl`, acceptance skeleton (ADRs 0037, 0038)
 - M7k: MCP bridge `illusion_mcp` with tools generated from editor commands (ADR 0039)
 - M7l: Editor shell: layouts, menus, command palette, console, history, AI activity, preferences

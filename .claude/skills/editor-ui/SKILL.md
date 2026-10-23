@@ -15,6 +15,7 @@ and ADR 0031 (UI stack).
 - Text: add keys to `editor/data/locales/en.json` (sorted, `comment` when the context is unclear); they
   become `illusion::editor::strings::k...` constants (`illusion/editor/EditorStrings.hpp`). See the
   `localization` skill.
+- State changes: panels never change editor state themselves; they run commands (`editor-commands` skill).
 - New targets: `illusion_add_editor_library()` / `illusion_add_editor_executable()` only. Never include
   `illusion/editor/...`, `imgui.h` or `implot.h` outside `editor/` (`python tools/check_layering.py`).
 

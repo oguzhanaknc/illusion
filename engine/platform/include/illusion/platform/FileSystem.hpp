@@ -26,14 +26,16 @@ namespace illusion
 /// Result of a file operation.
 enum class FileError : u8
 {
-    None,         ///< Success.
-    InvalidPath,  ///< The virtual path is malformed or tries to escape its mount.
-    UnknownMount, ///< The mount name is not registered.
-    NotFound,     ///< The file or directory does not exist.
-    ReadOnly,     ///< Writing to a read-only mount.
-    AccessDenied, ///< The operating system refused access.
-    IoError,      ///< Any other I/O failure (including damaged archive data).
-    Unsupported,  ///< The mount cannot do this (e.g. resolve() on an archive mount).
+    None,          ///< Success.
+    InvalidPath,   ///< The virtual path is malformed or tries to escape its mount.
+    UnknownMount,  ///< The mount name is not registered.
+    NotFound,      ///< The file or directory does not exist.
+    ReadOnly,      ///< Writing to a read-only mount.
+    AccessDenied,  ///< The operating system refused access.
+    IoError,       ///< Any other I/O failure (including damaged archive data).
+    Unsupported,   ///< The mount cannot do this (e.g. resolve() on an archive mount).
+    AlreadyExists, ///< The target of a copy, move or new directory exists.
+    NotEmpty,      ///< Removing a directory that has entries without asking for a recursive removal.
 };
 
 /// Human-readable name of @p error, e.g. "NotFound".
@@ -44,6 +46,16 @@ enum class MountAccess : u8
 {
     ReadOnly,  ///< Reads only (game data).
     ReadWrite, ///< Reads and writes (saves, settings, caches).
+};
+
+/// What VirtualFileSystem::stat() reports about a file or directory.
+struct FileStat
+{
+    bool isDirectory = false; ///< True for directories.
+    u64 size = 0;             ///< Size in bytes (0 for directories).
+    /// Last modification in the file system's clock, in nanoseconds (0 in archives). Only for comparing
+    /// two stamps of the same file system ("has it changed?"); it is not a calendar time.
+    i64 modified = 0;
 };
 
 /// One entry returned by VirtualFileSystem::list().
@@ -102,6 +114,29 @@ public:
     /// Lists a directory's entries in @p out, sorted by name.
     FileError list(std::string_view virtualPath, std::vector<DirectoryEntry>& out) const;
 
+    /// Lists every file and directory below a directory in @p out. Names are paths relative to it with '/'
+    /// separators ("textures/rock.png"), sorted so that a directory comes before its contents.
+    FileError listRecursive(std::string_view virtualPath, std::vector<DirectoryEntry>& out) const;
+
+    /// Reports whether @p virtualPath is a file or a directory, its size and modification stamp.
+    FileError stat(std::string_view virtualPath, FileStat& out) const;
+
+    /// Creates a directory and any missing parents. Returns AlreadyExists if a file or directory is there.
+    FileError createDirectory(std::string_view virtualPath);
+
+    /// Removes a file or a directory. A directory with entries is removed only when @p recursive is true
+    /// (NotEmpty otherwise). The root of a mount cannot be removed (InvalidPath).
+    FileError remove(std::string_view virtualPath, bool recursive = false);
+
+    /// Moves or renames a file or directory. Both paths must be on writable directory mounts; the target
+    /// must not exist (AlreadyExists) and a directory cannot move into itself (InvalidPath). Missing
+    /// parent directories of the target are created.
+    FileError rename(std::string_view from, std::string_view to);
+
+    /// Copies a file, or a directory with everything in it. The source may be on any mount, archives
+    /// included; the target must be on a writable directory mount and must not exist (AlreadyExists).
+    FileError copy(std::string_view from, std::string_view to);
+
     /// Resolves dot components and repeated slashes in a virtual path.
     ///
     /// For example `game:/models/../textures/./a.png` becomes `game:/textures/a.png`, so paths built by
@@ -113,6 +148,7 @@ private:
     struct Mount;
     FileError resolveMount(std::string_view virtualPath, const Mount*& mount,
                            std::filesystem::path& out) const;
+    FileError writablePath(std::string_view virtualPath, std::filesystem::path& out) const;
 
     struct Impl;
     std::unique_ptr<Impl> m_impl;
