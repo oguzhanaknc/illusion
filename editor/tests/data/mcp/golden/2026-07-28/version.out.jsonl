@@ -1,0 +1,6 @@
+{"jsonrpc":"2.0","id":30,"error":{"code":-32022,"message":"Unsupported protocol version","data":{"supported":["2026-07-28","2025-11-25","2025-06-18"],"requested":"1900-01-01"}}}
+{"jsonrpc":"2.0","id":31,"error":{"code":-32601,"message":"method not found: initialize"}}
+{"jsonrpc":"2.0","id":32,"error":{"code":-32601,"message":"method not found: ping"}}
+{"jsonrpc":"2.0","id":33,"error":{"code":-32600,"message":"send initialize first, or send requests with _meta[\"io.modelcontextprotocol/protocolVersion\"] = \"2026-07-28\""}}
+{"jsonrpc":"2.0","id":null,"error":{"code":-32700,"message":"parse error: invalid literal, expected 'null'"}}
+{"jsonrpc":"2.0","id":null,"error":{"code":-32600,"message":"not a JSON-RPC 2.0 request (batch arrays are not supported)"}}

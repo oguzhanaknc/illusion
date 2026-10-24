@@ -7,13 +7,17 @@
 //     illusion_ctl --launch <editor> [--editor-arg <arg>]... replay <transcript.jsonl> [--checks
 //     <checks.jsonl>]
 //                  [--var <name>=<JSON>]... [--gpu] [--temp-workspace] [--keep]
+//                  [--via-mcp <illusion_mcp> [--era legacy|modern]]
 //     illusion_ctl --launch <editor> [--editor-arg <arg>]... check <checks.jsonl> [...]
+//
+// --via-mcp runs every step as an MCP tool call through the bridge, which launches the editor (ADR 0039).
 //
 // <connection> is one of --endpoint <file>, --project <dir> (its endpoint file), --socket <path> --token <t>,
 // or --launch <editor> [--editor-arg <arg>]... (starts a headless editor over stdio).
 // Exit codes: 0 success, 1 a call or check failed, 2 usage error, 3 no connection.
 
 #include <illusion/core/Json.hpp>
+#include <illusion/editor/client/McpClient.hpp>
 #include <illusion/editor/client/RpcClient.hpp>
 #include <illusion/editor/client/Transcript.hpp>
 #include <illusion/editor/rpc/RpcStream.hpp>
@@ -21,6 +25,7 @@
 
 #include <cstdio>
 #include <filesystem>
+#include <memory>
 #include <optional>
 #include <random>
 #include <string>
@@ -41,6 +46,7 @@ constexpr std::string_view kUsage =
     "       illusion_ctl --launch <editor> [--editor-arg <arg>]... replay <transcript.jsonl>\n"
     "                    [--checks <checks.jsonl>] [--var <name>=<JSON>]... [--gpu] [--temp-workspace] "
     "[--keep]\n"
+    "                    [--via-mcp <illusion_mcp> [--era legacy|modern]]\n"
     "       illusion_ctl --launch <editor> [--editor-arg <arg>]... check <checks.jsonl> [same options]\n"
     "connection: --endpoint <file> | --project <dir> | --socket <path> --token <token>\n"
     "            | --launch <editor> [--editor-arg <arg>]...   (also: --client <name>)\n";
@@ -191,10 +197,25 @@ int runTranscripts(const Options& options)
     runner.launch = client::LaunchOptions{options.editor, options.editorArguments};
     bool tempWorkspace = false;
     bool keep = false;
+    std::filesystem::path bridge;
+    bool modern = false;
     for (usize i = 2; i < args.size(); ++i)
     {
         const std::string_view arg = args[i];
-        if (arg == "--checks" && i + 1 < args.size())
+        if (arg == "--via-mcp" && i + 1 < args.size())
+        {
+            bridge = utf8Path(args[++i]);
+        }
+        else if (arg == "--era" && i + 1 < args.size())
+        {
+            const std::string_view era = args[++i];
+            if (era != "legacy" && era != "modern")
+            {
+                return usage("--era takes legacy or modern");
+            }
+            modern = era == "modern";
+        }
+        else if (arg == "--checks" && i + 1 < args.size())
         {
             files.push_back(utf8Path(args[++i]));
         }
@@ -238,6 +259,32 @@ int runTranscripts(const Options& options)
     runner.log = [](std::string_view line) {
         print(stdout, line);
     };
+    if (!bridge.empty())
+    {
+        runner.connect = [bridge, modern](const client::LaunchOptions& launch)
+            -> Expected<std::unique_ptr<client::CallChannel>, std::string> {
+            client::McpLaunchOptions bridgeOptions;
+            bridgeOptions.bridge = bridge;
+            bridgeOptions.modern = modern;
+            bridgeOptions.workingDirectory = launch.workingDirectory;
+            const std::u8string editor = launch.editor.u8string();
+            bridgeOptions.arguments = {
+                "--launch", "--editor",
+                std::string(reinterpret_cast<const char*>(editor.data()), editor.size())};
+            for (const std::string& argument : launch.arguments)
+            {
+                bridgeOptions.arguments.emplace_back("--editor-arg");
+                bridgeOptions.arguments.push_back(argument);
+            }
+            Expected<client::McpClient, std::string> started = client::McpClient::launch(bridgeOptions);
+            if (!started)
+            {
+                return unexpected(std::move(started).error());
+            }
+            return std::unique_ptr<client::CallChannel>(
+                std::make_unique<client::McpClient>(std::move(started).value()));
+        };
+    }
 
     client::TranscriptRunner transcripts(std::move(runner));
     bool passed = true;

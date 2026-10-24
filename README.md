@@ -9,7 +9,7 @@ designed to ship commercial games on Steam and similar stores.
 > platform layer, input (keyboard, mouse, gamepads, actions), glTF loading and a forward PBR scene renderer
 > with image-based lighting, soft shadows and HDR post-processing, an asset pipeline (import cache,
 > streaming, packed archives), scene files, rigid-body physics, 3D audio and hot-reloadable game modules are
-> implemented and tested on all platforms. The editor is in progress (its UI foundation, headless command core and JSON-RPC automation are done), followed
+> implemented and tested on all platforms. The editor is in progress (its UI foundation, headless command core, JSON-RPC automation and MCP bridge are done), followed
 > by the export pipeline; see
 > [ROADMAP.md](ROADMAP.md).
 
@@ -56,6 +56,9 @@ designed to ship commercial games on Steam and similar stores.
   authentication and permission modes, batches with result references, per-connection transactions, undo of
   one's own steps, async commands with progress and cancellation, `illusion_ctl`, a Python client, and
   replayable acceptance transcripts.
+- An MCP bridge for AI agents such as Claude Code (`illusion_mcp`): every editor command is a generated tool,
+  both MCP protocol eras (2025-06-18/2025-11-25 and the stateless 2026-07-28), resources and prompts,
+  progress and cancellation, attach or launch, and relaunch with crash recovery.
 - No per-frame heap allocations: arenas, pools and an inline type-erased callable.
 - Tracy profiler integration and benchmark tests with performance budgets in CI.
 - CI on Windows (MSVC, clang-cl), Linux (GCC, Clang, ASan/UBSan, TSan) and macOS (Apple Clang).
@@ -106,7 +109,7 @@ world.query<Position, const Velocity>().each([](Position& p, const Velocity& v) 
 | `engine/audio` | Sound playback, 3D audio and mixing with miniaudio (`illusion::audio`) |
 | `engine/modules` | Game and plugin modules: loading, checks, hot reload (`illusion::modules`) |
 | `engine/render` | GPU device, swapchains, shaders, scene renderer (`illusion::render`) |
-| `editor` | The editor, never linked into games: command core (`illusion::editor_core`), UI foundation, widget kit, UI gallery (`illusion::editor_ui`) |
+| `editor` | The editor, never linked into games: command core (`illusion::editor_core`), RPC server and client, MCP bridge (`illusion::mcp_protocol`, `illusion_mcp`), UI foundation, widget kit, UI gallery (`illusion::editor_ui`) |
 | `samples` | Sample applications |
 | `tests` | Unit tests (doctest) |
 | `tools/pack` | `illusion_pack` archive packer and asset cooker |

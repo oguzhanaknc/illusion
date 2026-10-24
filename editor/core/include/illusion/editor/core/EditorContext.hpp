@@ -57,6 +57,9 @@ struct EditorContextOptions
     std::filesystem::path workspace{};
     /// Project templates, one directory each (empty: `editor-data/templates` next to the executable).
     std::filesystem::path templates{};
+    /// The MCP bridge that `project.create` names in the new project's `.mcp.json` (empty: `illusion_mcp`,
+    /// found through `PATH`). The editor passes the absolute path of the `illusion_mcp` next to it.
+    std::filesystem::path mcpServer{};
 };
 
 /// How a command is run.

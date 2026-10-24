@@ -336,24 +336,38 @@ TranscriptRunner::TranscriptRunner(RunnerOptions options)
 
 Expected<void, std::string> TranscriptRunner::ensureStarted(const std::vector<std::string>& extra)
 {
-    if (m_client.connected())
+    if (m_client != nullptr && m_client->connected())
     {
         return {};
     }
     LaunchOptions launch = m_options.launch;
     launch.arguments.insert(launch.arguments.end(), extra.begin(), extra.end());
+    if (m_options.connect)
+    {
+        Expected<std::unique_ptr<CallChannel>, std::string> channel = m_options.connect(launch);
+        if (!channel)
+        {
+            return unexpected(std::move(channel).error());
+        }
+        m_client = std::move(channel).value();
+        return {};
+    }
     Expected<RpcClient, std::string> client = RpcClient::launch(launch);
     if (!client)
     {
         return unexpected(std::move(client).error());
     }
-    m_client = std::move(client).value();
+    m_client = std::make_unique<RpcClient>(std::move(client).value());
     return {};
 }
 
 std::optional<i32> TranscriptRunner::stop()
 {
-    return m_client.close();
+    if (m_client == nullptr)
+    {
+        return std::nullopt;
+    }
+    return m_client->close(std::chrono::milliseconds(30000));
 }
 
 RunReport TranscriptRunner::run(std::string_view jsonl, std::string_view name)
@@ -449,7 +463,10 @@ RunReport TranscriptRunner::run(std::string_view jsonl, std::string_view name)
                     arguments.emplace_back(argument.asString().value_or(argument.dump()));
                 }
             }
-            m_client.close();
+            if (m_client != nullptr)
+            {
+                m_client->close(std::chrono::milliseconds(30000));
+            }
             m_restartArguments = std::move(arguments);
             if (Expected<void, std::string> started = ensureStarted(m_restartArguments); !started)
             {
@@ -520,7 +537,7 @@ RunReport TranscriptRunner::run(std::string_view jsonl, std::string_view name)
         }
         std::string paramsText;
         (void)params->root().write(paramsText, JsonWriteOptions{.pretty = false});
-        const Expected<std::string, RpcError> reply = m_client.call(method, paramsText);
+        const Expected<std::string, RpcError> reply = m_client->call(method, paramsText, kDefaultCallTimeout);
         if (!reply && reply.error().json.empty())
         {
             fail(method, reply.error().message);

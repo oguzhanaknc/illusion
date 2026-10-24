@@ -38,6 +38,10 @@ selection, files, history) is a command; panels, shortcuts, RPC and MCP all call
 3. Register with `registry.add<&fn>({...})`: title and description keys, an English `agentSummary` ending
    in `Example: {...}.`, category, icon, flags (`readOnly` / `undoable` / `destructive` / `idempotent`),
    `mode`, `permission`, and `palette`/`defaultShortcut` for user-facing actions.
+   The command is also the MCP tool `<domain>_<verb>` (ADR 0039): its description is `agentSummary` plus
+   parameter documentation generated from the params schema, and its annotations come from the flags. Nothing
+   else is needed for MCP, so make the summary say what an agent needs (what it does, units, an example) and
+   give fields ranges and enum names in their reflection metadata.
 
 ## 3. Tests (editor/tests/core)
 

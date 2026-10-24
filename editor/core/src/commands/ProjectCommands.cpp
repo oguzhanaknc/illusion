@@ -150,6 +150,12 @@ Expected<ProjectInfoResult, CommandError> projectCreate(CommandContext& context,
     {
         return unexpected(CommandError::make(ErrorKind::IoError, std::move(created).error()));
     }
+    const std::filesystem::path& mcpServer = context.editor().options().mcpServer;
+    if (!writeMcpConfig(*root, mcpServer.empty() ? std::filesystem::path("illusion_mcp") : mcpServer))
+    {
+        return unexpected(CommandError::make(
+            ErrorKind::IoError, "cannot write " + pathText(*root / std::string(kMcpConfigFileName))));
+    }
     if (Expected<void, CommandError> opened = context.editor().openProject(*root); !opened)
     {
         return unexpected(std::move(opened).error());
@@ -336,8 +342,9 @@ void registerProjectCommands(CommandRegistry& registry)
         .title = strings::kCommandProjectCreateTitle,
         .description = strings::kCommandProjectCreateDescription,
         .agentSummary =
-            "Creates a project from a template in a new directory of the editor's workspace and opens it. "
-            "Templates: \"empty\", \"3d-starter\". Example: {\"directory\":\"tetris\",\"name\":\"Tetris\","
+            "Creates a project from a template in a new directory of the editor's workspace and opens it; "
+            "its .mcp.json lets Claude Code started there reach the editor. Templates: \"empty\", "
+            "\"3d-starter\". Example: {\"directory\":\"tetris\",\"name\":\"Tetris\","
             "\"template\":\"empty\"}.",
         .category = "Project",
         .icon = "create_new_folder",

@@ -102,3 +102,10 @@ Protocol version 0.2.0 adds, without changing existing messages:
 
 Approval prompts for the `ask` mode still wait for the windowed editor (M7l); until then `ask` denies the
 classes that would need one, also inside batches.
+
+## Addendum: M7k (2026-10-24)
+
+Protocol version 0.3.0 adds three server methods for the MCP bridge and the AI activity panel (ADR 0039):
+`editor.set_client` names the program and agent of a connection (its origin becomes `rpc:<client>`),
+`editor.clients` lists the open connections, and `editor.activity` returns a ring of the last 256 requests.
+Existing messages do not change.

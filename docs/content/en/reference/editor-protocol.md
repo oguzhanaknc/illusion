@@ -1,7 +1,8 @@
 # Editor Protocol
 
-Protocol version `0.2.0` (semver; `1.0` comes with M7x). Design: ADR 0037. How to use it:
-[Automation](../manual/editor/automation.md).
+Protocol version `0.3.0` (semver; `1.0` comes with M7x). Design: ADR 0037. How to use it:
+[Automation](../manual/editor/automation.md). AI agents use it through the MCP bridge
+([AI agents](../manual/editor/ai-agents.md)).
 
 ## Framing
 
@@ -66,6 +67,9 @@ directory when that path is longer than 103 bytes (or not ASCII on Windows).
 | `editor.subscribe` | `topics` (array; empty: all), `mode` (`push` or `pull`, default `push`) | `{topics, mode}` |
 | `editor.unsubscribe` | — | `{}` |
 | `editor.poll_events` | `limit` (default 256) | `{events: [{topic, payload}], overflow}` |
+| `editor.set_client` | `client` (origin `rpc:<client>`), `agent`, `agentVersion`, `era` (each optional, up to 64 bytes) | `{connection, client, origin}` |
+| `editor.clients` | — | `{clients: [{connection, client, agent, agentVersion, era, origin, requests}]}` |
+| `editor.activity` | `since` (sequence number, default 0), `limit` (default 256) | `{entries: [{seq, connection, client, method, code, micros, revision}]}`, oldest first |
 | `editor.quit` | — | `{}`; the editor ends after the reply (permission class `system`) |
 | `rpc.cancel` | `id` (of a request of this connection) | `{}` if sent with an id; usually a notification |
 
@@ -75,8 +79,10 @@ Async commands send `{"method": "rpc.progress", "params": {"id", "progress", "to
 only when there is one) at most once per frame, when the progress changed. Commands run with the connection as
 their caller: a connection's transaction (`transaction.begin`) is cancelled when it closes, and
 `history.undo {"scope": "mine"}` undoes the steps of the connection's origin `rpc:<client>`. The steps of
-`editor.batch` are checked against the permission mode one by one.
-Every other method is an [editor command](editor-commands.md).
+`editor.batch` are checked against the permission mode one by one. `editor.activity` keeps the last 256
+requests of all connections (`code` 0 on success; `editor.activity`, `editor.clients` and `editor.poll_events`
+are left out); the MCP bridge names itself with `editor.set_client`, so its changes have the origin
+`rpc:illusion_mcp`. Every other method is an [editor command](editor-commands.md).
 
 ## Limits
 

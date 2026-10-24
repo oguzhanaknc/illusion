@@ -86,6 +86,7 @@ RpcClient& RpcClient::operator=(RpcClient&& other) noexcept
         m_lines = std::move(other.m_lines);
         m_nextId = other.m_nextId;
         m_closed = other.m_closed;
+        m_editor = other.m_editor;
     }
     return *this;
 }
@@ -150,12 +151,15 @@ Expected<RpcClient, std::string> RpcClient::launch(const LaunchOptions& options)
     ProcessOptions process;
     process.executable = options.editor;
     process.arguments = options.arguments;
-    process.arguments.emplace_back("--headless");
-    process.arguments.emplace_back("--rpc-stdio");
+    if (options.isEditor)
+    {
+        process.arguments.emplace_back("--headless");
+        process.arguments.emplace_back("--rpc-stdio");
+    }
     process.workingDirectory = options.workingDirectory;
     process.pipeInput = true;
     process.captureOutput = true;
-    process.captureError = false;
+    process.captureError = options.captureLog;
     // Room for the largest message and its line break, so lines are never split.
     process.bufferCapacity = rpc::kMaxMessageSize + 1024;
     Expected<Process, std::string> started = Process::spawn(process);
@@ -166,6 +170,7 @@ Expected<RpcClient, std::string> RpcClient::launch(const LaunchOptions& options)
     RpcClient client;
     client.m_process = std::make_unique<Process>(std::move(started).value());
     client.m_stream = std::make_unique<ChildStream>(*client.m_process);
+    client.m_editor = options.isEditor;
     return client;
 }
 
@@ -209,6 +214,25 @@ Expected<std::string, RpcError> RpcClient::call(std::string_view method, std::st
     {
         return unexpected(RpcError{0, "not connected"});
     }
+    const std::optional<u64> id = start(method, params);
+    if (!id)
+    {
+        return unexpected(RpcError{0, "the connection is closed"});
+    }
+    std::optional<Expected<std::string, RpcError>> reply = poll(*id, timeout);
+    if (!reply)
+    {
+        return unexpected(RpcError{0, "no reply to " + std::string(method) + " in time"});
+    }
+    return std::move(*reply);
+}
+
+std::optional<u64> RpcClient::start(std::string_view method, std::string_view params)
+{
+    if (!connected())
+    {
+        return std::nullopt;
+    }
     const u64 id = m_nextId++;
     JsonMutDocument doc;
     JsonMutValue request = doc.makeObject();
@@ -219,7 +243,7 @@ Expected<std::string, RpcError> RpcClient::call(std::string_view method, std::st
     std::string line;
     if (!doc.write(line, JsonWriteOptions{.pretty = false}))
     {
-        return unexpected(RpcError{0, "cannot write the request"});
+        return std::nullopt;
     }
     // Splice the params text in as given (it is checked by the editor, which reports parse errors).
     line.pop_back();
@@ -229,17 +253,25 @@ Expected<std::string, RpcError> RpcClient::call(std::string_view method, std::st
     if (!m_stream->write(line))
     {
         m_closed = true;
-        return unexpected(RpcError{0, "the connection is closed"});
+        return std::nullopt;
     }
+    return id;
+}
 
+std::optional<Expected<std::string, RpcError>> RpcClient::poll(u64 id, std::chrono::milliseconds timeout)
+{
     const auto start = std::chrono::steady_clock::now();
     std::string message;
     for (;;)
     {
         if (!readMessage(message, remaining(timeout, start)))
         {
-            return unexpected(RpcError{0, connected() ? "no reply to " + std::string(method) + " in time"
-                                                      : "the editor closed the connection"});
+            if (connected())
+            {
+                return std::nullopt;
+            }
+            return Expected<std::string, RpcError>(
+                unexpected(RpcError{0, "the editor closed the connection"}));
         }
         Expected<JsonDocument, JsonError> parsed = JsonDocument::parse(message);
         if (!parsed || !parsed->root().isObject())
@@ -257,9 +289,10 @@ Expected<std::string, RpcError> RpcClient::call(std::string_view method, std::st
         {
             // An error the editor could not attribute to a request (e.g. a parse error): it answers this one.
             const JsonValue error = root.find("error");
-            return unexpected(RpcError{static_cast<i32>(error.find("code").asI64().value_or(0)),
-                                       std::string(error.find("message").asString().value_or("")),
-                                       error.find("data").dump(), error.dump()});
+            return Expected<std::string, RpcError>(
+                unexpected(RpcError{static_cast<i32>(error.find("code").asI64().value_or(0)),
+                                    std::string(error.find("message").asString().value_or("")),
+                                    error.find("data").dump(), error.dump()}));
         }
         if (replyId.asU64() != id)
         {
@@ -267,12 +300,24 @@ Expected<std::string, RpcError> RpcClient::call(std::string_view method, std::st
         }
         if (const JsonValue error = root.find("error"); !error.isAbsent())
         {
-            return unexpected(RpcError{static_cast<i32>(error.find("code").asI64().value_or(0)),
-                                       std::string(error.find("message").asString().value_or("")),
-                                       error.find("data").dump(), error.dump()});
+            return Expected<std::string, RpcError>(
+                unexpected(RpcError{static_cast<i32>(error.find("code").asI64().value_or(0)),
+                                    std::string(error.find("message").asString().value_or("")),
+                                    error.find("data").dump(), error.dump()}));
         }
-        return root.find("result").dump();
+        return Expected<std::string, RpcError>(root.find("result").dump());
     }
+}
+
+std::optional<std::string> RpcClient::readLog()
+{
+    std::string line;
+    if (m_process == nullptr ||
+        !m_process->readLine(ProcessStream::Error, line, std::chrono::milliseconds(0)))
+    {
+        return std::nullopt;
+    }
+    return line;
 }
 
 bool RpcClient::notify(std::string_view method, std::string_view params)
@@ -319,12 +364,23 @@ std::optional<std::string> RpcClient::nextNotification(std::chrono::milliseconds
     return next;
 }
 
+std::optional<std::string> RpcClient::takeNotification()
+{
+    if (m_notifications.empty())
+    {
+        return std::nullopt;
+    }
+    std::string next = std::move(m_notifications.front());
+    m_notifications.pop_front();
+    return next;
+}
+
 std::optional<i32> RpcClient::close(std::chrono::milliseconds timeout)
 {
     std::optional<i32> code;
     if (m_process)
     {
-        if (connected())
+        if (connected() && m_editor)
         {
             (void)call("editor.quit", "{}", std::chrono::milliseconds(10000));
         }

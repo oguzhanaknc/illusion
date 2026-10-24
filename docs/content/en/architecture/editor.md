@@ -203,6 +203,25 @@ material file under `assets:/` (found through reflection, parsed again only when
 so that `asset.move` can rewrite them and `asset.delete` can refuse. The manual describes
 [using it](../manual/editor/index.md).
 
+## The MCP bridge
+
+`illusion_mcp` is a separate process between an MCP client and the editor
+([ADR 0039](https://github.com/oguzhanaknc/illusion/blob/main/docs/adr/0039-mcp-bridge.md)):
+
+```text
+MCP client --stdio--> StdioTransport --> McpServer (illusion::mcp_protocol) --> EditorToolProvider --> RpcClient --> editor
+                                            |  era, tools, results, resources       |  launch/attach, crash relaunch,
+                                            |  progress, cancellation, prompts      |  rpc.progress, rpc.cancel, log ring
+```
+
+`illusion::mcp_protocol` is pure (core Json only): `McpServer` takes one line at a time and writes through an
+`McpTransport`; a `ToolProvider` runs the commands. It generates the tools from the OpenRPC document of
+`rpc.discover`, so it never needs to know a command. `illusion::editor_client` holds the editor side
+(`EditorToolProvider`) and an MCP client of the bridge (`McpClient`) that the acceptance runner uses for
+`--via-mcp`. A tool call runs inside `McpServer::handle()`; while it waits, the provider calls
+`CallControl::service()`, which takes cancellations and pings at once and keeps other requests for later.
+The [AI agents manual](../manual/editor/ai-agents.md) describes the result.
+
 ## Performance
 
 - Idle UI frames do not allocate: labels are built in a per-frame arena, renderer buffers only grow, and a
@@ -215,6 +234,8 @@ so that `asset.move` can rewrite them and `asset.delete` can refuse. The manual 
   `editor/reference-refresh` (checking an unchanged scene file for the reference index), `editor/batch-step`
   (one step of an `editor.batch` with a `$` reference, undone with the batch) and `editor/undo-own-check`
   (checking one later step before an undo of one's own steps).
+- `mcp/translate` measures one MCP `tools/call` through the bridge's server with an immediate provider: parsing,
+  finding the tool, writing the result (about 1.6 µs on a desktop; budget 10 µs).
 
 ## Accessibility
 

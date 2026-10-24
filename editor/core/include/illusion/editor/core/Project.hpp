@@ -37,6 +37,15 @@ struct ProjectManifest
 /// Writes a manifest as formatted JSON.
 [[nodiscard]] std::string writeProjectManifest(const ProjectManifest& manifest);
 
+/// File name of the MCP client configuration that `project.create` writes into a new project (ADR 0039).
+inline constexpr std::string_view kMcpConfigFileName = ".mcp.json";
+
+/// Writes kMcpConfigFileName into @p projectRoot as Claude Code reads it: one stdio MCP server named
+/// "illusion" that runs @p server with the arguments "--project" and ".", and a tool timeout of 600 s.
+/// Returns false if the file cannot be written.
+[[nodiscard]] bool writeMcpConfig(const std::filesystem::path& projectRoot,
+                                  const std::filesystem::path& server);
+
 /// One mount of a project: a virtual mount name and the directory it points at.
 struct ProjectMount
 {

@@ -310,7 +310,7 @@ TEST_CASE("rpc.discover returns an OpenRPC document of every method")
     CHECK(document.find("openrpc").asString() == "1.3.2");
     CHECK(document.find("info").find("version").asString() == kProtocolVersion);
     const JsonValue methods = document.find("methods");
-    CHECK(methods.size() == rpc.fixture.editor->commands().commands().size() + 5);
+    CHECK(methods.size() == rpc.fixture.editor->commands().commands().size() + 8);
     bool sawRename = false;
     for (const JsonValue method : methods.elements())
     {

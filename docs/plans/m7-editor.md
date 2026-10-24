@@ -736,6 +736,15 @@ Needs: j.
 
 **ADR.** 0039: a dual-era MCP bridge with tools generated one-to-one from editor commands.
 
+> **Landed (2026-10-24).** As scoped, with the spec facts re-verified against the published 2026-07-28
+> revision (`resultType`, `ttlMs`/`cacheScope`, `subscriptions/listen` with acknowledgements, no `ping`,
+> -32022 with `data.supported` and `data.requested`). The golden transcripts live in
+> `editor/tests/data/mcp/golden/<version>/` and run against the real editor by outcome. The client registry
+> and activity ring are server methods of the editor protocol (`editor.set_client`, `editor.clients`,
+> `editor.activity`, protocol 0.3.0). Moved: the `illusion://sdk/{header}` resource to M7s (it needs the
+> `sdk:` mount), `illusion://manual/{page}` to the M8 documentation work, and normalising `--record` output
+> to the nightly live-agent job (M7x).
+
 ### M7l: Editor shell (windowed)
 Needs: d, k.
 

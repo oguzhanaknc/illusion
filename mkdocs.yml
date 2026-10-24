@@ -87,6 +87,9 @@ plugins:
             Editor Commands: Editör Komutları
             Automation: Otomasyon
             Editor Protocol: Editör Protokolü
+            AI Agents: Yapay Zekâ Ajanları
+            Tutorials: Eğitimler
+            First Agent Session: İlk Ajan Oturumu
             Contributing: Katkıda Bulunma
 
 markdown_extensions:
@@ -130,6 +133,9 @@ nav:
           - Editor Core: manual/editor/index.md
           - Projects: manual/editor/projects.md
           - Automation: manual/editor/automation.md
+          - AI Agents: manual/editor/ai-agents.md
+  - Tutorials:
+      - First Agent Session: tutorials/first-agent-session.md
   - Architecture:
       - Overview: architecture/overview.md
       - Editor: architecture/editor.md

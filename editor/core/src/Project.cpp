@@ -114,6 +114,26 @@ Expected<ProjectManifest, std::string> parseProjectManifest(std::string_view jso
     return manifest;
 }
 
+bool writeMcpConfig(const std::filesystem::path& projectRoot, const std::filesystem::path& server)
+{
+    JsonMutDocument doc;
+    JsonMutValue root = doc.makeObject();
+    JsonMutValue entry = root.addObject("mcpServers").addObject("illusion");
+    entry.add("type", doc.makeString("stdio"));
+    entry.add("command", doc.makeString(detail::pathText(server)));
+    JsonMutValue args = entry.addArray("args");
+    args.push(doc.makeString("--project"));
+    args.push(doc.makeString("."));
+    entry.add("timeout", doc.makeU64(600000));
+    doc.setRoot(root);
+    std::string text;
+    if (!doc.write(text))
+    {
+        return false;
+    }
+    return writeFileText(projectRoot / std::string(kMcpConfigFileName), text);
+}
+
 std::string writeProjectManifest(const ProjectManifest& manifest)
 {
     JsonMutDocument doc;

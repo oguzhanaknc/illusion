@@ -48,6 +48,9 @@ illusion_ctl --project ~/games/tetris dump-catalog > catalog.json
 | `replay <transcript> [--checks <file>]` | Bir transcript'i başlatılan bir editörde yeniden oynatır (bkz. [kabul testleri](#kabul-testleri)). |
 | `check <file>` | Bir kontrol dosyasını başlatılan bir editörde çalıştırır. |
 
+`replay` ve `check`, her adımı bunun yerine köprü üzerinden bir MCP araç çağrısı olarak çalıştırmak için
+`--via-mcp <illusion_mcp> [--era legacy|modern]` alır (bkz. [Yapay zekâ ajanları](ai-agents.md)).
+
 Bağlantılar: `--launch <editor>` (her editör argümanı için `--editor-arg` ile), `--project <dir>` (projenin
 endpoint dosyası), `--endpoint <file>` ya da `--socket <path> --token <token>`.
 
@@ -177,5 +180,8 @@ eşleştirir: nesneler en azından verilen üyelere sahipse eşleşir; `$approx`
 illusion_ctl --launch build/bin/Release/illusion_editor --editor-arg --deterministic --editor-arg --no-gpu \
     replay tests/acceptance/tetris/scripted.jsonl --checks tests/acceptance/tetris/checks.jsonl --temp-workspace
 ```
+
+CTest senaryoyu MCP köprüsü üzerinden iki protokol çağında da çalıştırır
+(`--via-mcp` ile `acceptance.tetris.board.mcp-legacy` ve `acceptance.tetris.board.mcp-modern`).
 
 Protokolün kendisi [editör protokolü başvurusunda](../../reference/editor-protocol.md) anlatılır.
