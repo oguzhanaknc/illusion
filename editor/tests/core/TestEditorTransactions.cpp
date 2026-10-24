@@ -190,6 +190,40 @@ TEST_CASE("the crash journal of a cancelled transaction recovers the scene befor
     CHECK(before != expected);
 }
 
+TEST_CASE("reverting a move under a parent that moved afterwards restores the root's Transform exactly")
+{
+    // While an entity is a child, its Transform follows the parent without operations of its own. Reverting
+    // several commands at once (a cancel, a multi-step undo) must still give it back its root Transform, also
+    // when the move kept the Transform bit for bit (integer positions, no rotation).
+    for (const bool cancel : {true, false})
+    {
+        CAPTURE(cancel);
+        EditorFixture fixture;
+        EditorContext& editor = *fixture.editor;
+        ok(editor, "entity.create",
+           R"({"name":"Parent","components":{"illusion.Transform":{"position":[1,2,3]}}})");
+        ok(editor, "entity.create",
+           R"({"name":"Root","components":{"illusion.Transform":{"position":[5,5,5]}}})");
+        ok(editor, "history.clear");
+        const std::string before = fixture.scene();
+        if (cancel)
+        {
+            ok(editor, "transaction.begin");
+        }
+        ok(editor, "hierarchy.set_parent", R"({"entity":"/Root","parent":"/Parent","keepWorld":true})");
+        ok(editor, "transform.translate", R"({"entities":["/Parent"],"offset":[-3,-4,1],"space":"local"})");
+        if (cancel)
+        {
+            ok(editor, "transaction.cancel");
+        }
+        else
+        {
+            REQUIRE(editor.undo(2).value() == 2);
+        }
+        CHECK(fixture.scene() == before);
+    }
+}
+
 TEST_CASE("editor.batch runs its steps as one undo step and passes results on with $ references")
 {
     EditorFixture fixture;

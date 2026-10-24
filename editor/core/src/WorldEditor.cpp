@@ -209,6 +209,7 @@ struct WorldEditor::Watch
     EntityGuid guid;
     ComponentId type = kInvalidComponentId;
     std::optional<std::string> before;
+    bool always = false; // record the value even if it did not change
 };
 
 WorldEditor::WorldEditor(World& world, EntityIndex& index, GuidGenerator& guids, ChangeJournal& changes)
@@ -329,7 +330,7 @@ void WorldEditor::finish(std::vector<Watch>& watches)
     for (Watch& watched : watches)
     {
         std::optional<std::string> after = capture(watched.entity, watched.type);
-        if (after == watched.before)
+        if (after == watched.before && !watched.always)
         {
             continue;
         }
@@ -1137,6 +1138,11 @@ Expected<void, CommandError> WorldEditor::setParent(Entity entity, Entity parent
     watch(watches, entity, componentId<Hierarchy>());
     watch(watches, entity, componentId<LocalTransform>());
     watch(watches, entity, componentId<Transform>());
+    // While the entity is a child its Transform is derived from the parent after every change, without an
+    // operation. Recording the Transform even when the move keeps it lets the reverse of this move restore
+    // the value it had exactly, whatever the parent did in between (a transaction cancel or a multi-step undo
+    // reverts several commands before anything is derived again).
+    watches.back().always = m_world->has<Transform>(entity);
     watchSiblings(watches, m_world->has<Hierarchy>(entity) ? parentOf(*m_world, entity) : Entity{});
     watchSiblings(watches, parent);
     watch(watches, parent, componentId<Hierarchy>());

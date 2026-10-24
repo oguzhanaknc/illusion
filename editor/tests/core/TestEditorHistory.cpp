@@ -23,7 +23,9 @@ std::vector<std::string> entityIds(EditorContext& editor)
     return ids;
 }
 
-// One random command on the scene; failures (cycles, missing Components) are part of the test.
+// One random command on the scene; failures (cycles, missing Components) are part of the test. Every random
+// draw is a statement of its own, in a fixed order: the order in which the operands of `a + f() + g()` are
+// evaluated is unspecified, and compilers differ, which would give each platform different commands.
 void randomCommand(EditorContext& editor, std::mt19937& random)
 {
     const std::vector<std::string> ids = entityIds(editor);
@@ -33,75 +35,130 @@ void randomCommand(EditorContext& editor, std::mt19937& random)
     const auto number = [&](u32 range) {
         return std::to_string(static_cast<int>(random() % range) - static_cast<int>(range / 2));
     };
+    const auto coin = [&] {
+        return random() % 2 == 0;
+    };
     std::string name;
     std::string params;
     switch (random() % 15)
     {
     case 0:
     case 1:
+    {
         name = "entity.create";
-        params = random() % 2 == 0 ? R"({"name":"E)" + number(100) + R"(","parent":")" + pick() + R"("})"
-                                   : R"({"name":"R)" + number(100) +
-                                         R"(","index":0,"components":{"illusion.Transform":{}}})";
+        if (coin())
+        {
+            const std::string suffix = number(100);
+            const std::string parent = pick();
+            params = R"({"name":"E)" + suffix + R"(","parent":")" + parent + R"("})";
+        }
+        else
+        {
+            params = R"({"name":"R)" + number(100) + R"(","index":0,"components":{"illusion.Transform":{}}})";
+        }
         break;
+    }
     case 2:
         name = "entity.destroy";
         params = R"({"entities":[")" + pick() + R"("]})";
         break;
     case 3:
+    {
         name = "entity.rename";
-        params = R"({"entity":")" + pick() + R"(","name":"N)" + number(1000) + R"("})";
+        const std::string entity = pick();
+        const std::string suffix = number(1000);
+        params = R"({"entity":")" + entity + R"(","name":"N)" + suffix + R"("})";
         break;
+    }
     case 4:
+    {
         name = "entity.set_enabled";
-        params = R"({"entity":")" + pick() + R"(","enabled":)" + (random() % 2 == 0 ? "true" : "false") + "}";
+        const std::string entity = pick();
+        const bool enabled = coin();
+        params = R"({"entity":")" + entity + R"(","enabled":)" + (enabled ? "true" : "false") + "}";
         break;
+    }
     case 5:
+    {
         name = "component.add";
+        const std::string entity = pick();
+        const std::string target = pick();
         params =
-            R"({"entity":")" + pick() + R"(","type":"test.Link","value":{"target":")" + pick() + R"("}})";
+            R"({"entity":")" + entity + R"(","type":"test.Link","value":{"target":")" + target + R"("}})";
         break;
+    }
     case 6:
+    {
         name = "component.set";
-        params = R"({"entity":")" + pick() + R"(","type":"illusion.LocalTransform","value":{"position":[)" +
-                 number(20) + "," + number(20) + ",0]}}";
+        const std::string entity = pick();
+        const std::string x = number(20);
+        const std::string y = number(20);
+        params = R"({"entity":")" + entity + R"(","type":"illusion.LocalTransform","value":{"position":[)" +
+                 x + "," + y + ",0]}}";
         break;
+    }
     case 7:
+    {
         name = "hierarchy.set_parent";
-        params = R"({"entity":")" + pick() + R"(","parent":")" + pick() + R"(","keepWorld":)" +
-                 (random() % 2 == 0 ? "true" : "false") + "}";
+        const std::string entity = pick();
+        const std::string parent = pick();
+        const bool keepWorld = coin();
+        params = R"({"entity":")" + entity + R"(","parent":")" + parent + R"(","keepWorld":)" +
+                 (keepWorld ? "true" : "false") + "}";
         break;
+    }
     case 8:
+    {
         name = "hierarchy.reorder";
-        params = R"({"entity":")" + pick() + R"(","index":)" + std::to_string(random() % 4) + "}";
+        const std::string entity = pick();
+        const std::string index = std::to_string(random() % 4);
+        params = R"({"entity":")" + entity + R"(","index":)" + index + "}";
         break;
+    }
     case 9:
         name = "entity.duplicate";
         params = R"({"entities":[")" + pick() + R"("]})";
         break;
     case 10:
+    {
         // A batch whose later steps use the first one's result; a failing last step reverts all of it.
         name = "editor.batch";
-        params = R"({"atomic":)" + std::string(random() % 2 == 0 ? "true" : "false") +
-                 R"(,"steps":[{"as":"made","method":"entity.create","params":{"name":"B)" + number(100) +
-                 R"(","parent":")" + pick() + R"("}},{"method":"component.add","params":{"entity":)" +
-                 R"("$made.entity.id","type":"test.Link","value":{"target":")" + pick() +
-                 R"("}}},{"method":"hierarchy.set_parent","params":{"entity":")" + pick() +
+        const bool atomic = coin();
+        const std::string suffix = number(100);
+        const std::string parent = pick();
+        const std::string target = pick();
+        const std::string moved = pick();
+        params = R"({"atomic":)" + std::string(atomic ? "true" : "false") +
+                 R"(,"steps":[{"as":"made","method":"entity.create","params":{"name":"B)" + suffix +
+                 R"(","parent":")" + parent + R"("}},{"method":"component.add","params":{"entity":)" +
+                 R"("$made.entity.id","type":"test.Link","value":{"target":")" + target +
+                 R"("}}},{"method":"hierarchy.set_parent","params":{"entity":")" + moved +
                  R"(","parent":"$made.entity.id"}}]})";
         break;
+    }
     case 11:
     {
         constexpr std::string_view spaces[] = {"world", "local", "self"};
         name = "transform.translate";
-        params = R"({"entities":[")" + pick() + R"("],"offset":[)" + number(10) + "," + number(10) +
-                 R"(,1],"space":")" + std::string(spaces[random() % 3]) + R"("})";
+        const std::string entity = pick();
+        const std::string x = number(10);
+        const std::string y = number(10);
+        const std::string_view space = spaces[random() % 3];
+        params = R"({"entities":[")" + entity + R"("],"offset":[)" + x + "," + y + R"(,1],"space":")" +
+                 std::string(space) + R"("})";
         break;
     }
     case 12:
+    {
         name = "transform.rotate";
-        params = R"({"entities":[")" + pick() + R"(",")" + pick() + R"("],"euler":[0,)" + number(360) +
-                 R"(,0],"pivot":")" + (random() % 2 == 0 ? "center" : "individual") + R"("})";
+        const std::string first = pick();
+        const std::string second = pick();
+        const std::string angle = number(360);
+        const bool center = coin();
+        params = R"({"entities":[")" + first + R"(",")" + second + R"("],"euler":[0,)" + angle +
+                 R"(,0],"pivot":")" + (center ? "center" : "individual") + R"("})";
         break;
+    }
     case 13:
         name = "scene.settings_set";
         params = R"({"type":"test.Difficulty","value":{"enemies":)" + number(100) + "}}";
@@ -109,13 +166,17 @@ void randomCommand(EditorContext& editor, std::mt19937& random)
     case 14:
         (void)test::run(editor, "clipboard.copy", R"({"entities":[")" + pick() + R"("]})");
         name = "clipboard.paste";
-        params = random() % 2 == 0 ? std::string("{}") : R"({"parent":")" + pick() + R"("})";
+        params = coin() ? std::string("{}") : R"({"parent":")" + pick() + R"("})";
         break;
     default:
-        name = random() % 2 == 0 ? "component.remove" : "component.reset";
-        params = R"({"entity":")" + pick() + R"(","type":")" +
-                 (random() % 2 == 0 ? "test.Link" : "illusion.Name") + R"("})";
+    {
+        name = coin() ? "component.remove" : "component.reset";
+        const std::string entity = pick();
+        const bool link = coin();
+        params =
+            R"({"entity":")" + entity + R"(","type":")" + (link ? "test.Link" : "illusion.Name") + R"("})";
         break;
+    }
     }
     const Expected<std::string, CommandError> result = test::run(editor, name, params);
     if (!result)

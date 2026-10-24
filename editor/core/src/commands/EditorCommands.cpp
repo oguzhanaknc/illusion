@@ -343,15 +343,17 @@ Expected<BatchResult, CommandError> batch(CommandContext& context, const BatchPa
             return unexpected(std::move(begun).error());
         }
     }
-    else if (editor.transaction()->caller != options.caller)
+    else if (const TransactionInfo* open = editor.transaction();
+             open != nullptr && open->caller != options.caller)
     {
-        CommandError error = CommandError::make(
-            ErrorKind::Busy, "transaction '" + editor.transaction()->label + "' of " +
-                                 editor.transaction()->origin + " is open; try again after it ends");
+        CommandError error =
+            CommandError::make(ErrorKind::Busy, "transaction '" + open->label + "' of " + open->origin +
+                                                    " is open; try again after it ends");
         error.retryable = true;
         return unexpected(std::move(error));
     }
-    const usize savepoint = editor.transaction()->operations;
+    const TransactionInfo* current = editor.transaction();
+    const usize savepoint = current != nullptr ? current->operations : 0;
     const auto revert = [&]() -> Expected<void, CommandError> {
         return own ? editor.cancelTransaction(options) : editor.rollbackTransactionTo(savepoint);
     };

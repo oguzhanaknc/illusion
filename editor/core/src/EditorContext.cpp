@@ -1188,7 +1188,12 @@ Expected<u32, CommandError> EditorContext::undoOwn(u32 steps, std::string_view o
             --index;
         }
         m_history.moveToTop(index - 1);
-        if (Expected<void, CommandError> applied = applyStep(*m_history.undoStep(), false); !applied)
+        const UndoStep* step = m_history.undoStep();
+        if (step == nullptr)
+        {
+            break;
+        }
+        if (Expected<void, CommandError> applied = applyStep(*step, false); !applied)
         {
             if (done > 0)
             {
