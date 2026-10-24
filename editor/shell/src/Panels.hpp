@@ -93,6 +93,44 @@ private:
     bool m_open = false;
 };
 
+/// The Outliner panel: virtualized scene hierarchy tree with search filters, multi-selection, inline
+/// rename, drag-and-drop reparenting and reordering, context menus and viewport visibility/lock toggles.
+class Outliner
+{
+public:
+    Outliner();
+    ~Outliner();
+    Outliner(const Outliner&) = delete;
+    Outliner& operator=(const Outliner&) = delete;
+
+    /// Starts inline renaming of @p entity in the next frame.
+    void beginRename(EntityGuid entity) noexcept;
+    /// Draws the panel's content.
+    void draw(Impl& shell);
+
+private:
+    struct State;
+    std::unique_ptr<State> m_state;
+};
+
+/// The Inspector panel: entity header, lock toggle, Local/World Transform card with Euler continuity cache,
+/// metadata-driven and custom Component cards, multi-entity editing, inline validation and Add Component.
+class Inspector
+{
+public:
+    Inspector();
+    ~Inspector();
+    Inspector(const Inspector&) = delete;
+    Inspector& operator=(const Inspector&) = delete;
+
+    /// Draws the panel's content.
+    void draw(Impl& shell);
+
+private:
+    struct State;
+    std::unique_ptr<State> m_state;
+};
+
 /// The Console panel: log messages with level filters, search, collapsing, timestamps and source links,
 /// and a command line.
 class Console

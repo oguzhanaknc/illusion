@@ -1,3 +1,4 @@
+#include "FieldPaths.hpp"
 #include "PathText.hpp"
 
 #include <illusion/core/Json.hpp>
@@ -930,20 +931,49 @@ Expected<bool, CommandError> WorldEditor::setField(Entity entity, ComponentId ty
         return unexpected(
             CommandError::make(ErrorKind::NotFound, std::string(reflection.name) + " has no fields"));
     }
-    std::vector<Watch> watches;
-    watch(watches, entity, type);
-    IndexResolver resolver(*m_index);
-    if (Expected<void, ValueError> set = setPath(reflection, m_world->componentData(entity, type), path,
-                                                 value, {.mode = JsonReadMode::Merge, .entities = &resolver});
-        !set)
+    if (path.find('/') == std::string_view::npos)
     {
-        return unexpected(CommandError::invalid("", set.error().pointer.empty()
-                                                        ? set.error().message
-                                                        : set.error().pointer + " " + set.error().message));
+        std::vector<Watch> watches;
+        watch(watches, entity, type);
+        IndexResolver resolver(*m_index);
+        const auto set = setPath(reflection, m_world->componentData(entity, type), path, value,
+                                 {.mode = JsonReadMode::Merge, .entities = &resolver});
+        if (!set)
+        {
+            return unexpected(CommandError::invalid(
+                "", set.error().pointer.empty() ? set.error().message
+                                                : set.error().pointer + " " + set.error().message));
+        }
+        const bool changed = capture(entity, type) != watches.front().before;
+        finish(watches);
+        return changed;
     }
-    const bool changed = capture(entity, type) != watches.front().before;
-    finish(watches);
-    return changed;
+    // A nested path ("position/x", "extras/1"): replace that value in the Component's JSON and set the whole
+    // Component, which validates it like component.set.
+    const std::optional<std::string> current = capture(entity, type);
+    Expected<JsonDocument, JsonError> parsed =
+        current ? JsonDocument::parse(*current) : Expected<JsonDocument, JsonError>(unexpected(JsonError{}));
+    if (!parsed)
+    {
+        return unexpected(CommandError::make(ErrorKind::Internal,
+                                             std::string(reflection.name) + " cannot be written as JSON"));
+    }
+    JsonMutDocument document;
+    const JsonMutValue replaced = detail::replaceField(document, parsed->root(), path, value);
+    if (replaced.isAbsent())
+    {
+        return unexpected(
+            CommandError::invalid("/path", "is not a field of " + std::string(reflection.name)));
+    }
+    std::string json;
+    Expected<JsonDocument, JsonError> patched =
+        replaced.write(json, {.pretty = false}) ? JsonDocument::parse(json)
+                                                : Expected<JsonDocument, JsonError>(unexpected(JsonError{}));
+    if (!patched)
+    {
+        return unexpected(CommandError::invalid("/value", "cannot be written as JSON"));
+    }
+    return setComponent(entity, type, patched->root());
 }
 
 Expected<bool, CommandError> WorldEditor::resetComponent(Entity entity, ComponentId type)

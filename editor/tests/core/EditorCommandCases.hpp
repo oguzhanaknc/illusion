@@ -26,6 +26,8 @@ inline constexpr CommandCase kCommandCases[] = {
     {"clipboard.cut", R"({"entities":["/Game/Player"]})"},
     {"clipboard.paste", R"({"parent":"/Game","index":0})"},
     {"component.add", R"({"entity":"/Light","type":"test.Link","value":{"weight":2}})"},
+    {"component.copy", R"({"entity":"/Game/Player","type":"test.Link"})"},
+    {"component.paste", R"({"entities":["/Light"]})"},
     {"component.get", R"({"entity":"/Game/Board","type":"illusion.LocalTransform"})"},
     {"component.remove", R"({"entity":"/Game/Player","type":"test.Link"})"},
     {"component.reset", R"({"entity":"/Game/Board","type":"illusion.LocalTransform"})"},
@@ -113,6 +115,8 @@ inline constexpr CommandCase kCommandCases[] = {
     {"ui.quit", R"({})"},
     {"ui.show_panel", R"({"panel":"panel.console"})"},
     {"ui.state", R"({})"},
+    {"view.get", R"({})"},
+    {"view.set_entities", R"({"entities":["/Game/Board"],"hidden":true})"},
 };
 
 // Commands that need another one to run first (with {} params) on the fixture.

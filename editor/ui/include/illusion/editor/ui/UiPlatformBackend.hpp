@@ -53,6 +53,10 @@ public:
     /// Called by Dear ImGui's platform callbacks. Not for direct use.
     void setImeRect(Vec2 position, f32 lineHeight, bool wantVisible) noexcept;
 
+    /// Asks newFrame() to capture the cursor (`CursorMode::Captured`) for one frame while a drag field is
+    /// being scrubbed by the mouse.
+    void requestInfiniteDrag() noexcept { m_infiniteDragRequested = true; }
+
 private:
     void subscribe();
 
@@ -69,6 +73,8 @@ private:
     Subscription m_scale;
     std::string m_clipboard; // keeps the text returned to Dear ImGui alive until the next call
     bool m_scaleChanged = false;
+    bool m_infiniteDragRequested = false;
+    bool m_infiniteDragging = false;
 };
 
 } // namespace illusion::editor::ui

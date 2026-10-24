@@ -99,8 +99,7 @@ Plan: `docs/plans/m7-editor.md` (sub-milestones, command API, localization, them
 - M7d: ✅ UI foundation: editor tree and export boundary (configure-time check, layering check, runtime-only
   CI build), Dear ImGui docking with NVRHI and platform backends, gamma-space UI target, theme tokens with
   contrast tests, fonts and generated icon constants, per-frame localized labels with stable ids, widget kit
-  v1, `UiDriver`, `illusion_ui_gallery` with golden-image tests (ADRs 0030, 0031). Not yet: infinite drag
-  (cursor wrap) on vector fields; it follows with the inspector (M7m)
+  v1, `UiDriver`, `illusion_ui_gallery` with golden-image tests (ADRs 0030, 0031)
 - M7e: ✅ Reflection v2: field and type metadata (units, ranges, hints, icons, required Components,
   transient runtime state), struct reflection with the engine settings structs, I8/I16/U8/U16, Struct,
   FixedArray, Array, Flags, Optional and Json fields, `FieldValue`, the JSON value API (merge/replace,
@@ -190,7 +189,20 @@ Plan: `docs/plans/m7-editor.md` (sub-milestones, command API, localization, them
   commands, `preferences.get/set` and `editor.screenshot` (91 commands). Cut to later: gamepad navigation of
   the window through `GamepadSystem` (M7w), follow-agent (needs viewports: M7o), launching External Tools
   (M7s), `#` asset search in the palette (M7u)
-- M7m: Outliner and Inspector
+- M7m: ✅ Outliner and Inspector: Outliner (`HierarchyIndex` row cache rebuilt on hierarchy, selection or
+  view-state change, `ImGuiListClipper`, multi-select with Ctrl/Shift and keyboard navigation, F2 inline
+  rename, drag-and-drop reparenting and sibling reordering with `keepWorld` or Alt `keepLocal`, context menus,
+  search with `has:`/`t:`/`disabled:`/`prefab:` filters, per-session eye and lock toggles via `ViewState` and
+  `view.get`/`view.set_entities`); Inspector (entity header with enabled toggle, name, lock and GUID copy;
+  Local/World Transform card with per-entity Euler continuity cache; metadata-driven Component cards for every
+  `FieldType` and `FieldHint`, unit conversions and suffixes, Shift ×10 / Alt ×0.1 drag speed and infinite
+  drag via `CursorMode::Captured`, drag `mergeKey` undo coalescing, per-field reset via `component.reset`
+  `path`, nested `FieldPaths` in `component.get`/`component.set_field`/`component.reset`, custom drawers for
+  `Collider`/`Joint`/`AudioSource`, inline validation with fix-it buttons, multi-entity editing with `—` for
+  mixed values, Component clipboard `component.copy`/`component.paste`, Add Component popup with fuzzy search
+  and automatic `requiredComponents`, and Inspector pin/lock; 95 commands). Cut to later: viewport entity
+  eyedropper (needs viewport picking: M7o), asset thumbnails in picker (M7u), multiple simultaneous Inspector
+  instances (M7w)
 - M7n: Renderer extension points: entity ids, debug draw, orthographic cameras, view targets (ADR 0040)
 - M7o: Viewports: editor camera, grid, selection outline, picking, overlays; following an agent's selection
   (from M7l)

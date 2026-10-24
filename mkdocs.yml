@@ -89,6 +89,7 @@ plugins:
             Editor Protocol: Editör Protokolü
             AI Agents: Yapay Zekâ Ajanları
             Editor Window: Editör Penceresi
+            Outliner and Inspector: Outliner ve Inspector
             Preferences: Tercihler
             Tutorials: Eğitimler
             First Agent Session: İlk Ajan Oturumu
@@ -134,6 +135,7 @@ nav:
       - Editor:
           - Editor Core: manual/editor/index.md
           - Editor Window: manual/editor/interface.md
+          - Outliner and Inspector: manual/editor/scene-editing.md
           - Preferences: manual/editor/preferences.md
           - Projects: manual/editor/projects.md
           - Automation: manual/editor/automation.md

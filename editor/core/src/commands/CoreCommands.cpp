@@ -234,6 +234,17 @@ void reflectCoreCommandTypes(StructRegistry& structs)
         reflectStruct<ComponentChangeResult>("editor.ComponentChangeResult", 1, structs)
             .field("entity", &ComponentChangeResult::entity)
             .field("changed", &ComponentChangeResult::changed);
+        reflectStruct<ComponentResetParams>("editor.ComponentResetParams", 1, structs)
+            .field("entity", &ComponentResetParams::entity)
+            .field("type", &ComponentResetParams::type)
+            .field("path", &ComponentResetParams::path);
+        reflectStruct<ComponentCopyResult>("editor.ComponentCopyResult", 1, structs)
+            .field("type", &ComponentCopyResult::type)
+            .field("value", &ComponentCopyResult::value);
+        reflectStruct<ComponentPasteResult>("editor.ComponentPasteResult", 1, structs)
+            .field("type", &ComponentPasteResult::type)
+            .field("entities", &ComponentPasteResult::entities)
+            .field("added", &ComponentPasteResult::added);
 
         reflectStruct<SetParentParams>("editor.SetParentParams", 1, structs)
             .field("entity", &SetParentParams::entity)
@@ -279,6 +290,14 @@ void reflectCoreCommandTypes(StructRegistry& structs)
 
         reflectStruct<SelectionResult>("editor.SelectionResult", 1, structs)
             .field("entities", &SelectionResult::entities);
+        reflectStruct<ViewSetParams>("editor.ViewSetParams", 1, structs)
+            .field("entities", &ViewSetParams::entities)
+            .field("hidden", &ViewSetParams::hidden)
+            .field("locked", &ViewSetParams::locked)
+            .field("recursive", &ViewSetParams::recursive);
+        reflectStruct<ViewStateResult>("editor.ViewStateResult", 1, structs)
+            .field("hidden", &ViewStateResult::hidden)
+            .field("locked", &ViewStateResult::locked);
 
         reflectStruct<SettingsGetParams>("editor.SettingsGetParams", 1, structs)
             .field("type", &SettingsGetParams::type);
@@ -478,6 +497,7 @@ void registerCoreCommands(CommandRegistry& registry)
     detail::registerHierarchyCommands(registry);
     detail::registerTransformCommands(registry);
     detail::registerSelectionCommands(registry);
+    detail::registerViewCommands(registry);
     detail::registerHistoryCommands(registry);
     detail::registerTransactionCommands(registry);
     detail::registerClipboardCommands(registry);

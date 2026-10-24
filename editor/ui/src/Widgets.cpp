@@ -1,6 +1,7 @@
 #include <illusion/editor/ui/FontManager.hpp>
 #include <illusion/editor/ui/FrameText.hpp>
 #include <illusion/editor/ui/Icons.hpp>
+#include <illusion/editor/ui/UiPlatformBackend.hpp>
 #include <illusion/editor/ui/Widgets.hpp>
 
 #include <algorithm>
@@ -304,6 +305,8 @@ bool vec3Field(UiKit& kit, std::string_view id, Vec3& value, f32 speed, const ch
     const f32 total = ImGui::CalcItemWidth();
     const f32 fieldWidth = std::max(1.0f, std::floor((total - spacing * 2.0f) / 3.0f));
     const f32 chipWidth = std::round(ImGui::GetFontSize() * 1.1f);
+    // Dear ImGui scales DragFloat by 10x with Shift and 0.01x with Alt; multiply by 10x under Alt for 0.1x.
+    const f32 effectiveSpeed = ImGui::GetIO().KeyAlt ? speed * 10.0f : speed;
     bool changed = false;
     for (usize axis = 0; axis < 3; ++axis)
     {
@@ -315,7 +318,8 @@ bool vec3Field(UiKit& kit, std::string_view id, Vec3& value, f32 speed, const ch
                             ImVec2(style.FramePadding.x + chipWidth, style.FramePadding.y));
         ImGui::SetNextItemWidth(fieldWidth);
         changed |= ImGui::DragFloat(kit.text.hidden(kit.text.concat(id, kSuffixes[axis])),
-                                    &value[static_cast<int>(axis)], speed, 0.0f, 0.0f, format);
+                                    &value[static_cast<int>(axis)], effectiveSpeed, 0.0f, 0.0f, format);
+        requestInfiniteDrag();
         ImGui::PopStyleVar();
 
         const ImVec2 min = ImGui::GetItemRectMin();
@@ -334,6 +338,22 @@ bool vec3Field(UiKit& kit, std::string_view id, Vec3& value, f32 speed, const ch
     return changed;
 }
 
+void requestInfiniteDrag() noexcept
+{
+    if (ImGui::GetCurrentContext() == nullptr)
+    {
+        return;
+    }
+    if (ImGui::IsItemActive() && !ImGui::TempInputIsActive(ImGui::GetItemID()) &&
+        ImGui::IsMouseDragging(ImGuiMouseButton_Left, 1.0f))
+    {
+        if (auto* backend = static_cast<UiPlatformBackend*>(ImGui::GetIO().BackendPlatformUserData))
+        {
+            backend->requestInfiniteDrag();
+        }
+    }
+}
+
 bool colorHdr(UiKit& kit, std::string_view id, Vec3& color, f32& intensity)
 {
     const ImGuiStyle& style = ImGui::GetStyle();
@@ -345,6 +365,7 @@ bool colorHdr(UiKit& kit, std::string_view id, Vec3& color, f32& intensity)
     ImGui::SetNextItemWidth(std::max(1.0f, total - ImGui::GetFrameHeight() - style.ItemInnerSpacing.x));
     changed |= ImGui::DragFloat(kit.text.hidden(kit.text.concat(id, ".intensity")), &intensity, 0.01f, 0.0f,
                                 1.0e6f, "%.2f", ImGuiSliderFlags_AlwaysClamp);
+    requestInfiniteDrag();
     if (kit.strings.intensity[0] != '\0')
     {
         ImGui::SetItemTooltip("%s", kit.strings.intensity);

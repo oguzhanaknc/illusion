@@ -18,7 +18,7 @@ and launching the editor, and [Preferences](preferences.md) for themes, language
 | --- | --- |
 | Menu bar | File, Edit, View, Entity, Assets, Play, Modules, Tools, Window and Help. Items whose command arrives in a later milestone are disabled; their tooltip names the milestone. |
 | Toolbar | Transform tools on the left, Play, Pause, Step and Simulate in the centre, and the layout, the agents chip, notifications and search on the right. |
-| Panels | Outliner, Inspector, Scene, Game, Assets, Console, History, AI Activity, Profiler, Rendering and Project Settings, docked in the window. Panels of later milestones show what they will hold. |
+| Panels | [Outliner and Inspector](scene-editing.md), Scene, Game, Assets, Console, History, AI Activity, Profiler, Rendering and Project Settings, docked in the window. Panels of later milestones show what they will hold. |
 | Status bar | Selection, scene revision and saved state, frame time, language, connected agents (and approvals waiting) and the play state. |
 
 Close a panel with its tab's close button and open it again from the Window menu (`ui.show_panel`).

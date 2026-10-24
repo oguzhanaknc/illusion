@@ -1,3 +1,4 @@
+#include "../FieldPaths.hpp"
 #include "CommandSupport.hpp"
 
 #include <illusion/editor/core/JsonSchema.hpp>
@@ -158,7 +159,7 @@ Expected<ComponentGetResult, CommandError> componentGet(CommandContext& context,
         return result;
     }
     Expected<JsonDocument, JsonError> parsed = JsonDocument::parse(*value);
-    const JsonValue field = parsed ? parsed->root().pointer("/" + *params.path) : JsonValue();
+    const JsonValue field = parsed ? fieldAt(parsed->root(), *params.path) : JsonValue();
     if (params.path->empty() || field.isAbsent())
     {
         return unexpected(CommandError::invalid("/path", "is not a field of " + params.type));
@@ -216,12 +217,54 @@ Expected<ComponentChangeResult, CommandError> componentSetField(CommandContext& 
 }
 
 Expected<ComponentChangeResult, CommandError> componentReset(CommandContext& context,
-                                                             const ComponentRefParams& params)
+                                                             const ComponentResetParams& params)
 {
     Expected<Target, CommandError> target = resolveTarget(context, params.entity, params.type);
     if (!target)
     {
         return unexpected(std::move(target).error());
+    }
+    if (params.path)
+    {
+        if (params.path->empty())
+        {
+            return unexpected(CommandError::invalid("/path", "must name a field"));
+        }
+        const TypeReflection& reflection = *context.world().registry().reflection(target->type);
+        if (reflection.size == 0 || reflection.ops == nullptr)
+        {
+            return unexpected(CommandError::invalid("/path", "the Component has no editable fields"));
+        }
+        ValueType valueType;
+        valueType.type = FieldType::Struct;
+        valueType.size = reflection.size;
+        valueType.alignment = reflection.alignment;
+        valueType.ops = reflection.ops;
+        valueType.structType = &reflection;
+        FieldValue defaults(valueType);
+        JsonMutDocument document;
+        const auto value = writeValue(document, reflection, defaults.data());
+        if (!value)
+        {
+            return unexpected(CommandError::invalid("/path", value.error().message));
+        }
+        std::string json;
+        if (!value->write(json, {.pretty = false}))
+        {
+            return unexpected(CommandError::make(ErrorKind::Internal, "cannot write the default value"));
+        }
+        Expected<JsonDocument, JsonError> parsed = JsonDocument::parse(json);
+        const JsonValue field = parsed ? fieldAt(parsed->root(), *params.path) : JsonValue();
+        if (field.isAbsent())
+        {
+            return unexpected(CommandError::invalid("/path", "is not a field of " + params.type));
+        }
+        auto changed = context.edit().setField(target->entity, target->type, *params.path, field);
+        if (!changed)
+        {
+            return unexpected(std::move(changed).error());
+        }
+        return ComponentChangeResult{context.summary(target->entity), *changed};
     }
     Expected<bool, CommandError> changed = context.edit().resetComponent(target->entity, target->type);
     if (!changed)
@@ -231,10 +274,105 @@ Expected<ComponentChangeResult, CommandError> componentReset(CommandContext& con
     return ComponentChangeResult{context.summary(target->entity), *changed};
 }
 
+Expected<ComponentCopyResult, CommandError> componentCopy(CommandContext& context,
+                                                          const ComponentRefParams& params)
+{
+    auto target = resolveTarget(context, params.entity, params.type);
+    if (!target)
+    {
+        return unexpected(std::move(target).error());
+    }
+    const auto value = context.edit().capture(target->entity, target->type);
+    if (!value)
+    {
+        return unexpected(CommandError::make(ErrorKind::NotFound, "the entity has no " + params.type));
+    }
+    if (!context.dryRun())
+    {
+        context.editor().setComponentClipboard({params.type, *value});
+    }
+    return ComponentCopyResult{params.type, JsonText{*value}};
+}
+
+Expected<ComponentPasteResult, CommandError> componentPaste(CommandContext& context,
+                                                            const EntitiesParams& params)
+{
+    const auto& clipboard = context.editor().componentClipboard();
+    if (clipboard.type.empty())
+    {
+        return unexpected(
+            CommandError::make(ErrorKind::PreconditionFailed, "the Component clipboard is empty"));
+    }
+    auto type = context.componentType(clipboard.type, "/type");
+    if (!type)
+    {
+        return unexpected(std::move(type).error());
+    }
+    auto entities = resolveEntityList(context, params.entities);
+    if (!entities)
+    {
+        return unexpected(std::move(entities).error());
+    }
+    auto value = parseParam(JsonText{clipboard.value}, "/value");
+    if (!value)
+    {
+        return unexpected(std::move(value).error());
+    }
+    ComponentPasteResult result;
+    result.type = clipboard.type;
+    for (const Entity entity : *entities)
+    {
+        const auto components = context.world().componentsOf(entity);
+        if (std::find(components.begin(), components.end(), *type) == components.end())
+        {
+            auto added = context.edit().addComponent(entity, *type, value->root());
+            if (!added)
+            {
+                return unexpected(std::move(added).error());
+            }
+            ++result.added;
+        }
+        else
+        {
+            auto changed = context.edit().setComponent(entity, *type, value->root());
+            if (!changed)
+            {
+                return unexpected(std::move(changed).error());
+            }
+        }
+        result.entities.push_back(context.summary(entity));
+    }
+    return result;
+}
+
 } // namespace
 
 void registerComponentCommands(CommandRegistry& registry)
 {
+    registry.add<&componentCopy>({
+        .name = "component.copy",
+        .title = strings::kCommandComponentCopyTitle,
+        .description = strings::kCommandComponentCopyDescription,
+        .agentSummary =
+            "Copies a Component value with persistent entity references to the Component clipboard. "
+            "Example: {\"entity\": \"/Game/Player\", \"type\": \"illusion.Transform\"}.",
+        .category = "Component",
+        .icon = "content_copy",
+        .flags = {.idempotent = true},
+        .permission = PermissionClass::Edit,
+    });
+    registry.add<&componentPaste>({
+        .name = "component.paste",
+        .title = strings::kCommandComponentPasteTitle,
+        .description = strings::kCommandComponentPasteDescription,
+        .agentSummary =
+            "Pastes the copied Component to all targets, adding it and its requirements when absent, "
+            "as one undo step. Example: {\"entities\": [\"$selection\"]}.",
+        .category = "Component",
+        .icon = "content_paste",
+        .flags = {.undoable = true},
+        .permission = PermissionClass::Edit,
+    });
     registry.add<&componentTypes>({
         .name = "component.types",
         .title = strings::kCommandComponentTypesTitle,
@@ -322,9 +460,9 @@ void registerComponentCommands(CommandRegistry& registry)
         .name = "component.reset",
         .title = strings::kCommandComponentResetTitle,
         .description = strings::kCommandComponentResetDescription,
-        .agentSummary =
-            "Gives a Component its default value. Example: {\"entity\": \"/Game/Board\", \"type\": "
-            "\"illusion.Transform\"}.",
+        .agentSummary = "Gives a Component its default value, or resets only the optional field path. "
+                        "Example: {\"entity\": \"/Game/Board\", \"type\": "
+                        "\"illusion.Transform\"}.",
         .category = "Component",
         .icon = "restart_alt",
         .flags = {.idempotent = true, .undoable = true},

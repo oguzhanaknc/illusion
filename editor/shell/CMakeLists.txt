@@ -7,7 +7,9 @@ illusion_add_editor_library(illusion_editor_shell STATIC
     src/Console.cpp
     src/EditorShell.cpp
     src/History.cpp
+    src/Inspector.cpp
     src/Layouts.cpp
+    src/Outliner.cpp
     src/Palette.cpp
     src/PreferencesWindow.cpp
     src/Projects.cpp)

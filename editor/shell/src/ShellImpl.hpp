@@ -94,6 +94,8 @@ struct Notice
 };
 
 class Palette;
+class Outliner;
+class Inspector;
 class Console;
 class History;
 class Agents;
@@ -161,6 +163,8 @@ struct EditorShell::Impl
     std::vector<std::unique_ptr<RunningCommand>> running;
 
     std::unique_ptr<detail::Palette> palette;
+    std::unique_ptr<detail::Outliner> outliner;
+    std::unique_ptr<detail::Inspector> inspector;
     std::unique_ptr<detail::Console> console;
     std::unique_ptr<detail::History> history;
     std::unique_ptr<detail::Agents> agentsPanel;
@@ -173,7 +177,7 @@ struct EditorShell::Impl
     /// Runs @p command with @p params (a JSON object, "" for {}) as @p origin. Async commands keep running in
     /// the background. Failures are shown as a toast; the result JSON is returned on success.
     std::optional<std::string> run(std::string_view command, std::string_view params, std::string_view origin,
-                                   std::string_view asOrigin = {});
+                                   std::string_view asOrigin = {}, std::string_view mergeKey = {});
 
     /// Runs the UI action @p index of uiActions(): its command with its params, or the palette's form when
     /// the command needs params the action does not give.

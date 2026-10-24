@@ -7,6 +7,28 @@ her komut. Paneller, kısayollar ve komut paleti onun komutlarını çağırır;
 [RPC](automation.md) üzerinden çağırır (MCP M7k'den itibaren). Her şey penceresiz çalışır; testler de onu
 böyle sürer.
 
+## Component panosu ve görünüm durumu
+
+`component.copy` bir Component'i ayrı bir bellek içi panoya kopyalar; Entity referanslarını kalıcı id'lerle
+korur. `component.paste` değeri bütün hedeflere tek undo adımında uygular; eksik Component'ler ve
+gerektirdikleri Component'ler birlikte eklenir. Bir hata yapıştırmanın tamamını geri alır. Entity panosu
+bağımsızdır. Kopyalama ve görünüm durumunu değiştirme undo adımı oluşturmaz.
+
+`component.reset`, yalnızca bir alanı sıfırlamak için isteğe bağlı `path` alır. Component komut yollarında
+alanlar ve dizi indisleri `/` ile ayrılır; vektör eksenleri `x`, `y`, `z` ve `w` de kabul eder.
+
+```json
+{"method":"component.copy","params":{"entity":"/Light","type":"illusion.Transform"}}
+{"method":"component.paste","params":{"entities":["$selection"]}}
+{"method":"component.reset","params":{"entity":"/Light","type":"illusion.Transform","path":"position/x"}}
+{"method":"view.set_entities","params":{"entities":["/Game"],"hidden":true,"locked":true}}
+```
+
+`view.get` gizli ve kilitli Entity'leri listeler. `view.set_entities`, `recursive` false olmadıkça alt
+Entity'leri de kapsayarak iki bayraktan birini değiştirir. Bu durum mevcut editör oturumuna aittir,
+sahne dosyalarına yazılmaz ve sahne değiştirildiğinde temizlenir. Dry run iki panoyu ve görünüm durumunu
+değiştirmez.
+
 ## Editör bağlamı
 
 `EditorContext`; [proje mount'larıyla](projects.md) bir `VirtualFileSystem`'i, açık sahneyi tutan tek bir

@@ -89,8 +89,13 @@ bool segmentedControl(UiKit& kit, std::string_view id, std::span<const char* con
 bool searchField(UiKit& kit, std::string_view id, std::span<char> buffer, const char* hint);
 
 /// Three drag fields with coloured X, Y and Z chips ("<id>.x", ...). Dragging moves by @p speed per pixel,
-/// ten times faster with Shift and ten times slower with Alt. Returns true when a value changed.
+/// ten times faster with Shift and ten times slower with Alt, and captures the cursor for infinite drag.
+/// Returns true when a value changed.
 bool vec3Field(UiKit& kit, std::string_view id, Vec3& value, f32 speed = 0.01f, const char* format = "%.3f");
+
+/// Asks the window's platform backend (when there is one) to capture the cursor (`CursorMode::Captured`)
+/// while the last submitted item is being dragged by the mouse.
+void requestInfiniteDrag() noexcept;
 
 /// An HDR colour: a colour button and picker for the colour plus a separate intensity field
 /// ("<id>.intensity"). Returns true when either changed.
