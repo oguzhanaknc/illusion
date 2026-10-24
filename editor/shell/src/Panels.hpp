@@ -10,6 +10,7 @@
 
 #include <array>
 #include <imgui.h>
+#include <initializer_list>
 #include <memory>
 #include <string>
 #include <vector>
@@ -48,6 +49,16 @@ public:
 private:
     bool m_pushed;
 };
+
+/// Sets up the columns of the current table as stretched columns with @p weights. Without it, proportional
+/// stretching divides by the widths of empty columns in the first frame.
+inline void setupStretchColumns(std::initializer_list<f32> weights)
+{
+    for (const f32 weight : weights)
+    {
+        ImGui::TableSetupColumn(nullptr, ImGuiTableColumnFlags_WidthStretch, weight);
+    }
+}
 
 /// @p color as a Dear ImGui colour.
 [[nodiscard]] inline ImVec4 imvec(Vec4 color) noexcept

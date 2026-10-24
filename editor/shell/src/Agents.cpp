@@ -176,7 +176,7 @@ void Agents::draw(Impl& shell)
         ui::sectionHeader(kit, text.format(s::kAgentsApprovals));
         for (usize i = 0; i < approvals.size(); ++i)
         {
-            char id[40];
+            char id[48];
             std::snprintf(id, sizeof(id), "agents.approval.%zu", i);
             ImGui::PushID(static_cast<int>(i));
             state.drawApproval(shell, approvals[i], id);
@@ -188,6 +188,7 @@ void Agents::draw(Impl& shell)
     if (ImGui::BeginTable(text.hidden("agents.clients"), 4,
                           ImGuiTableFlags_SizingStretchProp | ImGuiTableFlags_RowBg))
     {
+        setupStretchColumns({3.0f, 2.0f, 2.0f, 1.2f});
         for (const rpc::ClientInfo& client : state.clients)
         {
             ImGui::PushID(static_cast<int>(client.connection));
@@ -238,6 +239,7 @@ void Agents::draw(Impl& shell)
                           ImGuiTableFlags_SizingStretchProp | ImGuiTableFlags_RowBg |
                               ImGuiTableFlags_ScrollY))
     {
+        setupStretchColumns({1.2f, 1.6f, 3.0f, 0.8f, 1.0f});
         ImGuiListClipper clipper;
         clipper.Begin(static_cast<int>(state.feed.size()));
         while (clipper.Step())
@@ -275,7 +277,7 @@ void Agents::draw(Impl& shell)
                     state.undoable.end())
                 {
                     ImGui::SameLine();
-                    char id[40];
+                    char id[48];
                     std::snprintf(id, sizeof(id), "agents.feed.%llu.undo",
                                   static_cast<unsigned long long>(entry.sequence));
                     if (ImGui::SmallButton(text.label(s::kAgentsUndo, id)))

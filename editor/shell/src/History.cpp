@@ -88,7 +88,7 @@ void History::draw(Impl& shell)
             const usize position = static_cast<usize>(row);
             const bool current = position == stack.position();
             const bool undone = position > stack.position();
-            char id[32];
+            char id[48];
             std::snprintf(id, sizeof(id), "history.step.%zu", position);
             ImGui::PushStyleColor(ImGuiCol_Text,
                                   imvec(shell.theme.color(undone ? ui::ThemeToken::TextDisabled

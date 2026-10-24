@@ -161,7 +161,7 @@ void Projects::drawWelcome(Impl& shell)
     {
         ImGui::PushID(static_cast<int>(i));
         const std::string& relative = state.recentRelative[i];
-        char id[32];
+        char id[48];
         std::snprintf(id, sizeof(id), "welcome.recent.%zu", i);
         ImGui::BeginDisabled(relative.empty());
         if (ImGui::Selectable(text.verbatim(recent[i], id)))

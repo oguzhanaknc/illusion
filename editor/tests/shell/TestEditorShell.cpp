@@ -3,8 +3,10 @@
 
 #include <illusion/editor/rpc/RpcServer.hpp>
 
+#include <cmath>
 #include <fstream>
 #include <imgui.h>
+#include <imgui_internal.h>
 #include <set>
 
 using namespace illusion;
@@ -64,7 +66,7 @@ TEST_CASE("the palette opens with its shortcut and runs the command typed into i
     ui::UiDriver driver(fixture.context, [&] { fixture.frame(); });
     driver.runFrames(3);
     CHECK_FALSE(fixture.shell->paletteOpen());
-    driver.pressKey(ImGuiKey_P, ImGuiMod_Ctrl | ImGuiMod_Shift);
+    driver.pressKey(ImGuiKey_P, ui::UiDriver::shortcutModifier() | ImGuiMod_Shift);
     driver.runFrames(2);
     REQUIRE(fixture.shell->paletteOpen());
     ILL_LOG_WARN("Test", "a message for the console");
@@ -85,7 +87,7 @@ TEST_CASE("Go to Anything selects the entity picked in the palette")
     test::ok(*fixture.editor, "selection.clear");
     ui::UiDriver driver(fixture.context, [&] { fixture.frame(); });
     driver.runFrames(3);
-    driver.pressKey(ImGuiKey_P, ImGuiMod_Ctrl);
+    driver.pressKey(ImGuiKey_P, ui::UiDriver::shortcutModifier());
     driver.runFrames(2);
     REQUIRE(fixture.shell->paletteOpen());
     driver.typeText("Play");
@@ -391,4 +393,29 @@ TEST_CASE("a project's shipped layout applies when the user has no arrangement o
     CHECK_FALSE(panelOpen(*fixture.editor, "panel.console"));
     CHECK(panelOpen(*fixture.editor, "panel.history"));
     CHECK_FALSE(panelOpen(*fixture.editor, "panel.outliner"));
+}
+
+TEST_CASE("tables of the shell lay out without NaN in the first frames (regression)")
+{
+    ShellFixture fixture;
+    rpc::RpcServer server(*fixture.editor, rpc::RpcServerOptions{});
+    fixture.shell->setAgents(&server);
+    auto [serverEnd, clientEnd] = rpc::makeStreamPair();
+    REQUIRE(server.addConnection(std::move(serverEnd), true, "claude") != 0);
+    test::ok(*fixture.editor, "ui.show_panel", R"({"panel":"panel.ai_activity"})");
+    test::ok(*fixture.editor, "ui.show_panel", R"({"panel":"window.preferences"})");
+    ui::UiDriver driver(fixture.context, [&] { fixture.frame(); });
+    driver.runFrames(3);
+    REQUIRE(driver.click("prefs.tab.2"));
+    for (int frame = 0; frame < 4; ++frame)
+    {
+        driver.runFrames(1);
+        for (const ImGuiWindow* window : ImGui::GetCurrentContext()->Windows)
+        {
+            INFO(window->Name);
+            CHECK_FALSE(std::isnan(window->DC.CursorMaxPos.x));
+            CHECK_FALSE(std::isnan(window->DC.IdealMaxPos.x));
+        }
+    }
+    fixture.shell->setAgents(nullptr);
 }

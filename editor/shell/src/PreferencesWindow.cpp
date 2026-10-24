@@ -273,6 +273,7 @@ void PreferencesPage::State::keyboard(Impl& shell, ui::UiKit& kit)
     {
         return;
     }
+    setupStretchColumns({3.0f, 2.0f, 1.0f});
     const std::string_view needle(search.data());
     for (usize i = 0; i < actions.size(); ++i)
     {
@@ -426,7 +427,7 @@ void PreferencesPage::draw(Impl& shell)
         for (usize i = 0; i < static_cast<usize>(PreferencesTab::Count); ++i)
         {
             const PreferencesTab tab = static_cast<PreferencesTab>(i);
-            char id[32];
+            char id[48];
             std::snprintf(id, sizeof(id), "prefs.tab.%zu", i);
             if (ImGui::Selectable(text.label(kTabTitles[i], id), state.tab == tab))
             {
