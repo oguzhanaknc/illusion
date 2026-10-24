@@ -290,7 +290,7 @@ void UiPlatformBackend::subscribe()
         }
     });
     m_enter = m_events.subscribe<CursorEnteredEvent>([this, self](const CursorEnteredEvent& event) {
-        if (event.window == self && !event.entered)
+        if (event.window == self && !event.entered && m_window.cursorMode() != CursorMode::Captured)
         {
             m_context.makeCurrent();
             ImGui::GetIO().AddMousePosEvent(-FLT_MAX, -FLT_MAX); // the mouse is gone
@@ -318,6 +318,25 @@ void UiPlatformBackend::newFrame(f64 deltaSeconds)
                                             static_cast<f32>(framebuffer.y) / static_cast<f32>(size.y));
     }
     io.DeltaTime = deltaSeconds > 0.0 ? static_cast<f32>(deltaSeconds) : 1.0f / 60.0f;
+
+    const bool infiniteDrag = m_infiniteDragRequested;
+    m_infiniteDragRequested = false;
+    if (infiniteDrag)
+    {
+        if (m_window.cursorMode() != CursorMode::Captured)
+        {
+            m_window.setCursorMode(CursorMode::Captured);
+        }
+        m_infiniteDragging = true;
+    }
+    else if (m_infiniteDragging)
+    {
+        m_infiniteDragging = false;
+        if (m_window.cursorMode() == CursorMode::Captured)
+        {
+            m_window.setCursorMode(CursorMode::Normal);
+        }
+    }
 
     // The shape the previous frame asked for (Dear ImGui decides it while building the frame).
     if ((io.ConfigFlags & ImGuiConfigFlags_NoMouseCursorChange) == 0 &&

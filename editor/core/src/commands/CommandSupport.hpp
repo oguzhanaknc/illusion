@@ -22,6 +22,7 @@ void registerEntityCommands(CommandRegistry& registry);
 void registerComponentCommands(CommandRegistry& registry);
 void registerHierarchyCommands(CommandRegistry& registry);
 void registerSelectionCommands(CommandRegistry& registry);
+void registerViewCommands(CommandRegistry& registry);
 void registerHistoryCommands(CommandRegistry& registry);
 void registerTransactionCommands(CommandRegistry& registry);
 void registerTransformCommands(CommandRegistry& registry);

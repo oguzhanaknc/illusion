@@ -5,12 +5,15 @@
 
 #include "core/EditorCoreTestSupport.hpp"
 
+#include <illusion/audio/AudioComponents.hpp>
 #include <illusion/editor/shell/EditorShell.hpp>
 #include <illusion/editor/ui/EditorData.hpp>
 #include <illusion/editor/ui/FontManager.hpp>
 #include <illusion/editor/ui/HeadlessUi.hpp>
 #include <illusion/editor/ui/UiContext.hpp>
 #include <illusion/editor/ui/UiDriver.hpp>
+#include <illusion/physics/PhysicsComponents.hpp>
+#include <illusion/render/Components.hpp>
 
 #include <doctest/doctest.h>
 
@@ -50,6 +53,9 @@ struct ShellFixture
         : user(setup.user.empty() ? directory.path / "user" : setup.user)
     {
         reflectEditorTestComponents();
+        reflectRenderComponents();
+        reflectPhysicsComponents();
+        reflectAudioComponents();
         REQUIRE(editor::ui::mountEditorData(data));
         auto loaded = editor::ui::FontManager::load(context, data, "editor:/fonts");
         REQUIRE_MESSAGE(loaded.hasValue(), (loaded ? std::string() : loaded.error()));

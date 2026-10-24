@@ -392,6 +392,7 @@ void EditorContext::sceneReplaced(std::string_view path)
     m_index.rebuild();
     m_index.updateTransforms(true);
     m_selection.clear();
+    m_view.clear();
     m_history.clear();
     m_changes.reset();
     m_document.markSaved(std::string(path), m_history.stateId());

@@ -14,7 +14,7 @@ Editör kodu `editor/` altında yaşar:
 | `editor/strings` | `illusion::editor_strings` | Editörün İngilizce metni (`editor/data/locales/en.json`), string tablosu olarak |
 | `editor/core` | `illusion::editor_core` | Penceresiz editör çekirdeği: projeler, düzenlenen sahne, tipli komutlar, transaction'lar, undo, journal'lar (GPU, Dear ImGui veya socket yok) |
 | `editor/ui` | `illusion::editor_ui` | Backend'ler, tema, fontlar, ikonlar, kare başına metin, widget kiti, ekran dışı ve GPU'suz kareler (`OffscreenUi`, `HeadlessUi`), `UiDriver` |
-| `editor/shell` | `illusion::editor_shell` | Editör penceresinin arayüzü: menüler, araç çubuğu, yerleşimler, palet, konsol, geçmiş, AI Activity, tercihler, proje pencereleri |
+| `editor/shell` | `illusion::editor_shell` | Editör penceresinin arayüzü: menüler, araç çubuğu, yerleşimler, Outliner, Inspector, palet, konsol, geçmiş, AI Activity, tercihler, proje pencereleri |
 | `editor/tools/ui_gallery` | `illusion_ui_gallery` | Tasarım incelemeleri ve golden görüntü testleri için widget kataloğu |
 | `editor/tools/command_reference` | `illusion_editor_command_reference` | Üretilen [komut referansını](../reference/editor-commands.md) yazar ve kontrol eder |
 | `editor/data` | `editor-data/` | Temalar, locale'ler ve proje şablonları; fontlarla birlikte editör çalıştırılabilirlerinin yanına kopyalanır |

@@ -492,7 +492,7 @@ struct ComponentAddResult
     std::vector<std::string> added; ///< Added Components: required ones first, then the type.
 };
 
-/// Params of `component.remove`, `component.get` and `component.reset`.
+/// Params of `component.remove` and `component.copy`.
 struct ComponentRefParams
 {
     std::string entity; ///< Entity reference.
@@ -535,6 +535,29 @@ struct ComponentChangeResult
 {
     EntitySummary entity; ///< The entity.
     bool changed = false; ///< False if the value was already like that.
+};
+
+/// Params of `component.reset`.
+struct ComponentResetParams
+{
+    std::string entity;                ///< Entity reference.
+    std::string type;                  ///< Stable name.
+    std::optional<std::string> path{}; ///< Only this field, e.g. "position/x" (default: the whole value).
+};
+
+/// Result of `component.copy`.
+struct ComponentCopyResult
+{
+    std::string type; ///< Stable name of the copied type.
+    JsonText value;   ///< The copied value.
+};
+
+/// Result of `component.paste`.
+struct ComponentPasteResult
+{
+    std::string type;                    ///< Stable name of the pasted type.
+    std::vector<EntitySummary> entities; ///< The entities that got the value.
+    u32 added = 0;                       ///< How many of them did not have the Component before.
 };
 
 // --- hierarchy ---------------------------------------------------------------------------------------------
@@ -724,6 +747,24 @@ struct HistoryListResult
 struct SelectionResult
 {
     std::vector<EntitySummary> entities; ///< Selected entities, the primary last.
+};
+
+// --- view --------------------------------------------------------------------------------------------------
+
+/// Params of `view.set_entities`.
+struct ViewSetParams
+{
+    std::vector<std::string> entities; ///< Entity references (`$selection` for the selection).
+    std::optional<bool> hidden{};      ///< Hide (true) or show (false) them in viewports; absent: unchanged.
+    std::optional<bool> locked{};      ///< Lock (true) or unlock (false) picking; absent: unchanged.
+    std::optional<bool> recursive{};   ///< Also their descendants (default true).
+};
+
+/// Result of `view.get` and `view.set_entities`.
+struct ViewStateResult
+{
+    std::vector<EntitySummary> hidden; ///< Hidden entities, by id.
+    std::vector<EntitySummary> locked; ///< Locked entities, by id.
 };
 
 // --- clipboard ---------------------------------------------------------------------------------------------

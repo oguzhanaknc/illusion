@@ -7,6 +7,27 @@ every command that changes them. Panels, shortcuts and the command palette call 
 agents call the same commands over [RPC](automation.md) (and MCP from M7k). Everything works headless, which is how the
 tests drive it.
 
+## Component clipboard and view state
+
+`component.copy` copies one Component into a separate in-memory clipboard, preserving Entity references
+as persistent ids. `component.paste` applies it to every target in one undo step; missing Components and
+their requirements are added together. A failure rolls back the entire paste. The entity clipboard is
+independent. Neither copying nor changing view state adds an undo step.
+
+`component.reset` accepts an optional `path` to reset only one field. Component command paths use `/`
+between fields and array indices; vector axes also accept `x`, `y`, `z` and `w`.
+
+```json
+{"method":"component.copy","params":{"entity":"/Light","type":"illusion.Transform"}}
+{"method":"component.paste","params":{"entities":["$selection"]}}
+{"method":"component.reset","params":{"entity":"/Light","type":"illusion.Transform","path":"position/x"}}
+{"method":"view.set_entities","params":{"entities":["/Game"],"hidden":true,"locked":true}}
+```
+
+`view.get` lists hidden and locked entities. `view.set_entities` changes either flag, including descendants
+unless `recursive` is false. This state belongs to the current editor session, stays out of scene files
+and clears when the scene is replaced. Dry runs leave both clipboards and view state unchanged.
+
 ## The editor context
 
 `EditorContext` owns a `VirtualFileSystem` with the [project mounts](projects.md), one World with the open

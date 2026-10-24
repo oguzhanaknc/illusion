@@ -84,9 +84,12 @@ TEST_CASE("shell captures match the golden images")
         GpuShell gpu;
         EditorContext& editor = *gpu.fixture.editor;
         test::ok(editor, "preferences.set", std::string(R"({"value":)") + golden.preferences + "}");
-        test::ok(editor, "entity.create", R"({"name":"Board"})");
-        // The History tab shows the step; the log is cleared so that nothing machine-specific shows.
-        test::ok(editor, "ui.show_panel", R"({"panel":"panel.history"})");
+        test::ok(
+            editor, "entity.create",
+            R"({"name":"Board","components":{"illusion.Transform":{"position":[1,2,3]},"illusion.PointLight":{"intensity":800}}})");
+        test::ok(editor, "entity.create",
+                 R"({"name":"Piece","parent":"/Board","components":{"illusion.Transform":{}}})");
+        test::ok(editor, "selection.set", R"({"entities":["/Board"]})");
         (void)gpu.capture(10);
         test::ok(editor, "log.clear");
         const Image actual = gpu.capture(4);
@@ -101,7 +104,7 @@ TEST_CASE("the shell renders its windows and the palette without validation erro
     EditorContext& editor = *gpu.fixture.editor;
     for (const std::string_view panel :
          {"window.preferences", "window.welcome", "window.about", "window.licenses", "window.notifications",
-          "panel.console", "panel.ai_activity"})
+          "panel.console", "panel.history", "panel.ai_activity"})
     {
         test::ok(editor, "ui.show_panel", std::string(R"({"panel":")") + std::string(panel) + "\"}");
     }

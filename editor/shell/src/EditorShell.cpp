@@ -239,6 +239,8 @@ EditorShell::Impl::Impl(EditorShell& owner, EditorContext& editorContext, ui::Ui
     , options(std::move(shellOptions))
     , text(editorContext.localization())
     , palette(std::make_unique<detail::Palette>())
+    , outliner(std::make_unique<detail::Outliner>())
+    , inspector(std::make_unique<detail::Inspector>())
     , console(std::make_unique<detail::Console>())
     , history(std::make_unique<detail::History>())
     , agentsPanel(std::make_unique<detail::Agents>())
@@ -302,7 +304,8 @@ ui::UiKit EditorShell::Impl::kit()
 }
 
 std::optional<std::string> EditorShell::Impl::run(std::string_view command, std::string_view params,
-                                                  std::string_view origin, std::string_view asOrigin)
+                                                  std::string_view origin, std::string_view asOrigin,
+                                                  std::string_view mergeKey)
 {
     Expected<JsonDocument, JsonError> parsed = JsonDocument::parse(params.empty() ? "{}" : params);
     if (!parsed)
@@ -312,6 +315,7 @@ std::optional<std::string> EditorShell::Impl::run(std::string_view command, std:
     }
     CommandOptions commandOptions;
     commandOptions.origin = asOrigin.empty() ? origin : asOrigin;
+    commandOptions.mergeKey = mergeKey;
     const CommandDescriptor* descriptor = editor.commands().find(command);
     if (descriptor != nullptr && descriptor->info.flags.async)
     {
@@ -337,6 +341,12 @@ std::optional<std::string> EditorShell::Impl::run(std::string_view command, std:
 void EditorShell::Impl::runAction(usize index, std::string_view origin)
 {
     const UiAction& action = uiActions()[index];
+    if (action.id == "entity.rename" && open[static_cast<usize>(detail::Panel::Outliner)] &&
+        editor.selection().size() == 1)
+    {
+        outliner->beginRename(editor.selection().primary());
+        return;
+    }
     const CommandDescriptor* descriptor = editor.commands().find(action.command);
     if (descriptor == nullptr)
     {
@@ -926,6 +936,10 @@ void EditorShell::draw(f64 now, f64 deltaSeconds)
             impl.focus[i] = false;
         }
         ImGuiWindowFlags flags = 0;
+        if (!info.milestone.empty() && panel != Panel::Scene)
+        {
+            flags |= ImGuiWindowFlags_NoFocusOnAppearing;
+        }
         if (!info.docked)
         {
             const ImVec2 size = panel == Panel::Preferences     ? ImVec2(760.0f, 520.0f)
@@ -942,6 +956,12 @@ void EditorShell::draw(f64 now, f64 deltaSeconds)
         {
             switch (panel)
             {
+            case Panel::Outliner:
+                impl.outliner->draw(impl);
+                break;
+            case Panel::Inspector:
+                impl.inspector->draw(impl);
+                break;
             case Panel::Console:
                 impl.console->draw(impl);
                 break;

@@ -40,6 +40,35 @@ bool panelOpen(EditorContext& editor, std::string_view id)
     return false;
 }
 
+void clickWithModifier(ui::UiDriver& driver, std::string_view id, int modifier)
+{
+    REQUIRE(driver.hover(id));
+    ImGuiIO& io = ImGui::GetIO();
+    io.AddKeyEvent(static_cast<ImGuiKey>(modifier), true);
+    driver.runFrames(1);
+    io.AddMouseButtonEvent(0, true);
+    driver.runFrames(1);
+    io.AddMouseButtonEvent(0, false);
+    driver.runFrames(1);
+    io.AddKeyEvent(static_cast<ImGuiKey>(modifier), false);
+    driver.runFrames(1);
+}
+
+void typeIntoDragField(ui::UiDriver& driver, std::string_view id, std::string_view value)
+{
+    clickWithModifier(driver, id, ui::UiDriver::shortcutModifier());
+    driver.pressKey(ImGuiKey_A, ui::UiDriver::shortcutModifier());
+    driver.typeText(value);
+    driver.pressKey(ImGuiKey_Enter);
+}
+
+void dragBetween(ui::UiDriver& driver, std::string_view fromId, Vec2 target)
+{
+    const std::optional<ui::UiItem> from = driver.find(fromId);
+    REQUIRE(from.has_value());
+    REQUIRE(driver.drag(fromId, target - from->center(), 6));
+}
+
 } // namespace
 
 TEST_CASE("the shell draws the menu bar, toolbar, status bar and the panels of the default layout")
@@ -180,6 +209,9 @@ TEST_CASE("a layout saved by name loads again, also in the next session")
 TEST_CASE("switching to en-XA keeps every item id")
 {
     ShellFixture fixture;
+    test::ok(*fixture.editor, "entity.create",
+             R"({"name":"Board","components":{"illusion.Transform":{},"illusion.PointLight":{}}})");
+    test::ok(*fixture.editor, "selection.set", R"({"entities":["/Board"]})");
     ui::UiDriver driver(fixture.context, [&] { fixture.frame(); });
     driver.runFrames(4);
     const std::set<std::string> english = itemIds(driver);
@@ -307,6 +339,9 @@ TEST_CASE("the permission mode preference applies to the agents' server")
 TEST_CASE("an idle shell frame does not allocate after warming up")
 {
     ShellFixture fixture;
+    test::ok(*fixture.editor, "entity.create",
+             R"({"name":"Board","components":{"illusion.Transform":{},"illusion.PointLight":{}}})");
+    test::ok(*fixture.editor, "selection.set", R"({"entities":["/Board"]})");
     for (int i = 0; i < 120; ++i)
     {
         fixture.frame();
@@ -418,4 +453,248 @@ TEST_CASE("tables of the shell lay out without NaN in the first frames (regressi
         }
     }
     fixture.shell->setAgents(nullptr);
+}
+
+TEST_CASE("the outliner filters, selects, toggles visibility and lock, and renames with F2")
+{
+    ShellFixture fixture;
+    EditorContext& editor = *fixture.editor;
+    test::ok(editor, "entity.create", R"({"name":"Game","components":{"illusion.Transform":{}}})");
+    test::ok(editor, "entity.create",
+             R"({"name":"Board","parent":"/Game","components":{"illusion.LocalTransform":{}}})");
+    test::ok(editor, "entity.create",
+             R"({"name":"Light","components":{"illusion.Transform":{},"illusion.PointLight":{}}})");
+    test::ok(editor, "entity.set_enabled", R"({"entity":"/Light","enabled":false})");
+    test::ok(editor, "selection.clear");
+
+    ui::UiDriver driver(fixture.context, [&] { fixture.frame(); });
+    driver.runFrames(3);
+
+    // Rows 0 (/Game), 1 (/Game/Board) and 2 (/Light) are visible.
+    REQUIRE(driver.find("outliner.row.0").has_value());
+    REQUIRE(driver.find("outliner.row.1").has_value());
+    REQUIRE(driver.find("outliner.row.2").has_value());
+
+    // Single click selects /Game; Ctrl-click adds /Light; Shift-click selects the range 0..2.
+    REQUIRE(driver.click("outliner.row.0"));
+    CHECK(editor.selection().size() == 1);
+    clickWithModifier(driver, "outliner.row.2", ui::UiDriver::shortcutModifier());
+    CHECK(editor.selection().size() == 2);
+    REQUIRE(driver.click("outliner.row.0"));
+    CHECK(editor.selection().size() == 1);
+    clickWithModifier(driver, "outliner.row.2", ImGuiMod_Shift);
+    CHECK(editor.selection().size() == 3);
+
+    // Eye and lock buttons update editor.view() without recording an undo step.
+    const usize historyBefore = editor.history().steps().size();
+    const Entity light = editor.entities().resolve("/Light", editor.selection()).value();
+    const EntityGuid lightGuid = editor.entities().guidOf(light);
+    REQUIRE(driver.click("outliner.visible.2"));
+    CHECK(editor.view().hidden(lightGuid));
+    REQUIRE(driver.click("outliner.lock.2"));
+    CHECK(editor.view().locked(lightGuid));
+    CHECK(editor.history().steps().size() == historyBefore);
+
+    // F2 inline rename on /Light commits via entity.rename.
+    REQUIRE(driver.click("outliner.row.2"));
+    driver.pressKey(ImGuiKey_F2);
+    driver.runFrames(2);
+    REQUIRE(driver.find("outliner.rename").has_value());
+    driver.typeText("Sun");
+    driver.pressKey(ImGuiKey_Enter);
+    driver.runFrames(2);
+    CHECK(editor.entities().resolve("/Sun", editor.selection()).hasValue());
+
+    // Search filters by component type (t:PointLight) and disabled state (disabled:true).
+    REQUIRE(driver.click("outliner.search"));
+    driver.typeText("t:PointLight disabled:true");
+    driver.runFrames(2);
+    CHECK(driver.find("outliner.row.0").has_value());
+    CHECK_FALSE(driver.find("outliner.row.1").has_value());
+    REQUIRE(driver.click("outliner.search.clear"));
+    driver.runFrames(2);
+    CHECK(driver.find("outliner.row.2").has_value());
+}
+
+TEST_CASE("dragging a row in the outliner reparents it with undo")
+{
+    ShellFixture fixture;
+    EditorContext& editor = *fixture.editor;
+    test::ok(editor, "entity.create", R"({"name":"Parent","components":{"illusion.Transform":{}}})");
+    test::ok(editor, "entity.create", R"({"name":"Child","components":{"illusion.Transform":{}}})");
+    test::ok(editor, "history.clear");
+
+    ui::UiDriver driver(fixture.context, [&] { fixture.frame(); });
+    driver.runFrames(3);
+
+    const std::optional<ui::UiItem> parentRow = driver.find("outliner.row.0");
+    REQUIRE(parentRow.has_value());
+    dragBetween(driver, "outliner.row.1", parentRow->center());
+    driver.runFrames(2);
+
+    CHECK(editor.entities().resolve("/Parent/Child", editor.selection()).hasValue());
+    CHECK(editor.history().steps().size() == 1);
+    test::ok(editor, "history.undo");
+    CHECK(editor.entities().resolve("/Child", editor.selection()).hasValue());
+}
+
+TEST_CASE("the inspector edits transform in local and world space, preserves 180-degree yaw and locks")
+{
+    ShellFixture fixture;
+    EditorContext& editor = *fixture.editor;
+    test::ok(editor, "entity.create",
+             R"({"name":"Parent","components":{"illusion.Transform":{"position":[10,0,0]}}})");
+    test::ok(
+        editor, "entity.create",
+        R"({"name":"Child","parent":"/Parent","components":{"illusion.LocalTransform":{"position":[1,2,3]}}})");
+    test::ok(editor, "selection.set", R"({"entities":["/Parent/Child"]})");
+
+    ui::UiDriver driver(fixture.context, [&] { fixture.frame(); });
+    driver.runFrames(3);
+
+    // Typing a yaw of 180 degrees keeps showing 180 degrees (does not flip to -180, 0, -180).
+    typeIntoDragField(driver, "inspector.transform.rotation.y", "180");
+    driver.runFrames(3);
+    const JsonDocument localTf =
+        test::ok(editor, "transform.get", R"({"entity":"/Parent/Child","space":"local"})");
+    CHECK(std::abs(localTf.root().pointer("/rotation/1").asF64().value_or(0.0)) ==
+          doctest::Approx(1.0).epsilon(1e-3));
+
+    // Verify that subsequent drags on X rotation preserve the 180-degree yaw continuity.
+    typeIntoDragField(driver, "inspector.transform.rotation.x", "15");
+    driver.runFrames(2);
+    const JsonDocument afterPitch =
+        test::ok(editor, "transform.get", R"({"entity":"/Parent/Child","space":"local"})");
+    CHECK(std::abs(afterPitch.root().pointer("/rotation/1").asF64().value_or(0.0)) > 0.95);
+
+    // Switch to World space and set world X to 25 (Parent is at 10, so local X becomes 15).
+    REQUIRE(driver.click("inspector.transform.space.1"));
+    driver.runFrames(2);
+    typeIntoDragField(driver, "inspector.transform.position.x", "25");
+    driver.runFrames(2);
+    const JsonDocument afterWorld =
+        test::ok(editor, "transform.get", R"({"entity":"/Parent/Child","space":"local"})");
+    CHECK(afterWorld.root().pointer("/position/0").asF64().value_or(0.0) ==
+          doctest::Approx(15.0).epsilon(1e-3));
+
+    // Lock the Inspector to /Parent/Child, then select /Parent: the Inspector stays on Child.
+    REQUIRE(driver.click("inspector.lock"));
+    driver.runFrames(1);
+    test::ok(editor, "selection.set", R"({"entities":["/Parent"]})");
+    driver.runFrames(2);
+    REQUIRE(driver.click("inspector.enabled"));
+    driver.runFrames(1);
+    CHECK(test::ok(editor, "entity.get", R"({"entity":"/Parent/Child"})").root().find("enabled").asBool() ==
+          false);
+    CHECK(test::ok(editor, "entity.get", R"({"entity":"/Parent"})").root().find("enabled").asBool() == true);
+}
+
+TEST_CASE("the inspector adds components with required dependencies, custom drawers and fix-it buttons")
+{
+    ShellFixture fixture;
+    EditorContext& editor = *fixture.editor;
+    test::ok(editor, "entity.create", R"({"name":"Crate","components":{"illusion.Transform":{}}})");
+    test::ok(editor, "selection.set", R"({"entities":["/Crate"]})");
+    test::ok(editor, "history.clear");
+
+    ui::UiDriver driver(fixture.context, [&] { fixture.frame(); });
+    driver.runFrames(3);
+
+    // Add RigidBody via the Add Component popup: also adds required Collider in a single undo step.
+    REQUIRE(driver.click("inspector.add_component"));
+    driver.runFrames(2);
+    REQUIRE(driver.find("inspector.add_component.search").has_value());
+    driver.typeText("RigidBody");
+    driver.runFrames(1);
+    driver.pressKey(ImGuiKey_Enter);
+    driver.runFrames(2);
+
+    const Entity crate = editor.entities().resolve("/Crate", editor.selection()).value();
+    CHECK(editor.world().has<RigidBody>(crate));
+    CHECK(editor.world().has<Collider>(crate));
+    CHECK(editor.history().steps().size() == 1);
+
+    // Collider custom drawer: Box shows halfExtents and hides radius; Sphere shows radius and hides
+    // halfExtents.
+    CHECK(driver.find("inspector.card.illusion.Collider.halfExtents.x").has_value());
+    CHECK_FALSE(driver.find("inspector.card.illusion.Collider.radius").has_value());
+    test::ok(editor, "component.set_field",
+             R"({"entity":"/Crate","type":"illusion.Collider","path":"shape","value":"Sphere"})");
+    driver.runFrames(2);
+    CHECK(driver.find("inspector.card.illusion.Collider.radius").has_value());
+    CHECK_FALSE(driver.find("inspector.card.illusion.Collider.halfExtents.x").has_value());
+
+    // Mesh Collider on a Dynamic RigidBody shows the warning and fix-it button -> switches to ConvexHull.
+    test::ok(editor, "component.set_field",
+             R"({"entity":"/Crate","type":"illusion.Collider","path":"shape","value":"Mesh"})");
+    driver.runFrames(2);
+    REQUIRE(driver.find("inspector.card.illusion.Collider.fix.convex_hull").has_value());
+    REQUIRE(driver.click("inspector.card.illusion.Collider.fix.convex_hull"));
+    driver.runFrames(2);
+    CHECK(
+        test::ok(editor, "component.get", R"({"entity":"/Crate","type":"illusion.Collider","path":"shape"})")
+            .root()
+            .find("value")
+            .asString() == std::optional<std::string_view>("ConvexHull"));
+
+    // If a scene or C++ code leaves RigidBody without its required Collider, the fix-it button re-adds it.
+    editor.world().remove<Collider>(crate);
+    driver.runFrames(2);
+    REQUIRE(driver.find("inspector.card.illusion.RigidBody.fix.req.illusion.Collider").has_value());
+    REQUIRE(driver.click("inspector.card.illusion.RigidBody.fix.req.illusion.Collider"));
+    driver.runFrames(2);
+    CHECK(editor.world().has<Collider>(crate));
+}
+
+TEST_CASE(
+    "the inspector merges continuous drags, edits multiple entities in one step, and accepts entity drops")
+{
+    ShellFixture fixture;
+    EditorContext& editor = *fixture.editor;
+    test::ok(editor, "entity.create",
+             R"({"name":"A","components":{"illusion.Transform":{"position":[1,0,0]}}})");
+    test::ok(
+        editor, "entity.create",
+        R"({"name":"B","components":{"illusion.Transform":{"position":[4,0,0]},"test.Link":{"weight":2}}})");
+
+    ui::UiDriver driver(fixture.context, [&] { fixture.frame(); });
+
+    // Multi-entity edit: select A and B (different X positions) and set X to 9 in a single undo step.
+    test::ok(editor, "selection.set", R"({"entities":["/A","/B"]})");
+    test::ok(editor, "history.clear");
+    driver.runFrames(3);
+    typeIntoDragField(driver, "inspector.transform.position.x", "9");
+    driver.runFrames(2);
+    CHECK(editor.history().steps().size() == 1);
+    CHECK(test::ok(editor, "transform.get", R"({"entity":"/A"})").root().pointer("/position/0").asF64() ==
+          doctest::Approx(9.0));
+    CHECK(test::ok(editor, "transform.get", R"({"entity":"/B"})").root().pointer("/position/0").asF64() ==
+          doctest::Approx(9.0));
+
+    // Continuous drag on a scalar field across multiple frames merges into one undo step.
+    test::ok(editor, "selection.set", R"({"entities":["/B"]})");
+    test::ok(editor, "history.clear");
+    driver.runFrames(3);
+    REQUIRE(driver.drag("inspector.card.test.Link.weight", Vec2(30.0f, 0.0f), 6));
+    driver.runFrames(2);
+    CHECK(editor.history().steps().size() == 1);
+    CHECK(test::ok(editor, "component.get", R"({"entity":"/B","type":"test.Link","path":"weight"})")
+              .root()
+              .find("value")
+              .asF64() > 2.0);
+
+    // Drag /A from the Outliner onto test.Link.target in the Inspector.
+    const std::optional<ui::UiItem> targetField = driver.find("inspector.card.test.Link.target");
+    REQUIRE(targetField.has_value());
+    dragBetween(driver, "outliner.row.0", targetField->center());
+    driver.runFrames(2);
+    const std::string aId(test::ok(editor, "entity.get", R"({"entity":"/A"})")
+                              .root()
+                              .pointer("/entity/id")
+                              .asString()
+                              .value_or(""));
+    CHECK(test::ok(editor, "component.get", R"({"entity":"/B","type":"test.Link","path":"target"})")
+              .root()
+              .find("value")
+              .asString() == std::optional<std::string_view>(aId));
 }

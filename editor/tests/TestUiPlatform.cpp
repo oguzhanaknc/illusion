@@ -3,13 +3,18 @@
 #include <illusion/core/EventBus.hpp>
 #include <illusion/editor/ui/EditorData.hpp>
 #include <illusion/editor/ui/FontManager.hpp>
+#include <illusion/editor/ui/FrameText.hpp>
 #include <illusion/editor/ui/HeadlessUi.hpp>
+#include <illusion/editor/ui/Theme.hpp>
 #include <illusion/editor/ui/UiContext.hpp>
+#include <illusion/editor/ui/UiDriver.hpp>
 #include <illusion/editor/ui/UiPlatformBackend.hpp>
+#include <illusion/editor/ui/Widgets.hpp>
 #include <illusion/platform/Events.hpp>
 #include <illusion/platform/FileSystem.hpp>
 #include <illusion/platform/Platform.hpp>
 #include <illusion/platform/Window.hpp>
+#include <illusion/text/Localization.hpp>
 
 #include <doctest/doctest.h>
 
@@ -212,4 +217,62 @@ TEST_CASE("a content scale change is reported once")
     fixture.frame();
     CHECK(fixture.backend->consumeContentScaleChange());
     CHECK_FALSE(fixture.backend->consumeContentScaleChange());
+}
+
+TEST_CASE("dragging a vec3Field captures the cursor for infinite drag and scales speed with Shift and Alt")
+{
+    PlatformFixture fixture;
+    std::string themeJson;
+    REQUIRE(fixture.vfs.readText("editor:/themes/dark.json", themeJson) == FileError::None);
+    auto theme = ui::Theme::parse(themeJson);
+    REQUIRE(theme.hasValue());
+    text::Localization localization;
+    ui::FrameText frameText(localization);
+    Vec3 value(0.0f);
+    const auto draw = [&] {
+        frameText.reset();
+        ui::UiKit kit(*theme, fixture.fonts.get(), frameText);
+        ImGui::SetNextWindowPos(ImVec2(0.0f, 0.0f));
+        ImGui::SetNextWindowSize(ImVec2(400.0f, 120.0f));
+        ImGui::Begin("###drag.window");
+        ImGui::SetNextItemWidth(300.0f);
+        ui::vec3Field(kit, "test.vec", value, 0.1f);
+        ImGui::End();
+    };
+    ui::UiDriver driver(fixture.context, [&] { fixture.frame(draw); });
+    driver.runFrames(2);
+    const std::optional<ui::UiItem> xItem = driver.find("test.vec.x");
+    REQUIRE(xItem.has_value());
+    const Vec2 start = xItem->center();
+
+    fixture.events.enqueue(MouseMovedEvent{fixture.window->id(), start});
+    driver.runFrames(1);
+    fixture.events.enqueue(MouseButtonEvent{fixture.window->id(), MouseButton::Left, true, {}, start});
+    driver.runFrames(1);
+    fixture.events.enqueue(MouseMovedEvent{fixture.window->id(), start + Vec2(20.0f, 0.0f)});
+    driver.runFrames(2);
+    CHECK(fixture.window->cursorMode() == CursorMode::Captured);
+    const f32 afterNormal = value.x;
+    CHECK(afterNormal > 1.0f);
+
+    // Shift multiplies speed by 10; unbounded motion past the 800 px window width continues dragging.
+    fixture.keyEvent(Key::LeftShift, true, KeyModifiers{.shift = true});
+    fixture.events.enqueue(MouseMovedEvent{fixture.window->id(), start + Vec2(120.0f, 0.0f)});
+    driver.runFrames(2);
+    const f32 afterShift = value.x;
+    CHECK(afterShift - afterNormal > 50.0f);
+    fixture.keyEvent(Key::LeftShift, false);
+
+    // Alt multiplies speed by 0.1.
+    fixture.keyEvent(Key::LeftAlt, true, KeyModifiers{.alt = true});
+    fixture.events.enqueue(MouseMovedEvent{fixture.window->id(), start + Vec2(220.0f, 0.0f)});
+    driver.runFrames(2);
+    const f32 afterAlt = value.x;
+    CHECK(afterAlt - afterShift == doctest::Approx(1.0f).epsilon(0.2f));
+    fixture.keyEvent(Key::LeftAlt, false);
+
+    fixture.events.enqueue(
+        MouseButtonEvent{fixture.window->id(), MouseButton::Left, false, {}, start + Vec2(220.0f, 0.0f)});
+    driver.runFrames(2);
+    CHECK(fixture.window->cursorMode() == CursorMode::Normal);
 }

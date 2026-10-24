@@ -21,6 +21,7 @@
 #include <illusion/editor/core/SettingsCatalog.hpp>
 #include <illusion/editor/core/UiHost.hpp>
 #include <illusion/editor/core/UndoStack.hpp>
+#include <illusion/editor/core/ViewState.hpp>
 #include <illusion/editor/core/WorldEditor.hpp>
 #include <illusion/platform/FileSystem.hpp>
 #include <illusion/text/Localization.hpp>
@@ -286,6 +287,26 @@ public:
     /// Replaces the clipboard.
     void setClipboard(std::string text) noexcept { m_clipboard = std::move(text); }
 
+    /// The copied Component of `component.copy`: its stable type name ("" when empty) and its value as
+    /// compact JSON (entity fields as ids).
+    struct ComponentClipboard
+    {
+        std::string type;  ///< Stable name of the copied type ("" when nothing was copied).
+        std::string value; ///< The value as compact JSON.
+    };
+
+    /// The copied Component (see `component.copy` and `component.paste`).
+    [[nodiscard]] const ComponentClipboard& componentClipboard() const noexcept
+    {
+        return m_componentClipboard;
+    }
+
+    /// Replaces the copied Component.
+    void setComponentClipboard(ComponentClipboard value) noexcept { m_componentClipboard = std::move(value); }
+
+    /// The user's view state: hidden and locked entities (cleared when the scene is replaced).
+    [[nodiscard]] ViewState& view() noexcept { return m_view; }
+
     /// The user's preferences (loaded from EditorContextOptions::userDirectory).
     [[nodiscard]] const Preferences& preferences() const noexcept { return m_preferences; }
 
@@ -491,6 +512,8 @@ private:
     SettingsCatalog m_settings;
     ReferenceIndex m_references;
     std::string m_clipboard;
+    ComponentClipboard m_componentClipboard;
+    ViewState m_view;
     Preferences m_preferences;
     u64 m_preferencesVersion = 1;
     UiHost* m_ui = nullptr;

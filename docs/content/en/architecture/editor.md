@@ -14,7 +14,7 @@ Editor code lives in `editor/`:
 | `editor/strings` | `illusion::editor_strings` | The editor's English text (`editor/data/locales/en.json`) as a string table |
 | `editor/core` | `illusion::editor_core` | The headless editor core: projects, the edited scene, typed commands, transactions, undo, journals (no GPU, Dear ImGui or sockets) |
 | `editor/ui` | `illusion::editor_ui` | Backends, theme, fonts, icons, per-frame text, widget kit, offscreen and GPU-less frames (`OffscreenUi`, `HeadlessUi`), `UiDriver` |
-| `editor/shell` | `illusion::editor_shell` | The editor window's UI: menus, toolbar, layouts, palette, console, history, AI Activity, preferences, project windows |
+| `editor/shell` | `illusion::editor_shell` | The editor window's UI: menus, toolbar, layouts, Outliner, Inspector, palette, console, history, AI Activity, preferences, project windows |
 | `editor/tools/ui_gallery` | `illusion_ui_gallery` | The widget catalogue used for design reviews and golden-image tests |
 | `editor/tools/command_reference` | `illusion_editor_command_reference` | Writes and checks the generated [command reference](../reference/editor-commands.md) |
 | `editor/data` | `editor-data/` | Themes, locales and project templates, copied next to the editor executables with the fonts |

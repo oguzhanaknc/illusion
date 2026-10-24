@@ -25,6 +25,7 @@ void prepare(EditorFixture& fixture)
     fixture.buildScene();
     fixture.addAssets();
     ok(*fixture.editor, "clipboard.copy", R"({"entities":["/Game/Board"]})");
+    ok(*fixture.editor, "component.copy", R"({"entity":"/Game/Player","type":"test.Link"})");
     ok(*fixture.editor, "entity.rename", R"({"entity":"/Game/Board/Cell 2","name":"Cell 3"})");
     const std::filesystem::path journal =
         fixture.directory.path / "project" / ".illusion" / "journal" / "crashed.jsonl";
@@ -124,7 +125,7 @@ TEST_CASE("every core command has a test case")
         cases.emplace(entry.name);
     }
     CHECK(registered == cases);
-    CHECK(registered.size() == 91);
+    CHECK(registered.size() == 95);
 }
 
 TEST_CASE("every command succeeds on the fixture and its params and result match their schemas")

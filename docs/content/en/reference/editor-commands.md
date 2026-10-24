@@ -34,9 +34,11 @@ mode allows an agent to run (see the [editor protocol](editor-protocol.md#permis
 | `clipboard.cut` | Clipboard | UD | edit | Ctrl+X | Copies entities like clipboard.copy, then destroys them (undo brings them back). Example: `{"entities": ["/Game/Board"]}` |
 | `clipboard.paste` | Clipboard | U | edit | Ctrl+V | Pastes the clipboard (or the given scene JSON) as new entities with new ids, under a parent if given, keeping their world placement, and selects them. Example: `{"parent": "/Game"}` |
 | `component.add` | Component | U | edit | - | Adds a Component (and the ones it requires) with default values, then the given fields. Example: `{"entity": "/Game/Board", "type": "illusion.LocalTransform", "value": {"position": [0, 1, 0]}}` |
+| `component.copy` | Component | I | edit | - | Copies a Component value with persistent entity references to the Component clipboard. Example: `{"entity": "/Game/Player", "type": "illusion.Transform"}` |
 | `component.get` | Component | RI | read | - | Returns a Component's value, or one field with path. Example: `{"entity": "/Game/Board", "type": "illusion.Transform", "path": "position/1"}` |
+| `component.paste` | Component | U | edit | - | Pastes the copied Component to all targets, adding it and its requirements when absent, as one undo step. Example: `{"entities": ["$selection"]}` |
 | `component.remove` | Component | UD | edit | - | Removes a Component unless another one requires it. Example: `{"entity": "/Game/Board", "type": "illusion.Disabled"}` |
-| `component.reset` | Component | UI | edit | - | Gives a Component its default value. Example: `{"entity": "/Game/Board", "type": "illusion.Transform"}` |
+| `component.reset` | Component | UI | edit | - | Gives a Component its default value, or resets only the optional field path. Example: `{"entity": "/Game/Board", "type": "illusion.Transform"}` |
 | `component.schema` | Component | RI | read | - | Returns the JSON Schema of a Component's value (fields, types, units as ranges). Example: `{"type": "illusion.Transform"}` |
 | `component.set` | Component | UI | edit | - | Merges the given fields into a Component; angles take radians or {"deg": n}, colours linear arrays or "#rrggbb". Use mergeKey for continuous edits. Example: `{"entity": "/Game/Board", "type": "illusion.Transform", "value": {"scale": [2, 2, 2]}}` |
 | `component.set_field` | Component | UI | edit | - | Sets one field by path (fields and array indices joined by '/'). Example: `{"entity": "/Game/Board", "type": "illusion.Transform", "path": "position", "value": [0, 2, 0]}` |
@@ -114,5 +116,7 @@ mode allows an agent to run (see the [editor protocol](editor-protocol.md#permis
 | `ui.quit` | UI | I | system | - | Closes the editor window as its close button does (unsaved changes are kept in the journal and autosave). Example: `{}` |
 | `ui.show_panel` | UI | I | edit | - | Shows and focuses a panel or window of the editor, or hides it with open false. Ids come from ui.state, e.g. panel.console, panel.ai_activity, window.preferences. Example: `{"panel": "panel.console"}` |
 | `ui.state` | UI | RI | read | - | Lists the editor window's panels (id, title, open) and layouts (name, built in, active). Example: `{}` |
+| `view.get` | View | RI | read | - | Lists the entities the user hid in viewports or locked against picking (per-user view state, not saved in the scene). Example: `{}` |
+| `view.set_entities` | View | I | edit | - | Hides or shows entities in viewports and locks or unlocks them against picking, with their descendants unless recursive is false. Not undoable and not saved in the scene. Example: `{"entities": ["/Game/Board"], "hidden": true}` |
 
 <!-- END GENERATED: editor commands -->
