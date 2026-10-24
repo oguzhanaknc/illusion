@@ -64,9 +64,14 @@ struct RpcServerOptions
 /// I/O threads read and frame messages, answer protocol errors, authentication, `rpc.discover`, unknown
 /// methods and permission denials themselves, and queue the rest. The editor's main thread runs the queue
 /// with pump(), between frames, so commands never race with the World. Requests of one connection run and
-/// are answered in order. Besides the commands of the registry the server implements `editor.subscribe`,
-/// `editor.unsubscribe`, `editor.poll_events` and `editor.quit`. The method catalogue is taken when the
-/// server is created.
+/// are answered in order, except async commands (CommandFlags::async): they start when their request comes
+/// up, advance once per pump(), send `rpc.progress` notifications and are answered when they finish, while
+/// later requests go on. `rpc.cancel` ends a running async command or skips a queued request (error 1004).
+/// Commands run with the connection id as CommandOptions::caller and a gate for the permission mode, so
+/// transactions belong to their connection and are cancelled when it closes. Besides the commands of the
+/// registry the server implements `editor.subscribe`, `editor.unsubscribe`, `editor.poll_events`,
+/// `editor.quit` and `rpc.cancel`. The method catalogue is taken when the server is created and again
+/// after every `commands.changed` event.
 class RpcServer
 {
 public:
@@ -88,8 +93,8 @@ public:
     /// The token socket clients pass to rpc.authenticate (64 hex digits).
     [[nodiscard]] const std::string& token() const noexcept { return m_token; }
 
-    /// Runs queued requests on the calling (main) thread until the queue is empty or @p budget has passed.
-    /// Returns how many ran.
+    /// On the calling (main) thread: advances every running async command once (a frame of it), then runs
+    /// queued requests until the queue is empty or @p budget has passed. Returns how many requests ran.
     usize pump(std::chrono::microseconds budget = std::chrono::microseconds::max());
 
     /// Waits up to @p timeout until a request is queued (for loops without an event loop). True if one is.
@@ -115,6 +120,9 @@ private:
     struct Shared;
 
     std::string execute(Connection& connection, const Request& request);
+    bool startTask(const std::shared_ptr<Connection>& connection, const Request& request);
+    void takeCancels();
+    void advanceTasks();
     void deliver(const EditorEvent& event);
     void reap();
 

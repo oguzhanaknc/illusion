@@ -102,6 +102,10 @@ TEST_CASE("invalid params of every command give structured errors and never reac
         fixture.buildScene();
         fixture.addAssets();
         EditorContext& editor = *fixture.editor;
+        if (const std::string_view setup = test::setupOf(entry.name); !setup.empty())
+        {
+            test::ok(editor, setup);
+        }
         const CommandDescriptor& command = *editor.commands().find(entry.name);
         JsonMutDocument schemaDoc;
         schemaDoc.setRoot(writeCommandResultSchema(schemaDoc, command));
@@ -135,7 +139,11 @@ TEST_CASE("invalid params of every command give structured errors and never reac
                 CHECK_FALSE(result.error().errors.empty());
             }
         }
-        // Whatever succeeded can be undone completely.
+        // Whatever succeeded can be undone completely (after a transaction that a call left open).
+        if (editor.transaction() != nullptr)
+        {
+            CHECK(editor.cancelTransaction({}).hasValue());
+        }
         CHECK(editor.undo(10000).hasValue());
     }
     CHECK(calls > 1000);

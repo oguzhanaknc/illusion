@@ -30,6 +30,7 @@ illusion_add_editor_library(illusion_editor_core STATIC
     src/commands/SceneCommands.cpp
     src/commands/SelectionCommands.cpp
     src/commands/SettingsCommands.cpp
+    src/commands/TransactionCommands.cpp
     src/commands/TransformCommands.cpp)
 add_library(illusion::editor_core ALIAS illusion_editor_core)
 

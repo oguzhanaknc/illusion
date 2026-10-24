@@ -67,6 +67,7 @@ with EditorClient.launch("build/bin/Release/illusion_editor", ["--workspace", "/
         print(error.code, error.data["kind"])  # 1200 not_found
 ```
 
+`event` ve `rpc.progress` gibi bildirimler `call()` beklerken `editor.notifications` içinde birikir.
 `EditorClient.connect_project(path)` çalışan bir editöre endpoint dosyası üzerinden bağlanır.
 
 ## Soketler ve endpoint dosyası
@@ -113,13 +114,46 @@ bir kez bildirim göndermesini sağlar:
 
 `pull` modunda editör `editor.poll_events` için en fazla 1.024 olay saklar; daha fazlası gelirse yanıt
 `"overflow": true` der ve istemci sahneyi yeniden okur. Konular arasında `scene.changed`, `scene.opened`,
-`scene.saved`, `selection.changed`, `history.changed` ve `scene.autosaved` vardır; boş liste hepsi demektir.
+`scene.saved`, `selection.changed`, `history.changed`, `scene.autosaved` ve `commands.changed` vardır; boş liste
+hepsi demektir. `commands.changed` sonrasında (örneğin bir modül komut kaydettiğinde) sunucunun metot listesi
+ve `rpc.discover` yeni komutları içerir.
+
+## Async komutlar ve iptal
+
+`async` bayraklı komutlar (`editor.list_commands` bayrağı gösterir) birkaç editör frame'i sürer. Editör onlara
+bittiklerinde yanıt verir, arada istek id'siyle `rpc.progress` bildirimleri gönderir; bağlantının sonraki
+istekleri onları beklemez. id ile gönderilen `rpc.cancel` çalışan bir async komutu bitirir ya da hâlâ kuyrukta
+olan bir isteği atlatır; istek `cancelled` (1004) ile yanıtlanır:
+
+```json
+{"jsonrpc": "2.0", "id": 7, "method": "editor.wait", "params": {"frames": 600}}
+{"jsonrpc": "2.0", "method": "rpc.progress", "params": {"id": 7, "progress": 1, "total": 600}}
+{"jsonrpc": "2.0", "method": "rpc.cancel", "params": {"id": 7}}
+{"jsonrpc": "2.0", "id": 7, "error": {"code": 1004, "message": "editor.wait was cancelled", "data": {"kind": "cancelled", "errors": [], "suggestions": [], "retryable": false}}}
+```
+
+## Batch'ler ve transaction'lar
+
+`editor.batch` birkaç komutu, bir adımın sonucundan sonrakine `$` referanslarıyla, tek undo adımı olarak
+çalıştırır ([editör çekirdeği](index.md#batchler)). Daha uzun bir iş için istemci bağlantısına ait bir
+transaction açabilir; bu sırada diğer istemciler sahneyi değiştiremez (`busy`, yeniden denenebilir) ve
+bağlantı kapanırsa editör transaction'ı geri alır:
+
+```python
+editor.call("transaction.begin", label="Build board")
+board = editor.call("entity.create", name="Board")["entity"]
+editor.call("entity.create", name="Cell 1", parent=board["id"])
+editor.call("transaction.commit")  # one undo step; transaction.cancel would revert both
+editor.call("history.undo", scope="mine")  # undoes it even if other clients edited since
+```
 
 ## Yeniden denemeler ve eşzamanlılık
 
 - Değişiklik yapan bir çağrıdaki `clientToken` onu yeniden denemeye güvenli kılar: editör her istemcinin son
   1.024 token'ını hatırlar ve tekrarlanan birine ilk yanıtla karşılık verir.
 - `expectRevision`, siz okuduktan sonra başka biri sahneyi değiştirdiyse `conflict` (1203) ile başarısız olur.
+- `history.undo {"scope": "mine"}` kendi son adımınızı diğer istemcilerin sonraki bağımsız adımlarının
+  ötesinden geri alır; onlar aynı şeylere dokunduysa `conflict` ile başarısız olur.
 - `retryable: true` taşıyan `busy` (1002) ve `limit_exceeded` (1401) "sonra yeniden deneyin" demektir: editör
   8 bağlantı, bağlantı başına bekleyen 64 istek ve toplamda 256 istek kabul eder.
 

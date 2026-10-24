@@ -99,6 +99,69 @@ a label, an origin (`ui`, `inspector`, `gizmo`, `rpc:<client>`, ...) and the sel
 - Selecting is not an undo step, but undo and redo restore the selection of their step.
 - Saving remembers the undo state, so undoing back to it makes the scene clean again.
 
+### Grouping changes
+
+`transaction.begin {"label": "Build board"}` opens a transaction: the following undoable commands of the same
+caller apply at once but become a single undo step when `transaction.commit` runs, while
+`transaction.cancel` reverts all of them and restores the selection. A transaction belongs to its caller
+(`CommandOptions::caller`, the connection for RPC clients; 0 for the editor itself). While it is open:
+
+- undoable commands of other callers fail with `busy` (1002, `retryable`); reading and selecting still work;
+- commands that replace or save the scene or move through the history (`scene.new`, `scene.open`,
+  `scene.save`, `scene.save_as`, `project.open`, `project.create`, `project.recover`, `history.*` except
+  `history.list`; flag `outsideTransactions`) fail for everyone;
+- each command still increases the revision, so `expectRevision` works inside it;
+- when its RPC connection closes, the editor cancels it.
+
+### Batches
+
+`editor.batch` runs a list of commands in order as one transaction and undo step. A step named with `as`
+can be used by later steps: the string `"$name.path.to.field"` anywhere in their params becomes that value
+of its result (array elements by index; `"$$"` escapes a literal `$`, and `"$selection"` keeps its meaning).
+
+```json
+{"label": "Board", "steps": [
+  {"as": "board", "method": "entity.create", "params": {"name": "Board", "parent": "/Game"}},
+  {"method": "entity.create", "params": {"name": "Cell 1", "parent": "$board.entity.id"}},
+  {"method": "selection.set", "params": {"entities": ["$board.entity.path"]}}
+]}
+```
+
+Every step is checked before any runs (method names, `as` names, params objects); async commands,
+`transaction.*` and nested batches cannot be steps. An atomic batch (the default) reverts everything when a
+step fails and returns that step's error with its pointer under `/steps/<i>/params`; with `"atomic": false`
+failing steps are reported in `steps[i].error` and the others are kept. A batch inside an open transaction of
+the same caller joins it, and a failing atomic batch reverts only its own steps. A dry run of a batch runs
+the undoable steps in a trial transaction (`TransactionInfo::trial`) that is cancelled at the end without
+changing the revision, and only validates the steps that are neither undoable nor read-only. The steps run
+with the gate of the call (`CommandOptions::gate`), so the RPC permission mode applies to each of them.
+
+### Undoing your own steps
+
+`history.undo {"scope": "mine"}` undoes the last steps of the caller's origin even when steps of other
+origins came after them, as long as those later steps are independent (`findOverlap()`): they did not change
+the same Component of an entity, create or destroy an entity the step changed or refers to, or touch the same
+file or setting. Otherwise it fails with `conflict` (1203) and changes nothing. The undone step moves to the
+redo side, so `history.redo` applies it again.
+
+### Async commands
+
+Commands that take several frames are registered with `CommandRegistry::addAsync()`: their handler validates
+the params and returns a `CommandTask`, which the editor advances once per frame with a `CommandProgress`.
+`executeJson()` refuses them; `startJson()` returns a `RunningCommand` to advance with `update()` and to
+destroy to cancel. Async commands cannot be undoable. `editor.wait {"frames": 60}` is the first one.
+
+```cpp
+const illusion::JsonDocument params = std::move(illusion::JsonDocument::parse(R"({"frames": 60})").value());
+auto started = editor.startJson("editor.wait", params.root());
+if (started)
+{
+    std::unique_ptr<illusion::editor::RunningCommand> running = std::move(started).value();
+    // Once per frame, on the editor's thread:
+    auto step = running->update(); // std::nullopt while it runs; the result JSON or an error at the end
+}
+```
+
 ## Errors
 
 Failures return a `CommandError` with a kind, an English message, the invalid values and suggestions. The
@@ -122,7 +185,8 @@ Every commit, undo and redo increases the scene revision. `changes().changesSinc
 which entities were created, destroyed or changed (and which Components), and which scene settings changed,
 since a revision a client remembers, or `false` when it must read the scene again. `events()` delivers `scene.changed`,
 `selection.changed`, `history.changed`, `history.trimmed`, `scene.opened`, `scene.saved` and
-`scene.autosaved` once per `endFrame()`.
+`scene.autosaved` once per `endFrame()`, and `commands.changed` (`{"commands": <count>}`) at the end of a frame
+in which commands were registered.
 
 ## Crash journal and recovery
 

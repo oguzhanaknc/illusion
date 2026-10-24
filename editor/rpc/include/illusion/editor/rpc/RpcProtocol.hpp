@@ -15,7 +15,7 @@ namespace illusion::editor::rpc
 {
 
 /// Semantic version of the protocol (0.x until the protocol is declared stable).
-inline constexpr std::string_view kProtocolVersion = "0.1.0";
+inline constexpr std::string_view kProtocolVersion = "0.2.0";
 
 /// Largest message, in bytes without the line break (16 MiB).
 inline constexpr usize kMaxMessageSize = 16u * 1024u * 1024u;

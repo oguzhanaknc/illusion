@@ -2,6 +2,8 @@
 #include <illusion/editor/core/Operation.hpp>
 
 #include <array>
+#include <set>
+#include <utility>
 
 namespace illusion::editor
 {
@@ -122,6 +124,152 @@ usize operationBytes(const Operation& operation) noexcept
                  (file.after ? file.after->size() : 0);
     }
     return bytes;
+}
+
+namespace
+{
+
+// What a list of operations touches. Entity ids are kept as quoted text ("9f2c41aa0b7d3e15"), the form in
+// which values refer to entities.
+struct Footprint
+{
+    std::set<std::pair<std::string, std::string>> components; // (quoted id, Component type)
+    std::set<std::string> changedEntities;                    // ids with a changed Component
+    std::set<std::string> lifetimes;                          // ids that appear or disappear
+    std::set<std::string> files;
+    std::set<std::string> settings;
+    std::vector<std::string_view> values; // Component values and entity records, to find references
+};
+
+std::string quotedGuid(EntityGuid guid)
+{
+    return '"' + std::string(textOf(formatGuid(guid))) + '"';
+}
+
+Footprint footprintOf(std::span<const Operation> operations)
+{
+    Footprint footprint;
+    for (const Operation& operation : operations)
+    {
+        if (const auto* change = std::get_if<ComponentChange>(&operation))
+        {
+            const std::string id = quotedGuid(change->entity);
+            footprint.components.emplace(id, change->type);
+            footprint.changedEntities.insert(id);
+            for (const std::optional<std::string>* value : {&change->before, &change->after})
+            {
+                if (value->has_value())
+                {
+                    footprint.values.emplace_back(**value);
+                }
+            }
+        }
+        else if (const auto* lifetime = std::get_if<EntityLifetime>(&operation))
+        {
+            for (const EntityRecord& record : lifetime->entities)
+            {
+                footprint.lifetimes.insert(quotedGuid(record.guid));
+                footprint.values.emplace_back(record.components);
+            }
+        }
+        else if (const auto* settings = std::get_if<SettingsChange>(&operation))
+        {
+            footprint.settings.insert(settings->type);
+        }
+        else
+        {
+            const auto& file = std::get<FileChange>(operation);
+            footprint.files.insert(file.path);
+            if (!file.target.empty())
+            {
+                footprint.files.insert(file.target);
+            }
+        }
+    }
+    return footprint;
+}
+
+// True if @p a and @p b are the same item or one contains the other ("assets:/x" and "assets:/x/y").
+bool pathsOverlap(std::string_view a, std::string_view b) noexcept
+{
+    while (a.size() > 1 && a.back() == '/')
+    {
+        a.remove_suffix(1);
+    }
+    while (b.size() > 1 && b.back() == '/')
+    {
+        b.remove_suffix(1);
+    }
+    const std::string_view shorter = a.size() <= b.size() ? a : b;
+    const std::string_view longer = a.size() <= b.size() ? b : a;
+    return longer.starts_with(shorter) &&
+           (longer.size() == shorter.size() || shorter.back() == '/' || longer[shorter.size()] == '/');
+}
+
+std::string_view unquoted(std::string_view id) noexcept
+{
+    return id.substr(1, id.size() - 2);
+}
+
+// Entities that @p lifetimes creates or destroys and that @p other changes or refers to.
+std::optional<std::string> lifetimeOverlap(const Footprint& lifetimes, const Footprint& other)
+{
+    for (const std::string& id : lifetimes.lifetimes)
+    {
+        if (other.lifetimes.contains(id) || other.changedEntities.contains(id))
+        {
+            return "entity " + std::string(unquoted(id));
+        }
+        for (const std::string_view value : other.values)
+        {
+            if (value.find(id) != std::string_view::npos)
+            {
+                return "a reference to entity " + std::string(unquoted(id));
+            }
+        }
+    }
+    return std::nullopt;
+}
+
+} // namespace
+
+std::optional<std::string> findOverlap(std::span<const Operation> a, std::span<const Operation> b)
+{
+    const Footprint first = footprintOf(a);
+    const Footprint second = footprintOf(b);
+    for (const auto& component : second.components)
+    {
+        if (first.components.contains(component))
+        {
+            return "Component " + component.second + " of entity " + std::string(unquoted(component.first));
+        }
+    }
+    if (std::optional<std::string> overlap = lifetimeOverlap(first, second))
+    {
+        return overlap;
+    }
+    if (std::optional<std::string> overlap = lifetimeOverlap(second, first))
+    {
+        return overlap;
+    }
+    for (const std::string& file : second.files)
+    {
+        for (const std::string& other : first.files)
+        {
+            if (pathsOverlap(file, other))
+            {
+                return "file " + (file.size() <= other.size() ? file : other);
+            }
+        }
+    }
+    for (const std::string& setting : second.settings)
+    {
+        if (first.settings.contains(setting))
+        {
+            return "setting " + setting;
+        }
+    }
+    return std::nullopt;
 }
 
 JsonMutValue writeOperation(JsonMutDocument& doc, const Operation& operation)

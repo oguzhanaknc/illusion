@@ -102,3 +102,35 @@ These decisions add to the ones above; none of them changes them.
   scenes are saved through the scene serializer, so they come out in the current format.
 - **Clipboard.** The clipboard is scene v2 JSON of the copied subtrees, saved in the order given, with each
   copied root's world placement written into it; pasting loads it with new ids (`IdPolicy::Regenerate`).
+
+## Addendum: transactions, batches, scoped undo and async commands (2026-10-24)
+
+M7j-2 adds grouping to the command core without a second write path:
+
+- **Transactions span commands.** `EditorContext::beginTransaction()` opens a transaction owned by a caller
+  (`CommandOptions::caller`: an RPC connection id, or 0 for the editor itself). Each undoable command inside
+  it still commits its own `WorldEditor` transaction, so a failing command rolls back alone, but its
+  operations are appended to the open transaction instead of the history; `commitTransaction()` pushes them
+  as one `UndoStep` (selection before and after the whole transaction), `cancelTransaction()` reverts them
+  and `rollbackTransactionTo()` reverts to a savepoint. Every command inside still ends a revision and is
+  journaled, so `expectRevision`, events and crash recovery behave as before. While a transaction is open,
+  undoable commands of other callers fail with `busy` (retryable), and commands flagged
+  `outsideTransactions` (scene replacement and saving, project open/create/recover, history moves) fail for
+  everyone, because they would break the order of the operations. A transaction begun by a dry run is a
+  trial: its changes stay pending, so the revision does not move and nothing is announced or journaled, and
+  it can only be cancelled.
+- **`editor.batch`** is a core command that runs its steps through `executeStep()` inside one transaction
+  (its own, or a savepoint of the caller's open one), with `$name.path` references from earlier results. The
+  call's `CommandGate` is asked before every step, which is how the RPC permission mode reaches nested
+  commands.
+- **Scoped undo.** `undoOwn()` undoes the last steps of one origin past later steps of other origins when
+  `findOverlap()` finds them independent (no shared Component of an entity, no lifetime of an entity the other
+  changes or refers to by id, no shared file path prefix or setting). Independent steps commute, so the stack
+  moves the step to the top (`UndoStack::moveToTop()`) and undoes it normally; otherwise the call fails with
+  `conflict` before changing anything. The check is conservative: references are found as quoted ids in
+  Component values.
+- **Async commands** register with `CommandRegistry::addAsync()`. Their handler validates and returns a
+  `CommandTask` that the editor advances once per frame (`RunningCommand::update()`); destroying it cancels
+  the command. They cannot be undoable yet, since a transaction cannot stay open across frames while others
+  edit; asset imports and builds that edit the scene will finish with an ordinary undoable command.
+- `CommandRegistry::revision()` grows with every registration; `endFrame()` posts `commands.changed`.

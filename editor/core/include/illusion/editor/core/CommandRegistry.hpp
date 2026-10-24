@@ -12,6 +12,8 @@
 #include <illusion/text/StringTable.hpp>
 
 #include <map>
+#include <memory>
+#include <optional>
 #include <string>
 #include <string_view>
 #include <type_traits>
@@ -29,8 +31,11 @@ struct CommandFlags
     bool destructive = false; ///< Removes or overwrites data (even if undoable).
     bool idempotent = false;  ///< Running it twice has the effect of running it once.
     bool undoable = false;    ///< Runs in a transaction that becomes an undo step.
-    bool async = false;       ///< Runs over several frames with progress (from M7j).
+    bool async = false;       ///< Runs over several frames with progress (registered with addAsync()).
     bool needsGpu = false;    ///< Fails with Unsupported without a GPU.
+    /// Replaces the scene, saves it or moves through the undo history, so it cannot run while a transaction
+    /// is open (EditorContext::beginTransaction()).
+    bool outsideTransactions = false;
 };
 
 /// When a command may run.
@@ -85,19 +90,87 @@ struct NoResult
 {
 };
 
+/// Progress of an async command, reported to clients (`rpc.progress`).
+struct CommandProgress
+{
+    f64 done = 0.0;      ///< Work done, in units of `total`.
+    f64 total = 0.0;     ///< Work in all (0: unknown).
+    std::string message; ///< What it does now, in English ("" for nothing to say).
+};
+
+/// The running part of an async command, without its result type (see CommandTask).
+class CommandTaskBase : NonCopyable
+{
+public:
+    virtual ~CommandTaskBase() = default;
+
+    /// Advances the task by one frame. Returns true once it finished and wrote its result to @p result
+    /// (the command's default-constructed result struct).
+    [[nodiscard]] virtual Expected<bool, CommandError> advance(CommandContext& context,
+                                                               CommandProgress& progress, void* result) = 0;
+};
+
+/// The running part of an async command whose result is @p R. Its handler validates the params and returns
+/// a task, which the editor advances once per frame on its main thread until it finishes. Destroying the
+/// task cancels the command, so the editor must be consistent after every frame of it.
+template <class R>
+class CommandTask : public CommandTaskBase
+{
+public:
+    /// Advances the task by one frame: returns the result once finished, std::nullopt while it runs (after
+    /// updating @p progress), or the error that ends it.
+    [[nodiscard]] virtual Expected<std::optional<R>, CommandError> update(CommandContext& context,
+                                                                          CommandProgress& progress) = 0;
+
+    /// Calls update() and stores a finished result in @p result.
+    [[nodiscard]] Expected<bool, CommandError> advance(CommandContext& context, CommandProgress& progress,
+                                                       void* result) final
+    {
+        Expected<std::optional<R>, CommandError> out = update(context, progress);
+        if (!out)
+        {
+            return unexpected(std::move(out).error());
+        }
+        if (!out->has_value())
+        {
+            return false;
+        }
+        *static_cast<R*>(result) = std::move(**out);
+        return true;
+    }
+};
+
+struct CommandDescriptor;
+
+/// Decides which commands a caller may run, e.g. the permission mode of an RPC client. EditorContext asks it
+/// before every command of a call that names it (CommandOptions::gate), also before each step of
+/// `editor.batch`.
+class CommandGate
+{
+public:
+    virtual ~CommandGate() = default;
+
+    /// Returns the error (usually PermissionDenied) if @p command must not run.
+    [[nodiscard]] virtual Expected<void, CommandError> check(const CommandDescriptor& command) const = 0;
+};
+
 /// A registered command.
 struct CommandDescriptor
 {
     /// Runs the handler: @p params points to the params struct, @p result to a default result struct.
     using Invoke = Expected<void, CommandError> (*)(CommandContext& context, const void* params,
                                                     void* result);
+    /// Starts an async command: validates @p params and returns its task.
+    using Start = Expected<std::unique_ptr<CommandTaskBase>, CommandError> (*)(CommandContext& context,
+                                                                               const void* params);
 
     CommandInfo info;                         ///< Static description (strings owned by the registry).
     const StructReflection* params = nullptr; ///< Reflection of the params (nullptr: NoParams).
     const StructReflection* result = nullptr; ///< Reflection of the result (nullptr: NoResult).
     u64 paramsType = 0;                       ///< typeHash() of the params struct.
     u64 resultType = 0;                       ///< typeHash() of the result struct.
-    Invoke invoke = nullptr;                  ///< The handler.
+    Invoke invoke = nullptr;                  ///< The handler (nullptr for async commands).
+    Start start = nullptr;                    ///< Starts an async command (nullptr for the others).
 };
 
 namespace detail
@@ -110,6 +183,20 @@ struct CommandTraits;
 /// The params and result types of `Expected<R, CommandError> (*)(CommandContext&, const P&)`.
 template <class P, class R>
 struct CommandTraits<Expected<R, CommandError> (*)(CommandContext&, const P&)>
+{
+    using Params = P; ///< The params struct.
+    using Result = R; ///< The result struct.
+};
+
+/// The params and result types of an async command handler type.
+template <class F>
+struct AsyncCommandTraits;
+
+/// The params and result types of
+/// `Expected<std::unique_ptr<CommandTask<R>>, CommandError> (*)(CommandContext&, const P&)`.
+template <class P, class R>
+struct AsyncCommandTraits<Expected<std::unique_ptr<CommandTask<R>>, CommandError> (*)(CommandContext&,
+                                                                                      const P&)>
 {
     using Params = P; ///< The params struct.
     using Result = R; ///< The result struct.
@@ -134,6 +221,67 @@ public:
         using Traits = detail::CommandTraits<decltype(Fn)>;
         using P = typename Traits::Params;
         using R = typename Traits::Result;
+        ILL_ASSERT(!info.flags.async, "async command {} must be registered with addAsync()", info.name);
+        CommandDescriptor descriptor = describe<P, R>(info, structs);
+        descriptor.invoke = [](CommandContext& context, const void* params,
+                               void* result) -> Expected<void, CommandError> {
+            Expected<R, CommandError> out = Fn(context, *static_cast<const P*>(params));
+            if (!out)
+            {
+                return unexpected(std::move(out).error());
+            }
+            *static_cast<R*>(result) = std::move(out).value();
+            return {};
+        };
+        addDescriptor(descriptor);
+    }
+
+    /// Registers the async command @p Fn under @p info.name and sets CommandFlags::async. @p Fn is a function
+    /// `Expected<std::unique_ptr<CommandTask<Result>>, CommandError> fn(CommandContext&, const Params&)` that
+    /// validates the params and returns the task, which copies what it needs from them (they live only during
+    /// the call). Async commands cannot be undoable.
+    template <auto Fn>
+    void addAsync(const CommandInfo& info,
+                  const StructRegistry& structs = ComponentRegistry::instance().structs())
+    {
+        using Traits = detail::AsyncCommandTraits<decltype(Fn)>;
+        using P = typename Traits::Params;
+        using R = typename Traits::Result;
+        ILL_ASSERT(!info.flags.undoable, "async command {} cannot be undoable", info.name);
+        CommandInfo asyncInfo = info;
+        asyncInfo.flags.async = true;
+        CommandDescriptor descriptor = describe<P, R>(asyncInfo, structs);
+        descriptor.start =
+            [](CommandContext& context,
+               const void* params) -> Expected<std::unique_ptr<CommandTaskBase>, CommandError> {
+            Expected<std::unique_ptr<CommandTask<R>>, CommandError> task =
+                Fn(context, *static_cast<const P*>(params));
+            if (!task)
+            {
+                return unexpected(std::move(task).error());
+            }
+            ILL_ASSERT(task.value() != nullptr, "the handler of an async command returned no task");
+            return std::unique_ptr<CommandTaskBase>(std::move(task).value());
+        };
+        addDescriptor(descriptor);
+    }
+
+    /// The command named @p name, or nullptr.
+    [[nodiscard]] const CommandDescriptor* find(std::string_view name) const;
+
+    /// Every command, sorted by name. Pointers stay valid while the registry lives.
+    [[nodiscard]] const std::vector<const CommandDescriptor*>& commands() const noexcept { return m_sorted; }
+
+    /// Up to three registered names close to @p name, best first.
+    [[nodiscard]] std::vector<std::string> suggest(std::string_view name) const;
+
+    /// Increases whenever a command is registered (EditorContext::endFrame() then posts `commands.changed`).
+    [[nodiscard]] u64 revision() const noexcept { return m_revision; }
+
+private:
+    template <class P, class R>
+    static CommandDescriptor describe(const CommandInfo& info, const StructRegistry& structs)
+    {
         CommandDescriptor descriptor;
         descriptor.info = info;
         descriptor.paramsType = typeHash<P>();
@@ -148,29 +296,9 @@ public:
             descriptor.result = structs.reflectionOf(typeHash<R>());
             ILL_ASSERT(descriptor.result != nullptr, "result of command {} is not reflected", info.name);
         }
-        descriptor.invoke = [](CommandContext& context, const void* params,
-                               void* result) -> Expected<void, CommandError> {
-            Expected<R, CommandError> out = Fn(context, *static_cast<const P*>(params));
-            if (!out)
-            {
-                return unexpected(std::move(out).error());
-            }
-            *static_cast<R*>(result) = std::move(out).value();
-            return {};
-        };
-        addDescriptor(descriptor);
+        return descriptor;
     }
 
-    /// The command named @p name, or nullptr.
-    [[nodiscard]] const CommandDescriptor* find(std::string_view name) const;
-
-    /// Every command, sorted by name. Pointers stay valid while the registry lives.
-    [[nodiscard]] const std::vector<const CommandDescriptor*>& commands() const noexcept { return m_sorted; }
-
-    /// Up to three registered names close to @p name, best first.
-    [[nodiscard]] std::vector<std::string> suggest(std::string_view name) const;
-
-private:
     struct Entry
     {
         CommandDescriptor descriptor;
@@ -181,6 +309,7 @@ private:
 
     std::map<std::string, Entry, std::less<>> m_entries;
     std::vector<const CommandDescriptor*> m_sorted;
+    u64 m_revision = 0;
 };
 
 } // namespace illusion::editor

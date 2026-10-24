@@ -70,6 +70,11 @@ public:
     /// Moves the position one step forward (after the caller applied redoStep()).
     void stepForward() noexcept;
 
+    /// Moves the applied step at @p index to the last applied place, so that undoStep() returns it, and seals
+    /// the stack. Only valid when the step is independent of the applied steps after it (findOverlap()):
+    /// then the order in which they were applied does not matter.
+    void moveToTop(usize index) noexcept;
+
     /// Prevents merging into the current last step (after a save, an undo or a selection of a new tool).
     void seal() noexcept { m_sealed = true; }
 

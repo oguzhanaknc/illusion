@@ -78,3 +78,27 @@ must be safe by default, must not race with the frame loop, and must keep workin
   transactions and `scope: mine` undo follow in M7j-2 on top of this protocol.
 - The method catalogue is a snapshot: commands registered later (hot-reloaded modules) need a server restart
   until `commands.changed` arrives with M7s.
+
+## Addendum: M7j-2 (2026-10-24)
+
+Protocol version 0.2.0 adds, without changing existing messages:
+
+- **Async commands.** A request for a command flagged `async` starts the command when it comes up in the
+  queue; `pump()` advances every running one once per frame before running new requests, sends
+  `rpc.progress {id, progress, total, message}` when the progress changed and answers when it finishes.
+  Later requests of the connection do not wait, so replies are in request order except for async ones.
+  Running async commands count against the 64 waiting requests of their connection.
+- **`rpc.cancel {id}`** is handled on the I/O thread and applied by the main thread at the next `pump()`: it
+  ends a running async command or marks a queued request, and either is answered with `cancelled` (1004).
+  Ids of finished requests are ignored.
+- **Per-connection transactions.** Commands run with the connection id as their caller, so `transaction.*`
+  (ADR 0036 addendum) belong to a connection; the server cancels a connection's transaction and drops its
+  async commands when it closes, and when the server stops.
+- **Permission modes inside batches.** The server passes a `CommandGate` for its permission mode with every
+  command, so each step of `editor.batch` is checked like a request of its own.
+- **`commands.changed`.** The method catalogue (methods, permission classes, the OpenRPC document) is rebuilt
+  on the main thread when this event is delivered and swapped in under a mutex for the I/O threads; this
+  supersedes the snapshot consequence above.
+
+Approval prompts for the `ask` mode still wait for the windowed editor (M7l); until then `ask` denies the
+classes that would need one, also inside batches.

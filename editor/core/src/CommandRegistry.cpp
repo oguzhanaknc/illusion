@@ -62,6 +62,7 @@ void CommandRegistry::addDescriptor(const CommandDescriptor& descriptor)
     {
         m_sorted.push_back(&value.descriptor);
     }
+    ++m_revision;
 }
 
 const CommandDescriptor* CommandRegistry::find(std::string_view name) const

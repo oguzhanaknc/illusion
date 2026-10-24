@@ -43,6 +43,22 @@ void reflectCoreCommandTypes(StructRegistry& structs)
             .field("shortcut", &DescribeResult::shortcut)
             .field("params", &DescribeResult::params)
             .field("result", &DescribeResult::result);
+        reflectStruct<BatchStep>("editor.BatchStep", 1, structs)
+            .field("as", &BatchStep::as)
+            .field("method", &BatchStep::method)
+            .field("params", &BatchStep::params);
+        reflectStruct<BatchParams>("editor.BatchParams", 1, structs)
+            .field("label", &BatchParams::label)
+            .field("atomic", &BatchParams::atomic)
+            .field("steps", &BatchParams::steps);
+        reflectStruct<BatchStepResult>("editor.BatchStepResult", 1, structs)
+            .field("result", &BatchStepResult::result)
+            .field("error", &BatchStepResult::error);
+        reflectStruct<BatchResult>("editor.BatchResult", 1, structs)
+            .field("steps", &BatchResult::steps)
+            .field("failed", &BatchResult::failed);
+        reflectStruct<WaitParams>("editor.WaitParams", 1, structs).field("frames", &WaitParams::frames);
+        reflectStruct<WaitResult>("editor.WaitResult", 1, structs).field("frames", &WaitResult::frames);
 
         reflectStruct<ProjectInfoResult>("editor.ProjectInfoResult", 1, structs)
             .field("name", &ProjectInfoResult::name)
@@ -231,6 +247,18 @@ void reflectCoreCommandTypes(StructRegistry& structs)
 
         reflectStruct<HistoryStepParams>("editor.HistoryStepParams", 1, structs)
             .field("steps", &HistoryStepParams::steps);
+        reflectStruct<HistoryUndoParams>("editor.HistoryUndoParams", 1, structs)
+            .field("steps", &HistoryUndoParams::steps)
+            .field("scope", &HistoryUndoParams::scope);
+        reflectStruct<TransactionBeginParams>("editor.TransactionBeginParams", 1, structs)
+            .field("label", &TransactionBeginParams::label);
+        reflectStruct<TransactionBeginResult>("editor.TransactionBeginResult", 1, structs)
+            .field("label", &TransactionBeginResult::label);
+        reflectStruct<TransactionEndResult>("editor.TransactionEndResult", 1, structs)
+            .field("commands", &TransactionEndResult::commands)
+            .field("operations", &TransactionEndResult::operations)
+            .field("position", &TransactionEndResult::position)
+            .field("revision", &TransactionEndResult::revision);
         reflectStruct<HistoryResult>("editor.HistoryResult", 1, structs)
             .field("steps", &HistoryResult::steps)
             .field("position", &HistoryResult::position)
@@ -410,6 +438,7 @@ void registerCoreCommands(CommandRegistry& registry)
     detail::registerTransformCommands(registry);
     detail::registerSelectionCommands(registry);
     detail::registerHistoryCommands(registry);
+    detail::registerTransactionCommands(registry);
     detail::registerClipboardCommands(registry);
     detail::registerAssetCommands(registry);
     detail::registerMaterialCommands(registry);

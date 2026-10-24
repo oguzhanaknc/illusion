@@ -192,6 +192,15 @@ hepsi bunları yeniden oynatır; böylece her şey geri alındıktan sonraki sah
 Editör her değişiklikten sonra çocukların dünya Transform'larını yeniden türetir; yalnızca sahne dosyalarının
 tutmadığı bu türetilmiş değerleri yazar, böylece işlemleri yeniden oynatmak tam kalır.
 
+Bir transaction birden çok komuta da yayılabilir (`transaction.begin`, `editor.batch`): her komut yine kendi
+işlemlerini commit eder, journal'a yazar ve bir revizyonu bitirir, ama işlemler geçmiş yerine açık
+transaction'da toplanır ve commit'te tek bir undo adımı olur. Transaction bir çağırana aittir; böylece bir RPC
+bağlantısının kendi transaction'ı olur ve diğer çağıranlar o bitene kadar bekler (`busy`).
+`history.undo {"scope": "mine"}` bir kaynağın adımını, başkalarının sonraki bağımsız adımlarının ötesinden,
+önce en üste taşıyarak geri alır; bağımsız adımların sırası değiştirilebildiği için sonuç kesindir. Async
+komutlar `RunningCommand::update()` ile her frame'de bir adım ilerleyen görevlerdir; RPC sunucusu onları
+`pump()` içinde ilerletir ve `rpc.progress` bildirir.
+
 World'ün yanında iki parça daha vardır: `SettingsCatalog` (sahnelerin ve projenin ayar olarak tuttuğu
 reflection'lı struct'lar) ve `assets:/` altındaki her sahne ve Material dosyasının Asset referanslarını bilen
 `ReferenceIndex` (reflection ile bulunur, yalnızca bir dosyanın içeriği değişince yeniden ayrıştırılır); böylece
@@ -208,7 +217,9 @@ reflection'lı struct'lar) ve `assets:/` altındaki her sahne ve Material dosyas
   `editor/undo-capture-delete` (bir alt ağacı silip geri getirmek, Entity başına), `editor/scene-query`
   (aranan Entity başına), `editor/transform-translate` (bir gizmo sürüklemesi gibi dört seviye derinlikte
   birleştirilen tek bir `transform.translate`) ve `editor/reference-refresh` (referans indeksi için değişmemiş
-  bir sahne dosyasını denetlemek).
+  bir sahne dosyasını denetlemek), `editor/batch-step` (`$` referanslı bir `editor.batch` adımı, batch ile
+  birlikte geri alınarak) ve `editor/undo-own-check` (kendi adımlarını geri almadan önce sonraki bir adımı
+  denetlemek).
 
 ## Erişilebilirlik
 

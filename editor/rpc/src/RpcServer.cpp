@@ -62,6 +62,20 @@ constexpr std::array kServerMethods = {
         R"({"type":"object","properties":{"events":{"type":"array"},"overflow":{"type":"boolean"}}})"},
     ServerMethod{"editor.quit", PermissionClass::System, false, "Ends the editor process after this reply.",
                  "[]", R"({"type":"object"})"},
+    ServerMethod{
+        "rpc.cancel", PermissionClass::Read, true,
+        "Notification: cancels this connection's request with the given id. A running async command ends "
+        "and a queued request is not run; either is answered with error 1004 (cancelled). Example: "
+        "{\"id\":7}.",
+        R"([{"name":"id","required":true,"schema":{"type":["integer","string"]}}])", R"({"type":"object"})"},
+};
+
+// The methods clients can call, taken when the server starts and again after `commands.changed`.
+struct Catalog
+{
+    std::map<std::string, MethodEntry, std::less<>> methods;
+    std::vector<std::string> names;
+    std::string discover;
 };
 
 std::string compact(const JsonMutDocument& doc)
@@ -161,7 +175,9 @@ std::string buildDiscover(EditorContext& editor)
         flags.add("destructive", doc.makeBool(command->info.flags.destructive));
         flags.add("idempotent", doc.makeBool(command->info.flags.idempotent));
         flags.add("undoable", doc.makeBool(command->info.flags.undoable));
+        flags.add("async", doc.makeBool(command->info.flags.async));
         flags.add("needsGpu", doc.makeBool(command->info.flags.needsGpu));
+        flags.add("outsideTransactions", doc.makeBool(command->info.flags.outsideTransactions));
     }
     for (const ServerMethod& server : kServerMethods)
     {
@@ -183,6 +199,44 @@ std::string buildDiscover(EditorContext& editor)
     }
     doc.setRoot(root);
     return compact(doc);
+}
+
+std::shared_ptr<const Catalog> buildCatalog(EditorContext& editor)
+{
+    auto catalog = std::make_shared<Catalog>();
+    catalog->discover = buildDiscover(editor);
+    for (const CommandDescriptor* command : editor.commands().commands())
+    {
+        catalog->methods.emplace(std::string(command->info.name),
+                                 MethodEntry{command->info.permission, command->info.flags.readOnly});
+    }
+    for (const ServerMethod& method : kServerMethods)
+    {
+        catalog->methods.emplace(std::string(method.name), MethodEntry{method.permission, method.readOnly});
+    }
+    catalog->methods.emplace("rpc.authenticate", MethodEntry{});
+    catalog->methods.emplace("rpc.discover", MethodEntry{});
+    for (const auto& entry : catalog->methods)
+    {
+        catalog->names.push_back(entry.first);
+    }
+    return catalog;
+}
+
+// `{"id":<id>,"progress":done,"total":total,"message":...}` for an `rpc.progress` notification.
+std::string progressParams(std::string_view id, const CommandProgress& progress)
+{
+    JsonMutDocument doc;
+    JsonMutValue object = doc.makeObject();
+    object.add("progress", doc.makeF64(progress.done));
+    object.add("total", doc.makeF64(progress.total));
+    if (!progress.message.empty())
+    {
+        object.add("message", doc.makeString(progress.message));
+    }
+    doc.setRoot(object);
+    const std::string members = compact(doc);
+    return R"({"id":)" + std::string(id) + "," + members.substr(1);
 }
 
 } // namespace
@@ -245,6 +299,10 @@ struct RpcServer::Connection
 
     std::thread reader;
     std::thread writer;
+
+    // Ids of requests to cancel (rpc.cancel), from the reader to the main thread.
+    std::mutex cancelMutex;
+    std::vector<std::string> cancels;
 
     // Main thread only: the event subscription.
     bool subscribed = false;
@@ -325,12 +383,44 @@ struct RpcServer::Connection
     }
 };
 
+// Lets RPC clients run what the permission mode allows, also inside `editor.batch`.
+struct PermissionGate final : CommandGate
+{
+    PermissionMode mode = PermissionMode::Auto;
+
+    Expected<void, CommandError> check(const CommandDescriptor& command) const override
+    {
+        if (permits(mode, command.info.permission, command.info.flags.readOnly))
+        {
+            return {};
+        }
+        return unexpected(CommandError::make(ErrorKind::PermissionDenied,
+                                             std::string(command.info.name) + " needs the '" +
+                                                 std::string(permissionClassName(command.info.permission)) +
+                                                 "' permission, which the permission mode '" +
+                                                 std::string(permissionModeName(mode)) + "' does not grant"));
+    }
+};
+
 struct RpcServer::Shared
 {
     struct Work
     {
         std::shared_ptr<Connection> connection;
         Request request;
+        bool cancelled = false; // set under queueMutex by rpc.cancel
+    };
+
+    // An async command that has started (main thread only).
+    struct Task
+    {
+        std::shared_ptr<Connection> connection;
+        std::string id; // request id as JSON ("" for a notification)
+        std::string method;
+        std::string clientToken;
+        std::unique_ptr<RunningCommand> command;
+        CommandProgress sent; // progress in the last rpc.progress
+        bool cancelled = false;
     };
 
     struct TokenCache
@@ -342,9 +432,11 @@ struct RpcServer::Shared
 
     RpcServerOptions options;
     std::string token;
-    std::string discover;
-    std::map<std::string, MethodEntry, std::less<>> methods;
-    std::vector<std::string> names;
+    PermissionGate gate;
+
+    mutable std::mutex catalogMutex;
+    std::shared_ptr<const Catalog> catalog;
+    std::atomic<bool> cancelsPending{false}; // a reader queued an rpc.cancel
 
     std::mutex queueMutex;
     std::condition_variable queueReady;
@@ -360,6 +452,34 @@ struct RpcServer::Shared
 
     // Main thread only.
     std::map<std::string, TokenCache, std::less<>> tokens;
+    std::vector<Task> tasks;
+
+    std::shared_ptr<const Catalog> currentCatalog() const
+    {
+        const std::lock_guard lock(catalogMutex);
+        return catalog;
+    }
+
+    void setCatalog(std::shared_ptr<const Catalog> next)
+    {
+        const std::lock_guard lock(catalogMutex);
+        catalog = std::move(next);
+    }
+
+    // Remembers @p result of @p method for the client's idempotency token.
+    void remember(const Connection& connection, std::string_view clientToken, std::string_view method,
+                  std::string_view result)
+    {
+        TokenCache& cache = tokens[connection.client];
+        cache.entries.emplace(std::string(clientToken),
+                              std::make_pair(std::string(method), std::string(result)));
+        cache.order.emplace_back(clientToken);
+        while (cache.order.size() > options.idempotencyTokens)
+        {
+            cache.entries.erase(cache.order.front());
+            cache.order.pop_front();
+        }
+    }
 
     u32 add(std::unique_ptr<RpcStream> stream, bool trusted, std::string_view client)
     {
@@ -480,15 +600,36 @@ struct RpcServer::Shared
             reject(c, "authenticate first: the first message must be rpc.authenticate");
             return;
         }
+        const std::shared_ptr<const Catalog> methods = currentCatalog();
         if (request.method == "rpc.discover")
         {
-            reply(resultResponse(request.id, discover));
+            reply(resultResponse(request.id, methods->discover));
             return;
         }
-        const auto method = methods.find(request.method);
-        if (method == methods.end())
+        if (request.method == "rpc.cancel")
         {
-            std::vector<std::string_view> candidates(names.begin(), names.end());
+            const JsonValue id = request.params.find("id");
+            if (!id.isString() && !id.isInteger())
+            {
+                reply(errorResponse(request.id, CommandError::invalid("/id", "must be a request id")));
+                return;
+            }
+            {
+                const std::lock_guard lock(c.cancelMutex);
+                c.cancels.push_back(id.dump());
+            }
+            cancelsPending.store(true);
+            reply(resultResponse(request.id, "{}"));
+            if (options.wake)
+            {
+                options.wake();
+            }
+            return;
+        }
+        const auto method = methods->methods.find(request.method);
+        if (method == methods->methods.end())
+        {
+            std::vector<std::string_view> candidates(methods->names.begin(), methods->names.end());
             CommandError error = CommandError::make(ErrorKind::NotFound,
                                                     "unknown method '" + std::string(request.method) + "'");
             error.suggestions = closestMatches(request.method, candidates);
@@ -608,26 +749,12 @@ RpcServer::RpcServer(EditorContext& editor, RpcServerOptions options)
 {
     m_token = makeToken();
     ILL_CHECK(!m_token.empty(), "the system has no secure random source for the RPC token");
-    m_discover = buildDiscover(editor);
     Shared& shared = *m_shared;
     shared.options = std::move(options);
     shared.token = m_token;
-    shared.discover = m_discover;
-    for (const CommandDescriptor* command : editor.commands().commands())
-    {
-        shared.methods.emplace(std::string(command->info.name),
-                               MethodEntry{command->info.permission, command->info.flags.readOnly});
-    }
-    for (const ServerMethod& method : kServerMethods)
-    {
-        shared.methods.emplace(std::string(method.name), MethodEntry{method.permission, method.readOnly});
-    }
-    shared.methods.emplace("rpc.authenticate", MethodEntry{});
-    shared.methods.emplace("rpc.discover", MethodEntry{});
-    for (const auto& entry : shared.methods)
-    {
-        shared.names.push_back(entry.first);
-    }
+    shared.gate.mode = shared.options.permissions;
+    shared.setCatalog(buildCatalog(editor));
+    m_discover = shared.currentCatalog()->discover;
     m_subscription = editor.events().subscribe("*", [this](const EditorEvent& event) { deliver(event); });
 }
 
@@ -655,6 +782,8 @@ usize RpcServer::pump(std::chrono::microseconds budget)
     ILL_PROFILE_SCOPE();
     Shared& shared = *m_shared;
     const auto start = std::chrono::steady_clock::now();
+    takeCancels();
+    advanceTasks();
     usize ran = 0;
     for (;;)
     {
@@ -669,15 +798,36 @@ usize RpcServer::pump(std::chrono::microseconds budget)
             shared.queue.pop_front();
         }
         Connection& connection = *work.connection;
+        bool finished = true;
         if (connection.open.load())
         {
-            std::string response = execute(connection, work.request);
-            if (!work.request.notification())
+            if (work.cancelled)
             {
-                connection.send(response);
+                if (!work.request.notification())
+                {
+                    connection.send(
+                        errorResponse(work.request.id,
+                                      CommandError::make(ErrorKind::Cancelled, "the request was cancelled")));
+                }
+            }
+            else if (const CommandDescriptor* command = m_editor.commands().find(work.request.method);
+                     command != nullptr && command->info.flags.async)
+            {
+                finished = !startTask(work.connection, work.request);
+            }
+            else
+            {
+                std::string response = execute(connection, work.request);
+                if (!work.request.notification())
+                {
+                    connection.send(response);
+                }
             }
         }
-        connection.inFlight.fetch_sub(1);
+        if (finished)
+        {
+            connection.inFlight.fetch_sub(1);
+        }
         ++ran;
         if (budget != std::chrono::microseconds::max() && std::chrono::steady_clock::now() - start >= budget)
         {
@@ -726,6 +876,7 @@ void RpcServer::stop()
         shared.acceptor.join();
     }
     shared.listener = SocketListener();
+    shared.tasks.clear();
     std::vector<std::shared_ptr<Connection>> connections;
     {
         const std::lock_guard lock(shared.connectionsMutex);
@@ -733,6 +884,7 @@ void RpcServer::stop()
     }
     for (const std::shared_ptr<Connection>& connection : connections)
     {
+        m_editor.abandonTransaction(connection->id);
         connection->finish();
     }
     for (const std::shared_ptr<Connection>& connection : connections)
@@ -772,6 +924,10 @@ void RpcServer::reap()
     }
     for (const std::shared_ptr<Connection>& connection : closed)
     {
+        // What a client left unfinished is undone: its transaction and its async commands.
+        m_editor.abandonTransaction(connection->id);
+        std::erase_if(m_shared->tasks,
+                      [&](const Shared::Task& task) { return task.connection == connection; });
         connection->abort();
         if (connection->writer.joinable())
         {
@@ -786,6 +942,11 @@ void RpcServer::reap()
 
 void RpcServer::deliver(const EditorEvent& event)
 {
+    if (event.topic == "commands.changed")
+    {
+        m_shared->setCatalog(buildCatalog(m_editor));
+        m_discover = m_shared->currentCatalog()->discover;
+    }
     const std::string object =
         R"({"topic":)" + jsonString(event.topic) + R"(,"payload":)" + event.payload + "}";
     std::vector<std::shared_ptr<Connection>> connections;
@@ -914,6 +1075,8 @@ std::string RpcServer::execute(Connection& connection, const Request& request)
     }
     CommandOptions options;
     options.origin = connection.origin;
+    options.caller = connection.id;
+    options.gate = &m_shared->gate;
     Expected<std::string, CommandError> result = m_editor.executeJson(method, params, options);
     if (!result)
     {
@@ -921,15 +1084,151 @@ std::string RpcServer::execute(Connection& connection, const Request& request)
     }
     if (cache != nullptr)
     {
-        cache->entries.emplace(std::string(*clientToken), std::make_pair(std::string(method), *result));
-        cache->order.emplace_back(*clientToken);
-        while (cache->order.size() > m_shared->options.idempotencyTokens)
-        {
-            cache->entries.erase(cache->order.front());
-            cache->order.pop_front();
-        }
+        m_shared->remember(connection, *clientToken, method, *result);
     }
     return resultResponse(request.id, *result);
+}
+
+bool RpcServer::startTask(const std::shared_ptr<Connection>& connection, const Request& request)
+{
+    const std::optional<std::string_view> clientToken = request.params.find("clientToken").asString();
+    if (clientToken && !clientToken->empty())
+    {
+        Shared::TokenCache& cache = m_shared->tokens[connection->client];
+        if (const auto hit = cache.entries.find(std::string(*clientToken)); hit != cache.entries.end())
+        {
+            if (!request.notification())
+            {
+                connection->send(hit->second.first != request.method
+                                     ? errorResponse(request.id, CommandError::invalid(
+                                                                     "/clientToken", "was already used for " +
+                                                                                         hit->second.first))
+                                     : resultResponse(request.id, hit->second.second));
+            }
+            return false;
+        }
+    }
+    CommandOptions options;
+    options.origin = connection->origin;
+    options.caller = connection->id;
+    options.gate = &m_shared->gate;
+    Expected<std::unique_ptr<RunningCommand>, CommandError> started =
+        m_editor.startJson(request.method, request.params, options);
+    if (!started)
+    {
+        if (!request.notification())
+        {
+            connection->send(errorResponse(request.id, started.error()));
+        }
+        return false;
+    }
+    Shared::Task task;
+    task.connection = connection;
+    task.id = request.id;
+    task.method = std::string(request.method);
+    task.clientToken = std::string(clientToken.value_or(""));
+    task.command = std::move(started).value();
+    m_shared->tasks.push_back(std::move(task));
+    return true;
+}
+
+void RpcServer::takeCancels()
+{
+    Shared& shared = *m_shared;
+    if (!shared.cancelsPending.exchange(false))
+    {
+        return; // the usual case: nothing to look at, nothing allocated
+    }
+    std::vector<std::shared_ptr<Connection>> connections;
+    {
+        const std::lock_guard lock(shared.connectionsMutex);
+        connections = shared.connections;
+    }
+    for (const std::shared_ptr<Connection>& connection : connections)
+    {
+        std::vector<std::string> ids;
+        {
+            const std::lock_guard lock(connection->cancelMutex);
+            ids.swap(connection->cancels);
+        }
+        for (const std::string& id : ids)
+        {
+            // A running async command ends at its next update; a queued request is answered when it comes up.
+            // Ids of requests that already finished are ignored.
+            const auto task =
+                std::find_if(shared.tasks.begin(), shared.tasks.end(),
+                             [&](const Shared::Task& t) { return t.connection == connection && t.id == id; });
+            if (task != shared.tasks.end())
+            {
+                task->cancelled = true;
+                continue;
+            }
+            const std::lock_guard lock(shared.queueMutex);
+            for (Shared::Work& work : shared.queue)
+            {
+                if (work.connection == connection && work.request.id == id)
+                {
+                    work.cancelled = true;
+                }
+            }
+        }
+    }
+}
+
+void RpcServer::advanceTasks()
+{
+    ILL_PROFILE_SCOPE();
+    Shared& shared = *m_shared;
+    for (auto it = shared.tasks.begin(); it != shared.tasks.end();)
+    {
+        Shared::Task& task = *it;
+        Connection& connection = *task.connection;
+        const bool reply = !task.id.empty() && connection.open.load();
+        if (!connection.open.load() || task.cancelled)
+        {
+            if (reply)
+            {
+                connection.send(errorResponse(
+                    task.id, CommandError::make(ErrorKind::Cancelled, task.method + " was cancelled")));
+            }
+            connection.inFlight.fetch_sub(1);
+            it = shared.tasks.erase(it);
+            continue;
+        }
+        Expected<std::optional<std::string>, CommandError> updated = task.command->update();
+        if (updated && !updated->has_value())
+        {
+            const CommandProgress& progress = task.command->progress();
+            if (reply && (progress.done != task.sent.done || progress.total != task.sent.total ||
+                          progress.message != task.sent.message))
+            {
+                connection.send(notification("rpc.progress", progressParams(task.id, progress)));
+                task.sent = progress;
+            }
+            ++it;
+            continue;
+        }
+        if (!updated)
+        {
+            if (reply)
+            {
+                connection.send(errorResponse(task.id, updated.error()));
+            }
+        }
+        else
+        {
+            if (!task.clientToken.empty())
+            {
+                shared.remember(connection, task.clientToken, task.method, **updated);
+            }
+            if (reply)
+            {
+                connection.send(resultResponse(task.id, **updated));
+            }
+        }
+        connection.inFlight.fetch_sub(1);
+        it = shared.tasks.erase(it);
+    }
 }
 
 } // namespace illusion::editor::rpc

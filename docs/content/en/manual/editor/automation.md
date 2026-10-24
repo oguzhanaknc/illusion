@@ -67,6 +67,7 @@ with EditorClient.launch("build/bin/Release/illusion_editor", ["--workspace", "/
         print(error.code, error.data["kind"])  # 1200 not_found
 ```
 
+Notifications such as `event` and `rpc.progress` collect in `editor.notifications` while `call()` waits.
 `EditorClient.connect_project(path)` connects to a running editor through its endpoint file.
 
 ## Sockets and the endpoint file
@@ -113,13 +114,46 @@ each event, once per frame and topic:
 
 In `pull` mode the editor keeps up to 1,024 events for `editor.poll_events`; when more arrive, the reply says
 `"overflow": true` and the client reads the scene again. Topics include `scene.changed`, `scene.opened`,
-`scene.saved`, `selection.changed`, `history.changed` and `scene.autosaved`; an empty list means all.
+`scene.saved`, `selection.changed`, `history.changed`, `scene.autosaved` and `commands.changed`; an empty list
+means all. After `commands.changed` (commands were registered, e.g. by a module) the server's method list and
+`rpc.discover` include the new commands.
+
+## Async commands and cancellation
+
+Commands flagged `async` (`editor.list_commands` shows the flag) take several editor frames. The editor
+answers them when they finish and sends `rpc.progress` notifications with the request id in between; the
+connection's later requests do not wait for them. `rpc.cancel` with the id ends a running async command, or
+skips a request that is still queued, and the request is answered with `cancelled` (1004):
+
+```json
+{"jsonrpc": "2.0", "id": 7, "method": "editor.wait", "params": {"frames": 600}}
+{"jsonrpc": "2.0", "method": "rpc.progress", "params": {"id": 7, "progress": 1, "total": 600}}
+{"jsonrpc": "2.0", "method": "rpc.cancel", "params": {"id": 7}}
+{"jsonrpc": "2.0", "id": 7, "error": {"code": 1004, "message": "editor.wait was cancelled", "data": {"kind": "cancelled", "errors": [], "suggestions": [], "retryable": false}}}
+```
+
+## Batches and transactions
+
+`editor.batch` runs several commands as one undo step, with `$` references from one step's result to the
+next ([editor core](index.md#batches)). For a longer piece of work a client can open a transaction of its
+connection; meanwhile other clients cannot change the scene (`busy`, retryable), and if the connection
+closes the editor reverts the transaction:
+
+```python
+editor.call("transaction.begin", label="Build board")
+board = editor.call("entity.create", name="Board")["entity"]
+editor.call("entity.create", name="Cell 1", parent=board["id"])
+editor.call("transaction.commit")  # one undo step; transaction.cancel would revert both
+editor.call("history.undo", scope="mine")  # undoes it even if other clients edited since
+```
 
 ## Retries and concurrency
 
 - `clientToken` on a mutating call makes it safe to retry: the editor remembers the last 1,024 tokens of each
   client and answers a repeated one with the first reply.
 - `expectRevision` fails with `conflict` (1203) when someone else changed the scene since you read it.
+- `history.undo {"scope": "mine"}` undoes your own last step past later independent steps of other clients,
+  and fails with `conflict` when they touched the same things.
 - `busy` (1002) and `limit_exceeded` (1401) with `retryable: true` mean "try again later": the editor accepts
   8 connections, 64 waiting requests per connection and 256 in all.
 

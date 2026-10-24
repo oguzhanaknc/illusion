@@ -78,6 +78,52 @@ struct DescribeResult
     JsonText result;         ///< JSON Schema of the result.
 };
 
+/// One step of `editor.batch`.
+struct BatchStep
+{
+    /// Name under which later steps refer to its result: the string "$name.path.to.field" in their params is
+    /// replaced by that value of the result (array elements by index). Letters, digits and '_'.
+    std::optional<std::string> as{};
+    std::string method;               ///< The command, e.g. "entity.create".
+    std::optional<JsonText> params{}; ///< Its params (an object; default {}).
+};
+
+/// Params of `editor.batch`.
+struct BatchParams
+{
+    std::optional<std::string> label{}; ///< Label of the undo step (default "Batch").
+    /// True (default): the first failing step reverts the whole batch and fails it. False: failing steps are
+    /// reported and the others are kept.
+    std::optional<bool> atomic{};
+    std::vector<BatchStep> steps; ///< The commands, run in order (1 to 1,000).
+};
+
+/// Outcome of one step of `editor.batch`.
+struct BatchStepResult
+{
+    std::optional<JsonText> result{}; ///< Its result, with `_editor`, if it succeeded.
+    std::optional<JsonText> error{};  ///< Its error {code, message, data} if it failed.
+};
+
+/// Result of `editor.batch`.
+struct BatchResult
+{
+    std::vector<BatchStepResult> steps; ///< One entry per step, in order.
+    u32 failed = 0;                     ///< Steps that failed (non-atomic batches only).
+};
+
+/// Params of `editor.wait`.
+struct WaitParams
+{
+    u32 frames = 1; ///< Editor frames to wait (1 to 100,000).
+};
+
+/// Result of `editor.wait`.
+struct WaitResult
+{
+    u32 frames = 0; ///< Frames waited.
+};
+
 // --- project -----------------------------------------------------------------------------------------------
 
 /// Result of `project.info`.
@@ -601,10 +647,42 @@ struct TransformResetParams
 
 // --- history -----------------------------------------------------------------------------------------------
 
-/// Params of `history.undo` and `history.redo`.
+/// Params of `history.redo`.
 struct HistoryStepParams
 {
     std::optional<u32> steps{}; ///< Number of steps (default 1).
+};
+
+/// Params of `history.undo`.
+struct HistoryUndoParams
+{
+    std::optional<u32> steps{}; ///< Number of steps (default 1).
+    /// "all" (default): the last steps, whoever made them; "mine": the last steps of the caller's origin,
+    /// even when steps of others came later (refused with a conflict when those touched the same things).
+    std::optional<std::string> scope{};
+};
+
+// --- transaction -------------------------------------------------------------------------------------------
+
+/// Params of `transaction.begin`.
+struct TransactionBeginParams
+{
+    std::optional<std::string> label{}; ///< Label of the undo step it becomes (default "Transaction").
+};
+
+/// Result of `transaction.begin`.
+struct TransactionBeginResult
+{
+    std::string label; ///< Label of the undo step it becomes.
+};
+
+/// Result of `transaction.commit` and `transaction.cancel`.
+struct TransactionEndResult
+{
+    u32 commands = 0;   ///< Commands that changed something in the transaction.
+    u32 operations = 0; ///< Primitive operations they applied (and a cancel reverted).
+    u32 position = 0;   ///< History position afterwards.
+    u64 revision = 0;   ///< Scene revision afterwards.
 };
 
 /// Result of history commands.

@@ -659,6 +659,9 @@ Needs: i.
 > board scenario. Async commands (`rpc.progress`, `rpc.cancel`), `editor.batch` with `$ref`, per-connection
 > transactions and scoped undo moved to **M7j-2** (ROADMAP), because they need transaction grouping in
 > `EditorContext`. The acceptance runner replays over RPC until `illusion_mcp` exists (`--via-mcp` in M7k).
+>
+> **M7j-2 (2026-10-24)** landed those, plus `editor.wait` as the first async command and `commands.changed`.
+> Approval prompts for the `ask` mode moved to M7l, which brings the window they need.
 
 **Scope**
 

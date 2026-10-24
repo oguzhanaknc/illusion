@@ -102,6 +102,72 @@ sonrasındaki seçimiyle bir undo adımı olur.
 - Seçim yapmak bir undo adımı değildir, ama undo ve redo kendi adımlarının seçimini geri yükler.
 - Kaydetmek undo durumunu hatırlar; o duruma geri dönmek sahneyi yeniden temiz yapar.
 
+### Değişiklikleri gruplamak
+
+`transaction.begin {"label": "Build board"}` bir transaction açar: aynı çağıranın sonraki geri alınabilir
+komutları hemen uygulanır ama `transaction.commit` çalışınca tek bir undo adımı olur; `transaction.cancel`
+ise hepsini geri alır ve seçimi geri yükler. Bir transaction onu açana aittir (`CommandOptions::caller`: RPC
+istemcileri için bağlantı, editörün kendisi için 0). Açık olduğu sürece:
+
+- diğer çağıranların geri alınabilir komutları `busy` (1002, `retryable`) ile başarısız olur; okumak ve seçmek
+  çalışmaya devam eder;
+- sahneyi değiştiren, kaydeden ya da geçmişte gezinen komutlar (`scene.new`, `scene.open`, `scene.save`,
+  `scene.save_as`, `project.open`, `project.create`, `project.recover`, `history.list` dışındaki `history.*`;
+  `outsideTransactions` bayrağı) herkes için başarısız olur;
+- her komut yine revizyonu artırır, yani `expectRevision` içeride de çalışır;
+- RPC bağlantısı kapanınca editör transaction'ı iptal eder.
+
+### Batch'ler
+
+`editor.batch` bir komut listesini sırayla tek transaction ve tek undo adımı olarak çalıştırır. `as` ile
+adlandırılan bir adım sonraki adımlarda kullanılabilir: onların parametrelerindeki `"$name.path.to.field"`
+string'i o adımın sonucundaki değere dönüşür (dizi elemanları indisle; `"$$"` düz bir `$` yazar,
+`"$selection"` anlamını korur).
+
+```json
+{"label": "Board", "steps": [
+  {"as": "board", "method": "entity.create", "params": {"name": "Board", "parent": "/Game"}},
+  {"method": "entity.create", "params": {"name": "Cell 1", "parent": "$board.entity.id"}},
+  {"method": "selection.set", "params": {"entities": ["$board.entity.path"]}}
+]}
+```
+
+Hiçbir adım çalışmadan önce hepsi denetlenir (metot adları, `as` adları, parametre nesneleri); async komutlar,
+`transaction.*` ve iç içe batch'ler adım olamaz. Atomik bir batch (varsayılan) bir adım başarısız olunca her
+şeyi geri alır ve o adımın hatasını işaretçisi `/steps/<i>/params` altında olacak şekilde döndürür;
+`"atomic": false` ile başarısız adımlar `steps[i].error` içinde bildirilir ve diğerleri korunur. Aynı
+çağıranın açık bir transaction'ı içindeki batch ona katılır; başarısız atomik bir batch yalnızca kendi
+adımlarını geri alır. Bir batch'in dry run'ı geri alınabilir adımları bir deneme transaction'ında
+(`TransactionInfo::trial`) çalıştırır ve sonunda revizyonu değiştirmeden iptal eder; ne geri alınabilir ne de
+salt okunur olan adımları yalnızca doğrular. Adımlar çağrının kapısıyla (`CommandOptions::gate`) çalışır,
+yani RPC izin modu her birine uygulanır.
+
+### Kendi adımlarını geri almak
+
+`history.undo {"scope": "mine"}`, çağıranın kaynağına ait son adımları, ardından başka kaynakların adımları
+gelmiş olsa bile geri alır; yeter ki o sonraki adımlar bağımsız olsun (`findOverlap()`): bir Entity'nin aynı
+Component'ini değiştirmemiş, adımın değiştirdiği ya da referans verdiği bir Entity'yi oluşturmamış veya
+silmemiş, aynı dosyaya ya da ayara dokunmamış olmalılar. Aksi hâlde `conflict` (1203) ile başarısız olur ve
+hiçbir şeyi değiştirmez. Geri alınan adım redo tarafına geçer; `history.redo` onu yeniden uygular.
+
+### Async komutlar
+
+Birkaç frame süren komutlar `CommandRegistry::addAsync()` ile kaydedilir: handler'ları parametreleri doğrular
+ve bir `CommandTask` döndürür; editör onu her frame'de bir `CommandProgress` ile bir adım ilerletir.
+`executeJson()` onları reddeder; `startJson()` `update()` ile ilerletilen ve iptal için yok edilen bir
+`RunningCommand` döndürür. Async komutlar geri alınabilir olamaz. İlki `editor.wait {"frames": 60}`.
+
+```cpp
+const illusion::JsonDocument params = std::move(illusion::JsonDocument::parse(R"({"frames": 60})").value());
+auto started = editor.startJson("editor.wait", params.root());
+if (started)
+{
+    std::unique_ptr<illusion::editor::RunningCommand> running = std::move(started).value();
+    // Once per frame, on the editor's thread:
+    auto step = running->update(); // std::nullopt while it runs; the result JSON or an error at the end
+}
+```
+
 ## Hatalar
 
 Başarısızlıklar; bir tür, İngilizce bir mesaj, geçersiz değerler ve öneriler içeren bir `CommandError`
@@ -125,7 +191,8 @@ Her commit, undo ve redo sahne revizyonunu artırır. `changes().changesSince(re
 hatırladığı revizyondan bu yana hangi Entity'lerin oluşturulduğunu, silindiğini veya değiştiğini (ve hangi
 Component'lerin), ayrıca hangi sahne ayarlarının değiştiğini döndürür; istemcinin sahneyi yeniden okuması gerekiyorsa `false` döner. `events()`;
 `scene.changed`, `selection.changed`, `history.changed`, `history.trimmed`, `scene.opened`, `scene.saved` ve
-`scene.autosaved` event'lerini her `endFrame()` çağrısında bir kez iletir.
+`scene.autosaved` event'lerini her `endFrame()` çağrısında bir kez iletir; komut kaydedilen bir frame'in
+sonunda da `commands.changed` (`{"commands": <sayı>}`) gönderir.
 
 ## Çökme journal'ı ve kurtarma
 

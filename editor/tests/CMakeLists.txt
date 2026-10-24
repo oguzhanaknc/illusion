@@ -19,8 +19,10 @@ illusion_add_editor_executable(illusion_editor_tests
     core/TestEditorHistory.cpp
     core/TestEditorLog.cpp
     core/TestEditorSettings.cpp
+    core/TestEditorTransactions.cpp
     core/TestEditorTransforms.cpp
     rpc/TestEditorClient.cpp
+    rpc/TestRpcAsync.cpp
     rpc/TestRpcProtocol.cpp
     rpc/TestRpcServer.cpp
     rpc/TestRpcTransport.cpp)
