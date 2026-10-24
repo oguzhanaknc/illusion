@@ -134,6 +134,10 @@ are within budget, format and docs checks pass, and Doxygen reports nothing.
   adding or changing a command, run `illusion_editor_command_reference --write docs/content` and update
   `editor/tests/data/commands/catalog.json` with `ILLUSION_UPDATE_GOLDENS=1`; bump the command's `version`
   for incompatible changes. See `.claude/skills/editor-commands/SKILL.md`.
+- Commands that replace or save the scene or move through the undo history set
+  `CommandFlags::outsideTransactions`. Work that spans frames is an async command (`registry.addAsync()`,
+  never undoable); a command runs other commands only as `editor.batch` does, through `executeStep()`
+  (ADR 0036 addendum).
 - See `.claude/skills/editor-ui/SKILL.md` and the [editor architecture](docs/content/en/architecture/editor.md).
 
 ## Testing rules

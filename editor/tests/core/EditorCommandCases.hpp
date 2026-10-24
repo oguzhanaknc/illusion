@@ -35,8 +35,11 @@ inline constexpr CommandCase kCommandCases[] = {
     {"component.set_field",
      R"({"entity":"/Game/Board","type":"illusion.LocalTransform","path":"position","value":[0,5,0]})"},
     {"component.types", R"({})"},
+    {"editor.batch",
+     R"({"label":"Two","steps":[{"as":"made","method":"entity.create","params":{"name":"Made","parent":"/Game"}},{"method":"entity.rename","params":{"entity":"$made.entity.id","name":"Renamed"}}]})"},
     {"editor.describe", R"({"command":"entity.create"})"},
     {"editor.list_commands", R"({})"},
+    {"editor.wait", R"({"frames":3})"},
     {"entity.create", R"({"name":"New","parent":"/Game","components":{"test.Link":{"weight":3}}})"},
     {"entity.destroy", R"({"entities":["/Game/Board"]})"},
     {"entity.duplicate", R"({"entities":["/Game/Board"]})"},
@@ -89,6 +92,9 @@ inline constexpr CommandCase kCommandCases[] = {
     {"selection.get", R"({})"},
     {"selection.remove", R"({"entities":["/Game/Board"]})"},
     {"selection.set", R"({"entities":["/Game/Board","/Light"]})"},
+    {"transaction.begin", R"({"label":"Group"})"},
+    {"transaction.cancel", R"({})"},
+    {"transaction.commit", R"({})"},
     {"transform.get", R"({"entity":"/Game/Board","space":"local"})"},
     {"transform.reset", R"({"entities":["/Game/Board"],"scale":false})"},
     {"transform.rotate", R"({"entities":["/Game/Board","/Light"],"euler":[0,45,0],"pivot":"center"})"},
@@ -96,5 +102,24 @@ inline constexpr CommandCase kCommandCases[] = {
     {"transform.set", R"({"entities":["/Game/Board"],"position":[1,2,3],"euler":[0,90,0]})"},
     {"transform.translate", R"({"entities":["/Game/Board","/Light"],"offset":[1,0,0],"space":"self"})"},
 };
+
+// Commands that need another one to run first (with {} params) on the fixture.
+inline constexpr CommandCase kCommandSetups[] = {
+    {"transaction.cancel", "transaction.begin"},
+    {"transaction.commit", "transaction.begin"},
+};
+
+/// The command to run before @p name on the fixture ("" for none).
+constexpr std::string_view setupOf(std::string_view name)
+{
+    for (const CommandCase& entry : kCommandSetups)
+    {
+        if (entry.name == name)
+        {
+            return entry.params;
+        }
+    }
+    return {};
+}
 
 } // namespace illusion::test

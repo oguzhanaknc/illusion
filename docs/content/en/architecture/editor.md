@@ -189,6 +189,14 @@ everything is byte for byte the scene before. After each change the editor deriv
 children again; it writes only those derived values, which scene files do not keep, so replaying operations
 stays exact.
 
+A transaction can also span commands (`transaction.begin`, `editor.batch`): each command still commits and
+journals its own operations and ends a revision, but they collect in the open transaction instead of the
+history and become one undo step at the commit. The transaction belongs to a caller, so an RPC connection
+owns its own and other callers wait (`busy`) until it ends. `history.undo {"scope": "mine"}` undoes one
+origin's step past later independent steps of others by moving it to the top first, which is exact because
+independent steps commute. Async commands are tasks that `RunningCommand::update()` advances once per frame;
+the RPC server advances them in `pump()` and reports `rpc.progress`.
+
 Two more parts sit beside the World: the `SettingsCatalog` (the reflected structs that scenes and the
 project keep as settings) and the `ReferenceIndex`, which knows the asset references of every scene and
 material file under `assets:/` (found through reflection, parsed again only when a file's contents change)
@@ -204,7 +212,9 @@ so that `asset.move` can rewrite them and `asset.delete` can refuse. The manual 
 - The editor core's benchmarks: `editor/component-set` (one merged `component.set`), `editor/undo-capture-delete`
   (destroying and restoring a subtree, per entity), `editor/scene-query` (per entity searched),
   `editor/transform-translate` (one merged `transform.translate` four levels deep, like a gizmo drag) and
-  `editor/reference-refresh` (checking an unchanged scene file for the reference index).
+  `editor/reference-refresh` (checking an unchanged scene file for the reference index), `editor/batch-step`
+  (one step of an `editor.batch` with a `$` reference, undone with the batch) and `editor/undo-own-check`
+  (checking one later step before an undo of one's own steps).
 
 ## Accessibility
 

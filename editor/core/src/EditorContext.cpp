@@ -13,9 +13,11 @@
 #include <algorithm>
 #include <charconv>
 #include <fstream>
+#include <iterator>
 #include <new>
 #include <random>
 #include <system_error>
+#include <utility>
 
 namespace illusion::editor
 {
@@ -70,7 +72,133 @@ std::string fieldName(std::string_view pointer)
                                              : pointer.find('/', 1) - 1));
 }
 
+// The result of a command as compact JSON with its `_editor` member.
+Expected<std::string, CommandError> writeResult(const CommandDescriptor& descriptor, const void* result,
+                                                const CommandReport& report)
+{
+    JsonMutDocument doc;
+    JsonMutValue root;
+    if (descriptor.result != nullptr)
+    {
+        Expected<JsonMutValue, ValueError> written = writeValue(doc, *descriptor.result, result);
+        if (!written)
+        {
+            return unexpected(CommandError::make(ErrorKind::Internal,
+                                                 "cannot write the result: " + written.error().message));
+        }
+        root = *written;
+    }
+    else
+    {
+        root = doc.makeObject();
+    }
+    JsonMutValue editor = root.addObject("_editor");
+    editor.add("revision", doc.makeU64(report.revision));
+    editor.add("transaction", doc.makeU64(report.transaction));
+    editor.add("dryRun", doc.makeBool(report.dryRun));
+    editor.add("operations", doc.makeU64(report.operations));
+    JsonMutValue warnings = editor.addArray("warnings");
+    for (const std::string& warning : report.warnings)
+    {
+        warnings.push(doc.makeString(warning));
+    }
+    doc.setRoot(root);
+    return compact(doc);
+}
+
+CommandError notInCommand()
+{
+    return CommandError::make(ErrorKind::Busy, "commands cannot run inside other commands");
+}
+
 } // namespace
+
+struct RunningCommand::State
+{
+    EditorContext* editor = nullptr;
+    const CommandDescriptor* descriptor = nullptr;
+    std::unique_ptr<CommandTaskBase> task; // nullptr for a dry run
+    std::optional<ReflectedObject> result;
+    NoResult noResult;
+    // Owned copies of the strings the options point to.
+    std::string origin;
+    std::string mergeKey;
+    std::string label;
+    std::string clientToken;
+    CommandOptions options;
+    CommandProgress progress;
+    CommandReport report;
+    u32 frames = 0;
+    bool finished = false;
+};
+
+RunningCommand::RunningCommand(std::unique_ptr<State> state) noexcept
+    : m_state(std::move(state))
+{
+}
+
+RunningCommand::~RunningCommand() = default;
+
+const CommandProgress& RunningCommand::progress() const noexcept
+{
+    return m_state->progress;
+}
+
+const CommandDescriptor& RunningCommand::command() const noexcept
+{
+    return *m_state->descriptor;
+}
+
+u32 RunningCommand::frames() const noexcept
+{
+    return m_state->frames;
+}
+
+Expected<std::optional<std::string>, CommandError> RunningCommand::update()
+{
+    ILL_PROFILE_SCOPE();
+    State& state = *m_state;
+    ILL_ASSERT(!state.finished, "{} already finished", state.descriptor->info.name);
+    EditorContext& editor = *state.editor;
+    if (editor.m_running)
+    {
+        return unexpected(notInCommand());
+    }
+    void* result = state.result ? state.result->data() : &state.noResult;
+    bool done = true;
+    if (state.task)
+    {
+        CommandContext context(editor, state.options, state.report);
+        editor.m_running = true;
+        Expected<bool, CommandError> advanced = state.task->advance(context, state.progress, result);
+        editor.m_running = false;
+        ++state.frames;
+        if (!advanced)
+        {
+            state.finished = true;
+            state.task.reset();
+            return unexpected(std::move(advanced).error());
+        }
+        done = *advanced;
+    }
+    else
+    {
+        state.report.dryRun = true;
+    }
+    if (!done)
+    {
+        return std::optional<std::string>{};
+    }
+    state.finished = true;
+    state.task.reset();
+    state.report.revision = editor.revision();
+    Expected<std::string, CommandError> written = writeResult(*state.descriptor, result, state.report);
+    if (!written)
+    {
+        return unexpected(std::move(written).error());
+    }
+    return std::optional<std::string>(std::move(written).value());
+}
 
 WorldEditor& CommandContext::edit() noexcept
 {
@@ -141,6 +269,7 @@ EditorContext::EditorContext(const EditorContextOptions& options)
     {
         registerCoreCommands(m_commands);
     }
+    m_commandsRevision = m_commands.revision();
     newScene();
 }
 
@@ -205,6 +334,10 @@ Expected<void, CommandError> EditorContext::openProject(const std::filesystem::p
 
 void EditorContext::sceneReplaced(std::string_view path)
 {
+    // The operations of an open transaction belong to the scene that is gone.
+    m_transaction.reset();
+    m_transactionOperations.clear();
+    m_transactionSelection.clear();
     m_index.rebuild();
     m_index.updateTransforms(true);
     m_selection.clear();
@@ -306,6 +439,11 @@ Expected<std::string, CommandError> EditorContext::sceneJson() const
 Expected<u32, CommandError> EditorContext::saveScene(std::string_view path)
 {
     ILL_PROFILE_SCOPE();
+    if (m_transaction)
+    {
+        return unexpected(CommandError::make(ErrorKind::PreconditionFailed,
+                                             "the scene cannot be saved while a transaction is open"));
+    }
     const std::string target(path.empty() ? std::string_view(m_document.path()) : path);
     if (target.empty())
     {
@@ -477,6 +615,24 @@ Expected<std::string, CommandError> EditorContext::executeJson(std::string_view 
     {
         return unexpected(unknownCommand(name));
     }
+    return executeJsonAs(*descriptor, params, options);
+}
+
+Expected<std::string, CommandError> EditorContext::executeStep(std::string_view name, JsonValue params,
+                                                               const CommandOptions& options)
+{
+    const bool nested = m_nested;
+    m_nested = m_running;
+    Expected<std::string, CommandError> result = executeJson(name, params, options);
+    m_nested = nested;
+    return result;
+}
+
+Expected<std::string, CommandError> EditorContext::executeJsonAs(const CommandDescriptor& command,
+                                                                 JsonValue params,
+                                                                 const CommandOptions& options)
+{
+    const CommandDescriptor* descriptor = &command;
     CommandOptions effective = options;
     // Commands without params or a result take NoParams and NoResult objects.
     NoParams noParams;
@@ -502,34 +658,114 @@ Expected<std::string, CommandError> EditorContext::executeJson(std::string_view 
     {
         return unexpected(std::move(ran).error());
     }
-    JsonMutDocument doc;
-    JsonMutValue root;
+    return writeResult(*descriptor, resultData, report);
+}
+
+Expected<std::unique_ptr<RunningCommand>, CommandError>
+EditorContext::startJson(std::string_view name, JsonValue params, const CommandOptions& options)
+{
+    ILL_PROFILE_SCOPE();
+    const CommandDescriptor* descriptor = m_commands.find(name);
+    if (descriptor == nullptr)
+    {
+        return unexpected(unknownCommand(name));
+    }
+    if (!descriptor->info.flags.async)
+    {
+        return unexpected(CommandError::make(
+            ErrorKind::Unsupported, std::string(name) + " is not asynchronous; run it with executeJson()"));
+    }
+    if (m_running && !m_nested)
+    {
+        return unexpected(notInCommand());
+    }
+    auto state = std::make_unique<RunningCommand::State>();
+    state->editor = this;
+    state->descriptor = descriptor;
+    CommandOptions effective = options;
+    NoParams noParams;
+    std::optional<ReflectedObject> paramObject;
+    void* paramData = &noParams;
+    if (descriptor->params != nullptr)
+    {
+        paramData = paramObject.emplace(descriptor->params).data();
+    }
+    if (Expected<void, CommandError> read = readParams(*descriptor, params, paramData, effective); !read)
+    {
+        return unexpected(std::move(read).error());
+    }
+    if (Expected<void, CommandError> admitted = admit(*descriptor, effective); !admitted)
+    {
+        return unexpected(std::move(admitted).error());
+    }
+    state->origin = std::string(effective.origin);
+    state->mergeKey = std::string(effective.mergeKey);
+    state->label = std::string(effective.label);
+    state->clientToken = std::string(effective.clientToken);
+    state->options = effective;
+    state->options.origin = state->origin;
+    state->options.mergeKey = state->mergeKey;
+    state->options.label = state->label;
+    state->options.clientToken = state->clientToken;
     if (descriptor->result != nullptr)
     {
-        Expected<JsonMutValue, ValueError> written = writeValue(doc, *descriptor->result, resultData);
-        if (!written)
+        state->result.emplace(descriptor->result);
+    }
+    const bool wasRunning = std::exchange(m_running, true);
+    const bool nested = std::exchange(m_nested, false);
+    CommandContext context(*this, state->options, state->report);
+    Expected<std::unique_ptr<CommandTaskBase>, CommandError> task = descriptor->start(context, paramData);
+    m_running = wasRunning;
+    m_nested = nested;
+    if (!task)
+    {
+        return unexpected(std::move(task).error());
+    }
+    if (!effective.dryRun)
+    {
+        state->task = std::move(task).value();
+    }
+    return std::unique_ptr<RunningCommand>(new RunningCommand(std::move(state)));
+}
+
+Expected<void, CommandError> EditorContext::admit(const CommandDescriptor& descriptor,
+                                                  const CommandOptions& options) const
+{
+    if (options.gate != nullptr)
+    {
+        if (Expected<void, CommandError> allowed = options.gate->check(descriptor); !allowed)
         {
-            return unexpected(CommandError::make(ErrorKind::Internal,
-                                                 "cannot write the result: " + written.error().message));
+            return allowed;
         }
-        root = *written;
     }
-    else
+    if (options.expectRevision && *options.expectRevision != revision())
     {
-        root = doc.makeObject();
+        return unexpected(
+            CommandError::make(ErrorKind::Conflict, "the scene is at revision " + std::to_string(revision()) +
+                                                        ", not " + std::to_string(*options.expectRevision)));
     }
-    JsonMutValue editor = root.addObject("_editor");
-    editor.add("revision", doc.makeU64(report.revision));
-    editor.add("transaction", doc.makeU64(report.transaction));
-    editor.add("dryRun", doc.makeBool(report.dryRun));
-    editor.add("operations", doc.makeU64(report.operations));
-    JsonMutValue warnings = editor.addArray("warnings");
-    for (const std::string& warning : report.warnings)
+    if (!m_transaction)
     {
-        warnings.push(doc.makeString(warning));
+        return {};
     }
-    doc.setRoot(root);
-    return compact(doc);
+    const bool owner = m_transaction->caller == options.caller;
+    const std::string open =
+        "transaction '" + m_transaction->label + "' of " + m_transaction->origin + " is open";
+    if (descriptor.info.flags.outsideTransactions)
+    {
+        CommandError error =
+            CommandError::make(owner ? ErrorKind::PreconditionFailed : ErrorKind::Busy,
+                               std::string(descriptor.info.name) + " cannot run while " + open);
+        error.retryable = !owner;
+        return unexpected(std::move(error));
+    }
+    if (descriptor.info.flags.undoable && !owner)
+    {
+        CommandError error = CommandError::make(ErrorKind::Busy, "the " + open + "; try again after it ends");
+        error.retryable = true;
+        return unexpected(std::move(error));
+    }
+    return {};
 }
 
 Expected<void, CommandError> EditorContext::run(const CommandDescriptor& descriptor, const void* params,
@@ -537,18 +773,22 @@ Expected<void, CommandError> EditorContext::run(const CommandDescriptor& descrip
                                                 CommandReport& report)
 {
     ILL_PROFILE_SCOPE();
-    if (m_running)
+    if (m_running && !m_nested)
     {
-        return unexpected(CommandError::make(ErrorKind::Busy, "commands cannot run inside other commands"));
+        return unexpected(notInCommand());
     }
-    if (options.expectRevision && *options.expectRevision != revision())
+    if (descriptor.info.flags.async)
     {
-        CommandError error =
-            CommandError::make(ErrorKind::Conflict, "the scene is at revision " + std::to_string(revision()) +
-                                                        ", not " + std::to_string(*options.expectRevision));
-        return unexpected(std::move(error));
+        return unexpected(
+            CommandError::make(ErrorKind::Unsupported, std::string(descriptor.info.name) +
+                                                           " is asynchronous; start it with startJson()"));
     }
-    m_running = true;
+    if (Expected<void, CommandError> admitted = admit(descriptor, options); !admitted)
+    {
+        return admitted;
+    }
+    const bool wasRunning = std::exchange(m_running, true);
+    const bool nested = std::exchange(m_nested, false);
     CommandContext context(*this, options, report);
     const bool undoable = descriptor.info.flags.undoable;
     const u64 selectionVersion = m_selection.version();
@@ -568,6 +808,11 @@ Expected<void, CommandError> EditorContext::run(const CommandDescriptor& descrip
             restoreSelection(selectionBefore);
             report.dryRun = options.dryRun && ran.hasValue();
         }
+        else if (m_transaction)
+        {
+            addToTransaction(m_editor.commit(),
+                             options.label.empty() ? descriptor.info.title.english() : options.label);
+        }
         else
         {
             commitStep(m_editor.commit(),
@@ -584,8 +829,192 @@ Expected<void, CommandError> EditorContext::run(const CommandDescriptor& descrip
         m_events.post("selection.changed", "{\"count\":" + std::to_string(m_selection.size()) + "}");
     }
     report.revision = revision();
-    m_running = false;
+    m_running = wasRunning;
+    m_nested = nested;
     return ran;
+}
+
+void EditorContext::addToTransaction(std::vector<Operation> operations, std::string_view label)
+{
+    if (operations.empty())
+    {
+        m_changes.discardPending();
+        return;
+    }
+    if (!m_transaction->trial)
+    {
+        m_journal.writeOperations(label, operations);
+    }
+    m_transactionOperations.insert(m_transactionOperations.end(), std::make_move_iterator(operations.begin()),
+                                   std::make_move_iterator(operations.end()));
+    ++m_transaction->commands;
+    m_transaction->operations = m_transactionOperations.size();
+    transactionChanged(m_transaction->trial);
+}
+
+void EditorContext::transactionChanged(bool trial)
+{
+    if (trial)
+    {
+        // A trial keeps its changes pending, so the revision stays and nothing is announced.
+        m_index.updateTransforms();
+    }
+    else
+    {
+        afterChange(false);
+    }
+}
+
+Expected<void, CommandError> EditorContext::beginTransaction(std::string_view label,
+                                                             const CommandOptions& options)
+{
+    if (m_transaction)
+    {
+        const bool owner = m_transaction->caller == options.caller;
+        CommandError error =
+            CommandError::make(owner ? ErrorKind::PreconditionFailed : ErrorKind::Busy,
+                               "transaction '" + m_transaction->label + "' of " + m_transaction->origin +
+                                   " is already open" + (owner ? "; commit or cancel it first" : ""));
+        error.retryable = !owner;
+        return unexpected(std::move(error));
+    }
+    m_transaction = TransactionInfo{
+        .label = label.empty() ? std::string("Transaction") : std::string(label),
+        .origin = std::string(options.origin),
+        .caller = options.caller,
+        .commands = 0,
+        .operations = 0,
+        .trial = options.dryRun,
+    };
+    m_transactionOperations.clear();
+    m_transactionSelection.assign(m_selection.items().begin(), m_selection.items().end());
+    return {};
+}
+
+Expected<void, CommandError> EditorContext::ownTransaction(const CommandOptions& options) const
+{
+    if (!m_transaction)
+    {
+        return unexpected(CommandError::make(ErrorKind::PreconditionFailed, "no transaction is open"));
+    }
+    if (m_transaction->caller != options.caller)
+    {
+        return unexpected(
+            CommandError::make(ErrorKind::PreconditionFailed, "transaction '" + m_transaction->label +
+                                                                  "' belongs to " + m_transaction->origin));
+    }
+    return {};
+}
+
+Expected<u64, CommandError> EditorContext::commitTransaction(const CommandOptions& options)
+{
+    if (Expected<void, CommandError> owned = ownTransaction(options); !owned)
+    {
+        return unexpected(std::move(owned).error());
+    }
+    if (m_transaction->trial)
+    {
+        return unexpected(CommandError::make(ErrorKind::PreconditionFailed,
+                                             "a transaction of a dry run can only be cancelled"));
+    }
+    TransactionInfo info = std::move(*m_transaction);
+    m_transaction.reset();
+    std::vector<Operation> operations = std::move(m_transactionOperations);
+    m_transactionOperations.clear();
+    if (operations.empty())
+    {
+        return u64{0};
+    }
+    UndoStep step;
+    step.label = std::move(info.label);
+    step.origin = std::move(info.origin);
+    step.operations = std::move(operations);
+    step.selectionBefore = std::move(m_transactionSelection);
+    step.selectionAfter.assign(m_selection.items().begin(), m_selection.items().end());
+    m_transactionSelection.clear();
+    const u64 id = pushStep(std::move(step));
+    m_events.post("history.changed", "{\"position\":" + std::to_string(m_history.position()) +
+                                         ",\"steps\":" + std::to_string(m_history.steps().size()) + "}");
+    return id;
+}
+
+Expected<void, CommandError> EditorContext::cancelTransaction(const CommandOptions& options)
+{
+    if (Expected<void, CommandError> owned = ownTransaction(options); !owned)
+    {
+        return owned;
+    }
+    // A failed revert puts everything back, and the transaction stays open.
+    const bool trial = m_transaction->trial;
+    if (Expected<void, CommandError> reverted =
+            applyOperations(m_transactionOperations, false, trial ? "" : "Cancel " + m_transaction->label);
+        !reverted)
+    {
+        return reverted;
+    }
+    const bool changed = !m_transactionOperations.empty();
+    const std::vector<EntityGuid> selection = std::move(m_transactionSelection);
+    m_transaction.reset();
+    m_transactionOperations.clear();
+    m_transactionSelection.clear();
+    restoreSelection(selection);
+    if (trial)
+    {
+        m_index.updateTransforms();
+        m_changes.discardPending();
+    }
+    else if (changed)
+    {
+        afterChange(false);
+    }
+    return {};
+}
+
+bool EditorContext::abandonTransaction(u64 caller)
+{
+    if (!m_transaction || m_transaction->caller != caller)
+    {
+        return false;
+    }
+    ILL_LOG_INFO("Editor", "Cancelling transaction '{}' of {}: its client is gone", m_transaction->label,
+                 m_transaction->origin);
+    CommandOptions options;
+    options.caller = caller;
+    if (Expected<void, CommandError> cancelled = cancelTransaction(options); !cancelled)
+    {
+        ILL_LOG_ERROR("Editor", "Cannot cancel the transaction: {}", cancelled.error().message);
+    }
+    return true;
+}
+
+Expected<void, CommandError> EditorContext::rollbackTransactionTo(usize operations)
+{
+    if (!m_transaction)
+    {
+        return unexpected(CommandError::make(ErrorKind::PreconditionFailed, "no transaction is open"));
+    }
+    if (operations > m_transactionOperations.size())
+    {
+        return unexpected(CommandError::invalid(
+            "/operations", "must be at most " + std::to_string(m_transactionOperations.size())));
+    }
+    if (operations == m_transactionOperations.size())
+    {
+        return {};
+    }
+    const std::span<const Operation> tail =
+        std::span<const Operation>(m_transactionOperations).subspan(operations);
+    const bool trial = m_transaction->trial;
+    if (Expected<void, CommandError> reverted =
+            applyOperations(tail, false, trial ? "" : "Roll back " + m_transaction->label);
+        !reverted)
+    {
+        return reverted;
+    }
+    m_transactionOperations.resize(operations);
+    m_transaction->operations = operations;
+    transactionChanged(trial);
+    return {};
 }
 
 void EditorContext::commitStep(std::vector<Operation> operations, std::string_view label,
@@ -605,6 +1034,12 @@ void EditorContext::commitStep(std::vector<Operation> operations, std::string_vi
     step.operations = std::move(operations);
     step.selectionBefore = std::move(selectionBefore);
     step.selectionAfter.assign(m_selection.items().begin(), m_selection.items().end());
+    report.transaction = pushStep(std::move(step));
+    afterChange();
+}
+
+u64 EditorContext::pushStep(UndoStep step)
+{
     const UndoPushResult pushed = m_history.push(std::move(step));
     if (pushed.trimmed > 0)
     {
@@ -612,17 +1047,19 @@ void EditorContext::commitStep(std::vector<Operation> operations, std::string_vi
                      pushed.trimmed);
         m_events.post("history.trimmed", "{\"steps\":" + std::to_string(pushed.trimmed) + "}");
     }
-    report.transaction = m_history.undoStep()->id;
-    afterChange();
+    return m_history.undoStep()->id;
 }
 
-void EditorContext::afterChange()
+void EditorContext::afterChange(bool historyChanged)
 {
     m_index.updateTransforms();
     m_changes.endRevision();
     m_events.post("scene.changed", "{\"revision\":" + std::to_string(revision()) + "}");
-    m_events.post("history.changed", "{\"position\":" + std::to_string(m_history.position()) +
-                                         ",\"steps\":" + std::to_string(m_history.steps().size()) + "}");
+    if (historyChanged)
+    {
+        m_events.post("history.changed", "{\"position\":" + std::to_string(m_history.position()) +
+                                             ",\"steps\":" + std::to_string(m_history.steps().size()) + "}");
+    }
 }
 
 void EditorContext::restoreSelection(std::span<const EntityGuid> guids)
@@ -638,36 +1075,143 @@ void EditorContext::restoreSelection(std::span<const EntityGuid> guids)
     m_selection.set(alive);
 }
 
-Expected<void, CommandError> EditorContext::applyStep(const UndoStep& step, bool forward)
+Expected<void, CommandError> EditorContext::applyOperations(std::span<const Operation> operations,
+                                                            bool forward, std::string_view label)
 {
     std::vector<Operation> applied;
-    const usize count = step.operations.size();
+    const usize count = operations.size();
     for (usize i = 0; i < count; ++i)
     {
-        Operation operation = forward ? step.operations[i] : inverted(step.operations[count - 1 - i]);
+        Operation operation = forward ? operations[i] : inverted(operations[count - 1 - i]);
         if (Expected<void, CommandError> done = m_editor.apply(operation); !done)
         {
-            // Put back what this step changed so far; the history stays where it was.
+            // Put back what was changed so far; the caller keeps its state.
             for (auto it = applied.rbegin(); it != applied.rend(); ++it)
             {
                 (void)m_editor.apply(inverted(*it));
             }
             m_changes.discardPending();
-            ILL_LOG_ERROR("Editor", "{} '{}' failed: {}", forward ? "Redo of" : "Undo of", step.label,
-                          done.error().message);
-            return unexpected(CommandError::make(ErrorKind::Internal,
-                                                 std::string(forward ? "redo" : "undo") + " of '" +
-                                                     step.label + "' failed: " + done.error().message));
+            ILL_LOG_ERROR("Editor", "{} failed: {}", label, done.error().message);
+            return unexpected(CommandError::make(
+                ErrorKind::Internal, "'" + std::string(label) + "' failed: " + done.error().message));
         }
         applied.push_back(std::move(operation));
     }
-    m_journal.writeOperations((forward ? "Redo " : "Undo ") + step.label, applied);
+    if (!label.empty())
+    {
+        m_journal.writeOperations(label, applied);
+    }
+    return {};
+}
+
+Expected<void, CommandError> EditorContext::applyStep(const UndoStep& step, bool forward)
+{
+    if (Expected<void, CommandError> applied =
+            applyOperations(step.operations, forward, (forward ? "Redo " : "Undo ") + step.label);
+        !applied)
+    {
+        return applied;
+    }
     restoreSelection(forward ? step.selectionAfter : step.selectionBefore);
     return {};
 }
 
+Expected<std::vector<usize>, CommandError> EditorContext::planUndoOwn(u32 steps,
+                                                                      std::string_view origin) const
+{
+    // Undoing a step that is independent of the later ones is the same as moving it to the top first, so
+    // each planned step leaves the order of the others as it is.
+    const std::span<const UndoStep> history = m_history.steps();
+    std::vector<usize> applied(m_history.position());
+    for (usize i = 0; i < applied.size(); ++i)
+    {
+        applied[i] = i;
+    }
+    std::vector<usize> planned;
+    while (planned.size() < steps)
+    {
+        auto own = std::find_if(applied.rbegin(), applied.rend(),
+                                [&](usize index) { return history[index].origin == origin; });
+        if (own == applied.rend())
+        {
+            break;
+        }
+        const auto position = std::prev(own.base());
+        const UndoStep& step = history[*position];
+        for (auto later = std::next(position); later != applied.end(); ++later)
+        {
+            const UndoStep& other = history[*later];
+            if (std::optional<std::string> overlap = findOverlap(step.operations, other.operations))
+            {
+                CommandError error = CommandError::make(
+                    ErrorKind::Conflict, "cannot undo '" + step.label + "': the later step '" + other.label +
+                                             "' of " + other.origin + " also changed " + *overlap);
+                return unexpected(std::move(error));
+            }
+        }
+        planned.push_back(*position);
+        applied.erase(position);
+    }
+    return planned;
+}
+
+Expected<u32, CommandError> EditorContext::checkUndoOwn(u32 steps, std::string_view origin) const
+{
+    Expected<std::vector<usize>, CommandError> planned = planUndoOwn(steps, origin);
+    if (!planned)
+    {
+        return unexpected(std::move(planned).error());
+    }
+    return static_cast<u32>(planned->size());
+}
+
+Expected<u32, CommandError> EditorContext::undoOwn(u32 steps, std::string_view origin)
+{
+    if (m_transaction)
+    {
+        return unexpected(CommandError::make(ErrorKind::PreconditionFailed,
+                                             "undo is not possible while a transaction is open"));
+    }
+    Expected<std::vector<usize>, CommandError> planned = planUndoOwn(steps, origin);
+    if (!planned)
+    {
+        return unexpected(std::move(planned).error());
+    }
+    u32 done = 0;
+    for (; done < planned->size(); ++done)
+    {
+        // The plan names indices before any step moved; the last own applied step is always the next one.
+        const std::span<const UndoStep> history = m_history.steps();
+        usize index = m_history.position();
+        while (history[index - 1].origin != origin)
+        {
+            --index;
+        }
+        m_history.moveToTop(index - 1);
+        if (Expected<void, CommandError> applied = applyStep(*m_history.undoStep(), false); !applied)
+        {
+            if (done > 0)
+            {
+                afterChange();
+            }
+            return unexpected(std::move(applied).error());
+        }
+        m_history.stepBack();
+    }
+    if (done > 0)
+    {
+        afterChange();
+    }
+    return done;
+}
+
 Expected<u32, CommandError> EditorContext::undo(u32 steps)
 {
+    if (m_transaction)
+    {
+        return unexpected(CommandError::make(ErrorKind::PreconditionFailed,
+                                             "undo is not possible while a transaction is open"));
+    }
     u32 done = 0;
     for (; done < steps; ++done)
     {
@@ -695,6 +1239,11 @@ Expected<u32, CommandError> EditorContext::undo(u32 steps)
 
 Expected<u32, CommandError> EditorContext::redo(u32 steps)
 {
+    if (m_transaction)
+    {
+        return unexpected(CommandError::make(ErrorKind::PreconditionFailed,
+                                             "redo is not possible while a transaction is open"));
+    }
     u32 done = 0;
     for (; done < steps; ++done)
     {
@@ -766,6 +1315,12 @@ usize EditorContext::clearHistory()
 void EditorContext::endFrame(f64 deltaSeconds)
 {
     ILL_PROFILE_SCOPE();
+    if (m_commands.revision() != m_commandsRevision)
+    {
+        m_commandsRevision = m_commands.revision();
+        m_events.post("commands.changed",
+                      "{\"commands\":" + std::to_string(m_commands.commands().size()) + "}");
+    }
     m_events.flush();
     m_journal.flush();
     if (m_project && m_options.autosaveInterval > 0.0 && dirty())

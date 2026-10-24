@@ -78,6 +78,17 @@ selection, files, history) is a command; panels, shortcuts, RPC and MCP all call
 {"entities": ["$selection"], "offset": [0, 1, 0], "space": "self", "mergeKey": "gizmo-drag"}
 ```
 
+- **Transactions** (`TransactionCommands.cpp`): undoable commands need nothing for them; inside an open
+  transaction their operations join it. Set `.flags = {.outsideTransactions = true}` on a command that replaces
+  or saves the scene or moves through the history; such commands are refused while a transaction is open.
+- **Batches** (`EditorCommands.cpp`): a command that runs others goes through `context.editor().executeStep()`
+  with the caller's `origin`, `caller` and `gate`, inside `beginTransaction()` or a savepoint
+  (`rollbackTransactionTo()`).
+- **Async commands** (`editor.wait`): the handler validates and returns a `CommandTask<Result>` whose
+  `update()` runs once per frame, fills `CommandProgress` and returns the result when done; register it with
+  `registry.addAsync<&fn>({...})`. They cannot be undoable, and the generic tests run them through
+  `test::run()`, which advances them to the end.
+
 A new settings type needs no command: reflect the struct and register it.
 
 ```cpp

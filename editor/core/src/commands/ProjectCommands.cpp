@@ -341,7 +341,7 @@ void registerProjectCommands(CommandRegistry& registry)
             "\"template\":\"empty\"}.",
         .category = "Project",
         .icon = "create_new_folder",
-        .flags = {},
+        .flags = {.outsideTransactions = true},
         .permission = PermissionClass::Files,
         .palette = true,
     });
@@ -354,7 +354,7 @@ void registerProjectCommands(CommandRegistry& registry)
             "Example: {\"directory\":\"tetris\"}.",
         .category = "Project",
         .icon = "folder_open",
-        .flags = {},
+        .flags = {.outsideTransactions = true},
         .permission = PermissionClass::System,
         .palette = true,
     });
@@ -445,7 +445,7 @@ void registerProjectCommands(CommandRegistry& registry)
             "top of the scene it started from. Example: {} (the newest journal).",
         .category = "Project",
         .icon = "restore",
-        .flags = {},
+        .flags = {.outsideTransactions = true},
         .permission = PermissionClass::Edit,
         .palette = true,
     });

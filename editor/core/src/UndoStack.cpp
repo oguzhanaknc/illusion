@@ -1,5 +1,8 @@
 #include <illusion/editor/core/UndoStack.hpp>
 
+#include <algorithm>
+#include <cstddef>
+
 namespace illusion::editor
 {
 namespace
@@ -122,6 +125,16 @@ void UndoStack::stepForward() noexcept
         ++m_position;
         m_sealed = true;
     }
+}
+
+void UndoStack::moveToTop(usize index) noexcept
+{
+    if (index < m_position)
+    {
+        const auto first = m_steps.begin() + static_cast<std::ptrdiff_t>(index);
+        std::rotate(first, first + 1, m_steps.begin() + static_cast<std::ptrdiff_t>(m_position));
+    }
+    m_sealed = true;
 }
 
 usize UndoStack::clear() noexcept

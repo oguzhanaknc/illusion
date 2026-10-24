@@ -1150,6 +1150,21 @@ Expected<void, CommandError> WorldEditor::setParent(Entity entity, Entity parent
                                      "the new parent is the entity itself or one of its descendants")
                 : CommandError::make(ErrorKind::NotFound, "the entity or its new parent does not exist"));
     }
+    // A child's Transform is derived from its parent after every change. Derive it now, so that the operation
+    // records the change: undo then restores the Transform the entity had as a root bit for bit, instead of
+    // leaving the derived value (which rounding makes slightly different even when the world placement is
+    // kept).
+    if (!parent.isNull())
+    {
+        const LocalTransform* local = m_world->tryGet<LocalTransform>(entity);
+        Transform* transform = m_world->tryGet<Transform>(entity);
+        if (local != nullptr && transform != nullptr)
+        {
+            const Transform* parentTransform = m_world->tryGet<Transform>(parent);
+            *transform =
+                combine(parentTransform != nullptr ? *parentTransform : Transform{}, local->asTransform());
+        }
+    }
     finish(watches);
     return {};
 }

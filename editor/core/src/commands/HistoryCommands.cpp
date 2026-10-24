@@ -12,10 +12,25 @@ HistoryResult historyResult(EditorContext& editor, u32 steps)
     return HistoryResult{steps, static_cast<u32>(editor.history().position()), editor.revision()};
 }
 
-Expected<HistoryResult, CommandError> historyUndo(CommandContext& context, const HistoryStepParams& params)
+Expected<HistoryResult, CommandError> historyUndo(CommandContext& context, const HistoryUndoParams& params)
 {
     EditorContext& editor = context.editor();
     const u32 steps = params.steps.value_or(1);
+    const std::string scope = params.scope.value_or("all");
+    if (scope != "all" && scope != "mine")
+    {
+        return unexpected(CommandError::invalid("/scope", "must be \"all\" or \"mine\""));
+    }
+    if (scope == "mine")
+    {
+        Expected<u32, CommandError> undone = context.dryRun() ? editor.checkUndoOwn(steps, context.origin())
+                                                              : editor.undoOwn(steps, context.origin());
+        if (!undone)
+        {
+            return unexpected(std::move(undone).error());
+        }
+        return historyResult(editor, *undone);
+    }
     if (context.dryRun())
     {
         return historyResult(editor, std::min(steps, static_cast<u32>(editor.history().position())));
@@ -102,11 +117,14 @@ void registerHistoryCommands(CommandRegistry& registry)
         .name = "history.undo",
         .title = strings::kCommandHistoryUndoTitle,
         .description = strings::kCommandHistoryUndoDescription,
-        .agentSummary = "Undoes the last steps (default 1) and restores the selection before them. Example: "
-                        "{\"steps\": 2}.",
+        .agentSummary =
+            "Undoes the last steps (default 1) and restores the selection before them. With scope "
+            "\"mine\" it undoes the caller's own last steps even if others edited later, unless "
+            "their steps touched the same Components (conflict). Example: {\"steps\": 2, "
+            "\"scope\": \"mine\"}.",
         .category = "History",
         .icon = "undo",
-        .flags = {},
+        .flags = {.outsideTransactions = true},
         .permission = PermissionClass::Edit,
         .palette = true,
         .defaultShortcut = "Ctrl+Z",
@@ -118,7 +136,7 @@ void registerHistoryCommands(CommandRegistry& registry)
         .agentSummary = "Redoes undone steps (default 1). Example: {}.",
         .category = "History",
         .icon = "redo",
-        .flags = {},
+        .flags = {.outsideTransactions = true},
         .permission = PermissionClass::Edit,
         .palette = true,
         .defaultShortcut = "Ctrl+Y",
@@ -142,7 +160,7 @@ void registerHistoryCommands(CommandRegistry& registry)
                         "Example: {\"position\": 3}.",
         .category = "History",
         .icon = "manage_history",
-        .flags = {.idempotent = true},
+        .flags = {.idempotent = true, .outsideTransactions = true},
         .permission = PermissionClass::Edit,
     });
     registry.add<&historyClear>({
@@ -152,7 +170,7 @@ void registerHistoryCommands(CommandRegistry& registry)
         .agentSummary = "Forgets every undo step (the scene is unchanged). Example: {}.",
         .category = "History",
         .icon = "delete_history",
-        .flags = {.destructive = true, .idempotent = true},
+        .flags = {.destructive = true, .idempotent = true, .outsideTransactions = true},
         .permission = PermissionClass::Destructive,
     });
 }

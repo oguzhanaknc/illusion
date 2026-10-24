@@ -23,6 +23,7 @@ void registerComponentCommands(CommandRegistry& registry);
 void registerHierarchyCommands(CommandRegistry& registry);
 void registerSelectionCommands(CommandRegistry& registry);
 void registerHistoryCommands(CommandRegistry& registry);
+void registerTransactionCommands(CommandRegistry& registry);
 void registerTransformCommands(CommandRegistry& registry);
 void registerClipboardCommands(CommandRegistry& registry);
 void registerAssetCommands(CommandRegistry& registry);

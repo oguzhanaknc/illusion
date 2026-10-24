@@ -79,6 +79,16 @@ void randomCommand(EditorContext& editor, std::mt19937& random)
         name = "entity.duplicate";
         params = R"({"entities":[")" + pick() + R"("]})";
         break;
+    case 10:
+        // A batch whose later steps use the first one's result; a failing last step reverts all of it.
+        name = "editor.batch";
+        params = R"({"atomic":)" + std::string(random() % 2 == 0 ? "true" : "false") +
+                 R"(,"steps":[{"as":"made","method":"entity.create","params":{"name":"B)" + number(100) +
+                 R"(","parent":")" + pick() + R"("}},{"method":"component.add","params":{"entity":)" +
+                 R"("$made.entity.id","type":"test.Link","value":{"target":")" + pick() +
+                 R"("}}},{"method":"hierarchy.set_parent","params":{"entity":")" + pick() +
+                 R"(","parent":"$made.entity.id"}}]})";
+        break;
     case 11:
     {
         constexpr std::string_view spaces[] = {"world", "local", "self"};
@@ -126,7 +136,16 @@ TEST_CASE("undoing 2000 random commands restores the scene byte for byte, and re
     std::mt19937 random(1234);
     for (int i = 0; i < 2000; ++i)
     {
+        // Some commands run inside transactions, which end committed or cancelled.
+        if (i % 50 == 0)
+        {
+            ok(editor, "transaction.begin", R"({"label":"Group"})");
+        }
         randomCommand(editor, random);
+        if (i % 50 == 9)
+        {
+            ok(editor, random() % 3 == 0 ? "transaction.cancel" : "transaction.commit");
+        }
         if (i % 100 == 0)
         {
             editor.endFrame(1.0 / 60.0);
@@ -261,4 +280,26 @@ TEST_CASE("change events and the change journal follow commits, undos and redos"
     test::fails(editor, "entity.rename", R"({"entity":"/Nope","name":"x"})");
     ok(editor, "entity.create", R"({"name":"C","dryRun":true})");
     CHECK(editor.revision() == start + 3);
+}
+
+TEST_CASE("undoing a move under a rotated parent restores the root's Transform bit for bit")
+{
+    EditorFixture fixture;
+    EditorContext& editor = *fixture.editor;
+    ok(editor, "entity.create",
+       R"({"name":"Parent","components":{"illusion.Transform":{"position":[3.3,1.1,-7.7],)"
+       R"("rotation":[0.13,0.61566186,0.05,0.77]}}})");
+    for (int i = 0; i < 20; ++i)
+    {
+        CAPTURE(i);
+        const std::string name = "Root " + std::to_string(i);
+        ok(editor, "entity.create",
+           R"({"name":")" + name + R"(","components":{"illusion.Transform":{"position":[)" +
+               std::to_string(2.740831 + i * 0.37) +
+               R"(,-14,26.94212],"rotation":[0,-0.9832555,0,-0.18223594]}}})");
+        const std::string before = fixture.scene();
+        ok(editor, "hierarchy.set_parent", R"({"entity":"/)" + name + R"(","parent":"/Parent"})");
+        REQUIRE(editor.undo().value() == 1);
+        CHECK(fixture.scene() == before);
+    }
 }

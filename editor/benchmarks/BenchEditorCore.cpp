@@ -177,3 +177,69 @@ ILL_BENCHMARK("editor/reference-refresh", 160'000.0)
     std::error_code ignored;
     std::filesystem::remove_all(root, ignored);
 }
+
+// editor.batch of 100 component.set steps that name their entity through a $ reference to the first step's
+// result, as one transaction and undo step, then undone, per step. Budget about 6x the 8.0 us measured on a
+// desktop (Release, MSVC).
+ILL_BENCHMARK("editor/batch-step", 50'000.0)
+{
+    EditorContext editor(EditorContextOptions{.seed = 6, .crashJournal = false});
+    createEntity(editor, "Target", Entity{});
+    std::string steps = R"([{"as":"target","method":"entity.get","params":{"entity":"name:Target"}})";
+    for (int i = 0; i < 100; ++i)
+    {
+        steps += std::format(R"(,{{"method":"component.set","params":{{"entity":"$target.entity.id",)"
+                             R"("type":"illusion.Transform","value":{{"position":[{},0,0]}}}}}})",
+                             i);
+    }
+    steps += ']';
+    BatchParams params;
+    Expected<JsonDocument, JsonError> parsed = JsonDocument::parse(steps);
+    ILL_CHECK(parsed.hasValue(), "invalid benchmark steps");
+    for (const JsonValue step : parsed->root().elements())
+    {
+        BatchStep batchStep;
+        batchStep.as = step.find("as").asString().has_value()
+                           ? std::optional<std::string>(std::string(*step.find("as").asString()))
+                           : std::nullopt;
+        batchStep.method = std::string(step.find("method").asString().value_or(""));
+        batchStep.params = JsonText{step.find("params").dump()};
+        params.steps.push_back(std::move(batchStep));
+    }
+    bench.batch(101).unit("step").run("editor.batch (101 steps with $ references) + undo", [&] {
+        Expected<BatchResult, CommandError> result = editor.execute<BatchResult>("editor.batch", params);
+        ILL_CHECK(result.hasValue() && result->steps.size() == 101, "batch failed");
+        Expected<u32, CommandError> undone = editor.undo(1);
+        ILL_CHECK(undone.hasValue() && *undone == 1, "undo failed");
+    });
+}
+
+// Checking whether the last step of one origin can be undone past 1,000 later steps of another origin that
+// changed other entities (history.undo {scope: "mine"}), per later step. Budget about 6x the 0.65 us
+// measured on a desktop.
+ILL_BENCHMARK("editor/undo-own-check", 4'000.0)
+{
+    EditorContext editor(EditorContextOptions{.seed = 7, .crashJournal = false});
+    createEntity(editor, "Mine", Entity{});
+    createEntity(editor, "Theirs", Entity{});
+    ComponentSetParams params;
+    params.entity = "name:Mine";
+    params.type = "illusion.Transform";
+    params.value.text = R"({"position":[4,5,6]})";
+    CommandOptions mine;
+    mine.origin = "rpc:me";
+    ILL_CHECK(editor.execute<ComponentChangeResult>("component.set", params, mine).hasValue(), "set failed");
+    params.entity = "name:Theirs";
+    CommandOptions theirs;
+    theirs.origin = "rpc:other";
+    for (int i = 0; i < 1000; ++i)
+    {
+        params.value.text = std::format(R"({{"position":[{},0,0]}})", i);
+        ILL_CHECK(editor.execute<ComponentChangeResult>("component.set", params, theirs).hasValue(),
+                  "set failed");
+    }
+    bench.batch(1000).unit("step").run("EditorContext::checkUndoOwn (past 1000 steps)", [&] {
+        Expected<u32, CommandError> steps = editor.checkUndoOwn(1, "rpc:me");
+        ILL_CHECK(steps.hasValue() && *steps == 1, "the check failed");
+    });
+}

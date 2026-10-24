@@ -154,11 +154,15 @@ Plan: `docs/plans/m7-editor.md` (sub-milestones, command API, localization, them
   `TranscriptRunner` with captures and matchers), `illusion_ctl` (`call`, `batch`, `subscribe`, `replay`,
   `check`, `dump-catalog`), the Python client and the acceptance skeleton with the board scenario (C1, C3, C4;
   ADR 0038)
-- M7j-2: async commands with `rpc.progress` and `rpc.cancel`, `editor.batch` with `$` references,
-  per-connection transactions (`transaction.begin/commit/cancel`), `history.undo {scope: "mine"}`,
-  `commands.changed` and approval prompts for the ask mode once a window exists
+- M7j-2: ✅ Transactions that span commands (`transaction.begin/commit/cancel`, owned by a caller: one per
+  RPC connection, cancelled when it closes; trial transactions for dry runs), `editor.batch` with `$`
+  references and atomic or partial runs, `history.undo {scope: "mine"}` past independent later steps
+  (`findOverlap()`, `conflict` otherwise), async commands (`addAsync`, `RunningCommand`, `editor.wait`) with
+  `rpc.progress` and `rpc.cancel`, permission checks for every batch step (`CommandGate`), `commands.changed`
+  with a rebuilt method catalogue, and protocol version 0.2.0 (ADR 0036 and 0037 addenda)
 - M7k: MCP bridge `illusion_mcp` with tools generated from editor commands (ADR 0039)
-- M7l: Editor shell: layouts, menus, command palette, console, history, AI activity, preferences
+- M7l: Editor shell: layouts, menus, command palette, console, history, AI activity, preferences; approval
+  prompts for the `ask` permission mode (moved from M7j-2: they need a window)
 - M7m: Outliner and Inspector
 - M7n: Renderer extension points: entity ids, debug draw, orthographic cameras, view targets (ADR 0040)
 - M7o: Viewports: editor camera, grid, selection outline, picking, overlays

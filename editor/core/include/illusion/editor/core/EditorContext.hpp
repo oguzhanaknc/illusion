@@ -70,6 +70,10 @@ struct CommandOptions
     /// Idempotency key of an RPC client: the RPC server answers a repeated token with the first result.
     /// EditorContext only validates it.
     std::string_view clientToken{};
+    /// Who owns transactions begun by this call: an RPC connection id, or 0 for the editor itself. While a
+    /// transaction is open, only its caller may run undoable commands.
+    u64 caller = 0;
+    const CommandGate* gate = nullptr; ///< Decides which commands may run (nullptr: all).
 };
 
 /// Facts about the last command, returned in the `_editor` member of JSON results.
@@ -110,6 +114,12 @@ public:
     /// The origin of the call, e.g. "ui".
     [[nodiscard]] std::string_view origin() const noexcept { return m_options->origin; }
 
+    /// The options of the call.
+    [[nodiscard]] const CommandOptions& options() const noexcept { return *m_options; }
+
+    /// The report that becomes the `_editor` member of the result.
+    [[nodiscard]] CommandReport& report() noexcept { return *m_report; }
+
     /// Resolves an entity reference at JSON Pointer @p pointer of the params.
     [[nodiscard]] Expected<Entity, CommandError> entity(std::string_view reference, std::string_view pointer);
 
@@ -131,6 +141,51 @@ private:
     EditorContext* m_editor;
     const CommandOptions* m_options;
     CommandReport* m_report;
+};
+
+/// The open transaction of an EditorContext (see EditorContext::beginTransaction()).
+struct TransactionInfo
+{
+    std::string label;    ///< Label of the undo step it becomes.
+    std::string origin;   ///< Origin of the call that began it, e.g. "rpc:agent".
+    u64 caller = 0;       ///< CommandOptions::caller that owns it.
+    u32 commands = 0;     ///< Commands that changed something in it.
+    usize operations = 0; ///< Primitive operations applied in it.
+    /// Begun by a dry run (CommandOptions::dryRun): its changes keep the revision, are not announced or
+    /// journaled, and it can only be cancelled.
+    bool trial = false;
+};
+
+/// An async command started by EditorContext::startJson(). Advance it once per frame on the editor's thread
+/// with update() until it returns a result or an error; destroy it earlier to cancel the command. The
+/// EditorContext must outlive it.
+class RunningCommand : NonCopyable
+{
+public:
+    /// Cancels the command if it has not finished.
+    ~RunningCommand();
+
+    /// Advances the command by one frame. Returns its result (compact JSON with an `_editor` member) once it
+    /// finished, std::nullopt while it runs, or the error that ended it. Do not call it again after a result
+    /// or an error, nor from inside a command.
+    [[nodiscard]] Expected<std::optional<std::string>, CommandError> update();
+
+    /// Its progress after the last update().
+    [[nodiscard]] const CommandProgress& progress() const noexcept;
+
+    /// The command.
+    [[nodiscard]] const CommandDescriptor& command() const noexcept;
+
+    /// Frames it has been advanced.
+    [[nodiscard]] u32 frames() const noexcept;
+
+private:
+    friend class EditorContext;
+    struct State;
+
+    explicit RunningCommand(std::unique_ptr<State> state) noexcept;
+
+    std::unique_ptr<State> m_state;
 };
 
 /// What EditorContext::recover() did.
@@ -238,7 +293,10 @@ public:
     [[nodiscard]] u64 revision() const noexcept { return m_changes.revision(); }
 
     /// True if the scene has changes that are not saved.
-    [[nodiscard]] bool dirty() const noexcept { return m_document.dirty(m_history.stateId()); }
+    [[nodiscard]] bool dirty() const noexcept
+    {
+        return !m_transactionOperations.empty() || m_document.dirty(m_history.stateId());
+    }
 
     /// Replaces the scene with an empty, untitled one.
     void newScene();
@@ -289,8 +347,55 @@ public:
     [[nodiscard]] Expected<void, CommandError> readParams(const CommandDescriptor& descriptor, JsonValue json,
                                                           void* params, CommandOptions& options) const;
 
+    /// Starts the async command @p name with JSON params (see executeJson()). It runs when the returned
+    /// object is advanced (RunningCommand::update()). A dry run validates, starts no work and finishes at the
+    /// first update with the default result.
+    [[nodiscard]] Expected<std::unique_ptr<RunningCommand>, CommandError>
+    startJson(std::string_view name, JsonValue params, const CommandOptions& options = {});
+
+    /// Runs command @p name with JSON params from inside another command, e.g. a step of `editor.batch`.
+    /// Like executeJson() otherwise; outside a command it is the same.
+    [[nodiscard]] Expected<std::string, CommandError> executeStep(std::string_view name, JsonValue params,
+                                                                  const CommandOptions& options);
+
+    /// Begins a transaction owned by @p options.caller: the undoable commands of that caller then become one
+    /// undo step labelled @p label, made by commitTransaction(), or are reverted by cancelTransaction(). With
+    /// @p options.dryRun it is a trial (TransactionInfo::trial).
+    /// While it is open, undoable commands of other callers fail with Busy and commands flagged
+    /// CommandFlags::outsideTransactions fail for everyone. Fails if a transaction is open.
+    [[nodiscard]] Expected<void, CommandError> beginTransaction(std::string_view label,
+                                                                const CommandOptions& options);
+
+    /// Ends the transaction of @p options.caller as one undo step. Returns the step's id (0 if nothing
+    /// changed).
+    [[nodiscard]] Expected<u64, CommandError> commitTransaction(const CommandOptions& options);
+
+    /// Reverts what the transaction of @p options.caller changed (and the selection) and ends it.
+    [[nodiscard]] Expected<void, CommandError> cancelTransaction(const CommandOptions& options);
+
+    /// Cancels the open transaction if @p caller owns it (its connection closed). True if there was one.
+    bool abandonTransaction(u64 caller);
+
+    /// The open transaction, or nullptr.
+    [[nodiscard]] const TransactionInfo* transaction() const noexcept
+    {
+        return m_transaction ? &*m_transaction : nullptr;
+    }
+
+    /// Reverts the operations of the open transaction after the first @p operations of it (a savepoint taken
+    /// from TransactionInfo::operations), e.g. when an atomic `editor.batch` inside it fails.
+    [[nodiscard]] Expected<void, CommandError> rollbackTransactionTo(usize operations);
+
     /// Undoes up to @p steps steps; returns how many were undone.
     [[nodiscard]] Expected<u32, CommandError> undo(u32 steps = 1);
+
+    /// Undoes up to @p steps of the latest steps made by @p origin, even when steps of other origins came
+    /// after them, and returns how many were undone. Fails with Conflict, changing nothing, when one of them
+    /// overlaps a later step of another origin (findOverlap()).
+    [[nodiscard]] Expected<u32, CommandError> undoOwn(u32 steps, std::string_view origin);
+
+    /// The number of steps undoOwn() would undo, or its Conflict error, without changing anything.
+    [[nodiscard]] Expected<u32, CommandError> checkUndoOwn(u32 steps, std::string_view origin) const;
 
     /// Redoes up to @p steps steps; returns how many were redone.
     [[nodiscard]] Expected<u32, CommandError> redo(u32 steps = 1);
@@ -301,7 +406,8 @@ public:
     /// Forgets the undo history; returns the number of removed steps.
     usize clearHistory();
 
-    /// End of a frame: delivers events, flushes the crash journal and autosaves when it is time.
+    /// End of a frame: posts `commands.changed` if commands were registered since the last frame, delivers
+    /// events, flushes the crash journal and autosaves when it is time.
     void endFrame(f64 deltaSeconds);
 
     /// Journals of other sessions in `.illusion/journal/` (crashed sessions), newest first.
@@ -313,10 +419,23 @@ public:
 
 private:
     friend class CommandContext;
+    friend class RunningCommand;
 
     [[nodiscard]] Expected<void, CommandError> run(const CommandDescriptor& descriptor, const void* params,
                                                    void* result, const CommandOptions& options,
                                                    CommandReport& report);
+    [[nodiscard]] Expected<void, CommandError> admit(const CommandDescriptor& descriptor,
+                                                     const CommandOptions& options) const;
+    [[nodiscard]] Expected<std::string, CommandError>
+    executeJsonAs(const CommandDescriptor& descriptor, JsonValue params, const CommandOptions& options);
+    [[nodiscard]] Expected<void, CommandError> ownTransaction(const CommandOptions& options) const;
+    [[nodiscard]] Expected<void, CommandError> applyOperations(std::span<const Operation> operations,
+                                                               bool forward, std::string_view label);
+    [[nodiscard]] Expected<std::vector<usize>, CommandError> planUndoOwn(u32 steps,
+                                                                         std::string_view origin) const;
+    u64 pushStep(UndoStep step);
+    void addToTransaction(std::vector<Operation> operations, std::string_view label);
+    void transactionChanged(bool trial);
     [[nodiscard]] CommandError unknownCommand(std::string_view name) const;
     [[nodiscard]] Expected<bool, CommandError> loadSceneText(std::string_view json,
                                                              std::vector<std::string>* warnings);
@@ -324,7 +443,7 @@ private:
                     std::vector<EntityGuid> selectionBefore, CommandReport& report);
     [[nodiscard]] Expected<void, CommandError> applyStep(const UndoStep& step, bool forward);
     void sceneReplaced(std::string_view path);
-    void afterChange();
+    void afterChange(bool historyChanged = true);
     void restoreSelection(std::span<const EntityGuid> guids);
     void autosave();
 
@@ -351,7 +470,12 @@ private:
     u64 m_logCleared = 0;
     f64 m_autosaveTimer = 0.0;
     u32 m_autosaveCounter = 0;
+    u64 m_commandsRevision = 0;
+    std::optional<TransactionInfo> m_transaction;
+    std::vector<Operation> m_transactionOperations;
+    std::vector<EntityGuid> m_transactionSelection;
     bool m_running = false;
+    bool m_nested = false;
 };
 
 } // namespace illusion::editor

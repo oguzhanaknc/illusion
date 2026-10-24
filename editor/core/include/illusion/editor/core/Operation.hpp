@@ -9,6 +9,7 @@
 #include <illusion/ecs/EntityGuid.hpp>
 
 #include <optional>
+#include <span>
 #include <string>
 #include <variant>
 #include <vector>
@@ -86,6 +87,13 @@ using Operation = std::variant<ComponentChange, EntityLifetime, FileChange, Sett
 
 /// Approximate memory used by @p operation in bytes (for the undo budget).
 [[nodiscard]] usize operationBytes(const Operation& operation) noexcept;
+
+/// Describes the first thing that both @p a and @p b touch, or returns std::nullopt when they are
+/// independent, so that applying or reverting either one leaves the other valid. They overlap when they
+/// change the same Component of an entity, when one creates or destroys an entity that the other changes or
+/// refers to in a value, or when they touch the same file or setting.
+[[nodiscard]] std::optional<std::string> findOverlap(std::span<const Operation> a,
+                                                     std::span<const Operation> b);
 
 /// Writes @p operation as a JSON object (for the crash journal).
 [[nodiscard]] JsonMutValue writeOperation(JsonMutDocument& doc, const Operation& operation);

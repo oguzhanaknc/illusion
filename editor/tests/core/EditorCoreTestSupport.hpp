@@ -17,6 +17,7 @@
 
 #include <filesystem>
 #include <memory>
+#include <optional>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -111,13 +112,35 @@ inline JsonDocument parseJson(std::string_view text)
     return std::move(parsed).value();
 }
 
-/// Runs a command with JSON params given as text.
+/// Runs a command with JSON params given as text; an async command is advanced until it finishes.
 inline Expected<std::string, editor::CommandError> run(editor::EditorContext& editor, std::string_view name,
                                                        std::string_view params = "{}",
                                                        const editor::CommandOptions& options = {})
 {
     const JsonDocument doc = parseJson(params);
-    return editor.executeJson(name, doc.root(), options);
+    const editor::CommandDescriptor* command = editor.commands().find(name);
+    if (command == nullptr || !command->info.flags.async)
+    {
+        return editor.executeJson(name, doc.root(), options);
+    }
+    Expected<std::unique_ptr<editor::RunningCommand>, editor::CommandError> started =
+        editor.startJson(name, doc.root(), options);
+    if (!started)
+    {
+        return unexpected(std::move(started).error());
+    }
+    for (;;)
+    {
+        Expected<std::optional<std::string>, editor::CommandError> updated = started.value()->update();
+        if (!updated)
+        {
+            return unexpected(std::move(updated).error());
+        }
+        if (updated->has_value())
+        {
+            return std::move(**updated);
+        }
+    }
 }
 
 /// Runs a command that must succeed and returns its result.
