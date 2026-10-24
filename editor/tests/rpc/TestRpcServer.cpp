@@ -225,6 +225,8 @@ TEST_CASE("pull subscriptions keep events for poll_events and report overflow")
         rpc.call("editor.subscribe", R"({"topics":["scene.changed"],"mode":"pull"})");
     CHECK(subscribed.root().find("result").find("mode").asString() == "pull");
     rpc.call("entity.create", R"({"name":"A"})");
+    // A command reply does not flush the frame's coalesced events.
+    CHECK(rpc.call("editor.poll_events").root().pointer("/result/events").size() == 0);
     rpc.fixture.editor->endFrame(0.0);
     JsonDocument polled = rpc.call("editor.poll_events");
     JsonValue events = polled.root().find("result").find("events");

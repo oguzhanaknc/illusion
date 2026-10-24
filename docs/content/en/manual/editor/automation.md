@@ -123,6 +123,10 @@ In `pull` mode the editor keeps up to 1,024 events for `editor.poll_events`; whe
 means all. After `commands.changed` (commands were registered, e.g. by a module) the server's method list and
 `rpc.discover` include the new commands.
 
+Events are published at the end of a frame, so a command reply does not guarantee that its events are
+already available. For a deterministic pull, await `editor.wait {"frames": 1}` after the command before
+calling `editor.poll_events`. Additional synchronous calls do not guarantee a frame boundary.
+
 ## Async commands and cancellation
 
 Commands flagged `async` (`editor.list_commands` shows the flag) take several editor frames. The editor
