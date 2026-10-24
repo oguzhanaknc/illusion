@@ -1,5 +1,6 @@
 #include "EditorTestSupport.hpp"
 
+#include <illusion/editor/ui/EditorData.hpp>
 #include <illusion/editor/ui/Theme.hpp>
 
 #include <doctest/doctest.h>
@@ -146,7 +147,7 @@ TEST_CASE("a theme file needs every token and only known tokens")
 TEST_CASE("the shipped themes meet the contrast requirements")
 {
     VirtualFileSystem vfs;
-    for (const std::string_view name : gallery::kThemeNames)
+    for (const std::string_view name : ui::kThemeNames)
     {
         const ui::Theme theme = test::loadTestTheme(vfs, name);
         CHECK(theme.isHighContrast() == (name == "high-contrast"));

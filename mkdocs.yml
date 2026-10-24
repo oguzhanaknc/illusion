@@ -88,6 +88,8 @@ plugins:
             Automation: Otomasyon
             Editor Protocol: Editör Protokolü
             AI Agents: Yapay Zekâ Ajanları
+            Editor Window: Editör Penceresi
+            Preferences: Tercihler
             Tutorials: Eğitimler
             First Agent Session: İlk Ajan Oturumu
             Contributing: Katkıda Bulunma
@@ -131,6 +133,8 @@ nav:
       - Profiling: manual/profiling.md
       - Editor:
           - Editor Core: manual/editor/index.md
+          - Editor Window: manual/editor/interface.md
+          - Preferences: manual/editor/preferences.md
           - Projects: manual/editor/projects.md
           - Automation: manual/editor/automation.md
           - AI Agents: manual/editor/ai-agents.md

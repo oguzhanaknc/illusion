@@ -9,7 +9,7 @@ designed to ship commercial games on Steam and similar stores.
 > platform layer, input (keyboard, mouse, gamepads, actions), glTF loading and a forward PBR scene renderer
 > with image-based lighting, soft shadows and HDR post-processing, an asset pipeline (import cache,
 > streaming, packed archives), scene files, rigid-body physics, 3D audio and hot-reloadable game modules are
-> implemented and tested on all platforms. The editor is in progress (its UI foundation, headless command core, JSON-RPC automation and MCP bridge are done), followed
+> implemented and tested on all platforms. The editor is in progress (its UI foundation, headless command core, JSON-RPC automation, MCP bridge and window shell are done), followed
 > by the export pipeline; see
 > [ROADMAP.md](ROADMAP.md).
 
@@ -59,6 +59,9 @@ designed to ship commercial games on Steam and similar stores.
 - An MCP bridge for AI agents such as Claude Code (`illusion_mcp`): every editor command is a generated tool,
   both MCP protocol eras (2025-06-18/2025-11-25 and the stateless 2026-07-28), resources and prompts,
   progress and cancellation, attach or launch, and relaunch with crash recovery.
+- The editor window: dockable panels with five built-in and named layouts, a command palette with forms
+  generated from command schemas, console, history, an AI Activity panel with approval prompts for agents,
+  and preferences with keymap presets (illusion, Unity, Unreal, Blender); every action is a command.
 - No per-frame heap allocations: arenas, pools and an inline type-erased callable.
 - Tracy profiler integration and benchmark tests with performance budgets in CI.
 - CI on Windows (MSVC, clang-cl), Linux (GCC, Clang, ASan/UBSan, TSan) and macOS (Apple Clang).

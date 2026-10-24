@@ -80,6 +80,13 @@ public:
     [[nodiscard]] const char* iconLabel(const Icon& icon, text::TextKey key, std::string_view id,
                                         Arguments arguments = {});
 
+    /// @copydoc iconLabel(const Icon&, text::TextKey, std::string_view, Arguments)
+    [[nodiscard]] const char* iconLabel(const Icon& icon, text::TextKey key, std::string_view id,
+                                        std::initializer_list<text::MessageArgument> arguments)
+    {
+        return iconLabel(icon, key, id, Arguments(arguments.begin(), arguments.size()));
+    }
+
     /// "<icon>###<@p id>", for buttons that show only an icon.
     [[nodiscard]] const char* iconOnly(const Icon& icon, std::string_view id);
 

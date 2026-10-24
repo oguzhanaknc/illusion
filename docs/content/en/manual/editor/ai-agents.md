@@ -105,8 +105,14 @@ The editor's permission mode decides what the agent may run:
 | Mode | The agent may |
 | --- | --- |
 | `read-only` | only read (scene, entities, files). |
-| `ask` | read and edit; file, build, destructive and system commands need a person's approval (denied while the editor has no window). |
+| `ask` | read and edit; file, build, destructive and system commands need a person's approval (denied while the editor has no window). The default of the editor window. |
 | `auto` | run everything. The default of a headless editor. |
+
+In the editor window, a call that needs approval waits: the person at the editor sees a prompt and allows it
+once, allows that kind of command for the rest of the session, or denies it. The AI Activity panel shows the
+connected agents, every call with its params, duration and result, and lets the person pause or disconnect an
+agent and change the mode (see [Editor Window](interface.md#ai-activity)). A waiting call shows no progress;
+the agent's later calls wait behind it.
 
 A denied call fails with kind `permission_denied`. Every change an agent makes has the origin
 `rpc:illusion_mcp`, so `history.undo {"scope": "mine"}` undoes only the agent's steps and the editor's
@@ -138,7 +144,8 @@ connects again.
 | `MCP_PROTOCOL_NEGOTIATION` or `Unsupported protocol version` (-32022) | The client asked for a protocol version the bridge does not speak. It speaks 2025-06-18 and 2025-11-25 (with `initialize`) and 2026-07-28 (stateless); update the client or the bridge. |
 | `send initialize first` (-32600) | A client sent requests without `initialize` and without the modern `_meta` version. |
 | Tools are missing | Check `--tools`; `illusion_call` reaches every command. |
-| Calls fail with `permission_denied` | The editor runs in `read-only` or `ask` mode; launch it with `--permissions auto`. |
+| Calls fail with `permission_denied` | The editor runs in `read-only` or `ask` mode, or the person at the editor denied the call; launch it with `--permissions auto` or change the mode in the AI Activity panel. |
+| A call waits a long time | The editor window waits for a person to approve it (`ask` mode); see the AI Activity panel. |
 | Text summaries end with `truncated` | The result is complete in `structuredContent`; narrow the request with `limit`. |
 | `editor_crashed` | The editor's last log lines are in the error; call again to relaunch and recover. |
 

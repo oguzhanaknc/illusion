@@ -136,34 +136,6 @@ constexpr std::array<LogLine, 5> kConsole = {{
 
 } // namespace
 
-bool mountEditorData(VirtualFileSystem& vfs)
-{
-    const std::filesystem::path directory = executableDirectory() / "editor-data";
-    const FileError error = vfs.mount("editor", directory);
-    if (error != FileError::None)
-    {
-        ILL_LOG_ERROR("Gallery", "cannot mount '{}': {}", directory.string(), fileErrorName(error));
-        return false;
-    }
-    return true;
-}
-
-Expected<ui::Theme, std::string> loadTheme(const VirtualFileSystem& vfs, std::string_view name)
-{
-    const std::string path = std::format("editor:/themes/{}.json", name);
-    std::string json;
-    if (const FileError error = vfs.readText(path, json); error != FileError::None)
-    {
-        return unexpected(std::format("cannot read '{}': {}", path, fileErrorName(error)));
-    }
-    auto theme = ui::Theme::parse(json);
-    if (!theme)
-    {
-        return unexpected(std::format("{}: {}", path, theme.error()));
-    }
-    return std::move(theme.value());
-}
-
 Gallery::Gallery(text::Localization& localization, const ui::Theme& theme, const ui::FontManager* fonts)
     : m_localization(localization)
     , m_theme(&theme)

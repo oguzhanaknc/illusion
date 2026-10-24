@@ -13,7 +13,8 @@ Editor code lives in `editor/`:
 | `editor/thirdparty` | `illusion::imgui`, `illusion::implot` | Dear ImGui (docking) and ImPlot with the editor's configuration header |
 | `editor/strings` | `illusion::editor_strings` | The editor's English text (`editor/data/locales/en.json`) as a string table |
 | `editor/core` | `illusion::editor_core` | The headless editor core: projects, the edited scene, typed commands, transactions, undo, journals (no GPU, Dear ImGui or sockets) |
-| `editor/ui` | `illusion::editor_ui` | Backends, theme, fonts, icons, per-frame text, widget kit, `UiDriver` |
+| `editor/ui` | `illusion::editor_ui` | Backends, theme, fonts, icons, per-frame text, widget kit, offscreen and GPU-less frames (`OffscreenUi`, `HeadlessUi`), `UiDriver` |
+| `editor/shell` | `illusion::editor_shell` | The editor window's UI: menus, toolbar, layouts, palette, console, history, AI Activity, preferences, project windows |
 | `editor/tools/ui_gallery` | `illusion_ui_gallery` | The widget catalogue used for design reviews and golden-image tests |
 | `editor/tools/command_reference` | `illusion_editor_command_reference` | Writes and checks the generated [command reference](../reference/editor-commands.md) |
 | `editor/data` | `editor-data/` | Themes, locales and project templates, copied next to the editor executables with the fonts |
@@ -203,6 +204,32 @@ material file under `assets:/` (found through reflection, parsed again only when
 so that `asset.move` can rewrite them and `asset.delete` can refuse. The manual describes
 [using it](../manual/editor/index.md).
 
+## Editor shell
+
+`illusion::editor_shell` is the window's UI (`EditorShell`). It draws the editor state with the UI stack above
+and changes it only through commands: every menu item, toolbar button and shortcut is a `UiAction` (in
+`editor_core`, so the action table, the keymap presets and their tests need no window) that runs a command with
+fixed params, and the palette builds forms from the params' reflection. The shell is the `UiHost` behind the
+`ui.*` commands and `editor.screenshot`, registered with `EditorContext::setUi()`; without one (`--no-gpu`)
+those commands fail with `unsupported`.
+
+```text
+illusion_editor main loop (windowed)
+  Platform::pollEvents / waitEvents   <- RpcServer wakes it (Platform::wake)
+  RpcServer::pump(8 ms)               -- requests, approvals held for the window
+  EditorShell::beginFrame             -- preferences (theme, scale, locale, keymap), pending layouts
+  ImGui::NewFrame, EditorShell::draw  -- menus, toolbar, dock space, panels, palette, prompts, toasts
+  ImGui::Render, OffscreenUi::renderTo(swapchain), screenshots (OffscreenUi::capture)
+  EditorContext::endFrame             -- events, journal, autosave
+```
+
+Preferences are a reflected struct in the core (`preferences.json` in the user directory, changed with
+`preferences.set`). Layouts are Dear ImGui settings text plus an `[IllusionShell][Panels]` section with the open
+panels; the five built-in layouts are built with `DockBuilder`. The AI Activity panel reads the `RpcServer`
+(clients, activity ring, approvals) through copies it refreshes when `stateVersion()` changes, so idle frames
+do not allocate. A headless editor with a GPU runs the same shell into an `OffscreenUi` and renders it only to
+answer `editor.screenshot`. The manual describes [the window](../manual/editor/interface.md).
+
 ## The MCP bridge
 
 `illusion_mcp` is a separate process between an MCP client and the editor
@@ -226,6 +253,8 @@ The [AI agents manual](../manual/editor/ai-agents.md) describes the result.
 
 - Idle UI frames do not allocate: labels are built in a per-frame arena, renderer buffers only grow, and a
   test counts both global and Dear ImGui allocations over gallery frames.
+- `editor/shell-idle-frame` measures an idle frame of the whole editor window at 1920x1080 (about 32 µs; budget
+  300 µs), and a test checks that idle shell frames do not allocate after 120 warm-up frames.
 - The benchmark `ui/gallery-frame` measures the CPU cost of a frame of the densest gallery page (about 40 µs
   on a desktop; budget 400 µs).
 - The editor core's benchmarks: `editor/component-set` (one merged `component.set`), `editor/undo-capture-delete`

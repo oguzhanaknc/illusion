@@ -33,16 +33,6 @@ class FontManager;
 namespace illusion::editor::gallery
 {
 
-/// The themes in editor-data/themes, by file name.
-inline constexpr std::array<std::string_view, 3> kThemeNames = {"dark", "light", "high-contrast"};
-
-/// Mounts the editor-data folder next to the executable as "editor:". Returns false (and logs) if it is
-/// missing.
-bool mountEditorData(VirtualFileSystem& vfs);
-
-/// Loads "editor:/themes/<name>.json". Returns why it failed.
-[[nodiscard]] Expected<ui::Theme, std::string> loadTheme(const VirtualFileSystem& vfs, std::string_view name);
-
 /// The pages of the gallery.
 enum class GalleryPage : u8
 {

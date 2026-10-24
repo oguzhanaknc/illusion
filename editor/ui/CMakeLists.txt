@@ -1,10 +1,13 @@
 # illusion::editor_ui — the editor's UI foundation: Dear ImGui platform and renderer backends, theme,
-# fonts, icons, per-frame text, the widget kit and the UiDriver test helper.
+# fonts, icons, per-frame text, the widget kit, offscreen and GPU-less frames, and the UiDriver test helper.
 
 illusion_add_editor_library(illusion_editor_ui STATIC
+    src/EditorData.cpp
     src/FontManager.cpp
     src/FrameText.cpp
+    src/HeadlessUi.cpp
     src/Icon.cpp
+    src/OffscreenUi.cpp
     src/Theme.cpp
     src/UiContext.cpp
     src/UiDriver.cpp
@@ -17,7 +20,8 @@ add_library(illusion::editor_ui ALIAS illusion_editor_ui)
 target_include_directories(illusion_editor_ui PUBLIC
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>)
 target_link_libraries(illusion_editor_ui PUBLIC
-    illusion::core illusion::platform illusion::render illusion::text illusion::imgui illusion::implot)
+    illusion::core illusion::platform illusion::render illusion::text illusion::assets illusion::imgui
+    illusion::implot)
 
 illusion_add_shaders(illusion_editor_ui
     NAMESPACE illusion::editor::ui::shaders

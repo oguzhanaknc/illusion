@@ -7,7 +7,7 @@ PROJECT_BRIEF          = "3D game engine"
 OUTPUT_DIRECTORY       = build
 CREATE_SUBDIRS         = NO
 
-INPUT                  = engine/core/include engine/text/include engine/platform/include engine/input/include engine/assets/include engine/physics/include engine/audio/include engine/render/include engine/modules/include editor/core/include editor/ui/include docs/api-mainpage.md
+INPUT                  = engine/core/include engine/text/include engine/platform/include engine/input/include engine/assets/include engine/physics/include engine/audio/include engine/render/include engine/modules/include editor/core/include editor/ui/include editor/shell/include docs/api-mainpage.md
 FILE_PATTERNS          = *.hpp *.md
 RECURSIVE              = YES
 USE_MDFILE_AS_MAINPAGE = docs/api-mainpage.md

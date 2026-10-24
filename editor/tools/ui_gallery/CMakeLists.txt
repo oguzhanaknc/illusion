@@ -2,9 +2,7 @@
 # the gallery benchmark.
 
 illusion_add_editor_library(illusion_ui_gallery_pages STATIC
-    Gallery.cpp
-    HeadlessUi.cpp
-    OffscreenUi.cpp)
+    Gallery.cpp)
 target_include_directories(illusion_ui_gallery_pages PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
 target_link_libraries(illusion_ui_gallery_pages PUBLIC
     illusion::editor_ui illusion::editor_strings illusion::assets)

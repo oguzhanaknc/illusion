@@ -1,12 +1,11 @@
-#include "OffscreenUi.hpp"
-
 #include <illusion/core/Log.hpp>
+#include <illusion/editor/ui/OffscreenUi.hpp>
 #include <illusion/editor/ui/UiRenderer.hpp>
 #include <illusion/render/RenderDevice.hpp>
 
 #include <cstring>
 
-namespace illusion::editor::gallery
+namespace illusion::editor::ui
 {
 
 namespace
@@ -27,12 +26,12 @@ nvrhi::TextureDesc targetDesc(UVec2 size, nvrhi::Format format, const char* name
 
 } // namespace
 
-std::unique_ptr<OffscreenUi> OffscreenUi::create(RenderDevice& device, ui::UiContext& context, UVec2 size)
+std::unique_ptr<OffscreenUi> OffscreenUi::create(RenderDevice& device, UiContext& context, UVec2 size)
 {
     std::unique_ptr<OffscreenUi> offscreen(new OffscreenUi());
     offscreen->m_device = &device;
     offscreen->m_size = size;
-    offscreen->m_renderer = ui::UiRenderer::create(device, context);
+    offscreen->m_renderer = UiRenderer::create(device, context);
     nvrhi::IDevice* gpu = device.device();
     offscreen->m_target = gpu->createTexture(targetDesc(size, nvrhi::Format::RGBA8_UNORM, "UI target"));
     if (!offscreen->m_renderer || !offscreen->m_target)
@@ -47,6 +46,43 @@ std::unique_ptr<OffscreenUi> OffscreenUi::create(RenderDevice& device, ui::UiCon
 }
 
 OffscreenUi::~OffscreenUi() = default;
+
+bool OffscreenUi::resize(UVec2 size)
+{
+    if (size == m_size && m_target)
+    {
+        return true;
+    }
+    nvrhi::IDevice* gpu = m_device->device();
+    nvrhi::TextureHandle target =
+        gpu->createTexture(targetDesc(size, nvrhi::Format::RGBA8_UNORM, "UI target"));
+    if (!target)
+    {
+        return false;
+    }
+    m_target = std::move(target);
+    m_framebuffer = gpu->createFramebuffer(nvrhi::FramebufferDesc().addColorAttachment(m_target));
+    m_size = size;
+    return true;
+}
+
+void OffscreenUi::renderTo(ImDrawData* drawData, Vec4 clear, nvrhi::IFramebuffer* output)
+{
+    m_commands->open();
+    draw(m_commands, drawData, clear);
+    if (output != nullptr)
+    {
+        m_renderer->present(m_commands, m_target, output);
+    }
+    m_commands->close();
+    m_device->device()->executeCommandList(m_commands);
+}
+
+std::optional<Image> OffscreenUi::capture()
+{
+    m_commands->open();
+    return readBack(m_commands, m_target);
+}
 
 std::optional<Image> OffscreenUi::render(ImDrawData* drawData, Vec4 clear)
 {
@@ -114,4 +150,4 @@ std::optional<Image> OffscreenUi::readBack(nvrhi::ICommandList* commands, nvrhi:
     return image;
 }
 
-} // namespace illusion::editor::gallery
+} // namespace illusion::editor::ui

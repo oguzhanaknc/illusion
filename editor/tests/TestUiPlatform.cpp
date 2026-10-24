@@ -1,8 +1,9 @@
 #include "Gallery.hpp"
-#include "HeadlessUi.hpp"
 
 #include <illusion/core/EventBus.hpp>
+#include <illusion/editor/ui/EditorData.hpp>
 #include <illusion/editor/ui/FontManager.hpp>
+#include <illusion/editor/ui/HeadlessUi.hpp>
 #include <illusion/editor/ui/UiContext.hpp>
 #include <illusion/editor/ui/UiPlatformBackend.hpp>
 #include <illusion/platform/Events.hpp>
@@ -32,7 +33,7 @@ struct PlatformFixture
     ui::UiContext context;
     std::unique_ptr<ui::FontManager> fonts;
     std::unique_ptr<ui::UiPlatformBackend> backend;
-    std::unique_ptr<gallery::HeadlessUi> headless;
+    std::unique_ptr<ui::HeadlessUi> headless;
 
     PlatformFixture()
     {
@@ -44,13 +45,13 @@ struct PlatformFixture
         window = Window::create(*platform, desc, &events);
         REQUIRE(window != nullptr);
         backend = std::make_unique<ui::UiPlatformBackend>(context, *window, events);
-        headless = std::make_unique<gallery::HeadlessUi>(context);
+        headless = std::make_unique<ui::HeadlessUi>(context);
         // Shortcuts below use Ctrl on every OS.
         ImGui::GetIO().ConfigMacOSXBehaviors = false;
         // Apply every queued event in the frame it arrives (Dear ImGui otherwise spreads a press and a
         // release of the same frame over two frames).
         ImGui::GetIO().ConfigInputTrickleEventQueue = false;
-        REQUIRE(gallery::mountEditorData(vfs));
+        REQUIRE(ui::mountEditorData(vfs));
         auto loaded = ui::FontManager::load(context, vfs, "editor:/fonts");
         REQUIRE(loaded.hasValue());
         fonts = std::move(loaded.value());

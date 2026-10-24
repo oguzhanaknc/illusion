@@ -13,14 +13,15 @@
 // Windowed: F2 cycles the theme, F3 the page, F4 the locale (en, en-XA). Exit code 2 on validation errors.
 
 #include "Gallery.hpp"
-#include "OffscreenUi.hpp"
 
 #include <illusion/assets/Image.hpp>
 #include <illusion/core/EventBus.hpp>
 #include <illusion/core/Log.hpp>
 #include <illusion/core/Time.hpp>
 #include <illusion/editor/EditorStrings.hpp>
+#include <illusion/editor/ui/EditorData.hpp>
 #include <illusion/editor/ui/FontManager.hpp>
+#include <illusion/editor/ui/OffscreenUi.hpp>
 #include <illusion/editor/ui/UiContext.hpp>
 #include <illusion/editor/ui/UiPlatformBackend.hpp>
 #include <illusion/editor/ui/UiRenderer.hpp>
@@ -173,31 +174,6 @@ bool parseOptions(int argc, char** argv, Options& options)
     return true;
 }
 
-// Loads every locale file in editor:/locales except the compiled English one.
-void loadLocales(const VirtualFileSystem& vfs, text::Localization& localization)
-{
-    std::vector<DirectoryEntry> entries;
-    if (vfs.list("editor:/locales", entries) != FileError::None)
-    {
-        return;
-    }
-    for (const DirectoryEntry& entry : entries)
-    {
-        if (entry.isDirectory || entry.name == "en.json" || !entry.name.ends_with(".json"))
-        {
-            continue;
-        }
-        std::string json;
-        if (vfs.readText("editor:/locales/" + entry.name, json) == FileError::None)
-        {
-            if (auto added = localization.addLocale(json); !added)
-            {
-                ILL_LOG_WARN("Gallery", "skipping locales/{}: {}", entry.name, added.error().message);
-            }
-        }
-    }
-}
-
 bool setLocale(text::Localization& localization, std::string_view tag)
 {
     const std::optional<text::LocaleId> locale = text::LocaleId::parse(tag);
@@ -229,7 +205,7 @@ int runHeadless(const Options& options, gallery::Gallery& galleryPage, ui::UiCon
     }
     const UVec2 size(static_cast<u32>(static_cast<f32>(options.size.x) * options.scale),
                      static_cast<u32>(static_cast<f32>(options.size.y) * options.scale));
-    auto offscreen = gallery::OffscreenUi::create(*device, context, size);
+    auto offscreen = ui::OffscreenUi::create(*device, context, size);
     if (!offscreen)
     {
         return 1;
@@ -306,9 +282,9 @@ int runWindowed(const Options& options, gallery::Gallery& galleryPage, ui::UiCon
     applyScale();
 
     usize themeIndex = 0;
-    for (usize i = 0; i < gallery::kThemeNames.size(); ++i)
+    for (usize i = 0; i < ui::kThemeNames.size(); ++i)
     {
-        if (gallery::kThemeNames[i] == options.theme)
+        if (ui::kThemeNames[i] == options.theme)
         {
             themeIndex = i;
         }
@@ -324,8 +300,8 @@ int runWindowed(const Options& options, gallery::Gallery& galleryPage, ui::UiCon
         const FrameTime& time = clock.tick(monotonicSeconds());
         if (window->input().wasPressed(Key::F2))
         {
-            themeIndex = (themeIndex + 1) % gallery::kThemeNames.size();
-            if (auto next = gallery::loadTheme(vfs, gallery::kThemeNames[themeIndex]))
+            themeIndex = (themeIndex + 1) % ui::kThemeNames.size();
+            if (auto next = ui::loadTheme(vfs, ui::kThemeNames[themeIndex]))
             {
                 theme = std::move(next.value());
                 applyScale();
@@ -399,11 +375,11 @@ int main(int argc, char** argv)
     }
 
     VirtualFileSystem vfs;
-    if (!gallery::mountEditorData(vfs))
+    if (!ui::mountEditorData(vfs))
     {
         return 1;
     }
-    auto theme = gallery::loadTheme(vfs, options.theme);
+    auto theme = ui::loadTheme(vfs, options.theme);
     if (!theme)
     {
         ILL_LOG_ERROR("Gallery", "{}", theme.error());
@@ -419,7 +395,7 @@ int main(int argc, char** argv)
     }
     text::Localization localization;
     gallery::Gallery galleryPage(localization, theme.value(), fonts.value().get());
-    loadLocales(vfs, localization);
+    (void)ui::loadEditorLocales(vfs, localization);
     if (!setLocale(localization, options.locale))
     {
         return 1;

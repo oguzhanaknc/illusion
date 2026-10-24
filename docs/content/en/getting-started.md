@@ -100,6 +100,33 @@ Then build with `cmake --preset dev` and `cmake --build C:/dev/illusion-build/de
 | `ILLUSION_SHARED_MODULES` | `ON` (`OFF` with profiling) | Build game modules as hot-reloadable shared libraries; `OFF` links them statically. |
 | `ILLUSION_SANITIZER` | empty | `address` (ASan + UBSan) or `thread` (TSan); GCC/Clang only. |
 
+## Launch the editor
+
+The editor is built with the engine (`illusion_editor` next to the other executables, with `editor-data`
+beside it). Start it with a project, or without one to open the Welcome window:
+
+```bash
+./build/linux-clang/bin/Debug/illusion_editor --project games/tetris
+```
+
+On Windows, run it from the build tree as any program; building it needs the developer environment:
+
+```bat
+tools\windows\vsdev.cmd cmake --build --preset windows-msvc-debug --target illusion_editor
+build\windows-msvc\bin\Debug\illusion_editor.exe --project games\tetris
+```
+
+| Option | Description |
+| --- | --- |
+| `--project <dir>` | Open this project. |
+| `--workspace <dir>` | Folder in which the Welcome window and agents create and open projects (default: your home folder, or the project's parent). |
+| `--rpc-listen [<socket>]` | Let agents attach (see [AI Agents](manual/editor/ai-agents.md)). |
+| `--permissions read-only\|ask\|auto` | Permission mode of agents for this run (default: the Preferences setting). |
+| `--user-dir <dir>` | Directory of preferences and saved layouts. |
+| `--headless` | No window: serve the editor protocol only (see [Automation](manual/editor/automation.md)). |
+
+The [Editor Window](manual/editor/interface.md) page explains the window.
+
 ## Benchmarks
 
 Benchmarks measure hot paths and fail when an operation exceeds its performance budget. They run as

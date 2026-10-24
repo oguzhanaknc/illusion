@@ -270,7 +270,44 @@ EditorContext::EditorContext(const EditorContextOptions& options)
         registerCoreCommands(m_commands);
     }
     m_commandsRevision = m_commands.revision();
+    if (!options.userDirectory.empty())
+    {
+        std::string warning;
+        m_preferences = loadPreferences(options.userDirectory, warning);
+        if (!warning.empty())
+        {
+            ILL_LOG_WARN("Editor", "{}", warning);
+        }
+        m_options.autosaveInterval = m_preferences.autosaveInterval;
+        m_options.autosaveCopies = m_preferences.autosaveCopies;
+    }
+    else
+    {
+        m_preferences.autosaveInterval = options.autosaveInterval;
+        m_preferences.autosaveCopies = std::clamp(options.autosaveCopies, 1u, 20u);
+    }
     newScene();
+}
+
+Expected<void, CommandError> EditorContext::setPreferences(Preferences preferences)
+{
+    if (Expected<void, std::string> valid = validatePreferences(preferences); !valid)
+    {
+        return unexpected(CommandError::make(ErrorKind::ValidationFailed, "preferences " + valid.error()));
+    }
+    if (!m_options.userDirectory.empty())
+    {
+        if (Expected<void, std::string> saved = savePreferences(m_options.userDirectory, preferences); !saved)
+        {
+            return unexpected(CommandError::make(ErrorKind::IoError, std::move(saved).error()));
+        }
+    }
+    m_options.autosaveInterval = preferences.autosaveInterval;
+    m_options.autosaveCopies = preferences.autosaveCopies;
+    m_preferences = std::move(preferences);
+    ++m_preferencesVersion;
+    m_events.post("preferences.changed", "{}");
+    return {};
 }
 
 EditorContext::~EditorContext()
@@ -336,6 +373,12 @@ Expected<void, CommandError> EditorContext::openProject(const std::filesystem::p
     else
     {
         newScene();
+    }
+    Preferences preferences = m_preferences;
+    addRecentProject(preferences.recentProjects, detail::pathText(m_project->root()));
+    if (Expected<void, CommandError> saved = setPreferences(std::move(preferences)); !saved)
+    {
+        ILL_LOG_WARN("Editor", "Cannot remember the recent project: {}", saved.error().message);
     }
     return {};
 }

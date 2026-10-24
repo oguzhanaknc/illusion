@@ -103,6 +103,15 @@ void UiDriver::typeText(std::string_view utf8)
     runFrames(1);
 }
 
+int UiDriver::shortcutModifier() noexcept
+{
+#if defined(ILL_PLATFORM_MACOS)
+    return ImGuiMod_Super;
+#else
+    return ImGuiMod_Ctrl;
+#endif
+}
+
 void UiDriver::pressKey(int key, int modifiers)
 {
     m_context.makeCurrent();

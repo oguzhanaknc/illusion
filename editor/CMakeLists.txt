@@ -10,9 +10,10 @@ add_subdirectory(rpc)
 add_subdirectory(mcp)
 add_subdirectory(client)
 add_subdirectory(ui)
+add_subdirectory(shell)
 
-# editor-data/ next to the editor executables (mounted read-only as "editor:"): themes, locales, fonts and
-# the fonts' licences.
+# editor-data/ next to the editor executables (mounted read-only as "editor:"): themes, locales, fonts,
+# templates, the fonts' licences and THIRD_PARTY_NOTICES.md (shown by Help > Third-party licenses).
 illusion_require_dependency(fonts)
 set(editor_font_files ${ILLUSION_EDITOR_FONTS})
 list(FILTER editor_font_files INCLUDE REGEX "\.ttf$")
@@ -27,8 +28,10 @@ add_custom_command(
     COMMAND ${CMAKE_COMMAND} -E make_directory ${editor_data_dir}/fonts ${editor_data_dir}/licenses
     COMMAND ${CMAKE_COMMAND} -E copy_if_different ${editor_font_files} ${editor_data_dir}/fonts
     COMMAND ${CMAKE_COMMAND} -E copy_if_different ${editor_licence_files} ${editor_data_dir}/licenses
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different ${PROJECT_SOURCE_DIR}/THIRD_PARTY_NOTICES.md
+        ${editor_data_dir}/licenses/THIRD_PARTY_NOTICES.md
     COMMAND ${CMAKE_COMMAND} -E touch ${editor_data_stamp}
-    DEPENDS ${editor_data_files} ${editor_font_files} ${editor_licence_files}
+    DEPENDS ${editor_data_files} ${editor_font_files} ${editor_licence_files} ${PROJECT_SOURCE_DIR}/THIRD_PARTY_NOTICES.md
     COMMENT "Copying editor-data"
     VERBATIM)
 add_custom_target(illusion_editor_data DEPENDS ${editor_data_stamp})

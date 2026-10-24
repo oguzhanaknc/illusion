@@ -16,6 +16,14 @@ and ADR 0031 (UI stack).
   become `illusion::editor::strings::k...` constants (`illusion/editor/EditorStrings.hpp`). See the
   `localization` skill.
 - State changes: panels never change editor state themselves; they run commands (`editor-commands` skill).
+- The editor window: `editor/shell` (`illusion::editor_shell`). Panels are classes in `src/` drawn by
+  `EditorShell::draw()` with the shell's state (`EditorShell::Impl` in `ShellImpl.hpp`); they run commands with
+  `Impl::run()` (failures become toasts) or `Impl::runAction()`. A new panel gets an entry in `Panel` and
+  `kPanels` (`Layouts.cpp`), a dock slot in each built-in layout that shows it, a `window.*` UI action, and a
+  title key. Menu items and toolbar buttons are `UiAction`s in `editor/core/src/UiActions.cpp`: give each an
+  id, its command and params, a menu and group, and a default chord only when the command has none; actions of
+  commands that do not exist yet name their milestone. Never put state changes in a panel that bypass
+  commands, except the agents' approvals, pause and disconnect (deliberately not commands, ADR 0037).
 - New targets: `illusion_add_editor_library()` / `illusion_add_editor_executable()` only. Never include
   `illusion/editor/...`, `imgui.h` or `implot.h` outside `editor/` (`python tools/check_layering.py`).
 
@@ -58,7 +66,13 @@ CHECK(driver.click("gallery.save"));
 ```
 
 - Platform input: `TestUiPlatform.cpp` shows how to feed window events through a headless window.
-- GPU tests (`editor/tests/gpu`): gallery goldens in `editor/tests/data/golden`. After an intended visual
+- The shell: `test::ShellFixture` (`editor/tests/shell/ShellTestSupport.hpp`) runs the whole window on a fixture
+  project at 1280x720 with its own user directory; drive it with `UiDriver` and check results through commands
+  (`ui.state`, `preferences.get`). Docked panels behind another tab are not drawn: show them with
+  `ui.show_panel` first, and filter long lists (the keyboard table) before clicking rows. The idle-frame
+  allocation test runs 120 warm-up frames.
+- GPU tests (`editor/tests/gpu`): gallery and shell goldens in `editor/tests/data/golden` (helpers in
+  `GoldenSupport.hpp`). After an intended visual
   change: run `illusion_editor_gpu_tests` with `ILLUSION_UPDATE_GOLDENS=1`, open the changed PNGs, check
   them, commit them. Captures of every run land in `<build>/ui-captures/`.
 - Look at your change: `illusion_ui_gallery --headless --page widgets --theme dark --screenshot out.png`,

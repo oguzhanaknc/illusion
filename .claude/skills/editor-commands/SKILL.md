@@ -88,6 +88,13 @@ selection, files, history) is a command; panels, shortcuts, RPC and MCP all call
 - **Batches** (`EditorCommands.cpp`): a command that runs others goes through `context.editor().executeStep()`
   with the caller's `origin`, `caller` and `gate`, inside `beginTransaction()` or a savepoint
   (`rollbackTransactionTo()`).
+- **UI commands** (`UiCommands.cpp`): the `ui.*` commands and `editor.screenshot` call the `UiHost` of
+  `context.editor().ui()` and fail with `unsupported` without one. The core tests install `test::FakeUi`
+  (`EditorCoreTestSupport.hpp`), so their cases run on every fixture; behaviour with the real window is tested
+  with `test::ShellFixture`. A command a menu, button or shortcut should run also needs a `UiAction` in
+  `UiActions.cpp` (the parity test checks that every action's command exists).
+- **Preferences** (`preferences.set`): validate with `validatePreferences()` and store with
+  `EditorContext::setPreferences()`, which saves `preferences.json` and bumps `preferencesVersion()`.
 - **Async commands** (`editor.wait`): the handler validates and returns a `CommandTask<Result>` whose
   `update()` runs once per frame, fills `CommandProgress` and returns the result when done; register it with
   `registry.addAsync<&fn>({...})`. They cannot be undoable, and the generic tests run them through

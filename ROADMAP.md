@@ -173,21 +173,38 @@ Plan: `docs/plans/m7-editor.md` (sub-milestones, command API, localization, them
   `illusion_ctl replay --via-mcp --era legacy|modern`; journals of crashed deterministic sessions are kept.
   Not yet: the `illusion://sdk/{header}` and `illusion://manual/{page}` resources (they need the `sdk:` mount
   and shipped manual pages: M7s and M8 docs), normalised recordings for the nightly live-agent job (M7x)
-- M7l: Editor shell: layouts, menus, command palette, console, history, AI activity, preferences; approval
-  prompts for the `ask` permission mode (moved from M7j-2: they need a window)
+- M7l: ✅ Editor shell (`illusion::editor_shell`): the windowed `illusion_editor` (main loop woken by the RPC
+  server, swapchain present through `OffscreenUi`, `--headless` renders the same UI offscreen for screenshots);
+  UI actions with a parity test (every menu item, toolbar button and shortcut runs a command; actions of later
+  milestones are disabled and name them); menu bar, toolbar, status bar, toasts and a notification centre; five
+  built-in `DockBuilder` layouts plus named per-user layouts, a project default (`settings/editor_layout.ini`)
+  and Reset Layout; the command palette and Go to Anything (fuzzy on localized and English titles, `@`
+  entities, `>` preference pages, forms generated from params schemas); Console (level filters, search,
+  collapsing, timestamps, source links, command line); History (origin badges, jump, undo an agent's
+  changes); AI Activity (clients, eras, call feed with params, durations, results and undo links, pause and
+  disconnect, permission mode); approval prompts for the `ask` mode (allow once, for the session, deny;
+  batches ask once; RpcServer `approvals()`/`decide()`, ADR 0037 addendum); Preferences (appearance, language
+  with en-XA and locale files, keymap presets illusion/Unity/Unreal/Blender with conflict detection and
+  rebinding capture, AI agents, autosave, external tools) in `preferences.json`; Welcome window with recent
+  projects, templates and the workspace folder browser; About and the third-party licence viewer; the `ui.*`
+  commands, `preferences.get/set` and `editor.screenshot` (91 commands). Cut to later: gamepad navigation of
+  the window through `GamepadSystem` (M7w), follow-agent (needs viewports: M7o), launching External Tools
+  (M7s), `#` asset search in the palette (M7u)
 - M7m: Outliner and Inspector
 - M7n: Renderer extension points: entity ids, debug draw, orthographic cameras, view targets (ADR 0040)
-- M7o: Viewports: editor camera, grid, selection outline, picking, overlays
+- M7o: Viewports: editor camera, grid, selection outline, picking, overlays; following an agent's selection
+  (from M7l)
 - M7p: Gizmos, snapping and transform tools
 - M7q: Module API v3: lifecycle, multi-world host, host service interfaces (scripting API) (ADR 0041)
 - M7r: Play mode and the `GameSession` runtime (ADR 0042)
-- M7s: Project modules built from the editor (ADR 0043)
+- M7s: Project modules built from the editor (ADR 0043); opening sources with the External Tools code editor
+  (from M7l)
 - M7t: Component layout migration on hot reload, the M6 follow-up (ADR 0044)
 - M7u: Asset catalog, live reload and the asset browser (ADR 0045); GPU eviction of unused
-  `RenderAssetCache` entries (from M7h)
+  `RenderAssetCache` entries (from M7h); `#` asset search in the command palette (from M7l)
 - M7v: Prefabs with overrides and nesting (ADR 0046)
 - M7w: Engine feature panels: rendering, physics, audio mixer, input actions, gamepad tester, profiler,
-  diagnostics
+  diagnostics; gamepad navigation of the editor window through `GamepadSystem` (from M7l)
 - M7x: Showcase scene covering every Component and the scripting API; Tetris built by an agent end to end
 
 ## M8 — Release pipeline

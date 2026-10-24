@@ -57,6 +57,10 @@ public:
     /// Types @p utf8 as text input, then runs a frame.
     void typeText(std::string_view utf8);
 
+    /// The physical modifier (ImGuiMod_* flag for pressKey()) that the Ctrl of a shortcut stands for: Cmd
+    /// (ImGuiMod_Super) on macOS, where Dear ImGui swaps Cmd and Ctrl, and ImGuiMod_Ctrl elsewhere.
+    [[nodiscard]] static int shortcutModifier() noexcept;
+
     /// Presses and releases @p key (an ImGuiKey) with the modifiers in @p modifiers (ImGuiMod_* flags),
     /// running a frame after each step.
     void pressKey(int key, int modifiers = 0);
