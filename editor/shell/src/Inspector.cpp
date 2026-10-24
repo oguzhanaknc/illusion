@@ -741,9 +741,12 @@ void Inspector::State::drawHeader(Impl& shell, ui::UiKit& kit)
     {
         lastNameGuid = primaryGuid;
         lastInspectedCount = inspected.size();
-        lastNameSynced.assign(shownName.data(), shownName.size());
+        lastNameSynced.assign(shownName);
         const usize len = std::min(shownName.size(), nameBuffer.size() - 1);
-        std::memcpy(nameBuffer.data(), shownName.data(), len);
+        if (len > 0)
+        {
+            std::memcpy(nameBuffer.data(), shownName.data(), len);
+        }
         nameBuffer[len] = '\0';
     }
 
@@ -757,7 +760,7 @@ void Inspector::State::drawHeader(Impl& shell, ui::UiKit& kit)
     if (enterRename || ImGui::IsItemDeactivatedAfterEdit())
     {
         const std::string_view newName(nameBuffer.data());
-        lastNameSynced.assign(newName.data(), newName.size());
+        lastNameSynced.assign(newName);
         if (inspected.size() == 1)
         {
             const auto hex = formatGuid(inspected[0].guid);
@@ -1532,7 +1535,10 @@ void Inspector::State::drawValueWidget(Impl& shell, ui::UiKit& kit, const TypeRe
         {
             const std::string_view shown = mixed ? std::string_view{} : std::string_view(str);
             const usize len = std::min(shown.size(), textFieldBuffer.size() - 1);
-            std::memcpy(textFieldBuffer.data(), shown.data(), len);
+            if (len > 0)
+            {
+                std::memcpy(textFieldBuffer.data(), shown.data(), len);
+            }
             textFieldBuffer[len] = '\0';
         }
         const char* hint = mixed ? text.format(s::kInspectorMixed) : "";
@@ -1595,7 +1601,10 @@ void Inspector::State::drawValueWidget(Impl& shell, ui::UiKit& kit, const TypeRe
                         previewLen += 3;
                     }
                     const usize copyLen = std::min(ev.name.size(), sizeof(previewBuf) - 1 - previewLen);
-                    std::memcpy(previewBuf + previewLen, ev.name.data(), copyLen);
+                    if (copyLen > 0)
+                    {
+                        std::memcpy(previewBuf + previewLen, ev.name.data(), copyLen);
+                    }
                     previewLen += copyLen;
                 }
             }
@@ -1749,7 +1758,10 @@ void Inspector::State::drawValueWidget(Impl& shell, ui::UiKit& kit, const TypeRe
         {
             const std::string_view shown = mixed ? std::string_view{} : assetPath;
             const usize len = std::min(shown.size(), textFieldBuffer.size() - 1);
-            std::memcpy(textFieldBuffer.data(), shown.data(), len);
+            if (len > 0)
+            {
+                std::memcpy(textFieldBuffer.data(), shown.data(), len);
+            }
             textFieldBuffer[len] = '\0';
         }
         const bool hasClear = !mixed && !assetPath.empty();
@@ -1814,7 +1826,10 @@ void Inspector::State::drawValueWidget(Impl& shell, ui::UiKit& kit, const TypeRe
         {
             const std::string_view shown = mixed ? std::string_view{} : std::string_view(jsonVal.text);
             const usize len = std::min(shown.size(), textFieldBuffer.size() - 1);
-            std::memcpy(textFieldBuffer.data(), shown.data(), len);
+            if (len > 0)
+            {
+                std::memcpy(textFieldBuffer.data(), shown.data(), len);
+            }
             textFieldBuffer[len] = '\0';
         }
         const bool enter = ImGui::InputText(text.hidden(fieldId), textFieldBuffer.data(),
