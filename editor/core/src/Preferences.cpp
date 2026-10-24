@@ -239,12 +239,19 @@ Expected<void, std::string> savePreferences(const std::filesystem::path& directo
 
 void addRecentProject(std::vector<std::string>& recent, std::string_view project)
 {
-    std::erase(recent, project);
-    recent.insert(recent.begin(), std::string(project));
-    if (recent.size() > kMaxRecentProjects)
+    // A new list (the project first, then the others in order) instead of inserting at the front, which
+    // GCC 13 reports as a null dereference inside std::string (a false positive).
+    std::vector<std::string> next;
+    next.reserve(kMaxRecentProjects);
+    next.emplace_back(project);
+    for (std::string& entry : recent)
     {
-        recent.resize(kMaxRecentProjects);
+        if (next.size() < kMaxRecentProjects && entry != project)
+        {
+            next.push_back(std::move(entry));
+        }
     }
+    recent = std::move(next);
 }
 
 std::span<const std::string_view> preferenceThemes() noexcept
