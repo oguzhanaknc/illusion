@@ -4,9 +4,10 @@
 // gallery, run headless (see HeadlessUi) or with a real renderer (GPU tests).
 
 #include "Gallery.hpp"
-#include "HeadlessUi.hpp"
 
+#include <illusion/editor/ui/EditorData.hpp>
 #include <illusion/editor/ui/FontManager.hpp>
+#include <illusion/editor/ui/HeadlessUi.hpp>
 #include <illusion/editor/ui/Theme.hpp>
 #include <illusion/editor/ui/UiContext.hpp>
 #include <illusion/platform/FileSystem.hpp>
@@ -31,9 +32,9 @@ inline ui::Theme loadTestTheme(VirtualFileSystem& vfs, std::string_view name)
 {
     if (!vfs.isMounted("editor"))
     {
-        REQUIRE(gallery::mountEditorData(vfs));
+        REQUIRE(ui::mountEditorData(vfs));
     }
-    auto theme = gallery::loadTheme(vfs, name);
+    auto theme = ui::loadTheme(vfs, name);
     REQUIRE_MESSAGE(theme.hasValue(), (theme ? std::string() : theme.error()));
     return std::move(theme.value());
 }
@@ -52,7 +53,7 @@ struct GalleryFixture
     ui::Theme theme;
     ui::UiContext context;
     std::unique_ptr<ui::FontManager> fonts;
-    std::unique_ptr<gallery::HeadlessUi> headless;
+    std::unique_ptr<ui::HeadlessUi> headless;
     text::Localization localization;
     std::unique_ptr<gallery::Gallery> galleryPage;
     f64 time = 0.0;
@@ -67,7 +68,7 @@ struct GalleryFixture
         fonts->setScale(scale, 1.0f);
         if (renderer == FixtureRenderer::Headless)
         {
-            headless = std::make_unique<gallery::HeadlessUi>(context);
+            headless = std::make_unique<ui::HeadlessUi>(context);
         }
         galleryPage = std::make_unique<gallery::Gallery>(localization, theme, fonts.get());
         galleryPage->setTheme(theme, scale);

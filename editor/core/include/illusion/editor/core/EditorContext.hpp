@@ -13,11 +13,13 @@
 #include <illusion/editor/core/CommandRegistry.hpp>
 #include <illusion/editor/core/CrashJournal.hpp>
 #include <illusion/editor/core/EntityIndex.hpp>
+#include <illusion/editor/core/Preferences.hpp>
 #include <illusion/editor/core/Project.hpp>
 #include <illusion/editor/core/ReferenceIndex.hpp>
 #include <illusion/editor/core/SceneDocument.hpp>
 #include <illusion/editor/core/Selection.hpp>
 #include <illusion/editor/core/SettingsCatalog.hpp>
+#include <illusion/editor/core/UiHost.hpp>
 #include <illusion/editor/core/UndoStack.hpp>
 #include <illusion/editor/core/WorldEditor.hpp>
 #include <illusion/platform/FileSystem.hpp>
@@ -60,6 +62,10 @@ struct EditorContextOptions
     /// The MCP bridge that `project.create` names in the new project's `.mcp.json` (empty: `illusion_mcp`,
     /// found through `PATH`). The editor passes the absolute path of the `illusion_mcp` next to it.
     std::filesystem::path mcpServer{};
+    /// Per-user directory of the preferences (`preferences.json`) and saved layouts (empty: preferences are
+    /// kept in memory only, as in tests and deterministic runs). The editor passes
+    /// `userDataDirectory("illusion", "editor")`.
+    std::filesystem::path userDirectory{};
 };
 
 /// How a command is run.
@@ -280,6 +286,22 @@ public:
     /// Replaces the clipboard.
     void setClipboard(std::string text) noexcept { m_clipboard = std::move(text); }
 
+    /// The user's preferences (loaded from EditorContextOptions::userDirectory).
+    [[nodiscard]] const Preferences& preferences() const noexcept { return m_preferences; }
+
+    /// Validates @p preferences, applies the autosave settings and saves them to the user directory.
+    /// preferencesVersion() increases when anything changed; the UI applies theme, language and keymap then.
+    [[nodiscard]] Expected<void, CommandError> setPreferences(Preferences preferences);
+
+    /// Increases whenever the preferences change.
+    [[nodiscard]] u64 preferencesVersion() const noexcept { return m_preferencesVersion; }
+
+    /// The user interface the `ui.*` commands drive, or nullptr (headless without a GPU).
+    [[nodiscard]] UiHost* ui() const noexcept { return m_ui; }
+
+    /// Sets the user interface (nullptr when it goes away). It must outlive its registration.
+    void setUi(UiHost* ui) noexcept { m_ui = ui; }
+
     /// Recent log messages of the process (nullptr if EditorContextOptions::logCapacity is 0).
     [[nodiscard]] const LogRingSink* log() const noexcept { return m_log.get(); }
 
@@ -469,6 +491,9 @@ private:
     SettingsCatalog m_settings;
     ReferenceIndex m_references;
     std::string m_clipboard;
+    Preferences m_preferences;
+    u64 m_preferencesVersion = 1;
+    UiHost* m_ui = nullptr;
     std::shared_ptr<LogRingSink> m_log;
     u64 m_logCleared = 0;
     f64 m_autosaveTimer = 0.0;

@@ -21,16 +21,19 @@ illusion_add_editor_executable(illusion_editor_tests
     core/TestEditorSettings.cpp
     core/TestEditorTransactions.cpp
     core/TestEditorTransforms.cpp
+    core/TestEditorUi.cpp
     mcp/TestMcpBridge.cpp
     mcp/TestMcpProtocol.cpp
     rpc/TestEditorClient.cpp
+    rpc/TestRpcApprovals.cpp
     rpc/TestRpcAsync.cpp
     rpc/TestRpcProtocol.cpp
     rpc/TestRpcServer.cpp
-    rpc/TestRpcTransport.cpp)
+    rpc/TestRpcTransport.cpp
+    shell/TestEditorShell.cpp)
 target_include_directories(illusion_editor_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR} ${PROJECT_SOURCE_DIR}/tests)
 target_link_libraries(illusion_editor_tests PRIVATE
-    illusion_ui_gallery_pages illusion::editor_core illusion::editor_client illusion::doctest)
+    illusion_ui_gallery_pages illusion::editor_core illusion::editor_client illusion::editor_shell illusion::doctest)
 # Golden files of the editor core (ILLUSION_UPDATE_GOLDENS=1 rewrites them).
 target_compile_definitions(illusion_editor_tests PRIVATE ILLUSION_EDITOR_TEST_DATA="${CMAKE_CURRENT_SOURCE_DIR}/data")
 # The client tests launch the editor.
@@ -46,13 +49,18 @@ doctest_discover_tests(illusion_editor_tests
 # ui-captures/ in the build tree (or ILLUSION_UI_CAPTURE_DIR) for design review.
 illusion_add_editor_executable(illusion_editor_gpu_tests
     ${PROJECT_SOURCE_DIR}/tests/gpu/main.cpp
+    ${PROJECT_SOURCE_DIR}/tests/AllocationCounter.cpp
+    gpu/TestEditorShellGpu.cpp
     gpu/TestUiRenderer.cpp)
-target_include_directories(illusion_editor_gpu_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
-target_link_libraries(illusion_editor_gpu_tests PRIVATE illusion_ui_gallery_pages illusion::doctest)
+target_include_directories(illusion_editor_gpu_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR} ${PROJECT_SOURCE_DIR}/tests)
+target_link_libraries(illusion_editor_gpu_tests PRIVATE
+    illusion_ui_gallery_pages illusion::editor_shell illusion::editor_client illusion::doctest)
 target_compile_definitions(illusion_editor_gpu_tests PRIVATE
     ILLUSION_GOLDEN_DIR="${CMAKE_CURRENT_SOURCE_DIR}/data/golden"
-    ILLUSION_UI_CAPTURE_DIR="${CMAKE_BINARY_DIR}/ui-captures")
-add_dependencies(illusion_editor_gpu_tests illusion_editor_data)
+    ILLUSION_UI_CAPTURE_DIR="${CMAKE_BINARY_DIR}/ui-captures"
+    ILLUSION_EDITOR_TEST_DATA="${CMAKE_CURRENT_SOURCE_DIR}/data"
+    ILLUSION_EDITOR_EXECUTABLE="$<TARGET_FILE:illusion_editor>")
+add_dependencies(illusion_editor_gpu_tests illusion_editor_data illusion_editor)
 illusion_configure_target(illusion_editor_gpu_tests)
 doctest_discover_tests(illusion_editor_gpu_tests
     PROPERTIES LABELS "gpu"

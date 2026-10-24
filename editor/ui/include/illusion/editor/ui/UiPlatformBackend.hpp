@@ -7,6 +7,7 @@
 #include <illusion/core/Base.hpp>
 #include <illusion/core/EventBus.hpp>
 #include <illusion/core/Math.hpp>
+#include <illusion/platform/Input.hpp>
 
 #include <string>
 
@@ -19,6 +20,9 @@ namespace illusion::editor::ui
 {
 
 class UiContext;
+
+/// The ImGuiKey of @p key (ImGuiKey_None for keys Dear ImGui does not know), for shortcut chords.
+[[nodiscard]] int imguiKey(Key key) noexcept;
 
 /// The platform backend of one UiContext and one Window. Window events reach Dear ImGui in order through
 /// the EventBus the window enqueues on, so dispatch the bus before newFrame(). Not thread-safe.

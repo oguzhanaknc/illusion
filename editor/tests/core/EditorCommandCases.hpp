@@ -39,6 +39,7 @@ inline constexpr CommandCase kCommandCases[] = {
      R"({"label":"Two","steps":[{"as":"made","method":"entity.create","params":{"name":"Made","parent":"/Game"}},{"method":"entity.rename","params":{"entity":"$made.entity.id","name":"Renamed"}}]})"},
     {"editor.describe", R"({"command":"entity.create"})"},
     {"editor.list_commands", R"({})"},
+    {"editor.screenshot", R"({"width":128,"height":96})"},
     {"editor.wait", R"({"frames":3})"},
     {"entity.create", R"({"name":"New","parent":"/Game","components":{"test.Link":{"weight":3}}})"},
     {"entity.destroy", R"({"entities":["/Game/Board"]})"},
@@ -74,6 +75,8 @@ inline constexpr CommandCase kCommandCases[] = {
     {"project.file_write", R"({"path":"assets:/notes.txt","text":"hello"})"},
     {"project.info", R"({})"},
     {"project.open", R"({"directory":"project","discardChanges":true})"},
+    {"preferences.get", R"({})"},
+    {"preferences.set", R"({"value":{"theme":"light","uiScale":1.25}})"},
     {"project.recover", R"({})"},
     {"project.settings_get", R"({})"},
     {"project.settings_set", R"({"type":"test.Controls","value":{"invertY":true}})"},
@@ -101,6 +104,15 @@ inline constexpr CommandCase kCommandCases[] = {
     {"transform.scale", R"({"entities":["/Game"],"factor":[2,2,2],"point":[0,0,0]})"},
     {"transform.set", R"({"entities":["/Game/Board"],"position":[1,2,3],"euler":[0,90,0]})"},
     {"transform.translate", R"({"entities":["/Game/Board","/Light"],"offset":[1,0,0],"space":"self"})"},
+    {"ui.layout_apply", R"({"name":"default"})"},
+    {"ui.layout_delete", R"({"name":"saved"})"},
+    {"ui.layout_reset", R"({})"},
+    {"ui.layout_save", R"({"name":"mine"})"},
+    {"ui.notify", R"({"message":"Board built","level":"success"})"},
+    {"ui.palette", R"({"mode":"entities","query":"Board"})"},
+    {"ui.quit", R"({})"},
+    {"ui.show_panel", R"({"panel":"panel.console"})"},
+    {"ui.state", R"({})"},
 };
 
 // Commands that need another one to run first (with {} params) on the fixture.

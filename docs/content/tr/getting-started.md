@@ -101,6 +101,33 @@ Ardından `cmake --preset dev` ve `cmake --build C:/dev/illusion-build/dev --con
 | `ILLUSION_SHARED_MODULES` | `ON` (profiling'de `OFF`) | Oyun modüllerini hot-reload edilebilen paylaşımlı kütüphaneler olarak derler; `OFF` onları statik linkler. |
 | `ILLUSION_SANITIZER` | boş | `address` (ASan + UBSan) veya `thread` (TSan); yalnızca GCC/Clang. |
 
+## Editörü başlatmak
+
+Editör motorla birlikte derlenir (`illusion_editor` diğer çalıştırılabilir dosyaların yanındadır, yanında da
+`editor-data` bulunur). Bir projeyle ya da Welcome penceresini açmak için projesiz başlatın:
+
+```bash
+./build/linux-clang/bin/Debug/illusion_editor --project games/tetris
+```
+
+Windows'ta build klasöründen herhangi bir program gibi çalıştırın; derlemek için geliştirici ortamı gerekir:
+
+```bat
+tools\windows\vsdev.cmd cmake --build --preset windows-msvc-debug --target illusion_editor
+build\windows-msvc\bin\Debug\illusion_editor.exe --project games\tetris
+```
+
+| Seçenek | Açıklama |
+| --- | --- |
+| `--project <dir>` | Bu projeyi açar. |
+| `--workspace <dir>` | Welcome penceresinin ve ajanların proje oluşturup açtığı klasör (varsayılan: ev klasörünüz ya da projenin üst klasörü). |
+| `--rpc-listen [<socket>]` | Ajanların bağlanmasına izin verir (bkz. [Yapay Zekâ Ajanları](manual/editor/ai-agents.md)). |
+| `--permissions read-only\|ask\|auto` | Bu çalıştırma için ajanların izin modu (varsayılan: Preferences ayarı). |
+| `--user-dir <dir>` | Tercihlerin ve kaydedilmiş yerleşimlerin klasörü. |
+| `--headless` | Pencere yok: yalnızca editör protokolüne hizmet verir (bkz. [Otomasyon](manual/editor/automation.md)). |
+
+[Editör Penceresi](manual/editor/interface.md) sayfası pencereyi anlatır.
+
 ## Benchmark'lar
 
 Benchmark'lar kritik yolları ölçer ve bir işlem performans bütçesini aştığında başarısız olur. Release

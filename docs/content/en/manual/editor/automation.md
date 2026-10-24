@@ -6,7 +6,7 @@ line, over its stdin and stdout or over a local socket. Nothing listens on the n
 
 ## Running the editor headless
 
-Until the editor window arrives, `illusion_editor` runs headless:
+Without a window (`--headless`), `illusion_editor` only serves the editor protocol:
 
 ```bash
 illusion_editor --headless --workspace ~/games --rpc-stdio
@@ -14,14 +14,16 @@ illusion_editor --headless --workspace ~/games --rpc-stdio
 
 | Option | Meaning |
 | --- | --- |
-| `--headless` | No window (required for now). |
+| `--headless` | No window. Without it the editor window opens (see [Editor Window](interface.md)). |
 | `--project <dir>` | Open this project at start. |
 | `--workspace <dir>` | The directory where `project.create` and `project.open` may work (default: the parent of `--project`, or the current directory). |
 | `--rpc-stdio` | Serve the parent process over stdin and stdout. The editor ends when stdin closes. |
 | `--rpc-listen [<socket>]` | Serve local clients over an `AF_UNIX` socket (default: in the project, see below). |
 | `--permissions read-only\|ask\|auto` | What clients may run (default `auto`). |
 | `--deterministic`, `--seed <n>` | Seeded entity ids and a fixed 1/60 s frame step, for reproducible sessions. |
-| `--no-gpu` | Run without a GPU; commands that need one fail with `unsupported`. |
+| `--no-gpu` | Run without a GPU; commands that need one (`editor.screenshot`, the `ui.*` commands) fail with `unsupported`. With a GPU the UI runs offscreen. |
+| `--ui-size <w>x<h>` | Size of the offscreen UI for `editor.screenshot` (default 1920x1080). |
+| `--user-dir <dir>` | Preferences and saved layouts (default: kept in memory). |
 | `--frames <n>` | Stop after `n` frames. |
 
 The log goes to stderr, so stdout carries only the protocol.

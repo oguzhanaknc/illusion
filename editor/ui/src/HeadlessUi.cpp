@@ -1,14 +1,13 @@
-#include "HeadlessUi.hpp"
-
 #include <illusion/core/Assert.hpp>
+#include <illusion/editor/ui/HeadlessUi.hpp>
 #include <illusion/editor/ui/UiContext.hpp>
 
 #include <imgui.h>
 
-namespace illusion::editor::gallery
+namespace illusion::editor::ui
 {
 
-HeadlessUi::HeadlessUi(ui::UiContext& context)
+HeadlessUi::HeadlessUi(UiContext& context)
     : m_context(context)
 {
     context.makeCurrent();
@@ -74,4 +73,4 @@ void HeadlessUi::endFrame()
     }
 }
 
-} // namespace illusion::editor::gallery
+} // namespace illusion::editor::ui

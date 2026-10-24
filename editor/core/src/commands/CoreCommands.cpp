@@ -2,6 +2,7 @@
 
 #include <illusion/core/Hash.hpp>
 #include <illusion/ecs/StructRegistry.hpp>
+#include <illusion/editor/core/Preferences.hpp>
 #include <illusion/text/MessageFormat.hpp>
 #include <illusion/text/TextOutput.hpp>
 
@@ -423,6 +424,46 @@ void reflectCoreCommandTypes(StructRegistry& structs)
         reflectStruct<LogStateResult>("editor.LogStateResult", 1, structs)
             .field("level", &LogStateResult::level)
             .field("last", &LogStateResult::last);
+
+        reflectStruct<UiPanelEntry>("editor.UiPanelEntry", 1, structs)
+            .field("id", &UiPanelEntry::id)
+            .field("title", &UiPanelEntry::title)
+            .field("open", &UiPanelEntry::open)
+            .field("docked", &UiPanelEntry::docked);
+        reflectStruct<UiLayoutEntry>("editor.UiLayoutEntry", 1, structs)
+            .field("name", &UiLayoutEntry::name)
+            .field("builtIn", &UiLayoutEntry::builtIn)
+            .field("active", &UiLayoutEntry::active);
+        reflectStruct<UiStateResult>("editor.UiStateResult", 1, structs)
+            .field("panels", &UiStateResult::panels)
+            .field("layouts", &UiStateResult::layouts);
+        reflectStruct<UiShowPanelParams>("editor.UiShowPanelParams", 1, structs)
+            .field("panel", &UiShowPanelParams::panel)
+            .field("open", &UiShowPanelParams::open);
+        reflectStruct<UiLayoutParams>("editor.UiLayoutParams", 1, structs)
+            .field("name", &UiLayoutParams::name);
+        reflectStruct<UiPaletteParams>("editor.UiPaletteParams", 1, structs)
+            .field("mode", &UiPaletteParams::mode)
+            .field("query", &UiPaletteParams::query);
+        reflectStruct<UiNotifyParams>("editor.UiNotifyParams", 1, structs)
+            .field("message", &UiNotifyParams::message)
+            .field("level", &UiNotifyParams::level);
+        reflectStruct<ScreenshotParams>("editor.ScreenshotParams", 1, structs)
+            .field("width", &ScreenshotParams::width, {.min = 64.0, .max = 7680.0})
+            .field("height", &ScreenshotParams::height, {.min = 64.0, .max = 4320.0});
+        reflectStruct<ResultImage>("editor.ResultImage", 1, structs)
+            .field("mimeType", &ResultImage::mimeType)
+            .field("data", &ResultImage::data);
+        reflectStruct<ScreenshotResult>("editor.ScreenshotResult", 1, structs)
+            .field("width", &ScreenshotResult::width)
+            .field("height", &ScreenshotResult::height)
+            .field("_images", &ScreenshotResult::_images);
+        reflectStruct<PreferencesSetParams>("editor.PreferencesSetParams", 1, structs)
+            .field("value", &PreferencesSetParams::value)
+            .field("replace", &PreferencesSetParams::replace);
+        reflectStruct<PreferencesResult>("editor.PreferencesResult", 1, structs)
+            .field("value", &PreferencesResult::value);
+        reflectPreferences(structs);
     });
 }
 
@@ -444,6 +485,7 @@ void registerCoreCommands(CommandRegistry& registry)
     detail::registerMaterialCommands(registry);
     detail::registerLogCommands(registry);
     detail::registerSettingsCommands(registry);
+    detail::registerUiCommands(registry);
 }
 
 namespace detail

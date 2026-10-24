@@ -107,8 +107,14 @@ Editörün izin modu, ajanın neyi çalıştırabileceğine karar verir:
 | Mod | Ajan şunu yapabilir |
 | --- | --- |
 | `read-only` | yalnızca okuma (sahne, Entity'ler, dosyalar). |
-| `ask` | okuma ve düzenleme; dosya, Build, yıkıcı ve sistem komutları bir kişinin onayını ister (editörün penceresi yokken reddedilir). |
+| `ask` | okuma ve düzenleme; dosya, Build, yıkıcı ve sistem komutları bir kişinin onayını ister (editörün penceresi yokken reddedilir). Editör penceresinin varsayılanı. |
 | `auto` | her şeyi çalıştırma. Penceresiz editörün varsayılanı. |
+
+Editör penceresinde onay gerektiren bir çağrı bekler: editörün başındaki kişi bir istem görür ve çağrıya bir
+kez izin verir, bu tür komutlara oturumun geri kalanında izin verir ya da reddeder. AI Activity paneli bağlı
+ajanları ve her çağrıyı parametreleri, süresi ve sonucuyla gösterir; kişi buradan bir ajanı duraklatabilir,
+bağlantısını kesebilir ve modu değiştirebilir (bkz. [Editör Penceresi](interface.md#ai-activity)). Bekleyen bir
+çağrı ilerleme göstermez; ajanın sonraki çağrıları onun arkasında bekler.
 
 Reddedilen bir çağrı `permission_denied` türüyle başarısız olur. Bir ajanın yaptığı her değişikliğin kaynağı
 `rpc:illusion_mcp` olur; böylece `history.undo {"scope": "mine"}` yalnızca ajanın adımlarını geri alır,
@@ -141,7 +147,8 @@ sonuca bununla ilgili bir not ekler. Bağlanılan bir editör kaybolursa `editor
 | `MCP_PROTOCOL_NEGOTIATION` ya da `Unsupported protocol version` (-32022) | İstemci, köprünün konuşmadığı bir protokol sürümü istedi. Köprü 2025-06-18 ve 2025-11-25 (`initialize` ile) ve 2026-07-28 (durumsuz) konuşur; istemciyi ya da köprüyü güncelleyin. |
 | `send initialize first` (-32600) | Bir istemci `initialize` olmadan ve modern `_meta` sürümü olmadan istek gönderdi. |
 | Araçlar eksik | `--tools` değerini kontrol edin; `illusion_call` her komuta ulaşır. |
-| Çağrılar `permission_denied` ile başarısız | Editör `read-only` ya da `ask` modunda çalışıyor; `--permissions auto` ile başlatın. |
+| Çağrılar `permission_denied` ile başarısız | Editör `read-only` ya da `ask` modunda çalışıyor ya da editörün başındaki kişi çağrıyı reddetti; `--permissions auto` ile başlatın ya da modu AI Activity panelinde değiştirin. |
+| Bir çağrı uzun süre bekliyor | Editör penceresi bir kişinin onayını bekliyor (`ask` modu); AI Activity paneline bakın. |
 | Metin özetleri `truncated` ile bitiyor | Sonuç `structuredContent` içinde eksiksizdir; isteği `limit` ile daraltın. |
 | `editor_crashed` | Editörün son log satırları hatanın içindedir; yeniden başlatıp kurtarmak için tekrar çağırın. |
 

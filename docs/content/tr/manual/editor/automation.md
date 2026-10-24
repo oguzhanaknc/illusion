@@ -6,7 +6,7 @@ ve stdout üzerinden ya da yerel bir soket üzerinden. Ağda hiçbir şey dinlem
 
 ## Editörü penceresiz çalıştırmak
 
-Editör penceresi gelene kadar `illusion_editor` penceresiz çalışır:
+Penceresiz (`--headless`) `illusion_editor` yalnızca editör protokolüne hizmet verir:
 
 ```bash
 illusion_editor --headless --workspace ~/games --rpc-stdio
@@ -14,14 +14,16 @@ illusion_editor --headless --workspace ~/games --rpc-stdio
 
 | Seçenek | Anlamı |
 | --- | --- |
-| `--headless` | Pencere yok (şimdilik zorunlu). |
+| `--headless` | Pencere yok. Bu seçenek olmadan editör penceresi açılır (bkz. [Editör Penceresi](interface.md)). |
 | `--project <dir>` | Başlarken bu projeyi açar. |
 | `--workspace <dir>` | `project.create` ve `project.open` komutlarının çalışabileceği dizin (varsayılan: `--project`'in üst dizini ya da geçerli dizin). |
 | `--rpc-stdio` | Üst sürece stdin ve stdout üzerinden hizmet verir. stdin kapanınca editör sona erer. |
 | `--rpc-listen [<socket>]` | Yerel istemcilere bir `AF_UNIX` soketi üzerinden hizmet verir (varsayılan: projenin içinde, aşağıya bakın). |
 | `--permissions read-only\|ask\|auto` | İstemcilerin neleri çalıştırabileceği (varsayılan `auto`). |
 | `--deterministic`, `--seed <n>` | Tekrarlanabilir oturumlar için tohumlanmış Entity id'leri ve sabit 1/60 s frame adımı. |
-| `--no-gpu` | GPU olmadan çalışır; GPU gerektiren komutlar `unsupported` ile başarısız olur. |
+| `--no-gpu` | GPU olmadan çalışır; GPU gerektiren komutlar (`editor.screenshot`, `ui.*` komutları) `unsupported` ile başarısız olur. GPU varken arayüz ekran dışında çalışır. |
+| `--ui-size <w>x<h>` | `editor.screenshot` için ekran dışı arayüzün boyutu (varsayılan 1920x1080). |
+| `--user-dir <dir>` | Tercihler ve kaydedilmiş yerleşimler (varsayılan: bellekte tutulur). |
 | `--frames <n>` | `n` frame sonra durur. |
 
 Log stderr'e gider; böylece stdout yalnızca protokolü taşır.

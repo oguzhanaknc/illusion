@@ -10,10 +10,12 @@ illusion_add_editor_library(illusion_editor_core STATIC
     src/EntityIndex.cpp
     src/JsonSchema.cpp
     src/Operation.cpp
+    src/Preferences.cpp
     src/Project.cpp
     src/ReferenceIndex.cpp
     src/Selection.cpp
     src/SettingsCatalog.cpp
+    src/UiActions.cpp
     src/UndoStack.cpp
     src/WorldEditor.cpp
     src/commands/AssetCommands.cpp
@@ -31,7 +33,8 @@ illusion_add_editor_library(illusion_editor_core STATIC
     src/commands/SelectionCommands.cpp
     src/commands/SettingsCommands.cpp
     src/commands/TransactionCommands.cpp
-    src/commands/TransformCommands.cpp)
+    src/commands/TransformCommands.cpp
+    src/commands/UiCommands.cpp)
 add_library(illusion::editor_core ALIAS illusion_editor_core)
 
 target_include_directories(illusion_editor_core PUBLIC

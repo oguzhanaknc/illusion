@@ -1,6 +1,7 @@
 #include "EditorTestSupport.hpp"
 
 #include <illusion/editor/EditorStrings.hpp>
+#include <illusion/editor/ui/EditorData.hpp>
 #include <illusion/editor/ui/FontManager.hpp>
 #include <illusion/editor/ui/Icons.hpp>
 #include <illusion/text/TextOutput.hpp>
@@ -86,6 +87,15 @@ TEST_CASE("every icon name resolves to a glyph of the icon font")
               ->IsGlyphInFont(static_cast<ImWchar>(ui::icons::kTerminal.codepoint)));
 }
 
+// Sample values of every argument the editor strings use.
+const text::MessageArgument kSampleArguments[] = {
+    {"action", "Undo"},       {"client", "claude"}, {"count", 3},
+    {"era", "2025-06-18"},    {"fps", 144},         {"message", "no"},
+    {"method", "scene.save"}, {"milestone", "M7m"}, {"ms", 16.7},
+    {"permission", "files"},  {"revision", 42},     {"title", "Save"},
+    {"version", "0.7.0"},
+};
+
 TEST_CASE("every character of the editor strings in English and en-XA has a glyph in every text font")
 {
     test::GalleryFixture fixture;
@@ -98,7 +108,8 @@ TEST_CASE("every character of the editor strings in English and en-XA has a glyp
             std::string formatted;
             text::TextOutput out(formatted);
             const text::TextKey key{&table, index};
-            REQUIRE(fixture.localization.format(key, {{"count", 3}, {"fps", 144}}, out).hasValue());
+            INFO(locale << " " << key.name());
+            REQUIRE(fixture.localization.format(key, kSampleArguments, out).hasValue());
             for (const ui::FontRole role : {ui::FontRole::Body, ui::FontRole::Strong, ui::FontRole::Title})
             {
                 const std::u32string missing = missingGlyphs(fixture.fonts->font(role), formatted);
@@ -138,7 +149,7 @@ TEST_CASE("font roles have the sizes of the design and scale through FontScaleDp
 TEST_CASE("loading fonts from a directory without them fails with the missing path")
 {
     VirtualFileSystem vfs;
-    REQUIRE(gallery::mountEditorData(vfs));
+    REQUIRE(ui::mountEditorData(vfs));
     ui::UiContext context;
     auto fonts = ui::FontManager::load(context, vfs, "editor:/themes");
     REQUIRE_FALSE(fonts.hasValue());

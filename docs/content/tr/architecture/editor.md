@@ -13,7 +13,8 @@ Editör kodu `editor/` altında yaşar:
 | `editor/thirdparty` | `illusion::imgui`, `illusion::implot` | Editörün yapılandırma başlığıyla Dear ImGui (docking) ve ImPlot |
 | `editor/strings` | `illusion::editor_strings` | Editörün İngilizce metni (`editor/data/locales/en.json`), string tablosu olarak |
 | `editor/core` | `illusion::editor_core` | Penceresiz editör çekirdeği: projeler, düzenlenen sahne, tipli komutlar, transaction'lar, undo, journal'lar (GPU, Dear ImGui veya socket yok) |
-| `editor/ui` | `illusion::editor_ui` | Backend'ler, tema, fontlar, ikonlar, kare başına metin, widget kiti, `UiDriver` |
+| `editor/ui` | `illusion::editor_ui` | Backend'ler, tema, fontlar, ikonlar, kare başına metin, widget kiti, ekran dışı ve GPU'suz kareler (`OffscreenUi`, `HeadlessUi`), `UiDriver` |
+| `editor/shell` | `illusion::editor_shell` | Editör penceresinin arayüzü: menüler, araç çubuğu, yerleşimler, palet, konsol, geçmiş, AI Activity, tercihler, proje pencereleri |
 | `editor/tools/ui_gallery` | `illusion_ui_gallery` | Tasarım incelemeleri ve golden görüntü testleri için widget kataloğu |
 | `editor/tools/command_reference` | `illusion_editor_command_reference` | Üretilen [komut referansını](../reference/editor-commands.md) yazar ve kontrol eder |
 | `editor/data` | `editor-data/` | Temalar, locale'ler ve proje şablonları; fontlarla birlikte editör çalıştırılabilirlerinin yanına kopyalanır |
@@ -207,6 +208,32 @@ reflection'lı struct'lar) ve `assets:/` altındaki her sahne ve Material dosyas
 `asset.move` onları yeniden yazabilir, `asset.delete` de reddedebilir. Kılavuz
 [kullanımını](../manual/editor/index.md) anlatır.
 
+## Editör kabuğu
+
+`illusion::editor_shell` pencerenin arayüzüdür (`EditorShell`). Editör durumunu yukarıdaki UI yığınıyla çizer
+ve yalnızca komutlarla değiştirir: her menü öğesi, araç çubuğu düğmesi ve kısayol, bir komutu sabit
+parametrelerle çalıştıran bir `UiAction`'dır (`editor_core` içindedir; böylece eylem tablosu, keymap preset'leri
+ve test'leri pencere gerektirmez) ve palet formları parametrelerin reflection bilgisinden kurar. Kabuk, `ui.*`
+komutlarının ve `editor.screenshot`'ın arkasındaki `UiHost`'tur ve `EditorContext::setUi()` ile kaydedilir;
+o olmadan (`--no-gpu`) bu komutlar `unsupported` ile başarısız olur.
+
+```text
+illusion_editor main loop (windowed)
+  Platform::pollEvents / waitEvents   <- RpcServer wakes it (Platform::wake)
+  RpcServer::pump(8 ms)               -- requests, approvals held for the window
+  EditorShell::beginFrame             -- preferences (theme, scale, locale, keymap), pending layouts
+  ImGui::NewFrame, EditorShell::draw  -- menus, toolbar, dock space, panels, palette, prompts, toasts
+  ImGui::Render, OffscreenUi::renderTo(swapchain), screenshots (OffscreenUi::capture)
+  EditorContext::endFrame             -- events, journal, autosave
+```
+
+Tercihler çekirdekte reflection'lı bir struct'tır (kullanıcı dizininde `preferences.json`, `preferences.set` ile
+değiştirilir). Yerleşimler, açık panelleri tutan bir `[IllusionShell][Panels]` bölümüyle birlikte Dear ImGui
+ayar metnidir; beş hazır yerleşim `DockBuilder` ile kurulur. AI Activity paneli `RpcServer`'ı (istemciler,
+etkinlik halkası, onaylar) `stateVersion()` değiştiğinde yenilediği kopyalar üzerinden okur; böylece boşta
+frame'ler bellek ayırmaz. GPU'su olan penceresiz bir editör aynı kabuğu bir `OffscreenUi` içinde çalıştırır ve
+yalnızca `editor.screenshot`'ı yanıtlamak için çizer. Kılavuz [pencereyi](../manual/editor/interface.md) anlatır.
+
 ## MCP köprüsü
 
 `illusion_mcp`, bir MCP istemcisi ile editör arasında duran ayrı bir süreçtir
@@ -230,6 +257,8 @@ Sonucu [yapay zekâ ajanları kılavuzu](../manual/editor/ai-agents.md) anlatır
 
 - Boşta geçen UI kareleri bellek ayırmaz: etiketler kare başına bir arenada oluşturulur, renderer buffer'ları
   yalnızca büyür ve bir test galeri kareleri boyunca hem genel hem Dear ImGui bellek ayırmalarını sayar.
+- `editor/shell-idle-frame` tüm editör penceresinin 1920x1080'de boşta bir karesini ölçer (yaklaşık 32 µs;
+  bütçe 300 µs); bir test de 120 ısınma karesinden sonra boşta kabuk karelerinin bellek ayırmadığını kontrol eder.
 - `ui/gallery-frame` Benchmark'ı en yoğun galeri sayfasının bir karesinin CPU maliyetini ölçer (bir masaüstü
   makinede yaklaşık 40 µs; bütçe 400 µs).
 - Editör çekirdeğinin Benchmark'ları: `editor/component-set` (birleştirilen tek bir `component.set`),

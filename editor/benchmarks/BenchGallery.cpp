@@ -1,9 +1,10 @@
 #include "Budget.hpp"
 #include "Gallery.hpp"
-#include "HeadlessUi.hpp"
 
 #include <illusion/core/Assert.hpp>
+#include <illusion/editor/ui/EditorData.hpp>
 #include <illusion/editor/ui/FontManager.hpp>
+#include <illusion/editor/ui/HeadlessUi.hpp>
 #include <illusion/editor/ui/UiContext.hpp>
 #include <illusion/platform/FileSystem.hpp>
 #include <illusion/text/Localization.hpp>
@@ -17,14 +18,14 @@ using namespace illusion::editor;
 ILL_BENCHMARK("ui/gallery-frame", 400'000.0)
 {
     VirtualFileSystem vfs;
-    ILL_CHECK(gallery::mountEditorData(vfs), "editor-data is missing next to the benchmark");
-    auto theme = gallery::loadTheme(vfs, "dark");
+    ILL_CHECK(ui::mountEditorData(vfs), "editor-data is missing next to the benchmark");
+    auto theme = ui::loadTheme(vfs, "dark");
     ILL_CHECK(theme.hasValue(), "cannot load the dark theme");
     ui::UiContext context;
     auto fonts = ui::FontManager::load(context, vfs, "editor:/fonts");
     ILL_CHECK(fonts.hasValue(), "cannot load the editor fonts");
     {
-        gallery::HeadlessUi headless(context);
+        ui::HeadlessUi headless(context);
         text::Localization localization;
         gallery::Gallery page(localization, theme.value(), fonts.value().get());
         page.setTheme(theme.value(), 1.0f);

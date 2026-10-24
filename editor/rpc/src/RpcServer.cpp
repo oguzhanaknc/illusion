@@ -27,6 +27,8 @@ constexpr usize kMaxOutbox = 64u * 1024u * 1024u;
 constexpr usize kReadBuffer = 64u * 1024u;
 constexpr usize kMaxClientName = 64;
 constexpr usize kActivityCapacity = 256;
+constexpr usize kActivityParams = 200;
+constexpr usize kApprovalParams = 512;
 
 struct MethodEntry
 {
@@ -79,10 +81,11 @@ constexpr std::array kServerMethods = {
     ServerMethod{
         "editor.activity", PermissionClass::Read, true,
         "Returns the latest requests of every connection (the last 256), oldest first: sequence number, "
-        "connection, client, method, error code (0 on success), duration in microseconds and the scene "
+        "connection, client, method, params (compact JSON, cut at 200 bytes), error code (0 on success), "
+        "duration in microseconds and the scene "
         "revision after it. Example: {\"since\":0,\"limit\":50}.",
         R"([{"name":"since","schema":{"type":"integer","minimum":0}},{"name":"limit","schema":{"type":"integer","minimum":1}}])",
-        R"({"type":"object","properties":{"entries":{"type":"array","items":{"type":"object","properties":{"seq":{"type":"integer"},"connection":{"type":"integer"},"client":{"type":"string"},"method":{"type":"string"},"code":{"type":"integer"},"micros":{"type":"integer"},"revision":{"type":"integer"}}}}}})"},
+        R"({"type":"object","properties":{"entries":{"type":"array","items":{"type":"object","properties":{"seq":{"type":"integer"},"connection":{"type":"integer"},"client":{"type":"string"},"method":{"type":"string"},"params":{"type":"string"},"code":{"type":"integer"},"micros":{"type":"integer"},"revision":{"type":"integer"}}}}}})"},
     ServerMethod{
         "rpc.cancel", PermissionClass::Read, true,
         "Notification: cancels this connection's request with the given id. A running async command ends "
@@ -105,6 +108,27 @@ std::string compact(const JsonMutDocument& doc)
     if (!doc.write(text, JsonWriteOptions{.pretty = false}))
     {
         return "{}";
+    }
+    return text;
+}
+
+// @p params as compact JSON, cut at @p limit bytes (on a UTF-8 boundary, with "..." added).
+std::string summary(JsonValue params, usize limit)
+{
+    std::string text;
+    if (params.isAbsent() || !params.write(text, JsonWriteOptions{.pretty = false}))
+    {
+        return "{}";
+    }
+    if (text.size() > limit)
+    {
+        usize end = limit;
+        while (end > 0 && (static_cast<u8>(text[end]) & 0xC0u) == 0x80u)
+        {
+            --end;
+        }
+        text.resize(end);
+        text += "...";
     }
     return text;
 }
@@ -295,11 +319,16 @@ bool permits(PermissionMode mode, PermissionClass permission, bool readOnly, boo
     case PermissionMode::ReadOnly:
         return readOnly;
     case PermissionMode::Ask:
-        return permission == PermissionClass::Read || permission == PermissionClass::Edit || interactive;
+        return !needsApproval(permission, readOnly) || interactive;
     case PermissionMode::Auto:
         return true;
     }
     return false;
+}
+
+bool needsApproval(PermissionClass permission, bool readOnly) noexcept
+{
+    return !readOnly && permission != PermissionClass::Read && permission != PermissionClass::Edit;
 }
 
 struct RpcServer::Connection
@@ -330,6 +359,12 @@ struct RpcServer::Connection
     std::string agentVersion;
     std::string era;
     u64 requests = 0;
+
+    // Main thread only: held back by RpcServer::setPaused(), the approval its oldest request waits for, and
+    // the permission classes allowed for its session (bit 1 << PermissionClass).
+    bool paused = false;
+    u64 waiting = 0;
+    u8 allowed = 0;
 
     // Main thread only: the event subscription.
     bool subscribed = false;
@@ -410,14 +445,30 @@ struct RpcServer::Connection
     }
 };
 
-// Lets RPC clients run what the permission mode allows, also inside `editor.batch`.
+constexpr u8 permissionBit(PermissionClass permission) noexcept
+{
+    return static_cast<u8>(1u << static_cast<u32>(permission));
+}
+
+// Lets RPC clients run what the permission mode allows, also inside `editor.batch`: in the ask mode also what
+// a person approved for this request (approved) or for the client's session (allowed).
 struct PermissionGate final : CommandGate
 {
-    PermissionMode mode = PermissionMode::Auto;
+    PermissionGate(PermissionMode gateMode, u8 gateAllowed, bool gateApproved) noexcept
+        : mode(gateMode)
+        , allowed(gateAllowed)
+        , approved(gateApproved)
+    {
+    }
+
+    PermissionMode mode;
+    u8 allowed;
+    bool approved;
 
     Expected<void, CommandError> check(const CommandDescriptor& command) const override
     {
-        if (permits(mode, command.info.permission, command.info.flags.readOnly))
+        if (approved || permits(mode, command.info.permission, command.info.flags.readOnly) ||
+            (mode == PermissionMode::Ask && (allowed & permissionBit(command.info.permission)) != 0))
         {
             return {};
         }
@@ -436,6 +487,10 @@ struct RpcServer::Shared
         std::shared_ptr<Connection> connection;
         Request request;
         bool cancelled = false; // set under queueMutex by rpc.cancel
+        // Main thread only: the approval it waits for, and whether a person approved or denied it.
+        u64 approval = 0;
+        bool approved = false;
+        bool denied = false;
     };
 
     // An async command that has started (main thread only).
@@ -445,6 +500,7 @@ struct RpcServer::Shared
         std::string id; // request id as JSON ("" for a notification)
         std::string method;
         std::string clientToken;
+        std::string params; // summary for the activity ring
         std::unique_ptr<RunningCommand> command;
         CommandProgress sent; // progress in the last rpc.progress
         bool cancelled = false;
@@ -458,6 +514,7 @@ struct RpcServer::Shared
         u32 connection = 0;
         std::string client;
         std::string method;
+        std::string params;
         i32 code = 0;
         u64 micros = 0;
         u64 revision = 0;
@@ -472,7 +529,7 @@ struct RpcServer::Shared
 
     RpcServerOptions options;
     std::string token;
-    PermissionGate gate;
+    std::atomic<PermissionMode> mode{PermissionMode::Auto}; // read by the I/O threads
 
     mutable std::mutex catalogMutex;
     std::shared_ptr<const Catalog> catalog;
@@ -495,12 +552,17 @@ struct RpcServer::Shared
     std::vector<Task> tasks;
     std::deque<Activity> activity;
     u64 activitySeq = 0;
+    std::deque<Work> parked; // requests of paused connections and of connections waiting for an approval
+    std::vector<PendingApproval> approvals;
+    u64 nextApproval = 1;
+    std::atomic<u64> version{1}; // see RpcServer::stateVersion()
 
     // Adds a finished request to the activity ring (polling methods are left out).
-    void record(Connection& connection, std::string_view method, i32 code,
+    void record(Connection& connection, std::string_view method, std::string params, i32 code,
                 std::chrono::steady_clock::time_point started, u64 revision)
     {
         ++connection.requests;
+        ++version;
         if (method == "editor.activity" || method == "editor.clients" || method == "editor.poll_events")
         {
             return;
@@ -512,7 +574,8 @@ struct RpcServer::Shared
         const auto micros =
             std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::steady_clock::now() - started);
         activity.push_back(Activity{++activitySeq, connection.id, connection.origin.substr(4),
-                                    std::string(method), code, static_cast<u64>(micros.count()), revision});
+                                    std::string(method), std::move(params), code,
+                                    static_cast<u64>(micros.count()), revision});
     }
 
     std::shared_ptr<const Catalog> currentCatalog() const
@@ -565,6 +628,7 @@ struct RpcServer::Shared
             connection->client = sanitizeClient(client, connection->id);
             connection->origin = "rpc:" + connection->client;
             connections.push_back(connection);
+            ++version;
         }
         Connection* raw = connection.get();
         raw->writer = std::thread([raw] { raw->writeLoop(); });
@@ -701,7 +765,8 @@ struct RpcServer::Shared
                                 compact(doc)));
             return;
         }
-        if (!permits(options.permissions, method->second.permission, method->second.readOnly))
+        const PermissionMode currentMode = mode.load();
+        if (!permits(currentMode, method->second.permission, method->second.readOnly, options.interactive))
         {
             reply(errorResponse(
                 request.id,
@@ -709,8 +774,7 @@ struct RpcServer::Shared
                                    std::string(request.method) + " needs the '" +
                                        std::string(permissionClassName(method->second.permission)) +
                                        "' permission, which the permission mode '" +
-                                       std::string(permissionModeName(options.permissions)) +
-                                       "' does not grant")));
+                                       std::string(permissionModeName(currentMode)) + "' does not grant")));
             return;
         }
         if (c.inFlight.load() >= options.maxInFlight)
@@ -813,7 +877,7 @@ RpcServer::RpcServer(EditorContext& editor, RpcServerOptions options)
     Shared& shared = *m_shared;
     shared.options = std::move(options);
     shared.token = m_token;
-    shared.gate.mode = shared.options.permissions;
+    shared.mode.store(shared.options.permissions);
     shared.setCatalog(buildCatalog(editor));
     m_discover = shared.currentCatalog()->discover;
     m_subscription = editor.events().subscribe("*", [this](const EditorEvent& event) { deliver(event); });
@@ -860,6 +924,44 @@ usize RpcServer::pump(std::chrono::microseconds budget)
         }
         Connection& connection = *work.connection;
         bool finished = true;
+        if (connection.open.load() && !work.cancelled)
+        {
+            // Requests of one connection run in order: while it is paused or its oldest request waits for a
+            // person, later ones wait too.
+            if (connection.paused || connection.waiting != 0)
+            {
+                shared.parked.push_back(std::move(work));
+                continue;
+            }
+            if (const u8 classes =
+                    work.approved || work.denied ? u8{0} : approvalNeeded(connection, work.request);
+                classes != 0)
+            {
+                PendingApproval approval;
+                approval.id = shared.nextApproval++;
+                approval.connection = connection.id;
+                approval.client = connection.client;
+                approval.method = std::string(work.request.method);
+                approval.params = summary(work.request.params, kApprovalParams);
+                approval.permissions = classes;
+                for (u32 bit = 0; bit < 8; ++bit)
+                {
+                    if ((classes & (1u << bit)) != 0)
+                    {
+                        approval.permission = static_cast<PermissionClass>(bit);
+                        break;
+                    }
+                }
+                ILL_LOG_INFO("rpc", "{} waits for approval of {} ({})", connection.origin, approval.method,
+                             permissionClassName(approval.permission));
+                connection.waiting = approval.id;
+                work.approval = approval.id;
+                shared.approvals.push_back(std::move(approval));
+                ++shared.version;
+                shared.parked.push_back(std::move(work));
+                continue;
+            }
+        }
         if (connection.open.load())
         {
             if (work.cancelled)
@@ -871,14 +973,27 @@ usize RpcServer::pump(std::chrono::microseconds budget)
                                       CommandError::make(ErrorKind::Cancelled, "the request was cancelled")));
                 }
             }
+            else if (work.denied)
+            {
+                const CommandError error = CommandError::make(ErrorKind::PermissionDenied,
+                                                              std::string(work.request.method) +
+                                                                  " was denied by the person at the editor");
+                if (!work.request.notification())
+                {
+                    connection.send(errorResponse(work.request.id, error));
+                }
+                shared.record(connection, work.request.method, summary(work.request.params, kActivityParams),
+                              static_cast<i32>(error.kind), std::chrono::steady_clock::now(),
+                              m_editor.revision());
+            }
             else if (const CommandDescriptor* command = m_editor.commands().find(work.request.method);
                      command != nullptr && command->info.flags.async)
             {
-                finished = !startTask(work.connection, work.request);
+                finished = !startTask(work.connection, work.request, work.approved);
             }
             else
             {
-                std::string response = execute(connection, work.request);
+                std::string response = execute(connection, work.request, work.approved);
                 if (!work.request.notification())
                 {
                     connection.send(response);
@@ -906,6 +1021,214 @@ bool RpcServer::waitForWork(std::chrono::milliseconds timeout)
     return shared.queueReady.wait_for(lock, timeout, [&] {
         return !shared.queue.empty() || shared.stopping;
     }) && !shared.queue.empty();
+}
+
+u8 RpcServer::approvalNeeded(const Connection& connection, const Request& request) const
+{
+    const Shared& shared = *m_shared;
+    if (!shared.options.interactive || shared.mode.load() != PermissionMode::Ask)
+    {
+        return 0;
+    }
+    u8 classes = 0;
+    const auto add = [&](std::string_view name) {
+        const CommandDescriptor* command = m_editor.commands().find(name);
+        if (command == nullptr || !needsApproval(command->info.permission, command->info.flags.readOnly))
+        {
+            return;
+        }
+        const u8 bit = permissionBit(command->info.permission);
+        if ((connection.allowed & bit) == 0)
+        {
+            classes = static_cast<u8>(classes | bit);
+        }
+    };
+    add(request.method);
+    // The steps of a batch run under the batch's approval.
+    if (request.method == "editor.batch")
+    {
+        for (const JsonValue step : request.params.find("steps").elements())
+        {
+            if (const std::optional<std::string_view> name = step.find("method").asString())
+            {
+                add(*name);
+            }
+        }
+    }
+    return classes;
+}
+
+void RpcServer::release(const std::shared_ptr<Connection>& connection)
+{
+    Shared& shared = *m_shared;
+    if (connection->paused || connection->waiting != 0)
+    {
+        return;
+    }
+    std::deque<Shared::Work> held;
+    for (auto it = shared.parked.begin(); it != shared.parked.end();)
+    {
+        if (it->connection == connection)
+        {
+            held.push_back(std::move(*it));
+            it = shared.parked.erase(it);
+        }
+        else
+        {
+            ++it;
+        }
+    }
+    if (held.empty())
+    {
+        return;
+    }
+    {
+        // Held requests are older than everything of the connection still queued, so they go first.
+        const std::lock_guard lock(shared.queueMutex);
+        shared.queue.insert(shared.queue.begin(), std::make_move_iterator(held.begin()),
+                            std::make_move_iterator(held.end()));
+    }
+    shared.queueReady.notify_all();
+    if (shared.options.wake)
+    {
+        shared.options.wake();
+    }
+}
+
+PermissionMode RpcServer::permissions() const noexcept
+{
+    return m_shared->mode.load();
+}
+
+void RpcServer::setPermissions(PermissionMode mode) noexcept
+{
+    m_shared->mode.store(mode);
+    ++m_shared->version;
+}
+
+std::span<const PendingApproval> RpcServer::approvals() const noexcept
+{
+    return m_shared->approvals;
+}
+
+bool RpcServer::decide(u64 id, ApprovalDecision decision)
+{
+    Shared& shared = *m_shared;
+    const auto approval = std::find_if(shared.approvals.begin(), shared.approvals.end(),
+                                       [&](const PendingApproval& entry) { return entry.id == id; });
+    if (approval == shared.approvals.end())
+    {
+        return false;
+    }
+    const u32 connectionId = approval->connection;
+    const u8 classes = approval->permissions;
+    ILL_LOG_INFO("rpc", "{} of {}: {} {}", approval->method, approval->client,
+                 decision == ApprovalDecision::Deny ? "denied" : "allowed",
+                 decision == ApprovalDecision::AllowForSession ? "for the session" : "once");
+    shared.approvals.erase(approval);
+    ++shared.version;
+    for (Shared::Work& work : shared.parked)
+    {
+        if (work.approval == id)
+        {
+            work.approval = 0;
+            (decision == ApprovalDecision::Deny ? work.denied : work.approved) = true;
+        }
+    }
+    std::shared_ptr<Connection> connection;
+    {
+        const std::lock_guard lock(shared.connectionsMutex);
+        for (const std::shared_ptr<Connection>& candidate : shared.connections)
+        {
+            if (candidate->id == connectionId)
+            {
+                connection = candidate;
+            }
+        }
+    }
+    if (connection)
+    {
+        if (decision == ApprovalDecision::AllowForSession)
+        {
+            connection->allowed = static_cast<u8>(connection->allowed | classes);
+        }
+        connection->waiting = 0;
+        release(connection);
+    }
+    return true;
+}
+
+bool RpcServer::setPaused(u32 id, bool paused)
+{
+    std::shared_ptr<Connection> connection;
+    {
+        const std::lock_guard lock(m_shared->connectionsMutex);
+        for (const std::shared_ptr<Connection>& candidate : m_shared->connections)
+        {
+            if (candidate->id == id && candidate->open.load())
+            {
+                connection = candidate;
+            }
+        }
+    }
+    if (!connection)
+    {
+        return false;
+    }
+    connection->paused = paused;
+    ++m_shared->version;
+    release(connection);
+    return true;
+}
+
+bool RpcServer::disconnect(u32 id)
+{
+    const std::lock_guard lock(m_shared->connectionsMutex);
+    for (const std::shared_ptr<Connection>& connection : m_shared->connections)
+    {
+        if (connection->id == id && connection->open.load())
+        {
+            ILL_LOG_INFO("rpc", "disconnecting {} at the editor's request", connection->origin);
+            connection->abort();
+            ++m_shared->version;
+            return true;
+        }
+    }
+    return false;
+}
+
+std::vector<ClientInfo> RpcServer::clients() const
+{
+    std::vector<ClientInfo> out;
+    const std::lock_guard lock(m_shared->connectionsMutex);
+    for (const std::shared_ptr<Connection>& connection : m_shared->connections)
+    {
+        if (!connection->open.load())
+        {
+            continue;
+        }
+        out.push_back(ClientInfo{connection->id, connection->client, connection->origin, connection->agent,
+                                 connection->agentVersion, connection->era, connection->requests,
+                                 connection->paused, connection->allowed});
+    }
+    return out;
+}
+
+void RpcServer::activity(u64 after, std::vector<ActivityEntry>& out) const
+{
+    for (const Shared::Activity& entry : m_shared->activity)
+    {
+        if (entry.seq > after)
+        {
+            out.push_back(ActivityEntry{entry.seq, entry.connection, entry.client, entry.method, entry.params,
+                                        entry.code, entry.micros, entry.revision});
+        }
+    }
+}
+
+u64 RpcServer::stateVersion() const noexcept
+{
+    return m_shared->version.load();
 }
 
 bool RpcServer::isOpen(u32 id) const
@@ -938,6 +1261,8 @@ void RpcServer::stop()
     }
     shared.listener = SocketListener();
     shared.tasks.clear();
+    shared.parked.clear();
+    shared.approvals.clear();
     std::vector<std::shared_ptr<Connection>> connections;
     {
         const std::lock_guard lock(shared.connectionsMutex);
@@ -989,6 +1314,11 @@ void RpcServer::reap()
         m_editor.abandonTransaction(connection->id);
         std::erase_if(m_shared->tasks,
                       [&](const Shared::Task& task) { return task.connection == connection; });
+        std::erase_if(m_shared->parked,
+                      [&](const Shared::Work& work) { return work.connection == connection; });
+        std::erase_if(m_shared->approvals,
+                      [&](const PendingApproval& approval) { return approval.connection == connection->id; });
+        ++m_shared->version;
         connection->abort();
         if (connection->writer.joinable())
         {
@@ -1037,17 +1367,18 @@ void RpcServer::deliver(const EditorEvent& event)
     }
 }
 
-std::string RpcServer::execute(Connection& connection, const Request& request)
+std::string RpcServer::execute(Connection& connection, const Request& request, bool approved)
 {
     ILL_PROFILE_SCOPE();
     const auto started = std::chrono::steady_clock::now();
     i32 code = 0;
-    std::string response = run(connection, request, code);
-    m_shared->record(connection, request.method, code, started, m_editor.revision());
+    std::string response = run(connection, request, approved, code);
+    m_shared->record(connection, request.method, summary(request.params, kActivityParams), code, started,
+                     m_editor.revision());
     return response;
 }
 
-std::string RpcServer::run(Connection& connection, const Request& request, i32& code)
+std::string RpcServer::run(Connection& connection, const Request& request, bool approved, i32& code)
 {
     const std::string_view method = request.method;
     const auto failed = [&](const CommandError& error) {
@@ -1224,6 +1555,7 @@ std::string RpcServer::run(Connection& connection, const Request& request, i32& 
             item.add("connection", doc.makeU64(entry.connection));
             item.add("client", doc.makeString(entry.client));
             item.add("method", doc.makeString(entry.method));
+            item.add("params", doc.makeString(entry.params));
             item.add("code", doc.makeI64(entry.code));
             item.add("micros", doc.makeU64(entry.micros));
             item.add("revision", doc.makeU64(entry.revision));
@@ -1253,10 +1585,11 @@ std::string RpcServer::run(Connection& connection, const Request& request, i32& 
             return resultResponse(request.id, hit->second.second);
         }
     }
+    const PermissionGate gate(m_shared->mode.load(), connection.allowed, approved);
     CommandOptions options;
     options.origin = connection.origin;
     options.caller = connection.id;
-    options.gate = &m_shared->gate;
+    options.gate = &gate;
     Expected<std::string, CommandError> result = m_editor.executeJson(method, params, options);
     if (!result)
     {
@@ -1269,7 +1602,8 @@ std::string RpcServer::run(Connection& connection, const Request& request, i32& 
     return resultResponse(request.id, *result);
 }
 
-bool RpcServer::startTask(const std::shared_ptr<Connection>& connection, const Request& request)
+bool RpcServer::startTask(const std::shared_ptr<Connection>& connection, const Request& request,
+                          bool approved)
 {
     const std::optional<std::string_view> clientToken = request.params.find("clientToken").asString();
     if (clientToken && !clientToken->empty())
@@ -1288,16 +1622,18 @@ bool RpcServer::startTask(const std::shared_ptr<Connection>& connection, const R
             return false;
         }
     }
+    const PermissionGate gate(m_shared->mode.load(), connection->allowed, approved);
     CommandOptions options;
     options.origin = connection->origin;
     options.caller = connection->id;
-    options.gate = &m_shared->gate;
+    options.gate = &gate;
     Expected<std::unique_ptr<RunningCommand>, CommandError> started =
         m_editor.startJson(request.method, request.params, options);
     if (!started)
     {
-        m_shared->record(*connection, request.method, static_cast<i32>(started.error().kind),
-                         std::chrono::steady_clock::now(), m_editor.revision());
+        m_shared->record(*connection, request.method, summary(request.params, kActivityParams),
+                         static_cast<i32>(started.error().kind), std::chrono::steady_clock::now(),
+                         m_editor.revision());
         if (!request.notification())
         {
             connection->send(errorResponse(request.id, started.error()));
@@ -1309,6 +1645,7 @@ bool RpcServer::startTask(const std::shared_ptr<Connection>& connection, const R
     task.id = request.id;
     task.method = std::string(request.method);
     task.clientToken = std::string(clientToken.value_or(""));
+    task.params = summary(request.params, kActivityParams);
     task.command = std::move(started).value();
     task.started = std::chrono::steady_clock::now();
     m_shared->tasks.push_back(std::move(task));
@@ -1346,6 +1683,29 @@ void RpcServer::takeCancels()
                 task->cancelled = true;
                 continue;
             }
+            bool released = false;
+            for (Shared::Work& work : shared.parked)
+            {
+                if (work.connection == connection && work.request.id == id)
+                {
+                    work.cancelled = true;
+                    // A cancelled request no longer waits for its approval.
+                    if (work.approval != 0)
+                    {
+                        std::erase_if(shared.approvals, [&](const PendingApproval& approval) {
+                            return approval.id == work.approval;
+                        });
+                        connection->waiting = 0;
+                        work.approval = 0;
+                        ++shared.version;
+                        released = true;
+                    }
+                }
+            }
+            if (released)
+            {
+                release(connection);
+            }
             const std::lock_guard lock(shared.queueMutex);
             for (Shared::Work& work : shared.queue)
             {
@@ -1374,8 +1734,8 @@ void RpcServer::advanceTasks()
                 connection.send(errorResponse(
                     task.id, CommandError::make(ErrorKind::Cancelled, task.method + " was cancelled")));
             }
-            shared.record(connection, task.method, static_cast<i32>(ErrorKind::Cancelled), task.started,
-                          m_editor.revision());
+            shared.record(connection, task.method, task.params, static_cast<i32>(ErrorKind::Cancelled),
+                          task.started, m_editor.revision());
             connection.inFlight.fetch_sub(1);
             it = shared.tasks.erase(it);
             continue;
@@ -1393,8 +1753,9 @@ void RpcServer::advanceTasks()
             ++it;
             continue;
         }
-        shared.record(connection, task.method, updated ? 0 : static_cast<i32>(updated.error().kind),
-                      task.started, m_editor.revision());
+        shared.record(connection, task.method, task.params,
+                      updated ? 0 : static_cast<i32>(updated.error().kind), task.started,
+                      m_editor.revision());
         if (!updated)
         {
             if (reply)

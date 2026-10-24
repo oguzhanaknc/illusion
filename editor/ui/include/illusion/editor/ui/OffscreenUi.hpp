@@ -1,7 +1,7 @@
 #pragma once
-
-// Renders Dear ImGui draw data into an offscreen UI target and reads the pixels back, for gallery
-// screenshots, golden-image tests and the sRGB/UNORM present comparison.
+/// @file
+/// Renders Dear ImGui draw data into an offscreen UI target and reads the pixels back, for gallery
+/// screenshots, golden-image tests, `editor.screenshot` and the sRGB/UNORM present comparison.
 
 #include <illusion/assets/Image.hpp>
 #include <illusion/core/Base.hpp>
@@ -21,19 +21,17 @@ class RenderDevice;
 
 namespace illusion::editor::ui
 {
+
 class UiContext;
 class UiRenderer;
-} // namespace illusion::editor::ui
 
-namespace illusion::editor::gallery
-{
-
-/// An RGBA8_UNORM UI target of a fixed size with a UiRenderer drawing into it.
+/// An RGBA8_UNORM UI target with a UiRenderer drawing into it. Windows present the target to their
+/// swapchain with renderTo() and read it back for screenshots with capture().
 class OffscreenUi : NonCopyable
 {
 public:
     /// Creates the target and the renderer for @p context. Returns nullptr if a GPU object cannot be created.
-    [[nodiscard]] static std::unique_ptr<OffscreenUi> create(RenderDevice& device, ui::UiContext& context,
+    [[nodiscard]] static std::unique_ptr<OffscreenUi> create(RenderDevice& device, UiContext& context,
                                                              UVec2 size);
 
     ~OffscreenUi();
@@ -47,8 +45,19 @@ public:
     [[nodiscard]] std::optional<Image> renderPresented(ImDrawData* drawData, Vec4 clear,
                                                        nvrhi::Format outputFormat);
 
+    /// Makes the target @p size pixels (recreating it when the size changes). Returns false if the texture
+    /// cannot be created.
+    bool resize(UVec2 size);
+
+    /// Clears the target to @p clear, draws @p drawData and, when @p output is not null, presents the target
+    /// to it (UiRenderer::present()). Submits the work without waiting for it.
+    void renderTo(ImDrawData* drawData, Vec4 clear, nvrhi::IFramebuffer* output);
+
+    /// The target's pixels as last drawn (sRGB-encoded RGBA8). Waits for the GPU.
+    [[nodiscard]] std::optional<Image> capture();
+
     /// The renderer.
-    [[nodiscard]] ui::UiRenderer& renderer() noexcept { return *m_renderer; }
+    [[nodiscard]] UiRenderer& renderer() noexcept { return *m_renderer; }
 
     /// The target size in pixels.
     [[nodiscard]] UVec2 size() const noexcept { return m_size; }
@@ -61,10 +70,10 @@ private:
 
     RenderDevice* m_device = nullptr;
     UVec2 m_size{0};
-    std::unique_ptr<ui::UiRenderer> m_renderer;
+    std::unique_ptr<UiRenderer> m_renderer;
     nvrhi::TextureHandle m_target;
     nvrhi::FramebufferHandle m_framebuffer;
     nvrhi::CommandListHandle m_commands;
 };
 
-} // namespace illusion::editor::gallery
+} // namespace illusion::editor::ui

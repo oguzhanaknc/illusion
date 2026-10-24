@@ -11,6 +11,7 @@
 #include <illusion/ecs/Reflection.hpp>
 #include <illusion/editor/core/EntityIndex.hpp>
 #include <illusion/editor/core/ReferenceIndex.hpp>
+#include <illusion/editor/core/UiHost.hpp>
 
 #include <array>
 #include <optional>
@@ -895,6 +896,105 @@ struct LogStateResult
     u64 last = 0;      ///< Sequence of the newest message.
 };
 
+// --- ui ----------------------------------------------------------------------------------------------------
+
+/// A panel or window in `ui.state`.
+struct UiPanelEntry
+{
+    std::string id;      ///< Stable id, e.g. "panel.console".
+    std::string title;   ///< Localized title.
+    bool open = false;   ///< Shown.
+    bool docked = false; ///< Part of the dock layout.
+};
+
+/// A layout in `ui.state`.
+struct UiLayoutEntry
+{
+    std::string name;     ///< Name, e.g. "default".
+    bool builtIn = false; ///< Built in (cannot be deleted).
+    bool active = false;  ///< Applied last.
+};
+
+/// Result of `ui.state`.
+struct UiStateResult
+{
+    std::vector<UiPanelEntry> panels;   ///< Every panel and window.
+    std::vector<UiLayoutEntry> layouts; ///< Built-in layouts, then saved ones.
+};
+
+/// Params of `ui.show_panel`.
+struct UiShowPanelParams
+{
+    std::string panel;          ///< Panel or window id, e.g. "panel.console".
+    std::optional<bool> open{}; ///< Show and focus it (default true) or hide it.
+};
+
+/// Params of `ui.layout_apply`, `ui.layout_save` and `ui.layout_delete`.
+struct UiLayoutParams
+{
+    std::string name; ///< Layout name: letters, digits, '-' and '_', at most 64 bytes.
+};
+
+/// What the command palette lists.
+enum class PaletteMode : u8
+{
+    Commands, ///< Commands and actions.
+    Entities, ///< Entities of the scene ("Go to Anything").
+    Settings, ///< Preference pages.
+};
+
+/// Params of `ui.palette`.
+struct UiPaletteParams
+{
+    std::optional<PaletteMode> mode{};  ///< What to list (default "commands").
+    std::optional<std::string> query{}; ///< Text typed into the search field.
+};
+
+/// Params of `ui.notify`.
+struct UiNotifyParams
+{
+    std::string message;             ///< Text of the toast (at most 256 bytes).
+    std::optional<UiNotice> level{}; ///< Severity (default "info").
+};
+
+/// Params of `editor.screenshot`.
+struct ScreenshotParams
+{
+    std::optional<u32> width{};  ///< Width in pixels, 64 to 7,680 (headless only; default: --ui-size).
+    std::optional<u32> height{}; ///< Height in pixels, 64 to 4,320 (headless only; default: --ui-size).
+};
+
+/// An image in a result.
+struct ResultImage
+{
+    std::string mimeType; ///< "image/png".
+    std::string data;     ///< The file, base64-encoded.
+};
+
+/// Result of `editor.screenshot`.
+struct ScreenshotResult
+{
+    u32 width = 0;                    ///< Width in pixels.
+    u32 height = 0;                   ///< Height in pixels.
+    std::vector<ResultImage> _images; ///< The PNG (MCP clients receive it as image content).
+};
+
+// --- preferences -------------------------------------------------------------------------------------------
+
+/// Params of `preferences.set`.
+struct PreferencesSetParams
+{
+    /// Object of preference values: a merge patch of the current preferences (see `preferences.get`).
+    JsonText value;
+    std::optional<bool> replace{}; ///< Reset the fields the patch does not mention (default false).
+};
+
+/// Result of `preferences.get` and `preferences.set`.
+struct PreferencesResult
+{
+    JsonText value; ///< Every preference.
+};
+
 } // namespace illusion::editor
 
 /// Names of TransformSpace values in JSON.
@@ -913,4 +1013,23 @@ struct illusion::EnumReflection<illusion::editor::TransformPivot>
     /// The values.
     static constexpr std::array kValues{illusion::EnumValue{"individual", 0},
                                         illusion::EnumValue{"center", 1}};
+};
+
+/// Names of PaletteMode values in JSON.
+template <>
+struct illusion::EnumReflection<illusion::editor::PaletteMode>
+{
+    /// The values.
+    static constexpr std::array kValues{illusion::EnumValue{"commands", 0},
+                                        illusion::EnumValue{"entities", 1},
+                                        illusion::EnumValue{"settings", 2}};
+};
+
+/// Names of UiNotice values in JSON.
+template <>
+struct illusion::EnumReflection<illusion::editor::UiNotice>
+{
+    /// The values.
+    static constexpr std::array kValues{illusion::EnumValue{"info", 0}, illusion::EnumValue{"success", 1},
+                                        illusion::EnumValue{"warning", 2}, illusion::EnumValue{"error", 3}};
 };

@@ -198,6 +198,11 @@ void setImeData(ImGuiContext* context, ImGuiViewport*, ImGuiPlatformImeData* dat
 
 } // namespace
 
+int imguiKey(Key key) noexcept
+{
+    return static_cast<int>(toImGuiKey(key));
+}
+
 UiPlatformBackend::UiPlatformBackend(UiContext& context, Window& window, EventBus& events)
     : m_context(context)
     , m_window(window)

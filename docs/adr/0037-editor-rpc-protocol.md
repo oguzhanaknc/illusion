@@ -109,3 +109,15 @@ Protocol version 0.3.0 adds three server methods for the MCP bridge and the AI a
 `editor.set_client` names the program and agent of a connection (its origin becomes `rpc:<client>`),
 `editor.clients` lists the open connections, and `editor.activity` returns a ring of the last 256 requests.
 Existing messages do not change.
+
+## Addendum: M7l (2026-10-24)
+
+The editor window makes the `ask` mode interactive (`RpcServerOptions::interactive`). A request whose command
+(or, for `editor.batch`, any step) needs approval is held on the main thread instead of being denied: the
+server keeps it with the connection's later requests, in order, and lists it in `approvals()`. The window's
+prompt answers with `decide()`: allow once, allow the permission classes for the connection's session, or deny
+(`permission_denied`). Approving, pausing (`setPaused()`) and disconnecting (`disconnect()`) are C++ calls of
+the window, deliberately not commands, so no client can approve its own requests. `rpc.cancel` and closing the
+connection drop a waiting request with its approval. `editor.activity` entries gain `params`, a compact summary
+(200 bytes) of the request's params. The permission mode can change at run time (`setPermissions()`), which the
+window does from the `agentPermissions` preference; the protocol version stays 0.3.0.

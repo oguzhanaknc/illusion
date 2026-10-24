@@ -1,7 +1,8 @@
 #include "EditorTestSupport.hpp"
-#include "OffscreenUi.hpp"
+#include "gpu/GoldenSupport.hpp"
 
 #include <illusion/assets/Image.hpp>
+#include <illusion/editor/ui/OffscreenUi.hpp>
 #include <illusion/editor/ui/UiRenderer.hpp>
 #include <illusion/platform/FileSystem.hpp>
 #include <illusion/render/RenderDevice.hpp>
@@ -22,106 +23,29 @@
 using namespace illusion;
 using namespace illusion::editor;
 
-// GPU tests of the editor UI. Gallery captures are compared with the golden images in
-// editor/tests/data/golden; every capture is also written to ILLUSION_UI_CAPTURE_DIR (the build tree by
-// default) so that CI can publish them for design review. Run with ILLUSION_UPDATE_GOLDENS=1 to rewrite the
-// goldens from the current captures after an intended visual change, and review the diff before committing.
+// GPU tests of the editor UI: gallery goldens (see GoldenSupport.hpp) and renderer behaviour.
 
 namespace
 {
 
 constexpr UVec2 kGoldenSize{1280, 800};
 
-RenderDeviceDesc headlessDesc()
-{
-    RenderDeviceDesc desc;
-    desc.applicationName = "illusion editor GPU tests";
-    desc.headless = true;
-    desc.validation = ValidationMode::Enabled;
-    return desc;
-}
-
-std::filesystem::path captureDirectory()
-{
-    if (const char* directory = std::getenv("ILLUSION_UI_CAPTURE_DIR");
-        directory != nullptr && directory[0] != '\0')
-    {
-        return utf8Path(directory);
-    }
-    return utf8Path(ILLUSION_UI_CAPTURE_DIR);
-}
-
-bool updateGoldens()
-{
-    const char* update = std::getenv("ILLUSION_UPDATE_GOLDENS");
-    return update != nullptr && std::string_view(update) == "1";
-}
-
-std::vector<std::byte> readFile(const std::filesystem::path& path)
-{
-    std::ifstream file(path, std::ios::binary);
-    std::vector<char> bytes((std::istreambuf_iterator<char>(file)), std::istreambuf_iterator<char>());
-    std::vector<std::byte> result(bytes.size());
-    std::memcpy(result.data(), bytes.data(), bytes.size());
-    return result;
-}
-
-void writeFile(const std::filesystem::path& path, std::span<const std::byte> bytes)
-{
-    std::filesystem::create_directories(path.parent_path());
-    std::ofstream file(path, std::ios::binary | std::ios::trunc);
-    file.write(reinterpret_cast<const char*>(bytes.data()), static_cast<std::streamsize>(bytes.size()));
-    REQUIRE(file.good());
-}
-
-struct Difference
-{
-    f64 meanAbsolute = 0.0;      // mean absolute channel difference (0-255)
-    f64 differentFraction = 0.0; // fraction of pixels with a channel off by more than 24
-};
-
-Difference compare(const Image& a, const Image& b)
-{
-    Difference difference;
-    const std::span<const std::byte> pa = a.mip(0);
-    const std::span<const std::byte> pb = b.mip(0);
-    u64 total = 0;
-    u64 different = 0;
-    for (usize i = 0; i < pa.size(); i += 4)
-    {
-        int worst = 0;
-        for (usize c = 0; c < 4; ++c)
-        {
-            const int d = std::abs(static_cast<int>(pa[i + c]) - static_cast<int>(pb[i + c]));
-            total += static_cast<u64>(d);
-            worst = std::max(worst, d);
-        }
-        if (worst > 24)
-        {
-            ++different;
-        }
-    }
-    difference.meanAbsolute = static_cast<f64>(total) / static_cast<f64>(pa.size());
-    difference.differentFraction = static_cast<f64>(different) / static_cast<f64>(pa.size() / 4);
-    return difference;
-}
-
 // The gallery rendered by a UiRenderer into an offscreen target.
 struct GpuGallery
 {
     std::unique_ptr<RenderDevice> device;
     test::GalleryFixture fixture;
-    std::unique_ptr<gallery::OffscreenUi> offscreen;
+    std::unique_ptr<ui::OffscreenUi> offscreen;
     UVec2 size;
 
     GpuGallery(std::string_view theme, f32 scale)
-        : device(RenderDevice::create(headlessDesc()))
+        : device(RenderDevice::create(test::headlessDeviceDesc()))
         , fixture(theme, scale, test::FixtureRenderer::External)
         , size(static_cast<u32>(static_cast<f32>(kGoldenSize.x) * scale),
                static_cast<u32>(static_cast<f32>(kGoldenSize.y) * scale))
     {
         REQUIRE(device != nullptr);
-        offscreen = gallery::OffscreenUi::create(*device, fixture.context, size);
+        offscreen = ui::OffscreenUi::create(*device, fixture.context, size);
         REQUIRE(offscreen != nullptr);
     }
 
@@ -204,28 +128,7 @@ TEST_CASE("gallery captures match the golden images")
         gpu.fixture.galleryPage->setPage(golden.page);
         gpu.fixture.galleryPage->showToast(0.0);
         const Image actual = gpu.capture(12);
-        const std::vector<std::byte> png = encodePng(actual);
-        writeFile(captureDirectory() / std::format("{}.png", golden.name), png);
-
-        const std::filesystem::path goldenPath =
-            utf8Path(ILLUSION_GOLDEN_DIR) / std::format("{}.png", golden.name);
-        if (updateGoldens())
-        {
-            writeFile(goldenPath, png);
-            continue;
-        }
-        REQUIRE_MESSAGE(std::filesystem::exists(goldenPath),
-                        "missing golden " << goldenPath.string() << " (run with ILLUSION_UPDATE_GOLDENS=1)");
-        const std::optional<Image> expected = decodeImage(readFile(goldenPath), true);
-        REQUIRE(expected.has_value());
-        REQUIRE(expected->width() == actual.width());
-        REQUIRE(expected->height() == actual.height());
-        const Difference difference = compare(actual, *expected);
-        INFO("mean difference " << difference.meanAbsolute << ", pixels off "
-                                << difference.differentFraction * 100.0 << "% (capture written to "
-                                << captureDirectory().string() << ")");
-        CHECK(difference.meanAbsolute < 1.0);
-        CHECK(difference.differentFraction < 0.003);
+        test::checkGolden(golden.name, actual);
         CHECK(gpu.device->validationErrorCount() == 0);
     }
 }

@@ -11,10 +11,12 @@
 #include <illusion/ecs/StructRegistry.hpp>
 #include <illusion/editor/core/CoreCommands.hpp>
 #include <illusion/editor/core/EditorContext.hpp>
+#include <illusion/editor/core/UiHost.hpp>
 #include <illusion/platform/FileSystem.hpp>
 
 #include <doctest/doctest.h>
 
+#include <algorithm>
 #include <filesystem>
 #include <memory>
 #include <optional>
@@ -162,10 +164,104 @@ inline editor::CommandError fails(editor::EditorContext& editor, std::string_vie
     return std::move(result).error();
 }
 
+/// A UiHost without a window for the core tests: two panels, the built-in "default" layout and a saved one,
+/// and screenshots that finish one frame after they were requested.
+class FakeUi final : public editor::UiHost
+{
+public:
+    std::vector<editor::UiPanelInfo> panels() const override
+    {
+        return {editor::UiPanelInfo{"panel.console", "Console", consoleOpen, true},
+                editor::UiPanelInfo{"window.preferences", "Preferences", false, false}};
+    }
+
+    Expected<void, editor::CommandError> showPanel(std::string_view id, bool open) override
+    {
+        if (id == "panel.console")
+        {
+            consoleOpen = open;
+        }
+        return {};
+    }
+
+    std::vector<editor::UiLayoutInfo> layouts() const override
+    {
+        std::vector<editor::UiLayoutInfo> out{editor::UiLayoutInfo{"default", true, active == "default"}};
+        for (const std::string& name : saved)
+        {
+            out.push_back(editor::UiLayoutInfo{name, false, active == name});
+        }
+        return out;
+    }
+
+    Expected<void, editor::CommandError> applyLayout(std::string_view name) override
+    {
+        active = std::string(name);
+        return {};
+    }
+
+    Expected<void, editor::CommandError> saveLayout(std::string_view name) override
+    {
+        if (std::find(saved.begin(), saved.end(), name) == saved.end())
+        {
+            saved.emplace_back(name);
+        }
+        active = std::string(name);
+        return {};
+    }
+
+    Expected<void, editor::CommandError> deleteLayout(std::string_view name) override
+    {
+        std::erase(saved, std::string(name));
+        return {};
+    }
+
+    void resetLayout() override { active = "default"; }
+
+    Expected<void, editor::CommandError> openPalette(std::string_view mode, std::string_view query) override
+    {
+        palette = std::string(mode) + ":" + std::string(query);
+        return {};
+    }
+
+    void notify(editor::UiNotice, std::string_view message) override { notices.emplace_back(message); }
+
+    void requestQuit() override { quit = true; }
+
+    Expected<u64, editor::CommandError> requestScreenshot(UVec2 size) override
+    {
+        requested = size;
+        return ++ticket;
+    }
+
+    std::optional<Expected<editor::UiScreenshot, editor::CommandError>> screenshot(u64) override
+    {
+        if (!pending)
+        {
+            pending = true;
+            return std::nullopt;
+        }
+        pending = false;
+        return Expected<editor::UiScreenshot, editor::CommandError>(
+            editor::UiScreenshot{requested, std::string("\x89PNG\r\n\x1a\n", 8)});
+    }
+
+    bool consoleOpen = false;
+    std::string active = "default";
+    std::vector<std::string> saved{"saved"};
+    std::string palette;
+    std::vector<std::string> notices;
+    bool quit = false;
+    UVec2 requested{0};
+    u64 ticket = 0;
+    bool pending = false;
+};
+
 /// A temporary project made from the empty template, open in an EditorContext.
 struct EditorFixture
 {
     TempDirectory directory;
+    FakeUi ui;
     std::unique_ptr<editor::EditorContext> editor;
 
     explicit EditorFixture(u64 seed = 1, editor::EditorContextOptions options = {})
@@ -187,6 +283,7 @@ struct EditorFixture
             options.workspace = directory.path;
         }
         editor = std::make_unique<editor::EditorContext>(options);
+        editor->setUi(&ui);
         const Expected<void, editor::CommandError> opened = editor->openProject(directory.path / "project");
         REQUIRE_MESSAGE(opened.hasValue(), (opened ? std::string() : opened.error().message));
         addTestSettings(*editor);
