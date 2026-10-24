@@ -346,7 +346,10 @@ TEST_CASE("illusion_mcp writes only protocol messages to stdout at every log lev
             const Expected<JsonDocument, JsonError> message = JsonDocument::parse(line);
             REQUIRE_MESSAGE(message.hasValue(), "not a protocol message on stdout: " << line);
             CHECK(message->root().find("jsonrpc").asString() == "2.0");
-            responses += message->root().find("id").isAbsent() ? 0 : 1;
+            if (!message->root().find("id").isAbsent())
+            {
+                ++responses;
+            }
         }
         CHECK(responses == 6);
         if (level == "trace")

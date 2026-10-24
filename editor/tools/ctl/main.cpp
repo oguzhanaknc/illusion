@@ -263,19 +263,20 @@ int runTranscripts(const Options& options)
     {
         runner.connect = [bridge, modern](const client::LaunchOptions& launch)
             -> Expected<std::unique_ptr<client::CallChannel>, std::string> {
-            client::McpLaunchOptions options;
-            options.bridge = bridge;
-            options.modern = modern;
-            options.workingDirectory = launch.workingDirectory;
+            client::McpLaunchOptions bridgeOptions;
+            bridgeOptions.bridge = bridge;
+            bridgeOptions.modern = modern;
+            bridgeOptions.workingDirectory = launch.workingDirectory;
             const std::u8string editor = launch.editor.u8string();
-            options.arguments = {"--launch", "--editor",
-                                 std::string(reinterpret_cast<const char*>(editor.data()), editor.size())};
+            bridgeOptions.arguments = {
+                "--launch", "--editor",
+                std::string(reinterpret_cast<const char*>(editor.data()), editor.size())};
             for (const std::string& argument : launch.arguments)
             {
-                options.arguments.emplace_back("--editor-arg");
-                options.arguments.push_back(argument);
+                bridgeOptions.arguments.emplace_back("--editor-arg");
+                bridgeOptions.arguments.push_back(argument);
             }
-            Expected<client::McpClient, std::string> started = client::McpClient::launch(options);
+            Expected<client::McpClient, std::string> started = client::McpClient::launch(bridgeOptions);
             if (!started)
             {
                 return unexpected(std::move(started).error());
