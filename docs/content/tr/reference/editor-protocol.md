@@ -1,7 +1,8 @@
 # Editör Protokolü
 
-Protokol sürümü `0.2.0` (semver; `1.0` M7x ile gelir). Tasarım: ADR 0037. Nasıl kullanılır:
-[Otomasyon](../manual/editor/automation.md).
+Protokol sürümü `0.3.0` (semver; `1.0` M7x ile gelir). Tasarım: ADR 0037. Nasıl kullanılır:
+[Otomasyon](../manual/editor/automation.md). Yapay zekâ ajanları onu MCP köprüsü üzerinden kullanır
+([Yapay zekâ ajanları](../manual/editor/ai-agents.md)).
 
 ## Çerçeveleme
 
@@ -66,6 +67,9 @@ transport, address, token}`; yalnızca sahibine açık, atomik olarak yazılır 
 | `editor.subscribe` | `topics` (dizi; boş: hepsi), `mode` (`push` ya da `pull`, varsayılan `push`) | `{topics, mode}` |
 | `editor.unsubscribe` | — | `{}` |
 | `editor.poll_events` | `limit` (varsayılan 256) | `{events: [{topic, payload}], overflow}` |
+| `editor.set_client` | `client` (kaynak `rpc:<client>`), `agent`, `agentVersion`, `era` (her biri isteğe bağlı, en fazla 64 bayt) | `{connection, client, origin}` |
+| `editor.clients` | — | `{clients: [{connection, client, agent, agentVersion, era, origin, requests}]}` |
+| `editor.activity` | `since` (sıra numarası, varsayılan 0), `limit` (varsayılan 256) | `{entries: [{seq, connection, client, method, code, micros, revision}]}`, en eskisi önce |
 | `editor.quit` | — | `{}`; editör yanıttan sonra kapanır (izin sınıfı `system`) |
 | `rpc.cancel` | `id` (bu bağlantının bir isteğinin) | id ile gönderildiyse `{}`; genellikle bir bildirim |
 
@@ -75,7 +79,10 @@ Async komutlar, ilerleme değiştiğinde frame başına en fazla bir kez `{"meth
 {"id", "progress", "total", "message"}}` gönderir (`message` yalnızca varsa). Komutlar bağlantıyı çağıran
 olarak çalışır: bir bağlantının transaction'ı (`transaction.begin`) bağlantı kapanınca iptal edilir ve
 `history.undo {"scope": "mine"}` bağlantının kaynağı `rpc:<client>` adımlarını geri alır. `editor.batch`
-adımları izin moduna tek tek denetlenir. Diğer her metot bir [editör komutudur](editor-commands.md).
+adımları izin moduna tek tek denetlenir. `editor.activity` bütün bağlantıların son 256 isteğini tutar
+(başarıda `code` 0'dır; `editor.activity`, `editor.clients` ve `editor.poll_events` dışarıda bırakılır); MCP
+köprüsü kendini `editor.set_client` ile adlandırır, böylece değişikliklerinin kaynağı `rpc:illusion_mcp` olur.
+Diğer her metot bir [editör komutudur](editor-commands.md).
 
 ## Sınırlar
 

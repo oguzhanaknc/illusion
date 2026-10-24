@@ -207,6 +207,25 @@ reflection'lı struct'lar) ve `assets:/` altındaki her sahne ve Material dosyas
 `asset.move` onları yeniden yazabilir, `asset.delete` de reddedebilir. Kılavuz
 [kullanımını](../manual/editor/index.md) anlatır.
 
+## MCP köprüsü
+
+`illusion_mcp`, bir MCP istemcisi ile editör arasında duran ayrı bir süreçtir
+([ADR 0039](https://github.com/oguzhanaknc/illusion/blob/main/docs/adr/0039-mcp-bridge.md)):
+
+```text
+MCP client --stdio--> StdioTransport --> McpServer (illusion::mcp_protocol) --> EditorToolProvider --> RpcClient --> editor
+                                            |  era, tools, results, resources       |  launch/attach, crash relaunch,
+                                            |  progress, cancellation, prompts      |  rpc.progress, rpc.cancel, log ring
+```
+
+`illusion::mcp_protocol` saftır (yalnızca core Json): `McpServer` her seferinde bir satır alır ve bir
+`McpTransport` üzerinden yazar; komutları bir `ToolProvider` çalıştırır. Araçları `rpc.discover`'ın OpenRPC
+belgesinden üretir, bu yüzden hiçbir komutu bilmesi gerekmez. `illusion::editor_client`, editör tarafını
+(`EditorToolProvider`) ve kabul çalıştırıcısının `--via-mcp` için kullandığı köprünün bir MCP istemcisini
+(`McpClient`) barındırır. Bir araç çağrısı `McpServer::handle()` içinde çalışır; beklerken sağlayıcı
+`CallControl::service()` çağırır; bu çağrı iptalleri ve ping'leri hemen işler, diğer istekleri sonraya bırakır.
+Sonucu [yapay zekâ ajanları kılavuzu](../manual/editor/ai-agents.md) anlatır.
+
 ## Performans
 
 - Boşta geçen UI kareleri bellek ayırmaz: etiketler kare başına bir arenada oluşturulur, renderer buffer'ları
@@ -220,6 +239,8 @@ reflection'lı struct'lar) ve `assets:/` altındaki her sahne ve Material dosyas
   bir sahne dosyasını denetlemek), `editor/batch-step` (`$` referanslı bir `editor.batch` adımı, batch ile
   birlikte geri alınarak) ve `editor/undo-own-check` (kendi adımlarını geri almadan önce sonraki bir adımı
   denetlemek).
+- `mcp/translate`, köprünün sunucusu üzerinden anında yanıt veren bir sağlayıcıyla tek bir MCP `tools/call`
+  çağrısını ölçer: ayrıştırma, aracı bulma, sonucu yazma (bir masaüstü makinede yaklaşık 1,6 µs; bütçe 10 µs).
 
 ## Erişilebilirlik
 

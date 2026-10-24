@@ -70,6 +70,7 @@ struct RpcServerOptions
 /// Commands run with the connection id as CommandOptions::caller and a gate for the permission mode, so
 /// transactions belong to their connection and are cancelled when it closes. Besides the commands of the
 /// registry the server implements `editor.subscribe`, `editor.unsubscribe`, `editor.poll_events`,
+/// `editor.set_client`, `editor.clients`, `editor.activity` (a ring of the last 256 requests),
 /// `editor.quit` and `rpc.cancel`. The method catalogue is taken when the server is created and again
 /// after every `commands.changed` event.
 class RpcServer
@@ -120,6 +121,7 @@ private:
     struct Shared;
 
     std::string execute(Connection& connection, const Request& request);
+    std::string run(Connection& connection, const Request& request, i32& code);
     bool startTask(const std::shared_ptr<Connection>& connection, const Request& request);
     void takeCancels();
     void advanceTasks();

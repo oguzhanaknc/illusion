@@ -48,6 +48,9 @@ illusion_ctl --project ~/games/tetris dump-catalog > catalog.json
 | `replay <transcript> [--checks <file>]` | Replays a transcript against a launched editor (see [acceptance tests](#acceptance-tests)). |
 | `check <file>` | Runs a checks file against a launched editor. |
 
+`replay` and `check` take `--via-mcp <illusion_mcp> [--era legacy|modern]` to run every step as an MCP tool
+call through the bridge instead (see [AI agents](ai-agents.md)).
+
 Connections: `--launch <editor>` (with `--editor-arg` for each editor argument), `--project <dir>` (the
 project's endpoint file), `--endpoint <file>`, or `--socket <path> --token <token>`.
 
@@ -177,5 +180,8 @@ by default) on an editor without a GPU. Run it with:
 illusion_ctl --launch build/bin/Release/illusion_editor --editor-arg --deterministic --editor-arg --no-gpu \
     replay tests/acceptance/tetris/scripted.jsonl --checks tests/acceptance/tetris/checks.jsonl --temp-workspace
 ```
+
+CTest also runs the scenario through the MCP bridge in both protocol eras
+(`acceptance.tetris.board.mcp-legacy` and `acceptance.tetris.board.mcp-modern`, with `--via-mcp`).
 
 The protocol itself is described in the [editor protocol reference](../../reference/editor-protocol.md).

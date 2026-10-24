@@ -192,6 +192,7 @@ int run(const std::vector<std::string>& args)
                             ? std::filesystem::absolute(arguments.project, code).parent_path()
                             : std::filesystem::current_path(code);
     options.workspace = std::filesystem::absolute(options.workspace, code);
+    options.mcpServer = executableDirectory() / ("illusion_mcp" ILLUSION_EXECUTABLE_SUFFIX);
     EditorContext editor(options);
     if (!arguments.project.empty())
     {

@@ -1,0 +1,10 @@
+{"jsonrpc":"2.0","id":"init","method":"initialize","params":{"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"golden","version":"1.0.0"}}}
+{"jsonrpc":"2.0","method":"notifications/initialized"}
+{"jsonrpc":"2.0","id":21,"method":"tools/call","params":{"name":"editor_wait","arguments":{"frames":100000},"_meta":{"progressToken":"p2"}}}
+{"jsonrpc":"2.0","method":"notifications/cancelled","params":{"requestId":21,"reason":"test"}}
+{"jsonrpc":"2.0","id":20,"method":"tools/call","params":{"name":"editor_wait","arguments":{"frames":3},"_meta":{"progressToken":"p1"}}}
+{"jsonrpc":"2.0","id":22,"method":"tools/call","params":{"name":"scene_info","arguments":{}}}
+{"jsonrpc":"2.0","id":23,"method":"tools/call","params":{"name":"editor_wait","arguments":{"frames":2}}}
+{"jsonrpc":"2.0","id":24,"method":"tools/call","params":{"name":"scene_info","arguments":{}}}
+{"jsonrpc":"2.0","method":"notifications/cancelled","params":{"requestId":24,"reason":"queued"}}
+{"jsonrpc":"2.0","id":25,"method":"tools/call","params":{"name":"scene_info","arguments":{}}}

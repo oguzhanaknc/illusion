@@ -1,0 +1,7 @@
+{"jsonrpc":"2.0","method":"notifications/progress","params":{"progressToken":"p1","progress":1.0,"total":3.0,"message":"frame 1"}}
+{"jsonrpc":"2.0","method":"notifications/progress","params":{"progressToken":"p1","progress":2.0,"total":3.0,"message":"frame 2"}}
+{"jsonrpc":"2.0","method":"notifications/progress","params":{"progressToken":"p1","progress":3.0,"total":3.0,"message":"frame 3"}}
+{"jsonrpc":"2.0","id":20,"result":{"content":[{"type":"text","text":"{\"frames\":3}"}],"structuredContent":{"frames":3},"isError":false,"resultType":"complete","_meta":{"io.modelcontextprotocol/serverInfo":{"name":"illusion_mcp","version":"1.0.0"}}}}
+{"jsonrpc":"2.0","id":22,"result":{"content":[{"type":"text","text":"{\"path\":\"\",\"entities\":1}"}],"structuredContent":{"path":"","entities":1},"isError":false,"resultType":"complete","_meta":{"io.modelcontextprotocol/serverInfo":{"name":"illusion_mcp","version":"1.0.0"}}}}
+{"jsonrpc":"2.0","id":23,"result":{"content":[{"type":"text","text":"{\"frames\":2}"}],"structuredContent":{"frames":2},"isError":false,"resultType":"complete","_meta":{"io.modelcontextprotocol/serverInfo":{"name":"illusion_mcp","version":"1.0.0"}}}}
+{"jsonrpc":"2.0","id":25,"result":{"content":[{"type":"text","text":"{\"path\":\"\",\"entities\":1}"}],"structuredContent":{"path":"","entities":1},"isError":false,"resultType":"complete","_meta":{"io.modelcontextprotocol/serverInfo":{"name":"illusion_mcp","version":"1.0.0"}}}}

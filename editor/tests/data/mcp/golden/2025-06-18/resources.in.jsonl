@@ -1,0 +1,10 @@
+{"jsonrpc":"2.0","id":"init","method":"initialize","params":{"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"golden","version":"1.0.0"}}}
+{"jsonrpc":"2.0","method":"notifications/initialized"}
+{"jsonrpc":"2.0","id":50,"method":"resources/list","params":{}}
+{"jsonrpc":"2.0","id":51,"method":"resources/templates/list","params":{}}
+{"jsonrpc":"2.0","id":52,"method":"resources/read","params":{"uri":"illusion://project"}}
+{"jsonrpc":"2.0","id":53,"method":"resources/read","params":{"uri":"illusion://components/illusion.Transform"}}
+{"jsonrpc":"2.0","id":54,"method":"resources/read","params":{"uri":"illusion://components/illusion.Nope"}}
+{"jsonrpc":"2.0","id":55,"method":"resources/read","params":{"uri":"illusion://nope"}}
+{"jsonrpc":"2.0","id":56,"method":"resources/read","params":{"uri":"illusion://guide"}}
+{"jsonrpc":"2.0","id":57,"method":"resources/read","params":{}}

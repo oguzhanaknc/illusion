@@ -1,0 +1,11 @@
+{"jsonrpc":"2.0","id":"init","method":"initialize","params":{"protocolVersion":"2025-11-25","capabilities":{},"clientInfo":{"name":"golden","version":"1.0.0"}}}
+{"jsonrpc":"2.0","method":"notifications/initialized"}
+{"jsonrpc":"2.0","id":10,"method":"tools/call","params":{"name":"entity_create","arguments":{"name":"Board"}}}
+{"jsonrpc":"2.0","id":11,"method":"tools/call","params":{"name":"entity_get","arguments":{"entity":"name:Board"}}}
+{"jsonrpc":"2.0","id":12,"method":"tools/call","params":{"name":"entity_get","arguments":{"entity":"name:Nope"}}}
+{"jsonrpc":"2.0","id":13,"method":"tools/call","params":{"name":"entity_create","arguments":{"name":5}}}
+{"jsonrpc":"2.0","id":14,"method":"tools/call","params":{"name":"no_such_tool","arguments":{}}}
+{"jsonrpc":"2.0","id":15,"method":"tools/call","params":{"name":"entity_get","arguments":["not","an","object"]}}
+{"jsonrpc":"2.0","id":16,"method":"tools/call","params":{"name":"illusion_call","arguments":{"method":"scene.info","params":{}}}}
+{"jsonrpc":"2.0","id":17,"method":"tools/call","params":{"name":"illusion_call","arguments":{"method":"no.such"}}}
+{"jsonrpc":"2.0","id":18,"method":"tools/call","params":{"name":"illusion_call","arguments":{"params":{}}}}

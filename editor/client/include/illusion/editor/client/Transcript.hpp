@@ -25,6 +25,7 @@
 
 #include <functional>
 #include <map>
+#include <memory>
 #include <optional>
 #include <string>
 #include <string_view>
@@ -74,6 +75,9 @@ struct RunnerOptions
     std::map<std::string, std::string> variables; ///< Initial variables (name -> JSON value text).
     bool gpu = false;                             ///< The editor has a GPU (`requires: "gpu"` steps run).
     std::function<void(std::string_view)> log{};  ///< Receives a line per step (optional).
+    /// Starts the editor and connects to it (empty: RpcClient::launch()). illusion_ctl passes one that starts
+    /// illusion_mcp and runs every step as an MCP tool call (`--via-mcp`).
+    std::function<Expected<std::unique_ptr<CallChannel>, std::string>(const LaunchOptions&)> connect{};
 };
 
 /// Runs transcripts and checks against an editor it launches.
@@ -100,7 +104,7 @@ private:
     RunnerOptions m_options;
     std::map<std::string, std::string> m_variables;
     std::vector<std::string> m_restartArguments;
-    RpcClient m_client;
+    std::unique_ptr<CallChannel> m_client;
 };
 
 } // namespace illusion::editor::client

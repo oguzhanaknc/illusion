@@ -21,6 +21,8 @@ illusion_add_editor_executable(illusion_editor_tests
     core/TestEditorSettings.cpp
     core/TestEditorTransactions.cpp
     core/TestEditorTransforms.cpp
+    mcp/TestMcpBridge.cpp
+    mcp/TestMcpProtocol.cpp
     rpc/TestEditorClient.cpp
     rpc/TestRpcAsync.cpp
     rpc/TestRpcProtocol.cpp
@@ -32,8 +34,9 @@ target_link_libraries(illusion_editor_tests PRIVATE
 # Golden files of the editor core (ILLUSION_UPDATE_GOLDENS=1 rewrites them).
 target_compile_definitions(illusion_editor_tests PRIVATE ILLUSION_EDITOR_TEST_DATA="${CMAKE_CURRENT_SOURCE_DIR}/data")
 # The client tests launch the editor.
-target_compile_definitions(illusion_editor_tests PRIVATE ILLUSION_EDITOR_EXECUTABLE="$<TARGET_FILE:illusion_editor>")
-add_dependencies(illusion_editor_tests illusion_editor_data illusion_editor)
+target_compile_definitions(illusion_editor_tests PRIVATE ILLUSION_EDITOR_EXECUTABLE="$<TARGET_FILE:illusion_editor>"
+    ILLUSION_MCP_EXECUTABLE="$<TARGET_FILE:illusion_mcp>")
+add_dependencies(illusion_editor_tests illusion_editor_data illusion_editor illusion_mcp)
 illusion_configure_target(illusion_editor_tests)
 doctest_discover_tests(illusion_editor_tests
     PROPERTIES LABELS "unit"
@@ -64,6 +67,18 @@ add_test(NAME acceptance.tetris.board
         --checks ${PROJECT_SOURCE_DIR}/tests/acceptance/tetris/checks.jsonl --temp-workspace
     CONFIGURATIONS Release RelWithDebInfo)
 set_tests_properties(acceptance.tetris.board PROPERTIES LABELS "acceptance" TIMEOUT 360)
+
+# The same scenario through the MCP bridge in both protocol eras (ADR 0039): every step is a tool call.
+foreach(era legacy modern)
+    add_test(NAME acceptance.tetris.board.mcp-${era}
+        COMMAND illusion_ctl --launch $<TARGET_FILE:illusion_editor>
+            --editor-arg --deterministic --editor-arg --seed --editor-arg 1 --editor-arg --no-gpu
+            replay ${PROJECT_SOURCE_DIR}/tests/acceptance/tetris/scripted.jsonl
+            --checks ${PROJECT_SOURCE_DIR}/tests/acceptance/tetris/checks.jsonl --temp-workspace
+            --via-mcp $<TARGET_FILE:illusion_mcp> --era ${era}
+        CONFIGURATIONS Release RelWithDebInfo)
+    set_tests_properties(acceptance.tetris.board.mcp-${era} PROPERTIES LABELS "acceptance" TIMEOUT 360)
+endforeach()
 
 # The Python client (tools/editor/illusion_rpc.py) against the editor.
 find_package(Python3 COMPONENTS Interpreter)

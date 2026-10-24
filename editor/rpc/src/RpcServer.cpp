@@ -26,6 +26,7 @@ namespace
 constexpr usize kMaxOutbox = 64u * 1024u * 1024u;
 constexpr usize kReadBuffer = 64u * 1024u;
 constexpr usize kMaxClientName = 64;
+constexpr usize kActivityCapacity = 256;
 
 struct MethodEntry
 {
@@ -62,6 +63,26 @@ constexpr std::array kServerMethods = {
         R"({"type":"object","properties":{"events":{"type":"array"},"overflow":{"type":"boolean"}}})"},
     ServerMethod{"editor.quit", PermissionClass::System, false, "Ends the editor process after this reply.",
                  "[]", R"({"type":"object"})"},
+    ServerMethod{
+        "editor.set_client", PermissionClass::Read, true,
+        "Names the program on this connection and the agent behind it, for editor.clients and the origin "
+        "(rpc:<client>) of its changes. Every member is optional. Example: {\"client\":\"illusion_mcp\","
+        "\"agent\":\"claude-code\",\"agentVersion\":\"2.1.0\",\"era\":\"2025-06-18\"}.",
+        R"([{"name":"client","schema":{"type":"string"}},{"name":"agent","schema":{"type":"string"}},{"name":"agentVersion","schema":{"type":"string"}},{"name":"era","schema":{"type":"string"}}])",
+        R"({"type":"object","properties":{"connection":{"type":"integer"},"client":{"type":"string"},"origin":{"type":"string"}}})"},
+    ServerMethod{
+        "editor.clients", PermissionClass::Read, true,
+        "Lists the open connections: id, client, agent, agent version, protocol era, origin and the "
+        "number of requests run. Example: {}.",
+        "[]",
+        R"({"type":"object","properties":{"clients":{"type":"array","items":{"type":"object","properties":{"connection":{"type":"integer"},"client":{"type":"string"},"agent":{"type":"string"},"agentVersion":{"type":"string"},"era":{"type":"string"},"origin":{"type":"string"},"requests":{"type":"integer"}}}}}})"},
+    ServerMethod{
+        "editor.activity", PermissionClass::Read, true,
+        "Returns the latest requests of every connection (the last 256), oldest first: sequence number, "
+        "connection, client, method, error code (0 on success), duration in microseconds and the scene "
+        "revision after it. Example: {\"since\":0,\"limit\":50}.",
+        R"([{"name":"since","schema":{"type":"integer","minimum":0}},{"name":"limit","schema":{"type":"integer","minimum":1}}])",
+        R"({"type":"object","properties":{"entries":{"type":"array","items":{"type":"object","properties":{"seq":{"type":"integer"},"connection":{"type":"integer"},"client":{"type":"string"},"method":{"type":"string"},"code":{"type":"integer"},"micros":{"type":"integer"},"revision":{"type":"integer"}}}}}})"},
     ServerMethod{
         "rpc.cancel", PermissionClass::Read, true,
         "Notification: cancels this connection's request with the given id. A running async command ends "
@@ -304,6 +325,12 @@ struct RpcServer::Connection
     std::mutex cancelMutex;
     std::vector<std::string> cancels;
 
+    // Main thread only: what editor.set_client reported, and the requests run.
+    std::string agent;
+    std::string agentVersion;
+    std::string era;
+    u64 requests = 0;
+
     // Main thread only: the event subscription.
     bool subscribed = false;
     bool push = true;
@@ -421,6 +448,19 @@ struct RpcServer::Shared
         std::unique_ptr<RunningCommand> command;
         CommandProgress sent; // progress in the last rpc.progress
         bool cancelled = false;
+        std::chrono::steady_clock::time_point started{};
+    };
+
+    // One request in the activity ring.
+    struct Activity
+    {
+        u64 seq = 0;
+        u32 connection = 0;
+        std::string client;
+        std::string method;
+        i32 code = 0;
+        u64 micros = 0;
+        u64 revision = 0;
     };
 
     struct TokenCache
@@ -453,6 +493,27 @@ struct RpcServer::Shared
     // Main thread only.
     std::map<std::string, TokenCache, std::less<>> tokens;
     std::vector<Task> tasks;
+    std::deque<Activity> activity;
+    u64 activitySeq = 0;
+
+    // Adds a finished request to the activity ring (polling methods are left out).
+    void record(Connection& connection, std::string_view method, i32 code,
+                std::chrono::steady_clock::time_point started, u64 revision)
+    {
+        ++connection.requests;
+        if (method == "editor.activity" || method == "editor.clients" || method == "editor.poll_events")
+        {
+            return;
+        }
+        if (activity.size() == kActivityCapacity)
+        {
+            activity.pop_front();
+        }
+        const auto micros =
+            std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::steady_clock::now() - started);
+        activity.push_back(Activity{++activitySeq, connection.id, connection.origin.substr(4),
+                                    std::string(method), code, static_cast<u64>(micros.count()), revision});
+    }
 
     std::shared_ptr<const Catalog> currentCatalog() const
     {
@@ -979,7 +1040,20 @@ void RpcServer::deliver(const EditorEvent& event)
 std::string RpcServer::execute(Connection& connection, const Request& request)
 {
     ILL_PROFILE_SCOPE();
+    const auto started = std::chrono::steady_clock::now();
+    i32 code = 0;
+    std::string response = run(connection, request, code);
+    m_shared->record(connection, request.method, code, started, m_editor.revision());
+    return response;
+}
+
+std::string RpcServer::run(Connection& connection, const Request& request, i32& code)
+{
     const std::string_view method = request.method;
+    const auto failed = [&](const CommandError& error) {
+        code = static_cast<i32>(error.kind);
+        return errorResponse(request.id, error);
+    };
     const JsonValue params = request.params;
     if (method == "editor.subscribe")
     {
@@ -987,22 +1061,20 @@ std::string RpcServer::execute(Connection& connection, const Request& request)
         const JsonValue list = params.find("topics");
         if (!list.isAbsent() && !list.isArray())
         {
-            return errorResponse(request.id,
-                                 CommandError::invalid("/topics", "must be an array of topic names"));
+            return failed(CommandError::invalid("/topics", "must be an array of topic names"));
         }
         for (const JsonValue topic : list.elements())
         {
             if (!topic.isString())
             {
-                return errorResponse(request.id,
-                                     CommandError::invalid("/topics", "must be an array of topic names"));
+                return failed(CommandError::invalid("/topics", "must be an array of topic names"));
             }
             topics.emplace_back(*topic.asString());
         }
         const std::string_view mode = params.find("mode").asString().value_or("push");
         if (mode != "push" && mode != "pull")
         {
-            return errorResponse(request.id, CommandError::invalid("/mode", "must be \"push\" or \"pull\""));
+            return failed(CommandError::invalid("/mode", "must be \"push\" or \"pull\""));
         }
         connection.subscribed = true;
         connection.push = mode == "push";
@@ -1034,7 +1106,7 @@ std::string RpcServer::execute(Connection& connection, const Request& request)
         const std::optional<u64> limit = limitValue.isAbsent() ? std::optional<u64>(256) : limitValue.asU64();
         if (!limit || *limit == 0)
         {
-            return errorResponse(request.id, CommandError::invalid("/limit", "must be a positive integer"));
+            return failed(CommandError::invalid("/limit", "must be a positive integer"));
         }
         std::string result = R"({"events":[)";
         usize taken = 0;
@@ -1049,6 +1121,115 @@ std::string RpcServer::execute(Connection& connection, const Request& request)
         result += '}';
         connection.overflow = false;
         return resultResponse(request.id, result);
+    }
+    if (method == "editor.set_client")
+    {
+        constexpr std::string_view kNames[4] = {"client", "agent", "agentVersion", "era"};
+        std::string_view texts[4];
+        for (usize i = 0; i < 4; ++i)
+        {
+            const JsonValue value = params.find(kNames[i]);
+            if (!value.isAbsent() && (!value.isString() || value.asString()->size() > kMaxClientName))
+            {
+                return failed(CommandError::invalid("/" + std::string(kNames[i]),
+                                                    "must be a string of at most 64 bytes"));
+            }
+            texts[i] = value.asString().value_or("");
+        }
+        if (params.find("client").isString())
+        {
+            connection.origin = "rpc:" + sanitizeClient(texts[0], connection.id);
+        }
+        if (params.find("agent").isString())
+        {
+            connection.agent = std::string(texts[1]);
+        }
+        if (params.find("agentVersion").isString())
+        {
+            connection.agentVersion = std::string(texts[2]);
+        }
+        if (params.find("era").isString())
+        {
+            connection.era = std::string(texts[3]);
+        }
+        ILL_LOG_INFO("rpc", "connection {} is {} (agent '{}' {}, era '{}')", connection.id, connection.origin,
+                     connection.agent, connection.agentVersion, connection.era);
+        JsonMutDocument doc;
+        JsonMutValue result = doc.makeObject();
+        result.add("connection", doc.makeU64(connection.id));
+        result.add("client", doc.makeString(std::string_view(connection.origin).substr(4)));
+        result.add("origin", doc.makeString(connection.origin));
+        doc.setRoot(result);
+        return resultResponse(request.id, compact(doc));
+    }
+    if (method == "editor.clients")
+    {
+        std::vector<std::shared_ptr<Connection>> open;
+        {
+            const std::lock_guard lock(m_shared->connectionsMutex);
+            open = m_shared->connections;
+        }
+        JsonMutDocument doc;
+        JsonMutValue result = doc.makeObject();
+        JsonMutValue list = result.addArray("clients");
+        for (const std::shared_ptr<Connection>& other : open)
+        {
+            if (!other->open.load() || !other->authenticated.load())
+            {
+                continue;
+            }
+            JsonMutValue entry = list.pushObject();
+            entry.add("connection", doc.makeU64(other->id));
+            entry.add("client", doc.makeString(std::string_view(other->origin).substr(4)));
+            entry.add("agent", doc.makeString(other->agent));
+            entry.add("agentVersion", doc.makeString(other->agentVersion));
+            entry.add("era", doc.makeString(other->era));
+            entry.add("origin", doc.makeString(other->origin));
+            entry.add("requests", doc.makeU64(other->requests));
+        }
+        doc.setRoot(result);
+        return resultResponse(request.id, compact(doc));
+    }
+    if (method == "editor.activity")
+    {
+        const JsonValue sinceValue = params.find("since");
+        const JsonValue limitValue = params.find("limit");
+        const std::optional<u64> since = sinceValue.isAbsent() ? std::optional<u64>(0) : sinceValue.asU64();
+        const std::optional<u64> limit =
+            limitValue.isAbsent() ? std::optional<u64>(kActivityCapacity) : limitValue.asU64();
+        if (!since)
+        {
+            return failed(CommandError::invalid("/since", "must be a non-negative integer"));
+        }
+        if (!limit || *limit == 0)
+        {
+            return failed(CommandError::invalid("/limit", "must be a positive integer"));
+        }
+        JsonMutDocument doc;
+        JsonMutValue result = doc.makeObject();
+        JsonMutValue list = result.addArray("entries");
+        u64 taken = 0;
+        for (const Shared::Activity& entry : m_shared->activity)
+        {
+            if (entry.seq <= *since)
+            {
+                continue;
+            }
+            if (taken++ == *limit)
+            {
+                break;
+            }
+            JsonMutValue item = list.pushObject();
+            item.add("seq", doc.makeU64(entry.seq));
+            item.add("connection", doc.makeU64(entry.connection));
+            item.add("client", doc.makeString(entry.client));
+            item.add("method", doc.makeString(entry.method));
+            item.add("code", doc.makeI64(entry.code));
+            item.add("micros", doc.makeU64(entry.micros));
+            item.add("revision", doc.makeU64(entry.revision));
+        }
+        doc.setRoot(result);
+        return resultResponse(request.id, compact(doc));
     }
     if (method == "editor.quit")
     {
@@ -1066,8 +1247,7 @@ std::string RpcServer::execute(Connection& connection, const Request& request)
         {
             if (hit->second.first != method)
             {
-                return errorResponse(
-                    request.id,
+                return failed(
                     CommandError::invalid("/clientToken", "was already used for " + hit->second.first));
             }
             return resultResponse(request.id, hit->second.second);
@@ -1080,7 +1260,7 @@ std::string RpcServer::execute(Connection& connection, const Request& request)
     Expected<std::string, CommandError> result = m_editor.executeJson(method, params, options);
     if (!result)
     {
-        return errorResponse(request.id, result.error());
+        return failed(result.error());
     }
     if (cache != nullptr)
     {
@@ -1116,6 +1296,8 @@ bool RpcServer::startTask(const std::shared_ptr<Connection>& connection, const R
         m_editor.startJson(request.method, request.params, options);
     if (!started)
     {
+        m_shared->record(*connection, request.method, static_cast<i32>(started.error().kind),
+                         std::chrono::steady_clock::now(), m_editor.revision());
         if (!request.notification())
         {
             connection->send(errorResponse(request.id, started.error()));
@@ -1128,6 +1310,7 @@ bool RpcServer::startTask(const std::shared_ptr<Connection>& connection, const R
     task.method = std::string(request.method);
     task.clientToken = std::string(clientToken.value_or(""));
     task.command = std::move(started).value();
+    task.started = std::chrono::steady_clock::now();
     m_shared->tasks.push_back(std::move(task));
     return true;
 }
@@ -1191,6 +1374,8 @@ void RpcServer::advanceTasks()
                 connection.send(errorResponse(
                     task.id, CommandError::make(ErrorKind::Cancelled, task.method + " was cancelled")));
             }
+            shared.record(connection, task.method, static_cast<i32>(ErrorKind::Cancelled), task.started,
+                          m_editor.revision());
             connection.inFlight.fetch_sub(1);
             it = shared.tasks.erase(it);
             continue;
@@ -1208,6 +1393,8 @@ void RpcServer::advanceTasks()
             ++it;
             continue;
         }
+        shared.record(connection, task.method, updated ? 0 : static_cast<i32>(updated.error().kind),
+                      task.started, m_editor.revision());
         if (!updated)
         {
             if (reply)

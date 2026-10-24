@@ -1,0 +1,4 @@
+{"jsonrpc":"2.0","id":40,"method":"subscriptions/listen","params":{"notifications":{"toolsListChanged":true,"resourcesListChanged":true},"_meta":{"io.modelcontextprotocol/protocolVersion":"2026-07-28","io.modelcontextprotocol/clientInfo":{"name":"golden","version":"1.0.0"},"io.modelcontextprotocol/clientCapabilities":{}}}}
+{"jsonrpc":"2.0","id":41,"method":"subscriptions/listen","params":{"notifications":{"promptsListChanged":true},"_meta":{"io.modelcontextprotocol/protocolVersion":"2026-07-28","io.modelcontextprotocol/clientInfo":{"name":"golden","version":"1.0.0"},"io.modelcontextprotocol/clientCapabilities":{}}}}
+{"jsonrpc":"2.0","method":"notifications/cancelled","params":{"requestId":41,"reason":"done"}}
+{"jsonrpc":"2.0","id":42,"method":"tools/list","params":{"cursor":"8","_meta":{"io.modelcontextprotocol/protocolVersion":"2026-07-28","io.modelcontextprotocol/clientInfo":{"name":"golden","version":"1.0.0"},"io.modelcontextprotocol/clientCapabilities":{}}}}

@@ -1,0 +1,6 @@
+{"jsonrpc":"2.0","id":30,"method":"tools/list","params":{"_meta":{"io.modelcontextprotocol/protocolVersion":"1900-01-01"}}}
+{"jsonrpc":"2.0","id":31,"method":"initialize","params":{"protocolVersion":"2026-07-28","capabilities":{},"clientInfo":{"name":"golden","version":"1.0.0"},"_meta":{"io.modelcontextprotocol/protocolVersion":"2026-07-28","io.modelcontextprotocol/clientInfo":{"name":"golden","version":"1.0.0"},"io.modelcontextprotocol/clientCapabilities":{}}}}
+{"jsonrpc":"2.0","id":32,"method":"ping","params":{"_meta":{"io.modelcontextprotocol/protocolVersion":"2026-07-28","io.modelcontextprotocol/clientInfo":{"name":"golden","version":"1.0.0"},"io.modelcontextprotocol/clientCapabilities":{}}}}
+{"jsonrpc":"2.0","id":33,"method":"tools/list","params":{}}
+not json
+[{"jsonrpc":"2.0","id":34,"method":"tools/list","params":{}}]

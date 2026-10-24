@@ -313,7 +313,15 @@ Expected<void, CommandError> EditorContext::openProject(const std::filesystem::p
     m_editor.setFiles(&m_files, m_project->stateDirectory() / "trash", m_session);
     if (m_options.crashJournal)
     {
-        m_journal.open(m_project->stateDirectory() / "journal" / utf8Path(m_session + ".jsonl"), m_session);
+        // A fixed seed gives every run the same session id: never truncate the journal a crashed run left.
+        const std::filesystem::path journals = m_project->stateDirectory() / "journal";
+        std::filesystem::path journal = journals / utf8Path(m_session + ".jsonl");
+        std::error_code code;
+        for (u32 attempt = 2; std::filesystem::exists(journal, code); ++attempt)
+        {
+            journal = journals / utf8Path(m_session + "-" + std::to_string(attempt) + ".jsonl");
+        }
+        m_journal.open(journal, m_session);
     }
     const std::string& startup = m_project->manifest().startupScene;
     if (!startup.empty() && m_files.exists(startup))

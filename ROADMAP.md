@@ -160,7 +160,19 @@ Plan: `docs/plans/m7-editor.md` (sub-milestones, command API, localization, them
   (`findOverlap()`, `conflict` otherwise), async commands (`addAsync`, `RunningCommand`, `editor.wait`) with
   `rpc.progress` and `rpc.cancel`, permission checks for every batch step (`CommandGate`), `commands.changed`
   with a rebuilt method catalogue, and protocol version 0.2.0 (ADR 0036 and 0037 addenda)
-- M7k: MCP bridge `illusion_mcp` with tools generated from editor commands (ADR 0039)
+- M7k: ✅ MCP bridge `illusion_mcp` (ADR 0039): the pure `illusion::mcp_protocol` library serving both MCP
+  eras (legacy `initialize` with 2025-06-18 and 2025-11-25, stateless 2026-07-28 with `server/discover`,
+  `resultType`, `ttlMs`/`cacheScope`, `subscriptions/listen` and -32022), tools generated one to one from the
+  `rpc.discover` catalogue (names, descriptions with parameter documentation, schemas, annotations, `--tools`
+  filters, `illusion_call`/`illusion_batch`, `list_changed`, pagination), results with `structuredContent`, 4 KB
+  text summaries, PNG image content with a size cap and flat `isError` objects, progress and cancellation
+  mapped to `rpc.progress`/`rpc.cancel`, resources and the `illusion://components/{stableName}` template,
+  prompts and instructions; `illusion_mcp` with `--auto`/`--attach`/`--launch`, `--record`, stderr-only
+  logs, crash reports with the editor's last log lines and relaunch with `project.recover`;
+  `editor.set_client`/`editor.clients`/`editor.activity` (protocol 0.3.0); `.mcp.json` from `project.create`;
+  `illusion_ctl replay --via-mcp --era legacy|modern`; journals of crashed deterministic sessions are kept.
+  Not yet: the `illusion://sdk/{header}` and `illusion://manual/{page}` resources (they need the `sdk:` mount
+  and shipped manual pages: M7s and M8 docs), normalised recordings for the nightly live-agent job (M7x)
 - M7l: Editor shell: layouts, menus, command palette, console, history, AI activity, preferences; approval
   prompts for the `ask` permission mode (moved from M7j-2: they need a window)
 - M7m: Outliner and Inspector

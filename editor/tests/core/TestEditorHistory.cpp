@@ -257,6 +257,31 @@ TEST_CASE("the crash journal of a session recovers its unsaved changes")
     CHECK(test::fails(editor, "project.recover", "{}").kind == ErrorKind::NotFound);
 }
 
+TEST_CASE("a session with the seed of a crashed one keeps the crashed journal and can recover it")
+{
+    // Deterministic runs (--deterministic, the MCP bridge relaunching after a crash) reuse the session id.
+    EditorFixture fixture(11);
+    ok(*fixture.editor, "entity.create", R"({"name":"Lost"})");
+    fixture.editor->endFrame(0.0);
+    const std::filesystem::path journals = fixture.directory.path / "project" / ".illusion" / "journal";
+    const std::filesystem::path journal = journals / (fixture.editor->session() + ".jsonl");
+    const std::filesystem::path kept = fixture.directory.path / "kept.jsonl";
+    std::filesystem::copy_file(journal, kept);
+    fixture.editor.reset();
+    std::filesystem::rename(kept, journal); // as a crash leaves it
+
+    fixture.open(11);
+    EditorContext& editor = *fixture.editor;
+    CHECK(editor.session() + ".jsonl" == journal.filename().string());
+    const std::vector<std::filesystem::path> leftover = editor.leftoverJournals();
+    REQUIRE(leftover.size() == 1);
+    CHECK(leftover[0] == journal);
+    CHECK(ok(editor, "project.recover").root().find("operations").asU64() > 0);
+    CHECK(
+        ok(editor, "entity.get", R"({"entity":"name:Lost"})").root().find("entity").find("name").asString() ==
+        "Lost");
+}
+
 TEST_CASE("journals keep a scene whose entities got new ids when it was opened")
 {
     EditorFixture fixture(21);
