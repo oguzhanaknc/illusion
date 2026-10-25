@@ -36,6 +36,8 @@ def main() -> int:
             except RpcError as error:
                 assert error.code == -32601, error
                 assert "entity.create" in error.data["suggestions"], error.data
+            # Replies can arrive in the same frame; events are published only at endFrame().
+            editor.call("editor.wait", frames=1)
             events = editor.call("editor.poll_events")
             assert any(event["topic"] == "scene.changed" for event in events["events"]), events
         assert os.path.isfile(os.path.join(workspace, "game", "project.illusion"))

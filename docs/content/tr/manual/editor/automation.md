@@ -123,6 +123,10 @@ bir kez bildirim göndermesini sağlar:
 hepsi demektir. `commands.changed` sonrasında (örneğin bir modül komut kaydettiğinde) sunucunun metot listesi
 ve `rpc.discover` yeni komutları içerir.
 
+Olaylar frame sonunda yayımlanır; bu yüzden bir komutun yanıtı, olaylarının da hazır olduğunu garanti
+etmez. Deterministik bir pull için komuttan sonra `editor.wait {"frames": 1}` çağrısının tamamlanmasını
+bekleyin, ardından `editor.poll_events` çağırın. Ek senkron çağrılar bir frame sınırını garanti etmez.
+
 ## Async komutlar ve iptal
 
 `async` bayraklı komutlar (`editor.list_commands` bayrağı gösterir) birkaç editör frame'i sürer. Editör onlara
