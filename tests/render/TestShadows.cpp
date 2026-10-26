@@ -51,6 +51,35 @@ TEST_CASE("shadow cascades split the shadow distance from near to far")
               .count == kMaxShadowCascades);
 }
 
+TEST_CASE("orthographic cascades contain off-centre frustum corners and respect the camera far plane")
+{
+    ShadowSettings settings;
+    settings.resolution = 64;
+    const Mat4 view = viewMatrix(Vec3(3, 2, -5), 0.7f);
+    const Mat4 projection = orthographicReversedZ(-3, 9, -2, 4, 0.5f, 30);
+    const ShadowCascades cascades = computeShadowCascades(view, projection, kLight, settings);
+    CHECK(cascades.cascades[0].splitNear == doctest::Approx(0.5));
+    CHECK(cascades.cascades[cascades.count - 1].splitFar == doctest::Approx(30));
+    for (u32 c = 0; c < cascades.count; ++c)
+    {
+        const auto& cascade = cascades.cascades[c];
+        for (const f32 depth : {cascade.splitNear, cascade.splitFar})
+        {
+            for (const f32 x : {-3.0f, 9.0f})
+            {
+                for (const f32 y : {-2.0f, 4.0f})
+                {
+                    const Vec4 clip = cascade.viewProjection * glm::inverse(view) * Vec4(x, y, -depth, 1);
+                    CHECK(std::abs(clip.x) <= 1.0001f);
+                    CHECK(std::abs(clip.y) <= 1.0001f);
+                    CHECK(clip.z >= 0);
+                    CHECK(clip.z <= 1);
+                }
+            }
+        }
+    }
+}
+
 TEST_CASE("each shadow cascade contains its slice of the view frustum")
 {
     const ShadowSettings settings;

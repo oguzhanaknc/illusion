@@ -128,7 +128,7 @@ ILL_LOG_DEBUG("Game", "{} draw calls", renderer->stats().drawCalls);
   draws each run of identical (Mesh, submesh, Material) with one instanced draw per pass. `stats()`
   reports candidates, Entities inside the frustum, draw calls and triangles.
 - The renderer owns a depth buffer that follows the size of the target. Create a `SceneRenderer` per
-  colour format you render to.
+  view, with the colour format of its target.
 - Colour targets with an sRGB format receive linear colour; UNORM targets receive sRGB-encoded colour,
   so both look the same.
 
@@ -330,13 +330,99 @@ renderer->resetTemporalHistory();
   everything else.
 - Bloom preserves energy: it replaces `bloom.intensity` of the image with its blurred copy instead of
   adding light.
-- TAA follows moving objects with per-pixel motion vectors from the depth prepass. The renderer keeps
-  each RenderMesh's previous world matrix in a `MotionHistory` Component that it adds itself; after
-  teleporting an object, set `MotionHistory::previousWorld` to its new matrix so the jump is not
-  smeared. TAA is off by default; it suits scenes that need smooth edges more than the sharpest image.
+- TAA follows moving objects with per-pixel motion vectors from the depth prepass. Each renderer keeps
+  its own previous transforms, checked against Entity generation. Rendering does not modify the World.
+  Use one renderer per view and call `resetTemporalHistory()` after teleporting objects or replacing
+  a World. TAA is off by default.
 - `motionVectors()` returns the motion-vector texture for debug views.
 - `stats().drawCalls` counts every draw: with occlusion culling, an opaque batch has one indirect draw
   per culling phase in both the depth prepass and shading.
+
+### Cameras and view filters
+
+Camera schema v2 adds `projection`, `orthoHeight`, `farPlane` and `priority`. Old scenes retain
+perspective defaults. Perspective uses `fovY` and an infinite far plane; orthographic uses a positive
+`orthoHeight` and `farPlane > nearPlane`. `findMainCamera(world)` returns the active Camera with a
+Transform and the highest priority (lowest Entity index breaks ties), or a null Entity.
+
+```cpp
+illusion::Camera camera;
+camera.projection = illusion::CameraProjection::Orthographic;
+camera.orthoHeight = 12.0f;
+camera.farPlane = 200.0f;
+camera.priority = 10;
+auto view = illusion::RenderView::fromCamera(illusion::Transform{}, camera, 16.0f / 9.0f);
+view.layerMask = 1u << 2;
+```
+
+`RenderMesh::kVisible`, its `layers & view.layerMask`, and `view.hiddenEntities` filter every pass.
+The hidden bitset is borrowed until `render()` returns: bit `index % 64` in word `index / 64` hides an
+Entity; missing words mean visible. Refresh it when Entity indices are reused. `kCastShadows` controls
+shadow casting independently. Cascades support both projections and stop at the orthographic far plane.
+
+### Entity IDs, readback and overlays
+
+Set `SceneRendererDesc::entityIds = true` to allocate an RG32_UINT attachment containing Entity index
+and generation. Background has both words `~0u`. Masked pixels obey alpha cutoff; blended pixels with
+nonzero alpha select the nearest surface without changing the scene's opaque depth.
+
+`viewTargets()` exposes borrowed `depth`, `ids`, `hdr`, `motion`, `renderSize`, `outputSize`,
+`viewProjection` (jittered) and `unjitteredViewProjection`. They last until resize or renderer destruction.
+Record overlays after `render()`, sample depth as an SRV and map output pixels to render pixels.
+
+Header: `<illusion/render/ReadbackRing.hpp>`. Create the ring once and submit rendering before requesting
+a copy. Poll on later frames; `Pending` leaves the destination unchanged. A full ring rejects requests.
+Readbacks validate regions and destination sizes; a short destination does not consume its ticket.
+
+```cpp
+auto readback = illusion::ReadbackRing::create(*device, 3);
+const auto ticket = readback->request(renderer->viewTargets().ids,
+                                     illusion::UVec2(20, 30), illusion::UVec2(1));
+if (ticket)
+{
+    illusion::UVec2 id;
+    const auto result = readback->read(*ticket, std::as_writable_bytes(std::span(&id, 1)), true);
+    // true waits for this copy only; interactive tools poll with false on later frames.
+    if (result == illusion::ReadbackStatus::Ready)
+    {
+        // Validate index and generation against the current World before using the Entity.
+    }
+}
+```
+
+Each ticket occupies a slot until successfully read. Slots reuse staging storage for matching dimensions
+and format. Both polling and blocking modes use event queries and never call `waitForIdle()`.
+
+### Debug drawing and diagnostics
+
+`DebugDraw` (`<illusion/render/DebugDraw.hpp>`) reserves line storage at construction. `line`, `box` and
+`sphere` return false without appending on invalid input or insufficient space. Call `clear()` each frame.
+Recording does not allocate; the `render/debugdraw-record` Benchmark budgets 20 ns per line for 100k lines.
+
+```cpp
+illusion::DebugDraw draw(16384);
+draw.line(illusion::Vec3(0), illusion::Vec3(1, 0, 0), illusion::Vec4(1, 0, 0, 1),
+          3.0f, illusion::DebugDepth::OnTop);
+auto overlay = illusion::DebugDrawRenderer::create(*device, rendererDesc.colorFormat);
+// While commands is open, after renderer->render(...):
+overlay->render(commands, swapchain->currentBackBuffer(), renderer->viewTargets(), draw);
+```
+
+Create the overlay renderer once. Widths are output pixels, implemented with quads rather than wide-line
+GPU support. `DebugDepth::Tested` samples reversed-Z scene depth; `OnTop` remains visible through geometry.
+Separate render/output sizes keep occlusion correct when output resolution differs.
+
+`setDebugView()` selects Lit, Unlit, Albedo, Normals, Roughness, Metallic, AmbientOcclusion,
+ShadowCascades or MotionVectors. Diagnostic modes bypass temporal accumulation, bloom, exposure and ACES,
+while preserving output colour encoding. `setWireframeOverlay(true)` overlays opaque triangle edges and
+returns false on GPUs without non-solid fill. `setClearColor()` changes background radiance.
+
+Opt in with `SceneRendererDesc::gpuTimers`. `gpuTimings()` polls completed pass durations in milliseconds:
+`available` reports timestamp support and `valid` reports a completed measurement. A busy query ring skips
+measurement instead of waiting. `stats().lightsDropped` counts active lights exceeding the 4 directional
+and 16 point light limits. GPU regressions compare DebugDraw, orthographic shadows and normals against
+`tests/data/render/` PNGs; `ILLUSION_UPDATE_GOLDENS=1` updates them, and `render-captures/` retains captures
+in the test working directory for review.
 
 ### The glTF viewer
 
@@ -359,7 +445,7 @@ the Vulkan viewport to achieve this, so projection matrices need no y flip. Text
 their origin at the top-left.
 
 World space is right-handed with y up; cameras look along their -z axis, and front faces are
-counter-clockwise. The scene renderer uses **reversed-Z** with an infinite far plane: the near plane
+counter-clockwise. Perspective rendering uses **reversed-Z** with an infinite far plane: the near plane
 maps to depth 1 and infinity to 0, which keeps depth precision nearly uniform over distance. Build
 projection matrices with `perspectiveReversedZ()` (or `RenderView::fromCamera()`), not
 `glm::perspective()`.

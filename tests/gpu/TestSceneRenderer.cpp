@@ -629,9 +629,10 @@ TEST_CASE("the prepass writes motion vectors for moving objects")
         const Entity entity = world.create(
             plane, RenderMesh{resources.createMesh(makePlane(2.0f, 1), "Plane"), 0, MaterialHandle{}});
 
+        const u64 structure = world.structuralVersion();
         renderScene(*device, *renderer, world, nullptr);
         std::vector<Vec2> motion = readMotion(*device, renderer->motionVectors());
-        CHECK(world.has<MotionHistory>(entity)); // added by the renderer
+        CHECK(world.structuralVersion() == structure);
         CHECK(glm::length(motion[32 * kSize + 32]) < 1e-4f);
 
         // Moving 0.2 units right at distance 5 with a 60 degree field of view shifts the image by

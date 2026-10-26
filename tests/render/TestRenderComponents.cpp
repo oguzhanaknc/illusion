@@ -38,6 +38,10 @@ TEST_CASE("render components with asset references are saved in scenes; runtime 
     Camera camera;
     camera.fovY = 0.8f;
     camera.exposure = 2.0f;
+    camera.projection = CameraProjection::Orthographic;
+    camera.orthoHeight = 12.0f;
+    camera.farPlane = 250.0f;
+    camera.priority = 7;
     DirectionalLight sun;
     sun.color = Vec3(1.0f, 0.9f, 0.8f);
     sun.castShadows = false;
@@ -71,6 +75,10 @@ TEST_CASE("render components with asset references are saved in scenes; runtime 
     REQUIRE(result.entities.size() == 4);
     CHECK(loaded.get<Camera>(result.entities[0]).fovY == 0.8f);
     CHECK(loaded.get<Camera>(result.entities[0]).exposure == 2.0f);
+    CHECK(loaded.get<Camera>(result.entities[0]).projection == CameraProjection::Orthographic);
+    CHECK(loaded.get<Camera>(result.entities[0]).orthoHeight == 12.0f);
+    CHECK(loaded.get<Camera>(result.entities[0]).farPlane == 250.0f);
+    CHECK(loaded.get<Camera>(result.entities[0]).priority == 7);
     CHECK(loaded.get<DirectionalLight>(result.entities[1]).color == sun.color);
     CHECK_FALSE(loaded.get<DirectionalLight>(result.entities[1]).castShadows);
     CHECK(loaded.get<PointLight>(result.entities[2]).range == 25.0f);

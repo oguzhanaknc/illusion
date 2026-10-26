@@ -24,6 +24,7 @@ public:
         Mat4 previousViewProjection; // unjittered
         f32 exposure = 1.0f;
         bool historyValid = false;
+        bool diagnostic = false;
         u32 frameIndex = 0;
     };
 

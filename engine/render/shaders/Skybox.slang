@@ -28,7 +28,7 @@ float4 fragmentMain(VertexOutput input) : SV_Target
 {
     // Unproject a point on the near plane (depth 1) and look from the camera through it.
     const float4 nearPoint = mul(g_view.inverseViewProjection, float4(input.clip, 1.0, 1.0));
-    const float3 direction = normalize(nearPoint.xyz / nearPoint.w - g_view.cameraPosition.xyz);
+    const float3 direction = (g_view.effects.z > 0.5 ? g_view.cameraForward.xyz : normalize(nearPoint.xyz / nearPoint.w - g_view.cameraPosition.xyz));
     const float3 environmentDirection = mul((float3x3)g_view.skyRotation, direction);
     const float3 radiance = g_skybox.SampleLevel(g_clampSampler, environmentDirection, 0.0).rgb * g_view.sky.z;
     return float4(radiance, 1.0);

@@ -1,3 +1,4 @@
+#include <illusion/core/Json.hpp>
 #include <illusion/core/VirtualPath.hpp>
 #include <illusion/ecs/Hierarchy.hpp>
 #include <illusion/ecs/Name.hpp>
@@ -84,11 +85,11 @@ void reflectRenderComponents(ComponentRegistry& registry)
         .field("layers", &MeshRenderer::layers, {.advanced = true})
         .field("castShadows", &MeshRenderer::castShadows)
         .field("visible", &MeshRenderer::visible);
-    reflect<Camera>("illusion.Camera", 1, registry)
+    reflect<Camera>("illusion.Camera", 2, registry)
         .meta({.displayName = "Camera",
                .category = "Rendering",
                .icon = "videocam",
-               .description = "Perspective camera looking along the Transform's -z axis.",
+               .description = "Perspective or orthographic camera looking along the Transform's -z axis.",
                .docsAnchor = "manual/rendering.md#drawing-a-scene",
                .requiredComponents = kRequiresTransform})
         .field("fovY", &Camera::fovY,
@@ -99,7 +100,13 @@ void reflectRenderComponents(ComponentRegistry& registry)
                 .max = 3.14,
                 .hint = FieldHint::Angle})
         .field("nearPlane", &Camera::nearPlane, {.unit = Unit::Meters, .min = 0.0001})
-        .field("exposure", &Camera::exposure, {.min = 0.0, .hint = FieldHint::LogSlider});
+        .field("exposure", &Camera::exposure, {.min = 0.0, .hint = FieldHint::LogSlider})
+        .field("projection", &Camera::projection)
+        .field("orthoHeight", &Camera::orthoHeight, {.unit = Unit::Meters, .min = 0.0001})
+        .field("farPlane", &Camera::farPlane, {.unit = Unit::Meters, .min = 0.0002})
+        .field("priority", &Camera::priority)
+        // v1 cameras retain their perspective projection; new fields take their defaults.
+        .migrate(1, [](JsonMutDocument&, JsonMutValue) {});
     reflect<DirectionalLight>("illusion.DirectionalLight", 1, registry)
         .meta({.displayName = "Directional light",
                .category = "Rendering/Lights",
@@ -162,11 +169,6 @@ void reflectRenderComponents(ComponentRegistry& registry)
     reflectRuntime<RenderSky>(
         "illusion.RenderSky",
         {.displayName = "Render sky", .description = "GPU environment of a SkyLight (runtime state)."},
-        registry);
-    reflectRuntime<MotionHistory>(
-        "illusion.MotionHistory",
-        {.displayName = "Motion history",
-         .description = "Previous world matrix for motion vectors (runtime state)."},
         registry);
 }
 

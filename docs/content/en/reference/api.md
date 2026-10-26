@@ -90,10 +90,12 @@ Open `build/api/index.html` in a browser.
 | `illusion/render/Swapchain.hpp` | `Swapchain`: presentation to a window |
 | `illusion/render/DebugTriangle.hpp` | Diagnostic triangle renderer |
 | `illusion/render/RenderResources.hpp` | `RenderResources`: GPU Meshes, Textures, Materials, environments and their Handles |
-| `illusion/render/SceneRenderer.hpp` | `SceneRenderer`, `RenderView`, `RenderStats` |
+| `illusion/render/SceneRenderer.hpp` | `SceneRenderer`, `RenderView`, `RenderStats`, `RenderViewTargets`, `RenderGpuTimings`, `RenderDebugView`, `findMainCamera` |
+| `illusion/render/ReadbackRing.hpp` | Bounded asynchronous texture readbacks with event queries |
+| `illusion/render/DebugDraw.hpp` | Reserved debug geometry and depth-sampled overlays |
 | `illusion/render/Shadows.hpp` | `ShadowSettings`, `ShadowCascades`, `computeShadowCascades` |
 | `illusion/render/UploadQueue.hpp` | `UploadQueue`: GPU uploads of streamed models with a byte budget |
 | `illusion/render/PostProcess.hpp` | `PostProcessSettings` (ambient occlusion, bloom, TAA), `temporalJitter` |
 | `illusion/render/SceneComponents.hpp` | Saved render Components: `MeshRenderer`, `Camera`, `DirectionalLight`, `PointLight`, `SkyLight`, `ProceduralSky` |
-| `illusion/render/Components.hpp` | Runtime `RenderMesh`, `RenderSky`, `MotionHistory`; `spawnModel` |
+| `illusion/render/Components.hpp` | Runtime `RenderMesh`, `RenderSky`; `spawnModel` |
 | `illusion/render/RenderAssets.hpp` | `RenderAssetCache`, `RenderAssetResolver`: asset references to GPU resources |

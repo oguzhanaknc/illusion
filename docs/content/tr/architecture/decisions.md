@@ -46,6 +46,7 @@ Record (ADR) olarak kaydedilir. Her kayıt bağlamı, kararı ve sonuçlarını 
 | [0037](https://github.com/oguzhanaknc/illusion/blob/main/docs/adr/0037-editor-rpc-protocol.md) | Editör RPC protokolü: stdio ve AF_UNIX üzerinde NDJSON ile JSON-RPC 2.0, token'lar ve izin modları |
 | [0038](https://github.com/oguzhanaknc/illusion/blob/main/docs/adr/0038-agent-acceptance-transcripts.md) | Yeniden oynatılabilir transcript'lerden ajan kabul testleri |
 | [0039](https://github.com/oguzhanaknc/illusion/blob/main/docs/adr/0039-mcp-bridge.md) | Editör komutlarından birebir üretilen araçlarla iki çağlı bir MCP köprüsü |
+| [0040](https://github.com/oguzhanaknc/illusion/blob/main/docs/adr/0040-renderer-extension-points.md) | Editörler ve araçlar için renderer genişletme noktaları |
 
 Yeni bir karar önermek için `docs/adr/0000-template.md` dosyasını kopyalayın ve
 [katkıda bulunma rehberini](../contributing.md#architecture-decision-recordlar) izleyin.

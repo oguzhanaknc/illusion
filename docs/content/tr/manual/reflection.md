@@ -131,7 +131,7 @@ derece olarak gösterilir, ışık renkleri HDR renklerdir ve `RigidBody` bir `C
 
 ## Çalışma zamanı durumu
 
-Yalnızca çalışma zamanı durumu tutan Component'ler (`MotionHistory`, `PhysicsBody`, `CharacterBody`,
+Yalnızca çalışma zamanı durumu tutan Component'ler (`PhysicsBody`, `CharacterBody`,
 `PhysicsJoint`, `AudioPlayback`) `reflectRuntime()` ile yansıtılır. Editörün onları listeleyebilmesi için
 kararlı bir ad alırlar ve `transient` olarak işaretlenirler: sahne dosyaları onları atlar.
 

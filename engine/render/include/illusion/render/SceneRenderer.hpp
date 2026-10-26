@@ -15,6 +15,7 @@
 #include <nvrhi/nvrhi.h>
 
 #include <memory>
+#include <span>
 
 namespace illusion
 {
@@ -31,10 +32,46 @@ struct RenderView
     Mat4 projection{1.0f}; ///< View to clip (reversed-Z, see perspectiveReversedZ()).
     Vec3 position{0.0f};   ///< Camera position in world space.
     f32 exposure = 1.0f;   ///< Exposure multiplier.
+    u32 layerMask = ~0u;   ///< RenderMesh layer bits accepted by this view.
+    /// Borrowed bitset indexed by Entity index (64 entities per word); set bits hide entities in all
+    /// passes of this view. Missing words are zero. Keep alive until render() returns.
+    std::span<const u64> hiddenEntities{};
 
     /// View looking through @p camera placed at @p transform, for a target with @p aspect (width / height).
     [[nodiscard]] static RenderView fromCamera(const Transform& transform, const Camera& camera,
                                                f32 aspect) noexcept;
+};
+
+/// Highest-priority active Camera with a Transform; null when none exists. Ties use the lowest index.
+[[nodiscard]] Entity findMainCamera(World& world);
+
+/// Diagnostic shading modes; Lit is the normal physically based image.
+enum class RenderDebugView : u32
+{
+    Lit,              ///< Normal shading.
+    Unlit,            ///< Base colour plus emission.
+    Albedo,           ///< Base colour.
+    Normals,          ///< World normal mapped to [0, 1].
+    Roughness,        ///< Material roughness.
+    Metallic,         ///< Material metallic factor.
+    AmbientOcclusion, ///< Combined material and screen-space occlusion.
+    ShadowCascades,   ///< Colour of the shadow cascade covering each surface.
+    MotionVectors,    ///< Screen-space velocity around neutral grey.
+};
+
+/// Borrowed targets of the last render(), valid until resize or renderer destruction. Record overlays
+/// after render(); sample depth instead of attaching it. Use outputSize for rasterization and map to
+/// renderSize for depth/ID loads. IDs are live World handles, never persistent scene identifiers.
+struct RenderViewTargets
+{
+    nvrhi::ITexture* depth = nullptr; ///< Reversed-Z depth, available as an SRV.
+    nvrhi::ITexture* ids = nullptr; ///< Optional RG32_UINT (Entity index, generation); ~0u means background.
+    nvrhi::ITexture* hdr = nullptr; ///< Linear HDR scene colour.
+    nvrhi::ITexture* motion = nullptr;   ///< RG16F velocity in UV units.
+    UVec2 renderSize{0};                 ///< Size of the internal targets.
+    UVec2 outputSize{0};                 ///< Size of the caller's colour target.
+    Mat4 viewProjection{1.0f};           ///< Jittered world-to-clip matrix.
+    Mat4 unjitteredViewProjection{1.0f}; ///< Matrix used for culling and tool coordinates.
 };
 
 /// Counters from the last SceneRenderer::render() call.
@@ -46,6 +83,19 @@ struct RenderStats
     u64 triangles = 0;       ///< Triangles submitted.
     u32 shadowCasters = 0;   ///< Shadow-caster instances, summed over cascades.
     u32 shadowDrawCalls = 0; ///< Instanced draw calls issued for shadows.
+    u32 lightsDropped = 0;   ///< Active lights beyond the directional and point light limits.
+};
+
+/// Completed GPU pass measurements in milliseconds, obtained without blocking the graphics queue.
+struct RenderGpuTimings
+{
+    bool available = false;      ///< Requested at creation and supported by the GPU.
+    bool valid = false;          ///< At least one complete frame has been measured.
+    f32 shadows = 0.0f;          ///< Shadow maps.
+    f32 depth = 0.0f;            ///< Depth/ID prepass and occlusion culling.
+    f32 ambientOcclusion = 0.0f; ///< Screen-space ambient occlusion.
+    f32 shading = 0.0f;          ///< Lighting, transparency, wireframe and transparent IDs.
+    f32 post = 0.0f;             ///< Temporal resolve, bloom and tonemapping.
 };
 
 /// Creation parameters for SceneRenderer.
@@ -61,6 +111,8 @@ struct SceneRendererDesc
     /// Use bindless materials and multi-draw indirect when the device supports them (GpuInfo::bindless and
     /// GpuInfo::multiDrawIndirect); otherwise, or when false, draw each batch with its material's bindings.
     bool bindless = true;
+    bool entityIds = false; ///< Allocate and write an RG32_UINT Entity ID attachment.
+    bool gpuTimers = false; ///< Measure GPU passes when timestamp queries are available.
 };
 
 /// Renders World entities that have Transform + RenderMesh, lit by DirectionalLight, PointLight and
@@ -87,9 +139,21 @@ public:
 
     /// Counters from the last render() call.
     [[nodiscard]] const RenderStats& stats() const noexcept;
+    /// Polls completed timestamp queries; never waits. Retains the last complete frame while GPU work runs.
+    [[nodiscard]] const RenderGpuTimings& gpuTimings();
 
     /// Changes the ambient radiance used without a SkyLight.
     void setAmbient(Vec3 ambient) noexcept;
+    /// Changes the background radiance used without a sky.
+    void setClearColor(Vec4 color) noexcept;
+    /// Targets for readback and overlays recorded after render().
+    [[nodiscard]] const RenderViewTargets& viewTargets() const noexcept;
+    /// Selects diagnostic shading (disables temporal accumulation, bloom and exposure for diagnostics).
+    void setDebugView(RenderDebugView mode) noexcept;
+    /// Enables the opaque wireframe overlay; returns false if non-solid fill is unsupported.
+    bool setWireframeOverlay(bool enabled) noexcept;
+    /// Current diagnostic mode.
+    [[nodiscard]] RenderDebugView debugView() const noexcept;
 
     /// Current shadow settings.
     [[nodiscard]] const ShadowSettings& shadowSettings() const noexcept;
@@ -116,7 +180,8 @@ public:
     /// True if the last render() used bindless materials and multi-draw indirect.
     [[nodiscard]] bool usesBindless() const noexcept;
 
-    /// Forgets the accumulated TAA history, for example after a camera cut.
+    /// Forgets camera, object-motion, occlusion and TAA history, for example after a camera cut or a
+    /// World replacement. Use one renderer per view; each render() advances that renderer's history.
     void resetTemporalHistory() noexcept;
 
     /// Screen-space motion vectors written by the last render() (RG16F, UV units, current minus previous

@@ -203,7 +203,12 @@ Plan: `docs/plans/m7-editor.md` (sub-milestones, command API, localization, them
   and automatic `requiredComponents`, and Inspector pin/lock; 95 commands). Cut to later: viewport entity
   eyedropper (needs viewport picking: M7o), asset thumbnails in picker (M7u), multiple simultaneous Inspector
   instances (M7w)
-- M7n: Renderer extension points: entity ids, debug draw, orthographic cameras, view targets (ADR 0040)
+- M7n: ✅ Renderer extension points (ADR 0040): per-view motion history without World mutation;
+  optional Entity index/generation IDs for opaque, masked and blended objects; bounded event-query
+  readback; depth-sampled DebugDraw with pixel-width quads; Camera v2 with orthographic projection and
+  priority; inverse-projection shadow fitting; layer/hidden filters; diagnostic views, wireframe and
+  optional GPU pass timings. CPU/GPU regressions and three image goldens cover the extension contract;
+  the 100k-line recording Benchmark has a 20 ns/line budget.
 - M7o: Viewports: editor camera, grid, selection outline, picking, overlays; following an agent's selection
   (from M7l)
 - M7p: Gizmos, snapping and transform tools

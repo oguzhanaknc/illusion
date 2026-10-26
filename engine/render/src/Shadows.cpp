@@ -10,11 +10,12 @@ ShadowCascades computeShadowCascades(const Mat4& view, const Mat4& projection, V
                                      const ShadowSettings& settings) noexcept
 {
     ShadowCascades result;
-    // perspectiveReversedZ(): m[0][0] = f / aspect, m[1][1] = f, m[3][2] = near.
-    const f32 tanHalfY = 1.0f / projection[1][1];
-    const f32 tanHalfX = 1.0f / projection[0][0];
-    const f32 nearPlane = projection[3][2];
-    const f32 farPlane = std::max(settings.maxDistance, nearPlane * 2.0f);
+    const Mat4 inverseProjection = glm::inverse(projection);
+    const Vec4 nearPoint = inverseProjection * Vec4(0.0f, 0.0f, 1.0f, 1.0f);
+    const Vec4 farPoint = inverseProjection * Vec4(0.0f, 0.0f, 0.0f, 1.0f);
+    const f32 nearPlane = std::max(-nearPoint.z / nearPoint.w, 0.0001f);
+    const f32 cameraFar = std::abs(farPoint.w) > 1e-7f ? -farPoint.z / farPoint.w : settings.maxDistance;
+    const f32 farPlane = std::max(std::min(settings.maxDistance, cameraFar), nearPlane + 0.001f);
     const u32 count = std::clamp(settings.cascadeCount, 1u, kMaxShadowCascades);
     const f32 resolution = static_cast<f32>(std::max(settings.resolution, 1u));
     const Mat4 cameraToWorld = glm::inverse(view);
@@ -32,19 +33,36 @@ ShadowCascades computeShadowCascades(const Mat4& view, const Mat4& projection, V
         const f32 logarithmic = nearPlane * std::pow(farPlane / nearPlane, t);
         const f32 sliceFar = i + 1 == count ? farPlane : glm::mix(uniform, logarithmic, settings.splitLambda);
 
-        // Bounding sphere of the slice, computed in view space so it does not depend on the camera's
-        // orientation. The centre lies on the view axis; the radius reaches the farthest corner.
-        const f32 nearExtent2 = (tanHalfX * tanHalfX + tanHalfY * tanHalfY) * sliceNear * sliceNear;
-        const f32 farExtent2 = (tanHalfX * tanHalfX + tanHalfY * tanHalfY) * sliceFar * sliceFar;
-        // Point on the axis equidistant from a near corner and a far corner, clamped to the slice.
-        const f32 centreDepth =
-            std::clamp((sliceFar * sliceFar - sliceNear * sliceNear + farExtent2 - nearExtent2) /
-                           (2.0f * (sliceFar - sliceNear)),
-                       sliceNear, sliceFar);
-        f32 radius = std::sqrt(std::max((sliceFar - centreDepth) * (sliceFar - centreDepth) + farExtent2,
-                                        (centreDepth - sliceNear) * (centreDepth - sliceNear) + nearExtent2));
-        radius = std::ceil(radius * 16.0f) / 16.0f; // stable size across tiny numeric changes
-        const Vec3 centre = Vec3(cameraToWorld * Vec4(0.0f, 0.0f, -centreDepth, 1.0f));
+        // Reconstruct each corner ray from the inverse projection. Intersect it with the two
+        // view-space split planes; this also handles orthographic and off-centre projections.
+        std::array<Vec3, 8> corners{};
+        usize cornerIndex = 0;
+        Vec3 centreView(0.0f);
+        for (const f32 z : {sliceNear, sliceFar})
+        {
+            for (const f32 x : {-1.0f, 1.0f})
+            {
+                for (const f32 y : {-1.0f, 1.0f})
+                {
+                    const Vec4 a = inverseProjection * Vec4(x, y, 1.0f, 1.0f);
+                    const Vec4 b = inverseProjection * Vec4(x, y, 0.5f, 1.0f);
+                    const Vec3 origin = Vec3(a) / a.w;
+                    const Vec3 delta = Vec3(b) / b.w - origin;
+                    const Vec3 corner = origin + delta * ((-z - origin.z) / delta.z);
+                    corners[cornerIndex++] = corner;
+                    centreView += corner / 8.0f;
+                }
+            }
+        }
+        f32 radius = 0.0f;
+        for (const Vec3 corner : corners)
+        {
+            radius = std::max(radius, glm::length(corner - centreView));
+        }
+        // Leave a texel around the sphere for the centre snap, including very small test maps.
+        radius = std::ceil(radius * 16.0f) / 16.0f;
+        radius *= resolution > 2.0f ? resolution / (resolution - 2.0f) : 3.0f;
+        const Vec3 centre = Vec3(cameraToWorld * Vec4(centreView, 1.0f));
 
         // Snap the centre to whole texels in light space.
         const f32 texel = 2.0f * radius / resolution;

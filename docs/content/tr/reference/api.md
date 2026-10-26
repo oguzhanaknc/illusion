@@ -91,10 +91,12 @@ doxygen docs/Doxyfile
 | `illusion/render/Swapchain.hpp` | `Swapchain`: bir pencereye present etme |
 | `illusion/render/DebugTriangle.hpp` | Tanılama amaçlı üçgen renderer'ı |
 | `illusion/render/RenderResources.hpp` | `RenderResources`: GPU Mesh'leri, Texture'ları, Material'leri, ortamlar ve Handle'ları |
-| `illusion/render/SceneRenderer.hpp` | `SceneRenderer`, `RenderView`, `RenderStats` |
+| `illusion/render/SceneRenderer.hpp` | `SceneRenderer`, `RenderView`, `RenderStats`, `RenderViewTargets`, `RenderGpuTimings`, `RenderDebugView`, `findMainCamera` |
+| `illusion/render/ReadbackRing.hpp` | Event query kullanan sınırlı asenkron Texture okumaları |
+| `illusion/render/DebugDraw.hpp` | Önceden ayrılmış debug geometrisi ve derinlik örnekleyen overlay'ler |
 | `illusion/render/Shadows.hpp` | `ShadowSettings`, `ShadowCascades`, `computeShadowCascades` |
 | `illusion/render/UploadQueue.hpp` | `UploadQueue`: streaming ile gelen modellerin byte bütçeli GPU yüklemesi |
 | `illusion/render/PostProcess.hpp` | `PostProcessSettings` (ambient occlusion, bloom, TAA), `temporalJitter` |
 | `illusion/render/SceneComponents.hpp` | Kaydedilen render Component'leri: `MeshRenderer`, `Camera`, `DirectionalLight`, `PointLight`, `SkyLight`, `ProceduralSky` |
-| `illusion/render/Components.hpp` | Çalışma zamanı `RenderMesh`, `RenderSky`, `MotionHistory`; `spawnModel` |
+| `illusion/render/Components.hpp` | Çalışma zamanı `RenderMesh`, `RenderSky`; `spawnModel` |
 | `illusion/render/RenderAssets.hpp` | `RenderAssetCache`, `RenderAssetResolver`: Asset referanslarından GPU kaynaklarına |

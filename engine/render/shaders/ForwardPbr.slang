@@ -113,6 +113,7 @@ struct VertexOutput
     float2 uv : TEXCOORD0;
     float4 currentClip : TEXCOORD1;  // unjittered, for motion vectors
     float4 previousClip : TEXCOORD2; // previous frame
+    nointerpolation uint2 entity : ENTITY;
     nointerpolation uint material : MATERIAL; // material table index (bindless)
 };
 
@@ -130,6 +131,7 @@ VertexOutput vertexMain(VertexInput input, uint instanceId: SV_InstanceID, uint 
     output.tangent = float4(mul((float3x3)instance.world, input.tangent.xyz), input.tangent.w);
     output.uv = input.uv;
     output.material = instance.extra.x;
+    output.entity = instance.extra.yz;
     output.currentClip = mul(g_view.unjitteredViewProjection, world);
     output.previousClip =
         mul(g_view.previousViewProjection, mul(instance.previousWorld, float4(input.position, 1.0)));
@@ -268,7 +270,7 @@ float4 fragmentMain(VertexOutput input, bool frontFace: SV_IsFrontFace) : SV_Tar
     surface.f0 = lerp(float3(0.04, 0.04, 0.04), baseColor.rgb, metallic);
     surface.alpha = roughness * roughness;
     surface.normal = surfaceNormal(input, frontFace);
-    surface.view = normalize(g_view.cameraPosition.xyz - input.worldPosition);
+    surface.view = g_view.effects.z > 0.5 ? -g_view.cameraForward.xyz : normalize(g_view.cameraPosition.xyz - input.worldPosition);
 
     float ambientOcclusion = occlusion;
     if ((g_push.flags & 1u) != 0u && g_view.effects.x > 0.5)
@@ -305,6 +307,27 @@ float4 fragmentMain(VertexOutput input, bool frontFace: SV_IsFrontFace) : SV_Tar
     }
     color += emissive;
 
+    switch (uint(g_view.effects.y))
+    {
+    case 1: color = baseColor.rgb + emissive; break;
+    case 2: color = baseColor.rgb; break;
+    case 3: color = surface.normal * 0.5 + 0.5; break;
+    case 4: color = roughness.xxx; break;
+    case 5: color = metallic.xxx; break;
+    case 6: color = ambientOcclusion.xxx; break;
+    case 7:
+    {
+        const float distance = dot(input.worldPosition - g_view.cameraPosition.xyz, g_view.cameraForward.xyz);
+        const float3 colors[4] = {float3(1,0.2,0.2),float3(0.2,1,0.2),float3(0.2,0.2,1),float3(1,1,0.2)};
+        color = float3(0.2,0.2,0.2);
+        for (uint c = 0; c < uint(g_view.shadow.x); ++c)
+        {
+            if (distance <= g_view.cascades[c].params.x) { color = colors[c]; break; }
+        }
+        break;
+    }
+    case 8: color = float3(motionVector(input) * 8.0 + 0.5, 0.5); break;
+    }
     return float4(color, baseColor.a);
 }
 
@@ -326,4 +349,47 @@ float2 prepassMaskedMain(VertexOutput input) : SV_Target
         discard;
     }
     return motionVector(input);
+}
+
+// Optional Entity-ID outputs; the normal prepass keeps its single attachment when IDs are disabled.
+struct PrepassIds
+{
+    float2 motion : SV_Target0;
+    uint2 entity : SV_Target1;
+};
+
+[shader("fragment")]
+PrepassIds prepassIdsMain(VertexOutput input)
+{
+    PrepassIds output;
+    output.motion = motionVector(input);
+    output.entity = input.entity;
+    return output;
+}
+
+[shader("fragment")]
+PrepassIds prepassMaskedIdsMain(VertexOutput input)
+{
+    const MaterialConstants material = materialConstants(input.material);
+    const float alpha = sampleMaterial(input.material, kBaseColor, input.uv).a * material.baseColorFactor.a;
+    if (alpha < material.alphaCutoff) { discard; }
+    return prepassIdsMain(input);
+}
+
+// Transparent picking treats any nonzero coverage as pickable, using a private depth copy.
+[shader("fragment")]
+uint2 entityIdMain(VertexOutput input) : SV_Target0
+{
+    const MaterialConstants material = materialConstants(input.material);
+    if (sampleMaterial(input.material, kBaseColor, input.uv).a * material.baseColorFactor.a <= 0.0) { discard; }
+    return input.entity;
+}
+
+[shader("fragment")]
+float4 wireframeMain(VertexOutput input) : SV_Target0
+{
+    const MaterialConstants material = materialConstants(input.material);
+    const float alpha = sampleMaterial(input.material, kBaseColor, input.uv).a * material.baseColorFactor.a;
+    if (alpha <= 0.0 || (material.alphaCutoff >= 0.0 && alpha < material.alphaCutoff)) { discard; }
+    return float4(0.05, 0.8, 0.7, 1.0);
 }

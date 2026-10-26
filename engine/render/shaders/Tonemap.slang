@@ -43,7 +43,7 @@ float4 fragmentMain(VertexOutput input) : SV_Target
         const float3 bloom = g_bloom.SampleLevel(g_linearClamp, input.uv, 0.0).rgb / g_post.bloom.x;
         color = lerp(color, bloom, g_post.bloom.y);
     }
-    float3 mapped = tonemapAces(color * g_post.output.x);
+    float3 mapped = g_post.output.z > 0.5 ? saturate(color) : tonemapAces(color * g_post.output.x);
     if (g_post.output.y > 0.5)
     {
         mapped = linearToSrgb(mapped);

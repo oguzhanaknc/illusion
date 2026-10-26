@@ -2,10 +2,12 @@
 
 add_library(illusion_render STATIC
     src/Components.cpp
+    src/DebugDraw.cpp
     src/DebugTriangle.cpp
     src/EnvironmentBaker.cpp
     src/GpuCulling.cpp
     src/PostProcessor.cpp
+    src/ReadbackRing.cpp
     src/RenderAssets.cpp
     src/RenderDevice.cpp
     src/RenderResources.cpp
@@ -33,6 +35,8 @@ illusion_add_shaders(illusion_render
     NAMESPACE illusion::shaders
     HEADER illusion/render/BuiltinShaders.hpp
     SHADERS
+        debugDrawVertex shaders/DebugDraw.slang vertexMain vertex
+        debugDrawFragment shaders/DebugDraw.slang fragmentMain fragment
         debugTriangleVertex shaders/DebugTriangle.slang vertexMain vertex
         debugTriangleFragment shaders/DebugTriangle.slang fragmentMain fragment
         forwardPbrVertex shaders/ForwardPbr.slang vertexMain vertex
@@ -43,6 +47,13 @@ illusion_add_shaders(illusion_render
         forwardPbrBindlessFragment shaders/ForwardPbrBindless.slang fragmentMain fragment
         prepassBindlessFragment shaders/ForwardPbrBindless.slang prepassMain fragment
         prepassMaskedBindlessFragment shaders/ForwardPbrBindless.slang prepassMaskedMain fragment
+        prepassIdsFragment shaders/ForwardPbr.slang prepassIdsMain fragment
+        prepassMaskedIdsFragment shaders/ForwardPbr.slang prepassMaskedIdsMain fragment
+        prepassIdsBindlessFragment shaders/ForwardPbrBindless.slang prepassIdsMain fragment
+        prepassMaskedIdsBindlessFragment shaders/ForwardPbrBindless.slang prepassMaskedIdsMain fragment
+        entityIdFragment shaders/ForwardPbr.slang entityIdMain fragment
+        wireframeFragment shaders/ForwardPbr.slang wireframeMain fragment
+        wireframeBindlessFragment shaders/ForwardPbrBindless.slang wireframeMain fragment
         occlusionCull shaders/OcclusionCull.slang cullMain compute
         hizReduce shaders/HiZ.slang hizReduceMain compute
         gtao shaders/Gtao.slang gtaoMain compute

@@ -20,6 +20,7 @@
 #include <illusion/assets/Environment.hpp>
 #include <illusion/core/AssetRef.hpp>
 #include <illusion/core/Math.hpp>
+#include <illusion/ecs/Reflection.hpp>
 
 namespace illusion
 {
@@ -39,12 +40,23 @@ struct MeshRenderer
     bool visible = true;     ///< Drawn at all; hidden renderers keep their assets loaded.
 };
 
-/// Perspective camera (reflected as "illusion.Camera"). The renderer looks through the Transform's -z axis.
+/// Projection used by a Camera.
+enum class CameraProjection : u8
+{
+    Perspective,  ///< Perspective with an infinite reversed-Z far plane.
+    Orthographic, ///< Parallel rays with a finite reversed-Z far plane.
+};
+
+/// Camera (reflected as "illusion.Camera" v2), looking through the Transform's -z axis.
 struct Camera
 {
     f32 fovY = 1.0471976f; ///< Vertical field of view in radians (60 degrees).
-    f32 nearPlane = 0.1f;  ///< Near clip distance. There is no far plane (reversed-Z, infinite).
+    f32 nearPlane = 0.1f;  ///< Positive near clip distance; perspective projection has an infinite far plane.
     f32 exposure = 1.0f;   ///< Linear exposure multiplier applied before tonemapping.
+    CameraProjection projection = CameraProjection::Perspective; ///< Projection mode.
+    f32 orthoHeight = 10.0f; ///< Vertical extent in world units for orthographic projection.
+    f32 farPlane = 1000.0f;  ///< Orthographic far distance; must exceed nearPlane.
+    i32 priority = 0;        ///< Higher priorities win findMainCamera(); ties use the lowest Entity index.
 };
 
 /// Sun-like light (reflected as "illusion.DirectionalLight"). It shines along the Transform's -z axis.
@@ -97,3 +109,12 @@ struct ProceduralSky
 };
 
 } // namespace illusion
+
+/// Stable scene-file names of camera projection modes.
+template <>
+struct illusion::EnumReflection<illusion::CameraProjection>
+{
+    /// Value names.
+    static constexpr std::array kValues{illusion::EnumValue{"Perspective", 0},
+                                        illusion::EnumValue{"Orthographic", 1}};
+};

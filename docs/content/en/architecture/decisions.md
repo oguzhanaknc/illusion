@@ -46,6 +46,7 @@ records rather than user documentation.
 | [0037](https://github.com/oguzhanaknc/illusion/blob/main/docs/adr/0037-editor-rpc-protocol.md) | Editor RPC protocol: JSON-RPC 2.0 over NDJSON on stdio and AF_UNIX, tokens and permission modes |
 | [0038](https://github.com/oguzhanaknc/illusion/blob/main/docs/adr/0038-agent-acceptance-transcripts.md) | Agent acceptance tests from replayable transcripts |
 | [0039](https://github.com/oguzhanaknc/illusion/blob/main/docs/adr/0039-mcp-bridge.md) | A dual-era MCP bridge with tools generated one to one from editor commands |
+| [0040](https://github.com/oguzhanaknc/illusion/blob/main/docs/adr/0040-renderer-extension-points.md) | Expose renderer extension points for editors and tools |
 
 To propose a new decision, copy `docs/adr/0000-template.md` and follow the
 [contributing guide](../contributing.md#architecture-decision-records).
