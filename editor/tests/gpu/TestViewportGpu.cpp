@@ -423,3 +423,91 @@ TEST_CASE("closing a viewport with readbacks in flight frees their slots for the
     const JsonDocument shot = gpu.run("viewport.screenshot", R"({"viewport":"scene"})");
     CHECK(shot.root().find("width").asU64().value_or(0) > 0u);
 }
+
+TEST_CASE("the entity under a resting cursor is highlighted and reported, the background clears it")
+{
+    GpuViewports gpu;
+    buildScene(gpu);
+    EditorContext& editor = gpu.editor();
+    const JsonDocument projected = test::ok(editor, "viewport.project", R"({"entity":"/Side"})");
+    const Vec2 pixel(static_cast<f32>(projected.root().find("x").asF64().value_or(0.0)),
+                     static_cast<f32>(projected.root().find("y").asF64().value_or(0.0)));
+    const auto hover = [&](Vec2 cursor) {
+        ViewportFrame drawn;
+        for (int i = 0; i < 4; ++i)
+        {
+            ViewportInput input;
+            input.hovered = true;
+            input.cursor = cursor;
+            input.deltaSeconds = 1.0f / 60.0f;
+            drawn = gpu.service->frame("scene", kSize, input, ViewportStyle{});
+            gpu.service->render(true);
+            gpu.device->waitIdle();
+            gpu.service->waitIdle();
+        }
+        return drawn;
+    };
+    const Image before = gpu.capture();
+    const ViewportFrame over = hover(pixel);
+    REQUIRE_FALSE(over.hovered.isNull());
+    CHECK(editor.entities().pathOf(over.hovered) == "/Side");
+    // The highlight draws an outline the image did not have.
+    CHECK(gpu.capture().data != before.data);
+    CHECK(hover(Vec2(2.0f, 2.0f)).hovered.isNull());
+
+    // Hover off: nothing is read.
+    test::ok(editor, "viewport.set_overlays", R"({"hover":false})");
+    CHECK(hover(pixel).hovered.isNull());
+}
+
+TEST_CASE("a selected Camera shows its frustum, icon and picture-in-picture view")
+{
+    GpuViewports gpu;
+    buildScene(gpu);
+    EditorContext& editor = gpu.editor();
+    test::ok(
+        editor, "entity.create",
+        R"({"name":"Eye","components":{"illusion.Transform":{"position":[0,0,6]},"illusion.Camera":{}}})");
+    test::ok(editor, "entity.create",
+             R"({"name":"Lamp","components":{"illusion.Transform":{"position":[-2,1,0]},)"
+             R"("illusion.PointLight":{"range":2}}})");
+    test::ok(editor, "viewport.camera_set",
+             R"({"pivot":[0,0,0],"yaw":90,"pitch":-20,"distance":16,"animate":false})");
+    gpu.frame();
+    CHECK(gpu.service->stats().visualisers == 0);
+    CHECK(gpu.service->stats().previews == 0);
+    const Image unselected = gpu.capture();
+
+    test::ok(editor, "selection.set", R"({"entities":["/Eye"]})");
+    gpu.frame();
+    CHECK(gpu.service->stats().visualisers == 1);
+    CHECK(gpu.service->stats().previews == 1);
+    const ViewportFrame drawn = gpu.service->frame("scene", kSize, ViewportInput{}, ViewportStyle{});
+    CHECK(drawn.preview != 0);
+    CHECK(drawn.previewSize.x >= 128u);
+    CHECK(editor.entities().pathOf(drawn.previewCamera) == "/Eye");
+    bool eye = false;
+    bool lamp = false;
+    for (const ViewportIcon& icon : drawn.icons)
+    {
+        const std::string path = editor.entities().pathOf(icon.entity);
+        eye = eye || (path == "/Eye" && icon.kind == ViewportIconKind::Camera && icon.selected);
+        lamp = lamp || (path == "/Lamp" && icon.kind == ViewportIconKind::PointLight && !icon.selected);
+    }
+    CHECK((eye && lamp));
+    gpu.service->render(true);
+    gpu.device->waitIdle();
+    CHECK(gpu.capture().data != unselected.data);
+
+    // Every entity's visualisers, then none; icons off.
+    test::ok(editor, "viewport.set_overlays",
+             R"({"visualiserScope":"all","icons":false,"cameraPreview":false})");
+    gpu.frame();
+    CHECK(gpu.service->stats().visualisers == 2);
+    CHECK(gpu.service->stats().previews == 0);
+    CHECK(gpu.service->frame("scene", kSize, ViewportInput{}, ViewportStyle{}).icons.empty());
+    gpu.service->render(true);
+    test::ok(editor, "viewport.set_overlays", R"({"visualisers":{"lights":false,"cameras":false}})");
+    gpu.frame();
+    CHECK(gpu.service->stats().visualisers == 0);
+}

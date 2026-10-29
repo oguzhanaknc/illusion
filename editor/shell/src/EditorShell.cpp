@@ -618,6 +618,8 @@ void EditorShell::draw(f64 now, f64 deltaSeconds)
     }
     impl.console->update(impl);
     impl.agentsPanel->update(impl);
+    detail::updateEyedropper(impl);
+    detail::followAgent(impl);
 
     // Shortcuts, unless a text field or the shortcut capture has the keyboard.
     const ImGuiIO& io = ImGui::GetIO();

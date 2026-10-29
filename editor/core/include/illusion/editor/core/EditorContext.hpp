@@ -245,6 +245,11 @@ public:
     /// The selection.
     [[nodiscard]] Selection& selection() noexcept { return m_selection; }
 
+    /// The Selection::version() an agent's command (an origin starting with "rpc:") left the selection at
+    /// when it last changed it, 0 if no agent has. Equal to the current version while nobody else changed
+    /// the selection since (the Scene view follows the agent then).
+    [[nodiscard]] u64 agentSelectionVersion() const noexcept { return m_agentSelection; }
+
     /// The open scene.
     [[nodiscard]] const SceneDocument& document() const noexcept { return m_document; }
 
@@ -498,6 +503,7 @@ private:
     void sceneReplaced(std::string_view path);
     void afterChange(bool historyChanged = true);
     void restoreSelection(std::span<const EntityGuid> guids);
+    void selectionChanged(u64 before, std::string_view origin);
     void autosave();
 
     EditorContextOptions m_options;
@@ -523,6 +529,7 @@ private:
     ViewState m_view;
     Preferences m_preferences;
     u64 m_preferencesVersion = 1;
+    u64 m_agentSelection = 0;
     UiHost* m_ui = nullptr;
     ViewportHost* m_viewports = nullptr;
     std::shared_ptr<LogRingSink> m_log;

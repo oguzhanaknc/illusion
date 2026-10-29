@@ -162,6 +162,12 @@ void Agents::draw(Impl& shell)
                                             R"({"agentPermissions":"auto"})"};
         shell.setPreferences(kPatches[mode]);
     }
+    ImGui::SameLine();
+    bool follow = shell.editor.preferences().followAgent;
+    if (ui::toggleSwitch(kit, text.label(s::kAgentsFollow, "agents.follow"), follow))
+    {
+        shell.setPreferences(follow ? R"({"followAgent":true})" : R"({"followAgent":false})");
+    }
     if (shell.agents == nullptr || state.clients.empty())
     {
         ui::emptyState(kit, ui::icons::kSmartToy, text.format(s::kAgentsEmptyTitle),

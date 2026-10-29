@@ -229,9 +229,32 @@ void PreferencesPage::State::keyboard(Impl& shell, ui::UiKit& kit)
     }
     ImGui::SameLine();
     const usize conflicts = shell.keymap.conflicts().size();
+    const auto navigationName = [&](std::string_view preset) {
+        return preset == "keymap" ? text.label(s::kPrefsKeyboardNavigationKeymap, "prefs.navigation.keymap")
+                                  : text.verbatim(preset, text.concat("prefs.navigation.", preset));
+    };
     ImGui::TextColored(
         imvec(shell.theme.color(conflicts > 0 ? ui::ThemeToken::Warning : ui::ThemeToken::TextSecondary)),
         "%s", text.format(s::kPrefsKeyboardConflicts, {{"count", static_cast<u64>(conflicts)}}));
+    // The mouse navigation of the Scene views.
+    ImGui::AlignTextToFramePadding();
+    ImGui::TextUnformatted(text.format(s::kPrefsKeyboardNavigation));
+    ImGui::SameLine();
+    ImGui::SetNextItemWidth(160.0f * kit.scale);
+    const char* navigation = prefs.viewportNavigation == "keymap"
+                                 ? text.format(s::kPrefsKeyboardNavigationKeymap)
+                                 : text.copy(prefs.viewportNavigation);
+    if (ImGui::BeginCombo(text.hidden("prefs.navigation"), navigation))
+    {
+        for (const std::string_view preset : viewportNavigationPresets())
+        {
+            if (ImGui::Selectable(navigationName(preset), prefs.viewportNavigation == preset))
+            {
+                shell.setPreferences("{\"viewportNavigation\":" + jsonQuote(preset) + "}");
+            }
+        }
+        ImGui::EndCombo();
+    }
     ui::searchField(kit, "prefs.keyboard.search", search, text.format(s::kPrefsKeyboardSearch));
 
     // A chord being captured: the next key with its modifiers; Escape cancels.
@@ -350,6 +373,12 @@ void PreferencesPage::State::agents(Impl& shell, ui::UiKit& kit)
         if (ui::toggleSwitch(kit, text.label(s::kPrefsAgentsApprovalPopups, "prefs.approval_popups"), popups))
         {
             shell.setPreferences(popups ? R"({"approvalPopups":true})" : R"({"approvalPopups":false})");
+        }
+        ui::propertyLabel(kit, "");
+        bool follow = prefs.followAgent;
+        if (ui::toggleSwitch(kit, text.label(s::kPrefsAgentsFollow, "prefs.follow_agent"), follow))
+        {
+            shell.setPreferences(follow ? R"({"followAgent":true})" : R"({"followAgent":false})");
         }
         ui::endPropertyTable();
     }

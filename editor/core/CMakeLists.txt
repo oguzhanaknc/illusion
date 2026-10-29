@@ -17,6 +17,7 @@ illusion_add_editor_library(illusion_editor_core STATIC
     src/SettingsCatalog.cpp
     src/UiActions.cpp
     src/UndoStack.cpp
+    src/ViewCube.cpp
     src/ViewState.cpp
     src/ViewportHost.cpp
     src/WorldEditor.cpp

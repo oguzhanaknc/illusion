@@ -169,9 +169,11 @@ Expected<std::optional<std::string>, CommandError> RunningCommand::update()
     if (state.task)
     {
         CommandContext context(editor, state.options, state.report);
+        const u64 selection = editor.m_selection.version();
         editor.m_running = true;
         Expected<bool, CommandError> advanced = state.task->advance(context, state.progress, result);
         editor.m_running = false;
+        editor.selectionChanged(selection, state.origin);
         ++state.frames;
         if (!advanced)
         {
@@ -876,14 +878,24 @@ Expected<void, CommandError> EditorContext::run(const CommandDescriptor& descrip
     {
         report.dryRun = options.dryRun;
     }
-    if (m_selection.version() != selectionVersion)
-    {
-        m_events.post("selection.changed", "{\"count\":" + std::to_string(m_selection.size()) + "}");
-    }
+    selectionChanged(selectionVersion, options.origin);
     report.revision = revision();
     m_running = wasRunning;
     m_nested = nested;
     return ran;
+}
+
+void EditorContext::selectionChanged(u64 before, std::string_view origin)
+{
+    if (m_selection.version() == before)
+    {
+        return;
+    }
+    if (origin.starts_with("rpc:"))
+    {
+        m_agentSelection = m_selection.version();
+    }
+    m_events.post("selection.changed", "{\"count\":" + std::to_string(m_selection.size()) + "}");
 }
 
 void EditorContext::addToTransaction(std::vector<Operation> operations, std::string_view label)

@@ -12,6 +12,7 @@
 #include <imgui.h>
 #include <initializer_list>
 #include <memory>
+#include <span>
 #include <string>
 #include <vector>
 
@@ -170,13 +171,30 @@ public:
 private:
     void drawToolbar(Impl& shell);
     void drawAspectMenu(Impl& shell);
+    void drawOverlaysMenu(Impl& shell);
     void handleBookmarks(Impl& shell, bool active);
     void run(Impl& shell, std::string_view command, std::string_view params);
 
     std::string m_id;
-    ViewportFrame m_last;  // the viewport's state of the previous frame (for the menus)
-    bool m_boxing = false; // a box selection is being dragged
+    ViewportFrame m_last;    // the viewport's state of the previous frame (for the menus)
+    bool m_boxing = false;   // a box selection is being dragged
+    bool m_cubeDrag = false; // a left drag that started on the view cube orbits
 };
+
+/// Assigns @p valueJson to the field @p path of the Component @p type of @p entities (one step; a batch for
+/// several entities) as the Inspector does, with @p mergeKey for drags.
+void setEntityField(Impl& shell, std::span<const EntityGuid> entities, std::string_view type,
+                    std::string_view path, std::string_view valueJson, std::string_view mergeKey = {});
+
+/// Starts the entity eyedropper for the field @p path (named @p field) of @p type on @p entities.
+void startEyedropper(Impl& shell, std::span<const EntityGuid> entities, std::string_view type,
+                     std::string_view path, std::string_view field);
+
+/// Finishes the eyedropper's pending pick, or cancels the eyedropper on Escape (every frame).
+void updateEyedropper(Impl& shell);
+
+/// Frames an agent's new selection in the Scene view when Preferences::followAgent is on (every frame).
+void followAgent(Impl& shell);
 
 /// Draws a window for each secondary Scene viewport ("scene-2" ...); closing one closes the viewport.
 void drawSecondaryViewports(Impl& shell);

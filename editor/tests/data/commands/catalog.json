@@ -10502,6 +10502,50 @@
             "selectionOutline": {
               "type": "boolean"
             },
+            "hover": {
+              "type": "boolean"
+            },
+            "icons": {
+              "type": "boolean"
+            },
+            "viewCube": {
+              "type": "boolean"
+            },
+            "stats": {
+              "type": "boolean"
+            },
+            "cameraPreview": {
+              "type": "boolean"
+            },
+            "visualisers": {
+              "type": "object",
+              "properties": {
+                "lights": {
+                  "type": "boolean"
+                },
+                "cameras": {
+                  "type": "boolean"
+                },
+                "colliders": {
+                  "type": "boolean"
+                },
+                "characters": {
+                  "type": "boolean"
+                },
+                "joints": {
+                  "type": "boolean"
+                },
+                "audio": {
+                  "type": "boolean"
+                }
+              },
+              "required": ["lights", "cameras", "colliders", "characters", "joints", "audio"],
+              "additionalProperties": false
+            },
+            "visualiserScope": {
+              "type": "string",
+              "enum": ["selected", "all"]
+            },
             "aspect": {
               "type": "string",
               "enum": ["free", "16:9", "16:10", "4:3", "21:9", "1:1", "fixed"]
@@ -10517,7 +10561,7 @@
               "maximum": 4294967295
             }
           },
-          "required": ["shading", "wireframe", "grid", "selectionOutline", "aspect", "width", "height"],
+          "required": ["shading", "wireframe", "grid", "selectionOutline", "hover", "icons", "viewCube", "stats", "cameraPreview", "visualisers", "visualiserScope", "aspect", "width", "height"],
           "additionalProperties": false
         },
         "sceneCamera": {
@@ -10908,6 +10952,50 @@
                   "selectionOutline": {
                     "type": "boolean"
                   },
+                  "hover": {
+                    "type": "boolean"
+                  },
+                  "icons": {
+                    "type": "boolean"
+                  },
+                  "viewCube": {
+                    "type": "boolean"
+                  },
+                  "stats": {
+                    "type": "boolean"
+                  },
+                  "cameraPreview": {
+                    "type": "boolean"
+                  },
+                  "visualisers": {
+                    "type": "object",
+                    "properties": {
+                      "lights": {
+                        "type": "boolean"
+                      },
+                      "cameras": {
+                        "type": "boolean"
+                      },
+                      "colliders": {
+                        "type": "boolean"
+                      },
+                      "characters": {
+                        "type": "boolean"
+                      },
+                      "joints": {
+                        "type": "boolean"
+                      },
+                      "audio": {
+                        "type": "boolean"
+                      }
+                    },
+                    "required": ["lights", "cameras", "colliders", "characters", "joints", "audio"],
+                    "additionalProperties": false
+                  },
+                  "visualiserScope": {
+                    "type": "string",
+                    "enum": ["selected", "all"]
+                  },
                   "aspect": {
                     "type": "string",
                     "enum": ["free", "16:9", "16:10", "4:3", "21:9", "1:1", "fixed"]
@@ -10923,7 +11011,7 @@
                     "maximum": 4294967295
                   }
                 },
-                "required": ["shading", "wireframe", "grid", "selectionOutline", "aspect", "width", "height"],
+                "required": ["shading", "wireframe", "grid", "selectionOutline", "hover", "icons", "viewCube", "stats", "cameraPreview", "visualisers", "visualiserScope", "aspect", "width", "height"],
                 "additionalProperties": false
               },
               "sceneCamera": {
@@ -11670,6 +11758,50 @@
             "selectionOutline": {
               "type": "boolean"
             },
+            "hover": {
+              "type": "boolean"
+            },
+            "icons": {
+              "type": "boolean"
+            },
+            "viewCube": {
+              "type": "boolean"
+            },
+            "stats": {
+              "type": "boolean"
+            },
+            "cameraPreview": {
+              "type": "boolean"
+            },
+            "visualisers": {
+              "type": "object",
+              "properties": {
+                "lights": {
+                  "type": "boolean"
+                },
+                "cameras": {
+                  "type": "boolean"
+                },
+                "colliders": {
+                  "type": "boolean"
+                },
+                "characters": {
+                  "type": "boolean"
+                },
+                "joints": {
+                  "type": "boolean"
+                },
+                "audio": {
+                  "type": "boolean"
+                }
+              },
+              "required": ["lights", "cameras", "colliders", "characters", "joints", "audio"],
+              "additionalProperties": false
+            },
+            "visualiserScope": {
+              "type": "string",
+              "enum": ["selected", "all"]
+            },
             "aspect": {
               "type": "string",
               "enum": ["free", "16:9", "16:10", "4:3", "21:9", "1:1", "fixed"]
@@ -11685,7 +11817,7 @@
               "maximum": 4294967295
             }
           },
-          "required": ["shading", "wireframe", "grid", "selectionOutline", "aspect", "width", "height"],
+          "required": ["shading", "wireframe", "grid", "selectionOutline", "hover", "icons", "viewCube", "stats", "cameraPreview", "visualisers", "visualiserScope", "aspect", "width", "height"],
           "additionalProperties": false
         },
         "_editor": {
@@ -11809,6 +11941,50 @@
             "selectionOutline": {
               "type": "boolean"
             },
+            "hover": {
+              "type": "boolean"
+            },
+            "icons": {
+              "type": "boolean"
+            },
+            "viewCube": {
+              "type": "boolean"
+            },
+            "stats": {
+              "type": "boolean"
+            },
+            "cameraPreview": {
+              "type": "boolean"
+            },
+            "visualisers": {
+              "type": "object",
+              "properties": {
+                "lights": {
+                  "type": "boolean"
+                },
+                "cameras": {
+                  "type": "boolean"
+                },
+                "colliders": {
+                  "type": "boolean"
+                },
+                "characters": {
+                  "type": "boolean"
+                },
+                "joints": {
+                  "type": "boolean"
+                },
+                "audio": {
+                  "type": "boolean"
+                }
+              },
+              "required": ["lights", "cameras", "colliders", "characters", "joints", "audio"],
+              "additionalProperties": false
+            },
+            "visualiserScope": {
+              "type": "string",
+              "enum": ["selected", "all"]
+            },
             "aspect": {
               "type": "string",
               "enum": ["free", "16:9", "16:10", "4:3", "21:9", "1:1", "fixed"]
@@ -11824,7 +12000,7 @@
               "maximum": 4294967295
             }
           },
-          "required": ["shading", "wireframe", "grid", "selectionOutline", "aspect", "width", "height"],
+          "required": ["shading", "wireframe", "grid", "selectionOutline", "hover", "icons", "viewCube", "stats", "cameraPreview", "visualisers", "visualiserScope", "aspect", "width", "height"],
           "additionalProperties": false
         },
         "_editor": {
@@ -11900,6 +12076,140 @@
             }
           ]
         },
+        "hover": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "icons": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "viewCube": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "stats": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "cameraPreview": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "visualisers": {
+          "anyOf": [
+            {
+              "type": "object",
+              "properties": {
+                "lights": {
+                  "anyOf": [
+                    {
+                      "type": "boolean"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "cameras": {
+                  "anyOf": [
+                    {
+                      "type": "boolean"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "colliders": {
+                  "anyOf": [
+                    {
+                      "type": "boolean"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "characters": {
+                  "anyOf": [
+                    {
+                      "type": "boolean"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "joints": {
+                  "anyOf": [
+                    {
+                      "type": "boolean"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "audio": {
+                  "anyOf": [
+                    {
+                      "type": "boolean"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                }
+              },
+              "additionalProperties": false
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "visualiserScope": {
+          "anyOf": [
+            {
+              "type": "string",
+              "enum": ["selected", "all"]
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
         "dryRun": {
           "type": "boolean"
         },
@@ -11947,6 +12257,50 @@
             "selectionOutline": {
               "type": "boolean"
             },
+            "hover": {
+              "type": "boolean"
+            },
+            "icons": {
+              "type": "boolean"
+            },
+            "viewCube": {
+              "type": "boolean"
+            },
+            "stats": {
+              "type": "boolean"
+            },
+            "cameraPreview": {
+              "type": "boolean"
+            },
+            "visualisers": {
+              "type": "object",
+              "properties": {
+                "lights": {
+                  "type": "boolean"
+                },
+                "cameras": {
+                  "type": "boolean"
+                },
+                "colliders": {
+                  "type": "boolean"
+                },
+                "characters": {
+                  "type": "boolean"
+                },
+                "joints": {
+                  "type": "boolean"
+                },
+                "audio": {
+                  "type": "boolean"
+                }
+              },
+              "required": ["lights", "cameras", "colliders", "characters", "joints", "audio"],
+              "additionalProperties": false
+            },
+            "visualiserScope": {
+              "type": "string",
+              "enum": ["selected", "all"]
+            },
             "aspect": {
               "type": "string",
               "enum": ["free", "16:9", "16:10", "4:3", "21:9", "1:1", "fixed"]
@@ -11962,7 +12316,7 @@
               "maximum": 4294967295
             }
           },
-          "required": ["shading", "wireframe", "grid", "selectionOutline", "aspect", "width", "height"],
+          "required": ["shading", "wireframe", "grid", "selectionOutline", "hover", "icons", "viewCube", "stats", "cameraPreview", "visualisers", "visualiserScope", "aspect", "width", "height"],
           "additionalProperties": false
         },
         "_editor": {

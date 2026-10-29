@@ -172,6 +172,21 @@ struct EditorShell::Impl
     u64 secondaryVersion = ~u64{0}; // ViewportHost::viewportsVersion() of secondaryViews
     bool viewportNavigating =
         false; // a viewport panel moved its camera last frame (fly keys are not shortcuts)
+
+    // The Inspector's entity eyedropper: the next click in a viewport assigns the entity under it to a field
+    // of the inspected entities.
+    struct Eyedropper
+    {
+        bool active = false;
+        std::vector<EntityGuid> targets; // the inspected entities
+        std::string type;                // reflected Component name
+        std::string path;                // field path
+        std::string field;               // field name shown in the hint
+        std::string viewport;            // viewport of the pending pick
+        u64 ticket = 0;                  // pending ViewportHost pick (0: none)
+    };
+    Eyedropper eyedropper;
+    u64 followedSelection = 0; // EditorContext::agentSelectionVersion() the Scene view framed last
     std::unique_ptr<detail::Console> console;
     std::unique_ptr<detail::History> history;
     std::unique_ptr<detail::Agents> agentsPanel;

@@ -1,18 +1,22 @@
 #include "ViewportOverlays.hpp"
 
 #include <illusion/assets/AssetStreamer.hpp>
+#include <illusion/audio/AudioComponents.hpp>
 #include <illusion/core/JobSystem.hpp>
 #include <illusion/core/Log.hpp>
 #include <illusion/core/Profiler.hpp>
 #include <illusion/ecs/Hierarchy.hpp>
 #include <illusion/ecs/Transform.hpp>
 #include <illusion/editor/core/EditorContext.hpp>
+#include <illusion/editor/core/Preferences.hpp>
 #include <illusion/editor/ui/UiRenderer.hpp>
 #include <illusion/editor/viewport/EditorCamera.hpp>
 #include <illusion/editor/viewport/PickCandidates.hpp>
 #include <illusion/editor/viewport/ResizePolicy.hpp>
 #include <illusion/editor/viewport/ViewportService.hpp>
+#include <illusion/editor/viewport/Visualisers.hpp>
 #include <illusion/render/Components.hpp>
+#include <illusion/render/DebugDraw.hpp>
 #include <illusion/render/ReadbackRing.hpp>
 #include <illusion/render/RenderAssets.hpp>
 #include <illusion/render/RenderDevice.hpp>
@@ -33,6 +37,7 @@ constexpr nvrhi::Format kColorFormat = nvrhi::Format::RGBA8_UNORM;
 // Frames a replaced texture stays registered with the UI (frames in flight may still sample it).
 constexpr u32 kRetireFrames = 4;
 constexpr u32 kOutlineRadius = 2;
+constexpr u32 kHoverRadius = 1;
 // Repeated cycling picks within this many pixels count as the same spot.
 constexpr f32 kCycleDistance = 2.0f;
 constexpr std::string_view kSceneId = "scene";
@@ -42,6 +47,13 @@ constexpr u32 kSecondaryCascades = 2;
 constexpr u32 kSecondaryShadowResolution = 1024;
 // Marks picks and readbacks of a closed viewport.
 constexpr usize kClosed = ~usize{0};
+// Readback slots shared by picks, hovers and readbacks.
+constexpr u32 kReadbackSlots = 8;
+// Lines the visualisers of one viewport can draw.
+constexpr usize kVisualiserLines = 65536;
+// Width of the picture-in-picture camera view: a quarter of the Scene view, within these bounds.
+constexpr u32 kPreviewMinWidth = 128;
+constexpr u32 kPreviewMaxWidth = 480;
 
 RenderDebugView debugViewOf(ViewportShading shading) noexcept
 {
@@ -77,6 +89,18 @@ void setBit(std::vector<u64>& bits, u32 index)
         bits.resize(word + 1, 0);
     }
     bits[word] |= u64{1} << (index % 64);
+}
+
+bool hasBit(std::span<const u64> bits, u32 index) noexcept
+{
+    const usize word = index / 64;
+    return word < bits.size() && (bits[word] >> (index % 64) & 1u) != 0;
+}
+
+bool hasVisualisers(const ViewportVisualisers& kinds) noexcept
+{
+    return kinds.lights || kinds.cameras || kinds.colliders || kinds.characters || kinds.joints ||
+           kinds.audio;
 }
 
 // The grid plane, cell size and fades for a camera (see Grid.slang).
@@ -130,6 +154,7 @@ struct ViewportService::Impl
         f64 time = 0.0;
         std::unique_ptr<SceneRenderer> renderer;
         std::unique_ptr<detail::ViewportOverlays> overlays;
+        std::unique_ptr<DebugDrawRenderer> debugRenderer;
         nvrhi::TextureHandle color;
         UVec2 colorSize{0};
         u64 texture = 0;
@@ -141,6 +166,13 @@ struct ViewportService::Impl
         Entity sceneCamera{}; // the Camera a Game viewport looked through last
         u32 frames = 0;
         RenderStats renderStats;
+        // Hover: the entity under the cursor, read from the ids one pixel at a time.
+        bool hoverWanted = false;
+        Vec2 hoverPixel{0.0f};
+        bool hoverSubmitted = false;
+        u64 hoverReadback = 0;
+        Entity hovered{};
+        std::vector<ViewportIcon> icons;
     };
 
     struct Readback
@@ -206,12 +238,22 @@ struct ViewportService::Impl
     std::vector<Pick> picks;
     std::vector<Readback> reads;
     std::vector<Retired> retired;
+    // The picture-in-picture view through the selected Camera, shared by the Scene viewports.
+    std::unique_ptr<SceneRenderer> previewRenderer;
+    nvrhi::TextureHandle previewColor;
+    UVec2 previewSize{0};
+    u64 previewTexture = 0;
+    Entity previewCamera{};
+    u32 previewWidth = 0; // wanted this frame (0: no Scene viewport asked)
+    DebugDraw debugDraw{kVisualiserLines};
     u64 nextTicket = 1;
     u64 viewportsVersion = 0;
     ViewportServiceStats stats;
     // Scratch, kept to avoid allocating every frame.
     std::vector<u64> hiddenBits;
     std::vector<u64> selectionBits;
+    std::vector<u64> hoverBits;
+    std::vector<u64> iconBits;
     std::vector<EntityIdTexel> texels;
     std::vector<Entity> candidates;
     std::vector<std::pair<f32, Entity>> behind;
@@ -244,8 +286,14 @@ struct ViewportService::Impl
         viewport.kind = kind;
         if (kind == ViewportKind::Game)
         {
+            // The game view shows what the game shows.
             viewport.settings.grid = false;
             viewport.settings.selectionOutline = false;
+            viewport.settings.hover = false;
+            viewport.settings.icons = false;
+            viewport.settings.viewCube = false;
+            viewport.settings.cameraPreview = false;
+            viewport.settings.visualisers = ViewportVisualisers{false, false, false, false, false, false};
         }
         SceneRendererDesc desc;
         desc.colorFormat = kColorFormat;
@@ -257,10 +305,12 @@ struct ViewportService::Impl
         }
         viewport.renderer = SceneRenderer::create(device, resources, desc);
         viewport.overlays = detail::ViewportOverlays::create(device, kColorFormat);
-        if (!viewport.renderer || !viewport.overlays)
+        viewport.debugRenderer = DebugDrawRenderer::create(device, kColorFormat);
+        if (!viewport.renderer || !viewport.overlays || !viewport.debugRenderer)
         {
             return false;
         }
+        viewport.icons.reserve(64);
         viewports.push_back(std::move(viewport));
         return true;
     }
@@ -319,6 +369,192 @@ struct ViewportService::Impl
             {
                 setBit(selectionBits, entity.index);
             }
+        }
+    }
+
+    // The entity of the selection's primary id when it has a Camera (else null).
+    [[nodiscard]] Entity selectedCamera()
+    {
+        World& world = editor.world();
+        const Entity entity = editor.entities().lookup(editor.selection().primary());
+        if (entity.isNull() || !world.isAlive(entity) || world.has<Inactive>(entity) ||
+            !world.has<Camera>(entity) || !world.has<Transform>(entity))
+        {
+            return Entity{};
+        }
+        return entity;
+    }
+
+    // Width / height of what the game view shows (16:9 before it has a size).
+    [[nodiscard]] f32 gameAspect() const noexcept
+    {
+        const auto game = std::find_if(viewports.begin(), viewports.end(), [](const Viewport& viewport) {
+            return viewport.kind == ViewportKind::Game;
+        });
+        return game != viewports.end() ? aspectOf(game->resize.current()) : 16.0f / 9.0f;
+    }
+
+    // Renders the picture-in-picture view through the selected Camera at previewWidth.
+    void renderPreview()
+    {
+        ILL_PROFILE_SCOPE();
+        const u32 width = previewWidth;
+        previewWidth = 0;
+        previewCamera = width != 0 ? selectedCamera() : Entity{};
+        if (previewCamera.isNull())
+        {
+            return;
+        }
+        const f32 aspect = gameAspect();
+        const UVec2 size(width, std::max(1u, static_cast<u32>(static_cast<f32>(width) / aspect + 0.5f)));
+        if (!previewRenderer)
+        {
+            SceneRendererDesc desc;
+            desc.colorFormat = kColorFormat;
+            desc.shadows.cascadeCount = kSecondaryCascades;
+            desc.shadows.resolution = kSecondaryShadowResolution;
+            previewRenderer = SceneRenderer::create(device, resources, desc);
+            if (!previewRenderer)
+            {
+                ILL_LOG_ERROR("editor", "cannot create the camera preview renderer");
+                previewCamera = Entity{};
+                return;
+            }
+        }
+        if (!previewColor || previewSize != size)
+        {
+            nvrhi::TextureDesc desc;
+            desc.width = size.x;
+            desc.height = size.y;
+            desc.format = kColorFormat;
+            desc.isRenderTarget = true;
+            desc.debugName = "Camera preview";
+            desc.setClearValue(nvrhi::Color(0.0f));
+            desc.enableAutomaticStateTracking(nvrhi::ResourceStates::ShaderResource);
+            nvrhi::TextureHandle color = device.device()->createTexture(desc);
+            if (!color)
+            {
+                previewCamera = Entity{};
+                return;
+            }
+            if (previewColor)
+            {
+                retired.push_back(Retired{previewColor, previewTexture, 0});
+            }
+            previewColor = color;
+            previewSize = size;
+            previewTexture = ui.registerTexture(color);
+        }
+        World& world = editor.world();
+        const RenderView view = RenderView::fromCamera(world.get<Transform>(previewCamera),
+                                                       world.get<Camera>(previewCamera), aspect);
+        commands->open();
+        previewRenderer->render(commands, previewColor, world, view, &jobs);
+        commands->close();
+        device.device()->executeCommandList(commands);
+        ++stats.previews;
+    }
+
+    // Icon billboards of @p viewport from its last render, farthest first.
+    void buildIcons(Viewport& viewport)
+    {
+        viewport.icons.clear();
+        if (viewport.kind != ViewportKind::Scene || !viewport.settings.icons || viewport.colorSize.x == 0)
+        {
+            return;
+        }
+        std::fill(iconBits.begin(), iconBits.end(), 0);
+        World& world = editor.world();
+        const auto add = [&](Entity entity, const Transform& transform, ViewportIconKind kind) {
+            if (hasBit(iconBits, entity.index) || hasBit(hiddenBits, entity.index))
+            {
+                return;
+            }
+            const ViewportPoint point =
+                projectToViewport(viewport.viewProjection, viewport.colorSize, transform.position);
+            if (!point.inside)
+            {
+                return;
+            }
+            setBit(iconBits, entity.index);
+            viewport.icons.push_back(
+                ViewportIcon{entity, kind, point.pixel, point.depth, hasBit(selectionBits, entity.index)});
+        };
+        world.query<Transform, Camera>().without<Inactive>().each(
+            [&](Entity entity, const Transform& transform, const Camera&) {
+                add(entity, transform, ViewportIconKind::Camera);
+            });
+        world.query<Transform, DirectionalLight>().without<Inactive>().each(
+            [&](Entity entity, const Transform& transform, const DirectionalLight&) {
+                add(entity, transform, ViewportIconKind::DirectionalLight);
+            });
+        world.query<Transform, PointLight>().without<Inactive>().each(
+            [&](Entity entity, const Transform& transform, const PointLight&) {
+                add(entity, transform, ViewportIconKind::PointLight);
+            });
+        world.query<Transform, SkyLight>().without<Inactive>().each(
+            [&](Entity entity, const Transform& transform, const SkyLight&) {
+                add(entity, transform, ViewportIconKind::SkyLight);
+            });
+        world.query<Transform, ProceduralSky>().without<Inactive>().each(
+            [&](Entity entity, const Transform& transform, const ProceduralSky&) {
+                add(entity, transform, ViewportIconKind::SkyLight);
+            });
+        world.query<Transform, AudioSource>().without<Inactive>().each(
+            [&](Entity entity, const Transform& transform, const AudioSource&) {
+                add(entity, transform, ViewportIconKind::AudioSource);
+            });
+        world.query<Transform>().with<AudioListener>().without<Inactive>().each(
+            [&](Entity entity, const Transform& transform) {
+                add(entity, transform, ViewportIconKind::AudioListener);
+            });
+        std::sort(viewport.icons.begin(), viewport.icons.end(),
+                  [](const ViewportIcon& a, const ViewportIcon& b) {
+                      return a.depth < b.depth || (a.depth == b.depth && a.entity.index < b.entity.index);
+                  });
+    }
+
+    // Asks for the id under the cursor of @p viewport (one at a time; after its render was submitted).
+    void submitHover(Viewport& viewport)
+    {
+        const RenderViewTargets& targets = viewport.renderer->viewTargets();
+        if (!viewport.hoverWanted || viewport.hoverSubmitted || targets.ids == nullptr ||
+            targets.outputSize.x == 0 || targets.renderSize.x == 0)
+        {
+            return;
+        }
+        const Vec2 scale = Vec2(targets.renderSize) / Vec2(targets.outputSize);
+        const UVec2 texel =
+            glm::min(UVec2(glm::max(viewport.hoverPixel * scale, Vec2(0.0f))), targets.renderSize - 1u);
+        // A full ring leaves the slots to picks and readbacks: try again next frame.
+        if (const std::optional<u64> readback = readbacks->request(targets.ids, texel, UVec2(1)))
+        {
+            viewport.hoverSubmitted = true;
+            viewport.hoverReadback = *readback;
+        }
+    }
+
+    void readHovers(bool block)
+    {
+        for (Viewport& viewport : viewports)
+        {
+            if (!viewport.hoverSubmitted)
+            {
+                continue;
+            }
+            EntityIdTexel texel{};
+            const ReadbackStatus status = readbacks->read(
+                viewport.hoverReadback, std::as_writable_bytes(std::span<EntityIdTexel>(&texel, 1)), block);
+            if (status == ReadbackStatus::Pending)
+            {
+                continue;
+            }
+            viewport.hoverSubmitted = false;
+            const Entity entity{texel.index, texel.generation};
+            viewport.hovered = status == ReadbackStatus::Ready && viewport.hoverWanted &&
+                                       texel.index != ~0u && pickable(entity)
+                                   ? entity
+                                   : Entity{};
         }
     }
 
@@ -402,7 +638,35 @@ struct ViewportService::Impl
                 commands, viewport.color, targets,
                 gridPass(camera, targets.unjitteredViewProjection, viewport.style));
         }
-        if (viewport.settings.selectionOutline && !editor.selection().empty() && !selectionBits.empty())
+        const ViewportSettings& settings = viewport.settings;
+        const bool all = settings.visualiserScope == ViewportVisualiserScope::All;
+        if (viewport.kind == ViewportKind::Scene && hasVisualisers(settings.visualisers) &&
+            (all || !editor.selection().empty()))
+        {
+            debugDraw.clear();
+            VisualiserOptions options;
+            options.kinds = settings.visualisers;
+            options.all = all;
+            options.selection = selectionBits;
+            options.hidden = hiddenBits;
+            options.cameraAspect = gameAspect();
+            const VisualiserStats recorded = recordVisualisers(editor.world(), debugDraw, options);
+            stats.visualisers += recorded.objects;
+            if (!debugDraw.lines().empty())
+            {
+                (void)viewport.debugRenderer->render(commands, viewport.color, targets, debugDraw);
+            }
+        }
+        const Entity hovered = viewport.hovered;
+        if (settings.hover && !hovered.isNull() && editor.world().isAlive(hovered) &&
+            !(settings.selectionOutline && hasBit(selectionBits, hovered.index)))
+        {
+            std::fill(hoverBits.begin(), hoverBits.end(), 0);
+            setBit(hoverBits, hovered.index);
+            (void)viewport.overlays->drawOutline(commands, viewport.color, targets, hoverBits,
+                                                 viewport.style.hover, kHoverRadius);
+        }
+        if (settings.selectionOutline && !editor.selection().empty() && !selectionBits.empty())
         {
             (void)viewport.overlays->drawOutline(commands, viewport.color, targets, selectionBits,
                                                  viewport.style.selection, kOutlineRadius);
@@ -689,13 +953,17 @@ ViewportService::~ViewportService()
     {
         impl.ui.unregisterTexture(retired.uiTexture);
     }
+    if (impl.previewTexture != 0)
+    {
+        impl.ui.unregisterTexture(impl.previewTexture);
+    }
 }
 
 std::unique_ptr<ViewportService> ViewportService::create(RenderDevice& device, EditorContext& editor,
                                                          ui::UiRenderer& ui)
 {
     auto impl = std::make_unique<Impl>(device, editor, ui);
-    impl->readbacks = ReadbackRing::create(device, 4);
+    impl->readbacks = ReadbackRing::create(device, kReadbackSlots);
     impl->commands = device.device()->createCommandList();
     if (!impl->readbacks || !impl->commands ||
         !impl->addViewport(std::string(kSceneId), ViewportKind::Scene, false) ||
@@ -737,11 +1005,21 @@ void ViewportService::render(bool uiShown)
                 }
                 impl.submitReads(i, rendered);
             }
+            if (rendered)
+            {
+                impl.submitHover(viewport);
+            }
         }
         viewport.drawn = false;
     }
+    if (uiShown)
+    {
+        impl.renderPreview();
+    }
+    impl.previewWidth = 0;
     impl.readPicks(false);
     impl.readReads(false);
+    impl.readHovers(false);
     for (Impl::Retired& retired : impl.retired)
     {
         ++retired.frames;
@@ -769,6 +1047,7 @@ void ViewportService::waitIdle()
     impl.resolver.waitIdle(impl.editor.world(), &impl.jobs);
     impl.readPicks(true);
     impl.readReads(true);
+    impl.readHovers(true);
 }
 
 const ViewportServiceStats& ViewportService::stats() const noexcept
@@ -962,18 +1241,42 @@ ViewportFrame ViewportService::frame(std::string_view id, UVec2 size, const View
         (void)viewport->resize.update(viewportImageSize(size, viewport->settings), viewport->time, dragging);
     }
     const bool scene = viewport->kind == ViewportKind::Scene;
+    viewport->camera.setPreset(navigationPresetFromName(viewportNavigationOf(impl.editor.preferences())));
     const bool navigating = scene && viewport->camera.update(input, viewport->resize.current());
     viewport->drawn = true;
+    // The entity under a resting cursor is read after the next render.
+    viewport->hoverWanted = viewport->settings.hover && input.hovered && !dragging && !navigating;
+    viewport->hoverPixel = input.cursor;
+    if (!viewport->hoverWanted || (!viewport->hovered.isNull() && !impl.pickable(viewport->hovered)))
+    {
+        viewport->hovered = Entity{};
+    }
     ViewportFrame out;
     out.navigating = navigating;
     out.settings = viewport->settings;
     out.projection = viewport->camera.target().projection;
     out.kind = viewport->kind;
     out.hasCamera = scene || !findMainCamera(impl.editor.world()).isNull();
+    out.camera = viewport->camera.camera();
+    out.hovered = viewport->hovered;
     if (out.hasCamera && impl.ensureTarget(*viewport))
     {
         out.texture = viewport->texture;
         out.size = viewport->colorSize;
+    }
+    impl.buildIcons(*viewport);
+    out.icons = viewport->icons;
+    if (scene && viewport->settings.cameraPreview && out.size.x != 0)
+    {
+        const u32 width = std::clamp(out.size.x / 4, kPreviewMinWidth, kPreviewMaxWidth);
+        impl.previewWidth = std::max(impl.previewWidth, width);
+        const Entity camera = impl.selectedCamera();
+        if (!camera.isNull() && camera == impl.previewCamera && impl.previewTexture != 0)
+        {
+            out.preview = impl.previewTexture;
+            out.previewSize = impl.previewSize;
+            out.previewCamera = camera;
+        }
     }
     return out;
 }
@@ -1027,6 +1330,7 @@ Expected<void, CommandError> ViewportService::closeViewport(std::string_view id)
     // Copies already in the ring finish now: a ticket holds its slot until it is read.
     impl.readPicks(true);
     impl.readReads(true);
+    impl.readHovers(true);
     if (viewport->color)
     {
         impl.retired.push_back(Impl::Retired{viewport->color, viewport->texture, 0});
