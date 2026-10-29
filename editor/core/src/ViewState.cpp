@@ -1,3 +1,4 @@
+#include <illusion/core/Assert.hpp>
 #include <illusion/editor/core/ViewState.hpp>
 
 #include <algorithm>
@@ -68,12 +69,29 @@ bool ViewState::setLocked(EntityGuid guid, bool value)
     return true;
 }
 
+std::optional<ViewportCamera> ViewState::bookmark(u32 slot) const noexcept
+{
+    ILL_ASSERT(slot >= 1 && slot <= kCameraBookmarkSlots, "bookmark slots are 1 to 9");
+    return m_bookmarks[slot - 1];
+}
+
+void ViewState::setBookmark(u32 slot, const ViewportCamera& camera) noexcept
+{
+    ILL_ASSERT(slot >= 1 && slot <= kCameraBookmarkSlots, "bookmark slots are 1 to 9");
+    m_bookmarks[slot - 1] = camera;
+    ++m_version;
+}
+
 void ViewState::clear() noexcept
 {
-    if (!m_hidden.empty() || !m_locked.empty())
+    const bool bookmarks =
+        std::any_of(m_bookmarks.begin(), m_bookmarks.end(),
+                    [](const std::optional<ViewportCamera>& slot) { return slot.has_value(); });
+    if (!m_hidden.empty() || !m_locked.empty() || bookmarks)
     {
         m_hidden.clear();
         m_locked.clear();
+        m_bookmarks.fill(std::nullopt);
         ++m_version;
     }
 }

@@ -84,6 +84,16 @@ add_test(NAME acceptance.tetris.board
     CONFIGURATIONS Release RelWithDebInfo)
 set_tests_properties(acceptance.tetris.board PROPERTIES LABELS "acceptance" TIMEOUT 360)
 
+# The same scenario with a GPU (labels "gpu" and "acceptance"): the C6 rendering checks run, including the
+# game-view golden image tests/acceptance/tetris/golden/board.png. Every configuration, for the gpu CI job.
+add_test(NAME acceptance.tetris.board.gpu
+    COMMAND illusion_ctl --launch $<TARGET_FILE:illusion_editor>
+        --editor-arg --deterministic --editor-arg --seed --editor-arg 1
+        replay ${PROJECT_SOURCE_DIR}/tests/acceptance/tetris/scripted.jsonl
+        --checks ${PROJECT_SOURCE_DIR}/tests/acceptance/tetris/checks.jsonl --temp-workspace --gpu)
+set_tests_properties(acceptance.tetris.board.gpu PROPERTIES LABELS "acceptance;gpu" TIMEOUT 600
+    ENVIRONMENT "ILLUSION_UI_CAPTURE_DIR=${CMAKE_BINARY_DIR}/ui-captures")
+
 # The same scenario through the MCP bridge in both protocol eras (ADR 0039): every step is a tool call.
 foreach(era legacy modern)
     add_test(NAME acceptance.tetris.board.mcp-${era}

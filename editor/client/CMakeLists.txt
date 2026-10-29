@@ -4,6 +4,7 @@
 
 illusion_add_editor_library(illusion_editor_client STATIC
     src/EditorToolProvider.cpp
+    src/ImageCompare.cpp
     src/McpClient.cpp
     src/RpcClient.cpp
     src/Transcript.cpp)
@@ -11,6 +12,7 @@ add_library(illusion::editor_client ALIAS illusion_editor_client)
 
 target_include_directories(illusion_editor_client PUBLIC
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>)
-target_link_libraries(illusion_editor_client PUBLIC illusion::editor_rpc illusion::mcp_protocol illusion::platform)
+target_link_libraries(illusion_editor_client PUBLIC illusion::editor_rpc illusion::mcp_protocol illusion::platform
+    PRIVATE illusion::assets)
 
 illusion_configure_target(illusion_editor_client)

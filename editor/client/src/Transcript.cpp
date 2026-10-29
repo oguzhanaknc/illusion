@@ -1,6 +1,9 @@
+#include <illusion/editor/client/ImageCompare.hpp>
 #include <illusion/editor/client/Transcript.hpp>
 
 #include <cmath>
+#include <fstream>
+#include <iterator>
 #include <regex>
 
 namespace illusion::editor::client
@@ -111,6 +114,20 @@ std::optional<std::string> matchOperator(std::string_view op, JsonValue argument
         }
         return where + "expected " + shown(target) + " +/- " + std::to_string(tolerance) + ", got " +
                shown(actual);
+    }
+    if (op == "$min" || op == "$max")
+    {
+        if (!argument.isNumber() || !actual.isNumber())
+        {
+            return where + "expected a number, got " + shown(actual);
+        }
+        const bool min = op == "$min";
+        if (min ? *actual.asF64() >= *argument.asF64() : *actual.asF64() <= *argument.asF64())
+        {
+            return std::nullopt;
+        }
+        return where + "expected a number " + (min ? "of at least " : "of at most ") + shown(argument) +
+               ", got " + shown(actual);
     }
     if (op == "$regex")
     {
@@ -370,6 +387,77 @@ std::optional<i32> TranscriptRunner::stop()
     return m_client->close(std::chrono::milliseconds(30000));
 }
 
+namespace
+{
+
+// Checks the image an `image` step option names in @p reply (see the file documentation).
+std::optional<std::string> checkImage(JsonValue option, JsonValue reply, const RunnerOptions& options)
+{
+    const std::string pointer(option.find("pointer").asString().value_or("/_images/0/data"));
+    const std::optional<std::string_view> data = reply.pointer(pointer).asString();
+    if (!data)
+    {
+        return "no image at " + pointer;
+    }
+    const std::optional<std::vector<std::byte>> png = decodeBase64(*data);
+    if (!png)
+    {
+        return "the image at " + pointer + " is not base64";
+    }
+    const std::optional<std::string_view> golden = option.find("golden").asString();
+    if (!options.captureDirectory.empty() && golden)
+    {
+        std::error_code error;
+        std::filesystem::create_directories(options.captureDirectory, error);
+        const std::filesystem::path name =
+            std::filesystem::path(std::u8string(golden->begin(), golden->end())).filename();
+        std::ofstream file(options.captureDirectory / name, std::ios::binary | std::ios::trunc);
+        file.write(reinterpret_cast<const char*>(png->data()), static_cast<std::streamsize>(png->size()));
+    }
+    if (option.find("notUniform").asBool().value_or(false) && isUniformImage(*png))
+    {
+        return std::string("every pixel of the image has the same colour");
+    }
+    if (!golden)
+    {
+        return std::nullopt;
+    }
+    const std::filesystem::path path =
+        options.goldenDirectory / std::filesystem::path(std::u8string(golden->begin(), golden->end()));
+    if (options.updateGoldens)
+    {
+        std::error_code error;
+        std::filesystem::create_directories(path.parent_path(), error);
+        std::ofstream file(path, std::ios::binary | std::ios::trunc);
+        file.write(reinterpret_cast<const char*>(png->data()), static_cast<std::streamsize>(png->size()));
+        return file.good() ? std::nullopt
+                           : std::optional<std::string>("cannot write the golden " + std::string(*golden));
+    }
+    std::ifstream file(path, std::ios::binary);
+    if (!file)
+    {
+        return "no golden image " + std::string(*golden) + " (run with ILLUSION_UPDATE_GOLDENS=1)";
+    }
+    const std::vector<char> bytes((std::istreambuf_iterator<char>(file)), std::istreambuf_iterator<char>());
+    const u32 tolerance = static_cast<u32>(option.find("channelTolerance").asU64().value_or(3));
+    const f64 maxDifferent = option.find("maxDifferent").asF64().value_or(0.005);
+    const Expected<ImageComparison, std::string> compared =
+        compareImages(*png, std::as_bytes(std::span<const char>(bytes)), tolerance);
+    if (!compared)
+    {
+        return compared.error();
+    }
+    if (compared->differentFraction > maxDifferent)
+    {
+        return "the image differs from " + std::string(*golden) + ": " +
+               std::to_string(compared->differentFraction * 100.0) + "% of the pixels are off by more than " +
+               std::to_string(tolerance) + " (largest " + std::to_string(compared->largestDifference) + ")";
+    }
+    return std::nullopt;
+}
+
+} // namespace
+
 RunReport TranscriptRunner::run(std::string_view jsonl, std::string_view name)
 {
     RunReport report;
@@ -573,8 +661,22 @@ RunReport TranscriptRunner::run(std::string_view jsonl, std::string_view name)
             }
             continue;
         }
+        // Without a GPU a GPU step only checks that it fails: there is nothing to look at or capture.
+        const bool skipped = !step.find("requires").isAbsent() && !m_options.gpu;
+        if (const JsonValue image = step.find("image"); !skipped && !image.isAbsent())
+        {
+            if (std::optional<std::string> wrong = checkImage(image, replyDoc->root(), m_options))
+            {
+                fail(method, *wrong);
+                if (check.empty())
+                {
+                    break;
+                }
+                continue;
+            }
+        }
         bool captured = true;
-        for (const JsonMember capture : step.find("capture").members())
+        for (const JsonMember capture : skipped ? JsonValue().members() : step.find("capture").members())
         {
             const JsonValue value = replyDoc->root().pointer(capture.value.asString().value_or(""));
             if (value.isAbsent())

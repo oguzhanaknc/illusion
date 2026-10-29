@@ -179,8 +179,19 @@ The agent acceptance test replays a transcript of editor calls and checks the re
 
 `capture` saves values from a reply by JSON Pointer and `${name}` uses them later. `expect` matches the reply:
 objects match when they have at least the given members, and `$approx`, `$regex`, `$length`, `$exists`,
-`$oneOf` and `$contains` relax the match. A step marked `"requires": "gpu"` must match `otherwise` (error 1400
-by default) on an editor without a GPU. Run it with:
+`$oneOf`, `$contains`, `$min` and `$max` relax the match. A step marked `"requires": "gpu"` must match
+`otherwise` (error 1400 by default) on an editor without a GPU.
+
+A step with `image` compares the screenshot in its reply with a golden PNG next to the transcript. A pixel
+differs when a channel is off by more than `channelTolerance`; the step fails when more than `maxDifferent` of
+the pixels differ, or when `notUniform` is set and the image is one flat colour. `ILLUSION_UPDATE_GOLDENS=1`
+rewrites the golden, and `ILLUSION_UI_CAPTURE_DIR` also saves every image there:
+
+```json
+{"call": "viewport.screenshot", "params": {"viewport": "game"}, "requires": "gpu", "image": {"golden": "golden/board.png", "channelTolerance": 8, "maxDifferent": 0.02, "notUniform": true}}
+```
+
+Run it with:
 
 ```bash
 illusion_ctl --launch build/bin/Release/illusion_editor --editor-arg --deterministic --editor-arg --no-gpu \

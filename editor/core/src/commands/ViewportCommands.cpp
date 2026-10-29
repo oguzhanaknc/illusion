@@ -1,6 +1,11 @@
 #include "CommandSupport.hpp"
 
+#include <illusion/assets/Image.hpp>
+
+#include <algorithm>
 #include <cmath>
+#include <cstring>
+#include <memory>
 
 namespace illusion::editor::detail
 {
@@ -27,7 +32,15 @@ struct Target
     ViewportInfo info;
 };
 
-Expected<Target, CommandError> findViewport(CommandContext& context, const std::optional<std::string>& id)
+// Which viewports a command accepts.
+enum class Needs : u8
+{
+    Any,          // every viewport
+    EditorCamera, // Scene viewports (the Game view looks through a scene Camera)
+};
+
+Expected<Target, CommandError> findViewport(CommandContext& context, const std::optional<std::string>& id,
+                                            Needs needs = Needs::Any)
 {
     Expected<ViewportHost*, CommandError> host = requireViewports(context);
     if (!host)
@@ -37,10 +50,17 @@ Expected<Target, CommandError> findViewport(CommandContext& context, const std::
     const std::string_view wanted = id ? std::string_view(*id) : kDefaultViewport;
     for (ViewportInfo& info : (*host)->viewports())
     {
-        if (info.id == wanted)
+        if (info.id != wanted)
         {
-            return Target{*host, std::move(info)};
+            continue;
         }
+        if (needs == Needs::EditorCamera && info.kind == ViewportKind::Game)
+        {
+            return unexpected(CommandError::make(
+                ErrorKind::PreconditionFailed,
+                "the game view looks through the scene's highest-priority Camera: move that entity instead"));
+        }
+        return Target{*host, std::move(info)};
     }
     return unexpected(CommandError::make(ErrorKind::NotFound, "no viewport '" + std::string(wanted) + "'"));
 }
@@ -78,6 +98,18 @@ Expected<ViewportCameraResult, CommandError> moveCamera(CommandContext& context,
     return cameraResult(target.info.id, camera);
 }
 
+ViewportEntry entryOf(CommandContext& context, ViewportInfo info)
+{
+    EditorContext& editor = context.editor();
+    std::optional<EntitySummary> sceneCamera;
+    if (!info.sceneCamera.isNull() && editor.world().isAlive(info.sceneCamera))
+    {
+        sceneCamera = editor.entities().summary(info.sceneCamera);
+    }
+    return ViewportEntry{std::move(info.id), info.kind, info.size.x,   info.size.y,           info.visible,
+                         info.camera,        info.eye,  info.settings, std::move(sceneCamera)};
+}
+
 Expected<ViewportListResult, CommandError> viewportList(CommandContext& context, const NoParams&)
 {
     Expected<ViewportHost*, CommandError> host = requireViewports(context);
@@ -88,15 +120,14 @@ Expected<ViewportListResult, CommandError> viewportList(CommandContext& context,
     ViewportListResult result;
     for (ViewportInfo& info : (*host)->viewports())
     {
-        result.viewports.push_back(ViewportEntry{std::move(info.id), info.size.x, info.size.y, info.visible,
-                                                 info.camera, viewportEye(info.camera), info.settings});
+        result.viewports.push_back(entryOf(context, std::move(info)));
     }
     return result;
 }
 
 Expected<ViewportCameraResult, CommandError> cameraGet(CommandContext& context, const ViewportParams& params)
 {
-    Expected<Target, CommandError> target = findViewport(context, params.viewport);
+    Expected<Target, CommandError> target = findViewport(context, params.viewport, Needs::EditorCamera);
     if (!target)
     {
         return unexpected(std::move(target).error());
@@ -107,7 +138,7 @@ Expected<ViewportCameraResult, CommandError> cameraGet(CommandContext& context, 
 Expected<ViewportCameraResult, CommandError> cameraSet(CommandContext& context,
                                                        const ViewportCameraSetParams& params)
 {
-    Expected<Target, CommandError> target = findViewport(context, params.viewport);
+    Expected<Target, CommandError> target = findViewport(context, params.viewport, Needs::EditorCamera);
     if (!target)
     {
         return unexpected(std::move(target).error());
@@ -156,7 +187,7 @@ Expected<ViewportCameraResult, CommandError> cameraSet(CommandContext& context,
 Expected<ViewportCameraResult, CommandError> viewportView(CommandContext& context,
                                                           const ViewportViewParams& params)
 {
-    Expected<Target, CommandError> target = findViewport(context, params.viewport);
+    Expected<Target, CommandError> target = findViewport(context, params.viewport, Needs::EditorCamera);
     if (!target)
     {
         return unexpected(std::move(target).error());
@@ -173,7 +204,7 @@ Expected<ViewportCameraResult, CommandError> viewportView(CommandContext& contex
 Expected<ViewportCameraResult, CommandError> viewportFrame(CommandContext& context,
                                                            const ViewportFrameParams& params)
 {
-    Expected<Target, CommandError> target = findViewport(context, params.viewport);
+    Expected<Target, CommandError> target = findViewport(context, params.viewport, Needs::EditorCamera);
     if (!target)
     {
         return unexpected(std::move(target).error());
@@ -284,9 +315,45 @@ Expected<ViewportProjectResult, CommandError> viewportProject(CommandContext& co
             return unexpected(CommandError::invalid("/point", "must be finite"));
         }
     }
-    const ViewportPoint projected = projectToViewport(target->info.camera, target->info.size, point);
+    const ViewportPoint projected =
+        projectToViewport(target->info.projection * target->info.view, target->info.size, point);
     return ViewportProjectResult{projected.pixel.x, projected.pixel.y, projected.depth, projected.inFront,
                                  projected.inside};
+}
+
+// Changes the selection by @p select with the entities a pick hit (none: the background).
+void applySelection(Selection& selection, PickSelect select, std::span<const EntityGuid> hits)
+{
+    switch (select)
+    {
+    case PickSelect::None:
+        break;
+    case PickSelect::Replace:
+        if (hits.empty())
+        {
+            selection.clear();
+        }
+        else
+        {
+            selection.set(hits);
+        }
+        break;
+    case PickSelect::Add:
+        for (const EntityGuid guid : hits)
+        {
+            selection.add(guid);
+        }
+        break;
+    case PickSelect::Toggle:
+        for (const EntityGuid guid : hits)
+        {
+            if (!selection.remove(guid))
+            {
+                selection.add(guid);
+            }
+        }
+        break;
+    }
 }
 
 // Waits for the viewport to read the entity under the cursor, then changes the selection if asked.
@@ -332,34 +399,8 @@ public:
             return std::optional<ViewportPickResult>(std::move(result));
         }
         const EntityGuid guid = alive ? editor.entities().guidOf(hit->entity) : EntityGuid{};
-        Selection& selection = editor.selection();
-        switch (m_select)
-        {
-        case PickSelect::None:
-            break;
-        case PickSelect::Replace:
-            if (alive)
-            {
-                selection.set(std::span<const EntityGuid>(&guid, 1));
-            }
-            else
-            {
-                selection.clear();
-            }
-            break;
-        case PickSelect::Add:
-            if (alive)
-            {
-                selection.add(guid);
-            }
-            break;
-        case PickSelect::Toggle:
-            if (alive && !selection.remove(guid))
-            {
-                selection.add(guid);
-            }
-            break;
-        }
+        applySelection(editor.selection(), m_select,
+                       alive ? std::span<const EntityGuid>(&guid, 1) : std::span<const EntityGuid>());
         return std::optional<ViewportPickResult>(std::move(result));
     }
 
@@ -403,6 +444,452 @@ viewportPick(CommandContext& context, const ViewportPickParams& params)
     }
     return std::unique_ptr<CommandTask<ViewportPickResult>>(
         std::make_unique<PickTask>(*target->host, *ticket, params.select.value_or(PickSelect::None)));
+}
+
+// The viewport of @p target has an image to read: its panel was shown or it has a fixed resolution.
+Expected<void, CommandError> requireImage(const Target& target)
+{
+    if (target.info.size.x == 0 || target.info.size.y == 0)
+    {
+        return unexpected(CommandError::make(ErrorKind::PreconditionFailed,
+                                             "the viewport has no image yet: show its panel (ui.show_panel) "
+                                             "or give it a fixed resolution (viewport.set_aspect)"));
+    }
+    if (target.info.kind == ViewportKind::Game && target.info.sceneCamera.isNull())
+    {
+        return unexpected(CommandError::make(ErrorKind::PreconditionFailed,
+                                             "the scene has no active Camera for the game view"));
+    }
+    return {};
+}
+
+Expected<void, CommandError> checkPixel(const Target& target, f32 x, f32 y)
+{
+    if (!std::isfinite(x) || !std::isfinite(y) || x < 0.0f || y < 0.0f ||
+        x >= static_cast<f32>(target.info.size.x) || y >= static_cast<f32>(target.info.size.y))
+    {
+        return unexpected(CommandError::invalid("", "x and y must lie within the viewport (" +
+                                                        std::to_string(target.info.size.x) + "x" +
+                                                        std::to_string(target.info.size.y) + " pixels)"));
+    }
+    return {};
+}
+
+// Waits for a viewport readback, then turns it into the command's result.
+template <class R>
+class ReadbackTask final : public CommandTask<R>
+{
+public:
+    using Finish = Expected<R, CommandError> (*)(CommandContext&, ViewportReadback&, PickSelect);
+
+    ReadbackTask(ViewportHost& host, u64 ticket, Finish finish, PickSelect select) noexcept
+        : m_host(&host)
+        , m_ticket(ticket)
+        , m_finish(finish)
+        , m_select(select)
+    {
+    }
+
+    Expected<std::optional<R>, CommandError> update(CommandContext& context,
+                                                    CommandProgress& progress) override
+    {
+        if (context.editor().viewports() != m_host)
+        {
+            return unexpected(CommandError::make(ErrorKind::Unsupported, "the viewports closed"));
+        }
+        std::optional<Expected<ViewportReadback, CommandError>> done = m_host->readback(m_ticket);
+        if (!done)
+        {
+            progress.message = "waiting for the GPU";
+            return std::optional<R>{};
+        }
+        if (!*done)
+        {
+            return unexpected(std::move(*done).error());
+        }
+        Expected<R, CommandError> result = m_finish(context, done->value(), m_select);
+        if (!result)
+        {
+            return unexpected(std::move(result).error());
+        }
+        return std::optional<R>(std::move(result).value());
+    }
+
+private:
+    ViewportHost* m_host;
+    u64 m_ticket;
+    Finish m_finish;
+    PickSelect m_select;
+};
+
+template <class R>
+Expected<std::unique_ptr<CommandTask<R>>, CommandError>
+startReadback(const Target& target, ViewportChannel channel, UVec2 origin, UVec2 extent,
+              typename ReadbackTask<R>::Finish finish, PickSelect select = PickSelect::None)
+{
+    Expected<u64, CommandError> ticket =
+        target.host->requestReadback(target.info.id, channel, origin, extent);
+    if (!ticket)
+    {
+        return unexpected(std::move(ticket).error());
+    }
+    return std::unique_ptr<CommandTask<R>>(
+        std::make_unique<ReadbackTask<R>>(*target.host, *ticket, finish, select));
+}
+
+Expected<ScreenshotResult, CommandError> finishScreenshot(CommandContext&, ViewportReadback& readback,
+                                                          PickSelect)
+{
+    Image image;
+    image.format = ImageFormat::RGBA8Srgb;
+    image.data.resize(readback.color.size());
+    std::memcpy(image.data.data(), readback.color.data(), readback.color.size());
+    image.mips.push_back(ImageMip{readback.extent.x, readback.extent.y, 0, image.data.size()});
+    const std::vector<std::byte> png = encodePng(image);
+    if (png.empty())
+    {
+        return unexpected(CommandError::make(ErrorKind::Internal, "the image could not be encoded"));
+    }
+    ScreenshotResult result;
+    result.width = readback.extent.x;
+    result.height = readback.extent.y;
+    result._images.push_back(ResultImage{
+        "image/png", encodeBase64(std::string_view(reinterpret_cast<const char*>(png.data()), png.size()))});
+    return result;
+}
+
+Expected<std::unique_ptr<CommandTask<ScreenshotResult>>, CommandError>
+viewportScreenshot(CommandContext& context, const ViewportParams& params)
+{
+    Expected<Target, CommandError> target = findViewport(context, params.viewport);
+    if (!target)
+    {
+        return unexpected(std::move(target).error());
+    }
+    if (Expected<void, CommandError> image = requireImage(*target); !image)
+    {
+        return unexpected(std::move(image).error());
+    }
+    return startReadback<ScreenshotResult>(*target, ViewportChannel::Color, UVec2(0), target->info.size,
+                                           &finishScreenshot);
+}
+
+Expected<ViewportSampleResult, CommandError> finishSample(CommandContext&, ViewportReadback& readback,
+                                                          PickSelect)
+{
+    ViewportSampleResult result;
+    const usize pixels = readback.color.size() / 4;
+    if (pixels == 0)
+    {
+        return unexpected(CommandError::make(ErrorKind::Internal, "the sample read no pixels"));
+    }
+    Vec4 sum{0.0f};
+    for (usize i = 0; i < pixels; ++i)
+    {
+        for (u32 c = 0; c < 4; ++c)
+        {
+            sum[static_cast<int>(c)] += static_cast<f32>(readback.color[i * 4 + c]) / 255.0f;
+        }
+    }
+    result.color = sum / static_cast<f32>(pixels);
+    result.pixels = static_cast<u32>(pixels);
+    const f32 high = std::max({result.color.r, result.color.g, result.color.b});
+    const f32 low = std::min({result.color.r, result.color.g, result.color.b});
+    const f32 range = high - low;
+    result.value = high;
+    result.saturation = high > 0.0f ? range / high : 0.0f;
+    if (range > 0.0f)
+    {
+        f32 hue = 0.0f;
+        if (high == result.color.r)
+        {
+            hue = std::fmod((result.color.g - result.color.b) / range, 6.0f);
+        }
+        else if (high == result.color.g)
+        {
+            hue = (result.color.b - result.color.r) / range + 2.0f;
+        }
+        else
+        {
+            hue = (result.color.r - result.color.g) / range + 4.0f;
+        }
+        hue *= 60.0f;
+        result.hue = hue < 0.0f ? hue + 360.0f : hue;
+    }
+    return result;
+}
+
+Expected<std::unique_ptr<CommandTask<ViewportSampleResult>>, CommandError>
+viewportSample(CommandContext& context, const ViewportSampleParams& params)
+{
+    Expected<Target, CommandError> target = findViewport(context, params.viewport);
+    if (!target)
+    {
+        return unexpected(std::move(target).error());
+    }
+    if (Expected<void, CommandError> image = requireImage(*target); !image)
+    {
+        return unexpected(std::move(image).error());
+    }
+    if (Expected<void, CommandError> pixel = checkPixel(*target, params.x, params.y); !pixel)
+    {
+        return unexpected(std::move(pixel).error());
+    }
+    const u32 radius = params.radius.value_or(0);
+    if (radius > 8)
+    {
+        return unexpected(CommandError::invalid("/radius", "must be 0 to 8"));
+    }
+    const UVec2 center(static_cast<u32>(params.x), static_cast<u32>(params.y));
+    const UVec2 low(center.x > radius ? center.x - radius : 0, center.y > radius ? center.y - radius : 0);
+    const UVec2 high = glm::min(center + radius, target->info.size - 1u);
+    return startReadback<ViewportSampleResult>(*target, ViewportChannel::Color, low, high - low + 1u,
+                                               &finishSample);
+}
+
+Expected<ViewportPickRectResult, CommandError> finishPickRect(CommandContext& context,
+                                                              ViewportReadback& readback, PickSelect select)
+{
+    EditorContext& editor = context.editor();
+    ViewportPickRectResult result;
+    std::vector<EntityGuid> guids;
+    for (const Entity entity : readback.entities)
+    {
+        if (editor.world().isAlive(entity))
+        {
+            result.entities.push_back(editor.entities().summary(entity));
+            guids.push_back(editor.entities().guidOf(entity));
+        }
+    }
+    if (!context.dryRun())
+    {
+        applySelection(editor.selection(), select, guids);
+    }
+    return result;
+}
+
+Expected<std::unique_ptr<CommandTask<ViewportPickRectResult>>, CommandError>
+viewportPickRect(CommandContext& context, const ViewportPickRectParams& params)
+{
+    Expected<Target, CommandError> target = findViewport(context, params.viewport);
+    if (!target)
+    {
+        return unexpected(std::move(target).error());
+    }
+    if (Expected<void, CommandError> select = checkEnum(params.select, PickSelect::Toggle, "/select");
+        !select)
+    {
+        return unexpected(std::move(select).error());
+    }
+    if (Expected<void, CommandError> image = requireImage(*target); !image)
+    {
+        return unexpected(std::move(image).error());
+    }
+    if (Expected<void, CommandError> pixel = checkPixel(*target, params.x, params.y); !pixel)
+    {
+        return unexpected(std::move(pixel).error());
+    }
+    if (!std::isfinite(params.width) || !std::isfinite(params.height) || params.width < 1.0f ||
+        params.height < 1.0f)
+    {
+        return unexpected(CommandError::invalid("", "width and height must be at least 1 pixel"));
+    }
+    // The rectangle is clipped to the image.
+    const UVec2 origin(static_cast<u32>(params.x), static_cast<u32>(params.y));
+    const Vec2 end =
+        glm::min(Vec2(params.x + params.width, params.y + params.height), Vec2(target->info.size));
+    const UVec2 extent = glm::max(UVec2(glm::ceil(end)) - origin, UVec2(1u));
+    return startReadback<ViewportPickRectResult>(*target, ViewportChannel::Entities, origin, extent,
+                                                 &finishPickRect, params.select.value_or(PickSelect::None));
+}
+
+Expected<ViewportEntry, CommandError> viewportCreate(CommandContext& context, const NoParams&)
+{
+    Expected<ViewportHost*, CommandError> host = requireViewports(context);
+    if (!host)
+    {
+        return unexpected(std::move(host).error());
+    }
+    if (context.dryRun())
+    {
+        const std::vector<ViewportInfo> viewports = (*host)->viewports();
+        const auto secondary =
+            std::count_if(viewports.begin(), viewports.end(), [](const ViewportInfo& info) {
+                return info.id != "scene" && info.kind == ViewportKind::Scene;
+            });
+        if (static_cast<u32>(secondary) >= kMaxSecondaryViewports)
+        {
+            return unexpected(CommandError::make(ErrorKind::LimitExceeded, "at most 3 extra viewports"));
+        }
+        Expected<Target, CommandError> scene = findViewport(context, std::nullopt);
+        if (!scene)
+        {
+            return unexpected(std::move(scene).error());
+        }
+        return entryOf(context, std::move(scene->info));
+    }
+    Expected<std::string, CommandError> id = (*host)->createViewport();
+    if (!id)
+    {
+        return unexpected(std::move(id).error());
+    }
+    Expected<Target, CommandError> created = findViewport(context, *id);
+    if (!created)
+    {
+        return unexpected(std::move(created).error());
+    }
+    return entryOf(context, std::move(created->info));
+}
+
+Expected<ViewportIdResult, CommandError> viewportClose(CommandContext& context, const ViewportParams& params)
+{
+    Expected<Target, CommandError> target = findViewport(context, params.viewport);
+    if (!target)
+    {
+        return unexpected(std::move(target).error());
+    }
+    if (target->info.id == "scene" || target->info.id == "game")
+    {
+        return unexpected(CommandError::make(ErrorKind::PreconditionFailed,
+                                             "the \"scene\" and \"game\" viewports cannot be closed"));
+    }
+    if (!context.dryRun())
+    {
+        if (Expected<void, CommandError> closed = target->host->closeViewport(target->info.id); !closed)
+        {
+            return unexpected(std::move(closed).error());
+        }
+    }
+    return ViewportIdResult{target->info.id};
+}
+
+Expected<ViewportSettingsResult, CommandError> setAspect(CommandContext& context,
+                                                         const ViewportAspectParams& params)
+{
+    Expected<Target, CommandError> target = findViewport(context, params.viewport);
+    if (!target)
+    {
+        return unexpected(std::move(target).error());
+    }
+    if (Expected<void, CommandError> aspect =
+            checkEnum(std::optional<ViewportAspect>(params.aspect), ViewportAspect::Fixed, "/aspect");
+        !aspect)
+    {
+        return unexpected(std::move(aspect).error());
+    }
+    ViewportSettings settings = target->info.settings;
+    settings.aspect = params.aspect;
+    settings.width = 0;
+    settings.height = 0;
+    if (params.aspect == ViewportAspect::Fixed)
+    {
+        if (!params.width || !params.height)
+        {
+            return unexpected(CommandError::invalid("", "\"fixed\" needs width and height"));
+        }
+        if (*params.width < kViewportMinResolution || *params.width > kViewportMaxWidth)
+        {
+            return unexpected(CommandError::invalid("/width", "must be 16 to 7,680"));
+        }
+        if (*params.height < kViewportMinResolution || *params.height > kViewportMaxHeight)
+        {
+            return unexpected(CommandError::invalid("/height", "must be 16 to 4,320"));
+        }
+        settings.width = *params.width;
+        settings.height = *params.height;
+    }
+    else if (params.width || params.height)
+    {
+        return unexpected(CommandError::invalid("", "width and height need the aspect \"fixed\""));
+    }
+    return applySettings(context, *target, settings);
+}
+
+Expected<void, CommandError> checkSlot(u32 slot)
+{
+    if (slot < 1 || slot > kCameraBookmarkSlots)
+    {
+        return unexpected(CommandError::invalid("/slot", "must be 1 to 9"));
+    }
+    return {};
+}
+
+Expected<ViewportCameraResult, CommandError> bookmarkSet(CommandContext& context,
+                                                         const CameraBookmarkParams& params)
+{
+    const u32 slot = params.slot.value_or(1);
+    if (Expected<void, CommandError> valid = checkSlot(slot); !valid)
+    {
+        return unexpected(std::move(valid).error());
+    }
+    Expected<Target, CommandError> target = findViewport(context, params.viewport, Needs::EditorCamera);
+    if (!target)
+    {
+        return unexpected(std::move(target).error());
+    }
+    if (!context.dryRun())
+    {
+        context.editor().view().setBookmark(slot, target->info.camera);
+    }
+    return cameraResult(target->info.id, target->info.camera);
+}
+
+Expected<ViewportCameraResult, CommandError> bookmarkGo(CommandContext& context,
+                                                        const CameraBookmarkParams& params)
+{
+    const u32 slot = params.slot.value_or(1);
+    if (Expected<void, CommandError> valid = checkSlot(slot); !valid)
+    {
+        return unexpected(std::move(valid).error());
+    }
+    Expected<Target, CommandError> target = findViewport(context, params.viewport, Needs::EditorCamera);
+    if (!target)
+    {
+        return unexpected(std::move(target).error());
+    }
+    const std::optional<ViewportCamera> camera = context.editor().view().bookmark(slot);
+    if (!camera)
+    {
+        return unexpected(
+            CommandError::make(ErrorKind::NotFound, "bookmark " + std::to_string(slot) + " is empty"));
+    }
+    return moveCamera(context, *target, *camera, params.animate);
+}
+
+Expected<RenderStatsResult, CommandError> renderStats(CommandContext& context, const ViewportParams& params)
+{
+    Expected<Target, CommandError> target = findViewport(context, params.viewport);
+    if (!target)
+    {
+        return unexpected(std::move(target).error());
+    }
+    Expected<ViewportRenderStats, CommandError> stats = target->host->renderStats(target->info.id);
+    if (!stats)
+    {
+        return unexpected(std::move(stats).error());
+    }
+    return RenderStatsResult{target->info.id, target->info.size.x, target->info.size.y, *stats};
+}
+
+Expected<RenderGpuInfoResult, CommandError> renderGpuInfo(CommandContext& context, const NoParams&)
+{
+    ViewportHost* host = context.editor().viewports();
+    if (host == nullptr)
+    {
+        return RenderGpuInfoResult{};
+    }
+    return RenderGpuInfoResult{true, host->gpuInfo()};
+}
+
+Expected<RenderDiagnosticsResult, CommandError> renderDiagnostics(CommandContext& context, const NoParams&)
+{
+    ViewportHost* host = context.editor().viewports();
+    if (host == nullptr)
+    {
+        return RenderDiagnosticsResult{};
+    }
+    const ViewportGpuInfo gpu = host->gpuInfo();
+    return RenderDiagnosticsResult{true, gpu.validation, gpu.validationErrors};
 }
 
 } // namespace
@@ -527,6 +1014,149 @@ void registerViewportCommands(CommandRegistry& registry)
         .flags = {.needsGpu = true},
         .mode = CommandMode::Any,
         .permission = PermissionClass::Edit,
+    });
+    registry.addAsync<&viewportPickRect>({
+        .name = "viewport.pick_rect",
+        .title = strings::kCommandViewportPickRectTitle,
+        .description = strings::kCommandViewportPickRectDescription,
+        .agentSummary = "Asynchronous: returns every entity drawn in a rectangle of viewport pixels (box "
+                        "select; hidden and locked entities are skipped, the rectangle is clipped to the "
+                        "image) and optionally changes the selection with them. Example: {\"x\": 100, \"y\": "
+                        "80, \"width\": 400, \"height\": 300, \"select\": \"replace\"}.",
+        .category = "Viewport",
+        .icon = "select",
+        .flags = {.needsGpu = true},
+        .mode = CommandMode::Any,
+        .permission = PermissionClass::Edit,
+    });
+    registry.addAsync<&viewportSample>({
+        .name = "viewport.sample",
+        .title = strings::kCommandViewportSampleTitle,
+        .description = strings::kCommandViewportSampleDescription,
+        .agentSummary = "Asynchronous: returns the displayed colour at a viewport pixel (sRGB RGBA from 0 to "
+                        "1, averaged over radius pixels around it) with its hue in degrees, saturation and "
+                        "value, to check what the scene looks like. Example: {\"viewport\": \"game\", \"x\": "
+                        "320, \"y\": 180, \"radius\": 2}.",
+        .category = "Viewport",
+        .icon = "colorize",
+        .flags = {.readOnly = true, .idempotent = true, .needsGpu = true},
+        .mode = CommandMode::Any,
+    });
+    registry.addAsync<&viewportScreenshot>({
+        .name = "viewport.screenshot",
+        .title = strings::kCommandViewportScreenshotTitle,
+        .description = strings::kCommandViewportScreenshotDescription,
+        .agentSummary = "Asynchronous: captures a viewport's image (the rendered scene with its overlays, "
+                        "without the editor UI) as a PNG at the viewport's size; give it a fixed resolution "
+                        "with viewport.set_aspect first for a repeatable size. Example: {\"viewport\": "
+                        "\"game\"}.",
+        .category = "Viewport",
+        .icon = "screenshot_monitor",
+        .flags = {.readOnly = true, .idempotent = true, .needsGpu = true},
+        .mode = CommandMode::Any,
+    });
+    registry.add<&viewportCreate>({
+        .name = "viewport.create",
+        .title = strings::kCommandViewportCreateTitle,
+        .description = strings::kCommandViewportCreateDescription,
+        .agentSummary = "Opens an extra Scene viewport (\"scene-2\" to \"scene-4\", at most three) with the "
+                        "camera and settings of \"scene\" and returns it; it renders fewer, smaller shadow "
+                        "cascades. Show it with its panel or give it a fixed resolution. Example: {}.",
+        .category = "Viewport",
+        .icon = "add_to_queue",
+        .flags = {.needsGpu = true},
+        .mode = CommandMode::Any,
+        .permission = PermissionClass::Edit,
+        .palette = true,
+    });
+    registry.add<&viewportClose>({
+        .name = "viewport.close",
+        .title = strings::kCommandViewportCloseTitle,
+        .description = strings::kCommandViewportCloseDescription,
+        .agentSummary =
+            "Closes an extra Scene viewport opened by viewport.create (\"scene\" and \"game\" stay). "
+            "Example: {\"viewport\": \"scene-2\"}.",
+        .category = "Viewport",
+        .icon = "remove_from_queue",
+        .flags = {.idempotent = true, .needsGpu = true},
+        .mode = CommandMode::Any,
+        .permission = PermissionClass::Edit,
+    });
+    registry.add<&setAspect>({
+        .name = "viewport.set_aspect",
+        .title = strings::kCommandViewportSetAspectTitle,
+        .description = strings::kCommandViewportSetAspectDescription,
+        .agentSummary =
+            "Sets the shape of a viewport's image inside its panel (letterboxed): free, 16:9, "
+            "16:10, 4:3, 21:9, 1:1, or fixed with width and height in pixels, which also renders "
+            "the viewport while its panel is hidden. Example: {\"viewport\": \"game\", \"aspect\": "
+            "\"fixed\", \"width\": 640, \"height\": 360}.",
+        .category = "Viewport",
+        .icon = "aspect_ratio",
+        .flags = {.idempotent = true, .needsGpu = true},
+        .mode = CommandMode::Any,
+        .permission = PermissionClass::Edit,
+    });
+    registry.add<&bookmarkSet>({
+        .name = "camera.bookmark_set",
+        .title = strings::kCommandCameraBookmarkSetTitle,
+        .description = strings::kCommandCameraBookmarkSetDescription,
+        .agentSummary = "Stores a Scene viewport's editor camera in bookmark slot 1 to 9 (Ctrl+Shift+1..9 in "
+                        "a viewport); bookmarks last until the scene is replaced. Example: {\"slot\": 1}.",
+        .category = "Viewport",
+        .icon = "bookmark_add",
+        .flags = {.idempotent = true, .needsGpu = true},
+        .mode = CommandMode::Any,
+        .permission = PermissionClass::Edit,
+    });
+    registry.add<&bookmarkGo>({
+        .name = "camera.bookmark_go",
+        .title = strings::kCommandCameraBookmarkGoTitle,
+        .description = strings::kCommandCameraBookmarkGoDescription,
+        .agentSummary = "Moves a Scene viewport's editor camera to bookmark slot 1 to 9 (Ctrl+1..9 in a "
+                        "viewport), animated unless animate is false; error 1200 for an empty slot. Example: "
+                        "{\"slot\": 1, \"animate\": false}.",
+        .category = "Viewport",
+        .icon = "bookmark",
+        .flags = {.idempotent = true, .needsGpu = true},
+        .mode = CommandMode::Any,
+        .permission = PermissionClass::Edit,
+    });
+    registry.add<&renderStats>({
+        .name = "render.stats",
+        .title = strings::kCommandRenderStatsTitle,
+        .description = strings::kCommandRenderStatsDescription,
+        .agentSummary =
+            "Returns what the renderer did in a viewport's last frame: frames rendered, RenderMesh "
+            "candidates, visible entities after culling, draw calls, triangles, shadow casters "
+            "and dropped lights. Render it first (viewport.screenshot or a shown panel). Example: "
+            "{\"viewport\": \"game\"}.",
+        .category = "Render",
+        .icon = "monitoring",
+        .flags = {.readOnly = true, .idempotent = true, .needsGpu = true},
+        .mode = CommandMode::Any,
+    });
+    registry.add<&renderGpuInfo>({
+        .name = "render.gpu_info",
+        .title = strings::kCommandRenderGpuInfoTitle,
+        .description = strings::kCommandRenderGpuInfoDescription,
+        .agentSummary = "Returns the GPU the editor renders with (name, driver, Vulkan version, software or "
+                        "discrete, bindless, validation), or available: false without one. Example: {}.",
+        .category = "Render",
+        .icon = "memory",
+        .flags = {.readOnly = true, .idempotent = true},
+        .mode = CommandMode::Any,
+    });
+    registry.add<&renderDiagnostics>({
+        .name = "render.diagnostics",
+        .title = strings::kCommandRenderDiagnosticsTitle,
+        .description = strings::kCommandRenderDiagnosticsDescription,
+        .agentSummary = "Returns whether Vulkan validation is on and how many validation errors the renderer "
+                        "caused (0 is required), or available: false without a GPU. Example: {}.",
+        .category = "Render",
+        .icon = "bug_report",
+        .flags = {.readOnly = true, .idempotent = true},
+        .mode = CommandMode::Any,
     });
 }
 

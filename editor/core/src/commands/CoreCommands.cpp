@@ -315,17 +315,22 @@ void reflectCoreCommandTypes(StructRegistry& structs)
             .field("shading", &ViewportSettings::shading)
             .field("wireframe", &ViewportSettings::wireframe)
             .field("grid", &ViewportSettings::grid)
-            .field("selectionOutline", &ViewportSettings::selectionOutline);
+            .field("selectionOutline", &ViewportSettings::selectionOutline)
+            .field("aspect", &ViewportSettings::aspect)
+            .field("width", &ViewportSettings::width)
+            .field("height", &ViewportSettings::height);
         reflectStruct<ViewportParams>("editor.ViewportParams", 1, structs)
             .field("viewport", &ViewportParams::viewport);
         reflectStruct<ViewportEntry>("editor.ViewportEntry", 1, structs)
             .field("id", &ViewportEntry::id)
+            .field("kind", &ViewportEntry::kind)
             .field("width", &ViewportEntry::width)
             .field("height", &ViewportEntry::height)
             .field("visible", &ViewportEntry::visible)
             .field("camera", &ViewportEntry::camera)
             .field("eye", &ViewportEntry::eye)
-            .field("settings", &ViewportEntry::settings);
+            .field("settings", &ViewportEntry::settings)
+            .field("sceneCamera", &ViewportEntry::sceneCamera);
         reflectStruct<ViewportListResult>("editor.ViewportListResult", 1, structs)
             .field("viewports", &ViewportListResult::viewports);
         reflectStruct<ViewportCameraResult>("editor.ViewportCameraResult", 1, structs)
@@ -383,6 +388,72 @@ void reflectCoreCommandTypes(StructRegistry& structs)
             .field("entity", &ViewportPickResult::entity)
             .field("index", &ViewportPickResult::index)
             .field("candidates", &ViewportPickResult::candidates);
+        reflectStruct<ViewportIdResult>("editor.ViewportIdResult", 1, structs)
+            .field("viewport", &ViewportIdResult::viewport);
+        const FieldMeta resolutionWidth{.min = 16.0, .max = 7680.0};
+        const FieldMeta resolutionHeight{.min = 16.0, .max = 4320.0};
+        reflectStruct<ViewportAspectParams>("editor.ViewportAspectParams", 1, structs)
+            .field("viewport", &ViewportAspectParams::viewport)
+            .field("aspect", &ViewportAspectParams::aspect)
+            .field("width", &ViewportAspectParams::width, resolutionWidth)
+            .field("height", &ViewportAspectParams::height, resolutionHeight);
+        const FieldMeta pixel{.min = 0.0, .max = 16384.0};
+        reflectStruct<ViewportSampleParams>("editor.ViewportSampleParams", 1, structs)
+            .field("viewport", &ViewportSampleParams::viewport)
+            .field("x", &ViewportSampleParams::x, pixel)
+            .field("y", &ViewportSampleParams::y, pixel)
+            .field("radius", &ViewportSampleParams::radius, {.min = 0.0, .max = 8.0});
+        reflectStruct<ViewportSampleResult>("editor.ViewportSampleResult", 1, structs)
+            .field("color", &ViewportSampleResult::color, {.hint = FieldHint::Color})
+            .field("hue", &ViewportSampleResult::hue, angle)
+            .field("saturation", &ViewportSampleResult::saturation)
+            .field("value", &ViewportSampleResult::value)
+            .field("pixels", &ViewportSampleResult::pixels);
+        reflectStruct<ViewportPickRectParams>("editor.ViewportPickRectParams", 1, structs)
+            .field("viewport", &ViewportPickRectParams::viewport)
+            .field("x", &ViewportPickRectParams::x, pixel)
+            .field("y", &ViewportPickRectParams::y, pixel)
+            .field("width", &ViewportPickRectParams::width, {.min = 1.0, .max = 16384.0})
+            .field("height", &ViewportPickRectParams::height, {.min = 1.0, .max = 16384.0})
+            .field("select", &ViewportPickRectParams::select);
+        reflectStruct<ViewportPickRectResult>("editor.ViewportPickRectResult", 1, structs)
+            .field("entities", &ViewportPickRectResult::entities);
+        reflectStruct<CameraBookmarkParams>("editor.CameraBookmarkParams", 1, structs)
+            .field("viewport", &CameraBookmarkParams::viewport)
+            .field("slot", &CameraBookmarkParams::slot, {.min = 1.0, .max = 9.0})
+            .field("animate", &CameraBookmarkParams::animate);
+        reflectStruct<ViewportRenderStats>("editor.ViewportRenderStats", 1, structs)
+            .field("frames", &ViewportRenderStats::frames)
+            .field("candidates", &ViewportRenderStats::candidates)
+            .field("visible", &ViewportRenderStats::visible)
+            .field("drawCalls", &ViewportRenderStats::drawCalls)
+            .field("triangles", &ViewportRenderStats::triangles)
+            .field("shadowCasters", &ViewportRenderStats::shadowCasters)
+            .field("shadowDrawCalls", &ViewportRenderStats::shadowDrawCalls)
+            .field("lightsDropped", &ViewportRenderStats::lightsDropped);
+        reflectStruct<RenderStatsResult>("editor.RenderStatsResult", 1, structs)
+            .field("viewport", &RenderStatsResult::viewport)
+            .field("width", &RenderStatsResult::width)
+            .field("height", &RenderStatsResult::height)
+            .field("stats", &RenderStatsResult::stats);
+        reflectStruct<ViewportGpuInfo>("editor.ViewportGpuInfo", 1, structs)
+            .field("name", &ViewportGpuInfo::name)
+            .field("driver", &ViewportGpuInfo::driver)
+            .field("vendorId", &ViewportGpuInfo::vendorId)
+            .field("deviceId", &ViewportGpuInfo::deviceId)
+            .field("apiVersion", &ViewportGpuInfo::apiVersion)
+            .field("discrete", &ViewportGpuInfo::discrete)
+            .field("software", &ViewportGpuInfo::software)
+            .field("bindless", &ViewportGpuInfo::bindless)
+            .field("validation", &ViewportGpuInfo::validation)
+            .field("validationErrors", &ViewportGpuInfo::validationErrors);
+        reflectStruct<RenderGpuInfoResult>("editor.RenderGpuInfoResult", 1, structs)
+            .field("available", &RenderGpuInfoResult::available)
+            .field("gpu", &RenderGpuInfoResult::gpu);
+        reflectStruct<RenderDiagnosticsResult>("editor.RenderDiagnosticsResult", 1, structs)
+            .field("available", &RenderDiagnosticsResult::available)
+            .field("validation", &RenderDiagnosticsResult::validation)
+            .field("validationErrors", &RenderDiagnosticsResult::validationErrors);
 
         reflectStruct<SettingsGetParams>("editor.SettingsGetParams", 1, structs)
             .field("type", &SettingsGetParams::type);

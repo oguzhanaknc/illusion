@@ -128,7 +128,7 @@ std::optional<ViewportCamera> aimViewportCamera(const ViewportCamera& camera, Ve
     return out;
 }
 
-ViewportPoint projectToViewport(const ViewportCamera& camera, UVec2 size, Vec3 point) noexcept
+ViewportPoint projectToViewport(const Mat4& viewProjection, UVec2 size, Vec3 point) noexcept
 {
     ViewportPoint out;
     if (size.x == 0 || size.y == 0)
@@ -137,8 +137,7 @@ ViewportPoint projectToViewport(const ViewportCamera& camera, UVec2 size, Vec3 p
     }
     const f32 width = static_cast<f32>(size.x);
     const f32 height = static_cast<f32>(size.y);
-    const Vec4 clip =
-        viewportProjectionMatrix(camera, width / height) * viewportViewMatrix(camera) * Vec4(point, 1.0f);
+    const Vec4 clip = viewProjection * Vec4(point, 1.0f);
     if (!(clip.w > 0.0f))
     {
         return out;
@@ -150,6 +149,63 @@ ViewportPoint projectToViewport(const ViewportCamera& camera, UVec2 size, Vec3 p
     out.inside = out.inFront && out.pixel.x >= 0.0f && out.pixel.x < width && out.pixel.y >= 0.0f &&
                  out.pixel.y < height;
     return out;
+}
+
+ViewportPoint projectToViewport(const ViewportCamera& camera, UVec2 size, Vec3 point) noexcept
+{
+    if (size.x == 0 || size.y == 0)
+    {
+        return {};
+    }
+    const f32 aspect = static_cast<f32>(size.x) / static_cast<f32>(size.y);
+    return projectToViewport(viewportProjectionMatrix(camera, aspect) * viewportViewMatrix(camera), size,
+                             point);
+}
+
+UVec2 viewportImageSize(UVec2 panel, const ViewportSettings& settings) noexcept
+{
+    if (panel.x == 0 || panel.y == 0)
+    {
+        return UVec2(0);
+    }
+    f32 ratio = 0.0f;
+    switch (settings.aspect)
+    {
+    case ViewportAspect::Free:
+        return panel;
+    case ViewportAspect::Wide16x9:
+        ratio = 16.0f / 9.0f;
+        break;
+    case ViewportAspect::Wide16x10:
+        ratio = 16.0f / 10.0f;
+        break;
+    case ViewportAspect::Standard4x3:
+        ratio = 4.0f / 3.0f;
+        break;
+    case ViewportAspect::Ultrawide21x9:
+        ratio = 21.0f / 9.0f;
+        break;
+    case ViewportAspect::Square:
+        ratio = 1.0f;
+        break;
+    case ViewportAspect::Fixed:
+        if (settings.width != 0 && settings.height != 0)
+        {
+            return UVec2(settings.width, settings.height);
+        }
+        return panel;
+    }
+    if (ratio == 0.0f)
+    {
+        return panel;
+    }
+    const f32 width = static_cast<f32>(panel.x);
+    const f32 height = static_cast<f32>(panel.y);
+    if (width / height > ratio)
+    {
+        return UVec2(std::max(static_cast<u32>(height * ratio + 0.5f), 1u), panel.y);
+    }
+    return UVec2(panel.x, std::max(static_cast<u32>(width / ratio + 0.5f), 1u));
 }
 
 } // namespace illusion::editor

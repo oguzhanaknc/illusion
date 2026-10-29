@@ -167,8 +167,11 @@ struct EditorShell::Impl
     std::unique_ptr<detail::Outliner> outliner;
     std::unique_ptr<detail::Inspector> inspector;
     std::unique_ptr<detail::SceneView> sceneView;
+    std::unique_ptr<detail::SceneView> gameView;
+    std::vector<std::unique_ptr<detail::SceneView>> secondaryViews;
+    u64 secondaryVersion = ~u64{0}; // ViewportHost::viewportsVersion() of secondaryViews
     bool viewportNavigating =
-        false; // the Scene panel moved its camera last frame (fly keys are not shortcuts)
+        false; // a viewport panel moved its camera last frame (fly keys are not shortcuts)
     std::unique_ptr<detail::Console> console;
     std::unique_ptr<detail::History> history;
     std::unique_ptr<detail::Agents> agentsPanel;

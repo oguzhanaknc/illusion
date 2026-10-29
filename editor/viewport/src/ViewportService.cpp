@@ -17,6 +17,7 @@
 #include <illusion/render/RenderAssets.hpp>
 #include <illusion/render/RenderDevice.hpp>
 #include <illusion/render/RenderResources.hpp>
+#include <illusion/render/SceneComponents.hpp>
 #include <illusion/render/SceneRenderer.hpp>
 
 #include <algorithm>
@@ -34,6 +35,13 @@ constexpr u32 kRetireFrames = 4;
 constexpr u32 kOutlineRadius = 2;
 // Repeated cycling picks within this many pixels count as the same spot.
 constexpr f32 kCycleDistance = 2.0f;
+constexpr std::string_view kSceneId = "scene";
+constexpr std::string_view kGameId = "game";
+// Shadows of the secondary viewports.
+constexpr u32 kSecondaryCascades = 2;
+constexpr u32 kSecondaryShadowResolution = 1024;
+// Marks picks and readbacks of a closed viewport.
+constexpr usize kClosed = ~usize{0};
 
 RenderDebugView debugViewOf(ViewportShading shading) noexcept
 {
@@ -114,6 +122,7 @@ struct ViewportService::Impl
     struct Viewport
     {
         std::string id;
+        ViewportKind kind = ViewportKind::Scene;
         EditorCamera camera;
         ViewportSettings settings;
         ViewportStyle style;
@@ -129,6 +138,23 @@ struct ViewportService::Impl
         Mat4 viewProjection{1.0f}; // of the last render
         Vec2 lastPickPixel{-1000.0f};
         Entity lastPick{};
+        Entity sceneCamera{}; // the Camera a Game viewport looked through last
+        u32 frames = 0;
+        RenderStats renderStats;
+    };
+
+    struct Readback
+    {
+        u64 ticket = 0;
+        usize viewport = 0;
+        ViewportChannel channel = ViewportChannel::Color;
+        UVec2 origin{0}; // image pixels
+        UVec2 extent{0};
+        bool submitted = false;
+        u64 readback = 0;
+        UVec2 readExtent{0}; // texels copied
+        UVec2 size{0};       // image size when submitted
+        std::optional<Expected<ViewportReadback, CommandError>> result;
     };
 
     struct Pick
@@ -178,8 +204,10 @@ struct ViewportService::Impl
     nvrhi::CommandListHandle commands;
     std::vector<Viewport> viewports;
     std::vector<Pick> picks;
+    std::vector<Readback> reads;
     std::vector<Retired> retired;
     u64 nextTicket = 1;
+    u64 viewportsVersion = 0;
     ViewportServiceStats stats;
     // Scratch, kept to avoid allocating every frame.
     std::vector<u64> hiddenBits;
@@ -187,8 +215,16 @@ struct ViewportService::Impl
     std::vector<EntityIdTexel> texels;
     std::vector<Entity> candidates;
     std::vector<std::pair<f32, Entity>> behind;
+    std::vector<u8> colorScratch;
 
     Viewport* find(std::string_view id) noexcept
+    {
+        const auto found = std::find_if(viewports.begin(), viewports.end(),
+                                        [&](const Viewport& viewport) { return viewport.id == id; });
+        return found != viewports.end() ? &*found : nullptr;
+    }
+
+    const Viewport* find(std::string_view id) const noexcept
     {
         const auto found = std::find_if(viewports.begin(), viewports.end(),
                                         [&](const Viewport& viewport) { return viewport.id == id; });
@@ -200,13 +236,25 @@ struct ViewportService::Impl
         return CommandError::make(ErrorKind::NotFound, "no viewport '" + std::string(id) + "'");
     }
 
-    bool addViewport(std::string id)
+    // Adds a viewport; secondary ones render fewer and smaller shadow cascades.
+    bool addViewport(std::string id, ViewportKind kind, bool secondary)
     {
         Viewport viewport;
         viewport.id = std::move(id);
+        viewport.kind = kind;
+        if (kind == ViewportKind::Game)
+        {
+            viewport.settings.grid = false;
+            viewport.settings.selectionOutline = false;
+        }
         SceneRendererDesc desc;
         desc.colorFormat = kColorFormat;
         desc.entityIds = true;
+        if (secondary)
+        {
+            desc.shadows.cascadeCount = kSecondaryCascades;
+            desc.shadows.resolution = kSecondaryShadowResolution;
+        }
         viewport.renderer = SceneRenderer::create(device, resources, desc);
         viewport.overlays = detail::ViewportOverlays::create(device, kColorFormat);
         if (!viewport.renderer || !viewport.overlays)
@@ -285,20 +333,62 @@ struct ViewportService::Impl
         return !editor.view().hidden(guid) && !editor.view().locked(guid);
     }
 
-    void renderViewport(Viewport& viewport)
+    // The view of @p viewport for an image of @p aspect: its editor camera (with @p animated, where the
+    // camera is now rather than where it goes), or the scene's main Camera (std::nullopt without one).
+    std::optional<RenderView> viewOf(const Viewport& viewport, f32 aspect, bool animated)
     {
-        ILL_PROFILE_SCOPE();
-        if (!ensureTarget(viewport))
+        if (viewport.kind == ViewportKind::Game)
         {
-            return;
+            World& world = editor.world();
+            const Entity entity = findMainCamera(world);
+            if (entity.isNull())
+            {
+                return std::nullopt;
+            }
+            return RenderView::fromCamera(world.get<Transform>(entity), world.get<Camera>(entity), aspect);
         }
-        const ViewportCamera& camera = viewport.camera.camera();
-        const f32 aspect = static_cast<f32>(viewport.colorSize.x) / static_cast<f32>(viewport.colorSize.y);
+        const ViewportCamera& camera = animated ? viewport.camera.camera() : viewport.camera.target();
         RenderView view;
         view.view = viewportViewMatrix(camera);
         view.projection = viewportProjectionMatrix(camera, aspect);
         view.position = viewportEye(camera);
-        view.hiddenEntities = hiddenBits;
+        return view;
+    }
+
+    static f32 aspectOf(UVec2 size) noexcept
+    {
+        return size.x != 0 && size.y != 0 ? static_cast<f32>(size.x) / static_cast<f32>(size.y)
+                                          : 16.0f / 9.0f;
+    }
+
+    // Renders @p viewport; false when there is nothing to render (no size, or no Camera for a Game view).
+    bool renderViewport(Viewport& viewport)
+    {
+        ILL_PROFILE_SCOPE();
+        if (viewport.kind == ViewportKind::Game)
+        {
+            viewport.sceneCamera = findMainCamera(editor.world());
+            if (viewport.sceneCamera.isNull())
+            {
+                return false;
+            }
+        }
+        if (!ensureTarget(viewport))
+        {
+            return false;
+        }
+        const ViewportCamera& camera = viewport.camera.camera();
+        std::optional<RenderView> found = viewOf(viewport, aspectOf(viewport.colorSize), true);
+        if (!found)
+        {
+            return false;
+        }
+        RenderView& view = *found;
+        // The user's hidden entities are a Scene view setting; the game view shows what the game shows.
+        if (viewport.kind == ViewportKind::Scene)
+        {
+            view.hiddenEntities = hiddenBits;
+        }
         viewport.renderer->setDebugView(debugViewOf(viewport.settings.shading));
         (void)viewport.renderer->setWireframeOverlay(viewport.settings.wireframe);
 
@@ -306,7 +396,7 @@ struct ViewportService::Impl
         viewport.renderer->render(commands, viewport.color, editor.world(), view, &jobs);
         const RenderViewTargets& targets = viewport.renderer->viewTargets();
         viewport.viewProjection = targets.unjitteredViewProjection;
-        if (viewport.settings.grid)
+        if (viewport.settings.grid && viewport.kind == ViewportKind::Scene)
         {
             (void)viewport.overlays->drawGrid(
                 commands, viewport.color, targets,
@@ -319,7 +409,10 @@ struct ViewportService::Impl
         }
         commands->close();
         device.device()->executeCommandList(commands);
+        viewport.renderStats = viewport.renderer->stats();
+        ++viewport.frames;
         ++stats.rendered;
+        return true;
     }
 
     // Copies the ID texels around each new pick of @p index (after its render was submitted).
@@ -411,6 +504,141 @@ struct ViewportService::Impl
             ViewportHit{candidates[index], index, static_cast<u32>(candidates.size())}));
     }
 
+    // Copies the regions of the new readbacks of @p index (after its render was submitted).
+    void submitReads(usize index, bool rendered)
+    {
+        Viewport& viewport = viewports[index];
+        const RenderViewTargets& targets = viewport.renderer->viewTargets();
+        for (Readback& read : reads)
+        {
+            if (read.viewport != index || read.submitted || read.result)
+            {
+                continue;
+            }
+            if (!rendered)
+            {
+                read.result.emplace(unexpected(CommandError::make(
+                    ErrorKind::PreconditionFailed, viewport.kind == ViewportKind::Game
+                                                       ? "the scene has no active Camera for the game view"
+                                                       : "the viewport has no image")));
+                continue;
+            }
+            const UVec2 size = viewport.colorSize;
+            if (read.origin.x >= size.x || read.origin.y >= size.y)
+            {
+                read.result.emplace(unexpected(
+                    CommandError::make(ErrorKind::PreconditionFailed, "the viewport was resized")));
+                continue;
+            }
+            const UVec2 extent = glm::min(read.extent, size - read.origin);
+            std::optional<u64> ticket;
+            UVec2 readExtent = extent;
+            if (read.channel == ViewportChannel::Color)
+            {
+                ticket = readbacks->request(viewport.color, read.origin, extent);
+            }
+            else
+            {
+                if (targets.ids == nullptr || targets.outputSize.x == 0 || targets.renderSize.x == 0)
+                {
+                    read.result.emplace(unexpected(
+                        CommandError::make(ErrorKind::Internal, "the viewport has no entity ids")));
+                    continue;
+                }
+                const Vec2 scale = Vec2(targets.renderSize) / Vec2(targets.outputSize);
+                const UVec2 low = glm::min(UVec2(Vec2(read.origin) * scale), targets.renderSize - 1u);
+                const UVec2 high = glm::clamp(UVec2(glm::ceil(Vec2(read.origin + extent) * scale)), low + 1u,
+                                              targets.renderSize);
+                readExtent = high - low;
+                ticket = readbacks->request(targets.ids, low, readExtent);
+            }
+            if (!ticket)
+            {
+                continue; // the ring is full: try again after the next render
+            }
+            read.submitted = true;
+            read.readback = *ticket;
+            read.extent = extent;
+            read.readExtent = readExtent;
+            read.size = size;
+        }
+    }
+
+    void finishRead(Readback& read, std::span<const EntityIdTexel> ids)
+    {
+        ViewportReadback out;
+        out.size = read.size;
+        out.origin = read.origin;
+        out.extent = read.extent;
+        if (read.channel == ViewportChannel::Color)
+        {
+            out.color = std::move(colorScratch);
+            colorScratch = {};
+        }
+        else
+        {
+            for (const EntityIdTexel& texel : ids)
+            {
+                if (texel.index != ~0u)
+                {
+                    out.entities.push_back(Entity{texel.index, texel.generation});
+                }
+            }
+            std::sort(out.entities.begin(), out.entities.end(), [](Entity a, Entity b) {
+                return a.index < b.index || (a.index == b.index && a.generation < b.generation);
+            });
+            out.entities.erase(std::unique(out.entities.begin(), out.entities.end()), out.entities.end());
+            std::erase_if(out.entities, [&](Entity entity) { return !pickable(entity); });
+        }
+        read.result.emplace(std::move(out));
+    }
+
+    void readReads(bool block)
+    {
+        for (Readback& read : reads)
+        {
+            if (!read.submitted || read.result)
+            {
+                continue;
+            }
+            const usize count = static_cast<usize>(read.readExtent.x) * read.readExtent.y;
+            ReadbackStatus status = ReadbackStatus::Invalid;
+            if (read.channel == ViewportChannel::Color)
+            {
+                colorScratch.resize(count * 4);
+                status = readbacks->read(read.readback, std::as_writable_bytes(std::span<u8>(colorScratch)),
+                                         block);
+            }
+            else
+            {
+                texels.resize(count);
+                status = readbacks->read(read.readback,
+                                         std::as_writable_bytes(std::span<EntityIdTexel>(texels)), block);
+            }
+            if (status == ReadbackStatus::Ready)
+            {
+                finishRead(read, texels);
+            }
+            else if (status == ReadbackStatus::Invalid)
+            {
+                read.result.emplace(unexpected(
+                    CommandError::make(ErrorKind::Internal, "the viewport could not be read back")));
+            }
+        }
+    }
+
+    // True while @p index has picks or readbacks that wait for a render.
+    [[nodiscard]] bool waiting(usize index) const noexcept
+    {
+        return std::any_of(picks.begin(), picks.end(),
+                           [&](const Pick& pick) {
+                               return pick.viewport == index && !pick.submitted && !pick.result;
+                           }) ||
+               std::any_of(reads.begin(), reads.end(), [&](const Readback& read) {
+                   return read.viewport == index && !read.submitted && !read.result;
+               });
+    }
+
     void readPicks(bool block)
     {
         for (Pick& pick : picks)
@@ -469,7 +697,9 @@ std::unique_ptr<ViewportService> ViewportService::create(RenderDevice& device, E
     auto impl = std::make_unique<Impl>(device, editor, ui);
     impl->readbacks = ReadbackRing::create(device, 4);
     impl->commands = device.device()->createCommandList();
-    if (!impl->readbacks || !impl->commands || !impl->addViewport("scene"))
+    if (!impl->readbacks || !impl->commands ||
+        !impl->addViewport(std::string(kSceneId), ViewportKind::Scene, false) ||
+        !impl->addViewport(std::string(kGameId), ViewportKind::Game, false))
     {
         ILL_LOG_ERROR("editor", "cannot create the viewport renderer");
         return nullptr;
@@ -483,26 +713,35 @@ void ViewportService::render(bool uiShown)
     Impl& impl = *m_impl;
     impl.stats = {};
     World& world = impl.editor.world();
+    impl.streamer.update();
     impl.cache.update();
     impl.resolver.update(world, &impl.jobs);
     updateTransformHierarchy(world, impl.hierarchy, &impl.jobs);
     impl.buildHidden();
     impl.buildSelection();
+    const bool loading = impl.resolver.statistics().pending != 0 || impl.cache.loading() != 0;
     for (usize i = 0; i < impl.viewports.size(); ++i)
     {
         Impl::Viewport& viewport = impl.viewports[i];
-        const bool picking = std::any_of(impl.picks.begin(), impl.picks.end(), [&](const Impl::Pick& pick) {
-            return pick.viewport == i && !pick.submitted && !pick.result;
-        });
+        const bool waiting = impl.waiting(i);
         viewport.visible = viewport.drawn;
-        if ((uiShown && viewport.drawn) || picking)
+        if ((uiShown && viewport.drawn) || waiting)
         {
-            impl.renderViewport(viewport);
-            impl.submitPicks(i);
+            const bool rendered = impl.renderViewport(viewport);
+            // Picks and readbacks wait until the image shows every asset (they render again next frame).
+            if (!loading)
+            {
+                if (rendered)
+                {
+                    impl.submitPicks(i);
+                }
+                impl.submitReads(i, rendered);
+            }
         }
         viewport.drawn = false;
     }
     impl.readPicks(false);
+    impl.readReads(false);
     for (Impl::Retired& retired : impl.retired)
     {
         ++retired.frames;
@@ -518,6 +757,9 @@ void ViewportService::render(bool uiShown)
     impl.stats.picksPending =
         static_cast<u32>(std::count_if(impl.picks.begin(), impl.picks.end(),
                                        [](const Impl::Pick& pick) { return !pick.result.has_value(); }));
+    impl.stats.readbacksPending =
+        static_cast<u32>(std::count_if(impl.reads.begin(), impl.reads.end(),
+                                       [](const Impl::Readback& read) { return !read.result.has_value(); }));
 }
 
 void ViewportService::waitIdle()
@@ -526,6 +768,7 @@ void ViewportService::waitIdle()
     impl.cache.waitIdle();
     impl.resolver.waitIdle(impl.editor.world(), &impl.jobs);
     impl.readPicks(true);
+    impl.readReads(true);
 }
 
 const ViewportServiceStats& ViewportService::stats() const noexcept
@@ -547,12 +790,28 @@ nvrhi::ITexture* ViewportService::target(std::string_view id) const noexcept
 
 std::vector<ViewportInfo> ViewportService::viewports() const
 {
+    Impl& impl = *m_impl;
     std::vector<ViewportInfo> out;
-    for (const Impl::Viewport& viewport : m_impl->viewports)
+    for (const Impl::Viewport& viewport : impl.viewports)
     {
-        const ViewportCamera& camera = viewport.camera.target();
-        out.push_back(ViewportInfo{viewport.id, viewport.resize.current(), viewport.visible, camera,
-                                   viewportEye(camera), viewport.settings});
+        ViewportInfo info;
+        info.id = viewport.id;
+        info.kind = viewport.kind;
+        info.size = viewport.resize.current();
+        info.visible = viewport.visible;
+        info.camera = viewport.camera.target();
+        info.settings = viewport.settings;
+        if (const std::optional<RenderView> view = impl.viewOf(viewport, Impl::aspectOf(info.size), false))
+        {
+            info.eye = view->position;
+            info.view = view->view;
+            info.projection = view->projection;
+        }
+        if (viewport.kind == ViewportKind::Game)
+        {
+            info.sceneCamera = findMainCamera(impl.editor.world());
+        }
+        out.push_back(std::move(info));
     }
     return out;
 }
@@ -577,7 +836,16 @@ Expected<void, CommandError> ViewportService::setSettings(std::string_view id,
     {
         return unexpected(Impl::notFound(id));
     }
+    const bool wasFixed = viewport->settings.aspect == ViewportAspect::Fixed;
     viewport->settings = settings;
+    if (settings.aspect == ViewportAspect::Fixed)
+    {
+        viewport->resize.reset(UVec2(settings.width, settings.height));
+    }
+    else if (wasFixed)
+    {
+        viewport->resize.reset(UVec2(0)); // the panel gives the size again
+    }
     return {};
 }
 
@@ -689,16 +957,195 @@ ViewportFrame ViewportService::frame(std::string_view id, UVec2 size, const View
     viewport->time += static_cast<f64>(delta);
     viewport->style = style;
     const bool dragging = input.buttons[0] || input.buttons[1] || input.buttons[2];
-    (void)viewport->resize.update(size, viewport->time, dragging);
-    const bool navigating = viewport->camera.update(input, viewport->resize.current());
-    viewport->drawn = true;
-    if (!impl.ensureTarget(*viewport))
+    if (viewport->settings.aspect != ViewportAspect::Fixed)
     {
-        return ViewportFrame{0, UVec2(0), navigating, viewport->settings,
-                             viewport->camera.target().projection};
+        (void)viewport->resize.update(viewportImageSize(size, viewport->settings), viewport->time, dragging);
     }
-    return ViewportFrame{viewport->texture, viewport->colorSize, navigating, viewport->settings,
-                         viewport->camera.target().projection};
+    const bool scene = viewport->kind == ViewportKind::Scene;
+    const bool navigating = scene && viewport->camera.update(input, viewport->resize.current());
+    viewport->drawn = true;
+    ViewportFrame out;
+    out.navigating = navigating;
+    out.settings = viewport->settings;
+    out.projection = viewport->camera.target().projection;
+    out.kind = viewport->kind;
+    out.hasCamera = scene || !findMainCamera(impl.editor.world()).isNull();
+    if (out.hasCamera && impl.ensureTarget(*viewport))
+    {
+        out.texture = viewport->texture;
+        out.size = viewport->colorSize;
+    }
+    return out;
+}
+
+Expected<std::string, CommandError> ViewportService::createViewport()
+{
+    Impl& impl = *m_impl;
+    for (u32 number = 2; number < 2 + kMaxSecondaryViewports; ++number)
+    {
+        std::string id = std::string(kSceneId) + "-" + std::to_string(number);
+        if (impl.find(id) != nullptr)
+        {
+            continue;
+        }
+        const Impl::Viewport& scene = *impl.find(kSceneId);
+        const ViewportCamera camera = scene.camera.target();
+        const ViewportSettings settings = scene.settings;
+        if (!impl.addViewport(id, ViewportKind::Scene, true))
+        {
+            return unexpected(CommandError::make(ErrorKind::Internal, "cannot create the viewport renderer"));
+        }
+        Impl::Viewport& created = impl.viewports.back();
+        created.camera.set(camera, false);
+        created.settings = settings;
+        if (settings.aspect == ViewportAspect::Fixed)
+        {
+            created.resize.reset(UVec2(settings.width, settings.height));
+        }
+        ++impl.viewportsVersion;
+        return id;
+    }
+    return unexpected(CommandError::make(ErrorKind::LimitExceeded, "at most 3 extra viewports can be open"));
+}
+
+Expected<void, CommandError> ViewportService::closeViewport(std::string_view id)
+{
+    Impl& impl = *m_impl;
+    Impl::Viewport* viewport = impl.find(id);
+    if (viewport == nullptr)
+    {
+        return unexpected(Impl::notFound(id));
+    }
+    if (id == kSceneId || id == kGameId)
+    {
+        return unexpected(
+            CommandError::make(ErrorKind::PreconditionFailed, "this viewport cannot be closed"));
+    }
+    const usize index = static_cast<usize>(viewport - impl.viewports.data());
+    // The renderer goes once the GPU is done with it; the UI may still draw the texture this frame.
+    impl.device.waitIdle();
+    // Copies already in the ring finish now: a ticket holds its slot until it is read.
+    impl.readPicks(true);
+    impl.readReads(true);
+    if (viewport->color)
+    {
+        impl.retired.push_back(Impl::Retired{viewport->color, viewport->texture, 0});
+    }
+    const auto closed = [](auto& work) {
+        work.result.emplace(unexpected(CommandError::make(ErrorKind::NotFound, "the viewport was closed")));
+        work.viewport = kClosed;
+    };
+    for (Impl::Pick& pick : impl.picks)
+    {
+        if (pick.viewport == index && !pick.result)
+        {
+            closed(pick);
+        }
+        else if (pick.viewport != kClosed && pick.viewport > index)
+        {
+            --pick.viewport;
+        }
+    }
+    for (Impl::Readback& read : impl.reads)
+    {
+        if (read.viewport == index && !read.result)
+        {
+            closed(read);
+        }
+        else if (read.viewport != kClosed && read.viewport > index)
+        {
+            --read.viewport;
+        }
+    }
+    impl.viewports.erase(impl.viewports.begin() + static_cast<std::ptrdiff_t>(index));
+    ++impl.viewportsVersion;
+    return {};
+}
+
+u64 ViewportService::viewportsVersion() const noexcept
+{
+    return m_impl->viewportsVersion;
+}
+
+Expected<u64, CommandError> ViewportService::requestReadback(std::string_view id, ViewportChannel channel,
+                                                             UVec2 origin, UVec2 extent)
+{
+    Impl& impl = *m_impl;
+    Impl::Viewport* viewport = impl.find(id);
+    if (viewport == nullptr)
+    {
+        return unexpected(Impl::notFound(id));
+    }
+    if (extent.x == 0 || extent.y == 0)
+    {
+        return unexpected(CommandError::invalid("", "the region is empty"));
+    }
+    Impl::Readback read;
+    read.ticket = impl.nextTicket++;
+    read.viewport = static_cast<usize>(viewport - impl.viewports.data());
+    read.channel = channel;
+    read.origin = origin;
+    read.extent = extent;
+    impl.reads.push_back(std::move(read));
+    return impl.reads.back().ticket;
+}
+
+std::optional<Expected<ViewportReadback, CommandError>> ViewportService::readback(u64 ticket)
+{
+    Impl& impl = *m_impl;
+    const auto found = std::find_if(impl.reads.begin(), impl.reads.end(),
+                                    [&](const Impl::Readback& read) { return read.ticket == ticket; });
+    if (found == impl.reads.end())
+    {
+        return Expected<ViewportReadback, CommandError>(
+            unexpected(CommandError::make(ErrorKind::NotFound, "unknown readback")));
+    }
+    if (!found->result)
+    {
+        return std::nullopt;
+    }
+    std::optional<Expected<ViewportReadback, CommandError>> result = std::move(found->result);
+    impl.reads.erase(found);
+    return result;
+}
+
+Expected<ViewportRenderStats, CommandError> ViewportService::renderStats(std::string_view id) const
+{
+    const Impl::Viewport* viewport = m_impl->find(id);
+    if (viewport == nullptr)
+    {
+        return unexpected(Impl::notFound(id));
+    }
+    const RenderStats& stats = viewport->renderStats;
+    return ViewportRenderStats{viewport->frames,
+                               stats.candidates,
+                               stats.visible,
+                               stats.drawCalls,
+                               static_cast<u32>(std::min<u64>(stats.triangles, ~u32{0})),
+                               stats.shadowCasters,
+                               stats.shadowDrawCalls,
+                               stats.lightsDropped};
+}
+
+ViewportGpuInfo ViewportService::gpuInfo() const
+{
+    const RenderDevice& device = m_impl->device;
+    const GpuInfo& gpu = device.gpu();
+    ViewportGpuInfo out;
+    out.name = gpu.name;
+    out.driver = gpu.driverName;
+    out.vendorId = gpu.vendorId;
+    out.deviceId = gpu.deviceId;
+    // VK_MAKE_API_VERSION: variant 3 bits, major 7, minor 10, patch 12.
+    out.apiVersion = std::to_string((gpu.apiVersion >> 22u) & 0x7Fu) + "." +
+                     std::to_string((gpu.apiVersion >> 12u) & 0x3FFu) + "." +
+                     std::to_string(gpu.apiVersion & 0xFFFu);
+    out.discrete = gpu.discrete;
+    out.software = gpu.software;
+    out.bindless = gpu.bindless;
+    out.validation = device.isValidationEnabled();
+    out.validationErrors = device.validationErrorCount();
+    return out;
 }
 
 } // namespace illusion::editor::viewport

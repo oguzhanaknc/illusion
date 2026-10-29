@@ -40,26 +40,6 @@ Expected<void, CommandError> checkLayoutName(std::string_view name)
     return {};
 }
 
-std::string encodeBase64(std::string_view bytes)
-{
-    constexpr std::string_view kAlphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
-    std::string out;
-    out.reserve((bytes.size() + 2) / 3 * 4);
-    for (usize i = 0; i < bytes.size(); i += 3)
-    {
-        const usize left = bytes.size() - i;
-        const u32 a = static_cast<u8>(bytes[i]);
-        const u32 b = left > 1 ? static_cast<u8>(bytes[i + 1]) : 0u;
-        const u32 c = left > 2 ? static_cast<u8>(bytes[i + 2]) : 0u;
-        const u32 triple = (a << 16) | (b << 8) | c;
-        out += kAlphabet[(triple >> 18) & 63];
-        out += kAlphabet[(triple >> 12) & 63];
-        out += left > 1 ? kAlphabet[(triple >> 6) & 63] : '=';
-        out += left > 2 ? kAlphabet[triple & 63] : '=';
-    }
-    return out;
-}
-
 Expected<UiStateResult, CommandError> uiState(CommandContext& context, const NoParams&)
 {
     Expected<UiHost*, CommandError> ui = requireUi(context);
@@ -445,6 +425,26 @@ Expected<PreferencesResult, CommandError> preferencesSet(CommandContext& context
 }
 
 } // namespace
+
+std::string encodeBase64(std::string_view bytes)
+{
+    constexpr std::string_view kAlphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+    std::string out;
+    out.reserve((bytes.size() + 2) / 3 * 4);
+    for (usize i = 0; i < bytes.size(); i += 3)
+    {
+        const usize left = bytes.size() - i;
+        const u32 a = static_cast<u8>(bytes[i]);
+        const u32 b = left > 1 ? static_cast<u8>(bytes[i + 1]) : 0u;
+        const u32 c = left > 2 ? static_cast<u8>(bytes[i + 2]) : 0u;
+        const u32 triple = (a << 16) | (b << 8) | c;
+        out += kAlphabet[(triple >> 18) & 63];
+        out += kAlphabet[(triple >> 12) & 63];
+        out += left > 1 ? kAlphabet[(triple >> 6) & 63] : '=';
+        out += left > 2 ? kAlphabet[triple & 63] : '=';
+    }
+    return out;
+}
 
 void registerUiCommands(CommandRegistry& registry)
 {

@@ -241,7 +241,8 @@ EditorShell::Impl::Impl(EditorShell& owner, EditorContext& editorContext, ui::Ui
     , palette(std::make_unique<detail::Palette>())
     , outliner(std::make_unique<detail::Outliner>())
     , inspector(std::make_unique<detail::Inspector>())
-    , sceneView(std::make_unique<detail::SceneView>())
+    , sceneView(std::make_unique<detail::SceneView>("scene"))
+    , gameView(std::make_unique<detail::SceneView>("game"))
     , console(std::make_unique<detail::Console>())
     , history(std::make_unique<detail::History>())
     , agentsPanel(std::make_unique<detail::Agents>())
@@ -923,6 +924,7 @@ void EditorShell::draw(f64 now, f64 deltaSeconds)
         --impl.settleFrames;
     }
     ImGui::DockSpaceOverViewport(dockspace, viewport);
+    impl.viewportNavigating = false;
     for (usize i = 0; i < detail::kPanelCount; ++i)
     {
         const Panel panel = static_cast<Panel>(i);
@@ -966,6 +968,9 @@ void EditorShell::draw(f64 now, f64 deltaSeconds)
                 break;
             case Panel::Scene:
                 impl.sceneView->draw(impl);
+                break;
+            case Panel::Game:
+                impl.gameView->draw(impl);
                 break;
             case Panel::Console:
                 impl.console->draw(impl);
@@ -1023,6 +1028,7 @@ void EditorShell::draw(f64 now, f64 deltaSeconds)
         }
     }
 
+    detail::drawSecondaryViewports(impl);
     impl.palette->draw(impl);
     impl.agentsPanel->drawPrompt(impl);
     if (const std::optional<u32> clicked = impl.toasts.draw(kit, now);

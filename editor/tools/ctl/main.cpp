@@ -24,6 +24,7 @@
 #include <illusion/platform/FileSystem.hpp>
 
 #include <cstdio>
+#include <cstdlib>
 #include <filesystem>
 #include <memory>
 #include <optional>
@@ -245,6 +246,18 @@ int runTranscripts(const Options& options)
         {
             return usage("unknown argument '" + std::string(arg) + "'");
         }
+    }
+    // Golden images live next to the transcript; ILLUSION_UPDATE_GOLDENS=1 rewrites them and
+    // ILLUSION_UI_CAPTURE_DIR receives every compared image.
+    runner.goldenDirectory = files.front().parent_path();
+    if (const char* update = std::getenv("ILLUSION_UPDATE_GOLDENS"); update != nullptr)
+    {
+        runner.updateGoldens = std::string_view(update) == "1";
+    }
+    if (const char* captures = std::getenv("ILLUSION_UI_CAPTURE_DIR");
+        captures != nullptr && captures[0] != '\0')
+    {
+        runner.captureDirectory = utf8Path(captures);
     }
     std::optional<TempWorkspace> workspace;
     if (tempWorkspace)

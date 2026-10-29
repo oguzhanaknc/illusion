@@ -179,8 +179,20 @@ Ajan kabul testi, editör çağrılarından oluşan bir transcript'i yeniden oyn
 
 `capture` bir yanıttaki değerleri JSON Pointer ile kaydeder; `${name}` onları sonra kullanır. `expect` yanıtı
 eşleştirir: nesneler en azından verilen üyelere sahipse eşleşir; `$approx`, `$regex`, `$length`, `$exists`,
-`$oneOf` ve `$contains` eşleşmeyi gevşetir. `"requires": "gpu"` ile işaretli bir adım, GPU'suz bir editörde
-`otherwise` ile eşleşmelidir (varsayılan: hata 1400). Şöyle çalıştırın:
+`$oneOf`, `$contains`, `$min` ve `$max` eşleşmeyi gevşetir. `"requires": "gpu"` ile işaretli bir adım,
+GPU'suz bir editörde `otherwise` ile eşleşmelidir (varsayılan: hata 1400).
+
+`image` içeren bir adım, yanıtındaki ekran görüntüsünü transcript'in yanındaki golden bir PNG ile karşılaştırır.
+Bir kanalı `channelTolerance` değerinden fazla sapan piksel farklı sayılır; piksellerin `maxDifferent`
+oranından fazlası farklıysa ya da `notUniform` ayarlıyken görüntü tek düz bir renkse adım başarısız olur.
+`ILLUSION_UPDATE_GOLDENS=1` golden'ı yeniden yazar, `ILLUSION_UI_CAPTURE_DIR` ise her görüntüyü oraya da
+kaydeder:
+
+```json
+{"call": "viewport.screenshot", "params": {"viewport": "game"}, "requires": "gpu", "image": {"golden": "golden/board.png", "channelTolerance": 8, "maxDifferent": 0.02, "notUniform": true}}
+```
+
+Şöyle çalıştırın:
 
 ```bash
 illusion_ctl --launch build/bin/Release/illusion_editor --editor-arg --deterministic --editor-arg --no-gpu \

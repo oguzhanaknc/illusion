@@ -14,3 +14,14 @@
 {"check": "C4", "call": "component.get", "params": {"entity": "/Board/Floor", "type": "illusion.MeshRenderer"}, "expect": {"result": {"value": {"mesh": "builtin:/mesh/cube", "material": "assets:/materials/frame.material"}}}}
 {"check": "C4", "call": "scene.save", "expect": {"result": {"entities": 7}}}
 {"check": "C4", "call": "project.file_read", "params": {"path": "assets:/scenes/main.scene"}, "expect": {"result": {"text": "${sceneText}"}}}
+{"check": "C6", "title": "Rendering: the 640x360 game view draws the board, picks it back and matches the golden image", "call": "viewport.set_aspect", "params": {"viewport": "game", "aspect": "fixed", "width": 640, "height": 360}, "requires": "gpu", "expect": {"result": {"settings": {"aspect": "fixed", "width": 640, "height": 360}}}}
+{"check": "C6", "call": "viewport.screenshot", "params": {"viewport": "game"}, "requires": "gpu", "expect": {"result": {"width": 640, "height": 360}}, "image": {"golden": "golden/board.png", "channelTolerance": 8, "maxDifferent": 0.02, "notUniform": true}}
+{"check": "C6", "call": "render.stats", "params": {"viewport": "game"}, "requires": "gpu", "expect": {"result": {"stats": {"frames": {"$min": 1}, "visible": {"$min": 3}}}}}
+{"check": "C6", "call": "render.diagnostics", "requires": "gpu", "expect": {"result": {"available": true, "validationErrors": 0}}, "otherwise": {"result": {"available": false}}}
+{"check": "C6", "call": "viewport.project", "params": {"viewport": "game", "entity": "/Board/Left wall"}, "requires": "gpu", "expect": {"result": {"x": {"$approx": [240.33, 1.0]}, "y": {"$approx": [180.0, 1.0]}, "inside": true}}}
+{"check": "C6", "call": "viewport.pick", "params": {"viewport": "game", "x": 240.33, "y": 180.0}, "requires": "gpu", "expect": {"result": {"entity": {"path": "/Board/Left wall"}}}}
+{"check": "C6", "call": "viewport.project", "params": {"viewport": "game", "entity": "/Board/Right wall"}, "requires": "gpu", "expect": {"result": {"x": {"$approx": [399.67, 1.0]}, "y": {"$approx": [180.0, 1.0]}, "inside": true}}}
+{"check": "C6", "call": "viewport.pick", "params": {"viewport": "game", "x": 399.67, "y": 180.0}, "requires": "gpu", "expect": {"result": {"entity": {"path": "/Board/Right wall"}}}}
+{"check": "C6", "call": "viewport.project", "params": {"viewport": "game", "entity": "/Board/Floor"}, "requires": "gpu", "expect": {"result": {"x": {"$approx": [320.0, 1.0]}, "y": {"$approx": [332.1, 1.0]}, "inside": true}}}
+{"check": "C6", "call": "viewport.pick", "params": {"viewport": "game", "x": 320.0, "y": 332.1}, "requires": "gpu", "expect": {"result": {"entity": {"path": "/Board/Floor"}}}}
+{"check": "C6", "call": "viewport.sample", "params": {"viewport": "game", "x": 240.33, "y": 180.0, "radius": 1}, "requires": "gpu", "expect": {"result": {"saturation": {"$max": 0.25}, "pixels": 9}}}

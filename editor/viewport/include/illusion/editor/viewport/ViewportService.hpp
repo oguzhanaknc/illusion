@@ -43,17 +43,19 @@ namespace illusion::editor::viewport
 /// Statistics of the last ViewportService::render().
 struct ViewportServiceStats
 {
-    u32 rendered = 0;     ///< Viewports rendered.
-    u32 picksPending = 0; ///< Picks waiting for the GPU.
+    u32 rendered = 0;         ///< Viewports rendered.
+    u32 picksPending = 0;     ///< Picks waiting for the GPU.
+    u32 readbacksPending = 0; ///< Readbacks (screenshots, samples, box selects) waiting for the GPU.
 };
 
-/// The editor's viewports ("scene", the Scene panel). Use it on the main thread; the device, editor and UI
+/// The editor's viewports: "scene" (the Scene panel), "game" (the Game panel, through the scene's main
+/// Camera) and up to three secondary Scene viewports. Use it on the main thread; the device, editor and UI
 /// renderer outlive it. Registers itself with EditorContext::setViewports() and unregisters when destroyed.
 class ViewportService final : public ViewportHost
 {
 public:
-    /// Creates the service with the "scene" viewport. Returns nullptr (and logs why) if a GPU object cannot
-    /// be created.
+    /// Creates the service with the "scene" and "game" viewports. Returns nullptr (and logs why) if a GPU
+    /// object cannot be created.
     [[nodiscard]] static std::unique_ptr<ViewportService> create(RenderDevice& device, EditorContext& editor,
                                                                  ui::UiRenderer& ui);
     ~ViewportService() override;
@@ -88,6 +90,14 @@ public:
     [[nodiscard]] std::optional<Expected<std::optional<ViewportHit>, CommandError>> pick(u64 ticket) override;
     [[nodiscard]] ViewportFrame frame(std::string_view id, UVec2 size, const ViewportInput& input,
                                       const ViewportStyle& style) override;
+    [[nodiscard]] Expected<std::string, CommandError> createViewport() override;
+    [[nodiscard]] u64 viewportsVersion() const noexcept override;
+    [[nodiscard]] Expected<void, CommandError> closeViewport(std::string_view id) override;
+    [[nodiscard]] Expected<u64, CommandError> requestReadback(std::string_view id, ViewportChannel channel,
+                                                              UVec2 origin, UVec2 extent) override;
+    [[nodiscard]] std::optional<Expected<ViewportReadback, CommandError>> readback(u64 ticket) override;
+    [[nodiscard]] Expected<ViewportRenderStats, CommandError> renderStats(std::string_view id) const override;
+    [[nodiscard]] ViewportGpuInfo gpuInfo() const override;
 
     /// The service's state, defined in its sources.
     struct Impl;

@@ -45,7 +45,8 @@ illusion_ctl --launch build/bin/Release/illusion_editor --editor-arg --determini
 
 The scripted transcript grows with the editor. M7j covers the **board scenario**: the project, the eight
 materials and the static board scene (camera, sun, sky, three walls), saved and reopened after a restart.
-Module Components, input assets, play mode, rendering checks and hot reload join the transcript in the
+M7o-2 adds the **rendering checks** (C6) in the game view; the golden image is rewritten with
+`ILLUSION_UPDATE_GOLDENS=1`, and CI uploads the captured image (`ui-captures`) when it differs. Module Components, input assets, play mode, rendering checks and hot reload join the transcript in the
 milestones that add those commands (M7n, M7r, M7s, M7t, M7u).
 
 ## Checks
@@ -57,6 +58,6 @@ milestones that add those commands (M7n, M7r, M7s, M7t, M7u).
 | C3 Scene | Exactly one camera; a DirectionalLight; a SkyLight with `builtin:/sky/procedural`; three MeshRenderers under `/Board` whose material resolves (later: one Board 10x20, one PieceQueue, one Score, an orthographic camera, `scene.validate`). | M7j |
 | C4 Persistence | After a restart the `scene.info` hash is unchanged, the ids survive, the MeshRenderer and SkyLight references survive and a re-save is byte-identical. | M7j |
 | C5 Behaviour | Spawn, walls, kicks, drops, clears, gravity and game over through `input.inject` and `play.step`. | M7r |
-| C6 Rendering | Visible objects, picking, colours and a golden image (GPU jobs). | M7o |
+| C6 Rendering | The 640x360 game view through the scene camera matches `golden/board.png`; `render.stats` sees the three board objects; `viewport.project` and `viewport.pick` find each wall and the floor; `viewport.sample` reads the grey frame; `render.diagnostics` reports no validation errors. Steps carry `"requires": "gpu"`: without a GPU they must fail with 1400. | M7o-2 |
 | C7 Hot reload | A Component layout change during play keeps the values. | M7t |
 | C8 Hygiene | No error log entries and no asserts; every transaction has an `rpc:` origin. | M7x |
