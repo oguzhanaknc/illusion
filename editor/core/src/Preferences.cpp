@@ -20,6 +20,8 @@ namespace
 constexpr std::array<std::string_view, 3> kThemes = {"dark", "light", "high-contrast"};
 constexpr std::array<std::string_view, 4> kAccents = {"azure", "violet", "teal", "amber"};
 constexpr std::array<std::string_view, 3> kPermissionModes = {"read-only", "ask", "auto"};
+constexpr std::array<std::string_view, 5> kNavigationPresets = {"keymap", "illusion", "unity", "unreal",
+                                                                "blender"};
 constexpr std::string_view kFileName = "preferences.json";
 
 bool oneOf(std::span<const std::string_view> names, std::string_view value) noexcept
@@ -56,8 +58,10 @@ void reflectPreferences(StructRegistry& structs)
             .field("locale", &Preferences::locale)
             .field("keymap", &Preferences::keymap)
             .field("shortcuts", &Preferences::shortcuts)
+            .field("viewportNavigation", &Preferences::viewportNavigation)
             .field("agentPermissions", &Preferences::agentPermissions)
             .field("approvalPopups", &Preferences::approvalPopups)
+            .field("followAgent", &Preferences::followAgent)
             .field("autosaveInterval", &Preferences::autosaveInterval,
                    {.unit = Unit::Seconds, .min = 0.0, .max = 3600.0})
             .field("autosaveCopies", &Preferences::autosaveCopies, {.min = 1.0, .max = 20.0})
@@ -97,6 +101,10 @@ Expected<void, std::string> validatePreferences(const Preferences& preferences)
     if (!oneOf(keymapPresets(), preferences.keymap))
     {
         return unexpected("/keymap must be one of " + quoted(keymapPresets()));
+    }
+    if (!oneOf(kNavigationPresets, preferences.viewportNavigation))
+    {
+        return unexpected("/viewportNavigation must be one of " + quoted(kNavigationPresets));
     }
     for (usize i = 0; i < preferences.shortcuts.size(); ++i)
     {
@@ -262,6 +270,17 @@ std::span<const std::string_view> preferenceThemes() noexcept
 std::span<const std::string_view> preferenceAccents() noexcept
 {
     return kAccents;
+}
+
+std::span<const std::string_view> viewportNavigationPresets() noexcept
+{
+    return kNavigationPresets;
+}
+
+std::string_view viewportNavigationOf(const Preferences& preferences) noexcept
+{
+    return preferences.viewportNavigation == "keymap" ? std::string_view(preferences.keymap)
+                                                      : std::string_view(preferences.viewportNavigation);
 }
 
 } // namespace illusion::editor

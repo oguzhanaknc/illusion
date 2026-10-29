@@ -77,7 +77,7 @@ Field widgets are chosen automatically from the Component's reflection and `Fiel
 | `FieldHint::Color` / `HdrColor` | Colour swatch and picker; `Color` writes sRGB `#rrggbb` or linear RGB, and `HdrColor` adds a separate intensity drag. |
 | `Enum` and `Flags` | Drop-down combo for enumerations; toggle chips for bitmask flags. |
 | `FieldHint::Layer` | Collision layer selector (`0..31`). |
-| `Entity` | Entity button showing the target's name (clicking selects it), a searchable entity picker popup, a clear button, and drop target for Outliner rows. |
+| `Entity` | Entity button showing the target's name (clicking selects it), a searchable entity picker popup, an eyedropper that picks the entity in a Scene view (see [Scene Viewport](viewport.md#picking-an-entity-for-a-field)), a clear button, and drop target for Outliner rows. |
 | `Asset` (`AssetRef`) | Virtual path field (`assets:/...` or `builtin:/...`), a searchable asset picker filtered by `FieldMeta::assetKind`, a clear button, and drop target for assets. |
 | `Optional<T>`, `Array<T>`, `FixedArray<T>`, `Struct` | Check box for `Optional`, element count and `+` / `-` buttons for `Array`, and indented nested rows for structs. |
 

@@ -325,3 +325,74 @@ TEST_CASE("cycling picks visit every candidate and wrap around")
     CHECK(chooseCandidate(candidates, Entity{2, 0}, false) == 0);
     CHECK(chooseCandidate(candidates, Entity{8, 0}, true) == 0);
 }
+
+TEST_CASE("navigation presets map the mouse buttons to the drags of Unity, Unreal and Blender")
+{
+    ViewportInput plain = hovering();
+    ViewportInput alt = plain;
+    alt.alt = true;
+    ViewportInput shift = plain;
+    shift.shift = true;
+    ViewportInput ctrl = plain;
+    ctrl.ctrl = true;
+    for (const NavigationPreset preset : {NavigationPreset::Illusion, NavigationPreset::Unity})
+    {
+        CHECK(navigationMode(preset, 0, plain) == NavigationMode::None);
+        CHECK(navigationMode(preset, 0, alt) == NavigationMode::Orbit);
+        CHECK(navigationMode(preset, 1, plain) == NavigationMode::Fly);
+        CHECK(navigationMode(preset, 1, alt) == NavigationMode::Dolly);
+        CHECK(navigationMode(preset, 2, plain) == NavigationMode::Pan);
+    }
+    CHECK(navigationMode(NavigationPreset::Unreal, 0, plain) == NavigationMode::Walk);
+    CHECK(navigationMode(NavigationPreset::Unreal, 0, alt) == NavigationMode::Orbit);
+    CHECK(navigationMode(NavigationPreset::Unreal, 1, plain) == NavigationMode::Fly);
+    CHECK(navigationMode(NavigationPreset::Unreal, 2, plain) == NavigationMode::Pan);
+    CHECK(navigationMode(NavigationPreset::Blender, 2, plain) == NavigationMode::Orbit);
+    CHECK(navigationMode(NavigationPreset::Blender, 2, shift) == NavigationMode::Pan);
+    CHECK(navigationMode(NavigationPreset::Blender, 2, ctrl) == NavigationMode::Dolly);
+    CHECK(navigationMode(NavigationPreset::Blender, 0, plain) == NavigationMode::None);
+    CHECK(navigationMode(NavigationPreset::Blender, 0, alt) == NavigationMode::Orbit);
+    CHECK(navigationMode(NavigationPreset::Blender, 1, plain) == NavigationMode::None);
+    // A drag that started on the view cube orbits with every preset.
+    ViewportInput cube = plain;
+    cube.orbit = true;
+    CHECK(navigationMode(NavigationPreset::Blender, 0, cube) == NavigationMode::Orbit);
+    CHECK(navigationMode(NavigationPreset::Unreal, 0, cube) == NavigationMode::Orbit);
+
+    CHECK(navigationPresetFromName("unreal") == NavigationPreset::Unreal);
+    CHECK(navigationPresetFromName("blender") == NavigationPreset::Blender);
+    CHECK(navigationPresetFromName("unity") == NavigationPreset::Unity);
+    CHECK(navigationPresetFromName("keymap") == NavigationPreset::Illusion);
+}
+
+TEST_CASE("an Unreal left drag walks along the ground and a Blender middle drag orbits")
+{
+    EditorCamera camera(start());
+    camera.setPreset(NavigationPreset::Unreal);
+    CHECK(camera.preset() == NavigationPreset::Unreal);
+    const Vec3 eye = viewportEye(start());
+    // Dragging up walks forward at the same height and keeps the pitch.
+    drag(camera, 0, Vec2(0.0f, -40.0f));
+    CHECK(camera.mode() == NavigationMode::Walk);
+    const Vec3 moved = viewportEye(camera.camera());
+    CHECK(moved.y == doctest::Approx(eye.y));
+    const f32 yaw = glm::radians(start().yaw);
+    CHECK(glm::dot(moved - eye, Vec3(-std::sin(yaw), 0.0f, -std::cos(yaw))) > 0.0f);
+    CHECK(camera.camera().pitch == doctest::Approx(start().pitch));
+    release(camera);
+    // Dragging sideways turns around the eye.
+    const Vec3 before = viewportEye(camera.camera());
+    drag(camera, 0, Vec2(30.0f, 0.0f));
+    CHECK(nearlyEqual(viewportEye(camera.camera()), before));
+    CHECK(camera.camera().yaw == doctest::Approx(static_cast<double>(start().yaw) - 30.0 * 0.15));
+    release(camera);
+
+    EditorCamera blender(start());
+    blender.setPreset(NavigationPreset::Blender);
+    drag(blender, 2, Vec2(20.0f, 0.0f));
+    CHECK(blender.mode() == NavigationMode::Orbit);
+    CHECK(nearlyEqual(blender.camera().pivot, start().pivot));
+    release(blender);
+    drag(blender, 1, Vec2(20.0f, 0.0f));
+    CHECK(blender.mode() == NavigationMode::None);
+}

@@ -845,12 +845,30 @@ struct ViewportModeParams
     std::optional<bool> wireframe{};          ///< Wireframe over opaque surfaces.
 };
 
+/// The visualiser kinds to change in `viewport.set_overlays` (absent: unchanged).
+struct ViewportVisualisersParams
+{
+    std::optional<bool> lights{};     ///< Point light ranges and directional light directions.
+    std::optional<bool> cameras{};    ///< Camera frusta.
+    std::optional<bool> colliders{};  ///< Collider shapes.
+    std::optional<bool> characters{}; ///< CharacterController capsules.
+    std::optional<bool> joints{};     ///< Joint anchors, axes and limits.
+    std::optional<bool> audio{};      ///< AudioSource distances and cones.
+};
+
 /// Params of `viewport.set_overlays`.
 struct ViewportOverlaysParams
 {
-    std::optional<std::string> viewport{};  ///< Viewport id (default "scene").
-    std::optional<bool> grid{};             ///< Ground grid.
-    std::optional<bool> selectionOutline{}; ///< Outline around selected entities.
+    std::optional<std::string> viewport{};                    ///< Viewport id (default "scene").
+    std::optional<bool> grid{};                               ///< Ground grid.
+    std::optional<bool> selectionOutline{};                   ///< Outline around selected entities.
+    std::optional<bool> hover{};                              ///< Highlight of the entity under the cursor.
+    std::optional<bool> icons{};                              ///< Icon billboards.
+    std::optional<bool> viewCube{};                           ///< View cube and axis navigator.
+    std::optional<bool> stats{};                              ///< Statistics overlay.
+    std::optional<bool> cameraPreview{};                      ///< Picture-in-picture camera view.
+    std::optional<ViewportVisualisersParams> visualisers{};   ///< Visualiser kinds.
+    std::optional<ViewportVisualiserScope> visualiserScope{}; ///< Visualised entities.
 };
 
 /// Result of `viewport.set_mode` and `viewport.set_overlays`.
@@ -1340,6 +1358,14 @@ struct illusion::EnumReflection<illusion::editor::PickSelect>
     /// The values.
     static constexpr std::array kValues{illusion::EnumValue{"none", 0}, illusion::EnumValue{"replace", 1},
                                         illusion::EnumValue{"add", 2}, illusion::EnumValue{"toggle", 3}};
+};
+
+/// Names of ViewportVisualiserScope values in JSON.
+template <>
+struct illusion::EnumReflection<illusion::editor::ViewportVisualiserScope>
+{
+    /// The values.
+    static constexpr std::array kValues{illusion::EnumValue{"selected", 0}, illusion::EnumValue{"all", 1}};
 };
 
 /// Names of ViewportKind values in JSON.

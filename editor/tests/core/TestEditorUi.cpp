@@ -139,6 +139,28 @@ TEST_CASE("preferences round-trip through their file and reject invalid values")
     CHECK(invalid([](Preferences& p) { p.autosaveCopies = 0; }));
     CHECK(invalid([](Preferences& p) { p.layout.clear(); }));
     CHECK(invalid([](Preferences& p) { p.recentProjects.assign(kMaxRecentProjects + 1, "x"); }));
+    CHECK(invalid([](Preferences& p) { p.viewportNavigation = "maya"; }));
+}
+
+TEST_CASE("viewport navigation follows the keymap preset unless a preset is named")
+{
+    Preferences preferences;
+    CHECK(preferences.viewportNavigation == "keymap");
+    CHECK_FALSE(preferences.followAgent);
+    preferences.keymap = "blender";
+    CHECK(viewportNavigationOf(preferences) == "blender");
+    preferences.viewportNavigation = "unreal";
+    CHECK(viewportNavigationOf(preferences) == "unreal");
+    preferences.followAgent = true;
+    const Expected<Preferences, std::string> read = readPreferences(writePreferences(preferences));
+    REQUIRE(read.hasValue());
+    CHECK(read->viewportNavigation == "unreal");
+    CHECK(read->followAgent);
+    for (const std::string_view preset : viewportNavigationPresets())
+    {
+        preferences.viewportNavigation = std::string(preset);
+        CHECK(validatePreferences(preferences).hasValue());
+    }
 }
 
 TEST_CASE("recent projects keep the newest first without duplicates and at most ten")

@@ -581,34 +581,23 @@ struct Inspector::State
         added.eulerDegrees = degrees;
     }
 
+    // The guids of the inspected entities, in order.
+    std::vector<EntityGuid> inspectedGuids() const
+    {
+        std::vector<EntityGuid> guids;
+        guids.reserve(inspected.size());
+        for (const auto& entry : inspected)
+        {
+            guids.push_back(entry.guid);
+        }
+        return guids;
+    }
+
     void applyFieldJson(Impl& shell, std::string_view typeName, std::string_view path,
                         std::string_view valueJson, bool merge)
     {
         const std::string_view key = merge ? mergeKey(shell.text, typeName, path) : std::string_view{};
-        if (inspected.size() == 1)
-        {
-            const auto hex = formatGuid(inspected[0].guid);
-            const std::string params = "{\"entity\":" + jsonQuote(std::string_view(hex.data(), hex.size())) +
-                                       ",\"type\":" + jsonQuote(typeName) + ",\"path\":" + jsonQuote(path) +
-                                       ",\"value\":" + std::string(valueJson) + "}";
-            (void)shell.run("component.set_field", params, "inspector", {}, key);
-            return;
-        }
-        std::string steps = "{\"steps\":[";
-        for (usize i = 0; i < inspected.size(); ++i)
-        {
-            if (i > 0)
-            {
-                steps.push_back(',');
-            }
-            const auto hex = formatGuid(inspected[i].guid);
-            steps += "{\"method\":\"component.set_field\",\"params\":{\"entity\":" +
-                     jsonQuote(std::string_view(hex.data(), hex.size())) +
-                     ",\"type\":" + jsonQuote(typeName) + ",\"path\":" + jsonQuote(path) +
-                     ",\"value\":" + std::string(valueJson) + "}}";
-        }
-        steps += "]}";
-        (void)shell.run("editor.batch", steps, "inspector", {}, key);
+        setEntityField(shell, inspectedGuids(), typeName, path, valueJson, key);
     }
 
     void resetFieldPath(Impl& shell, std::string_view typeName, std::string_view path)
@@ -1680,8 +1669,8 @@ void Inspector::State::drawValueWidget(Impl& shell, ui::UiKit& kit, const TypeRe
         const bool hasClear = !mixed && !target.isNull();
         const f32 buttonSize = ImGui::GetFrameHeight();
         const f32 avail = ImGui::GetContentRegionAvail().x;
-        const f32 pickWidth =
-            hasClear ? std::max(40.0f, avail - buttonSize - style.ItemInnerSpacing.x) : avail;
+        const f32 buttons = static_cast<f32>(hasClear ? 2 : 1) * (buttonSize + style.ItemInnerSpacing.x);
+        const f32 pickWidth = std::max(40.0f, avail - buttons);
         const char* popupId = text.concat(fieldId, ".popup");
         if (ImGui::Button(text.verbatim(buttonText, fieldId), ImVec2(pickWidth, 0.0f)))
         {
@@ -1704,6 +1693,30 @@ void Inspector::State::drawValueWidget(Impl& shell, ui::UiKit& kit, const TypeRe
                 }
             }
             ImGui::EndDragDropTarget();
+        }
+        ImGui::SameLine(0.0f, style.ItemInnerSpacing.x);
+        // The eyedropper: the next click in a viewport assigns the entity under it.
+        const bool picking = shell.eyedropper.active && shell.eyedropper.type == compReflection.name &&
+                             shell.eyedropper.path == fieldPath;
+        if (picking)
+        {
+            ImGui::PushStyleColor(ImGuiCol_Button, imvec(shell.theme.color(ui::ThemeToken::AccentFill)));
+        }
+        if (ui::iconButton(kit, ui::icons::kColorize, text.concat(fieldId, ".eyedropper"),
+                           text.format(s::kInspectorEyedropper)))
+        {
+            if (picking)
+            {
+                shell.eyedropper = {};
+            }
+            else
+            {
+                startEyedropper(shell, inspectedGuids(), compReflection.name, fieldPath, fieldPath);
+            }
+        }
+        if (picking)
+        {
+            ImGui::PopStyleColor();
         }
         if (hasClear)
         {
@@ -2433,6 +2446,38 @@ void Inspector::draw(Impl& shell)
     {
         ++state.dragSerial;
     }
+}
+
+void setEntityField(Impl& shell, std::span<const EntityGuid> entities, std::string_view type,
+                    std::string_view path, std::string_view valueJson, std::string_view mergeKey)
+{
+    if (entities.empty())
+    {
+        return;
+    }
+    if (entities.size() == 1)
+    {
+        const auto hex = formatGuid(entities[0]);
+        const std::string params = "{\"entity\":" + jsonQuote(std::string_view(hex.data(), hex.size())) +
+                                   ",\"type\":" + jsonQuote(type) + ",\"path\":" + jsonQuote(path) +
+                                   ",\"value\":" + std::string(valueJson) + "}";
+        (void)shell.run("component.set_field", params, "inspector", {}, mergeKey);
+        return;
+    }
+    std::string steps = "{\"steps\":[";
+    for (usize i = 0; i < entities.size(); ++i)
+    {
+        if (i > 0)
+        {
+            steps.push_back(',');
+        }
+        const auto hex = formatGuid(entities[i]);
+        steps += "{\"method\":\"component.set_field\",\"params\":{\"entity\":" +
+                 jsonQuote(std::string_view(hex.data(), hex.size())) + ",\"type\":" + jsonQuote(type) +
+                 ",\"path\":" + jsonQuote(path) + ",\"value\":" + std::string(valueJson) + "}}";
+    }
+    steps += "]}";
+    (void)shell.run("editor.batch", steps, "inspector", {}, mergeKey);
 }
 
 } // namespace illusion::editor::shell::detail

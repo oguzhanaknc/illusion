@@ -4,13 +4,16 @@
 /// The navigation of a viewport's orbit camera (GPU-free): orbit, pan, dolly and fly from the panel's input,
 /// animated moves, and framing of bounds.
 ///
-/// Mouse controls: Alt + left drag orbits around the pivot; middle drag pans; the wheel dollies towards the
-/// pivot; Alt + right drag dollies; right drag looks around and W A S D Q E fly (Shift is faster; the wheel
-/// changes the fly speed while flying).
+/// Mouse controls of the illusion preset (NavigationPreset): Alt + left drag orbits around the pivot; middle
+/// drag pans; the wheel dollies towards the pivot; Alt + right drag dollies; right drag looks around and
+/// W A S D Q E fly (Shift is faster; the wheel changes the fly speed while flying). The other presets follow
+/// Unity, Unreal and Blender (see navigationMode()).
 
 #include <illusion/core/Base.hpp>
 #include <illusion/core/Math.hpp>
 #include <illusion/editor/core/ViewportHost.hpp>
+
+#include <string_view>
 
 namespace illusion::editor::viewport
 {
@@ -23,7 +26,25 @@ enum class NavigationMode : u8
     Pan,   ///< Moves the pivot in the image plane.
     Dolly, ///< Moves towards or away from the pivot.
     Fly,   ///< Turns around the eye; the fly keys move it.
+    Walk,  ///< Turns around the eye horizontally and moves along the ground (Unreal's left drag).
 };
+
+/// Which mouse buttons navigate (Preferences::viewportNavigation).
+enum class NavigationPreset : u8
+{
+    Illusion, ///< Alt + left orbits, middle pans, right flies, Alt + right dollies.
+    Unity,    ///< The same as Illusion.
+    Unreal,   ///< Left walks, right flies, middle pans, Alt + left orbits, Alt + right dollies.
+    Blender,  ///< Middle orbits, Shift + middle pans, Ctrl + middle dollies, Alt + left orbits.
+};
+
+/// The preset named @p name ("illusion", "unity", "unreal" or "blender"); Illusion for other names.
+[[nodiscard]] NavigationPreset navigationPresetFromName(std::string_view name) noexcept;
+
+/// The drag that pressing @p button (0 left, 1 right, 2 middle) starts with the modifiers of @p input, or
+/// None. ViewportInput::orbit makes a left drag orbit with every preset.
+[[nodiscard]] NavigationMode navigationMode(NavigationPreset preset, u32 button,
+                                            const ViewportInput& input) noexcept;
 
 /// Sensitivities of the navigation.
 struct NavigationSettings
@@ -34,6 +55,8 @@ struct NavigationSettings
     f32 dollyPerPixel = 0.005f;      ///< Exponent of the distance per pixel of an Alt + right drag.
     f32 fastMultiplier = 4.0f;       ///< Fly speed factor while Shift is held.
     f32 transitionSeconds = 0.3f;    ///< Length of animated moves.
+    f32 walkPerPixel = 2.0f;         ///< Walk distance per pixel, in pixels' worth of units at the pivot.
+    NavigationPreset preset = NavigationPreset::Illusion; ///< Mouse buttons.
 };
 
 /// The orbit camera of a viewport and its navigation state.
@@ -62,6 +85,12 @@ public:
 
     /// Fly speed in units per second.
     [[nodiscard]] f32 flySpeed() const noexcept { return m_flySpeed; }
+
+    /// The mouse buttons that navigate.
+    [[nodiscard]] NavigationPreset preset() const noexcept { return m_settings.preset; }
+
+    /// Changes the mouse buttons that navigate (a drag in progress goes on).
+    void setPreset(NavigationPreset preset) noexcept { m_settings.preset = preset; }
 
     /// Moves to @p camera: animated over NavigationSettings::transitionSeconds when @p animate is true, at
     /// once otherwise. Values out of range are clamped.

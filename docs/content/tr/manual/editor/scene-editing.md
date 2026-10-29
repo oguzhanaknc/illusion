@@ -77,7 +77,7 @@ Alan widget'ları Component'in reflection bilgisinden ve `FieldMeta`'dan otomati
 | `FieldHint::Color` / `HdrColor` | Renk örneği ve seçici; `Color` sRGB `#rrggbb` veya doğrusal RGB yazar, `HdrColor` ayrı bir yoğunluk sürükleme alanı ekler. |
 | `Enum` ve `Flags` | Numaralandırmalar için açılır liste; bit maskesi bayrakları için aç/kapa çipleri. |
 | `FieldHint::Layer` | Çarpışma katmanı seçicisi (`0..31`). |
-| `Entity` | Hedefin adını gösteren Entity düğmesi (tıklamak onu seçer), aranabilir Entity seçici açılır penceresi, temizleme düğmesi ve Outliner satırları için bırakma hedefi. |
+| `Entity` | Hedefin adını gösteren Entity düğmesi (tıklamak onu seçer), aranabilir Entity seçici açılır penceresi, Entity'yi bir Scene görünümünde seçen bir damlalık (bkz. [Scene Viewport'u](viewport.md#bir-alan-icin-entity-secmek)), temizleme düğmesi ve Outliner satırları için bırakma hedefi. |
 | `Asset` (`AssetRef`) | Sanal yol alanı (`assets:/...` veya `builtin:/...`), `FieldMeta::assetKind` ile süzülen aranabilir Asset seçici, temizleme düğmesi ve Asset'ler için bırakma hedefi. |
 | `Optional<T>`, `Array<T>`, `FixedArray<T>`, `Struct` | `Optional` için onay kutusu, `Array` için eleman sayısı ve `+` / `-` düğmeleri, struct'lar için girintili iç içe satırlar. |
 

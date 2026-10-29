@@ -1,7 +1,14 @@
 #include "Budget.hpp"
 
+#include <illusion/audio/AudioComponents.hpp>
+#include <illusion/ecs/Transform.hpp>
+#include <illusion/ecs/World.hpp>
 #include <illusion/editor/viewport/EditorCamera.hpp>
 #include <illusion/editor/viewport/PickCandidates.hpp>
+#include <illusion/editor/viewport/Visualisers.hpp>
+#include <illusion/physics/PhysicsComponents.hpp>
+#include <illusion/render/DebugDraw.hpp>
+#include <illusion/render/SceneComponents.hpp>
 
 #include <vector>
 
@@ -39,5 +46,44 @@ ILL_BENCHMARK("viewport/pick-candidates", 1'000.0)
         candidates.clear();
         appendVisibleCandidates(texels, UVec2(5, 5), UVec2(2, 2), candidates);
         ankerl::nanobench::doNotOptimizeAway(candidates.data());
+    });
+}
+
+// Recording the DebugDraw visualisers of 1,200 objects: box, sphere and capsule colliders, point lights,
+// cameras and hinge joints in equal numbers, about 36 lines per object. Budget per object from the M7o plan;
+// measured 396 ns on a desktop, most of it DebugDraw::line itself (render/debugdraw-record, ~8 ns per line).
+ILL_BENCHMARK("viewport/visualisers-record", 500.0)
+{
+    constexpr u32 kPerKind = 200;
+    World world;
+    for (u32 i = 0; i < kPerKind; ++i)
+    {
+        const f32 x = static_cast<f32>(i);
+        const auto spawn = [&](f32 z) {
+            const Entity entity = world.create();
+            world.set(entity, Transform{Vec3(x, 0.0f, z), Quat(1.0f, 0.0f, 0.0f, 0.0f), Vec3(1.0f)});
+            return entity;
+        };
+        for (const ColliderShape shape : {ColliderShape::Box, ColliderShape::Sphere, ColliderShape::Capsule})
+        {
+            Collider collider;
+            collider.shape = shape;
+            world.set(spawn(static_cast<f32>(shape)), collider);
+        }
+        world.set(spawn(4.0f), PointLight{});
+        world.set(spawn(5.0f), Camera{});
+        Joint joint;
+        joint.type = JointType::Hinge;
+        joint.limited = true;
+        joint.minLimit = -1.0f;
+        joint.maxLimit = 1.0f;
+        world.set(spawn(6.0f), joint);
+    }
+    DebugDraw draw(1u << 20);
+    VisualiserOptions options;
+    options.all = true;
+    bench.batch(kPerKind * 6).unit("object").run("1,200 objects", [&] {
+        draw.clear();
+        ankerl::nanobench::doNotOptimizeAway(recordVisualisers(world, draw, options));
     });
 }

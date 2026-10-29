@@ -187,7 +187,7 @@ Plan: `docs/plans/m7-editor.md` (sub-milestones, command API, localization, them
   rebinding capture, AI agents, autosave, external tools) in `preferences.json`; Welcome window with recent
   projects, templates and the workspace folder browser; About and the third-party licence viewer; the `ui.*`
   commands, `preferences.get/set` and `editor.screenshot` (91 commands). Cut to later: gamepad navigation of
-  the window through `GamepadSystem` (M7w), follow-agent (needs viewports: M7o-3), launching External Tools
+  the window through `GamepadSystem` (M7w), follow-agent (done in M7o-3), launching External Tools
   (M7s), `#` asset search in the palette (M7u)
 - M7m: ✅ Outliner and Inspector: Outliner (`HierarchyIndex` row cache rebuilt on hierarchy, selection or
   view-state change, `ImGuiListClipper`, multi-select with Ctrl/Shift and keyboard navigation, F2 inline
@@ -201,7 +201,7 @@ Plan: `docs/plans/m7-editor.md` (sub-milestones, command API, localization, them
   `Collider`/`Joint`/`AudioSource`, inline validation with fix-it buttons, multi-entity editing with `—` for
   mixed values, Component clipboard `component.copy`/`component.paste`, Add Component popup with fuzzy search
   and automatic `requiredComponents`, and Inspector pin/lock; 95 commands). Cut to later: viewport entity
-  eyedropper (needs viewport picking: M7o-3), asset thumbnails in picker (M7u), multiple simultaneous Inspector
+  eyedropper (done in M7o-3), asset thumbnails in picker (M7u), multiple simultaneous Inspector
   instances (M7w)
 - M7n: ✅ Renderer extension points (ADR 0040): per-view motion history without World mutation;
   optional Entity index/generation IDs for opaque, masked and blended objects; bounded event-query
@@ -227,10 +227,16 @@ Plan: `docs/plans/m7-editor.md` (sub-milestones, command API, localization, them
   (`ImageCompare`), and acceptance C6 checks the game view against `golden/board.png` with picks and samples of
   the board (`acceptance.tetris.board.gpu`). Fix: the viewports publish streamed loads every frame (a `.material`
   stayed loading in a running editor).
-- M7o-3: Viewports, third part: view cube and axis navigator, navigation presets, hover highlight, icon
-  billboards, DebugDraw visualisers (lights, camera frusta with picture-in-picture, colliders, characters,
-  joints, audio) with the `viewport/visualisers-record` Benchmark, stats overlay, following an agent's selection
-  (from M7l) and the Inspector's entity eyedropper (from M7m)
+- M7o-3: ✅ Viewports, third part: the view cube and axis navigator (GPU-free `ViewCube` math: faces, picking of
+  faces, edges and corners, cameras for them; click for a view, drag to orbit), navigation presets
+  (`viewportNavigation`: keymap/illusion/unity/unreal/blender, with Unreal's walk and Blender's middle-button
+  orbit), a hover outline from an asynchronous id readback, icon billboards for cameras, lights and audio
+  (click to select), DebugDraw visualisers (lights, camera frusta, colliders and sensors, characters, joints with
+  limits, audio distances and cones; selected or all, never hidden or inactive) with a picture-in-picture
+  preview of the selected Camera, a stats overlay, `viewport.set_overlays` for all of them, following an
+  agent's selection (`followAgent`, from M7l) and the Inspector's entity eyedropper (from M7m); still 115
+  commands. CPU tests for the cube, presets, visualisers and agent selection, GPU tests for hover, frusta, icons
+  and the preview, and the `viewport/visualisers-record` Benchmark (500 ns per object, 396 measured).
 - M7p: Gizmos, snapping and transform tools
 - M7q: Module API v3: lifecycle, multi-world host, host service interfaces (scripting API) (ADR 0041)
 - M7r: Play mode and the `GameSession` runtime (ADR 0042)

@@ -278,9 +278,32 @@ Expected<ViewportSettingsResult, CommandError> setOverlays(CommandContext& conte
     {
         return unexpected(std::move(target).error());
     }
+    if (Expected<void, CommandError> scope =
+            checkEnum(params.visualiserScope, ViewportVisualiserScope::All, "/visualiserScope");
+        !scope)
+    {
+        return unexpected(std::move(scope).error());
+    }
     ViewportSettings settings = target->info.settings;
     settings.grid = params.grid.value_or(settings.grid);
     settings.selectionOutline = params.selectionOutline.value_or(settings.selectionOutline);
+    settings.hover = params.hover.value_or(settings.hover);
+    settings.icons = params.icons.value_or(settings.icons);
+    settings.viewCube = params.viewCube.value_or(settings.viewCube);
+    settings.stats = params.stats.value_or(settings.stats);
+    settings.cameraPreview = params.cameraPreview.value_or(settings.cameraPreview);
+    settings.visualiserScope = params.visualiserScope.value_or(settings.visualiserScope);
+    if (params.visualisers)
+    {
+        const ViewportVisualisersParams& kinds = *params.visualisers;
+        ViewportVisualisers& visualisers = settings.visualisers;
+        visualisers.lights = kinds.lights.value_or(visualisers.lights);
+        visualisers.cameras = kinds.cameras.value_or(visualisers.cameras);
+        visualisers.colliders = kinds.colliders.value_or(visualisers.colliders);
+        visualisers.characters = kinds.characters.value_or(visualisers.characters);
+        visualisers.joints = kinds.joints.value_or(visualisers.joints);
+        visualisers.audio = kinds.audio.value_or(visualisers.audio);
+    }
     return applySettings(context, *target, settings);
 }
 
@@ -981,8 +1004,12 @@ void registerViewportCommands(CommandRegistry& registry)
         .name = "viewport.set_overlays",
         .title = strings::kCommandViewportSetOverlaysTitle,
         .description = strings::kCommandViewportSetOverlaysDescription,
-        .agentSummary = "Turns a viewport's overlays on or off: the ground grid and the selection outline. "
-                        "Example: {\"grid\": false}.",
+        .agentSummary = "Turns a viewport's overlays on or off: the ground grid, the selection outline, the "
+                        "hover highlight, icon billboards, the view cube, the stats overlay, the "
+                        "picture-in-picture camera preview and the DebugDraw visualisers (lights, cameras, "
+                        "colliders, characters, joints, audio) of the selected or of all entities. Only the "
+                        "given fields change. Example: {\"visualisers\": {\"colliders\": true}, "
+                        "\"visualiserScope\": \"all\", \"stats\": true}.",
         .category = "Viewport",
         .icon = "layers",
         .flags = {.idempotent = true, .needsGpu = true},

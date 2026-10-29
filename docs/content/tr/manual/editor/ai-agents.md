@@ -114,7 +114,8 @@ Editör penceresinde onay gerektiren bir çağrı bekler: editörün başındaki
 kez izin verir, bu tür komutlara oturumun geri kalanında izin verir ya da reddeder. AI Activity paneli bağlı
 ajanları ve her çağrıyı parametreleri, süresi ve sonucuyla gösterir; kişi buradan bir ajanı duraklatabilir,
 bağlantısını kesebilir ve modu değiştirebilir (bkz. [Editör Penceresi](interface.md#ai-activity)). Bekleyen bir
-çağrı ilerleme göstermez; ajanın sonraki çağrıları onun arkasında bekler.
+çağrı ilerleme göstermez; ajanın sonraki çağrıları onun arkasında bekler. **Follow agent** açıkken Scene
+görünümü ajanın yaptığı her seçimi çerçeveler (bkz. [Scene Viewport'u](viewport.md#ajan-izlemek)).
 
 Reddedilen bir çağrı `permission_denied` türüyle başarısız olur. Bir ajanın yaptığı her değişikliğin kaynağı
 `rpc:illusion_mcp` olur; böylece `history.undo {"scope": "mine"}` yalnızca ajanın adımlarını geri alır,

@@ -11,7 +11,8 @@ ve Entity seçebilir.
 
 ## Kamerayı hareket ettirmek
 
-Editör kamerası bir pivot noktasının çevresinde döner. Fare denetimleri şunlardır:
+Editör kamerası bir pivot noktasının çevresinde döner. Varsayılan `illusion` gezinmesinde fare denetimleri
+şunlardır:
 
 | Girdi | Eylem |
 | --- | --- |
@@ -25,6 +26,26 @@ Editör kamerası bir pivot noktasının çevresinde döner. Fare denetimleri ş
 
 Çerçeveleme ve standart görünümler kamerayı kısa bir animasyonla taşır; `reduceMotion` tercihi kamerayı
 hemen taşır. Kamera hareket ederken uçuş tuşları eylem çalıştırmasın diye klavye kısayolları duraklatılır.
+
+### Gezinme preset'leri
+
+`viewportNavigation` tercihi (Preferences, Keyboard sayfası) başka araçların fare denetimlerini seçer.
+Varsayılan `keymap`, keymap preset'ini izler. Tekerlek her preset'te dolly yapar, **F** çerçeveler ve **Alt** +
+sol sürükleme orbit yapar.
+
+| Preset | Sol sürükleme | Orta sürükleme | Sağ sürükleme |
+| --- | --- | --- | --- |
+| `illusion`, `unity` | Seçim (kutu) | Pan | Uçuş (**Alt**: dolly) |
+| `unreal` | Yürüme: döner ve zemin boyunca ileri ya da geri gider | Pan | Uçuş (**Alt**: dolly) |
+| `blender` | Seçim (kutu) | Orbit (**Shift**: pan, **Ctrl**: dolly) | Hiçbir şey |
+
+### Görünüm küpü ve eksen gezgini
+
+Bir Scene görünümünün sağ üst köşesinde kamerayla birlikte dönen bir küp ve onun altında üç eksen görünür.
+Küpün bir yüzüne tıklamak kamerayı o ortografik görünüme (Top, Front, Right...) taşır; bir kenara ya da köşeye
+tıklamak perspektif kamerayı onun boyunca bakacak şekilde çevirir. Küpü sürüklemek pivotun çevresinde orbit
+yapar. Bir eksenin ucuna tıklamak o eksen boyunca bakar: dolu uçlar pozitif eksenler, içi boş olanlar negatif
+eksenlerdir. Eksenler temanın eksen renklerini kullanır.
 
 ## Game görünümü ve ek viewport'lar
 
@@ -58,12 +79,48 @@ seçilmez.
 Sol sürükleme bir seçim kutusu çizer ve kutunun içinde pikseli olan her Entity'yi seçer; **Shift** onları
 ekler, **Ctrl** seçimlerini tersine çevirir.
 
+İmlecin altındaki Entity, tıklanmadan önce temanın hover renginde ince bir outline alır. Mesh'i olmayan
+Entity'ler bulundukları yerde bir simge (billboard) gösterir: kameralar, yönlü, nokta ve gökyüzü ışıkları, ses
+kaynakları ve ses dinleyicileri. Bir simgeye tıklamak Entity'sini seçer; seçili simgeler seçim renginde çizilir.
+
+### Bir alan için Entity seçmek
+
+Inspector'daki bir `Entity` alanının yanındaki damlalık düğmesi seçmeyi başlatır: bir Scene görünümünde bir
+Entity'ye ya da bir simgeye yapılan sonraki tıklama o Entity'yi alana yazar (tek bir undo adımı olarak) ve Scene
+görünümü beklerken bir ipucu gösterir. Arka plana tıklamak beklemeyi sürdürür; **Esc** iptal eder.
+
+### Ajanı izlemek
+
+**Follow agent** açıkken (AI Activity paneli ya da `followAgent` tercihi), bir yapay zekâ ajanı seçimi her
+değiştirdiğinde ana Scene görünümü seçimi çerçeveler; böylece editörün başındaki kişi ajanın ne üzerinde
+çalıştığını görür.
+
+## Görselleştiriciler
+
+Görselleştiriciler kendi görüntüsü olmayan Component'lerin biçimini sahnenin üzerine çizgiler olarak çizer:
+
+| Görselleştirici | Çizdiği |
+| --- | --- |
+| Lights | Nokta ışıklarının menzil küresi; yönlü ışıkların yönü. |
+| Cameras | Her `Camera`'nın görüş frustum'u, Game görünümünün en-boy oranında. |
+| Colliders | Her `Collider`'ın kutusu, küresi, kapsülü, silindiri ya da sınırları; sensörler başka bir renkte. |
+| Characters | Her `CharacterController`'ın kapsülü. |
+| Joints | Her `Joint`'in bağlantı noktası ve ekseni, sınırları ve bağlı gövdeye giden çizgiyle. |
+| Audio | Uzamsal `AudioSource`'ların en küçük ve en büyük uzaklık küreleri ve konileri. |
+
+Varsayılan olarak yalnızca seçili Entity'leri çizerler; Visualisers menüsündeki **All** her Entity'yi çizer.
+Gizli ve etkin olmayan Entity'ler asla çizilmez.
+
+Bir `Camera` seçiliyken Scene görünümünün sağ alt köşesi o kameranın gördüğünün küçük bir resmini gösterir
+(**Camera preview**). **Stats**, sol üst köşede kare süresini, draw call'ları, üçgenleri, görünen nesneleri,
+gölge draw call'larını ve görüntü boyutunu gösterir.
+
 ## Araç çubuğu
 
 | Menü | İçerik |
 | --- | --- |
 | **Shading** | Lit, Unlit, Albedo, Normals, Roughness, Metallic, Ambient occlusion, Shadow cascades, Motion vectors ve wireframe katmanı. |
-| **Overlays** | Grid ve seçim outline'ı. |
+| **Overlays** | Grid, seçim outline'ı, hover, simgeler, görünüm küpü, kamera önizlemesi, istatistikler ve **Visualisers** menüsü (her tür için bir öğe ve Selected ya da All). Game görünümünde yalnızca outline, hover ve istatistikler vardır. |
 | **View** | Perspektif ve pivotun çevresinde ortografik Top, Bottom, Front, Back, Left ve Right görünümleri. |
 | Frame | Seçimi çerçeveler. |
 | **Aspect** | Free, en-boy oranı ön ayarları ve sabit çözünürlükler. |
@@ -84,7 +141,7 @@ esnetilir; sonra viewport yeni boyutta çizer.
 | `viewport.camera_get` / `viewport.camera_set` | Editör kamerasını okur ya da taşır: pivot, uzaklık, yaw, pitch, görüş alanı, projeksiyon veya pivota bakan bir göz konumu. |
 | `viewport.view` | Standart bir görünüm: `perspective`, `top`, `bottom`, `front`, `back`, `left`, `right`. |
 | `viewport.frame` | Entity'leri, seçimi ya da her şeyi çerçeveler. |
-| `viewport.set_mode` / `viewport.set_overlays` | Gölgelendirme ve wireframe; grid ve seçim outline'ı. |
+| `viewport.set_mode` / `viewport.set_overlays` | Gölgelendirme ve wireframe; katmanlar ve görselleştiriciler. |
 | `viewport.project` | Bir Entity'nin ya da bir noktanın göründüğü piksel. |
 | `viewport.pick` | Bir pikseldeki Entity (asenkron); isteğe bağlı olarak seçimi değiştirir. |
 | `viewport.pick_rect` | Bir dikdörtgenin içinde pikseli olan her Entity (asenkron); isteğe bağlı olarak seçimi değiştirir. |
@@ -111,6 +168,12 @@ denetler:
 {"method": "viewport.set_aspect", "params": {"viewport": "game", "aspect": "fixed", "width": 640, "height": 360}}
 {"method": "viewport.screenshot", "params": {"viewport": "game"}}
 {"method": "viewport.sample", "params": {"viewport": "game", "x": 320, "y": 180, "radius": 2}}
+```
+
+Bir ajan her Entity için collider görselleştiricilerini ve istatistikleri şöyle açar:
+
+```json
+{"method": "viewport.set_overlays", "params": {"visualisers": {"colliders": true, "audio": false}, "visualiserScope": "all", "stats": true}}
 ```
 
 Seçimler, ekran görüntüleri ve örnekler, paneli gizliyken viewport'u kendileri çizer ve viewport'un Asset'leri

@@ -1,6 +1,7 @@
 #include "core/EditorCoreTestSupport.hpp"
 
 #include <illusion/editor/core/UiActions.hpp>
+#include <illusion/editor/core/ViewCube.hpp>
 #include <illusion/editor/core/ViewportHost.hpp>
 
 #include <cmath>
@@ -531,4 +532,148 @@ TEST_CASE("render.stats, gpu_info and diagnostics report the viewports' GPU, or 
     CHECK(ok(editor, "render.gpu_info").root().find("available").asBool() == std::optional<bool>(false));
     CHECK(ok(editor, "render.diagnostics").root().find("available").asBool() == std::optional<bool>(false));
     CHECK(fails(editor, "render.stats", "{}").kind == ErrorKind::Unsupported);
+}
+
+TEST_CASE("viewport.set_overlays changes the named overlays, visualiser kinds and scope only")
+{
+    EditorFixture fixture;
+    EditorContext& editor = *fixture.editor;
+    const ViewportSettings defaults;
+    CHECK(defaults.hover);
+    CHECK(defaults.icons);
+    CHECK(defaults.viewCube);
+    CHECK_FALSE(defaults.stats);
+    CHECK(defaults.visualiserScope == ViewportVisualiserScope::Selected);
+
+    const JsonDocument result = ok(editor, "viewport.set_overlays",
+                                   R"({"stats":true,"icons":false,"visualisers":{"colliders":false},)"
+                                   R"("visualiserScope":"all"})");
+    const ViewportSettings& settings = fixture.viewports.settings;
+    CHECK(settings.stats);
+    CHECK_FALSE(settings.icons);
+    CHECK(settings.hover);
+    CHECK(settings.viewCube);
+    CHECK(settings.cameraPreview);
+    CHECK_FALSE(settings.visualisers.colliders);
+    CHECK(settings.visualisers.lights);
+    CHECK(settings.visualisers.audio);
+    CHECK(settings.visualiserScope == ViewportVisualiserScope::All);
+    CHECK(result.root().pointer("/settings/visualisers/colliders").asBool() == std::optional<bool>(false));
+    CHECK(result.root().pointer("/settings/visualiserScope").asString() ==
+          std::optional<std::string_view>("all"));
+
+    ok(editor, "viewport.set_overlays", R"({"hover":false,"viewCube":false,"cameraPreview":false})");
+    CHECK_FALSE(settings.hover);
+    CHECK_FALSE(settings.viewCube);
+    CHECK_FALSE(settings.cameraPreview);
+    CHECK(settings.stats);
+    CHECK_FALSE(settings.visualisers.colliders);
+    CHECK(fails(editor, "viewport.set_overlays", R"({"visualiserScope":"some"})").kind ==
+          ErrorKind::ValidationFailed);
+    CHECK(fails(editor, "viewport.set_overlays", R"({"visualisers":{"meshes":true}})").kind ==
+          ErrorKind::ValidationFailed);
+}
+
+TEST_CASE("an agent's selection is recorded so that the Scene view can follow it")
+{
+    EditorFixture fixture;
+    EditorContext& editor = *fixture.editor;
+    ok(editor, "entity.create", R"({"name":"A"})");
+    ok(editor, "entity.create", R"({"name":"B"})");
+    CHECK(editor.agentSelectionVersion() == 0);
+
+    CommandOptions agent;
+    agent.origin = "rpc:claude";
+    ok(editor, "selection.set", R"({"entities":["/A"]})", agent);
+    const u64 followed = editor.agentSelectionVersion();
+    CHECK(followed != 0);
+    CHECK(followed == editor.selection().version());
+
+    // A person's change leaves the agent's version behind; a command that keeps the selection changes
+    // nothing.
+    ok(editor, "selection.set", R"({"entities":["/B"]})");
+    CHECK(editor.agentSelectionVersion() == followed);
+    CHECK(editor.selection().version() != followed);
+    ok(editor, "selection.get", "{}", agent);
+    CHECK(editor.agentSelectionVersion() == followed);
+}
+
+TEST_CASE("the view cube shows the faces towards the camera, farthest first")
+{
+    ViewportCamera camera;
+    camera.yaw = 0.0f;
+    camera.pitch = 0.0f;
+    std::array<ViewCubeFace, 6> faces{};
+    // Looking along -z: only the front face.
+    REQUIRE(viewCubeFaces(viewportRotation(camera), faces) == 1);
+    CHECK(faces[0].normal == Vec3(0.0f, 0.0f, 1.0f));
+    CHECK(faces[0].view == ViewportView::Front);
+    CHECK(faces[0].facing == doctest::Approx(1.0f));
+    CHECK(faces[0].center.x == doctest::Approx(0.0f).epsilon(1e-5));
+    // The front face's corners span the cube: x right, y down.
+    CHECK(faces[0].corners[0].x == doctest::Approx(-1.0f));
+    CHECK(faces[0].corners[0].y == doctest::Approx(1.0f));
+
+    camera.yaw = 30.0f;
+    camera.pitch = -20.0f;
+    const u32 count = viewCubeFaces(viewportRotation(camera), faces);
+    REQUIRE(count == 3);
+    for (u32 i = 1; i < count; ++i)
+    {
+        CHECK(faces[i - 1].facing <= faces[i].facing);
+    }
+    // Looking down from the front right: the top, front and right faces.
+    bool top = false;
+    bool front = false;
+    bool right = false;
+    for (u32 i = 0; i < count; ++i)
+    {
+        top = top || faces[i].view == ViewportView::Top;
+        front = front || faces[i].view == ViewportView::Front;
+        right = right || faces[i].view == ViewportView::Right;
+    }
+    CHECK((top && front && right));
+
+    const std::array<ViewAxisEnd, 6> ends = viewAxisEnds(viewportRotation(camera));
+    for (usize i = 1; i < ends.size(); ++i)
+    {
+        CHECK(ends[i - 1].depth <= ends[i].depth);
+    }
+}
+
+TEST_CASE("picking the view cube finds faces, edges and corners and turns the camera to look from them")
+{
+    ViewportCamera camera;
+    camera.yaw = 0.0f;
+    camera.pitch = 0.0f;
+    const Quat rotation = viewportRotation(camera);
+    CHECK(viewCubePick(rotation, Vec2(0.0f)) == std::optional<Vec3>(Vec3(0.0f, 0.0f, 1.0f)));
+    // y is down in the image: the upper right corner of the front face.
+    CHECK(viewCubePick(rotation, Vec2(0.95f, -0.95f)) == std::optional<Vec3>(Vec3(1.0f, 1.0f, 1.0f)));
+    CHECK(viewCubePick(rotation, Vec2(0.0f, 0.9f)) == std::optional<Vec3>(Vec3(0.0f, -1.0f, 1.0f)));
+    CHECK_FALSE(viewCubePick(rotation, Vec2(1.5f, 0.0f)).has_value());
+    CHECK_FALSE(viewCubePick(rotation, Vec2(std::nanf(""), 0.0f)).has_value());
+
+    CHECK(viewCubeView(Vec3(0.0f, 1.0f, 0.0f)) == std::optional<ViewportView>(ViewportView::Top));
+    CHECK(viewCubeView(Vec3(-1.0f, 0.0f, 0.0f)) == std::optional<ViewportView>(ViewportView::Left));
+    CHECK_FALSE(viewCubeView(Vec3(1.0f, 1.0f, 0.0f)).has_value());
+
+    // Each face's view looks along -normal, like the camera viewCubeCamera() turns to.
+    for (const Vec3 normal : {Vec3(1.0f, 0.0f, 0.0f), Vec3(-1.0f, 0.0f, 0.0f), Vec3(0.0f, 0.0f, 1.0f),
+                              Vec3(0.0f, 0.0f, -1.0f), Vec3(0.0f, 1.0f, 0.0f), Vec3(0.0f, -1.0f, 0.0f)})
+    {
+        const ViewportCamera preset = viewportPreset(camera, *viewCubeView(normal));
+        CHECK(nearlyEqual(viewportForward(preset), -normal));
+        CHECK(nearlyEqual(viewportForward(viewCubeCamera(camera, normal)), -normal));
+    }
+    // A corner looks diagonally down, keeping the pivot and distance.
+    camera.pivot = Vec3(2.0f, 1.0f, 0.0f);
+    const ViewportCamera corner = viewCubeCamera(camera, Vec3(1.0f, 1.0f, 1.0f));
+    CHECK(corner.yaw == doctest::Approx(45.0f));
+    CHECK(corner.pitch == doctest::Approx(-35.2644f).epsilon(1e-4));
+    CHECK(corner.pivot == camera.pivot);
+    CHECK(corner.distance == camera.distance);
+    CHECK(nearlyEqual(viewportForward(corner), -glm::normalize(Vec3(1.0f))));
+    // A zero direction keeps the camera.
+    CHECK(viewCubeCamera(camera, Vec3(0.0f)).yaw == camera.yaw);
 }

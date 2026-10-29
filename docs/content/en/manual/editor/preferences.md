@@ -26,8 +26,8 @@ except the recent projects). Invalid values fail with the field's JSON Pointer, 
 | --- | --- |
 | Appearance | `theme` (`dark`, `light`, `high-contrast`), `accent` (`azure`, `violet`, `teal`, `amber`), `uiScale` (0.75 to 2, times the monitor's scale), `reduceMotion`, `colorBlindAxes` (Okabe-Ito colours for the X, Y and Z axes). |
 | Language | `locale`: English, the pseudo-locale `en-XA` (accented, longer text for testing layouts) and every locale file in `editor-data/locales`. The language changes at the next frame. |
-| Keyboard | `keymap` preset and `shortcuts`, see below. |
-| AI Agents | `agentPermissions` (`read-only`, `ask`, `auto`; `ask` by default) and `approvalPopups`. See [Editor Window](interface.md#ai-activity). |
+| Keyboard | `keymap` preset and `shortcuts`, see below; `viewportNavigation` (`keymap`, `illusion`, `unity`, `unreal`, `blender`), the mouse controls of the Scene view (see [Scene Viewport](viewport.md#navigation-presets)). |
+| AI Agents | `agentPermissions` (`read-only`, `ask`, `auto`; `ask` by default), `approvalPopups` and `followAgent` (the Scene view frames what an agent selects). See [Editor Window](interface.md#ai-activity). |
 | Autosave | `autosaveInterval` (seconds, 0 for never, at most 3,600) and `autosaveCopies` (1 to 20). |
 | External Tools | `codeEditor`: the command that opens source files (used by the module workflow of a later milestone). |
 

@@ -112,7 +112,8 @@ In the editor window, a call that needs approval waits: the person at the editor
 once, allows that kind of command for the rest of the session, or denies it. The AI Activity panel shows the
 connected agents, every call with its params, duration and result, and lets the person pause or disconnect an
 agent and change the mode (see [Editor Window](interface.md#ai-activity)). A waiting call shows no progress;
-the agent's later calls wait behind it.
+the agent's later calls wait behind it. With **Follow agent** on, the Scene view frames every selection the
+agent makes (see [Scene Viewport](viewport.md#following-the-agent)).
 
 A denied call fails with kind `permission_denied`. Every change an agent makes has the origin
 `rpc:illusion_mcp`, so `history.undo {"scope": "mine"}` undoes only the agent's steps and the editor's

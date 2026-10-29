@@ -95,6 +95,24 @@ struct ViewportCamera
     f32 orthographicHeight = 10.0f; ///< Vertical extent in world units (orthographic), 0.01 to 100,000.
 };
 
+/// Which entities the DebugDraw visualisers of a Scene viewport outline.
+enum class ViewportVisualiserScope : u8
+{
+    Selected, ///< Only the selected entities.
+    All,      ///< Every visible entity.
+};
+
+/// The kinds of DebugDraw visualisers a Scene viewport draws.
+struct ViewportVisualisers
+{
+    bool lights = true;     ///< Point light ranges and directional light directions.
+    bool cameras = true;    ///< Camera frusta.
+    bool colliders = true;  ///< Collider shapes.
+    bool characters = true; ///< CharacterController capsules.
+    bool joints = true;     ///< Joint anchors, axes and limits.
+    bool audio = true;      ///< AudioSource distances and cones.
+};
+
 /// What a viewport draws.
 struct ViewportSettings
 {
@@ -102,7 +120,14 @@ struct ViewportSettings
     bool wireframe = false;                         ///< Wireframe drawn over opaque surfaces.
     bool grid = true;                               ///< Ground grid.
     bool selectionOutline = true;                   ///< Outline around selected entities.
-    ViewportAspect aspect = ViewportAspect::Free;   ///< Shape of the image.
+    bool hover = true;                              ///< Highlight of the entity under the cursor.
+    bool icons = true;               ///< Icons of lights, cameras and audio entities (Scene viewports).
+    bool viewCube = true;            ///< View cube and axis navigator (Scene viewports).
+    bool stats = false;              ///< Statistics of the last frame in a corner.
+    bool cameraPreview = true;       ///< Picture-in-picture view through a selected Camera (Scene viewports).
+    ViewportVisualisers visualisers; ///< Visualiser kinds.
+    ViewportVisualiserScope visualiserScope = ViewportVisualiserScope::Selected; ///< Visualised entities.
+    ViewportAspect aspect = ViewportAspect::Free;                                ///< Shape of the image.
     u32 width = 0;  ///< Image width with ViewportAspect::Fixed, 16 to 7,680 (0 otherwise).
     u32 height = 0; ///< Image height with ViewportAspect::Fixed, 16 to 4,320 (0 otherwise).
 };
@@ -188,6 +213,8 @@ struct ViewportInput
     std::array<bool, 3> buttons{}; ///< Left, right and middle mouse buttons held.
     bool alt = false;              ///< Alt held.
     bool shift = false;            ///< Shift held.
+    bool ctrl = false;             ///< Ctrl held.
+    bool orbit = false;            ///< A left drag orbits whatever the preset (it started on the view cube).
     Vec3 move{0.0f};               ///< Fly keys: x = D - A, y = E - Q, z = W - S (each -1, 0 or 1).
     f32 deltaSeconds = 0.0f;       ///< Length of the frame.
 };
@@ -196,10 +223,32 @@ struct ViewportInput
 struct ViewportStyle
 {
     Vec4 selection{1.0f, 0.62f, 0.1f, 1.0f}; ///< Selection outline.
+    Vec4 hover{1.0f, 0.82f, 0.54f, 1.0f};    ///< Hover highlight.
     Vec4 grid{0.5f, 0.5f, 0.5f, 0.5f};       ///< Grid lines.
     Vec4 axisX{0.94f, 0.32f, 0.31f, 1.0f};   ///< The x axis of the grid.
     Vec4 axisY{0.48f, 0.8f, 0.16f, 1.0f};    ///< The y axis (orthographic side views).
     Vec4 axisZ{0.24f, 0.55f, 0.96f, 1.0f};   ///< The z axis of the grid.
+};
+
+/// What an icon billboard stands for.
+enum class ViewportIconKind : u8
+{
+    Camera,           ///< A Camera.
+    DirectionalLight, ///< A DirectionalLight.
+    PointLight,       ///< A PointLight.
+    SkyLight,         ///< A SkyLight or ProceduralSky.
+    AudioSource,      ///< An AudioSource.
+    AudioListener,    ///< An AudioListener.
+};
+
+/// An icon billboard of a Scene viewport: where an entity without a visible surface is.
+struct ViewportIcon
+{
+    Entity entity{};                                  ///< The entity.
+    ViewportIconKind kind = ViewportIconKind::Camera; ///< What it is (the first match in the enum order).
+    Vec2 pixel{0.0f};                                 ///< Its position in image pixels.
+    f32 depth = 0.0f;                                 ///< Reversed-Z depth (larger is nearer).
+    bool selected = false;                            ///< The entity is selected.
 };
 
 /// What a viewport panel draws this frame.
@@ -212,6 +261,14 @@ struct ViewportFrame
     ViewportProjection projection = ViewportProjection::Perspective; ///< Projection of its camera.
     ViewportKind kind = ViewportKind::Scene;                         ///< What the viewport looks through.
     bool hasCamera = true; ///< A Game viewport found a Camera (Scene viewports always have one).
+    ViewportCamera camera; ///< The editor camera as shown now (Scene viewports; for the view cube).
+    Entity hovered{};      ///< The pickable entity under the cursor (null for none or while navigating).
+    /// Icon billboards, farthest first (Scene viewports with ViewportSettings::icons); valid until the next
+    /// frame() of any viewport.
+    std::span<const ViewportIcon> icons;
+    u64 preview = 0;        ///< ImGui texture id of the picture-in-picture camera view (0: none).
+    UVec2 previewSize{0};   ///< Its size in pixels.
+    Entity previewCamera{}; ///< The Camera it looks through.
 };
 
 /// Smallest camera distance and orthographic height.

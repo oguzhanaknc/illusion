@@ -42,6 +42,53 @@ void translateCamera(ViewportCamera& camera, Vec3 offset) noexcept
 
 } // namespace
 
+NavigationPreset navigationPresetFromName(std::string_view name) noexcept
+{
+    if (name == "unity")
+    {
+        return NavigationPreset::Unity;
+    }
+    if (name == "unreal")
+    {
+        return NavigationPreset::Unreal;
+    }
+    if (name == "blender")
+    {
+        return NavigationPreset::Blender;
+    }
+    return NavigationPreset::Illusion;
+}
+
+NavigationMode navigationMode(NavigationPreset preset, u32 button, const ViewportInput& input) noexcept
+{
+    if (button == 0 && (input.orbit || input.alt))
+    {
+        return NavigationMode::Orbit;
+    }
+    switch (preset)
+    {
+    case NavigationPreset::Illusion:
+    case NavigationPreset::Unity:
+    case NavigationPreset::Unreal:
+        if (button == 0)
+        {
+            return preset == NavigationPreset::Unreal ? NavigationMode::Walk : NavigationMode::None;
+        }
+        if (button == 1)
+        {
+            return input.alt ? NavigationMode::Dolly : NavigationMode::Fly;
+        }
+        return button == 2 ? NavigationMode::Pan : NavigationMode::None;
+    case NavigationPreset::Blender:
+        if (button != 2)
+        {
+            return NavigationMode::None;
+        }
+        return input.shift ? NavigationMode::Pan : input.ctrl ? NavigationMode::Dolly : NavigationMode::Orbit;
+    }
+    return NavigationMode::None;
+}
+
 ViewportCamera clampCamera(const ViewportCamera& camera) noexcept
 {
     const ViewportCamera defaults;
@@ -141,20 +188,19 @@ void EditorCamera::startDrag(const ViewportInput& input) noexcept
     {
         return;
     }
-    if (pressed(0) && input.alt)
+    for (u32 button = 0; button < 3; ++button)
     {
-        m_mode = NavigationMode::Orbit;
-        m_modeButton = 0;
-    }
-    else if (pressed(1))
-    {
-        m_mode = input.alt ? NavigationMode::Dolly : NavigationMode::Fly;
-        m_modeButton = 1;
-    }
-    else if (pressed(2))
-    {
-        m_mode = NavigationMode::Pan;
-        m_modeButton = 2;
+        if (!pressed(button))
+        {
+            continue;
+        }
+        const NavigationMode mode = navigationMode(m_settings.preset, button, input);
+        if (mode != NavigationMode::None)
+        {
+            m_mode = mode;
+            m_modeButton = button;
+            return;
+        }
     }
 }
 
@@ -218,6 +264,17 @@ bool EditorCamera::update(const ViewportInput& input, UVec2 size) noexcept
         const Vec3 move = glm::clamp(finite(input.move) ? input.move : Vec3(0.0f), Vec3(-1.0f), Vec3(1.0f));
         const f32 speed = m_flySpeed * (input.shift ? m_settings.fastMultiplier : 1.0f);
         translateCamera(camera, move * speed * dt);
+        break;
+    }
+    case NavigationMode::Walk:
+    {
+        // Turn around the eye, then move along the ground in the direction the camera faces.
+        const Vec3 eye = viewportEye(camera);
+        camera.yaw -= delta.x * m_settings.lookDegreesPerPixel;
+        camera.pivot = eye + viewportForward(camera) * camera.distance;
+        const f32 yaw = glm::radians(camera.yaw);
+        const Vec3 ahead(-std::sin(yaw), 0.0f, -std::cos(yaw));
+        camera.pivot += ahead * (-delta.y * unitsPerPixel(size.y) * m_settings.walkPerPixel);
         break;
     }
     case NavigationMode::None:

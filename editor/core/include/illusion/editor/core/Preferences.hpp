@@ -55,9 +55,13 @@ struct Preferences
     // Keyboard
     std::string keymap = "illusion";        ///< Keymap preset: "illusion", "unity", "unreal" or "blender".
     std::vector<ShortcutBinding> shortcuts; ///< Changes to the preset, at most one per action.
+    /// Mouse navigation of the Scene views: "keymap" (the keymap preset's), "illusion", "unity", "unreal" or
+    /// "blender".
+    std::string viewportNavigation = "keymap";
     // AI agents
     std::string agentPermissions = "ask"; ///< Permission mode of agents in the window: read-only, ask, auto.
     bool approvalPopups = true;           ///< Show a pop-up when an agent asks for approval.
+    bool followAgent = false;             ///< The Scene view frames what an agent selects.
     // Autosave
     f64 autosaveInterval = 60.0; ///< Seconds between autosaves of a dirty scene, 0 (never) to 3,600.
     u32 autosaveCopies = 3;      ///< Autosave files kept per scene, 1 to 20.
@@ -103,5 +107,11 @@ void addRecentProject(std::vector<std::string>& recent, std::string_view project
 
 /// The accent preset names preferences accept.
 [[nodiscard]] std::span<const std::string_view> preferenceAccents() noexcept;
+
+/// The viewport navigation names preferences accept: "keymap" and the keymap preset names.
+[[nodiscard]] std::span<const std::string_view> viewportNavigationPresets() noexcept;
+
+/// The navigation preset @p preferences give the Scene views ("keymap" resolved to the keymap preset).
+[[nodiscard]] std::string_view viewportNavigationOf(const Preferences& preferences) noexcept;
 
 } // namespace illusion::editor

@@ -2,8 +2,9 @@
 
 /// @file
 /// The GPU viewports of the editor process: one SceneRenderer per viewport rendering the edited World into a
-/// texture the UI shows, the ground grid and selection outline overlays, and asynchronous picking. It is
-/// the ViewportHost of the `viewport.*` commands and the Scene panel.
+/// texture the UI shows, the ground grid, DebugDraw visualisers, hover highlight and selection outline
+/// overlays, icon billboards, the picture-in-picture view through a selected Camera, and asynchronous
+/// picking. It is the ViewportHost of the `viewport.*` commands and the Scene panel.
 ///
 /// ```cpp
 /// auto viewports = ViewportService::create(device, editor, offscreen->renderer());
@@ -46,6 +47,8 @@ struct ViewportServiceStats
     u32 rendered = 0;         ///< Viewports rendered.
     u32 picksPending = 0;     ///< Picks waiting for the GPU.
     u32 readbacksPending = 0; ///< Readbacks (screenshots, samples, box selects) waiting for the GPU.
+    u32 visualisers = 0;      ///< DebugDraw visualisers recorded, summed over the viewports.
+    u32 previews = 0;         ///< Picture-in-picture camera views rendered (0 or 1).
 };
 
 /// The editor's viewports: "scene" (the Scene panel), "game" (the Game panel, through the scene's main
