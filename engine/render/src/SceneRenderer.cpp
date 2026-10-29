@@ -223,6 +223,14 @@ struct SceneRenderer::Impl
     nvrhi::FramebufferHandle prepassFramebuffer;
     // Output framebuffers by target texture (tonemapping writes the caller's target).
     std::unordered_map<nvrhi::ITexture*, nvrhi::FramebufferHandle> framebuffers;
+    // Render-size targets replaced by a resize, kept until the GPU has finished the frames that used them:
+    // clears do not keep their textures alive in NVRHI's command lists.
+    struct RetiredTargets
+    {
+        std::array<nvrhi::TextureHandle, 5> textures;
+        nvrhi::EventQueryHandle done;
+    };
+    std::vector<RetiredTargets> retired;
 
     PostProcessor post;
     bool postDirty = true;
@@ -712,6 +720,13 @@ nvrhi::IFramebuffer* SceneRenderer::Impl::outputFramebufferFor(nvrhi::ITexture* 
     const nvrhi::TextureDesc& colorDesc = color->getDesc();
     if (!depth || depth->getDesc().width != colorDesc.width || depth->getDesc().height != colorDesc.height)
     {
+        if (depth)
+        {
+            // Everything submitted so far may still use the old targets.
+            RetiredTargets old{{depth, hdr, motion, ids, idDepth}, device->createEventQuery()};
+            device->setEventQuery(old.done, nvrhi::CommandQueue::Graphics);
+            retired.push_back(std::move(old));
+        }
         nvrhi::TextureDesc depthDesc;
         depthDesc.width = colorDesc.width;
         depthDesc.height = colorDesc.height;
@@ -1027,6 +1042,8 @@ void SceneRenderer::render(nvrhi::ICommandList* commandList, nvrhi::ITexture* co
     ILL_PROFILE_SCOPE();
     Impl& impl = *m_impl;
     impl.stats = RenderStats{};
+    std::erase_if(impl.retired,
+                  [&](const Impl::RetiredTargets& old) { return impl.device->pollEventQuery(old.done); });
     if (impl.motionWorld != &world)
     {
         resetTemporalHistory();
