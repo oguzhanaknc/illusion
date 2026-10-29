@@ -393,7 +393,10 @@ public:
 
     editor::ViewportGpuInfo gpuInfo() const override
     {
-        return editor::ViewportGpuInfo{.name = "Fake GPU", .validation = true, .validationErrors = 0};
+        editor::ViewportGpuInfo info;
+        info.name = "Fake GPU";
+        info.validation = true;
+        return info;
     }
 
     Secondary& find(std::string_view id)
