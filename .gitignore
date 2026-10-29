@@ -13,6 +13,7 @@ CMakeUserPresets.json
 # Generated docs
 /site/
 /docs/api/
+/render-captures/
 
 # Python
 __pycache__/

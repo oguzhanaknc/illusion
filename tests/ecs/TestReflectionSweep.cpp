@@ -282,14 +282,13 @@ TEST_CASE("runtime state Components are never saved")
 {
     reflectEngine();
     World world;
-    world.create(Transform{}, MotionHistory{}, PhysicsBody{}, PhysicsJoint{}, CharacterBody{},
-                 AudioPlayback{});
+    world.create(Transform{}, PhysicsBody{}, PhysicsJoint{}, CharacterBody{}, AudioPlayback{});
     assignMissingGuids(world);
     const SceneSaveResult saved = saveScene(world);
     REQUIRE(saved.ok());
-    CHECK(saved.skippedComponents == 5);
-    for (const char* name : {"illusion.MotionHistory", "illusion.PhysicsBody", "illusion.PhysicsJoint",
-                             "illusion.CharacterBody", "illusion.AudioPlayback"})
+    CHECK(saved.skippedComponents == 4);
+    for (const char* name : {"illusion.PhysicsBody", "illusion.PhysicsJoint", "illusion.CharacterBody",
+                             "illusion.AudioPlayback"})
     {
         CAPTURE(name);
         CHECK(saved.json.find(name) == std::string::npos);

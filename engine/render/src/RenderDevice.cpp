@@ -390,6 +390,8 @@ bool RenderDevice::Impl::selectPhysicalDevice(const RenderDeviceDesc& desc)
             continue;
         }
 
+        info.timestamps =
+            families[*queueFamily].timestampValidBits != 0 && p.limits.timestampComputeAndGraphics;
         const int score = scoreDevice(p.deviceType, desc.gpuPreference);
         if (score > best.score)
         {
@@ -457,6 +459,7 @@ bool RenderDevice::Impl::createLogicalDevice()
         supported.v12.descriptorBindingUpdateUnusedWhilePending &&
         properties12.maxPerStageDescriptorUpdateAfterBindSampledImages >= kBindlessTextureCapacity &&
         properties12.maxDescriptorSetUpdateAfterBindSampledImages >= kBindlessTextureCapacity;
+    gpu.wireframe = supported.core.features.fillModeNonSolid != VK_FALSE;
     gpu.multiDrawIndirect =
         supported.core.features.multiDrawIndirect && supported.core.features.drawIndirectFirstInstance;
 

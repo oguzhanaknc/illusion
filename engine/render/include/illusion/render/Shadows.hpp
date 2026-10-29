@@ -46,7 +46,7 @@ struct ShadowCascades
 };
 
 /// Fits cascades to the view described by @p view (world to view) and @p projection (from
-/// perspectiveReversedZ()) for a light travelling along @p lightDirection.
+/// perspectiveReversedZ() or orthographicReversedZ()) for a light travelling along @p lightDirection.
 ///
 /// Each cascade bounds its frustum slice with a sphere, so its size does not change when the camera
 /// turns, and its position is snapped to whole shadow-map texels, so shadow edges do not shimmer when

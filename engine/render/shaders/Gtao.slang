@@ -69,9 +69,9 @@ void gtaoMain(uint3 id: SV_DispatchThreadID)
     }
     const float3 position = viewPosition((float2(pixel) + 0.5) * g_post.size.zw, depth);
     const float3 normal = reconstructNormal(pixel, position);
-    const float3 view = normalize(-position);
+    const float3 view = g_post.temporal.z > 0.5 ? float3(0, 0, 1) : normalize(-position);
     const float radius = g_post.ao.x;
-    const float radiusPixels = radius * g_post.ao.z / max(-position.z, 1e-4);
+    const float radiusPixels = radius * g_post.ao.z / (g_post.temporal.z > 0.5 ? 1.0 : max(-position.z, 1e-4));
     if (radiusPixels < 1.0)
     {
         g_output[id.xy] = 1.0;

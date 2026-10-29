@@ -131,7 +131,7 @@ in degrees, light colours are HDR colours, and `RigidBody` requires a `Collider`
 
 ## Runtime state
 
-Components that only hold runtime state (`MotionHistory`, `PhysicsBody`, `CharacterBody`, `PhysicsJoint`,
+Components that only hold runtime state (`PhysicsBody`, `CharacterBody`, `PhysicsJoint`,
 `AudioPlayback`) are reflected with `reflectRuntime()`. They get a stable name, so the editor can list
 them, and are marked `transient`: scene files skip them.
 

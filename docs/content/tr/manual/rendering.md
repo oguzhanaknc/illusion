@@ -132,7 +132,7 @@ ILL_LOG_DEBUG("Game", "{} draw calls", renderer->stats().drawCalls);
 - `render()` Entity'leri eler ([Culling](#culling) bölümüne bakın), Pipeline, Material ve Mesh'e göre
   sıralar ve aynı (Mesh, submesh, Material) üçlüsünün her dizisini geçiş başına tek bir instanced draw
   ile çizer. `stats()` adayları, frustum içindeki Entity'leri, draw call'ları ve üçgenleri raporlar.
-- Renderer, hedefin boyutunu izleyen bir derinlik buffer'ına sahiptir. Çizdiğiniz her renk formatı için
+- Renderer, hedefin boyutunu izleyen bir derinlik buffer'ına sahiptir. Her görünüm için hedefin renk formatına uygun
   ayrı bir `SceneRenderer` oluşturun.
 - sRGB formatlı renk hedefleri doğrusal renk alır; UNORM hedefler sRGB kodlanmış renk alır, böylece
   ikisi de aynı görünür.
@@ -342,14 +342,102 @@ renderer->resetTemporalHistory();
   geçer.
 - Bloom enerjiyi korur: ışık eklemek yerine görüntünün `bloom.intensity` kadarını bulanık kopyasıyla
   değiştirir.
-- TAA, depth prepass'in yazdığı piksel başına hareket vektörleriyle hareket eden nesneleri izler.
-  Renderer, her RenderMesh'in önceki dünya matrisini kendi eklediği bir `MotionHistory`
-  Component'inde tutar; bir nesneyi ışınladıktan sonra, sıçramanın bulanıklaşmaması için
-  `MotionHistory::previousWorld` değerini yeni matrisine ayarlayın. TAA varsayılan olarak kapalıdır;
-  en keskin görüntüden çok yumuşak kenarlara ihtiyaç duyan sahnelere uygundur.
+- TAA, depth prepass'in yazdığı piksel başına hareket vektörleriyle nesneleri izler. Her renderer,
+  Entity generation değerini kontrol ederek kendi önceki Transform'larını saklar. Render işlemi World'ü
+  değiştirmez. Her görünüm için ayrı renderer kullanın; nesneleri ışınladıktan veya World'ü değiştirdikten
+  sonra `resetTemporalHistory()` çağırın. TAA varsayılan olarak kapalıdır.
 - `motionVectors()`, hata ayıklama görünümleri için hareket vektörü Texture'ını döndürür.
 - `stats().drawCalls` her draw'ı sayar: occlusion culling ile opak bir batch, hem depth prepass'te hem de
   gölgelendirmede culling aşaması başına bir indirect draw'a sahiptir.
+
+### Kameralar ve görünüm filtreleri
+
+Camera şeması v2, `projection`, `orthoHeight`, `farPlane` ve `priority` ekler. Eski sahneler perspective
+varsayılanlarını korur. Perspective, `fovY` ve sonsuz uzak düzlem kullanır; orthographic, pozitif
+`orthoHeight` ve `farPlane > nearPlane` kullanır. `findMainCamera(world)`, Transform'u olan etkin
+Camera'lardan en yüksek öncelikliyi döndürür; eşitlikte en küçük Entity index kazanır. Yoksa null Entity döner.
+
+```cpp
+illusion::Camera camera;
+camera.projection = illusion::CameraProjection::Orthographic;
+camera.orthoHeight = 12.0f;
+camera.farPlane = 200.0f;
+camera.priority = 10;
+auto view = illusion::RenderView::fromCamera(illusion::Transform{}, camera, 16.0f / 9.0f);
+view.layerMask = 1u << 2;
+```
+
+`RenderMesh::kVisible`, `layers & view.layerMask` ve `view.hiddenEntities` bütün geçişleri filtreler.
+Gizleme bitset'i `render()` dönene kadar ödünç alınır: `index / 64` sözcüğündeki `index % 64` biti Entity'yi
+gizler; eksik sözcükler görünür sayılır. Entity index'leri yeniden kullanıldığında bitset'i yenileyin.
+`kCastShadows` gölge oluşturmayı ayrıca kontrol eder. Cascade'ler iki projeksiyonu da destekler ve
+orthographic uzak düzleminde sonlanır.
+
+### Entity ID, readback ve overlay
+
+Entity index ve generation içeren RG32_UINT attachment için `SceneRendererDesc::entityIds = true` ayarlayın.
+Arka planda iki sözcük de `~0u` olur. Masked pikseller alpha cutoff'a uyar; alpha'sı sıfır olmayan blended
+pikseller, sahnenin opak derinliğini değiştirmeden en yakın yüzeyi seçer.
+
+`viewTargets()`, ödünç alınan `depth`, `ids`, `hdr`, `motion`, `renderSize`, `outputSize`,
+`viewProjection` (jitter'lı) ve `unjitteredViewProjection` sağlar. Boyut değişimine veya renderer'ın
+yıkımına kadar geçerlidir. Overlay'i `render()` sonrasında kaydedin; derinliği SRV olarak örnekleyin ve
+çıktı piksellerini render piksellerine eşleyin.
+
+Header: `<illusion/render/ReadbackRing.hpp>`. Ring'i bir kez oluşturun; kopya istemeden önce render
+komutlarını gönderin. Sonraki karelerde sorgulayın; `Pending` hedefi değiştirmez. Dolu ring yeni istekleri
+reddeder. Bölgeler ve hedef boyutu doğrulanır; kısa hedef buffer ticket'ı tüketmez.
+
+```cpp
+auto readback = illusion::ReadbackRing::create(*device, 3);
+const auto ticket = readback->request(renderer->viewTargets().ids,
+                                     illusion::UVec2(20, 30), illusion::UVec2(1));
+if (ticket)
+{
+    illusion::UVec2 id;
+    const auto result = readback->read(*ticket, std::as_writable_bytes(std::span(&id, 1)), true);
+    // true waits for this copy only; interactive tools poll with false on later frames.
+    if (result == illusion::ReadbackStatus::Ready)
+    {
+        // Validate index and generation against the current World before using the Entity.
+    }
+}
+```
+
+Her ticket başarıyla okunana kadar bir slot tutar. Boyut ve format eşleştiğinde staging depolaması yeniden
+kullanılır. Hem sorgulama hem beklemeli okuma event query kullanır; hiçbiri `waitForIdle()` çağırmaz.
+
+### Debug çizimleri ve tanılama
+
+`DebugDraw` (`<illusion/render/DebugDraw.hpp>`), oluşturulurken çizgi depolamasını ayırır. `line`, `box`
+ve `sphere`, geçersiz giriş veya yetersiz alanda hiçbir şey eklemeden false döndürür. Her karede `clear()`
+çağırın. Kayıt sırasında bellek ayrılmaz; `render/debugdraw-record` Benchmark'ı 100 bin çizgi için çizgi
+başına 20 ns bütçe uygular.
+
+```cpp
+illusion::DebugDraw draw(16384);
+draw.line(illusion::Vec3(0), illusion::Vec3(1, 0, 0), illusion::Vec4(1, 0, 0, 1),
+          3.0f, illusion::DebugDepth::OnTop);
+auto overlay = illusion::DebugDrawRenderer::create(*device, rendererDesc.colorFormat);
+// While commands is open, after renderer->render(...):
+overlay->render(commands, swapchain->currentBackBuffer(), renderer->viewTargets(), draw);
+```
+
+Overlay renderer'ını bir kez oluşturun. Genişlik çıktı pikseli cinsindendir; GPU wide-line desteği yerine
+quad kullanılır. `DebugDepth::Tested`, reversed-Z sahne derinliğini örnekler; `OnTop` geometri arkasında da
+görünür. Ayrı render/çıktı boyutları, çıktı çözünürlüğü farklıyken de doğru örtüşme sağlar.
+
+`setDebugView()`, Lit, Unlit, Albedo, Normals, Roughness, Metallic, AmbientOcclusion, ShadowCascades veya
+MotionVectors seçer. Tanılama modları temporal biriktirme, bloom, pozlama ve ACES'i atlar; çıktı renk
+kodlaması korunur. `setWireframeOverlay(true)` opak üçgen kenarlarını çizer; non-solid fill olmayan GPU'da
+false döndürür. `setClearColor()` arka plan radiance değerini değiştirir.
+
+`SceneRendererDesc::gpuTimers` ile ölçümü açın. `gpuTimings()`, tamamlanan geçiş sürelerini milisaniye olarak
+sorgular: `available` timestamp desteğini, `valid` tamamlanmış ölçümü bildirir. Query ring doluysa beklemek
+yerine ölçüm atlanır. `stats().lightsDropped`, 4 directional ve 16 point light sınırını aşan etkin ışıkları
+sayar. GPU regresyonları DebugDraw, orthographic gölgeler ve normals görüntülerini `tests/data/render/`
+PNG'leriyle karşılaştırır; `ILLUSION_UPDATE_GOLDENS=1` bunları günceller. Test çalışma dizinindeki
+`render-captures/`, inceleme için görüntüleri saklar.
 
 ### glTF görüntüleyici
 
@@ -372,7 +460,7 @@ bunu sağlamak için Vulkan viewport'unu çevirir; bu yüzden projeksiyon matris
 gerekmez. Texture koordinatlarının başlangıç noktası sol üst köşedir.
 
 Dünya uzayı sağ elli ve y yukarıdır; kameralar kendi -z eksenleri boyunca bakar ve ön yüzler saat
-yönünün tersindedir. Sahne renderer'ı sonsuz uzak düzlemli **reversed-Z** kullanır: yakın düzlem
+yönünün tersindedir. Perspective görünüm sonsuz uzak düzlemli **reversed-Z** kullanır: yakın düzlem
 derinlik 1'e, sonsuz ise 0'a eşlenir; bu, derinlik hassasiyetini mesafe boyunca neredeyse eşit tutar.
 Projeksiyon matrislerini `glm::perspective()` ile değil, `perspectiveReversedZ()` (veya
 `RenderView::fromCamera()`) ile oluşturun.

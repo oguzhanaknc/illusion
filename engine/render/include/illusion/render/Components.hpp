@@ -43,17 +43,9 @@ struct RenderSky
     u64 sourceKey = 0;               ///< Key of the SkyLight it was resolved from; 0 for code.
 };
 
-/// World matrix of a RenderMesh entity in the previous frame, for motion vectors (temporal
-/// anti-aliasing). The SceneRenderer adds and updates it; set it to the current matrix after teleporting
-/// an object so the jump is not treated as motion.
-struct MotionHistory
-{
-    Mat4 previousWorld{1.0f}; ///< World matrix used by the previous render() call.
-};
-
 /// Reflects the render Components of SceneComponents.hpp (MeshRenderer, Camera, DirectionalLight,
 /// PointLight, SkyLight and ProceduralSky as "illusion.<Name>") with editor metadata, and RenderMesh,
-/// RenderSky and MotionHistory as runtime state (TypeMeta::transient). Also reflects the structs
+/// RenderSky as runtime state (TypeMeta::transient). Also reflects the structs
 /// ShadowSettings, PostProcessSettings (with AmbientOcclusionSettings, BloomSettings and
 /// TemporalAntiAliasingSettings) and EnvironmentDesc as "illusion.<Name>" in registry.structs().
 void reflectRenderComponents(ComponentRegistry& registry = ComponentRegistry::instance());

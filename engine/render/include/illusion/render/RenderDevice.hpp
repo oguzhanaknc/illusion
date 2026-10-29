@@ -63,6 +63,8 @@ struct GpuInfo
     bool software = false;  ///< True for CPU implementations such as lavapipe.
     /// Descriptor indexing with update-after-bind sampled images (bindless textures) is available.
     bool bindless = false;
+    bool wireframe = false;  ///< Non-solid polygon fill is available.
+    bool timestamps = false; ///< Graphics-queue timestamp queries are available.
     /// Multi-draw indirect with a first-instance offset per draw is available.
     bool multiDrawIndirect = false;
 };

@@ -233,10 +233,10 @@ void PostProcessor::beginFrame(nvrhi::ICommandList* commands, const Frame& frame
         Vec4(std::max(settings.ambientOcclusion.radius, 1e-3f), settings.ambientOcclusion.intensity,
              frame.projection[1][1] * height * 0.5f, noiseOffset);
     constants.temporal = Vec4(std::clamp(settings.temporalAntiAliasing.currentFrameWeight, 0.01f, 1.0f),
-                              frame.historyValid ? 1.0f : 0.0f, 0.0f, 0.0f);
+                              frame.historyValid ? 1.0f : 0.0f, frame.projection[3][3], 0.0f);
     constants.bloom = Vec4(static_cast<f32>(m_bloomLevels), std::clamp(settings.bloom.intensity, 0.0f, 1.0f),
                            settings.bloom.enabled ? 1.0f : 0.0f, 0.0f);
-    constants.output = Vec4(frame.exposure, m_encodeSrgb ? 1.0f : 0.0f, 0.0f, 0.0f);
+    constants.output = Vec4(frame.exposure, m_encodeSrgb ? 1.0f : 0.0f, frame.diagnostic ? 1.0f : 0.0f, 0.0f);
     commands->writeBuffer(m_constants, &constants, sizeof(constants));
     if (temporal)
     {

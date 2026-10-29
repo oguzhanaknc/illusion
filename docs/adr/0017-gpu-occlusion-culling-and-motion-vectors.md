@@ -1,6 +1,6 @@
 # 0017. Two-phase GPU occlusion culling, indirect draws and per-object motion vectors
 
-- Status: Accepted
+- Status: Partially superseded by [0040](0040-renderer-extension-points.md) (motion-history ownership only)
 - Date: 2026-10-17
 
 ## Context
