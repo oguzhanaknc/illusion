@@ -25,12 +25,35 @@ The editor camera orbits around a pivot point. The mouse controls are:
 Framing and the standard views move the camera with a short animation; the `reduceMotion` preference moves it
 at once. While the camera moves, keyboard shortcuts are paused so that the fly keys do not run actions.
 
+## Game view and more viewports
+
+The **Game** panel shows the scene through its main camera (the first active entity with a `Camera`), the
+way the player will see it: without the grid, the outline and editor-only entities. When the scene has no
+camera, the panel says so. The editor camera commands and the view menu work only in Scene views.
+
+The **Aspect** menu of every viewport sets the shape of its image: **Free** fills the panel, the presets
+(16:9, 16:10, 4:3, 21:9, 1:1) fit the largest image of that shape into the panel, and the fixed resolutions
+(640 × 360, 1280 × 720, 1920 × 1080) render exactly that many pixels whatever the panel size. The image is
+centred with bars around it.
+
+**New viewport** in the Scene toolbar opens up to three more Scene views (Scene 2, 3, 4), each with its own
+editor camera, starting from the camera and settings of the main one. Closing the window closes the viewport.
+
+## Camera bookmarks
+
+**Ctrl+Shift+1** to **Ctrl+Shift+9** save the editor camera of a Scene view in a bookmark; **Ctrl+1** to
+**Ctrl+9** move the camera back to it. Bookmarks are shared by the Scene views and kept until the editor
+closes.
+
 ## Selecting
 
 A click selects the entity under the cursor; **Shift** + click adds it to the selection and **Ctrl** + click adds
 or removes it. A click on the background clears the selection. Clicks within 2 pixels of an entity's edge still
 hit it. Clicking the same spot again selects the next entity under the cursor, from front to back, so entities
 hidden behind others can be selected too. Entities hidden or locked in the Outliner are never picked.
+
+A left drag draws a selection box and selects every entity with a pixel inside it; **Shift** adds them and
+**Ctrl** toggles them.
 
 ## Toolbar
 
@@ -40,6 +63,8 @@ hidden behind others can be selected too. Entities hidden or locked in the Outli
 | **Overlays** | The grid and the selection outline. |
 | **View** | Perspective and the orthographic Top, Bottom, Front, Back, Left and Right views around the pivot. |
 | Frame | Frames the selection. |
+| **Aspect** | Free, the aspect presets and the fixed resolutions. |
+| New viewport | Opens another Scene view (main Scene panel only). |
 
 The grid lies on the ground plane (the plane facing the camera in the orthographic side views). Its spacing
 adapts to the distance in steps of ten, and the x and z axes are drawn in the axis colours of the theme (the
@@ -59,6 +84,14 @@ released; then the viewport renders at the new size.
 | `viewport.set_mode` / `viewport.set_overlays` | Shading and wireframe; grid and selection outline. |
 | `viewport.project` | The pixel where an entity or a point appears. |
 | `viewport.pick` | The entity at a pixel (asynchronous); optionally changes the selection. |
+| `viewport.pick_rect` | Every entity with a pixel in a rectangle (asynchronous); optionally changes the selection. |
+| `viewport.screenshot` | A PNG of the viewport image (asynchronous), as an MCP image. |
+| `viewport.sample` | The average colour of a few pixels as RGBA and hue, saturation, value (asynchronous). |
+| `viewport.create` / `viewport.close` | Open or close an extra Scene view (`scene-2` to `scene-4`). |
+| `viewport.set_aspect` | Free, an aspect preset, or a fixed `width` and `height`. |
+| `camera.bookmark_set` / `camera.bookmark_go` | Save the editor camera in slot 1-9, or move it back. |
+| `render.stats` | Frames, visible objects, draw calls and triangles of a viewport's last frame. |
+| `render.gpu_info` / `render.diagnostics` | The GPU and driver; whether validation is on and how many errors it reported. |
 
 An agent finds an entity on screen with `viewport.project` and passes the pixel to `viewport.pick`:
 
@@ -66,6 +99,18 @@ An agent finds an entity on screen with `viewport.project` and passes the pixel 
 {"method": "viewport.project", "params": {"entity": "/Game/Board"}}
 {"method": "viewport.pick", "params": {"x": 640, "y": 360, "select": "replace"}}
 ```
+
+Every command takes a `viewport` id (`scene` by default; `game` is the Game panel). An agent checks what the
+player sees by fixing the game view's resolution, taking a screenshot and sampling a colour:
+
+```json
+{"method": "viewport.set_aspect", "params": {"viewport": "game", "aspect": "fixed", "width": 640, "height": 360}}
+{"method": "viewport.screenshot", "params": {"viewport": "game"}}
+{"method": "viewport.sample", "params": {"viewport": "game", "x": 320, "y": 180, "radius": 2}}
+```
+
+Picks, screenshots and samples render the viewport themselves when its panel is hidden, and wait until the
+viewport's assets have loaded, so they see the finished image.
 
 Pixels count from the top left corner of the viewport image, with y pointing down; `viewport.list` gives its
 size. The camera, the shading and the overlays are editor state: they are not saved in the scene and not part

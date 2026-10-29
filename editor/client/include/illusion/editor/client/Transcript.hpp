@@ -16,13 +16,26 @@
 /// `${name}` in params, expectations and restart arguments is replaced by a captured value (a string that is
 /// exactly `${name}` becomes the captured JSON value; elsewhere the text is substituted). Expectations are
 /// matchers (see matchJson()). A step with `"requires": "gpu"` expects `otherwise` (by default error 1400)
-/// when the editor runs without a GPU; nothing is skipped. `{"frames": n}` steps call `play.step`.
+/// when the editor runs without a GPU; the call is still made, only its captures and image are skipped.
+/// `{"frames": n}` steps call `play.step`.
+///
+/// A step with `"image"` compares the base64 PNG of its result with a golden image:
+///
+///     {"call": "viewport.screenshot", "params": {"viewport": "game"}, "requires": "gpu",
+///      "image": {"golden": "golden/board.png", "channelTolerance": 3, "maxDifferent": 0.005,
+///                "notUniform": true}}
+///
+/// `golden` is relative to RunnerOptions::goldenDirectory; `pointer` (default `/_images/0/data`) names the
+/// image in the result. A pixel differs when a channel is off by more than `channelTolerance` (default 3);
+/// the step fails when more than `maxDifferent` of the pixels (default 0.005) differ, or when `notUniform`
+/// is true and every pixel has the same colour. With RunnerOptions::updateGoldens the golden is rewritten.
 
 #include <illusion/core/Base.hpp>
 #include <illusion/core/Expected.hpp>
 #include <illusion/core/Json.hpp>
 #include <illusion/editor/client/RpcClient.hpp>
 
+#include <filesystem>
 #include <functional>
 #include <map>
 #include <memory>
@@ -42,7 +55,8 @@ namespace illusion::editor::client
 /// with one `$` member are operators: `{"$approx": n}` or `{"$approx": [n, tolerance]}` (default 1e-4),
 /// `{"$regex": "..."}` (whole string), `{"$length": n}` or `{"$length": {"min": a, "max": b}}` (arrays,
 /// objects, strings), `{"$exists": bool}` (inside an object: the member is present or absent), `{"$oneOf":
-/// [m...]}` and `{"$contains": m}` (an array element matches m).
+/// [m...]}`, `{"$contains": m}` (an array element matches m), and `{"$min": n}` / `{"$max": n}` (a number
+/// at least or at most n).
 [[nodiscard]] std::optional<std::string> matchJson(JsonValue expected, JsonValue actual,
                                                    const std::string& pointer = {});
 
@@ -74,6 +88,9 @@ struct RunnerOptions
     LaunchOptions launch;                         ///< How to start (and restart) the editor.
     std::map<std::string, std::string> variables; ///< Initial variables (name -> JSON value text).
     bool gpu = false;                             ///< The editor has a GPU (`requires: "gpu"` steps run).
+    std::filesystem::path goldenDirectory{};      ///< Directory `image.golden` paths are relative to.
+    bool updateGoldens = false;                   ///< Rewrite golden images instead of comparing them.
+    std::filesystem::path captureDirectory{};     ///< Where images are also written (empty: nowhere).
     std::function<void(std::string_view)> log{};  ///< Receives a line per step (optional).
     /// Starts the editor and connects to it (empty: RpcClient::launch()). illusion_ctl passes one that starts
     /// illusion_mcp and runs every step as an MCP tool call (`--via-mcp`).

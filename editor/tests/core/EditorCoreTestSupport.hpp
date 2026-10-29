@@ -18,6 +18,7 @@
 #include <doctest/doctest.h>
 
 #include <algorithm>
+#include <array>
 #include <filesystem>
 #include <memory>
 #include <optional>
@@ -258,34 +259,59 @@ public:
     bool pending = false;
 };
 
-/// Viewports without a GPU: one "scene" viewport of 1280x720 whose picks answer at once with `hit`.
+/// Viewports without a GPU: a "scene" viewport of 1280x720, a "game" viewport of 640x360 looking through
+/// `gameCamera`, and the secondary viewports viewport.create opened. Picks and readbacks answer at once with
+/// `hit`, `color` and `entities`.
 class FakeViewports final : public editor::ViewportHost
 {
 public:
+    struct Secondary
+    {
+        std::string id;
+        editor::ViewportCamera camera;
+        editor::ViewportSettings settings;
+    };
+
     std::vector<editor::ViewportInfo> viewports() const override
     {
-        return {editor::ViewportInfo{"scene", size, true, camera, editor::viewportEye(camera), settings}};
+        const f32 aspect = static_cast<f32>(size.x) / static_cast<f32>(size.y);
+        std::vector<editor::ViewportInfo> out;
+        out.push_back(editor::ViewportInfo{
+            "scene", editor::ViewportKind::Scene, size, true, camera, editor::viewportEye(camera), settings,
+            Entity{}, editor::viewportViewMatrix(camera), editor::viewportProjectionMatrix(camera, aspect)});
+        out.push_back(editor::ViewportInfo{"game", editor::ViewportKind::Game, UVec2(640, 360), false,
+                                           editor::ViewportCamera{}, Vec3(0.0f), gameSettings, gameCamera,
+                                           Mat4(1.0f), Mat4(1.0f)});
+        for (const Secondary& viewport : secondary)
+        {
+            out.push_back(editor::ViewportInfo{viewport.id, editor::ViewportKind::Scene, size, true,
+                                               viewport.camera, editor::viewportEye(viewport.camera),
+                                               viewport.settings, Entity{},
+                                               editor::viewportViewMatrix(viewport.camera),
+                                               editor::viewportProjectionMatrix(viewport.camera, aspect)});
+        }
+        return out;
     }
 
-    Expected<void, editor::CommandError> setCamera(std::string_view, const editor::ViewportCamera& value,
+    Expected<void, editor::CommandError> setCamera(std::string_view id, const editor::ViewportCamera& value,
                                                    bool animate) override
     {
-        camera = value;
+        (id == "scene" ? camera : find(id).camera) = value;
         animated = animate;
         return {};
     }
 
-    Expected<void, editor::CommandError> setSettings(std::string_view,
+    Expected<void, editor::CommandError> setSettings(std::string_view id,
                                                      const editor::ViewportSettings& value) override
     {
-        settings = value;
+        (id == "scene" ? settings : id == "game" ? gameSettings : find(id).settings) = value;
         return {};
     }
 
     Expected<editor::ViewportCamera, editor::CommandError> framing(std::string_view,
-                                                                   std::span<const Entity> entities) override
+                                                                   std::span<const Entity> targets) override
     {
-        framed.assign(entities.begin(), entities.end());
+        framed.assign(targets.begin(), targets.end());
         editor::ViewportCamera out = camera;
         out.distance = 3.0f;
         return out;
@@ -309,15 +335,94 @@ public:
         return {};
     }
 
+    Expected<std::string, editor::CommandError> createViewport() override
+    {
+        if (secondary.size() >= editor::kMaxSecondaryViewports)
+        {
+            return unexpected(editor::CommandError::make(editor::ErrorKind::LimitExceeded, "full"));
+        }
+        std::string id = "scene-" + std::to_string(secondary.size() + 2);
+        secondary.push_back(Secondary{id, camera, settings});
+        ++version;
+        return id;
+    }
+
+    u64 viewportsVersion() const noexcept override { return version; }
+
+    Expected<void, editor::CommandError> closeViewport(std::string_view id) override
+    {
+        std::erase_if(secondary, [&](const Secondary& viewport) { return viewport.id == id; });
+        ++version;
+        return {};
+    }
+
+    Expected<u64, editor::CommandError> requestReadback(std::string_view, editor::ViewportChannel channel,
+                                                        UVec2 origin, UVec2 extent) override
+    {
+        readChannel = channel;
+        readOrigin = origin;
+        readExtent = extent;
+        return ++ticket;
+    }
+
+    std::optional<Expected<editor::ViewportReadback, editor::CommandError>> readback(u64) override
+    {
+        editor::ViewportReadback out;
+        out.size = size;
+        out.origin = readOrigin;
+        out.extent = readExtent;
+        if (readChannel == editor::ViewportChannel::Color)
+        {
+            out.color.resize(static_cast<usize>(readExtent.x) * readExtent.y * 4);
+            for (usize i = 0; i < out.color.size(); ++i)
+            {
+                out.color[i] = color[i % 4];
+            }
+        }
+        else
+        {
+            out.entities = entities;
+        }
+        return Expected<editor::ViewportReadback, editor::CommandError>(std::move(out));
+    }
+
+    Expected<editor::ViewportRenderStats, editor::CommandError> renderStats(std::string_view) const override
+    {
+        return stats;
+    }
+
+    editor::ViewportGpuInfo gpuInfo() const override
+    {
+        return editor::ViewportGpuInfo{.name = "Fake GPU", .validation = true, .validationErrors = 0};
+    }
+
+    Secondary& find(std::string_view id)
+    {
+        const auto found = std::find_if(secondary.begin(), secondary.end(),
+                                        [&](const Secondary& viewport) { return viewport.id == id; });
+        REQUIRE(found != secondary.end());
+        return *found;
+    }
+
     UVec2 size{1280, 720};
     editor::ViewportCamera camera;
     editor::ViewportSettings settings;
+    editor::ViewportSettings gameSettings;
+    Entity gameCamera{};
+    std::vector<Secondary> secondary;
     bool animated = false;
     std::vector<Entity> framed;
     Vec2 pickedAt{0.0f};
     bool cycled = false;
     std::optional<editor::ViewportHit> hit;
+    std::array<u8, 4> color{255, 0, 0, 255};
+    std::vector<Entity> entities;
+    editor::ViewportRenderStats stats;
+    editor::ViewportChannel readChannel = editor::ViewportChannel::Color;
+    UVec2 readOrigin{0};
+    UVec2 readExtent{0};
     u64 ticket = 0;
+    u64 version = 0;
 };
 
 /// A temporary project made from the empty template, open in an EditorContext.

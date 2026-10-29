@@ -1,5 +1,7 @@
 #include "rpc/RpcTestSupport.hpp"
 
+#include <illusion/assets/Image.hpp>
+#include <illusion/editor/client/ImageCompare.hpp>
 #include <illusion/editor/client/RpcClient.hpp>
 #include <illusion/editor/client/Transcript.hpp>
 
@@ -59,7 +61,67 @@ TEST_CASE("matchJson operators")
     CHECK(match(R"({"$oneOf":[1,"two"]})", "3").has_value());
     CHECK_FALSE(match(R"({"$contains":{"name":"Board"}})", R"([{"name":"Wall"},{"name":"Board","id":"1"}])"));
     CHECK(match(R"({"$contains":{"name":"Board"}})", R"([{"name":"Wall"}])").has_value());
+    CHECK_FALSE(match(R"({"$min":3})", "3"));
+    CHECK(match(R"({"$min":3})", "2.5")->find("expected a number of at least 3, got 2.5") !=
+          std::string::npos);
+    CHECK_FALSE(match(R"({"$max":0.25})", "0.1"));
+    CHECK(match(R"({"$max":0.25})", "0.5").has_value());
+    CHECK(match(R"({"$min":1})", R"("4")")->find("expected a number") != std::string::npos);
     CHECK(match(R"({"$nope":1})", "1")->find("unknown matcher") != std::string::npos);
+}
+
+TEST_CASE("decodeBase64 reads standard base64 with or without padding and rejects other text")
+{
+    const auto text = [](std::string_view base64) {
+        const std::optional<std::vector<std::byte>> bytes = decodeBase64(base64);
+        REQUIRE(bytes.has_value());
+        return std::string(reinterpret_cast<const char*>(bytes->data()), bytes->size());
+    };
+    CHECK(text("") == "");
+    CHECK(text("TWFu") == "Man");
+    CHECK(text("TWE=") == "Ma");
+    CHECK(text("TWE") == "Ma");
+    CHECK(text("TQ==") == "M");
+    const std::optional<std::vector<std::byte>> high = decodeBase64("+/8=");
+    REQUIRE(high.has_value());
+    CHECK(*high == std::vector<std::byte>{std::byte{0xFB}, std::byte{0xFF}});
+    CHECK(text("TWF") == "Ma");
+    CHECK_FALSE(decodeBase64("T").has_value());
+    CHECK_FALSE(decodeBase64("TW*u").has_value());
+}
+
+TEST_CASE("compareImages counts the pixels off by more than the tolerance")
+{
+    Image base = makeSolidImage(4, 2, Vec4(0.5f, 0.25f, 0.0f, 1.0f), ImageFormat::RGBA8);
+    const std::vector<std::byte> golden = encodePng(base);
+    Image changed = base;
+    changed.data[0] = std::byte{static_cast<u8>(std::to_integer<u8>(changed.data[0]) + 10)};
+    changed.data[5] = std::byte{static_cast<u8>(std::to_integer<u8>(changed.data[5]) + 2)};
+    const std::vector<std::byte> actual = encodePng(changed);
+
+    const Expected<ImageComparison, std::string> same = compareImages(golden, golden, 0);
+    REQUIRE(same.hasValue());
+    CHECK(same->differentFraction == 0.0);
+    CHECK(same->width == 4u);
+    CHECK(same->height == 2u);
+
+    const Expected<ImageComparison, std::string> strict = compareImages(actual, golden, 0);
+    REQUIRE(strict.hasValue());
+    CHECK(strict->differentFraction == doctest::Approx(2.0 / 8.0));
+    CHECK(strict->largestDifference == 10u);
+    const Expected<ImageComparison, std::string> tolerant = compareImages(actual, golden, 3);
+    REQUIRE(tolerant.hasValue());
+    CHECK(tolerant->differentFraction == doctest::Approx(1.0 / 8.0));
+
+    const std::vector<std::byte> small = encodePng(makeSolidImage(2, 2, Vec4(1.0f), ImageFormat::RGBA8));
+    CHECK(compareImages(small, golden, 3).error() == "the image is 2x2, the golden image 4x2");
+    const std::vector<std::byte> garbage(16, std::byte{7});
+    CHECK(compareImages(garbage, golden, 3).error() == "the image cannot be decoded");
+    CHECK(compareImages(golden, garbage, 3).error() == "the golden image cannot be decoded");
+
+    CHECK(isUniformImage(golden));
+    CHECK_FALSE(isUniformImage(actual));
+    CHECK_FALSE(isUniformImage(garbage));
 }
 
 TEST_CASE("a launched editor answers calls over stdio and exits cleanly")
@@ -102,7 +164,7 @@ TEST_CASE("the transcript runner captures, substitutes, restarts and checks")
 {"call": "entity.get", "params": {"entity": "/Missing"}, "expect": {"error": {"code": 1200, "data": {"kind": "not_found"}}}}
 {"call": "scene.save", "capture": {"saved": "/path"}}
 {"call": "scene.info", "capture": {"hash": "/hash"}}
-{"call": "render.stats", "requires": "gpu", "otherwise": {"error": {"code": -32601}}}
+{"call": "render.capture_frame", "requires": "gpu", "otherwise": {"error": {"code": -32601}}}
 {"restart": {"arguments": ["--project", "${root}"]}}
 )";
     const RunReport replay = runner.run(transcript, "scripted.jsonl");

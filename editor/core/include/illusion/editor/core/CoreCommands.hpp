@@ -779,13 +779,15 @@ struct ViewportParams
 /// A viewport in `viewport.list`.
 struct ViewportEntry
 {
-    std::string id;            ///< Stable id, e.g. "scene".
-    u32 width = 0;             ///< Width of the image in pixels (0 before the first frame).
-    u32 height = 0;            ///< Height of the image in pixels.
-    bool visible = false;      ///< Drawn in the last frame.
-    ViewportCamera camera;     ///< The camera.
-    Vec3 eye{0.0f};            ///< The camera's position.
-    ViewportSettings settings; ///< What it draws.
+    std::string id;                             ///< Stable id: "scene", "game", or "scene-2" to "scene-4".
+    ViewportKind kind = ViewportKind::Scene;    ///< What it looks through.
+    u32 width = 0;                              ///< Width of the image in pixels (0 before the first frame).
+    u32 height = 0;                             ///< Height of the image in pixels.
+    bool visible = false;                       ///< Drawn in the last frame.
+    ViewportCamera camera;                      ///< The editor camera (Scene viewports).
+    Vec3 eye{0.0f};                             ///< Position the image is seen from.
+    ViewportSettings settings;                  ///< What it draws.
+    std::optional<EntitySummary> sceneCamera{}; ///< The Camera a Game viewport looks through.
 };
 
 /// Result of `viewport.list`.
@@ -901,6 +903,89 @@ struct ViewportPickResult
     std::optional<EntitySummary> entity{}; ///< The entity hit, absent for the background.
     u32 index = 0;                         ///< Its position among the candidates.
     u32 candidates = 0;                    ///< Entities under the cursor (repeated cycling picks visit each).
+};
+
+/// Result of `viewport.close`.
+struct ViewportIdResult
+{
+    std::string viewport; ///< Viewport id.
+};
+
+/// Params of `viewport.set_aspect`.
+struct ViewportAspectParams
+{
+    std::optional<std::string> viewport{};        ///< Viewport id (default "scene").
+    ViewportAspect aspect = ViewportAspect::Free; ///< Shape of the image.
+    std::optional<u32> width{};  ///< Width with "fixed", 16 to 7,680 (required there, refused otherwise).
+    std::optional<u32> height{}; ///< Height with "fixed", 16 to 4,320 (required there, refused otherwise).
+};
+
+/// Params of `viewport.sample`.
+struct ViewportSampleParams
+{
+    std::optional<std::string> viewport{}; ///< Viewport id (default "scene").
+    f32 x = 0.0f;                          ///< Pixel column (origin at the top left).
+    f32 y = 0.0f;                          ///< Pixel row (y down).
+    std::optional<u32> radius{}; ///< Average the square of this many pixels around it, 0 to 8 (default 0).
+};
+
+/// Result of `viewport.sample`.
+struct ViewportSampleResult
+{
+    Vec4 color{0.0f};      ///< Average display colour, sRGB-encoded RGBA from 0 to 1.
+    f32 hue = 0.0f;        ///< Hue of the colour in degrees, 0 to 360 (0 for greys).
+    f32 saturation = 0.0f; ///< HSV saturation, 0 to 1.
+    f32 value = 0.0f;      ///< HSV value, 0 to 1.
+    u32 pixels = 0;        ///< Pixels averaged.
+};
+
+/// Params of `viewport.pick_rect`.
+struct ViewportPickRectParams
+{
+    std::optional<std::string> viewport{}; ///< Viewport id (default "scene").
+    f32 x = 0.0f;                          ///< Left edge in pixels (origin at the top left).
+    f32 y = 0.0f;                          ///< Top edge in pixels (y down).
+    f32 width = 1.0f;                      ///< Width in pixels.
+    f32 height = 1.0f;                     ///< Height in pixels.
+    std::optional<PickSelect> select{};    ///< Change the selection (default "none").
+};
+
+/// Result of `viewport.pick_rect`.
+struct ViewportPickRectResult
+{
+    std::vector<EntitySummary> entities; ///< Entities drawn in the rectangle, by Entity index.
+};
+
+/// Params of `camera.bookmark_set` and `camera.bookmark_go`.
+struct CameraBookmarkParams
+{
+    std::optional<std::string> viewport{}; ///< Viewport id (default "scene").
+    std::optional<u32> slot{};             ///< Bookmark slot, 1 to 9 (default 1).
+    std::optional<bool> animate{};         ///< `bookmark_go`: animate the move (default true).
+};
+
+/// Result of `render.stats`.
+struct RenderStatsResult
+{
+    std::string viewport;      ///< Viewport id.
+    u32 width = 0;             ///< Width of its image.
+    u32 height = 0;            ///< Height of its image.
+    ViewportRenderStats stats; ///< What the renderer did in its last frame.
+};
+
+/// Result of `render.gpu_info`.
+struct RenderGpuInfoResult
+{
+    bool available = false;               ///< The editor renders with a GPU.
+    std::optional<ViewportGpuInfo> gpu{}; ///< The GPU (absent without one).
+};
+
+/// Result of `render.diagnostics`.
+struct RenderDiagnosticsResult
+{
+    bool available = false;   ///< The editor renders with a GPU.
+    bool validation = false;  ///< The Vulkan validation layer is enabled.
+    u32 validationErrors = 0; ///< Validation errors since the device was created (0 is the goal).
 };
 
 // --- clipboard ---------------------------------------------------------------------------------------------
@@ -1255,4 +1340,23 @@ struct illusion::EnumReflection<illusion::editor::PickSelect>
     /// The values.
     static constexpr std::array kValues{illusion::EnumValue{"none", 0}, illusion::EnumValue{"replace", 1},
                                         illusion::EnumValue{"add", 2}, illusion::EnumValue{"toggle", 3}};
+};
+
+/// Names of ViewportKind values in JSON.
+template <>
+struct illusion::EnumReflection<illusion::editor::ViewportKind>
+{
+    /// The values.
+    static constexpr std::array kValues{illusion::EnumValue{"scene", 0}, illusion::EnumValue{"game", 1}};
+};
+
+/// Names of ViewportAspect values in JSON.
+template <>
+struct illusion::EnumReflection<illusion::editor::ViewportAspect>
+{
+    /// The values.
+    static constexpr std::array kValues{illusion::EnumValue{"free", 0},  illusion::EnumValue{"16:9", 1},
+                                        illusion::EnumValue{"16:10", 2}, illusion::EnumValue{"4:3", 3},
+                                        illusion::EnumValue{"21:9", 4},  illusion::EnumValue{"1:1", 5},
+                                        illusion::EnumValue{"fixed", 6}};
 };

@@ -153,18 +153,33 @@ private:
     std::unique_ptr<State> m_state;
 };
 
-/// The Scene panel: the "scene" viewport with navigation, click picking and its toolbar.
+/// A viewport panel (Scene, Game or a secondary Scene viewport): the viewport's image with navigation, click
+/// and box picking, camera bookmarks and its toolbar.
 class SceneView
 {
 public:
+    /// A panel of the viewport @p id.
+    explicit SceneView(std::string id);
+
     /// Draws the panel's content.
     void draw(Impl& shell);
 
+    /// The viewport id.
+    [[nodiscard]] const std::string& id() const noexcept { return m_id; }
+
 private:
     void drawToolbar(Impl& shell);
+    void drawAspectMenu(Impl& shell);
+    void handleBookmarks(Impl& shell, bool active);
+    void run(Impl& shell, std::string_view command, std::string_view params);
 
-    ViewportFrame m_last; // the viewport's state of the previous frame (for the menus)
+    std::string m_id;
+    ViewportFrame m_last;  // the viewport's state of the previous frame (for the menus)
+    bool m_boxing = false; // a box selection is being dragged
 };
+
+/// Draws a window for each secondary Scene viewport ("scene-2" ...); closing one closes the viewport.
+void drawSecondaryViewports(Impl& shell);
 
 /// The History panel: undo steps with origin badges, jumping, and undoing an agent's changes.
 class History

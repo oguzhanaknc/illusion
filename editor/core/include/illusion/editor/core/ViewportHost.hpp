@@ -55,6 +55,32 @@ enum class ViewportView : u8
     Right,       ///< Orthographic, looking along -x.
 };
 
+/// What a viewport looks through.
+enum class ViewportKind : u8
+{
+    Scene, ///< An editor camera ("scene" and the secondary viewports).
+    Game,  ///< The scene's highest-priority active Camera ("game", the Game panel).
+};
+
+/// Shape of a viewport's image inside its panel; the rest of the panel is letterboxed.
+enum class ViewportAspect : u8
+{
+    Free,          ///< The whole panel.
+    Wide16x9,      ///< 16:9.
+    Wide16x10,     ///< 16:10.
+    Standard4x3,   ///< 4:3.
+    Ultrawide21x9, ///< 21:9.
+    Square,        ///< 1:1.
+    Fixed,         ///< A fixed resolution (ViewportSettings::width and height), scaled down to fit the panel.
+};
+
+/// What a readback of ViewportHost::requestReadback() reads.
+enum class ViewportChannel : u8
+{
+    Color,    ///< The displayed RGBA8 image (sRGB-encoded, overlays included).
+    Entities, ///< The entities drawn in the region (visible, not hidden or locked).
+};
+
 /// The orbit camera of a viewport: it looks at `pivot` from `distance` away, in the direction given by `yaw`
 /// and `pitch` (degrees). The rotation is `yaw` about +y, then `pitch` about the camera's x axis, so yaw 0
 /// and pitch 0 look along -z and a negative pitch looks down.
@@ -76,17 +102,62 @@ struct ViewportSettings
     bool wireframe = false;                         ///< Wireframe drawn over opaque surfaces.
     bool grid = true;                               ///< Ground grid.
     bool selectionOutline = true;                   ///< Outline around selected entities.
+    ViewportAspect aspect = ViewportAspect::Free;   ///< Shape of the image.
+    u32 width = 0;  ///< Image width with ViewportAspect::Fixed, 16 to 7,680 (0 otherwise).
+    u32 height = 0; ///< Image height with ViewportAspect::Fixed, 16 to 4,320 (0 otherwise).
 };
 
 /// A viewport of `viewport.list`.
 struct ViewportInfo
 {
-    std::string id;            ///< Stable id, e.g. "scene".
+    std::string id;                          ///< Stable id: "scene", "game", or "scene-2" to "scene-4".
+    ViewportKind kind = ViewportKind::Scene; ///< What it looks through.
     UVec2 size{0};             ///< Size of the rendered image in pixels (0, 0 before the first frame).
     bool visible = false;      ///< Drawn in the last UI frame.
-    ViewportCamera camera;     ///< The camera.
-    Vec3 eye{0.0f};            ///< The camera's position (derived from the camera).
+    ViewportCamera camera;     ///< The editor camera (Scene viewports).
+    Vec3 eye{0.0f};            ///< Position the image is seen from.
     ViewportSettings settings; ///< What it draws.
+    Entity sceneCamera{};      ///< The Camera a Game viewport looks through (null without one).
+    Mat4 view{1.0f};           ///< World to view of the image.
+    Mat4 projection{1.0f};     ///< View to clip of the image (reversed-Z).
+};
+
+/// The pixels or entities of a viewport region (see ViewportHost::requestReadback()).
+struct ViewportReadback
+{
+    UVec2 size{0};                ///< Size of the whole image.
+    UVec2 origin{0};              ///< Top left of the region in image pixels.
+    UVec2 extent{0};              ///< Size of the region.
+    std::vector<u8> color;        ///< ViewportChannel::Color: RGBA8 rows of the region, top row first.
+    std::vector<Entity> entities; ///< ViewportChannel::Entities: each entity once, by Entity index.
+};
+
+/// What the renderer did in a viewport's last frame (`render.stats`).
+struct ViewportRenderStats
+{
+    u32 frames = 0;          ///< Frames rendered since the viewport was created.
+    u32 candidates = 0;      ///< RenderMesh entities considered.
+    u32 visible = 0;         ///< Entities that passed frustum culling.
+    u32 drawCalls = 0;       ///< Instanced draw calls.
+    u32 triangles = 0;       ///< Triangles submitted (saturates at 4,294,967,295).
+    u32 shadowCasters = 0;   ///< Shadow-caster instances, summed over cascades.
+    u32 shadowDrawCalls = 0; ///< Draw calls for shadows.
+    u32 lightsDropped = 0;   ///< Active lights beyond the renderer's limits.
+};
+
+/// The GPU behind the viewports (`render.gpu_info`, `render.diagnostics`).
+struct ViewportGpuInfo
+{
+    std::string name;         ///< Device name.
+    std::string driver;       ///< Driver name.
+    u32 vendorId = 0;         ///< PCI vendor id.
+    u32 deviceId = 0;         ///< PCI device id.
+    std::string apiVersion;   ///< Vulkan version, e.g. "1.3.280".
+    bool discrete = false;    ///< A discrete GPU.
+    bool software = false;    ///< A CPU implementation such as lavapipe.
+    bool bindless = false;    ///< Bindless textures are used.
+    bool validation = false;  ///< The Vulkan validation layer is enabled.
+    u32 validationErrors = 0; ///< Validation errors reported since the device was created.
 };
 
 /// Where a world-space point appears in a viewport.
@@ -139,12 +210,30 @@ struct ViewportFrame
     bool navigating = false;   ///< The input moved the camera (a click then does not pick).
     ViewportSettings settings; ///< What the viewport draws (for the panel's menus).
     ViewportProjection projection = ViewportProjection::Perspective; ///< Projection of its camera.
+    ViewportKind kind = ViewportKind::Scene;                         ///< What the viewport looks through.
+    bool hasCamera = true; ///< A Game viewport found a Camera (Scene viewports always have one).
 };
 
 /// Smallest camera distance and orthographic height.
 inline constexpr f32 kViewportMinExtent = 0.01f;
 /// Largest camera distance and orthographic height (and distance of the pivot from the origin).
 inline constexpr f32 kViewportMaxExtent = 100000.0f;
+/// Secondary Scene viewports ("scene-2" ...) that can be open at once.
+inline constexpr u32 kMaxSecondaryViewports = 3;
+/// Smallest fixed viewport resolution.
+inline constexpr u32 kViewportMinResolution = 16;
+/// Largest fixed viewport width.
+inline constexpr u32 kViewportMaxWidth = 7680;
+/// Largest fixed viewport height.
+inline constexpr u32 kViewportMaxHeight = 4320;
+
+/// Size of the image of a viewport drawing @p settings in a panel of @p panel pixels: the panel for Free, the
+/// largest rectangle of the aspect for the presets, and the fixed resolution for Fixed (whatever the panel).
+/// Never 0 in a dimension when @p panel is not empty.
+[[nodiscard]] UVec2 viewportImageSize(UVec2 panel, const ViewportSettings& settings) noexcept;
+
+/// Where @p point appears in an image of @p size pixels rendered with @p viewProjection.
+[[nodiscard]] ViewportPoint projectToViewport(const Mat4& viewProjection, UVec2 size, Vec3 point) noexcept;
 
 /// The rotation of @p camera: yaw about +y, then pitch about the camera's x axis.
 [[nodiscard]] Quat viewportRotation(const ViewportCamera& camera) noexcept;
@@ -197,7 +286,8 @@ public:
     framing(std::string_view id, std::span<const Entity> entities) = 0;
 
     /// Starts reading which entity is under @p pixel of @p id. With @p cycle, a pick at the pixel of the
-    /// previous one returns the next candidate. Returns a ticket for pick().
+    /// previous one returns the next candidate. The ids are read once the assets of the viewport have
+    /// loaded. Returns a ticket for pick().
     [[nodiscard]] virtual Expected<u64, CommandError> requestPick(std::string_view id, Vec2 pixel,
                                                                   bool cycle) = 0;
 
@@ -206,10 +296,39 @@ public:
     [[nodiscard]] virtual std::optional<Expected<std::optional<ViewportHit>, CommandError>>
     pick(u64 ticket) = 0;
 
-    /// Draws @p id at @p size pixels this frame after applying @p input to its camera (the Scene panel calls
-    /// it once per frame). Unknown ids return an empty frame.
+    /// Draws @p id in a panel of @p size pixels this frame after applying @p input to its camera (each
+    /// viewport panel calls it once per frame). The image has viewportImageSize() and is centred in the
+    /// panel. Unknown ids return an empty frame.
     [[nodiscard]] virtual ViewportFrame frame(std::string_view id, UVec2 size, const ViewportInput& input,
                                               const ViewportStyle& style) = 0;
+
+    /// Opens a secondary Scene viewport with the camera and settings of "scene" and returns its id
+    /// ("scene-2" to "scene-4"); LimitExceeded when kMaxSecondaryViewports are open. Secondary viewports
+    /// render fewer and smaller shadow cascades.
+    [[nodiscard]] virtual Expected<std::string, CommandError> createViewport() = 0;
+
+    /// Grows whenever a viewport opens or closes (panels refresh their list of viewports then).
+    [[nodiscard]] virtual u64 viewportsVersion() const noexcept = 0;
+
+    /// Closes the secondary viewport @p id; NotFound for unknown ids, PreconditionFailed for "scene" and
+    /// "game".
+    [[nodiscard]] virtual Expected<void, CommandError> closeViewport(std::string_view id) = 0;
+
+    /// Starts reading @p channel in the region at @p origin of @p extent image pixels of @p id (validated by
+    /// the command: inside the image). The viewport is rendered for it even if its panel is hidden, and read
+    /// once the assets it shows have loaded. Returns a ticket for readback().
+    [[nodiscard]] virtual Expected<u64, CommandError>
+    requestReadback(std::string_view id, ViewportChannel channel, UVec2 origin, UVec2 extent) = 0;
+
+    /// The result of @p ticket once it is read (std::nullopt while pending). Each ticket is answered once.
+    [[nodiscard]] virtual std::optional<Expected<ViewportReadback, CommandError>> readback(u64 ticket) = 0;
+
+    /// What the renderer did in the last frame of @p id; NotFound for unknown ids.
+    [[nodiscard]] virtual Expected<ViewportRenderStats, CommandError>
+    renderStats(std::string_view id) const = 0;
+
+    /// The GPU the viewports render with.
+    [[nodiscard]] virtual ViewportGpuInfo gpuInfo() const = 0;
 };
 
 } // namespace illusion::editor

@@ -23,6 +23,9 @@ public:
     /// true while a mouse button is held. A zero size keeps the current one.
     UVec2 update(UVec2 requested, f64 now, bool dragging) noexcept;
 
+    /// Applies @p size at once (a fixed resolution was chosen); later update() calls start from it.
+    void reset(UVec2 size) noexcept;
+
     /// The size applied last (0, 0 before the first).
     [[nodiscard]] UVec2 current() const noexcept { return m_current; }
 

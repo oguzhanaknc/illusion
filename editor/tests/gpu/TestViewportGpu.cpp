@@ -260,3 +260,166 @@ TEST_CASE("the viewport overlays match the golden image")
     gpu.frame();
     test::checkGolden("viewport-overlays-top", gpu.capture());
 }
+
+TEST_CASE(
+    "the game view looks through the scene Camera at a fixed resolution and reads back colours and entities")
+{
+    GpuViewports gpu;
+    buildScene(gpu);
+    EditorContext& editor = gpu.editor();
+    test::ok(
+        editor, "material.create",
+        R"({"path":"assets:/materials/red.material","value":{"material":{"name":"Red","baseColorFactor":[1,0,0,1]}}})");
+    test::ok(
+        editor, "entity.create",
+        R"({"name":"Red","components":{"illusion.Transform":{"position":[0,0,2]},)"
+        R"("illusion.MeshRenderer":{"mesh":"builtin:/mesh/cube","material":"assets:/materials/red.material"}}})");
+    test::ok(
+        editor, "entity.create",
+        R"({"name":"Camera","components":{"illusion.Transform":{"position":[0,0,10]},"illusion.Camera":{}}})");
+    test::ok(editor, "viewport.set_aspect",
+             R"({"viewport":"game","aspect":"fixed","width":160,"height":90})");
+    test::ok(editor, "viewport.set_mode", R"({"viewport":"game","shading":"unlit"})");
+
+    const JsonDocument list = test::ok(editor, "viewport.list");
+    CHECK(list.root().pointer("/viewports/1/width").asU64() == 160u);
+    CHECK(list.root().pointer("/viewports/1/sceneCamera/path").asString() ==
+          std::optional<std::string_view>("/Camera"));
+
+    // The panel is hidden: the readbacks render the viewport themselves.
+    const JsonDocument shot = gpu.run("viewport.screenshot", R"({"viewport":"game"})");
+    CHECK(shot.root().find("width").asU64() == 160u);
+    CHECK(shot.root().find("height").asU64() == 90u);
+
+    const JsonDocument projected =
+        test::ok(editor, "viewport.project", R"({"viewport":"game","entity":"/Red"})");
+    CHECK(projected.root().find("inside").asBool() == std::optional<bool>(true));
+    const f64 x = projected.root().find("x").asF64().value_or(0.0);
+    const f64 y = projected.root().find("y").asF64().value_or(0.0);
+    CHECK(x == doctest::Approx(80.0).epsilon(0.02));
+    CHECK(y == doctest::Approx(45.0).epsilon(0.02));
+    const JsonDocument sample =
+        gpu.run("viewport.sample", std::format(R"({{"viewport":"game","x":{},"y":{},"radius":2}})", x, y));
+    const f64 hue = sample.root().find("hue").asF64().value_or(180.0);
+    CHECK((hue < 25.0 || hue > 335.0));
+    CHECK(sample.root().find("saturation").asF64().value_or(0.0) > 0.5);
+    const JsonDocument picked =
+        gpu.run("viewport.pick", std::format(R"({{"viewport":"game","x":{},"y":{}}})", x, y));
+    CHECK(picked.root().pointer("/entity/path").asString() == std::optional<std::string_view>("/Red"));
+
+    const JsonDocument boxed =
+        gpu.run("viewport.pick_rect",
+                R"({"viewport":"game","x":0,"y":0,"width":160,"height":90,"select":"replace"})");
+    bool red = false;
+    for (const JsonValue entity : boxed.root().find("entities").elements())
+    {
+        red = red || entity.find("path").asString() == std::optional<std::string_view>("/Red");
+    }
+    CHECK(red);
+    CHECK(editor.selection().size() == boxed.root().find("entities").size());
+
+    const JsonDocument stats = test::ok(editor, "render.stats", R"({"viewport":"game"})");
+    CHECK(stats.root().pointer("/stats/visible").asU64().value_or(0) >= 1u);
+    CHECK(stats.root().pointer("/stats/frames").asU64().value_or(0) >= 1u);
+    CHECK(test::ok(editor, "render.diagnostics").root().find("validationErrors").asU64() == 0u);
+
+    // Without a Camera there is no game view.
+    test::ok(editor, "entity.destroy", R"({"entities":["/Camera"]})");
+    CHECK(test::fails(editor, "viewport.screenshot", R"({"viewport":"game"})").kind ==
+          ErrorKind::PreconditionFailed);
+}
+
+TEST_CASE("secondary viewports render with their own camera and close cleanly")
+{
+    GpuViewports gpu;
+    buildScene(gpu);
+    EditorContext& editor = gpu.editor();
+    const JsonDocument created = test::ok(editor, "viewport.create");
+    const std::string id(created.root().find("id").asString().value_or(""));
+    CHECK(id == "scene-2");
+    test::ok(editor, "viewport.set_aspect",
+             std::format(R"({{"viewport":"{}","aspect":"fixed","width":64,"height":48}})", id));
+    test::ok(editor, "viewport.camera_set",
+             std::format(R"({{"viewport":"{}","yaw":90,"animate":false}})", id));
+    const JsonDocument shot = gpu.run("viewport.screenshot", std::format(R"({{"viewport":"{}"}})", id));
+    CHECK(shot.root().find("width").asU64() == 64u);
+    CHECK(test::ok(editor, "render.stats", std::format(R"({{"viewport":"{}"}})", id))
+              .root()
+              .pointer("/stats/frames")
+              .asU64()
+              .value_or(0) >= 1u);
+    const u64 version = gpu.service->viewportsVersion();
+    test::ok(editor, "viewport.close", std::format(R"({{"viewport":"{}"}})", id));
+    CHECK(gpu.service->viewportsVersion() != version);
+    gpu.frame();
+    CHECK(test::ok(editor, "viewport.list").root().find("viewports").size() == 2);
+}
+TEST_CASE("readbacks finish while assets stream in without anyone waiting for the streamer")
+{
+    GpuViewports gpu;
+    EditorContext& editor = gpu.editor();
+    test::ok(
+        editor, "material.create",
+        R"({"path":"assets:/materials/red.material","value":{"material":{"name":"Red","baseColorFactor":[1,0,0,1]}}})");
+    test::ok(
+        editor, "entity.create",
+        R"({"name":"Red","components":{"illusion.Transform":{"position":[0,0,0]},)"
+        R"("illusion.MeshRenderer":{"mesh":"builtin:/mesh/cube","material":"assets:/materials/red.material"}}})");
+    test::ok(
+        editor, "entity.create",
+        R"({"name":"Camera","components":{"illusion.Transform":{"position":[0,0,8]},"illusion.Camera":{}}})");
+    test::ok(editor, "viewport.set_aspect", R"({"viewport":"game","aspect":"fixed","width":64,"height":36})");
+    test::ok(editor, "viewport.set_mode", R"({"viewport":"game","shading":"unlit"})");
+
+    // Regression: the viewports published streamed loads only when something called waitIdle(), so the
+    // .material stayed Loading and readbacks (which wait for loads) never finished in a running editor.
+    const JsonDocument doc = test::parseJson(R"({"viewport":"game","x":32,"y":18,"radius":1})");
+    Expected<std::unique_ptr<RunningCommand>, CommandError> started =
+        editor.startJson("viewport.sample", doc.root());
+    REQUIRE(started.hasValue());
+    std::optional<std::string> result;
+    for (int i = 0; i < 100000 && !result; ++i)
+    {
+        gpu.service->render(false);
+        gpu.device->waitIdle();
+        Expected<std::optional<std::string>, CommandError> updated = started.value()->update();
+        REQUIRE(updated.hasValue());
+        result = *updated;
+    }
+    REQUIRE(result.has_value());
+    const JsonDocument sample = test::parseJson(*result);
+    const f64 hue = sample.root().find("hue").asF64().value_or(180.0);
+    CHECK((hue < 25.0 || hue > 335.0));
+    CHECK(sample.root().find("saturation").asF64().value_or(0.0) > 0.5);
+}
+
+TEST_CASE("closing a viewport with readbacks in flight frees their slots for the other viewports")
+{
+    GpuViewports gpu;
+    buildScene(gpu);
+    EditorContext& editor = gpu.editor();
+    const JsonDocument created = test::ok(editor, "viewport.create");
+    const std::string id(created.root().find("id").asString().value_or(""));
+    test::ok(editor, "viewport.set_aspect",
+             std::format(R"({{"viewport":"{}","aspect":"fixed","width":32,"height":32}})", id));
+    // Fill the readback ring (four slots) with copies of the secondary viewport, then close it.
+    const JsonDocument params = test::parseJson(std::format(R"({{"viewport":"{}"}})", id));
+    std::vector<std::unique_ptr<RunningCommand>> shots;
+    for (int i = 0; i < 4; ++i)
+    {
+        Expected<std::unique_ptr<RunningCommand>, CommandError> started =
+            editor.startJson("viewport.screenshot", params.root());
+        REQUIRE(started.hasValue());
+        shots.push_back(std::move(started.value()));
+    }
+    gpu.service->render(false);
+    test::ok(editor, "viewport.close", std::format(R"({{"viewport":"{}"}})", id));
+    for (const std::unique_ptr<RunningCommand>& shot : shots)
+    {
+        // Each one has finished: with the image copied before the close, or failed by it.
+        const Expected<std::optional<std::string>, CommandError> updated = shot->update();
+        CHECK((!updated.hasValue() || updated->has_value()));
+    }
+    const JsonDocument shot = gpu.run("viewport.screenshot", R"({"viewport":"scene"})");
+    CHECK(shot.root().find("width").asU64().value_or(0) > 0u);
+}

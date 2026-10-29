@@ -29,4 +29,10 @@ UVec2 ResizePolicy::update(UVec2 requested, f64 now, bool dragging) noexcept
     return m_current;
 }
 
+void ResizePolicy::reset(UVec2 size) noexcept
+{
+    m_current = size;
+    m_pending = size;
+}
+
 } // namespace illusion::editor::viewport

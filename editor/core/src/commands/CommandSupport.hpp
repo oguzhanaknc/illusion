@@ -46,6 +46,9 @@ Expected<void, CommandError> requireProject(CommandContext& context);
 /// Matches @p text against @p pattern with `*` (any run) and `?` (one byte).
 bool globMatch(std::string_view pattern, std::string_view text) noexcept;
 
+/// Standard base64 (with padding) of @p bytes, for images in results.
+std::string encodeBase64(std::string_view bytes);
+
 /// Joins a directory path and an entry name: "assets:/" + "a" and "assets:/x" + "a".
 std::string joinPath(std::string_view directory, std::string_view name);
 

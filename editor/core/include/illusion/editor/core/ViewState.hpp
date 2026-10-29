@@ -3,18 +3,25 @@
 /// @file
 /// The user's view state of the scene: entities hidden in viewports (the Outliner's eye) and entities locked
 /// against picking (its lock). It belongs to the person at the editor, not to the scene: it is not saved
-/// in scene files, not undoable, and changed through the `view.*` commands.
+/// in scene files, not undoable, and changed through the `view.*` commands. It also keeps the camera
+/// bookmarks of `camera.bookmark_set` and `camera.bookmark_go`.
 
 #include <illusion/core/Base.hpp>
 #include <illusion/ecs/EntityGuid.hpp>
+#include <illusion/editor/core/ViewportHost.hpp>
 
+#include <array>
+#include <optional>
 #include <span>
 #include <vector>
 
 namespace illusion::editor
 {
 
-/// Sets of hidden and locked entities by EntityGuid.
+/// Number of camera bookmark slots (1 to 9, Ctrl+1 to Ctrl+9 in a viewport).
+inline constexpr u32 kCameraBookmarkSlots = 9;
+
+/// Sets of hidden and locked entities by EntityGuid, and the camera bookmarks.
 class ViewState
 {
 public:
@@ -36,7 +43,13 @@ public:
     /// The locked entities, sorted.
     [[nodiscard]] std::span<const EntityGuid> lockedEntities() const noexcept { return m_locked; }
 
-    /// Shows and unlocks everything (a scene was replaced).
+    /// The camera stored in bookmark @p slot (1 to kCameraBookmarkSlots), or std::nullopt.
+    [[nodiscard]] std::optional<ViewportCamera> bookmark(u32 slot) const noexcept;
+
+    /// Stores @p camera in bookmark @p slot (1 to kCameraBookmarkSlots).
+    void setBookmark(u32 slot, const ViewportCamera& camera) noexcept;
+
+    /// Shows and unlocks everything and forgets the bookmarks (a scene was replaced).
     void clear() noexcept;
 
     /// Grows whenever the state changes (for caches of panels).
@@ -45,6 +58,7 @@ public:
 private:
     std::vector<EntityGuid> m_hidden;
     std::vector<EntityGuid> m_locked;
+    std::array<std::optional<ViewportCamera>, kCameraBookmarkSlots> m_bookmarks{};
     u64 m_version = 0;
 };
 
