@@ -19,7 +19,7 @@ temalar, dil ve kısayollar için [Tercihler](preferences.md) sayfasına bakın.
 | --- | --- |
 | Menü çubuğu | File, Edit, View, Entity, Assets, Play, Modules, Tools, Window ve Help. Komutu sonraki bir aşamada gelen öğeler devre dışıdır; ipuçları o aşamayı söyler. |
 | Araç çubuğu | Solda dönüşüm araçları, ortada Play, Pause, Step ve Simulate, sağda yerleşim, ajan çipi, bildirimler ve arama. |
-| Paneller | [Outliner ve Inspector](scene-editing.md), Scene, Game, Assets, Console, History, AI Activity, Profiler, Rendering ve Project Settings, pencereye yerleştirilmiş olarak. Sonraki aşamaların panelleri neyi göstereceklerini söyler. |
+| Paneller | [Outliner ve Inspector](scene-editing.md), [Scene](viewport.md), Game, Assets, Console, History, AI Activity, Profiler, Rendering ve Project Settings, pencereye yerleştirilmiş olarak. Sonraki aşamaların panelleri neyi göstereceklerini söyler. |
 | Durum çubuğu | Seçim, sahne revizyonu ve kayıt durumu, frame süresi, dil, bağlı ajanlar (ve bekleyen onaylar) ve oynatma durumu. |
 
 Bir paneli sekmesinin kapatma düğmesiyle kapatın, Window menüsünden yeniden açın (`ui.show_panel`).

@@ -22,6 +22,7 @@
 #include <illusion/editor/ui/OffscreenUi.hpp>
 #include <illusion/editor/ui/UiContext.hpp>
 #include <illusion/editor/ui/UiPlatformBackend.hpp>
+#include <illusion/editor/viewport/ViewportService.hpp>
 #include <illusion/physics/PhysicsComponents.hpp>
 #include <illusion/platform/FileSystem.hpp>
 #include <illusion/platform/Platform.hpp>
@@ -256,6 +257,7 @@ int runHeadless(const Arguments& arguments, EditorContext& editor, rpc::RpcServe
     std::unique_ptr<RenderDevice> device;
     std::optional<EditorUi> ui;
     std::unique_ptr<ui::OffscreenUi> offscreen;
+    std::unique_ptr<viewport::ViewportService> viewports;
     if (!arguments.noGpu)
     {
         RenderDeviceDesc desc;
@@ -274,6 +276,7 @@ int runHeadless(const Arguments& arguments, EditorContext& editor, rpc::RpcServe
             else
             {
                 ui->shell->setAgents(&server);
+                viewports = viewport::ViewportService::create(*device, editor, offscreen->renderer());
             }
         }
         if (!ui)
@@ -322,6 +325,11 @@ int runHeadless(const Arguments& arguments, EditorContext& editor, rpc::RpcServe
             ImGui::NewFrame();
             ui->shell->draw(time, elapsed);
             ImGui::Render();
+            // The viewports render for screenshots and for picks; the UI is not drawn otherwise.
+            if (viewports)
+            {
+                viewports->render(request.has_value());
+            }
             if (request)
             {
                 std::optional<Image> image;
@@ -362,7 +370,9 @@ int runWindowed(const Arguments& arguments, EditorContext& editor, rpc::RpcServe
     }
     ui::UiPlatformBackend backend(ui.context, window, events);
     auto offscreen = ui::OffscreenUi::create(*device, ui.context, swapchain->size());
-    if (!offscreen)
+    auto viewports =
+        offscreen ? viewport::ViewportService::create(*device, editor, offscreen->renderer()) : nullptr;
+    if (!viewports)
     {
         return 1;
     }
@@ -399,7 +409,9 @@ int runWindowed(const Arguments& arguments, EditorContext& editor, rpc::RpcServe
         ImGui::NewFrame();
         ui.shell->draw(time.totalSeconds, delta);
         ImGui::Render();
-        if (swapchain->beginFrame())
+        const bool presenting = swapchain->beginFrame();
+        viewports->render(presenting);
+        if (presenting)
         {
             if (offscreen->resize(swapchain->size()))
             {

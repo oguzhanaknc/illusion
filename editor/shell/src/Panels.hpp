@@ -153,6 +153,19 @@ private:
     std::unique_ptr<State> m_state;
 };
 
+/// The Scene panel: the "scene" viewport with navigation, click picking and its toolbar.
+class SceneView
+{
+public:
+    /// Draws the panel's content.
+    void draw(Impl& shell);
+
+private:
+    void drawToolbar(Impl& shell);
+
+    ViewportFrame m_last; // the viewport's state of the previous frame (for the menus)
+};
+
 /// The History panel: undo steps with origin badges, jumping, and undoing an agent's changes.
 class History
 {

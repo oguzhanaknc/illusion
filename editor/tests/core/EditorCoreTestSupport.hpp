@@ -12,6 +12,7 @@
 #include <illusion/editor/core/CoreCommands.hpp>
 #include <illusion/editor/core/EditorContext.hpp>
 #include <illusion/editor/core/UiHost.hpp>
+#include <illusion/editor/core/ViewportHost.hpp>
 #include <illusion/platform/FileSystem.hpp>
 
 #include <doctest/doctest.h>
@@ -257,11 +258,74 @@ public:
     bool pending = false;
 };
 
+/// Viewports without a GPU: one "scene" viewport of 1280x720 whose picks answer at once with `hit`.
+class FakeViewports final : public editor::ViewportHost
+{
+public:
+    std::vector<editor::ViewportInfo> viewports() const override
+    {
+        return {editor::ViewportInfo{"scene", size, true, camera, editor::viewportEye(camera), settings}};
+    }
+
+    Expected<void, editor::CommandError> setCamera(std::string_view, const editor::ViewportCamera& value,
+                                                   bool animate) override
+    {
+        camera = value;
+        animated = animate;
+        return {};
+    }
+
+    Expected<void, editor::CommandError> setSettings(std::string_view,
+                                                     const editor::ViewportSettings& value) override
+    {
+        settings = value;
+        return {};
+    }
+
+    Expected<editor::ViewportCamera, editor::CommandError> framing(std::string_view,
+                                                                   std::span<const Entity> entities) override
+    {
+        framed.assign(entities.begin(), entities.end());
+        editor::ViewportCamera out = camera;
+        out.distance = 3.0f;
+        return out;
+    }
+
+    Expected<u64, editor::CommandError> requestPick(std::string_view, Vec2 pixel, bool cycle) override
+    {
+        pickedAt = pixel;
+        cycled = cycle;
+        return ++ticket;
+    }
+
+    std::optional<Expected<std::optional<editor::ViewportHit>, editor::CommandError>> pick(u64) override
+    {
+        return Expected<std::optional<editor::ViewportHit>, editor::CommandError>(hit);
+    }
+
+    editor::ViewportFrame frame(std::string_view, UVec2, const editor::ViewportInput&,
+                                const editor::ViewportStyle&) override
+    {
+        return {};
+    }
+
+    UVec2 size{1280, 720};
+    editor::ViewportCamera camera;
+    editor::ViewportSettings settings;
+    bool animated = false;
+    std::vector<Entity> framed;
+    Vec2 pickedAt{0.0f};
+    bool cycled = false;
+    std::optional<editor::ViewportHit> hit;
+    u64 ticket = 0;
+};
+
 /// A temporary project made from the empty template, open in an EditorContext.
 struct EditorFixture
 {
     TempDirectory directory;
     FakeUi ui;
+    FakeViewports viewports;
     std::unique_ptr<editor::EditorContext> editor;
 
     explicit EditorFixture(u64 seed = 1, editor::EditorContextOptions options = {})
@@ -284,6 +348,7 @@ struct EditorFixture
         }
         editor = std::make_unique<editor::EditorContext>(options);
         editor->setUi(&ui);
+        editor->setViewports(&viewports);
         const Expected<void, editor::CommandError> opened = editor->openProject(directory.path / "project");
         REQUIRE_MESSAGE(opened.hasValue(), (opened ? std::string() : opened.error().message));
         addTestSettings(*editor);

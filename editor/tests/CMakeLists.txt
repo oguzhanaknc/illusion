@@ -23,6 +23,7 @@ illusion_add_editor_executable(illusion_editor_tests
     core/TestEditorTransactions.cpp
     core/TestEditorTransforms.cpp
     core/TestEditorUi.cpp
+    core/TestEditorViewport.cpp
     mcp/TestMcpBridge.cpp
     mcp/TestMcpProtocol.cpp
     rpc/TestEditorClient.cpp
@@ -31,10 +32,12 @@ illusion_add_editor_executable(illusion_editor_tests
     rpc/TestRpcProtocol.cpp
     rpc/TestRpcServer.cpp
     rpc/TestRpcTransport.cpp
-    shell/TestEditorShell.cpp)
+    shell/TestEditorShell.cpp
+    viewport/TestEditorCamera.cpp)
 target_include_directories(illusion_editor_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR} ${PROJECT_SOURCE_DIR}/tests)
 target_link_libraries(illusion_editor_tests PRIVATE
     illusion_ui_gallery_pages illusion::editor_core illusion::editor_client illusion::editor_shell
+    illusion::editor_viewport
     illusion::render illusion::physics illusion::audio illusion::doctest)
 # Golden files of the editor core (ILLUSION_UPDATE_GOLDENS=1 rewrites them).
 target_compile_definitions(illusion_editor_tests PRIVATE ILLUSION_EDITOR_TEST_DATA="${CMAKE_CURRENT_SOURCE_DIR}/data")
@@ -53,10 +56,12 @@ illusion_add_editor_executable(illusion_editor_gpu_tests
     ${PROJECT_SOURCE_DIR}/tests/gpu/main.cpp
     ${PROJECT_SOURCE_DIR}/tests/AllocationCounter.cpp
     gpu/TestEditorShellGpu.cpp
-    gpu/TestUiRenderer.cpp)
+    gpu/TestUiRenderer.cpp
+    gpu/TestViewportGpu.cpp)
 target_include_directories(illusion_editor_gpu_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR} ${PROJECT_SOURCE_DIR}/tests)
 target_link_libraries(illusion_editor_gpu_tests PRIVATE
-    illusion_ui_gallery_pages illusion::editor_shell illusion::editor_client illusion::render
+    illusion_ui_gallery_pages illusion::editor_shell illusion::editor_client illusion::editor_viewport
+    illusion::render
     illusion::physics illusion::audio illusion::doctest)
 target_compile_definitions(illusion_editor_gpu_tests PRIVATE
     ILLUSION_GOLDEN_DIR="${CMAKE_CURRENT_SOURCE_DIR}/data/golden"

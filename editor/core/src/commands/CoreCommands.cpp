@@ -299,6 +299,91 @@ void reflectCoreCommandTypes(StructRegistry& structs)
             .field("hidden", &ViewStateResult::hidden)
             .field("locked", &ViewStateResult::locked);
 
+        const FieldMeta angle{.unit = Unit::Degrees};
+        const FieldMeta pitch{.unit = Unit::Degrees, .min = -90.0, .max = 90.0};
+        const FieldMeta fov{.unit = Unit::Degrees, .min = 1.0, .max = 170.0};
+        const FieldMeta extent{.min = 0.01, .max = 100000.0};
+        reflectStruct<ViewportCamera>("editor.ViewportCamera", 1, structs)
+            .field("pivot", &ViewportCamera::pivot)
+            .field("distance", &ViewportCamera::distance, extent)
+            .field("yaw", &ViewportCamera::yaw, angle)
+            .field("pitch", &ViewportCamera::pitch, pitch)
+            .field("fieldOfView", &ViewportCamera::fieldOfView, fov)
+            .field("projection", &ViewportCamera::projection)
+            .field("orthographicHeight", &ViewportCamera::orthographicHeight, extent);
+        reflectStruct<ViewportSettings>("editor.ViewportSettings", 1, structs)
+            .field("shading", &ViewportSettings::shading)
+            .field("wireframe", &ViewportSettings::wireframe)
+            .field("grid", &ViewportSettings::grid)
+            .field("selectionOutline", &ViewportSettings::selectionOutline);
+        reflectStruct<ViewportParams>("editor.ViewportParams", 1, structs)
+            .field("viewport", &ViewportParams::viewport);
+        reflectStruct<ViewportEntry>("editor.ViewportEntry", 1, structs)
+            .field("id", &ViewportEntry::id)
+            .field("width", &ViewportEntry::width)
+            .field("height", &ViewportEntry::height)
+            .field("visible", &ViewportEntry::visible)
+            .field("camera", &ViewportEntry::camera)
+            .field("eye", &ViewportEntry::eye)
+            .field("settings", &ViewportEntry::settings);
+        reflectStruct<ViewportListResult>("editor.ViewportListResult", 1, structs)
+            .field("viewports", &ViewportListResult::viewports);
+        reflectStruct<ViewportCameraResult>("editor.ViewportCameraResult", 1, structs)
+            .field("viewport", &ViewportCameraResult::viewport)
+            .field("camera", &ViewportCameraResult::camera)
+            .field("eye", &ViewportCameraResult::eye)
+            .field("forward", &ViewportCameraResult::forward);
+        reflectStruct<ViewportCameraSetParams>("editor.ViewportCameraSetParams", 1, structs)
+            .field("viewport", &ViewportCameraSetParams::viewport)
+            .field("pivot", &ViewportCameraSetParams::pivot)
+            .field("distance", &ViewportCameraSetParams::distance, extent)
+            .field("yaw", &ViewportCameraSetParams::yaw, angle)
+            .field("pitch", &ViewportCameraSetParams::pitch, pitch)
+            .field("fieldOfView", &ViewportCameraSetParams::fieldOfView, fov)
+            .field("projection", &ViewportCameraSetParams::projection)
+            .field("orthographicHeight", &ViewportCameraSetParams::orthographicHeight, extent)
+            .field("eye", &ViewportCameraSetParams::eye)
+            .field("animate", &ViewportCameraSetParams::animate);
+        reflectStruct<ViewportViewParams>("editor.ViewportViewParams", 1, structs)
+            .field("viewport", &ViewportViewParams::viewport)
+            .field("view", &ViewportViewParams::view)
+            .field("animate", &ViewportViewParams::animate);
+        reflectStruct<ViewportFrameParams>("editor.ViewportFrameParams", 1, structs)
+            .field("viewport", &ViewportFrameParams::viewport)
+            .field("entities", &ViewportFrameParams::entities)
+            .field("animate", &ViewportFrameParams::animate);
+        reflectStruct<ViewportModeParams>("editor.ViewportModeParams", 1, structs)
+            .field("viewport", &ViewportModeParams::viewport)
+            .field("shading", &ViewportModeParams::shading)
+            .field("wireframe", &ViewportModeParams::wireframe);
+        reflectStruct<ViewportOverlaysParams>("editor.ViewportOverlaysParams", 1, structs)
+            .field("viewport", &ViewportOverlaysParams::viewport)
+            .field("grid", &ViewportOverlaysParams::grid)
+            .field("selectionOutline", &ViewportOverlaysParams::selectionOutline);
+        reflectStruct<ViewportSettingsResult>("editor.ViewportSettingsResult", 1, structs)
+            .field("viewport", &ViewportSettingsResult::viewport)
+            .field("settings", &ViewportSettingsResult::settings);
+        reflectStruct<ViewportProjectParams>("editor.ViewportProjectParams", 1, structs)
+            .field("viewport", &ViewportProjectParams::viewport)
+            .field("entity", &ViewportProjectParams::entity)
+            .field("point", &ViewportProjectParams::point);
+        reflectStruct<ViewportProjectResult>("editor.ViewportProjectResult", 1, structs)
+            .field("x", &ViewportProjectResult::x)
+            .field("y", &ViewportProjectResult::y)
+            .field("depth", &ViewportProjectResult::depth)
+            .field("inFront", &ViewportProjectResult::inFront)
+            .field("inside", &ViewportProjectResult::inside);
+        reflectStruct<ViewportPickParams>("editor.ViewportPickParams", 1, structs)
+            .field("viewport", &ViewportPickParams::viewport)
+            .field("x", &ViewportPickParams::x, {.min = 0.0, .max = 16384.0})
+            .field("y", &ViewportPickParams::y, {.min = 0.0, .max = 16384.0})
+            .field("cycle", &ViewportPickParams::cycle)
+            .field("select", &ViewportPickParams::select);
+        reflectStruct<ViewportPickResult>("editor.ViewportPickResult", 1, structs)
+            .field("entity", &ViewportPickResult::entity)
+            .field("index", &ViewportPickResult::index)
+            .field("candidates", &ViewportPickResult::candidates);
+
         reflectStruct<SettingsGetParams>("editor.SettingsGetParams", 1, structs)
             .field("type", &SettingsGetParams::type);
         reflectStruct<SettingsEntry>("editor.SettingsEntry", 1, structs)
@@ -498,6 +583,7 @@ void registerCoreCommands(CommandRegistry& registry)
     detail::registerTransformCommands(registry);
     detail::registerSelectionCommands(registry);
     detail::registerViewCommands(registry);
+    detail::registerViewportCommands(registry);
     detail::registerHistoryCommands(registry);
     detail::registerTransactionCommands(registry);
     detail::registerClipboardCommands(registry);

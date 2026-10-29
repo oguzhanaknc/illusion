@@ -241,6 +241,7 @@ EditorShell::Impl::Impl(EditorShell& owner, EditorContext& editorContext, ui::Ui
     , palette(std::make_unique<detail::Palette>())
     , outliner(std::make_unique<detail::Outliner>())
     , inspector(std::make_unique<detail::Inspector>())
+    , sceneView(std::make_unique<detail::SceneView>())
     , console(std::make_unique<detail::Console>())
     , history(std::make_unique<detail::History>())
     , agentsPanel(std::make_unique<detail::Agents>())
@@ -619,7 +620,8 @@ void EditorShell::draw(f64 now, f64 deltaSeconds)
 
     // Shortcuts, unless a text field or the shortcut capture has the keyboard.
     const ImGuiIO& io = ImGui::GetIO();
-    if (!io.WantTextInput && !impl.preferences->capturing() && !impl.palette->isOpen())
+    if (!io.WantTextInput && !impl.preferences->capturing() && !impl.palette->isOpen() &&
+        !impl.viewportNavigating)
     {
         for (usize i = 0; i < actions.size(); ++i)
         {
@@ -961,6 +963,9 @@ void EditorShell::draw(f64 now, f64 deltaSeconds)
                 break;
             case Panel::Inspector:
                 impl.inspector->draw(impl);
+                break;
+            case Panel::Scene:
+                impl.sceneView->draw(impl);
                 break;
             case Panel::Console:
                 impl.console->draw(impl);

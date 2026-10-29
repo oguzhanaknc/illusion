@@ -22,6 +22,7 @@
 #include <illusion/editor/core/UiHost.hpp>
 #include <illusion/editor/core/UndoStack.hpp>
 #include <illusion/editor/core/ViewState.hpp>
+#include <illusion/editor/core/ViewportHost.hpp>
 #include <illusion/editor/core/WorldEditor.hpp>
 #include <illusion/platform/FileSystem.hpp>
 #include <illusion/text/Localization.hpp>
@@ -323,6 +324,12 @@ public:
     /// Sets the user interface (nullptr when it goes away). It must outlive its registration.
     void setUi(UiHost* ui) noexcept { m_ui = ui; }
 
+    /// The viewports the `viewport.*` commands and the Scene panel use, or nullptr (without a GPU).
+    [[nodiscard]] ViewportHost* viewports() const noexcept { return m_viewports; }
+
+    /// Sets the viewports (nullptr when they go away). They must outlive their registration.
+    void setViewports(ViewportHost* viewports) noexcept { m_viewports = viewports; }
+
     /// Recent log messages of the process (nullptr if EditorContextOptions::logCapacity is 0).
     [[nodiscard]] const LogRingSink* log() const noexcept { return m_log.get(); }
 
@@ -517,6 +524,7 @@ private:
     Preferences m_preferences;
     u64 m_preferencesVersion = 1;
     UiHost* m_ui = nullptr;
+    ViewportHost* m_viewports = nullptr;
     std::shared_ptr<LogRingSink> m_log;
     u64 m_logCleared = 0;
     f64 m_autosaveTimer = 0.0;

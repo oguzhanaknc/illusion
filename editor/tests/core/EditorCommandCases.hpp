@@ -117,6 +117,15 @@ inline constexpr CommandCase kCommandCases[] = {
     {"ui.state", R"({})"},
     {"view.get", R"({})"},
     {"view.set_entities", R"({"entities":["/Game/Board"],"hidden":true})"},
+    {"viewport.camera_get", R"({"viewport":"scene"})"},
+    {"viewport.camera_set", R"({"pivot":[0,1,0],"eye":[6,4,6],"animate":false})"},
+    {"viewport.frame", R"({"entities":["/Game/Board"]})"},
+    {"viewport.list", R"({})"},
+    {"viewport.pick", R"({"x":640,"y":360,"cycle":true,"select":"replace"})"},
+    {"viewport.project", R"({"entity":"/Game/Board"})"},
+    {"viewport.set_mode", R"({"shading":"normals","wireframe":true})"},
+    {"viewport.set_overlays", R"({"grid":false,"selectionOutline":true})"},
+    {"viewport.view", R"({"view":"top","animate":false})"},
 };
 
 // Commands that need another one to run first (with {} params) on the fixture.

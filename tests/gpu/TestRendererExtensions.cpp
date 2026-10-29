@@ -416,3 +416,28 @@ TEST_CASE("debug line quads sample scene depth at independent output resolution"
     device->waitIdle();
     CHECK(device->validationErrorCount() == 0);
 }
+
+TEST_CASE("resizing between frames keeps the replaced targets alive until the GPU has finished with them")
+{
+    // Regression: a resize released the Entity ID and motion targets while the previous frame still ran on
+    // the GPU. Without geometry only clears use them, and NVRHI's clears do not keep textures alive (the
+    // validation layer reported vkDestroyImage on an image in use). Correct code passes whatever the timing.
+    auto device = RenderDevice::create({.validation = ValidationMode::Enabled, .headless = true});
+    REQUIRE(device);
+    {
+        RenderResources resources(*device);
+        auto renderer = SceneRenderer::create(*device, resources, description());
+        REQUIRE(renderer);
+        World world;
+        // No waits between the frames: each one replaces the previous one's targets.
+        for (const u32 size : {1024u, 1536u, 1024u, 2048u, 1280u, 1024u})
+        {
+            auto target = targetFor(*device, size);
+            render(*device, *renderer, target, world, cameraView());
+            CHECK(renderer->viewTargets().renderSize == UVec2(size));
+        }
+        // The last frame's targets belong to the renderer: let it finish before the renderer goes.
+        device->waitIdle();
+    }
+    CHECK(device->validationErrorCount() == 0);
+}

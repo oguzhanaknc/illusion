@@ -14,7 +14,8 @@ Editör kodu `editor/` altında yaşar:
 | `editor/strings` | `illusion::editor_strings` | Editörün İngilizce metni (`editor/data/locales/en.json`), string tablosu olarak |
 | `editor/core` | `illusion::editor_core` | Penceresiz editör çekirdeği: projeler, düzenlenen sahne, tipli komutlar, transaction'lar, undo, journal'lar (GPU, Dear ImGui veya socket yok) |
 | `editor/ui` | `illusion::editor_ui` | Backend'ler, tema, fontlar, ikonlar, kare başına metin, widget kiti, ekran dışı ve GPU'suz kareler (`OffscreenUi`, `HeadlessUi`), `UiDriver` |
-| `editor/shell` | `illusion::editor_shell` | Editör penceresinin arayüzü: menüler, araç çubuğu, yerleşimler, Outliner, Inspector, palet, konsol, geçmiş, AI Activity, tercihler, proje pencereleri |
+| `editor/shell` | `illusion::editor_shell` | Editör penceresinin arayüzü: menüler, araç çubuğu, yerleşimler, Outliner, Inspector, Scene paneli, palet, konsol, geçmiş, AI Activity, tercihler, proje pencereleri |
+| `editor/viewport` | `illusion::editor_viewport` | GPU viewport'ları: `EditorCamera` gezinmesi, `ViewportService` (viewport başına bir `SceneRenderer`, grid ve seçim outline katmanları, asenkron seçme) |
 | `editor/tools/ui_gallery` | `illusion_ui_gallery` | Tasarım incelemeleri ve golden görüntü testleri için widget kataloğu |
 | `editor/tools/command_reference` | `illusion_editor_command_reference` | Üretilen [komut referansını](../reference/editor-commands.md) yazar ve kontrol eder |
 | `editor/data` | `editor-data/` | Temalar, locale'ler ve proje şablonları; fontlarla birlikte editör çalıştırılabilirlerinin yanına kopyalanır |
@@ -234,6 +235,42 @@ etkinlik halkası, onaylar) `stateVersion()` değiştiğinde yenilediği kopyala
 frame'ler bellek ayırmaz. GPU'su olan penceresiz bir editör aynı kabuğu bir `OffscreenUi` içinde çalıştırır ve
 yalnızca `editor.screenshot`'ı yanıtlamak için çizer. Kılavuz [pencereyi](../manual/editor/interface.md) anlatır.
 
+## Viewport'lar
+
+Çekirdek, viewport'ların sunduklarını GPU'ya bağlı olmadan tanımlar: `ViewportHost` (`editor_core` içinde,
+`UiHost`'un yanında) sade kamera, ayar ve seçme türleriyle, ayrıca kamera matematiği (`viewportEye()`,
+`viewportProjectionMatrix()`, `viewportPreset()`, `projectToViewport()`). `viewport.*` komutları yalnızca bu
+arayüzü kullanır; bu yüzden sahte bir host ile test edilirler ve `--no-gpu` altında `unsupported` (1400) ile
+başarısız olurlar. `illusion::editor_viewport` arayüzü `ViewportService` ile uygular; editör süreci onu
+`EditorContext::setViewports()` ile kaydeder:
+
+- Her viewport bir `EditorCamera` (orbit, pan, dolly, fly, yumuşatılmış geçişler), bir `ResizePolicy` (yeni
+  boyut 150 ms sonra ya da fare düğmesi bırakılınca uygulanır; bu sırada görüntü esnetilir) ve `UiRenderer`'a
+  kayıtlı bir RGBA8 Texture'a çizen, Entity ID'li bir `SceneRenderer` sahibidir.
+- Servis çizmeden önce render Asset'lerini (`RenderAssetResolver`) ve türetilmiş Transform'ları
+  (`updateTransformHierarchy()`) günceller. Görünüm durumunda gizlenen Entity'ler
+  `RenderView::hiddenEntities` listesine girer.
+- Tonemapping'den sonra `Grid.slang` uyarlanır grid'i (sahne derinliğine karşı test edilerek) çizer,
+  `Outline.slang` ise seçimin çevresini ID hedefi ve bir seçim bit kümesiyle çizer.
+- Bir seçme işlemi, frame gönderildikten sonra imlecin çevresindeki 5x5 ID texel'ini bir `ReadbackRing` ile
+  kopyalar ve sonraki bir frame'de tamamlanır. Adaylar önce imlece en yakın görünür Entity'ler, sonra ışının
+  arkalarında sınırlarını kestiği Entity'lerdir; gizli, kilitli ve etkin olmayan Entity'ler atlanır. Aynı
+  noktada tekrarlanan döngülü seçmeler listede ilerler.
+- Scene paneli (kabuktaki `SceneView`) frame'in fare ve uçuş tuşlarını `ViewportInput` olarak gönderir ve
+  Texture'ı çizer; bir tıklama `viewport.pick` çalıştırır. Kamera hareket ederken kabuk kısayollarını atlar;
+  böylece uçuş tuşları eylem çalıştırmaz.
+
+```text
+viewport frame (main thread)
+  SceneView::draw         -- ViewportHost::frame(): resize policy, navigation, texture id for ImGui::Image
+  ImGui::Render
+  ViewportService::render -- assets, Transforms, SceneRenderer (+ Entity IDs), Grid.slang, Outline.slang,
+                             ID readbacks for picks (ReadbackRing, never waits)
+  UI render and present   -- samples the viewport texture
+```
+
+Kılavuz [Scene viewport'unu](../manual/editor/viewport.md) anlatır.
+
 ## MCP köprüsü
 
 `illusion_mcp`, bir MCP istemcisi ile editör arasında duran ayrı bir süreçtir
@@ -270,6 +307,8 @@ Sonucu [yapay zekâ ajanları kılavuzu](../manual/editor/ai-agents.md) anlatır
   denetlemek).
 - `mcp/translate`, köprünün sunucusu üzerinden anında yanıt veren bir sağlayıcıyla tek bir MCP `tools/call`
   çağrısını ölçer: ayrıştırma, aracı bulma, sonucu yazma (bir masaüstü makinede yaklaşık 1,6 µs; bütçe 10 µs).
+- `viewport/camera-update` bir frame'lik viewport gezinmesini (yaklaşık 20 ns; bütçe 200 ns),
+  `viewport/pick-candidates` ise 5x5 bir seçme penceresinin sıralanmasını (yaklaşık 130 ns; bütçe 1 µs) ölçer.
 
 ## Erişilebilirlik
 

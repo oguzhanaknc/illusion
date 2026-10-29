@@ -15,7 +15,7 @@ namespace s = strings;
 constexpr PanelInfo kPanels[kPanelCount] = {
     {"panel.outliner", s::kPanelOutliner, "account_tree", true, ""},
     {"panel.inspector", s::kPanelInspector, "tune", true, ""},
-    {"panel.scene", s::kPanelScene, "view_in_ar", true, "M7o"},
+    {"panel.scene", s::kPanelScene, "view_in_ar", true, ""},
     {"panel.game", s::kPanelGame, "sports_esports", true, "M7r"},
     {"panel.assets", s::kPanelAssets, "folder", true, "M7u"},
     {"panel.console", s::kPanelConsole, "terminal", true, ""},

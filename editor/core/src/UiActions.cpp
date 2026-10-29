@@ -58,8 +58,10 @@ constexpr UiAction kActions[] = {
      .title = s::kToolScale, .icon = "open_in_full", .shortcut = "R", .milestone = "M7p"},
     {.id = "view.tool_rect", .command = "tool.set", .params = R"({"tool":"rect"})", .menu = UiMenu::View,
      .title = s::kActionViewToolRect, .icon = "crop_free", .shortcut = "T", .milestone = "M7p"},
-    {.id = "view.frame_selected", .command = "viewport.frame_selected", .menu = UiMenu::View, .group = 1,
-     .title = s::kActionViewFrameSelected, .icon = "center_focus_strong", .shortcut = "F", .milestone = "M7o"},
+    {.id = "view.frame_selected", .command = "viewport.frame", .menu = UiMenu::View, .group = 1,
+     .title = s::kActionViewFrameSelected, .icon = "center_focus_strong", .shortcut = "F"},
+    {.id = "view.frame_all", .command = "viewport.frame", .params = R"({"entities":[]})", .menu = UiMenu::View,
+     .group = 1, .title = s::kActionViewFrameAll, .icon = "fit_screen", .shortcut = "Shift+F"},
     // Entity
     {.id = "entity.create_empty", .command = "entity.create", .params = R"({"name":"Entity"})",
      .menu = UiMenu::Entity},

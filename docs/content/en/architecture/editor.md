@@ -14,7 +14,8 @@ Editor code lives in `editor/`:
 | `editor/strings` | `illusion::editor_strings` | The editor's English text (`editor/data/locales/en.json`) as a string table |
 | `editor/core` | `illusion::editor_core` | The headless editor core: projects, the edited scene, typed commands, transactions, undo, journals (no GPU, Dear ImGui or sockets) |
 | `editor/ui` | `illusion::editor_ui` | Backends, theme, fonts, icons, per-frame text, widget kit, offscreen and GPU-less frames (`OffscreenUi`, `HeadlessUi`), `UiDriver` |
-| `editor/shell` | `illusion::editor_shell` | The editor window's UI: menus, toolbar, layouts, Outliner, Inspector, palette, console, history, AI Activity, preferences, project windows |
+| `editor/shell` | `illusion::editor_shell` | The editor window's UI: menus, toolbar, layouts, Outliner, Inspector, Scene panel, palette, console, history, AI Activity, preferences, project windows |
+| `editor/viewport` | `illusion::editor_viewport` | GPU viewports: `EditorCamera` navigation, `ViewportService` (one `SceneRenderer` per viewport, grid and selection outline overlays, asynchronous picking) |
 | `editor/tools/ui_gallery` | `illusion_ui_gallery` | The widget catalogue used for design reviews and golden-image tests |
 | `editor/tools/command_reference` | `illusion_editor_command_reference` | Writes and checks the generated [command reference](../reference/editor-commands.md) |
 | `editor/data` | `editor-data/` | Themes, locales and project templates, copied next to the editor executables with the fonts |
@@ -230,6 +231,42 @@ panels; the five built-in layouts are built with `DockBuilder`. The AI Activity 
 do not allocate. A headless editor with a GPU runs the same shell into an `OffscreenUi` and renders it only to
 answer `editor.screenshot`. The manual describes [the window](../manual/editor/interface.md).
 
+## Viewports
+
+The core defines what viewports offer without depending on the GPU: `ViewportHost` (in `editor_core`, next to
+`UiHost`) with plain camera, settings and pick types, and the camera math (`viewportEye()`,
+`viewportProjectionMatrix()`, `viewportPreset()`, `projectToViewport()`). The `viewport.*` commands use only
+this interface, so they are tested with a fake host and fail with `unsupported` (1400) under `--no-gpu`.
+`illusion::editor_viewport` implements it with `ViewportService`, which the editor process registers with
+`EditorContext::setViewports()`:
+
+- Each viewport owns an `EditorCamera` (orbit, pan, dolly, fly, eased moves), a `ResizePolicy` (a new size
+  applies after 150 ms or when the mouse button is released; the image is stretched meanwhile) and a
+  `SceneRenderer` with Entity IDs that renders into an RGBA8 texture registered with the `UiRenderer`.
+- Before rendering, the service brings render assets (`RenderAssetResolver`) and derived Transforms
+  (`updateTransformHierarchy()`) up to date. Entities hidden in the view state go to
+  `RenderView::hiddenEntities`.
+- After tonemapping, `Grid.slang` draws the adaptive grid (depth tested against the scene) and
+  `Outline.slang` outlines the selection from the ID target and a selection bitset.
+- A pick copies the 5x5 ID texels around the cursor with a `ReadbackRing` after the frame is submitted and
+  finishes in a later frame. Candidates are the visible entities nearest to the cursor first, then the entities
+  whose bounds the ray crosses behind them; hidden, locked and inactive entities are skipped. Repeated cycling
+  picks at the same spot step through the list.
+- The Scene panel (`SceneView` in the shell) sends the frame's mouse and fly keys as `ViewportInput` and draws
+  the texture; a click runs `viewport.pick`. While the camera moves, the shell skips its shortcuts so that the
+  fly keys do not run actions.
+
+```text
+viewport frame (main thread)
+  SceneView::draw         -- ViewportHost::frame(): resize policy, navigation, texture id for ImGui::Image
+  ImGui::Render
+  ViewportService::render -- assets, Transforms, SceneRenderer (+ Entity IDs), Grid.slang, Outline.slang,
+                             ID readbacks for picks (ReadbackRing, never waits)
+  UI render and present   -- samples the viewport texture
+```
+
+The manual describes [the Scene viewport](../manual/editor/viewport.md).
+
 ## The MCP bridge
 
 `illusion_mcp` is a separate process between an MCP client and the editor
@@ -265,6 +302,8 @@ The [AI agents manual](../manual/editor/ai-agents.md) describes the result.
   (checking one later step before an undo of one's own steps).
 - `mcp/translate` measures one MCP `tools/call` through the bridge's server with an immediate provider: parsing,
   finding the tool, writing the result (about 1.6 µs on a desktop; budget 10 µs).
+- `viewport/camera-update` measures one frame of viewport navigation (about 20 ns; budget 200 ns) and
+  `viewport/pick-candidates` the ordering of a 5x5 pick window (about 130 ns; budget 1 µs).
 
 ## Accessibility
 
