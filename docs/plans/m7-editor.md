@@ -894,6 +894,12 @@ Needs: m, n.
 
 **Docs.** `manual/editor/viewport.md`.
 
+**Split.** M7o-1 delivers the core `ViewportHost` seam, the editor camera, the resize policy, one viewport with
+the grid and the selection outline, picking with cycling, the Scene panel and the `viewport.*` commands above
+except `pick_rect`, `sample` and `screenshot`. M7o-2 brings secondary viewports, the game view, the view cube,
+bookmarks, navigation presets, hover, icons, the DebugDraw visualisers with their Benchmark, the stats overlay,
+box select, the remaining `viewport.*` and `render.*` commands, follow-agent and acceptance C6.
+
 ### M7p: Gizmos, selection tools and transform utilities
 Needs: o.
 

@@ -12,7 +12,8 @@ illusion_add_editor_library(illusion_editor_shell STATIC
     src/Outliner.cpp
     src/Palette.cpp
     src/PreferencesWindow.cpp
-    src/Projects.cpp)
+    src/Projects.cpp
+    src/SceneView.cpp)
 add_library(illusion::editor_shell ALIAS illusion_editor_shell)
 target_include_directories(illusion_editor_shell PUBLIC
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>)

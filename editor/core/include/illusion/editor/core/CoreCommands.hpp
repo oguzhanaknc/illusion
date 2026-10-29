@@ -12,6 +12,7 @@
 #include <illusion/editor/core/EntityIndex.hpp>
 #include <illusion/editor/core/ReferenceIndex.hpp>
 #include <illusion/editor/core/UiHost.hpp>
+#include <illusion/editor/core/ViewportHost.hpp>
 
 #include <array>
 #include <optional>
@@ -767,6 +768,141 @@ struct ViewStateResult
     std::vector<EntitySummary> locked; ///< Locked entities, by id.
 };
 
+// --- viewport ----------------------------------------------------------------------------------------------
+
+/// Params of commands that name a viewport (`viewport.camera_get`).
+struct ViewportParams
+{
+    std::optional<std::string> viewport{}; ///< Viewport id (default "scene").
+};
+
+/// A viewport in `viewport.list`.
+struct ViewportEntry
+{
+    std::string id;            ///< Stable id, e.g. "scene".
+    u32 width = 0;             ///< Width of the image in pixels (0 before the first frame).
+    u32 height = 0;            ///< Height of the image in pixels.
+    bool visible = false;      ///< Drawn in the last frame.
+    ViewportCamera camera;     ///< The camera.
+    Vec3 eye{0.0f};            ///< The camera's position.
+    ViewportSettings settings; ///< What it draws.
+};
+
+/// Result of `viewport.list`.
+struct ViewportListResult
+{
+    std::vector<ViewportEntry> viewports; ///< Every viewport.
+};
+
+/// Result of the camera commands: the camera, or the camera it moves to when animated.
+struct ViewportCameraResult
+{
+    std::string viewport;  ///< Viewport id.
+    ViewportCamera camera; ///< The camera.
+    Vec3 eye{0.0f};        ///< The camera's position.
+    Vec3 forward{0.0f};    ///< Its unit view direction.
+};
+
+/// Params of `viewport.camera_set`: the fields to change.
+struct ViewportCameraSetParams
+{
+    std::optional<std::string> viewport{};          ///< Viewport id (default "scene").
+    std::optional<Vec3> pivot{};                    ///< Point to orbit around and look at.
+    std::optional<f32> distance{};                  ///< Distance of the eye from the pivot.
+    std::optional<f32> yaw{};                       ///< Degrees about +y.
+    std::optional<f32> pitch{};                     ///< Degrees, -90 (down) to 90 (up).
+    std::optional<f32> fieldOfView{};               ///< Vertical field of view in degrees.
+    std::optional<ViewportProjection> projection{}; ///< Projection.
+    std::optional<f32> orthographicHeight{};        ///< Vertical extent of orthographic views.
+    std::optional<Vec3> eye{};                      ///< Put the eye here (keeps the pivot: aims at it).
+    std::optional<bool> animate{};                  ///< Animate the move (default true).
+};
+
+/// Params of `viewport.view`.
+struct ViewportViewParams
+{
+    std::optional<std::string> viewport{};         ///< Viewport id (default "scene").
+    ViewportView view = ViewportView::Perspective; ///< The view.
+    std::optional<bool> animate{};                 ///< Animate the move (default true).
+};
+
+/// Params of `viewport.frame`.
+struct ViewportFrameParams
+{
+    std::optional<std::string> viewport{}; ///< Viewport id (default "scene").
+    /// Entities to frame; absent: the selection, or everything when nothing is selected; []: everything.
+    std::optional<std::vector<std::string>> entities{};
+    std::optional<bool> animate{}; ///< Animate the move (default true).
+};
+
+/// Params of `viewport.set_mode`.
+struct ViewportModeParams
+{
+    std::optional<std::string> viewport{};    ///< Viewport id (default "scene").
+    std::optional<ViewportShading> shading{}; ///< Shading mode.
+    std::optional<bool> wireframe{};          ///< Wireframe over opaque surfaces.
+};
+
+/// Params of `viewport.set_overlays`.
+struct ViewportOverlaysParams
+{
+    std::optional<std::string> viewport{};  ///< Viewport id (default "scene").
+    std::optional<bool> grid{};             ///< Ground grid.
+    std::optional<bool> selectionOutline{}; ///< Outline around selected entities.
+};
+
+/// Result of `viewport.set_mode` and `viewport.set_overlays`.
+struct ViewportSettingsResult
+{
+    std::string viewport;      ///< Viewport id.
+    ViewportSettings settings; ///< What it draws now.
+};
+
+/// Params of `viewport.project`: an entity's position or a point.
+struct ViewportProjectParams
+{
+    std::optional<std::string> viewport{}; ///< Viewport id (default "scene").
+    std::optional<std::string> entity{};   ///< Entity whose position to project (or point).
+    std::optional<Vec3> point{};           ///< World-space point to project (or entity).
+};
+
+/// Result of `viewport.project`.
+struct ViewportProjectResult
+{
+    f32 x = 0.0f;         ///< Pixel column (origin at the top left).
+    f32 y = 0.0f;         ///< Pixel row (y down).
+    f32 depth = 0.0f;     ///< Reversed-Z depth (1 at the near plane).
+    bool inFront = false; ///< In front of the camera.
+    bool inside = false;  ///< In front of the camera and within the image.
+};
+
+/// What `viewport.pick` does with the selection.
+enum class PickSelect : u8
+{
+    None,    ///< Leaves it unchanged.
+    Replace, ///< Selects the hit only (clears the selection on the background).
+    Add,     ///< Adds the hit.
+    Toggle,  ///< Adds or removes the hit.
+};
+
+/// Params of `viewport.pick`.
+struct ViewportPickParams
+{
+    std::optional<std::string> viewport{}; ///< Viewport id (default "scene").
+    f32 x = 0.0f;                          ///< Pixel column (origin at the top left).
+    f32 y = 0.0f;                          ///< Pixel row (y down).
+    std::optional<bool> cycle{}; ///< At the previous pick's pixel, return the next candidate (default false).
+    std::optional<PickSelect> select{}; ///< Change the selection (default "none").
+};
+
+/// Result of `viewport.pick`.
+struct ViewportPickResult
+{
+    std::optional<EntitySummary> entity{}; ///< The entity hit, absent for the background.
+    u32 index = 0;                         ///< Its position among the candidates.
+    u32 candidates = 0;                    ///< Entities under the cursor (repeated cycling picks visit each).
+};
+
 // --- clipboard ---------------------------------------------------------------------------------------------
 
 /// Result of `clipboard.copy` and `clipboard.cut`.
@@ -1073,4 +1209,50 @@ struct illusion::EnumReflection<illusion::editor::UiNotice>
     /// The values.
     static constexpr std::array kValues{illusion::EnumValue{"info", 0}, illusion::EnumValue{"success", 1},
                                         illusion::EnumValue{"warning", 2}, illusion::EnumValue{"error", 3}};
+};
+
+/// Names of ViewportProjection values in JSON.
+template <>
+struct illusion::EnumReflection<illusion::editor::ViewportProjection>
+{
+    /// The values.
+    static constexpr std::array kValues{illusion::EnumValue{"perspective", 0},
+                                        illusion::EnumValue{"orthographic", 1}};
+};
+
+/// Names of ViewportShading values in JSON.
+template <>
+struct illusion::EnumReflection<illusion::editor::ViewportShading>
+{
+    /// The values.
+    static constexpr std::array kValues{illusion::EnumValue{"lit", 0},
+                                        illusion::EnumValue{"unlit", 1},
+                                        illusion::EnumValue{"albedo", 2},
+                                        illusion::EnumValue{"normals", 3},
+                                        illusion::EnumValue{"roughness", 4},
+                                        illusion::EnumValue{"metallic", 5},
+                                        illusion::EnumValue{"ambientOcclusion", 6},
+                                        illusion::EnumValue{"shadowCascades", 7},
+                                        illusion::EnumValue{"motionVectors", 8}};
+};
+
+/// Names of ViewportView values in JSON.
+template <>
+struct illusion::EnumReflection<illusion::editor::ViewportView>
+{
+    /// The values.
+    static constexpr std::array kValues{
+        illusion::EnumValue{"perspective", 0}, illusion::EnumValue{"top", 1},
+        illusion::EnumValue{"bottom", 2},      illusion::EnumValue{"front", 3},
+        illusion::EnumValue{"back", 4},        illusion::EnumValue{"left", 5},
+        illusion::EnumValue{"right", 6}};
+};
+
+/// Names of PickSelect values in JSON.
+template <>
+struct illusion::EnumReflection<illusion::editor::PickSelect>
+{
+    /// The values.
+    static constexpr std::array kValues{illusion::EnumValue{"none", 0}, illusion::EnumValue{"replace", 1},
+                                        illusion::EnumValue{"add", 2}, illusion::EnumValue{"toggle", 3}};
 };

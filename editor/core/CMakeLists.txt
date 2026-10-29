@@ -18,6 +18,7 @@ illusion_add_editor_library(illusion_editor_core STATIC
     src/UiActions.cpp
     src/UndoStack.cpp
     src/ViewState.cpp
+    src/ViewportHost.cpp
     src/WorldEditor.cpp
     src/commands/AssetCommands.cpp
     src/commands/ClipboardCommands.cpp
@@ -36,7 +37,8 @@ illusion_add_editor_library(illusion_editor_core STATIC
     src/commands/TransactionCommands.cpp
     src/commands/TransformCommands.cpp
     src/commands/UiCommands.cpp
-    src/commands/ViewCommands.cpp)
+    src/commands/ViewCommands.cpp
+    src/commands/ViewportCommands.cpp)
 add_library(illusion::editor_core ALIAS illusion_editor_core)
 
 target_include_directories(illusion_editor_core PUBLIC

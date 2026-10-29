@@ -10,6 +10,7 @@ add_subdirectory(rpc)
 add_subdirectory(mcp)
 add_subdirectory(client)
 add_subdirectory(ui)
+add_subdirectory(viewport)
 add_subdirectory(shell)
 
 # editor-data/ next to the editor executables (mounted read-only as "editor:"): themes, locales, fonts,

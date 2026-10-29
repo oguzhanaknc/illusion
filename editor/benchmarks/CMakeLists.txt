@@ -8,9 +8,10 @@ illusion_add_editor_executable(illusion_editor_benchmarks
     BenchEditorRpc.cpp
     BenchEditorShell.cpp
     BenchMcp.cpp
-    BenchGallery.cpp)
+    BenchGallery.cpp
+    BenchViewport.cpp)
 target_include_directories(illusion_editor_benchmarks PRIVATE ${PROJECT_SOURCE_DIR}/benchmarks)
-target_link_libraries(illusion_editor_benchmarks PRIVATE illusion_ui_gallery_pages illusion::editor_core illusion::editor_rpc illusion::editor_shell illusion::mcp_protocol illusion::nanobench)
+target_link_libraries(illusion_editor_benchmarks PRIVATE illusion_ui_gallery_pages illusion::editor_core illusion::editor_rpc illusion::editor_shell illusion::editor_viewport illusion::mcp_protocol illusion::nanobench)
 add_dependencies(illusion_editor_benchmarks illusion_editor_data)
 illusion_configure_target(illusion_editor_benchmarks)
 add_test(NAME editor_benchmarks COMMAND illusion_editor_benchmarks CONFIGURATIONS Release RelWithDebInfo)

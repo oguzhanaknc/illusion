@@ -187,7 +187,7 @@ Plan: `docs/plans/m7-editor.md` (sub-milestones, command API, localization, them
   rebinding capture, AI agents, autosave, external tools) in `preferences.json`; Welcome window with recent
   projects, templates and the workspace folder browser; About and the third-party licence viewer; the `ui.*`
   commands, `preferences.get/set` and `editor.screenshot` (91 commands). Cut to later: gamepad navigation of
-  the window through `GamepadSystem` (M7w), follow-agent (needs viewports: M7o), launching External Tools
+  the window through `GamepadSystem` (M7w), follow-agent (needs viewports: M7o-2), launching External Tools
   (M7s), `#` asset search in the palette (M7u)
 - M7m: ✅ Outliner and Inspector: Outliner (`HierarchyIndex` row cache rebuilt on hierarchy, selection or
   view-state change, `ImGuiListClipper`, multi-select with Ctrl/Shift and keyboard navigation, F2 inline
@@ -201,7 +201,7 @@ Plan: `docs/plans/m7-editor.md` (sub-milestones, command API, localization, them
   `Collider`/`Joint`/`AudioSource`, inline validation with fix-it buttons, multi-entity editing with `—` for
   mixed values, Component clipboard `component.copy`/`component.paste`, Add Component popup with fuzzy search
   and automatic `requiredComponents`, and Inspector pin/lock; 95 commands). Cut to later: viewport entity
-  eyedropper (needs viewport picking: M7o), asset thumbnails in picker (M7u), multiple simultaneous Inspector
+  eyedropper (needs viewport picking: M7o-2), asset thumbnails in picker (M7u), multiple simultaneous Inspector
   instances (M7w)
 - M7n: ✅ Renderer extension points (ADR 0040): per-view motion history without World mutation;
   optional Entity index/generation IDs for opaque, masked and blended objects; bounded event-query
@@ -209,8 +209,21 @@ Plan: `docs/plans/m7-editor.md` (sub-milestones, command API, localization, them
   priority; inverse-projection shadow fitting; layer/hidden filters; diagnostic views, wireframe and
   optional GPU pass timings. CPU/GPU regressions and three image goldens cover the extension contract;
   the 100k-line recording Benchmark has a 20 ns/line budget.
-- M7o: Viewports: editor camera, grid, selection outline, picking, overlays; following an agent's selection
-  (from M7l)
+- M7o-1: ✅ Viewports: `ViewportHost` in the core with GPU-free camera math, `illusion::editor_viewport`
+  (`EditorCamera` orbit/pan/dolly/fly with eased moves and framing, `ResizePolicy`, `ViewportService` with one
+  `SceneRenderer` per viewport, the adaptive `Grid.slang` and the ID-based `Outline.slang` overlays, asynchronous
+  5x5 picking with front-to-back cycling that skips hidden and locked entities), the Scene panel with its
+  shading/overlay/view toolbar and click selection, and the `viewport.list`/`camera_get`/`camera_set`/`view`/
+  `frame`/`set_mode`/`set_overlays`/`project`/`pick` commands (104 commands). CPU navigation tests, GPU pick,
+  cycle and outline tests, two overlay goldens and the `viewport/camera-update` (200 ns budget, 20 measured) and
+  `viewport/pick-candidates` (1 µs budget, 127 ns measured) Benchmarks. Fix: `SceneRenderer` keeps the targets a resize replaces
+  until the GPU has finished the frames that used them (an empty scene's clears did not keep them alive).
+- M7o-2: Viewports, second part: secondary viewports with reduced shadows, game view (highest-priority Camera,
+  aspect presets, letterboxing), view cube and axis navigator, camera bookmarks, navigation presets, hover
+  highlight, icon billboards, DebugDraw visualisers (lights, camera frusta with picture-in-picture, colliders,
+  characters, joints, audio) with the `viewport/visualisers-record` Benchmark, stats overlay, box select,
+  `viewport.sample`/`pick_rect`/`screenshot` and `render.*` commands, acceptance C6, following an agent's
+  selection (from M7l) and the Inspector's entity eyedropper (from M7m)
 - M7p: Gizmos, snapping and transform tools
 - M7q: Module API v3: lifecycle, multi-world host, host service interfaces (scripting API) (ADR 0041)
 - M7r: Play mode and the `GameSession` runtime (ADR 0042)

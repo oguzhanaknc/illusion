@@ -96,6 +96,7 @@ struct Notice
 class Palette;
 class Outliner;
 class Inspector;
+class SceneView;
 class Console;
 class History;
 class Agents;
@@ -165,6 +166,9 @@ struct EditorShell::Impl
     std::unique_ptr<detail::Palette> palette;
     std::unique_ptr<detail::Outliner> outliner;
     std::unique_ptr<detail::Inspector> inspector;
+    std::unique_ptr<detail::SceneView> sceneView;
+    bool viewportNavigating =
+        false; // the Scene panel moved its camera last frame (fly keys are not shortcuts)
     std::unique_ptr<detail::Console> console;
     std::unique_ptr<detail::History> history;
     std::unique_ptr<detail::Agents> agentsPanel;
