@@ -258,6 +258,33 @@ struct ViewportBounds
     Aabb bounds;     ///< Its box.
 };
 
+/// What ViewportHost::requestSnap() looks for.
+enum class ViewportSnapTarget : u8
+{
+    Any,     ///< A vertex within the tolerance, otherwise the surface under the pixel.
+    Vertex,  ///< The mesh vertex that appears nearest to the pixel.
+    Surface, ///< The opaque surface under the pixel.
+};
+
+/// A request of ViewportHost::requestSnap().
+struct ViewportSnapRequest
+{
+    Vec2 pixel{0.0f};                                    ///< Image pixel (origin at the top left, y down).
+    ViewportSnapTarget target = ViewportSnapTarget::Any; ///< What to look for.
+    f32 tolerance = 12.0f; ///< Largest distance of a vertex on screen in pixels.
+    /// Entities left out with their descendants, e.g. what is being moved (borrowed for the call).
+    std::span<const Entity> exclude;
+};
+
+/// A point that ViewportHost::requestSnap() found.
+struct ViewportSnap
+{
+    ViewportSnapTarget kind = ViewportSnapTarget::Surface; ///< Vertex or Surface.
+    Vec3 position{0.0f};                                   ///< World position.
+    Vec3 normal{0.0f}; ///< Unit surface normal facing the camera (surfaces; zero for vertices).
+    Entity entity{};   ///< The entity whose mesh or surface it is.
+};
+
 /// What a viewport panel draws this frame.
 struct ViewportFrame
 {
@@ -398,6 +425,18 @@ public:
     /// has loaded and that is not hidden or inactive, once each, with the placements of the World as it is
     /// now (the arranging commands and drop to ground use them).
     virtual void meshBounds(std::vector<ViewportBounds>& out) = 0;
+
+    /// Starts looking for the point of @p request in @p id (validated by the command: inside the image):
+    /// vertices of the meshes that MeshRenderers draw, from CPU copies loaded on first use, and the surface
+    /// from a depth readback of a small view around the pixel. Hidden and inactive entities, and those of
+    /// ViewportSnapRequest::exclude, are left out. Returns a ticket for snap().
+    [[nodiscard]] virtual Expected<u64, CommandError> requestSnap(std::string_view id,
+                                                                  const ViewportSnapRequest& request) = 0;
+
+    /// The result of @p ticket once it is found (std::nullopt while pending): the point, or nothing when no
+    /// vertex is within the tolerance and no surface is under the pixel. Each ticket is answered once.
+    [[nodiscard]] virtual std::optional<Expected<std::optional<ViewportSnap>, CommandError>>
+    snap(u64 ticket) = 0;
 };
 
 } // namespace illusion::editor

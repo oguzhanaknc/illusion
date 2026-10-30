@@ -23,7 +23,7 @@ Expected<GizmoSettings, CommandError> gizmoGet(CommandContext& context, const No
 
 Expected<GizmoSettings, CommandError> gizmoSetTool(CommandContext& context, const GizmoToolParams& params)
 {
-    if (Expected<void, CommandError> valid = checkEnum(params.tool, GizmoTool::Universal, "/tool"); !valid)
+    if (Expected<void, CommandError> valid = checkEnum(params.tool, GizmoTool::Measure, "/tool"); !valid)
     {
         return unexpected(std::move(valid).error());
     }
@@ -69,9 +69,10 @@ Expected<GizmoSettings, CommandError> gizmoSetPivot(CommandContext& context, con
 
 Expected<GizmoSettings, CommandError> gizmoSetSnap(CommandContext& context, const GizmoSnapParams& params)
 {
-    if (!params.enabled && !params.translate && !params.rotate && !params.scale)
+    if (!params.enabled && !params.translate && !params.rotate && !params.scale && !params.alignToNormal)
     {
-        return unexpected(CommandError::invalid("", "must set enabled, translate, rotate or scale"));
+        return unexpected(
+            CommandError::invalid("", "must set enabled, translate, rotate, scale or alignToNormal"));
     }
     GizmoSettings settings = context.editor().gizmo();
     GizmoSnap& snap = settings.snap;
@@ -80,6 +81,70 @@ Expected<GizmoSettings, CommandError> gizmoSetSnap(CommandContext& context, cons
         std::clamp(params.translate.value_or(snap.translate), kGizmoMinTranslateSnap, kGizmoMaxTranslateSnap);
     snap.rotate = std::clamp(params.rotate.value_or(snap.rotate), kGizmoMinRotateSnap, kGizmoMaxRotateSnap);
     snap.scale = std::clamp(params.scale.value_or(snap.scale), kGizmoMinScaleSnap, kGizmoMaxScaleSnap);
+    snap.alignToNormal = params.alignToNormal.value_or(snap.alignToNormal);
+    if (!context.dryRun())
+    {
+        context.editor().setGizmo(settings);
+    }
+    return settings;
+}
+
+bool finite(Vec3 value) noexcept
+{
+    return std::isfinite(value.x) && std::isfinite(value.y) && std::isfinite(value.z);
+}
+
+Expected<Measurement, CommandError> gizmoMeasure(CommandContext& context, const GizmoMeasureParams& params)
+{
+    Vec3 from(0.0f);
+    Vec3 to(0.0f);
+    if (params.entities)
+    {
+        if (params.from || params.to)
+        {
+            return unexpected(CommandError::invalid("/entities", "give either from and to, or entities"));
+        }
+        Expected<std::vector<Entity>, CommandError> entities = resolveEntityList(context, *params.entities);
+        if (!entities)
+        {
+            return unexpected(std::move(entities).error());
+        }
+        if (params.entities->size() != 2)
+        {
+            return unexpected(CommandError::invalid("/entities", "must name exactly two entities"));
+        }
+        World& world = context.world();
+        from = worldTransformOf(world, (*entities)[0]).position;
+        to = worldTransformOf(world, (*entities)[1]).position;
+    }
+    else if (params.from && params.to)
+    {
+        from = *params.from;
+        to = *params.to;
+    }
+    else
+    {
+        return unexpected(CommandError::invalid("", "must give from and to, or entities"));
+    }
+    if (!finite(from) || !finite(to) ||
+        glm::any(glm::greaterThan(glm::abs(from), Vec3(kViewportMaxExtent))) ||
+        glm::any(glm::greaterThan(glm::abs(to), Vec3(kViewportMaxExtent))))
+    {
+        return unexpected(CommandError::invalid("", "the points must be finite and within 100,000 units"));
+    }
+    if (params.show.value_or(true) && !context.dryRun())
+    {
+        GizmoSettings settings = context.editor().gizmo();
+        settings.ruler = GizmoRuler{from, to};
+        context.editor().setGizmo(settings);
+    }
+    return measure(from, to);
+}
+
+Expected<GizmoSettings, CommandError> gizmoClearRuler(CommandContext& context, const NoParams&)
+{
+    GizmoSettings settings = context.editor().gizmo();
+    settings.ruler.reset();
     if (!context.dryRun())
     {
         context.editor().setGizmo(settings);
@@ -132,8 +197,8 @@ void registerGizmoCommands(CommandRegistry& registry)
         .description = strings::kCommandGizmoSetToolDescription,
         .agentSummary =
             "Chooses what a left drag in the Scene viewport does: \"select\" (box select), \"translate\", "
-            "\"rotate\", \"scale\" or \"universal\". To move entities yourself, use transform.* instead. "
-            "Example: {\"tool\": \"rotate\"}.",
+            "\"rotate\", \"scale\", \"universal\" or \"measure\" (draws a ruler). To move entities "
+            "yourself, use transform.* instead. Example: {\"tool\": \"rotate\"}.",
         .category = "Gizmo",
         .icon = "open_with",
         .flags = {.idempotent = true},
@@ -170,12 +235,40 @@ void registerGizmoCommands(CommandRegistry& registry)
         .description = strings::kCommandGizmoSetSnapDescription,
         .agentSummary =
             "Turns gizmo snapping on or off (Ctrl inverts it during a drag) and sets its increments: "
-            "translate in world units, rotate in degrees, scale as a factor step. Example: {\"enabled\": "
-            "true, \"translate\": 0.25, \"rotate\": 15}.",
+            "translate in world units, rotate in degrees, scale as a factor step; alignToNormal makes "
+            "surface "
+            "snapping (Ctrl+Shift during a move) also turn the entities' +y axis onto the surface. Example: "
+            "{\"enabled\": true, \"translate\": 0.25, \"rotate\": 15}.",
         .category = "Gizmo",
         .icon = "grid_4x4",
         .flags = {.idempotent = true},
         .mode = CommandMode::Any,
+    });
+    registry.add<&gizmoMeasure>({
+        .name = "gizmo.measure",
+        .title = strings::kCommandGizmoMeasureTitle,
+        .description = strings::kCommandGizmoMeasureDescription,
+        .agentSummary =
+            "Measures from one world point to another, or between the positions of two entities: the "
+            "distance, the offset, its length in the ground plane and the elevation in degrees. The ruler "
+            "stays in the Scene viewports until gizmo.clear_ruler (show false only measures). Example: "
+            "{\"entities\": [\"/Game/Board\", \"/Game/Spawner\"]}.",
+        .category = "Gizmo",
+        .icon = "straighten",
+        .flags = {.idempotent = true},
+        .mode = CommandMode::Any,
+    });
+    registry.add<&gizmoClearRuler>({
+        .name = "gizmo.clear_ruler",
+        .title = strings::kCommandGizmoClearRulerTitle,
+        .description = strings::kCommandGizmoClearRulerDescription,
+        .agentSummary = "Removes the ruler of gizmo.measure or the Measure tool from the Scene viewports. "
+                        "Example: {}.",
+        .category = "Gizmo",
+        .icon = "straighten",
+        .flags = {.idempotent = true},
+        .mode = CommandMode::Any,
+        .palette = true,
     });
     registry.add<&gizmoModal>({
         .name = "gizmo.modal",

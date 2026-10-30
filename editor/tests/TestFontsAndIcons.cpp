@@ -89,13 +89,15 @@ TEST_CASE("every icon name resolves to a glyph of the icon font")
 
 // Sample values of every argument the editor strings use.
 const text::MessageArgument kSampleArguments[] = {
-    {"action", "Undo"},  {"client", "claude"},    {"component", "Collider"},
-    {"count", 3},        {"era", "2025-06-18"},   {"fps", 144},
-    {"height", 360},     {"message", "no"},       {"method", "scene.save"},
-    {"number", "2"},     {"width", 640},          {"milestone", "M7m"},
-    {"ms", 16.7},        {"path", "game:/a.glb"}, {"permission", "files"},
-    {"revision", 42},    {"title", "Save"},       {"version", "0.7.0"},
-    {"field", "target"}, {"visible", 12},         {"candidates", 40},
+    {"action", "Undo"},    {"client", "claude"},     {"component", "Collider"},
+    {"count", 3},          {"era", "2025-06-18"},    {"fps", 144},
+    {"height", 360},       {"message", "no"},        {"method", "scene.save"},
+    {"number", "2"},       {"width", 640},           {"milestone", "M7m"},
+    {"ms", 16.7},          {"path", "game:/a.glb"},  {"permission", "files"},
+    {"revision", 42},      {"title", "Save"},        {"version", "0.7.0"},
+    {"field", "target"},   {"visible", 12},          {"candidates", 40},
+    {"distance", "2.500"}, {"x", "1.500"},           {"y", "-2.000"},
+    {"z", "0.000"},        {"elevation", "-53.130"},
 };
 
 TEST_CASE("every character of the editor strings in English and en-XA has a glyph in every text font")

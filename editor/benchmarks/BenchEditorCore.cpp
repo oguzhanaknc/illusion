@@ -9,6 +9,7 @@
 #include <illusion/editor/core/EditorContext.hpp>
 #include <illusion/editor/core/Gizmo.hpp>
 #include <illusion/editor/core/ReferenceIndex.hpp>
+#include <illusion/editor/core/Snap.hpp>
 #include <illusion/platform/FileSystem.hpp>
 
 #include <cmath>
@@ -331,5 +332,41 @@ ILL_BENCHMARK("arrange/drop-to-ground", 10'000.0)
     bench.run("1,000 surfaces", [&] {
         falling.min.x += 1e-6f;
         ankerl::nanobench::doNotOptimizeAway(restingHeight(falling, surfaces, 0.0f));
+    });
+}
+
+// The vertex snap search of one frame: the cursor over a 100,000-vertex mesh (a noisy sphere of radius 5, far
+// from the origin, turned and scaled) seen in a 1080p perspective view, run once per mesh under the cursor
+// per frame (11,278 ns measured).
+ILL_BENCHMARK("snap/vertex-search", 80'000.0)
+{
+    std::mt19937 random(11);
+    std::normal_distribution<f32> gauss(0.0f, 1.0f);
+    std::vector<Vec3> positions;
+    positions.reserve(100'000);
+    for (u32 i = 0; i < 100'000; ++i)
+    {
+        const Vec3 direction =
+            glm::normalize(Vec3(gauss(random), gauss(random), gauss(random)) + Vec3(1e-6f));
+        positions.push_back(direction * (5.0f + 0.05f * gauss(random)));
+    }
+    const VertexSnapGrid grid(positions);
+    const Vec3 center(10000.0f, 0.0f, -10000.0f);
+    const Mat4 toWorld = glm::translate(Mat4(1.0f), center) *
+                         glm::mat4_cast(glm::normalize(quatFromEuler(Vec3(0.2f, 0.4f, 0.1f)))) *
+                         glm::scale(Mat4(1.0f), Vec3(1.0f, 1.5f, 0.75f));
+    ViewportCamera view;
+    view.pivot = center;
+    view.yaw = 30.0f;
+    view.pitch = -25.0f;
+    view.distance = 20.0f;
+    const GizmoCamera camera = gizmoCamera(view, UVec2(1920, 1080), 1.0f);
+    Vec2 cursor(1000.0f, 500.0f);
+    ILL_ASSERT(grid.nearest(vertexSnapQuery(camera, cursor, kVertexSnapTolerance), toWorld).has_value(),
+               "the cursor must be over the mesh");
+    bench.run("100,000 vertices", [&] {
+        cursor.x += 0.001f;
+        ankerl::nanobench::doNotOptimizeAway(
+            grid.nearest(vertexSnapQuery(camera, cursor, kVertexSnapTolerance), toWorld));
     });
 }

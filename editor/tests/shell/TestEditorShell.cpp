@@ -803,6 +803,41 @@ TEST_CASE("dragging the gizmo in the Scene view moves the selection in one undo 
     CHECK(editor.gizmo().tool == GizmoTool::Select);
     dragAt(driver, window(grab), window(grab + Vec3(1.5f, 0.0f, 0.0f)), 8);
     CHECK(positionOf(editor, "/Board") == moved);
+
+    // Holding V snaps the move to the vertex under the cursor, along the dragged x arrow only; the moved
+    // entity is left out of the search.
+    test::ok(editor, "selection.set", R"({"entities":["/Board"]})");
+    driver.pressKey(ImGuiKey_W);
+    ViewportSnap vertex;
+    vertex.kind = ViewportSnapTarget::Vertex;
+    vertex.position = Vec3(4.0f, 2.0f, 1.0f);
+    viewports.snapped = vertex;
+    ImGui::GetIO().AddKeyEvent(ImGuiKey_V, true);
+    dragAt(driver, window(grabNow), window(grabNow + Vec3(0.5f, 0.0f, 0.0f)), 8);
+    ImGui::GetIO().AddKeyEvent(ImGuiKey_V, false);
+    driver.runFrames(1);
+    CHECK(viewports.snapRequest.target == ViewportSnapTarget::Vertex);
+    CHECK(viewports.snapExcluded.size() == 1);
+    const Vec3 onVertex = positionOf(editor, "/Board");
+    CHECK(static_cast<double>(onVertex.x) == doctest::Approx(4.0).epsilon(1e-4));
+    CHECK(onVertex.y == moved.y);
+    CHECK(onVertex.z == moved.z);
+    test::ok(editor, "history.undo");
+    viewports.snapped.reset();
+
+    // M picks the Measure tool: a drag over nothing measures on the ground plane and leaves the ruler, which
+    // Esc removes; nothing in the scene changes.
+    const usize measured = editor.history().steps().size();
+    driver.pressKey(ImGuiKey_M);
+    CHECK(editor.gizmo().tool == GizmoTool::Measure);
+    dragAt(driver, window(Vec3(0.0f, 0.0f, 2.0f)), window(Vec3(3.0f, 0.0f, 2.0f)), 8);
+    REQUIRE(editor.gizmo().ruler.has_value());
+    CHECK(static_cast<double>(glm::length(editor.gizmo().ruler->to - editor.gizmo().ruler->from)) ==
+          doctest::Approx(3.0).epsilon(1e-2));
+    CHECK(positionOf(editor, "/Board") == moved);
+    CHECK(editor.history().steps().size() == measured);
+    driver.pressKey(ImGuiKey_Escape);
+    CHECK(!editor.gizmo().ruler.has_value());
     fixture.editor->setViewports(nullptr);
 }
 

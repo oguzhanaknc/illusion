@@ -6,6 +6,7 @@
 
 #include <illusion/core/Log.hpp>
 #include <illusion/editor/core/Gizmo.hpp>
+#include <illusion/editor/core/Snap.hpp>
 #include <illusion/editor/rpc/RpcServer.hpp>
 #include <illusion/editor/ui/FontManager.hpp>
 
@@ -155,8 +156,34 @@ private:
     std::unique_ptr<State> m_state;
 };
 
-/// A viewport panel (Scene, Game or a secondary Scene viewport): the viewport's image with navigation, click
-/// and box picking, camera bookmarks and its toolbar.
+/// Keeps one snap request of a viewport in flight while the user snaps, and remembers the latest answer.
+class SnapTracker
+{
+public:
+    /// Collects the answer in flight and asks @p host for @p target at @p pixel of @p id once it is answered
+    /// (again only when the pixel or the target changes).
+    void update(ViewportHost& host, std::string_view id, Vec2 pixel, ViewportSnapTarget target, f32 tolerance,
+                std::span<const Entity> exclude);
+
+    /// Forgets the answer; the request in flight is collected and dropped by the next update().
+    void reset() noexcept;
+
+    /// The latest answer: the point, or std::nullopt before one or when nothing was found.
+    [[nodiscard]] const std::optional<ViewportSnap>& found() const noexcept { return m_found; }
+
+    /// A request since the last reset() was answered.
+    [[nodiscard]] bool answered() const noexcept { return m_any; }
+
+private:
+    u64 m_ticket = 0;
+    bool m_drop = false;     // the answer in flight belongs to an earlier request
+    bool m_answered = false; // m_found answers m_pixel and m_target
+    bool m_any = false;
+    Vec2 m_pixel{-1.0f};
+    ViewportSnapTarget m_target = ViewportSnapTarget::Any;
+    std::optional<ViewportSnap> m_found;
+};
+
 /// The transform gizmo of a Scene view: it draws the gizmo of the selection, finds the handle under the
 /// cursor and runs drags as `transform.set` calls inside one transaction (Esc or the right button cancels).
 class ViewportGizmo
@@ -171,6 +198,7 @@ public:
         f32 pixelScale = 1.0f;                   ///< Image pixels per display point.
         Vec2 cursor{0.0f};                       ///< Cursor in image pixels.
         bool hovered = false;                    ///< The cursor is over the image and no overlay.
+        std::string_view id;                     ///< The viewport id.
     };
 
     /// The handle under the cursor of @p frame (None while the gizmo is hidden or Alt is held).
@@ -195,6 +223,13 @@ public:
     /// A modal transform is running.
     [[nodiscard]] bool modal() const noexcept { return m_modal.has_value(); }
 
+    /// Starts measuring with the Measure tool at the cursor of @p frame (the left button is held). Returns
+    /// false when the tool is not Measure.
+    bool beginMeasure(Impl& shell, const Frame& frame);
+
+    /// The Measure tool is drawing a ruler.
+    [[nodiscard]] bool measuring() const noexcept { return m_measuring; }
+
 private:
     [[nodiscard]] std::optional<GizmoPose> pose(Impl& shell, const Frame& frame);
     void refreshTargets(Impl& shell);
@@ -203,6 +238,11 @@ private:
     void end(Impl& shell, bool commit);
     void typeNumbers();
     void drawModal(Impl& shell, const Frame& frame, ImDrawList& draw);
+    // Snaps the translation of the running drag to a vertex (V) or a surface (Ctrl+Shift); false when it does
+    // not snap.
+    bool snapDelta(Impl& shell, const Frame& frame, GizmoDelta& delta);
+    void updateMeasure(Impl& shell, const Frame& frame, ImDrawList& draw);
+    void drawSnapMarker(Impl& shell, const Frame& frame, ImDrawList& draw);
 
     std::vector<GizmoTarget> m_targets;
     std::vector<Transform> m_start;
@@ -217,7 +257,19 @@ private:
     GizmoTool m_dragTool = GizmoTool::Translate;
     GizmoPivot m_dragPivot = GizmoPivot::Median;
     GizmoDelta m_delta;
+    // Snapping drags: the moved entities (left out of the search) and the point under the cursor.
+    std::vector<Entity> m_excluded;
+    SnapTracker m_snap;
+    bool m_snapped = false;
+    // The Measure tool: the points under the press and under the cursor.
+    bool m_measuring = false;
+    SnapTracker m_measureFrom;
+    SnapTracker m_measureTo;
+    Vec2 m_measurePress{0.0f};
 };
+
+/// Draws @p ruler over the image of @p frame with its length, offsets and elevation.
+void drawRuler(Impl& shell, const ViewportGizmo::Frame& frame, ImDrawList& draw, const GizmoRuler& ruler);
 
 /// The gizmo controls of the main toolbar after the tool buttons: axes, pivot and snapping.
 void drawGizmoToolbar(Impl& shell);

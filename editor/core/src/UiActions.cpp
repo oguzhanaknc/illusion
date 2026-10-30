@@ -58,6 +58,8 @@ constexpr UiAction kActions[] = {
      .title = s::kToolScale, .icon = "open_in_full", .shortcut = "R"},
     {.id = "view.tool_universal", .command = "gizmo.set_tool", .params = R"({"tool":"universal"})", .menu = UiMenu::View,
      .title = s::kActionViewToolUniversal, .icon = "deployed_code", .shortcut = "T"},
+    {.id = "view.tool_measure", .command = "gizmo.set_tool", .params = R"({"tool":"measure"})", .menu = UiMenu::View,
+     .title = s::kActionViewToolMeasure, .icon = "straighten", .shortcut = "M"},
     {.id = "view.modal_move", .command = "gizmo.modal", .params = R"({"operation":"translate"})", .menu = UiMenu::View,
      .title = s::kActionViewModalMove, .icon = "drag_pan", .shortcut = "Shift+W"},
     {.id = "view.modal_rotate", .command = "gizmo.modal", .params = R"({"operation":"rotate"})", .menu = UiMenu::View,

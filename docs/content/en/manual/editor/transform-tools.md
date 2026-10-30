@@ -16,6 +16,7 @@ The tool buttons are on the left of the toolbar; the keys work while no text fie
 | **E** | Rotate | Rings turn about an axis, the outer ring about the view direction, the inside of the rings turns freely (trackball). |
 | **R** | Scale | The boxes scale along an axis, the centre box scales uniformly. |
 | **T** | Universal | Move arrows and squares, rotation rings and the uniform scale box together. |
+| **M** | Measure | No gizmo: a left drag measures between two points (see [Measuring](#measuring)). |
 
 The Blender keymap selects with **W** and uses **G**, **R** and **S** for modal transforms instead (see
 [Preferences](preferences.md)).
@@ -108,6 +109,32 @@ the setting, so a drag snaps when snapping is off and moves freely when it is on
 Move snapping counts from where the drag started. To put entities on the grid itself, use
 `transform.snap_to_grid`, which rounds their world positions to the nearest multiple of the step.
 
+## Vertex and surface snapping
+
+While a Move drag or a modal move is under way, two keys put the selection on what is under the cursor
+instead of where the drag would take it:
+
+| Hold | Snaps to | How |
+| --- | --- | --- |
+| **V** | The vertex nearest to the cursor | Any Mesh vertex within 12 points of the cursor on screen, the nearest to the camera when several are as near. The Meshes are read on the CPU and sorted into a grid per Mesh, so even large Meshes answer within a frame. |
+| **Ctrl+Shift** | The surface under the cursor | The point the cursor sees on the nearest drawn surface, read back from a depth image rendered without the selection, so the selection never lands on itself. |
+
+The move still follows the dragged handle: along an arrow the selection stops at the point of the axis nearest
+to the target, in a plane at the point of the plane, and the centre square follows the target exactly. A ring
+or dot marks the target. Releasing the key goes back to the ordinary drag.
+
+With **Align to surface normal** on (in the snapping menu, `alignToNormal` of `gizmo.set_snap`) a surface snap
+also turns the selection: the active entity's +y axis turns onto the surface normal by the shortest arc, and
+the other selected entities turn with it about the pivot.
+
+## Measuring
+
+The Measure tool (**M**, the ruler button) measures between two points. Drag from one point to the other: each
+end lands on the surface under the cursor, on the nearest vertex while **V** is held, or on the ground plane
+y = 0 where nothing is drawn. The ruler shows the distance, how far it runs along x, y and z, and its angle
+above the ground; it stays in the view after the release until another measurement replaces it, **Esc**
+removes it, or `gizmo.clear_ruler` runs. Measuring changes nothing in the scene.
+
 ## Arranging
 
 The Entity menu and the commands below place entities by the boxes around what they draw (their Meshes and the
@@ -128,12 +155,15 @@ Each of them is one undo step.
 | Command | What it does |
 | --- | --- |
 | `gizmo.get` | The tool, axes, pivot and snapping. |
-| `gizmo.set_tool` | `select`, `translate`, `rotate`, `scale` or `universal`. |
+| `gizmo.set_tool` | `select`, `translate`, `rotate`, `scale`, `universal` or `measure`. |
 | `gizmo.set_space` | `world`, `local` or `view`. |
 | `gizmo.set_pivot` | `median`, `active`, `individual` or `bounds_center`. |
-| `gizmo.set_snap` | Snapping on or off, and the `translate`, `rotate` and `scale` steps. |
+| `gizmo.set_snap` | Snapping on or off, the `translate`, `rotate` and `scale` steps, and `alignToNormal`. |
 | `gizmo.modal` | Start a modal `translate`, `rotate` or `scale` for the person at the editor. |
 | `transform.snap_to_grid` | Round the world positions of entities to a grid (one undo step). |
+| `viewport.snap` | The vertex or surface under a pixel of a viewport (`to`: `vertex`, `surface` or `any`), with the surface normal and the rotation that stands an entity on it. It only reads; place entities with `transform.set`. |
+| `gizmo.measure` | Measure between two points, or between the positions of two entities, and show the ruler. |
+| `gizmo.clear_ruler` | Remove the ruler. |
 | `transform.drop_to_ground` | Drop entities onto the boxes below them (`onto`: `surfaces`) or onto the ground plane (`plane`). |
 | `transform.align_to_view` | Turn entities to a viewport's camera; `move` also places them at its eye. |
 | `transform.align` | Line entities up along `axis` by their `min`, `center` or `max` edges, `to` the `selection` or the `active` entity. |
@@ -148,6 +178,8 @@ or `transform.scale` with the same pivots:
 {"method": "transform.snap_to_grid", "params": {"entities": ["$selection"]}}
 {"method": "transform.rotate", "params": {"entities": ["$selection"], "euler": [0, 90, 0], "pivot": "center"}}
 {"method": "transform.drop_to_ground", "params": {"entities": ["$selection"]}}
+{"method": "viewport.snap", "params": {"x": 640, "y": 360, "to": "surface", "exclude": ["/Crate"]}}
+{"method": "gizmo.measure", "params": {"entities": ["/Door", "/Window"]}}
 {"method": "transform.align", "params": {"entities": ["/Crate 1", "/Crate 2"], "axis": "x", "edge": "min"}}
 {"method": "transform.distribute", "params": {"entities": ["/Post 1", "/Post 2", "/Post 3"], "axis": "z", "mode": "gaps"}}
 ```

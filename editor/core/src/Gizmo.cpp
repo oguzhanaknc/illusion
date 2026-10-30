@@ -305,7 +305,7 @@ GizmoShape gizmoShape(GizmoTool tool, const GizmoCamera& camera, const GizmoPose
 {
     GizmoShape shape;
     shape.tool = tool;
-    if (tool == GizmoTool::Select || camera.size.x == 0 || camera.size.y == 0)
+    if (tool == GizmoTool::Select || tool == GizmoTool::Measure || camera.size.x == 0 || camera.size.y == 0)
     {
         return shape;
     }
@@ -422,7 +422,7 @@ GizmoShape gizmoShape(GizmoTool tool, const GizmoCamera& camera, const GizmoPose
 
 GizmoHandle gizmoHitTest(const GizmoShape& shape, Vec2 cursor) noexcept
 {
-    if (!shape.visible || shape.tool == GizmoTool::Select)
+    if (!shape.visible || shape.tool == GizmoTool::Select || shape.tool == GizmoTool::Measure)
     {
         return GizmoHandle::None;
     }

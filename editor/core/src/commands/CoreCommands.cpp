@@ -426,6 +426,20 @@ void reflectCoreCommandTypes(StructRegistry& structs)
             .field("width", &ViewportAspectParams::width, resolutionWidth)
             .field("height", &ViewportAspectParams::height, resolutionHeight);
         const FieldMeta pixel{.min = 0.0, .max = 16384.0};
+        reflectStruct<ViewportSnapParams>("editor.ViewportSnapParams", 1, structs)
+            .field("viewport", &ViewportSnapParams::viewport)
+            .field("x", &ViewportSnapParams::x, {.min = 0.0, .max = 16384.0})
+            .field("y", &ViewportSnapParams::y, {.min = 0.0, .max = 16384.0})
+            .field("to", &ViewportSnapParams::to)
+            .field("exclude", &ViewportSnapParams::exclude)
+            .field("tolerance", &ViewportSnapParams::tolerance, {.min = 1.0, .max = 64.0});
+        reflectStruct<ViewportSnapResult>("editor.ViewportSnapResult", 1, structs)
+            .field("hit", &ViewportSnapResult::hit)
+            .field("kind", &ViewportSnapResult::kind)
+            .field("position", &ViewportSnapResult::position)
+            .field("normal", &ViewportSnapResult::normal)
+            .field("rotation", &ViewportSnapResult::rotation)
+            .field("entity", &ViewportSnapResult::entity);
         reflectStruct<ViewportSampleParams>("editor.ViewportSampleParams", 1, structs)
             .field("viewport", &ViewportSampleParams::viewport)
             .field("x", &ViewportSampleParams::x, pixel)
@@ -569,12 +583,17 @@ void reflectCoreCommandTypes(StructRegistry& structs)
             .field("enabled", &GizmoSnap::enabled)
             .field("translate", &GizmoSnap::translate, grid)
             .field("rotate", &GizmoSnap::rotate, snapAngle)
-            .field("scale", &GizmoSnap::scale, snapScale);
+            .field("scale", &GizmoSnap::scale, snapScale)
+            .field("alignToNormal", &GizmoSnap::alignToNormal);
+        reflectStruct<GizmoRuler>("editor.GizmoRuler", 1, structs)
+            .field("from", &GizmoRuler::from)
+            .field("to", &GizmoRuler::to);
         reflectStruct<GizmoSettings>("editor.GizmoSettings", 1, structs)
             .field("tool", &GizmoSettings::tool)
             .field("space", &GizmoSettings::space)
             .field("pivot", &GizmoSettings::pivot)
-            .field("snap", &GizmoSettings::snap);
+            .field("snap", &GizmoSettings::snap)
+            .field("ruler", &GizmoSettings::ruler);
         reflectStruct<GizmoToolParams>("editor.GizmoToolParams", 1, structs)
             .field("tool", &GizmoToolParams::tool);
         reflectStruct<GizmoSpaceParams>("editor.GizmoSpaceParams", 1, structs)
@@ -585,7 +604,20 @@ void reflectCoreCommandTypes(StructRegistry& structs)
             .field("enabled", &GizmoSnapParams::enabled)
             .field("translate", &GizmoSnapParams::translate, grid)
             .field("rotate", &GizmoSnapParams::rotate, snapAngle)
-            .field("scale", &GizmoSnapParams::scale, snapScale);
+            .field("scale", &GizmoSnapParams::scale, snapScale)
+            .field("alignToNormal", &GizmoSnapParams::alignToNormal);
+        reflectStruct<GizmoMeasureParams>("editor.GizmoMeasureParams", 1, structs)
+            .field("from", &GizmoMeasureParams::from)
+            .field("to", &GizmoMeasureParams::to)
+            .field("entities", &GizmoMeasureParams::entities)
+            .field("show", &GizmoMeasureParams::show);
+        reflectStruct<Measurement>("editor.Measurement", 1, structs)
+            .field("from", &Measurement::from)
+            .field("to", &Measurement::to)
+            .field("delta", &Measurement::delta)
+            .field("distance", &Measurement::distance)
+            .field("horizontal", &Measurement::horizontal)
+            .field("elevation", &Measurement::elevation, {.unit = Unit::Degrees, .min = -90.0, .max = 90.0});
         reflectStruct<GizmoModalParams>("editor.GizmoModalParams", 1, structs)
             .field("operation", &GizmoModalParams::operation);
 

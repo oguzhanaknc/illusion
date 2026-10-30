@@ -13,6 +13,7 @@
 #include <illusion/editor/core/EntityIndex.hpp>
 #include <illusion/editor/core/Gizmo.hpp>
 #include <illusion/editor/core/ReferenceIndex.hpp>
+#include <illusion/editor/core/Snap.hpp>
 #include <illusion/editor/core/UiHost.hpp>
 #include <illusion/editor/core/ViewportHost.hpp>
 
@@ -746,10 +747,21 @@ struct GizmoPivotParams
 /// Params of `gizmo.set_snap` (absent members are unchanged).
 struct GizmoSnapParams
 {
-    std::optional<bool> enabled{};  ///< Snap without Ctrl.
-    std::optional<f32> translate{}; ///< Distance increment in world units.
-    std::optional<f32> rotate{};    ///< Angle increment in degrees.
-    std::optional<f32> scale{};     ///< Scale factor increment.
+    std::optional<bool> enabled{};       ///< Snap without Ctrl.
+    std::optional<f32> translate{};      ///< Distance increment in world units.
+    std::optional<f32> rotate{};         ///< Angle increment in degrees.
+    std::optional<f32> scale{};          ///< Scale factor increment.
+    std::optional<bool> alignToNormal{}; ///< Surface snapping turns the entities' +y axis onto the normal.
+};
+
+/// Params of `gizmo.measure`: two points, or two entities instead.
+struct GizmoMeasureParams
+{
+    std::optional<Vec3> from{}; ///< Start in world space (with to).
+    std::optional<Vec3> to{};   ///< End in world space (with from).
+    /// Two entity references instead of from and to: measures between their world positions.
+    std::optional<std::vector<std::string>> entities{};
+    std::optional<bool> show{}; ///< Show the ruler in the Scene viewports (default true).
 };
 
 /// Params of `gizmo.modal`.
@@ -1043,6 +1055,30 @@ struct ViewportSampleResult
     f32 saturation = 0.0f; ///< HSV saturation, 0 to 1.
     f32 value = 0.0f;      ///< HSV value, 0 to 1.
     u32 pixels = 0;        ///< Pixels averaged.
+};
+
+/// Params of `viewport.snap`.
+struct ViewportSnapParams
+{
+    std::optional<std::string> viewport{};  ///< Viewport id (default "scene").
+    f32 x = 0.0f;                           ///< Pixel column (origin at the top left).
+    f32 y = 0.0f;                           ///< Pixel row (y down).
+    std::optional<ViewportSnapTarget> to{}; ///< "any" (default), "vertex" or "surface".
+    /// Entity references left out with their descendants, e.g. the entities to be moved (default none).
+    std::optional<std::vector<std::string>> exclude{};
+    std::optional<f32>
+        tolerance{}; ///< Largest distance of a vertex on screen in pixels, 1 to 64 (default 12).
+};
+
+/// Result of `viewport.snap`.
+struct ViewportSnapResult
+{
+    bool hit = false;                         ///< A vertex or a surface was found.
+    std::optional<ViewportSnapTarget> kind{}; ///< "vertex" or "surface".
+    std::optional<Vec3> position{};           ///< Its world position.
+    std::optional<Vec3> normal{};             ///< The unit surface normal (surfaces).
+    std::optional<Quat> rotation{};           ///< A rotation that turns +y onto the normal (surfaces).
+    std::optional<EntitySummary> entity{};    ///< The entity whose mesh or surface it is.
 };
 
 /// Params of `viewport.pick_rect`.
@@ -1440,9 +1476,19 @@ template <>
 struct illusion::EnumReflection<illusion::editor::GizmoTool>
 {
     /// The values.
-    static constexpr std::array kValues{illusion::EnumValue{"select", 0}, illusion::EnumValue{"translate", 1},
-                                        illusion::EnumValue{"rotate", 2}, illusion::EnumValue{"scale", 3},
-                                        illusion::EnumValue{"universal", 4}};
+    static constexpr std::array kValues{
+        illusion::EnumValue{"select", 0},    illusion::EnumValue{"translate", 1},
+        illusion::EnumValue{"rotate", 2},    illusion::EnumValue{"scale", 3},
+        illusion::EnumValue{"universal", 4}, illusion::EnumValue{"measure", 5}};
+};
+
+/// Names of ViewportSnapTarget values in JSON.
+template <>
+struct illusion::EnumReflection<illusion::editor::ViewportSnapTarget>
+{
+    /// The values.
+    static constexpr std::array kValues{illusion::EnumValue{"any", 0}, illusion::EnumValue{"vertex", 1},
+                                        illusion::EnumValue{"surface", 2}};
 };
 
 /// Names of GizmoSpace values in JSON.

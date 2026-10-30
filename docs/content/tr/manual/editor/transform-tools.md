@@ -16,6 +16,7 @@ Araç düğmeleri araç çubuğunun solundadır; tuşlar klavye bir metin alanı
 | **E** | Döndür | Halkalar bir eksen çevresinde, dış halka görünüm yönü çevresinde döndürür; halkaların içi serbestçe döndürür (trackball). |
 | **R** | Ölçekle | Kutular bir eksen boyunca, ortadaki kutu her yöne eşit ölçekler. |
 | **T** | Evrensel | Taşıma okları ve kareleri, döndürme halkaları ve eşit ölçekleme kutusu bir arada. |
+| **M** | Ölçme | Gizmo yok: sol sürükleme iki nokta arasını ölçer (bkz. [Ölçmek](#olcmek)). |
 
 Blender keymap'i bunların yerine **W** ile seçer, **G**, **R** ve **S**'yi ise modal dönüşümler için kullanır
 (bkz. [Tercihler](preferences.md)).
@@ -108,6 +109,32 @@ ayarı tersine çevirir: yakalama kapalıyken sürükleme yakalar, açıkken ser
 Taşıma yakalaması sürüklemenin başladığı yerden sayar. Entity'leri grid'in kendisine oturtmak için dünya
 konumlarını adımın en yakın katına yuvarlayan `transform.snap_to_grid` kullanılır.
 
+## Vertex ve yüzey yakalama
+
+Taşıma sürüklemesi ya da modal taşıma sürerken iki tuş seçimi, sürüklemenin götüreceği yer yerine imlecin
+altındakinin üstüne koyar:
+
+| Basılı tut | Yakaladığı | Nasıl |
+| --- | --- | --- |
+| **V** | İmlece en yakın vertex | Ekranda imlece 12 nokta yakınlıktaki herhangi bir Mesh vertex'i; birkaçı aynı yakınlıktaysa kameraya en yakını. Mesh'ler CPU'da okunur ve her Mesh için bir grid'e dizilir, böylece büyük Mesh'ler bile bir frame içinde yanıt verir. |
+| **Ctrl+Shift** | İmlecin altındaki yüzey | İmlecin en yakın çizilmiş yüzeyde gördüğü nokta; seçim olmadan render edilen bir depth görüntüsünden geri okunur, böylece seçim hiçbir zaman kendi üstüne düşmez. |
+
+Taşıma yine sürüklenen tutamağı izler: bir ok boyunca seçim eksenin hedefe en yakın noktasında durur, bir
+düzlemde düzlemin noktasında; ortadaki kare ise hedefi tam olarak izler. Hedefi bir halka ya da nokta
+işaretler. Tuşu bırakmak sıradan sürüklemeye döner.
+
+**Yüzey normaline hizala** açıkken (yakalama menüsünde, `gizmo.set_snap` komutunun `alignToNormal` alanı) yüzey
+yakalama seçimi de döndürür: etkin Entity'nin +y ekseni en kısa yayla yüzey normaline döner, diğer seçili
+Entity'ler de pivot çevresinde onunla birlikte döner.
+
+## Ölçmek
+
+Ölçme aracı (**M**, cetvel düğmesi) iki nokta arasını ölçer. Bir noktadan diğerine sürüklenir: her uç
+imlecin altındaki yüzeye, **V** basılıyken en yakın vertex'e, hiçbir şey çizilmemiş yerde ise y = 0 zemin
+düzlemine oturur. Cetvel mesafeyi, x, y ve z boyunca ne kadar uzandığını ve zeminin üstündeki açısını gösterir;
+bırakıldıktan sonra başka bir ölçüm onun yerini alana, **Esc** onu kaldırana ya da `gizmo.clear_ruler`
+çalışana kadar görünümde kalır. Ölçmek sahnede hiçbir şeyi değiştirmez.
+
 ## Yerleştirme
 
 Entity menüsü ve aşağıdaki komutlar Entity'leri çizdiklerinin çevresindeki kutulara göre yerleştirir (kendi
@@ -128,12 +155,15 @@ Her biri tek bir geri alma adımıdır.
 | Komut | Ne yapar |
 | --- | --- |
 | `gizmo.get` | Araç, eksenler, pivot ve yakalama. |
-| `gizmo.set_tool` | `select`, `translate`, `rotate`, `scale` ya da `universal`. |
+| `gizmo.set_tool` | `select`, `translate`, `rotate`, `scale`, `universal` ya da `measure`. |
 | `gizmo.set_space` | `world`, `local` ya da `view`. |
 | `gizmo.set_pivot` | `median`, `active`, `individual` ya da `bounds_center`. |
-| `gizmo.set_snap` | Yakalamanın açık ya da kapalı olması ve `translate`, `rotate`, `scale` adımları. |
+| `gizmo.set_snap` | Yakalamanın açık ya da kapalı olması, `translate`, `rotate`, `scale` adımları ve `alignToNormal`. |
 | `gizmo.modal` | Editördeki kişi için modal bir `translate`, `rotate` ya da `scale` başlatır. |
 | `transform.snap_to_grid` | Entity'lerin dünya konumlarını bir grid'e yuvarlar (tek geri alma adımı). |
+| `viewport.snap` | Bir viewport'un bir pikselinin altındaki vertex ya da yüzey (`to`: `vertex`, `surface` ya da `any`); yüzey normali ve bir Entity'yi onun üstüne diken rotasyonla birlikte. Yalnızca okur; Entity'ler `transform.set` ile yerleştirilir. |
+| `gizmo.measure` | İki nokta ya da iki Entity'nin konumu arasını ölçer ve cetveli gösterir. |
+| `gizmo.clear_ruler` | Cetveli kaldırır. |
 | `transform.drop_to_ground` | Entity'leri altlarındaki kutulara (`onto`: `surfaces`) ya da zemin düzlemine (`plane`) bırakır. |
 | `transform.align_to_view` | Entity'leri bir viewport'un kamerasına çevirir; `move` onları gözüne de yerleştirir. |
 | `transform.align` | Entity'leri `axis` boyunca `min`, `center` ya da `max` kenarlarına göre, `selection`'a ya da `active` Entity'ye (`to`) hizalar. |
@@ -148,6 +178,8 @@ isteyen bir ajan gizmo'yu sürüklemez; aynı pivotlarla `transform.translate`, 
 {"method": "transform.snap_to_grid", "params": {"entities": ["$selection"]}}
 {"method": "transform.rotate", "params": {"entities": ["$selection"], "euler": [0, 90, 0], "pivot": "center"}}
 {"method": "transform.drop_to_ground", "params": {"entities": ["$selection"]}}
+{"method": "viewport.snap", "params": {"x": 640, "y": 360, "to": "surface", "exclude": ["/Crate"]}}
+{"method": "gizmo.measure", "params": {"entities": ["/Door", "/Window"]}}
 {"method": "transform.align", "params": {"entities": ["/Crate 1", "/Crate 2"], "axis": "x", "edge": "min"}}
 {"method": "transform.distribute", "params": {"entities": ["/Post 1", "/Post 2", "/Post 3"], "axis": "z", "mode": "gaps"}}
 ```

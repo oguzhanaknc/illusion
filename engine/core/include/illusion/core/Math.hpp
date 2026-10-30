@@ -27,6 +27,7 @@ using Vec3 = glm::vec3;   ///< 3D float vector.
 using Vec4 = glm::vec4;   ///< 4D float vector.
 using IVec2 = glm::ivec2; ///< 2D signed integer vector.
 using UVec2 = glm::uvec2; ///< 2D unsigned integer vector.
+using UVec3 = glm::uvec3; ///< 3D unsigned integer vector.
 using Mat3 = glm::mat3;   ///< 3x3 float matrix (column-major).
 using Mat4 = glm::mat4;   ///< 4x4 float matrix (column-major).
 using Quat = glm::quat;   ///< Rotation quaternion (w, x, y, z).

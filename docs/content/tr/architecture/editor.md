@@ -243,7 +243,13 @@ yalnızca `editor.screenshot`'ı yanıtlamak için çizer. Kılavuz [pencereyi](
 arayüzü kullanır; bu yüzden sahte bir host ile test edilirler ve `--no-gpu` altında `unsupported` (1400) ile
 başarısız olurlar. `ViewportHost::meshBounds()` yerleştirme komutlarına (`transform.align`,
 `transform.distribute`, `transform.drop_to_ground`) çizilen Mesh'lerin dünya kutularını verir; matematikleri
-GPU'suzdur (`Arrange.hpp`) ve host yokken her Entity konumu olarak sayılır. `illusion::editor_viewport` arayüzü
+GPU'suzdur (`Arrange.hpp`) ve host yokken her Entity konumu olarak sayılır.
+`ViewportHost::requestSnap()` ve `snap()`, `viewport.snap` komutunu ve gizmo'nun yakalamasını bir iki frame
+sonra yanıtlar: bir piksele en yakın vertex, her Mesh için bir `VertexSnapGrid` içinde CPU'da aranır
+(`Snap.hpp`; Mesh'in kendi uzayında, imleç ışını boyunca hücreleri dilim dilim gezilen düzgün bir grid), ya da
+altındaki yüzey, pikselin çevresinde dışlanan Entity'leri ve çocuklarını dışarıda bırakan küçük bir render'ın
+depth değerlerinden bulunur (`surfaceFromDepth()` normali komşu depth'lerden çift duyarlıkla yeniden kurar).
+`illusion::editor_viewport` arayüzü
 `ViewportService` ile uygular; editör süreci onu `EditorContext::setViewports()` ile kaydeder:
 
 - Her viewport bir `EditorCamera` (orbit, pan, dolly, fly, yumuşatılmış geçişler), bir `ResizePolicy` (yeni
@@ -306,7 +312,8 @@ Sonucu [yapay zekâ ajanları kılavuzu](../manual/editor/ai-agents.md) anlatır
   birleştirilen tek bir `transform.translate`) ve `editor/reference-refresh` (referans indeksi için değişmemiş
   bir sahne dosyasını denetlemek), `editor/batch-step` (`$` referanslı bir `editor.batch` adımı, batch ile
   birlikte geri alınarak) ve `editor/undo-own-check` (kendi adımlarını geri almadan önce sonraki bir adımı
-  denetlemek).
+  denetlemek) ve `snap/vertex-search` (100.000 vertex'li bir Mesh üzerinde vertex yakalama araması, yaklaşık
+  11 µs).
 - `mcp/translate`, köprünün sunucusu üzerinden anında yanıt veren bir sağlayıcıyla tek bir MCP `tools/call`
   çağrısını ölçer: ayrıştırma, aracı bulma, sonucu yazma (bir masaüstü makinede yaklaşık 1,6 µs; bütçe 10 µs).
 - `viewport/camera-update` bir frame'lik viewport gezinmesini (yaklaşık 20 ns; bütçe 200 ns),
