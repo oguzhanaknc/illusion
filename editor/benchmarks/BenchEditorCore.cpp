@@ -4,6 +4,7 @@
 #include <illusion/core/Json.hpp>
 #include <illusion/ecs/Name.hpp>
 #include <illusion/ecs/SceneSerializer.hpp>
+#include <illusion/editor/core/Arrange.hpp>
 #include <illusion/editor/core/CoreCommands.hpp>
 #include <illusion/editor/core/EditorContext.hpp>
 #include <illusion/editor/core/Gizmo.hpp>
@@ -15,6 +16,7 @@
 #include <format>
 #include <random>
 #include <string>
+#include <vector>
 
 using namespace illusion;
 using namespace illusion::editor;
@@ -280,5 +282,54 @@ ILL_BENCHMARK("gizmo/hit-test", 2'000.0)
         const GizmoShape shape = gizmoShape(GizmoTool::Universal, camera, pose);
         ankerl::nanobench::doNotOptimizeAway(gizmoHitTest(shape, cursor));
         cursor.x += 0.001f;
+    });
+}
+
+// One frame of a modal transform: a constrained move that follows the cursor, a free rotation and a scale,
+// each with snapping (80 ns measured).
+ILL_BENCHMARK("gizmo/modal-update", 500.0)
+{
+    ViewportCamera view;
+    view.pivot = Vec3(10000.0f, 0.0f, -10000.0f);
+    view.yaw = 30.0f;
+    view.pitch = -25.0f;
+    const GizmoCamera camera = gizmoCamera(view, UVec2(1920, 1080), 1.0f);
+    const Quat local = glm::normalize(quatFromEuler(Vec3(0.2f, 0.4f, 0.1f)));
+    const Vec2 start(1100.0f, 500.0f);
+    std::optional<GizmoModal> move =
+        GizmoModal::begin(GizmoModalOperation::Translate, camera, view.pivot, local, start);
+    std::optional<GizmoModal> turn =
+        GizmoModal::begin(GizmoModalOperation::Rotate, camera, view.pivot, local, start);
+    std::optional<GizmoModal> scale =
+        GizmoModal::begin(GizmoModalOperation::Scale, camera, view.pivot, local, start);
+    ILL_ASSERT(move && turn && scale, "the pivot must be in view");
+    move->constrain(0, false);
+    const GizmoSnap snap{.enabled = true};
+    const GizmoTypedInput typed;
+    Vec2 cursor = start;
+    bench.run("move, rotate and scale update", [&] {
+        cursor += Vec2(0.01f, 0.005f);
+        ankerl::nanobench::doNotOptimizeAway(move->update(cursor, &snap, typed));
+        ankerl::nanobench::doNotOptimizeAway(turn->update(cursor, &snap, typed));
+        ankerl::nanobench::doNotOptimizeAway(scale->update(cursor, &snap, typed));
+    });
+}
+
+// Dropping one entity onto 1,000 surfaces (the boxes of a large level; 1,091 ns measured).
+ILL_BENCHMARK("arrange/drop-to-ground", 10'000.0)
+{
+    std::mt19937 random(7);
+    std::uniform_real_distribution<f32> spread(-50.0f, 50.0f);
+    std::vector<Aabb> surfaces;
+    surfaces.reserve(1000);
+    for (u32 i = 0; i < 1000; ++i)
+    {
+        const Vec3 at(spread(random), spread(random) * 0.1f, spread(random));
+        surfaces.push_back(Aabb{at - Vec3(2.0f, 0.5f, 2.0f), at + Vec3(2.0f, 0.5f, 2.0f)});
+    }
+    Aabb falling{Vec3(-0.5f, 20.0f, -0.5f), Vec3(0.5f, 21.0f, 0.5f)};
+    bench.run("1,000 surfaces", [&] {
+        falling.min.x += 1e-6f;
+        ankerl::nanobench::doNotOptimizeAway(restingHeight(falling, surfaces, 0.0f));
     });
 }

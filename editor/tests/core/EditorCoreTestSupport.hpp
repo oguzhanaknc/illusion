@@ -230,6 +230,12 @@ public:
 
     void requestQuit() override { quit = true; }
 
+    Expected<void, editor::CommandError> beginModalTransform(editor::GizmoModalOperation operation) override
+    {
+        modal = operation;
+        return {};
+    }
+
     Expected<u64, editor::CommandError> requestScreenshot(UVec2 size) override
     {
         requested = size;
@@ -254,6 +260,7 @@ public:
     std::string palette;
     std::vector<std::string> notices;
     bool quit = false;
+    std::optional<editor::GizmoModalOperation> modal;
     UVec2 requested{0};
     u64 ticket = 0;
     bool pending = false;
@@ -409,6 +416,8 @@ public:
         return info;
     }
 
+    void meshBounds(std::vector<editor::ViewportBounds>& out) override { out = meshes; }
+
     Secondary& find(std::string_view id)
     {
         const auto found = std::find_if(secondary.begin(), secondary.end(),
@@ -430,6 +439,7 @@ public:
     std::optional<editor::ViewportHit> hit;
     std::array<u8, 4> color{255, 0, 0, 255};
     std::vector<Entity> entities;
+    std::vector<editor::ViewportBounds> meshes; ///< What meshBounds() reports.
     editor::ViewportRenderStats stats;
     editor::ViewportChannel readChannel = editor::ViewportChannel::Color;
     UVec2 readOrigin{0};

@@ -546,6 +546,22 @@ void reflectCoreCommandTypes(StructRegistry& structs)
         reflectStruct<TransformSnapParams>("editor.TransformSnapParams", 1, structs)
             .field("entities", &TransformSnapParams::entities)
             .field("increment", &TransformSnapParams::increment, grid);
+        reflectStruct<TransformAlignParams>("editor.TransformAlignParams", 1, structs)
+            .field("entities", &TransformAlignParams::entities)
+            .field("axis", &TransformAlignParams::axis)
+            .field("edge", &TransformAlignParams::edge)
+            .field("to", &TransformAlignParams::to);
+        reflectStruct<TransformDistributeParams>("editor.TransformDistributeParams", 1, structs)
+            .field("entities", &TransformDistributeParams::entities)
+            .field("axis", &TransformDistributeParams::axis)
+            .field("mode", &TransformDistributeParams::mode);
+        reflectStruct<TransformDropParams>("editor.TransformDropParams", 1, structs)
+            .field("entities", &TransformDropParams::entities)
+            .field("onto", &TransformDropParams::onto);
+        reflectStruct<TransformAlignViewParams>("editor.TransformAlignViewParams", 1, structs)
+            .field("entities", &TransformAlignViewParams::entities)
+            .field("viewport", &TransformAlignViewParams::viewport)
+            .field("move", &TransformAlignViewParams::move);
 
         const FieldMeta snapAngle{.unit = Unit::Degrees, .min = 0.01, .max = 180.0};
         const FieldMeta snapScale{.min = 0.001, .max = 10.0};
@@ -570,6 +586,8 @@ void reflectCoreCommandTypes(StructRegistry& structs)
             .field("translate", &GizmoSnapParams::translate, grid)
             .field("rotate", &GizmoSnapParams::rotate, snapAngle)
             .field("scale", &GizmoSnapParams::scale, snapScale);
+        reflectStruct<GizmoModalParams>("editor.GizmoModalParams", 1, structs)
+            .field("operation", &GizmoModalParams::operation);
 
         reflectStruct<ClipboardResult>("editor.ClipboardResult", 1, structs)
             .field("entities", &ClipboardResult::entities)

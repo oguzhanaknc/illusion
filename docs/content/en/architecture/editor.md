@@ -237,6 +237,9 @@ The core defines what viewports offer without depending on the GPU: `ViewportHos
 `UiHost`) with plain camera, settings and pick types, and the camera math (`viewportEye()`,
 `viewportProjectionMatrix()`, `viewportPreset()`, `projectToViewport()`). The `viewport.*` commands use only
 this interface, so they are tested with a fake host and fail with `unsupported` (1400) under `--no-gpu`.
+`ViewportHost::meshBounds()` gives the arranging commands (`transform.align`, `transform.distribute`,
+`transform.drop_to_ground`) the world boxes of the drawn Meshes; their math is GPU-free (`Arrange.hpp`), and
+without a host every entity counts as its position.
 `illusion::editor_viewport` implements it with `ViewportService`, which the editor process registers with
 `EditorContext::setViewports()`:
 

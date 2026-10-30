@@ -53,7 +53,7 @@ Expected<GizmoSettings, CommandError> gizmoSetSpace(CommandContext& context, con
 
 Expected<GizmoSettings, CommandError> gizmoSetPivot(CommandContext& context, const GizmoPivotParams& params)
 {
-    if (Expected<void, CommandError> valid = checkEnum(params.pivot, GizmoPivot::Individual, "/pivot");
+    if (Expected<void, CommandError> valid = checkEnum(params.pivot, GizmoPivot::BoundsCenter, "/pivot");
         !valid)
     {
         return unexpected(std::move(valid).error());
@@ -85,6 +85,30 @@ Expected<GizmoSettings, CommandError> gizmoSetSnap(CommandContext& context, cons
         context.editor().setGizmo(settings);
     }
     return settings;
+}
+
+Expected<NoResult, CommandError> gizmoModal(CommandContext& context, const GizmoModalParams& params)
+{
+    if (Expected<void, CommandError> valid =
+            checkEnum(params.operation, GizmoModalOperation::Scale, "/operation");
+        !valid)
+    {
+        return unexpected(std::move(valid).error());
+    }
+    UiHost* ui = context.editor().ui();
+    if (ui == nullptr)
+    {
+        return unexpected(CommandError::make(ErrorKind::Unsupported,
+                                             "this editor has no user interface (it runs with --no-gpu)"));
+    }
+    if (!context.dryRun())
+    {
+        if (Expected<void, CommandError> started = ui->beginModalTransform(params.operation); !started)
+        {
+            return unexpected(std::move(started).error());
+        }
+    }
+    return NoResult{};
 }
 
 } // namespace
@@ -152,6 +176,20 @@ void registerGizmoCommands(CommandRegistry& registry)
         .icon = "grid_4x4",
         .flags = {.idempotent = true},
         .mode = CommandMode::Any,
+    });
+    registry.add<&gizmoModal>({
+        .name = "gizmo.modal",
+        .title = strings::kCommandGizmoModalTitle,
+        .description = strings::kCommandGizmoModalDescription,
+        .agentSummary =
+            "Starts a Blender-style modal move, rotation or scale of the selection in the Scene view under "
+            "the person's cursor (G, R and S); it follows their mouse until they confirm or cancel it, and "
+            "does nothing without a selection. Meant for people at the editor: to move entities yourself, "
+            "use transform.* instead. Example: {\"operation\": \"translate\"}.",
+        .category = "Gizmo",
+        .icon = "open_with",
+        .mode = CommandMode::Edit,
+        .permission = PermissionClass::Edit,
     });
 }
 

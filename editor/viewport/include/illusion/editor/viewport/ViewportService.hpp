@@ -101,6 +101,7 @@ public:
     [[nodiscard]] std::optional<Expected<ViewportReadback, CommandError>> readback(u64 ticket) override;
     [[nodiscard]] Expected<ViewportRenderStats, CommandError> renderStats(std::string_view id) const override;
     [[nodiscard]] ViewportGpuInfo gpuInfo() const override;
+    void meshBounds(std::vector<ViewportBounds>& out) override;
 
     /// The service's state, defined in its sources.
     struct Impl;

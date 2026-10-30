@@ -58,6 +58,12 @@ constexpr UiAction kActions[] = {
      .title = s::kToolScale, .icon = "open_in_full", .shortcut = "R"},
     {.id = "view.tool_universal", .command = "gizmo.set_tool", .params = R"({"tool":"universal"})", .menu = UiMenu::View,
      .title = s::kActionViewToolUniversal, .icon = "deployed_code", .shortcut = "T"},
+    {.id = "view.modal_move", .command = "gizmo.modal", .params = R"({"operation":"translate"})", .menu = UiMenu::View,
+     .title = s::kActionViewModalMove, .icon = "drag_pan", .shortcut = "Shift+W"},
+    {.id = "view.modal_rotate", .command = "gizmo.modal", .params = R"({"operation":"rotate"})", .menu = UiMenu::View,
+     .title = s::kActionViewModalRotate, .icon = "rotate_90_degrees_ccw", .shortcut = "Shift+E"},
+    {.id = "view.modal_scale", .command = "gizmo.modal", .params = R"({"operation":"scale"})", .menu = UiMenu::View,
+     .title = s::kActionViewModalScale, .icon = "zoom_out_map", .shortcut = "Shift+R"},
     {.id = "view.frame_selected", .command = "viewport.frame", .menu = UiMenu::View, .group = 1,
      .title = s::kActionViewFrameSelected, .icon = "center_focus_strong", .shortcut = "F"},
     {.id = "view.frame_all", .command = "viewport.frame", .params = R"({"entities":[]})", .menu = UiMenu::View,
@@ -74,6 +80,10 @@ constexpr UiAction kActions[] = {
      .title = s::kActionEntityDisable, .icon = "visibility_off"},
     {.id = "entity.unparent", .command = "hierarchy.set_parent", .params = R"({"entity":"$selection"})",
      .menu = UiMenu::Entity, .group = 1, .title = s::kActionEntityUnparent, .icon = "move_up"},
+    {.id = "entity.drop_to_ground", .command = "transform.drop_to_ground", .params = R"({"entities":["$selection"]})",
+     .menu = UiMenu::Entity, .group = 2, .shortcut = "End"},
+    {.id = "entity.align_to_view", .command = "transform.align_to_view", .params = R"({"entities":["$selection"]})",
+     .menu = UiMenu::Entity, .group = 2, .shortcut = "Ctrl+Shift+F"},
     // Assets
     {.id = "assets.new_folder", .command = "asset.create_folder", .menu = UiMenu::Assets},
     {.id = "assets.new_material", .command = "material.create", .menu = UiMenu::Assets},
@@ -168,12 +178,21 @@ constexpr PresetBinding kUnreal[] = {
 };
 
 constexpr PresetBinding kBlender[] = {
-    {"edit.duplicate", "Shift+D"}, {"edit.delete", "X"},
-    {"edit.redo", "Ctrl+Shift+Z"}, {"edit.palette", "F3"},
-    {"view.tool_select", "W"},     {"view.tool_move", "G"},
-    {"view.tool_rotate", "R"},     {"view.tool_scale", "S"},
-    {"view.tool_universal", ""},   {"view.frame_selected", "KeypadDecimal"},
-    {"play.play", "Shift+Space"},  {"entity.create_empty", "Shift+A"},
+    {"edit.duplicate", "Shift+D"},
+    {"edit.delete", "X"},
+    {"edit.redo", "Ctrl+Shift+Z"},
+    {"edit.palette", "F3"},
+    {"view.tool_select", "W"},
+    {"view.tool_move", ""},
+    {"view.tool_rotate", ""},
+    {"view.tool_scale", ""},
+    {"view.modal_move", "G"},
+    {"view.modal_rotate", "R"},
+    {"view.modal_scale", "S"},
+    {"view.tool_universal", ""},
+    {"view.frame_selected", "KeypadDecimal"},
+    {"play.play", "Shift+Space"},
+    {"entity.create_empty", "Shift+A"},
 };
 
 constexpr std::array<std::string_view, 4> kPresets = {"illusion", "unity", "unreal", "blender"};

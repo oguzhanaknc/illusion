@@ -805,6 +805,98 @@ TEST_CASE("dragging the gizmo in the Scene view moves the selection in one undo 
     fixture.editor->setViewports(nullptr);
 }
 
+TEST_CASE("modal transforms follow the keyboard: Shift+W, X and typed numbers move exactly, Esc cancels")
+{
+    ShellFixture fixture;
+    test::FakeViewports viewports;
+    viewports.frames = true;
+    viewports.camera.pivot = Vec3(0.0f);
+    viewports.camera.distance = 10.0f;
+    viewports.camera.yaw = 30.0f;
+    viewports.camera.pitch = -30.0f;
+    fixture.editor->setViewports(&viewports);
+    EditorContext& editor = *fixture.editor;
+    test::ok(editor, "entity.create", R"({"name":"Board","components":{"illusion.Transform":{}}})");
+    test::ok(editor, "selection.set", R"({"entities":["/Board"]})");
+    const usize steps = editor.history().steps().size();
+    ui::UiDriver driver(fixture.context, [&] { fixture.frame(); });
+    driver.runFrames(3);
+    const std::optional<ui::UiItem> image = driver.find("viewport.image");
+    REQUIRE(image.has_value());
+    driver.moveMouse(image->center() + Vec2(60.0f, 25.0f));
+    driver.runFrames(1);
+
+    // A modal move along x, typed: exactly 2.5, one undo step from the gizmo.
+    driver.pressKey(ImGuiKey_W, ImGuiMod_Shift);
+    driver.runFrames(1);
+    driver.moveMouse(image->center() + Vec2(90.0f, 5.0f));
+    driver.pressKey(ImGuiKey_X);
+    driver.typeText("2.5");
+    driver.runFrames(1);
+    CHECK(static_cast<double>(positionOf(editor, "/Board").x) == doctest::Approx(2.5));
+    driver.pressKey(ImGuiKey_Enter);
+    driver.runFrames(1);
+    CHECK(positionOf(editor, "/Board") == Vec3(2.5f, 0.0f, 0.0f));
+    REQUIRE(editor.history().steps().size() == steps + 1);
+    CHECK(editor.history().steps().back().origin == "gizmo");
+    CHECK(editor.transaction() == nullptr);
+
+    // A modal rotation that follows the cursor, then Escape: nothing changes.
+    driver.pressKey(ImGuiKey_E, ImGuiMod_Shift);
+    driver.runFrames(1);
+    driver.moveMouse(image->center() + Vec2(-40.0f, 70.0f));
+    driver.runFrames(2);
+    driver.pressKey(ImGuiKey_Escape);
+    driver.runFrames(1);
+    CHECK(positionOf(editor, "/Board") == Vec3(2.5f, 0.0f, 0.0f));
+    CHECK(editor.history().steps().size() == steps + 1);
+    CHECK(editor.transaction() == nullptr);
+
+    // A modal scale confirmed by a click, which neither picks nor changes the selection.
+    driver.pressKey(ImGuiKey_R, ImGuiMod_Shift);
+    driver.runFrames(1);
+    driver.typeText("2");
+    driver.runFrames(1);
+    ImGuiIO& io = ImGui::GetIO();
+    io.AddMouseButtonEvent(0, true);
+    driver.runFrames(1);
+    io.AddMouseButtonEvent(0, false);
+    driver.runFrames(2);
+    const JsonDocument scaled = test::ok(editor, "transform.get", R"({"entity":"/Board"})");
+    CHECK(scaled.root().find("scale")[0].asF64() == doctest::Approx(2.0));
+    CHECK(editor.history().steps().size() == steps + 2);
+    CHECK(editor.selection().size() == 1);
+    CHECK(viewports.pickedAt == Vec2(0.0f));
+
+    // Numbers typed during a gizmo drag replace the cursor's distance.
+    const UVec2 size(static_cast<u32>(image->max.x - image->min.x + 0.5f),
+                     static_cast<u32>(image->max.y - image->min.y + 0.5f));
+    const GizmoCamera camera = gizmoCamera(viewports.camera, size, 1.0f);
+    GizmoPose pose;
+    pose.origin = Vec3(2.5f, 0.0f, 0.0f);
+    const GizmoShape shape = gizmoShape(GizmoTool::Translate, camera, pose);
+    const Vec2 grab =
+        image->min + (shape.lines[0].start + (shape.lines[0].end - shape.lines[0].start) * 0.75f);
+    driver.moveMouse(grab);
+    driver.runFrames(1);
+    io.AddMouseButtonEvent(0, true);
+    driver.runFrames(1);
+    driver.moveMouse(grab + Vec2(30.0f, 0.0f));
+    driver.typeText("-1");
+    driver.runFrames(1);
+    io.AddMouseButtonEvent(0, false);
+    driver.runFrames(2);
+    CHECK(static_cast<double>(positionOf(editor, "/Board").x) == doctest::Approx(1.5));
+    CHECK(editor.history().steps().size() == steps + 3);
+
+    // End drops the selection to the ground plane (the fake viewports draw no Mesh).
+    test::ok(editor, "transform.set", R"({"entities":["/Board"],"position":[1.5,4,0]})");
+    driver.moveMouse(image->center());
+    driver.pressKey(ImGuiKey_End);
+    CHECK(positionOf(editor, "/Board") == Vec3(1.5f, 0.0f, 0.0f));
+    fixture.editor->setViewports(nullptr);
+}
+
 TEST_CASE("the toolbar shows the active tool and changes the gizmo's axes, pivot and snapping")
 {
     ShellFixture fixture;
@@ -819,6 +911,9 @@ TEST_CASE("the toolbar shows the active tool and changes the gizmo's axes, pivot
     REQUIRE(driver.click("toolbar.gizmo.pivot"));
     REQUIRE(driver.click("toolbar.gizmo.pivot.individual"));
     CHECK(editor.gizmo().pivot == GizmoPivot::Individual);
+    REQUIRE(driver.click("toolbar.gizmo.pivot"));
+    REQUIRE(driver.click("toolbar.gizmo.pivot.bounds_center"));
+    CHECK(editor.gizmo().pivot == GizmoPivot::BoundsCenter);
     REQUIRE(driver.click("toolbar.gizmo.snap"));
     CHECK(editor.gizmo().snap.enabled);
     REQUIRE(driver.click("toolbar.gizmo.snap.more"));

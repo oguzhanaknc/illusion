@@ -929,7 +929,10 @@ Needs: o.
 angle and scale snapping), the `ImDrawList` renderer, transactions, the toolbar, the `gizmo.*` commands,
 `transform.snap_to_grid`, the gizmo goldens and the Benchmark. M7p-2 brings vertex, surface and ground snapping,
 typed numeric input, Blender-style G/R/S, the bounds-centre pivot, the remaining utilities (align to view, align
-and distribute, drop to ground, measure and ruler) and the surface snap GPU test.
+and distribute, drop to ground, measure and ruler) and the surface snap GPU test. M7p-2 was split again:
+it delivers typed numbers, the modal G/R/S transforms with constraints, the bounds-centre pivot, drop to ground
+on End (which is also the snap to ground), align to view, align and distribute; M7p-3 brings vertex snap, surface
+snap with align-to-normal and its GPU test, and measure and ruler.
 
 ### M7q: Module API v3, multi-world host and the scripting API
 Needs: h (runs in parallel with i–p).

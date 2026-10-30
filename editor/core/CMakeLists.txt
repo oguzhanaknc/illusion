@@ -2,6 +2,7 @@
 # undo, the change and crash journals (ADR 0036). No GPU, Dear ImGui or sockets.
 
 illusion_add_editor_library(illusion_editor_core STATIC
+    src/Arrange.cpp
     src/ChangeJournal.cpp
     src/CommandError.cpp
     src/CommandRegistry.cpp

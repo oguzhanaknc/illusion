@@ -932,6 +932,8 @@ void EditorShell::draw(f64 now, f64 deltaSeconds)
     }
     ImGui::DockSpaceOverViewport(dockspace, viewport);
     impl.viewportNavigating = false;
+    std::swap(impl.lastHoveredSceneView, impl.hoveredSceneView);
+    impl.hoveredSceneView.clear();
     for (usize i = 0; i < detail::kPanelCount; ++i)
     {
         const Panel panel = static_cast<Panel>(i);
@@ -1036,6 +1038,8 @@ void EditorShell::draw(f64 now, f64 deltaSeconds)
     }
 
     detail::drawSecondaryViewports(impl);
+    // A modal transform no Scene view took (its panel is closed) is dropped.
+    impl.pendingModal.reset();
     impl.palette->draw(impl);
     impl.agentsPanel->drawPrompt(impl);
     if (const std::optional<u32> clicked = impl.toasts.draw(kit, now);
@@ -1243,6 +1247,17 @@ void EditorShell::notify(UiNotice notice, std::string_view message)
 void EditorShell::requestQuit()
 {
     m_impl->quit = true;
+}
+
+Expected<void, CommandError> EditorShell::beginModalTransform(GizmoModalOperation operation)
+{
+    Impl& impl = *m_impl;
+    if (!impl.open[static_cast<usize>(Panel::Scene)] && impl.secondaryViews.empty())
+    {
+        return unexpected(CommandError::make(ErrorKind::PreconditionFailed, "no Scene view is open"));
+    }
+    impl.pendingModal = operation;
+    return {};
 }
 
 Expected<u64, CommandError> EditorShell::requestScreenshot(UVec2 size)

@@ -41,10 +41,10 @@ preset'i eylemlere tuş kombinasyonlarını verir:
 
 | Preset | `illusion`'dan farkları |
 | --- | --- |
-| `illusion` | Varsayılanlar: Ctrl+Z, Ctrl+Y, Ctrl+D, Delete, F2, Ctrl+Shift+P, Ctrl+P, araçlar için Q/W/E/R/T, oynatmak için F5. |
+| `illusion` | Varsayılanlar: Ctrl+Z, Ctrl+Y, Ctrl+D, Delete, F2, Ctrl+Shift+P, Ctrl+P, araçlar için Q/W/E/R/T, modal dönüşümler için Shift+W/E/R, zemine bırakmak için End, oynatmak için F5. |
 | `unity` | Ctrl+P oynatır, Ctrl+Shift+P duraklatır, Ctrl+Alt+P bir adım ilerler, Ctrl+K Go to Anything'dir. |
 | `unreal` | Alt+P oynatır, Alt+S simüle eder, Pause duraklatır, ters tırnak Console'u açar. |
-| `blender` | Shift+D çoğaltır, X siler, G/R/S taşır, döndürür ve ölçekler, F3 arar, Shift+A bir Entity ekler. |
+| `blender` | Shift+D çoğaltır, X siler, W seçer, G/R/S modal taşıma, döndürme ve ölçeklemeyi başlatır, F3 arar, Shift+A bir Entity ekler. |
 
 Keyboard sayfasında bir eylemi yeniden atamak için kombinasyonuna tıklayıp yeni tuşlara basın; **Escape** iptal
 eder. **Reset** preset'in kombinasyonuna döner, **Remove** eylemi kombinasyonsuz bırakır. İki eyleme atanmış

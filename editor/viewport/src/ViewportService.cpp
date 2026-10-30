@@ -1452,4 +1452,29 @@ ViewportGpuInfo ViewportService::gpuInfo() const
     return out;
 }
 
+void ViewportService::meshBounds(std::vector<ViewportBounds>& out)
+{
+    ILL_PROFILE_SCOPE();
+    out.clear();
+    Impl& impl = *m_impl;
+    World& world = impl.editor.world();
+    // Children moved by the running command need their Transforms first.
+    updateTransformHierarchy(world, impl.hierarchy, &impl.jobs);
+    const ViewState& view = impl.editor.view();
+    const EntityIndex& entities = impl.editor.entities();
+    world.query<Transform, RenderMesh>().without<Inactive>().each(
+        [&](Entity entity, const Transform& transform, const RenderMesh& mesh) {
+            if (mesh.mesh.index == 0 || view.hidden(entities.guidOf(entity)))
+            {
+                return;
+            }
+            const Aabb bounds =
+                impl.resources.submeshBounds(mesh.mesh, mesh.submesh).transformed(transform.matrix());
+            if (bounds.isValid())
+            {
+                out.push_back(ViewportBounds{entity, bounds});
+            }
+        });
+}
+
 } // namespace illusion::editor::viewport

@@ -138,6 +138,7 @@ public:
                                                            std::string_view query) override;
     void notify(UiNotice notice, std::string_view message) override;
     void requestQuit() override;
+    [[nodiscard]] Expected<void, CommandError> beginModalTransform(GizmoModalOperation operation) override;
     [[nodiscard]] Expected<u64, CommandError> requestScreenshot(UVec2 size) override;
     [[nodiscard]] std::optional<Expected<UiScreenshot, CommandError>> screenshot(u64 ticket) override;
 

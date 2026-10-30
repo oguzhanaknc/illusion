@@ -9,6 +9,7 @@
 #include <illusion/core/Base.hpp>
 #include <illusion/core/Math.hpp>
 #include <illusion/ecs/Reflection.hpp>
+#include <illusion/editor/core/Arrange.hpp>
 #include <illusion/editor/core/EntityIndex.hpp>
 #include <illusion/editor/core/Gizmo.hpp>
 #include <illusion/editor/core/ReferenceIndex.hpp>
@@ -679,6 +680,49 @@ struct TransformSnapParams
     std::optional<f32> increment{}; ///< Grid spacing in world units (default: the gizmo's translation snap).
 };
 
+/// An axis of `transform.align` and `transform.distribute`.
+enum class TransformAxis : u8
+{
+    X, ///< The x axis.
+    Y, ///< The y axis.
+    Z, ///< The z axis.
+};
+
+/// Params of `transform.align`.
+struct TransformAlignParams
+{
+    std::vector<std::string>
+        entities; ///< Entity references; descendants of other listed entities follow them.
+    TransformAxis axis = TransformAxis::X; ///< The axis to align along.
+    std::optional<AlignEdge> edge{};       ///< Edge of the boxes: "min", "center" (default) or "max".
+    std::optional<AlignTarget> to{}; ///< "selection" (default: the box around all) or "active" (the last).
+};
+
+/// Params of `transform.distribute`.
+struct TransformDistributeParams
+{
+    std::vector<std::string> entities;     ///< Entity references (three or more after dropping descendants).
+    TransformAxis axis = TransformAxis::X; ///< The axis to space them along.
+    std::optional<DistributeMode> mode{};  ///< "centers" (default) or "gaps".
+};
+
+/// Params of `transform.drop_to_ground`.
+struct TransformDropParams
+{
+    std::vector<std::string>
+        entities; ///< Entity references; descendants of other listed entities follow them.
+    std::optional<DropTarget> onto{}; ///< "surfaces" (default) or "plane".
+};
+
+/// Params of `transform.align_to_view`.
+struct TransformAlignViewParams
+{
+    std::vector<std::string>
+        entities; ///< Entity references; descendants of other listed entities follow them.
+    std::optional<std::string> viewport{}; ///< Viewport id (default "scene").
+    std::optional<bool> move{};            ///< Also move them to the viewport's eye (default false).
+};
+
 // --- gizmo -------------------------------------------------------------------------------------------------
 
 /// Params of `gizmo.set_tool`.
@@ -706,6 +750,12 @@ struct GizmoSnapParams
     std::optional<f32> translate{}; ///< Distance increment in world units.
     std::optional<f32> rotate{};    ///< Angle increment in degrees.
     std::optional<f32> scale{};     ///< Scale factor increment.
+};
+
+/// Params of `gizmo.modal`.
+struct GizmoModalParams
+{
+    GizmoModalOperation operation = GizmoModalOperation::Translate; ///< What the modal transform does.
 };
 
 // --- history -----------------------------------------------------------------------------------------------
@@ -1333,6 +1383,58 @@ struct illusion::EnumReflection<illusion::editor::TransformPivot>
                                         illusion::EnumValue{"center", 1}};
 };
 
+/// Names of TransformAxis values in JSON.
+template <>
+struct illusion::EnumReflection<illusion::editor::TransformAxis>
+{
+    /// The values.
+    static constexpr std::array kValues{illusion::EnumValue{"x", 0}, illusion::EnumValue{"y", 1},
+                                        illusion::EnumValue{"z", 2}};
+};
+
+/// Names of AlignEdge values in JSON.
+template <>
+struct illusion::EnumReflection<illusion::editor::AlignEdge>
+{
+    /// The values.
+    static constexpr std::array kValues{illusion::EnumValue{"min", 0}, illusion::EnumValue{"center", 1},
+                                        illusion::EnumValue{"max", 2}};
+};
+
+/// Names of AlignTarget values in JSON.
+template <>
+struct illusion::EnumReflection<illusion::editor::AlignTarget>
+{
+    /// The values.
+    static constexpr std::array kValues{illusion::EnumValue{"selection", 0},
+                                        illusion::EnumValue{"active", 1}};
+};
+
+/// Names of DistributeMode values in JSON.
+template <>
+struct illusion::EnumReflection<illusion::editor::DistributeMode>
+{
+    /// The values.
+    static constexpr std::array kValues{illusion::EnumValue{"centers", 0}, illusion::EnumValue{"gaps", 1}};
+};
+
+/// Names of DropTarget values in JSON.
+template <>
+struct illusion::EnumReflection<illusion::editor::DropTarget>
+{
+    /// The values.
+    static constexpr std::array kValues{illusion::EnumValue{"surfaces", 0}, illusion::EnumValue{"plane", 1}};
+};
+
+/// Names of GizmoModalOperation values in JSON.
+template <>
+struct illusion::EnumReflection<illusion::editor::GizmoModalOperation>
+{
+    /// The values.
+    static constexpr std::array kValues{illusion::EnumValue{"translate", 0}, illusion::EnumValue{"rotate", 1},
+                                        illusion::EnumValue{"scale", 2}};
+};
+
 /// Names of GizmoTool values in JSON.
 template <>
 struct illusion::EnumReflection<illusion::editor::GizmoTool>
@@ -1358,7 +1460,8 @@ struct illusion::EnumReflection<illusion::editor::GizmoPivot>
 {
     /// The values.
     static constexpr std::array kValues{illusion::EnumValue{"median", 0}, illusion::EnumValue{"active", 1},
-                                        illusion::EnumValue{"individual", 2}};
+                                        illusion::EnumValue{"individual", 2},
+                                        illusion::EnumValue{"bounds_center", 3}};
 };
 
 /// Names of PaletteMode values in JSON.

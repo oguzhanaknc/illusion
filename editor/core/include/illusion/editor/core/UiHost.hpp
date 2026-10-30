@@ -8,6 +8,7 @@
 #include <illusion/core/Expected.hpp>
 #include <illusion/core/Math.hpp>
 #include <illusion/editor/core/CommandError.hpp>
+#include <illusion/editor/core/Gizmo.hpp>
 
 #include <optional>
 #include <string>
@@ -79,6 +80,9 @@ public:
     virtual void notify(UiNotice notice, std::string_view message) = 0;
     /// Asks the editor to close (as the window's close button does).
     virtual void requestQuit() = 0;
+    /// Starts a modal @p operation of the selection in the Scene view under the cursor (the main one when the
+    /// cursor is over none) from the next frame on; PreconditionFailed when no Scene view is open.
+    [[nodiscard]] virtual Expected<void, CommandError> beginModalTransform(GizmoModalOperation operation) = 0;
 
     /// Starts capturing the next frame at @p size (0, 0: the window's size). Returns a ticket for
     /// screenshot(); Unsupported without a GPU.

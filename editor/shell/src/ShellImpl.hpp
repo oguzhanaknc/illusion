@@ -172,6 +172,10 @@ struct EditorShell::Impl
     u64 secondaryVersion = ~u64{0}; // ViewportHost::viewportsVersion() of secondaryViews
     bool viewportNavigating =
         false; // a viewport panel moved its camera last frame (fly keys are not shortcuts)
+    // gizmo.modal: the modal transform the Scene view under the cursor starts this frame, and that view
+    std::optional<GizmoModalOperation> pendingModal;
+    std::string hoveredSceneView;     // the Scene view under the cursor this frame ("" for none)
+    std::string lastHoveredSceneView; // ... and last frame
 
     // The Inspector's entity eyedropper: the next click in a viewport assigns the entity under it to a field
     // of the inspected entities.
