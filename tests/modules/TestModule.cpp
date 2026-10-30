@@ -67,9 +67,13 @@ bool loadModule(ModuleContext& context)
 
 void startModule(ModuleContext& context)
 {
-    test::ModuleControl& control = *context.service<test::ModuleControl>(); // load() checked it
-    ++control.starts;
-    checkWorld(context, control);
+    test::ModuleControl* control = context.service<test::ModuleControl>();
+    if (control == nullptr)
+    {
+        return; // load() refuses to run without it
+    }
+    ++control->starts;
+    checkWorld(context, *control);
     World& world = context.world();
     world.create(test::SharedComponent{11});
     world.create(test::ModuleCounter{});
@@ -81,9 +85,11 @@ void startModule(ModuleContext& context)
 
 void stopModule(ModuleContext& context)
 {
-    test::ModuleControl& control = *context.service<test::ModuleControl>();
-    ++control.stops;
-    checkWorld(context, control);
+    if (test::ModuleControl* control = context.service<test::ModuleControl>())
+    {
+        ++control->stops;
+        checkWorld(context, *control);
+    }
 }
 
 void unloadModule(ModuleContext& context)
