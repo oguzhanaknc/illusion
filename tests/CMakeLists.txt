@@ -50,6 +50,7 @@ add_executable(illusion_tests
     audio/TestAudioEffects.cpp
     audio/TestAudioWorld.cpp
     modules/TestModules.cpp
+    modules/TestServices.cpp
     physics/TestPhysicsAssets.cpp
     physics/TestPhysicsExtensions.cpp
     physics/TestPhysicsHierarchy.cpp
@@ -69,7 +70,7 @@ add_executable(illusion_tests
 target_include_directories(illusion_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
 target_link_libraries(illusion_tests PRIVATE
     illusion::core illusion::platform illusion::input illusion::assets illusion::audio illusion::physics
-    illusion::render illusion::modules illusion::text illusion_text_tools illusion::doctest)
+    illusion::render illusion::modules illusion::runtime illusion::text illusion_text_tools illusion::doctest)
 target_compile_definitions(illusion_tests PRIVATE ILLUSION_TEST_DATA_DIR="${CMAKE_CURRENT_SOURCE_DIR}/data")
 illusion_configure_target(illusion_tests)
 
@@ -110,7 +111,7 @@ add_dependencies(illusion_tests illusion_process_helper)
 # Shared libraries loaded by tests/modules/TestModules.cpp (see TestModule.cpp for the variants).
 foreach(variant 1 2 3 4)
     illusion_add_module(illusion_test_module_v${variant} SHARED SOURCES modules/TestModule.cpp
-        USES physics audio input render)
+        USES physics audio input render runtime)
     target_include_directories(illusion_test_module_v${variant} PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/modules)
     target_compile_definitions(illusion_test_module_v${variant} PRIVATE TEST_MODULE_VARIANT=${variant})
     target_compile_definitions(illusion_tests PRIVATE

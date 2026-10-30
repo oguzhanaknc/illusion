@@ -4,6 +4,7 @@ add_library(illusion_physics STATIC
     src/JoltJobSystem.cpp
     src/PhysicsAssetResolver.cpp
     src/PhysicsComponents.cpp
+    src/PhysicsWorldService.cpp
     src/PhysicsWorld.cpp)
 add_library(illusion::physics ALIAS illusion_physics)
 
@@ -17,8 +18,8 @@ target_link_libraries(illusion_physics
 
 illusion_configure_target(illusion_physics)
 
-# illusion::physics_api — headers of the physics Components, for game modules: no code, so a shared
-# module gets no copy of the library (illusion_add_module(... USES physics), ADR 0041).
+# illusion::physics_api — headers of the physics Components and of PhysicsService, for game modules: no
+# code, so a shared module gets no copy of the library (illusion_add_module(... USES physics), ADR 0041).
 add_library(illusion_physics_api INTERFACE)
 add_library(illusion::physics_api ALIAS illusion_physics_api)
 target_include_directories(illusion_physics_api INTERFACE

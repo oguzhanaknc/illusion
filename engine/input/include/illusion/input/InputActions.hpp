@@ -72,17 +72,56 @@ struct InputBinding
     f32 scale = 1.0f;
 
     /// Binds a key.
-    [[nodiscard]] static InputBinding key(Key key, f32 scale = 1.0f) noexcept;
+    [[nodiscard]] static constexpr InputBinding key(Key key, f32 scale = 1.0f) noexcept
+    {
+        InputBinding binding;
+        binding.source = BindingSource::Key;
+        binding.code = static_cast<u16>(key);
+        binding.scale = scale;
+        return binding;
+    }
     /// Binds a mouse button.
-    [[nodiscard]] static InputBinding mouseButton(MouseButton button) noexcept;
+    [[nodiscard]] static constexpr InputBinding mouseButton(MouseButton button) noexcept
+    {
+        InputBinding binding;
+        binding.source = BindingSource::MouseButton;
+        binding.code = static_cast<u16>(button);
+        return binding;
+    }
     /// Binds a gamepad button.
-    [[nodiscard]] static InputBinding gamepadButton(GamepadButton button, f32 scale = 1.0f) noexcept;
+    [[nodiscard]] static constexpr InputBinding gamepadButton(GamepadButton button, f32 scale = 1.0f) noexcept
+    {
+        InputBinding binding;
+        binding.source = BindingSource::GamepadButton;
+        binding.code = static_cast<u16>(button);
+        binding.scale = scale;
+        return binding;
+    }
     /// Binds a gamepad axis.
-    [[nodiscard]] static InputBinding gamepadAxis(GamepadAxis axis, f32 scale = 1.0f) noexcept;
+    [[nodiscard]] static constexpr InputBinding gamepadAxis(GamepadAxis axis, f32 scale = 1.0f) noexcept
+    {
+        InputBinding binding;
+        binding.source = BindingSource::GamepadAxis;
+        binding.code = static_cast<u16>(axis);
+        binding.scale = scale;
+        return binding;
+    }
     /// Binds a gamepad stick (for Vector2 actions).
-    [[nodiscard]] static InputBinding gamepadStick(GamepadStick stick) noexcept;
+    [[nodiscard]] static constexpr InputBinding gamepadStick(GamepadStick stick) noexcept
+    {
+        InputBinding binding;
+        binding.source = BindingSource::GamepadStick;
+        binding.code = static_cast<u16>(stick);
+        return binding;
+    }
     /// Binds four keys as a vector (for Vector2 actions).
-    [[nodiscard]] static InputBinding keyVector(Key up, Key down, Key left, Key right) noexcept;
+    [[nodiscard]] static constexpr InputBinding keyVector(Key up, Key down, Key left, Key right) noexcept
+    {
+        InputBinding binding;
+        binding.source = BindingSource::KeyVector;
+        binding.keys = {up, down, left, right};
+        return binding;
+    }
 
     /// Returns true if the binding reads a gamepad.
     [[nodiscard]] bool isGamepad() const noexcept

@@ -283,11 +283,16 @@ Plan: `docs/plans/m7-editor.md` (sub-milestones, command API, localization, them
   modules at configure time. Tests of the lifecycle on edit, play and preview Worlds, stripping from the edit
   and the play World on reload and unload, per-World services, the `world()` assert during `load`, the two
   configure fixtures, and the `modules/update` Benchmark (25 ns budget per module and World; 1.85 ns measured)
-- M7q-2: Module API v3, second part: the host service interfaces `PhysicsService`, `AudioService`,
-  `InputService` and `SceneService` (`illusion::runtime_api`) with host adapters, counting proxies that call
-  every method from a shared module, the `PhysicsService::createMesh` reload regression under ASan, the
-  `services/virtual-call` Benchmark (10 ns), `reference/scripting-api.md` (Doxygen group "Scripting API") and
-  the `game-modules` skill
+- M7q-2: ✅ Module API v3, second part: the host service interfaces `PhysicsService` (`physics_api`),
+  `AudioService` (`audio_api`), `InputService` (`input_api`) and `SceneService` (the new header-only
+  `illusion::runtime_api`), abstract classes with host adapters `PhysicsWorldService`, `AudioWorldService`,
+  `InputActionsService` and `SceneLoaderService` (the new `illusion::runtime`); `USES runtime`; the plain
+  query, event and playback types moved to `PhysicsTypes.hpp`, `AudioTypes.hpp` and `core/AssetState.hpp`,
+  and the `InputBinding` factories became `constexpr`, so modules use them without engine code. Counting
+  proxies of all four interfaces with a shared test module that calls every function once, forwarding tests
+  of every adapter, the `PhysicsService::createMesh` regression (a mesh body built by a module survives a hot
+  reload and the unload; meant for ASan), the `services/virtual-call` Benchmark (10 ns budget; 2.16 ns
+  measured), `reference/scripting-api.md` (Doxygen group "Scripting API") and the `game-modules` skill
 - M7r: Play mode and the `GameSession` runtime (ADR 0042)
 - M7s: Project modules built from the editor (ADR 0043); opening sources with the External Tools code editor
   (from M7l)

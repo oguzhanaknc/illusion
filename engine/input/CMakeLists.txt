@@ -3,7 +3,8 @@
 add_library(illusion_input STATIC
     src/Gamepad.cpp
     src/GamepadSystem.cpp
-    src/InputActions.cpp)
+    src/InputActions.cpp
+    src/InputActionsService.cpp)
 add_library(illusion::input ALIAS illusion_input)
 
 target_include_directories(illusion_input PUBLIC
@@ -23,9 +24,9 @@ illusion_add_string_table(illusion_input
 
 illusion_configure_target(illusion_input)
 
-# illusion::input_api — headers of the input types (keys, gamepad buttons, actions), for game
-# modules: no code, so a shared module gets no copy of the
-# library (illusion_add_module(... USES input), ADR 0041).
+# illusion::input_api — headers of the input types (keys, gamepad buttons, actions) and of InputService, for
+# game modules: no code, so a shared module gets no copy of the library (illusion_add_module(... USES
+# input), ADR 0041).
 add_library(illusion_input_api INTERFACE)
 add_library(illusion::input_api ALIAS illusion_input_api)
 target_include_directories(illusion_input_api INTERFACE

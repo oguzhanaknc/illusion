@@ -7,6 +7,7 @@
 #include <illusion/assets/AssetDatabase.hpp>
 #include <illusion/assets/AssetFormat.hpp>
 #include <illusion/core/Assert.hpp>
+#include <illusion/core/AssetState.hpp>
 #include <illusion/core/Base.hpp>
 
 #include <cstddef>
@@ -22,14 +23,6 @@ namespace illusion
 
 class JobSystem;
 class VirtualFileSystem;
-
-/// Loading state of an asset handle.
-enum class AssetState : u8
-{
-    Loading, ///< Requested; not finished (or finished but not yet published by update()).
-    Ready,   ///< Loaded; AssetHandle::get() returns the data.
-    Failed,  ///< Loading failed; AssetHandle::error() says why.
-};
 
 namespace detail
 {
