@@ -12,6 +12,10 @@ std::optional<ActionId> InputActionsService::addAction(std::string_view name, Ac
     {
         return m_actions.actionType(*existing) == type ? existing : std::nullopt;
     }
+    if (!InputActions::isValidActionName(name))
+    {
+        return std::nullopt;
+    }
     return m_actions.addAction(name, type);
 }
 

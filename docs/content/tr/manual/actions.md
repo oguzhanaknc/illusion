@@ -88,6 +88,50 @@ Bilinmeyen action'lar ve hatalı binding'ler atlanır ve bildirilir; böylece es
 bir dosya oyunun başlamasını asla engellemez. Metni [dosya sistemi](filesystem.md) ile saklayın; örneğin
 `user:/input.cfg` içinde.
 
+## Input action Asset'leri
+
+Bir oyunun action'ları da veridir: bir input action Asset'i (bir `.input` dosyası) her action'ı türü ve
+varsayılan binding'leriyle tanımlar; böylece editör ve tasarımcılar onları koda dokunmadan değiştirir.
+Binding metinleri `serialize()` ile aynıdır.
+
+```json
+{
+  "format": "illusion.input",
+  "version": 1,
+  "actions": [
+    {"name": "Jump", "type": "Button", "bindings": ["Key.Space", "Gamepad.South"]},
+    {"name": "Move", "type": "Vector2", "bindings": ["Keys.W.S.A.D", "Stick.Left"]},
+    {"name": "Throttle", "type": "Axis", "bindings": ["Axis.RightTrigger", "Key.S*-1"]}
+  ]
+}
+```
+
+```cpp
+#include <illusion/input/InputActionsAsset.hpp>
+
+illusion::InputActions actions;
+if (auto loaded = illusion::loadInputActions(files, "assets:/game.input", actions); !loaded)
+{
+    ILL_LOG_ERROR("Game", "{}", loaded.error()); // "assets:/game.input: '/actions/1/type' must be ..."
+}
+const std::string text = illusion::writeInputActions(actions); // the same actions give the same text
+```
+
+`readInputActions()` bütün action'ları birden değiştirir, herhangi bir hatada ise hiçbirini: geçersiz bir
+ad, iki kez kullanılan bir ad, bilinmeyen bir tür ya da binding, yanlış bir format veya daha yeni bir sürüm,
+hatalı değerin JSON pointer'ıyla başarısız olur. Action adları `InputActions::isValidActionName()` kuralına
+uymalıdır: boş değil, başında ve sonunda boşluk yok, `=`, `,`, `#` ya da satır sonu içermiyor. Projenin
+`InputSettings::actions` ayarı, bir [oyun oturumunun](runtime.md) başladığı Asset'i belirtir; oyuncunun
+kaydedilmiş yeniden atamaları (`serialize()`) bunun üzerine uygulanır.
+
+Editörler kümeyi üç fonksiyonla daha değiştirir:
+
+```cpp
+actions.renameAction(*actions.findAction("Throttle"), "Accelerate"); // false if taken or invalid
+actions.removeAction(*actions.findAction("Jump")); // later ids move down: look them up again
+actions.clear();
+```
+
 ## Glyph'ler
 
 `glyphId()` bir binding için ikon kimliği, `glyphLabel()` ise kısa bir etiket döndürür; oyuncunun en son

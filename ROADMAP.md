@@ -293,7 +293,25 @@ Plan: `docs/plans/m7-editor.md` (sub-milestones, command API, localization, them
   of every adapter, the `PhysicsService::createMesh` regression (a mesh body built by a module survives a hot
   reload and the unload; meant for ASan), the `services/virtual-call` Benchmark (10 ns budget; 2.16 ns
   measured), `reference/scripting-api.md` (Doxygen group "Scripting API") and the `game-modules` skill
-- M7r: Play mode and the `GameSession` runtime (ADR 0042)
+- M7r: Play mode and the `GameSession` runtime (ADR 0042), in two parts:
+- M7r-1: ✅ The game runtime: `GameSession` (`illusion::runtime`) owns a World with its `PhysicsWorld`,
+  `AudioWorld`, `InputActions`, physics and render asset resolvers, hierarchy index, gamepad routing and the
+  `ModuleHost` attachment with the four host services, and steps input, modules, physics, hierarchy, audio
+  and resolvers in that order; Play and Simulate modes, a deterministic fixed-step mode with seeded
+  EntityGuids for runtime spawns, input focus with `InputSettings::gamepadsInBackground`. Project settings
+  `PhysicsSettings`, `AudioSettings`, `InputSettings` and `RenderSettings` in `settings:/*.json` through
+  struct reflection (`loadProjectSettings()`), with the settings file format moved from the editor to core
+  (`SettingsFile.hpp`). The `.input` input actions asset (`readInputActions()`, `writeInputActions()`,
+  `loadInputActions()`) and `InputActions::removeAction`, `renameAction`, `clear` and `isValidActionName`.
+  Tests of the step order, modules and services, Simulate, fixed steps, the same reflected-state hash after
+  600 steps for the same seed, injected keys and virtual gamepads with and without focus, settings, and the
+  asset's errors; the `runtime/session-step-empty` Benchmark (50 µs budget; 2,326 ns measured); `manual/runtime.md`
+- M7r-2: Editor Play mode on `GameSession`: `illusion::editor_play` / `PlaySession` (scene snapshot into a
+  play World, Play, Simulate, Pause, Step N, time scale, commands routed to the play World, `keep_changes`),
+  `EditHooks`, Game view input routing and cursor capture, `input.*` and `play.*` commands, `module.load`,
+  the project settings in the editor's settings catalogue, the Play toolbar and tint, the
+  `play/snapshot` Benchmark, `manual/editor/play-mode.md` and the Tetris play scenarios of the acceptance
+  transcript
 - M7s: Project modules built from the editor (ADR 0043); opening sources with the External Tools code editor
   (from M7l)
 - M7t: Component layout migration on hot reload, the M6 follow-up (ADR 0044)

@@ -2,7 +2,7 @@
 
 /// @file
 /// The settings types the editor edits: reflected structs saved in the "settings" section of every scene, or
-/// in one file of the project's `settings:` mount.
+/// in one file of the project's `settings:` mount (written with writeSettingsFile(), SettingsFile.hpp).
 ///
 /// @code
 /// illusion::reflectStruct<game::Difficulty>("game.Difficulty").field("enemies", &game::Difficulty::enemies);
@@ -14,6 +14,7 @@
 #include <illusion/core/Base.hpp>
 #include <illusion/core/Expected.hpp>
 #include <illusion/ecs/Component.hpp>
+#include <illusion/ecs/SettingsFile.hpp>
 #include <illusion/ecs/StructRegistry.hpp>
 
 #include <optional>
@@ -34,9 +35,6 @@ enum class SettingsScope : u8
 
 /// Stable lower-case name of @p scope: "scene" or "project".
 [[nodiscard]] std::string_view settingsScopeName(SettingsScope scope) noexcept;
-
-/// The `format` value of project settings files.
-inline constexpr std::string_view kSettingsFormat = "illusion.settings";
 
 /// A registered settings type.
 struct SettingsType
@@ -68,14 +66,5 @@ public:
 private:
     std::vector<SettingsType> m_types;
 };
-
-/// A project settings file: the value of @p type as JSON text with its format, type and data version.
-[[nodiscard]] Expected<std::string, std::string> writeSettingsFile(const StructReflection& type,
-                                                                   const void* value);
-
-/// Reads the project settings file @p json of @p type into @p value (a default value of the type, so that
-/// missing fields keep their defaults). Older data versions are migrated; the error says what is wrong.
-[[nodiscard]] Expected<void, std::string> readSettingsFile(const StructReflection& type,
-                                                           std::string_view json, void* value);
 
 } // namespace illusion::editor

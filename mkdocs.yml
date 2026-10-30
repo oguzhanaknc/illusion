@@ -74,6 +74,7 @@ plugins:
             Physics: Fizik
             Audio: Ses
             Game Modules: Oyun Modülleri
+            Game Runtime: Oyun Runtime'ı
             Gamepads: Gamepad'ler
             Input Actions: Input Action'ları
             Architecture: Mimari
@@ -134,6 +135,7 @@ nav:
       - Physics: manual/physics.md
       - Audio: manual/audio.md
       - Game Modules: manual/modules.md
+      - Game Runtime: manual/runtime.md
       - Profiling: manual/profiling.md
       - Editor:
           - Editor Core: manual/editor/index.md

@@ -180,8 +180,23 @@ public:
     /// Analog values beyond this count as "down" for Button actions.
     static constexpr f32 kPressThreshold = 0.5f;
 
-    /// Adds an action. Names must be unique; asserts otherwise.
+    /// True if @p name can name an action: not empty, no leading or trailing spaces, and none of `=`, `,`,
+    /// `#` or a line break (the separators of serialize()).
+    [[nodiscard]] static bool isValidActionName(std::string_view name) noexcept;
+
+    /// Adds an action. Names must be unique and valid (isValidActionName()); asserts otherwise.
     ActionId addAction(std::string_view name, ActionType type);
+
+    /// Removes @p action with its bindings and state. The ids of the later actions move down by one, so
+    /// look them up again with findAction().
+    void removeAction(ActionId action);
+
+    /// Renames @p action. Returns false and changes nothing if @p name is not valid (isValidActionName())
+    /// or names another action.
+    bool renameAction(ActionId action, std::string_view name);
+
+    /// Removes every action. The last device stays as it was.
+    void clear() noexcept;
 
     /// Finds an action by name.
     [[nodiscard]] std::optional<ActionId> findAction(std::string_view name) const noexcept;

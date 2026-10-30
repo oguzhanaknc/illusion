@@ -4,6 +4,7 @@ add_library(illusion_input STATIC
     src/Gamepad.cpp
     src/GamepadSystem.cpp
     src/InputActions.cpp
+    src/InputActionsAsset.cpp
     src/InputActionsService.cpp)
 add_library(illusion::input ALIAS illusion_input)
 

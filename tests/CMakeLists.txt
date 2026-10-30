@@ -39,6 +39,7 @@ add_executable(illusion_tests
     input/TestGamepadState.cpp
     input/TestGamepadSystem.cpp
     input/TestInputActions.cpp
+    input/TestInputActionsAsset.cpp
     assets/TestAssetCooker.cpp
     assets/TestAssetDatabase.cpp
     assets/TestAssetFormat.cpp
@@ -59,6 +60,8 @@ add_executable(illusion_tests
     render/TestRenderComponents.cpp
     render/TestShadows.cpp
     render/TestRendererExtensions.cpp
+    runtime/TestGameSession.cpp
+    runtime/TestProjectSettings.cpp
     text/TestLocale.cpp
     text/TestLocalization.cpp
     text/TestMessageFormat.cpp

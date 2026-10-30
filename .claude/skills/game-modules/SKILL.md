@@ -44,6 +44,14 @@ Read first: `docs/adr/0027-module-system-and-hot-reload.md`, `docs/adr/0041-modu
    `engine/core/include/illusion/core/Module.hpp` and say so in the commit.
 5. Update `reference/scripting-api.md` in English and Turkish.
 
+## Hosting modules
+
+- Hosts run games through `GameSession` (`engine/runtime`, ADR 0042): it attaches its World as a Simulation
+  World with the four service adapters and updates modules in its fixed step order. Do not wire a second
+  game loop in a sample or the editor; create a session and feed it input.
+- A new service is provided in `GameSession::start()` (`engine/runtime/src/GameSession.cpp`) as well as in
+  the tests above.
+
 ## Testing
 
 - `tests/modules/TestModules.cpp` loads the variants of `TestModule.cpp`; steer them through
