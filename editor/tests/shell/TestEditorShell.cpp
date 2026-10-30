@@ -782,11 +782,12 @@ TEST_CASE("dragging the gizmo in the Scene view moves the selection in one undo 
     CHECK(positionOf(editor, "/Board") == moved);
     CHECK(editor.history().steps().size() == steps + 1);
 
-    // Snapping with Ctrl held: the move lands on a multiple of the increment.
+    // Snapping with Ctrl (Cmd on macOS) held: the move lands on a multiple of the increment.
     test::ok(editor, "gizmo.set_snap", R"({"translate":1})");
-    ImGui::GetIO().AddKeyEvent(ImGuiMod_Ctrl, true);
+    const auto ctrl = static_cast<ImGuiKey>(ui::UiDriver::shortcutModifier());
+    ImGui::GetIO().AddKeyEvent(ctrl, true);
     dragAt(driver, window(grabNow), window(grabNow + Vec3(1.3f, 0.0f, 0.0f)), 8);
-    ImGui::GetIO().AddKeyEvent(ImGuiMod_Ctrl, false);
+    ImGui::GetIO().AddKeyEvent(ctrl, false);
     driver.runFrames(1);
     CHECK(static_cast<double>(positionOf(editor, "/Board").x) ==
           doctest::Approx(static_cast<double>(moved.x) + 1.0));
