@@ -4,6 +4,8 @@
 
 #include <illusion/core/Base.hpp>
 #include <illusion/ecs/Component.hpp>
+#include <illusion/ecs/Entity.hpp>
+#include <illusion/physics/PhysicsComponents.hpp>
 
 #include <atomic>
 
@@ -61,6 +63,10 @@ struct ModuleControl
     ComponentId transformId = kInvalidComponentId;
     u32 threadIndex = 0;
     std::atomic<i32> workerIndex{-2}; // JobSystem::currentWorkerIndex() inside a job the module ran
+    bool callServices = false;        // update() calls every function of the four service interfaces
+    bool createMesh = false;          // start() builds a static mesh body through the PhysicsService
+    PhysicsMeshHandle mesh;           // the geometry start() created
+    Entity meshEntity;                // the body start() created
 };
 
 } // namespace illusion::test

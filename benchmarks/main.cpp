@@ -50,6 +50,8 @@ int main(int argc, char** argv)
                         result.config().mBenchmarkName.c_str(), medianNs, budget);
             failures += ok ? 0 : 1;
         }
+        // Piped output is buffered; flush so that a crash shows which group ran last.
+        std::fflush(stdout);
     }
 
     std::printf("\n%d benchmark group(s), %d over budget (tolerance x%.2f)\n", executed, failures, tolerance);

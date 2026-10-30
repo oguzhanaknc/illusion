@@ -515,57 +515,6 @@ text::TextKey stickLabel(bool left, GamepadFamily family) noexcept
 
 // --- InputBinding ---------------------------------------------------------------------------------------
 
-InputBinding InputBinding::key(Key key, f32 scale) noexcept
-{
-    InputBinding binding;
-    binding.source = BindingSource::Key;
-    binding.code = static_cast<u16>(key);
-    binding.scale = scale;
-    return binding;
-}
-
-InputBinding InputBinding::mouseButton(MouseButton button) noexcept
-{
-    InputBinding binding;
-    binding.source = BindingSource::MouseButton;
-    binding.code = static_cast<u16>(button);
-    return binding;
-}
-
-InputBinding InputBinding::gamepadButton(GamepadButton button, f32 scale) noexcept
-{
-    InputBinding binding;
-    binding.source = BindingSource::GamepadButton;
-    binding.code = static_cast<u16>(button);
-    binding.scale = scale;
-    return binding;
-}
-
-InputBinding InputBinding::gamepadAxis(GamepadAxis axis, f32 scale) noexcept
-{
-    InputBinding binding;
-    binding.source = BindingSource::GamepadAxis;
-    binding.code = static_cast<u16>(axis);
-    binding.scale = scale;
-    return binding;
-}
-
-InputBinding InputBinding::gamepadStick(GamepadStick stick) noexcept
-{
-    InputBinding binding;
-    binding.source = BindingSource::GamepadStick;
-    binding.code = static_cast<u16>(stick);
-    return binding;
-}
-
-InputBinding InputBinding::keyVector(Key up, Key down, Key left, Key right) noexcept
-{
-    InputBinding binding;
-    binding.source = BindingSource::KeyVector;
-    binding.keys = {up, down, left, right};
-    return binding;
-}
-
 std::string bindingToString(const InputBinding& binding)
 {
     switch (binding.source)

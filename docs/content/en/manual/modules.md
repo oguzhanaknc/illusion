@@ -89,8 +89,9 @@ and a static library otherwise. `SHARED` or `STATIC` forces one. A shared module
 everything it links and exports nothing but its entry point.
 
 `USES` names the engine libraries whose headers and plain-data Components the module needs: `physics`,
-`audio`, `input`, `render` (the saved, GPU-free Components of `SceneComponents.hpp`) and, from M7q-2,
-`runtime`. Each links the header-only target `illusion::<name>_api`, never the library's code.
+`audio`, `input`, `render` (the saved, GPU-free Components of `SceneComponents.hpp`) and `runtime`. Each
+links the header-only target `illusion::<name>_api`: the library's headers, its Components and its service
+interface (`PhysicsService`, `AudioService`, `InputService`, `SceneService`), never the library's code.
 
 !!! warning "Shared modules do not link engine libraries"
     A copy of an engine library inside a shared module would run on the host's objects with its own
@@ -98,6 +99,34 @@ everything it links and exports nothing but its entry point.
     other than `illusion::core` in a shared module is therefore a configure error. Use `USES` for the
     headers and reach the code through the host's services. `LINK` remains for third-party libraries, and
     for engine libraries in static modules.
+
+## Engine services
+
+A shared module reaches the engine libraries only through the host's service interfaces, the
+[Scripting API](../reference/scripting-api.md). Each is an abstract class that the host implements with an
+adapter over its own engine object, so every call runs host code on host objects and what it creates
+(physics geometry, audio clips, entities from a scene file) stays valid across hot reloads:
+
+```cpp
+// Host: one adapter per engine library, given to the play World.
+illusion::PhysicsWorldService physicsService(physics);
+illusion::AudioWorldService audioService(audio);
+illusion::SceneLoaderService sceneService(world, files);
+illusion::ServiceSet services;
+services.provide<illusion::PhysicsService>(physicsService);
+services.provide<illusion::AudioService>(audioService);
+services.provide<illusion::SceneService>(sceneService);
+modules.attachWorld(world, illusion::WorldRole::Simulation, std::move(services));
+modules.provide<illusion::InputService>(inputService); // one InputActions for the whole game
+
+// Module: always check the pointer; a World may come without the service.
+if (illusion::PhysicsService* physics = context.service<illusion::PhysicsService>())
+{
+    physics->addImpulse(player, illusion::Vec3(0.0f, 5.0f, 0.0f));
+}
+```
+
+Calling a non-inline engine function directly from a shared module is a link error, by design.
 
 ## Running modules
 

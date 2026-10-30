@@ -1,5 +1,7 @@
 #include "TestSupport.hpp"
+#include "modules/CountingServices.hpp"
 #include "modules/TestModuleShared.hpp"
+#include "physics/PhysicsTestSupport.hpp"
 
 #include <illusion/core/AssetRef.hpp>
 #include <illusion/core/JobSystem.hpp>
@@ -10,6 +12,7 @@
 #include <illusion/ecs/Transform.hpp>
 #include <illusion/ecs/World.hpp>
 #include <illusion/modules/ModuleHost.hpp>
+#include <illusion/physics/PhysicsWorldService.hpp>
 
 #include <doctest/doctest.h>
 
@@ -585,6 +588,74 @@ TEST_CASE("services are found in the World's set first, then in the host's")
     CHECK(host.detachWorld(b));
     CHECK(host.detachWorld(c));
     CHECK(host.worldCount() == 0);
+}
+
+TEST_CASE("a shared module calls every function of the service interfaces through the host's vtables")
+{
+    Fixture f;
+    test::CountingPhysics physics;
+    test::CountingAudio audio;
+    test::CountingInput input;
+    test::CountingScenes scenes;
+    ServiceSet services;
+    services.provide<PhysicsService>(physics);
+    services.provide<AudioService>(audio);
+    services.provide<InputService>(input);
+    services.provide<SceneService>(scenes);
+    f.host->attachWorld(f.secondWorld, WorldRole::Simulation, std::move(services));
+    install(TEST_MODULE_V1, f.library);
+    REQUIRE_FALSE(f.host->load(f.library));
+    f.control.callServices = true;
+    f.host->update(f.world, 0.0); // a World without the services: the module skips them
+    CHECK(std::ranges::all_of(physics.calls, [](u32 n) { return n == 0; }));
+    f.host->update(f.secondWorld, 0.0);
+    CHECK(physics.everyFunctionCalledOnce());
+    CHECK(audio.everyFunctionCalledOnce());
+    CHECK(input.everyFunctionCalledOnce());
+    CHECK(scenes.everyFunctionCalledOnce());
+    CHECK(f.host->detachWorld(f.secondWorld));
+}
+
+TEST_CASE("geometry a module creates through PhysicsService outlives hot reloads and unloading")
+{
+    // Regression test, meant for ASan builds: with an engine copy inside the module, the mesh shape would
+    // carry a vtable into the closed library. Through the service the host's code creates it.
+    Fixture f;
+    reflectPhysicsComponents(); // the host owns the engine's types before any module loads
+    PhysicsWorld physics(f.secondWorld, f.jobs);
+    PhysicsWorldService physicsService(physics);
+    ServiceSet services;
+    services.provide<PhysicsService>(physicsService);
+    f.host->attachWorld(f.secondWorld, WorldRole::Simulation, std::move(services));
+    f.control.createMesh = true;
+    install(TEST_MODULE_V1, f.library);
+    REQUIRE_FALSE(f.host->load(f.library));
+    REQUIRE(f.control.mesh.valid());
+    physics.update(test::kStep);
+    CHECK(physics.bodyCount() == 1);
+
+    install(TEST_MODULE_V2, f.library);
+    REQUIRE(f.host->reloadChanged() == 1); // the first library is closed now
+    CHECK(physics.isMeshValid(f.control.mesh));
+    const Entity ball = f.secondWorld.create(test::at(Vec3(0.0f, 1.0f, 0.0f)),
+                                             test::body(MotionType::Dynamic), test::sphere(0.25f));
+    test::simulate(physics, 1.0);
+    const f32 restingHeight = f.secondWorld.get<Transform>(ball).position.y; // the ball rests on the mesh
+    CHECK(restingHeight > 0.2f);
+    CHECK(restingHeight < 0.3f);
+    const std::optional<RaycastHit> hit =
+        physics.raycast(Vec3(2.0f, 5.0f, 2.0f), Vec3(0.0f, -1.0f, 0.0f), 10.0f);
+    REQUIRE(hit);
+    CHECK(hit->entity == f.control.meshEntity);
+    physics.rebuild(f.control.meshEntity); // a new body for the same host-owned geometry
+
+    CHECK(f.host->unload("test_module"));
+    CHECK(f.host->detachWorld(f.secondWorld));
+    test::simulate(physics, 0.1);
+    f.secondWorld.destroy(f.control.meshEntity);
+    physics.update(test::kStep);
+    physics.destroyMesh(f.control.mesh);
+    CHECK_FALSE(physics.isMeshValid(f.control.mesh));
 }
 
 #if ILL_ASSERTS_ENABLED

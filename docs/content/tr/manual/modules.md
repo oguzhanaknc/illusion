@@ -90,8 +90,9 @@ kendi kopyasını taşır ve giriş noktası dışında hiçbir şeyi dışa akt
 
 `USES`, modülün header'larına ve düz veri Component'lerine ihtiyaç duyduğu engine kütüphanelerini
 adlandırır: `physics`, `audio`, `input`, `render` (`SceneComponents.hpp`'nin kaydedilen, GPU'suz
-Component'leri) ve M7q-2'den itibaren `runtime`. Her biri, kütüphanenin kodunu değil, yalnızca header
-içeren `illusion::<name>_api` hedefini linkler.
+Component'leri) ve `runtime`. Her biri yalnızca header içeren `illusion::<name>_api` hedefini linkler:
+kütüphanenin header'ları, Component'leri ve servis arayüzü (`PhysicsService`, `AudioService`,
+`InputService`, `SceneService`); kütüphanenin kodu asla.
 
 !!! warning "Shared modüller engine kütüphanelerini linklemez"
     Shared bir modülün içindeki bir engine kütüphanesi kopyası, host'un nesneleri üzerinde kendi
@@ -99,6 +100,37 @@ içeren `illusion::<name>_api` hedefini linkler.
     0041). Bu yüzden shared bir modülde `illusion::core` dışındaki bir engine kütüphanesini `LINK` etmek
     bir configure hatasıdır. Header'lar için `USES` kullanın, koda host'un servisleri üzerinden ulaşın.
     `LINK`, üçüncü taraf kütüphaneler ve statik modüllerdeki engine kütüphaneleri için kalır.
+
+
+## Engine servisleri
+
+Shared bir modül engine kütüphanelerine yalnızca host'un servis arayüzleri, yani
+[Scripting API](../reference/scripting-api.md) üzerinden ulaşır. Her biri, host'un kendi engine nesnesi
+üzerinde bir adaptörle uyguladığı soyut bir sınıftır; böylece her çağrı host nesneleri üzerinde host
+kodunu çalıştırır ve oluşturduğu şeyler (fizik geometrisi, ses klipleri, bir sahne dosyasından Entity'ler)
+hot reload'lardan sonra da geçerli kalır:
+
+```cpp
+// Host: one adapter per engine library, given to the play World.
+illusion::PhysicsWorldService physicsService(physics);
+illusion::AudioWorldService audioService(audio);
+illusion::SceneLoaderService sceneService(world, files);
+illusion::ServiceSet services;
+services.provide<illusion::PhysicsService>(physicsService);
+services.provide<illusion::AudioService>(audioService);
+services.provide<illusion::SceneService>(sceneService);
+modules.attachWorld(world, illusion::WorldRole::Simulation, std::move(services));
+modules.provide<illusion::InputService>(inputService); // one InputActions for the whole game
+
+// Module: always check the pointer; a World may come without the service.
+if (illusion::PhysicsService* physics = context.service<illusion::PhysicsService>())
+{
+    physics->addImpulse(player, illusion::Vec3(0.0f, 5.0f, 0.0f));
+}
+```
+
+Shared bir modülden inline olmayan bir engine fonksiyonunu doğrudan çağırmak, tasarım gereği bir link
+hatasıdır.
 
 ## Modülleri çalıştırma
 

@@ -87,6 +87,7 @@ plugins:
             Editor Commands: Editör Komutları
             Automation: Otomasyon
             Editor Protocol: Editör Protokolü
+            Scripting API: Scripting API
             AI Agents: Yapay Zekâ Ajanları
             Editor Window: Editör Penceresi
             Outliner and Inspector: Outliner ve Inspector
@@ -154,4 +155,5 @@ nav:
       - API Reference: reference/api.md
       - Editor Commands: reference/editor-commands.md
       - Editor Protocol: reference/editor-protocol.md
+      - Scripting API: reference/scripting-api.md
   - Contributing: contributing.md
