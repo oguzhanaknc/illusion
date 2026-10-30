@@ -476,6 +476,33 @@ Expected<EntitiesResult, CommandError> transformReset(CommandContext& context,
     return result;
 }
 
+Expected<EntitiesResult, CommandError> transformSnapToGrid(CommandContext& context,
+                                                           const TransformSnapParams& params)
+{
+    Expected<std::vector<Entity>, CommandError> entities = resolveEntityList(context, params.entities);
+    if (!entities)
+    {
+        return unexpected(std::move(entities).error());
+    }
+    World& world = context.world();
+    dropDescendants(world, *entities);
+    const f32 increment = params.increment.value_or(context.editor().gizmo().snap.translate);
+    EntitiesResult result;
+    for (const Entity entity : *entities)
+    {
+        Transform placed = worldTransformOf(world, entity);
+        placed.position =
+            Vec3(snapToIncrement(placed.position.x, increment), snapToIncrement(placed.position.y, increment),
+                 snapToIncrement(placed.position.z, increment));
+        if (Expected<void, CommandError> done = placeWorld(context, entity, placed, "/entities"); !done)
+        {
+            return unexpected(std::move(done).error());
+        }
+        result.entities.push_back(context.summary(entity));
+    }
+    return result;
+}
+
 } // namespace
 
 void registerTransformCommands(CommandRegistry& registry)
@@ -553,6 +580,20 @@ void registerTransformCommands(CommandRegistry& registry)
             "parents. Example: {\"entities\": [\"/Game/Board\"], \"scale\": false}.",
         .category = "Transform",
         .icon = "restart_alt",
+        .flags = {.idempotent = true, .undoable = true},
+        .permission = PermissionClass::Edit,
+        .palette = true,
+    });
+    registry.add<&transformSnapToGrid>({
+        .name = "transform.snap_to_grid",
+        .title = strings::kCommandTransformSnapToGridTitle,
+        .description = strings::kCommandTransformSnapToGridDescription,
+        .agentSummary =
+            "Moves entities so that their world positions lie on a grid: each coordinate is rounded to the "
+            "nearest multiple of increment (default: the gizmo's translation snap). Children follow their "
+            "parents. Example: {\"entities\": [\"$selection\"], \"increment\": 1}.",
+        .category = "Transform",
+        .icon = "grid_4x4",
         .flags = {.idempotent = true, .undoable = true},
         .permission = PermissionClass::Edit,
         .palette = true,

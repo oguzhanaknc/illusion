@@ -229,6 +229,7 @@ The `transform` commands place entities without writing Component values by hand
 | `transform.rotate` | Turns about each entity's own position, about their `center` or about a `point`. |
 | `transform.scale` | Multiplies the scale; with a pivot the positions spread from it too. |
 | `transform.reset` | Resets position, rotation and scale relative to the parent. |
+| `transform.snap_to_grid` | Rounds world positions to the nearest multiple of a grid step (the gizmo's move step by default). |
 
 Rotations are quaternions `[x, y, z, w]` (`rotation`) or Euler angles in degrees (`euler`, applied as yaw,
 then pitch, then roll, like `quatFromEuler()`). For a child the commands write its `LocalTransform` (exactly,

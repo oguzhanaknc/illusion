@@ -40,7 +40,7 @@ void randomCommand(EditorContext& editor, std::mt19937& random)
     };
     std::string name;
     std::string params;
-    switch (random() % 15)
+    switch (random() % 16)
     {
     case 0:
     case 1:
@@ -167,6 +167,10 @@ void randomCommand(EditorContext& editor, std::mt19937& random)
         (void)test::run(editor, "clipboard.copy", R"({"entities":[")" + pick() + R"("]})");
         name = "clipboard.paste";
         params = coin() ? std::string("{}") : R"({"parent":")" + pick() + R"("})";
+        break;
+    case 15:
+        name = "transform.snap_to_grid";
+        params = R"({"entities":[")" + pick() + R"("],"increment":)" + (coin() ? "0.5" : "3") + "}";
         break;
     default:
     {

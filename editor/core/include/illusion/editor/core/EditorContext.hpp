@@ -13,6 +13,7 @@
 #include <illusion/editor/core/CommandRegistry.hpp>
 #include <illusion/editor/core/CrashJournal.hpp>
 #include <illusion/editor/core/EntityIndex.hpp>
+#include <illusion/editor/core/Gizmo.hpp>
 #include <illusion/editor/core/Preferences.hpp>
 #include <illusion/editor/core/Project.hpp>
 #include <illusion/editor/core/ReferenceIndex.hpp>
@@ -313,6 +314,12 @@ public:
     /// The user's view state: hidden and locked entities (cleared when the scene is replaced).
     [[nodiscard]] ViewState& view() noexcept { return m_view; }
 
+    /// The gizmo settings of the Scene viewports (`gizmo.*`; not saved, not undoable).
+    [[nodiscard]] const GizmoSettings& gizmo() const noexcept { return m_gizmo; }
+
+    /// Replaces the gizmo settings (the `gizmo.*` commands validate them).
+    void setGizmo(const GizmoSettings& settings) noexcept { m_gizmo = settings; }
+
     /// The user's preferences (loaded from EditorContextOptions::userDirectory).
     [[nodiscard]] const Preferences& preferences() const noexcept { return m_preferences; }
 
@@ -527,6 +534,7 @@ private:
     std::string m_clipboard;
     ComponentClipboard m_componentClipboard;
     ViewState m_view;
+    GizmoSettings m_gizmo;
     Preferences m_preferences;
     u64 m_preferencesVersion = 1;
     u64 m_agentSelection = 0;

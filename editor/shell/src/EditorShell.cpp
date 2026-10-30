@@ -756,7 +756,7 @@ void EditorShell::draw(f64 now, f64 deltaSeconds)
     if (ImGui::BeginViewportSideBar("###shell.toolbar", viewport, ImGuiDir_Up, kToolbarHeight * kit.scale,
                                     kBarFlags))
     {
-        const auto button = [&](std::string_view id) {
+        const auto button = [&](std::string_view id, bool selected = false) {
             const UiAction* action = findUiAction(id);
             const usize index = static_cast<usize>(action - actions.data());
             const bool enabled = impl.actionEnabled(index);
@@ -764,7 +764,7 @@ void EditorShell::draw(f64 now, f64 deltaSeconds)
             const std::string_view chord = impl.keymap.text(index);
             if (ui::iconButton(kit, impl.actionIcon(index), text.concat("toolbar.", id),
                                text.format(impl.actionTitle(index)),
-                               chord.empty() ? nullptr : text.copy(chord)))
+                               chord.empty() ? nullptr : text.copy(chord), selected))
             {
                 impl.runAction(index, "toolbar");
             }
@@ -772,11 +772,16 @@ void EditorShell::draw(f64 now, f64 deltaSeconds)
             ImGui::SameLine();
         };
         ImGui::SetCursorPosY((ImGui::GetWindowHeight() - ImGui::GetFrameHeight()) * 0.5f);
-        for (const std::string_view id :
-             {"view.tool_select", "view.tool_move", "view.tool_rotate", "view.tool_scale", "view.tool_rect"})
+        constexpr std::array<std::pair<std::string_view, GizmoTool>, 5> kTools = {
+            std::pair{"view.tool_select", GizmoTool::Select},
+            std::pair{"view.tool_move", GizmoTool::Translate},
+            std::pair{"view.tool_rotate", GizmoTool::Rotate}, std::pair{"view.tool_scale", GizmoTool::Scale},
+            std::pair{"view.tool_universal", GizmoTool::Universal}};
+        for (const auto& [id, tool] : kTools)
         {
-            button(id);
+            button(id, impl.editor.gizmo().tool == tool);
         }
+        detail::drawGizmoToolbar(impl);
         const f32 width = ImGui::GetWindowWidth();
         const f32 buttonWidth = ImGui::GetFrameHeight() + ImGui::GetStyle().ItemSpacing.x;
         ImGui::SetCursorPosX(std::max(ImGui::GetCursorPosX(), (width - 4.0f * buttonWidth) * 0.5f));

@@ -542,6 +542,34 @@ void reflectCoreCommandTypes(StructRegistry& structs)
             .field("position", &TransformResetParams::position)
             .field("rotation", &TransformResetParams::rotation)
             .field("scale", &TransformResetParams::scale);
+        const FieldMeta grid{.min = 0.001, .max = 1000.0};
+        reflectStruct<TransformSnapParams>("editor.TransformSnapParams", 1, structs)
+            .field("entities", &TransformSnapParams::entities)
+            .field("increment", &TransformSnapParams::increment, grid);
+
+        const FieldMeta snapAngle{.unit = Unit::Degrees, .min = 0.01, .max = 180.0};
+        const FieldMeta snapScale{.min = 0.001, .max = 10.0};
+        reflectStruct<GizmoSnap>("editor.GizmoSnap", 1, structs)
+            .field("enabled", &GizmoSnap::enabled)
+            .field("translate", &GizmoSnap::translate, grid)
+            .field("rotate", &GizmoSnap::rotate, snapAngle)
+            .field("scale", &GizmoSnap::scale, snapScale);
+        reflectStruct<GizmoSettings>("editor.GizmoSettings", 1, structs)
+            .field("tool", &GizmoSettings::tool)
+            .field("space", &GizmoSettings::space)
+            .field("pivot", &GizmoSettings::pivot)
+            .field("snap", &GizmoSettings::snap);
+        reflectStruct<GizmoToolParams>("editor.GizmoToolParams", 1, structs)
+            .field("tool", &GizmoToolParams::tool);
+        reflectStruct<GizmoSpaceParams>("editor.GizmoSpaceParams", 1, structs)
+            .field("space", &GizmoSpaceParams::space);
+        reflectStruct<GizmoPivotParams>("editor.GizmoPivotParams", 1, structs)
+            .field("pivot", &GizmoPivotParams::pivot);
+        reflectStruct<GizmoSnapParams>("editor.GizmoSnapParams", 1, structs)
+            .field("enabled", &GizmoSnapParams::enabled)
+            .field("translate", &GizmoSnapParams::translate, grid)
+            .field("rotate", &GizmoSnapParams::rotate, snapAngle)
+            .field("scale", &GizmoSnapParams::scale, snapScale);
 
         reflectStruct<ClipboardResult>("editor.ClipboardResult", 1, structs)
             .field("entities", &ClipboardResult::entities)
@@ -680,6 +708,7 @@ void registerCoreCommands(CommandRegistry& registry)
     detail::registerComponentCommands(registry);
     detail::registerHierarchyCommands(registry);
     detail::registerTransformCommands(registry);
+    detail::registerGizmoCommands(registry);
     detail::registerSelectionCommands(registry);
     detail::registerViewCommands(registry);
     detail::registerViewportCommands(registry);

@@ -73,8 +73,9 @@ or removes it. A click on the background clears the selection. Clicks within 2 p
 hit it. Clicking the same spot again selects the next entity under the cursor, from front to back, so entities
 hidden behind others can be selected too. Entities hidden or locked in the Outliner are never picked.
 
-A left drag draws a selection box and selects every entity with a pixel inside it; **Shift** adds them and
-**Ctrl** toggles them.
+A left drag that does not start on a gizmo handle draws a selection box and selects every entity with a pixel
+inside it; **Shift** adds them and **Ctrl** toggles them. The gizmos that move, rotate and scale the selection
+are described in [Transform Tools](transform-tools.md).
 
 The entity under the cursor gets a thin outline in the hover colour of the theme before it is clicked. Entities
 that have no mesh show an icon (billboard) where they are: cameras, directional, point and sky lights, audio

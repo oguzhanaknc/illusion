@@ -48,16 +48,16 @@ constexpr UiAction kActions[] = {
     {.id = "edit.search", .command = "ui.palette", .title = s::kActionEditSearch, .icon = "search",
      .shortcut = "Ctrl+K"},
     // View
-    {.id = "view.tool_select", .command = "tool.set", .params = R"({"tool":"select"})", .menu = UiMenu::View,
-     .title = s::kActionViewToolSelect, .icon = "arrow_selector_tool", .shortcut = "Q", .milestone = "M7p"},
-    {.id = "view.tool_move", .command = "tool.set", .params = R"({"tool":"move"})", .menu = UiMenu::View,
-     .title = s::kToolMove, .icon = "open_with", .shortcut = "W", .milestone = "M7p"},
-    {.id = "view.tool_rotate", .command = "tool.set", .params = R"({"tool":"rotate"})", .menu = UiMenu::View,
-     .title = s::kToolRotate, .icon = "rotate_right", .shortcut = "E", .milestone = "M7p"},
-    {.id = "view.tool_scale", .command = "tool.set", .params = R"({"tool":"scale"})", .menu = UiMenu::View,
-     .title = s::kToolScale, .icon = "open_in_full", .shortcut = "R", .milestone = "M7p"},
-    {.id = "view.tool_rect", .command = "tool.set", .params = R"({"tool":"rect"})", .menu = UiMenu::View,
-     .title = s::kActionViewToolRect, .icon = "crop_free", .shortcut = "T", .milestone = "M7p"},
+    {.id = "view.tool_select", .command = "gizmo.set_tool", .params = R"({"tool":"select"})", .menu = UiMenu::View,
+     .title = s::kActionViewToolSelect, .icon = "arrow_selector_tool", .shortcut = "Q"},
+    {.id = "view.tool_move", .command = "gizmo.set_tool", .params = R"({"tool":"translate"})", .menu = UiMenu::View,
+     .title = s::kToolMove, .icon = "open_with", .shortcut = "W"},
+    {.id = "view.tool_rotate", .command = "gizmo.set_tool", .params = R"({"tool":"rotate"})", .menu = UiMenu::View,
+     .title = s::kToolRotate, .icon = "rotate_right", .shortcut = "E"},
+    {.id = "view.tool_scale", .command = "gizmo.set_tool", .params = R"({"tool":"scale"})", .menu = UiMenu::View,
+     .title = s::kToolScale, .icon = "open_in_full", .shortcut = "R"},
+    {.id = "view.tool_universal", .command = "gizmo.set_tool", .params = R"({"tool":"universal"})", .menu = UiMenu::View,
+     .title = s::kActionViewToolUniversal, .icon = "deployed_code", .shortcut = "T"},
     {.id = "view.frame_selected", .command = "viewport.frame", .menu = UiMenu::View, .group = 1,
      .title = s::kActionViewFrameSelected, .icon = "center_focus_strong", .shortcut = "F"},
     {.id = "view.frame_all", .command = "viewport.frame", .params = R"({"entities":[]})", .menu = UiMenu::View,
@@ -163,8 +163,8 @@ constexpr PresetBinding kUnity[] = {
 };
 
 constexpr PresetBinding kUnreal[] = {
-    {"play.play", "Alt+P"}, {"play.simulate", "Alt+S"},        {"play.pause", "Pause"},
-    {"view.tool_rect", ""}, {"window.console", "GraveAccent"},
+    {"play.play", "Alt+P"},      {"play.simulate", "Alt+S"},        {"play.pause", "Pause"},
+    {"view.tool_universal", ""}, {"window.console", "GraveAccent"},
 };
 
 constexpr PresetBinding kBlender[] = {
@@ -172,7 +172,7 @@ constexpr PresetBinding kBlender[] = {
     {"edit.redo", "Ctrl+Shift+Z"}, {"edit.palette", "F3"},
     {"view.tool_select", "W"},     {"view.tool_move", "G"},
     {"view.tool_rotate", "R"},     {"view.tool_scale", "S"},
-    {"view.tool_rect", ""},        {"view.frame_selected", "KeypadDecimal"},
+    {"view.tool_universal", ""},   {"view.frame_selected", "KeypadDecimal"},
     {"play.play", "Shift+Space"},  {"entity.create_empty", "Shift+A"},
 };
 

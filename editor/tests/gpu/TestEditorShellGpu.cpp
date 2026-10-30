@@ -137,3 +137,39 @@ TEST_CASE("editor.screenshot of a headless editor returns a PNG of the requested
     CHECK(data->starts_with("iVBORw0KGgo"));
     CHECK(rpc->close() == std::optional<i32>(0));
 }
+
+TEST_CASE("the transform gizmos over a Scene view match the golden images")
+{
+    struct GizmoGolden
+    {
+        const char* name;
+        const char* tool;
+    };
+    constexpr GizmoGolden kGizmoGoldens[] = {{"shell-gizmo-universal", "universal"},
+                                             {"shell-gizmo-rotate", "rotate"}};
+    for (const GizmoGolden& golden : kGizmoGoldens)
+    {
+        CAPTURE(golden.name);
+        GpuShell gpu;
+        test::FakeViewports viewports;
+        viewports.frames = true;
+        viewports.camera.pivot = Vec3(0.0f);
+        viewports.camera.distance = 8.0f;
+        viewports.camera.yaw = 35.0f;
+        viewports.camera.pitch = -25.0f;
+        EditorContext& editor = *gpu.fixture.editor;
+        editor.setViewports(&viewports);
+        test::ok(
+            editor, "entity.create",
+            R"({"name":"Board","components":{"illusion.Transform":{"rotation":[0,0.258819,0,0.9659258]}}})");
+        test::ok(editor, "selection.set", R"({"entities":["/Board"]})");
+        test::ok(editor, "gizmo.set_space", R"({"space":"local"})");
+        test::ok(editor, "gizmo.set_tool", std::string(R"({"tool":")") + golden.tool + "\"}");
+        (void)gpu.capture(10);
+        test::ok(editor, "log.clear");
+        const Image actual = gpu.capture(4);
+        test::checkGolden(golden.name, actual);
+        CHECK(gpu.device->validationErrorCount() == 0);
+        editor.setViewports(nullptr);
+    }
+}

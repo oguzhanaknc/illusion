@@ -6,9 +6,11 @@
 #include <illusion/ecs/SceneSerializer.hpp>
 #include <illusion/editor/core/CoreCommands.hpp>
 #include <illusion/editor/core/EditorContext.hpp>
+#include <illusion/editor/core/Gizmo.hpp>
 #include <illusion/editor/core/ReferenceIndex.hpp>
 #include <illusion/platform/FileSystem.hpp>
 
+#include <cmath>
 #include <filesystem>
 #include <format>
 #include <random>
@@ -241,5 +243,42 @@ ILL_BENCHMARK("editor/undo-own-check", 4'000.0)
     bench.batch(1000).unit("step").run("EditorContext::checkUndoOwn (past 1000 steps)", [&] {
         Expected<u32, CommandError> steps = editor.checkUndoOwn(1, "rpc:me");
         ILL_CHECK(steps.hasValue() && *steps == 1, "the check failed");
+    });
+}
+
+// One frame of gizmo hover: the hit test alone, then with the shape of the Universal gizmo (axes, planes and
+// three rings of 64 points). The cursor is inside the rings and misses every handle, so that every handle is
+// tested. Budget from the M7 plan.
+ILL_BENCHMARK("gizmo/hit-test", 2'000.0)
+{
+    ViewportCamera view;
+    view.pivot = Vec3(10000.0f, 0.0f, -10000.0f);
+    view.yaw = 30.0f;
+    view.pitch = -25.0f;
+    const GizmoCamera camera = gizmoCamera(view, UVec2(1920, 1080), 1.0f);
+    GizmoPose pose;
+    pose.origin = view.pivot;
+    pose.orientation = glm::normalize(quatFromEuler(Vec3(0.2f, 0.4f, 0.1f)));
+    // Find a cursor between the handles, on a circle half the gizmo's size from the pivot.
+    const GizmoShape probe = gizmoShape(GizmoTool::Universal, camera, pose);
+    Vec2 cursor = probe.center;
+    for (u32 step = 0; step < 360; ++step)
+    {
+        const f32 angle = glm::radians(static_cast<f32>(step));
+        cursor = probe.center + 0.5f * probe.length * Vec2(std::cos(angle), std::sin(angle));
+        if (gizmoHitTest(probe, cursor) == GizmoHandle::None)
+        {
+            break;
+        }
+    }
+    ILL_ASSERT(gizmoHitTest(probe, cursor) == GizmoHandle::None, "the cursor must miss every handle");
+    bench.run("universal hit test", [&] {
+        ankerl::nanobench::doNotOptimizeAway(gizmoHitTest(probe, cursor));
+        cursor.x += 0.001f;
+    });
+    bench.run("universal shape and hit test", [&] {
+        const GizmoShape shape = gizmoShape(GizmoTool::Universal, camera, pose);
+        ankerl::nanobench::doNotOptimizeAway(gizmoHitTest(shape, cursor));
+        cursor.x += 0.001f;
     });
 }

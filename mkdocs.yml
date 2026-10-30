@@ -91,6 +91,7 @@ plugins:
             Editor Window: Editör Penceresi
             Outliner and Inspector: Outliner ve Inspector
             Scene Viewport: Scene Viewport'u
+            Transform Tools: Dönüşüm Araçları
             Preferences: Tercihler
             Tutorials: Eğitimler
             First Agent Session: İlk Ajan Oturumu
@@ -138,6 +139,7 @@ nav:
           - Editor Window: manual/editor/interface.md
           - Outliner and Inspector: manual/editor/scene-editing.md
           - Scene Viewport: manual/editor/viewport.md
+          - Transform Tools: manual/editor/transform-tools.md
           - Preferences: manual/editor/preferences.md
           - Projects: manual/editor/projects.md
           - Automation: manual/editor/automation.md

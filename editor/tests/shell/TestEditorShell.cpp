@@ -698,3 +698,131 @@ TEST_CASE(
               .find("value")
               .asString() == std::optional<std::string_view>(aId));
 }
+
+namespace
+{
+
+// Presses the left button at @p from, moves to @p to in @p steps frames (pressing Escape after @p escapeAt
+// steps when given) and releases.
+void dragAt(ui::UiDriver& driver, Vec2 from, Vec2 to, u32 steps, std::optional<u32> escapeAt = std::nullopt)
+{
+    ImGuiIO& io = ImGui::GetIO();
+    driver.moveMouse(from);
+    driver.runFrames(1);
+    io.AddMouseButtonEvent(0, true);
+    driver.runFrames(1);
+    for (u32 step = 1; step <= steps; ++step)
+    {
+        driver.moveMouse(from + (to - from) * (static_cast<f32>(step) / static_cast<f32>(steps)));
+        if (escapeAt && step == *escapeAt)
+        {
+            driver.pressKey(ImGuiKey_Escape);
+        }
+    }
+    io.AddMouseButtonEvent(0, false);
+    driver.runFrames(2);
+}
+
+Vec3 positionOf(EditorContext& editor, std::string_view entity)
+{
+    const JsonDocument placed =
+        test::ok(editor, "transform.get", std::string(R"({"entity":")") + std::string(entity) + "\"}");
+    const JsonValue position = placed.root().find("position");
+    return Vec3(static_cast<f32>(position[0].asF64().value_or(0.0)),
+                static_cast<f32>(position[1].asF64().value_or(0.0)),
+                static_cast<f32>(position[2].asF64().value_or(0.0)));
+}
+
+} // namespace
+
+TEST_CASE("dragging the gizmo in the Scene view moves the selection in one undo step and Escape cancels")
+{
+    ShellFixture fixture;
+    test::FakeViewports viewports;
+    viewports.frames = true;
+    viewports.camera.pivot = Vec3(0.0f);
+    viewports.camera.distance = 10.0f;
+    viewports.camera.yaw = 30.0f;
+    viewports.camera.pitch = -30.0f;
+    fixture.editor->setViewports(&viewports);
+    EditorContext& editor = *fixture.editor;
+    test::ok(editor, "entity.create", R"({"name":"Board","components":{"illusion.Transform":{}}})");
+    test::ok(editor, "selection.set", R"({"entities":["/Board"]})");
+    const usize steps = editor.history().steps().size();
+    ui::UiDriver driver(fixture.context, [&] { fixture.frame(); });
+    driver.runFrames(3);
+    const std::optional<ui::UiItem> image = driver.find("viewport.image");
+    REQUIRE(image.has_value());
+    const UVec2 size(static_cast<u32>(image->max.x - image->min.x + 0.5f),
+                     static_cast<u32>(image->max.y - image->min.y + 0.5f));
+    const GizmoCamera camera = gizmoCamera(viewports.camera, size, 1.0f);
+    const GizmoShape shape = gizmoShape(GizmoTool::Translate, camera, GizmoPose{});
+    REQUIRE(shape.visible);
+    const auto window = [&](Vec3 point) {
+        const Mat4 view =
+            glm::inverse(glm::translate(Mat4(1.0f), camera.eye) * glm::mat4_cast(camera.rotation));
+        return image->min + projectToViewport(camera.projection * view, size, point).pixel;
+    };
+    const Vec3 grab(shape.worldLength * 0.6f, 0.0f, 0.0f);
+
+    // Hovering an axis does not move the camera or select; dragging it moves the entity along x only.
+    dragAt(driver, window(grab), window(grab + Vec3(1.5f, 0.0f, 0.0f)), 8);
+    const Vec3 moved = positionOf(editor, "/Board");
+    CHECK(static_cast<double>(moved.x) == doctest::Approx(1.5).epsilon(1e-2));
+    CHECK(std::abs(moved.y) < 1e-4f);
+    CHECK(std::abs(moved.z) < 1e-4f);
+    REQUIRE(editor.history().steps().size() == steps + 1);
+    CHECK(editor.history().steps().back().origin == "gizmo");
+    CHECK(editor.transaction() == nullptr);
+    CHECK(editor.selection().size() == 1);
+
+    // Escape in the middle of a drag puts everything back.
+    const Vec3 grabNow = moved + grab;
+    dragAt(driver, window(grabNow), window(grabNow + Vec3(2.0f, 0.0f, 0.0f)), 8, 4);
+    CHECK(positionOf(editor, "/Board") == moved);
+    CHECK(editor.history().steps().size() == steps + 1);
+
+    // Snapping with Ctrl (Cmd on macOS) held: the move lands on a multiple of the increment.
+    test::ok(editor, "gizmo.set_snap", R"({"translate":1})");
+    const auto ctrl = static_cast<ImGuiKey>(ui::UiDriver::shortcutModifier());
+    ImGui::GetIO().AddKeyEvent(ctrl, true);
+    dragAt(driver, window(grabNow), window(grabNow + Vec3(1.3f, 0.0f, 0.0f)), 8);
+    ImGui::GetIO().AddKeyEvent(ctrl, false);
+    driver.runFrames(1);
+    CHECK(static_cast<double>(positionOf(editor, "/Board").x) ==
+          doctest::Approx(static_cast<double>(moved.x) + 1.0));
+    CHECK(editor.history().steps().size() == steps + 2);
+    test::ok(editor, "history.undo");
+    CHECK(positionOf(editor, "/Board") == moved);
+
+    // The tool shortcuts switch the gizmo; the Select tool has no gizmo, so a drag draws a selection box.
+    driver.moveMouse(image->center());
+    driver.pressKey(ImGuiKey_E);
+    CHECK(editor.gizmo().tool == GizmoTool::Rotate);
+    driver.pressKey(ImGuiKey_Q);
+    CHECK(editor.gizmo().tool == GizmoTool::Select);
+    dragAt(driver, window(grab), window(grab + Vec3(1.5f, 0.0f, 0.0f)), 8);
+    CHECK(positionOf(editor, "/Board") == moved);
+    fixture.editor->setViewports(nullptr);
+}
+
+TEST_CASE("the toolbar shows the active tool and changes the gizmo's axes, pivot and snapping")
+{
+    ShellFixture fixture;
+    EditorContext& editor = *fixture.editor;
+    ui::UiDriver driver(fixture.context, [&] { fixture.frame(); });
+    driver.runFrames(2);
+    REQUIRE(driver.click("toolbar.view.tool_rotate"));
+    CHECK(editor.gizmo().tool == GizmoTool::Rotate);
+    REQUIRE(driver.click("toolbar.gizmo.space"));
+    REQUIRE(driver.click("toolbar.gizmo.space.local"));
+    CHECK(editor.gizmo().space == GizmoSpace::Local);
+    REQUIRE(driver.click("toolbar.gizmo.pivot"));
+    REQUIRE(driver.click("toolbar.gizmo.pivot.individual"));
+    CHECK(editor.gizmo().pivot == GizmoPivot::Individual);
+    REQUIRE(driver.click("toolbar.gizmo.snap"));
+    CHECK(editor.gizmo().snap.enabled);
+    REQUIRE(driver.click("toolbar.gizmo.snap.more"));
+    driver.runFrames(2);
+    CHECK(driver.find("toolbar.gizmo.snap.rotate").has_value());
+}

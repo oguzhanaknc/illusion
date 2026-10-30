@@ -76,8 +76,9 @@ bulur. Aynı noktaya yeniden tıklamak imlecin altındaki bir sonraki Entity'yi 
 başka Entity'lerin arkasında kalanlar da seçilebilir. Outliner'da gizlenen ya da kilitlenen Entity'ler asla
 seçilmez.
 
-Sol sürükleme bir seçim kutusu çizer ve kutunun içinde pikseli olan her Entity'yi seçer; **Shift** onları
-ekler, **Ctrl** seçimlerini tersine çevirir.
+Bir gizmo tutamacında başlamayan sol sürükleme bir seçim kutusu çizer ve kutunun içinde pikseli olan her
+Entity'yi seçer; **Shift** onları ekler, **Ctrl** seçimlerini tersine çevirir. Seçimi taşıyan, döndüren ve
+ölçekleyen gizmo'lar [Dönüşüm Araçları](transform-tools.md) sayfasında anlatılır.
 
 İmlecin altındaki Entity, tıklanmadan önce temanın hover renginde ince bir outline alır. Mesh'i olmayan
 Entity'ler bulundukları yerde bir simge (billboard) gösterir: kameralar, yönlü, nokta ve gökyüzü ışıkları, ses

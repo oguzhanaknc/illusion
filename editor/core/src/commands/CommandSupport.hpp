@@ -27,6 +27,7 @@ void registerViewportCommands(CommandRegistry& registry);
 void registerHistoryCommands(CommandRegistry& registry);
 void registerTransactionCommands(CommandRegistry& registry);
 void registerTransformCommands(CommandRegistry& registry);
+void registerGizmoCommands(CommandRegistry& registry);
 void registerClipboardCommands(CommandRegistry& registry);
 void registerAssetCommands(CommandRegistry& registry);
 void registerMaterialCommands(CommandRegistry& registry);
