@@ -832,13 +832,43 @@ std::string glyphLabel(const InputBinding& binding, GamepadFamily family,
 
 // --- InputActions ---------------------------------------------------------------------------------------
 
+bool InputActions::isValidActionName(std::string_view name) noexcept
+{
+    return !name.empty() && name.find_first_of("=,\r\n#") == std::string_view::npos && trim(name) == name;
+}
+
 ActionId InputActions::addAction(std::string_view name, ActionType type)
 {
     ILL_ASSERT(!findAction(name).has_value(), "action '{}' already exists", name);
-    ILL_ASSERT(!name.empty() && name.find_first_of("=,\n#") == std::string_view::npos && trim(name) == name,
-               "invalid action name '{}'", name);
+    ILL_ASSERT(isValidActionName(name), "invalid action name '{}'", name);
     m_actions.push_back(Action{std::string(name), type, {}, Vec2(0.0f), false, false, false});
     return static_cast<ActionId>(m_actions.size() - 1);
+}
+
+void InputActions::removeAction(ActionId action)
+{
+    ILL_ASSERT(action < m_actions.size(), "invalid action id {}", action);
+    m_actions.erase(m_actions.begin() + static_cast<std::ptrdiff_t>(action));
+}
+
+bool InputActions::renameAction(ActionId action, std::string_view name)
+{
+    ILL_ASSERT(action < m_actions.size(), "invalid action id {}", action);
+    if (!isValidActionName(name))
+    {
+        return false;
+    }
+    if (const std::optional<ActionId> other = findAction(name))
+    {
+        return *other == action;
+    }
+    m_actions[action].name = name;
+    return true;
+}
+
+void InputActions::clear() noexcept
+{
+    m_actions.clear();
 }
 
 std::optional<ActionId> InputActions::findAction(std::string_view name) const noexcept

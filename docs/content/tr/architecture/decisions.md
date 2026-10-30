@@ -48,6 +48,7 @@ Record (ADR) olarak kaydedilir. Her kayıt bağlamı, kararı ve sonuçlarını 
 | [0039](https://github.com/oguzhanaknc/illusion/blob/main/docs/adr/0039-mcp-bridge.md) | Editör komutlarından birebir üretilen araçlarla iki çağlı bir MCP köprüsü |
 | [0040](https://github.com/oguzhanaknc/illusion/blob/main/docs/adr/0040-renderer-extension-points.md) | Editörler ve araçlar için renderer genişletme noktaları |
 | [0041](https://github.com/oguzhanaknc/illusion/blob/main/docs/adr/0041-module-api-v3.md) | Modül API v3: World başına start ve stop, çok World'lü host ve host servis arayüzleri |
+| [0042](https://github.com/oguzhanaknc/illusion/blob/main/docs/adr/0042-play-mode-and-game-session.md) | Sahne anlık görüntüleriyle Play modu ve ortak bir GameSession runtime'ı |
 
 Yeni bir karar önermek için `docs/adr/0000-template.md` dosyasını kopyalayın ve
 [katkıda bulunma rehberini](../contributing.md#architecture-decision-recordlar) izleyin.

@@ -147,6 +147,10 @@ while (running)
 modules.detachWorld(world);
 ```
 
+Games rarely wire this by hand: a [game session](runtime.md) attaches its World with the physics, audio,
+input and scene services and updates the modules in its step order, in the editor's Play mode and in the
+player alike.
+
 `load()` copies the library to a shadow directory and loads the copy, so the build can overwrite the
 original. It then checks the module and returns an error message if anything is wrong:
 

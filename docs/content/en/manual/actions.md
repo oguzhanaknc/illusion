@@ -87,6 +87,49 @@ Unknown actions and malformed bindings are skipped and reported, so an old or ed
 prevents the game from starting. Store the text with the [file system](filesystem.md), for example in
 `user:/input.cfg`.
 
+## Input actions assets
+
+A game's actions are data too: an input actions asset (a `.input` file) defines each action with its type
+and default bindings, so the editor and designers change them without touching code. The binding strings
+are those of `serialize()`.
+
+```json
+{
+  "format": "illusion.input",
+  "version": 1,
+  "actions": [
+    {"name": "Jump", "type": "Button", "bindings": ["Key.Space", "Gamepad.South"]},
+    {"name": "Move", "type": "Vector2", "bindings": ["Keys.W.S.A.D", "Stick.Left"]},
+    {"name": "Throttle", "type": "Axis", "bindings": ["Axis.RightTrigger", "Key.S*-1"]}
+  ]
+}
+```
+
+```cpp
+#include <illusion/input/InputActionsAsset.hpp>
+
+illusion::InputActions actions;
+if (auto loaded = illusion::loadInputActions(files, "assets:/game.input", actions); !loaded)
+{
+    ILL_LOG_ERROR("Game", "{}", loaded.error()); // "assets:/game.input: '/actions/1/type' must be ..."
+}
+const std::string text = illusion::writeInputActions(actions); // the same actions give the same text
+```
+
+`readInputActions()` replaces every action at once, or on any error none: an invalid name, a name used
+twice, an unknown type or binding, a wrong format or a newer version fails with the JSON pointer of the
+bad value. Action names must pass `InputActions::isValidActionName()`: not empty, no leading or trailing
+spaces, none of `=`, `,`, `#` or a line break. The project's `InputSettings::actions` names the asset that a
+[game session](runtime.md) starts with; the player's saved rebindings (`serialize()`) then go on top.
+
+Editors change the set with three more functions:
+
+```cpp
+actions.renameAction(*actions.findAction("Throttle"), "Accelerate"); // false if taken or invalid
+actions.removeAction(*actions.findAction("Jump")); // later ids move down: look them up again
+actions.clear();
+```
+
 ## Glyphs
 
 `glyphId()` returns an icon identifier and `glyphLabel()` a short label for a binding, following the

@@ -27,6 +27,7 @@ add_library(illusion_core STATIC
     src/ecs/Reflection.cpp
     src/ecs/ReflectionData.cpp
     src/ecs/SceneSerializer.cpp
+    src/ecs/SettingsFile.cpp
     src/ecs/StructRegistry.cpp
     src/ecs/World.cpp)
 add_library(illusion::core ALIAS illusion_core)

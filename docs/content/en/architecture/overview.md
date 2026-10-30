@@ -68,6 +68,7 @@ Only the core library may exist twice: a shared module links the other engine li
 | `engine/physics` | Physics library: `include/illusion/physics` and `src/` |
 | `engine/audio` | Audio library: `include/illusion/audio` and `src/` |
 | `engine/modules` | Module host: `include/illusion/modules` and `src/` |
+| `engine/runtime` | Game runtime: `GameSession`, project settings, `SceneLoaderService` (ADR 0042) |
 | `engine/render` | Render library: `include/illusion/render`, `src/` and `shaders/` |
 | `samples` | Small applications that exercise engine features |
 | `tests` | Unit tests (doctest), one file per feature |

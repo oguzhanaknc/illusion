@@ -151,6 +151,10 @@ while (running)
 modules.detachWorld(world);
 ```
 
+Oyunlar bunu nadiren elle kurar: bir [oyun oturumu](runtime.md) World'ünü fizik, ses, input ve sahne
+servisleriyle ekler ve modülleri kendi adım sırasında günceller; editörün Play modunda da oyuncuda da
+aynı şekilde.
+
 `load()` kütüphaneyi bir gölge dizine kopyalar ve kopyayı yükler; böylece build orijinalin üzerine
 yazabilir. Ardından modülü denetler ve bir sorun varsa bir hata mesajı döndürür:
 

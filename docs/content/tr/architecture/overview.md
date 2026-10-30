@@ -69,6 +69,7 @@ modülleri kendisine eklenmiş her World üzerinde çalıştırır (ADR 0041).
 | `engine/physics` | Fizik kütüphanesi: `include/illusion/physics` ve `src/` |
 | `engine/audio` | Ses kütüphanesi: `include/illusion/audio` ve `src/` |
 | `engine/modules` | Modül host'u: `include/illusion/modules` ve `src/` |
+| `engine/runtime` | Oyun runtime'ı: `GameSession`, proje ayarları, `SceneLoaderService` (ADR 0042) |
 | `engine/render` | Render kütüphanesi: `include/illusion/render`, `src/` ve `shaders/` |
 | `samples` | Motor özelliklerini çalıştıran küçük uygulamalar |
 | `tests` | Unit test'ler (doctest), her özellik için bir dosya |

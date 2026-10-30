@@ -35,7 +35,7 @@ class InputService : NonCopyable
 {
 public:
     /// Adds an action, or returns the existing one of that name and type; nullopt if an action of that
-    /// name has another type.
+    /// name has another type or the name is not valid (InputActions::isValidActionName()).
     virtual std::optional<ActionId> addAction(std::string_view name, ActionType type) = 0;
     /// The action called @p name, if there is one.
     [[nodiscard]] virtual std::optional<ActionId> findAction(std::string_view name) const = 0;
