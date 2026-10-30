@@ -261,8 +261,17 @@ Plan: `docs/plans/m7-editor.md` (sub-milestones, command API, localization, them
   Esc, a confirming click and End, a GPU test that drop to ground lands on a floor, and the `gizmo/modal-update`
   (500 ns budget; 80 ns measured) and `arrange/drop-to-ground` (10 µs budget for 1,000 surfaces; 1,091 ns
   measured) Benchmarks
-- M7p-3: Gizmos, third part: vertex snap (V, CPU mesh data with a per-mesh spatial grid), surface snap with
-  align-to-normal (depth and normal readback, GPU test that it lands on a plane), measure and ruler
+- M7p-3: ✅ Gizmos, third part: vertex snap (hold V during a move: the vertex nearest to the cursor within 12
+  points, searched on the CPU in a `VertexSnapGrid` per Mesh, a uniform grid in the Mesh's own space visited
+  slice by slice along the cursor ray), surface snap (Ctrl+Shift: the depth of an 8x8 probe render around the
+  cursor without the selection, the normal rebuilt from neighbouring depths) with align to normal (the active
+  entity's +y onto the normal), snapped moves constrained to the dragged axis or plane, the Measure tool (M:
+  a ruler between two snapped points or on the ground plane, distance, x/y/z and elevation; Esc removes it),
+  `ViewportHost::requestSnap()`/`snap()`, `viewport.snap` (async, read-only), `gizmo.measure` and
+  `gizmo.clear_ruler` (129 commands). Unit tests for the grid against a brute-force search, the depth patch
+  normal, align to normal, constraints and the ruler, command tests with a fake host, a headless UI test of V
+  and M, a GPU test that a surface snap lands on a tilted plane with its normal and a vertex snap on a cube
+  corner, and the `snap/vertex-search` Benchmark (80 µs budget for 100,000 vertices; 11,278 ns measured)
 - M7q: Module API v3: lifecycle, multi-world host, host service interfaces (scripting API) (ADR 0041)
 - M7r: Play mode and the `GameSession` runtime (ADR 0042)
 - M7s: Project modules built from the editor (ADR 0043); opening sources with the External Tools code editor

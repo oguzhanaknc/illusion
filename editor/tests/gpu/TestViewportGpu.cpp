@@ -568,3 +568,80 @@ TEST_CASE("mesh bounds follow the scene and drop to ground lands an entity on th
     }
     gpu.frame();
 }
+
+TEST_CASE("surface snap lands on a tilted plane with its normal, and vertex snap on a cube corner")
+{
+    GpuViewports gpu;
+    buildScene(gpu);
+    EditorContext& editor = gpu.editor();
+    // A ramp through the origin turned 30 degrees about z, under the Front cube; seen from above the front.
+    test::ok(
+        editor, "entity.create",
+        R"({"name":"Ramp","components":{"illusion.Transform":{"scale":[10,1,10],)"
+        R"("rotation":[0,0,0.2588190,0.9659258]},"illusion.MeshRenderer":{"mesh":"builtin:/mesh/plane"}}})");
+    test::ok(editor, "entity.create",
+             R"({"name":"Crate","components":{"illusion.Transform":{"position":[0,4,0]}}})");
+    test::ok(editor, "viewport.camera_set",
+             R"({"pivot":[0,0,0],"yaw":0,"pitch":-40,"distance":8,"animate":false})");
+    for (int i = 0; i < 3; ++i)
+    {
+        gpu.frame();
+    }
+    const Vec3 normal(-0.5f, 0.8660254f, 0.0f);
+    const auto vec3Of = [](const JsonValue& value) {
+        return Vec3(static_cast<f32>(value[0].asF64().value_or(0.0)),
+                    static_cast<f32>(value[1].asF64().value_or(0.0)),
+                    static_cast<f32>(value[2].asF64().value_or(0.0)));
+    };
+
+    // Under the centre of the image lies the Front cube; left out, the ramp is below it.
+    const JsonDocument covered = gpu.run("viewport.snap", R"({"x":160,"y":90,"to":"surface"})");
+    CHECK(covered.root().pointer("/entity/path").asString().value_or("") == "/Front");
+    const JsonDocument snapped =
+        gpu.run("viewport.snap", R"({"x":160,"y":90,"to":"surface","exclude":["/Front"]})");
+    const JsonValue root = snapped.root();
+    REQUIRE(root.find("hit").asBool().value_or(false));
+    CHECK(root.find("kind").asString().value_or("") == "surface");
+    CHECK(root.pointer("/entity/path").asString().value_or("") == "/Ramp");
+    const Vec3 position = vec3Of(root.find("position"));
+    CHECK(std::abs(glm::dot(position, normal)) < 2e-3f);
+    CHECK(glm::length(position) < 0.1f);
+    CHECK(glm::dot(vec3Of(root.find("normal")), normal) > 0.999f);
+
+    // Placing an entity with the snapped position and rotation lands it on the plane, standing on its normal.
+    const JsonValue rotation = root.find("rotation");
+    test::ok(editor, "transform.set",
+             std::format(R"({{"entities":["/Crate"],"position":[{},{},{}],"rotation":[{},{},{},{}]}})",
+                         position.x, position.y, position.z, rotation[0].asF64().value_or(0.0),
+                         rotation[1].asF64().value_or(0.0), rotation[2].asF64().value_or(0.0),
+                         rotation[3].asF64().value_or(1.0)));
+    const JsonDocument placed = test::ok(editor, "transform.get", R"({"entity":"/Crate"})");
+    const JsonValue turned = placed.root().find("rotation");
+    const Quat crate(
+        static_cast<f32>(turned[3].asF64().value_or(1.0)), static_cast<f32>(turned[0].asF64().value_or(0.0)),
+        static_cast<f32>(turned[1].asF64().value_or(0.0)), static_cast<f32>(turned[2].asF64().value_or(0.0)));
+    CHECK(glm::dot(crate * Vec3(0.0f, 1.0f, 0.0f), normal) > 0.999f);
+    CHECK(std::abs(glm::dot(vec3Of(placed.root().find("position")), normal)) < 2e-3f);
+
+    // The top front right corner of the Side cube, a few pixels off.
+    const std::vector<ViewportInfo> views = gpu.service->viewports();
+    const ViewportInfo& scene = views.front();
+    REQUIRE(scene.id == "scene");
+    const Vec3 corner(3.5f, 0.5f, 0.5f);
+    const ViewportPoint point = projectToViewport(scene.projection * scene.view, scene.size, corner);
+    REQUIRE(point.inside);
+    const JsonDocument vertex =
+        gpu.run("viewport.snap", std::format(R"({{"x":{},"y":{},"to":"vertex"}})", point.pixel.x - 3.0f,
+                                             point.pixel.y + 2.0f));
+    REQUIRE(vertex.root().find("hit").asBool().value_or(false));
+    CHECK(vertex.root().pointer("/entity/path").asString().value_or("") == "/Side");
+    CHECK(glm::length(vec3Of(vertex.root().find("position")) - corner) < 1e-4f);
+    // Far from every vertex there is none, and "any" then finds the surface.
+    const JsonDocument none = gpu.run("viewport.snap", R"({"x":160,"y":170,"to":"vertex","tolerance":2})");
+    CHECK(!none.root().find("hit").asBool().value_or(true));
+    const JsonDocument any =
+        gpu.run("viewport.snap", R"({"x":160,"y":170,"exclude":["/Front"],"tolerance":2})");
+    CHECK(any.root().find("kind").asString().value_or("") == "surface");
+    CHECK(any.root().pointer("/entity/path").asString().value_or("") == "/Ramp");
+    gpu.frame();
+}

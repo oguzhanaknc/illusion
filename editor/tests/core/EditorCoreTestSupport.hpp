@@ -418,6 +418,20 @@ public:
 
     void meshBounds(std::vector<editor::ViewportBounds>& out) override { out = meshes; }
 
+    Expected<u64, editor::CommandError> requestSnap(std::string_view,
+                                                    const editor::ViewportSnapRequest& request) override
+    {
+        snapRequest = request;
+        snapExcluded.assign(request.exclude.begin(), request.exclude.end());
+        snapRequest.exclude = {};
+        return ++ticket;
+    }
+
+    std::optional<Expected<std::optional<editor::ViewportSnap>, editor::CommandError>> snap(u64) override
+    {
+        return Expected<std::optional<editor::ViewportSnap>, editor::CommandError>(snapped);
+    }
+
     Secondary& find(std::string_view id)
     {
         const auto found = std::find_if(secondary.begin(), secondary.end(),
@@ -439,7 +453,10 @@ public:
     std::optional<editor::ViewportHit> hit;
     std::array<u8, 4> color{255, 0, 0, 255};
     std::vector<Entity> entities;
-    std::vector<editor::ViewportBounds> meshes; ///< What meshBounds() reports.
+    std::vector<editor::ViewportBounds> meshes;  ///< What meshBounds() reports.
+    std::optional<editor::ViewportSnap> snapped; ///< What snap() answers.
+    editor::ViewportSnapRequest snapRequest;     ///< The last requestSnap() (without its exclusions).
+    std::vector<Entity> snapExcluded;            ///< Its exclusions.
     editor::ViewportRenderStats stats;
     editor::ViewportChannel readChannel = editor::ViewportChannel::Color;
     UVec2 readOrigin{0};

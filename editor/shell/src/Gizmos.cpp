@@ -107,7 +107,109 @@ text::TextKey modalLabel(GizmoModalOperation operation) noexcept
     return s::kToolMove;
 }
 
+// "1.234" for the ruler's label.
+std::array<char, 24> rulerNumber(f32 value) noexcept
+{
+    std::array<char, 24> out{};
+    (void)std::snprintf(out.data(), out.size(), "%.3f", static_cast<double>(value));
+    return out;
+}
+
 } // namespace
+
+void SnapTracker::update(ViewportHost& host, std::string_view id, Vec2 pixel, ViewportSnapTarget target,
+                         f32 tolerance, std::span<const Entity> exclude)
+{
+    if (m_ticket != 0 && target != m_target)
+    {
+        m_drop = true;
+    }
+    if (m_ticket != 0)
+    {
+        std::optional<Expected<std::optional<ViewportSnap>, CommandError>> done = host.snap(m_ticket);
+        if (!done)
+        {
+            return;
+        }
+        if (!m_drop)
+        {
+            m_found = *done ? done->value() : std::nullopt;
+            m_answered = true;
+            m_any = true;
+        }
+        m_ticket = 0;
+        m_drop = false;
+    }
+    if (m_answered && pixel == m_pixel && target == m_target)
+    {
+        return;
+    }
+    ViewportSnapRequest request;
+    request.pixel = pixel;
+    request.target = target;
+    request.tolerance = tolerance;
+    request.exclude = exclude;
+    if (const Expected<u64, CommandError> ticket = host.requestSnap(id, request))
+    {
+        m_ticket = *ticket;
+        m_pixel = pixel;
+        m_target = target;
+        m_answered = false;
+    }
+}
+
+void SnapTracker::reset() noexcept
+{
+    m_drop = m_ticket != 0;
+    m_answered = false;
+    m_any = false;
+    m_pixel = Vec2(-1.0f);
+    m_found.reset();
+}
+
+void drawRuler(Impl& shell, const ViewportGizmo::Frame& frame, ImDrawList& draw, const GizmoRuler& ruler)
+{
+    const ViewportFrame* viewport = frame.viewport;
+    if (viewport == nullptr)
+    {
+        return;
+    }
+    const ViewportPoint from = projectToViewport(viewport->camera, viewport->size, ruler.from);
+    const ViewportPoint to = projectToViewport(viewport->camera, viewport->size, ruler.to);
+    if (!from.inFront || !to.inFront)
+    {
+        return;
+    }
+    const ui::UiKit kit = shell.kit();
+    const ui::Theme& theme = kit.theme;
+    const f32 points = kit.scale;
+    const ImU32 line = packed(theme.color(ui::ThemeToken::ViewportHover), 1.0f);
+    const ImVec2 a = toWindow(frame, from.pixel);
+    const ImVec2 b = toWindow(frame, to.pixel);
+    draw.AddLine(a, b, line, kLineWidth * points);
+    draw.AddCircleFilled(a, kScaleBox * points, line);
+    draw.AddCircleFilled(b, kScaleBox * points, line);
+    const Measurement measured = measure(ruler.from, ruler.to);
+    const auto distance = rulerNumber(measured.distance);
+    const auto x = rulerNumber(measured.delta.x);
+    const auto y = rulerNumber(measured.delta.y);
+    const auto z = rulerNumber(measured.delta.z);
+    const auto elevation = rulerNumber(measured.elevation);
+    const char* label = shell.text.format(s::kGizmoRuler, {{"distance", distance.data()},
+                                                           {"x", x.data()},
+                                                           {"y", y.data()},
+                                                           {"z", z.data()},
+                                                           {"elevation", elevation.data()}});
+    const ImVec2 size = ImGui::CalcTextSize(label);
+    const Vec2 padding(4.0f * points);
+    const Vec2 middle((a.x + b.x) * 0.5f, (a.y + b.y) * 0.5f);
+    const Vec2 low = middle - Vec2(size.x, size.y) * 0.5f - padding;
+    const Vec2 high = middle + Vec2(size.x, size.y) * 0.5f + padding;
+    draw.AddRectFilled(ImVec2(low.x, low.y), ImVec2(high.x, high.y),
+                       packed(theme.color(ui::ThemeToken::BgRaised), 0.85f), 3.0f * points);
+    draw.AddText(ImVec2(low.x + padding.x, low.y + padding.y),
+                 packed(theme.color(ui::ThemeToken::TextPrimary), 1.0f), label);
+}
 
 void ViewportGizmo::refreshTargets(Impl& shell)
 {
@@ -176,6 +278,16 @@ bool ViewportGizmo::beginTransaction(Impl& shell, text::TextKey label)
     m_placed.assign(m_start.begin(), m_start.end());
     m_delta = GizmoDelta{};
     m_typed.clear();
+    m_excluded.clear();
+    for (const GizmoTarget& target : m_targets)
+    {
+        if (const Entity entity = shell.editor.entities().lookup(target.guid); !entity.isNull())
+        {
+            m_excluded.push_back(entity);
+        }
+    }
+    m_snap.reset();
+    m_snapped = false;
     return true;
 }
 
@@ -275,11 +387,161 @@ void ViewportGizmo::apply(Impl& shell, const GizmoPose& pose, const GizmoDelta& 
     (void)shell.run("editor.batch", m_params, "gizmo");
 }
 
+bool ViewportGizmo::snapDelta(Impl& shell, const Frame& frame, GizmoDelta& delta)
+{
+    const ImGuiIO& io = ImGui::GetIO();
+    const bool vertex = ImGui::IsKeyDown(ImGuiKey_V);
+    const bool surface = io.KeyCtrl && io.KeyShift;
+    const bool translating = m_modal ? m_modal->operation() == GizmoModalOperation::Translate
+                                     : m_drag && gizmoHandleAxes(m_drag->handle()) != 0;
+    ViewportHost* host = shell.editor.viewports();
+    m_snapped = false;
+    if ((!vertex && !surface) || !translating || host == nullptr || frame.id.empty() || m_typed.active())
+    {
+        m_snap.reset();
+        return false;
+    }
+    m_snap.update(*host, frame.id, frame.cursor,
+                  vertex ? ViewportSnapTarget::Vertex : ViewportSnapTarget::Surface,
+                  kVertexSnapTolerance * frame.pixelScale, m_excluded);
+    const std::optional<ViewportSnap>& found = m_snap.found();
+    if (!found)
+    {
+        return false;
+    }
+    const GizmoPose& pose = m_modal ? m_modal->pose() : m_drag->pose();
+    const u32 axes = m_modal ? m_modal->axes() : gizmoHandleAxes(m_drag->handle());
+    delta = GizmoDelta{};
+    delta.translation = constrainOffset(pose, axes, found->position - pose.origin);
+    if (found->kind == ViewportSnapTarget::Surface && shell.editor.gizmo().snap.alignToNormal &&
+        !m_start.empty())
+    {
+        // The active entity's +y turns onto the normal; the others turn with it about the pivot.
+        const Quat start = m_start.back().rotation;
+        delta.rotation = glm::normalize(alignToNormal(start, found->normal) * glm::conjugate(start));
+    }
+    m_snapped = true;
+    return true;
+}
+
+void ViewportGizmo::drawSnapMarker(Impl& shell, const Frame& frame, ImDrawList& draw)
+{
+    const std::optional<ViewportSnap>& found = m_snap.found();
+    if (!m_snapped || !found || frame.viewport == nullptr)
+    {
+        return;
+    }
+    const ViewportPoint point =
+        projectToViewport(frame.viewport->camera, frame.viewport->size, found->position);
+    if (!point.inFront)
+    {
+        return;
+    }
+    const ui::UiKit kit = shell.kit();
+    const f32 points = kit.scale;
+    const ImU32 color = packed(kit.theme.color(ui::ThemeToken::ViewportHover), 1.0f);
+    const ImVec2 at = toWindow(frame, point.pixel);
+    draw.AddCircle(at, kArrowLength * points, color, 24, kRingWidth * points);
+    const char* label = shell.text.format(found->kind == ViewportSnapTarget::Vertex ? s::kGizmoSnapVertex
+                                                                                    : s::kGizmoSnapSurface);
+    draw.AddText(
+        ImVec2(at.x + kArrowLength * points + kLetterGap * points, at.y - ImGui::GetTextLineHeight()), color,
+        label);
+}
+
+bool ViewportGizmo::beginMeasure(Impl& shell, const Frame& frame)
+{
+    if (shell.editor.gizmo().tool != GizmoTool::Measure || dragging() || frame.viewport == nullptr ||
+        frame.id.empty())
+    {
+        return false;
+    }
+    m_measuring = true;
+    m_measurePress = frame.cursor;
+    m_measureFrom.reset();
+    m_measureTo.reset();
+    return true;
+}
+
+void ViewportGizmo::updateMeasure(Impl& shell, const Frame& frame, ImDrawList& draw)
+{
+    const GizmoSettings& settings = shell.editor.gizmo();
+    if (settings.ruler && !m_measuring)
+    {
+        drawRuler(shell, frame, draw, *settings.ruler);
+    }
+    ViewportHost* host = shell.editor.viewports();
+    if (m_measuring &&
+        (frame.viewport == nullptr || host == nullptr || ImGui::IsKeyPressed(ImGuiKey_Escape, false) ||
+         ImGui::IsMouseClicked(ImGuiMouseButton_Right)))
+    {
+        m_measuring = false;
+        return;
+    }
+    if (!m_measuring)
+    {
+        if (settings.tool == GizmoTool::Measure && frame.hovered && frame.viewport != nullptr)
+        {
+            if (settings.ruler && ImGui::IsKeyPressed(ImGuiKey_Escape, false))
+            {
+                (void)shell.run("gizmo.clear_ruler", "", "gizmo");
+            }
+            const ui::UiKit kit = shell.kit();
+            const ImVec2 cursor = toWindow(frame, frame.cursor);
+            draw.AddText(ImVec2(cursor.x + 16.0f * kit.scale, cursor.y + 16.0f * kit.scale),
+                         packed(kit.theme.color(ui::ThemeToken::TextPrimary), 0.7f),
+                         shell.text.format(s::kGizmoMeasureHint));
+        }
+        return;
+    }
+    // Vertices with V, otherwise surfaces; the ground plane where there is none.
+    const ViewportSnapTarget target =
+        ImGui::IsKeyDown(ImGuiKey_V) ? ViewportSnapTarget::Vertex : ViewportSnapTarget::Surface;
+    const f32 tolerance = kVertexSnapTolerance * frame.pixelScale;
+    m_measureFrom.update(*host, frame.id, m_measurePress, target, tolerance, {});
+    m_measureTo.update(*host, frame.id, frame.cursor, target, tolerance, {});
+    const GizmoCamera camera = cameraOf(frame);
+    const auto pointOf = [&](const SnapTracker& tracker, Vec2 pixel) -> std::optional<Vec3> {
+        if (!tracker.answered())
+        {
+            return std::nullopt;
+        }
+        if (tracker.found())
+        {
+            return tracker.found()->position;
+        }
+        const GizmoRay ray = gizmoRay(camera, pixel);
+        const f32 along = std::abs(ray.direction.y) > 1e-6f ? -ray.origin.y / ray.direction.y : -1.0f;
+        return along > 0.0f ? std::optional<Vec3>(ray.origin + ray.direction * along) : std::nullopt;
+    };
+    const std::optional<Vec3> from = pointOf(m_measureFrom, m_measurePress);
+    const std::optional<Vec3> to = pointOf(m_measureTo, frame.cursor);
+    if (from && to)
+    {
+        drawRuler(shell, frame, draw, GizmoRuler{*from, *to});
+    }
+    if (!ImGui::IsMouseDown(ImGuiMouseButton_Left))
+    {
+        m_measuring = false;
+        if (from && to && *from != *to)
+        {
+            std::string params = R"({"from":)";
+            appendNumbers(params, {from->x, from->y, from->z});
+            params += R"(,"to":)";
+            appendNumbers(params, {to->x, to->y, to->z});
+            params += '}';
+            (void)shell.run("gizmo.measure", params, "gizmo");
+        }
+    }
+}
+
 void ViewportGizmo::end(Impl& shell, bool commit)
 {
     m_drag.reset();
     m_modal.reset();
     m_typed.clear();
+    m_snap.reset();
+    m_snapped = false;
     m_cached = false;
     (void)shell.run(commit ? "transaction.commit" : "transaction.cancel", "", "gizmo");
 }
@@ -291,6 +553,7 @@ void ViewportGizmo::update(Impl& shell, const Frame& frame, ImDrawList& draw, Gi
     const bool confirm =
         ImGui::IsKeyPressed(ImGuiKey_Enter, false) || ImGui::IsKeyPressed(ImGuiKey_KeypadEnter, false);
     const GizmoSnap* snap = settings.snap.enabled != io.KeyCtrl ? &settings.snap : nullptr;
+    updateMeasure(shell, frame, draw);
     if (dragging())
     {
         if (frame.viewport == nullptr || ImGui::IsKeyPressed(ImGuiKey_Escape, false) ||
@@ -323,11 +586,21 @@ void ViewportGizmo::update(Impl& shell, const Frame& frame, ImDrawList& draw, Gi
             {
                 delta = m_typed.active() ? m_drag->typed(m_typed) : m_drag->update(frame.cursor, snap);
             }
+            // A vertex or surface under the cursor replaces the cursor's translation.
+            GizmoDelta snapped;
+            if (snapDelta(shell, frame, snapped))
+            {
+                delta = snapped;
+            }
             if (!sameDelta(delta, m_delta))
             {
                 apply(shell, m_modal ? m_modal->pose() : m_drag->pose(), delta);
             }
         }
+    }
+    if (dragging() && frame.viewport != nullptr)
+    {
+        drawSnapMarker(shell, frame, draw);
     }
     if (m_modal && frame.viewport != nullptr)
     {
@@ -647,6 +920,14 @@ void drawGizmoToolbar(Impl& shell)
                                     static_cast<double>(value));
                 (void)shell.run("gizmo.set_snap", params.data(), "toolbar");
             }
+        }
+        if (ImGui::MenuItem(text.label(s::kGizmoSnapAlignNormal, "toolbar.gizmo.snap.align_normal"), nullptr,
+                            settings.snap.alignToNormal))
+        {
+            (void)shell.run("gizmo.set_snap",
+                            settings.snap.alignToNormal ? R"({"alignToNormal":false})"
+                                                        : R"({"alignToNormal":true})",
+                            "toolbar");
         }
         ImGui::EndPopup();
     }

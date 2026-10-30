@@ -734,6 +734,7 @@ void SceneView::draw(Impl& shell)
     gizmoFrame.pixelScale = kit.scale * toImage.y;
     gizmoFrame.cursor = (mouse - imageOrigin) * toImage;
     gizmoFrame.hovered = hovered && !overOverlay && !shell.eyedropper.active;
+    gizmoFrame.id = m_id;
     if (scene && hovered)
     {
         shell.hoveredSceneView = m_id;
@@ -757,7 +758,13 @@ void SceneView::draw(Impl& shell)
     {
         m_gizmoPressed = m_gizmo.begin(shell, gizmoFrame, gizmoHovered);
     }
-    const bool gizmoDragging = m_gizmo.dragging();
+    else if (ImGui::IsItemActivated() && ImGui::IsMouseClicked(ImGuiMouseButton_Left) && gizmoFrame.hovered &&
+             !io.KeyAlt && !m_cubeDrag)
+    {
+        // The Measure tool draws a ruler with left drags (its release neither picks nor selects).
+        m_gizmoPressed = m_gizmo.beginMeasure(shell, gizmoFrame);
+    }
+    const bool gizmoDragging = m_gizmo.dragging() || m_gizmo.measuring();
 
     ViewportInput input;
     input.cursor = (mouse - imageOrigin) * toImage;

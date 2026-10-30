@@ -32,6 +32,7 @@ enum class GizmoTool : u8
     Rotate,    ///< Turn about the axes, the view direction or freely (trackball).
     Scale,     ///< Scale along the entities' own axes or uniformly.
     Universal, ///< Translate handles, rotation rings and a uniform scale handle together.
+    Measure,   ///< No gizmo: drags draw a ruler between the points under the cursor.
 };
 
 /// Axes of the Translate and Rotate gizmos. The Scale gizmo always uses the active entity's own axes.
@@ -58,6 +59,15 @@ struct GizmoSnap
     f32 translate = 0.5f; ///< Distance increment in world units, 0.001 to 1,000.
     f32 rotate = 15.0f;   ///< Angle increment in degrees, 0.01 to 180.
     f32 scale = 0.1f;     ///< Scale factor increment, 0.001 to 10.
+    bool alignToNormal =
+        false; ///< Surface snapping also turns the entities' +y axis onto the surface normal.
+};
+
+/// A ruler drawn in the Scene viewports (`gizmo.measure`, the Measure tool).
+struct GizmoRuler
+{
+    Vec3 from{0.0f}; ///< Start in world space.
+    Vec3 to{0.0f};   ///< End in world space.
 };
 
 /// The gizmo state of the editor (`gizmo.get`; not saved, not undoable).
@@ -67,6 +77,7 @@ struct GizmoSettings
     GizmoSpace space = GizmoSpace::World;  ///< Axes.
     GizmoPivot pivot = GizmoPivot::Median; ///< Pivot.
     GizmoSnap snap;                        ///< Snapping.
+    std::optional<GizmoRuler> ruler{};     ///< The ruler shown in the Scene viewports, if any.
 };
 
 /// Smallest snap increment of a translation.

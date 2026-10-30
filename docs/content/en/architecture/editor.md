@@ -240,6 +240,11 @@ this interface, so they are tested with a fake host and fail with `unsupported` 
 `ViewportHost::meshBounds()` gives the arranging commands (`transform.align`, `transform.distribute`,
 `transform.drop_to_ground`) the world boxes of the drawn Meshes; their math is GPU-free (`Arrange.hpp`), and
 without a host every entity counts as its position.
+`ViewportHost::requestSnap()` and `snap()` answer `viewport.snap` and the snapping of the gizmo a frame or two
+later: the vertex nearest to a pixel, searched on the CPU in a `VertexSnapGrid` per Mesh (`Snap.hpp`; a
+uniform grid in the Mesh's own space whose cells along the cursor ray are visited slice by slice), or the
+surface under it, from the depth of a small render around the pixel that leaves out the excluded entities and
+their children (`surfaceFromDepth()` rebuilds the normal from neighbouring depths in double precision).
 `illusion::editor_viewport` implements it with `ViewportService`, which the editor process registers with
 `EditorContext::setViewports()`:
 
@@ -302,7 +307,8 @@ The [AI agents manual](../manual/editor/ai-agents.md) describes the result.
   `editor/transform-translate` (one merged `transform.translate` four levels deep, like a gizmo drag) and
   `editor/reference-refresh` (checking an unchanged scene file for the reference index), `editor/batch-step`
   (one step of an `editor.batch` with a `$` reference, undone with the batch) and `editor/undo-own-check`
-  (checking one later step before an undo of one's own steps).
+  (checking one later step before an undo of one's own steps), and `snap/vertex-search` (the vertex snap
+  search over a 100,000-vertex Mesh, about 11 µs).
 - `mcp/translate` measures one MCP `tools/call` through the bridge's server with an immediate provider: parsing,
   finding the tool, writing the result (about 1.6 µs on a desktop; budget 10 µs).
 - `viewport/camera-update` measures one frame of viewport navigation (about 20 ns; budget 200 ns) and

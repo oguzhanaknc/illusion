@@ -772,11 +772,13 @@ void EditorShell::draw(f64 now, f64 deltaSeconds)
             ImGui::SameLine();
         };
         ImGui::SetCursorPosY((ImGui::GetWindowHeight() - ImGui::GetFrameHeight()) * 0.5f);
-        constexpr std::array<std::pair<std::string_view, GizmoTool>, 5> kTools = {
+        constexpr std::array<std::pair<std::string_view, GizmoTool>, 6> kTools = {
             std::pair{"view.tool_select", GizmoTool::Select},
             std::pair{"view.tool_move", GizmoTool::Translate},
-            std::pair{"view.tool_rotate", GizmoTool::Rotate}, std::pair{"view.tool_scale", GizmoTool::Scale},
-            std::pair{"view.tool_universal", GizmoTool::Universal}};
+            std::pair{"view.tool_rotate", GizmoTool::Rotate},
+            std::pair{"view.tool_scale", GizmoTool::Scale},
+            std::pair{"view.tool_universal", GizmoTool::Universal},
+            std::pair{"view.tool_measure", GizmoTool::Measure}};
         for (const auto& [id, tool] : kTools)
         {
             button(id, impl.editor.gizmo().tool == tool);

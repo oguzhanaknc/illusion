@@ -498,6 +498,106 @@ Expected<void, CommandError> checkPixel(const Target& target, f32 x, f32 y)
     return {};
 }
 
+// Waits for the viewport to find a vertex or a surface under a pixel.
+class SnapTask final : public CommandTask<ViewportSnapResult>
+{
+public:
+    SnapTask(ViewportHost& host, u64 ticket) noexcept
+        : m_host(&host)
+        , m_ticket(ticket)
+    {
+    }
+
+    Expected<std::optional<ViewportSnapResult>, CommandError> update(CommandContext& context,
+                                                                     CommandProgress& progress) override
+    {
+        if (context.editor().viewports() != m_host)
+        {
+            return unexpected(CommandError::make(ErrorKind::Unsupported, "the viewports closed"));
+        }
+        std::optional<Expected<std::optional<ViewportSnap>, CommandError>> done = m_host->snap(m_ticket);
+        if (!done)
+        {
+            progress.message = "waiting for the meshes and the GPU";
+            return std::optional<ViewportSnapResult>{};
+        }
+        if (!*done)
+        {
+            return unexpected(std::move(*done).error());
+        }
+        ViewportSnapResult result;
+        if (const std::optional<ViewportSnap>& found = done->value())
+        {
+            result.hit = true;
+            result.kind = found->kind;
+            result.position = found->position;
+            if (found->kind == ViewportSnapTarget::Surface)
+            {
+                result.normal = found->normal;
+                result.rotation = alignToNormal(Quat(1.0f, 0.0f, 0.0f, 0.0f), found->normal);
+            }
+            if (context.editor().world().isAlive(found->entity))
+            {
+                result.entity = context.editor().entities().summary(found->entity);
+            }
+        }
+        return std::optional<ViewportSnapResult>(std::move(result));
+    }
+
+private:
+    ViewportHost* m_host;
+    u64 m_ticket;
+};
+
+Expected<std::unique_ptr<CommandTask<ViewportSnapResult>>, CommandError>
+viewportSnap(CommandContext& context, const ViewportSnapParams& params)
+{
+    Expected<Target, CommandError> target = findViewport(context, params.viewport);
+    if (!target)
+    {
+        return unexpected(std::move(target).error());
+    }
+    if (Expected<void, CommandError> valid = checkEnum(params.to, ViewportSnapTarget::Surface, "/to"); !valid)
+    {
+        return unexpected(std::move(valid).error());
+    }
+    const f32 tolerance = params.tolerance.value_or(kVertexSnapTolerance);
+    if (!(tolerance >= kMinSnapTolerance && tolerance <= kMaxSnapTolerance))
+    {
+        return unexpected(CommandError::invalid("/tolerance", "must be from 1 to 64 pixels"));
+    }
+    if (Expected<void, CommandError> image = requireImage(*target); !image)
+    {
+        return unexpected(std::move(image).error());
+    }
+    if (Expected<void, CommandError> pixel = checkPixel(*target, params.x, params.y); !pixel)
+    {
+        return unexpected(std::move(pixel).error());
+    }
+    std::vector<Entity> exclude;
+    if (params.exclude && !params.exclude->empty())
+    {
+        Expected<std::vector<Entity>, CommandError> resolved = resolveEntityList(context, *params.exclude);
+        if (!resolved)
+        {
+            return unexpected(std::move(resolved).error());
+        }
+        exclude = std::move(resolved).value();
+    }
+    ViewportSnapRequest request;
+    request.pixel = Vec2(params.x, params.y);
+    request.target = params.to.value_or(ViewportSnapTarget::Any);
+    request.tolerance = tolerance;
+    request.exclude = exclude;
+    Expected<u64, CommandError> ticket = target->host->requestSnap(target->info.id, request);
+    if (!ticket)
+    {
+        return unexpected(std::move(ticket).error());
+    }
+    return std::unique_ptr<CommandTask<ViewportSnapResult>>(
+        std::make_unique<SnapTask>(*target->host, *ticket));
+}
+
 // Waits for a viewport readback, then turns it into the command's result.
 template <class R>
 class ReadbackTask final : public CommandTask<R>
@@ -1055,6 +1155,22 @@ void registerViewportCommands(CommandRegistry& registry)
         .flags = {.needsGpu = true},
         .mode = CommandMode::Any,
         .permission = PermissionClass::Edit,
+    });
+    registry.addAsync<&viewportSnap>({
+        .name = "viewport.snap",
+        .title = strings::kCommandViewportSnapTitle,
+        .description = strings::kCommandViewportSnapDescription,
+        .agentSummary = "Asynchronous: finds the point to snap to at a viewport pixel: the mesh vertex that "
+                        "appears nearest within tolerance pixels (to \"vertex\"), the opaque surface under "
+                        "the pixel with its normal (to \"surface\"), or a vertex if one is near and the "
+                        "surface otherwise (\"any\", default). Exclude the entities you are about to move; "
+                        "then place them with transform.set (position, and rotation to align +y to the "
+                        "surface). Example: {\"x\": 640, \"y\": 360, \"to\": \"surface\", "
+                        "\"exclude\": [\"$selection\"]}.",
+        .category = "Viewport",
+        .icon = "my_location",
+        .flags = {.readOnly = true, .idempotent = true, .needsGpu = true},
+        .mode = CommandMode::Any,
     });
     registry.addAsync<&viewportSample>({
         .name = "viewport.sample",

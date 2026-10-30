@@ -1,6 +1,8 @@
 #include "ViewportOverlays.hpp"
 
 #include <illusion/assets/AssetStreamer.hpp>
+#include <illusion/assets/Mesh.hpp>
+#include <illusion/assets/Model.hpp>
 #include <illusion/audio/AudioComponents.hpp>
 #include <illusion/core/JobSystem.hpp>
 #include <illusion/core/Log.hpp>
@@ -9,6 +11,7 @@
 #include <illusion/ecs/Transform.hpp>
 #include <illusion/editor/core/EditorContext.hpp>
 #include <illusion/editor/core/Preferences.hpp>
+#include <illusion/editor/core/Snap.hpp>
 #include <illusion/editor/ui/UiRenderer.hpp>
 #include <illusion/editor/viewport/EditorCamera.hpp>
 #include <illusion/editor/viewport/PickCandidates.hpp>
@@ -27,6 +30,7 @@
 #include <algorithm>
 #include <cmath>
 #include <cstring>
+#include <unordered_map>
 
 namespace illusion::editor::viewport
 {
@@ -49,6 +53,9 @@ constexpr u32 kSecondaryShadowResolution = 1024;
 constexpr usize kClosed = ~usize{0};
 // Readback slots shared by picks, hovers and readbacks.
 constexpr u32 kReadbackSlots = 8;
+// Width and height of the view rendered around a snapped pixel, and its texels.
+constexpr u32 kProbeSize = 8;
+constexpr usize kProbeTexels = usize{kProbeSize} * kProbeSize;
 // Lines the visualisers of one viewport can draw.
 constexpr usize kVisualiserLines = 65536;
 // Width of the picture-in-picture camera view: a quarter of the Scene view, within these bounds.
@@ -95,6 +102,56 @@ bool hasBit(std::span<const u64> bits, u32 index) noexcept
 {
     const usize word = index / 64;
     return word < bits.size() && (bits[word] >> (index % 64) & 1u) != 0;
+}
+
+// @p projection narrowed to the kProbeSize square of pixels around @p pixel of an image of @p size, so that
+// texel kProbeSize / 2 of the narrow view covers the pixel.
+Mat4 probeProjection(const Mat4& projection, UVec2 size, Vec2 pixel) noexcept
+{
+    const f32 probe = static_cast<f32>(kProbeSize);
+    const Vec2 corner = glm::floor(pixel) - Vec2(probe * 0.5f);
+    const Vec2 scale = Vec2(size) / probe;
+    Mat4 narrow(1.0f);
+    narrow[0][0] = scale.x;
+    narrow[1][1] = scale.y;
+    narrow[3][0] = scale.x - 2.0f * corner.x / probe - 1.0f;
+    narrow[3][1] = 1.0f - scale.y + 2.0f * corner.y / probe;
+    return narrow * projection;
+}
+
+// How the gizmo math sees @p view for an image of @p size (parallel projections have no perspective divide).
+GizmoCamera gizmoCameraOf(const RenderView& view, UVec2 size) noexcept
+{
+    GizmoCamera camera;
+    camera.eye = view.position;
+    camera.rotation = glm::normalize(glm::quat_cast(Mat3(glm::inverse(view.view))));
+    camera.projection = view.projection;
+    camera.size = size;
+    camera.orthographic = view.projection[2][3] == 0.0f;
+    return camera;
+}
+
+// The vertex snap grid of every submesh of @p mesh, from the vertices its indices use.
+std::vector<VertexSnapGrid> snapGridsOf(const MeshData& mesh)
+{
+    std::vector<VertexSnapGrid> out;
+    out.reserve(mesh.submeshes.size());
+    std::vector<Vec3> positions;
+    for (const Submesh& submesh : mesh.submeshes)
+    {
+        positions.clear();
+        const usize end =
+            std::min<usize>(usize{submesh.indexOffset} + submesh.indexCount, mesh.indices.size());
+        for (usize i = submesh.indexOffset; i < end; ++i)
+        {
+            if (const u32 index = mesh.indices[i]; index < mesh.vertices.size())
+            {
+                positions.push_back(mesh.vertices[index].position);
+            }
+        }
+        out.emplace_back(positions);
+    }
+    return out;
 }
 
 bool hasVisualisers(const ViewportVisualisers& kinds) noexcept
@@ -205,6 +262,42 @@ struct ViewportService::Impl
         std::optional<Expected<std::optional<ViewportHit>, CommandError>> result;
     };
 
+    // A CPU copy of a mesh for vertex snapping: the vertex grid of each of its submeshes.
+    struct SnapMesh
+    {
+        enum class Status : u8
+        {
+            Loading,
+            Ready,
+            Failed,
+        };
+        Status status = Status::Loading;
+        AssetHandle<ModelData> model; // until loaded
+        AssetFragment fragment = AssetFragment::None;
+        u32 index = 0;
+        std::string node;
+        std::vector<VertexSnapGrid> submeshes;
+    };
+
+    struct Snap
+    {
+        u64 ticket = 0; // 0: a free slot
+        usize viewport = 0;
+        Vec2 pixel{0.0f};
+        ViewportSnapTarget target = ViewportSnapTarget::Any;
+        f32 tolerance = 0.0f;
+        std::vector<Entity> exclude;
+        bool searched = false; // the vertices were searched
+        u64 depthReadback = 0; // of the probe view (0: not rendered yet)
+        u64 idsReadback = 0;
+        bool depthRead = false;
+        bool idsRead = false;
+        Mat4 probeViewProjection{1.0f};
+        std::array<f32, kProbeTexels> depth{};
+        std::array<EntityIdTexel, kProbeTexels> ids{};
+        std::optional<Expected<std::optional<ViewportSnap>, CommandError>> result;
+    };
+
     struct Retired
     {
         nvrhi::TextureHandle texture;
@@ -237,7 +330,14 @@ struct ViewportService::Impl
     std::vector<Viewport> viewports;
     std::vector<Pick> picks;
     std::vector<Readback> reads;
+    std::vector<Snap> snaps;
     std::vector<Retired> retired;
+    // Vertex snapping: CPU copies of the meshes by asset id, loaded on first use.
+    std::unordered_map<u64, SnapMesh> snapMeshes;
+    // Surface snapping: a small view around the pixel without the moved entities.
+    std::unique_ptr<SceneRenderer> probeRenderer;
+    nvrhi::TextureHandle probeColor;
+    std::vector<u64> discarded; // probe readbacks of a retried submission, read only to free their slots
     // The picture-in-picture view through the selected Camera, shared by the Scene viewports.
     std::unique_ptr<SceneRenderer> previewRenderer;
     nvrhi::TextureHandle previewColor;
@@ -258,6 +358,8 @@ struct ViewportService::Impl
     std::vector<Entity> candidates;
     std::vector<std::pair<f32, Entity>> behind;
     std::vector<u8> colorScratch;
+    std::vector<u64> snapBits;
+    std::vector<Entity> snapStack;
 
     Viewport* find(std::string_view id) noexcept
     {
@@ -392,6 +494,287 @@ struct ViewportService::Impl
             return viewport.kind == ViewportKind::Game;
         });
         return game != viewports.end() ? aspectOf(game->resize.current()) : 16.0f / 9.0f;
+    }
+
+    // The CPU copy of the mesh @p id for vertex snapping, loading it on first use.
+    SnapMesh& snapMesh(AssetId id)
+    {
+        const auto [found, inserted] = snapMeshes.try_emplace(id.value);
+        SnapMesh& entry = found->second;
+        if (inserted)
+        {
+            const std::optional<AssetPathParts> parts = splitAssetPath(AssetPathTable::instance().path(id));
+            if (!parts || parts->fragment == AssetFragment::Material)
+            {
+                entry.status = SnapMesh::Status::Failed;
+            }
+            else if (isOnBuiltinMount(parts->file))
+            {
+                const std::optional<MeshData> data =
+                    parts->fragment == AssetFragment::None ? makeBuiltinMesh(parts->file) : std::nullopt;
+                entry.status = data ? SnapMesh::Status::Ready : SnapMesh::Status::Failed;
+                if (data)
+                {
+                    entry.submeshes = snapGridsOf(*data);
+                }
+            }
+            else
+            {
+                entry.model = streamer.loadModel(parts->file);
+                entry.fragment = parts->fragment;
+                entry.index = parts->index;
+                entry.node = std::string(parts->node);
+            }
+        }
+        if (entry.status != SnapMesh::Status::Loading || entry.model.state() == AssetState::Loading)
+        {
+            return entry;
+        }
+        const ModelData* model = entry.model.get();
+        i64 mesh = entry.fragment == AssetFragment::Mesh ? i64{entry.index} : 0;
+        if (model != nullptr && entry.fragment == AssetFragment::Node)
+        {
+            mesh = -1;
+            for (const ModelNode& node : model->nodes)
+            {
+                if (node.name == entry.node)
+                {
+                    mesh = node.mesh;
+                    break;
+                }
+            }
+        }
+        if (model != nullptr && mesh >= 0 && static_cast<usize>(mesh) < model->meshes.size())
+        {
+            entry.submeshes = snapGridsOf(model->meshes[static_cast<usize>(mesh)]);
+            entry.status = SnapMesh::Status::Ready;
+        }
+        else
+        {
+            entry.status = SnapMesh::Status::Failed;
+        }
+        entry.model = {};
+        return entry;
+    }
+
+    // Bits of the entities a snap leaves out: the hidden ones, and @p exclude with their descendants.
+    void buildSnapBits(std::span<const Entity> exclude)
+    {
+        snapBits.assign(hiddenBits.begin(), hiddenBits.end());
+        World& world = editor.world();
+        snapStack.assign(exclude.begin(), exclude.end());
+        while (!snapStack.empty())
+        {
+            const Entity entity = snapStack.back();
+            snapStack.pop_back();
+            if (!world.isAlive(entity) || hasBit(snapBits, entity.index))
+            {
+                continue;
+            }
+            setBit(snapBits, entity.index);
+            for (const Entity child : hierarchy.children(entity))
+            {
+                snapStack.push_back(child);
+            }
+        }
+    }
+
+    // Searches the vertices of the visible meshes for @p snap seen through @p view; false while a mesh loads.
+    bool searchVertices(Snap& snap, const RenderView& view, UVec2 size)
+    {
+        ILL_PROFILE_SCOPE();
+        const VertexSnapQuery query = vertexSnapQuery(gizmoCameraOf(view, size), snap.pixel, snap.tolerance);
+        std::optional<VertexSnapHit> best;
+        Entity owner{};
+        bool loadingMesh = false;
+        editor.world().query<Transform, RenderMesh, MeshRenderer>().without<Inactive>().each(
+            [&](Entity entity, const Transform& transform, const RenderMesh& mesh,
+                const MeshRenderer& renderer) {
+                if ((mesh.flags & RenderMesh::kVisible) == 0 || mesh.mesh.index == 0 ||
+                    hasBit(snapBits, entity.index) || renderer.mesh.id.value == 0)
+                {
+                    return;
+                }
+                const SnapMesh& entry = snapMesh(renderer.mesh.id);
+                if (entry.status == SnapMesh::Status::Loading)
+                {
+                    loadingMesh = true;
+                    return;
+                }
+                if (renderer.submesh >= entry.submeshes.size())
+                {
+                    return;
+                }
+                const std::optional<VertexSnapHit> hit =
+                    entry.submeshes[renderer.submesh].nearest(query, transform.matrix());
+                if (hit && (!best || hit->closerThan(*best)))
+                {
+                    best = hit;
+                    owner = entity;
+                }
+            });
+        if (loadingMesh)
+        {
+            return false;
+        }
+        snap.searched = true;
+        if (best)
+        {
+            snap.result.emplace(std::optional<ViewportSnap>(
+                ViewportSnap{ViewportSnapTarget::Vertex, best->position, Vec3(0.0f), owner}));
+        }
+        else if (snap.target == ViewportSnapTarget::Vertex)
+        {
+            snap.result.emplace(std::optional<ViewportSnap>{});
+        }
+        return true;
+    }
+
+    // Renders the probe view of @p snap (without the entities of snapBits) and copies its depth and ids.
+    void submitProbe(Snap& snap, const RenderView& view, UVec2 size)
+    {
+        ILL_PROFILE_SCOPE();
+        if (!probeRenderer)
+        {
+            SceneRendererDesc desc;
+            desc.colorFormat = kColorFormat;
+            desc.entityIds = true;
+            desc.occlusionCulling = false;
+            desc.shadows.enabled = false;
+            desc.post.ambientOcclusion.enabled = false;
+            desc.post.bloom.enabled = false;
+            desc.post.temporalAntiAliasing.enabled = false;
+            probeRenderer = SceneRenderer::create(device, resources, desc);
+            nvrhi::TextureDesc color;
+            color.width = kProbeSize;
+            color.height = kProbeSize;
+            color.format = kColorFormat;
+            color.isRenderTarget = true;
+            color.debugName = "Snap probe";
+            color.setClearValue(nvrhi::Color(0.0f));
+            color.enableAutomaticStateTracking(nvrhi::ResourceStates::ShaderResource);
+            probeColor = device.device()->createTexture(color);
+            if (!probeRenderer || !probeColor)
+            {
+                ILL_LOG_ERROR("editor", "cannot create the snap probe renderer");
+                probeRenderer.reset();
+                snap.result.emplace(
+                    unexpected(CommandError::make(ErrorKind::Internal, "cannot render the surface probe")));
+                return;
+            }
+        }
+        RenderView probe = view;
+        probe.projection = probeProjection(view.projection, size, snap.pixel);
+        probe.hiddenEntities = snapBits;
+        probeRenderer->resetTemporalHistory();
+        commands->open();
+        probeRenderer->render(commands, probeColor, editor.world(), probe, &jobs);
+        commands->close();
+        device.device()->executeCommandList(commands);
+        const RenderViewTargets& targets = probeRenderer->viewTargets();
+        const std::optional<u64> ids = readbacks->request(targets.ids);
+        const std::optional<u64> depth = ids ? readbacks->request(targets.depth) : std::nullopt;
+        if (!ids || !depth)
+        {
+            // A full ring: render again next frame.
+            if (ids)
+            {
+                discarded.push_back(*ids);
+            }
+            return;
+        }
+        snap.idsReadback = *ids;
+        snap.depthReadback = *depth;
+        snap.probeViewProjection = targets.unjitteredViewProjection;
+    }
+
+    // Advances the snaps: vertices once their meshes have loaded, then the probe once the assets have.
+    void updateSnaps(bool loading)
+    {
+        for (Snap& snap : snaps)
+        {
+            if (snap.ticket == 0 || snap.result || snap.depthReadback != 0)
+            {
+                continue;
+            }
+            Viewport& viewport = viewports[snap.viewport];
+            const UVec2 size = viewport.colorSize;
+            std::optional<RenderView> view =
+                size.x != 0 ? viewOf(viewport, aspectOf(size), true) : std::optional<RenderView>{};
+            if (!view)
+            {
+                snap.result.emplace(unexpected(CommandError::make(
+                    ErrorKind::PreconditionFailed,
+                    size.x == 0 ? "the viewport has no image yet" : "the scene has no active Camera")));
+                continue;
+            }
+            buildSnapBits(snap.exclude);
+            if (!snap.searched && snap.target != ViewportSnapTarget::Surface &&
+                (!searchVertices(snap, *view, size) || snap.result))
+            {
+                continue;
+            }
+            if (!loading)
+            {
+                submitProbe(snap, *view, size);
+            }
+        }
+    }
+
+    // Reads the probes whose copies have finished and finds their surfaces.
+    void readSnaps(bool block)
+    {
+        std::array<std::byte, kProbeTexels * sizeof(EntityIdTexel)> scratch{};
+        std::erase_if(discarded, [&](u64 ticket) {
+            return readbacks->read(ticket, scratch, block) != ReadbackStatus::Pending;
+        });
+        for (Snap& snap : snaps)
+        {
+            if (snap.ticket == 0 || snap.result || snap.depthReadback == 0)
+            {
+                continue;
+            }
+            const auto read = [&](u64 ticket, std::span<std::byte> out, bool& done) {
+                if (!done)
+                {
+                    const ReadbackStatus status = readbacks->read(ticket, out, block);
+                    if (status == ReadbackStatus::Invalid)
+                    {
+                        snap.result.emplace(unexpected(
+                            CommandError::make(ErrorKind::Internal, "reading the surface probe failed")));
+                    }
+                    done = status == ReadbackStatus::Ready;
+                }
+                return done;
+            };
+            const bool depthDone =
+                read(snap.depthReadback, std::as_writable_bytes(std::span(snap.depth)), snap.depthRead);
+            const bool idsDone =
+                read(snap.idsReadback, std::as_writable_bytes(std::span(snap.ids)), snap.idsRead);
+            if (snap.result || !depthDone || !idsDone)
+            {
+                continue;
+            }
+            std::array<Entity, kProbeTexels> entities{};
+            for (usize i = 0; i < kProbeTexels; ++i)
+            {
+                if (snap.ids[i].index != ~0u)
+                {
+                    entities[i] = Entity{snap.ids[i].index, snap.ids[i].generation};
+                }
+            }
+            DepthPatch patch;
+            patch.viewProjection = snap.probeViewProjection;
+            patch.size = UVec2(kProbeSize);
+            patch.extent = UVec2(kProbeSize);
+            patch.depth = snap.depth;
+            patch.entities = entities;
+            const std::optional<SurfaceHit> hit = surfaceFromDepth(patch, UVec2(kProbeSize / 2));
+            snap.result.emplace(
+                hit ? std::optional<ViewportSnap>(
+                          ViewportSnap{ViewportSnapTarget::Surface, hit->position, hit->normal, hit->entity})
+                    : std::optional<ViewportSnap>{});
+        }
     }
 
     // Renders the picture-in-picture view through the selected Camera at previewWidth.
@@ -1017,9 +1400,11 @@ void ViewportService::render(bool uiShown)
         impl.renderPreview();
     }
     impl.previewWidth = 0;
+    impl.updateSnaps(loading);
     impl.readPicks(false);
     impl.readReads(false);
     impl.readHovers(false);
+    impl.readSnaps(false);
     for (Impl::Retired& retired : impl.retired)
     {
         ++retired.frames;
@@ -1048,6 +1433,7 @@ void ViewportService::waitIdle()
     impl.readPicks(true);
     impl.readReads(true);
     impl.readHovers(true);
+    impl.readSnaps(true);
 }
 
 const ViewportServiceStats& ViewportService::stats() const noexcept
@@ -1331,6 +1717,7 @@ Expected<void, CommandError> ViewportService::closeViewport(std::string_view id)
     impl.readPicks(true);
     impl.readReads(true);
     impl.readHovers(true);
+    impl.readSnaps(true);
     if (viewport->color)
     {
         impl.retired.push_back(Impl::Retired{viewport->color, viewport->texture, 0});
@@ -1359,6 +1746,17 @@ Expected<void, CommandError> ViewportService::closeViewport(std::string_view id)
         else if (read.viewport != kClosed && read.viewport > index)
         {
             --read.viewport;
+        }
+    }
+    for (Impl::Snap& snap : impl.snaps)
+    {
+        if (snap.ticket != 0 && snap.viewport == index && !snap.result)
+        {
+            closed(snap);
+        }
+        else if (snap.viewport != kClosed && snap.viewport > index)
+        {
+            --snap.viewport;
         }
     }
     impl.viewports.erase(impl.viewports.begin() + static_cast<std::ptrdiff_t>(index));
@@ -1475,6 +1873,60 @@ void ViewportService::meshBounds(std::vector<ViewportBounds>& out)
                 out.push_back(ViewportBounds{entity, bounds});
             }
         });
+}
+
+Expected<u64, CommandError> ViewportService::requestSnap(std::string_view id,
+                                                         const ViewportSnapRequest& request)
+{
+    Impl& impl = *m_impl;
+    Impl::Viewport* viewport = impl.find(id);
+    if (viewport == nullptr)
+    {
+        return unexpected(Impl::notFound(id));
+    }
+    // Answered snaps leave their slots free, so that a drag asking every frame does not allocate.
+    auto slot = std::find_if(impl.snaps.begin(), impl.snaps.end(),
+                             [](const Impl::Snap& snap) { return snap.ticket == 0; });
+    if (slot == impl.snaps.end())
+    {
+        impl.snaps.emplace_back();
+        slot = impl.snaps.end() - 1;
+    }
+    Impl::Snap& snap = *slot;
+    snap.ticket = impl.nextTicket++;
+    snap.viewport = static_cast<usize>(viewport - impl.viewports.data());
+    snap.pixel = request.pixel;
+    snap.target = request.target;
+    snap.tolerance = request.tolerance;
+    snap.exclude.assign(request.exclude.begin(), request.exclude.end());
+    snap.searched = false;
+    snap.depthReadback = 0;
+    snap.idsReadback = 0;
+    snap.depthRead = false;
+    snap.idsRead = false;
+    snap.result.reset();
+    return snap.ticket;
+}
+
+std::optional<Expected<std::optional<ViewportSnap>, CommandError>> ViewportService::snap(u64 ticket)
+{
+    Impl& impl = *m_impl;
+    const auto found = std::find_if(impl.snaps.begin(), impl.snaps.end(), [&](const Impl::Snap& snap) {
+        return ticket != 0 && snap.ticket == ticket;
+    });
+    if (found == impl.snaps.end())
+    {
+        return Expected<std::optional<ViewportSnap>, CommandError>(
+            unexpected(CommandError::make(ErrorKind::NotFound, "unknown snap")));
+    }
+    if (!found->result)
+    {
+        return std::nullopt;
+    }
+    std::optional<Expected<std::optional<ViewportSnap>, CommandError>> result = std::move(found->result);
+    found->result.reset();
+    found->ticket = 0;
+    return result;
 }
 
 } // namespace illusion::editor::viewport

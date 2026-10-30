@@ -102,6 +102,10 @@ public:
     [[nodiscard]] Expected<ViewportRenderStats, CommandError> renderStats(std::string_view id) const override;
     [[nodiscard]] ViewportGpuInfo gpuInfo() const override;
     void meshBounds(std::vector<ViewportBounds>& out) override;
+    [[nodiscard]] Expected<u64, CommandError> requestSnap(std::string_view id,
+                                                          const ViewportSnapRequest& request) override;
+    [[nodiscard]] std::optional<Expected<std::optional<ViewportSnap>, CommandError>>
+    snap(u64 ticket) override;
 
     /// The service's state, defined in its sources.
     struct Impl;
