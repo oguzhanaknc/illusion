@@ -47,6 +47,7 @@ records rather than user documentation.
 | [0038](https://github.com/oguzhanaknc/illusion/blob/main/docs/adr/0038-agent-acceptance-transcripts.md) | Agent acceptance tests from replayable transcripts |
 | [0039](https://github.com/oguzhanaknc/illusion/blob/main/docs/adr/0039-mcp-bridge.md) | A dual-era MCP bridge with tools generated one to one from editor commands |
 | [0040](https://github.com/oguzhanaknc/illusion/blob/main/docs/adr/0040-renderer-extension-points.md) | Expose renderer extension points for editors and tools |
+| [0041](https://github.com/oguzhanaknc/illusion/blob/main/docs/adr/0041-module-api-v3.md) | Module API v3: start and stop per World, a multi-world host and host service interfaces |
 
 To propose a new decision, copy `docs/adr/0000-template.md` and follow the
 [contributing guide](../contributing.md#architecture-decision-records).

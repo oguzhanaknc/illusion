@@ -2,12 +2,14 @@
 
 /// @file
 /// Loads game and plugin modules, checks their versions and dependencies, runs them and hot-reloads shared
-/// modules when their files change (see illusion/core/Module.hpp and
-/// docs/adr/0027-module-system-and-hot-reload.md).
+/// modules when their files change, on any number of Worlds (see illusion/core/Module.hpp,
+/// docs/adr/0027-module-system-and-hot-reload.md and docs/adr/0041-module-api-v3.md).
 ///
 /// @code
-/// illusion::ModuleHost modules(world, jobs);
-/// modules.provide(physics); // modules reach it with context.service<illusion::PhysicsWorld>()
+/// illusion::ModuleHost modules(jobs);
+/// illusion::ServiceSet services;
+/// services.provide(settings); // modules reach it with context.service<GameSettings>()
+/// modules.attachWorld(world, illusion::WorldRole::Simulation, std::move(services));
 /// if (const auto error = modules.load("build/game/libtetris.so"))
 /// {
 ///     ILL_LOG_ERROR("Game", "{}", *error);
@@ -17,6 +19,7 @@
 ///     modules.reloadChanged(); // editor and development builds
 ///     modules.update(frameSeconds);
 /// }
+/// modules.detachWorld(world);
 /// @endcode
 
 #include <illusion/core/Base.hpp>
@@ -62,30 +65,52 @@ struct ModuleHostDesc
     std::filesystem::path shadowDirectory;
 };
 
-/// Loads and runs modules. Not thread-safe: use it from one thread, between frames (no Job may use the
-/// World or component types of a module while it loads, reloads or unloads). The World and the Job
-/// System must outlive the host.
+/// Loads and runs modules on the Worlds attached to it. Not thread-safe: use it from one thread, between
+/// frames (no Job may use a World or the component types of a module while it loads, reloads or unloads).
+/// The Job System must outlive the host, and every attached World must stay alive until it is detached.
 class ModuleHost : NonCopyable
 {
 public:
-    /// Creates a host whose modules work on @p world and @p jobs. Reflects the core Components so that the
-    /// host owns them; reflect the Components of the other engine libraries the game uses
+    /// Creates a host whose modules use @p jobs, with no World attached. Reflects the core Components so
+    /// that the host owns them; reflect the Components of the other engine libraries the game uses
     /// (reflectPhysicsComponents(), reflectAudioComponents(), ...) before loading modules as well.
-    ModuleHost(World& world, JobSystem& jobs, ModuleHostDesc desc = {});
+    explicit ModuleHost(JobSystem& jobs, ModuleHostDesc desc = {});
 
-    /// Unloads every module, the last loaded first.
+    /// Unloads every module, the last loaded first: each stops on every Simulation World, then its
+    /// Components are removed from every World still attached.
     ~ModuleHost();
 
-    /// Makes @p service available to modules as `context.service<T>()`. It must outlive the host.
+    /// Makes @p service available to modules as `context.service<T>()` on every World, after the
+    /// services of the World itself. It must outlive the host.
     template <class T>
     void provide(T& service)
     {
-        provide(typeHash<T>(), &service);
+        hostServices().provide(service);
     }
 
+    /// Attaches @p world in @p role. Modules find @p services first in `context.service<T>()` for this
+    /// World. A Simulation World starts every loaded module, in load order. @p world must not be attached
+    /// already.
+    void attachWorld(World& world, WorldRole role, ServiceSet services = {});
+
+    /// Detaches @p world: on a Simulation World every module stops first, the last loaded first. Its
+    /// Components stay; a World that outlives detaching must not keep Components of a module that unloads
+    /// later. Returns false if @p world is not attached.
+    bool detachWorld(World& world);
+
+    /// True if @p world is attached.
+    [[nodiscard]] bool isAttached(const World& world) const noexcept;
+
+    /// The role @p world is attached in (@p world must be attached).
+    [[nodiscard]] WorldRole roleOf(const World& world) const noexcept;
+
+    /// Number of attached Worlds.
+    [[nodiscard]] u32 worldCount() const noexcept;
+
     /// Loads the shared module at @p library: copies it to the shadow directory, opens it, checks its
-    /// API, engine version, build settings, name and dependencies, installs the host's services and calls
-    /// its load(). Returns an error message on failure (and leaves nothing loaded).
+    /// API, engine version, build settings, name and dependencies, installs the host's services, calls
+    /// its load() and then its start() on every Simulation World. Returns an error message on failure (and
+    /// leaves nothing loaded).
     [[nodiscard]] std::optional<std::string> load(const std::filesystem::path& library);
 
     /// Adds a static module (its ModuleApi from ILL_MODULE() in a static build) with the same checks.
@@ -93,7 +118,8 @@ public:
 
     /// Hot-reloads the shared module @p name from its library file. The old version unloads, the new one
     /// loads and takes over the module's component types; Components of types the new version no longer
-    /// registers are removed from the World. If the new version cannot load, the old one keeps running and
+    /// registers are removed from every attached World. start() and stop() are not called: the running
+    /// sessions continue with the new code. If the new version cannot load, the old one keeps running and
     /// the error is returned.
     [[nodiscard]] std::optional<std::string> reload(std::string_view name);
 
@@ -102,11 +128,17 @@ public:
     /// the number of modules reloaded.
     u32 reloadChanged();
 
-    /// Unloads @p name. Returns false if it is not loaded or another module depends on it.
+    /// Unloads @p name: stops it on every Simulation World, calls its unload() and removes the Components
+    /// of its types from every attached World. Returns false if it is not loaded or another module depends
+    /// on it.
     bool unload(std::string_view name);
 
-    /// Calls update() of every module, in load order (dependencies first).
+    /// Calls update() of every module on every Simulation World: World by World in attach order, modules
+    /// in load order (dependencies first).
     void update(f64 deltaSeconds);
+
+    /// Calls update() of every module on @p world only, which must be attached as a Simulation World.
+    void update(World& world, f64 deltaSeconds);
 
     /// The loaded module @p name, or nullptr.
     [[nodiscard]] const ModuleInfo* find(std::string_view name) const noexcept;
@@ -118,7 +150,7 @@ public:
     [[nodiscard]] const ModuleInfo& module(u32 index) const noexcept;
 
 private:
-    void provide(u64 type, void* service);
+    [[nodiscard]] ServiceSet& hostServices() noexcept;
 
     struct Impl;
     std::unique_ptr<Impl> m_impl;

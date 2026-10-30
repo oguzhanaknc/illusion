@@ -1,6 +1,6 @@
 # 0027. Game modules: a C entry point, service injection and hot reload that hands Component types over
 
-- Status: Accepted
+- Status: Partially superseded by [0041](0041-module-api-v3.md) (one World per host, `LINK` of engine libraries into shared modules)
 - Date: 2026-10-17
 
 ## Context

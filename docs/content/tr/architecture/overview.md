@@ -53,7 +53,9 @@ bir paylaşımlı kütüphanedir. Modül yüklendiğinde `ModuleHost` kendi serv
 böylece iki taraf da tek bir Logger ve tek bir Component registry paylaşır. Component tipleri tam
 nitelikli adlarının hash'i ile tanımlanır; bu yüzden bir Component her iki tarafta da aynı id'yi alır.
 Registry her tipin hangi modülün kodunu kullandığını kaydeder; böylece bir yeniden yükleme tipi yeni koda
-devredebilir (ADR 0027).
+devredebilir (ADR 0027). İki kez bulunabilen tek kütüphane core'dur: shared bir modül diğer engine
+kütüphanelerinin yalnızca header'larını linkler (`USES`) ve kodlarını host üzerinden çağırır; host da
+modülleri kendisine eklenmiş her World üzerinde çalıştırır (ADR 0041).
 
 ## Depo yapısı
 

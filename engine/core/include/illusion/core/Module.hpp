@@ -5,14 +5,19 @@
 ///
 /// A module describes itself with a ModuleApi and exports it with ILL_MODULE(). The same module source is
 /// built as a shared library that a ModuleHost loads and hot-reloads (editor, development) or linked
-/// statically into a shipped game; see illusion_add_module() in cmake/IllusionModules.cmake and
-/// docs/adr/0027-module-system-and-hot-reload.md.
+/// statically into a shipped game; see illusion_add_module() in cmake/IllusionModules.cmake,
+/// docs/adr/0027-module-system-and-hot-reload.md and docs/adr/0041-module-api-v3.md.
 ///
 /// @code
-/// bool loadGame(illusion::ModuleContext& context)
+/// bool loadGame(illusion::ModuleContext&)
 /// {
 ///     illusion::reflect<Piece>("tetris.Piece").field("cell", &Piece::cell);
 ///     return true;
+/// }
+///
+/// void startGame(illusion::ModuleContext& context)
+/// {
+///     context.world().create(Piece{});
 /// }
 ///
 /// void updateGame(illusion::ModuleContext& context, illusion::f64 deltaSeconds)
@@ -20,8 +25,8 @@
 ///     context.world().query<Piece>().each([&](Piece& piece) { piece.fall += deltaSeconds; });
 /// }
 ///
-/// constexpr illusion::ModuleApi kTetris = illusion::makeModuleApi("tetris", "1.2.0", &loadGame, nullptr,
-///                                                                   &updateGame);
+/// constexpr illusion::ModuleApi kTetris = illusion::makeModuleApi(
+///     "tetris", "1.2.0", {.load = &loadGame, .start = &startGame, .update = &updateGame});
 /// ILL_MODULE(tetris, kTetris)
 /// @endcode
 ///
@@ -48,9 +53,68 @@ class JobSystem;
 class Logger;
 class World;
 
-/// Layout version of ModuleApi, ModuleServices and ModuleContext. A host only loads modules built with the
-/// same value.
-inline constexpr u32 kModuleApiVersion = 2;
+/// Layout version of ModuleApi, ModuleServices, ModuleContext and the host service interfaces. A host
+/// only loads modules built with the same value. Version 3 added start() and stop() and moved World work
+/// out of load() (ADR 0041).
+inline constexpr u32 kModuleApiVersion = 3;
+
+/// What a World attached to a ModuleHost is for.
+enum class WorldRole : u8
+{
+    Edit,       ///< The World an editor edits. Modules never start or update on it.
+    Simulation, ///< A World the game runs in: modules start(), update() and stop() on it.
+    Preview,    ///< A World that shows assets (prefabs, scenes) without running them.
+};
+
+/// Services keyed by type: what ModuleContext::service() finds. Holds pointers only; the services must
+/// outlive every host that uses the set.
+class ServiceSet
+{
+public:
+    /// One registered service.
+    struct Entry
+    {
+        u64 type = 0;           ///< typeHash<T>() of the service type.
+        void* object = nullptr; ///< The service.
+    };
+
+    /// Makes @p service available as find<T>(), replacing an earlier service of the same type.
+    template <class T>
+    void provide(T& service)
+    {
+        constexpr u64 type = typeHash<T>();
+        for (Entry& entry : m_entries)
+        {
+            if (entry.type == type)
+            {
+                entry.object = &service;
+                return;
+            }
+        }
+        m_entries.push_back(Entry{type, &service});
+    }
+
+    /// The service of type @p T, or nullptr.
+    template <class T>
+    [[nodiscard]] T* find() const noexcept
+    {
+        constexpr u64 type = typeHash<T>();
+        for (const Entry& entry : m_entries)
+        {
+            if (entry.type == type)
+            {
+                return static_cast<T*>(entry.object);
+            }
+        }
+        return nullptr;
+    }
+
+    /// Number of services.
+    [[nodiscard]] usize size() const noexcept { return m_entries.size(); }
+
+private:
+    std::vector<Entry> m_entries;
+};
 
 /// A module that must be loaded before this one.
 struct ModuleDependency
@@ -90,59 +154,85 @@ struct ModuleApi
     /// Installs the host's services into the module's copy of the engine. Set by ILL_MODULE().
     void (*installServices)(const ModuleServices& services) noexcept = nullptr;
 
-    /// Called after loading: register and reflect component types, read the World. Returning false
-    /// unloads the module again. Required.
+    /// Called after loading and after each hot reload: register and reflect Component types, subscribe
+    /// handlers. Sees no World (use start()). Returning false unloads the module again. Required.
     bool (*load)(ModuleContext& context) = nullptr;
 
-    /// Called before unloading: release everything that points into the module (event handlers, jobs).
-    /// Optional.
+    /// Called before unloading and before each hot reload: release everything that points into the
+    /// module (event handlers, jobs). Sees no World. Optional.
     void (*unload)(ModuleContext& context) = nullptr;
 
-    /// Called by ModuleHost::update() once per frame. Optional.
+    /// Called once for each Simulation World, when the World is attached or the module loads, whichever
+    /// comes last: spawn the game's entities. Not called again by a hot reload. Optional.
+    void (*start)(ModuleContext& context) = nullptr;
+
+    /// Called once for each Simulation World that start() ran on, before the World is detached or the
+    /// module unloads. Not called by a hot reload. Optional.
+    void (*stop)(ModuleContext& context) = nullptr;
+
+    /// Called by ModuleHost::update() once per Simulation World. Optional.
     void (*update)(ModuleContext& context, f64 deltaSeconds) = nullptr;
+};
+
+/// The functions of a module, for makeModuleApi(). @ref load is required; the others may be null.
+struct ModuleCallbacks
+{
+    bool (*load)(ModuleContext&) = nullptr;        ///< See ModuleApi::load.
+    void (*unload)(ModuleContext&) = nullptr;      ///< See ModuleApi::unload.
+    void (*start)(ModuleContext&) = nullptr;       ///< See ModuleApi::start.
+    void (*stop)(ModuleContext&) = nullptr;        ///< See ModuleApi::stop.
+    void (*update)(ModuleContext&, f64) = nullptr; ///< See ModuleApi::update.
 };
 
 /// What a module sees of its host. Owned by the ModuleHost; valid during the call that receives it.
 class ModuleContext
 {
 public:
-    /// One registered service.
-    struct Service
-    {
-        u64 type = 0;           ///< typeHash<T>() of the service type.
-        void* object = nullptr; ///< The service.
-    };
-
-    /// Creates a context (used by ModuleHost).
-    ModuleContext(World& world, JobSystem& jobs, const std::vector<Service>& services, std::string_view name,
-                  bool reloading) noexcept
-        : m_world(&world)
+    /// Creates a context (used by ModuleHost). @p world and @p worldServices are null during load() and
+    /// unload().
+    ModuleContext(World* world, WorldRole role, JobSystem& jobs, const ServiceSet* worldServices,
+                  const ServiceSet& hostServices, std::string_view name, bool reloading) noexcept
+        : m_world(world)
         , m_jobs(&jobs)
-        , m_services(&services)
+        , m_worldServices(worldServices)
+        , m_hostServices(&hostServices)
         , m_name(name)
+        , m_role(role)
         , m_reloading(reloading)
     {
     }
 
-    /// The World the host simulates. Keep game state in its Components: it survives hot reloads.
-    [[nodiscard]] World& world() const noexcept { return *m_world; }
+    /// The World this start(), stop() or update() call is for. Keep game state in its Components: it
+    /// survives hot reloads. Asserts during load() and unload(), which see no World.
+    [[nodiscard]] World& world() const
+    {
+        ILL_ASSERT(m_world != nullptr, "module '{}' has no World during load() and unload(); use start()",
+                   m_name);
+        return *m_world;
+    }
 
-    /// The host's Job System. Jobs a module submits must finish before its update() returns.
+    /// True during start(), stop() and update(), when world() is valid.
+    [[nodiscard]] bool hasWorld() const noexcept { return m_world != nullptr; }
+
+    /// The role of world() (Simulation for every call that has a World today).
+    [[nodiscard]] WorldRole worldRole() const noexcept { return m_role; }
+
+    /// The host's Job System. Jobs a module submits must finish before the call that submits them returns.
     [[nodiscard]] JobSystem& jobs() const noexcept { return *m_jobs; }
 
-    /// The host's service of type @p T (see ModuleHost::provide()), or nullptr.
+    /// The service of type @p T: the one world() was attached with, else the host's (ModuleHost::provide()),
+    /// else nullptr.
     template <class T>
     [[nodiscard]] T* service() const noexcept
     {
-        constexpr u64 type = typeHash<T>();
-        for (const Service& service : *m_services)
+        if (m_worldServices != nullptr)
         {
-            if (service.type == type)
+            if (T* service = m_worldServices->find<T>())
             {
-                return static_cast<T*>(service.object);
+                return service;
             }
         }
-        return nullptr;
+        return m_hostServices->find<T>();
     }
 
     /// Name of the module.
@@ -154,8 +244,10 @@ public:
 private:
     World* m_world;
     JobSystem* m_jobs;
-    const std::vector<Service>* m_services;
+    const ServiceSet* m_worldServices;
+    const ServiceSet* m_hostServices;
     std::string_view m_name;
+    WorldRole m_role;
     bool m_reloading;
 };
 
@@ -203,11 +295,9 @@ void installModuleServices(const ModuleServices& services) noexcept;
 
 } // namespace detail
 
-/// Builds a ModuleApi for the engine this code is compiled against. @p load is required; @p unload and
-/// @p update may be null.
+/// Builds a ModuleApi for the engine this code is compiled against. `callbacks.load` is required.
 [[nodiscard]] constexpr ModuleApi makeModuleApi(const char* name, const char* version,
-                                                bool (*load)(ModuleContext&), void (*unload)(ModuleContext&),
-                                                void (*update)(ModuleContext&, f64),
+                                                const ModuleCallbacks& callbacks,
                                                 std::span<const ModuleDependency> dependencies = {}) noexcept
 {
     ModuleApi api;
@@ -219,10 +309,23 @@ void installModuleServices(const ModuleServices& services) noexcept;
     api.buildKey = detail::moduleBuildKey();
     api.dependencies = dependencies;
     api.installServices = &detail::installModuleServices;
-    api.load = load;
-    api.unload = unload;
-    api.update = update;
+    api.load = callbacks.load;
+    api.unload = callbacks.unload;
+    api.start = callbacks.start;
+    api.stop = callbacks.stop;
+    api.update = callbacks.update;
     return api;
+}
+
+/// Builds a ModuleApi without start() and stop(). @p load is required; @p unload and @p update may be
+/// null.
+[[nodiscard]] constexpr ModuleApi makeModuleApi(const char* name, const char* version,
+                                                bool (*load)(ModuleContext&), void (*unload)(ModuleContext&),
+                                                void (*update)(ModuleContext&, f64),
+                                                std::span<const ModuleDependency> dependencies = {}) noexcept
+{
+    return makeModuleApi(name, version, ModuleCallbacks{.load = load, .unload = unload, .update = update},
+                         dependencies);
 }
 
 } // namespace illusion

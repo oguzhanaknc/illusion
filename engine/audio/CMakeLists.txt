@@ -23,3 +23,11 @@ target_link_libraries(illusion_audio
     PRIVATE illusion_audio_backend)
 
 illusion_configure_target(illusion_audio)
+
+# illusion::audio_api — headers of the audio Components, for game modules: no code, so a shared
+# module gets no copy of the library (illusion_add_module(... USES audio), ADR 0041).
+add_library(illusion_audio_api INTERFACE)
+add_library(illusion::audio_api ALIAS illusion_audio_api)
+target_include_directories(illusion_audio_api INTERFACE
+    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>)
+target_link_libraries(illusion_audio_api INTERFACE illusion::core)

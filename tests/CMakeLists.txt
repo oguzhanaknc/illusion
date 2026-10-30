@@ -109,7 +109,8 @@ add_dependencies(illusion_tests illusion_process_helper)
 
 # Shared libraries loaded by tests/modules/TestModules.cpp (see TestModule.cpp for the variants).
 foreach(variant 1 2 3 4)
-    illusion_add_module(illusion_test_module_v${variant} SHARED SOURCES modules/TestModule.cpp)
+    illusion_add_module(illusion_test_module_v${variant} SHARED SOURCES modules/TestModule.cpp
+        USES physics audio input render)
     target_include_directories(illusion_test_module_v${variant} PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/modules)
     target_compile_definitions(illusion_test_module_v${variant} PRIVATE TEST_MODULE_VARIANT=${variant})
     target_compile_definitions(illusion_tests PRIVATE
@@ -121,6 +122,19 @@ add_library(illusion_test_not_a_module MODULE modules/NotAModule.cpp)
 illusion_configure_target(illusion_test_not_a_module)
 target_compile_definitions(illusion_tests PRIVATE TEST_NOT_A_MODULE="$<TARGET_FILE:illusion_test_not_a_module>")
 add_dependencies(illusion_tests illusion_test_not_a_module)
+
+# illusion_add_module() rejects what would give a shared module a second copy of an engine library
+# (ADR 0041). The fixtures run in script mode: the checks come before any target is created.
+add_test(NAME modules.reject_engine_link
+    COMMAND ${CMAKE_COMMAND} -DILLUSION_SOURCE_DIR=${PROJECT_SOURCE_DIR}
+        -P ${CMAKE_CURRENT_SOURCE_DIR}/modules/cmake/LinkEngineLibrary.cmake)
+add_test(NAME modules.reject_unknown_uses
+    COMMAND ${CMAKE_COMMAND} -DILLUSION_SOURCE_DIR=${PROJECT_SOURCE_DIR}
+        -P ${CMAKE_CURRENT_SOURCE_DIR}/modules/cmake/UnknownUses.cmake)
+set_tests_properties(modules.reject_engine_link PROPERTIES LABELS "unit"
+    PASS_REGULAR_EXPRESSION "cannot LINK the engine")
+set_tests_properties(modules.reject_unknown_uses PROPERTIES LABELS "unit"
+    PASS_REGULAR_EXPRESSION "unknown USES entry 'scripting'")
 
 include(${ILLUSION_DOCTEST_SOURCE_DIR}/scripts/cmake/doctest.cmake)
 doctest_discover_tests(illusion_tests
