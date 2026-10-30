@@ -363,7 +363,7 @@ public:
     /// Sets the viewports (nullptr when they go away). They must outlive their registration.
     void setViewports(ViewportHost* viewports) noexcept { m_viewports = viewports; }
 
-    /// The game runtime the `play.*` and `module.*` commands use, or nullptr.
+    /// The game runtime the play and module commands use, or nullptr.
     [[nodiscard]] PlayHost* play() const noexcept { return m_play; }
 
     /// Sets the game runtime (nullptr when it goes away). It must outlive its registration.

@@ -1,7 +1,7 @@
 #pragma once
 
 /// @file
-/// What the `play.*`, `input.inject`, `input.read` and `module.*` commands need from the editor's game
+/// What the play, module, `input.inject` and `input.read` commands need from the editor's game
 /// runtime: play sessions (ADR 0042) and game modules. The play service of the editor process
 /// (`illusion::editor_play`, PlaySession) implements it and registers with EditorContext::setPlay(); without
 /// one, the commands fail with ErrorKind::Unsupported.
