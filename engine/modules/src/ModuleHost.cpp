@@ -60,9 +60,16 @@ struct ModuleHost::Impl
         std::filesystem::file_time_type writeTime{};
     };
 
-    Impl(World& targetWorld, JobSystem& jobSystem, ModuleHostDesc settings)
-        : world(targetWorld)
-        , jobs(jobSystem)
+    // A World attached to the host.
+    struct Attached
+    {
+        World* world = nullptr;
+        WorldRole role = WorldRole::Edit;
+        ServiceSet services;
+    };
+
+    Impl(JobSystem& jobSystem, ModuleHostDesc settings)
+        : jobs(jobSystem)
     {
         if (settings.shadowDirectory.empty())
         {
@@ -80,7 +87,7 @@ struct ModuleHost::Impl
 
     ~Impl()
     {
-        while (!modules.empty())
+        while (!modules.empty()) // each stops on every Simulation World first
         {
             unloadAt(modules.size() - 1);
         }
@@ -94,9 +101,107 @@ struct ModuleHost::Impl
     Impl(const Impl&) = delete;
     Impl& operator=(const Impl&) = delete;
 
+    // The context of load() and unload(), which see no World.
     [[nodiscard]] ModuleContext contextFor(const Module& module, bool reloading) const noexcept
     {
-        return ModuleContext(world, jobs, services, module.info.name, reloading);
+        return ModuleContext(nullptr, WorldRole::Edit, jobs, nullptr, services, module.info.name, reloading);
+    }
+
+    // The context of start(), stop() and update() on @p attached.
+    [[nodiscard]] ModuleContext contextFor(const Module& module, Attached& attached) const noexcept
+    {
+        return ModuleContext(attached.world, attached.role, jobs, &attached.services, services,
+                             module.info.name, false);
+    }
+
+    [[nodiscard]] Attached* findWorld(const World& world) noexcept
+    {
+        const auto it = std::find_if(worlds.begin(), worlds.end(),
+                                     [&world](const Attached& attached) { return attached.world == &world; });
+        return it != worlds.end() ? &*it : nullptr;
+    }
+
+    // --- Sessions ---------------------------------------------------------------------------------------
+
+    // Runs start() of @p module on every Simulation World, in attach order.
+    void startEverywhere(const Module& module)
+    {
+        if (module.api->start == nullptr)
+        {
+            return;
+        }
+        for (Attached& attached : worlds)
+        {
+            if (attached.role == WorldRole::Simulation)
+            {
+                ModuleContext context = contextFor(module, attached);
+                module.api->start(context);
+            }
+        }
+    }
+
+    // Runs stop() of @p module on every Simulation World, the last attached first.
+    void stopEverywhere(const Module& module)
+    {
+        if (module.api->stop == nullptr)
+        {
+            return;
+        }
+        for (auto it = worlds.rbegin(); it != worlds.rend(); ++it)
+        {
+            if (it->role == WorldRole::Simulation)
+            {
+                ModuleContext context = contextFor(module, *it);
+                module.api->stop(context);
+            }
+        }
+    }
+
+    // Runs start() of every module on @p attached if it is a Simulation World, in load order.
+    void startAll(Attached& attached)
+    {
+        if (attached.role != WorldRole::Simulation)
+        {
+            return;
+        }
+        for (const std::unique_ptr<Module>& module : modules)
+        {
+            if (module->api->start != nullptr)
+            {
+                ModuleContext context = contextFor(*module, attached);
+                module->api->start(context);
+            }
+        }
+    }
+
+    // Runs stop() of every module on @p attached if it is a Simulation World, the last loaded first.
+    void stopAll(Attached& attached)
+    {
+        if (attached.role != WorldRole::Simulation)
+        {
+            return;
+        }
+        for (auto it = modules.rbegin(); it != modules.rend(); ++it)
+        {
+            if ((*it)->api->stop != nullptr)
+            {
+                ModuleContext context = contextFor(**it, attached);
+                (*it)->api->stop(context);
+            }
+        }
+    }
+
+    // Runs update() of every module on @p attached, in load order.
+    void updateAll(Attached& attached, f64 deltaSeconds)
+    {
+        for (const std::unique_ptr<Module>& module : modules)
+        {
+            if (module->api->update != nullptr)
+            {
+                ModuleContext context = contextFor(*module, attached);
+                module->api->update(context, deltaSeconds);
+            }
+        }
     }
 
     [[nodiscard]] Module* find(std::string_view name) noexcept
@@ -240,8 +345,8 @@ struct ModuleHost::Impl
 
     // --- Component types --------------------------------------------------------------------------------
 
-    // Removes every Component whose type belongs to @p module from the World and detaches the types from
-    // the module's code. The module's library must still be open.
+    // Removes every Component whose type belongs to @p module from every attached World and detaches the
+    // types from the module's code. The module's library must still be open.
     void releaseTypes(u32 module)
     {
         ComponentRegistry& registry = ComponentRegistry::instance();
@@ -250,12 +355,15 @@ struct ModuleHost::Impl
         if (!types.empty())
         {
             std::vector<Entity> entities;
-            world.entities(entities);
-            for (const Entity entity : entities)
+            for (const Attached& attached : worlds)
             {
-                for (const ComponentId type : types)
+                attached.world->entities(entities);
+                for (const Entity entity : entities)
                 {
-                    world.remove(entity, type);
+                    for (const ComponentId type : types)
+                    {
+                        attached.world->remove(entity, type);
+                    }
                 }
             }
             ILL_LOG_INFO("Modules", "removed the Components of {} type(s) whose code is unloaded",
@@ -282,7 +390,7 @@ struct ModuleHost::Impl
 
     // --- Lifetime -------------------------------------------------------------------------------------
 
-    [[nodiscard]] std::optional<std::string> start(std::unique_ptr<Module> module)
+    [[nodiscard]] std::optional<std::string> run(std::unique_ptr<Module> module)
     {
         ModuleContext context = contextFor(*module, false);
         const bool loaded = module->api->load(context);
@@ -305,12 +413,14 @@ struct ModuleHost::Impl
                      module->info.version.toString(),
                      module->info.linkage == ModuleLinkage::Shared ? "shared" : "static");
         modules.push_back(std::move(module));
+        startEverywhere(*modules.back());
         return std::nullopt;
     }
 
     void unloadAt(usize index)
     {
         Module& module = *modules[index];
+        stopEverywhere(module);
         if (module.api->unload != nullptr)
         {
             ModuleContext context = contextFor(module, false);
@@ -401,18 +511,18 @@ struct ModuleHost::Impl
         return std::nullopt;
     }
 
-    World& world;
     JobSystem& jobs;
     std::filesystem::path shadowDirectory;
     bool ownsShadowDirectory = false;
-    std::vector<ModuleContext::Service> services;
+    ServiceSet services;                          // the host's, searched after each World's own
+    std::vector<Attached> worlds;                 // attach order
     std::vector<std::unique_ptr<Module>> modules; // load order: dependencies first
     u32 nextId = 1;
     u64 copies = 0;
 };
 
-ModuleHost::ModuleHost(World& world, JobSystem& jobs, ModuleHostDesc desc)
-    : m_impl(std::make_unique<Impl>(world, jobs, std::move(desc)))
+ModuleHost::ModuleHost(JobSystem& jobs, ModuleHostDesc desc)
+    : m_impl(std::make_unique<Impl>(jobs, std::move(desc)))
 {
     // The host's own code must own the engine's types, or they would go away with the first module that
     // happened to use them first.
@@ -421,17 +531,45 @@ ModuleHost::ModuleHost(World& world, JobSystem& jobs, ModuleHostDesc desc)
 
 ModuleHost::~ModuleHost() = default;
 
-void ModuleHost::provide(u64 type, void* service)
+ServiceSet& ModuleHost::hostServices() noexcept
 {
-    for (ModuleContext::Service& existing : m_impl->services)
+    return m_impl->services;
+}
+
+void ModuleHost::attachWorld(World& world, WorldRole role, ServiceSet services)
+{
+    ILL_ASSERT(m_impl->findWorld(world) == nullptr, "the World is attached to this ModuleHost already");
+    m_impl->worlds.push_back(Impl::Attached{&world, role, std::move(services)});
+    m_impl->startAll(m_impl->worlds.back());
+}
+
+bool ModuleHost::detachWorld(World& world)
+{
+    Impl::Attached* attached = m_impl->findWorld(world);
+    if (attached == nullptr)
     {
-        if (existing.type == type)
-        {
-            existing.object = service;
-            return;
-        }
+        return false;
     }
-    m_impl->services.push_back(ModuleContext::Service{type, service});
+    m_impl->stopAll(*attached);
+    m_impl->worlds.erase(m_impl->worlds.begin() + (attached - m_impl->worlds.data()));
+    return true;
+}
+
+bool ModuleHost::isAttached(const World& world) const noexcept
+{
+    return m_impl->findWorld(world) != nullptr;
+}
+
+WorldRole ModuleHost::roleOf(const World& world) const noexcept
+{
+    const Impl::Attached* attached = m_impl->findWorld(world);
+    ILL_ASSERT(attached != nullptr, "the World is not attached to this ModuleHost");
+    return attached->role;
+}
+
+u32 ModuleHost::worldCount() const noexcept
+{
+    return static_cast<u32>(m_impl->worlds.size());
 }
 
 std::optional<std::string> ModuleHost::load(const std::filesystem::path& library)
@@ -460,7 +598,7 @@ std::optional<std::string> ModuleHost::load(const std::filesystem::path& library
     module->writeTime = opened.writeTime;
     module->id = impl.nextId++;
     impl.install(*module->api, module->id);
-    return impl.start(std::move(module));
+    return impl.run(std::move(module));
 }
 
 std::optional<std::string> ModuleHost::add(const ModuleApi& api)
@@ -476,7 +614,7 @@ std::optional<std::string> ModuleHost::add(const ModuleApi& api)
     module->info.version = version;
     module->info.linkage = ModuleLinkage::Static;
     module->api = &api;
-    return impl.start(std::move(module));
+    return impl.run(std::move(module));
 }
 
 std::optional<std::string> ModuleHost::reload(std::string_view name)
@@ -546,14 +684,22 @@ bool ModuleHost::unload(std::string_view name)
 void ModuleHost::update(f64 deltaSeconds)
 {
     ILL_PROFILE_SCOPE();
-    for (const std::unique_ptr<Impl::Module>& module : m_impl->modules)
+    for (Impl::Attached& attached : m_impl->worlds)
     {
-        if (module->api->update != nullptr)
+        if (attached.role == WorldRole::Simulation)
         {
-            ModuleContext context = m_impl->contextFor(*module, false);
-            module->api->update(context, deltaSeconds);
+            m_impl->updateAll(attached, deltaSeconds);
         }
     }
+}
+
+void ModuleHost::update(World& world, f64 deltaSeconds)
+{
+    ILL_PROFILE_SCOPE();
+    Impl::Attached* attached = m_impl->findWorld(world);
+    ILL_ASSERT(attached != nullptr && attached->role == WorldRole::Simulation,
+               "ModuleHost::update(World&) needs an attached Simulation World");
+    m_impl->updateAll(*attached, deltaSeconds);
 }
 
 const ModuleInfo* ModuleHost::find(std::string_view name) const noexcept

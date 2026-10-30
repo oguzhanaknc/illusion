@@ -272,7 +272,22 @@ Plan: `docs/plans/m7-editor.md` (sub-milestones, command API, localization, them
   normal, align to normal, constraints and the ruler, command tests with a fake host, a headless UI test of V
   and M, a GPU test that a surface snap lands on a tilted plane with its normal and a vertex snap on a cube
   corner, and the `snap/vertex-search` Benchmark (80 µs budget for 100,000 vertices; 11,278 ns measured)
-- M7q: Module API v3: lifecycle, multi-world host, host service interfaces (scripting API) (ADR 0041)
+- M7q: Module API v3: lifecycle, multi-world host, host service interfaces (scripting API) (ADR 0041), in two
+  parts:
+- M7q-1: ✅ Module API v3, first part: `kModuleApiVersion = 3` with `start`/`stop` once per Simulation World
+  (hot reloads call neither) and `load`/`unload` without a World (`ModuleContext::world()` asserts there),
+  `ModuleCallbacks`; the multi-world `ModuleHost(JobSystem&)` with `attachWorld(World&, WorldRole{Edit,
+  Simulation, Preview}, ServiceSet)`, `detachWorld`, `update(World&, f64)`, stripping over every attached World
+  and services looked up per World, then on the host; the header-only `illusion::{physics,audio,input,render}_api`
+  targets and `illusion_add_module(... USES ...)`, with `LINK` of engine libraries rejected for `SHARED`
+  modules at configure time. Tests of the lifecycle on edit, play and preview Worlds, stripping from the edit
+  and the play World on reload and unload, per-World services, the `world()` assert during `load`, the two
+  configure fixtures, and the `modules/update` Benchmark (25 ns budget per module and World; 1.85 ns measured)
+- M7q-2: Module API v3, second part: the host service interfaces `PhysicsService`, `AudioService`,
+  `InputService` and `SceneService` (`illusion::runtime_api`) with host adapters, counting proxies that call
+  every method from a shared module, the `PhysicsService::createMesh` reload regression under ASan, the
+  `services/virtual-call` Benchmark (10 ns), `reference/scripting-api.md` (Doxygen group "Scripting API") and
+  the `game-modules` skill
 - M7r: Play mode and the `GameSession` runtime (ADR 0042)
 - M7s: Project modules built from the editor (ADR 0043); opening sources with the External Tools code editor
   (from M7l)

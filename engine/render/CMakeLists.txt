@@ -73,3 +73,13 @@ illusion_add_shaders(illusion_render
         iblBrdfLut shaders/IblBrdfLut.slang integrateBrdf compute)
 
 illusion_configure_target(illusion_render)
+
+# illusion::render_api — headers of the saved, GPU-free render Components (SceneComponents.hpp), for
+# game modules: no code, so a shared module gets no copy of the
+# library (illusion_add_module(... USES render), ADR 0041).
+add_library(illusion_render_api INTERFACE)
+add_library(illusion::render_api ALIAS illusion_render_api)
+target_include_directories(illusion_render_api INTERFACE
+    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+    $<BUILD_INTERFACE:${PROJECT_SOURCE_DIR}/engine/assets/include>)
+target_link_libraries(illusion_render_api INTERFACE illusion::core)

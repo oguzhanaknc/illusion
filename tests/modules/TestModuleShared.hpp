@@ -32,6 +32,12 @@ struct SharedComponent
     i32 value = 0;
 };
 
+// Given to some Worlds through their ServiceSet: the module adds its value to ModuleControl::tagSum.
+struct WorldTag
+{
+    i32 value = 0;
+};
+
 // Shared through ModuleHost::provide(): the host steers the module and reads what it saw.
 struct ModuleControl
 {
@@ -39,7 +45,12 @@ struct ModuleControl
     bool assertInUpdate = false;
     i32 loads = 0;
     i32 unloads = 0;
+    i32 starts = 0;
+    i32 stops = 0;
     i32 updates = 0;
+    bool worldInLoad = false;   // ModuleContext::hasWorld() during load() or unload()
+    bool simulationOnly = true; // every start(), stop() and update() saw a Simulation World
+    i32 tagSum = 0;             // WorldTag::value of the World of each update()
     i32 variant = 0;
     bool reloadingSeen = false;
     const void* logger = nullptr;     // &Logger::instance() as the module sees it

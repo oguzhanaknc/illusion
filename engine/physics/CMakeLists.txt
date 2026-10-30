@@ -16,3 +16,11 @@ target_link_libraries(illusion_physics
     PRIVATE illusion::assets Jolt::Jolt)
 
 illusion_configure_target(illusion_physics)
+
+# illusion::physics_api — headers of the physics Components, for game modules: no code, so a shared
+# module gets no copy of the library (illusion_add_module(... USES physics), ADR 0041).
+add_library(illusion_physics_api INTERFACE)
+add_library(illusion::physics_api ALIAS illusion_physics_api)
+target_include_directories(illusion_physics_api INTERFACE
+    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>)
+target_link_libraries(illusion_physics_api INTERFACE illusion::core)

@@ -116,7 +116,9 @@ struct Fixture
     test::TempDirectory directory;
     std::filesystem::path library = directory.path / std::filesystem::path(TEST_MODULE_V1).filename();
     JobSystem jobs{JobSystemDesc{2, 256}};
-    World world;
+    World world;       // attached as a Simulation World
+    World editWorld;   // attached by the tests that need it; outlives the host
+    World secondWorld; // see editWorld
     test::ModuleControl control;
     std::unique_ptr<ModuleHost> host;
 
@@ -124,8 +126,9 @@ struct Fixture
     {
         ModuleHostDesc desc;
         desc.shadowDirectory = directory.path / "shadow";
-        host = std::make_unique<ModuleHost>(world, jobs, desc);
+        host = std::make_unique<ModuleHost>(jobs, desc);
         host->provide(control);
+        host->attachWorld(world, WorldRole::Simulation);
     }
 };
 
@@ -143,6 +146,43 @@ void updateStatic(ModuleContext&, f64)
 
 constexpr ModuleApi kStaticModule =
     makeModuleApi("static_test", "2.3.0", &loadStatic, nullptr, &updateStatic);
+
+// A static module that adds the WorldTag of every World it updates to g_tagSum.
+i32 g_tagSum = 0;
+
+void updateTagged(ModuleContext& context, f64)
+{
+    if (const test::WorldTag* tag = context.service<test::WorldTag>())
+    {
+        g_tagSum += tag->value;
+    }
+}
+
+constexpr ModuleApi kTaggedModule = makeModuleApi("tagged", "1.0.0", &loadStatic, nullptr, &updateTagged);
+
+// A static module whose load() wrongly uses the World.
+bool loadUsingWorld(ModuleContext& context)
+{
+    return context.world().aliveCount() == 0;
+}
+
+constexpr ModuleApi kWorldInLoad = makeModuleApi("world_in_load", "1.0.0", &loadUsingWorld, nullptr, nullptr);
+
+// A static module that logs its start() and stop() calls into g_events.
+std::string g_events;
+
+void startLogged(ModuleContext& context)
+{
+    g_events += context.service<test::WorldTag>() != nullptr ? "start-tagged;" : "start;";
+}
+
+void stopLogged(ModuleContext& context)
+{
+    g_events += context.service<test::WorldTag>() != nullptr ? "stop-tagged;" : "stop;";
+}
+
+constexpr ModuleApi kLoggedModule =
+    makeModuleApi("logged", "1.0.0", {.load = &loadStatic, .start = &startLogged, .stop = &stopLogged});
 
 } // namespace
 
@@ -397,7 +437,172 @@ TEST_CASE("destroying the host unloads every module")
     REQUIRE_FALSE(f.host->load(f.library));
     REQUIRE_FALSE(f.host->add(kStaticModule));
     f.host.reset();
+    CHECK(f.control.stops == 1);
     CHECK(f.control.unloads == 1);
     CHECK(countWith(f.world, moduleType("test.ModuleCounter")) == 0); // the entities stay, empty
     CHECK_FALSE(std::filesystem::exists(f.directory.path / "shadow" / f.library.filename()));
 }
+
+TEST_CASE("start and stop run once per Simulation World and hot reloads keep the session running")
+{
+    Fixture f;
+    f.host->attachWorld(f.editWorld, WorldRole::Edit);
+    install(TEST_MODULE_V1, f.library);
+    REQUIRE_FALSE(f.host->load(f.library));
+    CHECK(f.control.starts == 1); // the Simulation World only
+    CHECK(f.editWorld.aliveCount() == 0);
+    CHECK(f.world.aliveCount() == 3);
+    CHECK_FALSE(f.control.worldInLoad);
+
+    f.host->update(0.0);
+    CHECK(f.control.updates == 1); // never on the edit World
+    CHECK(counterTotal(f.world) == 2);
+
+    install(TEST_MODULE_V2, f.library);
+    CHECK(f.host->reloadChanged() == 1);
+    CHECK(f.control.starts == 1); // a reload neither stops nor restarts the session
+    CHECK(f.control.stops == 0);
+    CHECK_FALSE(f.control.worldInLoad);
+
+    f.host->attachWorld(f.secondWorld, WorldRole::Simulation);
+    CHECK(f.control.starts == 2);
+    CHECK(f.host->worldCount() == 3);
+    f.host->update(0.0);
+    CHECK(f.control.updates == 3);
+    f.host->update(f.secondWorld, 0.0);
+    CHECK(f.control.updates == 4);
+    CHECK(counterTotal(f.world) == 2 + 4);       // two counters: +1 by version 1, +2 by version 2
+    CHECK(counterTotal(f.secondWorld) == 2 + 2); // one counter, two updates of version 2
+
+    CHECK(f.host->detachWorld(f.secondWorld));
+    CHECK(f.control.stops == 1);
+    CHECK_FALSE(f.host->detachWorld(f.secondWorld));
+    CHECK(f.secondWorld.aliveCount() == 2); // detaching leaves the World alone
+    // A detached World is no longer stripped: remove the module's Components while its code is loaded.
+    std::vector<Entity> entities;
+    f.secondWorld.entities(entities);
+    for (const Entity entity : entities)
+    {
+        f.secondWorld.remove(entity, moduleType("test.ModuleCounter"));
+    }
+
+    CHECK(f.host->unload("test_module"));
+    CHECK(f.control.stops == 2);
+    CHECK(f.control.starts == 2);
+    CHECK(f.control.simulationOnly);
+}
+
+TEST_CASE("unloading strips module Components from the edit and the play World before orphaning")
+{
+    Fixture f;
+    f.host->attachWorld(f.editWorld, WorldRole::Edit);
+    install(TEST_MODULE_V1, f.library);
+    REQUIRE_FALSE(f.host->load(f.library));
+    // The edit World holds module Components the way a scene loaded in the editor does.
+    const ComponentId counter = moduleType("test.ModuleCounter");
+    const ComponentId legacy = moduleType("test.LegacyComponent");
+    const Entity edited = f.editWorld.create();
+    REQUIRE(f.editWorld.emplaceDefault(edited, counter) != nullptr);
+    REQUIRE(f.editWorld.emplaceDefault(edited, legacy) != nullptr);
+
+    install(TEST_MODULE_V2, f.library);
+    CHECK(f.host->reloadChanged() == 1);
+    CHECK(countWith(f.editWorld, legacy) == 0); // dropped by version 2, in both Worlds
+    CHECK(countWith(f.world, legacy) == 0);
+    CHECK(countWith(f.editWorld, counter) == 1);
+
+    CHECK(f.host->unload("test_module"));
+    CHECK(countWith(f.editWorld, counter) == 0);
+    CHECK(countWith(f.world, counter) == 0);
+    // Structural changes in both Worlds after the code is gone must not reach it.
+    f.editWorld.destroy(edited);
+    std::vector<Entity> entities;
+    f.world.entities(entities);
+    for (const Entity entity : entities)
+    {
+        f.world.destroy(entity);
+    }
+    CHECK(f.editWorld.aliveCount() == 0);
+    CHECK(f.world.aliveCount() == 0);
+}
+
+TEST_CASE("a Simulation World attached after the modules starts them, and detaching stops them")
+{
+    test::TempDirectory directory;
+    JobSystem jobs{JobSystemDesc{1, 64}};
+    World play;
+    World preview;
+    g_events.clear();
+    ModuleHost host(jobs, ModuleHostDesc{directory.path / "shadow"});
+    REQUIRE_FALSE(host.add(kLoggedModule));
+    host.attachWorld(preview, WorldRole::Preview);
+    CHECK(g_events.empty()); // Preview Worlds do not run modules
+    ServiceSet services;
+    test::WorldTag tag{1};
+    services.provide(tag);
+    host.attachWorld(play, WorldRole::Simulation, std::move(services));
+    CHECK(g_events == "start-tagged;");
+    CHECK(host.isAttached(play));
+    CHECK(host.roleOf(play) == WorldRole::Simulation);
+    CHECK(host.roleOf(preview) == WorldRole::Preview);
+    CHECK(host.detachWorld(play));
+    CHECK(g_events == "start-tagged;stop-tagged;");
+    CHECK_FALSE(host.isAttached(play));
+    CHECK(host.unload("logged"));
+    CHECK(g_events == "start-tagged;stop-tagged;"); // no Simulation World left to stop on
+}
+
+TEST_CASE("services are found in the World's set first, then in the host's")
+{
+    test::TempDirectory directory;
+    JobSystem jobs{JobSystemDesc{1, 64}};
+    World a;
+    World b;
+    World c;
+    test::WorldTag tagA{1};
+    test::WorldTag tagB{10};
+    test::WorldTag hostTag{100};
+    g_tagSum = 0;
+    ModuleHost host(jobs, ModuleHostDesc{directory.path / "shadow"});
+    host.provide(hostTag);
+    ServiceSet servicesA;
+    servicesA.provide(tagA);
+    servicesA.provide(tagA); // replaces, does not add
+    CHECK(servicesA.size() == 1);
+    CHECK(servicesA.find<test::WorldTag>() == &tagA);
+    CHECK(servicesA.find<test::ModuleControl>() == nullptr);
+    ServiceSet servicesB;
+    servicesB.provide(tagB);
+    host.attachWorld(a, WorldRole::Simulation, std::move(servicesA));
+    host.attachWorld(b, WorldRole::Simulation, std::move(servicesB));
+    host.attachWorld(c, WorldRole::Simulation);
+    REQUIRE_FALSE(host.add(kTaggedModule));
+    host.update(0.0);
+    CHECK(g_tagSum == 1 + 10 + 100);
+    host.update(b, 0.0);
+    CHECK(g_tagSum == 1 + 10 + 100 + 10);
+    CHECK(host.detachWorld(a));
+    CHECK(host.detachWorld(b));
+    CHECK(host.detachWorld(c));
+    CHECK(host.worldCount() == 0);
+}
+
+#if ILL_ASSERTS_ENABLED
+TEST_CASE("load() sees no World and asserts when it asks for one")
+{
+    test::TempDirectory directory;
+    JobSystem jobs{JobSystemDesc{1, 64}};
+    World world;
+    World other;
+    ModuleHost host(jobs, ModuleHostDesc{directory.path / "shadow"});
+    host.attachWorld(world, WorldRole::Simulation);
+    {
+        test::ScopedAssertCatcher catcher;
+        CHECK_THROWS_AS(static_cast<void>(host.add(kWorldInLoad)), test::AssertionFailure);
+        CHECK_THROWS_AS(host.attachWorld(world, WorldRole::Edit), test::AssertionFailure); // twice
+        CHECK_THROWS_AS(host.update(other, 0.0), test::AssertionFailure);                  // not attached
+    }
+    CHECK(host.count() == 0);
+    CHECK(host.detachWorld(world));
+}
+#endif

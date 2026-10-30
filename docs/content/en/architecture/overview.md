@@ -52,6 +52,9 @@ of the static core library. When the module loads, the `ModuleHost` injects its 
 module, so both sides share one Logger and one Component registry. Component types are identified by the
 hash of their fully qualified name, so a Component gets the same id on both sides. The registry records
 which module's code each type uses, so that a reload can hand the type over to the new code (ADR 0027).
+Only the core library may exist twice: a shared module links the other engine libraries' headers alone
+(`USES`) and calls their code through the host, and the host runs modules on every World attached to it
+(ADR 0041).
 
 ## Repository layout
 

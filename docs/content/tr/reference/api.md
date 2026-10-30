@@ -38,8 +38,8 @@ doxygen docs/Doxyfile
 | `illusion/core/EventBus.hpp` | `EventBus`, `Subscription` |
 | `illusion/core/Time.hpp` | `monotonicSeconds`, `Stopwatch`, `FrameClock`, `FixedTimestep` |
 | `illusion/core/Version.hpp` | `SemanticVersion`, `engineVersion` |
-| `illusion/core/Module.hpp` | `ModuleApi`, `ModuleContext`, `ModuleDependency`, `makeModuleApi`, `ILL_MODULE`: oyun modüllerinin modül tarafı |
-| `illusion/modules/ModuleHost.hpp` | `ModuleHost`: modülleri yükler, denetler, çalıştırır ve hot-reload eder; `ModuleInfo` |
+| `illusion/core/Module.hpp` | `ModuleApi`, `ModuleCallbacks`, `ModuleContext`, `ModuleDependency`, `WorldRole`, `ServiceSet`, `makeModuleApi`, `ILL_MODULE`: oyun modüllerinin modül tarafı |
+| `illusion/modules/ModuleHost.hpp` | `ModuleHost`: modülleri eklenmiş World'ler üzerinde yükler, denetler, çalıştırır ve hot-reload eder; `ModuleInfo` |
 | `illusion/core/Math.hpp` | glm tabanlı vektör, matris ve quaternion tipleri, `Aabb`, `Sphere`, `Obb`, `Plane`, `Frustum`, `Ray` ve kesişimler, `screenToRay`, `perspectiveReversedZ`, `orthographicReversedZ`, Euler dönüşümleri |
 | `illusion/ecs/World.hpp` | `World`, `Query`, `ChunkView`, `RawChunk` (`forEachMatching`) |
 | `illusion/ecs/CommandBuffer.hpp` | Ertelenmiş yapısal değişiklikler |

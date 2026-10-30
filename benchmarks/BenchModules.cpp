@@ -42,11 +42,18 @@ constexpr std::array<ModuleApi, 8> kModules = [] {
 
 // Budgets are roughly 5-10x a desktop result; see Budget.hpp.
 
+// Per module and Simulation World; the edit World is attached as in the editor and never updated.
 ILL_BENCHMARK("modules/update", 25.0)
 {
     JobSystem jobs(JobSystemDesc{1, 64});
-    World world;
-    ModuleHost host(world, jobs);
+    World edit;
+    std::array<World, 2> play;
+    ModuleHost host(jobs);
+    host.attachWorld(edit, WorldRole::Edit);
+    for (World& world : play)
+    {
+        host.attachWorld(world, WorldRole::Simulation);
+    }
     for (const ModuleApi& api : kModules)
     {
         if (host.add(api))
@@ -54,8 +61,13 @@ ILL_BENCHMARK("modules/update", 25.0)
             return;
         }
     }
-    bench.batch(kModules.size()).unit("module").run("update 8 modules", [&] {
+    bench.batch(kModules.size() * play.size()).unit("module").run("update 8 modules on 2 Worlds", [&] {
         host.update(1.0 / 60.0);
         ankerl::nanobench::doNotOptimizeAway(g_updates);
     });
+    for (World& world : play)
+    {
+        host.detachWorld(world);
+    }
+    host.detachWorld(edit);
 }
