@@ -236,6 +236,7 @@ tek bir undo adımı olarak yeniden oynatır. Kaydedilmemiş değişiklikleri ol
 | `transform.rotate` | Her Entity'yi kendi konumu, hepsinin merkezi (`center`) ya da bir nokta (`point`) etrafında döndürür. |
 | `transform.scale` | Ölçeği çarpar; bir pivot verilirse konumlar da ondan uzaklaşır. |
 | `transform.reset` | Parent'a göre konumu, dönüşü ve ölçeği sıfırlar. |
+| `transform.snap_to_grid` | Dünya konumlarını bir grid adımının en yakın katına yuvarlar (varsayılan olarak gizmo'nun taşıma adımı). |
 
 Dönüşler quaternion `[x, y, z, w]` (`rotation`) ya da derece cinsinden Euler açılarıdır (`euler`;
 `quatFromEuler()` gibi önce yaw, sonra pitch, sonra roll uygulanır). Komutlar bir çocuk için `LocalTransform`

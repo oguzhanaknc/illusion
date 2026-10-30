@@ -16,6 +16,7 @@ illusion_add_editor_executable(illusion_editor_tests
     core/TestEditorCommands.cpp
     core/TestEditorCore.cpp
     core/TestEditorFuzz.cpp
+    core/TestEditorGizmo.cpp
     core/TestEditorHistory.cpp
     core/TestEditorLog.cpp
     core/TestEditorSettings.cpp

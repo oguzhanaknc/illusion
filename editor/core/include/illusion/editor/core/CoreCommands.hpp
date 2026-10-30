@@ -10,6 +10,7 @@
 #include <illusion/core/Math.hpp>
 #include <illusion/ecs/Reflection.hpp>
 #include <illusion/editor/core/EntityIndex.hpp>
+#include <illusion/editor/core/Gizmo.hpp>
 #include <illusion/editor/core/ReferenceIndex.hpp>
 #include <illusion/editor/core/UiHost.hpp>
 #include <illusion/editor/core/ViewportHost.hpp>
@@ -670,6 +671,43 @@ struct TransformResetParams
     std::optional<bool> scale{};       ///< Reset the scale (default true).
 };
 
+/// Params of `transform.snap_to_grid`.
+struct TransformSnapParams
+{
+    std::vector<std::string>
+        entities;                   ///< Entity references; descendants of other listed entities follow them.
+    std::optional<f32> increment{}; ///< Grid spacing in world units (default: the gizmo's translation snap).
+};
+
+// --- gizmo -------------------------------------------------------------------------------------------------
+
+/// Params of `gizmo.set_tool`.
+struct GizmoToolParams
+{
+    GizmoTool tool = GizmoTool::Translate; ///< The tool.
+};
+
+/// Params of `gizmo.set_space`.
+struct GizmoSpaceParams
+{
+    GizmoSpace space = GizmoSpace::World; ///< The axes.
+};
+
+/// Params of `gizmo.set_pivot`.
+struct GizmoPivotParams
+{
+    GizmoPivot pivot = GizmoPivot::Median; ///< The pivot.
+};
+
+/// Params of `gizmo.set_snap` (absent members are unchanged).
+struct GizmoSnapParams
+{
+    std::optional<bool> enabled{};  ///< Snap without Ctrl.
+    std::optional<f32> translate{}; ///< Distance increment in world units.
+    std::optional<f32> rotate{};    ///< Angle increment in degrees.
+    std::optional<f32> scale{};     ///< Scale factor increment.
+};
+
 // --- history -----------------------------------------------------------------------------------------------
 
 /// Params of `history.redo`.
@@ -1293,6 +1331,34 @@ struct illusion::EnumReflection<illusion::editor::TransformPivot>
     /// The values.
     static constexpr std::array kValues{illusion::EnumValue{"individual", 0},
                                         illusion::EnumValue{"center", 1}};
+};
+
+/// Names of GizmoTool values in JSON.
+template <>
+struct illusion::EnumReflection<illusion::editor::GizmoTool>
+{
+    /// The values.
+    static constexpr std::array kValues{illusion::EnumValue{"select", 0}, illusion::EnumValue{"translate", 1},
+                                        illusion::EnumValue{"rotate", 2}, illusion::EnumValue{"scale", 3},
+                                        illusion::EnumValue{"universal", 4}};
+};
+
+/// Names of GizmoSpace values in JSON.
+template <>
+struct illusion::EnumReflection<illusion::editor::GizmoSpace>
+{
+    /// The values.
+    static constexpr std::array kValues{illusion::EnumValue{"world", 0}, illusion::EnumValue{"local", 1},
+                                        illusion::EnumValue{"view", 2}};
+};
+
+/// Names of GizmoPivot values in JSON.
+template <>
+struct illusion::EnumReflection<illusion::editor::GizmoPivot>
+{
+    /// The values.
+    static constexpr std::array kValues{illusion::EnumValue{"median", 0}, illusion::EnumValue{"active", 1},
+                                        illusion::EnumValue{"individual", 2}};
 };
 
 /// Names of PaletteMode values in JSON.

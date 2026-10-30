@@ -5,6 +5,7 @@
 #include "ShellImpl.hpp"
 
 #include <illusion/core/Log.hpp>
+#include <illusion/editor/core/Gizmo.hpp>
 #include <illusion/editor/rpc/RpcServer.hpp>
 #include <illusion/editor/ui/FontManager.hpp>
 
@@ -156,6 +157,58 @@ private:
 
 /// A viewport panel (Scene, Game or a secondary Scene viewport): the viewport's image with navigation, click
 /// and box picking, camera bookmarks and its toolbar.
+/// The transform gizmo of a Scene view: it draws the gizmo of the selection, finds the handle under the
+/// cursor and runs drags as `transform.set` calls inside one transaction (Esc or the right button cancels).
+class ViewportGizmo
+{
+public:
+    /// What the panel tells the gizmo each frame.
+    struct Frame
+    {
+        const ViewportFrame* viewport = nullptr; ///< The viewport's frame (Scene viewports only).
+        Vec2 imageOrigin{0.0f};                  ///< Top left of the image in the window.
+        f32 toPanel = 1.0f;                      ///< Window points per image pixel.
+        f32 pixelScale = 1.0f;                   ///< Image pixels per display point.
+        Vec2 cursor{0.0f};                       ///< Cursor in image pixels.
+        bool hovered = false;                    ///< The cursor is over the image and no overlay.
+    };
+
+    /// The handle under the cursor of @p frame (None while the gizmo is hidden or Alt is held).
+    [[nodiscard]] GizmoHandle hoveredHandle(Impl& shell, const Frame& frame);
+
+    /// Starts dragging @p handle at the cursor of @p frame. Returns false when it cannot start (another
+    /// caller holds a transaction).
+    bool begin(Impl& shell, const Frame& frame, GizmoHandle handle);
+
+    /// Applies the running drag (commits on release, cancels on Esc or the right button) and draws the gizmo
+    /// over the image with @p hovered highlighted.
+    void update(Impl& shell, const Frame& frame, ImDrawList& draw, GizmoHandle hovered);
+
+    /// A drag is running.
+    [[nodiscard]] bool dragging() const noexcept { return m_drag.has_value(); }
+
+private:
+    [[nodiscard]] std::optional<GizmoPose> pose(Impl& shell, const Frame& frame);
+    void refreshTargets(Impl& shell);
+    void apply(Impl& shell, const GizmoDelta& delta);
+    void end(Impl& shell, bool commit);
+
+    std::vector<GizmoTarget> m_targets;
+    std::vector<Transform> m_start;
+    std::vector<Transform> m_placed;
+    std::string m_params;
+    u64 m_selectionVersion = 0;
+    u64 m_revision = 0;
+    bool m_cached = false;
+    std::optional<GizmoDrag> m_drag;
+    GizmoTool m_dragTool = GizmoTool::Translate;
+    GizmoPivot m_dragPivot = GizmoPivot::Median;
+    GizmoDelta m_delta;
+};
+
+/// The gizmo controls of the main toolbar after the tool buttons: axes, pivot and snapping.
+void drawGizmoToolbar(Impl& shell);
+
 class SceneView
 {
 public:
@@ -176,9 +229,11 @@ private:
     void run(Impl& shell, std::string_view command, std::string_view params);
 
     std::string m_id;
-    ViewportFrame m_last;    // the viewport's state of the previous frame (for the menus)
-    bool m_boxing = false;   // a box selection is being dragged
-    bool m_cubeDrag = false; // a left drag that started on the view cube orbits
+    ViewportFrame m_last;        // the viewport's state of the previous frame (for the menus)
+    bool m_boxing = false;       // a box selection is being dragged
+    bool m_cubeDrag = false;     // a left drag that started on the view cube orbits
+    bool m_gizmoPressed = false; // the left press went to the gizmo (no pick or box on release)
+    ViewportGizmo m_gizmo;
 };
 
 /// Assigns @p valueJson to the field @p path of the Component @p type of @p entities (one step; a batch for

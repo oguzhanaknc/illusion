@@ -925,6 +925,12 @@ Needs: o.
 
 **Docs.** `manual/editor/transform-tools.md`.
 
+**Split.** M7p-1 delivers `GizmoMath` (all handles, spaces, the median, active and individual pivots, grid,
+angle and scale snapping), the `ImDrawList` renderer, transactions, the toolbar, the `gizmo.*` commands,
+`transform.snap_to_grid`, the gizmo goldens and the Benchmark. M7p-2 brings vertex, surface and ground snapping,
+typed numeric input, Blender-style G/R/S, the bounds-centre pivot, the remaining utilities (align to view, align
+and distribute, drop to ground, measure and ruler) and the surface snap GPU test.
+
 ### M7q: Module API v3, multi-world host and the scripting API
 Needs: h (runs in parallel with i–p).
 

@@ -3410,6 +3410,645 @@
       "additionalProperties": false
     }
   },
+  "gizmo.get": {
+    "version": 1,
+    "permission": "read",
+    "mode": "any",
+    "undoable": false,
+    "readOnly": true,
+    "params": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "type": "object",
+      "properties": {},
+      "additionalProperties": false
+    },
+    "result": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "type": "object",
+      "properties": {
+        "tool": {
+          "type": "string",
+          "enum": ["select", "translate", "rotate", "scale", "universal"]
+        },
+        "space": {
+          "type": "string",
+          "enum": ["world", "local", "view"]
+        },
+        "pivot": {
+          "type": "string",
+          "enum": ["median", "active", "individual"]
+        },
+        "snap": {
+          "type": "object",
+          "properties": {
+            "enabled": {
+              "type": "boolean"
+            },
+            "translate": {
+              "type": "number",
+              "minimum": 0.001,
+              "maximum": 1000
+            },
+            "rotate": {
+              "anyOf": [
+                {
+                  "type": "number",
+                  "minimum": 0.01,
+                  "maximum": 180
+                },
+                {
+                  "type": "object",
+                  "additionalProperties": {
+                    "type": "number"
+                  }
+                }
+              ]
+            },
+            "scale": {
+              "type": "number",
+              "minimum": 0.001,
+              "maximum": 10
+            }
+          },
+          "required": ["enabled", "translate", "rotate", "scale"],
+          "additionalProperties": false
+        },
+        "_editor": {
+          "type": "object",
+          "properties": {
+            "revision": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "transaction": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "dryRun": {
+              "type": "boolean"
+            },
+            "operations": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "warnings": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          },
+          "required": ["revision", "transaction", "dryRun", "operations", "warnings"],
+          "additionalProperties": false
+        }
+      },
+      "required": ["tool", "space", "pivot", "snap", "_editor"],
+      "additionalProperties": false
+    }
+  },
+  "gizmo.set_pivot": {
+    "version": 1,
+    "permission": "read",
+    "mode": "any",
+    "undoable": false,
+    "readOnly": false,
+    "params": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "type": "object",
+      "properties": {
+        "pivot": {
+          "type": "string",
+          "enum": ["median", "active", "individual"]
+        },
+        "dryRun": {
+          "type": "boolean"
+        },
+        "mergeKey": {
+          "type": "string"
+        },
+        "clientToken": {
+          "type": "string"
+        },
+        "expectRevision": {
+          "anyOf": [
+            {
+              "type": "string",
+              "pattern": "^[0-9]+$"
+            },
+            {
+              "type": "integer",
+              "minimum": 0
+            }
+          ]
+        }
+      },
+      "required": ["pivot"],
+      "additionalProperties": false
+    },
+    "result": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "type": "object",
+      "properties": {
+        "tool": {
+          "type": "string",
+          "enum": ["select", "translate", "rotate", "scale", "universal"]
+        },
+        "space": {
+          "type": "string",
+          "enum": ["world", "local", "view"]
+        },
+        "pivot": {
+          "type": "string",
+          "enum": ["median", "active", "individual"]
+        },
+        "snap": {
+          "type": "object",
+          "properties": {
+            "enabled": {
+              "type": "boolean"
+            },
+            "translate": {
+              "type": "number",
+              "minimum": 0.001,
+              "maximum": 1000
+            },
+            "rotate": {
+              "anyOf": [
+                {
+                  "type": "number",
+                  "minimum": 0.01,
+                  "maximum": 180
+                },
+                {
+                  "type": "object",
+                  "additionalProperties": {
+                    "type": "number"
+                  }
+                }
+              ]
+            },
+            "scale": {
+              "type": "number",
+              "minimum": 0.001,
+              "maximum": 10
+            }
+          },
+          "required": ["enabled", "translate", "rotate", "scale"],
+          "additionalProperties": false
+        },
+        "_editor": {
+          "type": "object",
+          "properties": {
+            "revision": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "transaction": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "dryRun": {
+              "type": "boolean"
+            },
+            "operations": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "warnings": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          },
+          "required": ["revision", "transaction", "dryRun", "operations", "warnings"],
+          "additionalProperties": false
+        }
+      },
+      "required": ["tool", "space", "pivot", "snap", "_editor"],
+      "additionalProperties": false
+    }
+  },
+  "gizmo.set_snap": {
+    "version": 1,
+    "permission": "read",
+    "mode": "any",
+    "undoable": false,
+    "readOnly": false,
+    "params": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "type": "object",
+      "properties": {
+        "enabled": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "translate": {
+          "anyOf": [
+            {
+              "type": "number",
+              "minimum": 0.001,
+              "maximum": 1000
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "rotate": {
+          "anyOf": [
+            {
+              "anyOf": [
+                {
+                  "type": "number",
+                  "minimum": 0.01,
+                  "maximum": 180
+                },
+                {
+                  "type": "object",
+                  "additionalProperties": {
+                    "type": "number"
+                  }
+                }
+              ]
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "scale": {
+          "anyOf": [
+            {
+              "type": "number",
+              "minimum": 0.001,
+              "maximum": 10
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "dryRun": {
+          "type": "boolean"
+        },
+        "mergeKey": {
+          "type": "string"
+        },
+        "clientToken": {
+          "type": "string"
+        },
+        "expectRevision": {
+          "anyOf": [
+            {
+              "type": "string",
+              "pattern": "^[0-9]+$"
+            },
+            {
+              "type": "integer",
+              "minimum": 0
+            }
+          ]
+        }
+      },
+      "additionalProperties": false
+    },
+    "result": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "type": "object",
+      "properties": {
+        "tool": {
+          "type": "string",
+          "enum": ["select", "translate", "rotate", "scale", "universal"]
+        },
+        "space": {
+          "type": "string",
+          "enum": ["world", "local", "view"]
+        },
+        "pivot": {
+          "type": "string",
+          "enum": ["median", "active", "individual"]
+        },
+        "snap": {
+          "type": "object",
+          "properties": {
+            "enabled": {
+              "type": "boolean"
+            },
+            "translate": {
+              "type": "number",
+              "minimum": 0.001,
+              "maximum": 1000
+            },
+            "rotate": {
+              "anyOf": [
+                {
+                  "type": "number",
+                  "minimum": 0.01,
+                  "maximum": 180
+                },
+                {
+                  "type": "object",
+                  "additionalProperties": {
+                    "type": "number"
+                  }
+                }
+              ]
+            },
+            "scale": {
+              "type": "number",
+              "minimum": 0.001,
+              "maximum": 10
+            }
+          },
+          "required": ["enabled", "translate", "rotate", "scale"],
+          "additionalProperties": false
+        },
+        "_editor": {
+          "type": "object",
+          "properties": {
+            "revision": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "transaction": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "dryRun": {
+              "type": "boolean"
+            },
+            "operations": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "warnings": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          },
+          "required": ["revision", "transaction", "dryRun", "operations", "warnings"],
+          "additionalProperties": false
+        }
+      },
+      "required": ["tool", "space", "pivot", "snap", "_editor"],
+      "additionalProperties": false
+    }
+  },
+  "gizmo.set_space": {
+    "version": 1,
+    "permission": "read",
+    "mode": "any",
+    "undoable": false,
+    "readOnly": false,
+    "params": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "type": "object",
+      "properties": {
+        "space": {
+          "type": "string",
+          "enum": ["world", "local", "view"]
+        },
+        "dryRun": {
+          "type": "boolean"
+        },
+        "mergeKey": {
+          "type": "string"
+        },
+        "clientToken": {
+          "type": "string"
+        },
+        "expectRevision": {
+          "anyOf": [
+            {
+              "type": "string",
+              "pattern": "^[0-9]+$"
+            },
+            {
+              "type": "integer",
+              "minimum": 0
+            }
+          ]
+        }
+      },
+      "required": ["space"],
+      "additionalProperties": false
+    },
+    "result": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "type": "object",
+      "properties": {
+        "tool": {
+          "type": "string",
+          "enum": ["select", "translate", "rotate", "scale", "universal"]
+        },
+        "space": {
+          "type": "string",
+          "enum": ["world", "local", "view"]
+        },
+        "pivot": {
+          "type": "string",
+          "enum": ["median", "active", "individual"]
+        },
+        "snap": {
+          "type": "object",
+          "properties": {
+            "enabled": {
+              "type": "boolean"
+            },
+            "translate": {
+              "type": "number",
+              "minimum": 0.001,
+              "maximum": 1000
+            },
+            "rotate": {
+              "anyOf": [
+                {
+                  "type": "number",
+                  "minimum": 0.01,
+                  "maximum": 180
+                },
+                {
+                  "type": "object",
+                  "additionalProperties": {
+                    "type": "number"
+                  }
+                }
+              ]
+            },
+            "scale": {
+              "type": "number",
+              "minimum": 0.001,
+              "maximum": 10
+            }
+          },
+          "required": ["enabled", "translate", "rotate", "scale"],
+          "additionalProperties": false
+        },
+        "_editor": {
+          "type": "object",
+          "properties": {
+            "revision": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "transaction": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "dryRun": {
+              "type": "boolean"
+            },
+            "operations": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "warnings": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          },
+          "required": ["revision", "transaction", "dryRun", "operations", "warnings"],
+          "additionalProperties": false
+        }
+      },
+      "required": ["tool", "space", "pivot", "snap", "_editor"],
+      "additionalProperties": false
+    }
+  },
+  "gizmo.set_tool": {
+    "version": 1,
+    "permission": "read",
+    "mode": "any",
+    "undoable": false,
+    "readOnly": false,
+    "params": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "type": "object",
+      "properties": {
+        "tool": {
+          "type": "string",
+          "enum": ["select", "translate", "rotate", "scale", "universal"]
+        },
+        "dryRun": {
+          "type": "boolean"
+        },
+        "mergeKey": {
+          "type": "string"
+        },
+        "clientToken": {
+          "type": "string"
+        },
+        "expectRevision": {
+          "anyOf": [
+            {
+              "type": "string",
+              "pattern": "^[0-9]+$"
+            },
+            {
+              "type": "integer",
+              "minimum": 0
+            }
+          ]
+        }
+      },
+      "required": ["tool"],
+      "additionalProperties": false
+    },
+    "result": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "type": "object",
+      "properties": {
+        "tool": {
+          "type": "string",
+          "enum": ["select", "translate", "rotate", "scale", "universal"]
+        },
+        "space": {
+          "type": "string",
+          "enum": ["world", "local", "view"]
+        },
+        "pivot": {
+          "type": "string",
+          "enum": ["median", "active", "individual"]
+        },
+        "snap": {
+          "type": "object",
+          "properties": {
+            "enabled": {
+              "type": "boolean"
+            },
+            "translate": {
+              "type": "number",
+              "minimum": 0.001,
+              "maximum": 1000
+            },
+            "rotate": {
+              "anyOf": [
+                {
+                  "type": "number",
+                  "minimum": 0.01,
+                  "maximum": 180
+                },
+                {
+                  "type": "object",
+                  "additionalProperties": {
+                    "type": "number"
+                  }
+                }
+              ]
+            },
+            "scale": {
+              "type": "number",
+              "minimum": 0.001,
+              "maximum": 10
+            }
+          },
+          "required": ["enabled", "translate", "rotate", "scale"],
+          "additionalProperties": false
+        },
+        "_editor": {
+          "type": "object",
+          "properties": {
+            "revision": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "transaction": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "dryRun": {
+              "type": "boolean"
+            },
+            "operations": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "warnings": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          },
+          "required": ["revision", "transaction", "dryRun", "operations", "warnings"],
+          "additionalProperties": false
+        }
+      },
+      "required": ["tool", "space", "pivot", "snap", "_editor"],
+      "additionalProperties": false
+    }
+  },
   "hierarchy.children": {
     "version": 1,
     "permission": "read",
@@ -8646,6 +9285,115 @@
               },
               "minItems": 3,
               "maxItems": 3
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "dryRun": {
+          "type": "boolean"
+        },
+        "mergeKey": {
+          "type": "string"
+        },
+        "clientToken": {
+          "type": "string"
+        },
+        "expectRevision": {
+          "anyOf": [
+            {
+              "type": "string",
+              "pattern": "^[0-9]+$"
+            },
+            {
+              "type": "integer",
+              "minimum": 0
+            }
+          ]
+        }
+      },
+      "required": ["entities"],
+      "additionalProperties": false
+    },
+    "result": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "type": "object",
+      "properties": {
+        "entities": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "name": {
+                "type": "string"
+              },
+              "path": {
+                "type": "string"
+              }
+            },
+            "required": ["id", "name", "path"],
+            "additionalProperties": false
+          }
+        },
+        "_editor": {
+          "type": "object",
+          "properties": {
+            "revision": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "transaction": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "dryRun": {
+              "type": "boolean"
+            },
+            "operations": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "warnings": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          },
+          "required": ["revision", "transaction", "dryRun", "operations", "warnings"],
+          "additionalProperties": false
+        }
+      },
+      "required": ["entities", "_editor"],
+      "additionalProperties": false
+    }
+  },
+  "transform.snap_to_grid": {
+    "version": 1,
+    "permission": "edit",
+    "mode": "edit",
+    "undoable": true,
+    "readOnly": false,
+    "params": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "type": "object",
+      "properties": {
+        "entities": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "increment": {
+          "anyOf": [
+            {
+              "type": "number",
+              "minimum": 0.001,
+              "maximum": 1000
             },
             {
               "type": "null"

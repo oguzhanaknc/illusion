@@ -237,7 +237,22 @@ Plan: `docs/plans/m7-editor.md` (sub-milestones, command API, localization, them
   agent's selection (`followAgent`, from M7l) and the Inspector's entity eyedropper (from M7m); still 115
   commands. CPU tests for the cube, presets, visualisers and agent selection, GPU tests for hover, frusta, icons
   and the preview, and the `viewport/visualisers-record` Benchmark (500 ns per object, 396 measured).
-- M7p: Gizmos, snapping and transform tools
+- M7p-1: ✅ Gizmos, first part: the GPU-free `Gizmo` math in the core (Translate with axes, planes and the view
+  plane; Rotate with axis rings, the view ring and a trackball; Scale along the active entity's axes or
+  uniformly; Universal; constant screen size, hit tests with a tolerance that scales with the display, drag
+  planes that stay stable at grazing angles, axes and planes that fade when they cannot be dragged, unwrapped
+  angles), World/Local/View axes, Median/Active/Individual pivots, move, angle and scale snapping with Ctrl
+  inverting it, Dear ImGui drawing with dimmed back halves of rings, axis letters and the colour-blind axis
+  colours, drags as `transform.set` calls inside one transaction (one undo step; Esc or the right button
+  restores exactly; hierarchy-aware), the toolbar's Q/W/E/R/T tools, axes, pivot and snapping controls, and
+  `gizmo.get`/`set_tool`/`set_space`/`set_pivot`/`set_snap` and `transform.snap_to_grid` (121 commands). Hit
+  tests at 192 poses (perspective and orthographic, 1x and 2x, 10 km from the origin), drag and snapping tests,
+  headless UI drags, two gizmo goldens and the `gizmo/hit-test` Benchmark (2 µs budget; 297 ns
+  measured for the hit test, 1,384 ns with the shape)
+- M7p-2: Gizmos, second part: vertex snap (V, CPU mesh data with a per-mesh spatial grid), surface snap with
+  align-to-normal (depth and normal readback, GPU test that it lands on a plane), snap to ground (End), typed
+  numeric input during a drag, Blender-style G/R/S with X/Y/Z constraints, the bounds-centre pivot, align to
+  view, align and distribute, drop to ground (render bounds; physics raycasts from M7w), measure and ruler
 - M7q: Module API v3: lifecycle, multi-world host, host service interfaces (scripting API) (ADR 0041)
 - M7r: Play mode and the `GameSession` runtime (ADR 0042)
 - M7s: Project modules built from the editor (ADR 0043); opening sources with the External Tools code editor

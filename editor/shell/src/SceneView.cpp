@@ -726,14 +726,31 @@ void SceneView::draw(Impl& shell)
         m_cubeDrag = cubeHovered;
     }
 
+    // The transform gizmo of the selection takes the left drags that start on one of its handles.
+    ViewportGizmo::Frame gizmoFrame;
+    gizmoFrame.viewport = scene && m_last.size.x != 0 ? &m_last : nullptr;
+    gizmoFrame.imageOrigin = imageOrigin;
+    gizmoFrame.toPanel = toPanel;
+    gizmoFrame.pixelScale = kit.scale * toImage.y;
+    gizmoFrame.cursor = (mouse - imageOrigin) * toImage;
+    gizmoFrame.hovered = hovered && !overOverlay && !shell.eyedropper.active;
+    const GizmoHandle gizmoHovered = m_gizmo.hoveredHandle(shell, gizmoFrame);
+    if (ImGui::IsItemActivated() && ImGui::IsMouseClicked(ImGuiMouseButton_Left) &&
+        gizmoHovered != GizmoHandle::None && !m_cubeDrag)
+    {
+        m_gizmoPressed = m_gizmo.begin(shell, gizmoFrame, gizmoHovered);
+    }
+    const bool gizmoDragging = m_gizmo.dragging();
+
     ViewportInput input;
     input.cursor = (mouse - imageOrigin) * toImage;
     input.cursorDelta = Vec2(io.MouseDelta.x, io.MouseDelta.y) * toImage;
-    input.hovered = hovered && (!overOverlay || m_cubeDrag);
+    input.hovered = hovered && (!overOverlay || m_cubeDrag) && !gizmoDragging;
     input.wheel = input.hovered ? io.MouseWheel : 0.0f;
     input.focused = focused;
-    input.buttons = {ImGui::IsMouseDown(ImGuiMouseButton_Left), ImGui::IsMouseDown(ImGuiMouseButton_Right),
-                     ImGui::IsMouseDown(ImGuiMouseButton_Middle)};
+    input.buttons = {ImGui::IsMouseDown(ImGuiMouseButton_Left) && !gizmoDragging,
+                     ImGui::IsMouseDown(ImGuiMouseButton_Right) && !gizmoDragging,
+                     ImGui::IsMouseDown(ImGuiMouseButton_Middle) && !gizmoDragging};
     input.alt = io.KeyAlt;
     input.shift = io.KeyShift;
     input.ctrl = io.KeyCtrl;
@@ -761,7 +778,7 @@ void SceneView::draw(Impl& shell)
     style.axisZ = theme.color(kit.colorBlindAxes ? ui::ThemeToken::AxisCbZ : ui::ThemeToken::AxisZ);
 
     m_last = host->frame(m_id, pixels, input, style);
-    shell.viewportNavigating = shell.viewportNavigating || m_last.navigating;
+    shell.viewportNavigating = shell.viewportNavigating || m_last.navigating || gizmoDragging;
     ImDrawList& draw = *ImGui::GetWindowDrawList();
     if (m_last.texture != 0)
     {
@@ -780,9 +797,15 @@ void SceneView::draw(Impl& shell)
     {
         m_boxing = false;
         m_cubeDrag = false;
+        m_gizmoPressed = false;
+        // A drag cannot go on without an image: update() cancels it.
+        gizmoFrame.viewport = nullptr;
+        m_gizmo.update(shell, gizmoFrame, draw, GizmoHandle::None);
         return;
     }
     const ViewportSettings& settings = m_last.settings;
+    gizmoFrame.viewport = scene ? &m_last : nullptr;
+    m_gizmo.update(shell, gizmoFrame, draw, gizmoHovered);
     if (!m_last.icons.empty())
     {
         drawIcons(shell, draw, m_last.icons, imageOrigin, toPanel, iconRadius, iconHovered);
@@ -827,7 +850,7 @@ void SceneView::draw(Impl& shell)
     const bool dragged = io.MouseDragMaxDistanceSqr[ImGuiMouseButton_Left] >= threshold;
     // A left drag without Alt draws a selection box (not while the eyedropper picks one entity).
     if (ImGui::IsItemActive() && ImGui::IsMouseDown(ImGuiMouseButton_Left) && !io.KeyAlt && dragged &&
-        !m_last.navigating && !m_cubeDrag && !eyedropper.active)
+        !m_last.navigating && !m_cubeDrag && !eyedropper.active && !m_gizmoPressed)
     {
         m_boxing = true;
     }
@@ -839,7 +862,8 @@ void SceneView::draw(Impl& shell)
         draw.AddRect(start, io.MousePos, ImGui::GetColorU32(detail::imvec(style.selection)));
     }
     const char* select = io.KeyCtrl ? "toggle" : io.KeyShift ? "add" : "replace";
-    if (ImGui::IsItemDeactivated() && ImGui::IsMouseReleased(ImGuiMouseButton_Left))
+    // A press that went to the gizmo neither picks nor selects when it is released.
+    if (ImGui::IsItemDeactivated() && ImGui::IsMouseReleased(ImGuiMouseButton_Left) && !m_gizmoPressed)
     {
         if (m_cubeDrag)
         {
@@ -920,11 +944,13 @@ void SceneView::draw(Impl& shell)
         }
         m_boxing = false;
         m_cubeDrag = false;
+        m_gizmoPressed = false;
     }
     else if (!ImGui::IsMouseDown(ImGuiMouseButton_Left))
     {
         m_boxing = false;
         m_cubeDrag = false;
+        m_gizmoPressed = false;
     }
 }
 

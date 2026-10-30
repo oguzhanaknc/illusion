@@ -329,10 +329,20 @@ public:
         return Expected<std::optional<editor::ViewportHit>, editor::CommandError>(hit);
     }
 
-    editor::ViewportFrame frame(std::string_view, UVec2, const editor::ViewportInput&,
+    editor::ViewportFrame frame(std::string_view id, UVec2 panel, const editor::ViewportInput& input,
                                 const editor::ViewportStyle&) override
     {
-        return {};
+        lastInput = input;
+        if (!frames || id != "scene")
+        {
+            return {};
+        }
+        // A Scene viewport without an image, the size of the panel, seen through `camera`.
+        editor::ViewportFrame out;
+        out.size = panel;
+        out.settings = settings;
+        out.camera = camera;
+        return out;
     }
 
     Expected<std::string, editor::CommandError> createViewport() override
@@ -426,6 +436,8 @@ public:
     UVec2 readExtent{0};
     u64 ticket = 0;
     u64 version = 0;
+    bool frames = false;               ///< frame() answers "scene" with an empty image of the panel's size.
+    editor::ViewportInput lastInput{}; ///< The input of the last frame() call.
 };
 
 /// A temporary project made from the empty template, open in an EditorContext.
