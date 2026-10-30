@@ -149,5 +149,6 @@ connects again.
 | A call waits a long time | The editor window waits for a person to approve it (`ask` mode); see the AI Activity panel. |
 | Text summaries end with `truncated` | The result is complete in `structuredContent`; narrow the request with `limit`. |
 | `editor_crashed` | The editor's last log lines are in the error; call again to relaunch and recover. |
+| Edits vanish after `play.stop` | A play session ran: entity and component commands changed the play World. Pass `"world": "edit"`, or copy values with `play.keep_changes` before stopping (see [Play Mode](play-mode.md)). |
 
 Record a session with `--record session.jsonl` to see every message.

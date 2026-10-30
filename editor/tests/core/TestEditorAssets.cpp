@@ -95,7 +95,8 @@ TEST_CASE("asset.list and asset.info describe assets by kind")
     CHECK(kinds["assets:/textures/red.png"] == "Texture");
     CHECK(kinds["assets:/scenes/main.scene"] == "Scene");
     const JsonDocument top = ok(editor, "asset.list");
-    CHECK(top.root().pointer("/assets/0/path").asString() == "assets:/materials");
+    CHECK(top.root().pointer("/assets/0/path").asString() == "assets:/input");
+    CHECK(top.root().pointer("/assets/1/path").asString() == "assets:/materials");
     CHECK(ok(editor, "asset.list", R"({"recursive":true,"kind":"Scene"})").root().find("assets").size() == 2);
 
     const CommandError kind = fails(editor, "asset.list", R"({"kind":"Materal"})");

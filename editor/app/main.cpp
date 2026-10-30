@@ -10,10 +10,12 @@
 #include <illusion/assets/Image.hpp>
 #include <illusion/audio/AudioComponents.hpp>
 #include <illusion/core/EventBus.hpp>
+#include <illusion/core/JobSystem.hpp>
 #include <illusion/core/Log.hpp>
 #include <illusion/core/Time.hpp>
 #include <illusion/core/Version.hpp>
 #include <illusion/editor/core/EditorContext.hpp>
+#include <illusion/editor/play/PlaySession.hpp>
 #include <illusion/editor/rpc/RpcProtocol.hpp>
 #include <illusion/editor/rpc/RpcServer.hpp>
 #include <illusion/editor/shell/EditorShell.hpp>
@@ -252,7 +254,8 @@ UiScreenshot screenshotOf(const Image& image)
 
 // The frame loop without a window: run queued requests, draw the UI offscreen when there is one (rendering
 // it only for screenshots), then end the frame (events, journal, autosave).
-int runHeadless(const Arguments& arguments, EditorContext& editor, rpc::RpcServer& server, u32 stdio)
+int runHeadless(const Arguments& arguments, EditorContext& editor, PlaySession& play, rpc::RpcServer& server,
+                u32 stdio)
 {
     std::unique_ptr<RenderDevice> device;
     std::optional<EditorUi> ui;
@@ -344,6 +347,7 @@ int runHeadless(const Arguments& arguments, EditorContext& editor, rpc::RpcServe
                                                ErrorKind::Internal, "the frame could not be read back"))));
             }
         }
+        play.update(elapsed);
         editor.endFrame(elapsed);
     }
     if (device)
@@ -354,8 +358,8 @@ int runHeadless(const Arguments& arguments, EditorContext& editor, rpc::RpcServe
 }
 
 // The windowed editor: events, requests (8 ms per frame), the UI, then present.
-int runWindowed(const Arguments& arguments, EditorContext& editor, rpc::RpcServer& server, Platform& platform,
-                EventBus& events, Window& window)
+int runWindowed(const Arguments& arguments, EditorContext& editor, PlaySession& play, rpc::RpcServer& server,
+                Platform& platform, EventBus& events, Window& window)
 {
     auto device = RenderDevice::create();
     auto swapchain = device ? Swapchain::create(*device, window) : nullptr;
@@ -430,6 +434,7 @@ int runWindowed(const Arguments& arguments, EditorContext& editor, rpc::RpcServe
             }
             swapchain->present();
         }
+        play.update(delta);
         editor.endFrame(delta);
         ++frames;
     }
@@ -513,6 +518,10 @@ int run(const std::vector<std::string>& args)
     options.mcpServer = executableDirectory() / ("illusion_mcp" ILLUSION_EXECUTABLE_SUFFIX);
     options.userDirectory = arguments.userDirectory;
     EditorContext editor(options);
+    // The game runtime of Play mode (ADR 0042); a headless editor plays without sound.
+    JobSystem jobs;
+    PlaySession play(
+        editor, {.jobs = &jobs, .audioOutput = arguments.headless ? AudioOutput::Null : AudioOutput::Device});
     if (!arguments.project.empty())
     {
         if (Expected<void, CommandError> opened = editor.openProject(arguments.project); !opened)
@@ -591,8 +600,8 @@ int run(const std::vector<std::string>& args)
     }
 
     const int result = arguments.headless
-                           ? runHeadless(arguments, editor, server, stdio)
-                           : runWindowed(arguments, editor, server, *platform, events, *window);
+                           ? runHeadless(arguments, editor, play, server, stdio)
+                           : runWindowed(arguments, editor, play, server, *platform, events, *window);
     // Send the reply to editor.quit before the process ends.
     server.stop();
     if (!endpoint.empty())

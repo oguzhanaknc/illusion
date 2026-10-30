@@ -12,6 +12,7 @@
 #include <illusion/editor/core/Arrange.hpp>
 #include <illusion/editor/core/EntityIndex.hpp>
 #include <illusion/editor/core/Gizmo.hpp>
+#include <illusion/editor/core/PlayHost.hpp>
 #include <illusion/editor/core/ReferenceIndex.hpp>
 #include <illusion/editor/core/Snap.hpp>
 #include <illusion/editor/core/UiHost.hpp>
@@ -1397,6 +1398,188 @@ struct PreferencesSetParams
 struct PreferencesResult
 {
     JsonText value; ///< Every preference.
+};
+
+// --- play --------------------------------------------------------------------------------------------------
+
+/// Params of `play.start`.
+struct PlayStartParams
+{
+    std::optional<std::string> mode{}; ///< "play" (default: the whole game) or "simulate" (physics only).
+    std::optional<bool> fixedStep{};   ///< One physics step per frame and seeded ids (default false).
+    std::optional<u64> seed{};         ///< Seed of the ids of runtime spawns with fixedStep (default 0).
+};
+
+/// Result of the `play.*` commands: the state of the play session.
+struct PlayStatusResult
+{
+    std::string state;      ///< "stopped", "playing" or "paused".
+    std::string mode;       ///< "play" or "simulate".
+    bool fixedStep = false; ///< Deterministic steps.
+    f64 timeScale = 1.0;    ///< Multiplier of the frame time.
+    u32 steps = 0;          ///< Updates of the play World so far (saturates).
+    f64 time = 0.0;         ///< Game time so far, in seconds.
+};
+
+/// Params of `play.pause`.
+struct PlayPauseParams
+{
+    bool paused = true; ///< Pause (true) or resume (false).
+};
+
+/// Params of `play.step`.
+struct PlayStepParams
+{
+    std::optional<u32> steps{}; ///< Fixed physics steps to advance at once (default 1).
+};
+
+/// Params of `play.set_time_scale`.
+struct PlayTimeScaleParams
+{
+    f64 scale = 1.0; ///< Multiplier of the frame time: 0 freezes, 0.5 is slow motion.
+};
+
+/// Params of `play.run_until`.
+struct PlayRunUntilParams
+{
+    u32 maxSteps = 0;   ///< Steps to give up after.
+    std::string entity; ///< Entity reference in the play World.
+    /// Stop once the entity exists (true) or is gone (false). Without it, compare a value instead.
+    std::optional<bool> exists{};
+    std::optional<std::string> component{}; ///< Stable name of the Component to compare.
+    std::optional<std::string> field{}; ///< JSON Pointer into its value, e.g. "/lines" ("" or absent: all).
+    std::optional<JsonText> equals{};   ///< The value to wait for.
+};
+
+/// Result of `play.run_until`.
+struct PlayRunUntilResult
+{
+    bool met = false;        ///< The condition held before maxSteps.
+    u32 steps = 0;           ///< Steps taken by this call.
+    PlayStatusResult status; ///< The session afterwards.
+};
+
+/// Params of `play.keep_changes`.
+struct PlayKeepChangesParams
+{
+    std::vector<std::string> entities;                    ///< Entity references in the play World.
+    std::optional<std::vector<std::string>> components{}; ///< Stable Component names (default: all saved).
+};
+
+/// Result of `play.keep_changes`.
+struct PlayKeepChangesResult
+{
+    u32 entities = 0;   ///< Entities whose values were copied.
+    u32 components = 0; ///< Component values copied in all.
+};
+
+// --- module ------------------------------------------------------------------------------------------------
+
+/// Params of `module.load`.
+struct ModuleLoadParams
+{
+    std::string path; ///< File path of the module's shared library.
+};
+
+/// Params of `module.unload`.
+struct ModuleUnloadParams
+{
+    std::string name; ///< The module.
+};
+
+/// Result of the `module.*` commands.
+struct ModuleListResult
+{
+    std::vector<PlayModuleInfo> modules; ///< Loaded modules in load order.
+};
+
+// --- input -------------------------------------------------------------------------------------------------
+
+/// Params of `input.actions`.
+struct InputAssetParams
+{
+    std::string asset; ///< The input actions asset, e.g. "assets:/input/game.input".
+};
+
+/// One action of an input actions asset.
+struct InputActionInfo
+{
+    std::string name;                  ///< The action.
+    std::string type;                  ///< "Button", "Axis" or "Vector2".
+    std::vector<std::string> bindings; ///< Bindings in text form, e.g. "Key.Space".
+};
+
+/// Result of the `input.*` asset commands.
+struct InputActionsResult
+{
+    std::string asset;                    ///< The asset.
+    std::vector<InputActionInfo> actions; ///< Its actions in order.
+};
+
+/// Params of `input.action_define`.
+struct InputActionDefineParams
+{
+    std::string asset;                                  ///< The asset (created when missing).
+    std::string name;                                   ///< The action; an existing one is replaced.
+    std::string type;                                   ///< "Button", "Axis" or "Vector2".
+    std::optional<std::vector<std::string>> bindings{}; ///< Its bindings (default none).
+};
+
+/// Params of `input.action_remove`.
+struct InputActionParams
+{
+    std::string asset; ///< The asset.
+    std::string name;  ///< The action.
+};
+
+/// Params of `input.action_rename`.
+struct InputActionRenameParams
+{
+    std::string asset;   ///< The asset.
+    std::string name;    ///< The action.
+    std::string newName; ///< Its new name.
+};
+
+/// Params of `input.bind` and `input.unbind`.
+struct InputBindParams
+{
+    std::string asset;   ///< The asset.
+    std::string action;  ///< The action.
+    std::string binding; ///< The binding in text form, e.g. "Key.Space" or "Gamepad.South".
+};
+
+/// A key change for `input.inject`.
+struct InputKeyEvent
+{
+    std::string key;  ///< Key name, e.g. "Space", "Left", "A".
+    bool down = true; ///< Pressed (true) or released.
+};
+
+/// A mouse button change for `input.inject`.
+struct InputButtonEvent
+{
+    std::string button; ///< "Left", "Right" or "Middle".
+    bool down = true;   ///< Pressed (true) or released.
+};
+
+/// Params of `input.inject`.
+struct InputInjectParams
+{
+    std::optional<std::vector<InputKeyEvent>> keys{};            ///< Key changes, in order.
+    std::optional<std::vector<InputButtonEvent>> mouseButtons{}; ///< Mouse button changes, in order.
+    std::optional<Vec2> mousePosition{};                         ///< Cursor position in the game view.
+};
+
+/// Params of `input.read`.
+struct InputReadParams
+{
+    std::optional<std::vector<std::string>> actions{}; ///< Only these actions (default: all).
+};
+
+/// Result of `input.read`.
+struct InputReadResult
+{
+    std::vector<PlayActionState> actions; ///< The actions of the running game.
 };
 
 } // namespace illusion::editor

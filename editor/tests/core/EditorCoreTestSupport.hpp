@@ -8,9 +8,11 @@
 #include <illusion/core/AssetRef.hpp>
 #include <illusion/core/Json.hpp>
 #include <illusion/ecs/Reflection.hpp>
+#include <illusion/ecs/SceneSerializer.hpp>
 #include <illusion/ecs/StructRegistry.hpp>
 #include <illusion/editor/core/CoreCommands.hpp>
 #include <illusion/editor/core/EditorContext.hpp>
+#include <illusion/editor/core/PlayHost.hpp>
 #include <illusion/editor/core/UiHost.hpp>
 #include <illusion/editor/core/ViewportHost.hpp>
 #include <illusion/platform/FileSystem.hpp>
@@ -467,12 +469,136 @@ public:
     editor::ViewportInput lastInput{}; ///< The input of the last frame() call.
 };
 
+/// A game runtime without a game for the core tests: start() copies the edit World into a World of its own
+/// and attaches it, steps only count, input events are recorded, the game has one Button action "Jump", and
+/// a static module "fake" is loaded (module.load accepts any path ending in ".dll").
+class FakePlay final : public editor::PlayHost
+{
+public:
+    explicit FakePlay(editor::EditorContext*& editor)
+        : m_editor(editor)
+    {
+    }
+
+    Expected<void, editor::CommandError> start(const editor::PlayStartOptions& options) override
+    {
+        if (m_world)
+        {
+            return unexpected(editor::CommandError::make(editor::ErrorKind::PreconditionFailed, "playing"));
+        }
+        Expected<std::string, editor::CommandError> scene = m_editor->sceneJson();
+        if (!scene)
+        {
+            return unexpected(std::move(scene).error());
+        }
+        m_world = std::make_unique<World>();
+        const SceneLoadResult loaded = loadScene(*m_world, *scene);
+        REQUIRE_MESSAGE(loaded.ok(), loaded.error);
+        m_status = editor::PlayStatus{
+            editor::PlayState::Playing, options.mode, options.fixedStep, m_status.timeScale, 0, 0.0};
+        m_editor->attachPlayWorld(*m_world);
+        return {};
+    }
+
+    void stop() override
+    {
+        if (m_world)
+        {
+            m_editor->detachPlayWorld();
+            m_world.reset();
+            m_status = editor::PlayStatus{.timeScale = m_status.timeScale};
+        }
+    }
+
+    void setPaused(bool paused) override
+    {
+        if (m_world)
+        {
+            m_status.state = paused ? editor::PlayState::Paused : editor::PlayState::Playing;
+        }
+    }
+
+    u32 step(u32 steps) override
+    {
+        if (!m_world)
+        {
+            return 0;
+        }
+        m_status.steps += steps;
+        m_status.time += steps / 60.0;
+        m_editor->playWorldAdvanced();
+        return steps;
+    }
+
+    void setTimeScale(f64 scale) override { m_status.timeScale = scale; }
+
+    editor::PlayStatus status() const override { return m_status; }
+
+    Expected<void, editor::CommandError> inject(const editor::PlayInputEvent& event) override
+    {
+        events.push_back(event);
+        return {};
+    }
+
+    void actionStates(std::vector<editor::PlayActionState>& out) const override
+    {
+        if (m_world)
+        {
+            out.push_back(editor::PlayActionState{.name = "Jump", .type = "Button"});
+        }
+    }
+
+    void playWorldEdited(std::span<const editor::Operation> operations) override
+    {
+        edited += operations.size();
+    }
+
+    Expected<std::string, editor::CommandError> loadModule(std::string_view path) override
+    {
+        if (!path.ends_with(".dll"))
+        {
+            return unexpected(editor::CommandError::make(editor::ErrorKind::ModuleError, "not a module"));
+        }
+        m_modules.push_back(editor::PlayModuleInfo{"game", "1.0.0", std::string(path), true, 0});
+        return std::string("game");
+    }
+
+    bool unloadModule(std::string_view name) override
+    {
+        const auto found =
+            std::find_if(m_modules.begin(), m_modules.end(),
+                         [&](const editor::PlayModuleInfo& module) { return module.name == name; });
+        if (found == m_modules.end())
+        {
+            return false;
+        }
+        m_modules.erase(found);
+        return true;
+    }
+
+    void modules(std::vector<editor::PlayModuleInfo>& out) const override
+    {
+        out.insert(out.end(), m_modules.begin(), m_modules.end());
+    }
+
+    std::vector<editor::PlayInputEvent> events; ///< Every inject() so far.
+    usize edited = 0;                           ///< Operations passed to playWorldEdited().
+
+private:
+    editor::EditorContext*& m_editor;
+    std::unique_ptr<World> m_world;
+    editor::PlayStatus m_status;
+    std::vector<editor::PlayModuleInfo> m_modules{{"fake", "1.0.0", "", false, 0}};
+};
+
 /// A temporary project made from the empty template, open in an EditorContext.
 struct EditorFixture
 {
     TempDirectory directory;
     FakeUi ui;
     FakeViewports viewports;
+    editor::EditorContext* current = nullptr;
+    FakePlay play{current};
     std::unique_ptr<editor::EditorContext> editor;
 
     explicit EditorFixture(u64 seed = 1, editor::EditorContextOptions options = {})
@@ -484,9 +610,15 @@ struct EditorFixture
         open(seed, options);
     }
 
+    ~EditorFixture() { play.stop(); }
+
+    EditorFixture(const EditorFixture&) = delete;
+    EditorFixture& operator=(const EditorFixture&) = delete;
+
     /// (Re)creates the editor on the project.
     void open(u64 seed, editor::EditorContextOptions options = {})
     {
+        play.stop();
         editor.reset();
         options.seed = seed;
         if (options.workspace.empty())
@@ -496,6 +628,8 @@ struct EditorFixture
         editor = std::make_unique<editor::EditorContext>(options);
         editor->setUi(&ui);
         editor->setViewports(&viewports);
+        editor->setPlay(&play);
+        current = editor.get();
         const Expected<void, editor::CommandError> opened = editor->openProject(directory.path / "project");
         REQUIRE_MESSAGE(opened.hasValue(), (opened ? std::string() : opened.error().message));
         addTestSettings(*editor);
@@ -535,6 +669,7 @@ struct EditorFixture
     ///     assets:/scenes/other.scene       an entity "Prop" with test.Look -> red.material
     ///     /Light gets test.Look            material -> red.material, extras ->
     ///     [assets:/models/ship.glb#mesh/0]
+    ///     assets:/input/game.input       a Button action "Jump" bound to Key.Space
     void addAssets()
     {
         editor::EditorContext& e = *editor;
@@ -549,6 +684,8 @@ struct EditorFixture
         ok(e, "component.add",
            R"({"entity":"/Light","type":"test.Look","value":{"material":"assets:/materials/red.material",)"
            R"("extras":["assets:/models/ship.glb#mesh/0"]}})");
+        ok(e, "input.action_define",
+           R"({"asset":"assets:/input/game.input","name":"Jump","type":"Button","bindings":["Key.Space"]})");
         ok(e, "scene.save");
         ok(e, "history.clear");
     }

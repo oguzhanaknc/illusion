@@ -202,6 +202,10 @@
       "properties": {
         "path": {
           "type": "string"
+        },
+        "world": {
+          "type": "string",
+          "enum": ["edit", "play"]
         }
       },
       "required": ["path"],
@@ -262,6 +266,10 @@
       "properties": {
         "path": {
           "type": "string"
+        },
+        "world": {
+          "type": "string",
+          "enum": ["edit", "play"]
         }
       },
       "required": ["path"],
@@ -371,6 +379,10 @@
               "type": "null"
             }
           ]
+        },
+        "world": {
+          "type": "string",
+          "enum": ["edit", "play"]
         }
       },
       "additionalProperties": false
@@ -547,6 +559,10 @@
       "properties": {
         "path": {
           "type": "string"
+        },
+        "world": {
+          "type": "string",
+          "enum": ["edit", "play"]
         }
       },
       "required": ["path"],
@@ -676,6 +692,10 @@
               "minimum": 0
             }
           ]
+        },
+        "world": {
+          "type": "string",
+          "enum": ["edit", "play"]
         }
       },
       "additionalProperties": false
@@ -870,6 +890,10 @@
               "minimum": 0
             }
           ]
+        },
+        "world": {
+          "type": "string",
+          "enum": ["edit", "play"]
         }
       },
       "additionalProperties": false
@@ -1017,6 +1041,10 @@
           "items": {
             "type": "string"
           }
+        },
+        "world": {
+          "type": "string",
+          "enum": ["edit", "play"]
         }
       },
       "required": ["entities"],
@@ -1070,7 +1098,7 @@
   "clipboard.cut": {
     "version": 1,
     "permission": "edit",
-    "mode": "edit",
+    "mode": "any",
     "undoable": true,
     "readOnly": false,
     "params": {
@@ -1103,6 +1131,10 @@
               "minimum": 0
             }
           ]
+        },
+        "world": {
+          "type": "string",
+          "enum": ["edit", "play"]
         }
       },
       "required": ["entities"],
@@ -1156,7 +1188,7 @@
   "clipboard.paste": {
     "version": 1,
     "permission": "edit",
-    "mode": "edit",
+    "mode": "any",
     "undoable": true,
     "readOnly": false,
     "params": {
@@ -1215,6 +1247,10 @@
               "minimum": 0
             }
           ]
+        },
+        "world": {
+          "type": "string",
+          "enum": ["edit", "play"]
         }
       },
       "additionalProperties": false
@@ -1278,7 +1314,7 @@
   "component.add": {
     "version": 1,
     "permission": "edit",
-    "mode": "edit",
+    "mode": "any",
     "undoable": true,
     "readOnly": false,
     "params": {
@@ -1319,6 +1355,10 @@
               "minimum": 0
             }
           ]
+        },
+        "world": {
+          "type": "string",
+          "enum": ["edit", "play"]
         }
       },
       "required": ["entity", "type"],
@@ -1386,7 +1426,7 @@
   "component.copy": {
     "version": 1,
     "permission": "edit",
-    "mode": "edit",
+    "mode": "any",
     "undoable": false,
     "readOnly": false,
     "params": {
@@ -1419,6 +1459,10 @@
               "minimum": 0
             }
           ]
+        },
+        "world": {
+          "type": "string",
+          "enum": ["edit", "play"]
         }
       },
       "required": ["entity", "type"],
@@ -1490,6 +1534,10 @@
               "type": "null"
             }
           ]
+        },
+        "world": {
+          "type": "string",
+          "enum": ["edit", "play"]
         }
       },
       "required": ["entity", "type"],
@@ -1536,7 +1584,7 @@
   "component.paste": {
     "version": 1,
     "permission": "edit",
-    "mode": "edit",
+    "mode": "any",
     "undoable": true,
     "readOnly": false,
     "params": {
@@ -1569,6 +1617,10 @@
               "minimum": 0
             }
           ]
+        },
+        "world": {
+          "type": "string",
+          "enum": ["edit", "play"]
         }
       },
       "required": ["entities"],
@@ -1641,7 +1693,7 @@
   "component.remove": {
     "version": 1,
     "permission": "edit",
-    "mode": "edit",
+    "mode": "any",
     "undoable": true,
     "readOnly": false,
     "params": {
@@ -1674,6 +1726,10 @@
               "minimum": 0
             }
           ]
+        },
+        "world": {
+          "type": "string",
+          "enum": ["edit", "play"]
         }
       },
       "required": ["entity", "type"],
@@ -1735,7 +1791,7 @@
   "component.reset": {
     "version": 1,
     "permission": "edit",
-    "mode": "edit",
+    "mode": "any",
     "undoable": true,
     "readOnly": false,
     "params": {
@@ -1778,6 +1834,10 @@
               "minimum": 0
             }
           ]
+        },
+        "world": {
+          "type": "string",
+          "enum": ["edit", "play"]
         }
       },
       "required": ["entity", "type"],
@@ -1851,6 +1911,10 @@
       "properties": {
         "type": {
           "type": "string"
+        },
+        "world": {
+          "type": "string",
+          "enum": ["edit", "play"]
         }
       },
       "required": ["type"],
@@ -1905,7 +1969,7 @@
   "component.set": {
     "version": 1,
     "permission": "edit",
-    "mode": "edit",
+    "mode": "any",
     "undoable": true,
     "readOnly": false,
     "params": {
@@ -1939,6 +2003,10 @@
               "minimum": 0
             }
           ]
+        },
+        "world": {
+          "type": "string",
+          "enum": ["edit", "play"]
         }
       },
       "required": ["entity", "type", "value"],
@@ -2003,7 +2071,7 @@
   "component.set_field": {
     "version": 1,
     "permission": "edit",
-    "mode": "edit",
+    "mode": "any",
     "undoable": true,
     "readOnly": false,
     "params": {
@@ -2040,6 +2108,10 @@
               "minimum": 0
             }
           ]
+        },
+        "world": {
+          "type": "string",
+          "enum": ["edit", "play"]
         }
       },
       "required": ["entity", "type", "path", "value"],
@@ -2120,6 +2192,10 @@
               "type": "null"
             }
           ]
+        },
+        "world": {
+          "type": "string",
+          "enum": ["edit", "play"]
         }
       },
       "additionalProperties": false
@@ -2357,6 +2433,10 @@
       "properties": {
         "command": {
           "type": "string"
+        },
+        "world": {
+          "type": "string",
+          "enum": ["edit", "play"]
         }
       },
       "required": ["command"],
@@ -2475,6 +2555,10 @@
               "type": "null"
             }
           ]
+        },
+        "world": {
+          "type": "string",
+          "enum": ["edit", "play"]
         }
       },
       "additionalProperties": false
@@ -2585,6 +2669,10 @@
               "type": "null"
             }
           ]
+        },
+        "world": {
+          "type": "string",
+          "enum": ["edit", "play"]
         }
       },
       "additionalProperties": false
@@ -2666,6 +2754,10 @@
           "type": "integer",
           "minimum": 0,
           "maximum": 4294967295
+        },
+        "world": {
+          "type": "string",
+          "enum": ["edit", "play"]
         }
       },
       "required": ["frames"],
@@ -2716,7 +2808,7 @@
   "entity.create": {
     "version": 1,
     "permission": "edit",
-    "mode": "edit",
+    "mode": "any",
     "undoable": true,
     "readOnly": false,
     "params": {
@@ -2783,6 +2875,10 @@
               "minimum": 0
             }
           ]
+        },
+        "world": {
+          "type": "string",
+          "enum": ["edit", "play"]
         }
       },
       "additionalProperties": false
@@ -2843,7 +2939,7 @@
   "entity.destroy": {
     "version": 1,
     "permission": "edit",
-    "mode": "edit",
+    "mode": "any",
     "undoable": true,
     "readOnly": false,
     "params": {
@@ -2876,6 +2972,10 @@
               "minimum": 0
             }
           ]
+        },
+        "world": {
+          "type": "string",
+          "enum": ["edit", "play"]
         }
       },
       "required": ["entities"],
@@ -2926,7 +3026,7 @@
   "entity.duplicate": {
     "version": 1,
     "permission": "edit",
-    "mode": "edit",
+    "mode": "any",
     "undoable": true,
     "readOnly": false,
     "params": {
@@ -2959,6 +3059,10 @@
               "minimum": 0
             }
           ]
+        },
+        "world": {
+          "type": "string",
+          "enum": ["edit", "play"]
         }
       },
       "required": ["entities"],
@@ -3044,6 +3148,10 @@
               "type": "null"
             }
           ]
+        },
+        "world": {
+          "type": "string",
+          "enum": ["edit", "play"]
         }
       },
       "required": ["name"],
@@ -3145,6 +3253,10 @@
               "type": "null"
             }
           ]
+        },
+        "world": {
+          "type": "string",
+          "enum": ["edit", "play"]
         }
       },
       "required": ["entity"],
@@ -3225,7 +3337,7 @@
   "entity.rename": {
     "version": 1,
     "permission": "edit",
-    "mode": "edit",
+    "mode": "any",
     "undoable": true,
     "readOnly": false,
     "params": {
@@ -3258,6 +3370,10 @@
               "minimum": 0
             }
           ]
+        },
+        "world": {
+          "type": "string",
+          "enum": ["edit", "play"]
         }
       },
       "required": ["entity", "name"],
@@ -3319,7 +3435,7 @@
   "entity.set_enabled": {
     "version": 1,
     "permission": "edit",
-    "mode": "edit",
+    "mode": "any",
     "undoable": true,
     "readOnly": false,
     "params": {
@@ -3352,6 +3468,10 @@
               "minimum": 0
             }
           ]
+        },
+        "world": {
+          "type": "string",
+          "enum": ["edit", "play"]
         }
       },
       "required": ["entity", "enabled"],
@@ -3440,6 +3560,10 @@
               "minimum": 0
             }
           ]
+        },
+        "world": {
+          "type": "string",
+          "enum": ["edit", "play"]
         }
       },
       "additionalProperties": false
@@ -3570,7 +3694,12 @@
     "params": {
       "$schema": "https://json-schema.org/draft/2020-12/schema",
       "type": "object",
-      "properties": {},
+      "properties": {
+        "world": {
+          "type": "string",
+          "enum": ["edit", "play"]
+        }
+      },
       "additionalProperties": false
     },
     "result": {
@@ -3773,6 +3902,10 @@
               "minimum": 0
             }
           ]
+        },
+        "world": {
+          "type": "string",
+          "enum": ["edit", "play"]
         }
       },
       "additionalProperties": false
@@ -3969,6 +4102,10 @@
               "minimum": 0
             }
           ]
+        },
+        "world": {
+          "type": "string",
+          "enum": ["edit", "play"]
         }
       },
       "required": ["pivot"],
@@ -4187,6 +4324,10 @@
               "minimum": 0
             }
           ]
+        },
+        "world": {
+          "type": "string",
+          "enum": ["edit", "play"]
         }
       },
       "additionalProperties": false
@@ -4342,6 +4483,10 @@
               "minimum": 0
             }
           ]
+        },
+        "world": {
+          "type": "string",
+          "enum": ["edit", "play"]
         }
       },
       "required": ["space"],
@@ -4498,6 +4643,10 @@
               "minimum": 0
             }
           ]
+        },
+        "world": {
+          "type": "string",
+          "enum": ["edit", "play"]
         }
       },
       "required": ["tool"],
@@ -4639,6 +4788,10 @@
               "type": "null"
             }
           ]
+        },
+        "world": {
+          "type": "string",
+          "enum": ["edit", "play"]
         }
       },
       "additionalProperties": false
@@ -4702,7 +4855,7 @@
   "hierarchy.reorder": {
     "version": 1,
     "permission": "edit",
-    "mode": "edit",
+    "mode": "any",
     "undoable": true,
     "readOnly": false,
     "params": {
@@ -4737,6 +4890,10 @@
               "minimum": 0
             }
           ]
+        },
+        "world": {
+          "type": "string",
+          "enum": ["edit", "play"]
         }
       },
       "required": ["entity", "index"],
@@ -4798,7 +4955,7 @@
   "hierarchy.set_parent": {
     "version": 1,
     "permission": "edit",
-    "mode": "edit",
+    "mode": "any",
     "undoable": true,
     "readOnly": false,
     "params": {
@@ -4860,6 +5017,10 @@
               "minimum": 0
             }
           ]
+        },
+        "world": {
+          "type": "string",
+          "enum": ["edit", "play"]
         }
       },
       "required": ["entity"],
@@ -5119,7 +5280,12 @@
     "params": {
       "$schema": "https://json-schema.org/draft/2020-12/schema",
       "type": "object",
-      "properties": {},
+      "properties": {
+        "world": {
+          "type": "string",
+          "enum": ["edit", "play"]
+        }
+      },
       "additionalProperties": false
     },
     "result": {
@@ -5432,6 +5598,857 @@
       "additionalProperties": false
     }
   },
+  "input.action_define": {
+    "version": 1,
+    "permission": "files",
+    "mode": "edit",
+    "undoable": true,
+    "readOnly": false,
+    "params": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "type": "object",
+      "properties": {
+        "asset": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        },
+        "type": {
+          "type": "string"
+        },
+        "bindings": {
+          "anyOf": [
+            {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "dryRun": {
+          "type": "boolean"
+        },
+        "mergeKey": {
+          "type": "string"
+        },
+        "clientToken": {
+          "type": "string"
+        },
+        "expectRevision": {
+          "anyOf": [
+            {
+              "type": "string",
+              "pattern": "^[0-9]+$"
+            },
+            {
+              "type": "integer",
+              "minimum": 0
+            }
+          ]
+        }
+      },
+      "required": ["asset", "name", "type"],
+      "additionalProperties": false
+    },
+    "result": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "type": "object",
+      "properties": {
+        "asset": {
+          "type": "string"
+        },
+        "actions": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "name": {
+                "type": "string"
+              },
+              "type": {
+                "type": "string"
+              },
+              "bindings": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              }
+            },
+            "required": ["name", "type", "bindings"],
+            "additionalProperties": false
+          }
+        },
+        "_editor": {
+          "type": "object",
+          "properties": {
+            "revision": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "transaction": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "dryRun": {
+              "type": "boolean"
+            },
+            "operations": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "warnings": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          },
+          "required": ["revision", "transaction", "dryRun", "operations", "warnings"],
+          "additionalProperties": false
+        }
+      },
+      "required": ["asset", "actions", "_editor"],
+      "additionalProperties": false
+    }
+  },
+  "input.action_remove": {
+    "version": 1,
+    "permission": "files",
+    "mode": "edit",
+    "undoable": true,
+    "readOnly": false,
+    "params": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "type": "object",
+      "properties": {
+        "asset": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        },
+        "dryRun": {
+          "type": "boolean"
+        },
+        "mergeKey": {
+          "type": "string"
+        },
+        "clientToken": {
+          "type": "string"
+        },
+        "expectRevision": {
+          "anyOf": [
+            {
+              "type": "string",
+              "pattern": "^[0-9]+$"
+            },
+            {
+              "type": "integer",
+              "minimum": 0
+            }
+          ]
+        }
+      },
+      "required": ["asset", "name"],
+      "additionalProperties": false
+    },
+    "result": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "type": "object",
+      "properties": {
+        "asset": {
+          "type": "string"
+        },
+        "actions": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "name": {
+                "type": "string"
+              },
+              "type": {
+                "type": "string"
+              },
+              "bindings": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              }
+            },
+            "required": ["name", "type", "bindings"],
+            "additionalProperties": false
+          }
+        },
+        "_editor": {
+          "type": "object",
+          "properties": {
+            "revision": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "transaction": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "dryRun": {
+              "type": "boolean"
+            },
+            "operations": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "warnings": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          },
+          "required": ["revision", "transaction", "dryRun", "operations", "warnings"],
+          "additionalProperties": false
+        }
+      },
+      "required": ["asset", "actions", "_editor"],
+      "additionalProperties": false
+    }
+  },
+  "input.action_rename": {
+    "version": 1,
+    "permission": "files",
+    "mode": "edit",
+    "undoable": true,
+    "readOnly": false,
+    "params": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "type": "object",
+      "properties": {
+        "asset": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        },
+        "newName": {
+          "type": "string"
+        },
+        "dryRun": {
+          "type": "boolean"
+        },
+        "mergeKey": {
+          "type": "string"
+        },
+        "clientToken": {
+          "type": "string"
+        },
+        "expectRevision": {
+          "anyOf": [
+            {
+              "type": "string",
+              "pattern": "^[0-9]+$"
+            },
+            {
+              "type": "integer",
+              "minimum": 0
+            }
+          ]
+        }
+      },
+      "required": ["asset", "name", "newName"],
+      "additionalProperties": false
+    },
+    "result": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "type": "object",
+      "properties": {
+        "asset": {
+          "type": "string"
+        },
+        "actions": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "name": {
+                "type": "string"
+              },
+              "type": {
+                "type": "string"
+              },
+              "bindings": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              }
+            },
+            "required": ["name", "type", "bindings"],
+            "additionalProperties": false
+          }
+        },
+        "_editor": {
+          "type": "object",
+          "properties": {
+            "revision": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "transaction": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "dryRun": {
+              "type": "boolean"
+            },
+            "operations": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "warnings": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          },
+          "required": ["revision", "transaction", "dryRun", "operations", "warnings"],
+          "additionalProperties": false
+        }
+      },
+      "required": ["asset", "actions", "_editor"],
+      "additionalProperties": false
+    }
+  },
+  "input.actions": {
+    "version": 1,
+    "permission": "read",
+    "mode": "any",
+    "undoable": false,
+    "readOnly": true,
+    "params": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "type": "object",
+      "properties": {
+        "asset": {
+          "type": "string"
+        },
+        "world": {
+          "type": "string",
+          "enum": ["edit", "play"]
+        }
+      },
+      "required": ["asset"],
+      "additionalProperties": false
+    },
+    "result": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "type": "object",
+      "properties": {
+        "asset": {
+          "type": "string"
+        },
+        "actions": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "name": {
+                "type": "string"
+              },
+              "type": {
+                "type": "string"
+              },
+              "bindings": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              }
+            },
+            "required": ["name", "type", "bindings"],
+            "additionalProperties": false
+          }
+        },
+        "_editor": {
+          "type": "object",
+          "properties": {
+            "revision": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "transaction": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "dryRun": {
+              "type": "boolean"
+            },
+            "operations": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "warnings": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          },
+          "required": ["revision", "transaction", "dryRun", "operations", "warnings"],
+          "additionalProperties": false
+        }
+      },
+      "required": ["asset", "actions", "_editor"],
+      "additionalProperties": false
+    }
+  },
+  "input.bind": {
+    "version": 1,
+    "permission": "files",
+    "mode": "edit",
+    "undoable": true,
+    "readOnly": false,
+    "params": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "type": "object",
+      "properties": {
+        "asset": {
+          "type": "string"
+        },
+        "action": {
+          "type": "string"
+        },
+        "binding": {
+          "type": "string"
+        },
+        "dryRun": {
+          "type": "boolean"
+        },
+        "mergeKey": {
+          "type": "string"
+        },
+        "clientToken": {
+          "type": "string"
+        },
+        "expectRevision": {
+          "anyOf": [
+            {
+              "type": "string",
+              "pattern": "^[0-9]+$"
+            },
+            {
+              "type": "integer",
+              "minimum": 0
+            }
+          ]
+        }
+      },
+      "required": ["asset", "action", "binding"],
+      "additionalProperties": false
+    },
+    "result": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "type": "object",
+      "properties": {
+        "asset": {
+          "type": "string"
+        },
+        "actions": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "name": {
+                "type": "string"
+              },
+              "type": {
+                "type": "string"
+              },
+              "bindings": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              }
+            },
+            "required": ["name", "type", "bindings"],
+            "additionalProperties": false
+          }
+        },
+        "_editor": {
+          "type": "object",
+          "properties": {
+            "revision": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "transaction": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "dryRun": {
+              "type": "boolean"
+            },
+            "operations": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "warnings": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          },
+          "required": ["revision", "transaction", "dryRun", "operations", "warnings"],
+          "additionalProperties": false
+        }
+      },
+      "required": ["asset", "actions", "_editor"],
+      "additionalProperties": false
+    }
+  },
+  "input.inject": {
+    "version": 1,
+    "permission": "edit",
+    "mode": "play",
+    "undoable": false,
+    "readOnly": false,
+    "params": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "type": "object",
+      "properties": {
+        "keys": {
+          "anyOf": [
+            {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "key": {
+                    "type": "string"
+                  },
+                  "down": {
+                    "type": "boolean"
+                  }
+                },
+                "required": ["key", "down"],
+                "additionalProperties": false
+              }
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "mouseButtons": {
+          "anyOf": [
+            {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "button": {
+                    "type": "string"
+                  },
+                  "down": {
+                    "type": "boolean"
+                  }
+                },
+                "required": ["button", "down"],
+                "additionalProperties": false
+              }
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "mousePosition": {
+          "anyOf": [
+            {
+              "type": "array",
+              "items": {
+                "type": "number"
+              },
+              "minItems": 2,
+              "maxItems": 2
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "dryRun": {
+          "type": "boolean"
+        },
+        "mergeKey": {
+          "type": "string"
+        },
+        "clientToken": {
+          "type": "string"
+        },
+        "expectRevision": {
+          "anyOf": [
+            {
+              "type": "string",
+              "pattern": "^[0-9]+$"
+            },
+            {
+              "type": "integer",
+              "minimum": 0
+            }
+          ]
+        }
+      },
+      "additionalProperties": false
+    },
+    "result": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "type": "object",
+      "properties": {
+        "_editor": {
+          "type": "object",
+          "properties": {
+            "revision": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "transaction": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "dryRun": {
+              "type": "boolean"
+            },
+            "operations": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "warnings": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          },
+          "required": ["revision", "transaction", "dryRun", "operations", "warnings"],
+          "additionalProperties": false
+        }
+      },
+      "additionalProperties": false,
+      "required": ["_editor"]
+    }
+  },
+  "input.read": {
+    "version": 1,
+    "permission": "read",
+    "mode": "play",
+    "undoable": false,
+    "readOnly": true,
+    "params": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "type": "object",
+      "properties": {
+        "actions": {
+          "anyOf": [
+            {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "additionalProperties": false
+    },
+    "result": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "type": "object",
+      "properties": {
+        "actions": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "name": {
+                "type": "string"
+              },
+              "type": {
+                "type": "string"
+              },
+              "down": {
+                "type": "boolean"
+              },
+              "pressed": {
+                "type": "boolean"
+              },
+              "released": {
+                "type": "boolean"
+              },
+              "value": {
+                "type": "array",
+                "items": {
+                  "type": "number"
+                },
+                "minItems": 2,
+                "maxItems": 2
+              }
+            },
+            "required": ["name", "type", "down", "pressed", "released", "value"],
+            "additionalProperties": false
+          }
+        },
+        "_editor": {
+          "type": "object",
+          "properties": {
+            "revision": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "transaction": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "dryRun": {
+              "type": "boolean"
+            },
+            "operations": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "warnings": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          },
+          "required": ["revision", "transaction", "dryRun", "operations", "warnings"],
+          "additionalProperties": false
+        }
+      },
+      "required": ["actions", "_editor"],
+      "additionalProperties": false
+    }
+  },
+  "input.unbind": {
+    "version": 1,
+    "permission": "files",
+    "mode": "edit",
+    "undoable": true,
+    "readOnly": false,
+    "params": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "type": "object",
+      "properties": {
+        "asset": {
+          "type": "string"
+        },
+        "action": {
+          "type": "string"
+        },
+        "binding": {
+          "type": "string"
+        },
+        "dryRun": {
+          "type": "boolean"
+        },
+        "mergeKey": {
+          "type": "string"
+        },
+        "clientToken": {
+          "type": "string"
+        },
+        "expectRevision": {
+          "anyOf": [
+            {
+              "type": "string",
+              "pattern": "^[0-9]+$"
+            },
+            {
+              "type": "integer",
+              "minimum": 0
+            }
+          ]
+        }
+      },
+      "required": ["asset", "action", "binding"],
+      "additionalProperties": false
+    },
+    "result": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "type": "object",
+      "properties": {
+        "asset": {
+          "type": "string"
+        },
+        "actions": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "name": {
+                "type": "string"
+              },
+              "type": {
+                "type": "string"
+              },
+              "bindings": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              }
+            },
+            "required": ["name", "type", "bindings"],
+            "additionalProperties": false
+          }
+        },
+        "_editor": {
+          "type": "object",
+          "properties": {
+            "revision": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "transaction": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "dryRun": {
+              "type": "boolean"
+            },
+            "operations": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "warnings": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          },
+          "required": ["revision", "transaction", "dryRun", "operations", "warnings"],
+          "additionalProperties": false
+        }
+      },
+      "required": ["asset", "actions", "_editor"],
+      "additionalProperties": false
+    }
+  },
   "log.clear": {
     "version": 1,
     "permission": "edit",
@@ -5462,6 +6479,10 @@
               "minimum": 0
             }
           ]
+        },
+        "world": {
+          "type": "string",
+          "enum": ["edit", "play"]
         }
       },
       "additionalProperties": false
@@ -5588,6 +6609,10 @@
               "type": "null"
             }
           ]
+        },
+        "world": {
+          "type": "string",
+          "enum": ["edit", "play"]
         }
       },
       "additionalProperties": false
@@ -5730,6 +6755,10 @@
               "minimum": 0
             }
           ]
+        },
+        "world": {
+          "type": "string",
+          "enum": ["edit", "play"]
         }
       },
       "required": ["level"],
@@ -5898,6 +6927,10 @@
       "properties": {
         "path": {
           "type": "string"
+        },
+        "world": {
+          "type": "string",
+          "enum": ["edit", "play"]
         }
       },
       "required": ["path"],
@@ -6026,6 +7059,1195 @@
       "additionalProperties": false
     }
   },
+  "module.list": {
+    "version": 1,
+    "permission": "read",
+    "mode": "edit",
+    "undoable": false,
+    "readOnly": true,
+    "params": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "type": "object",
+      "properties": {},
+      "additionalProperties": false
+    },
+    "result": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "type": "object",
+      "properties": {
+        "modules": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "name": {
+                "type": "string"
+              },
+              "version": {
+                "type": "string"
+              },
+              "path": {
+                "type": "string"
+              },
+              "shared": {
+                "type": "boolean"
+              },
+              "reloads": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 4294967295
+              }
+            },
+            "required": ["name", "version", "path", "shared", "reloads"],
+            "additionalProperties": false
+          }
+        },
+        "_editor": {
+          "type": "object",
+          "properties": {
+            "revision": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "transaction": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "dryRun": {
+              "type": "boolean"
+            },
+            "operations": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "warnings": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          },
+          "required": ["revision", "transaction", "dryRun", "operations", "warnings"],
+          "additionalProperties": false
+        }
+      },
+      "required": ["modules", "_editor"],
+      "additionalProperties": false
+    }
+  },
+  "module.load": {
+    "version": 1,
+    "permission": "build",
+    "mode": "edit",
+    "undoable": false,
+    "readOnly": false,
+    "params": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "type": "object",
+      "properties": {
+        "path": {
+          "type": "string"
+        },
+        "dryRun": {
+          "type": "boolean"
+        },
+        "mergeKey": {
+          "type": "string"
+        },
+        "clientToken": {
+          "type": "string"
+        },
+        "expectRevision": {
+          "anyOf": [
+            {
+              "type": "string",
+              "pattern": "^[0-9]+$"
+            },
+            {
+              "type": "integer",
+              "minimum": 0
+            }
+          ]
+        }
+      },
+      "required": ["path"],
+      "additionalProperties": false
+    },
+    "result": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "type": "object",
+      "properties": {
+        "modules": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "name": {
+                "type": "string"
+              },
+              "version": {
+                "type": "string"
+              },
+              "path": {
+                "type": "string"
+              },
+              "shared": {
+                "type": "boolean"
+              },
+              "reloads": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 4294967295
+              }
+            },
+            "required": ["name", "version", "path", "shared", "reloads"],
+            "additionalProperties": false
+          }
+        },
+        "_editor": {
+          "type": "object",
+          "properties": {
+            "revision": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "transaction": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "dryRun": {
+              "type": "boolean"
+            },
+            "operations": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "warnings": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          },
+          "required": ["revision", "transaction", "dryRun", "operations", "warnings"],
+          "additionalProperties": false
+        }
+      },
+      "required": ["modules", "_editor"],
+      "additionalProperties": false
+    }
+  },
+  "module.unload": {
+    "version": 1,
+    "permission": "build",
+    "mode": "edit",
+    "undoable": false,
+    "readOnly": false,
+    "params": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "dryRun": {
+          "type": "boolean"
+        },
+        "mergeKey": {
+          "type": "string"
+        },
+        "clientToken": {
+          "type": "string"
+        },
+        "expectRevision": {
+          "anyOf": [
+            {
+              "type": "string",
+              "pattern": "^[0-9]+$"
+            },
+            {
+              "type": "integer",
+              "minimum": 0
+            }
+          ]
+        }
+      },
+      "required": ["name"],
+      "additionalProperties": false
+    },
+    "result": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "type": "object",
+      "properties": {
+        "modules": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "name": {
+                "type": "string"
+              },
+              "version": {
+                "type": "string"
+              },
+              "path": {
+                "type": "string"
+              },
+              "shared": {
+                "type": "boolean"
+              },
+              "reloads": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 4294967295
+              }
+            },
+            "required": ["name", "version", "path", "shared", "reloads"],
+            "additionalProperties": false
+          }
+        },
+        "_editor": {
+          "type": "object",
+          "properties": {
+            "revision": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "transaction": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "dryRun": {
+              "type": "boolean"
+            },
+            "operations": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "warnings": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          },
+          "required": ["revision", "transaction", "dryRun", "operations", "warnings"],
+          "additionalProperties": false
+        }
+      },
+      "required": ["modules", "_editor"],
+      "additionalProperties": false
+    }
+  },
+  "play.keep_changes": {
+    "version": 1,
+    "permission": "edit",
+    "mode": "play",
+    "undoable": true,
+    "readOnly": false,
+    "params": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "type": "object",
+      "properties": {
+        "entities": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "components": {
+          "anyOf": [
+            {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "dryRun": {
+          "type": "boolean"
+        },
+        "mergeKey": {
+          "type": "string"
+        },
+        "clientToken": {
+          "type": "string"
+        },
+        "expectRevision": {
+          "anyOf": [
+            {
+              "type": "string",
+              "pattern": "^[0-9]+$"
+            },
+            {
+              "type": "integer",
+              "minimum": 0
+            }
+          ]
+        }
+      },
+      "required": ["entities"],
+      "additionalProperties": false
+    },
+    "result": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "type": "object",
+      "properties": {
+        "entities": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 4294967295
+        },
+        "components": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 4294967295
+        },
+        "_editor": {
+          "type": "object",
+          "properties": {
+            "revision": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "transaction": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "dryRun": {
+              "type": "boolean"
+            },
+            "operations": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "warnings": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          },
+          "required": ["revision", "transaction", "dryRun", "operations", "warnings"],
+          "additionalProperties": false
+        }
+      },
+      "required": ["entities", "components", "_editor"],
+      "additionalProperties": false
+    }
+  },
+  "play.pause": {
+    "version": 1,
+    "permission": "edit",
+    "mode": "play",
+    "undoable": false,
+    "readOnly": false,
+    "params": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "type": "object",
+      "properties": {
+        "paused": {
+          "type": "boolean"
+        },
+        "dryRun": {
+          "type": "boolean"
+        },
+        "mergeKey": {
+          "type": "string"
+        },
+        "clientToken": {
+          "type": "string"
+        },
+        "expectRevision": {
+          "anyOf": [
+            {
+              "type": "string",
+              "pattern": "^[0-9]+$"
+            },
+            {
+              "type": "integer",
+              "minimum": 0
+            }
+          ]
+        }
+      },
+      "required": ["paused"],
+      "additionalProperties": false
+    },
+    "result": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "type": "object",
+      "properties": {
+        "state": {
+          "type": "string"
+        },
+        "mode": {
+          "type": "string"
+        },
+        "fixedStep": {
+          "type": "boolean"
+        },
+        "timeScale": {
+          "type": "number"
+        },
+        "steps": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 4294967295
+        },
+        "time": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "object",
+              "additionalProperties": {
+                "type": "number"
+              }
+            }
+          ]
+        },
+        "_editor": {
+          "type": "object",
+          "properties": {
+            "revision": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "transaction": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "dryRun": {
+              "type": "boolean"
+            },
+            "operations": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "warnings": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          },
+          "required": ["revision", "transaction", "dryRun", "operations", "warnings"],
+          "additionalProperties": false
+        }
+      },
+      "required": ["state", "mode", "fixedStep", "timeScale", "steps", "time", "_editor"],
+      "additionalProperties": false
+    }
+  },
+  "play.run_until": {
+    "version": 1,
+    "permission": "edit",
+    "mode": "play",
+    "undoable": false,
+    "readOnly": false,
+    "params": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "type": "object",
+      "properties": {
+        "maxSteps": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 100000
+        },
+        "entity": {
+          "type": "string"
+        },
+        "exists": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "component": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "field": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "equals": {
+          "anyOf": [
+            {},
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "dryRun": {
+          "type": "boolean"
+        },
+        "mergeKey": {
+          "type": "string"
+        },
+        "clientToken": {
+          "type": "string"
+        },
+        "expectRevision": {
+          "anyOf": [
+            {
+              "type": "string",
+              "pattern": "^[0-9]+$"
+            },
+            {
+              "type": "integer",
+              "minimum": 0
+            }
+          ]
+        }
+      },
+      "required": ["maxSteps", "entity"],
+      "additionalProperties": false
+    },
+    "result": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "type": "object",
+      "properties": {
+        "met": {
+          "type": "boolean"
+        },
+        "steps": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 4294967295
+        },
+        "status": {
+          "type": "object",
+          "properties": {
+            "state": {
+              "type": "string"
+            },
+            "mode": {
+              "type": "string"
+            },
+            "fixedStep": {
+              "type": "boolean"
+            },
+            "timeScale": {
+              "type": "number"
+            },
+            "steps": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 4294967295
+            },
+            "time": {
+              "anyOf": [
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "object",
+                  "additionalProperties": {
+                    "type": "number"
+                  }
+                }
+              ]
+            }
+          },
+          "required": ["state", "mode", "fixedStep", "timeScale", "steps", "time"],
+          "additionalProperties": false
+        },
+        "_editor": {
+          "type": "object",
+          "properties": {
+            "revision": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "transaction": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "dryRun": {
+              "type": "boolean"
+            },
+            "operations": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "warnings": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          },
+          "required": ["revision", "transaction", "dryRun", "operations", "warnings"],
+          "additionalProperties": false
+        }
+      },
+      "required": ["met", "steps", "status", "_editor"],
+      "additionalProperties": false
+    }
+  },
+  "play.set_time_scale": {
+    "version": 1,
+    "permission": "edit",
+    "mode": "edit",
+    "undoable": false,
+    "readOnly": false,
+    "params": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "type": "object",
+      "properties": {
+        "scale": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 100
+        },
+        "dryRun": {
+          "type": "boolean"
+        },
+        "mergeKey": {
+          "type": "string"
+        },
+        "clientToken": {
+          "type": "string"
+        },
+        "expectRevision": {
+          "anyOf": [
+            {
+              "type": "string",
+              "pattern": "^[0-9]+$"
+            },
+            {
+              "type": "integer",
+              "minimum": 0
+            }
+          ]
+        }
+      },
+      "required": ["scale"],
+      "additionalProperties": false
+    },
+    "result": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "type": "object",
+      "properties": {
+        "state": {
+          "type": "string"
+        },
+        "mode": {
+          "type": "string"
+        },
+        "fixedStep": {
+          "type": "boolean"
+        },
+        "timeScale": {
+          "type": "number"
+        },
+        "steps": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 4294967295
+        },
+        "time": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "object",
+              "additionalProperties": {
+                "type": "number"
+              }
+            }
+          ]
+        },
+        "_editor": {
+          "type": "object",
+          "properties": {
+            "revision": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "transaction": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "dryRun": {
+              "type": "boolean"
+            },
+            "operations": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "warnings": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          },
+          "required": ["revision", "transaction", "dryRun", "operations", "warnings"],
+          "additionalProperties": false
+        }
+      },
+      "required": ["state", "mode", "fixedStep", "timeScale", "steps", "time", "_editor"],
+      "additionalProperties": false
+    }
+  },
+  "play.start": {
+    "version": 1,
+    "permission": "edit",
+    "mode": "edit",
+    "undoable": false,
+    "readOnly": false,
+    "params": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "type": "object",
+      "properties": {
+        "mode": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "fixedStep": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "seed": {
+          "anyOf": [
+            {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "pattern": "^[0-9]+$"
+                },
+                {
+                  "type": "integer",
+                  "minimum": 0
+                }
+              ]
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "dryRun": {
+          "type": "boolean"
+        },
+        "mergeKey": {
+          "type": "string"
+        },
+        "clientToken": {
+          "type": "string"
+        },
+        "expectRevision": {
+          "anyOf": [
+            {
+              "type": "string",
+              "pattern": "^[0-9]+$"
+            },
+            {
+              "type": "integer",
+              "minimum": 0
+            }
+          ]
+        }
+      },
+      "additionalProperties": false
+    },
+    "result": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "type": "object",
+      "properties": {
+        "state": {
+          "type": "string"
+        },
+        "mode": {
+          "type": "string"
+        },
+        "fixedStep": {
+          "type": "boolean"
+        },
+        "timeScale": {
+          "type": "number"
+        },
+        "steps": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 4294967295
+        },
+        "time": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "object",
+              "additionalProperties": {
+                "type": "number"
+              }
+            }
+          ]
+        },
+        "_editor": {
+          "type": "object",
+          "properties": {
+            "revision": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "transaction": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "dryRun": {
+              "type": "boolean"
+            },
+            "operations": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "warnings": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          },
+          "required": ["revision", "transaction", "dryRun", "operations", "warnings"],
+          "additionalProperties": false
+        }
+      },
+      "required": ["state", "mode", "fixedStep", "timeScale", "steps", "time", "_editor"],
+      "additionalProperties": false
+    }
+  },
+  "play.status": {
+    "version": 1,
+    "permission": "read",
+    "mode": "edit",
+    "undoable": false,
+    "readOnly": true,
+    "params": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "type": "object",
+      "properties": {},
+      "additionalProperties": false
+    },
+    "result": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "type": "object",
+      "properties": {
+        "state": {
+          "type": "string"
+        },
+        "mode": {
+          "type": "string"
+        },
+        "fixedStep": {
+          "type": "boolean"
+        },
+        "timeScale": {
+          "type": "number"
+        },
+        "steps": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 4294967295
+        },
+        "time": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "object",
+              "additionalProperties": {
+                "type": "number"
+              }
+            }
+          ]
+        },
+        "_editor": {
+          "type": "object",
+          "properties": {
+            "revision": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "transaction": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "dryRun": {
+              "type": "boolean"
+            },
+            "operations": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "warnings": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          },
+          "required": ["revision", "transaction", "dryRun", "operations", "warnings"],
+          "additionalProperties": false
+        }
+      },
+      "required": ["state", "mode", "fixedStep", "timeScale", "steps", "time", "_editor"],
+      "additionalProperties": false
+    }
+  },
+  "play.step": {
+    "version": 1,
+    "permission": "edit",
+    "mode": "play",
+    "undoable": false,
+    "readOnly": false,
+    "params": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "type": "object",
+      "properties": {
+        "steps": {
+          "anyOf": [
+            {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100000
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "dryRun": {
+          "type": "boolean"
+        },
+        "mergeKey": {
+          "type": "string"
+        },
+        "clientToken": {
+          "type": "string"
+        },
+        "expectRevision": {
+          "anyOf": [
+            {
+              "type": "string",
+              "pattern": "^[0-9]+$"
+            },
+            {
+              "type": "integer",
+              "minimum": 0
+            }
+          ]
+        }
+      },
+      "additionalProperties": false
+    },
+    "result": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "type": "object",
+      "properties": {
+        "state": {
+          "type": "string"
+        },
+        "mode": {
+          "type": "string"
+        },
+        "fixedStep": {
+          "type": "boolean"
+        },
+        "timeScale": {
+          "type": "number"
+        },
+        "steps": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 4294967295
+        },
+        "time": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "object",
+              "additionalProperties": {
+                "type": "number"
+              }
+            }
+          ]
+        },
+        "_editor": {
+          "type": "object",
+          "properties": {
+            "revision": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "transaction": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "dryRun": {
+              "type": "boolean"
+            },
+            "operations": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "warnings": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          },
+          "required": ["revision", "transaction", "dryRun", "operations", "warnings"],
+          "additionalProperties": false
+        }
+      },
+      "required": ["state", "mode", "fixedStep", "timeScale", "steps", "time", "_editor"],
+      "additionalProperties": false
+    }
+  },
+  "play.stop": {
+    "version": 1,
+    "permission": "edit",
+    "mode": "play",
+    "undoable": false,
+    "readOnly": false,
+    "params": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "type": "object",
+      "properties": {
+        "dryRun": {
+          "type": "boolean"
+        },
+        "mergeKey": {
+          "type": "string"
+        },
+        "clientToken": {
+          "type": "string"
+        },
+        "expectRevision": {
+          "anyOf": [
+            {
+              "type": "string",
+              "pattern": "^[0-9]+$"
+            },
+            {
+              "type": "integer",
+              "minimum": 0
+            }
+          ]
+        }
+      },
+      "additionalProperties": false
+    },
+    "result": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "type": "object",
+      "properties": {
+        "state": {
+          "type": "string"
+        },
+        "mode": {
+          "type": "string"
+        },
+        "fixedStep": {
+          "type": "boolean"
+        },
+        "timeScale": {
+          "type": "number"
+        },
+        "steps": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 4294967295
+        },
+        "time": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "object",
+              "additionalProperties": {
+                "type": "number"
+              }
+            }
+          ]
+        },
+        "_editor": {
+          "type": "object",
+          "properties": {
+            "revision": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "transaction": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "dryRun": {
+              "type": "boolean"
+            },
+            "operations": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "warnings": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          },
+          "required": ["revision", "transaction", "dryRun", "operations", "warnings"],
+          "additionalProperties": false
+        }
+      },
+      "required": ["state", "mode", "fixedStep", "timeScale", "steps", "time", "_editor"],
+      "additionalProperties": false
+    }
+  },
   "preferences.get": {
     "version": 1,
     "permission": "read",
@@ -6035,7 +8257,12 @@
     "params": {
       "$schema": "https://json-schema.org/draft/2020-12/schema",
       "type": "object",
-      "properties": {},
+      "properties": {
+        "world": {
+          "type": "string",
+          "enum": ["edit", "play"]
+        }
+      },
       "additionalProperties": false
     },
     "result": {
@@ -6117,6 +8344,10 @@
               "minimum": 0
             }
           ]
+        },
+        "world": {
+          "type": "string",
+          "enum": ["edit", "play"]
         }
       },
       "required": ["value"],
@@ -6385,6 +8616,10 @@
               "type": "null"
             }
           ]
+        },
+        "world": {
+          "type": "string",
+          "enum": ["edit", "play"]
         }
       },
       "required": ["path"],
@@ -6629,6 +8864,10 @@
       "properties": {
         "path": {
           "type": "string"
+        },
+        "world": {
+          "type": "string",
+          "enum": ["edit", "play"]
         }
       },
       "required": ["path"],
@@ -6689,6 +8928,10 @@
       "properties": {
         "path": {
           "type": "string"
+        },
+        "world": {
+          "type": "string",
+          "enum": ["edit", "play"]
         }
       },
       "required": ["path"],
@@ -6845,7 +9088,12 @@
     "params": {
       "$schema": "https://json-schema.org/draft/2020-12/schema",
       "type": "object",
-      "properties": {},
+      "properties": {
+        "world": {
+          "type": "string",
+          "enum": ["edit", "play"]
+        }
+      },
       "additionalProperties": false
     },
     "result": {
@@ -7135,6 +9383,10 @@
               "type": "null"
             }
           ]
+        },
+        "world": {
+          "type": "string",
+          "enum": ["edit", "play"]
         }
       },
       "additionalProperties": false
@@ -7309,7 +9561,12 @@
     "params": {
       "$schema": "https://json-schema.org/draft/2020-12/schema",
       "type": "object",
-      "properties": {},
+      "properties": {
+        "world": {
+          "type": "string",
+          "enum": ["edit", "play"]
+        }
+      },
       "additionalProperties": false
     },
     "result": {
@@ -7369,7 +9626,12 @@
     "params": {
       "$schema": "https://json-schema.org/draft/2020-12/schema",
       "type": "object",
-      "properties": {},
+      "properties": {
+        "world": {
+          "type": "string",
+          "enum": ["edit", "play"]
+        }
+      },
       "additionalProperties": false
     },
     "result": {
@@ -7481,6 +9743,10 @@
               "type": "null"
             }
           ]
+        },
+        "world": {
+          "type": "string",
+          "enum": ["edit", "play"]
         }
       },
       "additionalProperties": false
@@ -7591,7 +9857,12 @@
     "params": {
       "$schema": "https://json-schema.org/draft/2020-12/schema",
       "type": "object",
-      "properties": {},
+      "properties": {
+        "world": {
+          "type": "string",
+          "enum": ["edit", "play"]
+        }
+      },
       "additionalProperties": false
     },
     "result": {
@@ -7976,6 +10247,10 @@
               "type": "null"
             }
           ]
+        },
+        "world": {
+          "type": "string",
+          "enum": ["edit", "play"]
         }
       },
       "additionalProperties": false
@@ -8242,6 +10517,10 @@
               "type": "null"
             }
           ]
+        },
+        "world": {
+          "type": "string",
+          "enum": ["edit", "play"]
         }
       },
       "additionalProperties": false
@@ -8438,6 +10717,10 @@
               "type": "null"
             }
           ]
+        },
+        "world": {
+          "type": "string",
+          "enum": ["edit", "play"]
         }
       },
       "additionalProperties": false
@@ -8547,6 +10830,10 @@
               "minimum": 0
             }
           ]
+        },
+        "world": {
+          "type": "string",
+          "enum": ["edit", "play"]
         }
       },
       "required": ["entities"],
@@ -8638,6 +10925,10 @@
               "minimum": 0
             }
           ]
+        },
+        "world": {
+          "type": "string",
+          "enum": ["edit", "play"]
         }
       },
       "additionalProperties": false
@@ -8707,7 +10998,12 @@
     "params": {
       "$schema": "https://json-schema.org/draft/2020-12/schema",
       "type": "object",
-      "properties": {},
+      "properties": {
+        "world": {
+          "type": "string",
+          "enum": ["edit", "play"]
+        }
+      },
       "additionalProperties": false
     },
     "result": {
@@ -8802,6 +11098,10 @@
               "minimum": 0
             }
           ]
+        },
+        "world": {
+          "type": "string",
+          "enum": ["edit", "play"]
         }
       },
       "required": ["entities"],
@@ -8899,6 +11199,10 @@
               "minimum": 0
             }
           ]
+        },
+        "world": {
+          "type": "string",
+          "enum": ["edit", "play"]
         }
       },
       "required": ["entities"],
@@ -9723,6 +12027,10 @@
               "type": "null"
             }
           ]
+        },
+        "world": {
+          "type": "string",
+          "enum": ["edit", "play"]
         }
       },
       "required": ["entity"],
@@ -9816,7 +12124,7 @@
   "transform.reset": {
     "version": 1,
     "permission": "edit",
-    "mode": "edit",
+    "mode": "any",
     "undoable": true,
     "readOnly": false,
     "params": {
@@ -9879,6 +12187,10 @@
               "minimum": 0
             }
           ]
+        },
+        "world": {
+          "type": "string",
+          "enum": ["edit", "play"]
         }
       },
       "required": ["entities"],
@@ -9943,7 +12255,7 @@
   "transform.rotate": {
     "version": 1,
     "permission": "edit",
-    "mode": "edit",
+    "mode": "any",
     "undoable": true,
     "readOnly": false,
     "params": {
@@ -10043,6 +12355,10 @@
               "minimum": 0
             }
           ]
+        },
+        "world": {
+          "type": "string",
+          "enum": ["edit", "play"]
         }
       },
       "required": ["entities"],
@@ -10107,7 +12423,7 @@
   "transform.scale": {
     "version": 1,
     "permission": "edit",
-    "mode": "edit",
+    "mode": "any",
     "undoable": true,
     "readOnly": false,
     "params": {
@@ -10174,6 +12490,10 @@
               "minimum": 0
             }
           ]
+        },
+        "world": {
+          "type": "string",
+          "enum": ["edit", "play"]
         }
       },
       "required": ["entities", "factor"],
@@ -10238,7 +12558,7 @@
   "transform.set": {
     "version": 1,
     "permission": "edit",
-    "mode": "edit",
+    "mode": "any",
     "undoable": true,
     "readOnly": false,
     "params": {
@@ -10342,6 +12662,10 @@
               "minimum": 0
             }
           ]
+        },
+        "world": {
+          "type": "string",
+          "enum": ["edit", "play"]
         }
       },
       "required": ["entities"],
@@ -10406,7 +12730,7 @@
   "transform.snap_to_grid": {
     "version": 1,
     "permission": "edit",
-    "mode": "edit",
+    "mode": "any",
     "undoable": true,
     "readOnly": false,
     "params": {
@@ -10451,6 +12775,10 @@
               "minimum": 0
             }
           ]
+        },
+        "world": {
+          "type": "string",
+          "enum": ["edit", "play"]
         }
       },
       "required": ["entities"],
@@ -10515,7 +12843,7 @@
   "transform.translate": {
     "version": 1,
     "permission": "edit",
-    "mode": "edit",
+    "mode": "any",
     "undoable": true,
     "readOnly": false,
     "params": {
@@ -10567,6 +12895,10 @@
               "minimum": 0
             }
           ]
+        },
+        "world": {
+          "type": "string",
+          "enum": ["edit", "play"]
         }
       },
       "required": ["entities", "offset"],
@@ -10661,6 +12993,10 @@
               "minimum": 0
             }
           ]
+        },
+        "world": {
+          "type": "string",
+          "enum": ["edit", "play"]
         }
       },
       "required": ["name"],
@@ -10736,6 +13072,10 @@
               "minimum": 0
             }
           ]
+        },
+        "world": {
+          "type": "string",
+          "enum": ["edit", "play"]
         }
       },
       "required": ["name"],
@@ -10808,6 +13148,10 @@
               "minimum": 0
             }
           ]
+        },
+        "world": {
+          "type": "string",
+          "enum": ["edit", "play"]
         }
       },
       "additionalProperties": false
@@ -10882,6 +13226,10 @@
               "minimum": 0
             }
           ]
+        },
+        "world": {
+          "type": "string",
+          "enum": ["edit", "play"]
         }
       },
       "required": ["name"],
@@ -10968,6 +13316,10 @@
               "minimum": 0
             }
           ]
+        },
+        "world": {
+          "type": "string",
+          "enum": ["edit", "play"]
         }
       },
       "required": ["message"],
@@ -11061,6 +13413,10 @@
               "minimum": 0
             }
           ]
+        },
+        "world": {
+          "type": "string",
+          "enum": ["edit", "play"]
         }
       },
       "additionalProperties": false
@@ -11132,6 +13488,10 @@
               "minimum": 0
             }
           ]
+        },
+        "world": {
+          "type": "string",
+          "enum": ["edit", "play"]
         }
       },
       "additionalProperties": false
@@ -11216,6 +13576,10 @@
               "minimum": 0
             }
           ]
+        },
+        "world": {
+          "type": "string",
+          "enum": ["edit", "play"]
         }
       },
       "required": ["panel"],
@@ -11267,7 +13631,12 @@
     "params": {
       "$schema": "https://json-schema.org/draft/2020-12/schema",
       "type": "object",
-      "properties": {},
+      "properties": {
+        "world": {
+          "type": "string",
+          "enum": ["edit", "play"]
+        }
+      },
       "additionalProperties": false
     },
     "result": {
@@ -11357,7 +13726,12 @@
     "params": {
       "$schema": "https://json-schema.org/draft/2020-12/schema",
       "type": "object",
-      "properties": {},
+      "properties": {
+        "world": {
+          "type": "string",
+          "enum": ["edit", "play"]
+        }
+      },
       "additionalProperties": false
     },
     "result": {
@@ -11501,6 +13875,10 @@
               "minimum": 0
             }
           ]
+        },
+        "world": {
+          "type": "string",
+          "enum": ["edit", "play"]
         }
       },
       "required": ["entities"],
@@ -11600,6 +13978,10 @@
               "type": "null"
             }
           ]
+        },
+        "world": {
+          "type": "string",
+          "enum": ["edit", "play"]
         }
       },
       "additionalProperties": false
@@ -11911,6 +14293,10 @@
               "minimum": 0
             }
           ]
+        },
+        "world": {
+          "type": "string",
+          "enum": ["edit", "play"]
         }
       },
       "additionalProperties": false
@@ -12083,6 +14469,10 @@
               "minimum": 0
             }
           ]
+        },
+        "world": {
+          "type": "string",
+          "enum": ["edit", "play"]
         }
       },
       "additionalProperties": false
@@ -12157,6 +14547,10 @@
               "minimum": 0
             }
           ]
+        },
+        "world": {
+          "type": "string",
+          "enum": ["edit", "play"]
         }
       },
       "additionalProperties": false
@@ -12462,6 +14856,10 @@
               "minimum": 0
             }
           ]
+        },
+        "world": {
+          "type": "string",
+          "enum": ["edit", "play"]
         }
       },
       "additionalProperties": false
@@ -12603,7 +15001,12 @@
     "params": {
       "$schema": "https://json-schema.org/draft/2020-12/schema",
       "type": "object",
-      "properties": {},
+      "properties": {
+        "world": {
+          "type": "string",
+          "enum": ["edit", "play"]
+        }
+      },
       "additionalProperties": false
     },
     "result": {
@@ -12925,6 +15328,10 @@
               "minimum": 0
             }
           ]
+        },
+        "world": {
+          "type": "string",
+          "enum": ["edit", "play"]
         }
       },
       "required": ["x", "y"],
@@ -13071,6 +15478,10 @@
               "minimum": 0
             }
           ]
+        },
+        "world": {
+          "type": "string",
+          "enum": ["edit", "play"]
         }
       },
       "required": ["x", "y", "width", "height"],
@@ -13176,6 +15587,10 @@
               "type": "null"
             }
           ]
+        },
+        "world": {
+          "type": "string",
+          "enum": ["edit", "play"]
         }
       },
       "additionalProperties": false
@@ -13273,6 +15688,10 @@
               "type": "null"
             }
           ]
+        },
+        "world": {
+          "type": "string",
+          "enum": ["edit", "play"]
         }
       },
       "required": ["x", "y"],
@@ -13374,6 +15793,10 @@
               "type": "null"
             }
           ]
+        },
+        "world": {
+          "type": "string",
+          "enum": ["edit", "play"]
         }
       },
       "additionalProperties": false
@@ -13509,6 +15932,10 @@
               "minimum": 0
             }
           ]
+        },
+        "world": {
+          "type": "string",
+          "enum": ["edit", "play"]
         }
       },
       "required": ["aspect"],
@@ -13693,6 +16120,10 @@
               "minimum": 0
             }
           ]
+        },
+        "world": {
+          "type": "string",
+          "enum": ["edit", "play"]
         }
       },
       "additionalProperties": false
@@ -14009,6 +16440,10 @@
               "minimum": 0
             }
           ]
+        },
+        "world": {
+          "type": "string",
+          "enum": ["edit", "play"]
         }
       },
       "additionalProperties": false
@@ -14196,6 +16631,10 @@
               "type": "null"
             }
           ]
+        },
+        "world": {
+          "type": "string",
+          "enum": ["edit", "play"]
         }
       },
       "required": ["x", "y"],
@@ -14374,6 +16813,10 @@
               "minimum": 0
             }
           ]
+        },
+        "world": {
+          "type": "string",
+          "enum": ["edit", "play"]
         }
       },
       "required": ["view"],

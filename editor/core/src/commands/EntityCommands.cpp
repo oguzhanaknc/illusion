@@ -82,7 +82,7 @@ Expected<EntityDestroyResult, CommandError> entityDestroy(CommandContext& contex
     std::vector<EntityGuid> alive;
     for (const EntityGuid guid : selection.items())
     {
-        if (!context.editor().entities().find(guid).isNull())
+        if (!context.index().find(guid).isNull())
         {
             alive.push_back(guid);
         }
@@ -113,7 +113,7 @@ Expected<EntitiesResult, CommandError> entityDuplicate(CommandContext& context, 
             return unexpected(std::move(copy).error());
         }
         result.entities.push_back(context.summary(*copy));
-        copies.push_back(context.editor().entities().guidOf(*copy));
+        copies.push_back(context.index().guidOf(*copy));
     }
     context.editor().selection().set(copies);
     return result;
@@ -179,7 +179,7 @@ Expected<EntityGetResult, CommandError> entityGet(CommandContext& context, const
         result.parent = context.summary(parent).id;
     }
     std::vector<Entity> children;
-    context.editor().entities().children(*entity, children);
+    context.index().children(*entity, children);
     result.children = static_cast<u32>(children.size());
     std::string components = "{";
     for (const ComponentId type : world.componentsOf(*entity))
@@ -224,7 +224,7 @@ Expected<SceneQueryResult, CommandError> entityFind(CommandContext& context, con
             matches.push_back(entity);
         }
     });
-    EntityIndex& index = context.editor().entities();
+    EntityIndex& index = context.index();
     std::sort(matches.begin(), matches.end(),
               [&index](Entity a, Entity b) { return index.guidOf(a).value < index.guidOf(b).value; });
     result.total = static_cast<u32>(matches.size());
@@ -250,6 +250,7 @@ void registerEntityCommands(CommandRegistry& registry)
         .category = "Entity",
         .icon = "add_circle",
         .flags = {.undoable = true},
+        .mode = CommandMode::Any,
         .permission = PermissionClass::Edit,
         .palette = true,
         .defaultShortcut = "Ctrl+Shift+N",
@@ -263,6 +264,7 @@ void registerEntityCommands(CommandRegistry& registry)
         .category = "Entity",
         .icon = "delete",
         .flags = {.destructive = true, .undoable = true},
+        .mode = CommandMode::Any,
         .permission = PermissionClass::Edit,
         .palette = true,
         .defaultShortcut = "Delete",
@@ -277,6 +279,7 @@ void registerEntityCommands(CommandRegistry& registry)
         .category = "Entity",
         .icon = "content_copy",
         .flags = {.undoable = true},
+        .mode = CommandMode::Any,
         .permission = PermissionClass::Edit,
         .palette = true,
         .defaultShortcut = "Ctrl+D",
@@ -290,6 +293,7 @@ void registerEntityCommands(CommandRegistry& registry)
         .category = "Entity",
         .icon = "edit",
         .flags = {.idempotent = true, .undoable = true},
+        .mode = CommandMode::Any,
         .permission = PermissionClass::Edit,
         .palette = true,
         .defaultShortcut = "F2",
@@ -304,6 +308,7 @@ void registerEntityCommands(CommandRegistry& registry)
         .category = "Entity",
         .icon = "visibility",
         .flags = {.idempotent = true, .undoable = true},
+        .mode = CommandMode::Any,
         .permission = PermissionClass::Edit,
     });
     registry.add<&entityGet>({

@@ -293,7 +293,7 @@ Plan: `docs/plans/m7-editor.md` (sub-milestones, command API, localization, them
   of every adapter, the `PhysicsService::createMesh` regression (a mesh body built by a module survives a hot
   reload and the unload; meant for ASan), the `services/virtual-call` Benchmark (10 ns budget; 2.16 ns
   measured), `reference/scripting-api.md` (Doxygen group "Scripting API") and the `game-modules` skill
-- M7r: Play mode and the `GameSession` runtime (ADR 0042), in two parts:
+- M7r: Play mode and the `GameSession` runtime (ADR 0042), in three parts:
 - M7r-1: ✅ The game runtime: `GameSession` (`illusion::runtime`) owns a World with its `PhysicsWorld`,
   `AudioWorld`, `InputActions`, physics and render asset resolvers, hierarchy index, gamepad routing and the
   `ModuleHost` attachment with the four host services, and steps input, modules, physics, hierarchy, audio
@@ -306,12 +306,21 @@ Plan: `docs/plans/m7-editor.md` (sub-milestones, command API, localization, them
   Tests of the step order, modules and services, Simulate, fixed steps, the same reflected-state hash after
   600 steps for the same seed, injected keys and virtual gamepads with and without focus, settings, and the
   asset's errors; the `runtime/session-step-empty` Benchmark (50 µs budget; 2,326 ns measured); `manual/runtime.md`
-- M7r-2: Editor Play mode on `GameSession`: `illusion::editor_play` / `PlaySession` (scene snapshot into a
-  play World, Play, Simulate, Pause, Step N, time scale, commands routed to the play World, `keep_changes`),
-  `EditHooks`, Game view input routing and cursor capture, `input.*` and `play.*` commands, `module.load`,
-  the project settings in the editor's settings catalogue, the Play toolbar and tint, the
-  `play/snapshot` Benchmark, `manual/editor/play-mode.md` and the Tetris play scenarios of the acceptance
-  transcript
+- M7r-2: ✅ Editor Play mode on `GameSession`: `illusion::editor_play` / `PlaySession` implementing the
+  core's `PlayHost` (in-memory scene snapshot with ids kept into a play World, Play, Simulate, Pause, Step N,
+  time scale, fixed steps with a seed), the edit World attached to the editor's `ModuleHost` as
+  `WorldRole::Edit`; `CommandMode::Any` commands routed to the play World while playing (own entity index,
+  never undoable) with the `"world": "edit"` override, edit hooks (physics rebuilds, restarted sounds);
+  commands `play.start`, `stop`, `pause`, `step`, `set_time_scale`, `status`, `run_until`, `keep_changes`
+  (one undoable step), `module.load`, `unload`, `list`, `input.actions`, `action_define`, `action_remove`,
+  `action_rename`, `bind`, `unbind` (undoable `.input` edits), `input.inject` and `input.read`; the runtime
+  project settings in the editor's settings catalogue; the F5/F6/F7/Shift+F5 UI actions; tests of the
+  byte-identical edit scene after Stop, routing, keep_changes, edit hooks, input and modules with a
+  `FakePlay` in the core fixture; the `play/snapshot` Benchmark (20 µs per entity budget; 3.0 µs measured);
+  `manual/editor/play-mode.md`
+- M7r-3: Game view rendering of the play World with input routing and cursor capture (Shift+F1), the Play
+  toolbar, tint and Maximize on Play, autosave before Play, the Tetris reference module and the play
+  scenarios of the acceptance transcript (C5)
 - M7s: Project modules built from the editor (ADR 0043); opening sources with the External Tools code editor
   (from M7l)
 - M7t: Component layout migration on hot reload, the M6 follow-up (ADR 0044)

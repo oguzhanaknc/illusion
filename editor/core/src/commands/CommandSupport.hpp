@@ -34,6 +34,8 @@ void registerMaterialCommands(CommandRegistry& registry);
 void registerLogCommands(CommandRegistry& registry);
 void registerSettingsCommands(CommandRegistry& registry);
 void registerUiCommands(CommandRegistry& registry);
+void registerPlayCommands(CommandRegistry& registry);
+void registerInputCommands(CommandRegistry& registry);
 
 /// The text of @p key in the current locale.
 std::string localized(text::Localization& localization, text::TextKey key);

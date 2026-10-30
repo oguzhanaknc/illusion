@@ -171,7 +171,7 @@ Transform localOf(World& world, Entity entity)
 // Entities in hierarchy pre-order (parents before children), the others after them in the given order.
 void sortParentsFirst(CommandContext& context, std::vector<Entity>& entities)
 {
-    const HierarchyIndex& hierarchy = context.editor().entities().hierarchy();
+    const HierarchyIndex& hierarchy = context.index().hierarchy();
     std::unordered_map<u64, usize> position;
     const std::span<const Entity> order = hierarchy.preOrder();
     for (usize i = 0; i < order.size(); ++i)
@@ -540,7 +540,7 @@ Expected<Arranged, CommandError> arranged(CommandContext& context, const std::ve
         host->meshBounds(meshes);
     }
     std::unordered_map<u64, usize> owner; // entity bits -> index in entities of the moved root
-    const HierarchyIndex& hierarchy = context.editor().entities().hierarchy();
+    const HierarchyIndex& hierarchy = context.index().hierarchy();
     for (usize i = 0; i < entities->size(); ++i)
     {
         const Entity root = (*entities)[i];
@@ -778,6 +778,7 @@ void registerTransformCommands(CommandRegistry& registry)
         .category = "Transform",
         .icon = "open_with",
         .flags = {.idempotent = true, .undoable = true},
+        .mode = CommandMode::Any,
         .permission = PermissionClass::Edit,
     });
     registry.add<&transformTranslate>({
@@ -790,6 +791,7 @@ void registerTransformCommands(CommandRegistry& registry)
         .category = "Transform",
         .icon = "drag_pan",
         .flags = {.undoable = true},
+        .mode = CommandMode::Any,
         .permission = PermissionClass::Edit,
     });
     registry.add<&transformRotate>({
@@ -803,6 +805,7 @@ void registerTransformCommands(CommandRegistry& registry)
         .category = "Transform",
         .icon = "rotate_right",
         .flags = {.undoable = true},
+        .mode = CommandMode::Any,
         .permission = PermissionClass::Edit,
     });
     registry.add<&transformScale>({
@@ -816,6 +819,7 @@ void registerTransformCommands(CommandRegistry& registry)
         .category = "Transform",
         .icon = "zoom_out_map",
         .flags = {.undoable = true},
+        .mode = CommandMode::Any,
         .permission = PermissionClass::Edit,
     });
     registry.add<&transformReset>({
@@ -828,6 +832,7 @@ void registerTransformCommands(CommandRegistry& registry)
         .category = "Transform",
         .icon = "restart_alt",
         .flags = {.idempotent = true, .undoable = true},
+        .mode = CommandMode::Any,
         .permission = PermissionClass::Edit,
         .palette = true,
     });
@@ -842,6 +847,7 @@ void registerTransformCommands(CommandRegistry& registry)
         .category = "Transform",
         .icon = "grid_4x4",
         .flags = {.idempotent = true, .undoable = true},
+        .mode = CommandMode::Any,
         .permission = PermissionClass::Edit,
         .palette = true,
     });

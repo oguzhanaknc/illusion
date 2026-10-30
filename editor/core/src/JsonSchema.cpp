@@ -467,6 +467,14 @@ JsonMutValue writeCommandParamsSchema(JsonMutDocument& doc, const CommandDescrip
         properties.add("expectRevision",
                        writeValueSchema(doc, illusion::detail::valueTypeOf<u64>(), nullptr));
     }
+    if (command.info.mode == CommandMode::Any)
+    {
+        JsonMutValue world = schema.find("properties").addObject("world");
+        world.add("type", doc.makeString("string"));
+        JsonMutValue names = world.addArray("enum");
+        names.push(doc.makeString("edit"));
+        names.push(doc.makeString("play"));
+    }
     return schema;
 }
 

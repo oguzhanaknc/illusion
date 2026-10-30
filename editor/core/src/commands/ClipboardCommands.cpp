@@ -22,7 +22,7 @@ Expected<Copied, CommandError> copyEntities(CommandContext& context, std::vector
 {
     World& world = context.world();
     dropDescendants(world, roots);
-    const HierarchyIndex& hierarchy = context.editor().entities().hierarchy();
+    const HierarchyIndex& hierarchy = context.index().hierarchy();
     std::vector<Entity> subset;
     for (const Entity root : roots)
     {
@@ -137,7 +137,7 @@ Expected<ClipboardResult, CommandError> clipboardCut(CommandContext& context, co
     std::vector<EntityGuid> alive;
     for (const EntityGuid guid : selection.items())
     {
-        if (!context.editor().entities().find(guid).isNull())
+        if (!context.index().find(guid).isNull())
         {
             alive.push_back(guid);
         }
@@ -184,7 +184,7 @@ Expected<EntitiesResult, CommandError> clipboardPaste(CommandContext& context,
     for (const Entity entity : *pasted)
     {
         result.entities.push_back(context.summary(entity));
-        selected.push_back(context.editor().entities().guidOf(entity));
+        selected.push_back(context.index().guidOf(entity));
     }
     context.editor().selection().set(selected);
     return result;
@@ -217,6 +217,7 @@ void registerClipboardCommands(CommandRegistry& registry)
         .category = "Clipboard",
         .icon = "content_cut",
         .flags = {.destructive = true, .undoable = true},
+        .mode = CommandMode::Any,
         .permission = PermissionClass::Edit,
         .palette = true,
         .defaultShortcut = "Ctrl+X",
@@ -231,6 +232,7 @@ void registerClipboardCommands(CommandRegistry& registry)
         .category = "Clipboard",
         .icon = "content_paste",
         .flags = {.undoable = true},
+        .mode = CommandMode::Any,
         .permission = PermissionClass::Edit,
         .palette = true,
         .defaultShortcut = "Ctrl+V",

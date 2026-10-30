@@ -24,7 +24,8 @@ namespace illusion::editor
 namespace
 {
 
-constexpr std::string_view kReservedParams[] = {"dryRun", "mergeKey", "expectRevision", "clientToken"};
+constexpr std::string_view kReservedParams[] = {"dryRun", "mergeKey", "expectRevision", "clientToken",
+                                                "world"};
 
 u64 sessionSeed(u64 seed)
 {
@@ -168,7 +169,8 @@ Expected<std::optional<std::string>, CommandError> RunningCommand::update()
     bool done = true;
     if (state.task)
     {
-        CommandContext context(editor, state.options, state.report);
+        CommandContext context(editor, state.options, state.report,
+                               editor.routesToPlay(*state.descriptor, state.options));
         const u64 selection = editor.m_selection.version();
         editor.m_running = true;
         Expected<bool, CommandError> advanced = state.task->advance(context, state.progress, result);
@@ -202,30 +204,54 @@ Expected<std::optional<std::string>, CommandError> RunningCommand::update()
     return std::optional<std::string>(std::move(written).value());
 }
 
+// The play World of a play session (ADR 0042): its own entity index and WorldEditor, whose operations are
+// applied and then dropped, so play edits are never undoable, journaled or saved.
+struct EditorContext::PlayWorld
+{
+    PlayWorld(World& world, u64 seed)
+        : guids(seed != 0 ? GuidGenerator(seed) : GuidGenerator())
+        , index(world)
+        , editor(world, index, guids, changes)
+    {
+        index.rebuild();
+    }
+
+    GuidGenerator guids;
+    EntityIndex index;
+    ChangeJournal changes;
+    WorldEditor editor;
+    bool stale = false; // the World advanced since the index was built
+};
+
 WorldEditor& CommandContext::edit() noexcept
 {
-    return m_editor->editor();
+    return m_playWorld ? m_editor->m_playWorld->editor : m_editor->editor();
 }
 
 World& CommandContext::world() noexcept
 {
-    return m_editor->world();
+    return m_playWorld ? m_editor->m_playWorld->editor.world() : m_editor->world();
+}
+
+EntityIndex& CommandContext::index()
+{
+    return m_playWorld ? *m_editor->playEntities() : m_editor->entities();
 }
 
 Expected<Entity, CommandError> CommandContext::entity(std::string_view reference, std::string_view pointer)
 {
-    return m_editor->entities().resolve(reference, m_editor->selection(), pointer);
+    return index().resolve(reference, m_editor->selection(), pointer);
 }
 
 Expected<void, CommandError> CommandContext::entities(std::span<const std::string> references,
                                                       std::string_view pointer, std::vector<Entity>& out)
 {
-    return m_editor->entities().resolveAll(references, m_editor->selection(), pointer, out);
+    return index().resolveAll(references, m_editor->selection(), pointer, out);
 }
 
 EntitySummary CommandContext::summary(Entity entity)
 {
-    return m_editor->entities().summary(entity);
+    return index().summary(entity);
 }
 
 Expected<ComponentId, CommandError> CommandContext::componentType(std::string_view name,
@@ -581,6 +607,22 @@ Expected<void, CommandError> EditorContext::readParams(const CommandDescriptor& 
         }
         options.mergeKey = mergeKey.asString().value_or("");
     }
+    if (const JsonValue world = json.find("world"); !world.isAbsent())
+    {
+        const std::string_view name = world.asString().value_or("");
+        if (name == "edit")
+        {
+            options.world = WorldTarget::Edit;
+        }
+        else if (name == "play")
+        {
+            options.world = WorldTarget::Play;
+        }
+        else
+        {
+            errors.push_back(ValueError{"/world", "must be \"edit\" or \"play\""});
+        }
+    }
     if (const JsonValue token = json.find("clientToken"); !token.isAbsent())
     {
         if (!token.isString())
@@ -767,7 +809,7 @@ EditorContext::startJson(std::string_view name, JsonValue params, const CommandO
     }
     const bool wasRunning = std::exchange(m_running, true);
     const bool nested = std::exchange(m_nested, false);
-    CommandContext context(*this, state->options, state->report);
+    CommandContext context(*this, state->options, state->report, routesToPlay(*descriptor, state->options));
     Expected<std::unique_ptr<CommandTaskBase>, CommandError> task = descriptor->start(context, paramData);
     m_running = wasRunning;
     m_nested = nested;
@@ -790,6 +832,25 @@ Expected<void, CommandError> EditorContext::admit(const CommandDescriptor& descr
         if (Expected<void, CommandError> allowed = options.gate->check(descriptor); !allowed)
         {
             return allowed;
+        }
+    }
+    if (descriptor.info.mode == CommandMode::Play && !playing())
+    {
+        return unexpected(CommandError::make(ErrorKind::WrongMode,
+                                             std::string(descriptor.info.name) +
+                                                 " needs a running play session; start one with play.start"));
+    }
+    if (options.world == WorldTarget::Play)
+    {
+        if (descriptor.info.mode != CommandMode::Any)
+        {
+            return unexpected(CommandError::invalid("/world", std::string(descriptor.info.name) +
+                                                                  " acts on the edit World only"));
+        }
+        if (!playing())
+        {
+            return unexpected(CommandError::make(ErrorKind::WrongMode,
+                                                 "there is no play World; start a session with play.start"));
         }
     }
     if (options.expectRevision && *options.expectRevision != revision())
@@ -843,16 +904,43 @@ Expected<void, CommandError> EditorContext::run(const CommandDescriptor& descrip
     }
     const bool wasRunning = std::exchange(m_running, true);
     const bool nested = std::exchange(m_nested, false);
-    CommandContext context(*this, options, report);
+    const bool onPlay = routesToPlay(descriptor, options);
+    if (onPlay)
+    {
+        static_cast<void>(playEntities());
+    }
+    CommandContext context(*this, options, report, onPlay);
     const bool undoable = descriptor.info.flags.undoable;
     const u64 selectionVersion = m_selection.version();
     std::vector<EntityGuid> selectionBefore(m_selection.items().begin(), m_selection.items().end());
     if (undoable)
     {
-        m_editor.begin();
+        context.edit().begin();
     }
     Expected<void, CommandError> ran = descriptor.invoke(context, params, result);
-    if (undoable)
+    if (undoable && onPlay)
+    {
+        // Play edits apply at once and leave no undo step, journal entry or dirty scene.
+        WorldEditor& play = m_playWorld->editor;
+        report.operations = static_cast<u32>(play.pendingOperations());
+        if (!ran || options.dryRun)
+        {
+            play.rollback();
+            restoreSelection(selectionBefore);
+            report.dryRun = options.dryRun && ran.hasValue();
+        }
+        else if (const std::vector<Operation> operations = play.commit(); !operations.empty())
+        {
+            m_playWorld->index.updateTransforms();
+            if (m_play != nullptr)
+            {
+                m_play->playWorldEdited(operations);
+            }
+            m_events.post("play.changed", "{\"operations\":" + std::to_string(operations.size()) + "}");
+        }
+        m_playWorld->changes.discardPending();
+    }
+    else if (undoable)
     {
         report.operations = static_cast<u32>(m_editor.pendingOperations());
         if (!ran || options.dryRun)
@@ -883,6 +971,61 @@ Expected<void, CommandError> EditorContext::run(const CommandDescriptor& descrip
     m_running = wasRunning;
     m_nested = nested;
     return ran;
+}
+
+bool EditorContext::routesToPlay(const CommandDescriptor& descriptor,
+                                 const CommandOptions& options) const noexcept
+{
+    return playing() && descriptor.info.mode == CommandMode::Any && options.world != WorldTarget::Edit;
+}
+
+void EditorContext::attachPlayWorld(World& world)
+{
+    ILL_ASSERT(m_playWorld == nullptr, "a play World is attached already");
+    m_playWorld = std::make_unique<PlayWorld>(
+        world, m_options.seed != 0 ? m_options.seed ^ 0x9a7e'0000'0000'0001ull : 0);
+    m_events.post("play.attached", "{}");
+}
+
+void EditorContext::detachPlayWorld() noexcept
+{
+    if (m_playWorld)
+    {
+        m_playWorld.reset();
+        m_events.post("play.detached", "{}");
+    }
+}
+
+World* EditorContext::playWorld() noexcept
+{
+    return m_playWorld ? &m_playWorld->editor.world() : nullptr;
+}
+
+EntityIndex* EditorContext::playEntities()
+{
+    if (!m_playWorld)
+    {
+        return nullptr;
+    }
+    if (m_playWorld->stale)
+    {
+        m_playWorld->index.rebuild();
+        m_playWorld->stale = false;
+    }
+    return &m_playWorld->index;
+}
+
+void EditorContext::playWorldAdvanced() noexcept
+{
+    if (m_playWorld)
+    {
+        m_playWorld->stale = true;
+    }
+}
+
+WorldEditor* EditorContext::playEditor() noexcept
+{
+    return m_playWorld ? &m_playWorld->editor : nullptr;
 }
 
 void EditorContext::selectionChanged(u64 before, std::string_view origin)

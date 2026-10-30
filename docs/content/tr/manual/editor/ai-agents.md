@@ -152,5 +152,6 @@ sonuca bununla ilgili bir not ekler. Bağlanılan bir editör kaybolursa `editor
 | Bir çağrı uzun süre bekliyor | Editör penceresi bir kişinin onayını bekliyor (`ask` modu); AI Activity paneline bakın. |
 | Metin özetleri `truncated` ile bitiyor | Sonuç `structuredContent` içinde eksiksizdir; isteği `limit` ile daraltın. |
 | `editor_crashed` | Editörün son log satırları hatanın içindedir; yeniden başlatıp kurtarmak için tekrar çağırın. |
+| Düzenlemeler `play.stop` sonrasında kayboluyor | Bir play oturumu çalışıyordu: Entity ve Component komutları play World'ü değiştirdi. `"world": "edit"` verin ya da durdurmadan önce değerleri `play.keep_changes` ile kopyalayın (bkz. [Play Modu](play-mode.md)). |
 
 Her mesajı görmek için bir oturumu `--record session.jsonl` ile kaydedin.

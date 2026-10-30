@@ -122,7 +122,7 @@ TreeNode treeNode(CommandContext& context, Entity entity, u32 depth)
 {
     const EntitySummary summary = context.summary(entity);
     std::vector<Entity> children;
-    context.editor().entities().children(entity, children);
+    context.index().children(entity, children);
     return TreeNode{summary.id,
                     summary.name,
                     summary.path,
@@ -133,7 +133,7 @@ TreeNode treeNode(CommandContext& context, Entity entity, u32 depth)
 
 Expected<SceneTreeResult, CommandError> sceneTree(CommandContext& context, const SceneTreeParams& params)
 {
-    EntityIndex& index = context.editor().entities();
+    EntityIndex& index = context.index();
     std::vector<std::pair<Entity, u32>> stack; // entity, depth
     std::vector<Entity> level;
     if (params.root)
@@ -209,7 +209,7 @@ Expected<u32, CommandError> readLimit(const std::optional<u32>& limit)
 template <class F>
 void forEachInOrder(CommandContext& context, Entity under, F&& fn)
 {
-    EntityIndex& index = context.editor().entities();
+    EntityIndex& index = context.index();
     const HierarchyIndex& hierarchy = index.hierarchy();
     if (!under.isNull())
     {
