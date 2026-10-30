@@ -241,8 +241,10 @@ yalnızca `editor.screenshot`'ı yanıtlamak için çizer. Kılavuz [pencereyi](
 `UiHost`'un yanında) sade kamera, ayar ve seçme türleriyle, ayrıca kamera matematiği (`viewportEye()`,
 `viewportProjectionMatrix()`, `viewportPreset()`, `projectToViewport()`). `viewport.*` komutları yalnızca bu
 arayüzü kullanır; bu yüzden sahte bir host ile test edilirler ve `--no-gpu` altında `unsupported` (1400) ile
-başarısız olurlar. `illusion::editor_viewport` arayüzü `ViewportService` ile uygular; editör süreci onu
-`EditorContext::setViewports()` ile kaydeder:
+başarısız olurlar. `ViewportHost::meshBounds()` yerleştirme komutlarına (`transform.align`,
+`transform.distribute`, `transform.drop_to_ground`) çizilen Mesh'lerin dünya kutularını verir; matematikleri
+GPU'suzdur (`Arrange.hpp`) ve host yokken her Entity konumu olarak sayılır. `illusion::editor_viewport` arayüzü
+`ViewportService` ile uygular; editör süreci onu `EditorContext::setViewports()` ile kaydeder:
 
 - Her viewport bir `EditorCamera` (orbit, pan, dolly, fly, yumuşatılmış geçişler), bir `ResizePolicy` (yeni
   boyut 150 ms sonra ya da fare düğmesi bırakılınca uygulanır; bu sırada görüntü esnetilir) ve `UiRenderer`'a

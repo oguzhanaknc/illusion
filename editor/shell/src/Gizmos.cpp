@@ -92,6 +92,21 @@ GizmoHandle axisHandle(GizmoHandle first, u32 axis) noexcept
     return static_cast<GizmoHandle>(static_cast<u32>(first) + axis);
 }
 
+// The undo label of a modal @p operation.
+text::TextKey modalLabel(GizmoModalOperation operation) noexcept
+{
+    switch (operation)
+    {
+    case GizmoModalOperation::Rotate:
+        return s::kToolRotate;
+    case GizmoModalOperation::Scale:
+        return s::kToolScale;
+    case GizmoModalOperation::Translate:
+        break;
+    }
+    return s::kToolMove;
+}
+
 } // namespace
 
 void ViewportGizmo::refreshTargets(Impl& shell)
@@ -122,7 +137,7 @@ std::optional<GizmoPose> ViewportGizmo::pose(Impl& shell, const Frame& frame)
     }
     const GizmoSettings& settings = shell.editor.gizmo();
     const GizmoTool tool = m_drag ? m_dragTool : settings.tool;
-    if (tool == GizmoTool::Select)
+    if (tool == GizmoTool::Select || m_modal)
     {
         return std::nullopt;
     }
@@ -137,7 +152,7 @@ std::optional<GizmoPose> ViewportGizmo::pose(Impl& shell, const Frame& frame)
 
 GizmoHandle ViewportGizmo::hoveredHandle(Impl& shell, const Frame& frame)
 {
-    if (!frame.hovered || m_drag || ImGui::GetIO().KeyAlt)
+    if (!frame.hovered || dragging() || ImGui::GetIO().KeyAlt)
     {
         return GizmoHandle::None;
     }
@@ -149,40 +164,94 @@ GizmoHandle ViewportGizmo::hoveredHandle(Impl& shell, const Frame& frame)
     return gizmoHitTest(gizmoShape(shell.editor.gizmo().tool, cameraOf(frame), *placed), frame.cursor);
 }
 
+bool ViewportGizmo::beginTransaction(Impl& shell, text::TextKey label)
+{
+    m_params = "{\"label\":";
+    m_params += jsonQuote(shell.text.format(label));
+    m_params += '}';
+    if (!shell.run("transaction.begin", m_params, "gizmo"))
+    {
+        return false;
+    }
+    m_placed.assign(m_start.begin(), m_start.end());
+    m_delta = GizmoDelta{};
+    m_typed.clear();
+    return true;
+}
+
 bool ViewportGizmo::begin(Impl& shell, const Frame& frame, GizmoHandle handle)
 {
     const std::optional<GizmoPose> placed = pose(shell, frame);
-    if (!placed || m_drag)
+    if (!placed || dragging())
     {
         return false;
     }
     const GizmoSettings& settings = shell.editor.gizmo();
     std::optional<GizmoDrag> drag =
         GizmoDrag::begin(settings.tool, handle, cameraOf(frame), *placed, frame.cursor);
-    if (!drag)
-    {
-        return false;
-    }
-    m_params = "{\"label\":";
-    m_params += jsonQuote(shell.text.format(dragLabel(handle)));
-    m_params += '}';
-    if (!shell.run("transaction.begin", m_params, "gizmo"))
+    if (!drag || !beginTransaction(shell, dragLabel(handle)))
     {
         return false;
     }
     m_drag = drag;
     m_dragTool = settings.tool;
     m_dragPivot = settings.pivot;
-    m_placed.assign(m_start.begin(), m_start.end());
-    m_delta = GizmoDelta{};
     return true;
 }
 
-void ViewportGizmo::apply(Impl& shell, const GizmoDelta& delta)
+bool ViewportGizmo::beginModal(Impl& shell, const Frame& frame, GizmoModalOperation operation)
+{
+    const ViewportFrame* viewport = frame.viewport;
+    if (dragging() || viewport == nullptr || viewport->kind != ViewportKind::Scene)
+    {
+        return false;
+    }
+    refreshTargets(shell);
+    const GizmoSettings& settings = shell.editor.gizmo();
+    const GizmoCamera camera = cameraOf(frame);
+    const std::optional<GizmoPose> placed =
+        gizmoPose(m_start, m_start.empty() ? 0 : m_start.size() - 1, GizmoTool::Translate, GizmoSpace::World,
+                  settings.pivot, camera);
+    if (!placed)
+    {
+        return false;
+    }
+    std::optional<GizmoModal> modal =
+        GizmoModal::begin(operation, camera, placed->origin, m_start.back().rotation, frame.cursor);
+    if (!modal || !beginTransaction(shell, modalLabel(operation)))
+    {
+        return false;
+    }
+    m_modal = modal;
+    m_dragPivot = settings.pivot;
+    return true;
+}
+
+void ViewportGizmo::typeNumbers()
+{
+    const ImGuiIO& io = ImGui::GetIO();
+    for (const ImWchar character : io.InputQueueCharacters)
+    {
+        if (character < 128)
+        {
+            (void)m_typed.type(static_cast<char>(character));
+        }
+    }
+    if (ImGui::IsKeyPressed(ImGuiKey_Backspace))
+    {
+        m_typed.erase();
+    }
+    if (ImGui::IsKeyPressed(ImGuiKey_Tab, false))
+    {
+        m_typed.next();
+    }
+}
+
+void ViewportGizmo::apply(Impl& shell, const GizmoPose& pose, const GizmoDelta& delta)
 {
     ILL_PROFILE_SCOPE();
     m_delta = delta;
-    applyGizmoDelta(m_start, m_drag->pose(), m_dragPivot, delta, m_placed);
+    applyGizmoDelta(m_start, pose, m_dragPivot, delta, m_placed);
     m_params = "{\"steps\":[";
     for (usize i = 0; i < m_targets.size(); ++i)
     {
@@ -209,6 +278,8 @@ void ViewportGizmo::apply(Impl& shell, const GizmoDelta& delta)
 void ViewportGizmo::end(Impl& shell, bool commit)
 {
     m_drag.reset();
+    m_modal.reset();
+    m_typed.clear();
     m_cached = false;
     (void)shell.run(commit ? "transaction.commit" : "transaction.cancel", "", "gizmo");
 }
@@ -217,26 +288,51 @@ void ViewportGizmo::update(Impl& shell, const Frame& frame, ImDrawList& draw, Gi
 {
     const ImGuiIO& io = ImGui::GetIO();
     const GizmoSettings& settings = shell.editor.gizmo();
-    if (m_drag)
+    const bool confirm =
+        ImGui::IsKeyPressed(ImGuiKey_Enter, false) || ImGui::IsKeyPressed(ImGuiKey_KeypadEnter, false);
+    const GizmoSnap* snap = settings.snap.enabled != io.KeyCtrl ? &settings.snap : nullptr;
+    if (dragging())
     {
         if (frame.viewport == nullptr || ImGui::IsKeyPressed(ImGuiKey_Escape, false) ||
             ImGui::IsMouseClicked(ImGuiMouseButton_Right))
         {
             end(shell, false);
         }
-        else if (!ImGui::IsMouseDown(ImGuiMouseButton_Left))
+        else if (confirm || (m_drag && !ImGui::IsMouseDown(ImGuiMouseButton_Left)) ||
+                 (m_modal && ImGui::IsMouseClicked(ImGuiMouseButton_Left)))
         {
             end(shell, true);
         }
         else
         {
-            const bool snapping = settings.snap.enabled != io.KeyCtrl;
-            const GizmoDelta delta = m_drag->update(frame.cursor, snapping ? &settings.snap : nullptr);
+            typeNumbers();
+            GizmoDelta delta;
+            if (m_modal)
+            {
+                constexpr std::array<ImGuiKey, 3> kAxisKeys = {ImGuiKey_X, ImGuiKey_Y, ImGuiKey_Z};
+                for (u32 i = 0; i < 3; ++i)
+                {
+                    if (ImGui::IsKeyPressed(kAxisKeys[i], false))
+                    {
+                        m_modal->constrain(i, io.KeyShift);
+                    }
+                }
+                delta = m_modal->update(frame.cursor, snap, m_typed);
+            }
+            else
+            {
+                delta = m_typed.active() ? m_drag->typed(m_typed) : m_drag->update(frame.cursor, snap);
+            }
             if (!sameDelta(delta, m_delta))
             {
-                apply(shell, delta);
+                apply(shell, m_modal ? m_modal->pose() : m_drag->pose(), delta);
             }
         }
+    }
+    if (m_modal && frame.viewport != nullptr)
+    {
+        drawModal(shell, frame, draw);
+        return;
     }
 
     const std::optional<GizmoPose> placed = pose(shell, frame);
@@ -375,6 +471,85 @@ void ViewportGizmo::update(Impl& shell, const Frame& frame, ImDrawList& draw, Gi
     }
 }
 
+void ViewportGizmo::drawModal(Impl& shell, const Frame& frame, ImDrawList& draw)
+{
+    const GizmoModal& modal = *m_modal;
+    const GizmoShape shape = gizmoShape(GizmoTool::Translate, cameraOf(frame), modal.pose());
+    if (!shape.visible)
+    {
+        return;
+    }
+    const ui::UiKit kit = shell.kit();
+    const ui::Theme& theme = kit.theme;
+    const std::array<Vec4, 3> axisColors = {
+        theme.color(kit.colorBlindAxes ? ui::ThemeToken::AxisCbX : ui::ThemeToken::AxisX),
+        theme.color(kit.colorBlindAxes ? ui::ThemeToken::AxisCbY : ui::ThemeToken::AxisY),
+        theme.color(kit.colorBlindAxes ? ui::ThemeToken::AxisCbZ : ui::ThemeToken::AxisZ)};
+    const Vec4 neutral = theme.color(ui::ThemeToken::TextPrimary);
+    const f32 points = kit.scale;
+    const ImVec2 center = toWindow(frame, shape.center);
+
+    // Each constrained axis as a line through the pivot across the image.
+    const f32 reach = static_cast<f32>(frame.viewport->size.x + frame.viewport->size.y);
+    for (u32 i = 0; i < 3; ++i)
+    {
+        if ((modal.axes() & (1u << i)) == 0)
+        {
+            continue;
+        }
+        const Vec2 along = shape.lines[i].end - shape.center;
+        const f32 length = glm::length(along);
+        if (!(length > 1e-3f))
+        {
+            continue;
+        }
+        const Vec2 direction = along / length * reach;
+        draw.AddLine(toWindow(frame, shape.center - direction), toWindow(frame, shape.center + direction),
+                     packed(axisColors[i], 0.8f), kRingWidth * points);
+    }
+    const ImVec2 cursor = toWindow(frame, frame.cursor);
+    if (modal.operation() != GizmoModalOperation::Translate)
+    {
+        draw.AddLine(center, cursor, packed(neutral, 0.6f), points);
+    }
+    draw.AddCircleFilled(center, kScaleBox * points, packed(neutral, 0.9f));
+
+    // What it does, its constraint and the typed numbers next to the cursor, the keys below.
+    ui::FrameText& text = shell.text;
+    std::string_view line = text.format(modalLabel(modal.operation()));
+    if (modal.axes() != 0)
+    {
+        line = text.concat(line, "  ");
+        for (u32 i = 0; i < 3; ++i)
+        {
+            if ((modal.axes() & (1u << i)) != 0)
+            {
+                line = text.concat(line, text.format(kAxisLetters[i]));
+            }
+        }
+        if (modal.local())
+        {
+            line = text.concat(text.concat(line, " "), text.format(s::kGizmoModalLocal));
+        }
+    }
+    if (m_typed.active())
+    {
+        for (u32 field = 0; field < GizmoTypedInput::kFields; ++field)
+        {
+            line = text.concat(line, field == 0 ? "  " : ", ");
+            line = text.concat(line, m_typed.text(field));
+            if (field == m_typed.field())
+            {
+                line = text.concat(line, "|");
+            }
+        }
+    }
+    const ImVec2 at(cursor.x + 16.0f * points, cursor.y + 16.0f * points);
+    draw.AddText(at, packed(neutral, 1.0f), line.data(), line.data() + line.size());
+    const char* hint = text.format(s::kGizmoModalHint);
+    draw.AddText(ImVec2(at.x, at.y + ImGui::GetTextLineHeightWithSpacing()), packed(neutral, 0.7f), hint);
+}
+
 void drawGizmoToolbar(Impl& shell)
 {
     ui::UiKit kit = shell.kit();
@@ -393,16 +568,18 @@ void drawGizmoToolbar(Impl& shell)
         Choice{&ui::icons::kDeployedCode, s::kGizmoSpaceLocal, "toolbar.gizmo.space.local",
                R"({"space":"local"})"},
         Choice{&ui::icons::kVideocam, s::kGizmoSpaceView, "toolbar.gizmo.space.view", R"({"space":"view"})"}};
-    static const std::array<Choice, 3> kPivots = {
+    static const std::array<Choice, 4> kPivots = {
         Choice{&ui::icons::kFilterCenterFocus, s::kGizmoPivotMedian, "toolbar.gizmo.pivot.median",
                R"({"pivot":"median"})"},
         Choice{&ui::icons::kAdjust, s::kGizmoPivotActive, "toolbar.gizmo.pivot.active",
                R"({"pivot":"active"})"},
         Choice{&ui::icons::kScatterPlot, s::kGizmoPivotIndividual, "toolbar.gizmo.pivot.individual",
-               R"({"pivot":"individual"})"}};
+               R"({"pivot":"individual"})"},
+        Choice{&ui::icons::kSelectAll, s::kGizmoPivotBoundsCenter, "toolbar.gizmo.pivot.bounds_center",
+               R"({"pivot":"bounds_center"})"}};
 
-    const auto menu = [&](const std::array<Choice, 3>& choices, usize current, text::TextKey title,
-                          const char* id, const char* popup, const char* command) {
+    const auto menu = [&](std::span<const Choice> choices, usize current, text::TextKey title, const char* id,
+                          const char* popup, const char* command) {
         const Choice& shown = choices[std::min<usize>(current, choices.size() - 1)];
         if (ui::iconButton(kit, *shown.icon, id, text.format(title), text.format(shown.title)))
         {

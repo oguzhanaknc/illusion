@@ -734,9 +734,26 @@ void SceneView::draw(Impl& shell)
     gizmoFrame.pixelScale = kit.scale * toImage.y;
     gizmoFrame.cursor = (mouse - imageOrigin) * toImage;
     gizmoFrame.hovered = hovered && !overOverlay && !shell.eyedropper.active;
+    if (scene && hovered)
+    {
+        shell.hoveredSceneView = m_id;
+    }
+    // gizmo.modal starts in the Scene view under the cursor, or in the main one.
+    if (scene && shell.pendingModal &&
+        m_id == (shell.lastHoveredSceneView.empty() ? std::string_view("scene")
+                                                    : std::string_view(shell.lastHoveredSceneView)))
+    {
+        (void)m_gizmo.beginModal(shell, gizmoFrame, *shell.pendingModal);
+        shell.pendingModal.reset();
+    }
     const GizmoHandle gizmoHovered = m_gizmo.hoveredHandle(shell, gizmoFrame);
-    if (ImGui::IsItemActivated() && ImGui::IsMouseClicked(ImGuiMouseButton_Left) &&
-        gizmoHovered != GizmoHandle::None && !m_cubeDrag)
+    if (ImGui::IsItemActivated() && ImGui::IsMouseClicked(ImGuiMouseButton_Left) && m_gizmo.modal())
+    {
+        // The click confirms the modal transform: its release neither picks nor selects.
+        m_gizmoPressed = true;
+    }
+    else if (ImGui::IsItemActivated() && ImGui::IsMouseClicked(ImGuiMouseButton_Left) &&
+             gizmoHovered != GizmoHandle::None && !m_cubeDrag)
     {
         m_gizmoPressed = m_gizmo.begin(shell, gizmoFrame, gizmoHovered);
     }

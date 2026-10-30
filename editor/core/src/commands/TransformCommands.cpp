@@ -7,6 +7,7 @@
 #include <cmath>
 #include <unordered_map>
 #include <unordered_set>
+#include <vector>
 
 namespace illusion::editor::detail
 {
@@ -503,6 +504,252 @@ Expected<EntitiesResult, CommandError> transformSnapToGrid(CommandContext& conte
     return result;
 }
 
+// Enum params also accept raw numbers: reject values outside the enum.
+template <class E>
+Expected<void, CommandError> checkEnum(const std::optional<E>& value, E last, std::string pointer)
+{
+    if (value && static_cast<usize>(*value) > static_cast<usize>(last))
+    {
+        return unexpected(CommandError::invalid(std::move(pointer), "is not one of the allowed values"));
+    }
+    return {};
+}
+
+// The entities a placing command moves (descendants of others dropped) with the world-space box around what
+// each draws with its descendants: the Mesh boxes of the viewports, or its position when it draws nothing
+// (or the editor has no viewports).
+struct Arranged
+{
+    std::vector<Entity> entities;
+    std::vector<Aabb> boxes;
+    std::vector<Aabb> others; // Mesh boxes of the entities that do not move
+};
+
+Expected<Arranged, CommandError> arranged(CommandContext& context, const std::vector<std::string>& references)
+{
+    Expected<std::vector<Entity>, CommandError> entities = resolveEntityList(context, references);
+    if (!entities)
+    {
+        return unexpected(std::move(entities).error());
+    }
+    World& world = context.world();
+    dropDescendants(world, *entities);
+    std::vector<ViewportBounds> meshes;
+    if (ViewportHost* host = context.editor().viewports())
+    {
+        host->meshBounds(meshes);
+    }
+    std::unordered_map<u64, usize> owner; // entity bits -> index in entities of the moved root
+    const HierarchyIndex& hierarchy = context.editor().entities().hierarchy();
+    for (usize i = 0; i < entities->size(); ++i)
+    {
+        const Entity root = (*entities)[i];
+        const std::span<const Entity> members =
+            hierarchy.contains(root) ? hierarchy.subtree(root) : std::span<const Entity>(&root, 1);
+        for (const Entity member : members)
+        {
+            owner.emplace(member.toBits(), i);
+        }
+    }
+    Arranged out;
+    out.boxes.resize(entities->size());
+    for (const ViewportBounds& mesh : meshes)
+    {
+        const auto found = owner.find(mesh.entity.toBits());
+        if (found != owner.end())
+        {
+            out.boxes[found->second].expand(mesh.bounds);
+        }
+        else
+        {
+            out.others.push_back(mesh.bounds);
+        }
+    }
+    for (usize i = 0; i < entities->size(); ++i)
+    {
+        if (!out.boxes[i].isValid())
+        {
+            out.boxes[i].expand(worldTransformOf(world, (*entities)[i]).position);
+        }
+    }
+    out.entities = std::move(*entities);
+    return out;
+}
+
+// Moves each arranged entity by offsets[i] (world units) and lists them.
+Expected<EntitiesResult, CommandError> moveArranged(CommandContext& context, const Arranged& arranged,
+                                                    std::span<const Vec3> offsets)
+{
+    World& world = context.world();
+    EntitiesResult result;
+    for (usize i = 0; i < arranged.entities.size(); ++i)
+    {
+        const Entity entity = arranged.entities[i];
+        if (offsets[i] != Vec3(0.0f))
+        {
+            Transform placed = worldTransformOf(world, entity);
+            placed.position += offsets[i];
+            if (Expected<void, CommandError> done = placeWorld(context, entity, placed, "/entities"); !done)
+            {
+                return unexpected(std::move(done).error());
+            }
+        }
+        result.entities.push_back(context.summary(entity));
+    }
+    return result;
+}
+
+Expected<EntitiesResult, CommandError> transformAlign(CommandContext& context,
+                                                      const TransformAlignParams& params)
+{
+    if (Expected<void, CommandError> valid = checkEnum(std::optional(params.axis), TransformAxis::Z, "/axis");
+        !valid)
+    {
+        return unexpected(std::move(valid).error());
+    }
+    if (Expected<void, CommandError> valid = checkEnum(params.edge, AlignEdge::Max, "/edge"); !valid)
+    {
+        return unexpected(std::move(valid).error());
+    }
+    if (Expected<void, CommandError> valid = checkEnum(params.to, AlignTarget::Active, "/to"); !valid)
+    {
+        return unexpected(std::move(valid).error());
+    }
+    Expected<Arranged, CommandError> found = arranged(context, params.entities);
+    if (!found)
+    {
+        return unexpected(std::move(found).error());
+    }
+    Aabb target;
+    if (params.to.value_or(AlignTarget::Selection) == AlignTarget::Active)
+    {
+        target = found->boxes.back();
+    }
+    else
+    {
+        for (const Aabb& box : found->boxes)
+        {
+            target.expand(box);
+        }
+    }
+    const u32 axis = static_cast<u32>(params.axis);
+    std::vector<f32> along(found->boxes.size());
+    alignOffsets(found->boxes, axis, params.edge.value_or(AlignEdge::Center), target, along);
+    std::vector<Vec3> offsets(along.size(), Vec3(0.0f));
+    for (usize i = 0; i < along.size(); ++i)
+    {
+        offsets[i][static_cast<glm::length_t>(axis)] = along[i];
+    }
+    return moveArranged(context, *found, offsets);
+}
+
+Expected<EntitiesResult, CommandError> transformDistribute(CommandContext& context,
+                                                           const TransformDistributeParams& params)
+{
+    if (Expected<void, CommandError> valid = checkEnum(std::optional(params.axis), TransformAxis::Z, "/axis");
+        !valid)
+    {
+        return unexpected(std::move(valid).error());
+    }
+    if (Expected<void, CommandError> valid = checkEnum(params.mode, DistributeMode::Gaps, "/mode"); !valid)
+    {
+        return unexpected(std::move(valid).error());
+    }
+    Expected<Arranged, CommandError> found = arranged(context, params.entities);
+    if (!found)
+    {
+        return unexpected(std::move(found).error());
+    }
+    if (found->entities.size() < 3)
+    {
+        return unexpected(CommandError::invalid(
+            "/entities", "must name at least three entities that are not descendants of each other"));
+    }
+    const u32 axis = static_cast<u32>(params.axis);
+    std::vector<f32> along(found->boxes.size());
+    distributeOffsets(found->boxes, axis, params.mode.value_or(DistributeMode::Centers), along);
+    std::vector<Vec3> offsets(along.size(), Vec3(0.0f));
+    for (usize i = 0; i < along.size(); ++i)
+    {
+        offsets[i][static_cast<glm::length_t>(axis)] = along[i];
+    }
+    return moveArranged(context, *found, offsets);
+}
+
+Expected<EntitiesResult, CommandError> transformDropToGround(CommandContext& context,
+                                                             const TransformDropParams& params)
+{
+    if (Expected<void, CommandError> valid = checkEnum(params.onto, DropTarget::Plane, "/onto"); !valid)
+    {
+        return unexpected(std::move(valid).error());
+    }
+    Expected<Arranged, CommandError> found = arranged(context, params.entities);
+    if (!found)
+    {
+        return unexpected(std::move(found).error());
+    }
+    const bool plane = params.onto.value_or(DropTarget::Surfaces) == DropTarget::Plane;
+    const std::span<const Aabb> surfaces =
+        plane ? std::span<const Aabb>() : std::span<const Aabb>(found->others);
+    std::vector<Vec3> offsets(found->boxes.size(), Vec3(0.0f));
+    for (usize i = 0; i < offsets.size(); ++i)
+    {
+        offsets[i].y = restingHeight(found->boxes[i], surfaces, 0.0f) - found->boxes[i].min.y;
+    }
+    return moveArranged(context, *found, offsets);
+}
+
+Expected<EntitiesResult, CommandError> transformAlignToView(CommandContext& context,
+                                                            const TransformAlignViewParams& params)
+{
+    ViewportHost* host = context.editor().viewports();
+    if (host == nullptr)
+    {
+        return unexpected(CommandError::make(ErrorKind::Unsupported,
+                                             "this editor has no viewports (it runs without a GPU)"));
+    }
+    const std::string_view wanted = params.viewport ? std::string_view(*params.viewport) : "scene";
+    std::optional<ViewportInfo> view;
+    for (ViewportInfo& info : host->viewports())
+    {
+        if (info.id == wanted)
+        {
+            view = std::move(info);
+            break;
+        }
+    }
+    if (!view)
+    {
+        return unexpected(
+            CommandError::make(ErrorKind::NotFound, "no viewport '" + std::string(wanted) + "'"));
+    }
+    Expected<std::vector<Entity>, CommandError> entities = resolveEntityList(context, params.entities);
+    if (!entities)
+    {
+        return unexpected(std::move(entities).error());
+    }
+    World& world = context.world();
+    dropDescendants(world, *entities);
+    sortParentsFirst(context, *entities);
+    const Quat rotation = glm::normalize(glm::quat_cast(Mat3(glm::inverse(view->view))));
+    EntitiesResult result;
+    for (const Entity entity : *entities)
+    {
+        Transform placed = worldTransformOf(world, entity);
+        placed.rotation = rotation;
+        if (params.move.value_or(false))
+        {
+            placed.position = view->eye;
+        }
+        if (Expected<void, CommandError> done = placeWorld(context, entity, placed, "/entities"); !done)
+        {
+            return unexpected(std::move(done).error());
+        }
+        result.entities.push_back(context.summary(entity));
+    }
+    return result;
+}
+
 } // namespace
 
 void registerTransformCommands(CommandRegistry& registry)
@@ -594,6 +841,70 @@ void registerTransformCommands(CommandRegistry& registry)
             "parents. Example: {\"entities\": [\"$selection\"], \"increment\": 1}.",
         .category = "Transform",
         .icon = "grid_4x4",
+        .flags = {.idempotent = true, .undoable = true},
+        .permission = PermissionClass::Edit,
+        .palette = true,
+    });
+    registry.add<&transformAlign>({
+        .name = "transform.align",
+        .title = strings::kCommandTransformAlignTitle,
+        .description = strings::kCommandTransformAlignDescription,
+        .agentSummary = "Lines entities up along one world axis: moves each so that the min, center or max "
+                        "edge of the box "
+                        "around what it draws matches that edge of the box around all of them (to "
+                        "\"selection\") or of the "
+                        "last listed entity (to \"active\"). Entities that draw nothing count as their "
+                        "position. Example: "
+                        "{\"entities\": [\"/A\", \"/B\"], \"axis\": \"x\", \"edge\": \"min\"}.",
+        .category = "Transform",
+        .icon = "align_horizontal_left",
+        .flags = {.idempotent = true, .undoable = true},
+        .permission = PermissionClass::Edit,
+        .palette = true,
+    });
+    registry.add<&transformDistribute>({
+        .name = "transform.distribute",
+        .title = strings::kCommandTransformDistributeTitle,
+        .description = strings::kCommandTransformDistributeDescription,
+        .agentSummary =
+            "Spaces three or more entities evenly along one world axis between the first and the last (by "
+            "the "
+            "centres of their boxes, which stay put): equal distances between \"centers\" (default) or equal "
+            "\"gaps\" between the boxes. Example: {\"entities\": [\"/A\", \"/B\", \"/C\"], \"axis\": \"x\", "
+            "\"mode\": \"gaps\"}.",
+        .category = "Transform",
+        .icon = "horizontal_distribute",
+        .flags = {.idempotent = true, .undoable = true},
+        .permission = PermissionClass::Edit,
+        .palette = true,
+    });
+    registry.add<&transformDropToGround>({
+        .name = "transform.drop_to_ground",
+        .title = strings::kCommandTransformDropToGroundTitle,
+        .description = strings::kCommandTransformDropToGroundDescription,
+        .agentSummary =
+            "Moves entities straight down (or up) until the bottom of the box around what they draw rests on "
+            "the highest box of another entity below them, or on the ground plane y = 0 when there is none "
+            "(onto \"surfaces\", default), or always on the plane (onto \"plane\"). Render bounds, not "
+            "physics. "
+            "Example: {\"entities\": [\"$selection\"]}.",
+        .category = "Transform",
+        .icon = "vertical_align_bottom",
+        .flags = {.idempotent = true, .undoable = true},
+        .permission = PermissionClass::Edit,
+        .palette = true,
+    });
+    registry.add<&transformAlignToView>({
+        .name = "transform.align_to_view",
+        .title = strings::kCommandTransformAlignToViewTitle,
+        .description = strings::kCommandTransformAlignToViewDescription,
+        .agentSummary = "Turns entities to the rotation of a viewport's camera (they look where it looks, "
+                        "along their -z) "
+                        "and, with move, also places them at its eye, e.g. to aim a Camera or a light from "
+                        "the current view. "
+                        "Example: {\"entities\": [\"/Main Camera\"], \"move\": true}.",
+        .category = "Transform",
+        .icon = "switch_video",
         .flags = {.idempotent = true, .undoable = true},
         .permission = PermissionClass::Edit,
         .palette = true,

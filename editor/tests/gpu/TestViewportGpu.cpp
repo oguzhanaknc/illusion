@@ -511,3 +511,60 @@ TEST_CASE("a selected Camera shows its frustum, icon and picture-in-picture view
     gpu.frame();
     CHECK(gpu.service->stats().visualisers == 0);
 }
+
+TEST_CASE("mesh bounds follow the scene and drop to ground lands an entity on the floor below it")
+{
+    GpuViewports gpu;
+    buildScene(gpu);
+    EditorContext& editor = gpu.editor();
+    test::ok(
+        editor, "entity.create",
+        R"({"name":"Floor","components":{"illusion.Transform":{"position":[0,-3,0],"scale":[20,0.5,20]},)"
+        R"("illusion.MeshRenderer":{"mesh":"builtin:/mesh/cube"}}})");
+    test::ok(
+        editor, "entity.create",
+        R"({"name":"Crate","components":{"illusion.Transform":{"position":[6,5,1],)"
+        R"("rotation":[0,0.3826834,0,0.9238795]},"illusion.MeshRenderer":{"mesh":"builtin:/mesh/cube"}}})");
+    for (int i = 0; i < 3; ++i)
+    {
+        gpu.frame();
+    }
+    const auto boundsOf = [&](std::string_view path) {
+        std::vector<ViewportBounds> meshes;
+        gpu.service->meshBounds(meshes);
+        CHECK(meshes.size() == 5);
+        for (const ViewportBounds& mesh : meshes)
+        {
+            if (editor.entities().pathOf(mesh.entity) == path)
+            {
+                return mesh.bounds;
+            }
+        }
+        FAIL("no bounds for " << path);
+        return Aabb{};
+    };
+    const Aabb front = boundsOf("/Front");
+    CHECK(front.isValid());
+    CHECK(glm::length(front.center()) < 1e-4f);
+
+    test::ok(editor, "transform.drop_to_ground", R"({"entities":["/Crate"]})");
+    const Aabb floor = boundsOf("/Floor");
+    const Aabb crate = boundsOf("/Crate");
+    CHECK(crate.min.y == doctest::Approx(floor.max.y).epsilon(1e-4));
+    CHECK(crate.center().x == doctest::Approx(6.0f));
+
+    // Hidden entities have no bounds: with the floor hidden the crate falls to the ground plane.
+    test::ok(editor, "view.set_entities", R"({"entities":["/Floor"],"hidden":true})");
+    test::ok(editor, "transform.drop_to_ground", R"({"entities":["/Crate"]})");
+    std::vector<ViewportBounds> meshes;
+    gpu.service->meshBounds(meshes);
+    CHECK(meshes.size() == 4);
+    for (const ViewportBounds& mesh : meshes)
+    {
+        if (editor.entities().pathOf(mesh.entity) == "/Crate")
+        {
+            CHECK(std::abs(mesh.bounds.min.y) < 1e-4f);
+        }
+    }
+    gpu.frame();
+}

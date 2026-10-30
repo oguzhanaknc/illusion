@@ -180,18 +180,29 @@ public:
     /// caller holds a transaction).
     bool begin(Impl& shell, const Frame& frame, GizmoHandle handle);
 
-    /// Applies the running drag (commits on release, cancels on Esc or the right button) and draws the gizmo
-    /// over the image with @p hovered highlighted.
+    /// Starts a modal @p operation of the selection at the cursor of @p frame. Returns false when nothing can
+    /// move or another caller holds a transaction.
+    bool beginModal(Impl& shell, const Frame& frame, GizmoModalOperation operation);
+
+    /// Applies the running drag or modal transform (a drag commits on release, a modal transform on Enter or
+    /// a click; both commit on Enter and cancel on Esc or the right button; typed numbers replace the
+    /// cursor's) and draws the gizmo over the image with @p hovered highlighted.
     void update(Impl& shell, const Frame& frame, ImDrawList& draw, GizmoHandle hovered);
 
-    /// A drag is running.
-    [[nodiscard]] bool dragging() const noexcept { return m_drag.has_value(); }
+    /// A drag or a modal transform is running.
+    [[nodiscard]] bool dragging() const noexcept { return m_drag.has_value() || m_modal.has_value(); }
+
+    /// A modal transform is running.
+    [[nodiscard]] bool modal() const noexcept { return m_modal.has_value(); }
 
 private:
     [[nodiscard]] std::optional<GizmoPose> pose(Impl& shell, const Frame& frame);
     void refreshTargets(Impl& shell);
-    void apply(Impl& shell, const GizmoDelta& delta);
+    bool beginTransaction(Impl& shell, text::TextKey label);
+    void apply(Impl& shell, const GizmoPose& pose, const GizmoDelta& delta);
     void end(Impl& shell, bool commit);
+    void typeNumbers();
+    void drawModal(Impl& shell, const Frame& frame, ImDrawList& draw);
 
     std::vector<GizmoTarget> m_targets;
     std::vector<Transform> m_start;
@@ -201,6 +212,8 @@ private:
     u64 m_revision = 0;
     bool m_cached = false;
     std::optional<GizmoDrag> m_drag;
+    std::optional<GizmoModal> m_modal;
+    GizmoTypedInput m_typed;
     GizmoTool m_dragTool = GizmoTool::Translate;
     GizmoPivot m_dragPivot = GizmoPivot::Median;
     GizmoDelta m_delta;

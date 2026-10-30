@@ -687,3 +687,247 @@ TEST_CASE("a gizmo drag inside a transaction is one undo step and cancelling it 
     ok(editor, "history.undo");
     CHECK(fixture.scene() == before);
 }
+
+TEST_CASE(
+    "typed numbers take digits, one point and a sign per field, and Tab and Backspace move between them")
+{
+    GizmoTypedInput input;
+    CHECK_FALSE(input.active());
+    CHECK_FALSE(input.value(0).has_value());
+    for (const char c : std::string_view("2.5"))
+    {
+        CHECK(input.type(c));
+    }
+    CHECK_FALSE(input.type('.'));
+    CHECK_FALSE(input.type('x'));
+    CHECK(input.active());
+    CHECK(input.value(0) == doctest::Approx(2.5f));
+    CHECK(input.type('-'));
+    CHECK(input.text(0) == "-2.5");
+    CHECK(input.value(0) == doctest::Approx(-2.5f));
+    CHECK(input.type('-'));
+    CHECK(input.text(0) == "2.5");
+
+    input.next();
+    CHECK(input.field() == 1);
+    CHECK(input.type('-'));
+    CHECK_FALSE(input.value(1).has_value()); // a sign alone is no number
+    CHECK(input.type('.'));
+    CHECK(input.type('7'));
+    CHECK(input.value(1) == doctest::Approx(-0.7f));
+    input.erase();
+    input.erase();
+    input.erase();
+    CHECK(input.text(1).empty());
+    input.erase(); // an empty field goes back to the previous one
+    CHECK(input.field() == 0);
+    input.next();
+    input.next();
+    input.next();
+    CHECK(input.field() == 0);
+    CHECK(input.text(GizmoTypedInput::kFields).empty());
+    CHECK_FALSE(input.value(GizmoTypedInput::kFields).has_value());
+
+    for (usize i = 0; i < GizmoTypedInput::kMaxLength; ++i)
+    {
+        (void)input.type('9');
+    }
+    CHECK(input.text(0).size() == GizmoTypedInput::kMaxLength);
+    CHECK_FALSE(input.type('9'));
+    input.clear();
+    CHECK_FALSE(input.active());
+    CHECK(input.field() == 0);
+}
+
+TEST_CASE("typed numbers replace the cursor of a drag: distances, angles and scale factors along its handle")
+{
+    const GizmoCamera camera = lookAt(Vec3(0.0f), 35.0f, -25.0f, 10.0f, false);
+    GizmoPose pose;
+    pose.orientation = glm::normalize(quatFromEuler(glm::radians(Vec3(0.0f, 90.0f, 0.0f))));
+    const GizmoShape shape = gizmoShape(GizmoTool::Universal, camera, pose);
+    const auto typed = [](std::string_view first, std::string_view second = {}) {
+        GizmoTypedInput input;
+        for (const char c : first)
+        {
+            (void)input.type(c);
+        }
+        input.next();
+        for (const char c : second)
+        {
+            (void)input.type(c);
+        }
+        return input;
+    };
+
+    std::optional<GizmoDrag> drag =
+        GizmoDrag::begin(GizmoTool::Translate, GizmoHandle::TranslateX, camera, pose, shape.lines[0].end);
+    REQUIRE(drag.has_value());
+    CHECK(glm::length(drag->typed(typed("2")).translation - shape.axes[0] * 2.0f) < 1e-5f);
+
+    const Vec2 corner = (shape.planes[2].corners[0] + shape.planes[2].corners[2]) * 0.5f;
+    drag = GizmoDrag::begin(GizmoTool::Translate, GizmoHandle::TranslateXY, camera, pose, corner);
+    REQUIRE(drag.has_value());
+    CHECK(glm::length(drag->typed(typed("1", "-3")).translation - (shape.axes[0] - shape.axes[1] * 3.0f)) <
+          1e-5f);
+    drag = GizmoDrag::begin(GizmoTool::Translate, GizmoHandle::TranslateScreen, camera, pose, shape.center);
+    REQUIRE(drag.has_value());
+    CHECK(glm::length(drag->typed(typed("", "4")).translation - shape.axes[1] * 4.0f) < 1e-5f);
+
+    drag = GizmoDrag::begin(GizmoTool::Rotate, GizmoHandle::RotateY, camera, pose, shape.center);
+    REQUIRE(drag.has_value());
+    const GizmoDelta turned = drag->typed(typed("90"));
+    CHECK(turned.angle == doctest::Approx(90.0f));
+    CHECK(glm::length(turned.rotation * shape.axes[0] -
+                      glm::angleAxis(glm::radians(90.0f), shape.axes[1]) * shape.axes[0]) < 1e-5f);
+
+    drag = GizmoDrag::begin(GizmoTool::Scale, GizmoHandle::ScaleZ, camera, pose, shape.lines[2].end);
+    REQUIRE(drag.has_value());
+    CHECK(drag->typed(typed("3")).scale == Vec3(1.0f, 1.0f, 3.0f));
+    CHECK(drag->typed(typed("0")).scale.z == kGizmoMinScaleFactor);
+    drag = GizmoDrag::begin(GizmoTool::Scale, GizmoHandle::ScaleUniform, camera, pose, shape.center);
+    REQUIRE(drag.has_value());
+    CHECK(drag->typed(typed("0.5")).scale == Vec3(0.5f));
+    CHECK(drag->typed(GizmoTypedInput{}).scale == Vec3(1.0f));
+}
+
+TEST_CASE("modal transforms follow the cursor and cycle X, Y and Z through world axes, local axes and none")
+{
+    for (const bool orthographic : {false, true})
+    {
+        CAPTURE(orthographic);
+        const Vec3 pivot(2.0f, 1.0f, -3.0f);
+        const GizmoCamera camera = lookAt(pivot, 30.0f, -20.0f, 12.0f, orthographic);
+        const Quat local = glm::normalize(quatFromEuler(glm::radians(Vec3(0.0f, 90.0f, 0.0f))));
+        const Vec2 start = pixelOf(camera, pivot) + Vec2(80.0f, 30.0f);
+        const GizmoTypedInput none;
+
+        std::optional<GizmoModal> modal =
+            GizmoModal::begin(GizmoModalOperation::Translate, camera, pivot, local, start);
+        REQUIRE(modal.has_value());
+        CHECK(modal->axes() == 0);
+        // Free: the point under the start cursor follows the cursor in the view plane.
+        const GizmoDelta free = modal->update(start + Vec2(40.0f, -25.0f), nullptr, none);
+        CHECK(glm::length(pixelOf(camera, pivot + free.translation) -
+                          (pixelOf(camera, pivot) + Vec2(40.0f, -25.0f))) < 0.2f);
+
+        modal->constrain(0, false);
+        CHECK(modal->axes() == 1u);
+        CHECK_FALSE(modal->local());
+        // Along x from a start on the pivot, the pivot stays under the cursor.
+        std::optional<GizmoModal> onPivot =
+            GizmoModal::begin(GizmoModalOperation::Translate, camera, pivot, local, pixelOf(camera, pivot));
+        REQUIRE(onPivot.has_value());
+        onPivot->constrain(0, false);
+        const GizmoDelta alongX =
+            onPivot->update(pixelOf(camera, pivot + Vec3(1.5f, 0.0f, 0.0f)), nullptr, none);
+        CHECK(alongX.translation.x == doctest::Approx(1.5f).epsilon(1e-3));
+        CHECK(std::abs(alongX.translation.y) < 1e-4f);
+        CHECK(std::abs(alongX.translation.z) < 1e-4f);
+        modal->constrain(0, false);
+        CHECK(modal->local());
+        CHECK(glm::length(modal->pose().orientation * Vec3(1.0f, 0.0f, 0.0f) -
+                          local * Vec3(1.0f, 0.0f, 0.0f)) < 1e-5f);
+        modal->constrain(0, false);
+        CHECK(modal->axes() == 0);
+        CHECK_FALSE(modal->local());
+
+        // Shift+Y: the plane of x and z.
+        modal->constrain(1, true);
+        CHECK(modal->axes() == 5u);
+        const GizmoDelta planar = modal->update(start + Vec2(-30.0f, 40.0f), nullptr, none);
+        CHECK(std::abs(planar.translation.y) < 1e-4f);
+        // Typed numbers win over the cursor; the plane takes two of them.
+        GizmoTypedInput typed;
+        (void)typed.type('2');
+        typed.next();
+        (void)typed.type('3');
+        const GizmoDelta exact = modal->update(start, nullptr, typed);
+        CHECK(glm::length(exact.translation - Vec3(2.0f, 0.0f, 3.0f)) < 1e-5f);
+        // A different key starts again from world axes.
+        modal->constrain(2, false);
+        CHECK(modal->axes() == 4u);
+        CHECK_FALSE(modal->local());
+        modal->constrain(7, false);
+        CHECK(modal->axes() == 4u);
+
+        // Rotations: free about the view direction, constrained about an axis, snapped, typed.
+        modal = GizmoModal::begin(GizmoModalOperation::Rotate, camera, pivot, local, start);
+        REQUIRE(modal.has_value());
+        const Vec2 center = pixelOf(camera, pivot);
+        const Vec2 from = start - center;
+        const Vec2 quarter = center + Vec2(from.y, -from.x); // a quarter turn counter-clockwise on screen
+        CHECK(std::abs(modal->update(quarter, nullptr, none).angle) == doctest::Approx(90.0f).epsilon(0.01));
+        modal->constrain(1, false);
+        GizmoSnap snap;
+        snap.rotate = 45.0f;
+        const GizmoDelta snapped = modal->update(quarter, &snap, none);
+        CHECK(std::fmod(std::abs(snapped.angle), 45.0f) == doctest::Approx(0.0f));
+        GizmoTypedInput degrees;
+        (void)degrees.type('3');
+        (void)degrees.type('0');
+        const GizmoDelta turned = modal->update(quarter, nullptr, degrees);
+        CHECK(turned.angle == doctest::Approx(30.0f));
+        CHECK(glm::length(turned.rotation - glm::angleAxis(glm::radians(30.0f), Vec3(0.0f, 1.0f, 0.0f))) <
+              1e-5f);
+
+        // Scaling by the cursor's distance from the pivot, along the constrained axes only.
+        modal = GizmoModal::begin(GizmoModalOperation::Scale, camera, pivot, local, start);
+        REQUIRE(modal.has_value());
+        CHECK(modal->update(center + from * 2.0f, nullptr, none).scale.x == doctest::Approx(2.0f));
+        CHECK(modal->update(center, nullptr, none).scale.x == kGizmoMinScaleFactor);
+        modal->constrain(2, true);
+        const GizmoDelta flat = modal->update(center + from * 3.0f, nullptr, none);
+        CHECK(flat.scale.x == doctest::Approx(3.0f));
+        CHECK(flat.scale.y == flat.scale.x);
+        CHECK(flat.scale.z == 1.0f);
+        snap.scale = 0.5f;
+        CHECK(modal->update(center + from * 1.3f, &snap, none).scale.x == doctest::Approx(1.5f));
+        GizmoTypedInput factor;
+        (void)factor.type('4');
+        CHECK(modal->update(center, nullptr, factor).scale == Vec3(4.0f, 4.0f, 1.0f));
+    }
+    // Nothing to see: no modal transform.
+    const GizmoCamera camera = lookAt(Vec3(0.0f), 0.0f, 0.0f, 10.0f, false);
+    CHECK_FALSE(GizmoModal::begin(GizmoModalOperation::Translate, camera, Vec3(0.0f, 0.0f, 50.0f),
+                                  Quat(1.0f, 0.0f, 0.0f, 0.0f), Vec2(0.0f))
+                    .has_value());
+    GizmoCamera empty = camera;
+    empty.size = UVec2(0);
+    CHECK_FALSE(GizmoModal::begin(GizmoModalOperation::Scale, empty, Vec3(0.0f), Quat(1.0f, 0.0f, 0.0f, 0.0f),
+                                  Vec2(0.0f))
+                    .has_value());
+}
+
+TEST_CASE("the bounds-centre pivot sits in the middle of the box around the selected positions")
+{
+    const GizmoCamera camera = lookAt(Vec3(0.0f), 30.0f, -20.0f, 10.0f, false);
+    std::array<Transform, 3> placements{};
+    placements[0].position = Vec3(0.0f, 0.0f, 0.0f);
+    placements[1].position = Vec3(1.0f, 0.0f, 0.0f);
+    placements[2].position = Vec3(9.0f, 4.0f, -2.0f);
+    const std::optional<GizmoPose> bounds =
+        gizmoPose(placements, 2, GizmoTool::Translate, GizmoSpace::World, GizmoPivot::BoundsCenter, camera);
+    REQUIRE(bounds.has_value());
+    CHECK(glm::length(bounds->origin - Vec3(4.5f, 2.0f, -1.0f)) < 1e-6f);
+    const std::optional<GizmoPose> median =
+        gizmoPose(placements, 2, GizmoTool::Translate, GizmoSpace::World, GizmoPivot::Median, camera);
+    CHECK(glm::length(median->origin - Vec3(10.0f / 3.0f, 4.0f / 3.0f, -2.0f / 3.0f)) < 1e-5f);
+
+    EditorFixture fixture;
+    ok(*fixture.editor, "gizmo.set_pivot", R"({"pivot":"bounds_center"})");
+    CHECK(fixture.editor->gizmo().pivot == GizmoPivot::BoundsCenter);
+    CHECK(ok(*fixture.editor, "gizmo.get").root().find("pivot").asString() == "bounds_center");
+}
+
+TEST_CASE("gizmo.modal asks the UI to start a modal transform of the selection")
+{
+    EditorFixture fixture;
+    EditorContext& editor = *fixture.editor;
+    ok(editor, "gizmo.modal", R"({"operation":"rotate","dryRun":true})");
+    CHECK_FALSE(fixture.ui.modal.has_value());
+    ok(editor, "gizmo.modal", R"({"operation":"rotate"})");
+    CHECK(fixture.ui.modal == GizmoModalOperation::Rotate);
+    CHECK(fails(editor, "gizmo.modal", R"({"operation":5})").kind == ErrorKind::ValidationFailed);
+    editor.setUi(nullptr);
+    CHECK(fails(editor, "gizmo.modal", R"({"operation":"scale"})").kind == ErrorKind::Unsupported);
+}

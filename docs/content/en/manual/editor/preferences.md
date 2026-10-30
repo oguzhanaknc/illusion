@@ -40,10 +40,10 @@ gives the actions their chords:
 
 | Preset | Differences from `illusion` |
 | --- | --- |
-| `illusion` | The defaults: Ctrl+Z, Ctrl+Y, Ctrl+D, Delete, F2, Ctrl+Shift+P, Ctrl+P, Q/W/E/R/T for tools, F5 to play. |
+| `illusion` | The defaults: Ctrl+Z, Ctrl+Y, Ctrl+D, Delete, F2, Ctrl+Shift+P, Ctrl+P, Q/W/E/R/T for tools, Shift+W/E/R for modal transforms, End to drop to ground, F5 to play. |
 | `unity` | Ctrl+P plays, Ctrl+Shift+P pauses, Ctrl+Alt+P steps, Ctrl+K is Go to Anything. |
 | `unreal` | Alt+P plays, Alt+S simulates, Pause pauses, the backtick opens the Console. |
-| `blender` | Shift+D duplicates, X deletes, G/R/S move, rotate and scale, F3 searches, Shift+A adds an entity. |
+| `blender` | Shift+D duplicates, X deletes, W selects, G/R/S start modal moves, rotations and scales, F3 searches, Shift+A adds an entity. |
 
 On the Keyboard page, click an action's chord and press the new keys to rebind it; **Escape** cancels.
 **Reset** goes back to the preset's chord and **Remove** leaves the action without one. Chords bound to two

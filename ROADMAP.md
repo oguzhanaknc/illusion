@@ -249,10 +249,20 @@ Plan: `docs/plans/m7-editor.md` (sub-milestones, command API, localization, them
   tests at 192 poses (perspective and orthographic, 1x and 2x, 10 km from the origin), drag and snapping tests,
   headless UI drags, two gizmo goldens and the `gizmo/hit-test` Benchmark (2 µs budget; 297 ns
   measured for the hit test, 1,384 ns with the shape)
-- M7p-2: Gizmos, second part: vertex snap (V, CPU mesh data with a per-mesh spatial grid), surface snap with
-  align-to-normal (depth and normal readback, GPU test that it lands on a plane), snap to ground (End), typed
-  numeric input during a drag, Blender-style G/R/S with X/Y/Z constraints, the bounds-centre pivot, align to
-  view, align and distribute, drop to ground (render bounds; physics raycasts from M7w), measure and ruler
+- M7p-2: ✅ Gizmos, second part: typed numbers during drags and modal transforms (`GizmoTypedInput`: three
+  fields, Tab, sign, exact distances, angles and factors per handle), Blender-style modal move, rotate and scale
+  (`GizmoModal`: Shift+W/E/R, G/R/S in the Blender keymap; X/Y/Z constrain to world axes, again to local axes,
+  Shift to planes; Enter or a click confirms, Esc or a right click cancels; one undo step), the bounds-centre
+  pivot, drop to ground on End (render bounds from `ViewportHost::meshBounds()`, the ground plane when nothing is
+  below; physics raycasts from M7w), align to view (Ctrl+Shift+F), align and distribute (GPU-free math in
+  `Arrange.hpp`), `gizmo.modal`, `transform.drop_to_ground`, `transform.align_to_view`, `transform.align` and
+  `transform.distribute` (126 commands). Unit tests for typed input, modal constraints, snapping and the
+  arranging math, command tests with fake mesh bounds, a headless UI test of Shift+W, X, typed numbers, Enter,
+  Esc, a confirming click and End, a GPU test that drop to ground lands on a floor, and the `gizmo/modal-update`
+  (500 ns budget; 80 ns measured) and `arrange/drop-to-ground` (10 µs budget for 1,000 surfaces; 1,091 ns
+  measured) Benchmarks
+- M7p-3: Gizmos, third part: vertex snap (V, CPU mesh data with a per-mesh spatial grid), surface snap with
+  align-to-normal (depth and normal readback, GPU test that it lands on a plane), measure and ruler
 - M7q: Module API v3: lifecycle, multi-world host, host service interfaces (scripting API) (ADR 0041)
 - M7r: Play mode and the `GameSession` runtime (ADR 0042)
 - M7s: Project modules built from the editor (ADR 0043); opening sources with the External Tools code editor

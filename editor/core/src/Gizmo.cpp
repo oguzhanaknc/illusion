@@ -267,6 +267,17 @@ std::optional<GizmoPose> gizmoPose(std::span<const Transform> placements, usize 
     {
         pose.origin = primary.position;
     }
+    else if (pivot == GizmoPivot::BoundsCenter)
+    {
+        Vec3 low = placements[0].position;
+        Vec3 high = low;
+        for (const Transform& placement : placements)
+        {
+            low = glm::min(low, placement.position);
+            high = glm::max(high, placement.position);
+        }
+        pose.origin = (low + high) * 0.5f;
+    }
     else
     {
         Vec3 sum(0.0f);
@@ -791,6 +802,275 @@ GizmoDelta GizmoDrag::update(Vec2 cursor, const GizmoSnap* snap) noexcept
         break;
     }
     m_last = out;
+    return out;
+}
+
+GizmoDelta GizmoDrag::typed(const GizmoTypedInput& input) const noexcept
+{
+    GizmoDelta out;
+    const std::optional<u32> axisIndex = gizmoHandleAxis(m_handle);
+    const auto value = [&](u32 field, f32 fallback) {
+        return input.value(field).value_or(fallback);
+    };
+    const auto factor = [&](u32 field) {
+        return std::max(value(field, 1.0f), kGizmoMinScaleFactor);
+    };
+    switch (m_handle)
+    {
+    case GizmoHandle::TranslateX:
+    case GizmoHandle::TranslateY:
+    case GizmoHandle::TranslateZ:
+        out.translation = m_axis * value(0, 0.0f);
+        break;
+    case GizmoHandle::TranslateYZ:
+    case GizmoHandle::TranslateXZ:
+    case GizmoHandle::TranslateXY:
+    {
+        // The two fields go to the plane's axes in x, y, z order.
+        const u32 first = *axisIndex == 0 ? 1u : 0u;
+        const u32 second = *axisIndex == 2 ? 1u : 2u;
+        out.translation =
+            m_pose.orientation * (kUnitAxes[first] * value(0, 0.0f) + kUnitAxes[second] * value(1, 0.0f));
+        break;
+    }
+    case GizmoHandle::TranslateScreen:
+        out.translation = m_pose.orientation * Vec3(value(0, 0.0f), value(1, 0.0f), value(2, 0.0f));
+        break;
+    case GizmoHandle::RotateX:
+    case GizmoHandle::RotateY:
+    case GizmoHandle::RotateZ:
+    case GizmoHandle::RotateView:
+    case GizmoHandle::RotateTrackball:
+        out.angle = value(0, 0.0f);
+        out.rotation = glm::angleAxis(glm::radians(out.angle), m_axis);
+        break;
+    case GizmoHandle::ScaleX:
+    case GizmoHandle::ScaleY:
+    case GizmoHandle::ScaleZ:
+        out.scale[static_cast<glm::length_t>(*axisIndex)] = factor(0);
+        break;
+    case GizmoHandle::ScaleUniform:
+        out.scale = Vec3(factor(0));
+        break;
+    case GizmoHandle::None:
+        break;
+    }
+    return out;
+}
+
+bool GizmoTypedInput::type(char character) noexcept
+{
+    std::array<char, kMaxLength>& text = m_text[m_field];
+    u8& length = m_length[m_field];
+    const auto end = text.begin() + length;
+    if (character == '-')
+    {
+        if (length > 0 && text[0] == '-')
+        {
+            std::copy(text.begin() + 1, end, text.begin());
+            --length;
+            return true;
+        }
+        if (length == kMaxLength)
+        {
+            return false;
+        }
+        std::copy_backward(text.begin(), end, end + 1);
+        text[0] = '-';
+        ++length;
+        return true;
+    }
+    const bool digit = character >= '0' && character <= '9';
+    const bool point = character == '.' && std::find(text.begin(), end, '.') == end;
+    if ((!digit && !point) || length == kMaxLength)
+    {
+        return false;
+    }
+    text[length++] = character;
+    return true;
+}
+
+void GizmoTypedInput::erase() noexcept
+{
+    if (m_length[m_field] > 0)
+    {
+        --m_length[m_field];
+    }
+    else if (m_field > 0)
+    {
+        --m_field;
+    }
+}
+
+void GizmoTypedInput::next() noexcept
+{
+    m_field = (m_field + 1) % kFields;
+}
+
+void GizmoTypedInput::clear() noexcept
+{
+    m_length = {};
+    m_field = 0;
+}
+
+bool GizmoTypedInput::active() const noexcept
+{
+    return std::any_of(m_length.begin(), m_length.end(), [](u8 length) { return length > 0; });
+}
+
+std::optional<f32> GizmoTypedInput::value(u32 field) const noexcept
+{
+    const std::string_view typed = text(field);
+    const bool negative = !typed.empty() && typed.front() == '-';
+    f64 whole = 0.0;
+    f64 place = 1.0;
+    bool fraction = false;
+    bool digits = false;
+    for (const char character : typed.substr(negative ? 1 : 0))
+    {
+        if (character == '.')
+        {
+            fraction = true;
+            continue;
+        }
+        digits = true;
+        const f64 digit = static_cast<f64>(character - '0');
+        if (fraction)
+        {
+            place *= 0.1;
+            whole += digit * place;
+        }
+        else
+        {
+            whole = whole * 10.0 + digit;
+        }
+    }
+    if (!digits)
+    {
+        return std::nullopt;
+    }
+    return static_cast<f32>(negative ? -whole : whole);
+}
+
+std::string_view GizmoTypedInput::text(u32 field) const noexcept
+{
+    if (field >= kFields)
+    {
+        return {};
+    }
+    return std::string_view(m_text[field].data(), m_length[field]);
+}
+
+std::optional<GizmoModal> GizmoModal::begin(GizmoModalOperation operation, const GizmoCamera& camera,
+                                            Vec3 pivot, Quat local, Vec2 cursor) noexcept
+{
+    if (camera.size.x == 0 || camera.size.y == 0)
+    {
+        return std::nullopt;
+    }
+    const Projected center = project(camera, pivot);
+    if (!center.valid)
+    {
+        return std::nullopt;
+    }
+    GizmoModal modal;
+    modal.m_operation = operation;
+    modal.m_camera = camera;
+    modal.m_pose.origin = pivot;
+    const f32 length = glm::length(local);
+    modal.m_localRotation =
+        length > 1e-6f && std::isfinite(length) ? local / length : Quat(1.0f, 0.0f, 0.0f, 0.0f);
+    modal.m_cursor = cursor;
+    modal.m_center = center.pixel;
+    // Starting on the pivot would make every scale huge: measure from at least the hit tolerance away.
+    modal.m_startRadius =
+        std::max(glm::length(cursor - center.pixel), kGizmoHitTolerance * camera.pixelScale);
+    modal.restart();
+    return modal;
+}
+
+void GizmoModal::constrain(u32 axis, bool plane) noexcept
+{
+    if (axis > 2)
+    {
+        return;
+    }
+    const u32 key = axis + (plane ? 3u : 0u) + 1u;
+    if (m_key != key)
+    {
+        m_key = key;
+        m_local = false;
+    }
+    else if (!m_local)
+    {
+        m_local = true;
+    }
+    else
+    {
+        m_key = 0;
+        m_local = false;
+    }
+    m_axes = m_key == 0 ? 0u : plane ? (7u & ~(1u << axis)) : (1u << axis);
+    restart();
+}
+
+void GizmoModal::restart() noexcept
+{
+    m_pose.orientation = m_local ? m_localRotation : Quat(1.0f, 0.0f, 0.0f, 0.0f);
+    // The axis of a single-axis constraint, and the axis a plane constraint leaves out (3: none).
+    const u32 single = m_axes == 1u ? 0u : m_axes == 2u ? 1u : m_axes == 4u ? 2u : 3u;
+    const u32 excluded = m_axes == 6u ? 0u : m_axes == 5u ? 1u : m_axes == 3u ? 2u : 3u;
+    GizmoHandle handle = GizmoHandle::None;
+    if (m_operation == GizmoModalOperation::Translate)
+    {
+        handle = m_axes == 0  ? GizmoHandle::TranslateScreen
+                 : single < 3 ? offset(GizmoHandle::TranslateX, single)
+                              : offset(GizmoHandle::TranslateYZ, excluded);
+    }
+    else if (m_operation == GizmoModalOperation::Rotate)
+    {
+        handle = m_axes == 0 ? GizmoHandle::RotateView
+                             : offset(GizmoHandle::RotateX, single < 3 ? single : excluded);
+    }
+    const GizmoTool tool =
+        m_operation == GizmoModalOperation::Rotate ? GizmoTool::Rotate : GizmoTool::Translate;
+    m_drag = handle == GizmoHandle::None ? std::nullopt
+                                         : GizmoDrag::begin(tool, handle, m_camera, m_pose, m_cursor);
+}
+
+GizmoDelta GizmoModal::update(Vec2 cursor, const GizmoSnap* snap, const GizmoTypedInput& typed) noexcept
+{
+    if (m_operation != GizmoModalOperation::Scale)
+    {
+        // An axis that points at the camera cannot be dragged along: nothing moves until it changes.
+        if (!m_drag)
+        {
+            return GizmoDelta{};
+        }
+        return typed.active() ? m_drag->typed(typed) : m_drag->update(cursor, snap);
+    }
+    f32 factor = 1.0f;
+    if (typed.active())
+    {
+        factor = std::max(typed.value(0).value_or(1.0f), kGizmoMinScaleFactor);
+    }
+    else
+    {
+        factor = glm::length(cursor - m_center) / m_startRadius;
+        if (snap != nullptr)
+        {
+            factor = 1.0f + snapToIncrement(factor - 1.0f, snap->scale);
+        }
+        factor = std::isfinite(factor) ? std::max(factor, kGizmoMinScaleFactor) : 1.0f;
+    }
+    GizmoDelta out;
+    for (u32 i = 0; i < 3; ++i)
+    {
+        if (m_axes == 0 || (m_axes & (1u << i)) != 0)
+        {
+            out.scale[static_cast<glm::length_t>(i)] = factor;
+        }
+    }
     return out;
 }
 

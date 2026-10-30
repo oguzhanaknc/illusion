@@ -251,6 +251,13 @@ struct ViewportIcon
     bool selected = false;                            ///< The entity is selected.
 };
 
+/// The world-space box around the Mesh an entity draws (ViewportHost::meshBounds()).
+struct ViewportBounds
+{
+    Entity entity{}; ///< The entity.
+    Aabb bounds;     ///< Its box.
+};
+
 /// What a viewport panel draws this frame.
 struct ViewportFrame
 {
@@ -386,6 +393,11 @@ public:
 
     /// The GPU the viewports render with.
     [[nodiscard]] virtual ViewportGpuInfo gpuInfo() const = 0;
+
+    /// Fills @p out (cleared first) with the world-space box of every entity that draws a Mesh whose asset
+    /// has loaded and that is not hidden or inactive, once each, with the placements of the World as it is
+    /// now (the arranging commands and drop to ground use them).
+    virtual void meshBounds(std::vector<ViewportBounds>& out) = 0;
 };
 
 } // namespace illusion::editor

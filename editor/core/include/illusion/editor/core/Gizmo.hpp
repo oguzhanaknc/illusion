@@ -16,6 +16,7 @@
 #include <array>
 #include <optional>
 #include <span>
+#include <string_view>
 #include <vector>
 
 namespace illusion::editor
@@ -44,9 +45,10 @@ enum class GizmoSpace : u8
 /// Where the gizmo sits and what rotations and scaling turn about.
 enum class GizmoPivot : u8
 {
-    Median,     ///< The mean of the selected entities' positions.
-    Active,     ///< The active (last selected) entity's position.
-    Individual, ///< Each entity about its own position (the gizmo sits at the median).
+    Median,       ///< The mean of the selected entities' positions.
+    Active,       ///< The active (last selected) entity's position.
+    Individual,   ///< Each entity about its own position (the gizmo sits at the median).
+    BoundsCenter, ///< The centre of the box around the selected entities' positions.
 };
 
 /// Increments that drags snap to. Holding Ctrl during a drag inverts `enabled`.
@@ -219,6 +221,42 @@ struct GizmoDelta
     f32 angle = 0.0f;                      ///< The rotation's angle in degrees (signed, unwrapped).
 };
 
+/// Numbers typed during a drag or a modal transform, as in Blender: up to three fields (the gizmo's x, y and
+/// z; Tab moves to the next one), each a decimal number of digits and one point; '-' flips the sign.
+class GizmoTypedInput
+{
+public:
+    /// Characters a field holds, the sign included.
+    static constexpr usize kMaxLength = 16;
+    /// Fields.
+    static constexpr u32 kFields = 3;
+
+    /// Adds @p character to the current field: a digit, one '.', or '-' to flip the sign. Returns false (and
+    /// changes nothing) for other characters or a full field.
+    bool type(char character) noexcept;
+    /// Removes the last character of the current field (the sign last); in an empty field, moves back to the
+    /// previous one.
+    void erase() noexcept;
+    /// Moves to the next field (after the last, back to the first).
+    void next() noexcept;
+    /// Empties every field and moves back to the first.
+    void clear() noexcept;
+
+    /// Something was typed.
+    [[nodiscard]] bool active() const noexcept;
+    /// The field that typing goes to.
+    [[nodiscard]] u32 field() const noexcept { return m_field; }
+    /// The number in @p field (std::nullopt when it is empty or holds no digit).
+    [[nodiscard]] std::optional<f32> value(u32 field) const noexcept;
+    /// The text of @p field as typed, e.g. "-2.5" ("" for fields out of range).
+    [[nodiscard]] std::string_view text(u32 field) const noexcept;
+
+private:
+    std::array<std::array<char, kMaxLength>, kFields> m_text{};
+    std::array<u8, kFields> m_length{};
+    u32 m_field = 0;
+};
+
 /// A drag of one gizmo handle. Its geometry (drag plane, axis) is fixed when it begins, so the result
 /// depends only on the cursor, never on how many frames the drag took.
 class GizmoDrag
@@ -238,6 +276,11 @@ public:
 
     /// The pose of the gizmo when the drag began.
     [[nodiscard]] const GizmoPose& pose() const noexcept { return m_pose; }
+
+    /// The delta that the numbers typed in @p input give the dragged handle: distances along its axes,
+    /// an angle in degrees about its axis, or scale factors (at least kGizmoMinScaleFactor). Fields that
+    /// were not typed count as 0 (1 for scale factors). The trackball turns about the view direction.
+    [[nodiscard]] GizmoDelta typed(const GizmoTypedInput& input) const noexcept;
 
 private:
     GizmoDrag() = default;
@@ -260,6 +303,63 @@ private:
     f32 m_turn = 0.0f;      // unwrapped angle in radians of the last update
     f32 m_previous = 0.0f;  // raw angle of the last update, for unwrapping
     GizmoDelta m_last;      // the result of the last update (kept when the cursor ray misses the plane)
+};
+
+/// What a modal transform does (G, R and S in Blender).
+enum class GizmoModalOperation : u8
+{
+    Translate, ///< Move with the cursor.
+    Rotate,    ///< Turn about the pivot as the cursor goes round it.
+    Scale,     ///< Scale by the cursor's distance from the pivot.
+};
+
+/// A modal transform: it starts at the cursor wherever it is and follows it without a button held, until the
+/// caller confirms or cancels it. X, Y and Z constrain it to an axis, or with Shift to the plane of the other
+/// two; pressing the same key again uses the active entity's axes, a third time removes the constraint.
+class GizmoModal
+{
+public:
+    /// Starts @p operation about @p pivot seen through @p camera with the cursor at @p cursor; @p local is
+    /// the active entity's rotation (the axes of the second press). std::nullopt when the pivot is behind the
+    /// camera or the image is empty.
+    [[nodiscard]] static std::optional<GizmoModal> begin(GizmoModalOperation operation,
+                                                         const GizmoCamera& camera, Vec3 pivot, Quat local,
+                                                         Vec2 cursor) noexcept;
+
+    /// Applies a press of X, Y or Z (@p axis 0 to 2), with Shift when @p plane is true. Rotations constrained
+    /// to a plane turn about its normal.
+    void constrain(u32 axis, bool plane) noexcept;
+
+    /// The delta with the cursor at @p cursor: the numbers of @p typed when it is active, otherwise the
+    /// cursor's, snapped to the increments of @p snap when it is not null.
+    [[nodiscard]] GizmoDelta update(Vec2 cursor, const GizmoSnap* snap,
+                                    const GizmoTypedInput& typed) noexcept;
+
+    /// The operation.
+    [[nodiscard]] GizmoModalOperation operation() const noexcept { return m_operation; }
+    /// Bits of the constrained axes (bit i: axis i; 0: free).
+    [[nodiscard]] u32 axes() const noexcept { return m_axes; }
+    /// The constraint uses the active entity's axes.
+    [[nodiscard]] bool local() const noexcept { return m_local; }
+    /// The pivot and the axes of the constraint (pose().origin is the pivot).
+    [[nodiscard]] const GizmoPose& pose() const noexcept { return m_pose; }
+
+private:
+    GizmoModal() = default;
+
+    void restart() noexcept;
+
+    GizmoModalOperation m_operation = GizmoModalOperation::Translate;
+    GizmoCamera m_camera;
+    GizmoPose m_pose;
+    Quat m_localRotation{1.0f, 0.0f, 0.0f, 0.0f};
+    Vec2 m_cursor{0.0f};      // cursor at the start
+    Vec2 m_center{0.0f};      // the pivot in pixels
+    f32 m_startRadius = 1.0f; // distance of the start cursor from the pivot in pixels (scale)
+    u32 m_axes = 0;
+    u32 m_key = 0; // the constraint key pressed last (0: none; axis + 1, plus 3 with Shift)
+    bool m_local = false;
+    std::optional<GizmoDrag> m_drag; // translations and rotations
 };
 
 /// Writes to @p out (the size of @p start) the world placements of @p start after @p delta of a gizmo at
