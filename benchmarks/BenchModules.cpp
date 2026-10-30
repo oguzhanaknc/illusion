@@ -39,6 +39,27 @@ constexpr std::array<ModuleApi, 8> kModules = [] {
     return modules;
 }();
 
+// A static module that calls the InputService of its World kServiceCalls times per update().
+constexpr usize kServiceCalls = 64;
+ActionId g_jump = 0;
+u32 g_down = 0;
+
+void updateServiceBench(ModuleContext& context, f64)
+{
+    const InputService* input = context.service<InputService>();
+    if (input == nullptr)
+    {
+        return;
+    }
+    for (usize i = 0; i < kServiceCalls; ++i)
+    {
+        g_down += input->isDown(g_jump) ? 1u : 0u;
+    }
+}
+
+constexpr ModuleApi kServiceModule =
+    makeModuleApi("service_bench", "1.0.0", &loadBench, nullptr, &updateServiceBench);
+
 } // namespace
 
 // Budgets are roughly 5-10x a desktop result; see Budget.hpp.
@@ -74,23 +95,27 @@ ILL_BENCHMARK("modules/update", 25.0)
 }
 
 // One call of a host service from module code: an indirect call through the host's vtable into the
-// adapter, which forwards to the engine library (ADR 0041).
+// adapter, which forwards to the engine library (ADR 0041). A static module's update() finds the service
+// through its ModuleContext, as module code does, and calls it kServiceCalls times; the host's dispatch
+// of update() is shared by those calls.
 ILL_BENCHMARK("services/virtual-call", 10.0)
 {
     InputActions actions;
-    const ActionId jump = actions.addAction("Jump", ActionType::Button);
+    g_jump = actions.addAction("Jump", ActionType::Button);
     InputActionsService service(actions);
+    JobSystem jobs(JobSystemDesc{1, 64});
+    World play;
+    ModuleHost host(jobs);
     ServiceSet services;
     services.provide<InputService>(service);
-    InputService* input = services.find<InputService>();
-    ankerl::nanobench::doNotOptimizeAway(input); // a module sees only the interface
-    constexpr usize kCalls = 64;
-    u32 down = 0;
-    bench.batch(kCalls).unit("call").run("InputService::isDown", [&] {
-        for (usize i = 0; i < kCalls; ++i)
-        {
-            down += input->isDown(jump) ? 1u : 0u;
-        }
-        ankerl::nanobench::doNotOptimizeAway(down);
+    host.attachWorld(play, WorldRole::Simulation, std::move(services));
+    if (host.add(kServiceModule))
+    {
+        return;
+    }
+    bench.batch(kServiceCalls).unit("call").run("InputService::isDown", [&] {
+        host.update(play, 1.0 / 60.0);
+        ankerl::nanobench::doNotOptimizeAway(g_down);
     });
+    host.detachWorld(play);
 }
