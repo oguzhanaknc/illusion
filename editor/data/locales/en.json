@@ -51,6 +51,8 @@
     "editor.command.asset.delete.title": {"text": "Delete asset", "comment": "Title of the command asset.delete"},
     "editor.command.asset.dependencies.description": {"text": "Lists the assets a scene or material refers to.", "comment": "Tooltip of the command asset.dependencies"},
     "editor.command.asset.dependencies.title": {"text": "Dependencies", "comment": "Title of the command asset.dependencies"},
+    "editor.command.asset.find_missing.description": {"text": "Lists the references to assets that do not exist.", "comment": "Tooltip of the command asset.find_missing"},
+    "editor.command.asset.find_missing.title": {"text": "Find Missing Assets", "comment": "Title of the command asset.find_missing"},
     "editor.command.asset.info.description": {"text": "Shows the kind and size of an asset and how many references it has.", "comment": "Tooltip of the command asset.info"},
     "editor.command.asset.info.title": {"text": "Asset info", "comment": "Title of the command asset.info"},
     "editor.command.asset.list.description": {"text": "Lists the assets in a folder.", "comment": "Tooltip of the command asset.list"},

@@ -64,6 +64,8 @@ struct DirectoryEntry
     std::string name;         ///< File or directory name (no path).
     bool isDirectory = false; ///< True for directories.
     u64 size = 0;             ///< Size in bytes (0 for directories).
+    /// Last modification, as FileStat::modified (0 in archives and when it cannot be read).
+    i64 modified = 0;
 };
 
 /// Maps virtual paths to real files. Not thread-safe for mount()/unmount(); concurrent reads are safe
