@@ -5,6 +5,8 @@
 //                             with a CMake error when <src>/FAIL_CONFIGURE exists.
 //   --build <build> ...       build: prints Ninja progress, prints <src>/<module>/ERRORS of every module that
 //                             has one and fails, or writes a library file for every module (or --target).
+//   --record <file> <args...> writes the arguments to <file>, one per line (the code editor of
+//                             editor.open_source in the tests).
 
 #include <filesystem>
 #include <fstream>
@@ -130,6 +132,15 @@ int main(int argc, char** argv)
     if (args.size() >= 4 && args[0] == "-S")
     {
         return configure(args);
+    }
+    if (args.size() >= 2 && args[0] == "--record")
+    {
+        std::ofstream out(args[1], std::ios::binary);
+        for (std::size_t i = 2; i < args.size(); ++i)
+        {
+            out << args[i] << '\n';
+        }
+        return 0;
     }
     if (args.size() >= 2 && args[0] == "--build")
     {

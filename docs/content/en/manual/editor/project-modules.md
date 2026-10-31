@@ -68,6 +68,28 @@ CMake's output for anything the parser did not recognise.
 `module.reload` hot-reloads one module by name, or every module whose library file changed, for libraries built
 outside the editor (**Ctrl+R**).
 
+## Opening sources
+
+`editor.open_source` opens a file at a line and column in your code editor: the **External Tools** command line
+of the [preferences](preferences.md) (`codeEditor`), whose `{file}`, `{line}` and `{column}` are replaced; the file
+is appended when the command does not name `{file}`. Quote a program path that contains spaces. With no command
+set, the file opens in the system's default application (`explorer`, `open` or `xdg-open`). The editor starts the
+program detached, so it stays open when the editor quits.
+
+```json
+{"method": "editor.open_source", "params": {"path": "modules:/tetris/tetris.cpp", "line": 42, "column": 9}}
+```
+
+| Editor | `codeEditor` |
+| --- | --- |
+| Visual Studio Code | `code -g {file}:{line}:{column}` |
+| Sublime Text | `subl {file}:{line}:{column}` |
+| CLion | `clion --line {line} --column {column} {file}` |
+
+Clicking a source link in the Console, such as the file of a build diagnostic, opens it the same way when it is
+a project file; other source links are copied to the clipboard. On Windows, give the full path of the
+program's `.exe` (for example `Code.exe`), since batch files such as `code.cmd` are not started directly.
+
 ## The module SDK
 
 The engine's build writes a CMake package to `<build>/sdk`: `illusionConfig.cmake` imports `illusion::core` and

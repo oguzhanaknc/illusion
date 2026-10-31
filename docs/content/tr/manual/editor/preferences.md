@@ -30,7 +30,7 @@ onları sıfırlar). Geçersiz değerler alanın JSON Pointer'ıyla başarısız
 | Keyboard | `keymap` preset'i ve `shortcuts`, aşağıya bakın; `viewportNavigation` (`keymap`, `illusion`, `unity`, `unreal`, `blender`), Scene görünümünün fare denetimleri (bkz. [Scene Viewport'u](viewport.md#gezinme-presetleri)). |
 | AI Agents | `agentPermissions` (`read-only`, `ask`, `auto`; varsayılan `ask`), `approvalPopups` ve `followAgent` (Scene görünümü bir ajanın seçtiğini çerçeveler). Bkz. [Editör Penceresi](interface.md#ai-activity). |
 | Autosave | `autosaveInterval` (saniye, hiçbir zaman için 0, en çok 3.600) ve `autosaveCopies` (1 ile 20 arası). |
-| External Tools | `codeEditor`: kaynak dosyaları açan komut (sonraki bir aşamanın modül iş akışı kullanır). |
+| External Tools | `codeEditor`: bir kaynak dosyayı bir satırda açan komut satırı; `{file}`, `{line}` ve `{column}` yer tutucularıyla, örneğin `code -g {file}:{line}:{column}` (boş: sistemin varsayılan uygulaması; bkz. [Proje Modülleri](project-modules.md)). |
 
 Dosya ayrıca `recentProjects` (açılan son on proje) ve `layout` (en son kullanılan yerleşim) bilgilerini tutar.
 

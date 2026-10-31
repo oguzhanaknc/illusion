@@ -413,6 +413,7 @@ struct Process::Impl
     Reader error;
     std::mutex inputMutex;
     u64 pid = 0;
+    bool detached = false; // ProcessOptions::detached: never terminated or waited for
 
 #if defined(ILL_PLATFORM_WINDOWS)
     Handle process;
@@ -435,8 +436,11 @@ struct Process::Impl
 
     ~Impl()
     {
-        kill();
-        waitFor(std::chrono::milliseconds::max());
+        if (!detached)
+        {
+            kill();
+            waitFor(std::chrono::milliseconds::max());
+        }
         stopReader(output);
         stopReader(error);
         const std::lock_guard lock(inputMutex);
@@ -532,7 +536,7 @@ Expected<Process, std::string> Process::spawn(const ProcessOptions& options)
     SECURITY_ATTRIBUTES inherit = {sizeof(SECURITY_ATTRIBUTES), nullptr, TRUE};
     Handle childInput, childOutput, childError;
 
-    if (options.pipeInput)
+    if (options.pipeInput && !options.detached)
     {
         if (!CreatePipe(childInput.out(), impl->input.out(), &inherit, 0))
         {
@@ -560,7 +564,7 @@ Expected<Process, std::string> Process::spawn(const ProcessOptions& options)
             return true;
         }
         reader.buffer.finish();
-        const HANDLE own = GetStdHandle(standard);
+        const HANDLE own = options.detached ? nullptr : GetStdHandle(standard);
         if (own == nullptr || own == INVALID_HANDLE_VALUE ||
             !DuplicateHandle(GetCurrentProcess(), own, GetCurrentProcess(), child.out(), 0, TRUE,
                              DUPLICATE_SAME_ACCESS))
@@ -570,8 +574,9 @@ Expected<Process, std::string> Process::spawn(const ProcessOptions& options)
         }
         return true;
     };
-    if (!prepareOutput(impl->output, options.captureOutput, STD_OUTPUT_HANDLE, childOutput) ||
-        !prepareOutput(impl->error, options.captureError, STD_ERROR_HANDLE, childError))
+    if (!prepareOutput(impl->output, options.captureOutput && !options.detached, STD_OUTPUT_HANDLE,
+                       childOutput) ||
+        !prepareOutput(impl->error, options.captureError && !options.detached, STD_ERROR_HANDLE, childError))
     {
         return unexpected(lastErrorText("CreatePipe"));
     }
@@ -624,8 +629,16 @@ Expected<Process, std::string> Process::spawn(const ProcessOptions& options)
         return unexpected(failure);
     }
     CloseHandle(info.hThread);
-    impl->process.reset(info.hProcess);
     impl->pid = info.dwProcessId;
+    impl->detached = options.detached;
+    if (options.detached)
+    {
+        CloseHandle(info.hProcess);
+    }
+    else
+    {
+        impl->process.reset(info.hProcess);
+    }
     childInput.reset();
     childOutput.reset();
     childError.reset();
@@ -841,8 +854,11 @@ Expected<Process, std::string> Process::spawn(const ProcessOptions& options)
     ignoreSigpipe();
 
     auto impl = std::make_unique<Impl>();
+    const bool pipeInput = options.pipeInput && !options.detached;
+    const bool captureOutput = options.captureOutput && !options.detached;
+    const bool captureError = options.captureError && !options.detached;
     int inputPipe[2] = {-1, -1};
-    if (options.pipeInput && !makePipe(inputPipe))
+    if (pipeInput && !makePipe(inputPipe))
     {
         return unexpected(errnoText("pipe", errno));
     }
@@ -850,9 +866,9 @@ Expected<Process, std::string> Process::spawn(const ProcessOptions& options)
 
     int outputPipe[2] = {-1, -1};
     int errorPipe[2] = {-1, -1};
-    impl->output.captured = options.captureOutput;
-    impl->error.captured = options.captureError;
-    if ((options.captureOutput && !makePipe(outputPipe)) || (options.captureError && !makePipe(errorPipe)))
+    impl->output.captured = captureOutput;
+    impl->error.captured = captureError;
+    if ((captureOutput && !makePipe(outputPipe)) || (captureError && !makePipe(errorPipe)))
     {
         const int error = errno;
         closeFd(inputPipe[0]);
@@ -865,7 +881,7 @@ Expected<Process, std::string> Process::spawn(const ProcessOptions& options)
 
     posix_spawn_file_actions_t actions;
     posix_spawn_file_actions_init(&actions);
-    if (options.pipeInput)
+    if (pipeInput)
     {
         posix_spawn_file_actions_adddup2(&actions, inputPipe[0], STDIN_FILENO);
     }
@@ -873,13 +889,21 @@ Expected<Process, std::string> Process::spawn(const ProcessOptions& options)
     {
         posix_spawn_file_actions_addopen(&actions, STDIN_FILENO, "/dev/null", O_RDONLY, 0);
     }
-    if (options.captureOutput)
+    if (captureOutput)
     {
         posix_spawn_file_actions_adddup2(&actions, outputPipe[1], STDOUT_FILENO);
     }
-    if (options.captureError)
+    else if (options.detached)
+    {
+        posix_spawn_file_actions_addopen(&actions, STDOUT_FILENO, "/dev/null", O_WRONLY, 0);
+    }
+    if (captureError)
     {
         posix_spawn_file_actions_adddup2(&actions, errorPipe[1], STDERR_FILENO);
+    }
+    else if (options.detached)
+    {
+        posix_spawn_file_actions_addopen(&actions, STDERR_FILENO, "/dev/null", O_WRONLY, 0);
     }
     const std::string directory = options.workingDirectory.string();
     if (!directory.empty())
@@ -965,6 +989,20 @@ Expected<Process, std::string> Process::spawn(const ProcessOptions& options)
         {
             reader->buffer.finish();
         }
+    }
+    if (options.detached)
+    {
+        // Nobody waits for a detached child; this thread reaps it so that it does not stay a zombie.
+        impl->detached = true;
+        std::thread([pid] {
+            int status = 0;
+            while (waitpid(pid, &status, 0) < 0 && errno == EINTR)
+            {
+            }
+        }).detach();
+        Process process;
+        process.m_impl = std::move(impl);
+        return process;
     }
     Impl* state = impl.get();
     impl->waiter = std::thread([state, pid] {
@@ -1091,17 +1129,17 @@ bool Process::drained(ProcessStream stream) const
 
 std::optional<i32> Process::poll()
 {
-    return m_impl ? m_impl->waitFor(std::chrono::milliseconds(0)) : std::nullopt;
+    return m_impl && !m_impl->detached ? m_impl->waitFor(std::chrono::milliseconds(0)) : std::nullopt;
 }
 
 std::optional<i32> Process::wait(std::chrono::milliseconds timeout)
 {
-    return m_impl ? m_impl->waitFor(timeout) : std::nullopt;
+    return m_impl && !m_impl->detached ? m_impl->waitFor(timeout) : std::nullopt;
 }
 
 bool Process::terminate() noexcept
 {
-    return m_impl && m_impl->kill();
+    return m_impl && !m_impl->detached && m_impl->kill();
 }
 
 } // namespace illusion

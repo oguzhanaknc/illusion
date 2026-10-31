@@ -95,6 +95,8 @@
     "editor.command.editor.describe.title": {"text": "Describe command", "comment": "Title of the command editor.describe"},
     "editor.command.editor.list_commands.description": {"text": "Lists the editor commands.", "comment": "Tooltip of the command editor.list_commands"},
     "editor.command.editor.list_commands.title": {"text": "List commands", "comment": "Title of the command editor.list_commands"},
+    "editor.command.editor.open_source.description": {"text": "Opens a source file at a line in the code editor.", "comment": "Tooltip of the command editor.open_source"},
+    "editor.command.editor.open_source.title": {"text": "Open in code editor", "comment": "Title of the command editor.open_source"},
     "editor.command.editor.screenshot.description": {"text": "Captures the editor window as an image.", "comment": "Tooltip of the command editor.screenshot"},
     "editor.command.editor.screenshot.title": {"text": "Take screenshot", "comment": "Title of the command editor.screenshot"},
     "editor.command.editor.wait.description": {"text": "Waits until editor frames have passed.", "comment": "Tooltip of the command editor.wait"},

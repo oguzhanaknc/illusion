@@ -67,6 +67,28 @@ satırlarını tutar.
 `module.reload` editör dışında derlenen kütüphaneler için bir modülü adıyla ya da kütüphane dosyası değişen
 her modülü hot reload ile yeniler (**Ctrl+R**).
 
+## Kaynakları açma
+
+`editor.open_source` bir dosyayı kod editörünüzde bir satır ve sütunda açar: [tercihlerin](preferences.md)
+**External Tools** komut satırı (`codeEditor`); `{file}`, `{line}` ve `{column}` değiştirilir, komut `{file}`
+içermiyorsa dosya sona eklenir. Boşluk içeren bir program yolunu tırnak içine alın. Komut ayarlı değilse dosya
+sistemin varsayılan uygulamasıyla (`explorer`, `open` ya da `xdg-open`) açılır. Editör programı bağımsız
+başlatır; böylece editör kapandığında program açık kalır.
+
+```json
+{"method": "editor.open_source", "params": {"path": "modules:/tetris/tetris.cpp", "line": 42, "column": 9}}
+```
+
+| Editör | `codeEditor` |
+| --- | --- |
+| Visual Studio Code | `code -g {file}:{line}:{column}` |
+| Sublime Text | `subl {file}:{line}:{column}` |
+| CLion | `clion --line {line} --column {column} {file}` |
+
+Console'daki bir kaynak bağlantısına (örneğin bir build diagnostiğinin dosyasına) tıklamak, bir proje dosyasıysa
+onu aynı şekilde açar; diğer kaynak bağlantıları panoya kopyalanır. Windows'ta programın `.exe` dosyasının tam
+yolunu verin (örneğin `Code.exe`), çünkü `code.cmd` gibi batch dosyaları doğrudan başlatılmaz.
+
 ## Modül SDK'sı
 
 Motorun Build'i `<build>/sdk` içine bir CMake paketi yazar: `illusionConfig.cmake`, `illusion::core` ile API

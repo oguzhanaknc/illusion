@@ -44,6 +44,7 @@ inline constexpr CommandCase kCommandCases[] = {
     {"editor.describe", R"({"command":"entity.create"})"},
     {"editor.list_commands", R"({})"},
     {"editor.screenshot", R"({"width":128,"height":96})"},
+    {"editor.open_source", R"({"path":"assets:/scenes/main.scene","line":3,"column":2})"},
     {"editor.wait", R"({"frames":3})"},
     {"entity.create", R"({"name":"New","parent":"/Game","components":{"test.Link":{"weight":3}}})"},
     {"entity.destroy", R"({"entities":["/Game/Board"]})"},

@@ -820,6 +820,13 @@ void reflectCoreCommandTypes(StructRegistry& structs)
             .field("reloaded", &ModuleBuildResult::reloaded)
             .field("modules", &ModuleBuildResult::modules)
             .field("output", &ModuleBuildResult::output);
+        reflectStruct<OpenSourceParams>("editor.OpenSourceParams", 1, structs)
+            .field("path", &OpenSourceParams::path)
+            .field("line", &OpenSourceParams::line)
+            .field("column", &OpenSourceParams::column);
+        reflectStruct<OpenSourceResult>("editor.OpenSourceResult", 1, structs)
+            .field("program", &OpenSourceResult::program)
+            .field("arguments", &OpenSourceResult::arguments);
         reflectStruct<ModuleReloadParams>("editor.ModuleReloadParams", 1, structs)
             .field("name", &ModuleReloadParams::name);
         reflectStruct<ModuleReloadResult>("editor.ModuleReloadResult", 1, structs)
@@ -901,6 +908,7 @@ void registerCoreCommands(CommandRegistry& registry)
     detail::registerPlayCommands(registry);
     detail::registerInputCommands(registry);
     detail::registerModuleCommands(registry);
+    detail::registerToolCommands(registry);
 }
 
 namespace detail

@@ -23,13 +23,13 @@ inline constexpr std::string_view kModuleSdkFormat = "illusion.sdk";
 /// How the engine build that wrote a module SDK compiles code (`<build>/sdk/<Config>/illusion-sdk.json`).
 struct ModuleToolchain
 {
-    std::filesystem::path cmake;        ///< The CMake program.
-    std::string generator;              ///< CMake generator, e.g. "Ninja".
-    std::string config;                 ///< Build configuration, e.g. "Debug".
-    std::filesystem::path package;      ///< Directory of `illusionConfig.cmake` (passed as `illusion_DIR`).
-    std::vector<std::string> arguments; ///< Further configure arguments: compiler, flags, make program.
-    std::string modulePrefix;           ///< File name prefix of module libraries, e.g. "lib" ("" on Windows).
-    std::string moduleSuffix;           ///< File name suffix of module libraries, e.g. ".dll" or ".so".
+    std::filesystem::path cmake{};        ///< The CMake program.
+    std::string generator{};              ///< CMake generator, e.g. "Ninja".
+    std::string config{};                 ///< Build configuration, e.g. "Debug".
+    std::filesystem::path package{};      ///< Directory of `illusionConfig.cmake` (passed as `illusion_DIR`).
+    std::vector<std::string> arguments{}; ///< Further configure arguments: compiler, flags, make program.
+    std::string modulePrefix{}; ///< File name prefix of module libraries, e.g. "lib" ("" on Windows).
+    std::string moduleSuffix{}; ///< File name suffix of module libraries, e.g. ".dll" or ".so".
 };
 
 /// Reads a toolchain description; the error says what is wrong.
@@ -52,12 +52,12 @@ enum class DiagnosticSeverity : u8
 /// One diagnostic of a compiler, linker or CMake.
 struct BuildDiagnostic
 {
-    std::string file; ///< Source file as printed ("" when it names none).
-    u32 line = 0;     ///< 1-based line (0: none).
-    u32 column = 0;   ///< 1-based column (0: none).
+    std::string file{}; ///< Source file as printed ("" when it names none).
+    u32 line = 0;       ///< 1-based line (0: none).
+    u32 column = 0;     ///< 1-based column (0: none).
     DiagnosticSeverity severity = DiagnosticSeverity::Error; ///< How serious it is.
-    std::string code;    ///< Tool code, e.g. "C2065" or "-Wunused" ("" for none).
-    std::string message; ///< What the tool said.
+    std::string code{};    ///< Tool code, e.g. "C2065" or "-Wunused" ("" for none).
+    std::string message{}; ///< What the tool said.
 };
 
 /// Turns lines of build output into diagnostics: GCC and Clang (`file:line:col: error: ...`), MSVC and
@@ -87,12 +87,12 @@ struct BuildProgress
 /// What ModuleBuild builds.
 struct ModuleBuildOptions
 {
-    ModuleToolchain toolchain;             ///< The SDK's toolchain.
-    std::filesystem::path sourceDirectory; ///< The project's `modules/` directory.
-    std::filesystem::path buildDirectory;  ///< The build tree (`.illusion/build/modules`).
-    std::filesystem::path outputDirectory; ///< Where module libraries are written.
-    std::vector<std::string> targets{};    ///< Modules to build (empty: all).
-    bool reconfigure = false;              ///< Configure even when the build tree has a cache.
+    ModuleToolchain toolchain{};             ///< The SDK's toolchain.
+    std::filesystem::path sourceDirectory{}; ///< The project's `modules/` directory.
+    std::filesystem::path buildDirectory{};  ///< The build tree (`.illusion/build/modules`).
+    std::filesystem::path outputDirectory{}; ///< Where module libraries are written.
+    std::vector<std::string> targets{};      ///< Modules to build (empty: all).
+    bool reconfigure = false;                ///< Configure even when the build tree has a cache.
 };
 
 /// One build of a project's modules: a CMake configure (when the build tree has no cache yet, or when

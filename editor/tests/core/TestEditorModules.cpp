@@ -3,8 +3,10 @@
 
 #include "EditorCoreTestSupport.hpp"
 
+#include <illusion/editor/core/ExternalTools.hpp>
 #include <illusion/editor/core/ModuleBuild.hpp>
 
+#include <chrono>
 #include <fstream>
 #include <iterator>
 
@@ -310,4 +312,92 @@ TEST_CASE("module.reload reloads a named module or the changed ones")
           0);
     CHECK(fails(editor, "module.reload", R"({"name":"nope"})").kind == ErrorKind::NotFound);
     CHECK(fails(editor, "module.reload", R"({"name":"fake"})").kind == ErrorKind::PreconditionFailed);
+}
+
+TEST_CASE("code editor command lines are split and their placeholders replaced")
+{
+    const auto arguments = [](std::string_view command) {
+        Expected<std::vector<std::string>, std::string> parsed =
+            codeEditorArguments(command, "C:/p/a b.cpp", 42, 0);
+        REQUIRE_MESSAGE(parsed.hasValue(), (parsed ? std::string() : parsed.error()));
+        return std::move(parsed).value();
+    };
+    CHECK(arguments("code -g {file}:{line}:{column}") ==
+          std::vector<std::string>{"code", "-g", "C:/p/a b.cpp:42:1"});
+    CHECK(arguments(R"("C:/Program Files/Editor/editor.exe"  --line {line})") ==
+          std::vector<std::string>{"C:/Program Files/Editor/editor.exe", "--line", "42", "C:/p/a b.cpp"});
+    CHECK(arguments(R"(subl "{file}:{line}" "")") == std::vector<std::string>{"subl", "C:/p/a b.cpp:42", ""});
+    CHECK(arguments("vim") == std::vector<std::string>{"vim", "C:/p/a b.cpp"});
+    CHECK_FALSE(codeEditorArguments("", "f", 1, 1).hasValue());
+    CHECK_FALSE(codeEditorArguments("   ", "f", 1, 1).hasValue());
+    CHECK_FALSE(codeEditorArguments(R"("" -g {file})", "f", 1, 1).hasValue());
+    CHECK_FALSE(codeEditorArguments(R"("code -g {file})", "f", 1, 1).hasValue());
+
+    const std::vector<std::string> fallback = defaultOpenArguments("x.cpp");
+    REQUIRE(fallback.size() == 2);
+    CHECK_FALSE(fallback[0].empty());
+    CHECK(fallback[1] == "x.cpp");
+}
+
+TEST_CASE("editor.open_source starts the code editor of the preferences at the line")
+{
+    EditorFixture f;
+    f.buildScene();
+    EditorContext& editor = *f.editor;
+    const std::filesystem::path opened = f.directory.path / "opened.txt";
+    const std::filesystem::path scene =
+        (f.directory.path / "project" / "assets" / "scenes" / "main.scene").make_preferred();
+
+    const JsonDocument dry =
+        ok(editor, "editor.open_source", R"({"path":"assets:/scenes/main.scene","line":7,"dryRun":true})");
+    CHECK(dry.root().find("program").asString() == std::string_view(ILLUSION_FAKE_CMAKE));
+    CHECK_FALSE(std::filesystem::exists(opened));
+
+    const JsonDocument result =
+        ok(editor, "editor.open_source", R"({"path":"assets:/scenes/main.scene","line":7,"column":3})");
+    const JsonValue arguments = result.root().find("arguments");
+    REQUIRE(arguments.size() == 3);
+    CHECK(arguments[0].asString() == "--record");
+    // The editor runs detached; wait until it has written what it was asked to open.
+    const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(60);
+    std::string text;
+    while (text.find('\n') == std::string::npos && std::chrono::steady_clock::now() < deadline)
+    {
+        text = readText(opened);
+    }
+    const std::u8string native = scene.u8string();
+    CHECK(text == std::string(native.begin(), native.end()) + ":7:3\n");
+
+    // An absolute path works too.
+    const std::string absolute = R"({"path":")" + scene.generic_string() + R"(","dryRun":true})";
+    CHECK(
+        ok(editor, "editor.open_source", absolute).root().find("arguments")[2].asString()->ends_with(":1:1"));
+}
+
+TEST_CASE("editor.open_source rejects bad paths and unusable code editor preferences")
+{
+    EditorFixture f;
+    EditorContext& editor = *f.editor;
+    CHECK(fails(editor, "editor.open_source", R"({"path":""})").kind == ErrorKind::ValidationFailed);
+    CHECK(fails(editor, "editor.open_source", R"({"path":"relative/file.cpp"})").kind ==
+          ErrorKind::ValidationFailed);
+    CHECK(fails(editor, "editor.open_source", R"({"path":"nomount:/x.cpp"})").kind ==
+          ErrorKind::ValidationFailed);
+    CHECK(fails(editor, "editor.open_source", R"({"path":"modules:/game/missing.cpp"})").kind ==
+          ErrorKind::NotFound);
+    CHECK(fails(editor, "editor.open_source", R"({"path":"modules:/game"})").kind == ErrorKind::NotFound);
+
+    Preferences preferences = editor.preferences();
+    preferences.codeEditor = R"("unclosed {file})";
+    REQUIRE(editor.setPreferences(preferences).hasValue());
+    CHECK(fails(editor, "editor.open_source", R"({"path":"modules:/CMakeLists.txt"})").kind ==
+          ErrorKind::PreconditionFailed);
+    preferences.codeEditor = "illusion-no-such-editor {file}";
+    REQUIRE(editor.setPreferences(preferences).hasValue());
+    CHECK(fails(editor, "editor.open_source", R"({"path":"modules:/CMakeLists.txt"})").kind ==
+          ErrorKind::NotFound);
+    preferences.codeEditor = "no/such/editor {file}";
+    REQUIRE(editor.setPreferences(preferences).hasValue());
+    CHECK(fails(editor, "editor.open_source", R"({"path":"modules:/CMakeLists.txt"})").kind ==
+          ErrorKind::IoError);
 }

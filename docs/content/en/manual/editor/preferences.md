@@ -29,7 +29,7 @@ except the recent projects). Invalid values fail with the field's JSON Pointer, 
 | Keyboard | `keymap` preset and `shortcuts`, see below; `viewportNavigation` (`keymap`, `illusion`, `unity`, `unreal`, `blender`), the mouse controls of the Scene view (see [Scene Viewport](viewport.md#navigation-presets)). |
 | AI Agents | `agentPermissions` (`read-only`, `ask`, `auto`; `ask` by default), `approvalPopups` and `followAgent` (the Scene view frames what an agent selects). See [Editor Window](interface.md#ai-activity). |
 | Autosave | `autosaveInterval` (seconds, 0 for never, at most 3,600) and `autosaveCopies` (1 to 20). |
-| External Tools | `codeEditor`: the command that opens source files (used by the module workflow of a later milestone). |
+| External Tools | `codeEditor`: the command line that opens a source file at a line, with `{file}`, `{line}` and `{column}` placeholders, e.g. `code -g {file}:{line}:{column}` (empty: the system's default application; see [Project Modules](project-modules.md)). |
 
 The file also keeps `recentProjects` (the last ten projects opened) and `layout` (the layout used last).
 

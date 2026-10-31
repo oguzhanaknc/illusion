@@ -335,9 +335,12 @@ Plan: `docs/plans/m7-editor.md` (sub-milestones, command API, localization, them
   actions enabled. Tests of the parser, the toolchain description and the commands against a stand-in for
   CMake (`illusion_fake_cmake`), and one real build with the build tree's SDK that compiles a module, reports a
   compile error at its line, hot-reloads the fix and plays it; `manual/editor/project-modules.md`
-- M7s-2: `editor.open_source`: opening project files at a line in the External Tools code editor (placeholders
-  `{file}`, `{line}`, `{column}`) or the system's default application; Console source links and build
-  diagnostics open it
+- M7s-2: ✅ `editor.open_source`: opens a project file (virtual or absolute path) at a line and column in the
+  External Tools code editor (`codeEditor`, a command line with `{file}`, `{line}` and `{column}`) or with the
+  system's default application (`explorer`, `open`, `xdg-open`), started as a detached process
+  (`ProcessOptions::detached`); Console source links of project files, such as build diagnostics, open it.
+  Tests of the command line splitting, the command with a recording stand-in editor and its errors, and a
+  detached process that outlives its `Process`
 - M7t: Component layout migration on hot reload, the M6 follow-up (ADR 0044)
 - M7u: Asset catalog, live reload and the asset browser (ADR 0045); GPU eviction of unused
   `RenderAssetCache` entries (from M7h); `#` asset search in the command palette (from M7l)
