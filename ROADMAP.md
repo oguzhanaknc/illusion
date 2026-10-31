@@ -330,7 +330,13 @@ Plan: `docs/plans/m7-editor.md` (sub-milestones, command API, localization, them
   scene before Play (`EditorContext::autosaveNow()`). Tests of autosave, play-World viewport commands, the
   toolbar, capture and release with Maximize on Play, a GPU test of rendering and picking the play World
   across sessions, and the golden images `shell-dark-100-play` and `shell-dark-100-play-maximized`
-- M7r-3b: The Tetris reference module and the play scenarios of the acceptance transcript (C5)
+- M7r-3b: ✅ The Tetris reference module (`tests/acceptance/tetris/module/Tetris.cpp`, built as
+  `illusion_tetris_module` with `USES input render runtime`: the SPEC's Components, SRS rotation and wall
+  kicks, soft and hard drop, line clears and scoring, gravity by level, game over, forced pieces and seeded
+  7-bags) and the play scenarios of the acceptance transcript: the input asset in `scripted.jsonl`, C1 checks
+  of its actions and C5 checks that load the module through `--var tetrisModule`, start Play mode with
+  `fixedStep` and play spawn, walls, rotation, drops, gravity and game over through `input.inject` and
+  `play.step`; `editor/tests/play/TestTetris.cpp` tests the rules through `PlaySession`
 - M7s: Project modules built from the editor (ADR 0043); opening sources with the External Tools code editor
   (from M7l)
 - M7t: Component layout migration on hot reload, the M6 follow-up (ADR 0044)
