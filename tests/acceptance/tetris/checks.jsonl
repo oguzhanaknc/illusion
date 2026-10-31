@@ -2,6 +2,7 @@
 {"check": "C1", "call": "project.file_stat", "params": {"path": "assets:/scenes/main.scene"}, "expect": {"result": {"exists": true, "isDirectory": false}}}
 {"check": "C1", "call": "asset.list", "params": {"path": "assets:/materials", "kind": "Material"}, "expect": {"result": {"assets": [{"path": "assets:/materials/frame.material"}, {"path": "assets:/materials/i.material"}, {"path": "assets:/materials/j.material"}, {"path": "assets:/materials/l.material"}, {"path": "assets:/materials/o.material"}, {"path": "assets:/materials/s.material"}, {"path": "assets:/materials/t.material"}, {"path": "assets:/materials/z.material"}]}}}
 {"check": "C1", "call": "material.get", "params": {"path": "assets:/materials/t.material"}, "expect": {"result": {"value": {"material": {"baseColorFactor": [{"$approx": 0.5}, 0, {"$approx": 0.5}, 1]}}}}}
+{"check": "C1", "call": "input.actions", "params": {"asset": "assets:/input/tetris.input"}, "expect": {"result": {"actions": [{"name": "tetris.move_left", "bindings": ["Key.Left", "Gamepad.DPadLeft"]}, {"name": "tetris.move_right"}, {"name": "tetris.rotate_cw"}, {"name": "tetris.soft_drop"}, {"name": "tetris.hard_drop", "type": "Button"}]}}}
 {"check": "C3", "title": "Scene: one camera, a sun, a sky that resolves and a board of three walls", "call": "scene.query", "params": {"has": ["illusion.Camera"]}, "expect": {"result": {"total": 1, "entities": [{"path": "/Camera"}]}}}
 {"check": "C3", "call": "scene.query", "params": {"has": ["illusion.DirectionalLight"]}, "expect": {"result": {"total": {"$oneOf": [1, 2, 3]}}}}
 {"check": "C3", "call": "component.get", "params": {"entity": "/Sky", "type": "illusion.SkyLight"}, "expect": {"result": {"value": {"environment": "builtin:/sky/procedural"}}}}
@@ -25,3 +26,60 @@
 {"check": "C6", "call": "viewport.project", "params": {"viewport": "game", "entity": "/Board/Floor"}, "requires": "gpu", "expect": {"result": {"x": {"$approx": [320.0, 1.0]}, "y": {"$approx": [332.1, 1.0]}, "inside": true}}}
 {"check": "C6", "call": "viewport.pick", "params": {"viewport": "game", "x": 320.0, "y": 332.1}, "requires": "gpu", "expect": {"result": {"entity": {"path": "/Board/Floor"}}}}
 {"check": "C6", "call": "viewport.sample", "params": {"viewport": "game", "x": 240.33, "y": 180.0, "radius": 1}, "requires": "gpu", "expect": {"result": {"saturation": {"$max": 0.25}, "pixels": 9}}}
+{"check": "C5", "title": "Behaviour: the Tetris module plays through input.inject and play.step", "call": "module.load", "params": {"path": "${tetrisModule}"}, "expect": {"result": {"modules": [{"name": "tetris"}]}}}
+{"check": "C5", "call": "play.start", "params": {"fixedStep": true}}
+{"check": "C5", "call": "component.add", "params": {"entity": "/Board", "type": "tetris.Board"}}
+{"check": "C5", "call": "entity.create", "params": {"name": "Queue", "components": {"tetris.PieceQueue": {"seed": 1, "forced": "TI"}}}}
+{"check": "C5", "call": "entity.create", "params": {"name": "Score", "components": {"tetris.Score": {}}}}
+{"check": "C5", "call": "play.step"}
+{"check": "C5", "call": "scene.query", "params": {"has": ["tetris.ActivePiece"]}, "capture": {"piece": "/entities/0/id"}, "expect": {"result": {"total": 1}}}
+{"check": "C5", "call": "component.get", "params": {"entity": "${piece}", "type": "tetris.ActivePiece"}, "expect": {"result": {"value": {"kind": "T", "rotation": 0, "x": 3, "y": 19}}}}
+{"check": "C5", "call": "scene.query", "params": {"has": ["tetris.ActiveBlock"]}, "expect": {"result": {"total": 4}}}
+{"check": "C5", "call": "input.inject", "params": {"keys": [{"key": "Left", "down": true}]}}
+{"check": "C5", "call": "play.step"}
+{"check": "C5", "call": "input.inject", "params": {"keys": [{"key": "Left", "down": false}]}}
+{"check": "C5", "call": "play.step"}
+{"check": "C5", "call": "input.inject", "params": {"keys": [{"key": "Left", "down": true}]}}
+{"check": "C5", "call": "play.step"}
+{"check": "C5", "call": "input.inject", "params": {"keys": [{"key": "Left", "down": false}]}}
+{"check": "C5", "call": "play.step"}
+{"check": "C5", "call": "input.inject", "params": {"keys": [{"key": "Left", "down": true}]}}
+{"check": "C5", "call": "play.step"}
+{"check": "C5", "call": "input.inject", "params": {"keys": [{"key": "Left", "down": false}]}}
+{"check": "C5", "call": "play.step"}
+{"check": "C5", "call": "input.inject", "params": {"keys": [{"key": "Left", "down": true}]}}
+{"check": "C5", "call": "play.step"}
+{"check": "C5", "call": "input.inject", "params": {"keys": [{"key": "Left", "down": false}]}}
+{"check": "C5", "call": "play.step"}
+{"check": "C5", "call": "component.get", "params": {"entity": "${piece}", "type": "tetris.ActivePiece"}, "expect": {"result": {"value": {"x": 0}}}}
+{"check": "C5", "call": "input.inject", "params": {"keys": [{"key": "Up", "down": true}]}}
+{"check": "C5", "call": "play.step"}
+{"check": "C5", "call": "input.inject", "params": {"keys": [{"key": "Up", "down": false}]}}
+{"check": "C5", "call": "play.step"}
+{"check": "C5", "call": "component.get", "params": {"entity": "${piece}", "type": "tetris.ActivePiece"}, "expect": {"result": {"value": {"rotation": 1, "x": 0}}}}
+{"check": "C5", "call": "input.inject", "params": {"keys": [{"key": "Down", "down": true}]}}
+{"check": "C5", "call": "play.step"}
+{"check": "C5", "call": "input.inject", "params": {"keys": [{"key": "Down", "down": false}]}}
+{"check": "C5", "call": "play.step"}
+{"check": "C5", "call": "component.get", "params": {"entity": "${piece}", "type": "tetris.ActivePiece"}, "expect": {"result": {"value": {"y": 18}}}}
+{"check": "C5", "call": "input.inject", "params": {"keys": [{"key": "Space", "down": true}]}}
+{"check": "C5", "call": "play.step"}
+{"check": "C5", "call": "input.inject", "params": {"keys": [{"key": "Space", "down": false}]}}
+{"check": "C5", "call": "play.step"}
+{"check": "C5", "call": "scene.query", "params": {"has": ["tetris.Cell"], "under": "/Board"}, "expect": {"result": {"total": 4}}}
+{"check": "C5", "call": "scene.query", "params": {"has": ["tetris.ActivePiece"]}, "capture": {"piece": "/entities/0/id"}, "expect": {"result": {"total": 1}}}
+{"check": "C5", "call": "component.get", "params": {"entity": "${piece}", "type": "tetris.ActivePiece"}, "expect": {"result": {"value": {"kind": "I", "rotation": 0, "x": 3, "y": 19}}}}
+{"check": "C5", "call": "play.step", "params": {"steps": 50}}
+{"check": "C5", "call": "component.get", "params": {"entity": "${piece}", "type": "tetris.ActivePiece"}, "expect": {"result": {"value": {"y": 18}}}}
+{"check": "C5", "call": "entity.create", "params": {"parent": "/Board", "components": {"tetris.Cell": {"x": 3, "y": 18, "kind": "O"}}}}
+{"check": "C5", "call": "entity.create", "params": {"parent": "/Board", "components": {"tetris.Cell": {"x": 4, "y": 18, "kind": "O"}}}}
+{"check": "C5", "call": "entity.create", "params": {"parent": "/Board", "components": {"tetris.Cell": {"x": 5, "y": 18, "kind": "O"}}}}
+{"check": "C5", "call": "entity.create", "params": {"parent": "/Board", "components": {"tetris.Cell": {"x": 6, "y": 18, "kind": "O"}}}}
+{"check": "C5", "call": "input.inject", "params": {"keys": [{"key": "Space", "down": true}]}}
+{"check": "C5", "call": "play.step"}
+{"check": "C5", "call": "input.inject", "params": {"keys": [{"key": "Space", "down": false}]}}
+{"check": "C5", "call": "play.step"}
+{"check": "C5", "call": "component.get", "params": {"entity": "/Score", "type": "tetris.Score"}, "expect": {"result": {"value": {"gameOver": true, "lines": 0, "points": 0, "level": 1}}}}
+{"check": "C5", "call": "scene.query", "params": {"has": ["tetris.ActivePiece"]}, "expect": {"result": {"total": 0}}}
+{"check": "C5", "call": "play.stop"}
+{"check": "C5", "call": "scene.query", "params": {"has": ["tetris.Cell"]}, "expect": {"result": {"total": 0}}}

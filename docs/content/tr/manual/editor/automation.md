@@ -196,8 +196,14 @@ kaydeder:
 
 ```bash
 illusion_ctl --launch build/bin/Release/illusion_editor --editor-arg --deterministic --editor-arg --no-gpu \
-    replay tests/acceptance/tetris/scripted.jsonl --checks tests/acceptance/tetris/checks.jsonl --temp-workspace
+    replay tests/acceptance/tetris/scripted.jsonl --checks tests/acceptance/tetris/checks.jsonl --temp-workspace \
+    --var 'tetrisModule="build/editor/tests/Release/illusion_tetris_module.dll"'
 ```
+
+`--var name=JSON` ilk adımdan önce bir `${name}` tanımlar; Tetris kontrolleri (C5) başvuru modülü
+`tests/acceptance/tetris/module/Tetris.cpp`'yi `${tetrisModule}` yolundan yükler, Play modunu `fixedStep`
+ile başlatır ve oyunu `input.inject` ile `play.step` üzerinden oynar. CTest modülü (`illusion_tetris_module`)
+build eder ve yolunu verir.
 
 CTest senaryoyu MCP köprüsü üzerinden iki protokol çağında da çalıştırır
 (`--via-mcp` ile `acceptance.tetris.board.mcp-legacy` ve `acceptance.tetris.board.mcp-modern`).

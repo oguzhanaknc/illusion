@@ -31,6 +31,7 @@ illusion_add_editor_executable(illusion_editor_tests
     mcp/TestMcpBridge.cpp
     mcp/TestMcpProtocol.cpp
     play/TestPlayMode.cpp
+    play/TestTetris.cpp
     rpc/TestEditorClient.cpp
     rpc/TestRpcApprovals.cpp
     rpc/TestRpcAsync.cpp
@@ -51,6 +52,14 @@ target_compile_definitions(illusion_editor_tests PRIVATE ILLUSION_EDITOR_TEST_DA
 target_compile_definitions(illusion_editor_tests PRIVATE ILLUSION_EDITOR_EXECUTABLE="$<TARGET_FILE:illusion_editor>"
     ILLUSION_MCP_EXECUTABLE="$<TARGET_FILE:illusion_mcp>")
 add_dependencies(illusion_editor_tests illusion_editor_data illusion_editor illusion_mcp)
+# The Tetris reference module of the acceptance test (tests/acceptance/tetris/SPEC.md), loaded by the play
+# tests and by the C5 checks of the acceptance transcript.
+illusion_add_module(illusion_tetris_module SHARED
+    SOURCES ${PROJECT_SOURCE_DIR}/tests/acceptance/tetris/module/Tetris.cpp
+    USES input render runtime)
+target_compile_definitions(illusion_editor_tests PRIVATE
+    ILLUSION_TETRIS_MODULE="$<TARGET_FILE:illusion_tetris_module>")
+add_dependencies(illusion_editor_tests illusion_tetris_module)
 # The module build tests run a stand-in for CMake, and one real build with the module SDK of this build tree
 # (ADR 0043; profiling builds have no SDK).
 illusion_add_editor_executable(illusion_fake_cmake FakeCMake.cpp)
@@ -98,6 +107,7 @@ add_test(NAME acceptance.tetris.board
         --editor-arg --deterministic --editor-arg --seed --editor-arg 1 --editor-arg --no-gpu
         replay ${PROJECT_SOURCE_DIR}/tests/acceptance/tetris/scripted.jsonl
         --checks ${PROJECT_SOURCE_DIR}/tests/acceptance/tetris/checks.jsonl --temp-workspace
+        --var "tetrisModule=\"$<TARGET_FILE:illusion_tetris_module>\""
     CONFIGURATIONS Release RelWithDebInfo)
 set_tests_properties(acceptance.tetris.board PROPERTIES LABELS "acceptance" TIMEOUT 360)
 
@@ -107,7 +117,8 @@ add_test(NAME acceptance.tetris.board.gpu
     COMMAND illusion_ctl --launch $<TARGET_FILE:illusion_editor>
         --editor-arg --deterministic --editor-arg --seed --editor-arg 1
         replay ${PROJECT_SOURCE_DIR}/tests/acceptance/tetris/scripted.jsonl
-        --checks ${PROJECT_SOURCE_DIR}/tests/acceptance/tetris/checks.jsonl --temp-workspace --gpu)
+        --checks ${PROJECT_SOURCE_DIR}/tests/acceptance/tetris/checks.jsonl --temp-workspace --gpu
+        --var "tetrisModule=\"$<TARGET_FILE:illusion_tetris_module>\"")
 set_tests_properties(acceptance.tetris.board.gpu PROPERTIES LABELS "acceptance;gpu" TIMEOUT 600
     ENVIRONMENT "ILLUSION_UI_CAPTURE_DIR=${CMAKE_BINARY_DIR}/ui-captures")
 
@@ -119,6 +130,7 @@ foreach(era legacy modern)
             replay ${PROJECT_SOURCE_DIR}/tests/acceptance/tetris/scripted.jsonl
             --checks ${PROJECT_SOURCE_DIR}/tests/acceptance/tetris/checks.jsonl --temp-workspace
             --via-mcp $<TARGET_FILE:illusion_mcp> --era ${era}
+            --var "tetrisModule=\"$<TARGET_FILE:illusion_tetris_module>\""
         CONFIGURATIONS Release RelWithDebInfo)
     set_tests_properties(acceptance.tetris.board.mcp-${era} PROPERTIES LABELS "acceptance" TIMEOUT 360)
 endforeach()

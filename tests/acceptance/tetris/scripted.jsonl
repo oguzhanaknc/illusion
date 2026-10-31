@@ -15,6 +15,12 @@
 {"call": "entity.create", "params": {"name": "Left wall", "parent": "/Board", "components": {"illusion.Transform": {"position": [-1, 9.5, 0], "scale": [1, 22, 1]}, "illusion.MeshRenderer": {"mesh": "builtin:/mesh/cube", "material": "assets:/materials/frame.material"}}}}
 {"call": "entity.create", "params": {"name": "Right wall", "parent": "/Board", "components": {"illusion.Transform": {"position": [10, 9.5, 0], "scale": [1, 22, 1]}, "illusion.MeshRenderer": {"mesh": "builtin:/mesh/cube", "material": "assets:/materials/frame.material"}}}}
 {"call": "entity.create", "params": {"name": "Floor", "parent": "/Board", "components": {"illusion.Transform": {"position": [4.5, -1, 0], "scale": [10, 1, 1]}, "illusion.MeshRenderer": {"mesh": "builtin:/mesh/cube", "material": "assets:/materials/frame.material"}}}}
+{"call": "input.action_define", "params": {"asset": "assets:/input/tetris.input", "name": "tetris.move_left", "type": "Button", "bindings": ["Key.Left", "Gamepad.DPadLeft"]}}
+{"call": "input.action_define", "params": {"asset": "assets:/input/tetris.input", "name": "tetris.move_right", "type": "Button", "bindings": ["Key.Right", "Gamepad.DPadRight"]}}
+{"call": "input.action_define", "params": {"asset": "assets:/input/tetris.input", "name": "tetris.rotate_cw", "type": "Button", "bindings": ["Key.Up", "Gamepad.South"]}}
+{"call": "input.action_define", "params": {"asset": "assets:/input/tetris.input", "name": "tetris.soft_drop", "type": "Button", "bindings": ["Key.Down", "Gamepad.DPadDown"]}}
+{"call": "input.action_define", "params": {"asset": "assets:/input/tetris.input", "name": "tetris.hard_drop", "type": "Button", "bindings": ["Key.Space", "Gamepad.North"]}}
+{"call": "project.settings_set", "params": {"type": "illusion.InputSettings", "value": {"actions": "assets:/input/tetris.input"}}}
 {"call": "scene.save", "expect": {"result": {"path": "assets:/scenes/main.scene", "entities": 7}}}
 {"call": "scene.info", "capture": {"hash": "/hash"}, "expect": {"result": {"dirty": false, "entities": 7, "roots": 4}}}
 {"call": "project.file_read", "params": {"path": "assets:/scenes/main.scene"}, "capture": {"sceneText": "/text"}}

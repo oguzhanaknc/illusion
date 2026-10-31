@@ -195,8 +195,14 @@ Run it with:
 
 ```bash
 illusion_ctl --launch build/bin/Release/illusion_editor --editor-arg --deterministic --editor-arg --no-gpu \
-    replay tests/acceptance/tetris/scripted.jsonl --checks tests/acceptance/tetris/checks.jsonl --temp-workspace
+    replay tests/acceptance/tetris/scripted.jsonl --checks tests/acceptance/tetris/checks.jsonl --temp-workspace \
+    --var 'tetrisModule="build/editor/tests/Release/illusion_tetris_module.dll"'
 ```
+
+`--var name=JSON` sets a `${name}` before the first step; the Tetris checks (C5) load the reference module
+`tests/acceptance/tetris/module/Tetris.cpp` from `${tetrisModule}`, start Play mode with `fixedStep` and
+play the game through `input.inject` and `play.step`. CTest builds the module (`illusion_tetris_module`) and
+passes its path.
 
 CTest also runs the scenario through the MCP bridge in both protocol eras
 (`acceptance.tetris.board.mcp-legacy` and `acceptance.tetris.board.mcp-modern`, with `--via-mcp`).

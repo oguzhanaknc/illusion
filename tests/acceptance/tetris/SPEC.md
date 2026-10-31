@@ -8,7 +8,8 @@ Run it locally (Release build):
 
 ```bash
 illusion_ctl --launch build/bin/Release/illusion_editor --editor-arg --deterministic --editor-arg --no-gpu \
-    replay tests/acceptance/tetris/scripted.jsonl --checks tests/acceptance/tetris/checks.jsonl --temp-workspace
+    replay tests/acceptance/tetris/scripted.jsonl --checks tests/acceptance/tetris/checks.jsonl --temp-workspace \
+    --var 'tetrisModule="build/editor/tests/Release/illusion_tetris_module.dll"'
 ```
 
 ## The game
@@ -16,13 +17,13 @@ illusion_ctl --launch build/bin/Release/illusion_editor --editor-arg --determini
 1. Create the project with `project.create {"directory": "tetris", "name": "Tetris", "template": "empty"}`
    in the editor's workspace.
 2. Write a module `tetris` (version 1.x) in `modules:/tetris` using `illusion::core` with `USES input
-   runtime`, and build it with `module.build`. Its reflected Components:
+   render runtime`, and build it with `module.build`. Its reflected Components:
 
    | Component | Fields |
    | --- | --- |
    | `tetris.Board` | `width` U32 = 10, `height` U32 = 20, `gravitySeconds` F32 = 0.8, `origin` Vector3 |
    | `tetris.Cell` | `x` I32, `y` I32, `kind` Enum `tetris.Piece` (I, O, T, S, Z, J, L) |
-   | `tetris.ActivePiece` | `kind`, `rotation` U32 (0–3), `x` I32, `y` I32; four child entities tagged `tetris.ActiveBlock` |
+   | `tetris.ActivePiece` | `kind`, `rotation` U32 (0–3), `x` I32, `y` I32 (the top-left cell of the SRS bounding box); four child entities tagged `tetris.ActiveBlock` |
    | `tetris.PieceQueue` | `seed` U32, `forced` String: its characters are dealt first, then a 7-bag from `illusion::Random` seeded with `seed` |
    | `tetris.Score` | `lines`, `points`, `level` U32, `gameOver` Bool |
 
@@ -46,14 +47,19 @@ illusion_ctl --launch build/bin/Release/illusion_editor --editor-arg --determini
 The scripted transcript grows with the editor. M7j covers the **board scenario**: the project, the eight
 materials and the static board scene (camera, sun, sky, three walls), saved and reopened after a restart.
 M7o-2 adds the **rendering checks** (C6) in the game view; the golden image is rewritten with
-`ILLUSION_UPDATE_GOLDENS=1`, and CI uploads the captured image (`ui-captures`) when it differs. Module Components, input assets, play mode, rendering checks and hot reload join the transcript in the
-milestones that add those commands (M7n, M7r, M7s, M7t, M7u).
+`ILLUSION_UPDATE_GOLDENS=1`, and CI uploads the captured image (`ui-captures`) when it differs. M7r-3b adds the **input asset** to the board scenario and the **behaviour checks** (C5): until the agent
+builds its own module with `module.build` (M7s, M7x), the checks load the reference module
+`tests/acceptance/tetris/module/Tetris.cpp`, which CMake builds as `illusion_tetris_module` and passes as
+`--var tetrisModule=...`. They start Play mode with `fixedStep`, add the Board, PieceQueue and Score in the
+play World and play through `input.inject` and `play.step`; the module's own rules are tested in
+`editor/tests/play/TestTetris.cpp`. Module schemas and hot reload join the transcript in the milestones that
+add those commands (M7s, M7t, M7u).
 
 ## Checks
 
 | Check | Verifies | Since |
 | --- | --- | --- |
-| C1 Project | The manifest, `assets:/scenes/main.scene` and the eight materials exist (later: the `.input` asset and `modules:/tetris`). | M7j |
+| C1 Project | The manifest, `assets:/scenes/main.scene`, the eight materials and the five actions of `assets:/input/tetris.input` exist (later: `modules:/tetris`). | M7j |
 | C2 Module | `tetris` is loaded with semver 1.x and no error diagnostics; `component.schema` matches the contract. | M7s |
 | C3 Scene | Exactly one camera; a DirectionalLight; a SkyLight with `builtin:/sky/procedural`; three MeshRenderers under `/Board` whose material resolves (later: one Board 10x20, one PieceQueue, one Score, an orthographic camera, `scene.validate`). | M7j |
 | C4 Persistence | After a restart the `scene.info` hash is unchanged, the ids survive, the MeshRenderer and SkyLight references survive and a re-save is byte-identical. | M7j |
