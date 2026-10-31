@@ -669,6 +669,9 @@ void reflectCoreCommandTypes(StructRegistry& structs)
             .field("references", &AssetReferencesResult::references);
         reflectStruct<AssetDependenciesResult>("editor.AssetDependenciesResult", 1, structs)
             .field("dependencies", &AssetDependenciesResult::dependencies);
+        reflectStruct<AssetFindMissingResult>("editor.AssetFindMissingResult", 1, structs)
+            .field("references", &AssetFindMissingResult::references)
+            .field("assets", &AssetFindMissingResult::assets);
 
         reflectStruct<MaterialCreateParams>("editor.MaterialCreateParams", 1, structs)
             .field("path", &MaterialCreateParams::path)

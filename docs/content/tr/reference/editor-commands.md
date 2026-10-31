@@ -27,6 +27,7 @@ seçenekleri ve hataları anlatır. Özetler, ajanlar için yazıldıklarından 
 | `asset.create_folder` | Asset | U | files | - | Creates a folder (and missing parents) in assets:. Example: `{"path": "assets:/materials"}` |
 | `asset.delete` | Asset | UD | files | - | Deletes an asset or folder unless something refers to it (force deletes anyway and returns the dangling references); undo brings it back. Example: `{"path": "assets:/old.material"}` |
 | `asset.dependencies` | Asset | RI | read | - | Lists the assets a scene or material refers to (for the open scene, its unsaved state). Example: `{"path": "assets:/scenes/main.scene"}` |
+| `asset.find_missing` | Asset | RI | read | - | Lists every reference to an assets: path that does not exist (in scenes, materials, settings, the open scene, the manifest and glTF buffers and images), with where it is. Example: `{}` |
 | `asset.info` | Asset | RI | read | - | Returns an asset's kind, size and how many references it has and makes. Example: `{"path": "assets:/materials/red.material"}` |
 | `asset.list` | Asset | RI | read | - | Lists the assets and folders in an assets: folder with their kinds, optionally recursive or of one kind. Example: `{"path": "assets:/", "recursive": true, "kind": "Material"}` |
 | `asset.move` | Asset | U | files | - | Moves or renames an asset or folder and updates every reference to it in scenes, materials and the open scene, as one undo step. Example: `{"from": "assets:/red.material", "to": "assets:/materials/red.material"}` |

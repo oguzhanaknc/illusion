@@ -3,6 +3,7 @@
 
 illusion_add_editor_library(illusion_editor_core STATIC
     src/Arrange.cpp
+    src/AssetCatalog.cpp
     src/ChangeJournal.cpp
     src/CommandError.cpp
     src/CommandRegistry.cpp

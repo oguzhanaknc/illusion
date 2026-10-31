@@ -1225,6 +1225,15 @@ struct AssetDependenciesResult
     std::vector<std::string> dependencies; ///< Referenced assets, sorted, each once.
 };
 
+/// Result of `asset.find_missing`.
+struct AssetFindMissingResult
+{
+    /// References to `assets:` paths that do not exist, sorted by source, entity, owner and field: in scenes,
+    /// materials, settings, the open scene, the manifest and the external files of `.gltf` models.
+    std::vector<AssetReference> references{};
+    std::vector<std::string> assets{}; ///< The missing paths, without `#` fragments, sorted, each once.
+};
+
 // --- material ----------------------------------------------------------------------------------------------
 
 /// Params of `material.create`.

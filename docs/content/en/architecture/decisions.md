@@ -51,6 +51,7 @@ records rather than user documentation.
 | [0042](https://github.com/oguzhanaknc/illusion/blob/main/docs/adr/0042-play-mode-and-game-session.md) | Play mode through scene snapshots and a shared GameSession runtime |
 | [0043](https://github.com/oguzhanaknc/illusion/blob/main/docs/adr/0043-project-modules-built-by-the-editor.md) | Project modules built by the editor through a module SDK package |
 | [0044](https://github.com/oguzhanaknc/illusion/blob/main/docs/adr/0044-component-layout-migration-on-hot-reload.md) | In-place Component layout migration on hot reload |
+| [0045](https://github.com/oguzhanaknc/illusion/blob/main/docs/adr/0045-asset-catalog-and-file-watching.md) | Asset catalog and file watching |
 
 To propose a new decision, copy `docs/adr/0000-template.md` and follow the
 [contributing guide](../contributing.md#architecture-decision-records).

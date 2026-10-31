@@ -214,7 +214,8 @@ hatırladığı revizyondan bu yana hangi Entity'lerin oluşturulduğunu, silind
 Component'lerin), ayrıca hangi sahne ayarlarının değiştiğini döndürür; istemcinin sahneyi yeniden okuması gerekiyorsa `false` döner. `events()`;
 `scene.changed`, `selection.changed`, `history.changed`, `history.trimmed`, `scene.opened`, `scene.saved` ve
 `scene.autosaved` event'lerini her `endFrame()` çağrısında bir kez iletir; komut kaydedilen bir frame'in
-sonunda da `commands.changed` (`{"commands": <sayı>}`) gönderir.
+sonunda `commands.changed` (`{"commands": <sayı>}`), Asset kataloğu değiştiğinde de `asset.changed` gönderir
+(aşağıya bakın).
 
 ## Çökme journal'ı ve kurtarma
 
@@ -267,7 +268,7 @@ Entity'leri ekleyebilir.
 
 `asset` komutları `assets:/` altındaki dosyalarla çalışır: `asset.list` (`Folder`, `Scene`, `Material`,
 `Model`, `Texture`, `Environment`, `AudioClip` ve `Other` türleriyle), `asset.info`, `asset.create_folder`,
-`asset.move`, `asset.delete`, `asset.references` ve `asset.dependencies`.
+`asset.move`, `asset.delete`, `asset.references`, `asset.dependencies` ve `asset.find_missing`.
 
 Referanslar reflection ile bulunur: kaydedilen her Component'in, sahne ayarlarının, `.material` dosyalarının
 ve proje ayar dosyalarının her `AssetRef` alanı. `ReferenceIndex`, `assets:/` altındaki her sahneyi ve
@@ -287,6 +288,28 @@ bir klasör de içindeki her şeyle eşleşir.
 
 Türleri kayıtlı olmayan Component'ler ve ayarlar (dosyadaki hâlleriyle tutulur) aranmaz; `asset.references`
 okuyamadığı dosyalar için uyarı verir.
+
+### Asset kataloğu
+
+`AssetCatalog` (`editor.assets()`), `assets:/` altındaki her dosyayı ve klasörü bilir: türünü, boyutunu,
+değişiklik damgasını, xxHash64 içerik hash'ini ve bağımlılıklarını (sahnelerin ve Material'lerin
+referansları, `.gltf` dosyalarının harici buffer ve görüntüleri) ve ona hangi dosyaların referans verdiğini
+(`referrers()`). Editor, projenin `assets/` dizinini bir `FileWatcher` ile izler (varsayılan olarak Native,
+`EditorContextOptions::assetWatching`); böylece editor dışında, bir görüntü düzenleyicide ya da
+`git checkout` ile yapılan değişiklikler de görülür:
+
+- Komutlar kataloğu kullanmadan önce günceller; yalnızca boyutu ya da damgası değişen dosyaları ve watcher'ın
+  bildirdiği her dosyayı okur.
+- `endFrame()`, katalog bir kez kullanıldıktan sonra watcher'ı her `assetPollInterval` saniyede (varsayılan
+  0.25) kontrol eder ve son event'ten bu yana değişenlerle `asset.changed` gönderir:
+  `{"added": [...], "modified": [...], "removed": [...], "renamed": [{"from": ..., "to": ...}]}`.
+- Kaybolup aynı içerikle başka bir yerde yeniden beliren bir dosya (dosya yöneticisinde yeniden adlandırma)
+  `renamed` içinde bildirilir; eski yoluna yapılan referanslar değiştirilmez. Dosyaları taşıyıp referansları
+  yeniden yazan komut `asset.move`'dur.
+
+`asset.find_missing`, var olmayan bir `assets:` yoluna yapılan her referansı (sahnelerde, Material'lerde,
+ayar dosyalarında, açık sahnede, manifest'te ve glTF dosyalarında) her birinin Entity'si, Component'i ve
+alanıyla listeler.
 
 ## Material'ler
 

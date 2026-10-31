@@ -367,7 +367,14 @@ Plan: `docs/plans/m7-editor.md` (sub-milestones, command API, localization, them
 - M7t-2: ✅ `module.reload` and `module.build` return the migration report (`modules[].migrated`, the
   `editor.ComponentMigration` struct) and post the `module.migrated` event; tests with the stand-in play host;
   `manual/editor/project-modules.md`
-- M7u: Asset catalog, live reload and the asset browser (ADR 0045); GPU eviction of unused
+- M7u-1: ✅ Asset catalog and file watching (ADR 0045): `FileWatcher` in `engine/platform`
+  (ReadDirectoryChangesW, inotify, FSEvents, a stat-polling backend and automatic fallback; coalesced
+  delivery at `poll()`), `DirectoryEntry::modified`; `AssetCatalog` in the editor core (kinds, sizes, stamps,
+  xxHash64, scene/material/glTF dependencies, reverse index, incremental `refresh()`/`apply()`, rename
+  detection by content hash); `EditorContext::assets()`, the `asset.changed` event and `asset.find_missing`;
+  `assets/catalog-scan`, `assets/catalog-first-scan` and `assets/reference-index` benchmarks
+- M7u (rest): import settings sidecars, live reload, `RenderResources` lifetime, the environment bake cache,
+  thumbnails and the asset browser (ADR 0045); GPU eviction of unused
   `RenderAssetCache` entries (from M7h); `#` asset search in the command palette (from M7l)
 - M7v: Prefabs with overrides and nesting (ADR 0046)
 - M7w: Engine feature panels: rendering, physics, audio mixer, input actions, gamepad tester, profiler,

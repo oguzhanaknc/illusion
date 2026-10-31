@@ -2,52 +2,16 @@
 #include "CommandSupport.hpp"
 
 #include <illusion/assets/MaterialAsset.hpp>
+#include <illusion/editor/core/AssetCatalog.hpp>
 
 #include <algorithm>
-#include <array>
+#include <iterator>
 #include <tuple>
 
 namespace illusion::editor::detail
 {
 namespace
 {
-
-constexpr std::array<std::string_view, 8> kKinds{"Folder",  "Scene",       "Material",  "Model",
-                                                 "Texture", "Environment", "AudioClip", "Other"};
-
-std::string_view kindOf(std::string_view path, bool isDirectory)
-{
-    if (isDirectory)
-    {
-        return "Folder";
-    }
-    const std::string extension = lowerExtension(path);
-    if (extension == kSceneExtension)
-    {
-        return "Scene";
-    }
-    if (extension == kMaterialAssetExtension)
-    {
-        return "Material";
-    }
-    if (extension == ".gltf" || extension == ".glb")
-    {
-        return "Model";
-    }
-    if (extension == ".png" || extension == ".jpg" || extension == ".jpeg")
-    {
-        return "Texture";
-    }
-    if (extension == ".hdr")
-    {
-        return "Environment";
-    }
-    if (extension == ".wav" || extension == ".flac" || extension == ".mp3" || extension == ".ogg")
-    {
-        return "AudioClip";
-    }
-    return "Other";
-}
 
 // Checks that @p path is under `assets:/` (and, with @p allowRoot false, is not the mount itself).
 Expected<void, CommandError> checkAssetPath(CommandContext& context, std::string_view path,
@@ -239,12 +203,12 @@ Expected<AssetListResult, CommandError> assetList(CommandContext& context, const
     {
         return unexpected(std::move(valid).error());
     }
-    if (params.kind && std::find(kKinds.begin(), kKinds.end(), *params.kind) == kKinds.end())
+    if (params.kind && std::find(kAssetKinds.begin(), kAssetKinds.end(), *params.kind) == kAssetKinds.end())
     {
         CommandError error = CommandError::invalid(
             "/kind", "must be Folder, Scene, Material, Model, Texture, Environment, AudioClip or Other");
-        error.suggestions =
-            closestMatches(*params.kind, std::vector<std::string_view>(kKinds.begin(), kKinds.end()));
+        error.suggestions = closestMatches(
+            *params.kind, std::vector<std::string_view>(kAssetKinds.begin(), kAssetKinds.end()));
         return unexpected(std::move(error));
     }
     if (Expected<FileStat, CommandError> stat = existing(context, path); !stat)
@@ -264,7 +228,7 @@ Expected<AssetListResult, CommandError> assetList(CommandContext& context, const
     for (const DirectoryEntry& entry : entries)
     {
         std::string entryPath = joinPath(path, entry.name);
-        const std::string_view kind = kindOf(entryPath, entry.isDirectory);
+        const std::string_view kind = assetKindOf(entryPath, entry.isDirectory);
         if (!params.kind || *params.kind == kind)
         {
             result.assets.push_back(AssetEntry{std::move(entryPath), std::string(kind), entry.size});
@@ -328,7 +292,7 @@ Expected<AssetInfoResult, CommandError> assetInfo(CommandContext& context, const
     }
     AssetInfoResult result;
     result.path = params.path;
-    result.kind = std::string(kindOf(params.path, stat->isDirectory));
+    result.kind = std::string(assetKindOf(params.path, stat->isDirectory));
     result.size = stat->size;
     result.references = static_cast<u32>(referencesTo(context, params.path).size());
     if (!stat->isDirectory)
@@ -533,6 +497,52 @@ Expected<AssetDependenciesResult, CommandError> assetDependencies(CommandContext
     return AssetDependenciesResult{std::move(dependencies).value()};
 }
 
+Expected<AssetFindMissingResult, CommandError> assetFindMissing(CommandContext& context, const NoParams&)
+{
+    if (Expected<void, CommandError> open = requireProject(context); !open)
+    {
+        return unexpected(std::move(open).error());
+    }
+    EditorContext& editor = context.editor();
+    const AssetCatalog& catalog = editor.assets();
+    const std::string& openScene = editor.document().path();
+    std::vector<AssetReference> found;
+    if (std::optional<AssetReference> startup = startupReference(context, kAssetsRoot))
+    {
+        found.push_back(std::move(*startup));
+    }
+    const ReferenceIndex& index = editor.references();
+    warnProblems(context, index);
+    index.referencesTo(kAssetsRoot, openScene, found);
+    std::vector<AssetReference> live;
+    worldReferences(editor.world(), editor.entities(), editor.sceneSettings(), openScene, live);
+    std::move(live.begin(), live.end(), std::back_inserter(found));
+    for (const auto& [path, record] : catalog.records())
+    {
+        if (lowerExtension(path) == ".gltf")
+        {
+            for (const std::string& dependency : record.dependencies)
+            {
+                found.push_back(AssetReference{dependency, path, {}, {}, {}});
+            }
+        }
+    }
+    AssetFindMissingResult result;
+    for (AssetReference& reference : found)
+    {
+        const std::string_view path = std::string_view(reference.asset).substr(0, reference.asset.find('#'));
+        if (refersTo(path, kAssetsRoot) && path != kAssetsRoot && catalog.find(path) == nullptr)
+        {
+            result.assets.emplace_back(path);
+            result.references.push_back(std::move(reference));
+        }
+    }
+    sortReferences(result.references);
+    std::sort(result.assets.begin(), result.assets.end());
+    result.assets.erase(std::unique(result.assets.begin(), result.assets.end()), result.assets.end());
+    return result;
+}
+
 } // namespace
 
 void registerAssetCommands(CommandRegistry& registry)
@@ -609,6 +619,20 @@ void registerAssetCommands(CommandRegistry& registry)
         .icon = "link",
         .flags = {.readOnly = true, .idempotent = true},
         .mode = CommandMode::Any,
+    });
+    registry.add<&assetFindMissing>({
+        .name = "asset.find_missing",
+        .title = strings::kCommandAssetFindMissingTitle,
+        .description = strings::kCommandAssetFindMissingDescription,
+        .agentSummary =
+            "Lists every reference to an assets: path that does not exist (in scenes, materials, "
+            "settings, the open scene, the manifest and glTF buffers and images), with where it is. "
+            "Example: {}.",
+        .category = "Asset",
+        .icon = "link_off",
+        .flags = {.readOnly = true, .idempotent = true},
+        .mode = CommandMode::Any,
+        .palette = true,
     });
     registry.add<&assetDependencies>({
         .name = "asset.dependencies",
