@@ -54,7 +54,7 @@ public:
     void setImeRect(Vec2 position, f32 lineHeight, bool wantVisible) noexcept;
 
     /// Asks newFrame() to capture the cursor (`CursorMode::Captured`) for one frame while a drag field is
-    /// being scrubbed by the mouse.
+    /// being scrubbed by the mouse, or while the Game view gives the running game the mouse.
     void requestInfiniteDrag() noexcept { m_infiniteDragRequested = true; }
 
 private:

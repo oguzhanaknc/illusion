@@ -24,7 +24,7 @@ except the recent projects). Invalid values fail with the field's JSON Pointer, 
 
 | Page | Preferences |
 | --- | --- |
-| Appearance | `theme` (`dark`, `light`, `high-contrast`), `accent` (`azure`, `violet`, `teal`, `amber`), `uiScale` (0.75 to 2, times the monitor's scale), `reduceMotion`, `colorBlindAxes` (Okabe-Ito colours for the X, Y and Z axes). |
+| Appearance | `theme` (`dark`, `light`, `high-contrast`), `accent` (`azure`, `violet`, `teal`, `amber`), `uiScale` (0.75 to 2, times the monitor's scale), `reduceMotion`, `colorBlindAxes` (Okabe-Ito colours for the X, Y and Z axes), `playModeTint` (tints the panels while playing; on by default) and `maximizeOnPlay` (the Game view fills the window while playing). |
 | Language | `locale`: English, the pseudo-locale `en-XA` (accented, longer text for testing layouts) and every locale file in `editor-data/locales`. The language changes at the next frame. |
 | Keyboard | `keymap` preset and `shortcuts`, see below; `viewportNavigation` (`keymap`, `illusion`, `unity`, `unreal`, `blender`), the mouse controls of the Scene view (see [Scene Viewport](viewport.md#navigation-presets)). |
 | AI Agents | `agentPermissions` (`read-only`, `ask`, `auto`; `ask` by default), `approvalPopups` and `followAgent` (the Scene view frames what an agent selects). See [Editor Window](interface.md#ai-activity). |

@@ -187,6 +187,32 @@ TEST_CASE("viewport.project then viewport.pick returns the same entity and repea
     CHECK(editor.entities().pathOf(editor.entities().find(editor.selection().primary())) == "/Side");
 }
 
+TEST_CASE("while playing, the viewports render and pick the play World, and Stop shows the edit World again")
+{
+    GpuViewports gpu;
+    buildScene(gpu);
+    EditorContext& editor = gpu.editor();
+    const JsonDocument front = test::ok(editor, "viewport.project", R"({"entity":"/Front"})");
+    const f64 x = front.root().find("x").asF64().value_or(0.0);
+    const f64 y = front.root().find("y").asF64().value_or(0.0);
+
+    // The play World is a copy: without its front cube, the cube behind shows under the cursor.
+    test::ok(editor, "play.start");
+    test::ok(editor, "entity.destroy", R"({"entities":["/Front"]})");
+    gpu.frame();
+    CHECK(gpu.pickAt(x, y, false) == "/Back");
+    test::ok(editor, "entity.get", R"({"entity":"/Front","world":"edit"})");
+    test::ok(editor, "play.stop");
+    gpu.frame();
+    CHECK(gpu.pickAt(x, y, false) == "/Front");
+
+    // The next session starts over from the edit World, with a fresh resolver.
+    test::ok(editor, "play.start");
+    gpu.frame();
+    CHECK(gpu.pickAt(x, y, false) == "/Front");
+    test::ok(editor, "play.stop");
+}
+
 TEST_CASE("the selection outline appears only around the selection and renders are repeatable")
 {
     GpuViewports gpu;

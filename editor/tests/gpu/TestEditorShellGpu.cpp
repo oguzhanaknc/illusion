@@ -98,6 +98,31 @@ TEST_CASE("shell captures match the golden images")
     }
 }
 
+TEST_CASE("the shell in play mode tints its panels, shows Stop and can maximize the Game view (golden)")
+{
+    for (const bool maximize : {false, true})
+    {
+        CAPTURE(maximize);
+        GpuShell gpu;
+        EditorContext& editor = *gpu.fixture.editor;
+        EditorContext* current = &editor;
+        test::FakePlay play(current);
+        editor.setPlay(&play);
+        test::ok(editor, "preferences.set",
+                 maximize ? R"({"value":{"maximizeOnPlay":true}})" : R"({"value":{"maximizeOnPlay":false}})");
+        test::ok(editor, "entity.create",
+                 R"({"name":"Board","components":{"illusion.Transform":{"position":[1,2,3]}}})");
+        test::ok(editor, "play.start");
+        (void)gpu.capture(10);
+        test::ok(editor, "log.clear");
+        const Image actual = gpu.capture(4);
+        test::checkGolden(maximize ? "shell-dark-100-play-maximized" : "shell-dark-100-play", actual);
+        CHECK(gpu.device->validationErrorCount() == 0);
+        play.stop();
+        editor.setPlay(nullptr);
+    }
+}
+
 TEST_CASE("the shell renders its windows and the palette without validation errors")
 {
     GpuShell gpu;

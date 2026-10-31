@@ -956,3 +956,91 @@ TEST_CASE("the toolbar shows the active tool and changes the gizmo's axes, pivot
     driver.runFrames(2);
     CHECK(driver.find("toolbar.gizmo.snap.rotate").has_value());
 }
+
+TEST_CASE("the Play toolbar starts, pauses, resumes and stops a session, and Play turns into Stop")
+{
+    ShellFixture fixture;
+    EditorContext* current = fixture.editor.get();
+    test::FakePlay play(current);
+    fixture.editor->setPlay(&play);
+    ui::UiDriver driver(fixture.context, [&] { fixture.frame(); });
+    driver.runFrames(3);
+
+    // Pause and Step wait for a session.
+    (void)driver.click("toolbar.play.pause");
+    CHECK(play.status().state == PlayState::Stopped);
+    REQUIRE(driver.click("toolbar.play.play"));
+    driver.runFrames(1);
+    CHECK(fixture.editor->playing());
+    REQUIRE(driver.click("toolbar.play.pause"));
+    CHECK(play.status().state == PlayState::Paused);
+    REQUIRE(driver.click("toolbar.play.pause"));
+    CHECK(play.status().state == PlayState::Playing);
+    // F5 stops what Play started; Simulate stops it too.
+    driver.pressKey(ImGuiKey_F5);
+    CHECK_FALSE(fixture.editor->playing());
+    REQUIRE(driver.click("toolbar.play.simulate"));
+    CHECK(play.status().mode == PlayMode::Simulate);
+    REQUIRE(driver.click("toolbar.play.play"));
+    CHECK_FALSE(fixture.editor->playing());
+    fixture.editor->setPlay(nullptr);
+}
+
+TEST_CASE("a click on the Game view gives the running game the keyboard and mouse until Shift+F1")
+{
+    ShellFixture fixture;
+    test::FakeViewports viewports;
+    viewports.frames = true;
+    fixture.editor->setViewports(&viewports);
+    EditorContext* current = fixture.editor.get();
+    test::FakePlay play(current);
+    fixture.editor->setPlay(&play);
+    EditorContext& editor = *fixture.editor;
+    // Maximize on Play: only the Game view's image is drawn while playing.
+    test::ok(editor, "preferences.set", R"({"value":{"maximizeOnPlay":true}})");
+    ui::UiDriver driver(fixture.context, [&] { fixture.frame(); });
+    driver.runFrames(3);
+    REQUIRE(driver.find("outliner.search").has_value());
+    test::ok(editor, "play.start");
+    driver.runFrames(2);
+    const std::optional<ui::UiItem> image = driver.find("viewport.image");
+    REQUIRE(image.has_value());
+    CHECK(image->max.x - image->min.x > test::kShellFrameSize.x * 0.9f);
+    CHECK_FALSE(driver.find("outliner.search").has_value());
+
+    // Keys before the capture belong to the editor.
+    driver.pressKey(ImGuiKey_Space);
+    CHECK(play.events.empty());
+    REQUIRE(driver.click("viewport.image"));
+    driver.runFrames(1);
+    play.events.clear();
+    driver.pressKey(ImGuiKey_LeftArrow);
+    const auto keyEvents = [&](Key key) {
+        std::vector<bool> downs;
+        for (const PlayInputEvent& event : play.events)
+        {
+            if (event.kind == PlayInputEvent::Kind::Key && event.key == key)
+            {
+                downs.push_back(event.down);
+            }
+        }
+        return downs;
+    };
+    CHECK(keyEvents(Key::Left) == std::vector<bool>{true, false});
+    // Editor shortcuts wait while the game has the keyboard.
+    driver.pressKey(ImGuiKey_F5);
+    CHECK(editor.playing());
+
+    // Shift+F1 takes the input back and releases what the game saw held.
+    driver.pressKey(ImGuiKey_F1, ImGuiMod_Shift);
+    CHECK(keyEvents(Key::F1).empty());
+    play.events.clear();
+    driver.pressKey(ImGuiKey_LeftArrow);
+    CHECK(play.events.empty());
+    driver.pressKey(ImGuiKey_F5);
+    CHECK_FALSE(editor.playing());
+    driver.runFrames(2);
+    CHECK(driver.find("outliner.search").has_value());
+    fixture.editor->setPlay(nullptr);
+    fixture.editor->setViewports(nullptr);
+}

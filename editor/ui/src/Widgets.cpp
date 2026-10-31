@@ -354,6 +354,18 @@ void requestInfiniteDrag() noexcept
     }
 }
 
+void requestCursorCapture() noexcept
+{
+    if (ImGui::GetCurrentContext() == nullptr)
+    {
+        return;
+    }
+    if (auto* backend = static_cast<UiPlatformBackend*>(ImGui::GetIO().BackendPlatformUserData))
+    {
+        backend->requestInfiniteDrag();
+    }
+}
+
 bool colorHdr(UiKit& kit, std::string_view id, Vec3& color, f32& intensity)
 {
     const ImGuiStyle& style = ImGui::GetStyle();

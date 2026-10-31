@@ -307,3 +307,57 @@ TEST_CASE("destroying the PlaySession stops its session and unregisters it")
     CHECK_FALSE(f.editor().playing());
     CHECK(f.editor().play() == nullptr);
 }
+
+TEST_CASE("play.start autosaves an unsaved scene before the game runs")
+{
+    PlayFixture f;
+    const std::filesystem::path autosaves = f.editor().project()->stateDirectory() / "autosave";
+    const auto count = [&] {
+        std::error_code code;
+        usize files = 0;
+        for (std::filesystem::directory_iterator it(autosaves, code), end; !code && it != end;
+             it.increment(code))
+        {
+            ++files;
+        }
+        return files;
+    };
+
+    // A saved scene has nothing to keep.
+    ok(f.editor(), "play.start");
+    ok(f.editor(), "play.stop");
+    CHECK(count() == 0);
+
+    ok(f.editor(), "entity.create", R"({"name":"Unsaved"})");
+    REQUIRE(f.editor().dirty());
+    ok(f.editor(), "play.start", R"({"dryRun":true})");
+    CHECK(count() == 0);
+    ok(f.editor(), "play.start");
+    CHECK(count() == 1);
+    ok(f.editor(), "play.stop");
+
+    // Autosave off (interval 0) means never, also before Play.
+    ok(f.editor(), "preferences.set", R"({"value":{"autosaveInterval":0}})");
+    ok(f.editor(), "play.start");
+    CHECK(count() == 1);
+}
+
+TEST_CASE("while playing, viewport commands see the play World and refuse the edit World")
+{
+    PlayFixture f;
+    f.base.buildScene();
+    ok(f.editor(), "play.start");
+    ok(f.editor(), "entity.rename", R"({"entity":"/Light","name":"Lamp"})");
+    EntityIndex* play = f.editor().playEntities();
+    REQUIRE(play != nullptr);
+    const Entity lamp = play->resolve("/Lamp", f.editor().selection()).value();
+    f.base.viewports.hit = ViewportHit{lamp, 0, 1};
+
+    const JsonDocument picked = ok(f.editor(), "viewport.pick", R"({"x":1,"y":1,"select":"replace"})");
+    CHECK(picked.root().pointer("/entity/path").asString() == std::optional<std::string_view>("/Lamp"));
+    CHECK(f.editor().selection().primary() == play->guidOf(lamp));
+    CHECK(fails(f.editor(), "viewport.pick", R"({"x":1,"y":1,"world":"edit"})").kind ==
+          ErrorKind::PreconditionFailed);
+    ok(f.editor(), "play.stop");
+    ok(f.editor(), "viewport.camera_get", R"({"world":"edit"})");
+}

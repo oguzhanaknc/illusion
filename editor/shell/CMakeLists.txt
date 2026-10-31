@@ -6,6 +6,7 @@ illusion_add_editor_library(illusion_editor_shell STATIC
     src/Agents.cpp
     src/Console.cpp
     src/EditorShell.cpp
+    src/GameInput.cpp
     src/Gizmos.cpp
     src/History.cpp
     src/Inspector.cpp

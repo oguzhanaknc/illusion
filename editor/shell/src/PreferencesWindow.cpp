@@ -178,6 +178,18 @@ void PreferencesPage::State::appearance(Impl& shell, ui::UiKit& kit)
         {
             shell.setPreferences(colorBlind ? R"({"colorBlindAxes":true})" : R"({"colorBlindAxes":false})");
         }
+        ui::propertyLabel(kit, "");
+        bool tint = prefs.playModeTint;
+        if (ui::toggleSwitch(kit, text.label(s::kPrefsPlayModeTint, "prefs.play_mode_tint"), tint))
+        {
+            shell.setPreferences(tint ? R"({"playModeTint":true})" : R"({"playModeTint":false})");
+        }
+        ui::propertyLabel(kit, "");
+        bool maximize = prefs.maximizeOnPlay;
+        if (ui::toggleSwitch(kit, text.label(s::kPrefsMaximizeOnPlay, "prefs.maximize_on_play"), maximize))
+        {
+            shell.setPreferences(maximize ? R"({"maximizeOnPlay":true})" : R"({"maximizeOnPlay":false})");
+        }
         ui::endPropertyTable();
     }
 }
