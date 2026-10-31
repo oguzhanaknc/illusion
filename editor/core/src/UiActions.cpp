@@ -102,9 +102,9 @@ constexpr UiAction kActions[] = {
      .title = s::kActionPlaySimulate, .icon = "science", .shortcut = "Shift+F5"},
     // Modules
     {.id = "modules.build", .command = "module.build", .menu = UiMenu::Modules, .title = s::kActionModulesBuild,
-     .icon = "build", .shortcut = "Ctrl+B", .milestone = "M7s"},
+     .icon = "build", .shortcut = "Ctrl+B"},
     {.id = "modules.reload", .command = "module.reload", .menu = UiMenu::Modules,
-     .title = s::kActionModulesReload, .icon = "refresh", .shortcut = "Ctrl+R", .milestone = "M7s"},
+     .title = s::kActionModulesReload, .icon = "refresh", .shortcut = "Ctrl+R"},
     // Tools
     {.id = "tools.screenshot", .command = "editor.screenshot", .menu = UiMenu::Tools},
     {.id = "tools.clear_log", .command = "log.clear", .menu = UiMenu::Tools},

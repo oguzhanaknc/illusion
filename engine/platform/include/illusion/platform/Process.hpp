@@ -44,6 +44,11 @@ struct ProcessOptions
     bool captureOutput = true;       ///< Capture stdout for read(); otherwise the child shares this one's.
     bool captureError = true;        ///< Capture stderr for read(); otherwise the child shares this one's.
     usize bufferCapacity = 1u << 20; ///< Bytes buffered per captured stream; a full buffer blocks the child.
+    /// Let the child run on its own, e.g. a code editor that should outlive this process: its stdin, stdout
+    /// and stderr use the null device (pipeInput and the capture options are ignored), and destroying the
+    /// Process neither terminates nor waits for it. poll() and wait() then report nothing and terminate()
+    /// does nothing; on POSIX systems a thread reaps the child when it exits.
+    bool detached = false;
 };
 
 /// A running (or finished) child process.

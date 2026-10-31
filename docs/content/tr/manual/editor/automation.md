@@ -105,8 +105,8 @@ Reddedilen çağrılar `permission_denied` (1001) ile başarısız olur. Dosya k
 komutları da çalışma alanının içinde kalır. Kabuk çalıştıran bir komut yoktur.
 
 !!! warning "Ajanlar kod çalıştırabilir"
-    M7s'den itibaren `module.build` ve `module.load`, bir ajanın yazdığı C++ kodunu derler ve editör
-    sürecinin içinde yükler. Güvenmediğiniz ajanlar için `read-only` ya da `ask` kullanın.
+    `module.build` ve `module.load`, bir ajanın yazdığı C++ kodunu derler ve editör sürecinin içinde yükler
+    (bkz. [Proje Modülleri](project-modules.md)). Güvenmediğiniz ajanlar için `read-only` ya da `ask` kullanın.
 
 ## Olaylar
 

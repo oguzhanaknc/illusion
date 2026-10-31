@@ -22,6 +22,7 @@
 #include <algorithm>
 #include <array>
 #include <filesystem>
+#include <fstream>
 #include <memory>
 #include <optional>
 #include <string>
@@ -564,13 +565,35 @@ public:
 
     Expected<std::string, editor::CommandError> loadModule(std::string_view path) override
     {
-        if (!path.ends_with(".dll"))
+        if (!path.ends_with(".dll") && !path.ends_with(".so"))
         {
             return unexpected(editor::CommandError::make(editor::ErrorKind::ModuleError, "not a module"));
         }
-        m_modules.push_back(editor::PlayModuleInfo{"game", "1.0.0", std::string(path), true, 0});
-        return std::string("game");
+        // Named after the library's file name without prefix and suffix, as built project modules are.
+        std::string name(path.substr(path.find_last_of("/\\") + 1));
+        name = name.substr(0, name.rfind('.'));
+        if (name.starts_with("lib"))
+        {
+            name.erase(0, 3);
+        }
+        m_modules.push_back(editor::PlayModuleInfo{name, "1.0.0", std::string(path), true, 0});
+        return name;
     }
+
+    Expected<void, editor::CommandError> reloadModule(std::string_view name) override
+    {
+        for (editor::PlayModuleInfo& module : m_modules)
+        {
+            if (module.name == name)
+            {
+                ++module.reloads;
+                return {};
+            }
+        }
+        return unexpected(editor::CommandError::make(editor::ErrorKind::NotFound, "no such module"));
+    }
+
+    u32 reloadChangedModules() override { return changedModules; }
 
     bool unloadModule(std::string_view name) override
     {
@@ -592,6 +615,7 @@ public:
 
     std::vector<editor::PlayInputEvent> events; ///< Every inject() so far.
     usize edited = 0;                           ///< Operations passed to playWorldEdited().
+    u32 changedModules = 0;                     ///< What reloadChangedModules() reports.
 
 private:
     editor::EditorContext*& m_editor;
@@ -599,6 +623,20 @@ private:
     editor::PlayStatus m_status;
     std::vector<editor::PlayModuleInfo> m_modules{{"fake", "1.0.0", "", false, 0}};
 };
+
+/// Writes a module SDK description to @p file whose CMake is the stand-in of FakeCMake.cpp; returns @p file.
+inline std::filesystem::path writeFakeModuleSdk(const std::filesystem::path& file)
+{
+#if defined(_WIN32)
+    constexpr const char* kLibrary = R"("modulePrefix": "", "moduleSuffix": ".dll")";
+#else
+    constexpr const char* kLibrary = R"("modulePrefix": "lib", "moduleSuffix": ".so")";
+#endif
+    std::ofstream(file) << R"({"format": "illusion.sdk", "version": 1, "cmake": ")" ILLUSION_FAKE_CMAKE
+                        << R"(", "generator": "Ninja", "config": "Debug", "package": "sdk", )" << kLibrary
+                        << R"(, "arguments": ["-DCMAKE_BUILD_TYPE=Debug"]})";
+    return file;
+}
 
 /// A temporary project made from the empty template, open in an EditorContext.
 struct EditorFixture
@@ -616,6 +654,12 @@ struct EditorFixture
         Expected<editor::Project, std::string> project = editor::Project::create(
             directory.path / "project", "Test", editorDataDirectory() / "templates" / "empty");
         REQUIRE_MESSAGE(project.hasValue(), (project ? std::string() : project.error()));
+        // One project module, "game", for module.build (built by the stand-in for CMake).
+        std::filesystem::create_directories(directory.path / "project" / "modules" / "game");
+        std::ofstream(directory.path / "project" / "modules" / "CMakeLists.txt")
+            << "illusion_project_modules()\n";
+        std::ofstream(directory.path / "project" / "modules" / "game" / "CMakeLists.txt")
+            << "illusion_add_module(game SHARED SOURCES game.cpp)\n";
         open(seed, options);
     }
 
@@ -634,10 +678,20 @@ struct EditorFixture
         {
             options.workspace = directory.path;
         }
+        if (options.moduleSdk.empty())
+        {
+            options.moduleSdk = writeFakeModuleSdk(directory.path / "sdk.json");
+        }
         editor = std::make_unique<editor::EditorContext>(options);
         editor->setUi(&ui);
         editor->setViewports(&viewports);
         editor->setPlay(&play);
+        // editor.open_source starts the stand-in of FakeCMake.cpp, which records what it was asked to open.
+        editor::Preferences preferences = editor->preferences();
+        preferences.codeEditor = "\"" ILLUSION_FAKE_CMAKE "\" --record \"" +
+                                 (directory.path / "opened.txt").generic_string() +
+                                 "\" {file}:{line}:{column}";
+        REQUIRE(editor->setPreferences(std::move(preferences)).hasValue());
         current = editor.get();
         const Expected<void, editor::CommandError> opened = editor->openProject(directory.path / "project");
         REQUIRE_MESSAGE(opened.hasValue(), (opened ? std::string() : opened.error().message));

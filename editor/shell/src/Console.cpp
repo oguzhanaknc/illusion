@@ -6,8 +6,10 @@
 #include <illusion/editor/ui/FontManager.hpp>
 #include <illusion/editor/ui/Icons.hpp>
 
+#include <algorithm>
 #include <cstdio>
 #include <cstring>
+#include <string>
 
 namespace illusion::editor::shell::detail
 {
@@ -301,14 +303,26 @@ void Console::draw(Impl& shell)
                 }
                 if (record.fileLength > 0)
                 {
-                    // The source link copies "file:line", e.g. for a code editor's "go to".
+                    // The source link opens a project file (a virtual path, as build diagnostics have) in the
+                    // code editor (editor.open_source) and copies any other "file:line".
                     char source[LogRecord::kMaxFileBytes + 16];
                     std::snprintf(source, sizeof(source), "%.*s:%u", static_cast<int>(record.fileLength),
                                   record.file, record.line);
                     ImGui::SameLine();
                     if (ImGui::TextLink(source))
                     {
-                        ImGui::SetClipboardText(source);
+                        const std::string_view file(record.file, record.fileLength);
+                        if (const usize mount = file.find(":/"); mount != std::string_view::npos && mount > 1)
+                        {
+                            (void)shell.run("editor.open_source",
+                                            "{\"path\":" + jsonQuote(file) + ",\"line\":" +
+                                                std::to_string(std::max(record.line, 1u)) + "}",
+                                            "console");
+                        }
+                        else
+                        {
+                            ImGui::SetClipboardText(source);
+                        }
                     }
                 }
                 ImGui::PopID();

@@ -517,6 +517,10 @@ int run(const std::vector<std::string>& args)
     options.workspace = std::filesystem::absolute(options.workspace, code);
     options.mcpServer = executableDirectory() / ("illusion_mcp" ILLUSION_EXECUTABLE_SUFFIX);
     options.userDirectory = arguments.userDirectory;
+#if defined(ILLUSION_MODULE_SDK)
+    // The module SDK of the build tree this editor was built in (ADR 0043); M8 installs one beside it.
+    options.moduleSdk = std::filesystem::path(std::u8string_view(u8"" ILLUSION_MODULE_SDK));
+#endif
     EditorContext editor(options);
     // The game runtime of Play mode (ADR 0042); a headless editor plays without sound.
     JobSystem jobs;

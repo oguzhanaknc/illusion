@@ -20,6 +20,7 @@ illusion_add_editor_executable(illusion_editor_tests
     core/TestEditorGizmo.cpp
     core/TestEditorHistory.cpp
     core/TestEditorLog.cpp
+    core/TestEditorModules.cpp
     core/TestEditorSettings.cpp
     core/TestEditorSceneEditing.cpp
     core/TestEditorSnap.cpp
@@ -59,6 +60,16 @@ illusion_add_module(illusion_tetris_module SHARED
 target_compile_definitions(illusion_editor_tests PRIVATE
     ILLUSION_TETRIS_MODULE="$<TARGET_FILE:illusion_tetris_module>")
 add_dependencies(illusion_editor_tests illusion_tetris_module)
+# The module build tests run a stand-in for CMake, and one real build with the module SDK of this build tree
+# (ADR 0043; profiling builds have no SDK).
+illusion_add_editor_executable(illusion_fake_cmake FakeCMake.cpp)
+illusion_configure_target(illusion_fake_cmake)
+target_compile_definitions(illusion_editor_tests PRIVATE ILLUSION_FAKE_CMAKE="$<TARGET_FILE:illusion_fake_cmake>")
+add_dependencies(illusion_editor_tests illusion_fake_cmake)
+if(NOT ILLUSION_PROFILING)
+    target_compile_definitions(illusion_editor_tests PRIVATE
+        ILLUSION_MODULE_SDK="${PROJECT_BINARY_DIR}/sdk/$<CONFIG>/illusion-sdk.json")
+endif()
 illusion_configure_target(illusion_editor_tests)
 doctest_discover_tests(illusion_editor_tests
     PROPERTIES LABELS "unit"
@@ -78,6 +89,7 @@ target_link_libraries(illusion_editor_gpu_tests PRIVATE
     illusion::render
     illusion::physics illusion::audio illusion::doctest)
 target_compile_definitions(illusion_editor_gpu_tests PRIVATE
+    ILLUSION_FAKE_CMAKE="$<TARGET_FILE:illusion_fake_cmake>"
     ILLUSION_GOLDEN_DIR="${CMAKE_CURRENT_SOURCE_DIR}/data/golden"
     ILLUSION_UI_CAPTURE_DIR="${CMAKE_BINARY_DIR}/ui-captures"
     ILLUSION_EDITOR_TEST_DATA="${CMAKE_CURRENT_SOURCE_DIR}/data"

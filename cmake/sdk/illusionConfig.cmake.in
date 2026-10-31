@@ -1,0 +1,44 @@
+# The illusion module SDK (docs/adr/0043-project-modules-built-by-the-editor.md), written by the engine's
+# build. A project's modules/CMakeLists.txt uses it:
+#
+#   find_package(illusion REQUIRED CONFIG)
+#   illusion_project_modules()
+#
+# and each modules/<name>/CMakeLists.txt calls illusion_add_module(<name> SHARED SOURCES ... USES ...).
+
+include(CMakeFindDependencyMacro)
+find_dependency(Threads)
+
+if(NOT TARGET illusion::core)
+    include("${CMAKE_CURRENT_LIST_DIR}/illusionTargets.cmake")
+endif()
+
+# The settings of the engine build this SDK belongs to. Project code does not treat warnings as errors.
+set(ILLUSION_SHARED_MODULES ON)
+set(ILLUSION_PROFILING OFF)
+set(ILLUSION_WARNINGS_AS_ERRORS OFF)
+set(ILLUSION_SANITIZER "@ILLUSION_SANITIZER@")
+
+include("@ILLUSION_SDK_SOURCE_DIR@/cmake/IllusionCompilerSettings.cmake")
+include("@ILLUSION_SDK_SOURCE_DIR@/cmake/IllusionModules.cmake")
+
+# Adds every subdirectory of the current source directory that has a CMakeLists.txt, in name order, with
+# the engine's language settings. Shared module libraries go to ILLUSION_MODULE_OUTPUT_DIRECTORY when it is
+# set (the editor sets it to .illusion/build/modules/bin), without a per-configuration subdirectory.
+function(illusion_project_modules)
+    set(CMAKE_CXX_STANDARD 20)
+    set(CMAKE_CXX_STANDARD_REQUIRED ON)
+    set(CMAKE_CXX_EXTENSIONS OFF)
+    set(CMAKE_POSITION_INDEPENDENT_CODE ON)
+    if(ILLUSION_MODULE_OUTPUT_DIRECTORY)
+        set(CMAKE_LIBRARY_OUTPUT_DIRECTORY "$<1:${ILLUSION_MODULE_OUTPUT_DIRECTORY}>")
+    endif()
+    file(GLOB entries LIST_DIRECTORIES true RELATIVE "${CMAKE_CURRENT_SOURCE_DIR}" "${CMAKE_CURRENT_SOURCE_DIR}/*")
+    list(SORT entries)
+    foreach(entry IN LISTS entries)
+        if(IS_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/${entry}" AND
+                EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/${entry}/CMakeLists.txt")
+            add_subdirectory(${entry})
+        endif()
+    endforeach()
+endfunction()

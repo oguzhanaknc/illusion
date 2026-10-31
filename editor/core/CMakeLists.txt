@@ -9,8 +9,10 @@ illusion_add_editor_library(illusion_editor_core STATIC
     src/CrashJournal.cpp
     src/EditorContext.cpp
     src/EntityIndex.cpp
+    src/ExternalTools.cpp
     src/Gizmo.cpp
     src/JsonSchema.cpp
+    src/ModuleBuild.cpp
     src/Operation.cpp
     src/Preferences.cpp
     src/Project.cpp
@@ -36,12 +38,14 @@ illusion_add_editor_library(illusion_editor_core STATIC
     src/commands/InputCommands.cpp
     src/commands/LogCommands.cpp
     src/commands/MaterialCommands.cpp
+    src/commands/ModuleCommands.cpp
     src/commands/PlayCommands.cpp
     src/commands/ProjectCommands.cpp
     src/commands/SceneCommands.cpp
     src/commands/SelectionCommands.cpp
     src/commands/SettingsCommands.cpp
     src/commands/TransactionCommands.cpp
+    src/commands/ToolCommands.cpp
     src/commands/TransformCommands.cpp
     src/commands/UiCommands.cpp
     src/commands/ViewCommands.cpp

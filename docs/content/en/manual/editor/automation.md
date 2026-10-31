@@ -105,8 +105,8 @@ Denied calls fail with `permission_denied` (1001). File commands stay inside the
 commands inside the workspace. There is no command that runs a shell.
 
 !!! warning "Agents can run code"
-    From M7s, `module.build` and `module.load` compile and load C++ that an agent wrote, inside the editor
-    process. Use `read-only` or `ask` for agents you do not trust.
+    `module.build` and `module.load` compile and load C++ that an agent wrote, inside the editor process
+    (see [Project Modules](project-modules.md)). Use `read-only` or `ask` for agents you do not trust.
 
 ## Events
 

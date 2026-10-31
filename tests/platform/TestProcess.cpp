@@ -5,7 +5,9 @@
 
 #include <doctest/doctest.h>
 
+#include <fstream>
 #include <string>
+#include <thread>
 #include <vector>
 
 using namespace illusion;
@@ -40,6 +42,12 @@ std::vector<std::string> lines(Process& process, ProcessStream stream = ProcessS
         out.push_back(line);
     }
     return out;
+}
+
+std::string utf8String(const std::filesystem::path& path)
+{
+    const std::u8string text = path.u8string();
+    return std::string(text.begin(), text.end());
 }
 
 std::string hex(std::string_view text)
@@ -112,6 +120,33 @@ TEST_CASE("destroying a running process terminates it")
     CHECK_FALSE(process.valid());
     CHECK(moved.valid());
     // Leaving the scope must not hang.
+}
+
+TEST_CASE("a detached process outlives its Process and is never waited for")
+{
+    test::TempDirectory directory;
+    const std::filesystem::path go = directory.path / "go";
+    const std::filesystem::path done = directory.path / "done";
+    ProcessOptions options;
+    options.detached = true;
+    {
+        Process process = start({"relay", utf8String(go), utf8String(done)}, options);
+        CHECK(process.valid());
+        CHECK(process.id() != 0);
+        CHECK_FALSE(process.poll());
+        CHECK_FALSE(process.wait(10ms));
+        CHECK_FALSE(process.terminate());
+        std::string output;
+        CHECK(process.read(ProcessStream::Output, output) == 0);
+    }
+    // The child still runs after the Process is gone: it answers the file.
+    std::ofstream(go) << "";
+    const auto deadline = std::chrono::steady_clock::now() + kPatience;
+    while (!std::filesystem::exists(done) && std::chrono::steady_clock::now() < deadline)
+    {
+        std::this_thread::yield();
+    }
+    CHECK(std::filesystem::exists(done));
 }
 
 TEST_CASE("added environment variables reach the child and replace inherited ones")

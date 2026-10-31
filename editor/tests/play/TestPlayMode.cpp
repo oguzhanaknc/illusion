@@ -10,6 +10,9 @@
 #include <illusion/physics/PhysicsComponents.hpp>
 #include <illusion/runtime/GameSession.hpp>
 
+#include <fstream>
+#include <sstream>
+
 using namespace illusion;
 using namespace illusion::editor;
 using namespace illusion::test;
@@ -307,6 +310,59 @@ TEST_CASE("destroying the PlaySession stops its session and unregisters it")
     CHECK_FALSE(f.editor().playing());
     CHECK(f.editor().play() == nullptr);
 }
+
+#if defined(ILLUSION_MODULE_SDK)
+TEST_CASE("module.build compiles a project module with the module SDK of this build and plays it")
+{
+    EditorFixture base(1, EditorContextOptions{.moduleSdk = std::filesystem::path(
+                                                   std::u8string_view(u8"" ILLUSION_MODULE_SDK))});
+    reflectPhysicsComponents();
+    reflectAudioComponents();
+    JobSystem jobs{JobSystemDesc{2, 1024}};
+    PlaySession play(*base.editor, PlaySessionDesc{.jobs = &jobs, .audioOutput = AudioOutput::Offline});
+    EditorContext& editor = *base.editor;
+    // The fixture's module has no source; start from module.create alone.
+    std::filesystem::remove_all(base.directory.path / "project" / "modules");
+    ok(editor, "module.create", R"({"name":"spinner"})");
+
+    const JsonDocument built = ok(editor, "module.build");
+    INFO(built.root().find("output").asString().value_or(""));
+    REQUIRE(built.root().find("succeeded").asBool() == true);
+    REQUIRE(built.root().find("loaded").size() == 1);
+    CHECK(built.root().find("loaded")[0].asString() == "spinner");
+    CHECK(ok(editor, "module.list").root().find("modules")[0].find("name").asString() == "spinner");
+
+    // A compile error comes back with the module's virtual path and the line.
+    const std::filesystem::path source =
+        base.directory.path / "project" / "modules" / "spinner" / "spinner.cpp";
+    std::string original;
+    {
+        std::ifstream in(source, std::ios::binary);
+        std::ostringstream text;
+        text << in.rdbuf();
+        original = text.str();
+    }
+    std::ofstream(source, std::ios::binary) << original << "int broken = undefined_name;\n";
+    const JsonDocument failed = ok(editor, "module.build");
+    CHECK(failed.root().find("succeeded").asBool() == false);
+    REQUIRE(failed.root().find("errors").asU64().value_or(0) >= 1u);
+    const JsonValue error = failed.root().find("diagnostics")[0];
+    CHECK(error.find("file").asString() == "modules:/spinner/spinner.cpp");
+    CHECK(error.find("severity").asString() == "error");
+    CHECK(error.find("line").asU64() == 26u);
+
+    // The fixed module is hot-reloaded and runs in a play session.
+    std::ofstream(source, std::ios::binary) << original << "// fixed\n";
+    const JsonDocument fixed = ok(editor, "module.build", R"({"modules":["spinner"]})");
+    INFO(fixed.root().find("output").asString().value_or(""));
+    REQUIRE(fixed.root().find("succeeded").asBool() == true);
+    REQUIRE(fixed.root().find("reloaded").size() == 1);
+    ok(editor, "play.start", R"({"fixedStep":true})");
+    ok(editor, "play.step", R"({"steps":3})");
+    ok(editor, "play.stop");
+    CHECK(ok(editor, "module.list").root().find("modules")[0].find("reloads").asU64() == 1u);
+}
+#endif
 
 TEST_CASE("play.start autosaves an unsaved scene before the game runs")
 {

@@ -328,6 +328,26 @@ Expected<std::string, CommandError> PlaySession::loadModule(std::string_view pat
     return impl.modules.module(impl.modules.count() - 1).name;
 }
 
+Expected<void, CommandError> PlaySession::reloadModule(std::string_view name)
+{
+    Impl& impl = *m_impl;
+    if (impl.modules.find(name) == nullptr)
+    {
+        return unexpected(
+            CommandError::make(ErrorKind::NotFound, "no module '" + std::string(name) + "' is loaded"));
+    }
+    if (std::optional<std::string> error = impl.modules.reload(name))
+    {
+        return unexpected(CommandError::make(ErrorKind::ModuleError, std::move(*error)));
+    }
+    return {};
+}
+
+u32 PlaySession::reloadChangedModules()
+{
+    return m_impl->modules.reloadChanged();
+}
+
 bool PlaySession::unloadModule(std::string_view name)
 {
     return m_impl->modules.unload(name);
