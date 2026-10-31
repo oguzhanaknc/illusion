@@ -2159,6 +2159,7 @@ void Inspector::State::drawComponentCard(Impl& shell, ui::UiKit& kit, ComponentI
                 steps += "]}";
                 (void)shell.run("editor.batch", steps, "inspector");
             }
+            ImGui::EndDisabled(); // isTransient
             ui::endComponentCardMenu();
             if (open)
             {
