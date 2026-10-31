@@ -85,6 +85,8 @@ Expected<PlayStatusResult, CommandError> playStart(CommandContext& context, cons
     }
     if (!context.dryRun())
     {
+        // Game code may crash the editor: the scene being edited is on disk first.
+        (void)context.editor().autosaveNow();
         if (Expected<void, CommandError> started = (*play)->start(options); !started)
         {
             return unexpected(std::move(started).error());
@@ -525,8 +527,9 @@ void registerPlayCommands(CommandRegistry& registry)
         .title = strings::kCommandPlayStartTitle,
         .description = strings::kCommandPlayStartDescription,
         .agentSummary =
-            "Starts a play session (ADR 0042): copies the edit World into a play World and runs the game "
-            "on it each frame. While it runs, entity, component, transform and hierarchy commands act on "
+            "Starts a play session (ADR 0042): autosaves an unsaved scene, copies the edit World into a "
+            "play World and runs the game on it each frame; the viewports show the play World. While it "
+            "runs, entity, component, transform and hierarchy commands act on "
             "the play World and are not undoable; play.stop throws it away. mode \"simulate\" runs physics "
             "only. fixedStep makes every frame one physics step with seeded ids, for repeatable runs. "
             "Example: {\"mode\": \"play\", \"fixedStep\": true}.",

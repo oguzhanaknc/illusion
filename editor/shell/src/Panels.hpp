@@ -6,6 +6,7 @@
 
 #include <illusion/core/Log.hpp>
 #include <illusion/editor/core/Gizmo.hpp>
+#include <illusion/editor/core/PlayHost.hpp>
 #include <illusion/editor/core/Snap.hpp>
 #include <illusion/editor/rpc/RpcServer.hpp>
 #include <illusion/editor/ui/FontManager.hpp>
@@ -291,6 +292,8 @@ private:
     void drawAspectMenu(Impl& shell);
     void drawOverlaysMenu(Impl& shell);
     void handleBookmarks(Impl& shell, bool active);
+    bool handleGameInput(Impl& shell, ImDrawList& draw, Vec2 imageOrigin, Vec2 display, Vec2 toImage,
+                         bool clicked);
     void run(Impl& shell, std::string_view command, std::string_view params);
 
     std::string m_id;
@@ -318,6 +321,38 @@ void followAgent(Impl& shell);
 
 /// Draws a window for each secondary Scene viewport ("scene-2" ...); closing one closes the viewport.
 void drawSecondaryViewports(Impl& shell);
+
+/// Routes the window's keyboard and mouse to the running game while the Game view has captured them (a
+/// click on the Game view while playing). Shift+F1, Stop and Pause let go: the game then sees every held key
+/// and button released. Editor shortcuts wait while the game has the input.
+class GameInput
+{
+public:
+    /// Gives the game the keyboard, the mouse and the cursor (hidden and unbounded) from the next update().
+    void capture() noexcept;
+
+    /// Takes the input back from the game and releases what it sees held.
+    void release(Impl& shell);
+
+    /// True while the game has the input.
+    [[nodiscard]] bool captured() const noexcept { return m_captured; }
+
+    /// Where the Game view draws its image this frame: cursor positions sent to the game are
+    /// `(mouse - origin) * toImage` (pixels of the game view).
+    void setImage(Vec2 origin, Vec2 toImage) noexcept;
+
+    /// Every frame before the panels draw: lets go on Shift+F1 or when no session plays, else sends the game
+    /// the keys, buttons and cursor position that changed since the last frame.
+    void update(Impl& shell);
+
+private:
+    std::array<bool, static_cast<usize>(Key::Count)> m_keys{};
+    std::array<bool, static_cast<usize>(MouseButton::Count)> m_buttons{};
+    Vec2 m_cursor{-1.0f};
+    Vec2 m_origin{0.0f};
+    Vec2 m_toImage{1.0f};
+    bool m_captured = false;
+};
 
 /// The History panel: undo steps with origin badges, jumping, and undoing an agent's changes.
 class History

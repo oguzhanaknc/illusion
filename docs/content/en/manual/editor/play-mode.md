@@ -30,6 +30,30 @@ the same World.
 {"method": "play.start", "params": {"mode": "play", "fixedStep": true, "seed": 7}}
 ```
 
+The toolbar's Play controls follow the session: while it runs, **Play** turns into **Stop** (F5 and Shift+F5
+stop it too), **Pause** stays pressed while paused and resumes on the next click, and **Pause** and **Step**
+are off while nothing plays. The status bar says **Playing** or **Paused**, and the panels take the theme's
+play tint (the `playModeTint` preference) so a running game is never mistaken for the edited scene; changes
+made now disappear with Stop.
+
+Before the copy, `play.start` writes an [autosave](projects.md) of an unsaved scene (when autosave is on), so
+game code that crashes the editor loses nothing.
+
+## The Game view
+
+While a session runs, every viewport shows the play World: the Game view through the scene's main Camera, the
+Scene views through their editor cameras. `viewport.pick`, `viewport.sample`, `viewport.screenshot` and the
+other viewport commands read what the game shows, and the entities they report are the play World's (a
+viewport command with `"world": "edit"` fails while playing).
+
+Click the Game view to give the game the keyboard and mouse: the cursor hides and moves without bounds, keys
+and buttons reach the game's input actions, and editor shortcuts wait. **Shift+F1** takes them back (the game
+sees every held key released); Pause and Stop do too. Agents send input with `input.inject` whether or not
+the window has captured it.
+
+With **Maximize on Play** (the button in the Game view's toolbar, or the `maximizeOnPlay` preference) the Game
+view fills the window while playing and the other panels come back with Stop.
+
 ## Editing while playing
 
 While a session runs, the entity, component, transform, hierarchy and clipboard commands act on the play

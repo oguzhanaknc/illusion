@@ -51,6 +51,47 @@ std::string_view stringParam(std::string_view json, std::string_view key) noexce
     return {};
 }
 
+// The state of the play session (Stopped without a game runtime).
+PlayState playState(const EditorContext& editor)
+{
+    const PlayHost* play = editor.play();
+    return play != nullptr ? play->status().state : PlayState::Stopped;
+}
+
+// Tints the panel backgrounds with the theme's play.tint while a play session runs
+// (Preferences::playModeTint), for the lifetime of the object.
+class PlayTint
+{
+public:
+    PlayTint(const ui::Theme& theme, bool active)
+    {
+        if (!active)
+        {
+            return;
+        }
+        constexpr f32 kAmount = 0.16f;
+        const Vec4 tint = theme.color(ui::ThemeToken::PlayTint);
+        for (const ImGuiCol color : kColors)
+        {
+            const ImVec4 base = ImGui::GetStyleColorVec4(color);
+            const Vec4 mixed = glm::mix(Vec4(base.x, base.y, base.z, base.w), tint, kAmount);
+            ImGui::PushStyleColor(color, ImVec4(mixed.x, mixed.y, mixed.z, base.w));
+        }
+        m_pushed = static_cast<int>(kColors.size());
+    }
+
+    ~PlayTint() { ImGui::PopStyleColor(m_pushed); }
+
+    PlayTint(const PlayTint&) = delete;
+    PlayTint& operator=(const PlayTint&) = delete;
+
+private:
+    static constexpr std::array<ImGuiCol, 7> kColors{
+        ImGuiCol_WindowBg,      ImGuiCol_ChildBg,          ImGuiCol_MenuBarBg,     ImGuiCol_TitleBg,
+        ImGuiCol_TitleBgActive, ImGuiCol_TitleBgCollapsed, ImGuiCol_DockingEmptyBg};
+    int m_pushed = 0;
+};
+
 text::TextKey menuTitle(UiMenu menu) noexcept
 {
     switch (menu)
@@ -243,6 +284,7 @@ EditorShell::Impl::Impl(EditorShell& owner, EditorContext& editorContext, ui::Ui
     , inspector(std::make_unique<detail::Inspector>())
     , sceneView(std::make_unique<detail::SceneView>("scene"))
     , gameView(std::make_unique<detail::SceneView>("game"))
+    , gameInput(std::make_unique<detail::GameInput>())
     , console(std::make_unique<detail::Console>())
     , history(std::make_unique<detail::History>())
     , agentsPanel(std::make_unique<detail::Agents>())
@@ -349,6 +391,24 @@ void EditorShell::Impl::runAction(usize index, std::string_view origin)
         outliner->beginRename(editor.selection().primary());
         return;
     }
+    // The Play toolbar toggles: Play and Simulate stop a running session, Pause resumes a paused one.
+    if (action.menu == UiMenu::Play && editor.play() != nullptr)
+    {
+        const PlayState state = playState(editor);
+        if (state != PlayState::Stopped && (action.id == "play.play" || action.id == "play.simulate"))
+        {
+            gameInput->release(*this);
+            (void)run("play.stop", "", origin);
+            return;
+        }
+        if (action.id == "play.pause")
+        {
+            gameInput->release(*this);
+            (void)run("play.pause", state == PlayState::Paused ? R"({"paused":false})" : R"({"paused":true})",
+                      origin);
+            return;
+        }
+    }
     const CommandDescriptor* descriptor = editor.commands().find(action.command);
     if (descriptor == nullptr)
     {
@@ -374,6 +434,10 @@ void EditorShell::Impl::runAction(usize index, std::string_view origin)
 text::TextKey EditorShell::Impl::actionTitle(usize index) const
 {
     const UiAction& action = uiActions()[index];
+    if (action.id == "play.play" && playState(editor) != PlayState::Stopped)
+    {
+        return s::kToolStop;
+    }
     if (action.title.table != nullptr)
     {
         return action.title;
@@ -385,6 +449,10 @@ text::TextKey EditorShell::Impl::actionTitle(usize index) const
 ui::Icon EditorShell::Impl::actionIcon(usize index) const
 {
     const UiAction& action = uiActions()[index];
+    if (action.id == "play.play" && playState(editor) != PlayState::Stopped)
+    {
+        return ui::icons::kStop;
+    }
     std::string_view name = action.icon;
     if (name.empty())
     {
@@ -397,6 +465,10 @@ ui::Icon EditorShell::Impl::actionIcon(usize index) const
 bool EditorShell::Impl::actionEnabled(usize index) const
 {
     const UiAction& action = uiActions()[index];
+    if ((action.id == "play.pause" || action.id == "play.step") && playState(editor) == PlayState::Stopped)
+    {
+        return false;
+    }
     return action.milestone.empty() && editor.commands().find(action.command) != nullptr;
 }
 
@@ -600,6 +672,8 @@ void EditorShell::draw(f64 now, f64 deltaSeconds)
     ui::UiKit kit = impl.kit();
     ui::FrameText& text = impl.text;
     const std::span<const UiAction> actions = uiActions();
+    const PlayState play = playState(impl.editor);
+    const PlayTint tint(impl.theme, play != PlayState::Stopped && impl.editor.preferences().playModeTint);
 
     // Async commands the UI started.
     for (auto it = impl.running.begin(); it != impl.running.end();)
@@ -620,11 +694,12 @@ void EditorShell::draw(f64 now, f64 deltaSeconds)
     impl.agentsPanel->update(impl);
     detail::updateEyedropper(impl);
     detail::followAgent(impl);
+    impl.gameInput->update(impl);
 
-    // Shortcuts, unless a text field or the shortcut capture has the keyboard.
+    // Shortcuts, unless a text field, the shortcut capture or the running game has the keyboard.
     const ImGuiIO& io = ImGui::GetIO();
     if (!io.WantTextInput && !impl.preferences->capturing() && !impl.palette->isOpen() &&
-        !impl.viewportNavigating)
+        !impl.viewportNavigating && !impl.gameInput->captured())
     {
         for (usize i = 0; i < actions.size(); ++i)
         {
@@ -787,10 +862,10 @@ void EditorShell::draw(f64 now, f64 deltaSeconds)
         const f32 width = ImGui::GetWindowWidth();
         const f32 buttonWidth = ImGui::GetFrameHeight() + ImGui::GetStyle().ItemSpacing.x;
         ImGui::SetCursorPosX(std::max(ImGui::GetCursorPosX(), (width - 4.0f * buttonWidth) * 0.5f));
-        for (const std::string_view id : {"play.play", "play.pause", "play.step", "play.simulate"})
-        {
-            button(id);
-        }
+        button("play.play", play != PlayState::Stopped);
+        button("play.pause", play == PlayState::Paused);
+        button("play.step");
+        button("play.simulate");
         const f32 comboWidth = 150.0f * kit.scale;
         const f32 chipWidth = 110.0f * kit.scale;
         const f32 right = comboWidth + chipWidth + 2.0f * buttonWidth +
@@ -916,7 +991,16 @@ void EditorShell::draw(f64 now, f64 deltaSeconds)
                                            {{"count", static_cast<u64>(impl.agents->approvals().size())}}));
         }
         separator();
-        ImGui::TextUnformatted(text.format(s::kStatusEditMode));
+        if (play == PlayState::Stopped)
+        {
+            ImGui::TextUnformatted(text.format(s::kStatusEditMode));
+        }
+        else
+        {
+            ImGui::TextColored(
+                detail::imvec(impl.theme.color(ui::ThemeToken::PlayTint)), "%s",
+                text.format(play == PlayState::Paused ? s::kStatusPlayPaused : s::kStatusPlayMode));
+        }
     }
     ImGui::End();
 
@@ -936,11 +1020,28 @@ void EditorShell::draw(f64 now, f64 deltaSeconds)
     impl.viewportNavigating = false;
     std::swap(impl.lastHoveredSceneView, impl.hoveredSceneView);
     impl.hoveredSceneView.clear();
+    // Maximize on Play: the Game view covers the dock space and the other docked panels wait for Stop.
+    const bool maximized = play != PlayState::Stopped && impl.editor.preferences().maximizeOnPlay;
+    if (maximized)
+    {
+        const detail::PanelInfo& info = detail::panelInfo(Panel::Game);
+        ImGui::SetNextWindowPos(viewport->WorkPos);
+        ImGui::SetNextWindowSize(viewport->WorkSize);
+        if (ImGui::Begin(text.iconLabel(ui::findIcon(info.icon).value_or(ui::icons::kCircle), info.title,
+                                        "panel.game.maximized"),
+                         nullptr,
+                         ImGuiWindowFlags_NoDocking | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoResize |
+                             ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoSavedSettings))
+        {
+            impl.gameView->draw(impl);
+        }
+        ImGui::End();
+    }
     for (usize i = 0; i < detail::kPanelCount; ++i)
     {
         const Panel panel = static_cast<Panel>(i);
         const detail::PanelInfo& info = detail::panelInfo(panel);
-        if (!impl.open[i])
+        if (!impl.open[i] || (maximized && info.docked))
         {
             continue;
         }

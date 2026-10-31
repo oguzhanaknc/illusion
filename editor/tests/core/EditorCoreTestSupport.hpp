@@ -343,6 +343,15 @@ public:
                                 const editor::ViewportStyle&) override
     {
         lastInput = input;
+        if (frames && id == "game")
+        {
+            // A Game viewport without an image, the size of the panel.
+            editor::ViewportFrame out;
+            out.kind = editor::ViewportKind::Game;
+            out.size = panel;
+            out.settings = gameSettings;
+            return out;
+        }
         if (!frames || id != "scene")
         {
             return {};

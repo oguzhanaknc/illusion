@@ -318,9 +318,19 @@ Plan: `docs/plans/m7-editor.md` (sub-milestones, command API, localization, them
   byte-identical edit scene after Stop, routing, keep_changes, edit hooks, input and modules with a
   `FakePlay` in the core fixture; the `play/snapshot` Benchmark (20 µs per entity budget; 3.0 µs measured);
   `manual/editor/play-mode.md`
-- M7r-3: Game view rendering of the play World with input routing and cursor capture (Shift+F1), the Play
-  toolbar, tint and Maximize on Play, autosave before Play, the Tetris reference module and the play
-  scenarios of the acceptance transcript (C5)
+- M7r-3: split in two parts:
+- M7r-3a: ✅ The play World in the editor's viewports: `ViewportService` renders, picks, samples and bounds
+  the play World while playing (its own `RenderAssetResolver` and hierarchy index per play session, through
+  `EditorContext::playSessions()`), viewport commands report play-World entities and refuse
+  `"world": "edit"` while playing; input routing from the Game view (`GameInput`: a click captures the
+  keyboard, mouse and cursor through `ui::requestCursorCapture()`, Shift+F1, Pause and Stop release and the
+  game sees held keys released, shortcuts wait); the Play toolbar (Play turns into Stop, Pause toggles and
+  stays pressed, Pause and Step off while stopped, Playing/Paused in the status bar); the play tint
+  (`playModeTint`) and Maximize on Play (`maximizeOnPlay`, the Game view's toolbar); autosave of an unsaved
+  scene before Play (`EditorContext::autosaveNow()`). Tests of autosave, play-World viewport commands, the
+  toolbar, capture and release with Maximize on Play, a GPU test of rendering and picking the play World
+  across sessions, and the golden images `shell-dark-100-play` and `shell-dark-100-play-maximized`
+- M7r-3b: The Tetris reference module and the play scenarios of the acceptance transcript (C5)
 - M7s: Project modules built from the editor (ADR 0043) and the External Tools code editor (from M7l), in two
   parts:
 - M7s-1: ✅ The module SDK: every editor build tree writes a CMake package to `<build>/sdk`

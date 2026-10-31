@@ -390,6 +390,10 @@ public:
     /// True while a play World is attached.
     [[nodiscard]] bool playing() const noexcept { return m_playWorld != nullptr; }
 
+    /// Play Worlds attached so far: changes with every new play session, so views that keep state per play
+    /// World (resolvers, caches) know when to start over even if a new World reuses an old address.
+    [[nodiscard]] u64 playSessions() const noexcept { return m_playSessions; }
+
     /// The play World, or nullptr when not playing.
     [[nodiscard]] World* playWorld() noexcept;
 
@@ -539,6 +543,11 @@ public:
     /// events, flushes the crash journal and autosaves when it is time.
     void endFrame(f64 deltaSeconds);
 
+    /// Writes an autosave copy of the scene now if a project is open, autosave is on
+    /// (EditorContextOptions::autosaveInterval above 0) and the scene has unsaved changes; Play does this
+    /// first, so a crash in game code loses nothing. Returns true if it wrote one.
+    bool autosaveNow();
+
     /// Journals of other sessions in `.illusion/journal/` (crashed sessions), newest first.
     [[nodiscard]] std::vector<std::filesystem::path> leftoverJournals() const;
 
@@ -577,7 +586,7 @@ private:
     void afterChange(bool historyChanged = true);
     void restoreSelection(std::span<const EntityGuid> guids);
     void selectionChanged(u64 before, std::string_view origin);
-    void autosave();
+    bool autosave();
 
     EditorContextOptions m_options;
     VirtualFileSystem m_files;
@@ -610,6 +619,7 @@ private:
     bool m_moduleBuildRunning = false;
     struct PlayWorld;
     std::unique_ptr<PlayWorld> m_playWorld;
+    u64 m_playSessions = 0;
     std::shared_ptr<LogRingSink> m_log;
     u64 m_logCleared = 0;
     f64 m_autosaveTimer = 0.0;

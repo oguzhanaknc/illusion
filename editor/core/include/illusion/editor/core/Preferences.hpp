@@ -1,7 +1,7 @@
 #pragma once
 /// @file
-/// The editor preferences of the current user: appearance, language, keyboard, AI agents, autosave, external
-/// tools and recent projects. They are saved as `preferences.json` in the user directory
+/// The editor preferences of the current user: appearance, language, keyboard, AI agents, play mode,
+/// autosave, external tools and recent projects. They are saved as `preferences.json` in the user directory
 /// (EditorContextOptions::userDirectory) and changed through the `preferences.set` command.
 ///
 /// ```json
@@ -62,6 +62,9 @@ struct Preferences
     std::string agentPermissions = "ask"; ///< Permission mode of agents in the window: read-only, ask, auto.
     bool approvalPopups = true;           ///< Show a pop-up when an agent asks for approval.
     bool followAgent = false;             ///< The Scene view frames what an agent selects.
+    // Play mode
+    bool playModeTint = true;    ///< Tints the editor's panels while a play session runs.
+    bool maximizeOnPlay = false; ///< The Game view fills the window while a play session runs.
     // Autosave
     f64 autosaveInterval = 60.0; ///< Seconds between autosaves of a dirty scene, 0 (never) to 3,600.
     u32 autosaveCopies = 3;      ///< Autosave files kept per scene, 1 to 20.

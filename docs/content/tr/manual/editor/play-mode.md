@@ -30,6 +30,30 @@ her zaman aynı World'ü verir.
 {"method": "play.start", "params": {"mode": "play", "fixedStep": true, "seed": 7}}
 ```
 
+Araç çubuğunun Play denetimleri oturumu izler: oturum çalışırken **Play**, **Stop** olur (F5 ve Shift+F5 de
+durdurur), **Pause** duraklatılmışken basılı kalır ve sonraki tıklamada sürdürür; hiçbir şey oynamazken
+**Pause** ve **Step** kapalıdır. Durum çubuğu **Playing** ya da **Paused** der ve paneller temanın play
+rengini alır (`playModeTint` tercihi); böylece çalışan oyun düzenlenen sahneyle karıştırılmaz. Bu sırada
+yapılan değişiklikler Stop ile kaybolur.
+
+Kopyadan önce `play.start`, kaydedilmemiş bir sahnenin [autosave](projects.md) kopyasını yazar (autosave
+açıksa); böylece editörü çökerten oyun kodu hiçbir şey kaybettirmez.
+
+## Game görünümü
+
+Bir oturum çalışırken her Viewport play World'ü gösterir: Game görünümü sahnenin ana Camera'sından, Scene
+görünümleri kendi editör kameralarından. `viewport.pick`, `viewport.sample`, `viewport.screenshot` ve diğer
+Viewport komutları oyunun gösterdiğini okur ve bildirdikleri Entity'ler play World'ündür (oynarken
+`"world": "edit"` verilen bir Viewport komutu başarısız olur).
+
+Klavyeyi ve fareyi oyuna vermek için Game görünümüne tıklayın: imleç gizlenir ve sınırsız hareket eder, tuşlar
+ve düğmeler oyunun girdi eylemlerine ulaşır, editör kısayolları bekler. **Shift+F1** bunları geri alır (oyun
+basılı her tuşun bırakıldığını görür); Pause ve Stop da alır. Ajanlar, pencere girdiyi yakalamış olsun ya da
+olmasın, girdiyi `input.inject` ile gönderir.
+
+**Maximize on Play** açıkken (Game görünümünün araç çubuğundaki düğme ya da `maximizeOnPlay` tercihi) Game
+görünümü oynarken pencereyi doldurur; diğer paneller Stop ile geri gelir.
+
 ## Oynarken düzenlemek
 
 Bir oturum çalışırken Entity, Component, transform, hiyerarşi ve pano komutları play World üzerinde çalışır.
