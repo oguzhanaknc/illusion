@@ -94,6 +94,7 @@ plugins:
             Outliner and Inspector: Outliner ve Inspector
             Scene Viewport: Scene Viewport'u
             Transform Tools: Dönüşüm Araçları
+            Play Mode: Play Modu
             Preferences: Tercihler
             Tutorials: Eğitimler
             First Agent Session: İlk Ajan Oturumu
@@ -143,6 +144,7 @@ nav:
           - Outliner and Inspector: manual/editor/scene-editing.md
           - Scene Viewport: manual/editor/viewport.md
           - Transform Tools: manual/editor/transform-tools.md
+          - Play Mode: manual/editor/play-mode.md
           - Preferences: manual/editor/preferences.md
           - Projects: manual/editor/projects.md
           - Automation: manual/editor/automation.md

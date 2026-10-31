@@ -14,6 +14,7 @@
 #include <illusion/editor/core/CrashJournal.hpp>
 #include <illusion/editor/core/EntityIndex.hpp>
 #include <illusion/editor/core/Gizmo.hpp>
+#include <illusion/editor/core/PlayHost.hpp>
 #include <illusion/editor/core/Preferences.hpp>
 #include <illusion/editor/core/Project.hpp>
 #include <illusion/editor/core/ReferenceIndex.hpp>
@@ -71,6 +72,14 @@ struct EditorContextOptions
     std::filesystem::path userDirectory{};
 };
 
+/// Which World a command acts on while a play session runs (ADR 0042).
+enum class WorldTarget : u8
+{
+    Default, ///< The play World for CommandMode::Any commands while playing; otherwise the edit World.
+    Edit,    ///< The edit World, also while playing (params `"world": "edit"`).
+    Play,    ///< The play World; fails when not playing (params `"world": "play"`).
+};
+
 /// How a command is run.
 struct CommandOptions
 {
@@ -85,7 +94,8 @@ struct CommandOptions
     /// Who owns transactions begun by this call: an RPC connection id, or 0 for the editor itself. While a
     /// transaction is open, only its caller may run undoable commands.
     u64 caller = 0;
-    const CommandGate* gate = nullptr; ///< Decides which commands may run (nullptr: all).
+    const CommandGate* gate = nullptr;        ///< Decides which commands may run (nullptr: all).
+    WorldTarget world = WorldTarget::Default; ///< The World it acts on while playing.
 };
 
 /// Facts about the last command, returned in the `_editor` member of JSON results.
@@ -102,22 +112,32 @@ struct CommandReport
 class CommandContext
 {
 public:
-    /// A context for one command run by @p editor.
-    CommandContext(EditorContext& editor, const CommandOptions& options, CommandReport& report) noexcept
+    /// A context for one command run by @p editor, on its play World if @p playWorld (the editor decides
+    /// with the command's mode and CommandOptions::world).
+    CommandContext(EditorContext& editor, const CommandOptions& options, CommandReport& report,
+                   bool playWorld = false) noexcept
         : m_editor(&editor)
         , m_options(&options)
         , m_report(&report)
+        , m_playWorld(playWorld)
     {
     }
 
     /// The editor.
     [[nodiscard]] EditorContext& editor() noexcept { return *m_editor; }
 
-    /// The edits of the open transaction.
+    /// The edits of the open transaction; on the play World they are applied but never undoable.
     [[nodiscard]] WorldEditor& edit() noexcept;
 
-    /// The edited World (read it; change it only through edit()).
+    /// The World the command acts on: the edit World, or the play World while playing (read it; change it
+    /// only through edit()).
     [[nodiscard]] World& world() noexcept;
+
+    /// The entities of world() by id, path and name.
+    [[nodiscard]] EntityIndex& index();
+
+    /// True if the command acts on the play World.
+    [[nodiscard]] bool onPlayWorld() const noexcept { return m_playWorld; }
 
     /// True for a dry run. Undoable commands need not check it (their transaction is rolled back); other
     /// commands that change state must validate and return without changing anything.
@@ -153,6 +173,7 @@ private:
     EditorContext* m_editor;
     const CommandOptions* m_options;
     CommandReport* m_report;
+    bool m_playWorld = false;
 };
 
 /// The open transaction of an EditorContext (see EditorContext::beginTransaction()).
@@ -342,6 +363,39 @@ public:
     /// Sets the viewports (nullptr when they go away). They must outlive their registration.
     void setViewports(ViewportHost* viewports) noexcept { m_viewports = viewports; }
 
+    /// The game runtime the play and module commands use, or nullptr.
+    [[nodiscard]] PlayHost* play() const noexcept { return m_play; }
+
+    /// Sets the game runtime (nullptr when it goes away). It must outlive its registration.
+    void setPlay(PlayHost* play) noexcept { m_play = play; }
+
+    /// Makes @p world the play World: while it is attached, CommandMode::Any commands act on it (unless they
+    /// ask for the edit World), with their own entity index and no undo. The PlayHost calls it; @p world must
+    /// stay alive until detachPlayWorld(). Asserts if a play World is attached already.
+    void attachPlayWorld(World& world);
+
+    /// Forgets the play World. Does nothing when none is attached.
+    void detachPlayWorld() noexcept;
+
+    /// True while a play World is attached.
+    [[nodiscard]] bool playing() const noexcept { return m_playWorld != nullptr; }
+
+    /// The play World, or nullptr when not playing.
+    [[nodiscard]] World* playWorld() noexcept;
+
+    /// The entities of the play World, or nullptr when not playing. Rebuilt first if the World advanced
+    /// since the last call (playWorldAdvanced()).
+    [[nodiscard]] EntityIndex* playEntities();
+
+    /// Tells the editor that the play World advanced (game code and physics may have created, destroyed or
+    /// renamed entities), so its entity index is rebuilt before the next command uses it. The PlayHost calls
+    /// it after every update.
+    void playWorldAdvanced() noexcept;
+
+    /// The WorldEditor of the play World, or nullptr when not playing. Read through it (capture()); commands
+    /// change the play World through CommandContext::edit().
+    [[nodiscard]] WorldEditor* playEditor() noexcept;
+
     /// Recent log messages of the process (nullptr if EditorContextOptions::logCapacity is 0).
     [[nodiscard]] const LogRingSink* log() const noexcept { return m_log.get(); }
 
@@ -491,6 +545,8 @@ private:
                                                    CommandReport& report);
     [[nodiscard]] Expected<void, CommandError> admit(const CommandDescriptor& descriptor,
                                                      const CommandOptions& options) const;
+    [[nodiscard]] bool routesToPlay(const CommandDescriptor& descriptor,
+                                    const CommandOptions& options) const noexcept;
     [[nodiscard]] Expected<std::string, CommandError>
     executeJsonAs(const CommandDescriptor& descriptor, JsonValue params, const CommandOptions& options);
     [[nodiscard]] Expected<void, CommandError> ownTransaction(const CommandOptions& options) const;
@@ -540,6 +596,9 @@ private:
     u64 m_agentSelection = 0;
     UiHost* m_ui = nullptr;
     ViewportHost* m_viewports = nullptr;
+    PlayHost* m_play = nullptr;
+    struct PlayWorld;
+    std::unique_ptr<PlayWorld> m_playWorld;
     std::shared_ptr<LogRingSink> m_log;
     u64 m_logCleared = 0;
     f64 m_autosaveTimer = 0.0;

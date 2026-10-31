@@ -38,12 +38,13 @@ struct CommandFlags
     bool outsideTransactions = false;
 };
 
-/// When a command may run.
+/// When a command may run, and which World it acts on while a play session runs (ADR 0042).
 enum class CommandMode : u8
 {
-    Edit, ///< While editing (not while playing).
-    Play, ///< Only while playing.
-    Any,  ///< Always.
+    Edit, ///< Always; it acts on the edit World (or on no World), also while playing.
+    Play, ///< Only while playing (it controls the play session); it acts on the edit World.
+    /// Always; while playing it acts on the play World, unless its params say `"world": "edit"`.
+    Any,
 };
 
 /// What a command may touch; permission modes allow or ask by class (from M7j).

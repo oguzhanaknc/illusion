@@ -744,6 +744,102 @@ void reflectCoreCommandTypes(StructRegistry& structs)
             .field("replace", &PreferencesSetParams::replace);
         reflectStruct<PreferencesResult>("editor.PreferencesResult", 1, structs)
             .field("value", &PreferencesResult::value);
+
+        const FieldMeta steps{.min = 1.0, .max = 100000.0};
+        reflectStruct<PlayStartParams>("editor.PlayStartParams", 1, structs)
+            .field("mode", &PlayStartParams::mode)
+            .field("fixedStep", &PlayStartParams::fixedStep)
+            .field("seed", &PlayStartParams::seed);
+        reflectStruct<PlayStatusResult>("editor.PlayStatusResult", 1, structs)
+            .field("state", &PlayStatusResult::state)
+            .field("mode", &PlayStatusResult::mode)
+            .field("fixedStep", &PlayStatusResult::fixedStep)
+            .field("timeScale", &PlayStatusResult::timeScale)
+            .field("steps", &PlayStatusResult::steps)
+            .field("time", &PlayStatusResult::time, {.unit = Unit::Seconds});
+        reflectStruct<PlayPauseParams>("editor.PlayPauseParams", 1, structs)
+            .field("paused", &PlayPauseParams::paused);
+        reflectStruct<PlayStepParams>("editor.PlayStepParams", 1, structs)
+            .field("steps", &PlayStepParams::steps, steps);
+        reflectStruct<PlayTimeScaleParams>("editor.PlayTimeScaleParams", 1, structs)
+            .field("scale", &PlayTimeScaleParams::scale, {.min = 0.0, .max = 100.0});
+        reflectStruct<PlayRunUntilParams>("editor.PlayRunUntilParams", 1, structs)
+            .field("maxSteps", &PlayRunUntilParams::maxSteps, steps)
+            .field("entity", &PlayRunUntilParams::entity)
+            .field("exists", &PlayRunUntilParams::exists)
+            .field("component", &PlayRunUntilParams::component)
+            .field("field", &PlayRunUntilParams::field)
+            .field("equals", &PlayRunUntilParams::equals);
+        reflectStruct<PlayRunUntilResult>("editor.PlayRunUntilResult", 1, structs)
+            .field("met", &PlayRunUntilResult::met)
+            .field("steps", &PlayRunUntilResult::steps)
+            .field("status", &PlayRunUntilResult::status);
+        reflectStruct<PlayKeepChangesParams>("editor.PlayKeepChangesParams", 1, structs)
+            .field("entities", &PlayKeepChangesParams::entities)
+            .field("components", &PlayKeepChangesParams::components);
+        reflectStruct<PlayKeepChangesResult>("editor.PlayKeepChangesResult", 1, structs)
+            .field("entities", &PlayKeepChangesResult::entities)
+            .field("components", &PlayKeepChangesResult::components);
+
+        reflectStruct<ModuleLoadParams>("editor.ModuleLoadParams", 1, structs)
+            .field("path", &ModuleLoadParams::path);
+        reflectStruct<ModuleUnloadParams>("editor.ModuleUnloadParams", 1, structs)
+            .field("name", &ModuleUnloadParams::name);
+        reflectStruct<PlayModuleInfo>("editor.ModuleInfo", 1, structs)
+            .field("name", &PlayModuleInfo::name)
+            .field("version", &PlayModuleInfo::version)
+            .field("path", &PlayModuleInfo::path)
+            .field("shared", &PlayModuleInfo::shared)
+            .field("reloads", &PlayModuleInfo::reloads);
+        reflectStruct<ModuleListResult>("editor.ModuleListResult", 1, structs)
+            .field("modules", &ModuleListResult::modules);
+
+        reflectStruct<InputAssetParams>("editor.InputAssetParams", 1, structs)
+            .field("asset", &InputAssetParams::asset);
+        reflectStruct<InputActionInfo>("editor.InputActionInfo", 1, structs)
+            .field("name", &InputActionInfo::name)
+            .field("type", &InputActionInfo::type)
+            .field("bindings", &InputActionInfo::bindings);
+        reflectStruct<InputActionsResult>("editor.InputActionsResult", 1, structs)
+            .field("asset", &InputActionsResult::asset)
+            .field("actions", &InputActionsResult::actions);
+        reflectStruct<InputActionDefineParams>("editor.InputActionDefineParams", 1, structs)
+            .field("asset", &InputActionDefineParams::asset)
+            .field("name", &InputActionDefineParams::name)
+            .field("type", &InputActionDefineParams::type)
+            .field("bindings", &InputActionDefineParams::bindings);
+        reflectStruct<InputActionParams>("editor.InputActionParams", 1, structs)
+            .field("asset", &InputActionParams::asset)
+            .field("name", &InputActionParams::name);
+        reflectStruct<InputActionRenameParams>("editor.InputActionRenameParams", 1, structs)
+            .field("asset", &InputActionRenameParams::asset)
+            .field("name", &InputActionRenameParams::name)
+            .field("newName", &InputActionRenameParams::newName);
+        reflectStruct<InputBindParams>("editor.InputBindParams", 1, structs)
+            .field("asset", &InputBindParams::asset)
+            .field("action", &InputBindParams::action)
+            .field("binding", &InputBindParams::binding);
+        reflectStruct<InputKeyEvent>("editor.InputKeyEvent", 1, structs)
+            .field("key", &InputKeyEvent::key)
+            .field("down", &InputKeyEvent::down);
+        reflectStruct<InputButtonEvent>("editor.InputButtonEvent", 1, structs)
+            .field("button", &InputButtonEvent::button)
+            .field("down", &InputButtonEvent::down);
+        reflectStruct<InputInjectParams>("editor.InputInjectParams", 1, structs)
+            .field("keys", &InputInjectParams::keys)
+            .field("mouseButtons", &InputInjectParams::mouseButtons)
+            .field("mousePosition", &InputInjectParams::mousePosition);
+        reflectStruct<InputReadParams>("editor.InputReadParams", 1, structs)
+            .field("actions", &InputReadParams::actions);
+        reflectStruct<PlayActionState>("editor.PlayActionState", 1, structs)
+            .field("name", &PlayActionState::name)
+            .field("type", &PlayActionState::type)
+            .field("down", &PlayActionState::down)
+            .field("pressed", &PlayActionState::pressed)
+            .field("released", &PlayActionState::released)
+            .field("value", &PlayActionState::value);
+        reflectStruct<InputReadResult>("editor.InputReadResult", 1, structs)
+            .field("actions", &InputReadResult::actions);
         reflectPreferences(structs);
     });
 }
@@ -770,6 +866,8 @@ void registerCoreCommands(CommandRegistry& registry)
     detail::registerLogCommands(registry);
     detail::registerSettingsCommands(registry);
     detail::registerUiCommands(registry);
+    detail::registerPlayCommands(registry);
+    detail::registerInputCommands(registry);
 }
 
 namespace detail

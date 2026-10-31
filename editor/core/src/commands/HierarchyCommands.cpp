@@ -61,7 +61,7 @@ Expected<EntitiesResult, CommandError> hierarchyChildren(CommandContext& context
         parent = *resolved;
     }
     std::vector<Entity> entities;
-    context.editor().entities().children(parent, entities);
+    context.index().children(parent, entities);
     EntitiesResult result;
     for (const Entity child : entities)
     {
@@ -85,6 +85,7 @@ void registerHierarchyCommands(CommandRegistry& registry)
         .category = "Hierarchy",
         .icon = "subdirectory_arrow_right",
         .flags = {.idempotent = true, .undoable = true},
+        .mode = CommandMode::Any,
         .permission = PermissionClass::Edit,
     });
     registry.add<&hierarchyReorder>({
@@ -97,6 +98,7 @@ void registerHierarchyCommands(CommandRegistry& registry)
         .category = "Hierarchy",
         .icon = "swap_vert",
         .flags = {.idempotent = true, .undoable = true},
+        .mode = CommandMode::Any,
         .permission = PermissionClass::Edit,
     });
     registry.add<&hierarchyChildren>({

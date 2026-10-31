@@ -8,7 +8,7 @@ namespace
 SelectionResult selectionResult(CommandContext& context)
 {
     SelectionResult result;
-    EntityIndex& index = context.editor().entities();
+    EntityIndex& index = context.index();
     for (const EntityGuid guid : context.editor().selection().items())
     {
         if (const Entity entity = index.find(guid); !entity.isNull())
@@ -31,7 +31,7 @@ Expected<std::vector<EntityGuid>, CommandError> resolveGuids(CommandContext& con
     std::vector<EntityGuid> guids;
     for (const Entity entity : entities)
     {
-        guids.push_back(context.editor().entities().guidOf(entity));
+        guids.push_back(context.index().guidOf(entity));
     }
     return guids;
 }

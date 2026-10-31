@@ -93,13 +93,13 @@ constexpr UiAction kActions[] = {
      .title = s::kActionAssetsImport, .icon = "download", .milestone = "M7u"},
     // Play
     {.id = "play.play", .command = "play.start", .menu = UiMenu::Play, .title = s::kToolPlay,
-     .icon = "play_arrow", .shortcut = "F5", .milestone = "M7r"},
+     .icon = "play_arrow", .shortcut = "F5"},
     {.id = "play.pause", .command = "play.pause", .menu = UiMenu::Play, .title = s::kToolPause,
-     .icon = "pause", .shortcut = "F6", .milestone = "M7r"},
+     .icon = "pause", .shortcut = "F6"},
     {.id = "play.step", .command = "play.step", .menu = UiMenu::Play, .title = s::kToolStep,
-     .icon = "skip_next", .shortcut = "F7", .milestone = "M7r"},
-    {.id = "play.simulate", .command = "play.simulate", .menu = UiMenu::Play, .title = s::kActionPlaySimulate,
-     .icon = "science", .shortcut = "Shift+F5", .milestone = "M7r"},
+     .icon = "skip_next", .shortcut = "F7"},
+    {.id = "play.simulate", .command = "play.start", .params = R"({"mode":"simulate"})", .menu = UiMenu::Play,
+     .title = s::kActionPlaySimulate, .icon = "science", .shortcut = "Shift+F5"},
     // Modules
     {.id = "modules.build", .command = "module.build", .menu = UiMenu::Modules, .title = s::kActionModulesBuild,
      .icon = "build", .shortcut = "Ctrl+B", .milestone = "M7s"},

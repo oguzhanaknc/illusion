@@ -359,6 +359,7 @@ void registerComponentCommands(CommandRegistry& registry)
         .category = "Component",
         .icon = "content_copy",
         .flags = {.idempotent = true},
+        .mode = CommandMode::Any,
         .permission = PermissionClass::Edit,
     });
     registry.add<&componentPaste>({
@@ -371,6 +372,7 @@ void registerComponentCommands(CommandRegistry& registry)
         .category = "Component",
         .icon = "content_paste",
         .flags = {.undoable = true},
+        .mode = CommandMode::Any,
         .permission = PermissionClass::Edit,
     });
     registry.add<&componentTypes>({
@@ -407,6 +409,7 @@ void registerComponentCommands(CommandRegistry& registry)
         .category = "Component",
         .icon = "add",
         .flags = {.undoable = true},
+        .mode = CommandMode::Any,
         .permission = PermissionClass::Edit,
     });
     registry.add<&componentRemove>({
@@ -418,6 +421,7 @@ void registerComponentCommands(CommandRegistry& registry)
         .category = "Component",
         .icon = "remove",
         .flags = {.destructive = true, .undoable = true},
+        .mode = CommandMode::Any,
         .permission = PermissionClass::Edit,
     });
     registry.add<&componentGet>({
@@ -442,6 +446,7 @@ void registerComponentCommands(CommandRegistry& registry)
         .category = "Component",
         .icon = "tune",
         .flags = {.idempotent = true, .undoable = true},
+        .mode = CommandMode::Any,
         .permission = PermissionClass::Edit,
     });
     registry.add<&componentSetField>({
@@ -454,6 +459,7 @@ void registerComponentCommands(CommandRegistry& registry)
         .category = "Component",
         .icon = "tune",
         .flags = {.idempotent = true, .undoable = true},
+        .mode = CommandMode::Any,
         .permission = PermissionClass::Edit,
     });
     registry.add<&componentReset>({
@@ -466,6 +472,7 @@ void registerComponentCommands(CommandRegistry& registry)
         .category = "Component",
         .icon = "restart_alt",
         .flags = {.idempotent = true, .undoable = true},
+        .mode = CommandMode::Any,
         .permission = PermissionClass::Edit,
     });
 }

@@ -10,7 +10,7 @@ namespace
 ViewStateResult viewResult(CommandContext& context)
 {
     ViewStateResult result;
-    EntityIndex& index = context.editor().entities();
+    EntityIndex& index = context.index();
     const ViewState& view = context.editor().view();
     for (const EntityGuid guid : view.hiddenEntities())
     {
@@ -49,7 +49,7 @@ Expected<ViewStateResult, CommandError> viewSetEntities(CommandContext& context,
     {
         return viewResult(context);
     }
-    EntityIndex& index = context.editor().entities();
+    EntityIndex& index = context.index();
     ViewState& view = context.editor().view();
     const auto apply = [&](Entity entity) {
         const EntityGuid guid = index.guidOf(entity);

@@ -279,6 +279,31 @@ viewport frame (main thread)
 
 Kılavuz [Scene viewport'unu](../manual/editor/viewport.md) anlatır.
 
+## Play modu
+
+Play modu aynı ayrımı izler (ADR 0042). Çekirdek `PlayHost`'u (`PlayHost.hpp`) tanımlar: başlatma, durdurma,
+duraklatma, adımlar, zaman ölçeği, girdi enjeksiyonu, eylem durumları, modüller ve düzenleme kancaları.
+`illusion::editor_play` bunu, editör sürecinin `EditorContext::setPlay()` ile kaydettiği `PlaySession` ile
+uygular; o olmadan `play.*`, `input.inject`, `input.read` ve `module.*` komutları `unsupported` (1400) ile
+başarısız olur ve çekirdek testleri sahte bir host kullanır.
+
+- `PlaySession::start()` edit World'ü `sceneJson()` ile yazar (bellekte, kimlikler korunarak), yeni bir
+  `GameSession`'ın World'üne yükler ve `EditorContext::attachPlayWorld()`'ü çağırır. Editörün `ModuleHost`'u
+  `PlaySession`'a aittir; edit World ona `WorldRole::Edit` olarak, her play World ise kendi `GameSession`'ı
+  tarafından `WorldRole::Simulation` olarak bağlanır.
+- Bir play World bağlıyken `CommandMode::Any` komutları, parametreleri `"world": "edit"` demedikçe onun
+  üzerinde çalışır: `CommandContext::world()`, `edit()` ve `index()` play World'ü, onun kendi `WorldEditor`'ünü
+  ve `EntityIndex`'ini döndürür. İşlemleri uygulanır, `PlayHost::playWorldEdited()`'e verilir (fizik
+  gövdelerini yeniden kurar ve sesleri yeniden başlatır) ve atılır: geri alma adımı, günlük kaydı ya da kirli
+  sahne yoktur. `CommandMode::Edit` komutları edit World üzerinde çalışmayı sürdürür, `CommandMode::Play`
+  komutları ise bir oturum gerektirir.
+- Play World'ün dizini tembelce yeniden kurulur: `PlaySession::update()` ve `step()` onu eskimiş olarak
+  işaretler ve bir Entity çözen bir sonraki komut onu yeniden kurar.
+- `play.keep_changes` play World'ü `EditorContext::playEditor()` üzerinden okur ve edit World'e komutun kendi
+  transaction'ı üzerinden yazar; bu yüzden tek bir geri alma adımıdır.
+
+Kılavuz [Play modunu](../manual/editor/play-mode.md) anlatır.
+
 ## MCP köprüsü
 
 `illusion_mcp`, bir MCP istemcisi ile editör arasında duran ayrı bir süreçtir

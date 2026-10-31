@@ -275,6 +275,30 @@ viewport frame (main thread)
 
 The manual describes [the Scene viewport](../manual/editor/viewport.md).
 
+## Play mode
+
+Play mode follows the same split (ADR 0042). The core defines `PlayHost` (`PlayHost.hpp`): start, stop, pause,
+steps, time scale, input injection, action states, modules and the edit hooks. `illusion::editor_play`
+implements it with `PlaySession`, which the editor process registers with `EditorContext::setPlay()`; without
+it the `play.*`, `input.inject`, `input.read` and `module.*` commands fail with `unsupported` (1400), and the
+core tests use a fake host.
+
+- `PlaySession::start()` writes the edit World with `sceneJson()` (in memory, ids kept), loads it into the
+  World of a new `GameSession` and calls `EditorContext::attachPlayWorld()`. The editor's `ModuleHost` belongs
+  to the `PlaySession`; the edit World is attached to it as `WorldRole::Edit`, each play World as
+  `WorldRole::Simulation` by its `GameSession`.
+- While a play World is attached, `CommandMode::Any` commands run on it unless their params say
+  `"world": "edit"`: `CommandContext::world()`, `edit()` and `index()` return the play World, its own
+  `WorldEditor` and `EntityIndex`. Their operations are applied, passed to `PlayHost::playWorldEdited()` (which
+  rebuilds physics bodies and restarts sounds) and dropped: no undo step, journal entry or dirty scene.
+  `CommandMode::Edit` commands keep acting on the edit World and `CommandMode::Play` commands need a session.
+- The play World's index is rebuilt lazily: `PlaySession::update()` and `step()` mark it stale, and the next
+  command that resolves an entity rebuilds it.
+- `play.keep_changes` reads the play World through `EditorContext::playEditor()` and writes the edit World
+  through the command's own transaction, so it is one undo step.
+
+The manual describes [Play mode](../manual/editor/play-mode.md).
+
 ## The MCP bridge
 
 `illusion_mcp` is a separate process between an MCP client and the editor

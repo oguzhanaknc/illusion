@@ -313,11 +313,17 @@ std::string toolDescription(const CommandSpec& command)
         const JsonValue required = schema->root().find("required");
         std::string params;
         bool common = false;
+        bool world = false;
         for (const JsonMember member : schema->root().find("properties").members())
         {
             if (isCommonOption(member.key))
             {
                 common = true;
+                continue;
+            }
+            if (member.key == "world")
+            {
+                world = true;
                 continue;
             }
             bool isRequired = false;
@@ -341,6 +347,12 @@ std::string toolDescription(const CommandSpec& command)
         if (common)
         {
             text += "\n\nAlso takes dryRun (validate only), mergeKey, clientToken and expectRevision.";
+        }
+        if (world)
+        {
+            text +=
+                "\n\nWhile a play session runs it acts on the play World; pass world: \"edit\" for the edit "
+                "World.";
         }
     }
     text += "\n\nPermission: " + command.permission + ".";

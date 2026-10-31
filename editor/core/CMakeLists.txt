@@ -33,8 +33,10 @@ illusion_add_editor_library(illusion_editor_core STATIC
     src/commands/GizmoCommands.cpp
     src/commands/HierarchyCommands.cpp
     src/commands/HistoryCommands.cpp
+    src/commands/InputCommands.cpp
     src/commands/LogCommands.cpp
     src/commands/MaterialCommands.cpp
+    src/commands/PlayCommands.cpp
     src/commands/ProjectCommands.cpp
     src/commands/SceneCommands.cpp
     src/commands/SelectionCommands.cpp
@@ -50,6 +52,6 @@ target_include_directories(illusion_editor_core PUBLIC
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>)
 target_link_libraries(illusion_editor_core PUBLIC
     illusion::core illusion::platform illusion::text illusion::editor_strings
-    PRIVATE illusion::assets)
+    PRIVATE illusion::assets illusion::input)
 
 illusion_configure_target(illusion_editor_core)
