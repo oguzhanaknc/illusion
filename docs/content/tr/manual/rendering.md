@@ -174,6 +174,49 @@ resolver.update(world, &jobs);
   `RenderMesh`'i doğrudan yazar (`sourceKey` 0 ile); resolver ona dokunmaz. `RenderMesh` kaydedilmez.
 - Önbellek her Asset'i renderer'lar ve World'ler arasında paylaşır (tek Mesh'in 100 renderer'ı onu bir
   kez yükler) ve her Asset'i kullanan resolver'ları sayar (`references()`).
+- **Canlı yeniden yükleme.** `AssetStreamer::reload(path)` ([Streaming](assets.md#degisen-dosyalar-yeniden-yukleme)
+  bölümüne bakın), önbelleğin o dosyadan üretilen her Asset'i yeniden yüklemesini sağlar. Yenisi GPU'ya
+  gelene kadar önceki sürüm çizilmeye devam eder; yeni dosya yüklenemezse önceki sürüm kalır (`error()`
+  nedenini söyler). Bir `.material` dosyası yerinde değişir; Mesh'ler, modeller ve ortamlar yeni Handle'lar
+  alır ve her resolver bir sonraki `update()` çağrısında renderer'larını yeniden çözümler. Yüklenemeyen bir
+  Asset, dosyası yeniden yüklenince tekrar yüklenir.
+- **Bellekten çıkarma.** `RenderAssetResolver::releaseUnused(world)`, World'deki hiçbir renderer'ın artık
+  başvurmadığı Asset'leri kullanmayı bırakır; `RenderAssetCache::evictUnused()` de hiçbir resolver'ın
+  kullanmadığı Asset'lerin (ve yalnızca onların kullandığı model ve Texture'ların) GPU kaynaklarını
+  serbest bırakır. İkisi de her şeyi dolaşır: her karede değil, başka bir sahne yüklendikten sonra gibi
+  Asset'lerin gitmiş olabileceği anlarda çağırın.
+
+### Kaynak ömrü
+
+`RenderResources`, serbest bırakılması istenen kaynakları serbest bırakır. Handle'lar slotlarının nesil
+sayısını taşır; bu yüzden serbest bırakılan bir Handle hemen geçersizleşir: renderer'lar onu atlar,
+`isValid()` false döndürür ve onu yeniden serbest bırakmak ya da güncellemek assert'e takılır. Bellek
+ancak GPU, serbest bırakmadan önce gönderilen kareleri bitirdikten sonra yeniden kullanılır: `collect()`
+(oluşturma fonksiyonları ve `RenderAssetCache::update()` tarafından çağrılır) GPU'nun artık kullanmadığı
+kaynakları serbest bırakır. Mesh'ler ortak vertex ve index havuzlarında yaşar; serbest kalan aralıklar
+yeniden kullanılır, böylece bir modeli tekrar tekrar içe aktarmak havuzları aynı boyutta tutar.
+
+```cpp
+const illusion::MeshHandle mesh = resources.createMesh(illusion::makeCube());
+resources.releaseMesh(mesh);           // stale at once: draws nothing, cannot be released again
+ILL_ASSERT(!resources.isValid(mesh));
+resources.collect();                   // once per frame: frees what the GPU no longer uses
+
+illusion::MaterialDesc paint;
+paint.parameters.baseColorFactor = illusion::Vec4(0.9f, 0.2f, 0.1f, 1.0f);
+const illusion::MaterialHandle material = resources.createMaterial(paint);
+paint.parameters.roughnessFactor = 0.2f;
+resources.updateMaterial(material, paint); // same handle, no new binding set
+```
+
+- `releaseMesh()`, `releaseTexture()`, `releaseMaterial()`, `releaseEnvironment()` ve `releaseModel()` boş
+  Handle'ları yok sayar. Varsayılan Material ve Texture'lar serbest bırakılamaz.
+- `updateMaterial()`, bir Material'in katsayılarını ve Texture'larını aynı Handle altında yeniden yazar.
+  Yeni bir binding set'i yalnızca bir Texture ya da sarma (wrapping) değiştiğinde oluşturur; bu yüzden
+  katsayıları her karede düzenlemek ucuzdur. Bir Texture'ı serbest bırakmadan önce onu kullanan
+  Material'leri güncelleyin ya da serbest bırakın.
+- `statistics()`, havuzların kullanımını ve kapasitesini, serbest aralıklarını ve kaç serbest bırakılmış
+  kaynağın hâlâ GPU'yu beklediğini bildirir.
 
 ### Material'ler ve gölgelendirme
 

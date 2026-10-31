@@ -54,3 +54,49 @@ ILL_BENCHMARK("render/asset-resolve-steady", 5.0)
     }
     device->waitIdle();
 }
+
+ILL_BENCHMARK("render/asset-cache-steady", 50.0)
+{
+    // The per-frame cost of a cache with nothing to load or reload: RenderResources::collect() included.
+    RenderDeviceDesc desc;
+    desc.headless = true;
+    desc.validation = ValidationMode::Disabled;
+    const std::unique_ptr<RenderDevice> device = RenderDevice::create(desc);
+    ILL_CHECK(device != nullptr, "the GPU benchmarks need a Vulkan 1.3 device");
+    {
+        JobSystem jobs;
+        VirtualFileSystem files;
+        AssetStreamer streamer(files, jobs, AssetStreamerDesc{.cacheMount = ""});
+        RenderResources resources(*device);
+        RenderAssetCache cache(resources, streamer);
+        RenderAssetResolver resolver(cache);
+        World world;
+        world.create(Transform{}, MeshRenderer{.mesh = AssetRef("builtin:/mesh/cube")});
+        resolver.waitIdle(world, &jobs);
+        bench.unit("update").minEpochIterations(10'000).run("RenderAssetCache::update with nothing to do",
+                                                            [&] { cache.update(); });
+    }
+    device->waitIdle();
+}
+
+ILL_BENCHMARK("render/update-material", 500'000.0)
+{
+    // Live material editing: one updateMaterial() per frame with new factors (no new binding set).
+    RenderDeviceDesc desc;
+    desc.headless = true;
+    desc.validation = ValidationMode::Disabled;
+    const std::unique_ptr<RenderDevice> device = RenderDevice::create(desc);
+    ILL_CHECK(device != nullptr, "the GPU benchmarks need a Vulkan 1.3 device");
+    {
+        RenderResources resources(*device);
+        MaterialDesc material;
+        const MaterialHandle handle = resources.createMaterial(material);
+        f32 roughness = 0.0f;
+        bench.unit("update").minEpochIterations(200).run("RenderResources::updateMaterial", [&] {
+            roughness = roughness >= 1.0f ? 0.0f : roughness + 0.01f;
+            material.parameters.roughnessFactor = roughness;
+            resources.updateMaterial(handle, material);
+        });
+    }
+    device->waitIdle();
+}

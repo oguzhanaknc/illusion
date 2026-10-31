@@ -70,3 +70,59 @@ Options considered for change detection:
   polling backend and explicit stamps.
 - The Polling backend walks the whole tree per poll; the editor rate-limits it through
   `assetPollInterval`.
+
+## Addendum: live reload and GPU resource lifetime (M7u-2, 2026-11-01)
+
+### Context
+
+Reloading an asset while the editor runs means freeing the GPU resources of the old version, but
+`RenderResources` could only create: handles were plain indices, geometry was appended to the pools, and
+the material table and bindless texture table only grew. A reimport therefore leaked a mesh, its textures
+and its materials every time, and nothing told the `RenderAssetCache` that a file had changed.
+
+### Decision
+
+- **Generation-checked handles.** `MeshHandle`, `TextureHandle`, `MaterialHandle` and `EnvironmentHandle`
+  carry the generation of their slot. Releasing bumps it, so a released handle is stale at once:
+  renderers skip it (`mesh()` returns null, `material()` the default material, `environment()` the black
+  environment), `isValid()` is false, and releasing or updating it again asserts. The first use of a slot
+  has generation 0, so `MeshHandle{3}` written by older code still names the first resource in slot 3.
+- **Release deferred until the GPU is done**, not by a fixed number of frames: `release*()` moves the
+  resource to a batch, `collect()` closes the batch with an NVRHI event query and frees the batches the GPU
+  has reached. `RenderResources` has no frame counter and is used with and without swapchains (tools,
+  tests, offscreen editor views), and an event query is exact where "frames in flight" is a guess. The
+  create functions and `RenderAssetCache::update()` call `collect()`.
+- **Free ranges in the geometry pools** through `RangeAllocator` (core): first fit, merging neighbours,
+  shrinking the end. Freed texture slots point at the default white texture before reuse, so the bindless
+  table never holds a destroyed view. An environment slot that changes owner bumps `generation()`, because
+  renderers cache binding sets per environment slot.
+- **`updateMaterial()`** rewrites the constants and the material table record under the same handle and
+  makes a new binding set only when a texture or the sampler changed. Material files reload in place
+  through it, so resolvers do not need to touch their renderers.
+- **Live reload through the streamer.** `AssetStreamer::invalidate(path)` forgets the requests for a file
+  (any import settings or decoder); `reload(path)` also publishes `AssetReloadedEvent` on the streamer's
+  `EventBus`. The `RenderAssetCache` queues the event and, in its next `update()`, loads again every model,
+  texture, material file and environment made from the file. A Ready asset keeps its GPU data until the
+  new data is uploaded and keeps it when the reload fails (the error is recorded); a Failed asset loads
+  again. A change that arrives while a load runs reloads once more when it ends. When handles that
+  resolvers wrote change (new model, environment, a failed asset now loading, an eviction), the cache's
+  epoch increases and every `RenderAssetResolver` resolves all its renderers again on its next update; the
+  steady-state check stays the per-renderer key comparison.
+- **Eviction.** Resolvers count the assets they use; `RenderAssetResolver::releaseUnused(world)` drops the
+  ones no renderer refers to any more and `RenderAssetCache::evictUnused()` frees assets with no resolver,
+  then models and textures no remaining asset uses. Both walk everything and run on events, not per frame.
+- **Editor.** `ViewportService` listens to `asset.changed`, reloads each file and its catalog referrers
+  (`AssetCatalog::referrers()`: the glTF file of a buffer or image) on the next frame, then releases and
+  evicts unused assets; it also evicts when a play session stops.
+- **Split.** Import settings sidecars, `asset.reimport` and `asset.set_import_settings` follow in M7u-3,
+  then the environment bake cache, thumbnails and the asset browser.
+
+### Consequences
+
+- Handles are 8 bytes instead of 4; `RenderMesh` grows by 8 bytes (runtime state, never saved).
+- Code that keeps handles outside the ECS must expect them to go stale after a reload and re-read them from
+  the cache's resolvers; `isValid()` makes the check cheap.
+- `PhysicsAssetResolver` and `AudioWorld` do not listen to `AssetReloadedEvent` yet; reloading collision
+  meshes and audio clips is left to a later milestone (tracked in ROADMAP).
+- Reload of a glTF model depends on the caller knowing its dependencies (the editor's catalog); a game that
+  reloads at run time must reload the model file itself.

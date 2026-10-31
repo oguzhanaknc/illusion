@@ -24,6 +24,12 @@
 /// Renderers whose assets are still loading keep what they drew before (nothing for new ones). A mesh that
 /// fails to load draws nothing; a material that fails draws with the default material. See
 /// docs/adr/0035-asset-references.md.
+///
+/// Live reload: AssetStreamer::reload() of a file makes the cache load every asset made from it again. The
+/// previous version stays on the GPU until the new one is there (and stays if the reload fails); material
+/// files change in place through RenderResources::updateMaterial(), other assets get new handles and every
+/// resolver resolves its renderers again. Assets no resolver uses are freed by evictUnused(). See
+/// docs/adr/0045-asset-catalog-and-file-watching.md.
 
 #include <illusion/core/AssetId.hpp>
 #include <illusion/core/Base.hpp>
@@ -56,8 +62,10 @@ struct RenderAssetCacheStatistics
     u32 materials = 0;    ///< Material assets ready.
     u32 textures = 0;     ///< Textures of material files on the GPU.
     u32 environments = 0; ///< Environments baked.
-    u32 loading = 0;      ///< Assets still loading.
+    u32 loading = 0;      ///< Assets still loading (first loads, reloads and files waiting to reload).
     u32 failed = 0;       ///< Assets that failed to load (see RenderAssetCache::error()).
+    u32 reloads = 0;      ///< Reloads finished since construction (see AssetStreamer::reload()).
+    u32 evicted = 0;      ///< Assets freed by RenderAssetCache::evictUnused() since construction.
 };
 
 /// The assets loaded for the renderer, shared by the RenderAssetResolvers of several Worlds. Assets are
@@ -72,9 +80,16 @@ public:
                      const RenderAssetCacheDesc& desc = {});
     ~RenderAssetCache();
 
-    /// Uploads loaded models within the byte budget and finishes materials and environments whose files
-    /// are loaded. Call once per frame after AssetStreamer::update().
+    /// Starts the reloads asked for by AssetStreamer::reload() since the last call, uploads loaded models
+    /// within the byte budget, finishes materials and environments whose files are loaded and lets
+    /// RenderResources free what was released (RenderResources::collect()). Call once per frame after
+    /// AssetStreamer::update().
     void update();
+
+    /// Frees the GPU resources of assets no resolver uses (see RenderAssetResolver::releaseUnused()), and of
+    /// models and textures only those assets used. Assets still loading are kept. Returns the number of
+    /// assets freed; requesting one again loads it again.
+    u32 evictUnused();
 
     /// Updates the streamer and the cache until no asset is loading (for loading screens, tools, tests).
     void waitIdle();
@@ -86,6 +101,7 @@ public:
     [[nodiscard]] RenderAssetCacheStatistics statistics() const noexcept;
 
     /// Number of resolvers that use the mesh, material or environment asset @p asset (0 if none or unknown).
+    /// A resolver uses an asset from its first request until releaseUnused() finds no renderer with it.
     [[nodiscard]] u32 references(AssetId asset) const noexcept;
 
     /// Why @p asset failed to load (empty if it did not fail or is unknown).
@@ -103,9 +119,10 @@ private:
 /// Counters of a RenderAssetResolver.
 struct RenderAssetResolverStatistics
 {
-    u32 resolved = 0; ///< Renderers and sky lights (re)resolved by the last update().
-    u32 pending = 0;  ///< Renderers and sky lights waiting for assets after the last update().
-    u32 failures = 0; ///< Renderers and sky lights resolved with an asset that failed, since construction.
+    u32 resolved = 0;   ///< Renderers and sky lights (re)resolved by the last update().
+    u32 reresolves = 0; ///< update() calls that resolved everything again after a reload, since construction.
+    u32 pending = 0;    ///< Renderers and sky lights waiting for assets after the last update().
+    u32 failures = 0;   ///< Renderers and sky lights resolved with an asset that failed, since construction.
 };
 
 /// Keeps the RenderMesh and RenderSky Components of one World in step with its MeshRenderer and SkyLight
@@ -128,6 +145,12 @@ public:
 
     /// Calls update() and RenderAssetCache::waitIdle() until nothing in @p world waits for assets.
     void waitIdle(World& world, JobSystem* jobs = nullptr);
+
+    /// Stops using the assets no MeshRenderer or SkyLight of @p world refers to any more, so that
+    /// RenderAssetCache::evictUnused() can free them. Walks every renderer: call it when assets may have
+    /// gone (a scene was replaced, a play session ended), not every frame. Returns the number of assets
+    /// released.
+    u32 releaseUnused(World& world);
 
     /// Counters.
     [[nodiscard]] const RenderAssetResolverStatistics& statistics() const noexcept;

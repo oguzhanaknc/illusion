@@ -9,6 +9,7 @@
 #include <illusion/core/Assert.hpp>
 #include <illusion/core/AssetState.hpp>
 #include <illusion/core/Base.hpp>
+#include <illusion/core/EventBus.hpp>
 
 #include <cstddef>
 #include <functional>
@@ -102,6 +103,14 @@ private:
 template <class T>
 using AssetFileDecoder = std::function<std::optional<T>(std::vector<std::byte>&& bytes, std::string& error)>;
 
+/// A file changed and was reloaded through AssetStreamer::reload(): caches that made assets from it request
+/// them again (published on AssetStreamer::events()).
+struct AssetReloadedEvent
+{
+    std::string path; ///< Normalized virtual path of the file.
+    AssetId asset;    ///< Id of the file (AssetId::fromPath(path)).
+};
+
 /// Creation parameters of an AssetStreamer.
 struct AssetStreamerDesc
 {
@@ -150,6 +159,19 @@ public:
             });
         return AssetHandle<T>(std::static_pointer_cast<detail::AssetSlot<T>>(std::move(slot)));
     }
+
+    /// Forgets the requests for the file @p virtualPath, whatever their import settings or decoder, so the
+    /// next request reads the file again (and reimports it when the import cache is stale). Handles given
+    /// out before keep their data. Returns the number of requests forgotten.
+    u32 invalidate(std::string_view virtualPath);
+
+    /// Calls invalidate() and publishes an AssetReloadedEvent on events(), so that caches holding assets made
+    /// from the file request them again. Call it when a file changed on disk; the editor does it for every
+    /// file in its `asset.changed` event. Returns false (and publishes nothing) for an invalid path.
+    bool reload(std::string_view virtualPath);
+
+    /// The streamer's events (AssetReloadedEvent), published on the thread that calls reload().
+    [[nodiscard]] EventBus& events() noexcept;
 
     /// Publishes finished loads (their handles become Ready or Failed). Call once per frame. Returns the
     /// number of loads published.

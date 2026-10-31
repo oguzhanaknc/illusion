@@ -1,8 +1,10 @@
 #include <illusion/core/Memory.hpp>
 
 #include <algorithm>
+#include <cstddef>
 #include <cstdlib>
 #include <cstring>
+#include <iterator>
 
 namespace illusion
 {
@@ -167,6 +169,76 @@ void PoolAllocator::reserve(usize blockCount)
     {
         ILL_CHECK(addPage(), "PoolAllocator: out of memory");
     }
+}
+
+u32 RangeAllocator::allocate(u32 count)
+{
+    ILL_ASSERT(count > 0, "RangeAllocator: empty range");
+    for (usize i = 0; i < m_free.size(); ++i)
+    {
+        Range& range = m_free[i];
+        if (range.count < count)
+        {
+            continue;
+        }
+        const u32 offset = range.offset;
+        range.offset += count;
+        range.count -= count;
+        if (range.count == 0)
+        {
+            m_free.erase(m_free.begin() + static_cast<std::ptrdiff_t>(i));
+        }
+        m_allocated += count;
+        return offset;
+    }
+    ILL_CHECK(count <= ~u32{0} - m_end, "RangeAllocator: out of address space");
+    const u32 offset = m_end;
+    m_end += count;
+    m_allocated += count;
+    return offset;
+}
+
+void RangeAllocator::free(u32 offset, u32 count)
+{
+    ILL_ASSERT(count > 0 && count <= m_allocated && offset <= m_end && count <= m_end - offset,
+               "RangeAllocator: the range was not allocated");
+    const auto next = std::lower_bound(m_free.begin(), m_free.end(), offset,
+                                       [](const Range& range, u32 value) { return range.offset < value; });
+    ILL_ASSERT(next == m_free.end() || offset + count <= next->offset, "RangeAllocator: double free");
+    ILL_ASSERT(next == m_free.begin() || std::prev(next)->offset + std::prev(next)->count <= offset,
+               "RangeAllocator: double free");
+    m_allocated -= count;
+    Range freed{offset, count};
+    auto at = next;
+    if (at != m_free.end() && freed.offset + freed.count == at->offset)
+    {
+        freed.count += at->count;
+        at = m_free.erase(at);
+    }
+    if (at != m_free.begin() && std::prev(at)->offset + std::prev(at)->count == freed.offset)
+    {
+        Range& previous = *std::prev(at);
+        previous.count += freed.count;
+        if (previous.offset + previous.count == m_end)
+        {
+            m_end = previous.offset;
+            m_free.erase(std::prev(at));
+        }
+        return;
+    }
+    if (freed.offset + freed.count == m_end)
+    {
+        m_end = freed.offset;
+        return;
+    }
+    m_free.insert(at, freed);
+}
+
+void RangeAllocator::reset() noexcept
+{
+    m_free.clear();
+    m_end = 0;
+    m_allocated = 0;
 }
 
 } // namespace illusion

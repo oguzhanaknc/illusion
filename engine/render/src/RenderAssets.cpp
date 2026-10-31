@@ -3,6 +3,7 @@
 #include <illusion/assets/MaterialAsset.hpp>
 #include <illusion/assets/Mesh.hpp>
 #include <illusion/core/AssetRef.hpp>
+#include <illusion/core/EventBus.hpp>
 #include <illusion/core/Hash.hpp>
 #include <illusion/core/Log.hpp>
 #include <illusion/core/Profiler.hpp>
@@ -13,6 +14,7 @@
 #include <illusion/render/SceneComponents.hpp>
 #include <illusion/render/UploadQueue.hpp>
 
+#include <algorithm>
 #include <array>
 #include <atomic>
 #include <format>
@@ -37,10 +39,20 @@ enum class Status : u8
 constexpr std::string_view kProceduralSky = "builtin:/sky/procedural";
 constexpr std::string_view kDefaultMaterial = "builtin:/material/default";
 
+// Entries being reloaded keep their status: a Ready entry keeps its GPU data until the new data is on the GPU
+// (and keeps it if the reload fails); a Failed one is Loading again until the reload ends.
+struct Reload
+{
+    bool active = false; // a reload is loading
+    bool again = false;  // the file changed again while it loaded: reload once more when it ends
+};
+
 // A glTF model on the GPU. Only what meshes and materials of the model need is kept after the upload.
 struct ModelEntry
 {
     Status status = Status::Loading;
+    Reload reload;
+    std::string file;                          // the glTF file (its id may have no recorded path)
     AssetHandle<ModelData> model;              // until uploaded
     std::shared_ptr<const ModelUpload> upload; // until uploaded
     ModelHandles handles;
@@ -64,19 +76,24 @@ struct MeshEntry
 struct TextureEntry
 {
     Status status = Status::Loading;
+    Reload reload;
     AssetHandle<Image> image; // until uploaded
     TextureHandle handle;
     AssetId asset;
+    bool srgb = true;
 };
 
 struct MaterialEntry
 {
     Status status = Status::Loading;
+    Reload reload;
     u64 model = 0; // ModelEntry key of a `#material/N` reference
     u32 index = 0;
-    AssetHandle<MaterialAsset> file; // a .material file, until created
+    bool fromFile = false;           // a .material file (owns its GPU material)
+    AssetHandle<MaterialAsset> file; // until created
     bool texturesRequested = false;
     std::array<u64, 5> textures{}; // TextureEntry keys; 0 for none
+    MaterialDesc desc;             // of a .material file, kept for updateMaterial()
     MaterialHandle handle;
     u32 references = 0;
 };
@@ -84,6 +101,7 @@ struct MaterialEntry
 struct EnvironmentEntry
 {
     Status status = Status::Loading;
+    Reload reload;
     AssetId asset;
     AssetHandle<Image> image; // until baked
     EnvironmentHandle handle;
@@ -126,6 +144,24 @@ void advanceAll(std::vector<u64>& loading, Advance advance)
     }
 }
 
+// The texture field of @p desc for texture @p slot of materialTextureUses().
+TextureHandle& materialTexture(MaterialDesc& desc, usize slot) noexcept
+{
+    switch (slot)
+    {
+    case 0:
+        return desc.baseColor;
+    case 1:
+        return desc.metallicRoughness;
+    case 2:
+        return desc.normal;
+    case 3:
+        return desc.occlusion;
+    default:
+        return desc.emissive;
+    }
+}
+
 u64 skyKey(AssetId environment, const ProceduralSky* sky) noexcept
 {
     const u64 parameters =
@@ -144,7 +180,12 @@ struct RenderAssetCache::Impl
         , desc(cacheDesc)
         , uploads(gpuResources)
     {
+        reloaded = streamer->events().subscribe<AssetReloadedEvent>(
+            [this](const AssetReloadedEvent& event) { reloads.push_back(event.asset); });
     }
+
+    Impl(const Impl&) = delete;
+    Impl& operator=(const Impl&) = delete;
 
     RenderResources* resources;
     AssetStreamer* streamer;
@@ -161,6 +202,13 @@ struct RenderAssetCache::Impl
     std::vector<u64> loadingMeshes;
     std::vector<u64> loadingMaterials;
     std::vector<u64> loadingEnvironments;
+    std::vector<AssetId> reloads; // files reloaded since the last update()
+    Subscription reloaded;
+    // Increments when handles that resolvers wrote into RenderMesh or RenderSky change, or when an asset
+    // that failed is loading again: resolvers then resolve every renderer again.
+    u64 epoch = 0;
+    u32 reloadsDone = 0;
+    u32 evicted = 0;
 
     void fail(Status& status, AssetId asset, std::string message)
     {
@@ -177,6 +225,7 @@ struct RenderAssetCache::Impl
         const auto [entry, inserted] = models.try_emplace(key);
         if (inserted)
         {
+            entry->second.file = file;
             entry->second.model = streamer->loadModel(file);
             entry->second.upload = uploads.upload(entry->second.model);
             loadingModels.push_back(key);
@@ -184,20 +233,37 @@ struct RenderAssetCache::Impl
         return key;
     }
 
+    // A load that ended without data: a reload of a Ready entry keeps the previous version.
+    void failReload(Status& status, bool replacing, AssetId asset, std::string message)
+    {
+        if (!replacing)
+        {
+            fail(status, asset, std::move(message));
+            return;
+        }
+        ILL_LOG_WARN("Render", "cannot reload asset '{}', keeping the previous version: {}",
+                     AssetPathTable::instance().path(asset), message);
+        errors.insert_or_assign(asset.value, std::move(message));
+    }
+
     bool advanceModel(u64 key)
     {
         ModelEntry& entry = models.at(key);
+        const bool replacing = entry.reload.active && entry.status == Status::Ready;
         if (entry.upload->failed)
         {
-            entry.status = Status::Failed;
-            entry.error =
-                entry.model.error().empty() ? std::string("the upload failed") : entry.model.error();
+            failReload(entry.status, replacing, AssetId{key},
+                       entry.model.error().empty() ? std::string("the upload failed") : entry.model.error());
+            if (!replacing)
+            {
+                entry.error = errors.at(key);
+            }
         }
         else if (entry.upload->uploaded)
         {
             const ModelData& model = entry.model.value();
-            entry.handles = entry.upload->handles;
-            entry.submeshMaterials.resize(model.meshes.size());
+            ModelHandles previous = std::exchange(entry.handles, entry.upload->handles);
+            entry.submeshMaterials.assign(model.meshes.size(), {});
             for (usize m = 0; m < model.meshes.size(); ++m)
             {
                 for (const Submesh& submesh : model.meshes[m].submeshes)
@@ -205,11 +271,19 @@ struct RenderAssetCache::Impl
                     entry.submeshMaterials[m].push_back(submesh.material);
                 }
             }
+            entry.nodes.clear();
             for (const ModelNode& node : model.nodes)
             {
                 entry.nodes.emplace_back(node.name, node.mesh);
             }
             entry.status = Status::Ready;
+            entry.error.clear();
+            errors.erase(key);
+            if (replacing)
+            {
+                refreshModelUsers(key);
+                resources->releaseModel(previous);
+            }
         }
         else
         {
@@ -217,7 +291,40 @@ struct RenderAssetCache::Impl
         }
         entry.model = {};
         entry.upload.reset();
+        if (entry.reload.active)
+        {
+            entry.reload.active = false;
+            ++reloadsDone;
+            ++epoch; // new mesh and material handles, or a model that failed before
+            if (std::exchange(entry.reload.again, false))
+            {
+                reloads.push_back(AssetId{key});
+            }
+        }
         return true;
+    }
+
+    // Points the mesh and material entries of a reloaded model at its new handles.
+    void refreshModelUsers(u64 key)
+    {
+        for (auto& [meshKey, mesh] : meshes)
+        {
+            if (mesh.model == key && mesh.status != Status::Loading)
+            {
+                mesh.status = Status::Loading;
+                mesh.mesh = {};
+                mesh.materials.clear();
+                advanceMesh(meshKey); // the model is ready, so this ends now
+            }
+        }
+        for (auto& [materialKey, material] : materials)
+        {
+            if (material.model == key && material.status != Status::Loading)
+            {
+                material.status = Status::Loading;
+                advanceMaterial(materialKey);
+            }
+        }
     }
 
     // Meshes ---------------------------------------------------------------------------------------------
@@ -329,6 +436,7 @@ struct RenderAssetCache::Impl
         {
             TextureEntry& entry = found->second;
             entry.asset = id;
+            entry.srgb = srgb;
             entry.image = streamer->loadImage(AssetPathTable::instance().path(id), {.srgb = srgb});
             loadingTextures.push_back(key);
         }
@@ -342,17 +450,54 @@ struct RenderAssetCache::Impl
         {
             return false;
         }
+        const bool replacing = entry.reload.active && entry.status == Status::Ready;
         if (entry.image.ready())
         {
-            entry.handle = resources->createTexture(
+            const TextureHandle texture = resources->createTexture(
                 entry.image.value(), std::string(AssetPathTable::instance().path(entry.asset)).c_str());
+            const TextureHandle previous = std::exchange(entry.handle, texture);
             entry.status = Status::Ready;
+            errors.erase(entry.asset.value);
+            if (replacing)
+            {
+                // Materials made from files that use it switch to the new texture, then the old one goes.
+                for (auto& [materialKey, material] : materials)
+                {
+                    if (!material.fromFile || material.status != Status::Ready)
+                    {
+                        continue;
+                    }
+                    bool uses = false;
+                    for (usize t = 0; t < material.textures.size(); ++t)
+                    {
+                        if (material.textures[t] == key)
+                        {
+                            materialTexture(material.desc, t) = texture;
+                            uses = true;
+                        }
+                    }
+                    if (uses)
+                    {
+                        resources->updateMaterial(material.handle, material.desc);
+                    }
+                }
+                resources->releaseTexture(previous);
+            }
         }
         else
         {
-            fail(entry.status, entry.asset, entry.image.error());
+            failReload(entry.status, replacing, entry.asset, entry.image.error());
         }
         entry.image = {};
+        if (entry.reload.active)
+        {
+            entry.reload.active = false;
+            ++reloadsDone;
+            if (std::exchange(entry.reload.again, false))
+            {
+                reloads.push_back(entry.asset);
+            }
+        }
         return true;
     }
 
@@ -391,6 +536,7 @@ struct RenderAssetCache::Impl
         else if (parts->fragment == AssetFragment::None &&
                  endsWithIgnoreCase(parts->file, kMaterialAssetExtension))
         {
+            entry.fromFile = true;
             entry.file =
                 streamer->loadFile<MaterialAsset>(parts->file, kMaterialDecoderName, materialAssetDecoder());
             loadingMaterials.push_back(id.value);
@@ -433,10 +579,12 @@ struct RenderAssetCache::Impl
         {
             return false;
         }
+        const bool replacing = entry.reload.active && entry.status == Status::Ready;
         if (!entry.file.ready())
         {
-            fail(entry.status, id, entry.file.error());
+            failReload(entry.status, replacing, id, entry.file.error());
             entry.file = {};
+            finishMaterialReload(key, replacing);
             return true;
         }
         const MaterialAsset& asset = entry.file.value();
@@ -463,25 +611,51 @@ struct RenderAssetCache::Impl
             }
             if (texture.status == Status::Failed)
             {
-                fail(entry.status, id,
-                     std::format("texture '{}' failed to load",
-                                 AssetPathTable::instance().path(texture.asset)));
+                failReload(entry.status, replacing, id,
+                           std::format("texture '{}' failed to load",
+                                       AssetPathTable::instance().path(texture.asset)));
                 entry.file = {};
+                finishMaterialReload(key, replacing);
                 return true;
             }
             handles[t] = texture.handle;
         }
         MaterialDesc material;
         material.parameters = asset.material;
-        material.baseColor = handles[0];
-        material.metallicRoughness = handles[1];
-        material.normal = handles[2];
-        material.occlusion = handles[3];
-        material.emissive = handles[4];
-        entry.handle = resources->createMaterial(material);
+        for (usize t = 0; t < handles.size(); ++t)
+        {
+            materialTexture(material, t) = handles[t];
+        }
+        if (replacing)
+        {
+            resources->updateMaterial(entry.handle, material); // the handle stays: nothing to resolve again
+        }
+        else
+        {
+            entry.handle = resources->createMaterial(material);
+        }
+        entry.desc = material;
         entry.status = Status::Ready;
+        errors.erase(key);
         entry.file = {};
+        finishMaterialReload(key, replacing);
         return true;
+    }
+
+    void finishMaterialReload(u64 key, bool replacing)
+    {
+        MaterialEntry& entry = materials.at(key);
+        if (!entry.reload.active)
+        {
+            return;
+        }
+        entry.reload.active = false;
+        ++reloadsDone;
+        epoch += replacing ? 0u : 1u; // a material that failed before resolves to a new handle
+        if (std::exchange(entry.reload.again, false))
+        {
+            reloads.push_back(AssetId{key});
+        }
     }
 
     // Environments ---------------------------------------------------------------------------------------
@@ -525,30 +699,291 @@ struct RenderAssetCache::Impl
         {
             return false;
         }
+        const bool replacing = entry.reload.active && entry.status == Status::Ready;
         if (entry.image.ready())
         {
-            entry.handle = resources->createEnvironment(
-                entry.image.value(), desc.environment,
-                std::string(AssetPathTable::instance().path(entry.asset)).c_str());
+            const EnvironmentHandle previous = std::exchange(
+                entry.handle, resources->createEnvironment(
+                                  entry.image.value(), desc.environment,
+                                  std::string(AssetPathTable::instance().path(entry.asset)).c_str()));
             entry.status = Status::Ready;
+            errors.erase(entry.asset.value);
+            if (replacing)
+            {
+                resources->releaseEnvironment(previous);
+            }
         }
         else
         {
-            fail(entry.status, entry.asset, entry.image.error());
+            failReload(entry.status, replacing, entry.asset, entry.image.error());
         }
         entry.image = {};
+        if (entry.reload.active)
+        {
+            entry.reload.active = false;
+            ++reloadsDone;
+            ++epoch; // a new handle, or an environment that failed before
+            if (std::exchange(entry.reload.again, false))
+            {
+                reloads.push_back(entry.asset);
+            }
+        }
         return true;
+    }
+
+    // Reloads -------------------------------------------------------------------------------------------
+
+    // Starts loading @p entry's file again; returns false when a load is already running (it reloads once
+    // more when that ends). A Failed entry becomes Loading.
+    template <class Entry>
+    static bool beginReload(Entry& entry)
+    {
+        if (entry.status == Status::Loading || entry.reload.active)
+        {
+            entry.reload.again = true;
+            return false;
+        }
+        entry.reload.active = true;
+        if (entry.status == Status::Failed)
+        {
+            entry.status = Status::Loading;
+        }
+        return true;
+    }
+
+    void reloadModel(u64 key)
+    {
+        ModelEntry& entry = models.at(key);
+        const bool failed = entry.status == Status::Failed;
+        if (!beginReload(entry))
+        {
+            return;
+        }
+        entry.model = streamer->loadModel(entry.file);
+        entry.upload = uploads.upload(entry.model);
+        loadingModels.push_back(key);
+        if (!failed)
+        {
+            return;
+        }
+        // Meshes and materials that failed with the model wait for it again.
+        for (auto& [meshKey, mesh] : meshes)
+        {
+            if (mesh.model == key && mesh.status == Status::Failed)
+            {
+                mesh.status = Status::Loading;
+                mesh.materials.clear();
+                loadingMeshes.push_back(meshKey);
+            }
+        }
+        for (auto& [materialKey, material] : materials)
+        {
+            if (material.model == key && material.status == Status::Failed)
+            {
+                material.status = Status::Loading;
+                loadingMaterials.push_back(materialKey);
+            }
+        }
+    }
+
+    void reloadTexture(u64 key)
+    {
+        TextureEntry& entry = textures.at(key);
+        const bool failed = entry.status == Status::Failed;
+        if (!beginReload(entry))
+        {
+            return;
+        }
+        entry.image = streamer->loadImage(AssetPathTable::instance().path(entry.asset), {.srgb = entry.srgb});
+        loadingTextures.push_back(key);
+        if (!failed)
+        {
+            return;
+        }
+        // Material files that failed because of this texture load again.
+        for (auto& [materialKey, material] : materials)
+        {
+            if (material.fromFile && material.status == Status::Failed &&
+                std::find(material.textures.begin(), material.textures.end(), key) != material.textures.end())
+            {
+                reloadMaterial(materialKey);
+            }
+        }
+    }
+
+    void reloadMaterial(u64 key)
+    {
+        MaterialEntry& entry = materials.at(key);
+        if (!entry.fromFile || !beginReload(entry))
+        {
+            return;
+        }
+        entry.file = streamer->loadFile<MaterialAsset>(AssetPathTable::instance().path(AssetId{key}),
+                                                       kMaterialDecoderName, materialAssetDecoder());
+        entry.texturesRequested = false;
+        loadingMaterials.push_back(key);
+    }
+
+    void reloadEnvironment(u64 key)
+    {
+        EnvironmentEntry& entry = environments.at(key);
+        if (!beginReload(entry))
+        {
+            return;
+        }
+        entry.image = streamer->loadImage(AssetPathTable::instance().path(entry.asset),
+                                          {.srgb = true, .generateMips = false});
+        loadingEnvironments.push_back(key);
+    }
+
+    // Starts reloading every entry made from a file in `reloads`.
+    void startReloads()
+    {
+        ILL_PROFILE_SCOPE();
+        std::vector<AssetId> files;
+        files.swap(reloads);
+        std::vector<u64> keys;
+        for (const AssetId file : files)
+        {
+            if (models.contains(file.value))
+            {
+                reloadModel(file.value);
+            }
+            keys.clear();
+            for (const auto& [key, texture] : textures)
+            {
+                if (texture.asset == file)
+                {
+                    keys.push_back(key);
+                }
+            }
+            for (const u64 key : keys)
+            {
+                reloadTexture(key);
+            }
+            if (materials.contains(file.value))
+            {
+                reloadMaterial(file.value);
+            }
+            // Procedural skies are keyed by their parameters, so a file's environment has the file's id.
+            if (environments.contains(file.value))
+            {
+                reloadEnvironment(file.value);
+            }
+        }
+    }
+
+    // Eviction -------------------------------------------------------------------------------------------
+
+    template <class Entry>
+    static bool busy(const Entry& entry) noexcept
+    {
+        return entry.status == Status::Loading || entry.reload.active;
+    }
+
+    u32 evictUnused()
+    {
+        ILL_PROFILE_SCOPE();
+        u32 count = 0;
+        std::erase_if(meshes, [&](auto& item) {
+            MeshEntry& mesh = item.second;
+            if (mesh.references != 0 || mesh.status == Status::Loading)
+            {
+                return false;
+            }
+            if (mesh.model == 0 && mesh.status == Status::Ready)
+            {
+                resources->releaseMesh(mesh.mesh); // built-in meshes own theirs; models own the others
+            }
+            ++count;
+            return true;
+        });
+        std::erase_if(materials, [&](auto& item) {
+            MaterialEntry& material = item.second;
+            if (material.references != 0 || busy(material))
+            {
+                return false;
+            }
+            if (material.fromFile && material.status == Status::Ready)
+            {
+                resources->releaseMaterial(material.handle);
+            }
+            ++count;
+            return true;
+        });
+        std::unordered_set<u64> used;
+        for (const auto& [key, mesh] : meshes)
+        {
+            used.insert(mesh.model);
+        }
+        for (const auto& [key, material] : materials)
+        {
+            used.insert(material.model);
+        }
+        std::erase_if(models, [&](auto& item) {
+            ModelEntry& model = item.second;
+            if (used.contains(item.first) || busy(model))
+            {
+                return false;
+            }
+            if (model.status == Status::Ready)
+            {
+                resources->releaseModel(model.handles);
+            }
+            ++count;
+            return true;
+        });
+        used.clear();
+        for (const auto& [key, material] : materials)
+        {
+            used.insert(material.textures.begin(), material.textures.end());
+        }
+        std::erase_if(textures, [&](auto& item) {
+            TextureEntry& texture = item.second;
+            if (used.contains(item.first) || busy(texture))
+            {
+                return false;
+            }
+            if (texture.status == Status::Ready)
+            {
+                resources->releaseTexture(texture.handle);
+            }
+            ++count;
+            return true;
+        });
+        std::erase_if(environments, [&](auto& item) {
+            EnvironmentEntry& environment = item.second;
+            if (environment.references != 0 || busy(environment))
+            {
+                return false;
+            }
+            if (environment.status == Status::Ready)
+            {
+                resources->releaseEnvironment(environment.handle);
+            }
+            ++count;
+            return true;
+        });
+        evicted += count;
+        // RenderMesh and RenderSky Components written by resolvers that are gone may hold freed handles.
+        epoch += count > 0 ? 1u : 0u;
+        return count;
     }
 
     [[nodiscard]] u32 loading() const noexcept
     {
         return static_cast<u32>(loadingModels.size() + loadingTextures.size() + loadingMeshes.size() +
-                                loadingMaterials.size() + loadingEnvironments.size());
+                                loadingMaterials.size() + loadingEnvironments.size() + reloads.size());
     }
 
     void update()
     {
         ILL_PROFILE_SCOPE_N("RenderAssetCache::update");
+        resources->collect();
+        if (!reloads.empty())
+        {
+            startReloads();
+        }
         if (loading() == 0)
         {
             return;
@@ -575,9 +1010,14 @@ void RenderAssetCache::update()
     m_impl->update();
 }
 
+u32 RenderAssetCache::evictUnused()
+{
+    return m_impl->evictUnused();
+}
+
 void RenderAssetCache::waitIdle()
 {
-    // Every step either publishes loads or uploads at least one model, so this ends.
+    // Every step starts reloads, publishes loads or uploads at least one model, so this ends.
     while (m_impl->loading() > 0)
     {
         m_impl->streamer->waitIdle();
@@ -606,6 +1046,8 @@ RenderAssetCacheStatistics RenderAssetCache::statistics() const noexcept
     count(m_impl->textures, statistics.textures);
     count(m_impl->environments, statistics.environments);
     statistics.loading = m_impl->loading();
+    statistics.reloads = m_impl->reloadsDone;
+    statistics.evicted = m_impl->evicted;
     return statistics;
 }
 
@@ -723,7 +1165,7 @@ struct RenderAssetResolver::Impl
         statistics.failures += failed ? 1u : 0u;
     }
 
-    void updateMeshes(World& world, JobSystem* jobs)
+    void updateMeshes(World& world, JobSystem* jobs, bool everything)
     {
         // Structural changes first: RenderMesh for new renderers, none for removed ones.
         scratch.clear();
@@ -756,9 +1198,9 @@ struct RenderAssetResolver::Impl
         }
         std::atomic<u32> found{0};
         Entity* const out = mismatches.get();
-        const auto compare = [out, &found](Entity entity, const MeshRenderer& renderer,
-                                           const RenderMesh& mesh) {
-            if (renderSourceKey(renderer) != mesh.sourceKey)
+        const auto compare = [out, &found, everything](Entity entity, const MeshRenderer& renderer,
+                                                       const RenderMesh& mesh) {
+            if (everything || renderSourceKey(renderer) != mesh.sourceKey)
             {
                 out[found.fetch_add(1, std::memory_order_relaxed)] = entity;
             }
@@ -779,7 +1221,7 @@ struct RenderAssetResolver::Impl
         }
     }
 
-    void updateSkies(World& world)
+    void updateSkies(World& world, bool everything)
     {
         scratch.clear();
         world.query<const SkyLight>().without<RenderSky, Inactive>().each(
@@ -801,7 +1243,7 @@ struct RenderAssetResolver::Impl
             }
         });
         world.query<const SkyLight, RenderSky>().without<Inactive>().each(
-            [this, &world](Entity entity, const SkyLight& sky, RenderSky& target) {
+            [this, &world, everything](Entity entity, const SkyLight& sky, RenderSky& target) {
                 if (!sky.environment)
                 {
                     if (target.sourceKey != 0)
@@ -812,7 +1254,7 @@ struct RenderAssetResolver::Impl
                 }
                 const ProceduralSky* procedural = world.tryGet<ProceduralSky>(entity);
                 const u64 key = skyKey(sky.environment.id, procedural);
-                if (key == target.sourceKey)
+                if (key == target.sourceKey && !everything)
                 {
                     return;
                 }
@@ -836,8 +1278,48 @@ struct RenderAssetResolver::Impl
         }
     }
 
+    u32 releaseUnused(World& world)
+    {
+        ILL_PROFILE_SCOPE_N("RenderAssetResolver::releaseUnused");
+        std::unordered_set<u64> meshesInUse;
+        std::unordered_set<u64> materialsInUse;
+        std::unordered_set<u64> environmentsInUse;
+        world.query<const MeshRenderer>().each([&](Entity, const MeshRenderer& renderer) {
+            meshesInUse.insert(renderer.mesh.id.value);
+            materialsInUse.insert(renderer.material.id.value);
+        });
+        world.query<const SkyLight>().each([&](Entity entity, const SkyLight& sky) {
+            if (sky.environment)
+            {
+                const ProceduralSky* procedural = world.tryGet<ProceduralSky>(entity);
+                const bool isProcedural =
+                    AssetPathTable::instance().path(sky.environment.id) == kProceduralSky;
+                environmentsInUse.insert(isProcedural ? skyKey(sky.environment.id, procedural)
+                                                      : sky.environment.id.value);
+            }
+        });
+        u32 released = 0;
+        const auto release = [&released](std::unordered_set<u64>& held, const std::unordered_set<u64>& inUse,
+                                         auto& entries) {
+            std::erase_if(held, [&](u64 key) {
+                if (inUse.contains(key))
+                {
+                    return false;
+                }
+                --entries.at(key).references;
+                ++released;
+                return true;
+            });
+        };
+        release(heldMeshes, meshesInUse, cache->meshes);
+        release(heldMaterials, materialsInUse, cache->materials);
+        release(heldEnvironments, environmentsInUse, cache->environments);
+        return released;
+    }
+
     RenderAssetCache* owner;
     RenderAssetCache::Impl* cache;
+    u64 epoch = 0; // the cache's epoch at the last update()
     RenderAssetResolverStatistics statistics;
     std::vector<Entity> scratch;
     std::unique_ptr<Entity[]> mismatches;
@@ -857,10 +1339,20 @@ RenderAssetResolver::~RenderAssetResolver() = default;
 void RenderAssetResolver::update(World& world, JobSystem* jobs)
 {
     ILL_PROFILE_SCOPE_N("RenderAssetResolver::update");
-    m_impl->statistics.resolved = 0;
-    m_impl->statistics.pending = 0;
-    m_impl->updateMeshes(world, jobs);
-    m_impl->updateSkies(world);
+    Impl& impl = *m_impl;
+    impl.statistics.resolved = 0;
+    impl.statistics.pending = 0;
+    // After a reload, handles may be stale and failed assets may load now: resolve everything again.
+    const bool everything = impl.epoch != impl.cache->epoch;
+    impl.epoch = impl.cache->epoch;
+    impl.statistics.reresolves += everything ? 1u : 0u;
+    impl.updateMeshes(world, jobs, everything);
+    impl.updateSkies(world, everything);
+}
+
+u32 RenderAssetResolver::releaseUnused(World& world)
+{
+    return m_impl->releaseUnused(world);
 }
 
 void RenderAssetResolver::waitIdle(World& world, JobSystem* jobs)

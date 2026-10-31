@@ -306,6 +306,11 @@ referansları, `.gltf` dosyalarının harici buffer ve görüntüleri) ve ona ha
 - Kaybolup aynı içerikle başka bir yerde yeniden beliren bir dosya (dosya yöneticisinde yeniden adlandırma)
   `renamed` içinde bildirilir; eski yoluna yapılan referanslar değiştirilmez. Dosyaları taşıyıp referansları
   yeniden yazan komut `asset.move`'dur.
+- **Canlı yeniden yükleme.** Viewport'lar `asset.changed` içindeki her dosyayı ve ona başvuran dosyaları
+  (değişen bir buffer'ın ya da görüntünün glTF dosyasını) bir sonraki karelerinde yeniden yükler: başka
+  bir programda kaydedilen bir Material yeni renklerini gösterir, yeniden içe aktarılan bir model düzenleme
+  ve oynatma World'lerinde eskisinin yerini alır, eksik olan bir Asset de dosyası oluşunca görünür. Artık
+  hiçbir World'ün kullanmadığı Asset'ler o anda ve bir oynatma oturumu durduğunda GPU'dan çıkarılır.
 
 `asset.find_missing`, var olmayan bir `assets:` yoluna yapılan her referansı (sahnelerde, Material'lerde,
 ayar dosyalarında, açık sahnede, manifest'te ve glTF dosyalarında) her birinin Entity'si, Component'i ve

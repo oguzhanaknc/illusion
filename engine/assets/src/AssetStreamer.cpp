@@ -86,7 +86,8 @@ struct AssetStreamer::Impl
     std::vector<std::pair<std::shared_ptr<detail::AssetSlotBase>, bool>> done;
 
     JobCounter inFlight;
-    std::unordered_map<std::string, std::weak_ptr<detail::AssetSlotBase>> requests; // dedup, by key
+    std::unordered_map<std::string, std::weak_ptr<detail::AssetSlotBase>> requests; // dedup, by key|path
+    EventBus events;
     u32 pendingCount = 0;
     std::atomic<u32> cacheHits{0};
     std::atomic<u32> imports{0};
@@ -454,6 +455,40 @@ std::shared_ptr<detail::AssetSlotBase> AssetStreamer::requestFile(std::string_vi
     ++impl.pendingCount;
     impl.queueLoad(std::move(request));
     return slot;
+}
+
+u32 AssetStreamer::invalidate(std::string_view virtualPath)
+{
+    const std::optional<std::string> path = VirtualFileSystem::normalizePath(virtualPath);
+    if (!path)
+    {
+        return 0;
+    }
+    // Keys are "<importer or decoder>|<path>"; importer names never contain '|'.
+    const auto forgotten = std::erase_if(m_impl->requests, [&](const auto& entry) {
+        const std::string& key = entry.first;
+        return key.size() > path->size() && key.ends_with(*path) && key[key.size() - path->size() - 1] == '|';
+    });
+    return static_cast<u32>(forgotten);
+}
+
+bool AssetStreamer::reload(std::string_view virtualPath)
+{
+    ILL_PROFILE_SCOPE();
+    std::optional<std::string> path = VirtualFileSystem::normalizePath(virtualPath);
+    if (!path)
+    {
+        return false;
+    }
+    invalidate(*path);
+    const AssetId asset = AssetId::fromPath(*path);
+    m_impl->events.publish(AssetReloadedEvent{std::move(*path), asset});
+    return true;
+}
+
+EventBus& AssetStreamer::events() noexcept
+{
+    return m_impl->events;
 }
 
 u32 AssetStreamer::update()

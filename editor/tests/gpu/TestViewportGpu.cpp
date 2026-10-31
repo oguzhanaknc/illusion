@@ -10,7 +10,9 @@
 
 #include <cmath>
 #include <cstring>
+#include <filesystem>
 #include <format>
+#include <fstream>
 
 using namespace illusion;
 using namespace illusion::editor;
@@ -32,8 +34,9 @@ struct GpuViewports
     std::unique_ptr<viewport::ViewportService> service;
     std::unique_ptr<ReadbackRing> readbacks;
 
-    GpuViewports()
+    explicit GpuViewports(editor::EditorContextOptions options = {})
         : device(RenderDevice::create(test::headlessDeviceDesc()))
+        , fixture(1, options)
     {
         REQUIRE(device != nullptr);
         reflectRenderComponents();
@@ -417,6 +420,56 @@ TEST_CASE("readbacks finish while assets stream in without anyone waiting for th
     const f64 hue = sample.root().find("hue").asF64().value_or(180.0);
     CHECK((hue < 25.0 || hue > 335.0));
     CHECK(sample.root().find("saturation").asF64().value_or(0.0) > 0.5);
+}
+
+TEST_CASE("an edited material file reloads in the viewports through asset.changed")
+{
+    editor::EditorContextOptions options;
+    options.assetWatching = FileWatchBackend::Polling;
+    options.assetPollInterval = 0.0;
+    GpuViewports gpu(options);
+    EditorContext& editor = gpu.editor();
+    test::ok(
+        editor, "material.create",
+        R"({"path":"assets:/materials/paint.material","value":{"material":{"baseColorFactor":[1,0,0,1]}}})");
+    test::ok(
+        editor, "entity.create",
+        R"({"name":"Painted","components":{"illusion.Transform":{"position":[0,0,0]},)"
+        R"("illusion.MeshRenderer":{"mesh":"builtin:/mesh/cube","material":"assets:/materials/paint.material"}}})");
+    test::ok(
+        editor, "entity.create",
+        R"({"name":"Camera","components":{"illusion.Transform":{"position":[0,0,8]},"illusion.Camera":{}}})");
+    test::ok(editor, "viewport.set_aspect", R"({"viewport":"game","aspect":"fixed","width":64,"height":36})");
+    test::ok(editor, "viewport.set_mode", R"({"viewport":"game","shading":"unlit"})");
+    const auto sampleHue = [&]() {
+        const JsonDocument doc = test::parseJson(R"({"viewport":"game","x":32,"y":18,"radius":1})");
+        Expected<std::unique_ptr<RunningCommand>, CommandError> started =
+            editor.startJson("viewport.sample", doc.root());
+        REQUIRE(started.hasValue());
+        std::optional<std::string> result;
+        for (int i = 0; i < 1000 && !result; ++i)
+        {
+            gpu.service->render(false);
+            gpu.device->waitIdle();
+            Expected<std::optional<std::string>, CommandError> updated = started.value()->update();
+            REQUIRE(updated.hasValue());
+            result = *updated;
+        }
+        REQUIRE(result.has_value());
+        return test::parseJson(*result).root().find("hue").asF64().value_or(-1.0);
+    };
+    const f64 red = sampleHue();
+    CHECK((red < 25.0 || red > 335.0));
+
+    // An artist saves the material in another program: the catalog notices it, endFrame() posts
+    // asset.changed, and the viewports reload the material in place.
+    REQUIRE(editor.assets().scanned());
+    std::ofstream(gpu.fixture.directory.path / "project" / "assets" / "materials" / "paint.material")
+        << R"({"format":"illusion.material","version":1,"material":{"name":"Green","baseColorFactor":[0,1,0,1]}})";
+    editor.endFrame(0.016);
+    const f64 green = sampleHue();
+    CHECK(green > 95.0);
+    CHECK(green < 145.0);
 }
 
 TEST_CASE("closing a viewport with readbacks in flight frees their slots for the other viewports")

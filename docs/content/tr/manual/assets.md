@@ -269,6 +269,28 @@ while (running)
 - Streamer'ı yok etmek, başlamamış yüklemeleri atlar, çalışanları bitirir ve onların önbellek
   kayıtlarını yazar.
 
+### Değişen dosyaları yeniden yükleme
+
+Bir dosya için yapılan istekler son handle ortadan kalkana kadar tek bir handle'ı paylaşır; bu yüzden
+diskte değişen bir dosya kendiliğinden yeniden okunmaz. `invalidate(path)`, bir dosya için yapılan
+istekleri (hangi içe aktarma ayarı ya da çözücüyle yapılmış olursa olsun) unutur: bir sonraki istek onu
+yeniden okur ve içe aktarma önbelleğindeki kayıt eskiyse yeniden içe aktarır; daha önce verilen handle'lar
+verilerini korur. `reload(path)` aynısını yapar ve `events()` üzerinde bir `AssetReloadedEvent` yayımlar;
+[renderer'ın Asset önbelleği](rendering.md#meshrenderer-ve-rendermesh) bu olayla Asset'lerini yeniden yükler:
+
+```cpp
+// A file changed on disk (the editor does this for every file in its asset.changed event):
+streamer.reload("game:/materials/paint.material");
+
+illusion::Subscription onReload = streamer.events().subscribe<illusion::AssetReloadedEvent>(
+    [](const illusion::AssetReloadedEvent& event) { ILL_LOG_INFO("Game", "reloaded {}", event.path); });
+```
+
+- `reload()` geçersiz bir yol için false döndürür; olay normalleştirilmiş yolu ve onun `AssetId` değerini
+  taşır.
+- Bir glTF modeli buffer'larına ve görüntülerine bağlıdır: bunlardan biri değişince model dosyasını
+  yeniden yükleyin (editör bu dosyaları Asset kataloğunda bulur).
+
 ### Diğer dosya türleri
 
 `loadFile()`, başka modüllerin çözdüğü dosyaları stream eder. Dosyayı I/O thread'i okur, sizin

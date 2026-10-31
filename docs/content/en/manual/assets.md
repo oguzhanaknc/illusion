@@ -261,6 +261,27 @@ while (running)
 - Destroying the streamer skips loads that have not started, finishes the running ones and writes their
   cache entries.
 
+### Reloading changed files
+
+Requests for a file share a handle until the last handle is gone, so a file that changed on disk is not
+read again by itself. `invalidate(path)` forgets the requests for a file (with any import settings or
+decoder): the next request reads it again, and reimports it when the import cache entry is stale, while
+handles given out before keep their data. `reload(path)` does the same and publishes an
+`AssetReloadedEvent` on `events()`, which the [renderer's asset cache](rendering.md#meshrenderer-and-rendermesh)
+uses to load its assets again:
+
+```cpp
+// A file changed on disk (the editor does this for every file in its asset.changed event):
+streamer.reload("game:/materials/paint.material");
+
+illusion::Subscription onReload = streamer.events().subscribe<illusion::AssetReloadedEvent>(
+    [](const illusion::AssetReloadedEvent& event) { ILL_LOG_INFO("Game", "reloaded {}", event.path); });
+```
+
+- `reload()` returns false for an invalid path; the event carries the normalized path and its `AssetId`.
+- A glTF model depends on its buffers and images: reload the model file when one of them changes (the
+  editor finds such files in its asset catalog).
+
 ### Other file types
 
 `loadFile()` streams files that other modules decode. The I/O thread reads the file and your decoder

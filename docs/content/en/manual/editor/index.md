@@ -295,6 +295,11 @@ watches the project's `assets/` directory with a `FileWatcher` (Native by defaul
 - A file that disappears and reappears elsewhere with the same contents (a rename in a file manager) is
   reported in `renamed`; references to its old path are not changed. `asset.move` moves files and rewrites
   references.
+- **Live reload.** The viewports reload every file in `asset.changed`, and the files that refer to it (the
+  glTF file of a changed buffer or image), on their next frame: a material saved in another program shows
+  its new colours, a reimported model replaces the old one in the edit and play Worlds, and an asset that
+  was missing appears once its file exists. Assets no World uses any more are freed from the GPU then and
+  when a play session stops.
 
 `asset.find_missing` lists every reference to an `assets:` path that does not exist (in scenes, materials,
 settings files, the open scene, the manifest and glTF files), with the entity, Component and field of each.
