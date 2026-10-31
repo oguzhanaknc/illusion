@@ -62,6 +62,8 @@ void reflectPreferences(StructRegistry& structs)
             .field("agentPermissions", &Preferences::agentPermissions)
             .field("approvalPopups", &Preferences::approvalPopups)
             .field("followAgent", &Preferences::followAgent)
+            .field("playModeTint", &Preferences::playModeTint)
+            .field("maximizeOnPlay", &Preferences::maximizeOnPlay)
             .field("autosaveInterval", &Preferences::autosaveInterval,
                    {.unit = Unit::Seconds, .min = 0.0, .max = 3600.0})
             .field("autosaveCopies", &Preferences::autosaveCopies, {.min = 1.0, .max = 20.0})

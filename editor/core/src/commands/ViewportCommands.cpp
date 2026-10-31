@@ -47,6 +47,13 @@ Expected<Target, CommandError> findViewport(CommandContext& context, const std::
     {
         return unexpected(std::move(host).error());
     }
+    // The viewports show the play World while playing, so their entities are never the edit World's.
+    if (context.editor().playing() && !context.onPlayWorld())
+    {
+        return unexpected(CommandError::make(ErrorKind::PreconditionFailed,
+                                             "the viewports show the play World while playing: leave out "
+                                             "\"world\": \"edit\""));
+    }
     const std::string_view wanted = id ? std::string_view(*id) : kDefaultViewport;
     for (ViewportInfo& info : (*host)->viewports())
     {
@@ -100,11 +107,16 @@ Expected<ViewportCameraResult, CommandError> moveCamera(CommandContext& context,
 
 ViewportEntry entryOf(CommandContext& context, ViewportInfo info)
 {
+    // The viewports show the play World while playing, whatever "world" says.
     EditorContext& editor = context.editor();
+    World* play = editor.playWorld();
+    EntityIndex* playEntities = editor.playEntities();
+    World& world = play != nullptr ? *play : editor.world();
+    EntityIndex& entities = playEntities != nullptr ? *playEntities : editor.entities();
     std::optional<EntitySummary> sceneCamera;
-    if (!info.sceneCamera.isNull() && editor.world().isAlive(info.sceneCamera))
+    if (!info.sceneCamera.isNull() && world.isAlive(info.sceneCamera))
     {
-        sceneCamera = editor.entities().summary(info.sceneCamera);
+        sceneCamera = entities.summary(info.sceneCamera);
     }
     return ViewportEntry{std::move(info.id), info.kind, info.size.x,   info.size.y,           info.visible,
                          info.camera,        info.eye,  info.settings, std::move(sceneCamera)};
@@ -223,7 +235,7 @@ Expected<ViewportCameraResult, CommandError> viewportFrame(CommandContext& conte
     {
         for (const EntityGuid guid : context.editor().selection().items())
         {
-            if (const Entity entity = context.editor().entities().find(guid); !entity.isNull())
+            if (const Entity entity = context.index().find(guid); !entity.isNull())
             {
                 entities.push_back(entity);
             }
@@ -323,12 +335,12 @@ Expected<ViewportProjectResult, CommandError> viewportProject(CommandContext& co
     if (params.entity)
     {
         Expected<Entity, CommandError> entity =
-            context.editor().entities().resolve(*params.entity, context.editor().selection(), "/entity");
+            context.index().resolve(*params.entity, context.editor().selection(), "/entity");
         if (!entity)
         {
             return unexpected(std::move(entity).error());
         }
-        point = worldTransformOf(context.editor().world(), *entity).position;
+        point = worldTransformOf(context.world(), *entity).position;
     }
     else
     {
@@ -409,11 +421,11 @@ public:
         }
         const std::optional<ViewportHit>& hit = done->value();
         EditorContext& editor = context.editor();
-        const bool alive = hit && editor.world().isAlive(hit->entity);
+        const bool alive = hit && context.world().isAlive(hit->entity);
         ViewportPickResult result;
         if (alive)
         {
-            result.entity = editor.entities().summary(hit->entity);
+            result.entity = context.index().summary(hit->entity);
             result.index = hit->index;
             result.candidates = hit->candidates;
         }
@@ -421,7 +433,7 @@ public:
         {
             return std::optional<ViewportPickResult>(std::move(result));
         }
-        const EntityGuid guid = alive ? editor.entities().guidOf(hit->entity) : EntityGuid{};
+        const EntityGuid guid = alive ? context.index().guidOf(hit->entity) : EntityGuid{};
         applySelection(editor.selection(), m_select,
                        alive ? std::span<const EntityGuid>(&guid, 1) : std::span<const EntityGuid>());
         return std::optional<ViewportPickResult>(std::move(result));
@@ -536,9 +548,9 @@ public:
                 result.normal = found->normal;
                 result.rotation = alignToNormal(Quat(1.0f, 0.0f, 0.0f, 0.0f), found->normal);
             }
-            if (context.editor().world().isAlive(found->entity))
+            if (context.world().isAlive(found->entity))
             {
-                result.entity = context.editor().entities().summary(found->entity);
+                result.entity = context.index().summary(found->entity);
             }
         }
         return std::optional<ViewportSnapResult>(std::move(result));
@@ -778,10 +790,10 @@ Expected<ViewportPickRectResult, CommandError> finishPickRect(CommandContext& co
     std::vector<EntityGuid> guids;
     for (const Entity entity : readback.entities)
     {
-        if (editor.world().isAlive(entity))
+        if (context.world().isAlive(entity))
         {
-            result.entities.push_back(editor.entities().summary(entity));
-            guids.push_back(editor.entities().guidOf(entity));
+            result.entities.push_back(context.index().summary(entity));
+            guids.push_back(context.index().guidOf(entity));
         }
     }
     if (!context.dryRun())

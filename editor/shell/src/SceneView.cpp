@@ -642,6 +642,17 @@ void SceneView::drawToolbar(Impl& shell)
         ImGui::SameLine();
     }
     drawAspectMenu(shell);
+    if (m_last.kind == ViewportKind::Game)
+    {
+        ImGui::SameLine();
+        ui::UiKit kit = shell.kit();
+        const bool maximize = shell.editor.preferences().maximizeOnPlay;
+        if (ui::iconButton(kit, ui::icons::kFullscreen, "viewport.maximize_on_play",
+                           text.format(s::kViewportMaximizeOnPlay), nullptr, maximize))
+        {
+            shell.setPreferences(maximize ? R"({"maximizeOnPlay":false})" : R"({"maximizeOnPlay":true})");
+        }
+    }
     if (m_id == "scene")
     {
         ImGui::SameLine();
@@ -650,6 +661,36 @@ void SceneView::drawToolbar(Impl& shell)
             (void)shell.run("viewport.create", "", "ui");
         }
     }
+}
+
+// While the game runs, a click on the Game view gives it the keyboard and mouse (GameInput); a hint over the
+// image says how to get them back. True when the game runs (the view then neither picks nor selects).
+bool SceneView::handleGameInput(Impl& shell, ImDrawList& draw, Vec2 imageOrigin, Vec2 display, Vec2 toImage,
+                                bool clicked)
+{
+    GameInput& game = *shell.gameInput;
+    const PlayHost* play = shell.editor.play();
+    const PlayStatus status = play != nullptr ? play->status() : PlayStatus{};
+    if (status.state != PlayState::Playing || status.mode != PlayMode::Play)
+    {
+        return false;
+    }
+    game.setImage(imageOrigin, toImage);
+    if (clicked && !game.captured())
+    {
+        game.capture();
+    }
+    ui::UiKit kit = shell.kit();
+    const ui::Theme& theme = kit.theme;
+    const char* hint = shell.text.format(game.captured() ? s::kViewportPlayRelease : s::kViewportPlayCapture);
+    const Vec2 padding(6.0f * kit.scale);
+    const ImVec2 size = ImGui::CalcTextSize(hint);
+    const Vec2 at = imageOrigin + Vec2((display.x - size.x) * 0.5f - padding.x, kOverlayMargin * kit.scale);
+    draw.AddRectFilled(toImVec(at), toImVec(at + Vec2(size.x, size.y) + padding * 2.0f),
+                       color32(withAlpha(theme.color(ui::ThemeToken::BgBase), 0.75f)), 4.0f * kit.scale);
+    draw.AddText(toImVec(at + padding), color32(theme.color(ui::ThemeToken::PlayTint)), hint);
+    m_boxing = false;
+    return true;
 }
 
 // Ctrl+1..9 moves the camera to a bookmark, Ctrl+Shift+1..9 stores it.
@@ -694,6 +735,7 @@ void SceneView::draw(Impl& shell)
                                ImGuiButtonFlags_MouseButtonMiddle);
     const bool hovered = ImGui::IsItemHovered();
     const bool focused = ImGui::IsWindowFocused();
+    const bool imageClicked = ImGui::IsItemClicked(ImGuiMouseButton_Left);
 
     // Where the image goes in the panel: letterboxed when its shape differs (the shape of the last frame).
     const Vec2 panelOrigin(origin.x, origin.y);
@@ -841,6 +883,10 @@ void SceneView::draw(Impl& shell)
     if (settings.stats)
     {
         drawStats(shell, draw, *host, m_id, imageOrigin, m_last.size);
+    }
+    if (!scene && handleGameInput(shell, draw, imageOrigin, display, toImage, imageClicked))
+    {
+        return;
     }
     if (layout.cubeShown)
     {

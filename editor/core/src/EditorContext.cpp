@@ -984,6 +984,7 @@ void EditorContext::attachPlayWorld(World& world)
     ILL_ASSERT(m_playWorld == nullptr, "a play World is attached already");
     m_playWorld = std::make_unique<PlayWorld>(
         world, m_options.seed != 0 ? m_options.seed ^ 0x9a7e'0000'0000'0001ull : 0);
+    ++m_playSessions;
     m_events.post("play.attached", "{}");
 }
 
@@ -1541,7 +1542,7 @@ void EditorContext::endFrame(f64 deltaSeconds)
         if (m_autosaveTimer >= m_options.autosaveInterval)
         {
             m_autosaveTimer = 0.0;
-            autosave();
+            (void)autosave();
         }
     }
     else
@@ -1550,13 +1551,23 @@ void EditorContext::endFrame(f64 deltaSeconds)
     }
 }
 
-void EditorContext::autosave()
+bool EditorContext::autosaveNow()
+{
+    if (!m_project || m_options.autosaveInterval <= 0.0 || !dirty())
+    {
+        return false;
+    }
+    m_autosaveTimer = 0.0;
+    return autosave();
+}
+
+bool EditorContext::autosave()
 {
     Expected<std::string, CommandError> json = sceneJson();
     if (!json)
     {
         ILL_LOG_WARN("Editor", "Autosave failed: {}", json.error().message);
-        return;
+        return false;
     }
     const u32 copies = std::max(1u, m_options.autosaveCopies);
     const std::filesystem::path directory = m_project->stateDirectory() / "autosave";
@@ -1570,9 +1581,10 @@ void EditorContext::autosave()
     if (!out)
     {
         ILL_LOG_WARN("Editor", "Autosave cannot write {}", detail::pathText(file));
-        return;
+        return false;
     }
     m_events.post("scene.autosaved", "{\"revision\":" + std::to_string(revision()) + "}");
+    return true;
 }
 
 std::vector<std::filesystem::path> EditorContext::leftoverJournals() const

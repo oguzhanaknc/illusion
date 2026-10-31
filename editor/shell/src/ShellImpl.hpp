@@ -97,6 +97,7 @@ class Palette;
 class Outliner;
 class Inspector;
 class SceneView;
+class GameInput;
 class Console;
 class History;
 class Agents;
@@ -169,7 +170,8 @@ struct EditorShell::Impl
     std::unique_ptr<detail::SceneView> sceneView;
     std::unique_ptr<detail::SceneView> gameView;
     std::vector<std::unique_ptr<detail::SceneView>> secondaryViews;
-    u64 secondaryVersion = ~u64{0}; // ViewportHost::viewportsVersion() of secondaryViews
+    std::unique_ptr<detail::GameInput> gameInput; // the window's input routed to the running game
+    u64 secondaryVersion = ~u64{0};               // ViewportHost::viewportsVersion() of secondaryViews
     bool viewportNavigating =
         false; // a viewport panel moved its camera last frame (fly keys are not shortcuts)
     // gizmo.modal: the modal transform the Scene view under the cursor starts this frame, and that view

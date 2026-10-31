@@ -97,6 +97,10 @@ bool vec3Field(UiKit& kit, std::string_view id, Vec3& value, f32 speed = 0.01f, 
 /// while the last submitted item is being dragged by the mouse.
 void requestInfiniteDrag() noexcept;
 
+/// Asks the window's platform backend (when there is one) to capture the cursor (`CursorMode::Captured`:
+/// hidden, with unbounded motion) for the next frame; call it every frame while the cursor stays captured.
+void requestCursorCapture() noexcept;
+
 /// An HDR colour: a colour button and picker for the colour plus a separate intensity field
 /// ("<id>.intensity"). Returns true when either changed.
 bool colorHdr(UiKit& kit, std::string_view id, Vec3& color, f32& intensity);

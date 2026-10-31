@@ -325,6 +325,10 @@ struct ViewportService::Impl
     RenderAssetCache cache;
     RenderAssetResolver resolver;
     HierarchyIndex hierarchy;
+    // The play World's resolver and hierarchy index, made anew for each play session (null when stopped).
+    std::unique_ptr<RenderAssetResolver> playResolver;
+    std::unique_ptr<HierarchyIndex> playHierarchy;
+    u64 playSession = 0;
     std::unique_ptr<ReadbackRing> readbacks;
     nvrhi::CommandListHandle commands;
     std::vector<Viewport> viewports;
@@ -373,6 +377,52 @@ struct ViewportService::Impl
         const auto found = std::find_if(viewports.begin(), viewports.end(),
                                         [&](const Viewport& viewport) { return viewport.id == id; });
         return found != viewports.end() ? &*found : nullptr;
+    }
+
+    // The World the viewports show: the play World while a play session runs (ADR 0042), else the edit
+    // World. Entities in picks, readbacks and bounds belong to it.
+    [[nodiscard]] World& shown() noexcept
+    {
+        World* play = editor.playWorld();
+        return play != nullptr ? *play : editor.world();
+    }
+
+    [[nodiscard]] EntityIndex& shownEntities()
+    {
+        EntityIndex* play = editor.playEntities();
+        return play != nullptr ? *play : editor.entities();
+    }
+
+    // Makes the play World's resolver and hierarchy index for a new play session and drops them on Stop;
+    // entities remembered from the other World are forgotten.
+    void syncPlayWorld()
+    {
+        const bool playing = editor.playing();
+        if (playing == (playResolver != nullptr) && (!playing || playSession == editor.playSessions()))
+        {
+            return;
+        }
+        playResolver = playing ? std::make_unique<RenderAssetResolver>(cache) : nullptr;
+        playHierarchy = playing ? std::make_unique<HierarchyIndex>() : nullptr;
+        playSession = editor.playSessions();
+        for (Viewport& viewport : viewports)
+        {
+            viewport.hovered = Entity{};
+            viewport.lastPick = Entity{};
+        }
+        previewCamera = Entity{};
+    }
+
+    [[nodiscard]] RenderAssetResolver& shownResolver()
+    {
+        syncPlayWorld();
+        return playResolver ? *playResolver : resolver;
+    }
+
+    [[nodiscard]] HierarchyIndex& shownHierarchy()
+    {
+        syncPlayWorld();
+        return playHierarchy ? *playHierarchy : hierarchy;
     }
 
     static CommandError notFound(std::string_view id)
@@ -455,7 +505,7 @@ struct ViewportService::Impl
         std::fill(hiddenBits.begin(), hiddenBits.end(), 0);
         for (const EntityGuid guid : editor.view().hiddenEntities())
         {
-            if (const Entity entity = editor.entities().lookup(guid); !entity.isNull())
+            if (const Entity entity = shownEntities().lookup(guid); !entity.isNull())
             {
                 setBit(hiddenBits, entity.index);
             }
@@ -467,7 +517,7 @@ struct ViewportService::Impl
         std::fill(selectionBits.begin(), selectionBits.end(), 0);
         for (const EntityGuid guid : editor.selection().items())
         {
-            if (const Entity entity = editor.entities().lookup(guid); !entity.isNull())
+            if (const Entity entity = shownEntities().lookup(guid); !entity.isNull())
             {
                 setBit(selectionBits, entity.index);
             }
@@ -477,8 +527,8 @@ struct ViewportService::Impl
     // The entity of the selection's primary id when it has a Camera (else null).
     [[nodiscard]] Entity selectedCamera()
     {
-        World& world = editor.world();
-        const Entity entity = editor.entities().lookup(editor.selection().primary());
+        World& world = shown();
+        const Entity entity = shownEntities().lookup(editor.selection().primary());
         if (entity.isNull() || !world.isAlive(entity) || world.has<Inactive>(entity) ||
             !world.has<Camera>(entity) || !world.has<Transform>(entity))
         {
@@ -561,7 +611,7 @@ struct ViewportService::Impl
     void buildSnapBits(std::span<const Entity> exclude)
     {
         snapBits.assign(hiddenBits.begin(), hiddenBits.end());
-        World& world = editor.world();
+        World& world = shown();
         snapStack.assign(exclude.begin(), exclude.end());
         while (!snapStack.empty())
         {
@@ -572,7 +622,7 @@ struct ViewportService::Impl
                 continue;
             }
             setBit(snapBits, entity.index);
-            for (const Entity child : hierarchy.children(entity))
+            for (const Entity child : shownHierarchy().children(entity))
             {
                 snapStack.push_back(child);
             }
@@ -587,7 +637,7 @@ struct ViewportService::Impl
         std::optional<VertexSnapHit> best;
         Entity owner{};
         bool loadingMesh = false;
-        editor.world().query<Transform, RenderMesh, MeshRenderer>().without<Inactive>().each(
+        shown().query<Transform, RenderMesh, MeshRenderer>().without<Inactive>().each(
             [&](Entity entity, const Transform& transform, const RenderMesh& mesh,
                 const MeshRenderer& renderer) {
                 if ((mesh.flags & RenderMesh::kVisible) == 0 || mesh.mesh.index == 0 ||
@@ -668,7 +718,7 @@ struct ViewportService::Impl
         probe.hiddenEntities = snapBits;
         probeRenderer->resetTemporalHistory();
         commands->open();
-        probeRenderer->render(commands, probeColor, editor.world(), probe, &jobs);
+        probeRenderer->render(commands, probeColor, shown(), probe, &jobs);
         commands->close();
         device.device()->executeCommandList(commands);
         const RenderViewTargets& targets = probeRenderer->viewTargets();
@@ -828,7 +878,7 @@ struct ViewportService::Impl
             previewSize = size;
             previewTexture = ui.registerTexture(color);
         }
-        World& world = editor.world();
+        World& world = shown();
         const RenderView view = RenderView::fromCamera(world.get<Transform>(previewCamera),
                                                        world.get<Camera>(previewCamera), aspect);
         commands->open();
@@ -847,7 +897,7 @@ struct ViewportService::Impl
             return;
         }
         std::fill(iconBits.begin(), iconBits.end(), 0);
-        World& world = editor.world();
+        World& world = shown();
         const auto add = [&](Entity entity, const Transform& transform, ViewportIconKind kind) {
             if (hasBit(iconBits, entity.index) || hasBit(hiddenBits, entity.index))
             {
@@ -943,12 +993,12 @@ struct ViewportService::Impl
 
     [[nodiscard]] bool pickable(Entity entity)
     {
-        World& world = editor.world();
+        World& world = shown();
         if (!world.isAlive(entity) || world.has<Inactive>(entity))
         {
             return false;
         }
-        const EntityGuid guid = editor.entities().guidOf(entity);
+        const EntityGuid guid = shownEntities().guidOf(entity);
         return !editor.view().hidden(guid) && !editor.view().locked(guid);
     }
 
@@ -958,7 +1008,7 @@ struct ViewportService::Impl
     {
         if (viewport.kind == ViewportKind::Game)
         {
-            World& world = editor.world();
+            World& world = shown();
             const Entity entity = findMainCamera(world);
             if (entity.isNull())
             {
@@ -986,7 +1036,7 @@ struct ViewportService::Impl
         ILL_PROFILE_SCOPE();
         if (viewport.kind == ViewportKind::Game)
         {
-            viewport.sceneCamera = findMainCamera(editor.world());
+            viewport.sceneCamera = findMainCamera(shown());
             if (viewport.sceneCamera.isNull())
             {
                 return false;
@@ -1012,7 +1062,7 @@ struct ViewportService::Impl
         (void)viewport.renderer->setWireframeOverlay(viewport.settings.wireframe);
 
         commands->open();
-        viewport.renderer->render(commands, viewport.color, editor.world(), view, &jobs);
+        viewport.renderer->render(commands, viewport.color, shown(), view, &jobs);
         const RenderViewTargets& targets = viewport.renderer->viewTargets();
         viewport.viewProjection = targets.unjitteredViewProjection;
         if (viewport.settings.grid && viewport.kind == ViewportKind::Scene)
@@ -1033,7 +1083,7 @@ struct ViewportService::Impl
             options.selection = selectionBits;
             options.hidden = hiddenBits;
             options.cameraAspect = gameAspect();
-            const VisualiserStats recorded = recordVisualisers(editor.world(), debugDraw, options);
+            const VisualiserStats recorded = recordVisualisers(shown(), debugDraw, options);
             stats.visualisers += recorded.objects;
             if (!debugDraw.lines().empty())
             {
@@ -1041,7 +1091,7 @@ struct ViewportService::Impl
             }
         }
         const Entity hovered = viewport.hovered;
-        if (settings.hover && !hovered.isNull() && editor.world().isAlive(hovered) &&
+        if (settings.hover && !hovered.isNull() && shown().isAlive(hovered) &&
             !(settings.selectionOutline && hasBit(selectionBits, hovered.index)))
         {
             std::fill(hoverBits.begin(), hoverBits.end(), 0);
@@ -1105,7 +1155,7 @@ struct ViewportService::Impl
     {
         behind.clear();
         const Ray ray = screenToRay(pick.pixel, Vec2(pick.size), pick.viewProjection);
-        editor.world().query<Transform, RenderMesh>().without<Inactive>().each(
+        shown().query<Transform, RenderMesh>().without<Inactive>().each(
             [&](Entity entity, const Transform& transform, const RenderMesh& mesh) {
                 if ((mesh.flags & RenderMesh::kVisible) == 0 || mesh.mesh.index == 0)
                 {
@@ -1363,14 +1413,15 @@ void ViewportService::render(bool uiShown)
     ILL_PROFILE_SCOPE();
     Impl& impl = *m_impl;
     impl.stats = {};
-    World& world = impl.editor.world();
+    impl.syncPlayWorld();
+    World& world = impl.shown();
     impl.streamer.update();
     impl.cache.update();
-    impl.resolver.update(world, &impl.jobs);
-    updateTransformHierarchy(world, impl.hierarchy, &impl.jobs);
+    impl.shownResolver().update(world, &impl.jobs);
+    updateTransformHierarchy(world, impl.shownHierarchy(), &impl.jobs);
     impl.buildHidden();
     impl.buildSelection();
-    const bool loading = impl.resolver.statistics().pending != 0 || impl.cache.loading() != 0;
+    const bool loading = impl.shownResolver().statistics().pending != 0 || impl.cache.loading() != 0;
     for (usize i = 0; i < impl.viewports.size(); ++i)
     {
         Impl::Viewport& viewport = impl.viewports[i];
@@ -1429,7 +1480,7 @@ void ViewportService::waitIdle()
 {
     Impl& impl = *m_impl;
     impl.cache.waitIdle();
-    impl.resolver.waitIdle(impl.editor.world(), &impl.jobs);
+    impl.shownResolver().waitIdle(impl.shown(), &impl.jobs);
     impl.readPicks(true);
     impl.readReads(true);
     impl.readHovers(true);
@@ -1474,7 +1525,7 @@ std::vector<ViewportInfo> ViewportService::viewports() const
         }
         if (viewport.kind == ViewportKind::Game)
         {
-            info.sceneCamera = findMainCamera(impl.editor.world());
+            info.sceneCamera = findMainCamera(impl.shown());
         }
         out.push_back(std::move(info));
     }
@@ -1523,13 +1574,13 @@ Expected<ViewportCamera, CommandError> ViewportService::framing(std::string_view
     {
         return unexpected(Impl::notFound(id));
     }
-    World& world = impl.editor.world();
+    World& world = impl.shown();
     // Children placed this frame need their Transforms before their bounds count.
-    updateTransformHierarchy(world, impl.hierarchy, &impl.jobs);
+    updateTransformHierarchy(world, impl.shownHierarchy(), &impl.jobs);
     Aabb bounds;
     const auto include = [&](Entity entity) {
         if (!world.isAlive(entity) || world.has<Inactive>(entity) ||
-            impl.editor.view().hidden(impl.editor.entities().guidOf(entity)))
+            impl.editor.view().hidden(impl.shownEntities().guidOf(entity)))
         {
             return;
         }
@@ -1555,9 +1606,9 @@ Expected<ViewportCamera, CommandError> ViewportService::framing(std::string_view
     }
     for (const Entity entity : entities)
     {
-        if (impl.hierarchy.contains(entity))
+        if (impl.shownHierarchy().contains(entity))
         {
-            for (const Entity member : impl.hierarchy.subtree(entity))
+            for (const Entity member : impl.shownHierarchy().subtree(entity))
             {
                 include(member);
             }
@@ -1642,7 +1693,7 @@ ViewportFrame ViewportService::frame(std::string_view id, UVec2 size, const View
     out.settings = viewport->settings;
     out.projection = viewport->camera.target().projection;
     out.kind = viewport->kind;
-    out.hasCamera = scene || !findMainCamera(impl.editor.world()).isNull();
+    out.hasCamera = scene || !findMainCamera(impl.shown()).isNull();
     out.camera = viewport->camera.camera();
     out.hovered = viewport->hovered;
     if (out.hasCamera && impl.ensureTarget(*viewport))
@@ -1855,11 +1906,11 @@ void ViewportService::meshBounds(std::vector<ViewportBounds>& out)
     ILL_PROFILE_SCOPE();
     out.clear();
     Impl& impl = *m_impl;
-    World& world = impl.editor.world();
+    World& world = impl.shown();
     // Children moved by the running command need their Transforms first.
-    updateTransformHierarchy(world, impl.hierarchy, &impl.jobs);
+    updateTransformHierarchy(world, impl.shownHierarchy(), &impl.jobs);
     const ViewState& view = impl.editor.view();
-    const EntityIndex& entities = impl.editor.entities();
+    const EntityIndex& entities = impl.shownEntities();
     world.query<Transform, RenderMesh>().without<Inactive>().each(
         [&](Entity entity, const Transform& transform, const RenderMesh& mesh) {
             if (mesh.mesh.index == 0 || view.hidden(entities.guidOf(entity)))

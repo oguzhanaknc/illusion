@@ -25,7 +25,7 @@ onları sıfırlar). Geçersiz değerler alanın JSON Pointer'ıyla başarısız
 
 | Sayfa | Tercihler |
 | --- | --- |
-| Appearance | `theme` (`dark`, `light`, `high-contrast`), `accent` (`azure`, `violet`, `teal`, `amber`), `uiScale` (0.75 ile 2 arası, monitörün ölçeğiyle çarpılır), `reduceMotion`, `colorBlindAxes` (X, Y ve Z eksenleri için Okabe-Ito renkleri). |
+| Appearance | `theme` (`dark`, `light`, `high-contrast`), `accent` (`azure`, `violet`, `teal`, `amber`), `uiScale` (0.75 ile 2 arası, monitörün ölçeğiyle çarpılır), `reduceMotion`, `colorBlindAxes` (X, Y ve Z eksenleri için Okabe-Ito renkleri), `playModeTint` (oynarken panelleri renklendirir; varsayılan olarak açık) ve `maximizeOnPlay` (oynarken Game görünümü pencereyi doldurur). |
 | Language | `locale`: İngilizce, sözde dil `en-XA` (yerleşimleri denemek için aksanlı, daha uzun metin) ve `editor-data/locales` içindeki her dil dosyası. Dil bir sonraki frame'de değişir. |
 | Keyboard | `keymap` preset'i ve `shortcuts`, aşağıya bakın; `viewportNavigation` (`keymap`, `illusion`, `unity`, `unreal`, `blender`), Scene görünümünün fare denetimleri (bkz. [Scene Viewport'u](viewport.md#gezinme-presetleri)). |
 | AI Agents | `agentPermissions` (`read-only`, `ask`, `auto`; varsayılan `ask`), `approvalPopups` ve `followAgent` (Scene görünümü bir ajanın seçtiğini çerçeveler). Bkz. [Editör Penceresi](interface.md#ai-activity). |
