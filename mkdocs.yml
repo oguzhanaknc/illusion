@@ -95,6 +95,7 @@ plugins:
             Scene Viewport: Scene Viewport'u
             Transform Tools: Dönüşüm Araçları
             Play Mode: Play Modu
+            Project Modules: Proje Modülleri
             Preferences: Tercihler
             Tutorials: Eğitimler
             First Agent Session: İlk Ajan Oturumu
@@ -145,6 +146,7 @@ nav:
           - Scene Viewport: manual/editor/viewport.md
           - Transform Tools: manual/editor/transform-tools.md
           - Play Mode: manual/editor/play-mode.md
+          - Project Modules: manual/editor/project-modules.md
           - Preferences: manual/editor/preferences.md
           - Projects: manual/editor/projects.md
           - Automation: manual/editor/automation.md

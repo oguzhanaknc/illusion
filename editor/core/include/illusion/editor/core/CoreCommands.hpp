@@ -1493,6 +1493,70 @@ struct ModuleListResult
     std::vector<PlayModuleInfo> modules; ///< Loaded modules in load order.
 };
 
+/// Params of `module.create`.
+struct ModuleCreateParams
+{
+    std::string name; ///< The module: lower case letters, digits and underscores, starting with a letter.
+};
+
+/// Result of `module.create`.
+struct ModuleCreateResult
+{
+    std::string directory;          ///< The module's directory, e.g. "modules:/tetris".
+    std::vector<std::string> files; ///< Files written, as virtual paths.
+};
+
+/// Params of `module.build`.
+struct ModuleBuildParams
+{
+    /// Modules to build, by directory name under `modules:/` (default: all).
+    std::optional<std::vector<std::string>> modules{};
+    std::optional<bool> reconfigure{}; ///< Run the CMake configure step again (default false).
+    std::optional<bool> load{};        ///< Load or hot-reload the built modules (default true).
+};
+
+/// One compiler, linker or CMake diagnostic of `module.build`.
+struct ModuleDiagnostic
+{
+    /// The file: a virtual path such as "modules:/tetris/tetris.cpp" inside the project, otherwise as the
+    /// tool printed it ("" when it names none).
+    std::string file;
+    u32 line = 0;         ///< 1-based line (0: none).
+    u32 column = 0;       ///< 1-based column (0: none).
+    std::string severity; ///< "error", "warning" or "note".
+    std::string code;     ///< Tool code, e.g. "C2065" or "-Wunused-variable" ("" for none).
+    std::string message;  ///< What the tool said.
+};
+
+/// Result of `module.build`.
+struct ModuleBuildResult
+{
+    bool succeeded = false;                    ///< Every step succeeded.
+    bool configured = false;                   ///< The build ran a CMake configure step.
+    u32 errors = 0;                            ///< Diagnostics with severity "error".
+    u32 warnings = 0;                          ///< Diagnostics with severity "warning".
+    std::vector<ModuleDiagnostic> diagnostics; ///< Diagnostics in output order (at most 200).
+    std::vector<std::string> libraries;        ///< File paths of the built module libraries.
+    std::vector<std::string> loaded;           ///< Modules loaded for the first time.
+    std::vector<std::string> reloaded;         ///< Modules hot-reloaded.
+    std::vector<PlayModuleInfo> modules;       ///< Loaded modules in load order.
+    std::string output;                        ///< The last lines of CMake's output.
+};
+
+/// Params of `module.reload`.
+struct ModuleReloadParams
+{
+    std::optional<std::string>
+        name{}; ///< The module to reload (default: every module whose library changed).
+};
+
+/// Result of `module.reload`.
+struct ModuleReloadResult
+{
+    std::vector<std::string> reloaded;   ///< Modules reloaded.
+    std::vector<PlayModuleInfo> modules; ///< Loaded modules in load order.
+};
+
 // --- input -------------------------------------------------------------------------------------------------
 
 /// Params of `input.actions`.

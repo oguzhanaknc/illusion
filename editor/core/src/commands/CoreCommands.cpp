@@ -793,6 +793,38 @@ void reflectCoreCommandTypes(StructRegistry& structs)
             .field("reloads", &PlayModuleInfo::reloads);
         reflectStruct<ModuleListResult>("editor.ModuleListResult", 1, structs)
             .field("modules", &ModuleListResult::modules);
+        reflectStruct<ModuleCreateParams>("editor.ModuleCreateParams", 1, structs)
+            .field("name", &ModuleCreateParams::name);
+        reflectStruct<ModuleCreateResult>("editor.ModuleCreateResult", 1, structs)
+            .field("directory", &ModuleCreateResult::directory)
+            .field("files", &ModuleCreateResult::files);
+        reflectStruct<ModuleBuildParams>("editor.ModuleBuildParams", 1, structs)
+            .field("modules", &ModuleBuildParams::modules)
+            .field("reconfigure", &ModuleBuildParams::reconfigure)
+            .field("load", &ModuleBuildParams::load);
+        reflectStruct<ModuleDiagnostic>("editor.ModuleDiagnostic", 1, structs)
+            .field("file", &ModuleDiagnostic::file)
+            .field("line", &ModuleDiagnostic::line)
+            .field("column", &ModuleDiagnostic::column)
+            .field("severity", &ModuleDiagnostic::severity)
+            .field("code", &ModuleDiagnostic::code)
+            .field("message", &ModuleDiagnostic::message);
+        reflectStruct<ModuleBuildResult>("editor.ModuleBuildResult", 1, structs)
+            .field("succeeded", &ModuleBuildResult::succeeded)
+            .field("configured", &ModuleBuildResult::configured)
+            .field("errors", &ModuleBuildResult::errors)
+            .field("warnings", &ModuleBuildResult::warnings)
+            .field("diagnostics", &ModuleBuildResult::diagnostics)
+            .field("libraries", &ModuleBuildResult::libraries)
+            .field("loaded", &ModuleBuildResult::loaded)
+            .field("reloaded", &ModuleBuildResult::reloaded)
+            .field("modules", &ModuleBuildResult::modules)
+            .field("output", &ModuleBuildResult::output);
+        reflectStruct<ModuleReloadParams>("editor.ModuleReloadParams", 1, structs)
+            .field("name", &ModuleReloadParams::name);
+        reflectStruct<ModuleReloadResult>("editor.ModuleReloadResult", 1, structs)
+            .field("reloaded", &ModuleReloadResult::reloaded)
+            .field("modules", &ModuleReloadResult::modules);
 
         reflectStruct<InputAssetParams>("editor.InputAssetParams", 1, structs)
             .field("asset", &InputAssetParams::asset);
@@ -868,6 +900,7 @@ void registerCoreCommands(CommandRegistry& registry)
     detail::registerUiCommands(registry);
     detail::registerPlayCommands(registry);
     detail::registerInputCommands(registry);
+    detail::registerModuleCommands(registry);
 }
 
 namespace detail

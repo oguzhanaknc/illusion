@@ -145,6 +145,13 @@ public:
     /// name; ModuleError with the host's message when it cannot be loaded.
     [[nodiscard]] virtual Expected<std::string, CommandError> loadModule(std::string_view path) = 0;
 
+    /// Hot-reloads the module @p name from its library. NotFound when no module has that name; ModuleError
+    /// with the host's message when the new library is rejected (the old code keeps running).
+    [[nodiscard]] virtual Expected<void, CommandError> reloadModule(std::string_view name) = 0;
+
+    /// Hot-reloads every shared module whose library file changed; returns how many were reloaded.
+    virtual u32 reloadChangedModules() = 0;
+
     /// Unloads the module @p name; false if no module has that name.
     virtual bool unloadModule(std::string_view name) = 0;
 

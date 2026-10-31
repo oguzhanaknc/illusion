@@ -24,6 +24,7 @@ include(IllusionShaders)
 include(IllusionModules)
 include(IllusionText)
 include(IllusionEditor)
+include(IllusionSdk)
 
 add_subdirectory(engine)
 
@@ -49,4 +50,6 @@ endif()
 
 if(ILLUSION_BUILD_EDITOR)
     add_subdirectory(editor)
+    # The package that projects build their modules with (ADR 0043).
+    illusion_write_module_sdk()
 endif()

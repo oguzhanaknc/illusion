@@ -35,6 +35,7 @@
 #include <span>
 #include <string>
 #include <string_view>
+#include <utility>
 #include <vector>
 
 namespace illusion
@@ -70,6 +71,9 @@ struct EditorContextOptions
     /// kept in memory only, as in tests and deterministic runs). The editor passes
     /// `userDataDirectory("illusion", "editor")`.
     std::filesystem::path userDirectory{};
+    /// Toolchain description of the module SDK that `module.build` compiles project modules with
+    /// (`<build>/sdk/<Config>/illusion-sdk.json`, ADR 0043; empty: module builds are unsupported).
+    std::filesystem::path moduleSdk{};
 };
 
 /// Which World a command acts on while a play session runs (ADR 0042).
@@ -369,6 +373,12 @@ public:
     /// Sets the game runtime (nullptr when it goes away). It must outlive its registration.
     void setPlay(PlayHost* play) noexcept { m_play = play; }
 
+    /// Marks a module build as running; false if one runs already (`module.build` builds one at a time).
+    [[nodiscard]] bool beginModuleBuild() noexcept { return !std::exchange(m_moduleBuildRunning, true); }
+
+    /// Marks the running module build as finished.
+    void endModuleBuild() noexcept { m_moduleBuildRunning = false; }
+
     /// Makes @p world the play World: while it is attached, CommandMode::Any commands act on it (unless they
     /// ask for the edit World), with their own entity index and no undo. The PlayHost calls it; @p world must
     /// stay alive until detachPlayWorld(). Asserts if a play World is attached already.
@@ -597,6 +607,7 @@ private:
     UiHost* m_ui = nullptr;
     ViewportHost* m_viewports = nullptr;
     PlayHost* m_play = nullptr;
+    bool m_moduleBuildRunning = false;
     struct PlayWorld;
     std::unique_ptr<PlayWorld> m_playWorld;
     std::shared_ptr<LogRingSink> m_log;
