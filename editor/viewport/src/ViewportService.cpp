@@ -5,6 +5,7 @@
 #include <illusion/assets/Model.hpp>
 #include <illusion/audio/AudioComponents.hpp>
 #include <illusion/core/JobSystem.hpp>
+#include <illusion/core/Json.hpp>
 #include <illusion/core/Log.hpp>
 #include <illusion/core/Profiler.hpp>
 #include <illusion/ecs/Hierarchy.hpp>
@@ -31,6 +32,7 @@
 #include <cmath>
 #include <cstring>
 #include <unordered_map>
+#include <unordered_set>
 
 namespace illusion::editor::viewport
 {
@@ -314,7 +316,14 @@ struct ViewportService::Impl
         , cache(resources, streamer)
         , resolver(cache)
     {
+        assetSubscription = editor.events().subscribe(
+            "asset.changed", [this](const EditorEvent& event) { queueAssetChanges(event.payload); });
     }
+
+    ~Impl() { editor.events().unsubscribe(assetSubscription); }
+
+    Impl(const Impl&) = delete;
+    Impl& operator=(const Impl&) = delete;
 
     RenderDevice& device;
     EditorContext& editor;
@@ -325,6 +334,8 @@ struct ViewportService::Impl
     RenderAssetCache cache;
     RenderAssetResolver resolver;
     HierarchyIndex hierarchy;
+    u32 assetSubscription = 0;
+    std::vector<std::string> changedAssets; // files of `asset.changed` events not reloaded yet
     // The play World's resolver and hierarchy index, made anew for each play session (null when stopped).
     std::unique_ptr<RenderAssetResolver> playResolver;
     std::unique_ptr<HierarchyIndex> playHierarchy;
@@ -402,8 +413,13 @@ struct ViewportService::Impl
         {
             return;
         }
+        const bool stopped = playResolver != nullptr && !playing;
         playResolver = playing ? std::make_unique<RenderAssetResolver>(cache) : nullptr;
         playHierarchy = playing ? std::make_unique<HierarchyIndex>() : nullptr;
+        if (stopped)
+        {
+            cache.evictUnused(); // assets only the play World used
+        }
         playSession = editor.playSessions();
         for (Viewport& viewport : viewports)
         {
@@ -411,6 +427,65 @@ struct ViewportService::Impl
             viewport.lastPick = Entity{};
         }
         previewCamera = Entity{};
+    }
+
+    // Remembers the files of an `asset.changed` payload for reloadChangedAssets().
+    void queueAssetChanges(std::string_view payload)
+    {
+        const Expected<JsonDocument, JsonError> document = JsonDocument::parse(payload);
+        if (!document)
+        {
+            return;
+        }
+        const JsonValue root = document->root();
+        for (const std::string_view list : {"added", "modified", "removed"})
+        {
+            for (const JsonValue path : root.find(list).elements())
+            {
+                if (const std::optional<std::string_view> text = path.asString())
+                {
+                    changedAssets.emplace_back(*text);
+                }
+            }
+        }
+        for (const JsonValue rename : root.find("renamed").elements())
+        {
+            for (const std::string_view side : {"from", "to"})
+            {
+                if (const std::optional<std::string_view> text = rename.find(side).asString())
+                {
+                    changedAssets.emplace_back(*text);
+                }
+            }
+        }
+    }
+
+    // Live reload (ADR 0045): reloads the changed files and the files that refer to them (a glTF file whose
+    // buffer or image changed, for example); the cache loads the assets made from them again.
+    void reloadChangedAssets()
+    {
+        if (changedAssets.empty())
+        {
+            return;
+        }
+        ILL_PROFILE_SCOPE();
+        std::unordered_set<std::string> files(changedAssets.begin(), changedAssets.end());
+        const AssetCatalog& catalog = editor.assets();
+        for (const std::string& path : changedAssets)
+        {
+            for (std::string& referrer : catalog.referrers(path))
+            {
+                files.insert(std::move(referrer));
+            }
+        }
+        changedAssets.clear();
+        for (const std::string& file : files)
+        {
+            streamer.reload(file);
+        }
+        snapMeshes.clear(); // CPU copies for vertex snapping are loaded again on use
+        shownResolver().releaseUnused(shown());
+        cache.evictUnused();
     }
 
     [[nodiscard]] RenderAssetResolver& shownResolver()
@@ -1415,6 +1490,7 @@ void ViewportService::render(bool uiShown)
     impl.stats = {};
     impl.syncPlayWorld();
     World& world = impl.shown();
+    impl.reloadChangedAssets();
     impl.streamer.update();
     impl.cache.update();
     impl.shownResolver().update(world, &impl.jobs);

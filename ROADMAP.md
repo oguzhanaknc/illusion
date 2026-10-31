@@ -125,8 +125,8 @@ Plan: `docs/plans/m7-editor.md` (sub-milestones, command API, localization, them
   procedural sky; saved `MeshRenderer`/`SkyLight`/`ProceduralSky` with runtime `RenderMesh`/`RenderSky`,
   `RenderAssetResolver` and a shared `RenderAssetCache` (parallel steady-state check, no allocations),
   `.material` files, `PhysicsAssetResolver` for collision meshes, `AudioSource::clip` as an asset
-  reference, `SceneLoadResult::missingAssets` (ADR 0035). Not yet: freeing GPU memory of cache entries no
-  resolver uses (`RenderResources` cannot destroy resources yet); it comes with live reload (M7u)
+  reference, `SceneLoadResult::missingAssets` (ADR 0035). Freeing GPU memory of cache entries no
+  resolver uses came with live reload (M7u-2)
 - M7i: ✅ Headless editor core (`illusion::editor_core`, ADR 0036): projects (`project.illusion`, mounts,
   `empty` and `3d-starter` templates), VFS file management (`listRecursive`, `stat`, `createDirectory`,
   `remove`, `rename`, `copy`), `EditorContext`, `EntityIndex` (ids, paths, `name:`, `$selection`),
@@ -373,9 +373,20 @@ Plan: `docs/plans/m7-editor.md` (sub-milestones, command API, localization, them
   xxHash64, scene/material/glTF dependencies, reverse index, incremental `refresh()`/`apply()`, rename
   detection by content hash); `EditorContext::assets()`, the `asset.changed` event and `asset.find_missing`;
   `assets/catalog-scan`, `assets/catalog-first-scan` and `assets/reference-index` benchmarks
-- M7u (rest): import settings sidecars, live reload, `RenderResources` lifetime, the environment bake cache,
-  thumbnails and the asset browser (ADR 0045); GPU eviction of unused
-  `RenderAssetCache` entries (from M7h); `#` asset search in the command palette (from M7l)
+- M7u-2: ✅ Live reload and GPU resource lifetime (ADR 0045 addendum): generation-checked `RenderResources`
+  handles, release deferred until the GPU is done (`collect()`, event queries), free ranges in the geometry
+  pools (`RangeAllocator` in core), `updateMaterial()`, `isValid()`, `statistics()`;
+  `AssetStreamer::invalidate()`/`reload()` and `AssetReloadedEvent`; the `RenderAssetCache` reloads models,
+  textures, material files (in place) and environments, keeps the old version until the new one is up and
+  re-resolves renderers; `RenderAssetResolver::releaseUnused()` and `RenderAssetCache::evictUnused()` (GPU
+  eviction from M7h); the viewports reload files of `asset.changed` and their catalog referrers; 100-cycle
+  reimport GPU test; `memory/range-allocator`, `render/asset-cache-steady`, `render/update-material`
+  benchmarks
+- M7u-3: import settings sidecars (`<file>.import.json`, honoured by `cookAssets`), `asset.reimport` and
+  `asset.set_import_settings` (ADR 0045)
+- M7u (rest): the environment bake cache, thumbnails and the asset browser (ADR 0045); `#` asset search in
+  the command palette (from M7l); reloading collision meshes (`PhysicsAssetResolver`) and audio clips
+  (`AudioWorld`) on `AssetReloadedEvent` (from M7u-2)
 - M7v: Prefabs with overrides and nesting (ADR 0046)
 - M7w: Engine feature panels: rendering, physics, audio mixer, input actions, gamepad tester, profiler,
   diagnostics; gamepad navigation of the editor window through `GamepadSystem` (from M7l)

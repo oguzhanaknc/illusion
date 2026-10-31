@@ -169,6 +169,45 @@ resolver.update(world, &jobs);
   `RenderMesh` directly (with `sourceKey` 0); the resolver leaves it alone. `RenderMesh` is not saved.
 - The cache shares every asset between renderers and Worlds (100 renderers of one mesh upload it once)
   and counts the resolvers that use each asset (`references()`).
+- **Live reload.** `AssetStreamer::reload(path)` (see [Streaming](assets.md#reloading-changed-files)) makes
+  the cache load every asset made from that file again. The previous version keeps drawing until the new
+  one is on the GPU, and stays if the new file cannot be loaded (`error()` says why). A `.material` file
+  changes in place; meshes, models and environments get new Handles and every resolver resolves its
+  renderers again on its next `update()`. An asset that failed loads again when its file is reloaded.
+- **Eviction.** `RenderAssetResolver::releaseUnused(world)` stops using the assets no renderer of the World
+  refers to any more, and `RenderAssetCache::evictUnused()` frees the GPU resources of every asset no
+  resolver uses (and of the models and Textures only they used). Both walk everything: call them when
+  assets may have gone, such as after loading another scene, not every frame.
+
+### Resource lifetime
+
+`RenderResources` frees what it is told to release. Handles carry the generation of their slot, so a
+released Handle is stale at once: renderers skip it, `isValid()` returns false, and releasing or updating
+it again asserts. The memory is reused only after the GPU finished the frames submitted before the
+release: `collect()` (called by the create functions and by `RenderAssetCache::update()`) frees what the
+GPU no longer uses. Meshes live in shared vertex and index pools; freed ranges are reused, so reimporting
+a model again and again keeps the pools at the same size.
+
+```cpp
+const illusion::MeshHandle mesh = resources.createMesh(illusion::makeCube());
+resources.releaseMesh(mesh);           // stale at once: draws nothing, cannot be released again
+ILL_ASSERT(!resources.isValid(mesh));
+resources.collect();                   // once per frame: frees what the GPU no longer uses
+
+illusion::MaterialDesc paint;
+paint.parameters.baseColorFactor = illusion::Vec4(0.9f, 0.2f, 0.1f, 1.0f);
+const illusion::MaterialHandle material = resources.createMaterial(paint);
+paint.parameters.roughnessFactor = 0.2f;
+resources.updateMaterial(material, paint); // same handle, no new binding set
+```
+
+- `releaseMesh()`, `releaseTexture()`, `releaseMaterial()`, `releaseEnvironment()` and `releaseModel()`
+  ignore empty Handles. The default Material and Textures cannot be released.
+- `updateMaterial()` rewrites a Material's factors and Textures under the same Handle. It makes a new
+  binding set only when a Texture or the wrapping changed, so editing factors every frame is cheap.
+  Update or release the Materials that use a Texture before releasing it.
+- `statistics()` reports the use and capacity of the pools, their free ranges and how many released
+  resources still wait for the GPU.
 
 ### Materials and shading
 

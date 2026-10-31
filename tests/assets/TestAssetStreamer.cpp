@@ -243,6 +243,62 @@ TEST_CASE("loadFile reads a file on the I/O thread and decodes it on the Job Sys
     CHECK(streamer.statistics().imports == 0);
 }
 
+TEST_CASE("invalidate forgets the requests of one file so the next request reads it again")
+{
+    test::AssetProject project;
+    JobSystem jobs(smallPool());
+    AssetStreamer streamer(project.files, jobs);
+    const AssetFileDecoder<std::string> asText = [](std::vector<std::byte>&& bytes,
+                                                    std::string&) -> std::optional<std::string> {
+        return std::string(reinterpret_cast<const char*>(bytes.data()), bytes.size());
+    };
+    REQUIRE(project.files.writeFile("game:/a.txt", std::vector<std::byte>{std::byte{'1'}}) ==
+            FileError::None);
+    REQUIRE(project.files.writeFile("game:/sub/a.txt", std::vector<std::byte>{std::byte{'s'}}) ==
+            FileError::None);
+    const AssetHandle<std::string> first = streamer.loadFile("game:/a.txt", "test.text", asText);
+    const AssetHandle<std::string> upper = streamer.loadFile("game:/a.txt", "test.upper", asText);
+    const AssetHandle<std::string> other = streamer.loadFile("game:/sub/a.txt", "test.text", asText);
+    streamer.waitIdle();
+    REQUIRE(first.ready());
+
+    REQUIRE(project.files.writeFile("game:/a.txt", std::vector<std::byte>{std::byte{'2'}}) ==
+            FileError::None);
+    CHECK(streamer.loadFile("game:/a.txt", "test.text", asText) == first); // still the old request
+    CHECK(streamer.invalidate("game:/./a.txt") == 2);                      // both decoders, not sub/a.txt
+    CHECK(streamer.invalidate("game:/a.txt") == 0);
+    CHECK(streamer.invalidate("../outside.txt") == 0);
+    const AssetHandle<std::string> second = streamer.loadFile("game:/a.txt", "test.text", asText);
+    CHECK_FALSE(second == first);
+    CHECK(streamer.loadFile("game:/sub/a.txt", "test.text", asText) == other);
+    streamer.waitIdle();
+    CHECK(second.value() == "2");
+    CHECK(first.value() == "1"); // handles given out before keep their data
+    CHECK(upper.ready());
+}
+
+TEST_CASE("reload invalidates a file and publishes AssetReloadedEvent")
+{
+    test::AssetProject project;
+    JobSystem jobs(smallPool());
+    AssetStreamer streamer(project.files, jobs);
+    const AssetHandle<Image> image = streamer.loadImage("game:/textures/checker.png");
+    streamer.waitIdle();
+
+    std::vector<AssetReloadedEvent> events;
+    const Subscription subscription = streamer.events().subscribe<AssetReloadedEvent>(
+        [&events](const AssetReloadedEvent& event) { events.push_back(event); });
+    CHECK(streamer.reload("game:/textures/../textures/checker.png"));
+    CHECK_FALSE(streamer.reload("../outside.png"));
+    REQUIRE(events.size() == 1);
+    CHECK(events[0].path == "game:/textures/checker.png");
+    CHECK(events[0].asset == AssetId::fromPath("game:/textures/checker.png"));
+    const AssetHandle<Image> again = streamer.loadImage("game:/textures/checker.png");
+    CHECK_FALSE(again == image);
+    streamer.waitIdle();
+    CHECK(again.ready());
+}
+
 #if ILL_ASSERTS_ENABLED
 TEST_CASE("reading the value of an asset that is not loaded asserts")
 {
