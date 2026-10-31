@@ -206,8 +206,10 @@ komutlar `RunningCommand::update()` ile her frame'de bir adım ilerleyen görevl
 World'ün yanında iki parça daha vardır: `SettingsCatalog` (sahnelerin ve projenin ayar olarak tuttuğu
 reflection'lı struct'lar) ve `assets:/` altındaki her sahne ve Material dosyasının Asset referanslarını bilen
 `ReferenceIndex` (reflection ile bulunur, yalnızca bir dosyanın içeriği değişince yeniden ayrıştırılır); böylece
-`asset.move` onları yeniden yazabilir, `asset.delete` de reddedebilir. Kılavuz
-[kullanımını](../manual/editor/index.md) anlatır.
+`asset.move` onları yeniden yazabilir, `asset.delete` de reddedebilir. `AssetCatalog`, `assets:/`
+altındaki her dosyayı içerik hash'i ve bağımlılıklarıyla tutar; projenin `assets/` dizinindeki bir
+`FileWatcher` onu editor dışında yapılan değişikliklerle güncel tutar ve bunlar `asset.changed` olarak
+gönderilir (ADR 0045). Kılavuz [kullanımlarını](../manual/editor/index.md) anlatır.
 
 ## Editör kabuğu
 
@@ -339,6 +341,10 @@ Sonucu [yapay zekâ ajanları kılavuzu](../manual/editor/ai-agents.md) anlatır
   birlikte geri alınarak) ve `editor/undo-own-check` (kendi adımlarını geri almadan önce sonraki bir adımı
   denetlemek) ve `snap/vertex-search` (100.000 vertex'li bir Mesh üzerinde vertex yakalama araması, yaklaşık
   11 µs).
+- Asset kataloğunun Benchmark'ları: `assets/catalog-scan` (değişmemiş bir dosyayı denetlemek, yaklaşık 1,7 µs;
+  bütçe 20 µs), `assets/catalog-first-scan` (yeni bir dosyayı okumak, hash'lemek ve ayrıştırmak, Windows'ta
+  yaklaşık 57 µs; bütçe 600 µs) ve `assets/reference-index` (bir Asset'e referans veren dosyaları bulmak,
+  yaklaşık 0,2 µs; bütçe 5 µs).
 - `mcp/translate`, köprünün sunucusu üzerinden anında yanıt veren bir sağlayıcıyla tek bir MCP `tools/call`
   çağrısını ölçer: ayrıştırma, aracı bulma, sonucu yazma (bir masaüstü makinede yaklaşık 1,6 µs; bütçe 10 µs).
 - `viewport/camera-update` bir frame'lik viewport gezinmesini (yaklaşık 20 ns; bütçe 200 ns),

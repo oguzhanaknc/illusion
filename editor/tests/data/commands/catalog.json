@@ -254,6 +254,91 @@
       "additionalProperties": false
     }
   },
+  "asset.find_missing": {
+    "version": 1,
+    "permission": "read",
+    "mode": "any",
+    "undoable": false,
+    "readOnly": true,
+    "params": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "type": "object",
+      "properties": {
+        "world": {
+          "type": "string",
+          "enum": ["edit", "play"]
+        }
+      },
+      "additionalProperties": false
+    },
+    "result": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "type": "object",
+      "properties": {
+        "references": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "asset": {
+                "type": "string"
+              },
+              "source": {
+                "type": "string"
+              },
+              "entity": {
+                "type": "string"
+              },
+              "owner": {
+                "type": "string"
+              },
+              "field": {
+                "type": "string"
+              }
+            },
+            "required": ["asset", "source", "entity", "owner", "field"],
+            "additionalProperties": false
+          }
+        },
+        "assets": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "_editor": {
+          "type": "object",
+          "properties": {
+            "revision": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "transaction": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "dryRun": {
+              "type": "boolean"
+            },
+            "operations": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "warnings": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          },
+          "required": ["revision", "transaction", "dryRun", "operations", "warnings"],
+          "additionalProperties": false
+        }
+      },
+      "required": ["references", "assets", "_editor"],
+      "additionalProperties": false
+    }
+  },
   "asset.info": {
     "version": 1,
     "permission": "read",

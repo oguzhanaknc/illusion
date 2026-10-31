@@ -202,8 +202,10 @@ the RPC server advances them in `pump()` and reports `rpc.progress`.
 Two more parts sit beside the World: the `SettingsCatalog` (the reflected structs that scenes and the
 project keep as settings) and the `ReferenceIndex`, which knows the asset references of every scene and
 material file under `assets:/` (found through reflection, parsed again only when a file's contents change)
-so that `asset.move` can rewrite them and `asset.delete` can refuse. The manual describes
-[using it](../manual/editor/index.md).
+so that `asset.move` can rewrite them and `asset.delete` can refuse. The `AssetCatalog` keeps every file
+under `assets:/` with its content hash and dependencies; a `FileWatcher` on the project's `assets/` directory
+keeps it current with changes made outside the editor, posted as `asset.changed` (ADR 0045). The manual
+describes [using them](../manual/editor/index.md).
 
 ## Editor shell
 
@@ -333,6 +335,9 @@ The [AI agents manual](../manual/editor/ai-agents.md) describes the result.
   (one step of an `editor.batch` with a `$` reference, undone with the batch) and `editor/undo-own-check`
   (checking one later step before an undo of one's own steps), and `snap/vertex-search` (the vertex snap
   search over a 100,000-vertex Mesh, about 11 µs).
+- The asset catalog's benchmarks: `assets/catalog-scan` (checking an unchanged file, about 1.7 µs; budget
+  20 µs), `assets/catalog-first-scan` (reading, hashing and parsing a new file, about 57 µs on Windows; budget
+  600 µs) and `assets/reference-index` (finding the files that refer to an asset, about 0.2 µs; budget 5 µs).
 - `mcp/translate` measures one MCP `tools/call` through the bridge's server with an immediate provider: parsing,
   finding the tool, writing the result (about 1.6 µs on a desktop; budget 10 µs).
 - `viewport/camera-update` measures one frame of viewport navigation (about 20 ns; budget 200 ns) and

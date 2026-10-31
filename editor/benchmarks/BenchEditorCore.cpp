@@ -1,10 +1,12 @@
 #include "Budget.hpp"
 
+#include <illusion/assets/AssetReflection.hpp>
 #include <illusion/core/Assert.hpp>
 #include <illusion/core/Json.hpp>
 #include <illusion/ecs/Name.hpp>
 #include <illusion/ecs/SceneSerializer.hpp>
 #include <illusion/editor/core/Arrange.hpp>
+#include <illusion/editor/core/AssetCatalog.hpp>
 #include <illusion/editor/core/CoreCommands.hpp>
 #include <illusion/editor/core/EditorContext.hpp>
 #include <illusion/editor/core/Gizmo.hpp>
@@ -178,6 +180,106 @@ ILL_BENCHMARK("editor/reference-refresh", 160'000.0)
     bench.batch(100).unit("file").run("ReferenceIndex::refresh (100 unchanged scenes)", [&] {
         index.refresh(files);
         ankerl::nanobench::doNotOptimizeAway(index);
+    });
+    std::error_code ignored;
+    std::filesystem::remove_all(root, ignored);
+}
+
+namespace
+{
+
+// 200 assets under a temporary `assets:` mount, a quarter of them materials with a texture dependency.
+struct BenchAssets
+{
+    std::filesystem::path root = std::filesystem::temp_directory_path() /
+                                 std::format("illusion-bench-catalog-{}", std::random_device{}());
+    VirtualFileSystem files;
+
+    BenchAssets()
+    {
+        std::filesystem::create_directories(root);
+        ILL_CHECK(files.mount("assets", root, MountAccess::ReadWrite) == FileError::None,
+                  "cannot mount the benchmark files");
+        reflectAssetStructs();
+        for (int i = 0; i < 200; ++i)
+        {
+            const std::string path = i % 4 == 0 ? std::format("assets:/materials/m{}.material", i)
+                                                : std::format("assets:/textures/t{}.png", i);
+            const std::string text =
+                i % 4 == 0 ? std::format(R"({{"format":"illusion.material","version":1,"material":{{}},)"
+                                         R"("textures":{{"baseColor":"assets:/textures/t{}.png"}}}})",
+                                         i + 1)
+                           : std::string(4096, static_cast<char>('a' + i % 26));
+            ILL_CHECK(files.writeText(path, text) == FileError::None, "cannot write a benchmark asset");
+        }
+    }
+    ~BenchAssets()
+    {
+        std::error_code ignored;
+        std::filesystem::remove_all(root, ignored);
+    }
+    BenchAssets(const BenchAssets&) = delete;
+    BenchAssets& operator=(const BenchAssets&) = delete;
+};
+
+} // namespace
+
+// The catalog checking 200 unchanged files (one listing with stamps, no reads), per file: what every
+// command that uses the catalog pays. Budget about 10x the 1.6 us measured on a desktop (Release, MSVC).
+ILL_BENCHMARK("assets/catalog-scan", 20'000.0)
+{
+    BenchAssets assets;
+    AssetCatalog catalog;
+    ILL_CHECK(catalog.refresh(assets.files).added.size() == 202, "the benchmark assets were not catalogued");
+    bench.batch(200).unit("file").run("AssetCatalog::refresh (200 unchanged files)", [&] {
+        const AssetCatalogChanges changes = catalog.refresh(assets.files);
+        ILL_CHECK(changes.empty(), "the benchmark assets changed");
+        ankerl::nanobench::doNotOptimizeAway(catalog);
+    });
+}
+
+// A first catalog scan of the same 200 files: list, read, hash and parse, per file. Budget about 10x the
+// 57 us measured on a desktop (Release, MSVC): opening files is slow on Windows.
+ILL_BENCHMARK("assets/catalog-first-scan", 600'000.0)
+{
+    BenchAssets assets;
+    bench.batch(200).unit("file").run("AssetCatalog::refresh (200 new files)", [&] {
+        AssetCatalog catalog;
+        ILL_CHECK(catalog.refresh(assets.files).added.size() == 202,
+                  "the benchmark assets were not catalogued");
+        ankerl::nanobench::doNotOptimizeAway(catalog);
+    });
+}
+
+// Looking up the files that refer to an asset in a catalog of 2,000 dependencies (the reverse index is
+// built once), per lookup. Budget from the M7 plan, about 25x the 0.2 us measured on a desktop.
+ILL_BENCHMARK("assets/reference-index", 5'000.0)
+{
+    const std::filesystem::path root = std::filesystem::temp_directory_path() /
+                                       std::format("illusion-bench-referrers-{}", std::random_device{}());
+    std::filesystem::create_directories(root);
+    VirtualFileSystem files;
+    ILL_CHECK(files.mount("assets", root, MountAccess::ReadWrite) == FileError::None,
+              "cannot mount the benchmark files");
+    reflectAssetStructs();
+    for (int i = 0; i < 1000; ++i)
+    {
+        const std::string text = std::format(R"({{"format":"illusion.material","version":1,"material":{{}},)"
+                                             R"("textures":{{"baseColor":"assets:/textures/t{}.png",)"
+                                             R"("normal":"assets:/textures/n{}.png"}}}})",
+                                             i % 100, i);
+        ILL_CHECK(files.writeText(std::format("assets:/materials/m{}.material", i), text) == FileError::None,
+                  "cannot write a benchmark material");
+    }
+    AssetCatalog catalog;
+    (void)catalog.refresh(files);
+    ILL_CHECK(catalog.referrers("assets:/textures/t7.png").size() == 10, "the reverse index is wrong");
+    u32 next = 0;
+    bench.unit("lookup").run("AssetCatalog::referrers (2,000 dependencies)", [&] {
+        const std::vector<std::string> sources =
+            catalog.referrers(std::format("assets:/textures/n{}.png", next));
+        next = (next + 1) % 1000;
+        ankerl::nanobench::doNotOptimizeAway(sources);
     });
     std::error_code ignored;
     std::filesystem::remove_all(root, ignored);

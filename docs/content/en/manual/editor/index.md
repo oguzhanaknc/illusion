@@ -206,8 +206,8 @@ Every commit, undo and redo increases the scene revision. `changes().changesSinc
 which entities were created, destroyed or changed (and which Components), and which scene settings changed,
 since a revision a client remembers, or `false` when it must read the scene again. `events()` delivers `scene.changed`,
 `selection.changed`, `history.changed`, `history.trimmed`, `scene.opened`, `scene.saved` and
-`scene.autosaved` once per `endFrame()`, and `commands.changed` (`{"commands": <count>}`) at the end of a frame
-in which commands were registered.
+`scene.autosaved` once per `endFrame()`, `commands.changed` (`{"commands": <count>}`) at the end of a frame
+in which commands were registered, and `asset.changed` when the asset catalog changed (see below).
 
 ## Crash journal and recovery
 
@@ -257,7 +257,8 @@ step. `clipboard.paste` also takes scene JSON in `text`, so agents can insert pr
 
 The `asset` commands work on files under `assets:/`: `asset.list` (with the kinds `Folder`, `Scene`,
 `Material`, `Model`, `Texture`, `Environment`, `AudioClip` and `Other`), `asset.info`,
-`asset.create_folder`, `asset.move`, `asset.delete`, `asset.references` and `asset.dependencies`.
+`asset.create_folder`, `asset.move`, `asset.delete`, `asset.references`, `asset.dependencies` and
+`asset.find_missing`.
 
 References are found through reflection: every `AssetRef` field of a saved Component, of the scene's
 settings, of `.material` files and of project settings files. `ReferenceIndex` reads every scene and
@@ -276,6 +277,27 @@ folder matches everything inside it.
 
 Components and settings whose types are not registered (kept as they are in the file) are not searched;
 `asset.references` warns about files it cannot read.
+
+### The asset catalog
+
+`AssetCatalog` (`editor.assets()`) knows every file and folder under `assets:/`: its kind, size,
+modification stamp, xxHash64 content hash and dependencies (the references of scenes and materials, and the
+external buffers and images of `.gltf` files), and which files refer to it (`referrers()`). The editor
+watches the project's `assets/` directory with a `FileWatcher` (Native by default,
+`EditorContextOptions::assetWatching`), so changes made outside the editor, by an image editor or by
+`git checkout`, are seen too:
+
+- Commands bring the catalog up to date before they use it, reading only files whose size or stamp
+  changed, and every file the watcher reported.
+- `endFrame()` checks the watcher every `assetPollInterval` seconds (0.25 by default) once the catalog has
+  been used, and posts `asset.changed` with what changed since the last one:
+  `{"added": [...], "modified": [...], "removed": [...], "renamed": [{"from": ..., "to": ...}]}`.
+- A file that disappears and reappears elsewhere with the same contents (a rename in a file manager) is
+  reported in `renamed`; references to its old path are not changed. `asset.move` moves files and rewrites
+  references.
+
+`asset.find_missing` lists every reference to an `assets:` path that does not exist (in scenes, materials,
+settings files, the open scene, the manifest and glTF files), with the entity, Component and field of each.
 
 ## Materials
 

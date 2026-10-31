@@ -375,6 +375,20 @@ Expected<void, CommandError> EditorContext::openProject(const std::filesystem::p
     }
     m_project = std::move(project).value();
     m_references.clear();
+    m_assets.clear();
+    m_assetChanges.clear();
+    m_assetNews = {};
+    m_assetWatcher = {};
+    if (Expected<FileWatcher, std::string> watcher =
+            FileWatcher::watch(m_project->root() / "assets", m_options.assetWatching))
+    {
+        m_assetWatcher = std::move(watcher).value();
+    }
+    else
+    {
+        ILL_LOG_WARN("Editor", "Changes to the project's assets made outside the editor are not seen: {}",
+                     watcher.error());
+    }
     m_editor.setFiles(&m_files, m_project->stateDirectory() / "trash", m_session);
     if (m_options.crashJournal)
     {
@@ -553,6 +567,70 @@ Expected<u32, CommandError> EditorContext::saveScene(std::string_view path)
     m_journal.writeSaved(target);
     m_events.post("scene.saved", "{\"revision\":" + std::to_string(revision()) + "}");
     return saved.entities;
+}
+
+const AssetCatalog& EditorContext::assets()
+{
+    if (m_project)
+    {
+        m_assetNews.merge(pollAssets(true));
+    }
+    return m_assets;
+}
+
+AssetCatalogChanges EditorContext::pollAssets(bool full)
+{
+    m_assetChanges.clear();
+    m_assetWatcher.poll(m_assetChanges);
+    if (!m_assets.scanned())
+    {
+        (void)m_assets.refresh(m_files); // The first scan reports every asset; that is not news.
+        return {};
+    }
+    AssetCatalogChanges changes;
+    if (!m_assetChanges.empty())
+    {
+        changes = m_assets.apply(m_files, m_assetChanges);
+    }
+    // Native notifications arrive late, so commands also list the mount: they must see their own writes.
+    if (full || !m_assetWatcher.isWatching())
+    {
+        changes.merge(m_assets.refresh(m_files));
+    }
+    return changes;
+}
+
+void EditorContext::postAssetChanges(const AssetCatalogChanges& changes)
+{
+    if (changes.empty())
+    {
+        return;
+    }
+    JsonMutDocument document;
+    JsonMutValue root = document.makeObject();
+    const auto addPaths = [&](std::string_view key, const std::vector<std::string>& paths) {
+        JsonMutValue list = root.addArray(key);
+        for (const std::string& path : paths)
+        {
+            list.push(document.makeString(path));
+        }
+    };
+    addPaths("added", changes.added);
+    addPaths("modified", changes.modified);
+    addPaths("removed", changes.removed);
+    JsonMutValue renamed = root.addArray("renamed");
+    for (const AssetRename& rename : changes.renamed)
+    {
+        JsonMutValue item = renamed.pushObject();
+        item.add("from", document.makeString(rename.from));
+        item.add("to", document.makeString(rename.to));
+    }
+    document.setRoot(root);
+    std::string payload;
+    if (document.write(payload, JsonWriteOptions{.pretty = false}))
+    {
+        m_events.post("asset.changed", std::move(payload));
+    }
 }
 
 const ReferenceIndex& EditorContext::references()
@@ -1533,6 +1611,17 @@ void EditorContext::endFrame(f64 deltaSeconds)
         m_commandsRevision = m_commands.revision();
         m_events.post("commands.changed",
                       "{\"commands\":" + std::to_string(m_commands.commands().size()) + "}");
+    }
+    if (m_project && m_assets.scanned())
+    {
+        m_assetPollTimer += deltaSeconds;
+        if (m_assetPollTimer >= m_options.assetPollInterval)
+        {
+            m_assetPollTimer = 0.0;
+            m_assetNews.merge(pollAssets(false));
+            postAssetChanges(m_assetNews);
+            m_assetNews = {};
+        }
     }
     m_events.flush();
     m_journal.flush();

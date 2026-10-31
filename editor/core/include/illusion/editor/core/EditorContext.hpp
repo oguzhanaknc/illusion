@@ -9,6 +9,7 @@
 #include <illusion/core/TypeName.hpp>
 #include <illusion/ecs/EntityGuid.hpp>
 #include <illusion/ecs/World.hpp>
+#include <illusion/editor/core/AssetCatalog.hpp>
 #include <illusion/editor/core/ChangeJournal.hpp>
 #include <illusion/editor/core/CommandRegistry.hpp>
 #include <illusion/editor/core/CrashJournal.hpp>
@@ -27,6 +28,7 @@
 #include <illusion/editor/core/ViewportHost.hpp>
 #include <illusion/editor/core/WorldEditor.hpp>
 #include <illusion/platform/FileSystem.hpp>
+#include <illusion/platform/FileWatcher.hpp>
 #include <illusion/text/Localization.hpp>
 
 #include <filesystem>
@@ -58,7 +60,11 @@ struct EditorContextOptions
     u32 autosaveCopies = 3;                ///< Autosave files kept per scene (rotating).
     bool crashJournal = true;              ///< Write `.illusion/journal/<session>.jsonl` in projects.
     usize logCapacity = 1024;              ///< Log messages kept for `log.read` (0: none are kept).
-    bool registerCoreCommands = true;      ///< Register the core command modules (registerCoreCommands()).
+    /// How the project's `assets/` directory is watched for changes made outside the editor.
+    FileWatchBackend assetWatching = FileWatchBackend::Native;
+    f64 assetPollInterval =
+        0.25; ///< Seconds between checks for asset changes in endFrame() (0: every frame).
+    bool registerCoreCommands = true; ///< Register the core command modules (registerCoreCommands()).
     /// Directory in which `project.create` and `project.open` may create and open projects (empty: those
     /// commands are unsupported). Agents name projects relative to it, so they cannot reach other files.
     std::filesystem::path workspace{};
@@ -313,6 +319,13 @@ public:
     /// without a project).
     [[nodiscard]] const ReferenceIndex& references();
 
+    /// The catalog of the project's assets, brought up to date first (empty without a project). Changes
+    /// found here or by endFrame() are posted as the `asset.changed` event by endFrame().
+    [[nodiscard]] const AssetCatalog& assets();
+
+    /// The backend watching the project's `assets/` directory (Polling without a project).
+    [[nodiscard]] FileWatchBackend assetWatchBackend() const noexcept { return m_assetWatcher.backend(); }
+
     /// The editor's clipboard: scene v2 JSON of copied entities ("" when empty).
     [[nodiscard]] const std::string& clipboard() const noexcept { return m_clipboard; }
 
@@ -539,8 +552,9 @@ public:
     /// Forgets the undo history; returns the number of removed steps.
     usize clearHistory();
 
-    /// End of a frame: posts `commands.changed` if commands were registered since the last frame, delivers
-    /// events, flushes the crash journal and autosaves when it is time.
+    /// End of a frame: posts `commands.changed` if commands were registered since the last frame, checks
+    /// for asset changes made outside the editor once the catalog was used (see assets()) and posts
+    /// `asset.changed`, delivers events, flushes the crash journal and autosaves when it is time.
     void endFrame(f64 deltaSeconds);
 
     /// Writes an autosave copy of the scene now if a project is open, autosave is on
@@ -583,6 +597,11 @@ private:
                     std::vector<EntityGuid> selectionBefore, CommandReport& report);
     [[nodiscard]] Expected<void, CommandError> applyStep(const UndoStep& step, bool forward);
     void sceneReplaced(std::string_view path);
+    // Brings the asset catalog up to date with the watcher's changes (and, with @p full, a listing of the
+    // mount) and returns what changed.
+    AssetCatalogChanges pollAssets(bool full);
+    // Posts `asset.changed` with @p changes unless they are empty.
+    void postAssetChanges(const AssetCatalogChanges& changes);
     void afterChange(bool historyChanged = true);
     void restoreSelection(std::span<const EntityGuid> guids);
     void selectionChanged(u64 before, std::string_view origin);
@@ -606,6 +625,11 @@ private:
     CrashJournal m_journal;
     SettingsCatalog m_settings;
     ReferenceIndex m_references;
+    AssetCatalog m_assets;
+    FileWatcher m_assetWatcher;
+    std::vector<FileEvent> m_assetChanges;
+    AssetCatalogChanges m_assetNews; // Changes not yet posted as `asset.changed`.
+    f64 m_assetPollTimer = 0.0;
     std::string m_clipboard;
     ComponentClipboard m_componentClipboard;
     ViewState m_view;
