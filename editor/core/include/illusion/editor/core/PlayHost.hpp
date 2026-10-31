@@ -91,6 +91,17 @@ struct PlayActionState
     Vec2 value{0.0f};      ///< Axis: x; Vector2: x and y; Button: 1 or 0 in x.
 };
 
+/// A Component type whose layout a module load or hot reload changed, and what happened to its Components
+/// (docs/adr/0044-component-layout-migration-on-hot-reload.md).
+struct PlayComponentMigration
+{
+    std::string type{};                       ///< Stable name of the type.
+    u32 components = 0;                       ///< Components migrated, in all Worlds.
+    std::vector<std::string> addedFields{};   ///< New fields, which got their default value.
+    std::vector<std::string> removedFields{}; ///< Fields of the old version that were dropped.
+    std::vector<std::string> resetFields{};   ///< Fields reset to their default where the value did not fit.
+};
+
 /// A game module loaded in the editor (module.list).
 struct PlayModuleInfo
 {
@@ -99,6 +110,7 @@ struct PlayModuleInfo
     std::string path;    ///< The library it was loaded from ("" for static modules).
     bool shared = true;  ///< Loaded from a shared library (hot-reloadable).
     u32 reloads = 0;     ///< Successful hot reloads.
+    std::vector<PlayComponentMigration> migrated{}; ///< Types the last load or reload migrated.
 };
 
 /// The editor's game runtime: one play session at a time and the loaded game modules. Called on the

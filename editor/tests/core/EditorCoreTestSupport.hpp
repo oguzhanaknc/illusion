@@ -576,7 +576,7 @@ public:
         {
             name.erase(0, 3);
         }
-        m_modules.push_back(editor::PlayModuleInfo{name, "1.0.0", std::string(path), true, 0});
+        m_modules.push_back(editor::PlayModuleInfo{name, "1.0.0", std::string(path), true, 0, {}});
         return name;
     }
 
@@ -587,6 +587,7 @@ public:
             if (module.name == name)
             {
                 ++module.reloads;
+                module.migrated = nextMigration;
                 return {};
             }
         }
@@ -613,15 +614,16 @@ public:
         out.insert(out.end(), m_modules.begin(), m_modules.end());
     }
 
-    std::vector<editor::PlayInputEvent> events; ///< Every inject() so far.
-    usize edited = 0;                           ///< Operations passed to playWorldEdited().
-    u32 changedModules = 0;                     ///< What reloadChangedModules() reports.
+    std::vector<editor::PlayInputEvent> events;                ///< Every inject() so far.
+    usize edited = 0;                                          ///< Operations passed to playWorldEdited().
+    u32 changedModules = 0;                                    ///< What reloadChangedModules() reports.
+    std::vector<editor::PlayComponentMigration> nextMigration; ///< What reloadModule() reports as migrated.
 
 private:
     editor::EditorContext*& m_editor;
     std::unique_ptr<World> m_world;
     editor::PlayStatus m_status;
-    std::vector<editor::PlayModuleInfo> m_modules{{"fake", "1.0.0", "", false, 0}};
+    std::vector<editor::PlayModuleInfo> m_modules{{"fake", "1.0.0", "", false, 0, {}}};
 };
 
 /// Writes a module SDK description to @p file whose CMake is the stand-in of FakeCMake.cpp; returns @p file.

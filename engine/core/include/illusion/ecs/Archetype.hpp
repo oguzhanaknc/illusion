@@ -130,6 +130,12 @@ public:
     /// Caches the archetype reached by removing @p id.
     void setRemoveEdge(ComponentId id, Archetype* target);
 
+    /// Forgets every cached edge (the World removed archetypes they may point at).
+    void clearEdges() noexcept;
+
+    /// Sets index() after the World removed archetypes before this one.
+    void setIndex(u32 index) noexcept { m_index = index; }
+
 private:
     static void relocate(const Column& column, void* dst, void* src) noexcept;
 
@@ -142,6 +148,7 @@ private:
     u32 m_size = 0;
     std::vector<std::byte*> m_chunks;
     std::byte* m_spareChunk = nullptr;
+    const ComponentRegistry& m_registry;
     PoolAllocator& m_chunkPool;
     std::unordered_map<ComponentId, Archetype*> m_addEdges;
     std::unordered_map<ComponentId, Archetype*> m_removeEdges;

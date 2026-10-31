@@ -68,6 +68,16 @@ CMake's output for anything the parser did not recognise.
 `module.reload` hot-reloads one module by name, or every module whose library file changed, for libraries built
 outside the editor (**Ctrl+R**).
 
+When the new code changes the fields of a reflected Component, the Components in the edit and play Worlds
+are migrated by field name instead of being lost ([Component layout migration](../modules.md#component-layout-migration)).
+The `modules` of the `module.reload` and `module.build` results list, for each module, the `migrated` types
+with their `components` and their `addedFields`, `removedFields` and `resetFields`; subscribers get a
+`module.migrated` event:
+
+```json
+{"module": "tetris", "types": ["tetris.Score"], "components": 1}
+```
+
 ## Opening sources
 
 `editor.open_source` opens a file at a line and column in your code editor: the **External Tools** command line

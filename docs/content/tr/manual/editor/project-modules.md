@@ -67,6 +67,16 @@ satırlarını tutar.
 `module.reload` editör dışında derlenen kütüphaneler için bir modülü adıyla ya da kütüphane dosyası değişen
 her modülü hot reload ile yeniler (**Ctrl+R**).
 
+Yeni kod yansıtılmış bir Component'in alanlarını değiştirdiğinde, edit ve play World'lerindeki Component'ler
+kaybolmak yerine alan adına göre taşınır ([Component layout taşıma](../modules.md#component-layout-tasma)).
+`module.reload` ve `module.build` sonuçlarının `modules` listesi her modül için `migrated` türlerini
+`components`, `addedFields`, `removedFields` ve `resetFields` ile verir; aboneler bir `module.migrated`
+event'i alır:
+
+```json
+{"module": "tetris", "types": ["tetris.Score"], "components": 1}
+```
+
 ## Kaynakları açma
 
 `editor.open_source` bir dosyayı kod editörünüzde bir satır ve sütunda açar: [tercihlerin](preferences.md)

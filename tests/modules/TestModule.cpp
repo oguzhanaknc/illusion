@@ -1,8 +1,11 @@
 // A module for the module tests, built in several variants (TEST_MODULE_VARIANT):
 // 1: registers ModuleCounter and LegacyComponent; update adds 1 to every counter.
 // 2: registers only ModuleCounter; update adds 2.
-// 3: widens ModuleCounter (TEST_MODULE_WIDE_COUNTER), which a hot reload must reject.
+// 3: widens ModuleCounter (TEST_MODULE_WIDE_COUNTER), which a hot reload migrates.
 // 4: reports a wrong build key.
+// 5: changes the layout of LayoutComponent (TEST_MODULE_LAYOUT_V2), which a hot reload migrates.
+// 6: widens the unreflected OpaqueComponent (TEST_MODULE_WIDE_OPAQUE), which a hot reload must reject.
+// Variants 1 to 4 and 6 start a session with two LayoutComponents and an OpaqueComponent.
 // Every variant is built with USES physics audio input render runtime: the API targets give it the headers
 // of those libraries and their service interfaces without their code. update() can call every service
 // function (ModuleControl::callServices) and start() can build a mesh body (ModuleControl::createMesh).
@@ -181,6 +184,22 @@ bool loadModule(ModuleContext& context)
     {
         reflect<test::LegacyComponent>("test.LegacyComponent").field("value", &test::LegacyComponent::value);
     }
+#if !defined(TEST_MODULE_LAYOUT_V2)
+    reflect<test::LayoutComponent>("test.LayoutComponent")
+        .field("count", &test::LayoutComponent::count)
+        .field("speed", &test::LayoutComponent::speed)
+        .field("removed", &test::LayoutComponent::removed)
+        .field("small", &test::LayoutComponent::small)
+        .field("target", &test::LayoutComponent::target);
+#else
+    reflect<test::LayoutComponent>("test.LayoutComponent", 2)
+        .field("target", &test::LayoutComponent::target)
+        .field("count", &test::LayoutComponent::count)
+        .field("velocity", &test::LayoutComponent::velocity, {.renamedFrom = "speed"})
+        .field("small", &test::LayoutComponent::small)
+        .field("label", &test::LayoutComponent::label);
+#endif
+    static_cast<void>(componentId<test::OpaqueComponent>());
     ILL_LOG_INFO("TestModule", "variant {} loaded", kVariant);
     return true;
 }
@@ -201,6 +220,11 @@ void startModule(ModuleContext& context)
     {
         world.create(test::ModuleCounter{}, test::LegacyComponent{7});
     }
+#if !defined(TEST_MODULE_LAYOUT_V2)
+    control->layoutTarget = world.create(test::LayoutComponent{41, 2.5f, 5, 300, Entity{}});
+    world.create(test::LayoutComponent{-3, 0.25f, 6, 7, control->layoutTarget});
+    world.create(test::OpaqueComponent{5});
+#endif
     createMeshBody(context, *control);
 }
 

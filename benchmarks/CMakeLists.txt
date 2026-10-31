@@ -24,6 +24,18 @@ target_link_libraries(illusion_benchmarks PRIVATE
     illusion::runtime illusion::text illusion::render illusion::nanobench)
 illusion_configure_target(illusion_benchmarks)
 
+# The two builds of the modules/migrate benchmark module (a shared module, so not in profiling builds).
+if(NOT ILLUSION_PROFILING)
+    foreach(variant narrow wide)
+        string(TOUPPER ${variant} upper)
+        illusion_add_module(illusion_bench_migrate_${variant} SHARED SOURCES modules/MigrateModule.cpp)
+        target_compile_definitions(illusion_benchmarks PRIVATE
+            BENCH_MIGRATE_${upper}="$<TARGET_FILE:illusion_bench_migrate_${variant}>")
+        add_dependencies(illusion_benchmarks illusion_bench_migrate_${variant})
+    endforeach()
+    target_compile_definitions(illusion_bench_migrate_wide PRIVATE BENCH_MIGRATE_WIDE=1)
+endif()
+
 # Perf budgets are only meaningful for optimized builds. The tolerance multiplier absorbs noise on
 # shared CI runners; set ILLUSION_BENCH_TOLERANCE in the environment to override it.
 add_test(NAME benchmarks COMMAND illusion_benchmarks CONFIGURATIONS Release RelWithDebInfo)

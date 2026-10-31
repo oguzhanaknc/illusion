@@ -19,7 +19,8 @@ struct ComponentRegistry::Lookup
     std::unordered_map<u64, ComponentId> byHash;
     std::unordered_map<std::string, ComponentId> byStableName;
     std::vector<u32> retiredModules; // their types are taken over by the next registration
-    std::vector<std::string> layoutConflicts;
+    // Registrations of retired or orphaned types, waiting for commitStaged().
+    std::vector<std::pair<ComponentId, ComponentInfo>> staged;
     // Every reflection ever made, including replaced ones, so that views never dangle.
     std::vector<std::unique_ptr<detail::ReflectionData>> reflections;
 };
@@ -60,6 +61,7 @@ ComponentRegistry::ComponentRegistry()
     : m_lookup(std::make_unique<Lookup>())
     , m_structs(std::make_unique<StructRegistry>())
     , m_entries(std::make_unique<std::array<Entry, kMaxComponentTypes>>())
+    , m_archetypeUses(std::make_unique<std::array<std::atomic<u32>, kMaxComponentTypes>>())
 {
 }
 
@@ -89,27 +91,35 @@ ComponentId ComponentRegistry::registerType(const ComponentInfo& info)
         ComponentInfo& entry = (*m_entries)[it->second].info;
         ILL_CHECK(entry.name == info.name, "component hash collision between '{}' and '{}'", entry.name,
                   info.name);
-        // A reloaded module's (retired) or an unloaded module's (orphaned) type goes to whoever registers it
-        // next; the host's code is never unloaded, so it takes any type over from a module.
+        // A reloaded module's (retired) or an unloaded module's (orphaned) type goes to the module that
+        // registers it next, through a staged registration that the module host commits once it has
+        // migrated the existing Components (ADR 0044). The host's code is never unloaded, so it takes any
+        // type over from a module at once.
         const auto& retired = m_lookup->retiredModules;
         const bool replaceable = entry.module == kOrphaned ||
                                  std::find(retired.begin(), retired.end(), entry.module) != retired.end();
         const bool hostTakesOver = info.module == 0 && entry.module != 0;
-        const bool takeover = entry.module != info.module && (replaceable || hostTakesOver);
         const bool sameLayout = entry.size == info.size && entry.alignment == info.alignment;
-        if (replaceable && !hostTakesOver && takeover && !sameLayout)
+        // An orphaned type has no Components left, so only a new layout must wait for its archetypes to go.
+        if (replaceable && !hostTakesOver && entry.module != info.module &&
+            (entry.module != kOrphaned || !sameLayout))
         {
-            // A reloaded module changed the type: existing Components cannot be reinterpreted. The module
-            // host rolls the reload back.
-            auto& conflicts = m_lookup->layoutConflicts;
-            if (std::find(conflicts.begin(), conflicts.end(), entry.name) == conflicts.end())
+            auto& staged = m_lookup->staged;
+            const auto existing =
+                std::find_if(staged.begin(), staged.end(),
+                             [id = it->second](const auto& item) { return item.first == id; });
+            if (existing != staged.end())
             {
-                conflicts.emplace_back(entry.name);
+                existing->second = info;
+            }
+            else
+            {
+                staged.emplace_back(it->second, info);
             }
             return it->second;
         }
         ILL_CHECK(sameLayout, "component '{}' re-registered with a different layout", info.name);
-        if (takeover)
+        if (hostTakesOver || (replaceable && entry.module != info.module))
         {
             entry.relocate = info.relocate;
             entry.destroy = info.destroy;
@@ -152,30 +162,86 @@ void ComponentRegistry::restoreModule(u32 module)
     std::erase(m_lookup->retiredModules, module);
 }
 
-void ComponentRegistry::restoreType(ComponentId id, const ComponentInfo& info)
+void ComponentRegistry::stagedTypes(std::vector<ComponentId>& out) const
 {
     std::scoped_lock lock(m_lookup->mutex);
-    ILL_ASSERT(id < count(), "unknown component id {}", id);
-    ComponentInfo& entry = (*m_entries)[id].info;
-    ILL_ASSERT(entry.hash == info.hash && entry.size == info.size && entry.alignment == info.alignment,
-               "restoreType() needs a copy of the same type's info");
-    entry.relocate = info.relocate;
-    entry.destroy = info.destroy;
-    entry.construct = info.construct;
-    entry.trivial = info.trivial;
-    entry.module = info.module;
+    for (const auto& [id, info] : m_lookup->staged)
+    {
+        out.push_back(id);
+    }
 }
 
-bool ComponentRegistry::takeLayoutConflicts(std::vector<std::string>& out)
+std::optional<ComponentInfo> ComponentRegistry::stagedInfo(ComponentId id) const
 {
     std::scoped_lock lock(m_lookup->mutex);
-    const bool any = !m_lookup->layoutConflicts.empty();
-    for (std::string& name : m_lookup->layoutConflicts)
+    for (const auto& [stagedId, info] : m_lookup->staged)
     {
-        out.push_back(std::move(name));
+        if (stagedId == id)
+        {
+            return info;
+        }
     }
-    m_lookup->layoutConflicts.clear();
-    return any;
+    return std::nullopt;
+}
+
+const TypeReflection* ComponentRegistry::stagedReflection(ComponentId id) const
+{
+    ILL_ASSERT(id < count(), "unknown component id {}", id);
+    std::scoped_lock lock(m_lookup->mutex);
+    const Entry& entry = (*m_entries)[id];
+    return entry.building != nullptr && entry.building != entry.reflection ? &entry.building->view()
+                                                                           : nullptr;
+}
+
+void ComponentRegistry::commitStaged(ComponentId id)
+{
+    std::scoped_lock lock(m_lookup->mutex);
+    auto& staged = m_lookup->staged;
+    const auto it =
+        std::find_if(staged.begin(), staged.end(), [id](const auto& item) { return item.first == id; });
+    ILL_ASSERT(it != staged.end(), "component {} has no staged registration", id);
+    Entry& entry = (*m_entries)[id];
+    const ComponentInfo& next = it->second;
+    if (entry.info.size != next.size || entry.info.alignment != next.alignment)
+    {
+        ILL_CHECK((*m_archetypeUses)[id].load(std::memory_order_acquire) == 0,
+                  "the layout of component '{}' cannot change while archetypes use it", entry.name);
+        entry.info.size = next.size;
+        entry.info.alignment = next.alignment;
+    }
+    entry.info.relocate = next.relocate;
+    entry.info.destroy = next.destroy;
+    entry.info.construct = next.construct;
+    entry.info.trivial = next.trivial;
+    entry.info.module = next.module;
+    staged.erase(it);
+    if (entry.building != nullptr && entry.building != entry.reflection)
+    {
+        publishReflection(id);
+    }
+}
+
+void ComponentRegistry::discardStaged()
+{
+    std::scoped_lock lock(m_lookup->mutex);
+    for (const auto& [id, info] : m_lookup->staged)
+    {
+        Entry& entry = (*m_entries)[id];
+        entry.building = entry.reflection;
+    }
+    m_lookup->staged.clear();
+}
+
+u32 ComponentRegistry::archetypeUses(ComponentId id) const noexcept
+{
+    ILL_ASSERT(id < kMaxComponentTypes, "unknown component id {}", id);
+    return (*m_archetypeUses)[id].load(std::memory_order_acquire);
+}
+
+void ComponentRegistry::addArchetypeUse(ComponentId id, i32 delta) const noexcept
+{
+    ILL_ASSERT(id < kMaxComponentTypes, "unknown component id {}", id);
+    (*m_archetypeUses)[id].fetch_add(static_cast<u32>(delta), std::memory_order_acq_rel);
 }
 
 void ComponentRegistry::typesOfModule(u32 module, std::vector<ComponentId>& out) const
@@ -238,12 +304,19 @@ void ComponentRegistry::beginReflection(ComponentId id, std::string_view stableN
     Entry& entry = (*m_entries)[id];
     auto data = std::make_unique<detail::ReflectionData>(stableName, version, layout);
     entry.building = m_lookup->reflections.emplace_back(std::move(data)).get();
-    if (layout.size != entry.info.size)
+    const auto& staged = m_lookup->staged;
+    if (std::find_if(staged.begin(), staged.end(), [id](const auto& item) { return item.first == id; }) !=
+        staged.end())
     {
-        // A reloaded module changed the type's layout (see registerType()): the reload is rolled back, so
-        // the new reflection is built but not published.
-        return;
+        return; // published by commitStaged()
     }
+    publishReflection(id);
+}
+
+void ComponentRegistry::publishReflection(ComponentId id)
+{
+    Entry& entry = (*m_entries)[id];
+    const std::string_view stableName = entry.building->view().name;
     const auto existing = m_lookup->byStableName.find(std::string(stableName));
     ILL_CHECK(existing == m_lookup->byStableName.end() || existing->second == id,
               "stable name '{}' is already used by component '{}'", stableName,

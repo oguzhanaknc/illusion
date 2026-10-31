@@ -8,6 +8,9 @@
 
 #include <algorithm>
 #include <filesystem>
+#include <span>
+#include <string>
+#include <vector>
 
 namespace illusion::editor::detail
 {
@@ -18,6 +21,32 @@ namespace
 constexpr usize kMaxModuleName = 48;
 constexpr usize kMaxDiagnostics = 200;
 constexpr std::string_view kModulesRoot = "modules:/CMakeLists.txt";
+
+// Posts "module.migrated" for each module in @p names whose last reload migrated Components, with the
+// module's name, the stable names of the migrated types and their number of Components (ADR 0044).
+void postMigrations(EditorContext& editor, PlayHost& play, std::span<const std::string> names)
+{
+    std::vector<PlayModuleInfo> modules;
+    play.modules(modules);
+    for (const PlayModuleInfo& module : modules)
+    {
+        if (module.migrated.empty() || std::find(names.begin(), names.end(), module.name) == names.end())
+        {
+            continue;
+        }
+        // Module names, stable names and C++ type names hold no quotes or backslashes: nothing to escape.
+        std::string payload = "{\"module\":\"" + module.name + "\",\"types\":[";
+        u32 components = 0;
+        for (const PlayComponentMigration& migration : module.migrated)
+        {
+            payload += payload.back() == '[' ? "\"" : ",\"";
+            payload += migration.type + "\"";
+            components += migration.components;
+        }
+        payload += "],\"components\":" + std::to_string(components) + "}";
+        editor.events().post("module.migrated", std::move(payload));
+    }
+}
 
 // The module's directory name doubles as its CMake target and library name.
 bool isModuleName(std::string_view name) noexcept
@@ -284,6 +313,7 @@ private:
                 {
                     return unexpected(std::move(loaded).error());
                 }
+                postMigrations(context.editor(), *play, result.reloaded);
             }
         }
         else
@@ -437,6 +467,7 @@ Expected<ModuleReloadResult, CommandError> moduleReload(CommandContext& context,
             result.reloaded.push_back(module.name);
         }
     }
+    postMigrations(context.editor(), *play, result.reloaded);
     return result;
 }
 
@@ -482,8 +513,10 @@ void registerModuleCommands(CommandRegistry& registry)
         .description = strings::kCommandModuleReloadDescription,
         .agentSummary =
             "Hot-reloads the named game module from its library, or every module whose library file changed "
-            "when no name is given; Component values in the Worlds are kept. Example: {\"name\": "
-            "\"tetris\"}.",
+            "when no name is given; Component values in the Worlds are kept. When the new code changed the "
+            "fields of a reflected Component, its Components are migrated by field name: modules[].migrated "
+            "lists each type with its addedFields, removedFields and resetFields (values that did not fit), "
+            "and the module.migrated event is posted. Example: {\"name\": \"tetris\"}.",
         .category = "Module",
         .icon = "refresh",
         .permission = PermissionClass::Build,

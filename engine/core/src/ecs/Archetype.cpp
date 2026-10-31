@@ -11,6 +11,7 @@ Archetype::Archetype(u32 index, std::span<const ComponentId> signature, const Co
                      PoolAllocator& chunkPool)
     : m_index(index)
     , m_signature(signature.begin(), signature.end())
+    , m_registry(registry)
     , m_chunkPool(chunkPool)
 {
     ILL_ASSERT(std::is_sorted(m_signature.begin(), m_signature.end()), "archetype signature must be sorted");
@@ -23,6 +24,7 @@ Archetype::Archetype(u32 index, std::span<const ComponentId> signature, const Co
     for (const ComponentId id : m_signature)
     {
         m_mask.set(id);
+        registry.addArchetypeUse(id, 1);
         const ComponentInfo& info = registry.info(id);
         if (info.isTag())
         {
@@ -73,6 +75,10 @@ Archetype::~Archetype()
         m_chunkPool.deallocate(chunk);
     }
     m_chunkPool.deallocate(m_spareChunk);
+    for (const ComponentId id : m_signature)
+    {
+        m_registry.addArchetypeUse(id, -1);
+    }
 }
 
 void Archetype::relocate(const Column& column, void* dst, void* src) noexcept
@@ -172,6 +178,12 @@ void Archetype::setAddEdge(ComponentId id, Archetype* target)
 void Archetype::setRemoveEdge(ComponentId id, Archetype* target)
 {
     m_removeEdges[id] = target;
+}
+
+void Archetype::clearEdges() noexcept
+{
+    m_addEdges.clear();
+    m_removeEdges.clear();
 }
 
 } // namespace illusion

@@ -320,6 +320,46 @@ TEST_CASE("module.reload reloads a named module or the changed ones")
     CHECK(fails(editor, "module.reload", R"({"name":"fake"})").kind == ErrorKind::PreconditionFailed);
 }
 
+TEST_CASE("module.reload reports migrated Component types and posts module.migrated")
+{
+    EditorFixture f;
+    EditorContext& editor = *f.editor;
+    ok(editor, "module.build");
+    std::vector<std::string> payloads;
+    editor.events().subscribe("module.migrated",
+                              [&payloads](const EditorEvent& event) { payloads.push_back(event.payload); });
+    f.play.nextMigration = {
+        {.type = "game.Score",
+         .components = 3,
+         .addedFields = {"combo"},
+         .removedFields = {},
+         .resetFields = {}},
+        {.type = "game.Piece",
+         .components = 1,
+         .addedFields = {},
+         .removedFields = {"old"},
+         .resetFields = {"x"}},
+    };
+    const JsonDocument reloaded = ok(editor, "module.reload", R"({"name":"game"})");
+    const JsonValue game = reloaded.root().find("modules")[1];
+    CHECK(game.find("name").asString() == "game");
+    const JsonValue migrated = game.find("migrated");
+    REQUIRE(migrated.size() == 2);
+    CHECK(migrated[0].find("type").asString() == "game.Score");
+    CHECK(migrated[0].find("components").asI64() == 3);
+    CHECK(migrated[0].find("addedFields")[0].asString() == "combo");
+    CHECK(migrated[1].find("removedFields")[0].asString() == "old");
+    CHECK(migrated[1].find("resetFields")[0].asString() == "x");
+    editor.events().flush();
+    CHECK(payloads == std::vector<std::string>{
+                          R"({"module":"game","types":["game.Score","game.Piece"],"components":4})"});
+
+    f.play.nextMigration.clear(); // a reload without layout changes posts nothing
+    ok(editor, "module.reload", R"({"name":"game"})");
+    editor.events().flush();
+    CHECK(payloads.size() == 1);
+}
+
 TEST_CASE("code editor command lines are split and their placeholders replaced")
 {
     const auto arguments = [](std::string_view command) {

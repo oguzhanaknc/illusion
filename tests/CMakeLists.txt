@@ -112,7 +112,7 @@ target_compile_definitions(illusion_tests PRIVATE PROCESS_HELPER="$<TARGET_FILE:
 add_dependencies(illusion_tests illusion_process_helper)
 
 # Shared libraries loaded by tests/modules/TestModules.cpp (see TestModule.cpp for the variants).
-foreach(variant 1 2 3 4)
+foreach(variant 1 2 3 4 5 6)
     illusion_add_module(illusion_test_module_v${variant} SHARED SOURCES modules/TestModule.cpp
         USES physics audio input render runtime)
     target_include_directories(illusion_test_module_v${variant} PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/modules)
@@ -122,6 +122,8 @@ foreach(variant 1 2 3 4)
     add_dependencies(illusion_tests illusion_test_module_v${variant})
 endforeach()
 target_compile_definitions(illusion_test_module_v3 PRIVATE TEST_MODULE_WIDE_COUNTER=1)
+target_compile_definitions(illusion_test_module_v5 PRIVATE TEST_MODULE_LAYOUT_V2=1)
+target_compile_definitions(illusion_test_module_v6 PRIVATE TEST_MODULE_WIDE_OPAQUE=1)
 add_library(illusion_test_not_a_module MODULE modules/NotAModule.cpp)
 illusion_configure_target(illusion_test_not_a_module)
 target_compile_definitions(illusion_tests PRIVATE TEST_NOT_A_MODULE="$<TARGET_FILE:illusion_test_not_a_module>")

@@ -21,6 +21,7 @@
 #include <cstring>
 #include <memory>
 #include <new>
+#include <optional>
 #include <string>
 #include <string_view>
 #include <type_traits>
@@ -129,10 +130,12 @@ public:
     static void setInstance(ComponentRegistry* registry) noexcept;
 
     /// Registers a type described by @p info and returns its id. Registering a type again (same hash)
-    /// returns the existing id; it is a fatal error if size or alignment differ. @p info takes the type
-    /// over (its lifetime functions and module replace the old ones) if it comes from the host (module 0)
-    /// and the type was registered by a module, or if the type was registered by a module that is being
-    /// reloaded (retireModule()) or was unloaded (orphanModule()).
+    /// returns the existing id; it is a fatal error if size or alignment differ, unless the registration is
+    /// staged. @p info takes the type over (its lifetime functions and module replace the old ones) if it
+    /// comes from the host (module 0) and the type was registered by a module, or if the type was
+    /// registered by a module that was unloaded (orphanModule()). A registration by a module of a type whose
+    /// module is being reloaded (retireModule()), or of an orphaned type with another size or alignment, is
+    /// staged instead: see commitStaged().
     ComponentId registerType(const ComponentInfo& info);
 
     /// Registers @p T. See registerType(const ComponentInfo&).
@@ -163,20 +166,31 @@ public:
     /// while no other thread uses component types of @p module.
     /// @{
 
-    /// Lets the next registration of each type that @p module registered take it over. A registration
-    /// with a different size or alignment does not take over and is reported by takeLayoutConflicts().
+    /// Lets the next registration of each type that @p module registered take it over: such a
+    /// registration is staged (see commitStaged()).
     void retireModule(u32 module);
 
     /// Ends retireModule() for @p module (its types keep their current owners).
     void restoreModule(u32 module);
 
-    /// Gives @p id back the lifetime functions and module of @p info, a copy of info(id) taken earlier
-    /// (rolls back a takeover; the layout must not differ).
-    void restoreType(ComponentId id, const ComponentInfo& info);
+    /// Appends the ids of the types with a staged registration to @p out.
+    void stagedTypes(std::vector<ComponentId>& out) const;
 
-    /// Moves the names of types whose registration conflicted with the layout of a retired module's type
-    /// to @p out, and returns true if there were any.
-    bool takeLayoutConflicts(std::vector<std::string>& out);
+    /// Returns a copy of the staged registration of @p id, or nullopt if there is none.
+    [[nodiscard]] std::optional<ComponentInfo> stagedInfo(ComponentId id) const;
+
+    /// Returns the reflection built for the staged registration of @p id, which reflection() does not
+    /// return until commitStaged(), or nullptr if the new registration was not reflected.
+    [[nodiscard]] const TypeReflection* stagedReflection(ComponentId id) const;
+
+    /// Applies the staged registration of @p id: its lifetime functions and module take the type over, a
+    /// different size or alignment replaces the layout (no archetype may use the type then; see
+    /// archetypeUses()) and its reflection is published. The id and the stable name stay the same
+    /// (docs/adr/0044-component-layout-migration-on-hot-reload.md).
+    void commitStaged(ComponentId id);
+
+    /// Drops every staged registration and its unpublished reflection (rolls a reload back).
+    void discardStaged();
 
     /// Appends the ids of the types whose lifetime functions are in @p module to @p out.
     void typesOfModule(u32 module, std::vector<ComponentId>& out) const;
@@ -186,6 +200,12 @@ public:
     /// every World first.
     void orphanModule(u32 module);
 
+    /// Number of archetypes, in every World of this registry, whose signature contains @p id.
+    [[nodiscard]] u32 archetypeUses(ComponentId id) const noexcept;
+
+    /// Adds @p delta to archetypeUses() of @p id. Called by Archetype when it is created and destroyed.
+    void addArchetypeUse(ComponentId id, i32 delta) const noexcept;
+
     /// @}
 
     /// @name Reflection
@@ -194,8 +214,8 @@ public:
 
     /// Starts the reflection of @p id, laid out as @p layout, under @p stableName, replacing any earlier
     /// reflection of the same type (which stays valid until the registry is destroyed). Stable names must
-    /// be unique; reusing one for another type is a fatal error. A layout that differs from the registered
-    /// one (a reloaded module's layout conflict, see registerType()) is reflected but not published.
+    /// be unique; reusing one for another type is a fatal error. The reflection of a type with a staged
+    /// registration is built but published only by commitStaged().
     void beginReflection(ComponentId id, std::string_view stableName, u32 version, const TypeLayout& layout);
 
     /// Appends a field to the reflection of @p id. Strings, enumeration values and element types are
@@ -232,11 +252,13 @@ private:
     };
 
     detail::ReflectionData& reflectionData(ComponentId id) const;
+    void publishReflection(ComponentId id); // with the lookup mutex held
 
     struct Lookup;
     std::unique_ptr<Lookup> m_lookup;
     std::unique_ptr<StructRegistry> m_structs;
     std::unique_ptr<std::array<Entry, kMaxComponentTypes>> m_entries;
+    std::unique_ptr<std::array<std::atomic<u32>, kMaxComponentTypes>> m_archetypeUses;
     std::atomic<u32> m_count{0};
 };
 

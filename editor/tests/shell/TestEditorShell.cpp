@@ -646,6 +646,29 @@ TEST_CASE("the inspector adds components with required dependencies, custom draw
     CHECK(editor.world().has<Collider>(crate));
 }
 
+TEST_CASE("the inspector removes a component from its card menu and keeps drawing")
+{
+    // Regression: the Remove item returned without closing the menu's disabled scope, which asserted at the
+    // end of the frame.
+    ShellFixture fixture;
+    EditorContext& editor = *fixture.editor;
+    test::ok(editor, "entity.create",
+             R"({"name":"A","components":{"illusion.Transform":{},"test.Link":{"weight":2}}})");
+    test::ok(editor, "selection.set", R"({"entities":["/A"]})");
+
+    ui::UiDriver driver(fixture.context, [&] { fixture.frame(); });
+    driver.runFrames(3);
+    REQUIRE(driver.click("inspector.card.test.Link.menu"));
+    driver.runFrames(2);
+    REQUIRE(driver.click("inspector.card.test.Link.menu.remove"));
+    driver.runFrames(3);
+    CHECK_FALSE(driver.find("inspector.card.test.Link.menu").has_value());
+    const Entity a = editor.entities().resolve("/A", editor.selection()).value();
+    const ComponentId link = ComponentRegistry::instance().findByStableName("test.Link");
+    REQUIRE(link != kInvalidComponentId);
+    CHECK(editor.world().componentData(a, link) == nullptr);
+}
+
 TEST_CASE(
     "the inspector merges continuous drags, edits multiple entities in one step, and accepts entity drops")
 {

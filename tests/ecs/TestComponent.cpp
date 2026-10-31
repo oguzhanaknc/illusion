@@ -154,7 +154,7 @@ ComponentInfo moduleInfo(u32 module, void (*destroy)(void*) noexcept)
 
 } // namespace component_test
 
-TEST_CASE("a retired module's types are taken over by the next registration")
+TEST_CASE("a retired module's types are staged by the next registration and taken over on commit")
 {
     using namespace component_test;
     ComponentRegistry registry;
@@ -164,29 +164,44 @@ TEST_CASE("a retired module's types are taken over by the next registration")
     // Without retirement another registration does not take over.
     CHECK(registry.registerType(moduleInfo(2, &destroyFrom<2>)) == id);
     CHECK(registry.info(id).module == 1);
+    std::vector<ComponentId> staged;
+    registry.stagedTypes(staged);
+    CHECK(staged.empty());
 
     std::vector<ComponentId> owned;
     registry.typesOfModule(1, owned);
     CHECK(owned == std::vector<ComponentId>{id});
 
-    const ComponentInfo before = registry.info(id);
     registry.retireModule(1);
     CHECK(registry.registerType(moduleInfo(2, &destroyFrom<2>)) == id);
+    CHECK(registry.info(id).module == 1); // staged, not applied yet
+    registry.stagedTypes(staged);
+    CHECK(staged == std::vector<ComponentId>{id});
+    REQUIRE(registry.stagedInfo(id).has_value());
+    CHECK(registry.stagedInfo(id)->module == 2);
+    CHECK(registry.stagedReflection(id) == nullptr);
+
+    registry.commitStaged(id);
+    registry.restoreModule(1);
+    CHECK_FALSE(registry.stagedInfo(id).has_value());
     CHECK(registry.info(id).module == 2);
     registry.info(id).destroy(nullptr);
     CHECK(g_destroyedBy == 2);
 
-    // A rollback gives the type back.
-    registry.restoreType(id, before);
-    registry.restoreModule(1);
-    CHECK(registry.info(id).module == 1);
-    registry.info(id).destroy(nullptr);
-    CHECK(g_destroyedBy == 1);
-    CHECK(registry.registerType(moduleInfo(3, &destroyFrom<2>)) == id); // no longer retired
-    CHECK(registry.info(id).module == 1);
+    // A rollback drops the staged registration: the type keeps its owner.
+    registry.retireModule(2);
+    CHECK(registry.registerType(moduleInfo(3, &destroyFrom<1>)) == id);
+    registry.discardStaged();
+    registry.restoreModule(2);
+    CHECK(registry.info(id).module == 2);
+    staged.clear();
+    registry.stagedTypes(staged);
+    CHECK(staged.empty());
+    CHECK(registry.registerType(moduleInfo(3, &destroyFrom<1>)) == id); // no longer retired
+    CHECK(registry.info(id).module == 2);
 }
 
-TEST_CASE("orphaned types are taken over by any later registration")
+TEST_CASE("orphaned types are taken over by any later registration with the same layout")
 {
     using namespace component_test;
     ComponentRegistry registry;
@@ -202,21 +217,39 @@ TEST_CASE("orphaned types are taken over by any later registration")
     CHECK(g_destroyedBy == 2);
 }
 
-TEST_CASE("a takeover with another layout is reported instead of applied")
+TEST_CASE("a takeover with another layout is staged and replaces the layout on commit")
 {
     using namespace component_test;
     ComponentRegistry registry;
     const ComponentId id = registry.registerType(moduleInfo(6, &destroyFrom<1>));
+    const u32 size = registry.info(id).size;
     registry.retireModule(6);
     ComponentInfo wider = moduleInfo(7, &destroyFrom<2>);
     wider.size += 8;
+    wider.alignment = 16;
     CHECK(registry.registerType(wider) == id);
-    CHECK(registry.registerType(wider) == id);
-    CHECK(registry.info(id).module == 6); // not taken over
-    std::vector<std::string> conflicts;
-    CHECK(registry.takeLayoutConflicts(conflicts));
-    CHECK(conflicts == std::vector<std::string>{std::string(typeName<OnlyHere>())});
-    CHECK_FALSE(registry.takeLayoutConflicts(conflicts));
+    CHECK(registry.registerType(wider) == id); // registering again updates the staged registration
+    CHECK(registry.info(id).module == 6);
+    CHECK(registry.info(id).size == size);
+    std::vector<ComponentId> staged;
+    registry.stagedTypes(staged);
+    CHECK(staged == std::vector<ComponentId>{id});
+
+    CHECK(registry.archetypeUses(id) == 0);
+    registry.commitStaged(id);
+    CHECK(registry.info(id).size == size + 8);
+    CHECK(registry.info(id).alignment == 16);
+    CHECK(registry.info(id).module == 7);
+    CHECK(registry.info(id).name == typeName<OnlyHere>()); // same id, same name
+    CHECK(registry.count() == 1);
+
+    // An orphaned type with another layout is staged as well.
+    registry.orphanModule(7);
+    CHECK(registry.registerType(moduleInfo(8, &destroyFrom<1>)) == id);
+    CHECK(registry.info(id).size == size + 8);
+    registry.commitStaged(id);
+    CHECK(registry.info(id).size == size);
+    CHECK(registry.info(id).module == 8);
 }
 
 TEST_CASE("a registration by the host takes a type over from a module")

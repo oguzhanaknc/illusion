@@ -266,6 +266,14 @@ public:
     /// The registry whose ids this world uses.
     [[nodiscard]] const ComponentRegistry& registry() const noexcept { return m_registry; }
 
+    /// Number of this World's archetypes whose signature contains @p id (empty ones included).
+    [[nodiscard]] u32 archetypeCountWith(ComponentId id) const noexcept;
+
+    /// Destroys this World's archetypes that contain @p id, which must hold no entities, so that the type's
+    /// layout can change (docs/adr/0044-component-layout-migration-on-hot-reload.md). Returns how many were
+    /// destroyed. Not while a query iterates.
+    u32 purgeArchetypesWith(ComponentId id);
+
     /// Calls `fn(RawChunk&)` once per non-empty chunk of the entities that have every component in @p all
     /// and none in @p none: a query by ComponentId. An empty @p all matches every entity. Structural changes
     /// are not allowed during the iteration, as with Query.

@@ -417,3 +417,52 @@ TEST_CASE("structuralVersion follows the effects of CommandBuffer::apply")
     commands.apply(world);
     CHECK(world.structuralVersion() == version);
 }
+
+namespace world_test
+{
+// Used only by the purge test, so that no other test's archetypes count towards its uses.
+struct Purged
+{
+    int value = 0;
+};
+} // namespace world_test
+
+TEST_CASE("archetypes count their uses of a type and purging destroys the empty ones")
+{
+    using world_test::Purged;
+    const ComponentId purged = componentId<Purged>();
+    const ComponentRegistry& registry = ComponentRegistry::instance();
+    const u32 before = registry.archetypeUses(purged);
+    {
+        World world;
+        const Entity a = world.create(Purged{1});
+        const Entity b = world.create(Purged{2}, Position{1.0f, 2.0f, 3.0f});
+        const Entity c = world.create(Position{});
+        CHECK(world.archetypeCountWith(purged) == 2);
+        CHECK(registry.archetypeUses(purged) == before + 2);
+
+        {
+            test::ScopedAssertCatcher catcher;
+            CHECK_THROWS_AS(static_cast<void>(world.purgeArchetypesWith(purged)), test::AssertionFailure);
+        }
+        CHECK(world.archetypeCountWith(purged) == 2); // nothing changed
+
+        world.remove<Purged>(a);
+        world.remove<Purged>(b);
+        CHECK(world.purgeArchetypesWith(purged) == 2);
+        CHECK(world.archetypeCountWith(purged) == 0);
+        CHECK(registry.archetypeUses(purged) == before);
+        CHECK(world.purgeArchetypesWith(purged) == 0);
+
+        // Structural changes and queries work on new archetypes.
+        world.emplace<Purged>(c, Purged{3});
+        world.emplace<Purged>(b, Purged{4});
+        CHECK(world.get<Purged>(c).value == 3);
+        CHECK(world.get<Position>(b).y == 2.0f);
+        int total = 0;
+        world.query<Purged>().each([&total](const Purged& value) { total += value.value; });
+        CHECK(total == 7);
+        CHECK(registry.archetypeUses(purged) == before + 1);
+    }
+    CHECK(registry.archetypeUses(purged) == before);
+}

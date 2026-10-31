@@ -33,6 +33,7 @@
 #include <span>
 #include <string>
 #include <string_view>
+#include <vector>
 
 namespace illusion
 {
@@ -47,6 +48,28 @@ enum class ModuleLinkage : u8
     Static, ///< Linked into the executable (exported games); added with ModuleHost::add().
 };
 
+/// What a load or hot reload did to one Component type whose layout the module changed
+/// (docs/adr/0044-component-layout-migration-on-hot-reload.md). Fields are matched by name or
+/// FieldMeta::renamedFrom; converted values follow the scene file rules (ComponentJson.hpp).
+struct ComponentMigration
+{
+    std::string type;                       ///< Stable name of the type (its C++ name if unreflected).
+    u32 components = 0;                     ///< Components migrated, in all attached Worlds.
+    std::vector<std::string> addedFields;   ///< New fields, which got their default value.
+    std::vector<std::string> removedFields; ///< Fields of the old version that were dropped.
+    std::vector<std::string> resetFields;   ///< Fields whose value the new type could not hold in at least
+                                            ///< one Component; they got their default value there.
+};
+
+/// The Component types that the last load or hot reload of a module migrated.
+struct MigrationReport
+{
+    std::vector<ComponentMigration> types; ///< One entry per migrated type, in id order.
+
+    /// True if no type was migrated.
+    [[nodiscard]] bool empty() const noexcept { return types.empty(); }
+};
+
 /// A loaded module.
 struct ModuleInfo
 {
@@ -55,6 +78,7 @@ struct ModuleInfo
     ModuleLinkage linkage = ModuleLinkage::Shared; ///< How it is linked.
     std::filesystem::path path;                    ///< The library it was loaded from (Shared).
     u32 reloads = 0;                               ///< Successful hot reloads so far.
+    MigrationReport migration;                     ///< What the last load or reload migrated.
 };
 
 /// Creation parameters of a ModuleHost.
@@ -117,10 +141,12 @@ public:
     [[nodiscard]] std::optional<std::string> add(const ModuleApi& api);
 
     /// Hot-reloads the shared module @p name from its library file. The old version unloads, the new one
-    /// loads and takes over the module's component types; Components of types the new version no longer
+    /// loads and takes over the module's component types; Components of types whose layout changed are
+    /// migrated by field name (ModuleInfo::migration), and Components of types the new version no longer
     /// registers are removed from every attached World. start() and stop() are not called: the running
-    /// sessions continue with the new code. If the new version cannot load, the old one keeps running and
-    /// the error is returned.
+    /// sessions continue with the new code. If the new version cannot load, or a changed type cannot be
+    /// migrated (it is not reflected, or a World that is not attached uses it), the old one keeps running
+    /// with its values and the error is returned.
     [[nodiscard]] std::optional<std::string> reload(std::string_view name);
 
     /// Reloads every shared module whose library file changed since it was loaded. Errors are logged; a
