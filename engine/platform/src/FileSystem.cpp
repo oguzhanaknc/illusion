@@ -54,6 +54,21 @@ bool splitVirtualPath(std::string_view virtualPath, std::string_view& mount,
     return isValidMountName(mount) && isValidRelativePath(relative);
 }
 
+// A file time as FileStat::modified: nanoseconds since the file system clock's epoch.
+i64 stampOf(std::filesystem::file_time_type time) noexcept
+{
+    return static_cast<i64>(
+        std::chrono::duration_cast<std::chrono::nanoseconds>(time.time_since_epoch()).count());
+}
+
+// The modification stamp of a directory entry, 0 if it cannot be read.
+i64 modifiedStamp(const std::filesystem::directory_entry& entry) noexcept
+{
+    std::error_code code;
+    const std::filesystem::file_time_type time = entry.last_write_time(code);
+    return code ? 0 : stampOf(time);
+}
+
 FileError errorFromCode(const std::error_code& code) noexcept
 {
     if (code == std::errc::no_such_file_or_directory || code == std::errc::not_a_directory)
@@ -410,6 +425,7 @@ FileError VirtualFileSystem::list(std::string_view virtualPath, std::vector<Dire
         {
             entry.size = 0;
         }
+        entry.modified = modifiedStamp(*it);
         out.push_back(std::move(entry));
     }
     if (code)
@@ -477,6 +493,7 @@ FileError VirtualFileSystem::listRecursive(std::string_view virtualPath,
             {
                 entry.size = 0;
             }
+            entry.modified = modifiedStamp(*it);
             out.push_back(std::move(entry));
         }
         if (code)
@@ -538,8 +555,7 @@ FileError VirtualFileSystem::stat(std::string_view virtualPath, FileStat& out) c
     {
         return errorFromCode(code);
     }
-    out.modified = static_cast<i64>(
-        std::chrono::duration_cast<std::chrono::nanoseconds>(time.time_since_epoch()).count());
+    out.modified = stampOf(time);
     return FileError::None;
 }
 

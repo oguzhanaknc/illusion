@@ -26,7 +26,7 @@ decisions are in `docs/adr/`. Do not reverse an accepted ADR silently: write a n
 | --- | --- |
 | `engine/core/include/illusion/{core,ecs}` | Public headers of the core library |
 | `engine/core/src` | Core implementation |
-| `engine/platform` | Platform layer: windows, input, events from the OS, virtual file system, child processes (`Process`; GLFW is private) |
+| `engine/platform` | Platform layer: windows, input, events from the OS, virtual file system, file watching (`FileWatcher`), child processes (`Process`; GLFW is private) |
 | `engine/text` | UTF-8, `searchFold`, `FuzzyMatcher`, plural rules, `MessageFormat`, string tables, `Localization` (core only) |
 | `engine/input` | Gamepads (SDL3 private), `InputActions` mapping/rebinding/glyphs, string table `data/locales/en.json`; tests use `attachVirtualGamepad()` |
 | `engine/assets` | CPU-side assets: `Image`, `MeshData`, glTF via `loadGltf`, environments (SH, sky), `.material` files (cgltf/stb private); no GPU code. `AssetId`/`AssetRef` live in core |

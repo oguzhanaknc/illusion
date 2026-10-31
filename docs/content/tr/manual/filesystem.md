@@ -106,6 +106,39 @@ files.readText("game:/config/defaults.json", config); // same path as with a dir
 illusion_pack data/ build/data.illpak
 ```
 
+## Değişiklikleri izleme
+
+`FileWatcher` bir dizinin altında neyin değiştiğini bildirir: oluşturulan, değiştirilen ya da silinen dosya ve
+dizinler. Bunu işletim sisteminin bildirimleriyle (Windows'ta ReadDirectoryChangesW, Linux'ta inotify,
+macOS'ta FSEvents) ya da `FileWatchBackend::Polling` ile dizin listelerini karşılaştırarak yapar.
+
+Header: `<illusion/platform/FileWatcher.hpp>`
+
+```cpp
+#include <illusion/platform/FileWatcher.hpp>
+
+auto watcher = illusion::FileWatcher::watch(projectRoot / "assets", illusion::FileWatchBackend::Native);
+std::vector<illusion::FileEvent> events;
+watcher->poll(events); // once per frame
+for (const illusion::FileEvent& event : events)
+{
+    // event.kind: Created, Modified, Removed or Overflow (rescan); event.path: "textures/rock.png"
+}
+```
+
+- Arka planda hiçbir şey iletilmez: değişiklikler `poll()` çağrısına kadar birikir ve yola göre sıralı, yol
+  başına en fazla bir tane olarak gelir. Oluşturulup yazılan bir dosya tek bir `Created`'dır; iki poll
+  arasında oluşturulup yeniden silinen dosya hiçbir şeydir; silinip yeniden oluşturulan dosya `Modified`'dır.
+- Yeniden adlandırma, eski yolun `Removed`'ı ve yeni yolun `Created`'ıdır. Beliren ya da kaybolan bir dizin
+  tek bir değişikliktir ve içindeki dosyalar her zaman tek tek bildirilmez: bunu altındaki her şeyin
+  değişikliği olarak ele alın. Dizinler hiçbir zaman `Modified` bildirmez.
+- `Overflow`, sistemin değişiklikleri düşürdüğü anlamına gelir: tüm ağacı yeniden tarayın.
+- Native bildirimlerin olmadığı yerlerde (ağ sürücüleri, tükenmiş inotify watch sınırı) `Native` bir watcher
+  polling'e geri döner ve bir uyarı loglar; hangisinin çalıştığını `backend()` söyler. Polling her `poll()`
+  çağrısında ağacı dolaşır; bu yüzden daha seyrek poll edin.
+- `list()` ve `listRecursive()` her girdinin değişiklik damgasını da bildirir (`DirectoryEntry::modified`);
+  böylece hangi dosyaların değiştiğini görmek için bir liste yeterlidir.
+
 ## Platform dizinleri
 
 | Fonksiyon | Windows | macOS | Linux |

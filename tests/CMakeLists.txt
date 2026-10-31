@@ -33,6 +33,7 @@ add_executable(illusion_tests
     ecs/TestWorld.cpp
     platform/TestArchive.cpp
     platform/TestFileSystem.cpp
+    platform/TestFileWatcher.cpp
     platform/TestInput.cpp
     platform/TestProcess.cpp
     platform/TestWindow.cpp

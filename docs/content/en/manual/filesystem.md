@@ -106,6 +106,39 @@ files.readText("game:/config/defaults.json", config); // same path as with a dir
 illusion_pack data/ build/data.illpak
 ```
 
+## Watching for changes
+
+`FileWatcher` reports what changes below a directory: files and directories created, modified or removed,
+by the operating system's notifications (ReadDirectoryChangesW on Windows, inotify on Linux, FSEvents on
+macOS) or, with `FileWatchBackend::Polling`, by comparing directory listings.
+
+Header: `<illusion/platform/FileWatcher.hpp>`
+
+```cpp
+#include <illusion/platform/FileWatcher.hpp>
+
+auto watcher = illusion::FileWatcher::watch(projectRoot / "assets", illusion::FileWatchBackend::Native);
+std::vector<illusion::FileEvent> events;
+watcher->poll(events); // once per frame
+for (const illusion::FileEvent& event : events)
+{
+    // event.kind: Created, Modified, Removed or Overflow (rescan); event.path: "textures/rock.png"
+}
+```
+
+- Nothing is delivered behind your back: changes collect until `poll()` and arrive sorted by path, at most
+  one per path. A file created and written is one `Created`; created and deleted again between two polls is
+  nothing; deleted and created again is `Modified`.
+- A rename is a `Removed` of the old path and a `Created` of the new one. A directory that appears or
+  disappears is one change, and its files are not always reported one by one: treat it as a change of
+  everything below it. Directories never report `Modified`.
+- `Overflow` means the system dropped changes: rescan the whole tree.
+- Where native notifications are unavailable (network drives, an exhausted inotify watch limit), a `Native`
+  watcher falls back to polling and logs a warning; `backend()` tells which one runs. Polling walks the tree
+  on every `poll()`, so poll it less often.
+- `list()` and `listRecursive()` also report each entry's modification stamp (`DirectoryEntry::modified`),
+  so a listing is enough to see which files changed.
+
 ## Platform directories
 
 | Function | Windows | macOS | Linux |
