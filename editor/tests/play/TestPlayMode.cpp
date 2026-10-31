@@ -11,7 +11,7 @@
 #include <illusion/runtime/GameSession.hpp>
 
 #include <fstream>
-#include <iterator>
+#include <sstream>
 
 using namespace illusion;
 using namespace illusion::editor;
@@ -338,7 +338,9 @@ TEST_CASE("module.build compiles a project module with the module SDK of this bu
     std::string original;
     {
         std::ifstream in(source, std::ios::binary);
-        original.assign(std::istreambuf_iterator<char>(in), std::istreambuf_iterator<char>());
+        std::ostringstream text;
+        text << in.rdbuf();
+        original = text.str();
     }
     std::ofstream(source, std::ios::binary) << original << "int broken = undefined_name;\n";
     const JsonDocument failed = ok(editor, "module.build");

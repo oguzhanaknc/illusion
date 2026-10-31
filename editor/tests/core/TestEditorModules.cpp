@@ -8,7 +8,7 @@
 
 #include <chrono>
 #include <fstream>
-#include <iterator>
+#include <sstream>
 
 using namespace illusion;
 using namespace illusion::editor;
@@ -30,8 +30,14 @@ std::vector<BuildDiagnostic> parseLines(std::initializer_list<std::string_view> 
 
 std::string readText(const std::filesystem::path& path)
 {
+    // Through rdbuf(): GCC 13 Release reports a -Wnull-dereference false positive in istreambuf_iterator.
     std::ifstream in(path, std::ios::binary);
-    return std::string(std::istreambuf_iterator<char>(in), std::istreambuf_iterator<char>());
+    std::ostringstream text;
+    if (in)
+    {
+        text << in.rdbuf();
+    }
+    return text.str();
 }
 
 } // namespace
