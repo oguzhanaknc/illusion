@@ -360,9 +360,18 @@ void PlaySession::modules(std::vector<PlayModuleInfo>& out) const
     {
         const ModuleInfo& info = host.module(i);
         const std::u8string path = info.path.u8string();
-        out.push_back(PlayModuleInfo{info.name, info.version.toString(),
-                                     std::string(path.begin(), path.end()),
-                                     info.linkage == ModuleLinkage::Shared, info.reloads});
+        PlayModuleInfo& module = out.emplace_back(PlayModuleInfo{info.name,
+                                                                 info.version.toString(),
+                                                                 std::string(path.begin(), path.end()),
+                                                                 info.linkage == ModuleLinkage::Shared,
+                                                                 info.reloads,
+                                                                 {}});
+        for (const ComponentMigration& migration : info.migration.types)
+        {
+            module.migrated.push_back(PlayComponentMigration{migration.type, migration.components,
+                                                             migration.addedFields, migration.removedFields,
+                                                             migration.resetFields});
+        }
     }
 }
 

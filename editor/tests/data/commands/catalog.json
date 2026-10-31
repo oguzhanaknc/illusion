@@ -7325,9 +7325,45 @@
                 "type": "integer",
                 "minimum": 0,
                 "maximum": 4294967295
+              },
+              "migrated": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "type": {
+                      "type": "string"
+                    },
+                    "components": {
+                      "type": "integer",
+                      "minimum": 0,
+                      "maximum": 4294967295
+                    },
+                    "addedFields": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
+                    "removedFields": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
+                    "resetFields": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    }
+                  },
+                  "required": ["type", "components", "addedFields", "removedFields", "resetFields"],
+                  "additionalProperties": false
+                }
               }
             },
-            "required": ["name", "version", "path", "shared", "reloads"],
+            "required": ["name", "version", "path", "shared", "reloads", "migrated"],
             "additionalProperties": false
           }
         },
@@ -7488,9 +7524,45 @@
                 "type": "integer",
                 "minimum": 0,
                 "maximum": 4294967295
+              },
+              "migrated": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "type": {
+                      "type": "string"
+                    },
+                    "components": {
+                      "type": "integer",
+                      "minimum": 0,
+                      "maximum": 4294967295
+                    },
+                    "addedFields": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
+                    "removedFields": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
+                    "resetFields": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    }
+                  },
+                  "required": ["type", "components", "addedFields", "removedFields", "resetFields"],
+                  "additionalProperties": false
+                }
               }
             },
-            "required": ["name", "version", "path", "shared", "reloads"],
+            "required": ["name", "version", "path", "shared", "reloads", "migrated"],
             "additionalProperties": false
           }
         },
@@ -7590,9 +7662,45 @@
                 "type": "integer",
                 "minimum": 0,
                 "maximum": 4294967295
+              },
+              "migrated": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "type": {
+                      "type": "string"
+                    },
+                    "components": {
+                      "type": "integer",
+                      "minimum": 0,
+                      "maximum": 4294967295
+                    },
+                    "addedFields": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
+                    "removedFields": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
+                    "resetFields": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    }
+                  },
+                  "required": ["type", "components", "addedFields", "removedFields", "resetFields"],
+                  "additionalProperties": false
+                }
               }
             },
-            "required": ["name", "version", "path", "shared", "reloads"],
+            "required": ["name", "version", "path", "shared", "reloads", "migrated"],
             "additionalProperties": false
           }
         },
@@ -7704,9 +7812,45 @@
                 "type": "integer",
                 "minimum": 0,
                 "maximum": 4294967295
+              },
+              "migrated": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "type": {
+                      "type": "string"
+                    },
+                    "components": {
+                      "type": "integer",
+                      "minimum": 0,
+                      "maximum": 4294967295
+                    },
+                    "addedFields": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
+                    "removedFields": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
+                    "resetFields": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    }
+                  },
+                  "required": ["type", "components", "addedFields", "removedFields", "resetFields"],
+                  "additionalProperties": false
+                }
               }
             },
-            "required": ["name", "version", "path", "shared", "reloads"],
+            "required": ["name", "version", "path", "shared", "reloads", "migrated"],
             "additionalProperties": false
           }
         },
@@ -7806,9 +7950,45 @@
                 "type": "integer",
                 "minimum": 0,
                 "maximum": 4294967295
+              },
+              "migrated": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "type": {
+                      "type": "string"
+                    },
+                    "components": {
+                      "type": "integer",
+                      "minimum": 0,
+                      "maximum": 4294967295
+                    },
+                    "addedFields": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
+                    "removedFields": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
+                    "resetFields": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    }
+                  },
+                  "required": ["type", "components", "addedFields", "removedFields", "resetFields"],
+                  "additionalProperties": false
+                }
               }
             },
-            "required": ["name", "version", "path", "shared", "reloads"],
+            "required": ["name", "version", "path", "shared", "reloads", "migrated"],
             "additionalProperties": false
           }
         },

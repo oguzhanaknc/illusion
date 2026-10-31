@@ -364,7 +364,9 @@ Plan: `docs/plans/m7-editor.md` (sub-milestones, command API, localization, them
   scene file conversions; values that do not fit are reset), reported in `ModuleInfo::migration`;
   unreflected types in use, Worlds outside the host and unwritable values roll back. Test module variants
   with a widened, a reshaped and an unreflected type, 50 migrating reloads; `modules/migrate` benchmark
-- M7t-2: `module.reload` returns the migration report and emits `module.migrated`; C7 acceptance step
+- M7t-2: ✅ `module.reload` and `module.build` return the migration report (`modules[].migrated`, the
+  `editor.ComponentMigration` struct) and post the `module.migrated` event; tests with the stand-in play host;
+  `manual/editor/project-modules.md`
 - M7u: Asset catalog, live reload and the asset browser (ADR 0045); GPU eviction of unused
   `RenderAssetCache` entries (from M7h); `#` asset search in the command palette (from M7l)
 - M7v: Prefabs with overrides and nesting (ADR 0046)

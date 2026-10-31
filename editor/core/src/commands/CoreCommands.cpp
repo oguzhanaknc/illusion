@@ -785,12 +785,19 @@ void reflectCoreCommandTypes(StructRegistry& structs)
             .field("path", &ModuleLoadParams::path);
         reflectStruct<ModuleUnloadParams>("editor.ModuleUnloadParams", 1, structs)
             .field("name", &ModuleUnloadParams::name);
+        reflectStruct<PlayComponentMigration>("editor.ComponentMigration", 1, structs)
+            .field("type", &PlayComponentMigration::type)
+            .field("components", &PlayComponentMigration::components)
+            .field("addedFields", &PlayComponentMigration::addedFields)
+            .field("removedFields", &PlayComponentMigration::removedFields)
+            .field("resetFields", &PlayComponentMigration::resetFields);
         reflectStruct<PlayModuleInfo>("editor.ModuleInfo", 1, structs)
             .field("name", &PlayModuleInfo::name)
             .field("version", &PlayModuleInfo::version)
             .field("path", &PlayModuleInfo::path)
             .field("shared", &PlayModuleInfo::shared)
-            .field("reloads", &PlayModuleInfo::reloads);
+            .field("reloads", &PlayModuleInfo::reloads)
+            .field("migrated", &PlayModuleInfo::migrated);
         reflectStruct<ModuleListResult>("editor.ModuleListResult", 1, structs)
             .field("modules", &ModuleListResult::modules);
         reflectStruct<ModuleCreateParams>("editor.ModuleCreateParams", 1, structs)
