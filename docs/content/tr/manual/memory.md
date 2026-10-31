@@ -43,6 +43,25 @@ pool.deallocate(memory);
 
 ECS, her World için 16 KiB'lık Chunk'lardan oluşan bir pool kullanır.
 
+## RangeAllocator
+
+Range allocator, size ait bir buffer'ın (örneğin bir GPU vertex havuzunun) içinde eleman aralıkları dağıtır.
+Yeterince büyük ilk serbest aralığı alır, yoksa buffer'ın kullanılan kısmını (`end()`) uzatır; çağıran da
+buffer'ını bu boyuta büyütür. Serbest bırakılan aralıklar komşularıyla birleşir ve sondaki serbest bir
+aralık `end()` değerini küçültür:
+
+```cpp
+illusion::RangeAllocator ranges;
+const illusion::u32 a = ranges.allocate(1000); // offset 0
+const illusion::u32 b = ranges.allocate(500);  // offset 1000
+ranges.free(a, 1000);
+const illusion::u32 c = ranges.allocate(800);  // offset 0: reuses the freed range
+// grow the buffer to ranges.end() elements before writing
+```
+
+`RenderResources`, vertex ve index havuzlarını bunlardan ikisiyle yönetir; böylece serbest bırakılıp
+yeniden oluşturulan Mesh'ler belleklerini yeniden kullanır.
+
 ## Hizalanmış bellek ayırma
 
 `alignedAlloc(size, alignment)` ve `alignedFree(ptr)`, tüm platformlarda ikinin kuvveti olan herhangi

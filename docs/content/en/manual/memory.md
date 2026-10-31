@@ -42,6 +42,25 @@ pool.deallocate(memory);
 
 The ECS uses a pool of 16 KiB Chunks per World.
 
+## RangeAllocator
+
+A range allocator hands out ranges of elements inside a buffer that you own, such as a GPU vertex pool. It
+takes the first freed range that is large enough and otherwise extends the used part of the buffer
+(`end()`), which the caller grows its buffer to. Freed ranges merge with their neighbours, and a free
+range at the end shrinks `end()`:
+
+```cpp
+illusion::RangeAllocator ranges;
+const illusion::u32 a = ranges.allocate(1000); // offset 0
+const illusion::u32 b = ranges.allocate(500);  // offset 1000
+ranges.free(a, 1000);
+const illusion::u32 c = ranges.allocate(800);  // offset 0: reuses the freed range
+// grow the buffer to ranges.end() elements before writing
+```
+
+`RenderResources` keeps its vertex and index pools with two of them, so meshes that are released and
+created again reuse their memory.
+
 ## Aligned allocation
 
 `alignedAlloc(size, alignment)` and `alignedFree(ptr)` allocate memory with any power-of-two alignment

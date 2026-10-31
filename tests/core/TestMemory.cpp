@@ -220,3 +220,93 @@ TEST_CASE("ScopedAllocationCounter sees heap allocations on its thread only")
     CHECK(allocations.count() == 4);
     other.join();
 }
+
+TEST_CASE("RangeAllocator extends the buffer while nothing was freed")
+{
+    RangeAllocator ranges;
+    CHECK(ranges.end() == 0);
+    CHECK(ranges.allocate(10) == 0);
+    CHECK(ranges.allocate(5) == 10);
+    CHECK(ranges.allocate(1) == 15);
+    CHECK(ranges.end() == 16);
+    CHECK(ranges.allocated() == 16);
+    CHECK(ranges.freeRanges() == 0);
+}
+
+TEST_CASE("RangeAllocator reuses the first freed range that is large enough")
+{
+    RangeAllocator ranges;
+    const u32 a = ranges.allocate(4);
+    const u32 b = ranges.allocate(8);
+    const u32 c = ranges.allocate(4);
+    static_cast<void>(c);
+    ranges.free(a, 4);
+    ranges.free(b, 8);
+    CHECK(ranges.freeRanges() == 1); // a and b merged
+    CHECK(ranges.allocate(6) == 0);
+    CHECK(ranges.allocate(6) == 6);
+    CHECK(ranges.freeRanges() == 0);
+    CHECK(ranges.allocate(1) == 16); // nothing free is left below the end
+}
+
+TEST_CASE("RangeAllocator shrinks the end when the last range is freed")
+{
+    RangeAllocator ranges;
+    const u32 a = ranges.allocate(4);
+    const u32 b = ranges.allocate(4);
+    const u32 c = ranges.allocate(4);
+    ranges.free(b, 4);
+    CHECK(ranges.end() == 12);
+    ranges.free(c, 4); // merges with b and reaches the end
+    CHECK(ranges.end() == 4);
+    CHECK(ranges.freeRanges() == 0);
+    ranges.free(a, 4);
+    CHECK(ranges.end() == 0);
+    CHECK(ranges.allocated() == 0);
+}
+
+TEST_CASE("RangeAllocator merges a freed range with both neighbours")
+{
+    RangeAllocator ranges;
+    std::vector<u32> offsets;
+    for (int i = 0; i < 5; ++i)
+    {
+        offsets.push_back(ranges.allocate(2));
+    }
+    ranges.free(offsets[1], 2);
+    ranges.free(offsets[3], 2);
+    CHECK(ranges.freeRanges() == 2);
+    ranges.free(offsets[2], 2);
+    CHECK(ranges.freeRanges() == 1);
+    CHECK(ranges.allocate(6) == offsets[1]);
+}
+
+TEST_CASE("RangeAllocator keeps its size flat over many allocate and free cycles")
+{
+    RangeAllocator ranges;
+    const u32 pinned = ranges.allocate(3);
+    static_cast<void>(pinned);
+    for (int cycle = 0; cycle < 100; ++cycle)
+    {
+        const u32 a = ranges.allocate(100);
+        const u32 b = ranges.allocate(37);
+        ranges.free(a, 100);
+        ranges.free(b, 37);
+    }
+    CHECK(ranges.end() == 3);
+    CHECK(ranges.allocated() == 3);
+    ranges.reset();
+    CHECK(ranges.end() == 0);
+}
+
+TEST_CASE("RangeAllocator asserts on frees of ranges it did not hand out")
+{
+    test::ScopedAssertCatcher catcher;
+    RangeAllocator ranges;
+    const u32 a = ranges.allocate(4);
+    static_cast<void>(ranges.allocate(4));
+    CHECK_THROWS_AS(ranges.free(20, 4), test::AssertionFailure);
+    ranges.free(a, 4);
+    CHECK_THROWS_AS(ranges.free(a, 4), test::AssertionFailure);
+    CHECK_THROWS_AS(ranges.free(2, 4), test::AssertionFailure);
+}

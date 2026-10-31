@@ -7,6 +7,7 @@
 #include <illusion/core/Random.hpp>
 
 #include <string>
+#include <vector>
 
 using namespace illusion;
 
@@ -134,5 +135,28 @@ ILL_BENCHMARK("log/ring-write", 200.0)
             sink.write(message);
         }
         ankerl::nanobench::doNotOptimizeAway(sink);
+    });
+}
+
+ILL_BENCHMARK("memory/range-allocator", 100.0)
+{
+    // Reimport churn in a geometry pool: free every other mesh range, then allocate them again.
+    constexpr u32 kRanges = 1024;
+    RangeAllocator ranges;
+    std::vector<u32> offsets(kRanges);
+    for (u32 i = 0; i < kRanges; ++i)
+    {
+        offsets[i] = ranges.allocate(64 + i % 7);
+    }
+    bench.batch(kRanges).unit("range").run("RangeAllocator::free+allocate", [&] {
+        for (u32 i = 0; i < kRanges; i += 2)
+        {
+            ranges.free(offsets[i], 64 + i % 7);
+        }
+        for (u32 i = 0; i < kRanges; i += 2)
+        {
+            offsets[i] = ranges.allocate(64 + i % 7);
+        }
+        ankerl::nanobench::doNotOptimizeAway(ranges);
     });
 }

@@ -1,7 +1,8 @@
 #pragma once
 
 /// @file
-/// Memory primitives: aligned allocation, linear (arena) allocator and fixed-size block pool.
+/// Memory primitives: aligned allocation, linear (arena) allocator, fixed-size block pool and an allocator
+/// of ranges inside a buffer.
 ///
 /// Engine rule: steady-state frames must not touch the general-purpose heap. Use a LinearAllocator
 /// reset once per frame for transient data and PoolAllocator for fixed-size objects with churn.
@@ -143,6 +144,44 @@ private:
     usize m_free = 0;
     FreeBlock* m_freeList = nullptr;
     std::vector<void*> m_pages;
+};
+
+/// Hands out ranges of elements inside a buffer the caller owns (a GPU vertex pool, for example), reusing
+/// freed ranges. Allocation takes the first free range that is large enough and otherwise extends the
+/// used part of the buffer (end()); the caller grows its buffer to end(). Freed ranges are merged with
+/// their neighbours, and a free range at the end shrinks end(). Not thread-safe.
+class RangeAllocator
+{
+public:
+    /// Returns the offset of @p count (at least 1) consecutive elements.
+    [[nodiscard]] u32 allocate(u32 count);
+
+    /// Returns the range at @p offset of @p count elements, which allocate() handed out and which was not
+    /// freed since (asserted).
+    void free(u32 offset, u32 count);
+
+    /// Forgets every range: the buffer is empty again.
+    void reset() noexcept;
+
+    /// One past the last element of the highest allocated range: the size the buffer needs.
+    [[nodiscard]] u32 end() const noexcept { return m_end; }
+
+    /// Elements handed out and not freed.
+    [[nodiscard]] u32 allocated() const noexcept { return m_allocated; }
+
+    /// Number of free ranges below end() (fragmentation).
+    [[nodiscard]] u32 freeRanges() const noexcept { return static_cast<u32>(m_free.size()); }
+
+private:
+    struct Range
+    {
+        u32 offset = 0;
+        u32 count = 0;
+    };
+
+    std::vector<Range> m_free; // sorted by offset, never adjacent, all below m_end
+    u32 m_end = 0;
+    u32 m_allocated = 0;
 };
 
 } // namespace illusion
