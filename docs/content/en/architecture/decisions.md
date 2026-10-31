@@ -49,6 +49,8 @@ records rather than user documentation.
 | [0040](https://github.com/oguzhanaknc/illusion/blob/main/docs/adr/0040-renderer-extension-points.md) | Expose renderer extension points for editors and tools |
 | [0041](https://github.com/oguzhanaknc/illusion/blob/main/docs/adr/0041-module-api-v3.md) | Module API v3: start and stop per World, a multi-world host and host service interfaces |
 | [0042](https://github.com/oguzhanaknc/illusion/blob/main/docs/adr/0042-play-mode-and-game-session.md) | Play mode through scene snapshots and a shared GameSession runtime |
+| [0043](https://github.com/oguzhanaknc/illusion/blob/main/docs/adr/0043-project-modules-built-by-the-editor.md) | Project modules built by the editor through a module SDK package |
+| [0044](https://github.com/oguzhanaknc/illusion/blob/main/docs/adr/0044-component-layout-migration-on-hot-reload.md) | In-place Component layout migration on hot reload |
 
 To propose a new decision, copy `docs/adr/0000-template.md` and follow the
 [contributing guide](../contributing.md#architecture-decision-records).

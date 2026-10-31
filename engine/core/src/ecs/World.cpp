@@ -136,6 +136,42 @@ void World::clear()
     m_root = findOrCreateArchetype({});
 }
 
+u32 World::archetypeCountWith(ComponentId id) const noexcept
+{
+    return static_cast<u32>(
+        std::count_if(m_archetypes.begin(), m_archetypes.end(),
+                      [id](const std::unique_ptr<Archetype>& archetype) { return archetype->has(id); }));
+}
+
+u32 World::purgeArchetypesWith(ComponentId id)
+{
+    assertNotIterating();
+    for (const std::unique_ptr<Archetype>& archetype : m_archetypes)
+    {
+        if (archetype->has(id) && archetype->size() != 0)
+        {
+            ILL_ASSERT(false, "purgeArchetypesWith() needs the Components of the type removed first");
+            return 0;
+        }
+    }
+    std::scoped_lock lock(m_queryMutex);
+    const usize before = m_archetypes.size();
+    std::erase_if(m_archetypeLookup, [id](const auto& item) { return item.second->has(id); });
+    std::erase_if(m_archetypes,
+                  [id](const std::unique_ptr<Archetype>& archetype) { return archetype->has(id); });
+    const auto purged = static_cast<u32>(before - m_archetypes.size());
+    if (purged != 0)
+    {
+        for (u32 i = 0; i < m_archetypes.size(); ++i)
+        {
+            m_archetypes[i]->setIndex(i);
+            m_archetypes[i]->clearEdges();
+        }
+        m_queryCache.clear();
+    }
+    return purged;
+}
+
 Archetype* World::findOrCreateArchetype(std::span<const ComponentId> signature)
 {
     const u64 hash = hashSignature(signature);

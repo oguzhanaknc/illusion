@@ -194,19 +194,74 @@ türlerin Component'lerini, kodları gitmeden önce eklenmiş her World'den kald
 yükler:
 
 1. Eski sürümün `unload`'u çalışır.
-2. Yeni kütüphane yüklenir ve `load`'u modülün Component türlerini yeniden kaydeder: registry onları yeni
-   koda devreder; böylece var olan Component'ler verilerini korur.
-3. Yeni sürümün artık kaydetmediği türlerin Component'leri, eski kod onları yok etmek için hâlâ yüklüyken
+2. Yeni kütüphane yüklenir ve `load`'u modülün Component türlerini yeniden kaydeder. Layout'u değişmeyen bir
+   tür yeni koda devredilir; böylece Component'leri verilerini olduğu gibi korur.
+3. Layout'u değişen bir türün Component'leri, eski kod hâlâ yüklüyken taşınır (aşağıya bakın).
+4. Yeni sürümün artık kaydetmediği türlerin Component'leri, eski kod onları yok etmek için hâlâ yüklüyken
    eklenmiş her World'den kaldırılır.
-4. Eski kütüphane kapatılır.
+5. Eski kütüphane kapatılır.
 
-Yeni kütüphane yüklenemezse ya da `load`'u başarısız olursa eski sürüm türlerini geri alır ve çalışmaya
-devam eder; hata log'a yazılır ve aynı dosya değişene kadar yeniden denenmez.
+Yeni kütüphane yüklenemezse, `load`'u başarısız olursa ya da değişen bir tür taşınamazsa eski sürüm
+türlerini ve değerlerini korur ve çalışmaya devam eder; hata log'a yazılır ve aynı dosya değişene kadar
+yeniden denenmez.
+
+### Component layout taşıma
+
+Yansıtılmış bir Component'e alan eklemek, alanını kaldırmak, yeniden adlandırmak, sırasını veya türünü
+değiştirmek hot reload'dan sağ çıkar (ADR 0044). Host, değişen türün her Component'ini eski sürümün
+reflection'ıyla yazar, kaldırır ve yeni kodla yeniden oluşturur; eski değerleri, sahne dosyalarının
+okunduğu gibi alan adına göre okur:
+
+| Değişiklik | Sonuç |
+| --- | --- |
+| Yeni alan | Varsayılan değerini alır |
+| Kaldırılan alan | Atılır |
+| Yeniden adlandırılan alan (`FieldMeta`'sında `renamedFrom`) | Değerini korur |
+| Yeri değişen alan | Değerini korur |
+| Türü değişen alan | Dönüştürülür: değer sığıyorsa her tamsayı genişliği, tamsayıdan kayan noktaya, enum değer adıyla, string'den asset yoluna |
+| Değeri sığmayan, türü değişen alan (aralık dışı, tamsayı için kesirli, başka uzunlukta vektör, `min`/`max` dışında) | Bir uyarıyla varsayılan değerine sıfırlanır |
+
+```cpp
+// Version 1
+struct Score
+{
+    i32 points = 0;
+    f32 multiplier = 1.0f;
+};
+
+// Version 2: points widened, multiplier renamed, combo added. A hot reload keeps points and the
+// multiplier of every Score; combo starts at 0.
+struct Score
+{
+    i64 points = 0;
+    f32 bonus = 1.0f;
+    i32 combo = 0;
+};
+
+reflect<Score>("game.Score", 2)
+    .field("points", &Score::points)
+    .field("bonus", &Score::bonus, {.renamedFrom = "multiplier"})
+    .field("combo", &Score::combo);
+```
+
+Tür `ComponentId`'sini ve stable name'ini korur. Reflection sürümünü artırmak, eski bir sahne dosyasında
+olduğu gibi türün taşıma adımlarını (`migrate()`) eski değerler üzerinde çalıştırır. `ModuleInfo::migration`,
+son yüklemenin veya yeniden yüklemenin neyi taşıdığını listeler: her tür, Component sayısı ve eklenen,
+kaldırılan ve sıfırlanan alanlarıyla.
+
+Bir layout'u değiştiren yeniden yükleme şu durumlarda geri alınır ve eski sürüm değerleriyle çalışmaya devam
+eder:
+
+- tür yansıtılmamıştır ve Component'leri vardır ("reflect the type to migrate it"; yansıtılmamış bir türün
+  layout'unu değiştirmek ancak hiç Component'i yokken çalışır);
+- module host'a eklenmemiş bir World türü kullanır (World'ü ekleyin ya da Component'lerini kaldırdıktan
+  sonra `World::purgeArchetypesWith()` çağırın);
+- bir değer yazılamaz, örneğin bir NaN.
 
 !!! warning "Yeniden yüklemede ne korunur"
     Yalnızca Component'lerdeki veriler korunur: oyun durumunu modülün global değişkenlerinde değil,
-    World'de tutun. Bir modülün Component türünün boyutunu veya hizalamasını değiştirmek reddedilir
-    (yeniden yükleme geri alınır); uygulamak için yeniden başlatın.
+    World'de tutun. Alan olarak kullanılan yansıtılmış bir struct'ın boyutu çalışan bir süreçte
+    değişemez; uygulamak için yeniden başlatın.
 
 Yeniden yüklenebilir modüller için kurallar:
 

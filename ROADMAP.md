@@ -81,8 +81,8 @@ ADRs for its significant decisions. Items marked ✅ are done.
 - ✅ Service injection into modules (ADR 0003): Logger, ComponentRegistry, assert handler, thread and
   worker indices; module-owned component types handed over to the new code on reload, dropped types
   stripped from the World, failed reloads rolled back
-- Reflection-based migration of module Components whose layout changed, so that such a change survives a
-  hot reload instead of needing a restart (M7t)
+- ✅ Reflection-based migration of module Components whose layout changed, so that such a change survives a
+  hot reload instead of needing a restart (M7t, ADR 0044)
 
 ## M7 — Editor and AI control
 
@@ -357,7 +357,14 @@ Plan: `docs/plans/m7-editor.md` (sub-milestones, command API, localization, them
   (`ProcessOptions::detached`); Console source links of project files, such as build diagnostics, open it.
   Tests of the command line splitting, the command with a recording stand-in editor and its errors, and a
   detached process that outlives its `Process`
-- M7t: Component layout migration on hot reload, the M6 follow-up (ADR 0044)
+- M7t-1: ✅ Component layout migration on hot reload, the M6 follow-up (ADR 0044): a reloaded module's
+  registrations are staged (`ComponentRegistry::commitStaged`/`discardStaged`, archetype use counts,
+  `World::purgeArchetypesWith`); Components of a type whose size, alignment or reflected fields changed are
+  written with the old reflection and read back by field name with the new one (renames, version migrations,
+  scene file conversions; values that do not fit are reset), reported in `ModuleInfo::migration`;
+  unreflected types in use, Worlds outside the host and unwritable values roll back. Test module variants
+  with a widened, a reshaped and an unreflected type, 50 migrating reloads; `modules/migrate` benchmark
+- M7t-2: `module.reload` returns the migration report and emits `module.migrated`; C7 acceptance step
 - M7u: Asset catalog, live reload and the asset browser (ADR 0045); GPU eviction of unused
   `RenderAssetCache` entries (from M7h); `#` asset search in the command palette (from M7l)
 - M7v: Prefabs with overrides and nesting (ADR 0046)

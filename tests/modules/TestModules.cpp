@@ -5,9 +5,11 @@
 
 #include <illusion/core/AssetRef.hpp>
 #include <illusion/core/JobSystem.hpp>
+#include <illusion/core/Json.hpp>
 #include <illusion/core/Log.hpp>
 #include <illusion/core/Module.hpp>
 #include <illusion/core/Thread.hpp>
+#include <illusion/ecs/ComponentJson.hpp>
 #include <illusion/ecs/Reflection.hpp>
 #include <illusion/ecs/Transform.hpp>
 #include <illusion/ecs/World.hpp>
@@ -19,7 +21,10 @@
 #include <algorithm>
 #include <array>
 #include <chrono>
+#include <cstddef>
 #include <filesystem>
+#include <format>
+#include <limits>
 #include <memory>
 #include <span>
 #include <string>
@@ -64,6 +69,31 @@ i32 counterTotal(World& world)
         }
     }
     return total;
+}
+
+// The entities of @p world that have a Component of @p type.
+std::vector<Entity> entitiesWith(World& world, ComponentId type)
+{
+    std::vector<Entity> entities;
+    world.entities(entities);
+    std::erase_if(entities,
+                  [&world, type](Entity entity) { return world.componentData(entity, type) == nullptr; });
+    return entities;
+}
+
+// The JSON of @p field of @p entity's Component of @p type, read through the type's current reflection:
+// "<none>" without the Component, "<error>" for a field the type does not have.
+std::string fieldJson(World& world, Entity entity, ComponentId type, std::string_view field)
+{
+    const TypeReflection* reflection = ComponentRegistry::instance().reflection(type);
+    const void* data = world.componentData(entity, type);
+    if (reflection == nullptr || data == nullptr)
+    {
+        return "<none>";
+    }
+    JsonMutDocument doc;
+    const Expected<JsonMutValue, ValueError> value = getPath(doc, *reflection, data, field);
+    return value ? value->dump() : std::string("<error>");
 }
 
 u32 countWith(World& world, ComponentId type)
@@ -312,28 +342,214 @@ TEST_CASE("hot reload swaps the code, keeps World data and removes types the new
     CHECK(f.world.aliveCount() == 0);
 }
 
-TEST_CASE("a reload that changes a component's layout is rolled back")
+TEST_CASE("a reload that widens a Component migrates its values and keeps the session running")
 {
     Fixture f;
     LogCapture log;
     install(TEST_MODULE_V1, f.library);
     REQUIRE_FALSE(f.host->load(f.library));
     f.host->update(0.0);
+    CHECK(counterTotal(f.world) == 2);
+    const ComponentRegistry& registry = ComponentRegistry::instance();
+    const ComponentId counter = moduleType("test.ModuleCounter");
+    const u32 narrow = registry.info(counter).size;
+    const u32 types = registry.count();
 
     install(TEST_MODULE_V3, f.library);
-    CHECK(f.host->reloadChanged() == 0);
-    CHECK(log.contains("changed the layout of"));
+    CHECK(f.host->reloadChanged() == 1);
+    CHECK(moduleType("test.ModuleCounter") == counter);
+    CHECK(registry.info(counter).size > narrow);
+    CHECK(registry.count() == types);
+    const ModuleInfo* info = f.host->find("test_module");
+    REQUIRE(info != nullptr);
+    CHECK(info->version == SemanticVersion{1, 1, 0, {}});
+    REQUIRE(info->migration.types.size() == 1); // the other types kept their layout
+    const ComponentMigration& migration = info->migration.types[0];
+    CHECK(migration.type == "test.ModuleCounter");
+    CHECK(migration.components == 2);
+    CHECK(migration.addedFields.empty());
+    CHECK(migration.removedFields.empty());
+    CHECK(migration.resetFields.empty());
+    CHECK(log.contains("migrated 2 Component(s)"));
+    CHECK(counterTotal(f.world) == 2);
+    CHECK(f.control.starts == 1); // the session keeps running
+
+    f.host->update(0.0);
+    CHECK(f.control.variant == 3);
+    CHECK(f.control.counterId == counter);
+    CHECK(counterTotal(f.world) == 2 + 6);
+
+    install(TEST_MODULE_V2, f.library); // narrowing again migrates back
+    CHECK(f.host->reloadChanged() == 1);
+    CHECK(registry.info(counter).size == narrow);
+    f.host->update(0.0);
+    CHECK(counterTotal(f.world) == 8 + 4);
+}
+
+TEST_CASE("a reload migrates moved, widened, renamed, narrowed, removed and added fields in every World")
+{
+    Fixture f;
+    LogCapture log;
+    f.host->attachWorld(f.editWorld, WorldRole::Edit);
+    install(TEST_MODULE_V1, f.library);
+    REQUIRE_FALSE(f.host->load(f.library));
+    const ComponentRegistry& registry = ComponentRegistry::instance();
+    const ComponentId layout = moduleType("test.LayoutComponent");
+    REQUIRE(registry.reflection(layout) != nullptr);
+
+    // A Component of the edit World, made the way the editor makes one.
+    const Entity edited = f.editWorld.create();
+    const auto twelve = JsonDocument::parse("12");
+    REQUIRE(twelve);
+    REQUIRE(setPath(*registry.reflection(layout), f.editWorld.emplaceDefault(edited, layout), "count",
+                    twelve->root()));
+
+    const Entity first = f.control.layoutTarget;
+    const std::vector<Entity> owners = entitiesWith(f.world, layout);
+    REQUIRE(owners.size() == 2);
+    const Entity second = owners[0] == first ? owners[1] : owners[0];
+    const std::string target = fieldJson(f.world, second, layout, "target");
+    CHECK(target == std::format("\"{}\"", first.toBits()));
+    const u32 types = registry.count();
+
+    install(TEST_MODULE_V5, f.library);
+    REQUIRE_FALSE(f.host->reload("test_module"));
+    CHECK(moduleType("test.LayoutComponent") == layout);
+    CHECK(registry.count() == types);
+    CHECK(registry.info(layout).alignment == 8);
+    CHECK(registry.reflection(layout)->version == 2);
+
+    CHECK(fieldJson(f.world, first, layout, "count") == "41");
+    CHECK(fieldJson(f.world, second, layout, "count") == "-3");
+    CHECK(fieldJson(f.world, first, layout, "velocity") == "2.5");
+    CHECK(fieldJson(f.world, second, layout, "velocity") == "0.25");
+    CHECK(fieldJson(f.world, first, layout, "small") == "9"); // 300 does not fit a u8
+    CHECK(fieldJson(f.world, second, layout, "small") == "7");
+    CHECK(fieldJson(f.world, first, layout, "label") == "\"new\"");
+    CHECK(fieldJson(f.world, first, layout, "target") == "null");
+    CHECK(fieldJson(f.world, second, layout, "target") == target);
+    CHECK(fieldJson(f.world, second, layout, "removed") == "<error>");
+    CHECK(fieldJson(f.editWorld, edited, layout, "count") == "12");
+    CHECK(fieldJson(f.editWorld, edited, layout, "label") == "\"new\"");
+
+    const ModuleInfo* info = f.host->find("test_module");
+    REQUIRE(info != nullptr);
+    REQUIRE(info->migration.types.size() == 1);
+    const ComponentMigration& migration = info->migration.types[0];
+    CHECK(migration.type == "test.LayoutComponent");
+    CHECK(migration.components == 3);
+    CHECK(migration.addedFields == std::vector<std::string>{"label"});
+    CHECK(migration.removedFields == std::vector<std::string>{"removed"});
+    CHECK(migration.resetFields == std::vector<std::string>{"small"});
+    CHECK(log.contains("field 'small' of 'test.LayoutComponent'"));
+
+    // The new code runs, and structural changes move the migrated Components with it.
+    f.host->update(0.0);
+    CHECK(f.control.variant == 5);
+    f.world.emplace<Transform>(second);
+    CHECK(fieldJson(f.world, second, layout, "label") == "\"new\"");
+    f.world.destroy(first);
+    f.world.destroy(second);
+    f.editWorld.destroy(edited);
+}
+
+TEST_CASE("a reload that changes the layout of an unreflected Component in use is rolled back")
+{
+    Fixture f;
+    install(TEST_MODULE_V1, f.library);
+    REQUIRE_FALSE(f.host->load(f.library));
+    f.host->update(0.0);
+    const ComponentId layout = moduleType("test.LayoutComponent");
+
+    install(TEST_MODULE_V6, f.library);
+    const std::optional<std::string> error = f.host->reload("test_module");
+    REQUIRE(error);
+    CHECK(error->find("reflect the type to migrate it") != std::string::npos);
     CHECK(f.host->find("test_module")->version == SemanticVersion{1, 0, 0, {}});
-    CHECK(f.host->reloadChanged() == 0); // the same file is not tried again
+    std::vector<ComponentId> staged;
+    ComponentRegistry::instance().stagedTypes(staged);
+    CHECK(staged.empty());
     f.host->update(0.0);
     CHECK(f.control.variant == 1);
     CHECK(counterTotal(f.world) == 4);
-    CHECK(countWith(f.world, moduleType("test.LegacyComponent")) == 1);
+    CHECK(fieldJson(f.world, f.control.layoutTarget, layout, "count") == "41");
 
-    install(TEST_MODULE_V2, f.library); // a fixed build reloads
-    CHECK(f.host->reloadChanged() == 1);
+    install(TEST_MODULE_V5, f.library); // a reflected change still migrates
+    REQUIRE_FALSE(f.host->reload("test_module"));
+    CHECK(fieldJson(f.world, f.control.layoutTarget, layout, "count") == "41");
+}
+
+TEST_CASE("a value that cannot be snapshot rolls the reload back with every value kept")
+{
+    Fixture f;
+    install(TEST_MODULE_V1, f.library);
+    REQUIRE_FALSE(f.host->load(f.library));
+    const ComponentRegistry& registry = ComponentRegistry::instance();
+    const ComponentId layout = moduleType("test.LayoutComponent");
+    const u32 size = registry.info(layout).size;
+    const TypeReflection* reflection = registry.reflection(layout);
+    REQUIRE(reflection != nullptr);
+    REQUIRE(reflection->field("speed") != nullptr);
+    auto* speed = reinterpret_cast<f32*>(
+        static_cast<std::byte*>(f.world.componentData(f.control.layoutTarget, layout)) +
+        reflection->field("speed")->offset);
+    *speed = std::numeric_limits<f32>::quiet_NaN(); // JSON cannot hold it
+
+    install(TEST_MODULE_V5, f.library);
+    const std::optional<std::string> error = f.host->reload("test_module");
+    REQUIRE(error);
+    CHECK(error->find("cannot migrate component 'test.LayoutComponent'") != std::string::npos);
+    CHECK(registry.info(layout).size == size);
+    CHECK(fieldJson(f.world, f.control.layoutTarget, layout, "count") == "41");
+    CHECK(f.host->find("test_module")->reloads == 0);
+
+    *speed = 1.0f;
+    REQUIRE_FALSE(f.host->reload("test_module"));
+    CHECK(fieldJson(f.world, f.control.layoutTarget, layout, "count") == "41");
+}
+
+TEST_CASE("a type that a World outside the host uses migrates once that World's archetypes are purged")
+{
+    Fixture f;
+    install(TEST_MODULE_V1, f.library);
+    REQUIRE_FALSE(f.host->load(f.library));
+    const ComponentId layout = moduleType("test.LayoutComponent");
+    World detached;
+    const Entity entity = detached.create();
+    static_cast<void>(detached.emplaceDefault(entity, layout));
+
+    install(TEST_MODULE_V5, f.library);
+    const std::optional<std::string> error = f.host->reload("test_module");
+    REQUIRE(error);
+    CHECK(error->find("not attached to the module host") != std::string::npos);
+
+    detached.destroy(entity);
+    CHECK(detached.purgeArchetypesWith(layout) == 1);
+    REQUIRE_FALSE(f.host->reload("test_module"));
+    CHECK(fieldJson(f.world, f.control.layoutTarget, layout, "count") == "41");
+}
+
+TEST_CASE("fifty migrating reloads keep the registry size, the type id and the values")
+{
+    Fixture f;
+    install(TEST_MODULE_V1, f.library);
+    REQUIRE_FALSE(f.host->load(f.library));
+    const ComponentRegistry& registry = ComponentRegistry::instance();
+    const ComponentId layout = moduleType("test.LayoutComponent");
+    const u32 types = registry.count();
+    for (int i = 0; i < 25; ++i)
+    {
+        install(TEST_MODULE_V5, f.library);
+        REQUIRE_FALSE(f.host->reload("test_module"));
+        install(TEST_MODULE_V1, f.library);
+        REQUIRE_FALSE(f.host->reload("test_module"));
+    }
+    CHECK(registry.count() == types);
+    CHECK(moduleType("test.LayoutComponent") == layout);
+    CHECK(f.host->find("test_module")->reloads == 50);
+    CHECK(fieldJson(f.world, f.control.layoutTarget, layout, "count") == "41");
     f.host->update(0.0);
-    CHECK(f.control.variant == 2);
+    CHECK(counterTotal(f.world) == 2);
 }
 
 TEST_CASE("a library that cannot be loaded keeps the old version running")
@@ -454,7 +670,7 @@ TEST_CASE("start and stop run once per Simulation World and hot reloads keep the
     REQUIRE_FALSE(f.host->load(f.library));
     CHECK(f.control.starts == 1); // the Simulation World only
     CHECK(f.editWorld.aliveCount() == 0);
-    CHECK(f.world.aliveCount() == 3);
+    CHECK(f.world.aliveCount() == 6); // shared, 2 counters, 2 layouts, opaque
     CHECK_FALSE(f.control.worldInLoad);
 
     f.host->update(0.0);
@@ -480,7 +696,7 @@ TEST_CASE("start and stop run once per Simulation World and hot reloads keep the
     CHECK(f.host->detachWorld(f.secondWorld));
     CHECK(f.control.stops == 1);
     CHECK_FALSE(f.host->detachWorld(f.secondWorld));
-    CHECK(f.secondWorld.aliveCount() == 2); // detaching leaves the World alone
+    CHECK(f.secondWorld.aliveCount() == 5); // detaching leaves the World alone
     // A detached World is no longer stripped: remove the module's Components while its code is loaded.
     std::vector<Entity> entities;
     f.secondWorld.entities(entities);

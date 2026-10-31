@@ -1,14 +1,19 @@
 #include "Budget.hpp"
 
+#include <illusion/core/Assert.hpp>
 #include <illusion/core/JobSystem.hpp>
 #include <illusion/core/Module.hpp>
+#include <illusion/ecs/Component.hpp>
 #include <illusion/ecs/World.hpp>
 #include <illusion/input/InputActionsService.hpp>
 #include <illusion/modules/ModuleHost.hpp>
 
 #include <array>
+#include <filesystem>
 #include <format>
+#include <random>
 #include <string>
+#include <system_error>
 
 using namespace illusion;
 
@@ -119,3 +124,51 @@ ILL_BENCHMARK("services/virtual-call", 10.0)
     });
     host.detachWorld(play);
 }
+
+#if defined(BENCH_MIGRATE_NARROW)
+// A hot reload that migrates every Component of a changed type (ADR 0044): two reloads per run, between the
+// two builds of benchmarks/modules/MigrateModule.cpp, each migrating kMigrated Components in a play World.
+// Measured about 4.6 us per Component on a desktop, including the two library loads.
+ILL_BENCHMARK("modules/migrate", 25000.0)
+{
+    constexpr u32 kMigrated = 4096;
+    const std::filesystem::path directory =
+        std::filesystem::temp_directory_path() /
+        std::format("illusion-bench-migrate-{:08x}", std::random_device{}());
+    std::filesystem::create_directories(directory);
+    const std::filesystem::path library = directory / std::filesystem::path(BENCH_MIGRATE_NARROW).filename();
+    std::filesystem::copy_file(BENCH_MIGRATE_NARROW, library,
+                               std::filesystem::copy_options::overwrite_existing);
+    {
+        JobSystem jobs(JobSystemDesc{1, 64});
+        World play;
+        ModuleHostDesc desc;
+        desc.shadowDirectory = directory / "shadow";
+        ModuleHost host(jobs, desc);
+        host.attachWorld(play, WorldRole::Simulation);
+        ILL_CHECK(!host.load(library), "the migrate benchmark module does not load");
+        const ComponentId migrated = ComponentRegistry::instance().findByStableName("bench.Migrated");
+        for (u32 i = 0; i < kMigrated; ++i)
+        {
+            static_cast<void>(play.emplaceDefault(play.create(), migrated));
+        }
+        bool wide = false;
+        bench.batch(2 * kMigrated)
+            .unit("Component")
+            .epochs(3)
+            .epochIterations(1)
+            .run("migrate 4096 Components there and back (two hot reloads)", [&] {
+                for (int i = 0; i < 2; ++i)
+                {
+                    wide = !wide;
+                    std::filesystem::copy_file(wide ? BENCH_MIGRATE_WIDE : BENCH_MIGRATE_NARROW, library,
+                                               std::filesystem::copy_options::overwrite_existing);
+                    ILL_CHECK(!host.reload("bench_migrate"), "the migrate benchmark module does not reload");
+                }
+                ankerl::nanobench::doNotOptimizeAway(host.find("bench_migrate")->migration.types.size());
+            });
+    }
+    std::error_code ignored;
+    std::filesystem::remove_all(directory, ignored);
+}
+#endif

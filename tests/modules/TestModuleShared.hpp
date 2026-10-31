@@ -8,16 +8,47 @@
 #include <illusion/physics/PhysicsComponents.hpp>
 
 #include <atomic>
+#include <string>
 
 namespace illusion::test
 {
 
-// Registered by the test modules. Variant 3 of the module widens it, which a reload must reject.
+// Registered by the test modules. Variant 3 of the module widens it, which a reload migrates.
 struct ModuleCounter
 {
     i32 value = 0;
 #if defined(TEST_MODULE_WIDE_COUNTER)
     i64 extra = 0;
+#endif
+};
+
+// Reflected by every variant. Variant 5 (TEST_MODULE_LAYOUT_V2) moves, widens, renames, narrows, removes
+// and adds fields, which a reload migrates by field name (ADR 0044).
+struct LayoutComponent
+{
+#if !defined(TEST_MODULE_LAYOUT_V2)
+    i32 count = 0;
+    f32 speed = 0.0f;
+    i32 removed = 0;
+    i32 small = 0;
+    Entity target;
+#else
+    Entity target;
+    i64 count = 0;            // was i32
+    f32 velocity = 1.5f;      // renamed from "speed"
+    u8 small = 9;             // was i32: values above 255 are reset to 9
+    std::string label{"new"}; // added
+#endif
+};
+
+// Registered but not reflected by every variant; variant 6 (TEST_MODULE_WIDE_OPAQUE) widens it, which a
+// reload cannot migrate while Components of it exist.
+struct OpaqueComponent
+{
+#if !defined(TEST_MODULE_WIDE_OPAQUE)
+    i32 value = 0;
+#else
+    i64 value = 0;
 #endif
 };
 
@@ -67,6 +98,7 @@ struct ModuleControl
     bool createMesh = false;          // start() builds a static mesh body through the PhysicsService
     PhysicsMeshHandle mesh;           // the geometry start() created
     Entity meshEntity;                // the body start() created
+    Entity layoutTarget;              // the first LayoutComponent start() created, the target of the second
 };
 
 } // namespace illusion::test

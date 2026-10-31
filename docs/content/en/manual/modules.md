@@ -188,19 +188,72 @@ and do not keep Components of a module in a detached World once that module unlo
 `reloadChanged()` reloads every shared module whose file changed; `reload(name)` reloads one now:
 
 1. The old version's `unload` runs.
-2. The new library loads and its `load` registers the module's Component types again: the registry hands
-   them over to the new code, so existing Components keep their data.
-3. Components of types that the new version no longer registers are removed from every attached World,
+2. The new library loads and its `load` registers the module's Component types again. A type whose layout
+   did not change is handed over to the new code, so its Components keep their data as they are.
+3. Components of a type whose layout changed are migrated (see below), while the old code is still loaded.
+4. Components of types that the new version no longer registers are removed from every attached World,
    while the old code is still loaded to destroy them.
-4. The old library is closed.
+5. The old library is closed.
 
-If the new library cannot load, or its `load` fails, the old version takes its types back and keeps
-running; the error is logged, and the same file is not tried again until it changes.
+If the new library cannot load, its `load` fails, or a changed type cannot be migrated, the old version
+keeps its types and values and keeps running; the error is logged, and the same file is not tried again
+until it changes.
+
+### Component layout migration
+
+Adding, removing, renaming, reordering or retyping fields of a reflected Component survives a hot reload
+(ADR 0044). The host writes each Component of the changed type with the old version's reflection, removes
+it, and builds it again with the new code, reading the old values by field name, the same way scene files
+are read:
+
+| Change | Result |
+| --- | --- |
+| New field | Gets its default value |
+| Removed field | Dropped |
+| Renamed field (`renamedFrom` in its `FieldMeta`) | Keeps its value |
+| Moved field | Keeps its value |
+| Retyped field | Converted: any integer width when the value fits, integer to floating point, enum by value name, string to asset path |
+| Retyped field whose value does not fit (out of range, a fraction for an integer, a vector of another length, outside `min`/`max`) | Reset to its default value, with a warning |
+
+```cpp
+// Version 1
+struct Score
+{
+    i32 points = 0;
+    f32 multiplier = 1.0f;
+};
+
+// Version 2: points widened, multiplier renamed, combo added. A hot reload keeps points and the
+// multiplier of every Score; combo starts at 0.
+struct Score
+{
+    i64 points = 0;
+    f32 bonus = 1.0f;
+    i32 combo = 0;
+};
+
+reflect<Score>("game.Score", 2)
+    .field("points", &Score::points)
+    .field("bonus", &Score::bonus, {.renamedFrom = "multiplier"})
+    .field("combo", &Score::combo);
+```
+
+The type keeps its `ComponentId` and its stable name. Raising the reflection version runs the type's
+migration steps (`migrate()`) on the old values, as for an older scene file. `ModuleInfo::migration` lists
+what the last load or reload migrated: each type with its number of Components and its added, removed and
+reset fields.
+
+A reload that changes a layout is rolled back, and the old version keeps running with its values, when:
+
+- the type is not reflected and Components of it exist ("reflect the type to migrate it"; changing the
+  layout of an unreflected type works only while none exists);
+- a World that is not attached to the module host uses the type (attach it, or call
+  `World::purgeArchetypesWith()` after removing its Components);
+- a value cannot be written, such as a NaN.
 
 !!! warning "What survives a reload"
-    Only data in Components survives: keep game state in the World, not in globals of the module. A
-    change to the size or alignment of a module's Component type is rejected (the reload is rolled
-    back); restart to apply it.
+    Only data in Components survives: keep game state in the World, not in globals of the module. The
+    size of a reflected struct used as a field cannot change in a running process; restart to apply that.
 
 Rules for reloadable modules:
 

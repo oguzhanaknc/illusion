@@ -1,8 +1,10 @@
 #include "SharedLibrary.hpp"
 
+#include <illusion/core/Json.hpp>
 #include <illusion/core/Log.hpp>
 #include <illusion/core/Profiler.hpp>
 #include <illusion/ecs/Component.hpp>
+#include <illusion/ecs/ComponentJson.hpp>
 #include <illusion/ecs/Reflection.hpp>
 #include <illusion/ecs/World.hpp>
 #include <illusion/modules/ModuleHost.hpp>
@@ -34,6 +36,106 @@ bool isValidModuleName(std::string_view name) noexcept
 std::string describeEngine(u32 major, u32 minor, u32 patch)
 {
     return std::format("{}.{}.{}", major, minor, patch);
+}
+
+// True if @p a and @p b have the same fields (names, offsets and types, in order).
+bool sameFields(const TypeReflection& a, const TypeReflection& b) noexcept
+{
+    return std::equal(a.fields.begin(), a.fields.end(), b.fields.begin(), b.fields.end(),
+                      [](const FieldInfo& x, const FieldInfo& y) {
+                          return x.name == y.name && x.offset == y.offset && x.type == y.type &&
+                                 x.size == y.size && x.typeHash == y.typeHash;
+                      });
+}
+
+// True if Components laid out as @p current (reflected as @p before) can be taken over by code that lays
+// them out as @p next (reflected as @p after) without a migration. Without both reflections only the size
+// and alignment can be compared.
+bool sameLayout(const ComponentInfo& current, const ComponentInfo& next, const TypeReflection* before,
+                const TypeReflection* after) noexcept
+{
+    if (current.size != next.size || current.alignment != next.alignment)
+    {
+        return false;
+    }
+    return before == nullptr || after == nullptr || sameFields(*before, *after);
+}
+
+void addUnique(std::vector<std::string>& list, std::string_view text)
+{
+    if (std::find(list.begin(), list.end(), text) == list.end())
+    {
+        list.emplace_back(text);
+    }
+}
+
+// Removes the member of @p object (a copy of @p read) that a ValueError at @p pointer is about: the first
+// segment of the pointer names a member, or the field it is read into after a version migration renamed it.
+// Returns the name of that field, or an empty string if no member was removed.
+std::string removeFailedMember(const TypeReflection& type, JsonValue read, JsonMutValue object,
+                               std::string_view pointer)
+{
+    if (pointer.size() < 2 || pointer.front() != '/')
+    {
+        return {};
+    }
+    const std::string_view key = pointer.substr(1, pointer.find('/', 1) - 1);
+    const FieldInfo* field = type.fieldOrRenamed(key);
+    if (object.remove(key))
+    {
+        return std::string(field != nullptr ? field->name : key);
+    }
+    for (const JsonMember member : read.members())
+    {
+        if (field != nullptr && type.fieldOrRenamed(member.key) == field && object.remove(member.key))
+        {
+            return std::string(field->name);
+        }
+    }
+    return {};
+}
+
+// Reads @p snapshot, written by an older reflection of version @p savedVersion, into the default value at
+// @p object with the reflection @p type. Members whose value the new type cannot hold are left out, so their
+// fields keep the default value; their names are added to @p reset.
+void restoreSnapshot(const TypeReflection& type, void* object, const std::string& snapshot, u32 savedVersion,
+                     std::vector<std::string>& reset)
+{
+    std::string text = snapshot;
+    // Each round removes at least one member, so there are at most as many rounds as members.
+    for (usize round = 0; round <= type.fields.size() + 1; ++round)
+    {
+        Expected<JsonDocument, JsonError> parsed = JsonDocument::parse(text);
+        if (!parsed)
+        {
+            return;
+        }
+        ValueReadOptions options;
+        options.savedVersion = savedVersion;
+        const ValueReadResult result = readValue(type, object, parsed->root(), options);
+        if (result.ok())
+        {
+            return;
+        }
+        JsonMutDocument doc;
+        JsonMutValue root = doc.copy(parsed->root());
+        bool removed = false;
+        for (const ValueError& error : result.errors)
+        {
+            const std::string field = removeFailedMember(type, parsed->root(), root, error.pointer);
+            if (!field.empty())
+            {
+                addUnique(reset, field);
+                removed = true;
+            }
+        }
+        doc.setRoot(root);
+        text.clear();
+        if (!removed || !doc.write(text))
+        {
+            return; // the whole value keeps its default
+        }
+    }
 }
 
 } // namespace
@@ -372,20 +474,177 @@ struct ModuleHost::Impl
         registry.orphanModule(module);
     }
 
-    // A message naming the types whose layout a registration during the last load() changed, if any.
-    [[nodiscard]] static std::optional<std::string> layoutConflicts(std::string_view name)
+    // --- Layout migration (ADR 0044) -------------------------------------------------------------------
+
+    // A staged registration of a module's Component type and how to apply it.
+    struct StagedType
     {
-        std::vector<std::string> types;
-        if (!ComponentRegistry::instance().takeLayoutConflicts(types))
+        ComponentId id = kInvalidComponentId;
+        ComponentInfo next;                     // the staged registration
+        const TypeReflection* before = nullptr; // the published reflection
+        const TypeReflection* after = nullptr;  // the staged one; null if the new code did not reflect it
+        bool migrate = false;                   // the layout changed
+        std::vector<std::pair<World*, Entity>> owners; // the Components to migrate
+        std::vector<std::string> snapshots;            // their values, written with `before`
+    };
+
+    // Decides how to apply each staged registration and snapshots the Components whose layout changed,
+    // while the old code is still loaded. Changes nothing; returns why a type cannot be applied.
+    [[nodiscard]] std::optional<std::string> prepareStaged(std::string_view name,
+                                                           std::vector<StagedType>& out)
+    {
+        ComponentRegistry& registry = ComponentRegistry::instance();
+        std::vector<ComponentId> ids;
+        registry.stagedTypes(ids);
+        std::sort(ids.begin(), ids.end());
+        std::vector<Entity> entities;
+        for (const ComponentId id : ids)
         {
-            return std::nullopt;
+            StagedType& type = out.emplace_back();
+            type.id = id;
+            type.next = *registry.stagedInfo(id);
+            type.before = registry.reflection(id);
+            type.after = registry.stagedReflection(id);
+            const ComponentInfo& current = registry.info(id);
+            type.migrate = !sameLayout(current, type.next, type.before, type.after);
+            if (!type.migrate)
+            {
+                continue;
+            }
+            const std::string_view label = type.before != nullptr ? type.before->name : current.name;
+            u32 archetypes = 0;
+            for (const Attached& attached : worlds)
+            {
+                archetypes += attached.world->archetypeCountWith(id);
+                attached.world->entities(entities);
+                for (const Entity entity : entities)
+                {
+                    const std::span<const ComponentId> types = attached.world->componentsOf(entity);
+                    if (std::find(types.begin(), types.end(), id) != types.end())
+                    {
+                        type.owners.emplace_back(attached.world, entity);
+                    }
+                }
+            }
+            if (registry.archetypeUses(id) != archetypes)
+            {
+                return std::format(
+                    "module '{}' changed the layout of component '{}', which a World that is not "
+                    "attached to the module host uses",
+                    name, label);
+            }
+            if (type.owners.empty())
+            {
+                continue;
+            }
+            if (type.before == nullptr || type.after == nullptr)
+            {
+                return std::format(
+                    "module '{}' changed the layout of component '{}', which is not reflected; "
+                    "reflect the type to migrate it",
+                    name, label);
+            }
+            if (!type.next.isTag() && type.next.construct == nullptr)
+            {
+                return std::format("module '{}' changed the layout of component '{}', which is not default "
+                                   "constructible",
+                                   name, label);
+            }
+            type.snapshots.reserve(type.owners.size());
+            for (const auto& [world, entity] : type.owners)
+            {
+                std::string& snapshot = type.snapshots.emplace_back("{}");
+                if (current.isTag())
+                {
+                    continue;
+                }
+                JsonMutDocument doc;
+                const Expected<JsonMutValue, ValueError> written =
+                    writeValue(doc, *type.before, world->componentData(entity, id));
+                if (!written)
+                {
+                    return std::format("cannot migrate component '{}': {} {}", label, written.error().pointer,
+                                       written.error().message);
+                }
+                doc.setRoot(*written);
+                snapshot.clear();
+                if (!doc.write(snapshot))
+                {
+                    return std::format("cannot migrate component '{}': its value cannot be written", label);
+                }
+            }
         }
-        std::string list;
-        for (const std::string& type : types)
+        return std::nullopt;
+    }
+
+    // Applies the registrations that prepareStaged() accepted: takes unchanged types over and migrates the
+    // others into the new layout. Cannot fail.
+    void applyStaged(std::string_view name, std::vector<StagedType>& staged, MigrationReport& report)
+    {
+        ILL_PROFILE_SCOPE();
+        ComponentRegistry& registry = ComponentRegistry::instance();
+        report.types.clear();
+        for (StagedType& type : staged)
         {
-            list += list.empty() ? type : ", " + type;
+            if (!type.migrate)
+            {
+                registry.commitStaged(type.id);
+                continue;
+            }
+            // The old code destroys the old values, the new code builds the new ones.
+            for (const auto& [world, entity] : type.owners)
+            {
+                world->remove(entity, type.id);
+            }
+            for (const Attached& attached : worlds)
+            {
+                attached.world->purgeArchetypesWith(type.id);
+            }
+            registry.commitStaged(type.id);
+
+            ComponentMigration& migration = report.types.emplace_back();
+            migration.type = type.after != nullptr    ? std::string(type.after->name)
+                             : type.before != nullptr ? std::string(type.before->name)
+                                                      : std::string(registry.info(type.id).name);
+            migration.components = static_cast<u32>(type.owners.size());
+            if (type.before != nullptr && type.after != nullptr)
+            {
+                for (const FieldInfo& field : type.before->fields)
+                {
+                    if (type.after->fieldOrRenamed(field.name) == nullptr)
+                    {
+                        migration.removedFields.emplace_back(field.name);
+                    }
+                }
+                for (const FieldInfo& field : type.after->fields)
+                {
+                    const bool kept = type.before->field(field.name) != nullptr ||
+                                      (!field.meta.renamedFrom.empty() &&
+                                       type.before->field(field.meta.renamedFrom) != nullptr);
+                    if (!kept)
+                    {
+                        migration.addedFields.emplace_back(field.name);
+                    }
+                }
+            }
+            for (usize i = 0; i < type.owners.size(); ++i)
+            {
+                const auto& [world, entity] = type.owners[i];
+                void* data = world->emplaceDefault(entity, type.id);
+                restoreSnapshot(*type.after, data, type.snapshots[i], type.before->version,
+                                migration.resetFields);
+            }
+            ILL_LOG_INFO("Modules", "module '{}' changed the layout of '{}': migrated {} Component(s)", name,
+                         migration.type, migration.components);
+            for (const std::string& field : migration.resetFields)
+            {
+                ILL_LOG_WARN(
+                    "Modules",
+                    "field '{}' of '{}' could not keep its value in every Component and was reset to "
+                    "its default",
+                    field, migration.type);
+            }
         }
-        return std::format("module '{}' changed the layout of {}; restart to apply that change", name, list);
     }
 
     // --- Lifetime -------------------------------------------------------------------------------------
@@ -394,13 +653,15 @@ struct ModuleHost::Impl
     {
         ModuleContext context = contextFor(*module, false);
         const bool loaded = module->api->load(context);
-        std::optional<std::string> error = layoutConflicts(module->info.name);
+        std::vector<StagedType> staged;
+        std::optional<std::string> error = loaded ? prepareStaged(module->info.name, staged) : std::nullopt;
         if (!loaded || error)
         {
             if (loaded && module->api->unload != nullptr)
             {
                 module->api->unload(context);
             }
+            ComponentRegistry::instance().discardStaged();
             if (module->id != 0)
             {
                 releaseTypes(module->id);
@@ -409,6 +670,7 @@ struct ModuleHost::Impl
             }
             return error ? error : std::format("module '{}' failed to load", module->info.name);
         }
+        applyStaged(module->info.name, staged, module->info.migration);
         ILL_LOG_INFO("Modules", "loaded module '{}' {} ({})", module->info.name,
                      module->info.version.toString(),
                      module->info.linkage == ModuleLinkage::Shared ? "shared" : "static");
@@ -456,16 +718,9 @@ struct ModuleHost::Impl
         }
 
         // The old version lets go, then the new one takes over its component types. The old library
-        // stays open until then: Components of types that the new version drops still need its code.
+        // stays open until then: Components of types that the new version drops or lays out differently
+        // still need its code.
         ComponentRegistry& registry = ComponentRegistry::instance();
-        std::vector<ComponentId> ownedTypes;
-        registry.typesOfModule(module.id, ownedTypes);
-        std::vector<ComponentInfo> ownedInfos;
-        ownedInfos.reserve(ownedTypes.size());
-        for (const ComponentId type : ownedTypes)
-        {
-            ownedInfos.push_back(registry.info(type));
-        }
         if (module.api->unload != nullptr)
         {
             ModuleContext context = contextFor(module, true);
@@ -476,18 +731,16 @@ struct ModuleHost::Impl
         install(*opened.api, id);
         ModuleContext context = contextFor(module, true);
         const bool loaded = opened.api->load(context);
-        std::optional<std::string> error = layoutConflicts(module.info.name);
+        std::vector<StagedType> staged;
+        std::optional<std::string> error = loaded ? prepareStaged(module.info.name, staged) : std::nullopt;
         if (!loaded || error)
         {
-            // Roll back: the new version lets go, the old one gets its types back and loads again.
+            // Roll back: the new version lets go, the old one keeps its types and values and loads again.
             if (loaded && opened.api->unload != nullptr)
             {
                 opened.api->unload(context);
             }
-            for (usize i = 0; i < ownedTypes.size(); ++i)
-            {
-                registry.restoreType(ownedTypes[i], ownedInfos[i]);
-            }
+            registry.discardStaged();
             registry.restoreModule(module.id);
             releaseTypes(id); // types only the new version registered
             close(opened);
@@ -496,6 +749,7 @@ struct ModuleHost::Impl
             return error ? error
                          : std::format("the new version of module '{}' failed to load", module.info.name);
         }
+        applyStaged(module.info.name, staged, module.info.migration);
         releaseTypes(module.id); // the types the new version did not take over
         module.library.reset();
         removeShadow(module.shadow);
