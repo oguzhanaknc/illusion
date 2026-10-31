@@ -11,7 +11,6 @@
 #include <filesystem>
 #include <fstream>
 #include <iostream>
-#include <iterator>
 #include <sstream>
 #include <string>
 #include <vector>
@@ -29,8 +28,14 @@ constexpr const char* kSuffix = ".so";
 
 std::string readFile(const std::filesystem::path& path)
 {
+    // Reading through rdbuf() avoids GCC 13's -Wnull-dereference false positive in istreambuf_iterator.
     std::ifstream in(path, std::ios::binary);
-    return std::string(std::istreambuf_iterator<char>(in), std::istreambuf_iterator<char>());
+    std::ostringstream text;
+    if (in)
+    {
+        text << in.rdbuf();
+    }
+    return text.str();
 }
 
 std::string valueOf(const std::string& cache, const std::string& key)
