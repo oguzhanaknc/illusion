@@ -89,6 +89,10 @@ struct ModelData
     [[nodiscard]] Aabb bounds() const;
 };
 
+/// Scales @p model uniformly by @p scale: vertex positions, bounds and node translations, so that both the
+/// node hierarchy and single meshes placed on their own come out @p scale times as large.
+void scaleModel(ModelData& model, f32 scale);
+
 /// Loads a glTF 2.0 file (.gltf with external or embedded buffers, or binary .glb) through @p files.
 /// Supports triangle meshes, metallic-roughness materials, PNG and JPEG textures, and the node
 /// hierarchy of the default scene. Unsupported required extensions (Draco, meshopt, KTX2) are errors.

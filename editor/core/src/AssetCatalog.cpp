@@ -1,3 +1,4 @@
+#include <illusion/assets/ImportSettings.hpp>
 #include <illusion/assets/MaterialAsset.hpp>
 #include <illusion/core/Hash.hpp>
 #include <illusion/core/Json.hpp>
@@ -144,11 +145,6 @@ bool parsesDependencies(std::string_view path)
     return extension == kSceneExtension || extension == kMaterialAssetExtension || extension == ".gltf";
 }
 
-bool isUnder(std::string_view path, std::string_view folder) noexcept
-{
-    return path.size() > folder.size() && path.starts_with(folder) && path[folder.size()] == '/';
-}
-
 void sortUnique(std::vector<std::string>& paths)
 {
     std::sort(paths.begin(), paths.end());
@@ -268,6 +264,17 @@ AssetCatalogChanges AssetCatalog::refresh(const VirtualFileSystem& files)
         listedPaths.push_back(std::string(kAssetsRoot) + entry.name);
     }
     // The listing is sorted by name, so the paths are too.
+    for (auto it = m_sidecars.begin(); it != m_sidecars.end();)
+    {
+        if (std::binary_search(listedPaths.begin(), listedPaths.end(), it->first))
+        {
+            ++it;
+            continue;
+        }
+        const std::string owner(importSettingsOwner(it->first));
+        it = m_sidecars.erase(it);
+        setImportSettingsHash(owner, 0, changes);
+    }
     for (auto it = m_records.begin(); it != m_records.end();)
     {
         if (std::binary_search(listedPaths.begin(), listedPaths.end(), it->first))
@@ -295,6 +302,11 @@ AssetCatalogChanges AssetCatalog::refresh(const VirtualFileSystem& files)
             {
                 changes.added.push_back(path);
             }
+            continue;
+        }
+        if (isImportSettingsPath(path))
+        {
+            scanSidecar(files, path, listed.size, listed.modified, false, changes);
             continue;
         }
         const auto known = m_records.find(path);
@@ -332,7 +344,19 @@ AssetCatalogChanges AssetCatalog::apply(const VirtualFileSystem& files, std::spa
             change.kind == FileEventKind::Removed ? FileError::NotFound : files.stat(path, stat);
         if (error != FileError::None)
         {
-            removeTree(path, result);
+            if (m_sidecars.find(path) != m_sidecars.end())
+            {
+                removeSidecar(path, result);
+            }
+            else
+            {
+                removeTree(path, result);
+            }
+            continue;
+        }
+        if (!stat.isDirectory && isImportSettingsPath(path))
+        {
+            scanSidecar(files, path, stat.size, stat.modified, true, result);
             continue;
         }
         if (!stat.isDirectory)
@@ -364,6 +388,10 @@ AssetCatalogChanges AssetCatalog::apply(const VirtualFileSystem& files, std::spa
                         result.added.push_back(inner);
                     }
                 }
+                else if (isImportSettingsPath(inner))
+                {
+                    scanSidecar(files, inner, listed.size, listed.modified, true, result);
+                }
                 else
                 {
                     scanFile(files, inner, listed.size, listed.modified, result);
@@ -381,6 +409,7 @@ void AssetCatalog::clear() noexcept
     m_referrers.clear();
     m_referrersStale = true;
     m_removedHashes.clear();
+    m_sidecars.clear();
     m_scanned = false;
 }
 
@@ -445,6 +474,10 @@ void AssetCatalog::scanFile(const VirtualFileSystem& files, const std::string& p
         known = m_records.end();
     }
     AssetRecord record{.path = path, .kind = assetKindOf(path, false), .size = size, .modified = modified};
+    if (const auto sidecar = m_sidecars.find(importSettingsPath(path)); sidecar != m_sidecars.end())
+    {
+        record.importSettingsHash = sidecar->second.hash;
+    }
     std::string text;
     if (const FileError error = files.readText(path, text); error != FileError::None)
     {
@@ -480,13 +513,64 @@ void AssetCatalog::scanFile(const VirtualFileSystem& files, const std::string& p
 
 void AssetCatalog::removeTree(const std::string& path, AssetCatalogChanges& changes)
 {
-    auto it = m_records.lower_bound(path);
-    while (it != m_records.end() && (it->first == path || isUnder(it->first, path)))
+    if (const auto it = m_records.find(path); it != m_records.end())
+    {
+        forget(it->second);
+        changes.removed.push_back(it->first);
+        m_records.erase(it);
+    }
+    // Look from "<path>/": "<path>.png" sorts between "<path>" and the paths inside it.
+    const std::string prefix = path + "/";
+    for (auto it = m_records.lower_bound(prefix); it != m_records.end() && it->first.starts_with(prefix);)
     {
         forget(it->second);
         changes.removed.push_back(it->first);
         it = m_records.erase(it);
     }
+    // The sidecars in a removed folder went with it, and so did their assets.
+    for (auto it = m_sidecars.lower_bound(prefix); it != m_sidecars.end() && it->first.starts_with(prefix);)
+    {
+        it = m_sidecars.erase(it);
+    }
+}
+
+void AssetCatalog::scanSidecar(const VirtualFileSystem& files, const std::string& path, u64 size,
+                               i64 modified, bool force, AssetCatalogChanges& changes)
+{
+    const auto known = m_sidecars.find(path);
+    if (!force && known != m_sidecars.end() && known->second.size == size &&
+        known->second.modified == modified)
+    {
+        return;
+    }
+    std::vector<std::byte> bytes;
+    if (files.readFile(path, bytes) != FileError::None)
+    {
+        bytes.clear(); // Unreadable: the import fails with the reason; record that it changed.
+    }
+    // A sidecar always hashes to something other than 0, the "no sidecar" value.
+    const u64 hash = std::max<u64>(xxhash64(bytes), 1);
+    m_sidecars[path] = Sidecar{size, modified, hash};
+    setImportSettingsHash(importSettingsOwner(path), hash, changes);
+}
+
+void AssetCatalog::removeSidecar(const std::string& path, AssetCatalogChanges& changes)
+{
+    const std::string owner(importSettingsOwner(path));
+    m_sidecars.erase(path);
+    setImportSettingsHash(owner, 0, changes);
+}
+
+void AssetCatalog::setImportSettingsHash(std::string_view owner, u64 hash, AssetCatalogChanges& changes)
+{
+    const auto record = m_records.find(owner);
+    if (record == m_records.end() || record->second.kind == "Folder" ||
+        record->second.importSettingsHash == hash)
+    {
+        return;
+    }
+    record->second.importSettingsHash = hash;
+    changes.modified.push_back(record->first);
 }
 
 void AssetCatalog::forget(const AssetRecord& record)
@@ -503,6 +587,8 @@ void AssetCatalog::finish(AssetCatalogChanges& changes)
     sortUnique(changes.removed);
     sortUnique(changes.added);
     sortUnique(changes.modified);
+    // An asset added in this update whose sidecar also appeared is just added.
+    std::erase_if(changes.modified, [&](const std::string& path) { return contains(changes.added, path); });
     // A path removed and added again in one update was replaced: a modification.
     std::vector<std::string> replaced;
     std::set_intersection(changes.removed.begin(), changes.removed.end(), changes.added.begin(),

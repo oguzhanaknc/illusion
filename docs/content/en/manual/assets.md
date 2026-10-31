@@ -216,6 +216,51 @@ Cooked files (`AssetFile`, `serializeImage()`, `serializeModel()` in `<illusion/
 are versioned, checksummed and fully validated when read, so a damaged cache file is ignored rather than
 trusted.
 
+## Import settings
+
+An image or glTF model can carry an import settings sidecar: a `<file>.import.json` file next to it that
+changes how it is imported. The sidecar exists only while a setting differs from its default, and holds
+only those settings:
+
+```json
+{
+  "format": "illusion.import",
+  "version": 1,
+  "texture": {"colorSpace": "linear", "maxSize": 1024}
+}
+```
+
+| Kind | Setting | Default | Meaning |
+| --- | --- | --- | --- |
+| Texture (`.png`, `.jpg`, `.jpeg`, `.tga`, `.bmp`, `.hdr`) | `colorSpace` | `"auto"` | `"srgb"` or `"linear"` overrides the colour space the image's user asks for (a material asks for sRGB base colour and linear normal maps). |
+| | `generateMips` | `true` | `false` imports only the top level, even when a user asks for mips. |
+| | `maxSize` | `0` | Halve the image until no side exceeds this (1 to 16384; 0 is no limit). |
+| Model (`.gltf`, `.glb`) | `scale` | `1` | Uniform scale of positions and node translations (greater than 0, at most 1000). |
+
+- `AssetDatabase`, `AssetStreamer` and `cookAssets()` read the sidecar of every image and model they
+  import, so the editor, the game and the cooked build all see the same result.
+- The sidecar is one of the sources of the cache entry: editing, adding or removing it makes the entry
+  stale and the next load imports again. Cache entries stay keyed by the settings the caller asked for,
+  so a game that ships only the cooked cache finds them without the sidecars.
+- Sidecars are versioned (`"version"`) and validated: an unknown member, a section of the wrong kind
+  (`"model"` next to a texture), a wrong type or an out-of-range value fails the import with an error
+  that names the sidecar and the JSON pointer of the value.
+- `parseImportSettings()`, `mergeImportSettings()` (JSON merge patch: `null` resets a setting or a
+  section) and `writeImportSettings()` read and write sidecars from code:
+
+```cpp
+#include <illusion/assets/ImportSettings.hpp>
+
+illusion::ImportSettings settings;
+settings.texture.maxSize = 512;
+const std::string text = illusion::writeImportSettings(settings, illusion::ImportSettingsKind::Texture);
+// text is empty when every setting is a default: delete the sidecar instead of writing it.
+files.writeText(illusion::importSettingsPath("game:/textures/ui.png"), text);
+```
+
+In the editor, `asset.set_import_settings` changes the settings (with undo) and `asset.reimport` imports
+an asset again; see [the editor manual](editor/index.md#import-settings).
+
 ## Streaming
 
 `AssetStreamer` loads in the background, so the game keeps running while assets arrive. It uses the
@@ -279,6 +324,14 @@ illusion::Subscription onReload = streamer.events().subscribe<illusion::AssetRel
 ```
 
 - `reload()` returns false for an invalid path; the event carries the normalized path and its `AssetId`.
+- Reload a file after its [import settings](#import-settings) sidecar changed: the stale cache entry
+  imports again. To import from source although nothing changed, pass `AssetReloadMode::Reimport`, which
+  deletes the cache entries of the file's current requests first:
+
+```cpp
+// Import again from source although neither the file nor its sidecar changed:
+streamer.reload("game:/textures/ui.png", illusion::AssetReloadMode::Reimport);
+```
 - A glTF model depends on its buffers and images: reload the model file when one of them changes (the
   editor finds such files in its asset catalog).
 
@@ -332,4 +385,7 @@ auto helmet = streamer.loadModel("game:/models/helmet.glb"); // served from the 
   exist.
 - Standalone images are cooked with the default import settings; images loaded with other settings need
   their source (or a cooking step that knows those settings).
+- Cooking honours [import settings](#import-settings) sidecars, and the cooked entries do not need them at
+  run time, so they are not shipped. A sidecar whose asset is missing, or next to a file that has no
+  import settings, is reported as an error.
 - `cookAssets()` does the same from code and reports what it cooked and which files failed.

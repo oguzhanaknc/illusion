@@ -126,3 +126,54 @@ and its materials every time, and nothing told the `RenderAssetCache` that a fil
   meshes and audio clips is left to a later milestone (tracked in ROADMAP).
 - Reload of a glTF model depends on the caller knowing its dependencies (the editor's catalog); a game that
   reloads at run time must reload the model file itself.
+
+## Addendum: import settings sidecars and reimport (M7u-3, 2026-11-01)
+
+### Context
+
+Textures and models were imported with fixed settings: the colour space came from the material slot that
+used an image, mips were always built, and models kept their file's units. Users need to override that per
+asset (a UI texture without mips, a mask stored in a colour slot, a model authored in centimetres), the
+override must reach the cooked build, and a forced reimport is needed when the cache is suspected wrong.
+
+### Decision
+
+- **Sidecars next to the asset.** `<file>.import.json` (`"format": "illusion.import"`, `"version": 1`)
+  with a `"texture"` section (`colorSpace` auto/srgb/linear, `generateMips`, `maxSize`) or a `"model"`
+  section (`scale`). A sidecar holds only non-default settings and does not exist when every setting is a
+  default, so most assets have none and diffs stay small. Parsing is hand-written (no reflection registry
+  needed at run time) and strict: unknown members, the other kind's section, wrong types and out-of-range
+  values are errors with a JSON pointer. Changes are JSON merge patches (`mergeImportSettings()`).
+  Alternatives rejected: settings inside the asset catalog or a project-wide database (merge conflicts in
+  one file, lost when files move outside the editor), and settings in the referring material (an image
+  shared by several materials would be imported several ways).
+- **Honoured in the import layer.** `AssetDatabase`, `AssetStreamer` and so `cookAssets()` read the
+  sidecar of every image and model they import and record it as a dependency of the cooked file; a missing
+  sidecar hashes as empty, so adding one makes the entry stale. The cache key stays the caller's requested
+  settings, not the effective ones, so a shipped game (sources and sidecars absent, `verifySources` off)
+  finds the entries it was cooked with. The importer versions became `image:2` and `gltf:2`, which
+  ignores caches written before the sidecar dependency existed. `cookAssets()` reports sidecars without an
+  asset or next to a file that has no import settings.
+- **Editor.** The catalog does not keep sidecars as records: it stores their hash on the asset
+  (`importSettingsHash`) and reports the asset as modified when its sidecar appears, changes or
+  disappears, so the existing live-reload path reloads it and the stale cache entry imports again.
+  `asset.list` hides sidecars, `asset.move` and `asset.delete` carry them along in the same undo step and
+  refuse sidecar paths. `asset.set_import_settings` (undoable, idempotent) merges a patch and writes or
+  deletes the sidecar; `asset.info` returns the effective settings.
+- **Forced reimport.** `AssetStreamer::reload(path, AssetReloadMode::Reimport)` deletes the cache entries
+  of the file's current requests (queued on the I/O thread before any later load) and then reloads.
+  `asset.reimport` (a file or a folder) asks for that through `EditorContext::requestReimport()`; the next
+  `endFrame()` posts the paths in the `reimported` list of `asset.changed`, and the viewports reload them
+  and the glTF files that refer to them in Reimport mode.
+- **Unrelated fix found on the way.** `AssetCatalog::removeTree()` stopped at a sibling that sorts between
+  a folder and its contents (`m.png` between `m` and `m/x`) and left records behind; it now searches from
+  `"<folder>/"`.
+
+### Consequences
+
+- Every image import reads one more (usually missing) file, and every verified cache hit checks it; both
+  happen at load time, not per frame.
+- Cache entries of import settings that are not requested at the time of a forced reimport keep their old
+  data until their sources change; the editor requests every setting it uses, so it sees the reimport.
+- The asset browser's import settings inspector (Apply/Revert) builds on `asset.set_import_settings` and
+  the `importSettings` of `asset.info`.

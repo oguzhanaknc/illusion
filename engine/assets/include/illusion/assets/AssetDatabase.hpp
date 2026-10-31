@@ -43,12 +43,14 @@ public:
     /// used without checking their sources (shipped games that mount a cooked archive and no sources).
     AssetDatabase(VirtualFileSystem& files, std::string cacheMount, bool verifySources = true);
 
-    /// Loads the image at @p virtualPath (PNG, JPEG, TGA, BMP, Radiance HDR).
+    /// Loads the image at @p virtualPath (PNG, JPEG, TGA, BMP, Radiance HDR) with @p settings changed by its
+    /// import settings sidecar, if it has one (see ImportSettings.hpp; an invalid sidecar fails the load).
     [[nodiscard]] std::optional<Image> loadImage(std::string_view virtualPath,
                                                  const ImageImportSettings& settings = {},
                                                  std::string* error = nullptr);
 
-    /// Loads the glTF model at @p virtualPath (.gltf or .glb).
+    /// Loads the glTF model at @p virtualPath (.gltf or .glb), with the settings of its import settings
+    /// sidecar, if it has one.
     [[nodiscard]] std::optional<ModelData> loadModel(std::string_view virtualPath,
                                                      std::string* error = nullptr);
 

@@ -223,6 +223,51 @@ Hazırlanmış dosyalar (`<illusion/assets/AssetFormat.hpp>` içindeki `AssetFil
 `serializeModel()`) sürümlüdür, checksum içerir ve okunurken tamamen doğrulanır; bu yüzden hasarlı bir
 önbellek dosyasına güvenilmez, yok sayılır.
 
+## İçe aktarma ayarları
+
+Bir görüntü ya da glTF modeli bir içe aktarma ayarları sidecar dosyası taşıyabilir: yanında duran ve nasıl
+içe aktarıldığını değiştiren bir `<file>.import.json` dosyası. Sidecar yalnızca bir ayar varsayılanından
+farklıyken vardır ve yalnızca o ayarları tutar:
+
+```json
+{
+  "format": "illusion.import",
+  "version": 1,
+  "texture": {"colorSpace": "linear", "maxSize": 1024}
+}
+```
+
+| Tür | Ayar | Varsayılan | Anlamı |
+| --- | --- | --- | --- |
+| Texture (`.png`, `.jpg`, `.jpeg`, `.tga`, `.bmp`, `.hdr`) | `colorSpace` | `"auto"` | `"srgb"` ya da `"linear"`, görüntüyü kullananın istediği renk uzayını geçersiz kılar (bir Material temel rengi sRGB, normal map'leri doğrusal ister). |
+| | `generateMips` | `true` | `false`, kullanan mip istese bile yalnızca en üst seviyeyi içe aktarır. |
+| | `maxSize` | `0` | Hiçbir kenar bunu aşmayana kadar görüntüyü yarıya indirir (1 ile 16384 arası; 0 sınır yok demektir). |
+| Model (`.gltf`, `.glb`) | `scale` | `1` | Konumların ve node ötelemelerinin düzgün ölçeği (0'dan büyük, en çok 1000). |
+
+- `AssetDatabase`, `AssetStreamer` ve `cookAssets()` içe aktardıkları her görüntünün ve modelin
+  sidecar'ını okur; böylece editör, oyun ve hazırlanmış Build aynı sonucu görür.
+- Sidecar, önbellek kaydının kaynaklarından biridir: onu düzenlemek, eklemek ya da silmek kaydı eskitir ve
+  sonraki yükleme yeniden içe aktarır. Önbellek kayıtları çağıranın istediği ayarlara göre anahtarlanmaya
+  devam eder; böylece yalnızca hazırlanmış önbelleği dağıtan bir oyun onları sidecar'lar olmadan bulur.
+- Sidecar'lar sürümlüdür (`"version"`) ve doğrulanır: bilinmeyen bir üye, yanlış türden bir bölüm (bir
+  Texture'ın yanında `"model"`), yanlış bir tip ya da aralık dışı bir değer, içe aktarmayı sidecar'ı ve
+  değerin JSON pointer'ını belirten bir hatayla başarısız kılar.
+- `parseImportSettings()`, `mergeImportSettings()` (JSON merge patch: `null` bir ayarı ya da bölümü
+  sıfırlar) ve `writeImportSettings()` sidecar'ları koddan okur ve yazar:
+
+```cpp
+#include <illusion/assets/ImportSettings.hpp>
+
+illusion::ImportSettings settings;
+settings.texture.maxSize = 512;
+const std::string text = illusion::writeImportSettings(settings, illusion::ImportSettingsKind::Texture);
+// text is empty when every setting is a default: delete the sidecar instead of writing it.
+files.writeText(illusion::importSettingsPath("game:/textures/ui.png"), text);
+```
+
+Editörde `asset.set_import_settings` ayarları değiştirir (geri alınabilir) ve `asset.reimport` bir Asset'i
+yeniden içe aktarır; bkz. [editör kılavuzu](editor/index.md#ice-aktarma-ayarlar).
+
 ## Streaming
 
 `AssetStreamer` arka planda yükler; böylece Asset'ler gelirken oyun çalışmaya devam eder.
@@ -288,6 +333,15 @@ illusion::Subscription onReload = streamer.events().subscribe<illusion::AssetRel
 
 - `reload()` geçersiz bir yol için false döndürür; olay normalleştirilmiş yolu ve onun `AssetId` değerini
   taşır.
+- Bir dosyanın [içe aktarma ayarları](#ice-aktarma-ayarlar) sidecar'ı değiştikten sonra dosyayı yeniden
+  yükleyin: eskiyen önbellek kaydı yeniden içe aktarılır. Hiçbir şey değişmediği hâlde kaynaktan içe
+  aktarmak için `AssetReloadMode::Reimport` verin; bu, önce dosyanın mevcut isteklerinin önbellek
+  kayıtlarını siler:
+
+```cpp
+// Import again from source although neither the file nor its sidecar changed:
+streamer.reload("game:/textures/ui.png", illusion::AssetReloadMode::Reimport);
+```
 - Bir glTF modeli buffer'larına ve görüntülerine bağlıdır: bunlardan biri değişince model dosyasını
   yeniden yükleyin (editör bu dosyaları Asset kataloğunda bulur).
 
@@ -341,5 +395,8 @@ auto helmet = streamer.loadModel("game:/models/helmet.glb"); // served from the 
   olması gerekmez.
 - Tek başına görüntüler varsayılan içe aktarma ayarlarıyla hazırlanır; başka ayarlarla yüklenen
   görüntüler kaynaklarına (ya da bu ayarları bilen bir hazırlama adımına) ihtiyaç duyar.
+- Hazırlama [içe aktarma ayarları](#ice-aktarma-ayarlar) sidecar'larına uyar ve hazırlanmış kayıtların
+  çalışma anında onlara ihtiyacı yoktur; bu yüzden dağıtılmazlar. Asset'i olmayan ya da içe aktarma ayarı
+  olmayan bir dosyanın yanındaki sidecar hata olarak bildirilir.
 - `cookAssets()` aynısını koddan yapar ve neyi hazırladığını ve hangi dosyaların başarısız olduğunu
   bildirir.

@@ -1,6 +1,7 @@
 #include "../ReflectedObject.hpp"
 #include "CommandSupport.hpp"
 
+#include <illusion/assets/ImportSettings.hpp>
 #include <illusion/assets/MaterialAsset.hpp>
 #include <illusion/editor/core/AssetCatalog.hpp>
 
@@ -51,6 +52,38 @@ Expected<FileStat, CommandError> existing(CommandContext& context, std::string_v
                                                                      ")"));
     }
     return stat;
+}
+
+// Sidecars are edited through asset.set_import_settings and travel with their asset, never on their own.
+Expected<void, CommandError> notImportSettings(std::string_view path, std::string_view pointer)
+{
+    if (isImportSettingsPath(path))
+    {
+        return unexpected(
+            CommandError::invalid(std::string(pointer), "must not be an import settings file (" +
+                                                            std::string(kImportSettingsSuffix) +
+                                                            "); use asset.set_import_settings on its asset"));
+    }
+    return {};
+}
+
+// The text of the sidecar of @p asset, or std::nullopt if it has none.
+Expected<std::optional<std::string>, CommandError> readSidecar(CommandContext& context,
+                                                               std::string_view asset)
+{
+    const std::string path = importSettingsPath(asset);
+    std::string text;
+    const FileError error = context.editor().files().readText(path, text);
+    if (error == FileError::NotFound)
+    {
+        return std::optional<std::string>();
+    }
+    if (error != FileError::None)
+    {
+        return unexpected(CommandError::make(
+            ErrorKind::IoError, "cannot read '" + path + "' (" + std::string(fileErrorName(error)) + ")"));
+    }
+    return std::optional<std::string>(std::move(text));
 }
 
 void sortReferences(std::vector<AssetReference>& references)
@@ -228,6 +261,10 @@ Expected<AssetListResult, CommandError> assetList(CommandContext& context, const
     for (const DirectoryEntry& entry : entries)
     {
         std::string entryPath = joinPath(path, entry.name);
+        if (!entry.isDirectory && isImportSettingsPath(entryPath))
+        {
+            continue; // Part of its asset (see asset.info), not an asset of its own.
+        }
         const std::string_view kind = assetKindOf(entryPath, entry.isDirectory);
         if (!params.kind || *params.kind == kind)
         {
@@ -285,6 +322,10 @@ Expected<AssetInfoResult, CommandError> assetInfo(CommandContext& context, const
     {
         return unexpected(std::move(valid).error());
     }
+    if (Expected<void, CommandError> valid = notImportSettings(params.path, "/path"); !valid)
+    {
+        return unexpected(std::move(valid).error());
+    }
     Expected<FileStat, CommandError> stat = existing(context, params.path);
     if (!stat)
     {
@@ -303,6 +344,27 @@ Expected<AssetInfoResult, CommandError> assetInfo(CommandContext& context, const
             return unexpected(std::move(dependencies).error());
         }
         result.dependencies = static_cast<u32>(dependencies->size());
+        const ImportSettingsKind kind = importSettingsKindOf(params.path);
+        if (kind != ImportSettingsKind::None)
+        {
+            Expected<std::optional<std::string>, CommandError> sidecar = readSidecar(context, params.path);
+            if (!sidecar)
+            {
+                return unexpected(std::move(sidecar).error());
+            }
+            Expected<ImportSettings, ImportSettingsError> settings =
+                *sidecar ? parseImportSettings(**sidecar, kind)
+                         : Expected<ImportSettings, ImportSettingsError>();
+            if (settings)
+            {
+                result.importSettings = JsonText{importSettingsValue(*settings, kind)};
+            }
+            else
+            {
+                context.warn(importSettingsPath(params.path) + settings.error().pointer +
+                             " is invalid: " + settings.error().message);
+            }
+        }
     }
     return result;
 }
@@ -343,6 +405,33 @@ Expected<AssetMoveResult, CommandError> assetMove(CommandContext& context, const
     {
         return unexpected(CommandError::make(ErrorKind::AlreadyExists, "'" + params.to + "' exists already"));
     }
+    for (const auto& [path, pointer] :
+         {std::pair{std::string_view(params.from), "/from"}, std::pair{std::string_view(params.to), "/to"}})
+    {
+        if (Expected<void, CommandError> valid = notImportSettings(path, pointer); !valid)
+        {
+            return unexpected(std::move(valid).error());
+        }
+    }
+    // A file's sidecar moves with it (a folder's sidecars are inside it).
+    const std::string fromSidecar = importSettingsPath(params.from);
+    const std::string toSidecar = importSettingsPath(params.to);
+    const bool moveSidecar = context.editor().files().exists(fromSidecar);
+    if (moveSidecar)
+    {
+        if (importSettingsKindOf(params.to) != importSettingsKindOf(params.from))
+        {
+            return unexpected(CommandError::make(
+                ErrorKind::PreconditionFailed,
+                "'" + params.from + "' has import settings that '" + params.to +
+                    "' could not use; reset them first with asset.set_import_settings {\"value\": null}"));
+        }
+        if (context.editor().files().exists(toSidecar))
+        {
+            return unexpected(
+                CommandError::make(ErrorKind::AlreadyExists, "'" + toSidecar + "' exists already"));
+        }
+    }
     if (Expected<void, CommandError> allowed = notOpenScene(context, params.from, "moved"); !allowed)
     {
         return unexpected(std::move(allowed).error());
@@ -372,6 +461,13 @@ Expected<AssetMoveResult, CommandError> assetMove(CommandContext& context, const
     if (Expected<void, CommandError> moved = context.edit().moveFile(params.from, params.to); !moved)
     {
         return unexpected(std::move(moved).error());
+    }
+    if (moveSidecar)
+    {
+        if (Expected<void, CommandError> moved = context.edit().moveFile(fromSidecar, toSidecar); !moved)
+        {
+            return unexpected(std::move(moved).error());
+        }
     }
     for (const std::string& file : referring)
     {
@@ -429,6 +525,10 @@ Expected<AssetDeleteResult, CommandError> assetDelete(CommandContext& context,
     {
         return unexpected(std::move(valid).error());
     }
+    if (Expected<void, CommandError> valid = notImportSettings(params.path, "/path"); !valid)
+    {
+        return unexpected(std::move(valid).error());
+    }
     if (Expected<FileStat, CommandError> stat = existing(context, params.path); !stat)
     {
         return unexpected(std::move(stat).error());
@@ -456,6 +556,14 @@ Expected<AssetDeleteResult, CommandError> assetDelete(CommandContext& context,
     if (Expected<void, CommandError> deleted = context.edit().deleteFile(params.path); !deleted)
     {
         return unexpected(std::move(deleted).error());
+    }
+    // The sidecar goes with its asset, in the same undo step.
+    if (const std::string sidecar = importSettingsPath(params.path); context.editor().files().exists(sidecar))
+    {
+        if (Expected<void, CommandError> deleted = context.edit().deleteFile(sidecar); !deleted)
+        {
+            return unexpected(std::move(deleted).error());
+        }
     }
     return AssetDeleteResult{params.path, std::move(references)};
 }
@@ -540,6 +648,152 @@ Expected<AssetFindMissingResult, CommandError> assetFindMissing(CommandContext& 
     sortReferences(result.references);
     std::sort(result.assets.begin(), result.assets.end());
     result.assets.erase(std::unique(result.assets.begin(), result.assets.end()), result.assets.end());
+    return result;
+}
+
+// The settings kind of the existing asset file @p path ("/path"), or why it has no import settings.
+Expected<ImportSettingsKind, CommandError> importedAsset(CommandContext& context, std::string_view path,
+                                                         bool allowRoot)
+{
+    if (Expected<void, CommandError> valid = checkAssetPath(context, path, "/path", allowRoot); !valid)
+    {
+        return unexpected(std::move(valid).error());
+    }
+    if (Expected<void, CommandError> valid = notImportSettings(path, "/path"); !valid)
+    {
+        return unexpected(std::move(valid).error());
+    }
+    Expected<FileStat, CommandError> stat = existing(context, path);
+    if (!stat)
+    {
+        return unexpected(std::move(stat).error());
+    }
+    if (stat->isDirectory)
+    {
+        return ImportSettingsKind::None;
+    }
+    const ImportSettingsKind kind = importSettingsKindOf(path);
+    if (kind == ImportSettingsKind::None)
+    {
+        return unexpected(CommandError::invalid(
+            "/path",
+            "must be a texture (.png, .jpg, .jpeg, .tga, .bmp, .hdr) or a model (.gltf, .glb); other "
+            "assets are not imported"));
+    }
+    return kind;
+}
+
+Expected<AssetImportSettingsResult, CommandError>
+assetSetImportSettings(CommandContext& context, const AssetSetImportSettingsParams& params)
+{
+    Expected<ImportSettingsKind, CommandError> kind = importedAsset(context, params.path, false);
+    if (!kind)
+    {
+        return unexpected(std::move(kind).error());
+    }
+    if (*kind == ImportSettingsKind::None)
+    {
+        return unexpected(CommandError::invalid("/path", "must be a file, not a folder"));
+    }
+    Expected<JsonDocument, CommandError> patch = parseParam(params.value, "/value");
+    if (!patch)
+    {
+        return unexpected(std::move(patch).error());
+    }
+    Expected<std::optional<std::string>, CommandError> before = readSidecar(context, params.path);
+    if (!before)
+    {
+        return unexpected(std::move(before).error());
+    }
+    const std::string sidecar = importSettingsPath(params.path);
+    ImportSettings settings;
+    if (*before)
+    {
+        Expected<ImportSettings, ImportSettingsError> current = parseImportSettings(**before, *kind);
+        if (current)
+        {
+            settings = *current;
+        }
+        else if (!patch->root().isNull())
+        {
+            return unexpected(CommandError::make(ErrorKind::PreconditionFailed,
+                                                 "'" + sidecar + "' is invalid (" + current.error().pointer +
+                                                     ": " + current.error().message +
+                                                     "); reset it with {\"value\": null} first"));
+        }
+    }
+    if (Expected<void, ImportSettingsError> merged = mergeImportSettings(settings, patch->root(), *kind);
+        !merged)
+    {
+        return unexpected(CommandError::invalid("/value" + merged.error().pointer, merged.error().message));
+    }
+    AssetImportSettingsResult result;
+    result.path = params.path;
+    result.value.text = importSettingsValue(settings, *kind);
+    const std::string text = writeImportSettings(settings, *kind);
+    if (text.empty())
+    {
+        // Every setting is a default: no sidecar.
+        if (*before)
+        {
+            if (Expected<void, CommandError> deleted = context.edit().deleteFile(sidecar); !deleted)
+            {
+                return unexpected(std::move(deleted).error());
+            }
+            result.changed = true;
+        }
+        return result;
+    }
+    result.sidecar = sidecar;
+    if (*before && **before == text)
+    {
+        return result;
+    }
+    if (Expected<bool, CommandError> written = context.edit().writeFile(sidecar, text); !written)
+    {
+        return unexpected(std::move(written).error());
+    }
+    result.changed = true;
+    return result;
+}
+
+Expected<AssetReimportResult, CommandError> assetReimport(CommandContext& context,
+                                                          const FilePathParams& params)
+{
+    Expected<ImportSettingsKind, CommandError> kind = importedAsset(context, params.path, true);
+    if (!kind)
+    {
+        return unexpected(std::move(kind).error());
+    }
+    AssetReimportResult result;
+    if (*kind != ImportSettingsKind::None)
+    {
+        result.assets.push_back(params.path);
+    }
+    else
+    {
+        std::vector<DirectoryEntry> entries;
+        if (const FileError error = context.editor().files().listRecursive(params.path, entries);
+            error != FileError::None)
+        {
+            return unexpected(CommandError::make(ErrorKind::IoError, "cannot list '" + params.path + "' (" +
+                                                                         std::string(fileErrorName(error)) +
+                                                                         ")"));
+        }
+        for (const DirectoryEntry& entry : entries)
+        {
+            std::string path = joinPath(params.path, entry.name);
+            if (!entry.isDirectory && importSettingsKindOf(path) != ImportSettingsKind::None)
+            {
+                result.assets.push_back(std::move(path));
+            }
+        }
+        std::sort(result.assets.begin(), result.assets.end());
+    }
+    for (const std::string& path : result.assets)
+    {
+        context.editor().requestReimport(path);
+    }
     return result;
 }
 
@@ -631,6 +885,35 @@ void registerAssetCommands(CommandRegistry& registry)
         .category = "Asset",
         .icon = "link_off",
         .flags = {.readOnly = true, .idempotent = true},
+        .mode = CommandMode::Any,
+        .palette = true,
+    });
+    registry.add<&assetSetImportSettings>({
+        .name = "asset.set_import_settings",
+        .title = strings::kCommandAssetSetImportSettingsTitle,
+        .description = strings::kCommandAssetSetImportSettingsDescription,
+        .agentSummary =
+            "Merges import settings into a texture's or model's <file>.import.json sidecar (written only "
+            "while a setting differs from its default, deleted when all are defaults; null resets) and "
+            "reloads it. Texture: colorSpace auto|srgb|linear, generateMips, maxSize (0 = none). Model: "
+            "scale. "
+            "Example: {\"path\": \"assets:/textures/ui.png\", \"value\": {\"texture\": {\"colorSpace\": "
+            "\"linear\", \"maxSize\": 512}}}.",
+        .category = "Asset",
+        .icon = "tune",
+        .flags = {.idempotent = true, .undoable = true},
+        .permission = PermissionClass::Files,
+    });
+    registry.add<&assetReimport>({
+        .name = "asset.reimport",
+        .title = strings::kCommandAssetReimportTitle,
+        .description = strings::kCommandAssetReimportDescription,
+        .agentSummary = "Imports a texture or model (or every one in a folder) again on the next frame, "
+                        "ignoring the import cache even if nothing changed; returns the assets. Example: "
+                        "{\"path\": \"assets:/models/ship.glb\"}.",
+        .category = "Asset",
+        .icon = "refresh",
+        .flags = {.idempotent = true},
         .mode = CommandMode::Any,
         .palette = true,
     });

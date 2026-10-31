@@ -46,12 +46,14 @@ struct Request
     std::optional<AssetFile> cached;
     std::vector<std::vector<std::byte>> dependencies; // current contents of cached->dependencies
     std::vector<std::byte> source;
+    std::vector<std::byte> sidecar; // Kind::Image: its import settings sidecar (empty if none)
 };
 
 struct CacheWrite
 {
     std::string path;
     std::vector<std::byte> bytes;
+    bool remove = false; // delete the file instead (AssetReloadMode::Reimport)
 };
 
 template <class T>
@@ -100,6 +102,7 @@ struct AssetStreamer::Impl
     void finish(std::unique_ptr<Request> request, bool ok);
     void queueLoad(std::unique_ptr<Request> request);
     void queueWrite(const std::string& path, const AssetFile& file);
+    void queueRemove(std::string path);
     void submit(std::unique_ptr<Request> request);
 };
 
@@ -121,6 +124,15 @@ void AssetStreamer::Impl::queueWrite(const std::string& path, const AssetFile& f
     {
         std::scoped_lock lock(ioMutex);
         writes.push_back(CacheWrite{path, writeAssetFile(file)});
+    }
+    ioWake.notify_one();
+}
+
+void AssetStreamer::Impl::queueRemove(std::string path)
+{
+    {
+        std::scoped_lock lock(ioMutex);
+        writes.push_back(CacheWrite{std::move(path), {}, true});
     }
     ioWake.notify_one();
 }
@@ -166,6 +178,16 @@ void AssetStreamer::Impl::ioLoop()
                 loads.pop_front();
                 busy = true;
             }
+        }
+        if (write && write->remove)
+        {
+            if (const FileError result = files->remove(write->path);
+                result != FileError::None && result != FileError::NotFound)
+            {
+                ILL_LOG_WARN("Assets", "cannot delete import cache {}: {}", write->path,
+                             fileErrorName(result));
+            }
+            continue;
         }
         if (write)
         {
@@ -237,8 +259,8 @@ void AssetStreamer::Impl::read(Request& request)
             request.dependencies.resize(request.cached->dependencies.size());
             for (usize i = 0; i < request.dependencies.size(); ++i)
             {
-                if (files->readFile(request.cached->dependencies[i].path, request.dependencies[i]) !=
-                    FileError::None)
+                if (!detail::readDependency(*files, request.cached->dependencies[i].path,
+                                            request.dependencies[i]))
                 {
                     request.cached.reset(); // a source is gone: import (and report) from source
                     request.dependencies.clear();
@@ -252,6 +274,10 @@ void AssetStreamer::Impl::read(Request& request)
         if (const FileError result = files->readFile(request.path, request.source); result != FileError::None)
         {
             request.slot->error = std::format("{}: {}", request.path, fileErrorName(result));
+        }
+        else if (!detail::readImportSettingsFile(*files, request.path, request.sidecar, &request.slot->error))
+        {
+            request.source.clear(); // fails the load with the sidecar's error
         }
     }
 }
@@ -315,10 +341,28 @@ void AssetStreamer::Impl::process(Request* raw)
         queueLoad(std::move(request));
         return;
     }
-    // Image: the stale entry's only dependency is the image itself, so its bytes are already here.
-    if (request->cached && request->source.empty() && !request->dependencies.empty())
+    // Image: the stale entry's dependencies are the image and its sidecar, so their bytes are already here.
+    if (request->cached && request->source.empty())
     {
-        request->source = std::move(request->dependencies.front());
+        const std::string sidecarPath = importSettingsPath(request->path);
+        bool haveSidecar = false;
+        for (usize i = 0; i < request->dependencies.size(); ++i)
+        {
+            const std::string& path = request->cached->dependencies[i].path;
+            if (path == request->path)
+            {
+                request->source = std::move(request->dependencies[i]);
+            }
+            else if (path == sidecarPath)
+            {
+                request->sidecar = std::move(request->dependencies[i]);
+                haveSidecar = true;
+            }
+        }
+        if (!haveSidecar)
+        {
+            request->source.clear();
+        }
     }
     if (request->source.empty())
     {
@@ -332,7 +376,8 @@ void AssetStreamer::Impl::process(Request* raw)
     imports.fetch_add(1, std::memory_order_relaxed);
     auto& slot = slotOf<Image>(*request);
     AssetFile cooked;
-    slot.value = detail::importImage(request->source, request->path, request->settings, cooked, &slot.error);
+    slot.value = detail::importImage(request->source, request->sidecar, request->path, request->settings,
+                                     cooked, &slot.error);
     if (slot.value)
     {
         queueWrite(request->cachePath, cooked);
@@ -472,13 +517,29 @@ u32 AssetStreamer::invalidate(std::string_view virtualPath)
     return static_cast<u32>(forgotten);
 }
 
-bool AssetStreamer::reload(std::string_view virtualPath)
+bool AssetStreamer::reload(std::string_view virtualPath, AssetReloadMode mode)
 {
     ILL_PROFILE_SCOPE();
     std::optional<std::string> path = VirtualFileSystem::normalizePath(virtualPath);
     if (!path)
     {
         return false;
+    }
+    if (mode == AssetReloadMode::Reimport && !m_impl->desc.cacheMount.empty())
+    {
+        // Keys are "<importer>|<path>"; the importer part (with its settings) is the cache file's import key.
+        for (const auto& [key, slot] : m_impl->requests)
+        {
+            const bool imported =
+                key.starts_with(detail::kImageImporter) || key.starts_with(detail::kModelImporter);
+            if (imported && key.size() > path->size() && key.ends_with(*path) &&
+                key[key.size() - path->size() - 1] == '|')
+            {
+                const std::string_view importKey =
+                    std::string_view(key).substr(0, key.size() - path->size() - 1);
+                m_impl->queueRemove(detail::assetCachePath(m_impl->desc.cacheMount, *path, importKey));
+            }
+        }
     }
     invalidate(*path);
     const AssetId asset = AssetId::fromPath(*path);

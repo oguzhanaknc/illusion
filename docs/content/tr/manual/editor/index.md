@@ -302,7 +302,8 @@ referansları, `.gltf` dosyalarının harici buffer ve görüntüleri) ve ona ha
   bildirdiği her dosyayı okur.
 - `endFrame()`, katalog bir kez kullanıldıktan sonra watcher'ı her `assetPollInterval` saniyede (varsayılan
   0.25) kontrol eder ve son event'ten bu yana değişenlerle `asset.changed` gönderir:
-  `{"added": [...], "modified": [...], "removed": [...], "renamed": [{"from": ..., "to": ...}]}`.
+  `{"added": [...], "modified": [...], "removed": [...], "renamed": [{"from": ..., "to": ...}],
+  "reimported": [...]}`.
 - Kaybolup aynı içerikle başka bir yerde yeniden beliren bir dosya (dosya yöneticisinde yeniden adlandırma)
   `renamed` içinde bildirilir; eski yoluna yapılan referanslar değiştirilmez. Dosyaları taşıyıp referansları
   yeniden yazan komut `asset.move`'dur.
@@ -315,6 +316,32 @@ referansları, `.gltf` dosyalarının harici buffer ve görüntüleri) ve ona ha
 `asset.find_missing`, var olmayan bir `assets:` yoluna yapılan her referansı (sahnelerde, Material'lerde,
 ayar dosyalarında, açık sahnede, manifest'te ve glTF dosyalarında) her birinin Entity'si, Component'i ve
 alanıyla listeler.
+
+### İçe aktarma ayarları
+
+Texture'lar ve modeller [içe aktarma ayarlarını](../assets.md#ice-aktarma-ayarlar) yanlarındaki bir
+`<file>.import.json` sidecar dosyasında tutar. Editor sidecar'ı Asset'inin bir parçası sayar:
+
+- `asset.set_import_settings` ayarları sidecar'a birleştirir (bir JSON merge patch: `null` bir ayarı, bir
+  bölümü ya da değerin tamamı olarak her şeyi sıfırlar). Sidecar'ı yalnızca bir ayar varsayılanından
+  farklıyken yazar ve hepsi yeniden varsayılan olunca siler; her çağrı tek bir geri alma adımıdır. Sonuç,
+  varsayılanlar dahil her ayarı içerir; `asset.info` da onları `importSettings` olarak döndürür:
+
+```json
+{"path": "assets:/textures/ui.png", "value": {"texture": {"colorSpace": "linear", "maxSize": 512}}}
+```
+
+- Bir sidecar'ın komutla, geri almayla ya da bir metin düzenleyicide değişmesi, Asset'ini `asset.changed`
+  event'inin `modified` listesinde bildirir; viewport'lar onu yeniden yükler ve kaynakları arasında sidecar
+  da bulunan içe aktarma önbelleği kaydı yeniden içe aktarılır.
+- `asset.reimport` bir Texture'ı ya da modeli, veya bir klasördeki hepsini, hiçbir şey değişmemiş olsa da
+  bir sonraki karede yeniden içe aktarır: onları `reimported` içinde gönderir, viewport'lar da onları
+  `AssetReloadMode::Reimport` ile (yeniden içe aktarılan bir görüntüyü kullanan glTF modelleriyle birlikte)
+  yeniden yükler.
+- `asset.list` ve katalog sidecar'ları listelemez. `asset.move` bir dosyanın sidecar'ını onunla birlikte
+  taşır, `asset.delete` da aynı geri alma adımında siler; ayarları kullanamayacak bir ada taşıma (`.txt`
+  olarak yeniden adlandırılan bir Texture) ayarlar sıfırlanana kadar reddedilir. Sidecar'ların kendileri bu
+  komutlar için geçerli yollar değildir.
 
 ## Material'ler
 

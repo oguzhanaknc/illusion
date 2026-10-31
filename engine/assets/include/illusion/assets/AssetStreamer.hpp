@@ -111,6 +111,13 @@ struct AssetReloadedEvent
     AssetId asset;    ///< Id of the file (AssetId::fromPath(path)).
 };
 
+/// How AssetStreamer::reload() treats the import cache.
+enum class AssetReloadMode : u8
+{
+    IfChanged, ///< Use cache entries whose sources (the file, its import settings sidecar) are unchanged.
+    Reimport,  ///< Delete the cache entries of the file's current requests first, so it imports from source.
+};
+
 /// Creation parameters of an AssetStreamer.
 struct AssetStreamerDesc
 {
@@ -166,9 +173,12 @@ public:
     u32 invalidate(std::string_view virtualPath);
 
     /// Calls invalidate() and publishes an AssetReloadedEvent on events(), so that caches holding assets made
-    /// from the file request them again. Call it when a file changed on disk; the editor does it for every
-    /// file in its `asset.changed` event. Returns false (and publishes nothing) for an invalid path.
-    bool reload(std::string_view virtualPath);
+    /// from the file request them again. Call it when a file or its import settings sidecar changed on disk;
+    /// the editor does it for every file in its `asset.changed` event. With AssetReloadMode::Reimport the
+    /// import cache entries of the file's current requests are deleted first (before any later load reads
+    /// them), so the next requests import from source even though nothing changed. Returns false (and
+    /// publishes nothing) for an invalid path.
+    bool reload(std::string_view virtualPath, AssetReloadMode mode = AssetReloadMode::IfChanged);
 
     /// The streamer's events (AssetReloadedEvent), published on the thread that calls reload().
     [[nodiscard]] EventBus& events() noexcept;

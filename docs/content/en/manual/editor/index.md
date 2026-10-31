@@ -291,7 +291,8 @@ watches the project's `assets/` directory with a `FileWatcher` (Native by defaul
   changed, and every file the watcher reported.
 - `endFrame()` checks the watcher every `assetPollInterval` seconds (0.25 by default) once the catalog has
   been used, and posts `asset.changed` with what changed since the last one:
-  `{"added": [...], "modified": [...], "removed": [...], "renamed": [{"from": ..., "to": ...}]}`.
+  `{"added": [...], "modified": [...], "removed": [...], "renamed": [{"from": ..., "to": ...}],
+  "reimported": [...]}`.
 - A file that disappears and reappears elsewhere with the same contents (a rename in a file manager) is
   reported in `renamed`; references to its old path are not changed. `asset.move` moves files and rewrites
   references.
@@ -303,6 +304,31 @@ watches the project's `assets/` directory with a `FileWatcher` (Native by defaul
 
 `asset.find_missing` lists every reference to an `assets:` path that does not exist (in scenes, materials,
 settings files, the open scene, the manifest and glTF files), with the entity, Component and field of each.
+
+### Import settings
+
+Textures and models keep their [import settings](../assets.md#import-settings) in a `<file>.import.json`
+sidecar next to them. The editor treats the sidecar as part of its asset:
+
+- `asset.set_import_settings` merges settings into the sidecar (a JSON merge patch: `null` resets a
+  setting, a section or, as the whole value, everything). It writes the sidecar only while a setting
+  differs from its default and deletes it when all are defaults again; each call is one undo step. The
+  result has every setting, defaults included, and `asset.info` returns them as `importSettings`:
+
+```json
+{"path": "assets:/textures/ui.png", "value": {"texture": {"colorSpace": "linear", "maxSize": 512}}}
+```
+
+- Changing a sidecar, from the command, by undo or in a text editor, reports its asset in the `modified`
+  list of `asset.changed`; the viewports reload it, and the import cache entry, whose sources include the
+  sidecar, imports again.
+- `asset.reimport` imports a texture or model, or every one in a folder, again on the next frame even
+  though nothing changed: it posts them in `reimported`, and the viewports reload them with
+  `AssetReloadMode::Reimport` (with the glTF models that use a reimported image).
+- `asset.list` and the catalog do not list sidecars. `asset.move` moves a file's sidecar with it and
+  `asset.delete` deletes it, in the same undo step; a move to a name that could not use the settings (a
+  texture renamed to `.txt`) is refused until they are reset. Sidecars are not valid paths for these
+  commands themselves.
 
 ## Materials
 

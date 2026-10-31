@@ -1,4 +1,5 @@
 #include <illusion/assets/Model.hpp>
+#include <illusion/core/Assert.hpp>
 #include <illusion/core/Log.hpp>
 #include <illusion/core/Profiler.hpp>
 #include <illusion/platform/FileSystem.hpp>
@@ -491,6 +492,29 @@ private:
 };
 
 } // namespace
+
+void scaleModel(ModelData& model, f32 scale)
+{
+    ILL_ASSERT(scale > 0.0f, "scaleModel needs a positive scale");
+    if (scale == 1.0f)
+    {
+        return;
+    }
+    for (MeshData& mesh : model.meshes)
+    {
+        for (Vertex& vertex : mesh.vertices)
+        {
+            vertex.position *= scale;
+        }
+        mesh.computeBounds();
+    }
+    // S * M * S^-1 for every local matrix: the world matrices become S * W * S^-1, which applied to the
+    // scaled positions gives S * W * p.
+    for (ModelNode& node : model.nodes)
+    {
+        node.localMatrix[3] = Vec4(Vec3(node.localMatrix[3]) * scale, node.localMatrix[3].w);
+    }
+}
 
 std::vector<Mat4> ModelData::worldMatrices() const
 {

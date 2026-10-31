@@ -1,6 +1,7 @@
 #include "core/EditorCoreTestSupport.hpp"
 #include "gpu/GoldenSupport.hpp"
 
+#include <illusion/assets/Image.hpp>
 #include <illusion/editor/ui/OffscreenUi.hpp>
 #include <illusion/editor/ui/UiContext.hpp>
 #include <illusion/editor/viewport/ViewportService.hpp>
@@ -75,6 +76,27 @@ struct GpuViewports
         service->render(true);
         device->waitIdle();
         service->waitIdle();
+    }
+
+    // The hue at the centre of the 64x36 game viewport, rendering until the sample (which waits for loads)
+    // is done.
+    f64 sampleHue()
+    {
+        const JsonDocument doc = test::parseJson(R"({"viewport":"game","x":32,"y":18,"radius":1})");
+        Expected<std::unique_ptr<RunningCommand>, CommandError> started =
+            editor().startJson("viewport.sample", doc.root());
+        REQUIRE(started.hasValue());
+        std::optional<std::string> result;
+        for (int i = 0; i < 1000 && !result; ++i)
+        {
+            service->render(false);
+            device->waitIdle();
+            Expected<std::optional<std::string>, CommandError> updated = started.value()->update();
+            REQUIRE(updated.hasValue());
+            result = *updated;
+        }
+        REQUIRE(result.has_value());
+        return test::parseJson(*result).root().find("hue").asF64().value_or(-1.0);
     }
 
     // Runs @p name (an async command) to completion, rendering a frame between steps.
@@ -441,24 +463,7 @@ TEST_CASE("an edited material file reloads in the viewports through asset.change
         R"({"name":"Camera","components":{"illusion.Transform":{"position":[0,0,8]},"illusion.Camera":{}}})");
     test::ok(editor, "viewport.set_aspect", R"({"viewport":"game","aspect":"fixed","width":64,"height":36})");
     test::ok(editor, "viewport.set_mode", R"({"viewport":"game","shading":"unlit"})");
-    const auto sampleHue = [&]() {
-        const JsonDocument doc = test::parseJson(R"({"viewport":"game","x":32,"y":18,"radius":1})");
-        Expected<std::unique_ptr<RunningCommand>, CommandError> started =
-            editor.startJson("viewport.sample", doc.root());
-        REQUIRE(started.hasValue());
-        std::optional<std::string> result;
-        for (int i = 0; i < 1000 && !result; ++i)
-        {
-            gpu.service->render(false);
-            gpu.device->waitIdle();
-            Expected<std::optional<std::string>, CommandError> updated = started.value()->update();
-            REQUIRE(updated.hasValue());
-            result = *updated;
-        }
-        REQUIRE(result.has_value());
-        return test::parseJson(*result).root().find("hue").asF64().value_or(-1.0);
-    };
-    const f64 red = sampleHue();
+    const f64 red = gpu.sampleHue();
     CHECK((red < 25.0 || red > 335.0));
 
     // An artist saves the material in another program: the catalog notices it, endFrame() posts
@@ -467,9 +472,57 @@ TEST_CASE("an edited material file reloads in the viewports through asset.change
     std::ofstream(gpu.fixture.directory.path / "project" / "assets" / "materials" / "paint.material")
         << R"({"format":"illusion.material","version":1,"material":{"name":"Green","baseColorFactor":[0,1,0,1]}})";
     editor.endFrame(0.016);
-    const f64 green = sampleHue();
+    const f64 green = gpu.sampleHue();
     CHECK(green > 95.0);
     CHECK(green < 145.0);
+}
+
+TEST_CASE("changed import settings and asset.reimport import a texture again in the viewports")
+{
+    editor::EditorContextOptions options;
+    options.assetWatching = FileWatchBackend::Polling;
+    options.assetPollInterval = 0.0;
+    GpuViewports gpu(options);
+    EditorContext& editor = gpu.editor();
+    // Orange: green is 128 of 255, which is 0.22 when decoded as sRGB and 0.5 when read as linear data.
+    REQUIRE(editor.files().writeFile("assets:/textures/tint.png",
+                                     encodePng(makeSolidImage(4, 4, Vec4(1.0f, 128.0f / 255.0f, 0.0f, 1.0f),
+                                                              ImageFormat::RGBA8))) == FileError::None);
+    test::ok(editor, "material.create",
+             R"({"path":"assets:/materials/tint.material","value":{"textures":)"
+             R"({"baseColor":"assets:/textures/tint.png"}}})");
+    test::ok(
+        editor, "entity.create",
+        R"({"name":"Tinted","components":{"illusion.Transform":{"position":[0,0,0]},)"
+        R"("illusion.MeshRenderer":{"mesh":"builtin:/mesh/cube","material":"assets:/materials/tint.material"}}})");
+    test::ok(
+        editor, "entity.create",
+        R"({"name":"Camera","components":{"illusion.Transform":{"position":[0,0,8]},"illusion.Camera":{}}})");
+    test::ok(editor, "viewport.set_aspect", R"({"viewport":"game","aspect":"fixed","width":64,"height":36})");
+    test::ok(editor, "viewport.set_mode", R"({"viewport":"game","shading":"unlit"})");
+    const f64 srgb = gpu.sampleHue();
+    CHECK(srgb > 5.0);
+    CHECK(srgb < 40.0);
+
+    // The sidecar changes the import: the catalog reports the texture as modified, the viewports reload it,
+    // and the stale cache entry (its sidecar is one of its sources) imports again as linear data.
+    REQUIRE(editor.assets().scanned());
+    test::ok(editor, "asset.set_import_settings",
+             R"({"path":"assets:/textures/tint.png","value":{"texture":{"colorSpace":"linear"}}})");
+    editor.endFrame(0.016);
+    const f64 linear = gpu.sampleHue();
+    CHECK(linear > srgb + 8.0);
+
+    // A forced reimport changes nothing visible and leaks nothing; undo brings the sRGB import back.
+    for (int i = 0; i < 3; ++i)
+    {
+        test::ok(editor, "asset.reimport", R"({"path":"assets:/textures"})");
+        editor.endFrame(0.016);
+        CHECK(gpu.sampleHue() == doctest::Approx(linear).epsilon(0.02));
+    }
+    test::ok(editor, "history.undo");
+    editor.endFrame(0.016);
+    CHECK(gpu.sampleHue() == doctest::Approx(srgb).epsilon(0.02));
 }
 
 TEST_CASE("closing a viewport with readbacks in flight frees their slots for the other viewports")
