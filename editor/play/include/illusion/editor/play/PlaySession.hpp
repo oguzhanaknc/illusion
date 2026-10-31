@@ -87,6 +87,8 @@ public:
     void actionStates(std::vector<PlayActionState>& out) const override;
     void playWorldEdited(std::span<const Operation> operations) override;
     [[nodiscard]] Expected<std::string, CommandError> loadModule(std::string_view path) override;
+    [[nodiscard]] Expected<void, CommandError> reloadModule(std::string_view name) override;
+    u32 reloadChangedModules() override;
     bool unloadModule(std::string_view name) override;
     void modules(std::vector<PlayModuleInfo>& out) const override;
 

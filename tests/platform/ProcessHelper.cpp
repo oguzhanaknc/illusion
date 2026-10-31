@@ -13,6 +13,7 @@
 #include <cstdio>
 #include <cstdlib>
 #include <filesystem>
+#include <fstream>
 #include <string>
 #include <thread>
 #include <vector>
@@ -129,6 +130,22 @@ int run(const std::vector<std::string>& args)
         }
         std::fflush(stdout);
         std::fputs("done\n", stderr);
+    }
+    else if (mode == "relay" && args.size() == 3)
+    {
+        // Waits for the file args[1], then creates args[2] (the detached process test).
+        const auto path = [](const std::string& text) {
+            return std::filesystem::path(std::u8string(text.begin(), text.end()));
+        };
+        while (!std::filesystem::exists(path(args[1])))
+        {
+            std::this_thread::sleep_for(std::chrono::milliseconds(5));
+        }
+        std::ofstream out(path(args[2]), std::ios::binary);
+        if (!out)
+        {
+            return 1;
+        }
     }
     else if (mode == "hang")
     {

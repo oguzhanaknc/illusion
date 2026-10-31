@@ -114,4 +114,5 @@ kullanın.
 
 `module.load` bir oyun modülünü paylaşımlı kütüphanesinden yükler ve çalışan bir oturumda başlatır,
 `module.unload` onu durdurup kaldırır, `module.list` yüklü modülleri listeler. Yüklenemeyen bir modül 1302
-koduyla ve yükleyicinin nedeniyle başarısız olur (bkz. [Modüller](../modules.md)).
+koduyla ve yükleyicinin nedeniyle başarısız olur (bkz. [Modüller](../modules.md)). [Proje
+Modülleri](project-modules.md) projenin kendi modüllerini derler ve yükler.

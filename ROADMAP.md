@@ -331,8 +331,26 @@ Plan: `docs/plans/m7-editor.md` (sub-milestones, command API, localization, them
   toolbar, capture and release with Maximize on Play, a GPU test of rendering and picking the play World
   across sessions, and the golden images `shell-dark-100-play` and `shell-dark-100-play-maximized`
 - M7r-3b: The Tetris reference module and the play scenarios of the acceptance transcript (C5)
-- M7s: Project modules built from the editor (ADR 0043); opening sources with the External Tools code editor
-  (from M7l)
+- M7s: Project modules built from the editor (ADR 0043) and the External Tools code editor (from M7l), in two
+  parts:
+- M7s-1: ✅ The module SDK: every editor build tree writes a CMake package to `<build>/sdk`
+  (`illusionConfig.cmake` importing `illusion::core` and the five API targets, with `illusion_add_module()` and
+  `illusion_project_modules()`) and a toolchain description per configuration (`illusion-sdk.json`: CMake,
+  generator, configuration, compiler and flags, module library prefix and suffix), read through
+  `EditorContextOptions::moduleSdk`; `ModuleBuild` (configure when there is no cache, then `cmake --build`, as
+  child processes read line by line) with `BuildOutputParser` for GCC, Clang, MSVC, clang-cl, MSVC linker and
+  CMake diagnostics; commands `module.create` (undoable template files), `module.build` (async, diagnostics
+  with virtual paths logged to the Console, loads new modules and hot-reloads loaded ones) and `module.reload`;
+  `PlayHost::reloadModule` and `reloadChangedModules`; the Build Modules (Ctrl+B) and Reload Modules (Ctrl+R)
+  actions enabled. Tests of the parser, the toolchain description and the commands against a stand-in for
+  CMake (`illusion_fake_cmake`), and one real build with the build tree's SDK that compiles a module, reports a
+  compile error at its line, hot-reloads the fix and plays it; `manual/editor/project-modules.md`
+- M7s-2: ✅ `editor.open_source`: opens a project file (virtual or absolute path) at a line and column in the
+  External Tools code editor (`codeEditor`, a command line with `{file}`, `{line}` and `{column}`) or with the
+  system's default application (`explorer`, `open`, `xdg-open`), started as a detached process
+  (`ProcessOptions::detached`); Console source links of project files, such as build diagnostics, open it.
+  Tests of the command line splitting, the command with a recording stand-in editor and its errors, and a
+  detached process that outlives its `Process`
 - M7t: Component layout migration on hot reload, the M6 follow-up (ADR 0044)
 - M7u: Asset catalog, live reload and the asset browser (ADR 0045); GPU eviction of unused
   `RenderAssetCache` entries (from M7h); `#` asset search in the command palette (from M7l)

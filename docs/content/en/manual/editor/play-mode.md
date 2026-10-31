@@ -111,4 +111,5 @@ Point the project at the asset with `project.settings_set` on `illusion.InputSet
 
 `module.load` loads a game module from its shared library and starts it on a running session, `module.unload`
 stops and unloads it, and `module.list` lists the loaded modules. A module that cannot load fails with code
-1302 and the loader's reason (see [Modules](../modules.md)).
+1302 and the loader's reason (see [Modules](../modules.md)). [Project Modules](project-modules.md) builds
+the project's own modules and loads them.
