@@ -493,7 +493,8 @@ void ThumbnailRenderer::waitIdle()
     while (Impl::Request* request = impl.current())
     {
         const u64 ticket = request->ticket;
-        while (impl.current() != nullptr && impl.current()->ticket == ticket)
+        for (Impl::Request* active = request; active != nullptr && active->ticket == ticket;
+             active = impl.current())
         {
             if (impl.stage == Impl::Stage::Reading)
             {
