@@ -378,6 +378,7 @@ Expected<void, CommandError> EditorContext::openProject(const std::filesystem::p
     m_assets.clear();
     m_assetChanges.clear();
     m_assetNews = {};
+    m_assetReimports.clear();
     m_assetWatcher = {};
     if (Expected<FileWatcher, std::string> watcher =
             FileWatcher::watch(m_project->root() / "assets", m_options.assetWatching))
@@ -578,6 +579,11 @@ const AssetCatalog& EditorContext::assets()
     return m_assets;
 }
 
+void EditorContext::requestReimport(std::string path)
+{
+    m_assetReimports.push_back(std::move(path));
+}
+
 AssetCatalogChanges EditorContext::pollAssets(bool full)
 {
     m_assetChanges.clear();
@@ -602,7 +608,10 @@ AssetCatalogChanges EditorContext::pollAssets(bool full)
 
 void EditorContext::postAssetChanges(const AssetCatalogChanges& changes)
 {
-    if (changes.empty())
+    std::sort(m_assetReimports.begin(), m_assetReimports.end());
+    m_assetReimports.erase(std::unique(m_assetReimports.begin(), m_assetReimports.end()),
+                           m_assetReimports.end());
+    if (changes.empty() && m_assetReimports.empty())
     {
         return;
     }
@@ -625,6 +634,8 @@ void EditorContext::postAssetChanges(const AssetCatalogChanges& changes)
         item.add("from", document.makeString(rename.from));
         item.add("to", document.makeString(rename.to));
     }
+    addPaths("reimported", m_assetReimports);
+    m_assetReimports.clear();
     document.setRoot(root);
     std::string payload;
     if (document.write(payload, JsonWriteOptions{.pretty = false}))
@@ -1622,6 +1633,11 @@ void EditorContext::endFrame(f64 deltaSeconds)
             postAssetChanges(m_assetNews);
             m_assetNews = {};
         }
+    }
+    if (m_project && !m_assetReimports.empty())
+    {
+        postAssetChanges(m_assetNews); // Reimports do not wait for the poll interval.
+        m_assetNews = {};
     }
     m_events.flush();
     m_journal.flush();

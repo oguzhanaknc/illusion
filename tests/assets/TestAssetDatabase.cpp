@@ -22,7 +22,7 @@ TEST_CASE("the asset database imports once and then loads from the cache")
     REQUIRE(imported.has_value());
     CHECK(database.statistics().imports == 1);
     CHECK(database.statistics().cacheWrites == 1);
-    CHECK(project.files.exists(database.cachePath("game:/scene/two_nodes.gltf", "gltf:1")));
+    CHECK(project.files.exists(database.cachePath("game:/scene/two_nodes.gltf", "gltf:2")));
 
     const std::optional<ModelData> cached = database.loadModel("game:/scene/../scene/two_nodes.gltf", &error);
     REQUIRE(cached.has_value());
@@ -92,7 +92,7 @@ TEST_CASE("the asset database recovers from bad caches and reports bad sources")
     REQUIRE(database.loadImage("game:/textures/checker.png").has_value());
 
     // A damaged cache file is ignored and rewritten.
-    const std::string cached = database.cachePath("game:/textures/checker.png", "image:1|srgb=1|mips=1");
+    const std::string cached = database.cachePath("game:/textures/checker.png", "image:2|srgb=1|mips=1");
     const std::string garbage = "definitely not an asset";
     REQUIRE(project.files.writeText(cached, garbage) == FileError::None);
     REQUIRE(database.loadImage("game:/textures/checker.png").has_value());

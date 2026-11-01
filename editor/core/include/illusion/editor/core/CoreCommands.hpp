@@ -1181,6 +1181,9 @@ struct AssetInfoResult
     u64 size = 0;         ///< Size in bytes (0 for folders).
     u32 references = 0;   ///< References to it (or to anything in the folder).
     u32 dependencies = 0; ///< Assets a scene or material refers to.
+    /// Every import setting of a texture or model, defaults included, e.g. {"texture": {"maxSize": 0, ...}};
+    /// absent for other assets and when its sidecar is invalid.
+    std::optional<JsonText> importSettings{};
 };
 
 /// Params of `asset.move`.
@@ -1232,6 +1235,30 @@ struct AssetFindMissingResult
     /// materials, settings, the open scene, the manifest and the external files of `.gltf` models.
     std::vector<AssetReference> references{};
     std::vector<std::string> assets{}; ///< The missing paths, without `#` fragments, sorted, each once.
+};
+
+/// Params of `asset.set_import_settings`.
+struct AssetSetImportSettingsParams
+{
+    std::string path; ///< The texture or model.
+    /// Merge patch of settings, e.g. {"texture": {"maxSize": 1024}}; null resets a setting, a section or (as
+    /// the whole value) everything to the defaults.
+    JsonText value;
+};
+
+/// Result of `asset.set_import_settings`.
+struct AssetImportSettingsResult
+{
+    std::string path;     ///< The texture or model.
+    std::string sidecar;  ///< Its sidecar, or "" if every setting is a default (no sidecar exists).
+    JsonText value;       ///< Every setting afterwards, defaults included.
+    bool changed = false; ///< True if the sidecar was written or deleted.
+};
+
+/// Result of `asset.reimport`.
+struct AssetReimportResult
+{
+    std::vector<std::string> assets; ///< The textures and models asked to import again, sorted.
 };
 
 // --- material ----------------------------------------------------------------------------------------------

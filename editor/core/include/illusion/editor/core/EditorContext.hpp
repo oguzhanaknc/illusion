@@ -323,6 +323,11 @@ public:
     /// found here or by endFrame() are posted as the `asset.changed` event by endFrame().
     [[nodiscard]] const AssetCatalog& assets();
 
+    /// Asks for @p path (an asset file) to be imported again even if neither it nor its import settings
+    /// changed: the next endFrame() posts it in the `reimported` list of `asset.changed`, which viewports
+    /// answer with AssetReloadMode::Reimport.
+    void requestReimport(std::string path);
+
     /// The backend watching the project's `assets/` directory (Polling without a project).
     [[nodiscard]] FileWatchBackend assetWatchBackend() const noexcept { return m_assetWatcher.backend(); }
 
@@ -628,7 +633,8 @@ private:
     AssetCatalog m_assets;
     FileWatcher m_assetWatcher;
     std::vector<FileEvent> m_assetChanges;
-    AssetCatalogChanges m_assetNews; // Changes not yet posted as `asset.changed`.
+    AssetCatalogChanges m_assetNews;           // Changes not yet posted as `asset.changed`.
+    std::vector<std::string> m_assetReimports; // requestReimport() paths not yet posted.
     f64 m_assetPollTimer = 0.0;
     std::string m_clipboard;
     ComponentClipboard m_componentClipboard;

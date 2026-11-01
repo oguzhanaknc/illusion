@@ -14,6 +14,7 @@ illusion_add_editor_executable(illusion_editor_tests
     core/TestEditorArrange.cpp
     core/TestAssetCatalog.cpp
     core/TestEditorAssets.cpp
+    core/TestEditorImportSettings.cpp
     core/TestEditorClipboard.cpp
     core/TestEditorCommands.cpp
     core/TestEditorCore.cpp

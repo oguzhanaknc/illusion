@@ -382,8 +382,15 @@ Plan: `docs/plans/m7-editor.md` (sub-milestones, command API, localization, them
   eviction from M7h); the viewports reload files of `asset.changed` and their catalog referrers; 100-cycle
   reimport GPU test; `memory/range-allocator`, `render/asset-cache-steady`, `render/update-material`
   benchmarks
-- M7u-3: import settings sidecars (`<file>.import.json`, honoured by `cookAssets`), `asset.reimport` and
-  `asset.set_import_settings` (ADR 0045)
+- M7u-3: ✅ Import settings sidecars and reimport (ADR 0045 addendum): versioned, validated
+  `<file>.import.json` sidecars written only for non-default settings (texture `colorSpace`, `generateMips`,
+  `maxSize`; model `scale`; `ImportSettings.hpp`, `limitImageSize()`, `scaleModel()`), honoured by
+  `AssetDatabase`, `AssetStreamer` and `cookAssets` as a cache dependency (importers `image:2`/`gltf:2`;
+  orphans reported by the cook); `AssetReloadMode::Reimport`; the catalog keeps sidecars on their asset
+  (`importSettingsHash`, owner reported as modified), `asset.list` hides them, `asset.move`/`asset.delete`
+  carry them with undo; `asset.set_import_settings`, `asset.reimport` (`reimported` in `asset.changed`),
+  `importSettings` in `asset.info`; GPU test of sidecar live reload and reimport; fix of
+  `AssetCatalog::removeTree()` for siblings that sort inside a folder
 - M7u (rest): the environment bake cache, thumbnails and the asset browser (ADR 0045); `#` asset search in
   the command palette (from M7l); reloading collision meshes (`PhysicsAssetResolver`) and audio clips
   (`AudioWorld`) on `AssetReloadedEvent` (from M7u-2)

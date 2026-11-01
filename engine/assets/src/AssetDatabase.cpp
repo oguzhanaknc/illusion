@@ -43,7 +43,7 @@ std::optional<AssetFile> AssetDatabase::readCache(const std::string& path, Asset
     std::vector<std::vector<std::byte>> contents(file->dependencies.size());
     for (usize i = 0; i < contents.size(); ++i)
     {
-        if (m_files->readFile(file->dependencies[i].path, contents[i]) != FileError::None)
+        if (!detail::readDependency(*m_files, file->dependencies[i].path, contents[i]))
         {
             return std::nullopt;
         }
@@ -102,8 +102,13 @@ std::optional<Image> AssetDatabase::loadImage(std::string_view virtualPath,
         }
         return std::nullopt;
     }
+    std::vector<std::byte> sidecar;
+    if (!detail::readImportSettingsFile(*m_files, *path, sidecar, error))
+    {
+        return std::nullopt;
+    }
     AssetFile cooked;
-    std::optional<Image> image = detail::importImage(bytes, *path, settings, cooked, error);
+    std::optional<Image> image = detail::importImage(bytes, sidecar, *path, settings, cooked, error);
     if (image)
     {
         writeCache(cached, cooked);

@@ -29,7 +29,10 @@ struct CookResult
 /// Standalone images are cooked with the default ImageImportSettings; other settings are imported on
 /// first use. Material files (.material) are parsed, and their textures cooked with the settings the
 /// renderer uses (see materialTextureUses()); the material files themselves are read directly, so ship
-/// them with the game's files. Files are visited in sorted order, so the result is deterministic.
+/// them with the game's files. Every import honours the asset's import settings sidecar
+/// (ImportSettings.hpp); an invalid sidecar fails its asset, and a sidecar whose asset does not exist or
+/// has no import settings is reported as an error. Files are visited in sorted order, so the result is
+/// deterministic.
 [[nodiscard]] CookResult cookAssets(VirtualFileSystem& files, std::string_view directory,
                                     std::string_view cacheMount);
 

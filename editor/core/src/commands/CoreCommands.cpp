@@ -650,7 +650,8 @@ void reflectCoreCommandTypes(StructRegistry& structs)
             .field("kind", &AssetInfoResult::kind)
             .field("size", &AssetInfoResult::size)
             .field("references", &AssetInfoResult::references)
-            .field("dependencies", &AssetInfoResult::dependencies);
+            .field("dependencies", &AssetInfoResult::dependencies)
+            .field("importSettings", &AssetInfoResult::importSettings);
         reflectStruct<AssetMoveParams>("editor.AssetMoveParams", 1, structs)
             .field("from", &AssetMoveParams::from)
             .field("to", &AssetMoveParams::to);
@@ -672,6 +673,16 @@ void reflectCoreCommandTypes(StructRegistry& structs)
         reflectStruct<AssetFindMissingResult>("editor.AssetFindMissingResult", 1, structs)
             .field("references", &AssetFindMissingResult::references)
             .field("assets", &AssetFindMissingResult::assets);
+        reflectStruct<AssetSetImportSettingsParams>("editor.AssetSetImportSettingsParams", 1, structs)
+            .field("path", &AssetSetImportSettingsParams::path)
+            .field("value", &AssetSetImportSettingsParams::value);
+        reflectStruct<AssetImportSettingsResult>("editor.AssetImportSettingsResult", 1, structs)
+            .field("path", &AssetImportSettingsResult::path)
+            .field("sidecar", &AssetImportSettingsResult::sidecar)
+            .field("value", &AssetImportSettingsResult::value)
+            .field("changed", &AssetImportSettingsResult::changed);
+        reflectStruct<AssetReimportResult>("editor.AssetReimportResult", 1, structs)
+            .field("assets", &AssetReimportResult::assets);
 
         reflectStruct<MaterialCreateParams>("editor.MaterialCreateParams", 1, structs)
             .field("path", &MaterialCreateParams::path)

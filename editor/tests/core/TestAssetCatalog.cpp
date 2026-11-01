@@ -387,7 +387,8 @@ TEST_CASE("The editor posts asset.changed for changes made outside it")
     std::ofstream(assets / "notes.txt") << "hello";
     editor.endFrame(0.016);
     REQUIRE(payloads.size() == 1);
-    CHECK(payloads[0] == R"({"added":["assets:/notes.txt"],"modified":[],"removed":[],"renamed":[]})");
+    CHECK(payloads[0] ==
+          R"({"added":["assets:/notes.txt"],"modified":[],"removed":[],"renamed":[],"reimported":[]})");
     CHECK(editor.assets().find("assets:/notes.txt") != nullptr);
 
     std::filesystem::create_directories(assets / "docs");
@@ -396,7 +397,7 @@ TEST_CASE("The editor posts asset.changed for changes made outside it")
     REQUIRE(payloads.size() == 2);
     CHECK(payloads[1] ==
           R"({"added":["assets:/docs"],"modified":[],"removed":[],"renamed":[{"from":"assets:/notes.txt",)"
-          R"("to":"assets:/docs/notes.txt"}]})");
+          R"("to":"assets:/docs/notes.txt"}],"reimported":[]})");
 }
 
 TEST_CASE("asset.find_missing lists references to assets that do not exist")

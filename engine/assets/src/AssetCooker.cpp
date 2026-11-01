@@ -1,5 +1,6 @@
 #include <illusion/assets/AssetCooker.hpp>
 #include <illusion/assets/AssetDatabase.hpp>
+#include <illusion/assets/ImportSettings.hpp>
 #include <illusion/assets/MaterialAsset.hpp>
 #include <illusion/core/Profiler.hpp>
 #include <illusion/platform/FileSystem.hpp>
@@ -77,7 +78,21 @@ void cookDirectory(VirtualFileSystem& files, AssetDatabase& database, const std:
         }
         const std::string extension = lowerExtension(entry.name);
         std::string error;
-        if (extension == ".gltf" || extension == ".glb")
+        if (isImportSettingsPath(path))
+        {
+            // Read with the asset they belong to; one without such an asset is a mistake worth reporting.
+            const std::string_view owner = importSettingsOwner(path);
+            if (importSettingsKindOf(owner) == ImportSettingsKind::None)
+            {
+                result.errors.push_back(
+                    std::format("{}: {} files have no import settings", path, lowerExtension(owner)));
+            }
+            else if (!files.exists(owner))
+            {
+                result.errors.push_back(std::format("{}: the asset {} does not exist", path, owner));
+            }
+        }
+        else if (extension == ".gltf" || extension == ".glb")
         {
             if (database.loadModel(path, &error))
             {

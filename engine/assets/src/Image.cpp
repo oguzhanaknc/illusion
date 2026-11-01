@@ -68,6 +68,34 @@ void downsample(u32 srcWidth, u32 srcHeight, u32 dstWidth, u32 dstHeight, Load l
 
 } // namespace
 
+void limitImageSize(Image& image, u32 maxSize)
+{
+    if (maxSize == 0 || !image.isValid() || std::max(image.width(), image.height()) <= maxSize)
+    {
+        return;
+    }
+    const bool keepChain = image.mips.size() > 1;
+    generateMips(image);
+    usize first = 0;
+    while (std::max(image.mips[first].width, image.mips[first].height) > maxSize)
+    {
+        ++first; // The chain ends at 1x1, and maxSize is at least 1.
+    }
+    const usize last = keepChain ? image.mips.size() : first + 1;
+    const usize begin = image.mips[first].offset;
+    const usize end = image.mips[last - 1].offset + image.mips[last - 1].size;
+    std::vector<std::byte> data(image.data.begin() + static_cast<std::ptrdiff_t>(begin),
+                                image.data.begin() + static_cast<std::ptrdiff_t>(end));
+    std::vector<ImageMip> mips(image.mips.begin() + static_cast<std::ptrdiff_t>(first),
+                               image.mips.begin() + static_cast<std::ptrdiff_t>(last));
+    for (ImageMip& mip : mips)
+    {
+        mip.offset -= begin;
+    }
+    image.data = std::move(data);
+    image.mips = std::move(mips);
+}
+
 u32 fullMipCount(u32 width, u32 height) noexcept
 {
     u32 levels = 1;

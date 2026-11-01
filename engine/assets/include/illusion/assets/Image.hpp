@@ -83,6 +83,11 @@ struct Image
 /// sRGB images are filtered in linear space.
 void generateMips(Image& image);
 
+/// Halves @p image with the filter of generateMips() until neither side of level 0 exceeds @p maxSize
+/// (0: no limit). An image with a mip chain keeps the chain below the new level 0; one without stays
+/// without. Does nothing if the image is within the limit already.
+void limitImageSize(Image& image, u32 maxSize);
+
 /// Number of levels in a full mip chain for @p width x @p height.
 [[nodiscard]] u32 fullMipCount(u32 width, u32 height) noexcept;
 

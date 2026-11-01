@@ -335,7 +335,8 @@ struct ViewportService::Impl
     RenderAssetResolver resolver;
     HierarchyIndex hierarchy;
     u32 assetSubscription = 0;
-    std::vector<std::string> changedAssets; // files of `asset.changed` events not reloaded yet
+    std::vector<std::string> changedAssets;    // files of `asset.changed` events not reloaded yet
+    std::vector<std::string> reimportedAssets; // files to import again even though they did not change
     // The play World's resolver and hierarchy index, made anew for each play session (null when stopped).
     std::unique_ptr<RenderAssetResolver> playResolver;
     std::unique_ptr<HierarchyIndex> playHierarchy;
@@ -448,6 +449,13 @@ struct ViewportService::Impl
                 }
             }
         }
+        for (const JsonValue path : root.find("reimported").elements())
+        {
+            if (const std::optional<std::string_view> text = path.asString())
+            {
+                reimportedAssets.emplace_back(*text);
+            }
+        }
         for (const JsonValue rename : root.find("renamed").elements())
         {
             for (const std::string_view side : {"from", "to"})
@@ -464,7 +472,7 @@ struct ViewportService::Impl
     // buffer or image changed, for example); the cache loads the assets made from them again.
     void reloadChangedAssets()
     {
-        if (changedAssets.empty())
+        if (changedAssets.empty() && reimportedAssets.empty())
         {
             return;
         }
@@ -479,6 +487,22 @@ struct ViewportService::Impl
             }
         }
         changedAssets.clear();
+        // A forced reimport skips the import cache, also for the files that refer to it (a glTF model holds
+        // its images in its own cache entry).
+        std::unordered_set<std::string> reimports(reimportedAssets.begin(), reimportedAssets.end());
+        for (const std::string& path : reimportedAssets)
+        {
+            for (std::string& referrer : catalog.referrers(path))
+            {
+                reimports.insert(std::move(referrer));
+            }
+        }
+        reimportedAssets.clear();
+        for (const std::string& file : reimports)
+        {
+            streamer.reload(file, AssetReloadMode::Reimport);
+            files.erase(file);
+        }
         for (const std::string& file : files)
         {
             streamer.reload(file);
