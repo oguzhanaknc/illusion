@@ -26,6 +26,7 @@ illusion_add_editor_executable(illusion_editor_tests
     core/TestEditorSettings.cpp
     core/TestEditorSceneEditing.cpp
     core/TestEditorSnap.cpp
+    core/TestEditorThumbnails.cpp
     core/TestEditorTransactions.cpp
     core/TestEditorTransforms.cpp
     core/TestEditorUi.cpp
@@ -83,6 +84,7 @@ illusion_add_editor_executable(illusion_editor_gpu_tests
     ${PROJECT_SOURCE_DIR}/tests/gpu/main.cpp
     ${PROJECT_SOURCE_DIR}/tests/AllocationCounter.cpp
     gpu/TestEditorShellGpu.cpp
+    gpu/TestThumbnailGpu.cpp
     gpu/TestUiRenderer.cpp
     gpu/TestViewportGpu.cpp)
 target_include_directories(illusion_editor_gpu_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR} ${PROJECT_SOURCE_DIR}/tests)
@@ -95,6 +97,7 @@ target_compile_definitions(illusion_editor_gpu_tests PRIVATE
     ILLUSION_GOLDEN_DIR="${CMAKE_CURRENT_SOURCE_DIR}/data/golden"
     ILLUSION_UI_CAPTURE_DIR="${CMAKE_BINARY_DIR}/ui-captures"
     ILLUSION_EDITOR_TEST_DATA="${CMAKE_CURRENT_SOURCE_DIR}/data"
+    ILLUSION_ENGINE_TEST_DATA="${PROJECT_SOURCE_DIR}/tests/data"
     ILLUSION_EDITOR_EXECUTABLE="$<TARGET_FILE:illusion_editor>")
 add_dependencies(illusion_editor_gpu_tests illusion_editor_data illusion_editor)
 illusion_configure_target(illusion_editor_gpu_tests)

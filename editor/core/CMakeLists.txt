@@ -21,6 +21,7 @@ illusion_add_editor_library(illusion_editor_core STATIC
     src/Selection.cpp
     src/SettingsCatalog.cpp
     src/Snap.cpp
+    src/ThumbnailCache.cpp
     src/UiActions.cpp
     src/UndoStack.cpp
     src/ViewCube.cpp

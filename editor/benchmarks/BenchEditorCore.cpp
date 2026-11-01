@@ -12,6 +12,7 @@
 #include <illusion/editor/core/Gizmo.hpp>
 #include <illusion/editor/core/ReferenceIndex.hpp>
 #include <illusion/editor/core/Snap.hpp>
+#include <illusion/editor/core/ThumbnailCache.hpp>
 #include <illusion/platform/FileSystem.hpp>
 
 #include <cmath>
@@ -248,6 +249,21 @@ ILL_BENCHMARK("assets/catalog-first-scan", 600'000.0)
         ILL_CHECK(catalog.refresh(assets.files).added.size() == 202,
                   "the benchmark assets were not catalogued");
         ankerl::nanobench::doNotOptimizeAway(catalog);
+    });
+}
+
+// The cache key of a material's thumbnail (the material and its texture, hashed through the catalog), which
+// asset.thumbnail computes on every call and again when the image arrives. Budget about 10x the 0.4 us
+// measured on a desktop (Release, MSVC).
+ILL_BENCHMARK("thumbnail/key", 4'000.0)
+{
+    BenchAssets assets;
+    AssetCatalog catalog;
+    (void)catalog.refresh(assets.files);
+    ILL_CHECK(thumbnailKey(catalog, "assets:/materials/m0.material") != 0,
+              "the benchmark material is missing");
+    bench.unit("key").run("thumbnailKey (material with a texture)", [&] {
+        ankerl::nanobench::doNotOptimizeAway(thumbnailKey(catalog, "assets:/materials/m0.material"));
     });
 }
 

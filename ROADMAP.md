@@ -401,9 +401,15 @@ Plan: `docs/plans/m7-editor.md` (sub-milestones, command API, localization, them
   models again (`reloads`) and the `AudioWorld` reloads streamed clips under the same handle
   (`clipReloads`); GPU tests of the readback and of the cache across restarts, edits and reimports;
   `assets/environment-load` and `physics/asset-resolve-steady` benchmarks
-- M7u-4b: `ThumbnailRenderer` (a preview World and a small `SceneRenderer` at 256 px, at most one thumbnail
-  and about 2 ms per frame) for models, material spheres, textures and HDRIs, cached as PNGs in
-  `.illusion/thumbnails` and invalidated by `asset.changed`; the `asset.thumbnail` command
+- M7u-4b: ✅ Thumbnails (ADR 0045 addendum): `ThumbnailHost` and `ThumbnailCache` in the editor core (PNGs in
+  the new `thumbnails:` mount, `.illusion/thumbnails`, named after a content key of the asset and its
+  dependencies, deleted on `asset.changed` with those of their referrers); the async `asset.thumbnail`
+  command (cache hits at once, `refresh`, made again when the asset changes meanwhile); `ThumbnailRenderer`
+  in `editor/viewport` (a preview World and a small `SceneRenderer` at 256 px sharing the viewports' asset
+  cache, at most one render or texture scale per frame, non-blocking readback) for models, material
+  spheres, textures (`textureThumbnail()` on the CPU) and HDRIs (through the bake cache); GPU golden images
+  of each kind, frame budget, live reload and failure tests; `thumbnail/key` and `thumbnail/texture`
+  benchmarks
 - M7u-5: the asset browser panel (ADR 0045) with the import settings inspector; `#` asset search in the
   command palette (from M7l)
 - M7v: Prefabs with overrides and nesting (ADR 0046)

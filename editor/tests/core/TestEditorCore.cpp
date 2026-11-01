@@ -109,6 +109,7 @@ TEST_CASE("projects are created from templates and open with their mounts")
     CHECK_FALSE(project->manifest().engineVersion.empty());
     CHECK(std::filesystem::is_directory(directory.path / "game" / "settings"));
     CHECK(std::filesystem::is_directory(directory.path / "game" / ".illusion" / "cache"));
+    CHECK(std::filesystem::is_directory(directory.path / "game" / ".illusion" / "thumbnails"));
 
     EditorContext editor(EditorContextOptions{.seed = 3});
     REQUIRE(editor.openProject(directory.path / "game").hasValue());
@@ -117,7 +118,7 @@ TEST_CASE("projects are created from templates and open with their mounts")
     CHECK_FALSE(editor.dirty());
     const JsonDocument info = ok(editor, "project.info");
     CHECK(info.root().find("name").asString() == "My Game");
-    CHECK(info.root().find("mounts").size() == 4);
+    CHECK(info.root().find("mounts").size() == 5);
 
     CHECK_FALSE(Project::create(directory.path / "game", "Again", templates / "empty").hasValue());
     CHECK_FALSE(Project::create(directory.path / "other", "", templates / "empty").hasValue());

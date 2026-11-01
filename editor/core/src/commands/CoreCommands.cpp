@@ -683,6 +683,17 @@ void reflectCoreCommandTypes(StructRegistry& structs)
             .field("changed", &AssetImportSettingsResult::changed);
         reflectStruct<AssetReimportResult>("editor.AssetReimportResult", 1, structs)
             .field("assets", &AssetReimportResult::assets);
+        reflectStruct<AssetThumbnailParams>("editor.AssetThumbnailParams", 1, structs)
+            .field("path", &AssetThumbnailParams::path)
+            .field("refresh", &AssetThumbnailParams::refresh);
+        reflectStruct<AssetThumbnailResult>("editor.AssetThumbnailResult", 1, structs)
+            .field("path", &AssetThumbnailResult::path)
+            .field("kind", &AssetThumbnailResult::kind)
+            .field("thumbnail", &AssetThumbnailResult::thumbnail)
+            .field("file", &AssetThumbnailResult::file)
+            .field("width", &AssetThumbnailResult::width)
+            .field("height", &AssetThumbnailResult::height)
+            .field("cached", &AssetThumbnailResult::cached);
 
         reflectStruct<MaterialCreateParams>("editor.MaterialCreateParams", 1, structs)
             .field("path", &MaterialCreateParams::path)

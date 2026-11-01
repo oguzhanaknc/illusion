@@ -15,6 +15,7 @@ MyGame/
   modules/              game module sources (editor only)                      modules:
   .illusion/            per-machine state, git-ignored
     cache/              derived data                                           cache:
+    thumbnails/         asset thumbnails (PNG)                                 thumbnails:
     journal/            crash journals of running and crashed sessions
     autosave/           rotating autosaves of dirty scenes
     trash/              contents of replaced and deleted files, for undo
@@ -49,6 +50,7 @@ açılır. `parseProjectManifest()` ve `writeProjectManifest()` onu okur ve yaza
 | `settings:` | `settings/` | Okuma-yazma |
 | `modules:` | `modules/` | Okuma-yazma |
 | `cache:` | `.illusion/cache/` | Okuma-yazma |
+| `thumbnails:` | `.illusion/thumbnails/` | Okuma-yazma |
 | `builtin:` | Yerleşik Asset'ler (dosyasız) | Salt okunur |
 | `editor:` | Editörün yanındaki `editor-data/` | Salt okunur |
 

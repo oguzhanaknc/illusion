@@ -53,8 +53,8 @@ struct ProjectMount
     std::string_view relative; ///< Directory relative to the project root, e.g. "assets".
 };
 
-/// The project mounts, all read-write: `assets:` (content), `settings:`, `modules:` (module sources) and
-/// `cache:` (`.illusion/cache`).
+/// The project mounts, all read-write: `assets:` (content), `settings:`, `modules:` (module sources),
+/// `cache:` (`.illusion/cache`) and `thumbnails:` (`.illusion/thumbnails`, see ThumbnailCache).
 [[nodiscard]] std::span<const ProjectMount> projectMounts() noexcept;
 
 /// An open project: its root directory and manifest.

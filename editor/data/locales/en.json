@@ -65,6 +65,8 @@
     "editor.command.asset.reimport.title": {"text": "Reimport", "comment": "Title of the command asset.reimport"},
     "editor.command.asset.set_import_settings.description": {"text": "Changes how a texture or model is imported.", "comment": "Tooltip of the command asset.set_import_settings"},
     "editor.command.asset.set_import_settings.title": {"text": "Set import settings", "comment": "Title of the command asset.set_import_settings"},
+    "editor.command.asset.thumbnail.description": {"text": "Makes a preview image of a model, material, texture or environment.", "comment": "Tooltip of the command asset.thumbnail"},
+    "editor.command.asset.thumbnail.title": {"text": "Make thumbnail", "comment": "Title of the command asset.thumbnail"},
     "editor.command.camera.bookmark_go.description": {"text": "Moves a viewport's camera to a bookmark.", "comment": "Tooltip of the command camera.bookmark_go"},
     "editor.command.camera.bookmark_go.title": {"text": "Go to camera bookmark", "comment": "Title of the command camera.bookmark_go"},
     "editor.command.camera.bookmark_set.description": {"text": "Stores a viewport's camera in a bookmark.", "comment": "Tooltip of the command camera.bookmark_set"},
