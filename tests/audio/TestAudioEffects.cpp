@@ -439,3 +439,70 @@ TEST_CASE("without a streamer, requestClip loads at once")
     CHECK(f.audio->clipState(clip) == AssetState::Ready);
     CHECK(f.audio->clipState(AudioClipHandle{}) == AssetState::Failed);
 }
+
+TEST_CASE("streamed clips reload when their file changes and their sources start again on the new data")
+{
+    StreamingFixture f;
+    f.writeWav("test:/engine.wav", constant(0.25f, kRate));
+    AudioSource source = sourceFor("test:/engine.wav");
+    source.spatial = false;
+    source.loop = true;
+    const Entity entity = f.world.create(source);
+    f.audio->update(0.0);
+    f.finishLoads();
+    REQUIRE(f.audio->isPlaying(entity));
+    const AudioClipHandle clip = f.audio->requestClip("test:/engine.wav");
+    const AudioVoiceHandle oneShot = f.audio->playOneShot(clip);
+    REQUIRE(oneShot.valid());
+    CHECK(peak(f.mix(1024)) == doctest::Approx(0.5f).epsilon(0.01)); // the source and the one-shot
+
+    // Unrelated files do not reload anything.
+    CHECK(f.streamer->reload("test:/other.wav"));
+    f.finishLoads();
+    CHECK(f.audio->stats().clipReloads == 0);
+
+    f.writeWav("test:/engine.wav", constant(0.125f, kRate));
+    CHECK(f.streamer->reload("test:/engine.wav"));
+    f.audio->update(0.0); // starts the reload; the old data keeps playing meanwhile
+    CHECK(f.audio->isPlaying(oneShot));
+    f.finishLoads();
+    CHECK(f.audio->stats().clipReloads == 1);
+    CHECK(f.audio->requestClip("test:/engine.wav") == clip); // same handle
+    CHECK(f.audio->clipState(clip) == AssetState::Ready);
+    CHECK_FALSE(f.audio->isPlaying(oneShot)); // one-shots on the old data stop
+    CHECK(f.audio->isPlaying(entity));        // the source starts again on the new data
+    CHECK(peak(f.mix(1024)) == doctest::Approx(0.125f).epsilon(0.01));
+    CHECK(f.audio->stats().clips == 1);
+}
+
+TEST_CASE("a clip reload that fails keeps the previous data, and a change during a load reloads again")
+{
+    StreamingFixture f;
+    f.writeWav("test:/engine.wav", constant(0.25f, kRate));
+    const AudioClipHandle clip = f.audio->requestClip("test:/engine.wav");
+    // The file changes while its first load runs: the clip loads once more afterwards.
+    CHECK(f.streamer->reload("test:/engine.wav"));
+    f.finishLoads();
+    f.finishLoads();
+    CHECK(f.audio->stats().clipReloads == 1);
+    REQUIRE(f.audio->clipState(clip) == AssetState::Ready);
+
+    const std::string_view garbage = "not audio";
+    REQUIRE(f.files.writeFile("test:/engine.wav", std::as_bytes(std::span(garbage))) == FileError::None);
+    CHECK(f.streamer->reload("test:/engine.wav"));
+    f.audio->update(0.0);
+    f.finishLoads();
+    CHECK(f.audio->stats().clipReloads == 1);
+    CHECK(f.audio->clipState(clip) == AssetState::Ready);
+    REQUIRE(f.audio->playOneShot(clip).valid());
+    CHECK(peak(f.mix(1024)) == doctest::Approx(0.25f).epsilon(0.01));
+
+    // Unloading a clip while it reloads drops the reload.
+    f.writeWav("test:/engine.wav", constant(0.5f, kRate));
+    CHECK(f.streamer->reload("test:/engine.wav"));
+    f.audio->update(0.0);
+    f.audio->unloadClip(clip);
+    f.finishLoads();
+    CHECK(f.audio->stats().clipReloads == 1);
+    CHECK(f.audio->clipState(clip) == AssetState::Failed);
+}

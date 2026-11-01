@@ -11,6 +11,8 @@
 #include <doctest/doctest.h>
 
 #include <numbers>
+#include <span>
+#include <string_view>
 
 using namespace illusion;
 using namespace illusion::test;
@@ -116,4 +118,55 @@ TEST_CASE("colliders share cooked geometry and rebuild when their asset changes"
     CHECK(colliders.statistics().geometries == 2);
     CHECK(world.get<Collider>(first).geometry != sphere);
     CHECK(physics.bodyCount() == 3);
+}
+
+TEST_CASE("collision geometry is cooked again when its model file is reloaded")
+{
+    reflectPhysicsComponents();
+    AssetProject project;
+    JobSystem jobs(JobSystemDesc{2, 256});
+    AssetStreamer streamer(project.files, jobs);
+    World world;
+    PhysicsWorld physics(world, jobs);
+    PhysicsAssetResolver colliders(physics, streamer);
+    const Entity ground = world.create(Transform{}, body(MotionType::Static),
+                                       meshCollider(ColliderShape::Mesh, "game:/binary.glb#mesh/0"));
+    const Entity box = world.create(at(Vec3(0.0f, 3.0f, 0.0f)), body(MotionType::Dynamic),
+                                    meshCollider(ColliderShape::ConvexHull, "builtin:/mesh/cube"));
+    colliders.waitIdle();
+    physics.update(kStep);
+    REQUIRE(physics.bodyCount() == 2);
+    const PhysicsMeshHandle before = world.get<Collider>(ground).geometry;
+    const PhysicsMeshHandle cube = world.get<Collider>(box).geometry;
+    REQUIRE(before.valid());
+
+    // Another file, or a built-in mesh's mount, reloads nothing.
+    CHECK(streamer.reload("game:/embedded.gltf"));
+    colliders.waitIdle();
+    CHECK(colliders.statistics().reloads == 0);
+
+    CHECK(streamer.reload("game:/binary.glb"));
+    colliders.update(); // starts the reload; the Collider keeps its geometry meanwhile
+    CHECK(world.get<Collider>(ground).geometry == before);
+    colliders.waitIdle();
+    physics.update(kStep);
+    CHECK(colliders.statistics().reloads == 1);
+    CHECK(colliders.statistics().geometries == 2); // replaced, not added
+    CHECK(world.get<Collider>(ground).geometry.valid());
+    CHECK(world.get<Collider>(ground).geometry != before);
+    CHECK(world.get<Collider>(box).geometry == cube);
+    CHECK(physics.bodyCount() == 2);
+
+    // A reload that fails keeps the geometry.
+    const PhysicsMeshHandle reloaded = world.get<Collider>(ground).geometry;
+    const std::string_view garbage = "not a model";
+    REQUIRE(project.files.writeFile("game:/binary.glb", std::as_bytes(std::span(garbage))) ==
+            FileError::None);
+    CHECK(streamer.reload("game:/binary.glb"));
+    colliders.waitIdle();
+    physics.update(kStep);
+    CHECK(colliders.statistics().reloads == 2);
+    CHECK(colliders.statistics().failures == 1);
+    CHECK(world.get<Collider>(ground).geometry == reloaded);
+    CHECK(physics.bodyCount() == 2);
 }

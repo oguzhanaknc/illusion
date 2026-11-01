@@ -20,6 +20,7 @@
 #include <string>
 #include <type_traits>
 #include <unordered_map>
+#include <utility>
 #include <vector>
 
 namespace illusion
@@ -134,15 +135,17 @@ struct AudioWorld::Impl
 {
     struct Clip
     {
-        std::string path;                    // empty for clips made with createClip()
-        detail::ClipData owned;              // data of clips loaded on the game thread
-        AssetHandle<detail::ClipData> asset; // data of clips loaded by the streamer
+        std::string path;                     // empty for clips made with createClip()
+        detail::ClipData owned;               // data of clips loaded on the game thread
+        AssetHandle<detail::ClipData> asset;  // data of clips loaded by the streamer
+        AssetHandle<detail::ClipData> reload; // new data of a streamed clip whose file changed
         AudioClipMode mode = AudioClipMode::Decode;
         u32 generation = 1;
-        u32 users = 0;       // voices playing the clip
-        bool loaded = false; // false for free slots and unloaded clips waiting to be freed
-        bool ready = true;   // false while the streamer loads the clip
-        u64 freeAfter = 0;   // snapshot serial after which an unloaded clip can be freed
+        u32 users = 0;            // voices playing the clip
+        bool loaded = false;      // false for free slots and unloaded clips waiting to be freed
+        bool ready = true;        // false while the streamer loads the clip
+        bool reloadAgain = false; // the file changed during a load: load it again when that ends
+        u64 freeAfter = 0;        // snapshot serial after which an unloaded clip can be freed
 
         [[nodiscard]] const detail::ClipData& data() const noexcept
         {
@@ -166,6 +169,13 @@ struct AudioWorld::Impl
     {
         u64 freeAfter = 0;
         detail::DecoderPtr decoder;
+    };
+
+    // The previous data of a reloaded clip, kept until the mixer no longer plays it.
+    struct RetiredClipData
+    {
+        u64 freeAfter = 0;
+        AssetHandle<detail::ClipData> asset;
     };
 
     Impl(World& targetWorld, const VirtualFileSystem& fileSystem, const AudioWorldDesc& settings)
@@ -380,22 +390,11 @@ struct AudioWorld::Impl
         return addClip(std::move(clip));
     }
 
-    AudioClipHandle requestClip(std::string_view path, AudioClipMode mode)
+    [[nodiscard]] AssetHandle<detail::ClipData> streamClip(std::string_view path, AudioClipMode mode)
     {
-        if (desc.streamer == nullptr)
-        {
-            return loadClip(path, mode);
-        }
-        if (const auto found = clipsByPath.find(path); found != clipsByPath.end())
-        {
-            return handleOf(found->second);
-        }
         const u32 rate = mixer->sampleRate();
         const bool stream = mode == AudioClipMode::Stream;
-        Clip clip;
-        clip.path = path;
-        clip.mode = mode;
-        clip.asset = desc.streamer->loadFile<detail::ClipData>(
+        return desc.streamer->loadFile<detail::ClipData>(
             path, std::format("illusion.audio.{}@{}", stream ? "stream" : "decode", rate),
             [rate, stream](std::vector<std::byte>&& bytes,
                            std::string& error) -> std::optional<detail::ClipData> {
@@ -407,6 +406,22 @@ struct AudioWorld::Impl
                 }
                 return data;
             });
+    }
+
+    AudioClipHandle requestClip(std::string_view path, AudioClipMode mode)
+    {
+        if (desc.streamer == nullptr)
+        {
+            return loadClip(path, mode);
+        }
+        if (const auto found = clipsByPath.find(path); found != clipsByPath.end())
+        {
+            return handleOf(found->second);
+        }
+        Clip clip;
+        clip.path = path;
+        clip.mode = mode;
+        clip.asset = streamClip(path, mode);
         if (clip.asset.state() == AssetState::Failed)
         {
             ILL_LOG_WARN("Audio", "cannot load clip '{}': {}", path, clip.asset.error());
@@ -443,6 +458,10 @@ struct AudioWorld::Impl
             if (state == AssetState::Ready)
             {
                 clip.ready = true;
+                if (std::exchange(clip.reloadAgain, false))
+                {
+                    startClipReload(index); // the file changed while it loaded
+                }
                 return true;
             }
             ILL_LOG_WARN("Audio", "cannot load clip '{}': {}", clip.path, clip.asset.error());
@@ -451,6 +470,98 @@ struct AudioWorld::Impl
             return true;
         });
         return finished;
+    }
+
+    // --- Live reload of streamed clips (AssetReloadedEvent) ---------------------------------------------
+
+    void startClipReload(u32 index)
+    {
+        Clip& clip = clips[index];
+        if (!clip.ready || clip.reload)
+        {
+            clip.reloadAgain = true; // a load is running
+            return;
+        }
+        clip.reload = streamClip(clip.path, clip.mode);
+        reloadingClips.push_back(handleOf(index));
+    }
+
+    void startClipReloads()
+    {
+        std::vector<AssetId> changed;
+        changed.swap(reloads);
+        for (u32 index = 0; index < clips.size(); ++index)
+        {
+            const Clip& clip = clips[index];
+            if (clip.loaded && !clip.path.empty() &&
+                std::ranges::find(changed, AssetId::fromPath(clip.path)) != changed.end())
+            {
+                startClipReload(index);
+            }
+        }
+    }
+
+    // Swaps in reloaded clip data: voices playing the old data stop (owned ones start again on the new
+    // data), and the old data is freed once the mixer has moved past it.
+    void pollReloadingClips()
+    {
+        std::erase_if(reloadingClips, [&](AudioClipHandle handle) {
+            if (slotOf(handle) == nullptr)
+            {
+                return true; // unloaded while reloading
+            }
+            Clip& clip = clips[handle.index];
+            const AssetState state = clip.reload.state();
+            if (state == AssetState::Loading)
+            {
+                return false;
+            }
+            if (state == AssetState::Failed)
+            {
+                ILL_LOG_WARN("Audio", "cannot reload clip '{}', keeping the previous version: {}", clip.path,
+                             clip.reload.error());
+                clip.reload = {};
+            }
+            else
+            {
+                swapReloadedClip(handle.index);
+            }
+            if (std::exchange(clip.reloadAgain, false))
+            {
+                startClipReload(handle.index);
+            }
+            return true;
+        });
+    }
+
+    void swapReloadedClip(u32 index)
+    {
+        scratch.clear();
+        for (u32 voice = 0; voice < records.size(); ++voice)
+        {
+            const VoiceRecord& record = records[voice];
+            if (record.serial == 0 || record.clip != index)
+            {
+                continue;
+            }
+            if (!record.owner.isNull() && world.isAlive(record.owner))
+            {
+                scratch.push_back(record.owner);
+            }
+            releaseVoice(voice);
+        }
+        Clip& clip = clips[index];
+        retiredClipData.push_back(RetiredClipData{published + 1, std::move(clip.asset)});
+        clip.asset = std::move(clip.reload);
+        clip.reload = {};
+        ++clipReloads;
+        for (const Entity owner : scratch)
+        {
+            if (world.has<AudioSource>(owner) && world.has<AudioPlayback>(owner))
+            {
+                startSource(owner);
+            }
+        }
     }
 
     void unloadClip(AudioClipHandle handle)
@@ -783,6 +894,9 @@ struct AudioWorld::Impl
         const u64 acknowledged = mixer->acknowledgedSnapshot();
         std::erase_if(
             retired, [acknowledged](const RetiredDecoder& entry) { return entry.freeAfter <= acknowledged; });
+        std::erase_if(retiredClipData, [acknowledged](const RetiredClipData& entry) {
+            return entry.freeAfter <= acknowledged;
+        });
         std::erase_if(clipsToFree, [&](u32 index) {
             Clip& clip = clips[index];
             if (clip.freeAfter > acknowledged)
@@ -815,6 +929,7 @@ struct AudioWorld::Impl
     std::vector<VoiceRecord> records;
     std::vector<u32> freeVoices;
     std::vector<RetiredDecoder> retired;
+    std::vector<RetiredClipData> retiredClipData;
 
     detail::ListenerState listener;
     bool listenerSeen = false;
@@ -823,7 +938,11 @@ struct AudioWorld::Impl
     std::array<bool, kAudioBusCount> busPaused{};
     std::array<AudioBusFilter, kAudioBusCount> busFilters{};
     AudioReverbSettings reverb;
-    std::vector<AudioClipHandle> loadingClips; // clips the streamer is loading
+    std::vector<AudioClipHandle> loadingClips;   // clips the streamer is loading
+    std::vector<AudioClipHandle> reloadingClips; // streamed clips whose new data is loading
+    std::vector<AssetId> reloads;                // files reloaded since the last update()
+    Subscription reloaded;
+    u32 clipReloads = 0;
 
     u32 nextSerial = 0;
     u64 nextOrder = 0;
@@ -836,6 +955,11 @@ struct AudioWorld::Impl
 AudioWorld::AudioWorld(World& world, const VirtualFileSystem& files, const AudioWorldDesc& desc)
     : m_impl(std::make_unique<Impl>(world, files, desc))
 {
+    if (desc.streamer != nullptr)
+    {
+        m_impl->reloaded = desc.streamer->events().subscribe<AssetReloadedEvent>(
+            [impl = m_impl.get()](const AssetReloadedEvent& event) { impl->reloads.push_back(event.asset); });
+    }
 }
 
 AudioWorld::~AudioWorld()
@@ -860,6 +984,14 @@ void AudioWorld::update(f64 deltaSeconds)
     if (impl.pollLoadingClips())
     {
         impl.startPendingSources();
+    }
+    if (!impl.reloads.empty())
+    {
+        impl.startClipReloads();
+    }
+    if (!impl.reloadingClips.empty())
+    {
+        impl.pollReloadingClips();
     }
     impl.addNewSources();
     impl.updateSources(deltaSeconds);
@@ -1083,6 +1215,7 @@ AudioStats AudioWorld::stats() const noexcept
         }
     }
     stats.loadingClips = static_cast<u32>(impl.loadingClips.size());
+    stats.clipReloads = impl.clipReloads;
     return stats;
 }
 

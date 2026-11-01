@@ -344,6 +344,11 @@ streamer.reload("game:/textures/ui.png", illusion::AssetReloadMode::Reimport);
 ```
 - Bir glTF modeli buffer'larına ve görüntülerine bağlıdır: bunlardan biri değişince model dosyasını
   yeniden yükleyin (editör bu dosyaları Asset kataloğunda bulur).
+- Renderer'ın yanında [`PhysicsAssetResolver`](physics.md#mesh-ve-convex-hull-colliderlar) yeniden
+  yüklenen bir modelin çarpışma geometrisini yeniden pişirir, [`AudioWorld`](audio.md#arka-planda-yukleme)
+  da yeniden yüklenen bir klibi yeniden yükler. Olayın `mode` alanı dinleyicilere yeniden yüklemenin bir
+  `Reimport` olduğunu söyler; böylece önbellekte kendi tuttuklarını (bake edilmiş ortamlar) da yeniden
+  oluştururlar.
 
 ### Diğer dosya türleri
 
@@ -367,6 +372,41 @@ const illusion::AssetHandle<std::string> credits = streamer.loadFile<std::string
 Aynı yol ve decoder adıyla yapılan istekler bir handle'ı paylaşır; bu yüzden ad, decoder'ı, ayarlarını ve
 sonuç türünü tanımlamalıdır. İçe aktarma önbelleği kullanılmaz. Okunamayan, boş olan ya da decoder'ın
 reddettiği bir dosya, nedeni `error()` içinde olacak şekilde `Failed` olur.
+
+### Kendi ürettiğiniz Asset'ler
+
+Bazı Asset'ler bir dosyadan, streamer'ın çalıştıramadığı kodla üretilir; örneğin GPU'da bake edilen
+renderer ortamları. `loadCooked()` ve `storeCooked()` bunları içe aktarmalarla aynı denetimlerle içe
+aktarma önbelleğinde tutar: bir kayıt, dosyanın ve onun içe aktarma ayarları sidecar'ının içerik
+hash'lerini saklar ve yalnızca ikisi de değişmediği sürece kullanılır.
+
+```cpp
+// Look up an asset you make yourself (here: something computed from an image on the GPU).
+const illusion::AssetHandle<illusion::CookedAsset> lookup = streamer.loadCooked(
+    "game:/skies/meadow.hdr", "game.bake:1", illusion::AssetType::Environment,
+    illusion::kEnvironmentFormatVersion);
+// ... once lookup.ready():
+if (lookup.value().file)
+{
+    use(lookup.value().file->payload); // a hit: the sources are unchanged
+}
+else
+{
+    illusion::AssetFile file{illusion::AssetType::Environment, illusion::kEnvironmentFormatVersion,
+                             lookup.value().sources, make()}; // a miss: make it and store it
+    streamer.storeCooked("game:/skies/meadow.hdr", "game.bake:1", file);
+}
+```
+
+- İçe aktarma anahtarı üreticiyi, sürümünü ve ayarlarını adlandırır (çıktı değişince sürümü artırın);
+  `|` içermemelidir. Kayıt, her içe aktarma gibi önbellek mount'u altında saklanır.
+- Kaçırma (miss), dosyası olmayan ama `sources` taşıyan bir `Ready` sonucudur: `sources`, kayda yazılacak
+  güncel hash'lerdir. Okunamayan bir dosya kaynaksız bir kaçırma verir (`storeCooked()` bağımlılığı olmayan
+  kayıtları yok sayar; böylece hiçbir şey saklanmaz ve hatayı üreticinin kendi yüklemesi bildirir).
+  Yalnızca geçersiz bir yol başarısız olur.
+- `AssetReloadMode::Reimport` kaydı yok sayar; zorunlu bir yeniden oluşturma içindir. Önbellek mount'u
+  yoksa her arama hemen kaçırır.
+- Renderer'ın [bake önbelleği](rendering.md#goruntu-tabanl-aydnlatma) bunun üzerine kuruludur.
 
 ## Hazırlanmış Asset'leri dağıtma
 

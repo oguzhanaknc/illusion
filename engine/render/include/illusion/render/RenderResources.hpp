@@ -12,6 +12,7 @@
 #include <illusion/assets/Environment.hpp>
 #include <illusion/assets/Model.hpp>
 #include <illusion/core/Base.hpp>
+#include <illusion/render/ReadbackRing.hpp>
 
 #include <nvrhi/nvrhi.h>
 
@@ -125,6 +126,21 @@ public:
     /// irradiance as spherical harmonics. Runs on the GPU and returns when the bake is done.
     [[nodiscard]] EnvironmentHandle createEnvironment(const Image& equirect, const EnvironmentDesc& desc = {},
                                                       const char* debugName = "Environment");
+
+    /// Creates a lighting environment from a bake read back before (readEnvironment()) without baking it
+    /// again, for example from a bake cache. @p baked must be valid (BakedEnvironment::isValid(), asserted).
+    [[nodiscard]] EnvironmentHandle createEnvironment(const BakedEnvironment& baked,
+                                                      const char* debugName = "Environment");
+
+    /// Starts copying the cube maps of @p environment to the CPU: records the copies after the work already
+    /// submitted (its bake) and an event query, and returns a ticket for readEnvironment(). Returns 0 for an
+    /// empty, invalid or released handle. Never waits.
+    [[nodiscard]] u64 requestEnvironmentReadback(EnvironmentHandle environment);
+
+    /// Finishes the readback @p ticket. Pending while the GPU copies; Ready fills @p out and consumes the
+    /// ticket; Invalid for an unknown ticket or a mapping failure (the ticket is consumed). With @p block it
+    /// waits for the copy (tools and tests).
+    [[nodiscard]] ReadbackStatus readEnvironment(u64 ticket, BakedEnvironment& out, bool block = false);
 
     /// Changes material @p material in place: the handle stays the same, the constants and the material
     /// table record are rewritten, and the binding set is made again only when a texture or the wrapping

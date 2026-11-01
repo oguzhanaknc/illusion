@@ -2,8 +2,9 @@
 
 /// @file
 /// Cooked asset files: a versioned container with a checksum and the source files an asset was imported
-/// from, plus the binary formats of cooked images and models.
+/// from, plus the binary formats of cooked images, models and baked environments.
 
+#include <illusion/assets/Environment.hpp>
 #include <illusion/assets/Image.hpp>
 #include <illusion/assets/Model.hpp>
 #include <illusion/core/AssetId.hpp> // AssetId lives in core; included here for existing users
@@ -22,8 +23,9 @@ namespace illusion
 /// What a cooked asset file contains.
 enum class AssetType : u32
 {
-    Image = 1, ///< serializeImage() payload.
-    Model = 2, ///< serializeModel() payload.
+    Image = 1,       ///< serializeImage() payload.
+    Model = 2,       ///< serializeModel() payload.
+    Environment = 3, ///< serializeEnvironment() payload.
 };
 
 /// A source file an asset was imported from, with the hash of its content at import time.
@@ -49,6 +51,8 @@ struct AssetFile
 inline constexpr u32 kImageFormatVersion = 1;
 /// @copydoc kImageFormatVersion
 inline constexpr u32 kModelFormatVersion = 1;
+/// @copydoc kImageFormatVersion
+inline constexpr u32 kEnvironmentFormatVersion = 1;
 
 /// Encodes @p file: magic, container version, type, version, dependencies, payload size and checksum,
 /// payload.
@@ -71,5 +75,12 @@ inline constexpr u32 kModelFormatVersion = 1;
 /// Reads a model written by serializeModel(); returns std::nullopt for invalid data (including indices
 /// that point outside their arrays).
 [[nodiscard]] std::optional<ModelData> deserializeModel(std::span<const std::byte> bytes);
+
+/// Serializes a baked environment (sizes, both cube maps with their mips, irradiance).
+[[nodiscard]] std::vector<std::byte> serializeEnvironment(const BakedEnvironment& environment);
+
+/// Reads an environment written by serializeEnvironment(); returns std::nullopt for invalid data (including
+/// texel counts that do not match the sizes, see BakedEnvironment::isValid()).
+[[nodiscard]] std::optional<BakedEnvironment> deserializeEnvironment(std::span<const std::byte> bytes);
 
 } // namespace illusion

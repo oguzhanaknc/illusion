@@ -13,6 +13,7 @@
 #include <algorithm>
 #include <array>
 #include <cstddef>
+#include <cstring>
 #include <format>
 #include <utility>
 
@@ -156,6 +157,18 @@ struct RenderResources::Impl
     std::vector<ReleaseBatch> retiring;
     std::vector<nvrhi::EventQueryHandle> spareQueries;
 
+    // Environment readbacks in flight (requestEnvironmentReadback()).
+    struct EnvironmentReadback
+    {
+        u64 ticket = 0;
+        nvrhi::StagingTextureHandle background;
+        nvrhi::StagingTextureHandle specular;
+        nvrhi::EventQueryHandle done;
+        ShIrradiance irradiance;
+    };
+    std::vector<EnvironmentReadback> readbacks;
+    u64 nextReadback = 1;
+
     EnvironmentBaker baker;
     GpuEnvironment blackEnvironment;
     nvrhi::TextureHandle brdfLut;
@@ -297,6 +310,19 @@ struct RenderResources::Impl
             environmentSlots.recycle(release.index);
             break;
         }
+    }
+
+    EnvironmentHandle storeEnvironment(GpuEnvironment&& environment)
+    {
+        const bool reused = !environmentSlots.free.empty();
+        const u32 index = environmentSlots.acquire();
+        ensureSlot(environments, index);
+        environments[index] = std::move(environment);
+        if (reused)
+        {
+            ++generation; // renderers cache binding sets by environment slot
+        }
+        return EnvironmentHandle{index, environmentSlots.slots[index].generation};
     }
 
     u32 collect()
@@ -646,15 +672,180 @@ EnvironmentHandle RenderResources::createEnvironment(const Image& equirect, cons
     impl.device->executeCommandList(impl.uploads);
 
     environment.irradiance = computeShIrradiance(equirect);
-    const bool reused = !impl.environmentSlots.free.empty();
-    const u32 index = impl.environmentSlots.acquire();
-    Impl::ensureSlot(impl.environments, index);
-    impl.environments[index] = std::move(environment);
-    if (reused)
+    return impl.storeEnvironment(std::move(environment));
+}
+
+namespace
+{
+
+// Creates an RGBA16F cube map for an environment uploaded from a bake.
+nvrhi::TextureHandle createEnvironmentCube(nvrhi::IDevice* device, u32 size, u32 mips, const char* debugName)
+{
+    nvrhi::TextureDesc desc;
+    desc.dimension = nvrhi::TextureDimension::TextureCube;
+    desc.width = size;
+    desc.height = size;
+    desc.arraySize = 6;
+    desc.mipLevels = mips;
+    desc.format = nvrhi::Format::RGBA16_FLOAT;
+    desc.debugName = debugName;
+    desc.enableAutomaticStateTracking(nvrhi::ResourceStates::ShaderResource);
+    return device->createTexture(desc);
+}
+
+// Uploads `texels` (mip order, then face order, tightly packed rows) into every subresource of `cube`.
+void uploadCube(nvrhi::ICommandList* commands, nvrhi::ITexture* cube, u32 size, u32 mips, const u64* texels)
+{
+    for (u32 mip = 0; mip < mips; ++mip)
     {
-        ++impl.generation; // renderers cache binding sets by environment slot
+        const u32 face = std::max(size >> mip, 1u);
+        for (u32 slice = 0; slice < 6; ++slice)
+        {
+            commands->writeTexture(cube, slice, mip, texels, static_cast<usize>(face) * sizeof(u64));
+            texels += static_cast<usize>(face) * face;
+        }
     }
-    return EnvironmentHandle{index, impl.environmentSlots.slots[index].generation};
+}
+
+// Copies every subresource of `cube` into the staging texture `staging` of the same layout.
+void copyCube(nvrhi::ICommandList* commands, nvrhi::IStagingTexture* staging, nvrhi::ITexture* cube)
+{
+    const nvrhi::TextureDesc& desc = cube->getDesc();
+    for (u32 mip = 0; mip < desc.mipLevels; ++mip)
+    {
+        for (u32 slice = 0; slice < 6; ++slice)
+        {
+            const nvrhi::TextureSlice region = nvrhi::TextureSlice().setMipLevel(mip).setArraySlice(slice);
+            commands->copyTexture(staging, region, cube, region);
+        }
+    }
+}
+
+// Reads every subresource of `staging` (a cube map of `size` and `mips`) into `out` in upload order.
+bool readCube(nvrhi::IDevice* device, nvrhi::IStagingTexture* staging, u32 size, u32 mips,
+              std::vector<u64>& out)
+{
+    out.resize(cubeTexelCount(size, mips));
+    u64* target = out.data();
+    for (u32 mip = 0; mip < mips; ++mip)
+    {
+        const u32 face = std::max(size >> mip, 1u);
+        for (u32 slice = 0; slice < 6; ++slice)
+        {
+            usize pitch = 0;
+            const auto* source = static_cast<const std::byte*>(device->mapStagingTexture(
+                staging, nvrhi::TextureSlice().setMipLevel(mip).setArraySlice(slice),
+                nvrhi::CpuAccessMode::Read, &pitch));
+            if (source == nullptr)
+            {
+                return false;
+            }
+            const usize row = static_cast<usize>(face) * sizeof(u64);
+            for (u32 y = 0; y < face; ++y)
+            {
+                std::memcpy(target, source + static_cast<usize>(y) * pitch, row);
+                target += face;
+            }
+            device->unmapStagingTexture(staging);
+        }
+    }
+    return true;
+}
+
+} // namespace
+
+EnvironmentHandle RenderResources::createEnvironment(const BakedEnvironment& baked, const char* debugName)
+{
+    ILL_PROFILE_SCOPE();
+    ILL_CHECK(baked.isValid(), "createEnvironment: invalid baked environment");
+    Impl& impl = *m_impl;
+    impl.collect();
+
+    GpuEnvironment environment;
+    environment.background =
+        createEnvironmentCube(impl.device, baked.backgroundSize, baked.backgroundMips, debugName);
+    environment.specular =
+        createEnvironmentCube(impl.device, baked.specularSize, baked.specularMips, debugName);
+    environment.specularMips = baked.specularMips;
+    environment.irradiance = baked.irradiance;
+    impl.uploads->open();
+    uploadCube(impl.uploads, environment.background, baked.backgroundSize, baked.backgroundMips,
+               baked.background.data());
+    uploadCube(impl.uploads, environment.specular, baked.specularSize, baked.specularMips,
+               baked.specular.data());
+    impl.uploads->close();
+    impl.device->executeCommandList(impl.uploads);
+
+    return impl.storeEnvironment(std::move(environment));
+}
+
+u64 RenderResources::requestEnvironmentReadback(EnvironmentHandle environment)
+{
+    ILL_PROFILE_SCOPE();
+    Impl& impl = *m_impl;
+    if (environment.index == 0 || !impl.environmentSlots.valid(environment.index, environment.generation))
+    {
+        return 0;
+    }
+    const GpuEnvironment& source = impl.environments[environment.index];
+    Impl::EnvironmentReadback readback;
+    readback.irradiance = source.irradiance;
+    readback.background =
+        impl.device->createStagingTexture(source.background->getDesc(), nvrhi::CpuAccessMode::Read);
+    readback.specular =
+        impl.device->createStagingTexture(source.specular->getDesc(), nvrhi::CpuAccessMode::Read);
+    readback.done = impl.device->createEventQuery();
+    if (!readback.background || !readback.specular || !readback.done)
+    {
+        return 0;
+    }
+    readback.ticket = impl.nextReadback++;
+    impl.uploads->open();
+    copyCube(impl.uploads, readback.background, source.background);
+    copyCube(impl.uploads, readback.specular, source.specular);
+    impl.uploads->close();
+    impl.device->executeCommandList(impl.uploads);
+    impl.device->setEventQuery(readback.done, nvrhi::CommandQueue::Graphics);
+    impl.readbacks.push_back(std::move(readback));
+    return impl.readbacks.back().ticket;
+}
+
+ReadbackStatus RenderResources::readEnvironment(u64 ticket, BakedEnvironment& out, bool block)
+{
+    Impl& impl = *m_impl;
+    const auto found = std::ranges::find(impl.readbacks, ticket, &Impl::EnvironmentReadback::ticket);
+    if (ticket == 0 || found == impl.readbacks.end())
+    {
+        return ReadbackStatus::Invalid;
+    }
+    if (block)
+    {
+        impl.device->waitEventQuery(found->done);
+    }
+    else if (!impl.device->pollEventQuery(found->done))
+    {
+        return ReadbackStatus::Pending;
+    }
+    ILL_PROFILE_SCOPE_N("Environment readback");
+    const nvrhi::TextureDesc& background = found->background->getDesc();
+    const nvrhi::TextureDesc& specular = found->specular->getDesc();
+    BakedEnvironment result;
+    result.backgroundSize = background.width;
+    result.backgroundMips = background.mipLevels;
+    result.specularSize = specular.width;
+    result.specularMips = specular.mipLevels;
+    result.irradiance = found->irradiance;
+    const bool ok =
+        readCube(impl.device, found->background, result.backgroundSize, result.backgroundMips,
+                 result.background) &&
+        readCube(impl.device, found->specular, result.specularSize, result.specularMips, result.specular);
+    impl.readbacks.erase(found);
+    if (!ok)
+    {
+        return ReadbackStatus::Invalid;
+    }
+    out = std::move(result);
+    return ReadbackStatus::Ready;
 }
 
 void RenderResources::releaseMesh(MeshHandle mesh)

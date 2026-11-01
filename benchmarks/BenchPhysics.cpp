@@ -1,9 +1,13 @@
 #include "Budget.hpp"
 
+#include <illusion/assets/AssetStreamer.hpp>
+#include <illusion/core/AssetRef.hpp>
 #include <illusion/core/JobSystem.hpp>
 #include <illusion/ecs/Transform.hpp>
 #include <illusion/ecs/World.hpp>
+#include <illusion/physics/PhysicsAssetResolver.hpp>
 #include <illusion/physics/PhysicsWorld.hpp>
+#include <illusion/platform/FileSystem.hpp>
 
 #include <cmath>
 #include <vector>
@@ -111,4 +115,34 @@ ILL_BENCHMARK("physics/shape-cast", 2000.0)
         ankerl::nanobench::doNotOptimizeAway(physics.shapeCast(
             probe, Vec3(x, 30.0f, 3.0f), Quat(1.0f, 0.0f, 0.0f, 0.0f), Vec3(0.0f, -1.0f, 0.0f), 50.0f));
     });
+}
+
+// Budget: ns per Collider of one PhysicsAssetResolver::update() with every Collider resolved (the per-frame
+// cost); the reload checks added by live reload must keep it at a key comparison per Collider.
+ILL_BENCHMARK("physics/asset-resolve-steady", 20.0)
+{
+    constexpr u32 kColliders = 2000;
+    JobSystem jobs;
+    VirtualFileSystem files;
+    AssetStreamer streamer(files, jobs, AssetStreamerDesc{.cacheMount = ""});
+    World world;
+    PhysicsWorld physics(world, jobs);
+    PhysicsAssetResolver colliders(physics, streamer);
+    RigidBody body;
+    body.motionType = MotionType::Static;
+    for (u32 i = 0; i < kColliders; ++i)
+    {
+        Transform transform;
+        transform.position = Vec3(static_cast<f32>(i % 50) * 3.0f, 0.0f, static_cast<f32>(i / 50) * 3.0f);
+        Collider collider;
+        collider.shape = i % 2 == 0 ? ColliderShape::ConvexHull : ColliderShape::Mesh;
+        collider.mesh = AssetRef(i % 3 == 0 ? "builtin:/mesh/cube" : "builtin:/mesh/sphere");
+        world.create(transform, body, collider);
+    }
+    colliders.waitIdle();
+    physics.update(1.0 / 60.0);
+    bench.minEpochIterations(2000)
+        .batch(kColliders)
+        .unit("collider")
+        .run("update() with 2000 resolved Colliders", [&] { colliders.update(); });
 }

@@ -17,6 +17,7 @@
 #include <algorithm>
 #include <array>
 #include <atomic>
+#include <bit>
 #include <format>
 #include <string>
 #include <unordered_map>
@@ -103,10 +104,24 @@ struct EnvironmentEntry
     Status status = Status::Loading;
     Reload reload;
     AssetId asset;
-    AssetHandle<Image> image; // until baked
+    AssetHandle<CookedAsset> cooked;      // the bake cache lookup, until answered
+    AssetHandle<Image> image;             // after a cache miss, until baked
+    std::vector<AssetDependency> sources; // of a miss, recorded in the bake stored after the readback
     EnvironmentHandle handle;
     u32 references = 0;
 };
+
+// A bake being read back from the GPU to be stored in the bake cache.
+struct EnvironmentStore
+{
+    u64 ticket = 0;
+    AssetId asset;
+    std::string importKey;
+    std::vector<AssetDependency> sources;
+};
+
+// Bump when the baker's output changes for the same image and EnvironmentDesc (shaders, layout).
+constexpr u32 kEnvironmentBakeVersion = 1;
 
 bool endsWithIgnoreCase(std::string_view text, std::string_view suffix) noexcept
 {
@@ -181,7 +196,12 @@ struct RenderAssetCache::Impl
         , uploads(gpuResources)
     {
         reloaded = streamer->events().subscribe<AssetReloadedEvent>(
-            [this](const AssetReloadedEvent& event) { reloads.push_back(event.asset); });
+            [this](const AssetReloadedEvent& event) { reloads.emplace_back(event.asset, event.mode); });
+        // The bake cache key holds the EnvironmentDesc the baker actually uses.
+        bakeKey = std::format("envbake:{}:{}:{}:{}", kEnvironmentBakeVersion,
+                              std::bit_floor(std::max(desc.environment.cubeSize, 1u)),
+                              std::bit_floor(std::max(desc.environment.specularSize, 1u)),
+                              std::max(desc.environment.sampleCount, 1u));
     }
 
     Impl(const Impl&) = delete;
@@ -202,8 +222,12 @@ struct RenderAssetCache::Impl
     std::vector<u64> loadingMeshes;
     std::vector<u64> loadingMaterials;
     std::vector<u64> loadingEnvironments;
-    std::vector<AssetId> reloads; // files reloaded since the last update()
+    std::vector<std::pair<AssetId, AssetReloadMode>> reloads; // files reloaded since the last update()
     Subscription reloaded;
+    std::string bakeKey; // import key of baked environments in the streamer's cache
+    std::vector<EnvironmentStore> stores;
+    u32 bakeCacheHits = 0;
+    u32 bakes = 0;
     // Increments when handles that resolvers wrote into RenderMesh or RenderSky change, or when an asset
     // that failed is loading again: resolvers then resolve every renderer again.
     u64 epoch = 0;
@@ -298,7 +322,7 @@ struct RenderAssetCache::Impl
             ++epoch; // new mesh and material handles, or a model that failed before
             if (std::exchange(entry.reload.again, false))
             {
-                reloads.push_back(AssetId{key});
+                reloads.emplace_back(AssetId{key}, AssetReloadMode::IfChanged);
             }
         }
         return true;
@@ -495,7 +519,7 @@ struct RenderAssetCache::Impl
             ++reloadsDone;
             if (std::exchange(entry.reload.again, false))
             {
-                reloads.push_back(entry.asset);
+                reloads.emplace_back(entry.asset, AssetReloadMode::IfChanged);
             }
         }
         return true;
@@ -654,7 +678,7 @@ struct RenderAssetCache::Impl
         epoch += replacing ? 0u : 1u; // a material that failed before resolves to a new handle
         if (std::exchange(entry.reload.again, false))
         {
-            reloads.push_back(AssetId{key});
+            reloads.emplace_back(AssetId{key}, AssetReloadMode::IfChanged);
         }
     }
 
@@ -686,26 +710,106 @@ struct RenderAssetCache::Impl
         }
         else
         {
-            entry.image = streamer->loadImage(parts->file, {.srgb = true, .generateMips = false});
+            entry.cooked =
+                streamer->loadCooked(parts->file, bakeKey, AssetType::Environment, kEnvironmentFormatVersion);
             loadingEnvironments.push_back(key);
         }
         return {key, &entry};
     }
 
+    // The bake cache answered: a hit becomes the environment, a miss loads the image to bake.
+    void answerBakeCache(EnvironmentEntry& entry, EnvironmentHandle& created)
+    {
+        if (entry.cooked.ready() && entry.cooked.value().file)
+        {
+            if (std::optional<BakedEnvironment> baked =
+                    deserializeEnvironment(entry.cooked.value().file->payload))
+            {
+                created = resources->createEnvironment(
+                    *baked, std::string(AssetPathTable::instance().path(entry.asset)).c_str());
+                ++bakeCacheHits;
+                entry.cooked = {};
+                return;
+            }
+        }
+        if (entry.cooked.ready())
+        {
+            entry.sources = entry.cooked.value().sources;
+        }
+        entry.cooked = {};
+        entry.image = streamer->loadImage(AssetPathTable::instance().path(entry.asset),
+                                          {.srgb = true, .generateMips = false});
+    }
+
+    // Bakes `entry.image` and, when the bake cache missed, starts reading the bake back to store it.
+    EnvironmentHandle bake(EnvironmentEntry& entry)
+    {
+        const EnvironmentHandle handle =
+            resources->createEnvironment(entry.image.value(), desc.environment,
+                                         std::string(AssetPathTable::instance().path(entry.asset)).c_str());
+        ++bakes;
+        if (!entry.sources.empty())
+        {
+            if (const u64 ticket = resources->requestEnvironmentReadback(handle); ticket != 0)
+            {
+                stores.push_back(EnvironmentStore{ticket, entry.asset, bakeKey, std::move(entry.sources)});
+            }
+        }
+        entry.sources.clear();
+        return handle;
+    }
+
+    // Writes the bakes whose readbacks finished into the bake cache (all of them with `block`).
+    void storeBakes(bool block)
+    {
+        std::erase_if(stores, [&](EnvironmentStore& store) {
+            BakedEnvironment baked;
+            const ReadbackStatus status = resources->readEnvironment(store.ticket, baked, block);
+            if (status == ReadbackStatus::Pending)
+            {
+                return false;
+            }
+            if (status == ReadbackStatus::Ready)
+            {
+                AssetFile file;
+                file.type = AssetType::Environment;
+                file.version = kEnvironmentFormatVersion;
+                file.dependencies = std::move(store.sources);
+                file.payload = serializeEnvironment(baked);
+                streamer->storeCooked(AssetPathTable::instance().path(store.asset), store.importKey, file);
+            }
+            return true;
+        });
+    }
+
     bool advanceEnvironment(u64 key)
     {
         EnvironmentEntry& entry = environments.at(key);
-        if (entry.image.state() == AssetState::Loading)
+        EnvironmentHandle created;
+        if (entry.cooked)
+        {
+            if (entry.cooked.state() == AssetState::Loading)
+            {
+                return false;
+            }
+            answerBakeCache(entry, created);
+            if (created.index == 0)
+            {
+                return false; // the image is loading
+            }
+        }
+        else if (entry.image.state() == AssetState::Loading)
         {
             return false;
         }
         const bool replacing = entry.reload.active && entry.status == Status::Ready;
-        if (entry.image.ready())
+        if (created.index != 0 || entry.image.ready())
         {
-            const EnvironmentHandle previous = std::exchange(
-                entry.handle, resources->createEnvironment(
-                                  entry.image.value(), desc.environment,
-                                  std::string(AssetPathTable::instance().path(entry.asset)).c_str()));
+            if (created.index == 0)
+            {
+                created = bake(entry);
+            }
+            const EnvironmentHandle previous = std::exchange(entry.handle, created);
             entry.status = Status::Ready;
             errors.erase(entry.asset.value);
             if (replacing)
@@ -725,7 +829,7 @@ struct RenderAssetCache::Impl
             ++epoch; // a new handle, or an environment that failed before
             if (std::exchange(entry.reload.again, false))
             {
-                reloads.push_back(entry.asset);
+                reloads.emplace_back(entry.asset, AssetReloadMode::IfChanged);
             }
         }
         return true;
@@ -824,15 +928,16 @@ struct RenderAssetCache::Impl
         loadingMaterials.push_back(key);
     }
 
-    void reloadEnvironment(u64 key)
+    void reloadEnvironment(u64 key, AssetReloadMode mode)
     {
         EnvironmentEntry& entry = environments.at(key);
         if (!beginReload(entry))
         {
             return;
         }
-        entry.image = streamer->loadImage(AssetPathTable::instance().path(entry.asset),
-                                          {.srgb = true, .generateMips = false});
+        // Reimport bakes again (and replaces the cache entry) even when the image did not change.
+        entry.cooked = streamer->loadCooked(AssetPathTable::instance().path(entry.asset), bakeKey,
+                                            AssetType::Environment, kEnvironmentFormatVersion, mode);
         loadingEnvironments.push_back(key);
     }
 
@@ -840,10 +945,10 @@ struct RenderAssetCache::Impl
     void startReloads()
     {
         ILL_PROFILE_SCOPE();
-        std::vector<AssetId> files;
+        std::vector<std::pair<AssetId, AssetReloadMode>> files;
         files.swap(reloads);
         std::vector<u64> keys;
-        for (const AssetId file : files)
+        for (const auto& [file, mode] : files)
         {
             if (models.contains(file.value))
             {
@@ -868,7 +973,7 @@ struct RenderAssetCache::Impl
             // Procedural skies are keyed by their parameters, so a file's environment has the file's id.
             if (environments.contains(file.value))
             {
-                reloadEnvironment(file.value);
+                reloadEnvironment(file.value, mode);
             }
         }
     }
@@ -980,6 +1085,10 @@ struct RenderAssetCache::Impl
     {
         ILL_PROFILE_SCOPE_N("RenderAssetCache::update");
         resources->collect();
+        if (!stores.empty())
+        {
+            storeBakes(false);
+        }
         if (!reloads.empty())
         {
             startReloads();
@@ -1023,6 +1132,7 @@ void RenderAssetCache::waitIdle()
         m_impl->streamer->waitIdle();
         m_impl->update();
     }
+    m_impl->storeBakes(true); // queued for writing; the streamer writes them before it stops
 }
 
 u32 RenderAssetCache::loading() const noexcept
@@ -1048,6 +1158,8 @@ RenderAssetCacheStatistics RenderAssetCache::statistics() const noexcept
     statistics.loading = m_impl->loading();
     statistics.reloads = m_impl->reloadsDone;
     statistics.evicted = m_impl->evicted;
+    statistics.bakeCacheHits = m_impl->bakeCacheHits;
+    statistics.bakes = m_impl->bakes;
     return statistics;
 }
 

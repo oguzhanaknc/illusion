@@ -2,6 +2,7 @@
 #include <illusion/core/Profiler.hpp>
 
 #include <algorithm>
+#include <bit>
 #include <cmath>
 #include <numbers>
 
@@ -140,6 +141,16 @@ Image makeSkyImage(u32 width, const SkyDesc& desc)
         }
     }
     return image;
+}
+
+bool BakedEnvironment::isValid() const noexcept
+{
+    const auto cubeValid = [](u32 size, u32 mips, usize texels) {
+        return size > 0 && std::has_single_bit(size) && mips > 0 &&
+               mips <= static_cast<u32>(std::bit_width(size)) && texels == cubeTexelCount(size, mips);
+    };
+    return cubeValid(backgroundSize, backgroundMips, background.size()) &&
+           cubeValid(specularSize, specularMips, specular.size());
 }
 
 } // namespace illusion
