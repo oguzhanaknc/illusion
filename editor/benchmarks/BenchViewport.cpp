@@ -1,10 +1,12 @@
 #include "Budget.hpp"
 
+#include <illusion/assets/Image.hpp>
 #include <illusion/audio/AudioComponents.hpp>
 #include <illusion/ecs/Transform.hpp>
 #include <illusion/ecs/World.hpp>
 #include <illusion/editor/viewport/EditorCamera.hpp>
 #include <illusion/editor/viewport/PickCandidates.hpp>
+#include <illusion/editor/viewport/ThumbnailRenderer.hpp>
 #include <illusion/editor/viewport/Visualisers.hpp>
 #include <illusion/physics/PhysicsComponents.hpp>
 #include <illusion/render/DebugDraw.hpp>
@@ -85,5 +87,29 @@ ILL_BENCHMARK("viewport/visualisers-record", 500.0)
     bench.batch(kPerKind * 6).unit("object").run("1,200 objects", [&] {
         draw.clear();
         ankerl::nanobench::doNotOptimizeAway(recordVisualisers(world, draw, options));
+    });
+}
+
+// The thumbnail of a 1,024 x 1,024 sRGB texture with a full mip chain (scaled from its 256 x 256 mip over the
+// checkerboard), per thumbnail: the CPU step of a texture thumbnail in its frame (the plan allows 2 ms).
+// Budget about 8x the 0.64 ms measured on a desktop (Release, MSVC).
+ILL_BENCHMARK("thumbnail/texture", 5'000'000.0)
+{
+    Image image;
+    image.format = ImageFormat::RGBA8Srgb;
+    usize offset = 0;
+    for (u32 size = 1024; size >= 1; size /= 2)
+    {
+        const usize bytes = static_cast<usize>(size) * size * 4;
+        image.mips.push_back(ImageMip{size, size, offset, bytes});
+        offset += bytes;
+    }
+    image.data.resize(offset);
+    for (usize i = 0; i < image.data.size(); ++i)
+    {
+        image.data[i] = static_cast<std::byte>(i * 7);
+    }
+    bench.unit("thumbnail").run("textureThumbnail (1024 x 1024 with mips)", [&] {
+        ankerl::nanobench::doNotOptimizeAway(textureThumbnail(image));
     });
 }

@@ -13,6 +13,7 @@
 #include <illusion/editor/core/CoreCommands.hpp>
 #include <illusion/editor/core/EditorContext.hpp>
 #include <illusion/editor/core/PlayHost.hpp>
+#include <illusion/editor/core/ThumbnailHost.hpp>
 #include <illusion/editor/core/UiHost.hpp>
 #include <illusion/editor/core/ViewportHost.hpp>
 #include <illusion/platform/FileSystem.hpp>
@@ -640,12 +641,76 @@ inline std::filesystem::path writeFakeModuleSdk(const std::filesystem::path& fil
     return file;
 }
 
+/// A ThumbnailHost without a GPU for the core tests: it answers a request with a solid image (its colour
+/// taken from the request number) once thumbnail() was asked `delay` times, or with `failure` when set.
+class FakeThumbnails final : public editor::ThumbnailHost
+{
+public:
+    std::vector<editor::ThumbnailRequest> requests; ///< Every request, in order.
+    std::optional<editor::CommandError> failure;    ///< Answer with this error instead of an image.
+    u32 delay = 0;                                  ///< Pending answers before each image.
+    u32 cancelled = 0;                              ///< Requests cancelled.
+
+    Expected<u64, editor::CommandError> requestThumbnail(const editor::ThumbnailRequest& request) override
+    {
+        requests.push_back(request);
+        m_waiting.push_back(Waiting{requests.size(), delay});
+        return requests.size();
+    }
+
+    std::optional<Expected<editor::ThumbnailImage, editor::CommandError>> thumbnail(u64 ticket) override
+    {
+        const auto found = std::find_if(m_waiting.begin(), m_waiting.end(),
+                                        [&](const Waiting& waiting) { return waiting.ticket == ticket; });
+        if (found == m_waiting.end())
+        {
+            return Expected<editor::ThumbnailImage, editor::CommandError>(
+                unexpected(editor::CommandError::make(editor::ErrorKind::NotFound, "unknown ticket")));
+        }
+        if (found->delay > 0)
+        {
+            --found->delay;
+            return std::nullopt;
+        }
+        m_waiting.erase(found);
+        if (failure)
+        {
+            return Expected<editor::ThumbnailImage, editor::CommandError>(unexpected(*failure));
+        }
+        editor::ThumbnailImage image;
+        image.size = UVec2(editor::kThumbnailSize);
+        image.rgba.assign(static_cast<usize>(editor::kThumbnailSize) * editor::kThumbnailSize * 4, 255);
+        for (usize i = 0; i < image.rgba.size(); i += 4)
+        {
+            image.rgba[i] = static_cast<u8>(ticket * 40);
+        }
+        return image;
+    }
+
+    void cancelThumbnail(u64 ticket) override
+    {
+        if (std::erase_if(m_waiting, [&](const Waiting& waiting) { return waiting.ticket == ticket; }) != 0)
+        {
+            ++cancelled;
+        }
+    }
+
+private:
+    struct Waiting
+    {
+        u64 ticket = 0;
+        u32 delay = 0;
+    };
+    std::vector<Waiting> m_waiting;
+};
+
 /// A temporary project made from the empty template, open in an EditorContext.
 struct EditorFixture
 {
     TempDirectory directory;
     FakeUi ui;
     FakeViewports viewports;
+    FakeThumbnails thumbnails;
     editor::EditorContext* current = nullptr;
     FakePlay play{current};
     std::unique_ptr<editor::EditorContext> editor;
@@ -687,6 +752,7 @@ struct EditorFixture
         editor = std::make_unique<editor::EditorContext>(options);
         editor->setUi(&ui);
         editor->setViewports(&viewports);
+        editor->setThumbnailHost(&thumbnails);
         editor->setPlay(&play);
         // editor.open_source starts the stand-in of FakeCMake.cpp, which records what it was asked to open.
         editor::Preferences preferences = editor->preferences();

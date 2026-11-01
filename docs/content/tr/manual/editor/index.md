@@ -343,6 +343,37 @@ Texture'lar ve modeller [içe aktarma ayarlarını](../assets.md#ice-aktarma-aya
   olarak yeniden adlandırılan bir Texture) ayarlar sıfırlanana kadar reddedilir. Sidecar'ların kendileri bu
   komutlar için geçerli yollar değildir.
 
+### Küçük resimler
+
+`asset.thumbnail` bir modelin (`.gltf`, `.glb`), bir Material dosyasının (bir küre üzerinde), bir
+Texture'ın (`.png`, `.jpg`, `.jpeg`, `.tga`, `.bmp`) ya da bir ortamın (`.hdr`) 256 x 256 boyutunda PNG
+önizlemesini yapar ve nerede olduğunu döndürür. Async bir komuttur: küçük resim çizicisi görüntüyü yapınca,
+karede en fazla bir tane olmak üzere, biter.
+
+```json
+{"path": "assets:/models/ship.glb", "kind": "Model", "thumbnail": "thumbnails:/5f0c2a9e7d4b1386.png",
+ "file": "C:/Projects/Game/.illusion/thumbnails/5f0c2a9e7d4b1386.png", "width": 256, "height": 256,
+ "cached": false}
+```
+
+- **Önbellek.** Küçük resimler `.illusion/thumbnails` içindeki (`thumbnails:` mount'u) PNG dosyalarıdır ve
+  Asset'in içeriğinden çıkan bir anahtarla adlandırılır: içerik hash'i ve içe aktarma ayarları ile bağlı
+  olduğu her şeyinkiler (bir Material'in Texture'ları, bir glTF dosyasının buffer'ları ve görüntüleri).
+  İkinci bir çağrı dosyayı hemen `cached: true` ile döndürür, yeniden başlatmadan sonra da; `refresh: true`
+  onu yeniden yapar.
+- **Geçersizleme.** `asset.changed` bir dosyayı değişmiş, silinmiş ya da yeniden adlandırılmış olarak
+  bildirdiğinde, o dosyanın ve ona başvuran dosyaların küçük resimleri silinir. Anahtar zaten içerikle
+  değiştiği için eski bir görüntü asla döndürülmez; yapılırken Asset'i değişen bir küçük resim yeniden
+  yapılır.
+- **Çizim.** Editor penceresinin `ThumbnailRenderer`'ı (editor çekirdeğinin `ThumbnailHost`'u) modelleri ve
+  Material'leri kendine ait bir önizleme World'ünde, prosedürel bir gökyüzü ve bir ana ışıkla aydınlatarak,
+  gölgesiz, bloom'suz ve TAA'sız küçük bir `SceneRenderer` ile çizer; bir ortam o World'ün bir kürenin
+  arkasındaki arka planıdır ve viewport'ların bake önbelleğini kullanır. Texture'lar CPU'da bir dama
+  deseni üzerine küçültülür. Viewport'ların Asset önbelleğini paylaştığı için canlı yeniden yükleme ona da
+  ulaşır. Her adım bir karenin yaklaşık 2 ms'sini harcar ve GPU beklenmeden geri okunur.
+- GPU olmadan (penceresiz `--headless`) yalnızca önbellekteki küçük resimler kullanılabilir; diğer çağrılar
+  `unsupported` ile başarısız olur. Yüklenemeyen dosyalar `io_error` ile başarısız olur.
+
 ## Material'ler
 
 `material.create`, `material.get` ve `material.set`, `.material` dosyalarını `MaterialAsset` reflection'ı

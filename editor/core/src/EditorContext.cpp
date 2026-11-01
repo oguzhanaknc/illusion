@@ -346,6 +346,7 @@ EditorContext::~EditorContext()
         // Blobs of this session are only needed by its undo history and journal.
         std::error_code code;
         std::filesystem::remove_all(m_project->stateDirectory() / "trash" / utf8Path(m_session), code);
+        m_thumbnails.close();
         m_project->unmount(m_files);
     }
     if (m_log)
@@ -364,6 +365,7 @@ Expected<void, CommandError> EditorContext::openProject(const std::filesystem::p
     if (m_project)
     {
         m_journal.closeClean();
+        m_thumbnails.close();
         m_project->unmount(m_files);
         m_project.reset();
         m_editor.setFiles(nullptr, {}, {});
@@ -374,6 +376,7 @@ Expected<void, CommandError> EditorContext::openProject(const std::filesystem::p
             ErrorKind::IoError, "cannot mount the project (" + std::string(fileErrorName(error)) + ")"));
     }
     m_project = std::move(project).value();
+    m_thumbnails.open(m_files);
     m_references.clear();
     m_assets.clear();
     m_assetChanges.clear();
@@ -615,6 +618,7 @@ void EditorContext::postAssetChanges(const AssetCatalogChanges& changes)
     {
         return;
     }
+    (void)m_thumbnails.invalidate(changes, m_assets);
     JsonMutDocument document;
     JsonMutValue root = document.makeObject();
     const auto addPaths = [&](std::string_view key, const std::vector<std::string>& paths) {

@@ -6,6 +6,7 @@ illusion_add_editor_library(illusion_editor_viewport STATIC
     src/EditorCamera.cpp
     src/PickCandidates.cpp
     src/ResizePolicy.cpp
+    src/ThumbnailRenderer.cpp
     src/ViewportOverlays.cpp
     src/ViewportService.cpp
     src/Visualisers.cpp)
