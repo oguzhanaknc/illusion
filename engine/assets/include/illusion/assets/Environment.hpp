@@ -2,13 +2,14 @@
 
 /// @file
 /// Environment (sky) images in equirectangular layout: direction mapping, diffuse irradiance as
-/// spherical harmonics, and a procedural sky.
+/// spherical harmonics, a procedural sky, and baked image-based lighting as stored in the import cache.
 
 #include <illusion/assets/Image.hpp>
 #include <illusion/core/Base.hpp>
 #include <illusion/core/Math.hpp>
 
 #include <array>
+#include <vector>
 
 namespace illusion
 {
@@ -57,5 +58,38 @@ struct SkyDesc
 /// zenith-to-horizon gradient, a ground colour and an optional sun disc. Useful as a default environment
 /// and for tests.
 [[nodiscard]] Image makeSkyImage(u32 width, const SkyDesc& desc = {});
+
+/// Number of texels of a cube map with face size @p size and @p mips mip levels (all six faces).
+[[nodiscard]] constexpr usize cubeTexelCount(u32 size, u32 mips) noexcept
+{
+    usize count = 0;
+    for (u32 mip = 0; mip < mips; ++mip)
+    {
+        const usize face = size >> mip > 0 ? size >> mip : 1;
+        count += face * face * 6;
+    }
+    return count;
+}
+
+/// Image-based lighting baked from an environment image by RenderResources (a background cube map with a
+/// full mip chain and a specular cube map prefiltered for increasing roughness), with its diffuse
+/// irradiance. RenderResources reads it back after a bake and creates environments from it without baking;
+/// the renderer keeps it in the import cache (AssetType::Environment).
+///
+/// Texels are RGBA16F (glm::packHalf4x16) in mip order, then face order (+x, -x, +y, -y, +z, -z), then rows
+/// from the top; a face of mip `m` is `max(size >> m, 1)` texels wide.
+struct BakedEnvironment
+{
+    u32 backgroundSize = 0; ///< Face size of the background cube map (a power of two).
+    u32 backgroundMips = 0; ///< Mip levels of the background cube map.
+    u32 specularSize = 0;   ///< Face size of the specular cube map (a power of two).
+    u32 specularMips = 0;   ///< Mip levels of the specular cube map (mip i is for roughness i / (mips - 1)).
+    std::vector<u64> background; ///< cubeTexelCount(backgroundSize, backgroundMips) texels.
+    std::vector<u64> specular;   ///< cubeTexelCount(specularSize, specularMips) texels.
+    ShIrradiance irradiance;     ///< Diffuse irradiance.
+
+    /// True if both sizes are non-zero powers of two, the mip counts fit them and the texel counts match.
+    [[nodiscard]] bool isValid() const noexcept;
+};
 
 } // namespace illusion

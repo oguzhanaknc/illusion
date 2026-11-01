@@ -113,6 +113,11 @@ world.create(rockTransform, illusion::RigidBody{}, rockShape);
   A Collider waiting for its asset gets its body once the geometry is cooked; a Collider whose asset
   changes is rebuilt. An asset that cannot be loaded logs a warning and counts in
   `statistics().failures`.
+- Live reload: when `AssetStreamer::reload()` reports a model file (see
+  [Reloading changed files](assets.md#reloading-changed-files)), the resolver cooks the geometry made from
+  it again on its next `update()` and rebuilds the Colliders that use it. They keep the previous geometry
+  until the new one is cooked, and keep it when the reload fails (a warning, counted in `failures`).
+  `statistics().reloads` counts finished reloads.
 - `geometry` is runtime data and is not saved in scenes; `mesh` and `meshIndex` are. Geometry created in
   code must be set again after loading a scene.
 

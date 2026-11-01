@@ -1,6 +1,8 @@
 #include "AssetTestProject.hpp"
 
 #include <illusion/assets/AssetStreamer.hpp>
+#include <illusion/assets/ImportSettings.hpp>
+#include <illusion/core/Hash.hpp>
 #include <illusion/core/JobSystem.hpp>
 
 #include <doctest/doctest.h>
@@ -8,7 +10,9 @@
 #include <atomic>
 #include <format>
 #include <optional>
+#include <span>
 #include <string>
+#include <string_view>
 #include <vector>
 
 using namespace illusion;
@@ -297,6 +301,150 @@ TEST_CASE("reload invalidates a file and publishes AssetReloadedEvent")
     CHECK_FALSE(again == image);
     streamer.waitIdle();
     CHECK(again.ready());
+}
+
+TEST_CASE("reload reports its mode in AssetReloadedEvent")
+{
+    test::AssetProject project;
+    JobSystem jobs(smallPool());
+    AssetStreamer streamer(project.files, jobs);
+    std::vector<AssetReloadMode> modes;
+    const Subscription subscription = streamer.events().subscribe<AssetReloadedEvent>(
+        [&modes](const AssetReloadedEvent& event) { modes.push_back(event.mode); });
+    CHECK(streamer.reload("game:/textures/checker.png"));
+    CHECK(streamer.reload("game:/textures/checker.png", AssetReloadMode::Reimport));
+    CHECK(modes == std::vector<AssetReloadMode>{AssetReloadMode::IfChanged, AssetReloadMode::Reimport});
+}
+
+namespace
+{
+
+constexpr std::string_view kCookedKey = "test-cooked:1";
+
+AssetHandle<CookedAsset> lookUp(AssetStreamer& streamer, std::string_view path,
+                                AssetReloadMode mode = AssetReloadMode::IfChanged)
+{
+    AssetHandle<CookedAsset> handle =
+        streamer.loadCooked(path, kCookedKey, AssetType::Environment, kEnvironmentFormatVersion, mode);
+    streamer.waitIdle();
+    return handle;
+}
+
+AssetFile cookedFile(std::vector<AssetDependency> sources, u8 marker)
+{
+    AssetFile file;
+    file.type = AssetType::Environment;
+    file.version = kEnvironmentFormatVersion;
+    file.dependencies = std::move(sources);
+    file.payload = {std::byte{marker}};
+    return file;
+}
+
+} // namespace
+
+TEST_CASE("loadCooked misses with the current sources, then hits what storeCooked wrote after a restart")
+{
+    test::AssetProject project;
+    {
+        JobSystem jobs(smallPool());
+        AssetStreamer streamer(project.files, jobs);
+        const AssetHandle<CookedAsset> miss = lookUp(streamer, "game:/textures/../textures/checker.png");
+        REQUIRE(miss.ready());
+        CHECK_FALSE(miss.value().file.has_value());
+        REQUIRE(miss.value().sources.size() == 2);
+        CHECK(miss.value().sources[0].path == "game:/textures/checker.png");
+        CHECK(miss.value().sources[1].path == importSettingsPath("game:/textures/checker.png"));
+        CHECK(miss.value().sources[1].contentHash == xxhash64(std::span<const std::byte>{}));
+        streamer.storeCooked("game:/textures/checker.png", kCookedKey, cookedFile(miss.value().sources, 7));
+    } // shutting down writes the entry
+
+    JobSystem jobs(smallPool());
+    AssetStreamer streamer(project.files, jobs);
+    const AssetHandle<CookedAsset> hit = lookUp(streamer, "game:/textures/checker.png");
+    REQUIRE(hit.ready());
+    REQUIRE(hit.value().file.has_value());
+    CHECK(hit.value().file->payload == std::vector<std::byte>{std::byte{7}});
+    CHECK(hit.value().sources.empty());
+    CHECK(streamer.statistics().cacheHits == 1);
+    CHECK(streamer.statistics().cacheWrites == 0);
+    // Same path and key share a handle; another key or type does not find the entry.
+    CHECK(streamer.loadCooked("game:/textures/checker.png", kCookedKey, AssetType::Environment,
+                              kEnvironmentFormatVersion) == hit);
+    const AssetHandle<CookedAsset> otherType = streamer.loadCooked(
+        "game:/textures/checker.png", "test-other:1", AssetType::Environment, kEnvironmentFormatVersion);
+    streamer.waitIdle();
+    CHECK_FALSE(otherType.value().file.has_value());
+}
+
+TEST_CASE("loadCooked misses once the file or its import settings sidecar changes, and with Reimport")
+{
+    test::AssetProject project;
+    JobSystem jobs(smallPool());
+    AssetStreamer streamer(project.files, jobs);
+    const std::string path = "game:/textures/checker.png";
+    {
+        const AssetHandle<CookedAsset> miss = lookUp(streamer, path);
+        streamer.storeCooked(path, kCookedKey, cookedFile(miss.value().sources, 1));
+    }
+    streamer.waitIdle();
+    // Writes are queued before later loads, so the entry is there for the next lookup.
+    CHECK(lookUp(streamer, path).value().file.has_value());
+    CHECK_FALSE(lookUp(streamer, path, AssetReloadMode::Reimport).value().file.has_value());
+
+    SUBCASE("the file")
+    {
+        const std::vector<std::byte> red =
+            encodePng(makeSolidImage(2, 2, Vec4(1.0f, 0.0f, 0.0f, 1.0f), ImageFormat::RGBA8));
+        REQUIRE(project.files.writeFile(path, red) == FileError::None);
+        streamer.invalidate(path);
+        const AssetHandle<CookedAsset> stale = lookUp(streamer, path);
+        CHECK_FALSE(stale.value().file.has_value());
+        REQUIRE(stale.value().sources.size() == 2);
+        CHECK(stale.value().sources[0].contentHash == xxhash64(red));
+    }
+    SUBCASE("the sidecar")
+    {
+        const std::string_view sidecar =
+            R"({"format": "illusion.import", "version": 1, "texture": {"generateMips": false}})";
+        REQUIRE(project.files.writeFile(importSettingsPath(path), std::as_bytes(std::span(sidecar))) ==
+                FileError::None);
+        streamer.invalidate(path);
+        const AssetHandle<CookedAsset> stale = lookUp(streamer, path);
+        CHECK_FALSE(stale.value().file.has_value());
+        REQUIRE(stale.value().sources.size() == 2);
+        CHECK(stale.value().sources[1].contentHash == xxhash64(std::as_bytes(std::span(sidecar))));
+    }
+}
+
+TEST_CASE("loadCooked of a missing file misses without sources, and an invalid path fails")
+{
+    test::AssetProject project;
+    JobSystem jobs(smallPool());
+    AssetStreamer streamer(project.files, jobs);
+    const AssetHandle<CookedAsset> missing = lookUp(streamer, "game:/textures/none.png");
+    REQUIRE(missing.ready());
+    CHECK_FALSE(missing.value().file.has_value());
+    CHECK(missing.value().sources.empty());
+    const AssetHandle<CookedAsset> invalid = lookUp(streamer, "../outside.png");
+    CHECK(invalid.state() == AssetState::Failed);
+    // Storing without sources or for an invalid path writes nothing.
+    streamer.storeCooked("game:/textures/none.png", kCookedKey, cookedFile({}, 1));
+    streamer.storeCooked("../outside.png", kCookedKey, cookedFile({{"game:/x", 1}}, 1));
+    streamer.waitIdle();
+    CHECK(streamer.statistics().cacheWrites == 0);
+}
+
+TEST_CASE("loadCooked without a cache mount always misses at once")
+{
+    test::AssetProject project;
+    JobSystem jobs(smallPool());
+    AssetStreamer streamer(project.files, jobs, AssetStreamerDesc{.cacheMount = ""});
+    const AssetHandle<CookedAsset> miss = streamer.loadCooked(
+        "game:/textures/checker.png", kCookedKey, AssetType::Environment, kEnvironmentFormatVersion);
+    CHECK(miss.ready());
+    CHECK(streamer.pending() == 0);
+    CHECK_FALSE(miss.value().file.has_value());
+    CHECK(miss.value().sources.empty());
 }
 
 #if ILL_ASSERTS_ENABLED

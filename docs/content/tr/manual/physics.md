@@ -113,6 +113,12 @@ world.create(rockTransform, illusion::RigidBody{}, rockShape);
   için bir kez, tüm submesh'lerden bir üçgen Mesh'i ya da tüm vertex'lerin convex hull'ünü hazırlar.
   Asset'ini bekleyen bir Collider, geometri hazırlanınca cismini alır; Asset'i değişen bir Collider
   yeniden kurulur. Yüklenemeyen bir Asset bir uyarı yazar ve `statistics().failures` içinde sayılır.
+- Canlı yeniden yükleme: `AssetStreamer::reload()` bir model dosyasını bildirdiğinde (bkz.
+  [Değişen dosyaları yeniden yükleme](assets.md#degisen-dosyalar-yeniden-yukleme)), resolver bir sonraki
+  `update()` içinde o dosyadan yapılan geometriyi yeniden hazırlar ve onu kullanan Collider'ları yeniden
+  kurar. Collider'lar yeni geometri hazırlanana kadar öncekini korur; yeniden yükleme başarısız olursa da
+  (bir uyarıyla, `failures` içinde sayılarak) onu kullanmaya devam eder. `statistics().reloads` biten
+  yeniden yüklemeleri sayar.
 - `geometry` çalışma zamanı verisidir ve sahnelere kaydedilmez; `mesh` ve `meshIndex` kaydedilir. Kodla
   oluşturulan geometri, bir sahne yükledikten sonra yeniden atanmalıdır.
 

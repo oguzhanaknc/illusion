@@ -2,6 +2,7 @@
 #include <illusion/assets/Mesh.hpp>
 #include <illusion/assets/Model.hpp>
 #include <illusion/core/AssetRef.hpp>
+#include <illusion/core/EventBus.hpp>
 #include <illusion/core/Hash.hpp>
 #include <illusion/core/Log.hpp>
 #include <illusion/core/Profiler.hpp>
@@ -11,9 +12,11 @@
 #include <illusion/physics/PhysicsComponents.hpp>
 #include <illusion/physics/PhysicsWorld.hpp>
 
+#include <algorithm>
 #include <optional>
 #include <string>
 #include <unordered_map>
+#include <utility>
 #include <vector>
 
 namespace illusion
@@ -37,13 +40,26 @@ struct GeometryEntry
     bool triangles = false;       // ColliderShape::Mesh; otherwise a convex hull
     AssetHandle<ModelData> model; // until cooked
     PhysicsMeshHandle geometry;
+    bool reloading = false; // `model` is a reload of a file that changed (AssetReloadedEvent)
+    bool again = false;     // the file changed again during the reload
 };
+
+u64 geometryKey(AssetId asset, u32 meshIndex, ColliderShape shape) noexcept
+{
+    u64 key = hashCombine(asset.value, meshIndex);
+    key = hashCombine(key, static_cast<u64>(shape));
+    return key == 0 ? 1 : key;
+}
 
 u64 geometryKey(const Collider& collider) noexcept
 {
-    u64 key = hashCombine(collider.mesh.id.value, collider.meshIndex);
-    key = hashCombine(key, static_cast<u64>(collider.shape));
-    return key == 0 ? 1 : key;
+    return geometryKey(collider.mesh.id, collider.meshIndex, collider.shape);
+}
+
+u64 geometryKey(const GeometryEntry& entry) noexcept
+{
+    return geometryKey(entry.asset, entry.meshIndex,
+                       entry.triangles ? ColliderShape::Mesh : ColliderShape::ConvexHull);
 }
 
 bool usesMeshAsset(ColliderShape shape) noexcept
@@ -60,6 +76,10 @@ struct PhysicsAssetResolver::Impl
     PhysicsAssetStatistics statistics;
     std::unordered_map<u64, GeometryEntry> entries;
     std::vector<u64> loading;
+    std::vector<AssetId> reloads;            // files reloaded since the last update()
+    std::vector<u64> refreshed;              // entries whose geometry changed: their Colliders take it again
+    std::vector<PhysicsMeshHandle> replaced; // destroyed once the Colliders use the new geometry
+    Subscription reloaded;
 
     void fail(GeometryEntry& entry, std::string_view message)
     {
@@ -77,17 +97,37 @@ struct PhysicsAssetResolver::Impl
         {
             positions.push_back(vertex.position);
         }
-        entry.geometry = entry.triangles ? physics->createMesh(positions, mesh.indices)
-                                         : physics->createConvexHull(positions);
+        const PhysicsMeshHandle geometry = entry.triangles ? physics->createMesh(positions, mesh.indices)
+                                                           : physics->createConvexHull(positions);
+        if (!geometry.valid())
+        {
+            failReload(entry, "the mesh is empty or degenerate");
+            return;
+        }
         if (entry.geometry.valid())
         {
-            entry.status = Status::Ready;
-            ++statistics.geometries;
+            replaced.push_back(entry.geometry);
         }
         else
         {
-            fail(entry, "the mesh is empty or degenerate");
+            ++statistics.geometries;
         }
+        entry.geometry = geometry;
+        entry.status = Status::Ready;
+    }
+
+    // A load that ended without geometry: a reload keeps the previous geometry.
+    void failReload(GeometryEntry& entry, std::string_view message)
+    {
+        if (!entry.geometry.valid())
+        {
+            fail(entry, message);
+            return;
+        }
+        entry.status = Status::Ready;
+        ++statistics.failures;
+        ILL_LOG_WARN("Physics", "cannot rebuild collision geometry from '{}', keeping the previous one: {}",
+                     AssetPathTable::instance().path(entry.asset), message);
     }
 
     // Cooks the entry once its model is loaded; returns false while it loads.
@@ -102,7 +142,7 @@ struct PhysicsAssetResolver::Impl
         const ModelData* model = entry.model.get();
         if (model == nullptr)
         {
-            fail(entry, entry.model.error());
+            failReload(entry, entry.model.error());
         }
         else
         {
@@ -122,7 +162,7 @@ struct PhysicsAssetResolver::Impl
             }
             if (mesh < 0 || static_cast<usize>(mesh) >= model->meshes.size())
             {
-                fail(entry, "the model has no such mesh");
+                failReload(entry, "the model has no such mesh");
             }
             else
             {
@@ -130,7 +170,51 @@ struct PhysicsAssetResolver::Impl
             }
         }
         entry.model = {};
+        if (std::exchange(entry.reloading, false))
+        {
+            ++statistics.reloads;
+            refreshed.push_back(geometryKey(entry));
+            if (std::exchange(entry.again, false))
+            {
+                startReload(entry);
+            }
+        }
         return true;
+    }
+
+    // Loads the entry's model again (its file changed); the geometry stays until the new one is cooked.
+    void startReload(GeometryEntry& entry)
+    {
+        if (entry.model)
+        {
+            entry.again = true; // a load is running: reload once more when it ends
+            return;
+        }
+        const std::optional<AssetPathParts> parts =
+            splitAssetPath(AssetPathTable::instance().path(entry.asset));
+        entry.reloading = true;
+        entry.model = streamer->loadModel(parts->file);
+        loading.push_back(geometryKey(entry));
+    }
+
+    // Starts reloading the entries made from the files in `reloads` (built-in meshes never change).
+    void startReloads()
+    {
+        std::vector<AssetId> files;
+        files.swap(reloads);
+        for (auto& [key, entry] : entries)
+        {
+            const std::optional<AssetPathParts> parts =
+                splitAssetPath(AssetPathTable::instance().path(entry.asset));
+            if (!parts || isOnBuiltinMount(parts->file) || parts->fragment == AssetFragment::Material)
+            {
+                continue;
+            }
+            if (std::ranges::find(files, AssetId::fromPath(parts->file)) != files.end())
+            {
+                startReload(entry);
+            }
+        }
     }
 
     GeometryEntry& request(u64 key, const Collider& collider)
@@ -173,6 +257,10 @@ struct PhysicsAssetResolver::Impl
     void update()
     {
         ILL_PROFILE_SCOPE_N("PhysicsAssetResolver::update");
+        if (!reloads.empty())
+        {
+            startReloads();
+        }
         for (usize i = 0; i < loading.size();)
         {
             if (advance(entries.at(loading[i])))
@@ -199,7 +287,8 @@ struct PhysicsAssetResolver::Impl
                 return;
             }
             const u64 key = geometryKey(collider);
-            if (key == collider.geometryKey)
+            if (key == collider.geometryKey &&
+                (refreshed.empty() || std::ranges::find(refreshed, key) == refreshed.end()))
             {
                 return;
             }
@@ -213,6 +302,13 @@ struct PhysicsAssetResolver::Impl
             collider.geometryKey = key;
             rebuildIfBuilt(world, entity);
         });
+        refreshed.clear();
+        // Bodies keep the geometry they were built with until they are rebuilt, so it can go at once.
+        for (const PhysicsMeshHandle geometry : replaced)
+        {
+            physics->destroyMesh(geometry);
+        }
+        replaced.clear();
     }
 
     void rebuildIfBuilt(const World& world, Entity entity)
@@ -229,6 +325,8 @@ PhysicsAssetResolver::PhysicsAssetResolver(PhysicsWorld& physics, AssetStreamer&
 {
     m_impl->physics = &physics;
     m_impl->streamer = &streamer;
+    m_impl->reloaded = streamer.events().subscribe<AssetReloadedEvent>(
+        [impl = m_impl.get()](const AssetReloadedEvent& event) { impl->reloads.push_back(event.asset); });
 }
 
 PhysicsAssetResolver::~PhysicsAssetResolver()
@@ -239,6 +337,10 @@ PhysicsAssetResolver::~PhysicsAssetResolver()
         {
             m_impl->physics->destroyMesh(entry.geometry);
         }
+    }
+    for (const PhysicsMeshHandle geometry : m_impl->replaced)
+    {
+        m_impl->physics->destroyMesh(geometry);
     }
 }
 

@@ -76,6 +76,25 @@ ILL_BENCHMARK("assets/image-load", 200.0)
     });
 }
 
+ILL_BENCHMARK("assets/environment-load", 20.0)
+{
+    // A bake of the default size (512 background, 256 specular with 6 mips) as the bake cache stores it.
+    BakedEnvironment environment;
+    environment.backgroundSize = 512;
+    environment.backgroundMips = 10;
+    environment.specularSize = 256;
+    environment.specularMips = 6;
+    environment.background.assign(cubeTexelCount(512, 10), 0x3C003C003C003C00ull);
+    environment.specular.assign(cubeTexelCount(256, 6), 0x3C00380034003000ull);
+    const std::vector<std::byte> cooked = writeAssetFile(
+        AssetFile{AssetType::Environment, kEnvironmentFormatVersion, {}, serializeEnvironment(environment)});
+    const usize texels = environment.background.size() + environment.specular.size();
+    bench.batch(texels).unit("texel").run("cached: verify + deserialize (512 + 256 cube maps)", [&] {
+        const std::optional<AssetFile> file = readAssetFile(cooked);
+        ankerl::nanobench::doNotOptimizeAway(deserializeEnvironment(file->payload));
+    });
+}
+
 ILL_BENCHMARK("assets/model-load", 250.0)
 {
     ModelData model;

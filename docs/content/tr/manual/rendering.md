@@ -347,6 +347,30 @@ world.create(illusion::Transform{}, illusion::SkyLight{}, illusion::RenderSky{en
 - Bir `RenderAssetResolver`, `environment` Asset'i olan bir `SkyLight`'a `RenderSky`'ını verir; dosya
   yüklendiğinde bake edilir. `builtin:/sky/procedural`, Entity'nin `ProceduralSky`'ıyla `makeSkyImage()`
   çıktısını bake eder; alanları her değiştiğinde yeniden.
+- **Bake önbelleği.** `RenderAssetCache`, görüntü dosyalarının bake sonuçlarını streamer'ın içe aktarma
+  önbelleğinde tutar (`AssetType::Environment`, [`loadCooked()`](assets.md#kendi-urettiginiz-assetler)
+  aracılığıyla); anahtar, görüntü ve onun içe aktarma ayarları sidecar'ı ile `EnvironmentDesc`'tir. Sonraki
+  bir çalıştırma (ya da aynı `EnvironmentDesc`'e sahip başka bir önbellek) görüntüyü yükleyip bake etmek
+  yerine saklanan cube map'leri yükler. Bir bake, yapıldıktan birkaç kare sonra GPU'dan geri okunur ve
+  ardından yazılır; `waitIdle()` hâlâ bekleyen geri okumaları bitirir. Değişen bir görüntü yeniden bake
+  edilir; `AssetReloadMode::Reimport` ile yapılan bir yeniden yükleme hiçbir şey değişmese de yeniden bake
+  eder. `statistics()`, `bakes` ve `bakeCacheHits` değerlerini sayar. Prosedürel gökyüzleri önbelleğe
+  alınmaz (dosyaları yoktur).
+- `requestEnvironmentReadback()` ve `readEnvironment()` bir ortamın cube map'lerini beklemeden CPU'ya bir
+  `BakedEnvironment` olarak kopyalar (araçlarda ve test'lerde `block = true` verin);
+  `createEnvironment(const BakedEnvironment&)` ise birini bake etmeden yükler:
+
+```cpp
+// Bake once, read the result back (here waiting for it), and upload it later without baking.
+const illusion::EnvironmentHandle sky = resources.createEnvironment(image);
+illusion::BakedEnvironment baked;
+if (resources.readEnvironment(resources.requestEnvironmentReadback(sky), baked, true) ==
+    illusion::ReadbackStatus::Ready)
+{
+    const illusion::EnvironmentHandle copy = resources.createEnvironment(baked, "Meadow");
+}
+```
+
 - Renderer, ortamı hazır olan ilk `SkyLight`'ı kullanır. Transform'u ortamı döndürür; `intensity` onu
   ölçekler ve `background = false` sahnenin arkasında temizleme rengini bırakır.
 - `SkyLight` yoksa onun yerine `SceneRendererDesc::ambient` tekdüze bir ortam ışığı ekler.

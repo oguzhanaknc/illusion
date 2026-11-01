@@ -453,3 +453,165 @@ TEST_CASE("a resolved World is checked without allocating")
     device->waitIdle();
     CHECK(device->validationErrorCount() == 0);
 }
+
+TEST_CASE("baked environments read back and upload again without baking")
+{
+    auto device = RenderDevice::create(headless());
+    REQUIRE(device != nullptr);
+    {
+        RenderResources resources(*device);
+        const Image sky = makeSkyImage(32, SkyDesc{.sunRadiance = Vec3(20.0f)});
+        const EnvironmentHandle baked = resources.createEnvironment(sky, EnvironmentDesc{16, 8, 4});
+        CHECK(resources.requestEnvironmentReadback(EnvironmentHandle{}) == 0);
+        BakedEnvironment none;
+        CHECK(resources.readEnvironment(12345, none) == ReadbackStatus::Invalid);
+
+        const u64 ticket = resources.requestEnvironmentReadback(baked);
+        REQUIRE(ticket != 0);
+        BakedEnvironment first;
+        REQUIRE(resources.readEnvironment(ticket, first, true) == ReadbackStatus::Ready);
+        CHECK(resources.readEnvironment(ticket, first) == ReadbackStatus::Invalid); // consumed
+        REQUIRE(first.isValid());
+        CHECK(first.backgroundSize == 16);
+        CHECK(first.backgroundMips == 5);
+        CHECK(first.specularSize == 8);
+        CHECK(first.specularMips == 4);
+        CHECK(first.irradiance.coefficients == resources.irradiance(baked).coefficients);
+        CHECK(
+            std::ranges::any_of(first.specular, [](u64 texel) { return (texel & 0xFFFFFFFFFFFFull) != 0; }));
+
+        // Uploading the readback gives the same texels back.
+        const EnvironmentHandle uploaded = resources.createEnvironment(first, "Uploaded");
+        CHECK(uploaded != baked);
+        BakedEnvironment second;
+        REQUIRE(resources.readEnvironment(resources.requestEnvironmentReadback(uploaded), second, true) ==
+                ReadbackStatus::Ready);
+        CHECK(second.background == first.background);
+        CHECK(second.specular == first.specular);
+        CHECK(resources.irradiance(uploaded).coefficients == first.irradiance.coefficients);
+
+        // A released environment cannot be read back.
+        resources.releaseEnvironment(uploaded);
+        CHECK(resources.requestEnvironmentReadback(uploaded) == 0);
+    }
+    device->waitIdle();
+    CHECK(device->validationErrorCount() == 0);
+}
+
+TEST_CASE("the environment bake cache hits after a restart and bakes again when the image changes")
+{
+    reflectAll();
+    auto device = RenderDevice::create(headless());
+    REQUIRE(device != nullptr);
+    {
+        test::AssetProject project;
+        REQUIRE(project.files.writeFile("game:/sky.hdr", encodeRadiance(makeSkyImage(32))) ==
+                FileError::None);
+        JobSystem jobs(JobSystemDesc{2, 256});
+
+        // One run of the renderer: returns the statistics and the read back environment of the sky light.
+        const auto run = [&](const RenderAssetCacheDesc& desc, BakedEnvironment& environment,
+                             const auto& afterLoad) {
+            AssetStreamer streamer(project.files, jobs);
+            RenderResources resources(*device);
+            RenderAssetCache cache(resources, streamer, desc);
+            RenderAssetResolver resolver(cache);
+            World world;
+            const Entity sky = world.create(Transform{}, SkyLight{.environment = AssetRef("game:/sky.hdr")});
+            resolver.waitIdle(world);
+            afterLoad(streamer, cache, resolver, world);
+            cache.waitIdle();
+            resolver.update(world); // takes the handles of reloads
+            const EnvironmentHandle handle = world.get<RenderSky>(sky).environment;
+            CHECK(resources.readEnvironment(resources.requestEnvironmentReadback(handle), environment,
+                                            true) == ReadbackStatus::Ready);
+            CHECK(cache.statistics().failed == 0);
+            return cache.statistics();
+        };
+        const auto nothing = [](AssetStreamer&, RenderAssetCache&, RenderAssetResolver&, World&) {
+        };
+
+        BakedEnvironment baked;
+        const RenderAssetCacheStatistics first = run(smallBakes(), baked, nothing);
+        CHECK(first.bakes == 1);
+        CHECK(first.bakeCacheHits == 0);
+
+        // A restart uploads the stored bake without baking.
+        BakedEnvironment cached;
+        const RenderAssetCacheStatistics second = run(smallBakes(), cached, nothing);
+        CHECK(second.bakes == 0);
+        CHECK(second.bakeCacheHits == 1);
+        CHECK(cached.background == baked.background);
+        CHECK(cached.specular == baked.specular);
+        CHECK(cached.irradiance.coefficients == baked.irradiance.coefficients);
+
+        // Another bake resolution is another entry.
+        RenderAssetCacheDesc larger = smallBakes();
+        larger.environment.cubeSize = 64;
+        BakedEnvironment large;
+        CHECK(run(larger, large, nothing).bakes == 1);
+        CHECK(large.backgroundSize == 64);
+        CHECK(run(larger, large, nothing).bakeCacheHits == 1);
+
+        // Reimport bakes again although nothing changed; a changed image bakes again and replaces the entry.
+        const auto reimport = [](AssetStreamer& streamer, RenderAssetCache&, RenderAssetResolver& resolver,
+                                 World& world) {
+            CHECK(streamer.reload("game:/sky.hdr", AssetReloadMode::Reimport));
+            resolver.waitIdle(world);
+        };
+        const RenderAssetCacheStatistics reimported = run(smallBakes(), cached, reimport);
+        CHECK(reimported.bakeCacheHits == 1);
+        CHECK(reimported.bakes == 1);
+        CHECK(reimported.reloads == 1);
+
+        const auto change = [&](AssetStreamer& streamer, RenderAssetCache&, RenderAssetResolver& resolver,
+                                World& world) {
+            REQUIRE(project.files.writeFile(
+                        "game:/sky.hdr",
+                        encodeRadiance(makeSkyImage(32, SkyDesc{.zenith = Vec3(2.0f, 0.1f, 0.1f)}))) ==
+                    FileError::None);
+            CHECK(streamer.reload("game:/sky.hdr"));
+            resolver.waitIdle(world);
+        };
+        BakedEnvironment changed;
+        const RenderAssetCacheStatistics edited = run(smallBakes(), changed, change);
+        CHECK(edited.bakes == 1);
+        CHECK(changed.background != baked.background);
+        BakedEnvironment again;
+        const RenderAssetCacheStatistics restarted = run(smallBakes(), again, nothing);
+        CHECK(restarted.bakes == 0);
+        CHECK(restarted.bakeCacheHits == 1);
+        CHECK(again.background == changed.background);
+    }
+    device->waitIdle();
+    CHECK(device->validationErrorCount() == 0);
+}
+
+TEST_CASE("without an import cache environments are baked every time")
+{
+    reflectAll();
+    auto device = RenderDevice::create(headless());
+    REQUIRE(device != nullptr);
+    {
+        test::AssetProject project;
+        REQUIRE(project.files.writeFile("game:/sky.hdr", encodeRadiance(makeSkyImage(32))) ==
+                FileError::None);
+        JobSystem jobs(JobSystemDesc{2, 256});
+        for (int runs = 0; runs < 2; ++runs)
+        {
+            AssetStreamer streamer(project.files, jobs, AssetStreamerDesc{.cacheMount = ""});
+            RenderResources resources(*device);
+            RenderAssetCache cache(resources, streamer, smallBakes());
+            RenderAssetResolver resolver(cache);
+            World world;
+            world.create(Transform{}, SkyLight{.environment = AssetRef("game:/sky.hdr")});
+            resolver.waitIdle(world);
+            cache.waitIdle();
+            CHECK(cache.statistics().bakes == 1);
+            CHECK(cache.statistics().bakeCacheHits == 0);
+            CHECK(streamer.statistics().cacheWrites == 0);
+        }
+    }
+    device->waitIdle();
+    CHECK(device->validationErrorCount() == 0);
+}

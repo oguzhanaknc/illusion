@@ -103,19 +103,30 @@ private:
 template <class T>
 using AssetFileDecoder = std::function<std::optional<T>(std::vector<std::byte>&& bytes, std::string& error)>;
 
-/// A file changed and was reloaded through AssetStreamer::reload(): caches that made assets from it request
-/// them again (published on AssetStreamer::events()).
-struct AssetReloadedEvent
-{
-    std::string path; ///< Normalized virtual path of the file.
-    AssetId asset;    ///< Id of the file (AssetId::fromPath(path)).
-};
-
 /// How AssetStreamer::reload() treats the import cache.
 enum class AssetReloadMode : u8
 {
     IfChanged, ///< Use cache entries whose sources (the file, its import settings sidecar) are unchanged.
     Reimport,  ///< Delete the cache entries of the file's current requests first, so it imports from source.
+};
+
+/// A file changed and was reloaded through AssetStreamer::reload(): caches that made assets from it request
+/// them again (published on AssetStreamer::events()).
+struct AssetReloadedEvent
+{
+    std::string path;                                  ///< Normalized virtual path of the file.
+    AssetId asset;                                     ///< Id of the file (AssetId::fromPath(path)).
+    AssetReloadMode mode = AssetReloadMode::IfChanged; ///< Reimport: caches also skip their derived entries
+                                                       ///< (see AssetStreamer::loadCooked()).
+};
+
+/// Result of AssetStreamer::loadCooked().
+struct CookedAsset
+{
+    std::optional<AssetFile> file; ///< The cache entry, when it exists and its sources are unchanged.
+    /// On a miss, the current sources (the file and its import settings sidecar, with their content hashes)
+    /// to record in the entry given to AssetStreamer::storeCooked(); empty if the file cannot be read.
+    std::vector<AssetDependency> sources;
 };
 
 /// Creation parameters of an AssetStreamer.
@@ -166,6 +177,21 @@ public:
             });
         return AssetHandle<T>(std::static_pointer_cast<detail::AssetSlot<T>>(std::move(slot)));
     }
+
+    /// Requests the import cache entry of an asset that the caller makes from the file @p virtualPath itself,
+    /// typically on the GPU (the renderer's baked environments): @p importKey names the maker, its version
+    /// and settings (it must not contain '|'), @p type and @p version the payload. The handle becomes Ready
+    /// with CookedAsset::file on a hit (sources verified as for imports), and Ready without a file but with
+    /// the current CookedAsset::sources on a miss; make the asset and pass them to storeCooked(). It fails
+    /// only for an invalid path. With AssetReloadMode::Reimport the entry is not used (always a miss, for a
+    /// forced rebuild). Requests with the same path and key share a handle (Reimport requests never do).
+    [[nodiscard]] AssetHandle<CookedAsset> loadCooked(std::string_view virtualPath,
+                                                      std::string_view importKey, AssetType type, u32 version,
+                                                      AssetReloadMode mode = AssetReloadMode::IfChanged);
+
+    /// Writes @p file as the cache entry that loadCooked() finds for @p virtualPath and @p importKey, on the
+    /// I/O thread. Ignored without a cache mount, for an invalid path or when @p file has no dependencies.
+    void storeCooked(std::string_view virtualPath, std::string_view importKey, const AssetFile& file);
 
     /// Forgets the requests for the file @p virtualPath, whatever their import settings or decoder, so the
     /// next request reads the file again (and reimports it when the import cache is stale). Handles given

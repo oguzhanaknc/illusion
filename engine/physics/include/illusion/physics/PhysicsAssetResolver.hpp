@@ -29,7 +29,8 @@ struct PhysicsAssetStatistics
 {
     u32 geometries = 0; ///< Shapes cooked (one per mesh asset, mesh index and shape kind).
     u32 pending = 0;    ///< Colliders waiting for their model after the last update().
-    u32 failures = 0;   ///< Mesh assets that could not be cooked, since construction.
+    u32 failures = 0;   ///< Mesh assets that could not be cooked (or cooked again), since construction.
+    u32 reloads = 0;    ///< Reloads of changed models finished, since construction.
 };
 
 /// Keeps Collider::geometry of the ConvexHull and Mesh Colliders of a PhysicsWorld's World in step with their
@@ -37,6 +38,10 @@ struct PhysicsAssetStatistics
 /// triangle mesh of all its submeshes, or the convex hull of its vertices) and shared by every Collider that
 /// uses it. A Collider whose geometry changes is rebuilt. Entities with the Inactive tag are skipped. Use on
 /// the thread that updates the PhysicsWorld.
+///
+/// Live reload: when AssetStreamer::reload() reports a model file (AssetReloadedEvent), the geometry made
+/// from it is cooked again and the Colliders that use it are rebuilt; the previous geometry stays when the
+/// reload fails. See docs/adr/0045-asset-catalog-and-file-watching.md.
 class PhysicsAssetResolver : NonCopyable
 {
 public:

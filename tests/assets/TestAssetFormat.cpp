@@ -130,3 +130,49 @@ TEST_CASE("cooked models with out-of-range indices are rejected")
     badTexture.materials[0].normalTexture.image = 2; // no images
     CHECK_FALSE(deserializeModel(serializeModel(badTexture)).has_value());
 }
+
+TEST_CASE("baked environments round-trip and invalid ones are rejected")
+{
+    BakedEnvironment environment;
+    environment.backgroundSize = 4;
+    environment.backgroundMips = 3;
+    environment.specularSize = 2;
+    environment.specularMips = 2;
+    environment.background.resize(cubeTexelCount(4, 3));
+    environment.specular.resize(cubeTexelCount(2, 2));
+    for (usize i = 0; i < environment.background.size(); ++i)
+    {
+        environment.background[i] = i * 0x0001000100010001ull;
+    }
+    environment.specular.back() = 42;
+    environment.irradiance = ShIrradiance::uniform(Vec3(0.5f, 1.0f, 2.0f));
+    CHECK(cubeTexelCount(4, 3) == (16 + 4 + 1) * 6);
+    CHECK(cubeTexelCount(1, 1) == 6);
+    REQUIRE(environment.isValid());
+
+    const std::vector<std::byte> bytes = serializeEnvironment(environment);
+    const std::optional<BakedEnvironment> read = deserializeEnvironment(bytes);
+    REQUIRE(read.has_value());
+    CHECK(read->backgroundSize == 4);
+    CHECK(read->specularMips == 2);
+    CHECK(read->background == environment.background);
+    CHECK(read->specular == environment.specular);
+    CHECK(read->irradiance.coefficients == environment.irradiance.coefficients);
+
+    // Truncated or padded data, and sizes that do not match the texels.
+    CHECK_FALSE(deserializeEnvironment(std::span(bytes).first(bytes.size() - 1)).has_value());
+    std::vector<std::byte> padded = bytes;
+    padded.push_back(std::byte{0});
+    CHECK_FALSE(deserializeEnvironment(padded).has_value());
+    BakedEnvironment broken = environment;
+    broken.backgroundMips = 4; // 4x4 has three mips
+    CHECK_FALSE(broken.isValid());
+    CHECK_FALSE(deserializeEnvironment(serializeEnvironment(broken)).has_value());
+    broken = environment;
+    broken.specularSize = 3;
+    CHECK_FALSE(broken.isValid());
+    broken = environment;
+    broken.background.pop_back();
+    CHECK_FALSE(broken.isValid());
+    CHECK_FALSE(BakedEnvironment{}.isValid());
+}

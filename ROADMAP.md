@@ -391,9 +391,21 @@ Plan: `docs/plans/m7-editor.md` (sub-milestones, command API, localization, them
   carry them with undo; `asset.set_import_settings`, `asset.reimport` (`reimported` in `asset.changed`),
   `importSettings` in `asset.info`; GPU test of sidecar live reload and reimport; fix of
   `AssetCatalog::removeTree()` for siblings that sort inside a folder
-- M7u (rest): the environment bake cache, thumbnails and the asset browser (ADR 0045); `#` asset search in
-  the command palette (from M7l); reloading collision meshes (`PhysicsAssetResolver`) and audio clips
-  (`AudioWorld`) on `AssetReloadedEvent` (from M7u-2)
+- M7u-4a: ✅ Environment bake cache and live reload of physics and audio (ADR 0045 addendum):
+  `AssetStreamer::loadCooked()`/`storeCooked()` for assets the caller makes itself (verified by source
+  hashes, `AssetReloadMode::Reimport` skips the entry; `AssetReloadedEvent::mode`); `AssetType::Environment`
+  with `BakedEnvironment` and `serializeEnvironment()`; `RenderResources::requestEnvironmentReadback()`,
+  `readEnvironment()` and `createEnvironment(const BakedEnvironment&)`; the `RenderAssetCache` stores bakes
+  of image files keyed by the image, its sidecar and the `EnvironmentDesc`, and uploads them after a restart
+  without baking (`bakes`, `bakeCacheHits`); the `PhysicsAssetResolver` cooks the geometry of reloaded
+  models again (`reloads`) and the `AudioWorld` reloads streamed clips under the same handle
+  (`clipReloads`); GPU tests of the readback and of the cache across restarts, edits and reimports;
+  `assets/environment-load` and `physics/asset-resolve-steady` benchmarks
+- M7u-4b: `ThumbnailRenderer` (a preview World and a small `SceneRenderer` at 256 px, at most one thumbnail
+  and about 2 ms per frame) for models, material spheres, textures and HDRIs, cached as PNGs in
+  `.illusion/thumbnails` and invalidated by `asset.changed`; the `asset.thumbnail` command
+- M7u-5: the asset browser panel (ADR 0045) with the import settings inspector; `#` asset search in the
+  command palette (from M7l)
 - M7v: Prefabs with overrides and nesting (ADR 0046)
 - M7w: Engine feature panels: rendering, physics, audio mixer, input actions, gamepad tester, profiler,
   diagnostics; gamepad navigation of the editor window through `GamepadSystem` (from M7l)

@@ -177,3 +177,57 @@ override must reach the cooked build, and a forced reimport is needed when the c
   data until their sources change; the editor requests every setting it uses, so it sees the reimport.
 - The asset browser's import settings inspector (Apply/Revert) builds on `asset.set_import_settings` and
   the `importSettings` of `asset.info`.
+
+## Addendum: environment bake cache and live reload of physics and audio (M7u-4a, 2026-11-01)
+
+### Context
+
+Every run baked every environment again: a 2K HDRI costs tens of milliseconds of GPU time plus the image
+import, and the editor reopens projects all day. The bake runs on the GPU, so the import cache could not
+make it (the streamer has no GPU and the renderer has no cache). Live reload (M7u-2) also left two
+consumers behind: collision meshes cooked by the `PhysicsAssetResolver` and audio clips loaded by the
+`AudioWorld` kept their first version until restart.
+
+### Decision
+
+- **Derived assets in the import cache.** `AssetStreamer::loadCooked(path, importKey, type, version)`
+  looks up an entry that the caller makes itself and verifies it like an import (the file and its import
+  settings sidecar, by content hash). A hit returns the entry; a miss returns the current source hashes,
+  which the caller records in the entry it gives to `storeCooked()` (written on the I/O thread). Hashing
+  the sources at lookup time instead of at store time means a file that changes between the two leaves an
+  entry with the old hash and new data, which the next lookup rejects (wasted work, never wrong data).
+  `AssetReloadMode::Reimport` skips the entry. `AssetReloadedEvent` carries the reload mode so that caches
+  of derived assets can honour a forced reimport.
+- **Baked environments as an asset type.** `AssetType::Environment` holds a `BakedEnvironment`: both
+  RGBA16F cube maps with all mips (mip, then face, then rows) and the SH irradiance, validated on load.
+  `RenderResources` reads an environment back through staging textures and an event query
+  (`requestEnvironmentReadback()`/`readEnvironment()`, never waiting unless asked) and creates one from a
+  `BakedEnvironment` without baking.
+- **The `RenderAssetCache` uses it** for environments of image files, with the import key
+  `envbake:<baker version>:<cube>:<specular>:<samples>` (the `EnvironmentDesc` as the baker rounds it). A
+  hit uploads the cube maps and skips the image load; a miss loads the image, bakes, starts a readback and
+  stores the bake once the GPU has finished it, polled in `update()` (so a bake never stalls a frame) and
+  drained by `waitIdle()`. Procedural skies have no file and are not cached. Alternatives rejected:
+  baking on the CPU (minutes for 128 GGX samples per texel at 512²), and a renderer-private cache folder
+  (a second invalidation scheme beside the import cache, invisible to `asset.reimport`).
+- **Live reload of collision meshes.** The `PhysicsAssetResolver` subscribes to `AssetReloadedEvent`,
+  loads the models of its entries again, cooks new geometry, hands it to the Colliders that use it (their
+  bodies are rebuilt) and then destroys the old geometry; Jolt shapes are reference counted, so bodies not
+  yet rebuilt keep theirs. A failed reload keeps the previous geometry.
+- **Live reload of audio clips.** The `AudioWorld` reloads clips loaded through its streamer under the same
+  handle. The mixer reads clip samples (and stream decoders the encoded bytes) without locks, so the data
+  cannot change under a playing voice: when the new data is ready, voices on the clip are released, the old
+  data is retired until the mixer acknowledges a snapshot without them (like unloaded clips), and the
+  `AudioSource`s that were playing start again on the new data. One-shots on the old data stop.
+- **Split.** M7u-4 was split: thumbnails (`ThumbnailRenderer`, `asset.thumbnail`, the PNG cache in
+  `.illusion/thumbnails`) follow in M7u-4b, then the asset browser and `#` search in M7u-5.
+
+### Consequences
+
+- A cached environment at the default `EnvironmentDesc` is about 22 MB on disk (uncompressed half floats,
+  so a hit is a read and a `memcpy`); `assets/environment-load` measures the verify and deserialize path.
+- The first run with a new image or `EnvironmentDesc` pays for a readback of the bake once.
+- Shipped games bake at run time on first start unless the cache is kept between runs; cooking bakes ahead
+  of time (`cookAssets`) needs a GPU in the cook and is not done yet.
+- Restarting looping sounds from the start on a clip reload is audible, which is acceptable for an editing
+  feature; games that reload clips at run time should do it between sounds.

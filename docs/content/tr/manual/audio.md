@@ -120,6 +120,12 @@ while (running)
   (`AudioPlayback::pendingStart`) ve hazır olur olmaz başlar; `stop()` beklemeyi iptal eder.
 - `playOneShot()` ve `clipInfo()` hazır bir clip ister. Yüklenmekte olan bir clip için `loadClip()`
   beklemeden handle'ını döndürür.
+- Canlı yeniden yükleme: `AssetStreamer::reload()` streamer üzerinden yüklenmiş bir clip'in dosyasını
+  bildirdiğinde (bkz. [Değişen dosyaları yeniden yükleme](assets.md#degisen-dosyalar-yeniden-yukleme)),
+  clip arka planda yeniden yüklenir ve handle'ını korur. Yeni veri hazır olana kadar eski veri çalar; sonra
+  onu çalan sesler durur, bunların arasındaki `AudioSource`'lar yeni veriyle yeniden başlar ve eski veri,
+  mixer onu artık kullanmadığında serbest bırakılır. Başarısız bir yeniden yükleme eski veriyi korur.
+  `stats().clipReloads` yeniden yüklemeleri sayar.
 
 ## Kaynaklar
 

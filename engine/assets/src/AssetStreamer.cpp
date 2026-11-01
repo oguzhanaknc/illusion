@@ -1,6 +1,7 @@
 #include "AssetImport.hpp"
 
 #include <illusion/assets/AssetStreamer.hpp>
+#include <illusion/core/Hash.hpp>
 #include <illusion/core/JobSystem.hpp>
 #include <illusion/core/Log.hpp>
 #include <illusion/core/Profiler.hpp>
@@ -27,7 +28,8 @@ enum class Kind : u8
 {
     Image,
     Model,
-    File, // read the file and run a decoder from another module (AssetStreamer::loadFile())
+    File,   // read the file and run a decoder from another module (AssetStreamer::loadFile())
+    Cooked, // look up a cache entry the caller makes itself (AssetStreamer::loadCooked())
 };
 
 // One load moving through the stages: I/O thread (reads) -> job (verify, decode) -> completion.
@@ -38,6 +40,8 @@ struct Request
     std::string path; // normalized
     std::string cachePath;
     ImageImportSettings settings;
+    AssetType cookedType = AssetType::Image;                                      // Kind::Cooked
+    u32 cookedVersion = 0;                                                        // Kind::Cooked
     std::function<bool(std::vector<std::byte>&&, detail::AssetSlotBase&)> decode; // Kind::File
     bool forceImport = false; // the cache entry was stale; import from source
     bool skipCache = false;   // the cache entry could not be used; read the source instead
@@ -46,7 +50,8 @@ struct Request
     std::optional<AssetFile> cached;
     std::vector<std::vector<std::byte>> dependencies; // current contents of cached->dependencies
     std::vector<std::byte> source;
-    std::vector<std::byte> sidecar; // Kind::Image: its import settings sidecar (empty if none)
+    std::vector<std::byte> sidecar; // Kind::Image, Kind::Cooked: its import settings sidecar (empty if none)
+    bool sourceRead = false;        // Kind::Cooked: `source` and `sidecar` hold the current files
 };
 
 struct CacheWrite
@@ -99,6 +104,7 @@ struct AssetStreamer::Impl
     void read(Request& request);
     void process(Request* request); // runs as a job
     void importModel(std::unique_ptr<Request> request);
+    void processCooked(std::unique_ptr<Request> request);
     void finish(std::unique_ptr<Request> request, bool ok);
     void queueLoad(std::unique_ptr<Request> request);
     void queueWrite(const std::string& path, const AssetFile& file);
@@ -215,7 +221,8 @@ void AssetStreamer::Impl::ioLoop()
             {
                 importModel(std::move(load));
             }
-            else if (load->kind != Kind::Model && !load->cached && load->source.empty())
+            else if ((load->kind == Kind::Image || load->kind == Kind::File) && !load->cached &&
+                     load->source.empty())
             {
                 finish(std::move(load), false);
             }
@@ -247,8 +254,13 @@ void AssetStreamer::Impl::read(Request& request)
         }
         return;
     }
-    const AssetType type = request.kind == Kind::Image ? AssetType::Image : AssetType::Model;
-    const u32 version = request.kind == Kind::Image ? kImageFormatVersion : kModelFormatVersion;
+    AssetType type = request.kind == Kind::Image ? AssetType::Image : AssetType::Model;
+    u32 version = request.kind == Kind::Image ? kImageFormatVersion : kModelFormatVersion;
+    if (request.kind == Kind::Cooked)
+    {
+        type = request.cookedType;
+        version = request.cookedVersion;
+    }
     std::vector<std::byte> bytes;
     if (!request.skipCache && !desc.cacheMount.empty() &&
         files->readFile(request.cachePath, bytes) == FileError::None)
@@ -280,6 +292,13 @@ void AssetStreamer::Impl::read(Request& request)
             request.source.clear(); // fails the load with the sidecar's error
         }
     }
+    if (!request.cached && request.kind == Kind::Cooked)
+    {
+        // A miss is not an error: without readable sources the caller's own load reports why.
+        std::string ignored;
+        request.sourceRead = files->readFile(request.path, request.source) == FileError::None &&
+                             detail::readImportSettingsFile(*files, request.path, request.sidecar, &ignored);
+    }
 }
 
 void AssetStreamer::Impl::importModel(std::unique_ptr<Request> request)
@@ -304,6 +323,11 @@ void AssetStreamer::Impl::process(Request* raw)
 {
     ILL_PROFILE_SCOPE_N("Asset process");
     std::unique_ptr<Request> request(raw);
+    if (request->kind == Kind::Cooked)
+    {
+        processCooked(std::move(request));
+        return;
+    }
     if (request->kind == Kind::File)
     {
         const bool ok = request->decode(std::move(request->source), *request->slot);
@@ -384,6 +408,59 @@ void AssetStreamer::Impl::process(Request* raw)
     }
     const bool ok = slot.value.has_value();
     finish(std::move(request), ok);
+}
+
+void AssetStreamer::Impl::processCooked(std::unique_ptr<Request> request)
+{
+    auto& slot = slotOf<CookedAsset>(*request);
+    if (request->cached &&
+        (!desc.verifySources || detail::dependenciesUnchanged(*request->cached, request->dependencies)))
+    {
+        slot.value.emplace().file = std::move(request->cached);
+        cacheHits.fetch_add(1, std::memory_order_relaxed);
+        finish(std::move(request), true);
+        return;
+    }
+    if (request->cached)
+    {
+        // Stale: the entry's dependencies usually are the file and its sidecar, already read for the check.
+        const std::string sidecarPath = importSettingsPath(request->path);
+        bool haveSource = false;
+        bool haveSidecar = false;
+        for (usize i = 0; i < request->dependencies.size(); ++i)
+        {
+            const std::string& path = request->cached->dependencies[i].path;
+            if (path == request->path)
+            {
+                request->source = std::move(request->dependencies[i]);
+                haveSource = true;
+            }
+            else if (path == sidecarPath)
+            {
+                request->sidecar = std::move(request->dependencies[i]);
+                haveSidecar = true;
+            }
+        }
+        if (!haveSource || !haveSidecar)
+        {
+            // Other dependencies: read the file and its sidecar on the I/O thread.
+            request->cached.reset();
+            request->dependencies.clear();
+            request->source.clear();
+            request->sidecar.clear();
+            request->skipCache = true;
+            queueLoad(std::move(request));
+            return;
+        }
+        request->sourceRead = true;
+    }
+    CookedAsset& result = slot.value.emplace();
+    if (request->sourceRead)
+    {
+        result.sources = {AssetDependency{request->path, xxhash64(request->source)},
+                          AssetDependency{importSettingsPath(request->path), xxhash64(request->sidecar)}};
+    }
+    finish(std::move(request), true);
 }
 
 AssetStreamer::AssetStreamer(VirtualFileSystem& files, JobSystem& jobs, AssetStreamerDesc desc)
@@ -472,6 +549,67 @@ AssetHandle<ModelData> AssetStreamer::loadModel(std::string_view virtualPath)
     return AssetHandle<ModelData>(std::move(slot));
 }
 
+AssetHandle<CookedAsset> AssetStreamer::loadCooked(std::string_view virtualPath, std::string_view importKey,
+                                                   AssetType type, u32 version, AssetReloadMode mode)
+{
+    ILL_ASSERT(importKey.find('|') == std::string_view::npos,
+               "loadCooked: the import key must not contain '|'");
+    Impl& impl = *m_impl;
+    const std::optional<std::string> path = VirtualFileSystem::normalizePath(virtualPath);
+    const bool reimport = mode == AssetReloadMode::Reimport;
+    const std::string key = std::format("{}|{}", importKey, path.value_or(std::string(virtualPath)));
+    if (!reimport)
+    {
+        if (auto existing = impl.requests[key].lock())
+        {
+            return AssetHandle<CookedAsset>(
+                std::static_pointer_cast<detail::AssetSlot<CookedAsset>>(existing));
+        }
+    }
+    auto slot = std::make_shared<detail::AssetSlot<CookedAsset>>();
+    slot->id = AssetId::fromPath(virtualPath);
+    if (!reimport)
+    {
+        impl.requests[key] = slot;
+    }
+    if (!path)
+    {
+        slot->state = AssetState::Failed;
+        slot->error = std::format("{}: invalid path", virtualPath);
+        return AssetHandle<CookedAsset>(std::move(slot));
+    }
+    if (impl.desc.cacheMount.empty())
+    {
+        slot->value.emplace(); // no cache: always a miss, and nothing to store
+        slot->state = AssetState::Ready;
+        return AssetHandle<CookedAsset>(std::move(slot));
+    }
+    auto request = std::make_unique<Request>();
+    request->slot = slot;
+    request->kind = Kind::Cooked;
+    request->path = *path;
+    request->cachePath = detail::assetCachePath(impl.desc.cacheMount, *path, importKey);
+    request->cookedType = type;
+    request->cookedVersion = version;
+    request->skipCache = reimport;
+    ++impl.pendingCount;
+    impl.queueLoad(std::move(request));
+    return AssetHandle<CookedAsset>(std::move(slot));
+}
+
+void AssetStreamer::storeCooked(std::string_view virtualPath, std::string_view importKey,
+                                const AssetFile& file)
+{
+    ILL_ASSERT(importKey.find('|') == std::string_view::npos,
+               "storeCooked: the import key must not contain '|'");
+    const std::optional<std::string> path = VirtualFileSystem::normalizePath(virtualPath);
+    if (!path)
+    {
+        return;
+    }
+    m_impl->queueWrite(detail::assetCachePath(m_impl->desc.cacheMount, *path, importKey), file);
+}
+
 std::shared_ptr<detail::AssetSlotBase> AssetStreamer::requestFile(std::string_view virtualPath,
                                                                   std::string_view decoderName,
                                                                   std::shared_ptr<detail::AssetSlotBase> slot,
@@ -543,7 +681,7 @@ bool AssetStreamer::reload(std::string_view virtualPath, AssetReloadMode mode)
     }
     invalidate(*path);
     const AssetId asset = AssetId::fromPath(*path);
-    m_impl->events.publish(AssetReloadedEvent{std::move(*path), asset});
+    m_impl->events.publish(AssetReloadedEvent{std::move(*path), asset, mode});
     return true;
 }
 

@@ -120,6 +120,11 @@ while (running)
   (`AudioPlayback::pendingStart`) and starts as soon as it is ready; `stop()` cancels the wait.
 - `playOneShot()` and `clipInfo()` need a ready clip. `loadClip()` on a clip that is loading returns its
   handle without waiting.
+- Live reload: when `AssetStreamer::reload()` reports the file of a clip loaded through the streamer (see
+  [Reloading changed files](assets.md#reloading-changed-files)), the clip loads again in the background
+  and keeps its handle. The old data plays until the new data is ready; then the voices playing it stop,
+  the `AudioSource`s among them start again on the new data, and the old data is freed once the mixer no
+  longer uses it. A reload that fails keeps the old data. `stats().clipReloads` counts the reloads.
 
 ## Sources
 

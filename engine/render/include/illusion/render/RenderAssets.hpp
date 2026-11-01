@@ -30,6 +30,11 @@
 /// files change in place through RenderResources::updateMaterial(), other assets get new handles and every
 /// resolver resolves its renderers again. Assets no resolver uses are freed by evictUnused(). See
 /// docs/adr/0045-asset-catalog-and-file-watching.md.
+///
+/// Bake cache: environments of image files are baked once and kept in the streamer's import cache
+/// (AssetType::Environment, keyed by the image and its import settings sidecar and by the EnvironmentDesc),
+/// so later runs upload the cube maps without baking. A bake is read back from the GPU and stored a few
+/// frames after it was made; waitIdle() finishes the pending ones.
 
 #include <illusion/core/AssetId.hpp>
 #include <illusion/core/Base.hpp>
@@ -57,15 +62,17 @@ struct RenderAssetCacheDesc
 /// Counters of a RenderAssetCache.
 struct RenderAssetCacheStatistics
 {
-    u32 models = 0;       ///< Models on the GPU.
-    u32 meshes = 0;       ///< Mesh assets ready (built-in meshes and meshes of models).
-    u32 materials = 0;    ///< Material assets ready.
-    u32 textures = 0;     ///< Textures of material files on the GPU.
-    u32 environments = 0; ///< Environments baked.
-    u32 loading = 0;      ///< Assets still loading (first loads, reloads and files waiting to reload).
-    u32 failed = 0;       ///< Assets that failed to load (see RenderAssetCache::error()).
-    u32 reloads = 0;      ///< Reloads finished since construction (see AssetStreamer::reload()).
-    u32 evicted = 0;      ///< Assets freed by RenderAssetCache::evictUnused() since construction.
+    u32 models = 0;        ///< Models on the GPU.
+    u32 meshes = 0;        ///< Mesh assets ready (built-in meshes and meshes of models).
+    u32 materials = 0;     ///< Material assets ready.
+    u32 textures = 0;      ///< Textures of material files on the GPU.
+    u32 environments = 0;  ///< Environments baked.
+    u32 loading = 0;       ///< Assets still loading (first loads, reloads and files waiting to reload).
+    u32 failed = 0;        ///< Assets that failed to load (see RenderAssetCache::error()).
+    u32 reloads = 0;       ///< Reloads finished since construction (see AssetStreamer::reload()).
+    u32 evicted = 0;       ///< Assets freed by RenderAssetCache::evictUnused() since construction.
+    u32 bakeCacheHits = 0; ///< Environments created from the bake cache without baking, since construction.
+    u32 bakes = 0;         ///< Environments baked from their image files, since construction.
 };
 
 /// The assets loaded for the renderer, shared by the RenderAssetResolvers of several Worlds. Assets are

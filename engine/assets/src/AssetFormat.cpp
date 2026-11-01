@@ -336,4 +336,48 @@ std::optional<ModelData> deserializeModel(std::span<const std::byte> bytes)
     return model;
 }
 
+std::vector<std::byte> serializeEnvironment(const BakedEnvironment& environment)
+{
+    std::vector<std::byte> bytes;
+    bytes.reserve((environment.background.size() + environment.specular.size()) * sizeof(u64) + 256);
+    BinaryWriter writer(bytes);
+    writer.write(environment.backgroundSize);
+    writer.write(environment.backgroundMips);
+    writer.write(environment.specularSize);
+    writer.write(environment.specularMips);
+    writer.writeVector(std::span<const u64>(environment.background));
+    writer.writeVector(std::span<const u64>(environment.specular));
+    for (const Vec3& coefficient : environment.irradiance.coefficients)
+    {
+        writer.write(coefficient.x);
+        writer.write(coefficient.y);
+        writer.write(coefficient.z);
+    }
+    return bytes;
+}
+
+std::optional<BakedEnvironment> deserializeEnvironment(std::span<const std::byte> bytes)
+{
+    BinaryReader reader(bytes);
+    BakedEnvironment environment;
+    if (!reader.read(environment.backgroundSize) || !reader.read(environment.backgroundMips) ||
+        !reader.read(environment.specularSize) || !reader.read(environment.specularMips) ||
+        !reader.readVector(environment.background) || !reader.readVector(environment.specular))
+    {
+        return std::nullopt;
+    }
+    for (Vec3& coefficient : environment.irradiance.coefficients)
+    {
+        if (!reader.read(coefficient.x) || !reader.read(coefficient.y) || !reader.read(coefficient.z))
+        {
+            return std::nullopt;
+        }
+    }
+    if (reader.remaining() != 0 || !environment.isValid())
+    {
+        return std::nullopt;
+    }
+    return environment;
+}
+
 } // namespace illusion

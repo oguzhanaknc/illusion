@@ -334,6 +334,10 @@ streamer.reload("game:/textures/ui.png", illusion::AssetReloadMode::Reimport);
 ```
 - A glTF model depends on its buffers and images: reload the model file when one of them changes (the
   editor finds such files in its asset catalog).
+- Besides the renderer, the [`PhysicsAssetResolver`](physics.md#mesh-and-convex-hull-colliders) cooks the
+  collision geometry of a reloaded model again and the [`AudioWorld`](audio.md#loading-in-the-background)
+  loads a reloaded clip again. The event's `mode` tells listeners that the reload was a `Reimport`, so
+  they also rebuild what they keep in the cache themselves (baked environments).
 
 ### Other file types
 
@@ -357,6 +361,40 @@ const illusion::AssetHandle<std::string> credits = streamer.loadFile<std::string
 Requests with the same path and decoder name share a handle, so the name must identify the decoder, its
 settings and its result type. The import cache is not used. A file that cannot be read, is empty or that
 the decoder rejects becomes `Failed` with the reason in `error()`.
+
+### Assets you make yourself
+
+Some assets are made from a file by code the streamer cannot run, for example the renderer's
+environments, which are baked on the GPU. `loadCooked()` and `storeCooked()` keep them in the import
+cache with the same checks as imports: an entry records the content hashes of the file and its import
+settings sidecar and is used only while both are unchanged.
+
+```cpp
+// Look up an asset you make yourself (here: something computed from an image on the GPU).
+const illusion::AssetHandle<illusion::CookedAsset> lookup = streamer.loadCooked(
+    "game:/skies/meadow.hdr", "game.bake:1", illusion::AssetType::Environment,
+    illusion::kEnvironmentFormatVersion);
+// ... once lookup.ready():
+if (lookup.value().file)
+{
+    use(lookup.value().file->payload); // a hit: the sources are unchanged
+}
+else
+{
+    illusion::AssetFile file{illusion::AssetType::Environment, illusion::kEnvironmentFormatVersion,
+                             lookup.value().sources, make()}; // a miss: make it and store it
+    streamer.storeCooked("game:/skies/meadow.hdr", "game.bake:1", file);
+}
+```
+
+- The import key names the maker, its version and its settings (bump the version when the output changes);
+  it must not contain `|`. The entry is stored under the cache mount like any import.
+- A miss is `Ready` without a file and with `sources`, the current hashes to record in the entry. A file
+  that cannot be read misses with no sources (`storeCooked()` ignores entries without dependencies, so
+  nothing is stored and the maker's own load reports the error). Only an invalid path fails.
+- `AssetReloadMode::Reimport` ignores the entry, for a forced rebuild. Without a cache mount every lookup
+  misses at once.
+- The renderer's [bake cache](rendering.md#image-based-lighting) is built on this.
 
 ## Shipping cooked assets
 

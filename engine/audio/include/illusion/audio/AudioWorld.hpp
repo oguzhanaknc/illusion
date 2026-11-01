@@ -50,7 +50,10 @@ struct AudioWorldDesc
     f32 speedOfSound = 343.3f;   ///< In m/s, for the doppler effect.
     /// Loads the clips of AudioSources and of AudioWorld::requestClip() in the background. Null loads
     /// them on the calling thread. The streamer must outlive the AudioWorld, and the game calls its
-    /// update() (which publishes finished loads) before AudioWorld::update().
+    /// update() (which publishes finished loads) before AudioWorld::update(). Clips loaded through it are
+    /// loaded again when AssetStreamer::reload() reports their file: the handle stays the same, voices on the
+    /// old data stop and the AudioSources that played them start again on the new data (the old data stays
+    /// when the reload fails).
     AssetStreamer* streamer = nullptr;
 };
 
@@ -63,6 +66,7 @@ struct AudioStats
     u32 clips = 0;            ///< Loaded clips.
     u32 loadingClips = 0;     ///< Clips loading in the background.
     usize clipBytes = 0;      ///< Memory held by loaded clips.
+    u32 clipReloads = 0;      ///< Streamed clips reloaded after their file changed, since construction.
     u64 mixerAllocations = 0; ///< Blocks the mixer took from the system allocator; constant after start-up.
 };
 

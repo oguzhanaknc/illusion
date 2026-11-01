@@ -334,6 +334,29 @@ world.create(illusion::Transform{}, illusion::SkyLight{}, illusion::RenderSky{en
 - A `RenderAssetResolver` gives a `SkyLight` with an `environment` asset its `RenderSky`; the file
   is baked when it has loaded. `builtin:/sky/procedural` bakes `makeSkyImage()` with the Entity's
   `ProceduralSky`, again whenever its fields change.
+- **Bake cache.** The `RenderAssetCache` keeps the bakes of image files in the streamer's import cache
+  (`AssetType::Environment`, through [`loadCooked()`](assets.md#assets-you-make-yourself)), keyed by the
+  image and its import settings sidecar and by the `EnvironmentDesc`. A later run (or another cache with
+  the same `EnvironmentDesc`) uploads the stored cube maps instead of loading the image and baking it.
+  A bake is read back from the GPU a few frames after it is made and then written; `waitIdle()` finishes
+  the readbacks still pending. A changed image bakes again; a reload in `AssetReloadMode::Reimport` bakes
+  again although nothing changed. `statistics()` counts `bakes` and `bakeCacheHits`. Procedural skies are
+  not cached (they have no file).
+- `requestEnvironmentReadback()` and `readEnvironment()` copy an environment's cube maps back to the CPU
+  as a `BakedEnvironment` without waiting (pass `block = true` in tools and tests), and
+  `createEnvironment(const BakedEnvironment&)` uploads one without baking:
+
+```cpp
+// Bake once, read the result back (here waiting for it), and upload it later without baking.
+const illusion::EnvironmentHandle sky = resources.createEnvironment(image);
+illusion::BakedEnvironment baked;
+if (resources.readEnvironment(resources.requestEnvironmentReadback(sky), baked, true) ==
+    illusion::ReadbackStatus::Ready)
+{
+    const illusion::EnvironmentHandle copy = resources.createEnvironment(baked, "Meadow");
+}
+```
+
 - The renderer uses the first `SkyLight` whose environment is ready. Its Transform rotates the
   environment; `intensity` scales it, and `background = false` keeps the clear colour behind the scene.
 - Without a `SkyLight`, `SceneRendererDesc::ambient` adds uniform ambient light instead.
