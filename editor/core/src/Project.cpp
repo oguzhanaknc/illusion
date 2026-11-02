@@ -14,11 +14,12 @@ namespace illusion::editor
 namespace
 {
 
-constexpr std::array<ProjectMount, 4> kMounts{{
+constexpr std::array<ProjectMount, 5> kMounts{{
     {"assets", "assets"},
     {"settings", "settings"},
     {"modules", "modules"},
     {"cache", ".illusion/cache"},
+    {"thumbnails", ".illusion/thumbnails"},
 }};
 
 Expected<std::string, std::string> readFileText(const std::filesystem::path& path)

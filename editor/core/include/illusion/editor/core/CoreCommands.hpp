@@ -1261,6 +1261,25 @@ struct AssetReimportResult
     std::vector<std::string> assets; ///< The textures and models asked to import again, sorted.
 };
 
+/// Params of `asset.thumbnail`.
+struct AssetThumbnailParams
+{
+    std::string path;              ///< A model, material file, texture or `.hdr` environment in `assets:`.
+    std::optional<bool> refresh{}; ///< Make it again even if the cache has it (default false).
+};
+
+/// Result of `asset.thumbnail`.
+struct AssetThumbnailResult
+{
+    std::string path;      ///< The asset.
+    std::string kind;      ///< "Model", "Material", "Texture" or "Environment".
+    std::string thumbnail; ///< Virtual path of the PNG, e.g. "thumbnails:/0123456789abcdef.png".
+    std::string file;      ///< Absolute path of the PNG (UTF-8).
+    u32 width = 0;         ///< Width in pixels.
+    u32 height = 0;        ///< Height in pixels.
+    bool cached = false;   ///< The PNG was in the cache already (nothing was rendered).
+};
+
 // --- material ----------------------------------------------------------------------------------------------
 
 /// Params of `material.create`.

@@ -1,9 +1,12 @@
+#include "../PathText.hpp"
 #include "../ReflectedObject.hpp"
 #include "CommandSupport.hpp"
 
 #include <illusion/assets/ImportSettings.hpp>
 #include <illusion/assets/MaterialAsset.hpp>
 #include <illusion/editor/core/AssetCatalog.hpp>
+#include <illusion/editor/core/ThumbnailCache.hpp>
+#include <illusion/editor/core/ThumbnailHost.hpp>
 
 #include <algorithm>
 #include <iterator>
@@ -797,6 +800,177 @@ Expected<AssetReimportResult, CommandError> assetReimport(CommandContext& contex
     return result;
 }
 
+// How often a thumbnail is made again because its asset changed while it was made.
+constexpr u32 kMaxThumbnailAttempts = 4;
+
+// Fills the file fields of @p result for the thumbnail at @p thumbnail.
+void setThumbnailFile(CommandContext& context, AssetThumbnailResult& result, std::string thumbnail)
+{
+    std::filesystem::path real;
+    (void)context.editor().files().resolve(thumbnail, real);
+    result.thumbnail = std::move(thumbnail);
+    result.file = pathText(real);
+    result.width = kThumbnailSize;
+    result.height = kThumbnailSize;
+}
+
+// Waits for the thumbnail renderer, then stores the image in the cache. A cache hit is finished at once.
+class ThumbnailTask final : public CommandTask<AssetThumbnailResult>
+{
+public:
+    ThumbnailTask(EditorContext& editor, AssetThumbnailResult result, ThumbnailKind kind, u64 key) noexcept
+        : m_editor(&editor)
+        , m_result(std::move(result))
+        , m_kind(kind)
+        , m_key(key)
+    {
+    }
+
+    ~ThumbnailTask() override
+    {
+        if (m_ticket != 0 && m_editor->thumbnailHost() == m_host)
+        {
+            m_host->cancelThumbnail(m_ticket);
+        }
+    }
+
+    ThumbnailTask(const ThumbnailTask&) = delete;
+    ThumbnailTask& operator=(const ThumbnailTask&) = delete;
+
+    // Asks the renderer for the thumbnail.
+    [[nodiscard]] Expected<void, CommandError> request()
+    {
+        m_host = m_editor->thumbnailHost();
+        if (m_host == nullptr)
+        {
+            return unexpected(
+                CommandError::make(ErrorKind::Unsupported, "thumbnails need the GPU of the editor window"));
+        }
+        Expected<u64, CommandError> ticket =
+            m_host->requestThumbnail(ThumbnailRequest{m_result.path, m_kind});
+        if (!ticket)
+        {
+            return unexpected(std::move(ticket).error());
+        }
+        m_ticket = *ticket;
+        return {};
+    }
+
+    Expected<std::optional<AssetThumbnailResult>, CommandError> update(CommandContext& context,
+                                                                       CommandProgress& progress) override
+    {
+        if (m_result.cached)
+        {
+            return std::optional<AssetThumbnailResult>(std::move(m_result));
+        }
+        if (m_ticket == 0)
+        {
+            if (Expected<void, CommandError> requested = request(); !requested)
+            {
+                return unexpected(std::move(requested).error());
+            }
+        }
+        if (context.editor().thumbnailHost() != m_host)
+        {
+            m_ticket = 0;
+            return unexpected(CommandError::make(ErrorKind::Unsupported, "the thumbnail renderer closed"));
+        }
+        std::optional<Expected<ThumbnailImage, CommandError>> done = m_host->thumbnail(m_ticket);
+        if (!done)
+        {
+            progress.message = "rendering the thumbnail";
+            return std::optional<AssetThumbnailResult>{};
+        }
+        m_ticket = 0;
+        if (!*done)
+        {
+            return unexpected(std::move(*done).error());
+        }
+        // The asset may have changed while the thumbnail was made: make it again then.
+        const u64 key = thumbnailKey(context.editor().assets(), m_result.path);
+        if (key == 0)
+        {
+            return unexpected(
+                CommandError::make(ErrorKind::NotFound, "'" + m_result.path + "' was removed meanwhile"));
+        }
+        if (key != m_key)
+        {
+            m_key = key;
+            if (++m_attempts >= kMaxThumbnailAttempts)
+            {
+                return unexpected(CommandError::make(
+                    ErrorKind::Conflict, "'" + m_result.path + "' keeps changing; try again later"));
+            }
+            progress.message = "the asset changed; rendering again";
+            return std::optional<AssetThumbnailResult>{};
+        }
+        Expected<std::string, CommandError> stored =
+            context.editor().thumbnails().store(m_result.path, m_key, done->value());
+        if (!stored)
+        {
+            return unexpected(std::move(stored).error());
+        }
+        setThumbnailFile(context, m_result, std::move(stored).value());
+        return std::optional<AssetThumbnailResult>(std::move(m_result));
+    }
+
+private:
+    EditorContext* m_editor;
+    AssetThumbnailResult m_result;
+    ThumbnailKind m_kind;
+    u64 m_key;
+    ThumbnailHost* m_host = nullptr;
+    u64 m_ticket = 0; // 0: none requested
+    u32 m_attempts = 0;
+};
+
+Expected<std::unique_ptr<CommandTask<AssetThumbnailResult>>, CommandError>
+assetThumbnail(CommandContext& context, const AssetThumbnailParams& params)
+{
+    if (Expected<void, CommandError> valid = checkAssetPath(context, params.path, "/path", false); !valid)
+    {
+        return unexpected(std::move(valid).error());
+    }
+    const std::optional<ThumbnailKind> kind = thumbnailKindOf(params.path);
+    if (!kind)
+    {
+        return unexpected(CommandError::invalid("/path", "must be a model (.gltf, .glb), a material file "
+                                                         "(.material), a texture (.png, .jpg, .jpeg, .tga, "
+                                                         ".bmp) or an environment (.hdr)"));
+    }
+    Expected<FileStat, CommandError> stat = existing(context, params.path);
+    if (!stat)
+    {
+        return unexpected(std::move(stat).error());
+    }
+    if (stat->isDirectory)
+    {
+        return unexpected(CommandError::invalid("/path", "must be a file, not a folder"));
+    }
+    const u64 key = thumbnailKey(context.editor().assets(), params.path);
+    if (key == 0)
+    {
+        return unexpected(
+            CommandError::make(ErrorKind::NotFound, "'" + params.path + "' is not in the asset catalog yet"));
+    }
+    AssetThumbnailResult result;
+    result.path = params.path;
+    result.kind = std::string(thumbnailKindName(*kind));
+    if (!params.refresh.value_or(false) && context.editor().thumbnails().find(params.path, key))
+    {
+        result.cached = true;
+        setThumbnailFile(context, result, thumbnailPath(key));
+        return std::unique_ptr<CommandTask<AssetThumbnailResult>>(
+            std::make_unique<ThumbnailTask>(context.editor(), std::move(result), *kind, key));
+    }
+    auto task = std::make_unique<ThumbnailTask>(context.editor(), std::move(result), *kind, key);
+    if (Expected<void, CommandError> requested = task->request(); !requested)
+    {
+        return unexpected(std::move(requested).error());
+    }
+    return std::unique_ptr<CommandTask<AssetThumbnailResult>>(std::move(task));
+}
+
 } // namespace
 
 void registerAssetCommands(CommandRegistry& registry)
@@ -916,6 +1090,20 @@ void registerAssetCommands(CommandRegistry& registry)
         .flags = {.idempotent = true},
         .mode = CommandMode::Any,
         .palette = true,
+    });
+    registry.addAsync<&assetThumbnail>({
+        .name = "asset.thumbnail",
+        .title = strings::kCommandAssetThumbnailTitle,
+        .description = strings::kCommandAssetThumbnailDescription,
+        .agentSummary =
+            "Makes (or finds in the cache) a 256x256 PNG preview of a model, material file (on a sphere), "
+            "texture or .hdr environment and returns its path; thumbnails are cached in .illusion/thumbnails "
+            "by content and made again after the asset or what it uses changes. Example: {\"path\": "
+            "\"assets:/models/ship.glb\"}.",
+        .category = "Asset",
+        .icon = "image",
+        .flags = {.readOnly = true, .idempotent = true},
+        .mode = CommandMode::Any,
     });
     registry.add<&assetDependencies>({
         .name = "asset.dependencies",

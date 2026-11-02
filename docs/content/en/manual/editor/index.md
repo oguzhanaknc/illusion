@@ -330,6 +330,35 @@ sidecar next to them. The editor treats the sidecar as part of its asset:
   texture renamed to `.txt`) is refused until they are reset. Sidecars are not valid paths for these
   commands themselves.
 
+### Thumbnails
+
+`asset.thumbnail` makes a 256 x 256 PNG preview of a model (`.gltf`, `.glb`), a material file (on a
+sphere), a texture (`.png`, `.jpg`, `.jpeg`, `.tga`, `.bmp`) or an environment (`.hdr`) and returns where it
+is. It is an async command: it finishes once the thumbnail renderer has made the image, at most one per
+frame.
+
+```json
+{"path": "assets:/models/ship.glb", "kind": "Model", "thumbnail": "thumbnails:/5f0c2a9e7d4b1386.png",
+ "file": "C:/Projects/Game/.illusion/thumbnails/5f0c2a9e7d4b1386.png", "width": 256, "height": 256,
+ "cached": false}
+```
+
+- **Cache.** Thumbnails are PNG files in `.illusion/thumbnails` (the `thumbnails:` mount), named after a
+  key of the asset's contents: its content hash and import settings and those of everything it depends on
+  (a material's textures, a glTF file's buffers and images). A second call returns the file at once with
+  `cached: true`, also after a restart; `refresh: true` makes it again.
+- **Invalidation.** When `asset.changed` reports a file as modified, removed or renamed, the thumbnails of
+  that file and of the files that refer to it are deleted. The key changes with the contents anyway, so a
+  stale image is never returned, and a thumbnail whose asset changes while it is made is made again.
+- **Rendering.** The editor window's `ThumbnailRenderer` (the `ThumbnailHost` of the editor core) draws
+  models and materials in a preview World of its own, lit by a procedural sky and a key light, with a small
+  `SceneRenderer` without shadows, bloom or TAA; an environment is the background of that World, behind a
+  sphere, and uses the bake cache of the viewports. Textures are scaled down on the CPU over a checkerboard.
+  It shares the viewports' asset cache, so live reload reaches it too. Each step costs about 2 ms of a frame
+  and is read back without waiting for the GPU.
+- Without a GPU (`--headless` without a window) only cached thumbnails are available; other calls fail with
+  `unsupported`. Files that do not load fail with `io_error`.
+
 ## Materials
 
 `material.create`, `material.get` and `material.set` read and write `.material` files through the

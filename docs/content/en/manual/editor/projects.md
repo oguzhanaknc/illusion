@@ -15,6 +15,7 @@ MyGame/
   modules/              game module sources (editor only)                      modules:
   .illusion/            per-machine state, git-ignored
     cache/              derived data                                           cache:
+    thumbnails/         asset thumbnails (PNG)                                 thumbnails:
     journal/            crash journals of running and crashed sessions
     autosave/           rotating autosaves of dirty scenes
     trash/              contents of replaced and deleted files, for undo
@@ -49,6 +50,7 @@ Opening a project creates the standard directories that are missing.
 | `settings:` | `settings/` | Read-write |
 | `modules:` | `modules/` | Read-write |
 | `cache:` | `.illusion/cache/` | Read-write |
+| `thumbnails:` | `.illusion/thumbnails/` | Read-write |
 | `builtin:` | Built-in assets (no files) | Read-only |
 | `editor:` | `editor-data/` next to the editor | Read-only |
 

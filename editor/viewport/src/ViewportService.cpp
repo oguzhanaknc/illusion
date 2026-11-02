@@ -17,6 +17,7 @@
 #include <illusion/editor/viewport/EditorCamera.hpp>
 #include <illusion/editor/viewport/PickCandidates.hpp>
 #include <illusion/editor/viewport/ResizePolicy.hpp>
+#include <illusion/editor/viewport/ThumbnailRenderer.hpp>
 #include <illusion/editor/viewport/ViewportService.hpp>
 #include <illusion/editor/viewport/Visualisers.hpp>
 #include <illusion/render/Components.hpp>
@@ -333,6 +334,7 @@ struct ViewportService::Impl
     RenderResources resources;
     RenderAssetCache cache;
     RenderAssetResolver resolver;
+    std::unique_ptr<ThumbnailRenderer> thumbnails; // shares the asset cache
     HierarchyIndex hierarchy;
     u32 assetSubscription = 0;
     std::vector<std::string> changedAssets;    // files of `asset.changed` events not reloaded yet
@@ -1463,6 +1465,7 @@ ViewportService::ViewportService(std::unique_ptr<Impl> impl) noexcept
     : m_impl(std::move(impl))
 {
     m_impl->editor.setViewports(this);
+    m_impl->editor.setThumbnailHost(m_impl->thumbnails.get());
 }
 
 ViewportService::~ViewportService()
@@ -1472,6 +1475,11 @@ ViewportService::~ViewportService()
     {
         impl.editor.setViewports(nullptr);
     }
+    if (impl.editor.thumbnailHost() == impl.thumbnails.get())
+    {
+        impl.editor.setThumbnailHost(nullptr);
+    }
+    impl.thumbnails.reset();
     impl.device.waitIdle();
     impl.cache.waitIdle();
     for (Impl::Viewport& viewport : impl.viewports)
@@ -1497,7 +1505,9 @@ std::unique_ptr<ViewportService> ViewportService::create(RenderDevice& device, E
     auto impl = std::make_unique<Impl>(device, editor, ui);
     impl->readbacks = ReadbackRing::create(device, kReadbackSlots);
     impl->commands = device.device()->createCommandList();
-    if (!impl->readbacks || !impl->commands ||
+    impl->thumbnails =
+        ThumbnailRenderer::create(device, impl->resources, impl->cache, impl->streamer, impl->jobs);
+    if (!impl->readbacks || !impl->commands || !impl->thumbnails ||
         !impl->addViewport(std::string(kSceneId), ViewportKind::Scene, false) ||
         !impl->addViewport(std::string(kGameId), ViewportKind::Game, false))
     {
@@ -1556,6 +1566,7 @@ void ViewportService::render(bool uiShown)
     impl.readReads(false);
     impl.readHovers(false);
     impl.readSnaps(false);
+    impl.thumbnails->update();
     for (Impl::Retired& retired : impl.retired)
     {
         ++retired.frames;
@@ -1590,6 +1601,11 @@ void ViewportService::waitIdle()
 const ViewportServiceStats& ViewportService::stats() const noexcept
 {
     return m_impl->stats;
+}
+
+ThumbnailRenderer& ViewportService::thumbnails() noexcept
+{
+    return *m_impl->thumbnails;
 }
 
 nvrhi::ITexture* ViewportService::target(std::string_view id) const noexcept

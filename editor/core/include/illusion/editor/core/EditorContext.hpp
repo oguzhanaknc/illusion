@@ -22,6 +22,8 @@
 #include <illusion/editor/core/SceneDocument.hpp>
 #include <illusion/editor/core/Selection.hpp>
 #include <illusion/editor/core/SettingsCatalog.hpp>
+#include <illusion/editor/core/ThumbnailCache.hpp>
+#include <illusion/editor/core/ThumbnailHost.hpp>
 #include <illusion/editor/core/UiHost.hpp>
 #include <illusion/editor/core/UndoStack.hpp>
 #include <illusion/editor/core/ViewState.hpp>
@@ -385,6 +387,16 @@ public:
     /// Sets the viewports (nullptr when they go away). They must outlive their registration.
     void setViewports(ViewportHost* viewports) noexcept { m_viewports = viewports; }
 
+    /// The renderer of `asset.thumbnail`, or nullptr (without a GPU).
+    [[nodiscard]] ThumbnailHost* thumbnailHost() const noexcept { return m_thumbnailHost; }
+
+    /// Sets the thumbnail renderer (nullptr when it goes away). It must outlive its registration.
+    void setThumbnailHost(ThumbnailHost* host) noexcept { m_thumbnailHost = host; }
+
+    /// The thumbnails of the open project's assets (closed without a project). Changes posted as
+    /// `asset.changed` remove the thumbnails of the changed assets and of the assets that refer to them.
+    [[nodiscard]] ThumbnailCache& thumbnails() noexcept { return m_thumbnails; }
+
     /// The game runtime the play and module commands use, or nullptr.
     [[nodiscard]] PlayHost* play() const noexcept { return m_play; }
 
@@ -645,6 +657,8 @@ private:
     u64 m_agentSelection = 0;
     UiHost* m_ui = nullptr;
     ViewportHost* m_viewports = nullptr;
+    ThumbnailHost* m_thumbnailHost = nullptr;
+    ThumbnailCache m_thumbnails;
     PlayHost* m_play = nullptr;
     bool m_moduleBuildRunning = false;
     struct PlayWorld;

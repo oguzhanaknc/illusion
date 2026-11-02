@@ -41,6 +41,8 @@ class UiRenderer;
 namespace illusion::editor::viewport
 {
 
+class ThumbnailRenderer;
+
 /// Statistics of the last ViewportService::render().
 struct ViewportServiceStats
 {
@@ -75,6 +77,10 @@ public:
 
     /// Statistics of the last render().
     [[nodiscard]] const ViewportServiceStats& stats() const noexcept;
+
+    /// The thumbnail renderer of `asset.thumbnail`, registered with EditorContext::setThumbnailHost(); it
+    /// shares the viewports' asset cache, so live reload reaches it too, and render() updates it.
+    [[nodiscard]] ThumbnailRenderer& thumbnails() noexcept;
 
     /// The colour texture (RGBA8_UNORM, sRGB-encoded) the UI shows for @p id, for captures; null before the
     /// viewport has a size or for unknown ids. Replaced when the size changes.

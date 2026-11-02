@@ -231,3 +231,48 @@ consumers behind: collision meshes cooked by the `PhysicsAssetResolver` and audi
   of time (`cookAssets`) needs a GPU in the cook and is not done yet.
 - Restarting looping sounds from the start on a clip reload is audible, which is acceptable for an editing
   feature; games that reload clips at run time should do it between sounds.
+
+## Addendum: thumbnails (M7u-4b, 2026-11-01)
+
+### Context
+
+The asset browser (M7u-5), the asset fields of the Inspector and agents need small previews of models,
+materials, textures and environments. Making one needs the GPU and the asset pipeline of the editor window,
+takes longer than a frame for a model that still loads, and is wasted if it is made again on every request or
+after every restart.
+
+### Decision
+
+- **The core asks, the window renders.** `ThumbnailHost` (editor core) is the interface: queue a request,
+  collect its result by ticket, cancel it. `ThumbnailRenderer` in `illusion::editor_viewport` implements it,
+  so the core stays GPU-free (ADR 0030, ADR 0036) and the core tests use a stand-in. The renderer is owned
+  by `ViewportService` and shares its `AssetStreamer` and `RenderAssetCache`: live reload, the import cache
+  and the environment bake cache reach thumbnails without a second invalidation path. Alternative rejected:
+  a renderer in `engine/render`; nothing outside the editor needs thumbnails yet, and the editor-side
+  placement keeps the request queue, the error kinds and the command's lifetime rules together.
+- **One step per frame.** Requests are served in order, one at a time: start loading, wait for the preview
+  World's assets, render it once (256 px RGBA8, no shadows, bloom, TAA or occlusion culling, a procedural sky
+  and a key light; environments as the background behind a sphere), then read it back through a
+  one-slot `ReadbackRing` without waiting. At most one render, or one CPU scale of a texture
+  (`textureThumbnail()`: the smallest mip at least 256 px, box filtered over a checkerboard; float images
+  tonemapped), happens per frame, which keeps a step near the planned 2 ms. A request waits at most 3,600
+  frames for its assets and fails with `timeout` rather than block the queue.
+- **PNG cache keyed by content.** `ThumbnailCache` writes `<key>.png` to the new `thumbnails:` mount
+  (`.illusion/thumbnails`, per machine and git-ignored like `cache:`). The key is xxHash64 of the thumbnail
+  version, size, extension, and the path, content hash and import settings hash of the asset and,
+  recursively, of its catalog dependencies, so a texture edit changes the key of the materials that use it.
+  A stale file is never served; `asset.changed` additionally deletes the files the cache made or found for
+  changed, removed or renamed assets and their referrers. `asset.thumbnail` checks the key again when the
+  image arrives and renders again (at most four times) if the asset changed meanwhile.
+- **The command.** `asset.thumbnail` is async (never undoable, read-only for permissions): a cache hit
+  finishes on its first update, a miss without a renderer fails with `unsupported`, a file that does not
+  load fails with `io_error`. It returns the virtual and the absolute path of the PNG; the image itself is
+  not embedded, because a browser shows hundreds of them from disk.
+
+### Consequences
+
+- Thumbnails from earlier sessions that nobody asked for again stay in `.illusion/thumbnails` until the
+  folder is cleaned; each is 5 to 30 KB.
+- A thumbnail shows what the editor's renderer draws on the machine that made it; golden tests compare
+  them with a tolerance like the other editor images.
+- Headless editors without a window serve only cached thumbnails.

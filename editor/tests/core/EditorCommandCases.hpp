@@ -26,6 +26,7 @@ inline constexpr CommandCase kCommandCases[] = {
     {"asset.reimport", R"({"path":"assets:/textures/red.png"})"},
     {"asset.set_import_settings",
      R"({"path":"assets:/textures/red.png","value":{"texture":{"maxSize":64}}})"},
+    {"asset.thumbnail", R"({"path":"assets:/materials/red.material"})"},
     {"camera.bookmark_go", R"({"slot":1,"animate":false})"},
     {"camera.bookmark_set", R"({"slot":1})"},
     {"clipboard.copy", R"({"entities":["/Game/Board"]})"},
