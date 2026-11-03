@@ -442,6 +442,28 @@ private:
     std::unique_ptr<State> m_state;
 };
 
+/// The Asset Browser panel: the project's `assets:` mount as a navigable grid and list with thumbnails, a
+/// folder tree and favourites, search, sorting and a kind filter; file operations run the asset commands,
+/// and the import settings of a selected texture or model are edited inline.
+class AssetBrowser
+{
+public:
+    AssetBrowser();
+    ~AssetBrowser();
+    AssetBrowser(const AssetBrowser&) = delete;
+    AssetBrowser& operator=(const AssetBrowser&) = delete;
+
+    /// Draws the panel's content.
+    void draw(Impl& shell);
+
+    /// Navigates to the folder of @p path and selects it (the palette's "#" search).
+    void reveal(std::string_view path);
+
+private:
+    struct State;
+    std::unique_ptr<State> m_state;
+};
+
 /// The workspace-relative form of the absolute project directory @p path ("" if it is outside).
 [[nodiscard]] std::string workspaceRelative(const EditorContext& editor, std::string_view path);
 

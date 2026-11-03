@@ -146,6 +146,7 @@ nav:
           - Scene Viewport: manual/editor/viewport.md
           - Transform Tools: manual/editor/transform-tools.md
           - Play Mode: manual/editor/play-mode.md
+          - Asset Browser: manual/editor/assets.md
           - Project Modules: manual/editor/project-modules.md
           - Preferences: manual/editor/preferences.md
           - Projects: manual/editor/projects.md

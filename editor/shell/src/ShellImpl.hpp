@@ -103,6 +103,7 @@ class History;
 class Agents;
 class PreferencesPage;
 class Projects;
+class AssetBrowser;
 
 } // namespace illusion::editor::shell::detail
 
@@ -198,6 +199,7 @@ struct EditorShell::Impl
     std::unique_ptr<detail::Agents> agentsPanel;
     std::unique_ptr<detail::PreferencesPage> preferences;
     std::unique_ptr<detail::Projects> projects;
+    std::unique_ptr<detail::AssetBrowser> assetBrowser;
 
     /// The widget kit of this frame.
     [[nodiscard]] ui::UiKit kit();

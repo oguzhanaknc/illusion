@@ -518,6 +518,12 @@ std::optional<usize> breadcrumbs(UiKit& kit, std::string_view id, std::span<cons
 bool assetTile(UiKit& kit, std::string_view id, const Icon& icon, const char* name, const char* badgeText,
                bool selected, f32 size)
 {
+    return assetTileImage(kit, id, 0, icon, name, badgeText, selected, size);
+}
+
+bool assetTileImage(UiKit& kit, std::string_view id, u64 texture, const Icon& icon, const char* name,
+                    const char* badgeText, bool selected, f32 size)
+{
     ImGuiWindow* window = ImGui::GetCurrentWindow();
     if (window->SkipItems)
     {
@@ -549,8 +555,17 @@ bool assetTile(UiKit& kit, std::string_view id, const Icon& icon, const char* na
         drawList->AddRect(bb.Min, bb.Max, tokenColor(kit, ThemeToken::Accent), style.ChildRounding,
                           std::max(1.0f, kit.scale));
     }
-    drawIcon(drawList, kit, icon, bb.Min, ImVec2(bb.Max.x, bb.Min.y + side), std::round(side * 0.45f),
-             tokenColor(kit, ThemeToken::TextSecondary));
+    if (texture != 0)
+    {
+        drawList->AddImageRounded(static_cast<ImTextureID>(texture), bb.Min,
+                                  ImVec2(bb.Max.x, bb.Min.y + side), ImVec2(0.0f, 0.0f), ImVec2(1.0f, 1.0f),
+                                  IM_COL32_WHITE, style.ChildRounding);
+    }
+    else
+    {
+        drawIcon(drawList, kit, icon, bb.Min, ImVec2(bb.Max.x, bb.Min.y + side), std::round(side * 0.45f),
+                 tokenColor(kit, ThemeToken::TextSecondary));
+    }
     if (badgeText != nullptr && badgeText[0] != '\0')
     {
         const ImVec2 textSize = ImGui::CalcTextSize(badgeText);

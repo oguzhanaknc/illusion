@@ -290,6 +290,7 @@ EditorShell::Impl::Impl(EditorShell& owner, EditorContext& editorContext, ui::Ui
     , agentsPanel(std::make_unique<detail::Agents>())
     , preferences(std::make_unique<detail::PreferencesPage>())
     , projects(std::make_unique<detail::Projects>())
+    , assetBrowser(std::make_unique<detail::AssetBrowser>())
 {
     context.makeCurrent();
     if (options.editorData != nullptr)
@@ -1083,6 +1084,9 @@ void EditorShell::draw(f64 now, f64 deltaSeconds)
                 break;
             case Panel::Game:
                 impl.gameView->draw(impl);
+                break;
+            case Panel::Assets:
+                impl.assetBrowser->draw(impl);
                 break;
             case Panel::Console:
                 impl.console->draw(impl);

@@ -4,6 +4,7 @@
 
 illusion_add_editor_library(illusion_editor_shell STATIC
     src/Agents.cpp
+    src/AssetBrowser.cpp
     src/Console.cpp
     src/EditorShell.cpp
     src/GameInput.cpp
@@ -20,5 +21,6 @@ add_library(illusion::editor_shell ALIAS illusion_editor_shell)
 target_include_directories(illusion_editor_shell PUBLIC
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>)
 target_link_libraries(illusion_editor_shell PUBLIC
-    illusion::editor_core illusion::editor_ui illusion::editor_rpc illusion::editor_strings)
+    illusion::editor_core illusion::editor_ui illusion::editor_rpc illusion::editor_strings
+    PRIVATE illusion::assets)
 illusion_configure_target(illusion_editor_shell)

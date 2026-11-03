@@ -754,11 +754,14 @@ struct EditorFixture
         editor->setViewports(&viewports);
         editor->setThumbnailHost(&thumbnails);
         editor->setPlay(&play);
-        // editor.open_source starts the stand-in of FakeCMake.cpp, which records what it was asked to open.
+        // editor.open_source and editor.reveal start the stand-in of FakeCMake.cpp, which records what it
+        // was asked to open.
         editor::Preferences preferences = editor->preferences();
         preferences.codeEditor = "\"" ILLUSION_FAKE_CMAKE "\" --record \"" +
                                  (directory.path / "opened.txt").generic_string() +
                                  "\" {file}:{line}:{column}";
+        preferences.fileBrowser = "\"" ILLUSION_FAKE_CMAKE "\" --record \"" +
+                                  (directory.path / "revealed.txt").generic_string() + "\" {file}";
         REQUIRE(editor->setPreferences(std::move(preferences)).hasValue());
         current = editor.get();
         const Expected<void, editor::CommandError> opened = editor->openProject(directory.path / "project");

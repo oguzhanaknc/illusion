@@ -859,6 +859,11 @@ void reflectCoreCommandTypes(StructRegistry& structs)
         reflectStruct<OpenSourceResult>("editor.OpenSourceResult", 1, structs)
             .field("program", &OpenSourceResult::program)
             .field("arguments", &OpenSourceResult::arguments);
+        reflectStruct<RevealParams>("editor.RevealParams", 1, structs).field("path", &RevealParams::path);
+        reflectStruct<RevealResult>("editor.RevealResult", 1, structs)
+            .field("file", &RevealResult::file)
+            .field("program", &RevealResult::program)
+            .field("arguments", &RevealResult::arguments);
         reflectStruct<ModuleReloadParams>("editor.ModuleReloadParams", 1, structs)
             .field("name", &ModuleReloadParams::name);
         reflectStruct<ModuleReloadResult>("editor.ModuleReloadResult", 1, structs)

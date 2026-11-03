@@ -319,6 +319,7 @@ AssetCatalogChanges AssetCatalog::refresh(const VirtualFileSystem& files)
     }
     m_scanned = true;
     finish(changes);
+    m_version += changes.empty() ? 0 : 1;
     return changes;
 }
 
@@ -400,6 +401,7 @@ AssetCatalogChanges AssetCatalog::apply(const VirtualFileSystem& files, std::spa
         }
     }
     finish(result);
+    m_version += result.empty() ? 0 : 1;
     return result;
 }
 
@@ -411,6 +413,7 @@ void AssetCatalog::clear() noexcept
     m_removedHashes.clear();
     m_sidecars.clear();
     m_scanned = false;
+    ++m_version;
 }
 
 const AssetRecord* AssetCatalog::find(std::string_view path) const

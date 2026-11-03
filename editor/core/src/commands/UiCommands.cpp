@@ -214,10 +214,10 @@ Expected<NoResult, CommandError> uiPalette(CommandContext& context, const UiPale
     {
         return unexpected(std::move(ui).error());
     }
-    if (params.mode && static_cast<usize>(*params.mode) > static_cast<usize>(PaletteMode::Settings))
+    if (params.mode && static_cast<usize>(*params.mode) > static_cast<usize>(PaletteMode::Assets))
     {
         return unexpected(
-            CommandError::invalid("/mode", "must be \"commands\", \"entities\" or \"settings\""));
+            CommandError::invalid("/mode", "must be \"commands\", \"entities\", \"settings\" or \"assets\""));
     }
     if (params.query && params.query->size() > 256)
     {
@@ -227,7 +227,7 @@ Expected<NoResult, CommandError> uiPalette(CommandContext& context, const UiPale
     {
         return NoResult{};
     }
-    constexpr std::string_view kModes[] = {"commands", "entities", "settings"};
+    constexpr std::string_view kModes[] = {"commands", "entities", "settings", "assets"};
     const std::string_view mode = kModes[static_cast<usize>(params.mode.value_or(PaletteMode::Commands))];
     if (Expected<void, CommandError> opened = (*ui)->openPalette(mode, params.query.value_or("")); !opened)
     {

@@ -15,6 +15,7 @@
 #include <illusion/editor/core/CrashJournal.hpp>
 #include <illusion/editor/core/EntityIndex.hpp>
 #include <illusion/editor/core/Gizmo.hpp>
+#include <illusion/editor/core/ImageHost.hpp>
 #include <illusion/editor/core/PlayHost.hpp>
 #include <illusion/editor/core/Preferences.hpp>
 #include <illusion/editor/core/Project.hpp>
@@ -325,6 +326,10 @@ public:
     /// found here or by endFrame() are posted as the `asset.changed` event by endFrame().
     [[nodiscard]] const AssetCatalog& assets();
 
+    /// The catalog as last brought up to date (by assets() or endFrame()), without scanning. The UI reads
+    /// it every frame; watch version() to know when to rebuild what it shows.
+    [[nodiscard]] const AssetCatalog& assetCatalog() const noexcept { return m_assets; }
+
     /// Asks for @p path (an asset file) to be imported again even if neither it nor its import settings
     /// changed: the next endFrame() posts it in the `reimported` list of `asset.changed`, which viewports
     /// answer with AssetReloadMode::Reimport.
@@ -392,6 +397,12 @@ public:
 
     /// Sets the thumbnail renderer (nullptr when it goes away). It must outlive its registration.
     void setThumbnailHost(ThumbnailHost* host) noexcept { m_thumbnailHost = host; }
+
+    /// The images of asset thumbnails the UI shows, or nullptr (without a GPU).
+    [[nodiscard]] ImageHost* imageHost() const noexcept { return m_imageHost; }
+
+    /// Sets the image host (nullptr when it goes away). It must outlive its registration.
+    void setImageHost(ImageHost* host) noexcept { m_imageHost = host; }
 
     /// The thumbnails of the open project's assets (closed without a project). Changes posted as
     /// `asset.changed` remove the thumbnails of the changed assets and of the assets that refer to them.
@@ -658,6 +669,7 @@ private:
     UiHost* m_ui = nullptr;
     ViewportHost* m_viewports = nullptr;
     ThumbnailHost* m_thumbnailHost = nullptr;
+    ImageHost* m_imageHost = nullptr;
     ThumbnailCache m_thumbnails;
     PlayHost* m_play = nullptr;
     bool m_moduleBuildRunning = false;

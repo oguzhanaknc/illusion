@@ -68,6 +68,8 @@ void reflectPreferences(StructRegistry& structs)
                    {.unit = Unit::Seconds, .min = 0.0, .max = 3600.0})
             .field("autosaveCopies", &Preferences::autosaveCopies, {.min = 1.0, .max = 20.0})
             .field("codeEditor", &Preferences::codeEditor)
+            .field("fileBrowser", &Preferences::fileBrowser)
+            .field("assetFavourites", &Preferences::assetFavourites)
             .field("recentProjects", &Preferences::recentProjects)
             .field("layout", &Preferences::layout);
     });
@@ -139,6 +141,27 @@ Expected<void, std::string> validatePreferences(const Preferences& preferences)
     if (preferences.autosaveCopies < 1 || preferences.autosaveCopies > 20)
     {
         return unexpected(std::string("/autosaveCopies must be between 1 and 20"));
+    }
+    if (preferences.assetFavourites.size() > kMaxAssetFavourites)
+    {
+        return unexpected("/assetFavourites holds at most " + std::to_string(kMaxAssetFavourites) +
+                          " assets");
+    }
+    for (usize i = 0; i < preferences.assetFavourites.size(); ++i)
+    {
+        const std::string& favourite = preferences.assetFavourites[i];
+        const std::string pointer = "/assetFavourites/" + std::to_string(i);
+        if (!favourite.starts_with("assets:/") || favourite.find("..") != std::string::npos)
+        {
+            return unexpected(pointer + " must be an asset path such as \"assets:/models/ship.glb\"");
+        }
+        for (usize j = 0; j < i; ++j)
+        {
+            if (preferences.assetFavourites[j] == favourite)
+            {
+                return unexpected(pointer + " is a duplicate");
+            }
+        }
     }
     if (preferences.recentProjects.size() > kMaxRecentProjects)
     {

@@ -410,8 +410,14 @@ Plan: `docs/plans/m7-editor.md` (sub-milestones, command API, localization, them
   spheres, textures (`textureThumbnail()` on the CPU) and HDRIs (through the bake cache); GPU golden images
   of each kind, frame budget, live reload and failure tests; `thumbnail/key` and `thumbnail/texture`
   benchmarks
-- M7u-5: the asset browser panel (ADR 0045) with the import settings inspector; `#` asset search in the
-  command palette (from M7l)
+- M7u-5: ✅ The asset browser panel (ADR 0045): the project's `assets:` mount as a grid or list with
+  thumbnails (the `asset.thumbnail` PNGs shown through the new `ImageHost`), a folder tree and favourites
+  (the `assetFavourites` preference), breadcrumbs with back/forward/up, search, sorting and a kind filter,
+  multi-select, and a context menu whose operations run the asset commands (Open, Reimport, Rename, Move,
+  Delete, Reveal, Copy path) plus New folder; the import settings inspector edits a texture's color space,
+  mipmaps and max size or a model's scale with Apply/Revert; `#` in the command palette searches assets
+  (`PaletteMode::Assets`); the `editor.reveal` command and the `fileBrowser` preference reveal a file in the
+  system's file manager
 - M7v: Prefabs with overrides and nesting (ADR 0046)
 - M7w: Engine feature panels: rendering, physics, audio mixer, input actions, gamepad tester, profiler,
   diagnostics; gamepad navigation of the editor window through `GamepadSystem` (from M7l)

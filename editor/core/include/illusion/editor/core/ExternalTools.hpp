@@ -28,4 +28,17 @@ codeEditorArguments(std::string_view command, std::string_view file, u32 line, u
 /// Windows, `open` on macOS and `xdg-open` elsewhere.
 [[nodiscard]] std::vector<std::string> defaultOpenArguments(std::string_view file);
 
+/// The program and arguments that reveal @p file (or the directory itself, when @p isDirectory) in the
+/// system's file manager, with the file selected where the platform can: the file browser command line
+/// @p command (Preferences::fileBrowser), e.g. `explorer /select,{file}`. Split and substituted like
+/// codeEditorArguments(); an empty @p command uses defaultRevealArguments(). The error says why the
+/// command is unusable (empty program, or an unclosed quote).
+[[nodiscard]] Expected<std::vector<std::string>, std::string>
+revealArguments(std::string_view command, std::string_view file, bool isDirectory);
+
+/// The program and arguments that reveal @p file with the system's file manager, the file selected where
+/// the platform can (`explorer /select,` on Windows, `open -R` on macOS, the containing folder on Linux).
+/// @p isDirectory opens the directory itself instead.
+[[nodiscard]] std::vector<std::string> defaultRevealArguments(std::string_view file, bool isDirectory);
+
 } // namespace illusion::editor

@@ -1401,6 +1401,7 @@ enum class PaletteMode : u8
     Commands, ///< Commands and actions.
     Entities, ///< Entities of the scene ("Go to Anything").
     Settings, ///< Preference pages.
+    Assets,   ///< Assets and folders of the project ("#").
 };
 
 /// Params of `ui.palette`.
@@ -1610,6 +1611,21 @@ struct OpenSourceParams
 /// Result of `editor.open_source`.
 struct OpenSourceResult
 {
+    std::string program{};                ///< The program that was started.
+    std::vector<std::string> arguments{}; ///< Its arguments.
+};
+
+/// Params of `editor.reveal`.
+struct RevealParams
+{
+    /// The file or folder: a virtual path such as "assets:/models/ship.glb", or an absolute path.
+    std::string path{};
+};
+
+/// Result of `editor.reveal`.
+struct RevealResult
+{
+    std::string file{};                   ///< The native path that was revealed (UTF-8).
     std::string program{};                ///< The program that was started.
     std::vector<std::string> arguments{}; ///< Its arguments.
 };
@@ -1835,7 +1851,7 @@ struct illusion::EnumReflection<illusion::editor::PaletteMode>
     /// The values.
     static constexpr std::array kValues{illusion::EnumValue{"commands", 0},
                                         illusion::EnumValue{"entities", 1},
-                                        illusion::EnumValue{"settings", 2}};
+                                        illusion::EnumValue{"settings", 2}, illusion::EnumValue{"assets", 3}};
 };
 
 /// Names of UiNotice values in JSON.

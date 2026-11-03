@@ -1,4 +1,4 @@
-// Commands that start External Tools of the preferences (ADR 0043): editor.open_source.
+// Commands that start External Tools of the preferences (ADR 0043): editor.open_source and editor.reveal.
 
 #include "../PathText.hpp"
 #include "CommandSupport.hpp"
@@ -48,6 +48,40 @@ Expected<std::filesystem::path, CommandError> sourceFile(CommandContext& context
     return file.make_preferred();
 }
 
+// Starts @p program with @p arguments detached, unless this is a dry run.
+Expected<void, CommandError> spawnDetached(CommandContext& context, const std::filesystem::path& program,
+                                           const std::vector<std::string>& arguments)
+{
+    if (context.dryRun())
+    {
+        return {};
+    }
+    Expected<Process, std::string> started =
+        Process::spawn(ProcessOptions{.executable = program, .arguments = arguments, .detached = true});
+    if (!started)
+    {
+        return unexpected(CommandError::make(ErrorKind::IoError, std::move(started).error()));
+    }
+    return {};
+}
+
+// The program behind @p arguments[0] (a bare name is looked up through PATH).
+Expected<std::filesystem::path, CommandError> programOf(const std::vector<std::string>& arguments)
+{
+    std::filesystem::path program(std::u8string(arguments[0].begin(), arguments[0].end()));
+    if (!program.has_parent_path())
+    {
+        const std::optional<std::filesystem::path> found = findExecutable(arguments[0]);
+        if (!found)
+        {
+            return unexpected(
+                CommandError::make(ErrorKind::NotFound, "program '" + arguments[0] + "' is not on the PATH"));
+        }
+        program = *found;
+    }
+    return program;
+}
+
 Expected<OpenSourceResult, CommandError> editorOpenSource(CommandContext& context,
                                                           const OpenSourceParams& params)
 {
@@ -74,29 +108,71 @@ Expected<OpenSourceResult, CommandError> editorOpenSource(CommandContext& contex
         }
         arguments = std::move(*parsed);
     }
-    // A bare program name is looked up through PATH.
-    std::filesystem::path program(std::u8string(arguments[0].begin(), arguments[0].end()));
-    if (!program.has_parent_path())
+    Expected<std::filesystem::path, CommandError> program = programOf(arguments);
+    if (!program)
     {
-        const std::optional<std::filesystem::path> found = findExecutable(arguments[0]);
-        if (!found)
+        return unexpected(std::move(program).error());
+    }
+    OpenSourceResult result{.program = detail::pathText(*program),
+                            .arguments = std::vector<std::string>(arguments.begin() + 1, arguments.end())};
+    if (Expected<void, CommandError> started = spawnDetached(context, *program, result.arguments); !started)
+    {
+        return unexpected(std::move(started).error());
+    }
+    return result;
+}
+
+Expected<RevealResult, CommandError> editorReveal(CommandContext& context, const RevealParams& params)
+{
+    if (params.path.empty())
+    {
+        return unexpected(CommandError::invalid("/path", "must name a file or folder"));
+    }
+    std::filesystem::path file;
+    if (const usize mount = params.path.find(":/"); mount != std::string::npos && mount > 1)
+    {
+        if (context.editor().files().resolve(params.path, file) != FileError::None)
         {
             return unexpected(
-                CommandError::make(ErrorKind::NotFound, "program '" + arguments[0] + "' is not on the PATH"));
+                CommandError::invalid("/path", "must be a file of a project mount or an absolute path"));
         }
-        program = *found;
     }
-    OpenSourceResult result{.program = detail::pathText(program),
-                            .arguments = std::vector<std::string>(arguments.begin() + 1, arguments.end())};
-    if (context.dryRun())
+    else
     {
-        return result;
+        file = std::filesystem::path(std::u8string(params.path.begin(), params.path.end()));
+        if (!file.is_absolute())
+        {
+            return unexpected(CommandError::invalid("/path",
+                                                    "must be a virtual path such as "
+                                                    "\"assets:/models/ship.glb\" or an absolute path"));
+        }
     }
-    Expected<Process, std::string> started = Process::spawn(
-        ProcessOptions{.executable = program, .arguments = result.arguments, .detached = true});
-    if (!started)
+    std::error_code code;
+    const bool isDirectory = std::filesystem::is_directory(file, code);
+    if (!isDirectory && !std::filesystem::is_regular_file(file, code))
     {
-        return unexpected(CommandError::make(ErrorKind::IoError, std::move(started).error()));
+        return unexpected(CommandError::make(ErrorKind::NotFound, "'" + params.path + "' does not exist"));
+    }
+    file = file.make_preferred();
+    const std::string fileText = detail::pathText(file);
+    const std::string& browser = context.editor().preferences().fileBrowser;
+    Expected<std::vector<std::string>, std::string> parsed = revealArguments(browser, fileText, isDirectory);
+    if (!parsed)
+    {
+        return unexpected(
+            CommandError::make(ErrorKind::PreconditionFailed, "preferences: " + parsed.error()));
+    }
+    Expected<std::filesystem::path, CommandError> program = programOf(*parsed);
+    if (!program)
+    {
+        return unexpected(std::move(program).error());
+    }
+    RevealResult result{.file = fileText,
+                        .program = detail::pathText(*program),
+                        .arguments = std::vector<std::string>(parsed->begin() + 1, parsed->end())};
+    if (Expected<void, CommandError> started = spawnDetached(context, *program, result.arguments); !started)
+    {
+        return unexpected(std::move(started).error());
     }
     return result;
 }
@@ -116,6 +192,20 @@ void registerToolCommands(CommandRegistry& registry)
             "started. Example: {\"path\": \"modules:/tetris/tetris.cpp\", \"line\": 42, \"column\": 9}.",
         .category = "Editor",
         .icon = "code",
+        .flags = {.idempotent = true},
+        .permission = PermissionClass::System,
+    });
+    registry.add<&editorReveal>({
+        .name = "editor.reveal",
+        .title = strings::kCommandEditorRevealTitle,
+        .description = strings::kCommandEditorRevealDescription,
+        .agentSummary =
+            "Reveals a file or folder in the system's file manager, with the file selected where the "
+            "platform can (the fileBrowser preference, a command line with {file}; the system default when "
+            "none is set). Takes a virtual path or an absolute path; returns the file, the program and the "
+            "arguments it started. Example: {\"path\": \"assets:/models/ship.glb\"}.",
+        .category = "Editor",
+        .icon = "folder_open",
         .flags = {.idempotent = true},
         .permission = PermissionClass::System,
     });

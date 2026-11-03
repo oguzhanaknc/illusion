@@ -108,6 +108,7 @@ TEST_CASE("preferences round-trip through their file and reject invalid values")
     preferences.uiScale = 1.5f;
     preferences.shortcuts = {{"edit.duplicate", "Shift+D"}};
     preferences.recentProjects = {"C:/projects/tetris"};
+    preferences.assetFavourites = {"assets:/scenes/main.scene"};
     const Expected<Preferences, std::string> read = readPreferences(writePreferences(preferences));
     REQUIRE_MESSAGE(read.hasValue(), (read ? std::string() : read.error()));
     CHECK(read->theme == "light");
@@ -115,6 +116,7 @@ TEST_CASE("preferences round-trip through their file and reject invalid values")
     REQUIRE(read->shortcuts.size() == 1);
     CHECK(read->shortcuts.front().chord == "Shift+D");
     CHECK(read->recentProjects == preferences.recentProjects);
+    CHECK(read->assetFavourites == preferences.assetFavourites);
 
     CHECK_FALSE(readPreferences("not json").hasValue());
     CHECK_FALSE(readPreferences(R"({"format":"illusion.settings","version":1,"data":{}})").hasValue());
@@ -140,6 +142,11 @@ TEST_CASE("preferences round-trip through their file and reject invalid values")
     CHECK(invalid([](Preferences& p) { p.layout.clear(); }));
     CHECK(invalid([](Preferences& p) { p.recentProjects.assign(kMaxRecentProjects + 1, "x"); }));
     CHECK(invalid([](Preferences& p) { p.viewportNavigation = "maya"; }));
+    CHECK(invalid([](Preferences& p) { p.assetFavourites = {"modules:/game/game.cpp"}; }));
+    CHECK(invalid([](Preferences& p) { p.assetFavourites = {"assets:/../secrets.txt"}; }));
+    CHECK(invalid([](Preferences& p) { p.assetFavourites = {"scenes/main.scene"}; }));
+    CHECK(invalid([](Preferences& p) { p.assetFavourites = {"assets:/a", "assets:/a"}; }));
+    CHECK(invalid([](Preferences& p) { p.assetFavourites.assign(kMaxAssetFavourites + 1, "assets:/a"); }));
 }
 
 TEST_CASE("viewport navigation follows the keymap preset unless a preset is named")

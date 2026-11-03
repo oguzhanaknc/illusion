@@ -139,6 +139,11 @@ std::optional<usize> breadcrumbs(UiKit& kit, std::string_view id, std::span<cons
 bool assetTile(UiKit& kit, std::string_view id, const Icon& icon, const char* name, const char* badge,
                bool selected, f32 size = 88.0f);
 
+/// As assetTile(), but shows @p texture (a UI texture id from UiRenderer::registerTexture(); 0 shows
+/// @p icon) clipped to the tile.
+bool assetTileImage(UiKit& kit, std::string_view id, u64 texture, const Icon& icon, const char* name,
+                    const char* badge, bool selected, f32 size = 88.0f);
+
 /// A small rounded label in the colour of @p token.
 void badge(UiKit& kit, const char* text, ThemeToken token);
 

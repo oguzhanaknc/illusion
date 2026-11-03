@@ -17,7 +17,7 @@ constexpr PanelInfo kPanels[kPanelCount] = {
     {"panel.inspector", s::kPanelInspector, "tune", true, ""},
     {"panel.scene", s::kPanelScene, "view_in_ar", true, ""},
     {"panel.game", s::kPanelGame, "sports_esports", true, ""},
-    {"panel.assets", s::kPanelAssets, "folder", true, "M7u"},
+    {"panel.assets", s::kPanelAssets, "folder", true, ""},
     {"panel.console", s::kPanelConsole, "terminal", true, ""},
     {"panel.history", s::kPanelHistory, "history", true, ""},
     {"panel.ai_activity", s::kPanelAiActivity, "smart_toy", true, ""},
