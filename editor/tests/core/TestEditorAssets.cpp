@@ -505,3 +505,33 @@ TEST_CASE("asset.import copies external files into assets and undo removes them"
     CHECK(editor.files().readFile("assets:/textures/red.png", redBytes) == FileError::None);
     CHECK(std::string_view(reinterpret_cast<const char*>(redBytes.data()), redBytes.size()) == "replacement");
 }
+
+TEST_CASE("asset.relink points every reference at a new path, and undo puts them back")
+{
+    EditorFixture fixture;
+    fixture.buildScene();
+    fixture.addAssets();
+    EditorContext& editor = *fixture.editor;
+    ok(editor, "material.create", R"({"path":"assets:/materials/crimson.material"})");
+
+    // References to red.material live in other.scene and in the open scene's /Light.
+    const JsonDocument relinked =
+        ok(editor, "asset.relink",
+           R"({"from":"assets:/materials/red.material","to":"assets:/materials/crimson.material"})");
+    CHECK(relinked.root().find("references").asU64() == 2);
+    CHECK(relinked.root().pointer("/updated/0").asString() == "assets:/scenes/other.scene");
+    CHECK(read(editor, "assets:/scenes/other.scene").find("crimson.material") != std::string::npos);
+    const JsonDocument light = ok(editor, "component.get", R"({"entity":"/Light","type":"test.Look"})");
+    CHECK(light.root().pointer("/value/material").asString() == "assets:/materials/crimson.material");
+
+    ok(editor, "history.undo");
+    const JsonDocument restored = ok(editor, "component.get", R"({"entity":"/Light","type":"test.Look"})");
+    CHECK(restored.root().pointer("/value/material").asString() == "assets:/materials/red.material");
+
+    CHECK(fails(editor, "asset.relink",
+                R"({"from":"assets:/materials/red.material","to":"assets:/materials/red.material"})")
+              .kind == ErrorKind::ValidationFailed);
+    CHECK(fails(editor, "asset.relink",
+                R"({"from":"assets:/materials/red.material","to":"assets:/materials/missing.material"})")
+              .kind == ErrorKind::NotFound);
+}

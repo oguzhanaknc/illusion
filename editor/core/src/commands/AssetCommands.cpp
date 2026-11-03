@@ -660,6 +660,94 @@ Expected<AssetImportResult, CommandError> assetImport(CommandContext& context,
     return result;
 }
 
+Expected<AssetRelinkResult, CommandError> assetRelink(CommandContext& context,
+                                                      const AssetRelinkParams& params)
+{
+    if (Expected<void, CommandError> valid = checkAssetPath(context, params.from, "/from", false); !valid)
+    {
+        return unexpected(std::move(valid).error());
+    }
+    if (Expected<void, CommandError> valid = checkAssetPath(context, params.to, "/to", false); !valid)
+    {
+        return unexpected(std::move(valid).error());
+    }
+    if (params.from == params.to)
+    {
+        return unexpected(CommandError::invalid("/to", "must differ from the path being relinked"));
+    }
+    if (Expected<void, CommandError> valid = notImportSettings(params.from, "/from"); !valid)
+    {
+        return unexpected(std::move(valid).error());
+    }
+    if (Expected<void, CommandError> valid = notImportSettings(params.to, "/to"); !valid)
+    {
+        return unexpected(std::move(valid).error());
+    }
+    if (Expected<FileStat, CommandError> stat = existing(context, params.to); !stat)
+    {
+        return unexpected(std::move(stat).error());
+    }
+    if (Expected<void, CommandError> allowed = notOpenScene(context, params.from, "relinked"); !allowed)
+    {
+        return unexpected(std::move(allowed).error());
+    }
+    EditorContext& editor = context.editor();
+    const ReferenceIndex& index = editor.references();
+    warnProblems(context, index);
+    const std::vector<std::string> referring = index.filesReferring(params.from, editor.document().path());
+    AssetRelinkResult result;
+    result.from = params.from;
+    result.to = params.to;
+    for (const std::string& file : referring)
+    {
+        const std::vector<AssetReference>* held = index.referencesIn(file);
+        result.references +=
+            static_cast<u32>(std::count_if(held->begin(), held->end(), [&](const AssetReference& r) {
+                return refersTo(r.asset, params.from);
+            }));
+        std::string text;
+        if (const FileError error = editor.files().readText(file, text); error != FileError::None)
+        {
+            return unexpected(
+                CommandError::make(ErrorKind::IoError,
+                                   "cannot read '" + file + "' (" + std::string(fileErrorName(error)) + ")"));
+        }
+        const std::string extension = lowerExtension(file);
+        Expected<std::optional<std::string>, std::string> rewritten =
+            extension == kSceneExtension ? rewriteSceneReferences(text, params.from, params.to)
+            : extension == kMaterialAssetExtension
+                ? rewriteMaterialReferences(text, params.from, params.to)
+                : rewriteSettingsFileReferences(text, params.from, params.to);
+        if (!rewritten)
+        {
+            return unexpected(CommandError::make(ErrorKind::Internal, "cannot update the references in '" +
+                                                                          file + "': " + rewritten.error()));
+        }
+        if (!*rewritten)
+        {
+            continue;
+        }
+        if (Expected<bool, CommandError> written = context.edit().writeFile(file, **rewritten); !written)
+        {
+            return unexpected(std::move(written).error());
+        }
+        result.updated.push_back(file);
+    }
+    Expected<u32, CommandError> open = moveWorldReferences(context, params.from, params.to);
+    if (!open)
+    {
+        return unexpected(std::move(open).error());
+    }
+    result.references += *open;
+    std::sort(result.updated.begin(), result.updated.end());
+    if (*open > 0)
+    {
+        context.warn("references in the open scene now point to " + params.to +
+                     "; save the scene to keep them");
+    }
+    return result;
+}
+
 Expected<AssetReferencesResult, CommandError> assetReferences(CommandContext& context,
                                                               const FilePathParams& params)
 {
@@ -1135,6 +1223,19 @@ void registerAssetCommands(CommandRegistry& registry)
             "\"assets:/textures\"}.",
         .category = "Asset",
         .icon = "download",
+        .flags = {.undoable = true},
+        .permission = PermissionClass::Files,
+    });
+    registry.add<&assetRelink>({
+        .name = "asset.relink",
+        .title = strings::kCommandAssetRelinkTitle,
+        .description = strings::kCommandAssetRelinkDescription,
+        .agentSummary =
+            "Rewrites every reference to one asset path so it points to another, without moving the file "
+            "(for a rename made outside the editor), as one undo step. Example: {\"from\": "
+            "\"assets:/old.png\", \"to\": \"assets:/textures/new.png\"}.",
+        .category = "Asset",
+        .icon = "link",
         .flags = {.undoable = true},
         .permission = PermissionClass::Files,
     });

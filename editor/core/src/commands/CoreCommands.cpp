@@ -672,6 +672,14 @@ void reflectCoreCommandTypes(StructRegistry& structs)
             .field("overwrite", &AssetImportParams::overwrite);
         reflectStruct<AssetImportResult>("editor.AssetImportResult", 1, structs)
             .field("imported", &AssetImportResult::imported);
+        reflectStruct<AssetRelinkParams>("editor.AssetRelinkParams", 1, structs)
+            .field("from", &AssetRelinkParams::from)
+            .field("to", &AssetRelinkParams::to);
+        reflectStruct<AssetRelinkResult>("editor.AssetRelinkResult", 1, structs)
+            .field("from", &AssetRelinkResult::from)
+            .field("to", &AssetRelinkResult::to)
+            .field("references", &AssetRelinkResult::references)
+            .field("updated", &AssetRelinkResult::updated);
         reflectStruct<AssetReferencesResult>("editor.AssetReferencesResult", 1, structs)
             .field("references", &AssetReferencesResult::references);
         reflectStruct<AssetDependenciesResult>("editor.AssetDependenciesResult", 1, structs)

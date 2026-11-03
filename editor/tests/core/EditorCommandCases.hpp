@@ -25,6 +25,7 @@ inline constexpr CommandCase kCommandCases[] = {
     {"asset.move", R"({"from":"assets:/materials/red.material","to":"assets:/materials/crimson.material"})"},
     {"asset.references", R"({"path":"assets:/materials/red.material"})"},
     {"asset.reimport", R"({"path":"assets:/textures/red.png"})"},
+    {"asset.relink", R"({"from":"assets:/materials/red.material","to":"assets:/scenes/other.scene"})"},
     {"asset.set_import_settings",
      R"({"path":"assets:/textures/red.png","value":{"texture":{"maxSize":64}}})"},
     {"asset.thumbnail", R"({"path":"assets:/materials/red.material"})"},

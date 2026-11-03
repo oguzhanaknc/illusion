@@ -121,6 +121,8 @@
     "editor.command.asset.references.title": {"text": "Find references", "comment": "Title of the command asset.references"},
     "editor.command.asset.reimport.description": {"text": "Imports an asset again, even if it did not change.", "comment": "Tooltip of the command asset.reimport"},
     "editor.command.asset.reimport.title": {"text": "Reimport", "comment": "Title of the command asset.reimport"},
+    "editor.command.asset.relink.description": {"text": "Points every reference to an asset at another path, without moving the file.", "comment": "Tooltip of the command asset.relink"},
+    "editor.command.asset.relink.title": {"text": "Relink references", "comment": "Title of the command asset.relink"},
     "editor.command.asset.set_import_settings.description": {"text": "Changes how a texture or model is imported.", "comment": "Tooltip of the command asset.set_import_settings"},
     "editor.command.asset.set_import_settings.title": {"text": "Set import settings", "comment": "Title of the command asset.set_import_settings"},
     "editor.command.asset.thumbnail.description": {"text": "Makes a preview image of a model, material, texture or environment.", "comment": "Tooltip of the command asset.thumbnail"},

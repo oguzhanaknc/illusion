@@ -1231,6 +1231,22 @@ struct AssetImportResult
     std::vector<std::string> imported; ///< The new virtual paths, in the order they were imported.
 };
 
+/// Params of `asset.relink`.
+struct AssetRelinkParams
+{
+    std::string from; ///< The old (usually missing) path the references point to.
+    std::string to;   ///< The new path the references should point to.
+};
+
+/// Result of `asset.relink`.
+struct AssetRelinkResult
+{
+    std::string from;                 ///< Old path.
+    std::string to;                   ///< New path.
+    u32 references = 0;               ///< References that now point to the new path.
+    std::vector<std::string> updated; ///< Scene and material files rewritten, sorted (not the open scene).
+};
+
 /// Result of `asset.references`.
 struct AssetReferencesResult
 {
