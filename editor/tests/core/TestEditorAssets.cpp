@@ -454,3 +454,54 @@ TEST_CASE("files are indexed whatever the case of their extension")
     CHECK(found.root().pointer("/references/0/source").asString() == "assets:/Level.SCENE");
     CHECK(ok(editor, "asset.list", R"({"kind":"Scene"})").root().find("assets").size() == 1);
 }
+
+TEST_CASE("asset.import copies external files into assets and undo removes them")
+{
+    EditorFixture fixture;
+    fixture.buildScene();
+    fixture.addAssets();
+    EditorContext& editor = *fixture.editor;
+
+    // A file outside the project.
+    const std::filesystem::path wood = fixture.directory.path / "wood.png";
+    std::ofstream(wood, std::ios::binary) << "external png bytes";
+    const std::string woodJson = "\"" + wood.generic_string() + "\"";
+    const std::string missing = (fixture.directory.path / "missing.txt").generic_string();
+
+    // Validation: an empty list, a relative path and a missing file are rejected.
+    CHECK(fails(editor, "asset.import", R"({"files":[]})").kind == ErrorKind::ValidationFailed);
+    CHECK(fails(editor, "asset.import", R"({"files":["relative/wood.png"]})").kind ==
+          ErrorKind::ValidationFailed);
+    CHECK(
+        fails(editor, "asset.import", "{\"files\":[\"" + missing + R"("],"destination":"assets:/textures"})")
+            .kind == ErrorKind::NotFound);
+    CHECK(fails(editor, "asset.import",
+                "{\"files\":[" + woodJson + R"(],"destination":"assets:/materials/red.material"})")
+              .kind == ErrorKind::ValidationFailed);
+
+    // Importing copies the bytes, keeping the file's name.
+    const JsonDocument imported =
+        ok(editor, "asset.import", "{\"files\":[" + woodJson + R"(],"destination":"assets:/textures"})");
+    CHECK(imported.root().find("imported").size() == 1);
+    CHECK(imported.root().pointer("/imported/0").asString() == "assets:/textures/wood.png");
+    std::vector<std::byte> bytes;
+    CHECK(editor.files().readFile("assets:/textures/wood.png", bytes) == FileError::None);
+    CHECK(std::string_view(reinterpret_cast<const char*>(bytes.data()), bytes.size()) ==
+          "external png bytes");
+
+    // Undo removes the imported file.
+    ok(editor, "history.undo");
+    CHECK_FALSE(editor.files().exists("assets:/textures/wood.png"));
+
+    // A name that already exists is refused unless overwrite replaces it.
+    const std::filesystem::path red = fixture.directory.path / "red.png";
+    std::ofstream(red, std::ios::binary) << "replacement";
+    const std::string redJson = "\"" + red.generic_string() + "\"";
+    CHECK(fails(editor, "asset.import", "{\"files\":[" + redJson + R"(],"destination":"assets:/textures"})")
+              .kind == ErrorKind::AlreadyExists);
+    ok(editor, "asset.import",
+       "{\"files\":[" + redJson + R"(],"destination":"assets:/textures","overwrite":true})");
+    std::vector<std::byte> redBytes;
+    CHECK(editor.files().readFile("assets:/textures/red.png", redBytes) == FileError::None);
+    CHECK(std::string_view(reinterpret_cast<const char*>(redBytes.data()), redBytes.size()) == "replacement");
+}

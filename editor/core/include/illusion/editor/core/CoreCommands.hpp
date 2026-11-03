@@ -1216,6 +1216,21 @@ struct AssetDeleteResult
     std::vector<AssetReference> dangling{}; ///< References left pointing at it (only with force).
 };
 
+/// Params of `asset.import`.
+struct AssetImportParams
+{
+    /// Absolute paths of the external files to copy into the project (OS file drops are absolute paths).
+    std::vector<std::string> files;
+    std::optional<std::string> destination{}; ///< Target folder (default "assets:/").
+    std::optional<bool> overwrite{};          ///< Replace a file of the same name (default false).
+};
+
+/// Result of `asset.import`.
+struct AssetImportResult
+{
+    std::vector<std::string> imported; ///< The new virtual paths, in the order they were imported.
+};
+
 /// Result of `asset.references`.
 struct AssetReferencesResult
 {

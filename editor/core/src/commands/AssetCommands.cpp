@@ -9,6 +9,7 @@
 #include <illusion/editor/core/ThumbnailHost.hpp>
 
 #include <algorithm>
+#include <fstream>
 #include <iterator>
 #include <tuple>
 
@@ -571,6 +572,94 @@ Expected<AssetDeleteResult, CommandError> assetDelete(CommandContext& context,
     return AssetDeleteResult{params.path, std::move(references)};
 }
 
+// The bytes of the external file at @p path (an absolute path outside the project mounts).
+Expected<std::vector<std::byte>, CommandError> readExternal(const std::filesystem::path& path)
+{
+    std::error_code code;
+    if (!std::filesystem::is_regular_file(path, code))
+    {
+        return unexpected(
+            CommandError::make(ErrorKind::NotFound, "file '" + detail::pathText(path) + "' does not exist"));
+    }
+    std::ifstream in(path, std::ios::binary | std::ios::ate);
+    if (!in)
+    {
+        return unexpected(
+            CommandError::make(ErrorKind::IoError, "cannot read '" + detail::pathText(path) + "'"));
+    }
+    const std::streamsize size = in.tellg();
+    std::vector<std::byte> bytes(static_cast<usize>(std::max<std::streamsize>(size, 0)));
+    if (size > 0)
+    {
+        in.seekg(0);
+        in.read(reinterpret_cast<char*>(bytes.data()), size);
+        if (!in)
+        {
+            return unexpected(
+                CommandError::make(ErrorKind::IoError, "cannot read '" + detail::pathText(path) + "'"));
+        }
+    }
+    return bytes;
+}
+
+Expected<AssetImportResult, CommandError> assetImport(CommandContext& context,
+                                                      const AssetImportParams& params)
+{
+    if (params.files.empty())
+    {
+        return unexpected(CommandError::invalid("/files", "must name at least one file to import"));
+    }
+    const std::string destination = params.destination.value_or(std::string(kAssetsRoot));
+    if (Expected<void, CommandError> valid = checkAssetPath(context, destination, "/destination", true);
+        !valid)
+    {
+        return unexpected(std::move(valid).error());
+    }
+    if (Expected<FileStat, CommandError> stat = existing(context, destination); !stat)
+    {
+        return unexpected(std::move(stat).error());
+    }
+    else if (!stat->isDirectory)
+    {
+        return unexpected(
+            CommandError::invalid("/destination", "must be a folder, e.g. \"assets:/textures\""));
+    }
+    AssetImportResult result;
+    result.imported.reserve(params.files.size());
+    for (usize i = 0; i < params.files.size(); ++i)
+    {
+        const std::string& source = params.files[i];
+        const std::filesystem::path file(std::u8string(source.begin(), source.end()));
+        if (source.empty() || !file.is_absolute())
+        {
+            return unexpected(CommandError::invalid("/files/" + std::to_string(i),
+                                                    "must be an absolute path of a file on this machine"));
+        }
+        const std::string name = detail::pathText(file.filename());
+        if (name.empty() || name == "." || name == "..")
+        {
+            return unexpected(CommandError::invalid("/files/" + std::to_string(i), "names no file"));
+        }
+        const std::string target = joinPath(destination, name);
+        if (context.editor().files().exists(target) && !params.overwrite.value_or(false))
+        {
+            return unexpected(CommandError::make(
+                ErrorKind::AlreadyExists, "'" + target + "' exists already; pass overwrite to replace it"));
+        }
+        Expected<std::vector<std::byte>, CommandError> bytes = readExternal(file);
+        if (!bytes)
+        {
+            return unexpected(std::move(bytes).error());
+        }
+        if (Expected<bool, CommandError> written = context.edit().writeFile(target, *bytes); !written)
+        {
+            return unexpected(std::move(written).error());
+        }
+        result.imported.push_back(target);
+    }
+    return result;
+}
+
 Expected<AssetReferencesResult, CommandError> assetReferences(CommandContext& context,
                                                               const FilePathParams& params)
 {
@@ -1033,6 +1122,20 @@ void registerAssetCommands(CommandRegistry& registry)
         .category = "Asset",
         .icon = "delete",
         .flags = {.destructive = true, .undoable = true},
+        .permission = PermissionClass::Files,
+    });
+    registry.add<&assetImport>({
+        .name = "asset.import",
+        .title = strings::kCommandAssetImportTitle,
+        .description = strings::kCommandAssetImportDescription,
+        .agentSummary =
+            "Copies external files (absolute paths, e.g. an OS file drop) into a folder of the assets: "
+            "mount, "
+            "as one undo step. Example: {\"files\": [\"C:/downloads/wood.png\"], \"destination\": "
+            "\"assets:/textures\"}.",
+        .category = "Asset",
+        .icon = "download",
+        .flags = {.undoable = true},
         .permission = PermissionClass::Files,
     });
     registry.add<&assetReferences>({

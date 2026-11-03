@@ -666,6 +666,12 @@ void reflectCoreCommandTypes(StructRegistry& structs)
         reflectStruct<AssetDeleteResult>("editor.AssetDeleteResult", 1, structs)
             .field("path", &AssetDeleteResult::path)
             .field("dangling", &AssetDeleteResult::dangling);
+        reflectStruct<AssetImportParams>("editor.AssetImportParams", 1, structs)
+            .field("files", &AssetImportParams::files)
+            .field("destination", &AssetImportParams::destination)
+            .field("overwrite", &AssetImportParams::overwrite);
+        reflectStruct<AssetImportResult>("editor.AssetImportResult", 1, structs)
+            .field("imported", &AssetImportResult::imported);
         reflectStruct<AssetReferencesResult>("editor.AssetReferencesResult", 1, structs)
             .field("references", &AssetReferencesResult::references);
         reflectStruct<AssetDependenciesResult>("editor.AssetDependenciesResult", 1, structs)

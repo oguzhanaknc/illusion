@@ -19,6 +19,7 @@ inline constexpr CommandCase kCommandCases[] = {
     {"asset.delete", R"({"path":"assets:/textures/red.png","force":true})"},
     {"asset.dependencies", R"({"path":"assets:/scenes/main.scene"})"},
     {"asset.find_missing", "{}"},
+    {"asset.import", R"({"files":["@fixture/import-source.txt"],"destination":"assets:/textures"})"},
     {"asset.info", R"({"path":"assets:/materials/red.material"})"},
     {"asset.list", R"({"path":"assets:/","recursive":true,"kind":"Material"})"},
     {"asset.move", R"({"from":"assets:/materials/red.material","to":"assets:/materials/crimson.material"})"},

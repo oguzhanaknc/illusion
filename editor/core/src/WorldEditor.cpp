@@ -1297,6 +1297,50 @@ Expected<bool, CommandError> WorldEditor::writeFile(std::string_view path, std::
     return !before->has_value();
 }
 
+Expected<bool, CommandError> WorldEditor::writeFile(std::string_view path, std::span<const std::byte> bytes)
+{
+    if (m_files == nullptr)
+    {
+        return unexpected(CommandError::make(ErrorKind::PreconditionFailed, "no project is open"));
+    }
+    FileStat stat;
+    const FileError statError = m_files->stat(path, stat);
+    if (statError != FileError::None && statError != FileError::NotFound)
+    {
+        return unexpected(fileError(statError, path));
+    }
+    if (statError == FileError::None && stat.isDirectory)
+    {
+        return unexpected(
+            CommandError::make(ErrorKind::PreconditionFailed, "'" + std::string(path) + "' is a directory"));
+    }
+    std::filesystem::path real;
+    if (const FileError error = m_files->resolve(path, real); error != FileError::None)
+    {
+        return unexpected(fileError(error, path));
+    }
+    if (Expected<void, CommandError> parents = createParents(path); !parents)
+    {
+        return unexpected(std::move(parents).error());
+    }
+    Expected<std::optional<std::string>, CommandError> before = storeBlob(path);
+    if (!before)
+    {
+        return unexpected(std::move(before).error());
+    }
+    if (const FileError error = m_files->writeFile(path, bytes); error != FileError::None)
+    {
+        return unexpected(fileError(error, path));
+    }
+    Expected<std::optional<std::string>, CommandError> after = storeBlob(path);
+    if (!after)
+    {
+        return unexpected(std::move(after).error());
+    }
+    record(FileChange{FileChange::Kind::Replace, std::string(path), {}, *before, *after});
+    return !before->has_value();
+}
+
 Expected<void, CommandError> WorldEditor::moveFile(std::string_view from, std::string_view to)
 {
     if (m_files == nullptr)

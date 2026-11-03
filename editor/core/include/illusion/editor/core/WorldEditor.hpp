@@ -140,6 +140,10 @@ public:
     /// Writes a UTF-8 text file. Returns true if it was created, false if it replaced a file.
     [[nodiscard]] Expected<bool, CommandError> writeFile(std::string_view path, std::string_view text);
 
+    /// Writes a binary file (any bytes). Returns true if it was created, false if it replaced a file.
+    [[nodiscard]] Expected<bool, CommandError> writeFile(std::string_view path,
+                                                         std::span<const std::byte> bytes);
+
     /// Moves or renames a file or directory.
     [[nodiscard]] Expected<void, CommandError> moveFile(std::string_view from, std::string_view to);
 

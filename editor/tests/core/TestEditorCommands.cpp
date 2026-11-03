@@ -32,6 +32,8 @@ void prepare(EditorFixture& fixture)
     std::ofstream out(journal, std::ios::binary);
     out << R"({"type":"session","session":"00000000000000ab","format":1})" << '\n'
         << R"({"type":"base","scene":"assets:/scenes/main.scene"})" << '\n';
+    // A file outside the project, for asset.import (whose params name it with the @fixture token).
+    std::ofstream(fixture.directory.path / "import-source.txt") << "imported bytes";
 }
 
 struct State
@@ -85,6 +87,20 @@ std::string withDryRun(std::string_view params)
                           : R"({"dryRun":true,)" + std::string(params.substr(1));
 }
 
+// Replaces the @fixture token with the fixture's directory, for commands whose params name a file outside
+// the project (asset.import).
+std::string expand(std::string_view params, const std::filesystem::path& directory)
+{
+    std::string text(params);
+    const std::string path = directory.generic_string();
+    for (usize at = text.find("@fixture"); at != std::string::npos;
+         at = text.find("@fixture", at + path.size()))
+    {
+        text.replace(at, 8, path);
+    }
+    return text;
+}
+
 JsonDocument schemaOf(const CommandDescriptor& command, bool result)
 {
     JsonMutDocument doc;
@@ -125,7 +141,7 @@ TEST_CASE("every core command has a test case")
         cases.emplace(entry.name);
     }
     CHECK(registered == cases);
-    CHECK(registered.size() == 157);
+    CHECK(registered.size() == 158);
 }
 
 TEST_CASE("every command succeeds on the fixture and its params and result match their schemas")
@@ -144,7 +160,8 @@ TEST_CASE("every command succeeds on the fixture and its params and result match
         const std::vector<ValueError> paramErrors =
             validateJson(schemaOf(command, false).root(), params.root());
         CHECK_MESSAGE(paramErrors.empty(), describeErrors(paramErrors));
-        const JsonDocument result = ok(*fixture.editor, entry.name, entry.params);
+        const JsonDocument result =
+            ok(*fixture.editor, entry.name, expand(entry.params, fixture.directory.path));
         const std::vector<ValueError> resultErrors =
             validateJson(schemaOf(command, true).root(), result.root());
         CHECK_MESSAGE(resultErrors.empty(), describeErrors(resultErrors));
@@ -163,7 +180,8 @@ TEST_CASE("dry runs validate and change nothing")
             ok(*fixture.editor, setup);
         }
         const State before = capture(fixture);
-        const JsonDocument result = ok(*fixture.editor, entry.name, withDryRun(entry.params));
+        const JsonDocument result =
+            ok(*fixture.editor, entry.name, expand(withDryRun(entry.params), fixture.directory.path));
         CHECK(result.root().pointer("/_editor/dryRun").asBool() == true);
         const State after = capture(fixture);
         CHECK(after.scene == before.scene);
