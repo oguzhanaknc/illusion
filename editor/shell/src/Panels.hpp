@@ -459,6 +459,9 @@ public:
     /// Navigates to the folder of @p path and selects it (the palette's "#" search).
     void reveal(std::string_view path);
 
+    /// The folder shown now (the destination of OS file drops), e.g. "assets:/models".
+    [[nodiscard]] std::string_view currentFolder() const noexcept;
+
 private:
     struct State;
     std::unique_ptr<State> m_state;

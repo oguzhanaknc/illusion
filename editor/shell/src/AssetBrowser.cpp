@@ -1055,6 +1055,11 @@ void AssetBrowser::reveal(std::string_view path)
     st.inspected.clear();
 }
 
+std::string_view AssetBrowser::currentFolder() const noexcept
+{
+    return m_state->folder;
+}
+
 void AssetBrowser::draw(Impl& shell)
 {
     State& st = *m_state;

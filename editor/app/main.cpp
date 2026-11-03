@@ -26,6 +26,7 @@
 #include <illusion/editor/ui/UiPlatformBackend.hpp>
 #include <illusion/editor/viewport/ViewportService.hpp>
 #include <illusion/physics/PhysicsComponents.hpp>
+#include <illusion/platform/Events.hpp>
 #include <illusion/platform/FileSystem.hpp>
 #include <illusion/platform/Platform.hpp>
 #include <illusion/platform/Process.hpp>
@@ -385,6 +386,16 @@ int runWindowed(const Arguments& arguments, EditorContext& editor, PlaySession& 
     {
         server.setPermissions(*arguments.permissions);
     }
+    // Files dropped on the window are imported into the asset browser's current folder.
+    const Subscription drops = events.subscribe<FilesDroppedEvent>([&](const FilesDroppedEvent& event) {
+        std::vector<std::string> paths;
+        paths.reserve(event.count);
+        for (u32 i = 0; i < event.count; ++i)
+        {
+            paths.emplace_back(window.droppedPath(event.first + i));
+        }
+        ui.shell->importDroppedFiles(paths);
+    });
     FrameClock clock;
     u64 frames = 0;
     while (!window.shouldClose() && !ui.shell->quitRequested() && !server.quitRequested())
