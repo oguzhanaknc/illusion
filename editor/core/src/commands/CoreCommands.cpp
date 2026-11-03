@@ -680,6 +680,15 @@ void reflectCoreCommandTypes(StructRegistry& structs)
             .field("to", &AssetRelinkResult::to)
             .field("references", &AssetRelinkResult::references)
             .field("updated", &AssetRelinkResult::updated);
+        reflectStruct<AssetCookResult>("editor.AssetCookResult", 1, structs)
+            .field("images", &AssetCookResult::images)
+            .field("models", &AssetCookResult::models)
+            .field("materials", &AssetCookResult::materials)
+            .field("errors", &AssetCookResult::errors);
+        reflectStruct<AssetPackParams>("editor.AssetPackParams", 1, structs)
+            .field("path", &AssetPackParams::path);
+        reflectStruct<AssetPackResult>("editor.AssetPackResult", 1, structs)
+            .field("path", &AssetPackResult::path);
         reflectStruct<AssetReferencesResult>("editor.AssetReferencesResult", 1, structs)
             .field("references", &AssetReferencesResult::references);
         reflectStruct<AssetDependenciesResult>("editor.AssetDependenciesResult", 1, structs)

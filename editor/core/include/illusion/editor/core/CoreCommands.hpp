@@ -1247,6 +1247,28 @@ struct AssetRelinkResult
     std::vector<std::string> updated; ///< Scene and material files rewritten, sorted (not the open scene).
 };
 
+/// Result of `asset.cook`.
+struct AssetCookResult
+{
+    u32 images = 0;                  ///< Images cooked.
+    u32 models = 0;                  ///< glTF models cooked (with the images they use).
+    u32 materials = 0;               ///< Material files checked.
+    std::vector<std::string> errors; ///< One message per file that failed.
+};
+
+/// Params of `asset.pack`.
+struct AssetPackParams
+{
+    std::string
+        path; ///< Target `.illpak` (a project path such as "settings:/game.illpak", or an absolute path).
+};
+
+/// Result of `asset.pack`.
+struct AssetPackResult
+{
+    std::string path; ///< The `.illpak` that was written.
+};
+
 /// Result of `asset.references`.
 struct AssetReferencesResult
 {

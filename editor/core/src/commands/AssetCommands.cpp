@@ -2,15 +2,18 @@
 #include "../ReflectedObject.hpp"
 #include "CommandSupport.hpp"
 
+#include <illusion/assets/AssetCooker.hpp>
 #include <illusion/assets/ImportSettings.hpp>
 #include <illusion/assets/MaterialAsset.hpp>
 #include <illusion/editor/core/AssetCatalog.hpp>
 #include <illusion/editor/core/ThumbnailCache.hpp>
 #include <illusion/editor/core/ThumbnailHost.hpp>
+#include <illusion/platform/Archive.hpp>
 
 #include <algorithm>
 #include <fstream>
 #include <iterator>
+#include <random>
 #include <tuple>
 
 namespace illusion::editor::detail
@@ -748,6 +751,81 @@ Expected<AssetRelinkResult, CommandError> assetRelink(CommandContext& context,
     return result;
 }
 
+Expected<AssetCookResult, CommandError> assetCook(CommandContext& context, const NoParams&)
+{
+    if (Expected<void, CommandError> open = requireProject(context); !open)
+    {
+        return unexpected(std::move(open).error());
+    }
+    const CookResult cooked = cookAssets(context.editor().files(), "assets:/", "cache:/");
+    AssetCookResult result;
+    result.images = cooked.images;
+    result.models = cooked.models;
+    result.materials = cooked.materials;
+    result.errors = cooked.errors;
+    for (const std::string& error : result.errors)
+    {
+        context.warn(error);
+    }
+    return result;
+}
+
+Expected<AssetPackResult, CommandError> assetPack(CommandContext& context, const AssetPackParams& params)
+{
+    if (Expected<void, CommandError> open = requireProject(context); !open)
+    {
+        return unexpected(std::move(open).error());
+    }
+    if (params.path.empty())
+    {
+        return unexpected(CommandError::invalid("/path", "must name the target .illpak"));
+    }
+    std::filesystem::path assets;
+    if (context.editor().files().resolve("assets:/", assets) != FileError::None)
+    {
+        return unexpected(CommandError::make(ErrorKind::IoError, "cannot resolve assets:/"));
+    }
+    std::filesystem::path target;
+    if (params.path.find(":/") != std::string::npos)
+    {
+        if (context.editor().files().resolve(params.path, target) != FileError::None)
+        {
+            return unexpected(CommandError::invalid("/path",
+                                                    "must be a project path such as "
+                                                    "\"settings:/game.illpak\" or an absolute path"));
+        }
+    }
+    else
+    {
+        target = std::filesystem::path(std::u8string(params.path.begin(), params.path.end()));
+        if (!target.is_absolute())
+        {
+            return unexpected(CommandError::invalid("/path",
+                                                    "must be a project path such as "
+                                                    "\"settings:/game.illpak\" or an absolute path"));
+        }
+    }
+    std::error_code code;
+    const std::filesystem::path temp = std::filesystem::temp_directory_path(code) /
+                                       ("illusion-pack-" + std::to_string(std::random_device{}()));
+    if (const FileError error = packDirectory(assets, temp); error != FileError::None)
+    {
+        return unexpected(CommandError::make(
+            ErrorKind::IoError, "cannot pack assets:/ (" + std::string(fileErrorName(error)) + ")"));
+    }
+    Expected<std::vector<std::byte>, CommandError> bytes = readExternal(temp);
+    std::filesystem::remove(temp, code);
+    if (!bytes)
+    {
+        return unexpected(std::move(bytes).error());
+    }
+    if (Expected<bool, CommandError> written = context.edit().writeFile(params.path, *bytes); !written)
+    {
+        return unexpected(std::move(written).error());
+    }
+    return AssetPackResult{params.path};
+}
+
 Expected<AssetReferencesResult, CommandError> assetReferences(CommandContext& context,
                                                               const FilePathParams& params)
 {
@@ -1236,6 +1314,30 @@ void registerAssetCommands(CommandRegistry& registry)
             "\"assets:/old.png\", \"to\": \"assets:/textures/new.png\"}.",
         .category = "Asset",
         .icon = "link",
+        .flags = {.undoable = true},
+        .permission = PermissionClass::Files,
+    });
+    registry.add<&assetCook>({
+        .name = "asset.cook",
+        .title = strings::kCommandAssetCookTitle,
+        .description = strings::kCommandAssetCookDescription,
+        .agentSummary =
+            "Imports every texture and model under assets:/ into the project's import cache, reporting how "
+            "many were cooked and which files failed. Example: {}.",
+        .category = "Asset",
+        .icon = "local_fire_department",
+        .flags = {.readOnly = true, .idempotent = true},
+        .permission = PermissionClass::Files,
+    });
+    registry.add<&assetPack>({
+        .name = "asset.pack",
+        .title = strings::kCommandAssetPackTitle,
+        .description = strings::kCommandAssetPackDescription,
+        .agentSummary =
+            "Packs everything under assets:/ into a .illpak archive at the given project path, as one undo "
+            "step. Example: {\"path\": \"settings:/game.illpak\"}.",
+        .category = "Asset",
+        .icon = "archive",
         .flags = {.undoable = true},
         .permission = PermissionClass::Files,
     });

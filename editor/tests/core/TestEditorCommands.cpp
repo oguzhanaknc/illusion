@@ -141,7 +141,7 @@ TEST_CASE("every core command has a test case")
         cases.emplace(entry.name);
     }
     CHECK(registered == cases);
-    CHECK(registered.size() == 159);
+    CHECK(registered.size() == 161);
 }
 
 TEST_CASE("every command succeeds on the fixture and its params and result match their schemas")

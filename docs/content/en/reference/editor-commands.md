@@ -23,6 +23,7 @@ mode allows an agent to run (see the [editor protocol](editor-protocol.md#permis
 
 | Command | Category | Flags | Permission | Shortcut | Summary |
 | --- | --- | --- | --- | --- | --- |
+| `asset.cook` | Asset | RI | files | - | Imports every texture and model under assets:/ into the project's import cache, reporting how many were cooked and which files failed. Example: `{}` |
 | `asset.create_folder` | Asset | U | files | - | Creates a folder (and missing parents) in assets:. Example: `{"path": "assets:/materials"}` |
 | `asset.delete` | Asset | UD | files | - | Deletes an asset or folder unless something refers to it (force deletes anyway and returns the dangling references); undo brings it back. Example: `{"path": "assets:/old.material"}` |
 | `asset.dependencies` | Asset | RI | read | - | Lists the assets a scene or material refers to (for the open scene, its unsaved state). Example: `{"path": "assets:/scenes/main.scene"}` |
@@ -31,6 +32,7 @@ mode allows an agent to run (see the [editor protocol](editor-protocol.md#permis
 | `asset.info` | Asset | RI | read | - | Returns an asset's kind, size and how many references it has and makes. Example: `{"path": "assets:/materials/red.material"}` |
 | `asset.list` | Asset | RI | read | - | Lists the assets and folders in an assets: folder with their kinds, optionally recursive or of one kind. Example: `{"path": "assets:/", "recursive": true, "kind": "Material"}` |
 | `asset.move` | Asset | U | files | - | Moves or renames an asset or folder and updates every reference to it in scenes, materials and the open scene, as one undo step. Example: `{"from": "assets:/red.material", "to": "assets:/materials/red.material"}` |
+| `asset.pack` | Asset | U | files | - | Packs everything under assets:/ into a .illpak archive at the given project path, as one undo step. Example: `{"path": "settings:/game.illpak"}` |
 | `asset.references` | Asset | RI | read | - | Lists the references to an asset (or to anything in a folder) in scenes, materials and the open scene, with the entity, Component and field of each. Example: `{"path": "assets:/materials/red.material"}` |
 | `asset.reimport` | Asset | I | read | - | Imports a texture or model (or every one in a folder) again on the next frame, ignoring the import cache even if nothing changed; returns the assets. Example: `{"path": "assets:/models/ship.glb"}` |
 | `asset.relink` | Asset | U | files | - | Rewrites every reference to one asset path so it points to another, without moving the file (for a rename made outside the editor), as one undo step. Example: `{"from": "assets:/old.png", "to": "assets:/textures/new.png"}` |

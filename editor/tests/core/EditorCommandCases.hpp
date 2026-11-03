@@ -16,6 +16,7 @@ struct CommandCase
 
 inline constexpr CommandCase kCommandCases[] = {
     {"asset.create_folder", R"({"path":"assets:/models"})"},
+    {"asset.cook", "{}"},
     {"asset.delete", R"({"path":"assets:/textures/red.png","force":true})"},
     {"asset.dependencies", R"({"path":"assets:/scenes/main.scene"})"},
     {"asset.find_missing", "{}"},
@@ -23,6 +24,7 @@ inline constexpr CommandCase kCommandCases[] = {
     {"asset.info", R"({"path":"assets:/materials/red.material"})"},
     {"asset.list", R"({"path":"assets:/","recursive":true,"kind":"Material"})"},
     {"asset.move", R"({"from":"assets:/materials/red.material","to":"assets:/materials/crimson.material"})"},
+    {"asset.pack", R"({"path":"settings:/game.illpak"})"},
     {"asset.references", R"({"path":"assets:/materials/red.material"})"},
     {"asset.reimport", R"({"path":"assets:/textures/red.png"})"},
     {"asset.relink", R"({"from":"assets:/materials/red.material","to":"assets:/scenes/other.scene"})"},

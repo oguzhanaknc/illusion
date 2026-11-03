@@ -535,3 +535,23 @@ TEST_CASE("asset.relink points every reference at a new path, and undo puts them
                 R"({"from":"assets:/materials/red.material","to":"assets:/materials/missing.material"})")
               .kind == ErrorKind::NotFound);
 }
+
+TEST_CASE("asset.pack writes a .illpak archive and undo removes it")
+{
+    EditorFixture fixture;
+    fixture.buildScene();
+    fixture.addAssets();
+    EditorContext& editor = *fixture.editor;
+    const std::map<std::string, std::string> files = projectFiles(fixture);
+
+    const JsonDocument packed = ok(editor, "asset.pack", R"({"path":"settings:/game.illpak"})");
+    CHECK(packed.root().find("path").asString() == "settings:/game.illpak");
+    CHECK(editor.files().exists("settings:/game.illpak"));
+    std::vector<std::byte> bytes;
+    CHECK(editor.files().readFile("settings:/game.illpak", bytes) == FileError::None);
+    CHECK_FALSE(bytes.empty());
+
+    ok(editor, "history.undo");
+    CHECK_FALSE(editor.files().exists("settings:/game.illpak"));
+    CHECK(projectFiles(fixture) == files);
+}
