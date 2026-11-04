@@ -405,14 +405,23 @@ TEST_CASE("file browser command lines are split and their placeholders replaced"
     // An empty command falls back to the platform default, which selects a file when it can.
     const std::vector<std::string> file = defaultRevealArguments("C:/p/a b.glb", false);
     const std::vector<std::string> folder = defaultRevealArguments("C:/p/models", true);
-    REQUIRE(file.size() == 2);
+    REQUIRE_FALSE(file.empty());
     REQUIRE(folder.size() == 2);
     CHECK_FALSE(file[0].empty());
     CHECK_FALSE(folder[0].empty());
     CHECK(folder[1] == "C:/p/models");
 #if defined(ILL_PLATFORM_WINDOWS)
+    REQUIRE(file.size() == 2);
     CHECK(file[0] == "explorer");
     CHECK(file[1] == "/select,C:/p/a b.glb");
+#elif defined(ILL_PLATFORM_MACOS)
+    REQUIRE(file.size() == 3);
+    CHECK(file[0] == "open");
+    CHECK(file[1] == "-R");
+    CHECK(file[2] == "C:/p/a b.glb");
+#else
+    REQUIRE(file.size() == 2);
+    CHECK(file[0] == "xdg-open");
 #endif
 }
 

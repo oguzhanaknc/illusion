@@ -319,7 +319,7 @@ AssetCatalogChanges AssetCatalog::refresh(const VirtualFileSystem& files)
     }
     m_scanned = true;
     finish(changes);
-    m_version += changes.empty() ? 0 : 1;
+    m_version += changes.empty() ? u64{0} : u64{1};
     return changes;
 }
 
@@ -401,7 +401,7 @@ AssetCatalogChanges AssetCatalog::apply(const VirtualFileSystem& files, std::spa
         }
     }
     finish(result);
-    m_version += result.empty() ? 0 : 1;
+    m_version += result.empty() ? u64{0} : u64{1};
     return result;
 }
 
