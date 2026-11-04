@@ -34,6 +34,9 @@ inline constexpr std::string_view kPreferencesFormat = "illusion.preferences";
 /// Recent projects kept in Preferences::recentProjects.
 inline constexpr usize kMaxRecentProjects = 10;
 
+/// Favourite assets kept in Preferences::assetFavourites.
+inline constexpr usize kMaxAssetFavourites = 512;
+
 /// A shortcut that replaces the keymap preset's chord of one UI action.
 struct ShortcutBinding
 {
@@ -70,6 +73,11 @@ struct Preferences
     u32 autosaveCopies = 3;      ///< Autosave files kept per scene, 1 to 20.
     // External tools
     std::string codeEditor; ///< Command that opens a source file ("" for the system default).
+    /// Command that reveals a file in the system's file manager ("" for the system default).
+    std::string fileBrowser;
+    // Asset browser
+    /// Favourite assets of the browser (virtual `assets:/` paths), at most kMaxAssetFavourites.
+    std::vector<std::string> assetFavourites;
     // Projects and layout
     std::vector<std::string> recentProjects; ///< Project directories (UTF-8), the most recent first.
     std::string layout = "default";          ///< The layout used last (see `ui.layout_apply`).

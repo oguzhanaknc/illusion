@@ -290,6 +290,7 @@ EditorShell::Impl::Impl(EditorShell& owner, EditorContext& editorContext, ui::Ui
     , agentsPanel(std::make_unique<detail::Agents>())
     , preferences(std::make_unique<detail::PreferencesPage>())
     , projects(std::make_unique<detail::Projects>())
+    , assetBrowser(std::make_unique<detail::AssetBrowser>())
 {
     context.makeCurrent();
     if (options.editorData != nullptr)
@@ -1084,6 +1085,9 @@ void EditorShell::draw(f64 now, f64 deltaSeconds)
             case Panel::Game:
                 impl.gameView->draw(impl);
                 break;
+            case Panel::Assets:
+                impl.assetBrowser->draw(impl);
+                break;
             case Panel::Console:
                 impl.console->draw(impl);
                 break;
@@ -1345,6 +1349,29 @@ Expected<void, CommandError> EditorShell::openPalette(std::string_view mode, std
 void EditorShell::notify(UiNotice notice, std::string_view message)
 {
     m_impl->toast(notice, message);
+}
+
+void EditorShell::importDroppedFiles(std::span<const std::string> paths)
+{
+    Impl& impl = *m_impl;
+    if (paths.empty() || impl.editor.project() == nullptr)
+    {
+        return;
+    }
+    std::string files = "[";
+    for (usize i = 0; i < paths.size(); ++i)
+    {
+        if (i != 0)
+        {
+            files += ',';
+        }
+        files += detail::jsonQuote(paths[i]);
+    }
+    files += ']';
+    (void)impl.run("asset.import",
+                   "{\"files\":" + files +
+                       ",\"destination\":" + detail::jsonQuote(impl.assetBrowser->currentFolder()) + "}",
+                   "file_drop");
 }
 
 void EditorShell::requestQuit()

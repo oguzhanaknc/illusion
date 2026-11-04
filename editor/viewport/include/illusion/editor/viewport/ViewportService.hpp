@@ -17,6 +17,7 @@
 /// ```
 
 #include <illusion/core/Base.hpp>
+#include <illusion/editor/core/ImageHost.hpp>
 #include <illusion/editor/core/ViewportHost.hpp>
 
 #include <nvrhi/nvrhi.h>
@@ -56,7 +57,7 @@ struct ViewportServiceStats
 /// The editor's viewports: "scene" (the Scene panel), "game" (the Game panel, through the scene's main
 /// Camera) and up to three secondary Scene viewports. Use it on the main thread; the device, editor and UI
 /// renderer outlive it. Registers itself with EditorContext::setViewports() and unregisters when destroyed.
-class ViewportService final : public ViewportHost
+class ViewportService final : public ViewportHost, public ImageHost
 {
 public:
     /// Creates the service with the "scene" and "game" viewports. Returns nullptr (and logs why) if a GPU
@@ -81,6 +82,11 @@ public:
     /// The thumbnail renderer of `asset.thumbnail`, registered with EditorContext::setThumbnailHost(); it
     /// shares the viewports' asset cache, so live reload reaches it too, and render() updates it.
     [[nodiscard]] ThumbnailRenderer& thumbnails() noexcept;
+
+    // ImageHost: the thumbnails on disk as UI textures of the asset browser. Registered with
+    // EditorContext::setImageHost().
+    [[nodiscard]] u64 imageTexture(std::string_view path) override;
+    void forgetImage(std::string_view path) override;
 
     /// The colour texture (RGBA8_UNORM, sRGB-encoded) the UI shows for @p id, for captures; null before the
     /// viewport has a size or for unknown ids. Replaced when the size changes.

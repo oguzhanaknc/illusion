@@ -1216,6 +1216,59 @@ struct AssetDeleteResult
     std::vector<AssetReference> dangling{}; ///< References left pointing at it (only with force).
 };
 
+/// Params of `asset.import`.
+struct AssetImportParams
+{
+    /// Absolute paths of the external files to copy into the project (OS file drops are absolute paths).
+    std::vector<std::string> files;
+    std::optional<std::string> destination{}; ///< Target folder (default "assets:/").
+    std::optional<bool> overwrite{};          ///< Replace a file of the same name (default false).
+};
+
+/// Result of `asset.import`.
+struct AssetImportResult
+{
+    std::vector<std::string> imported; ///< The new virtual paths, in the order they were imported.
+};
+
+/// Params of `asset.relink`.
+struct AssetRelinkParams
+{
+    std::string from; ///< The old (usually missing) path the references point to.
+    std::string to;   ///< The new path the references should point to.
+};
+
+/// Result of `asset.relink`.
+struct AssetRelinkResult
+{
+    std::string from;                 ///< Old path.
+    std::string to;                   ///< New path.
+    u32 references = 0;               ///< References that now point to the new path.
+    std::vector<std::string> updated; ///< Scene and material files rewritten, sorted (not the open scene).
+};
+
+/// Result of `asset.cook`.
+struct AssetCookResult
+{
+    u32 images = 0;                  ///< Images cooked.
+    u32 models = 0;                  ///< glTF models cooked (with the images they use).
+    u32 materials = 0;               ///< Material files checked.
+    std::vector<std::string> errors; ///< One message per file that failed.
+};
+
+/// Params of `asset.pack`.
+struct AssetPackParams
+{
+    std::string
+        path; ///< Target `.illpak` (a project path such as "settings:/game.illpak", or an absolute path).
+};
+
+/// Result of `asset.pack`.
+struct AssetPackResult
+{
+    std::string path; ///< The `.illpak` that was written.
+};
+
 /// Result of `asset.references`.
 struct AssetReferencesResult
 {
@@ -1401,6 +1454,7 @@ enum class PaletteMode : u8
     Commands, ///< Commands and actions.
     Entities, ///< Entities of the scene ("Go to Anything").
     Settings, ///< Preference pages.
+    Assets,   ///< Assets and folders of the project ("#").
 };
 
 /// Params of `ui.palette`.
@@ -1610,6 +1664,21 @@ struct OpenSourceParams
 /// Result of `editor.open_source`.
 struct OpenSourceResult
 {
+    std::string program{};                ///< The program that was started.
+    std::vector<std::string> arguments{}; ///< Its arguments.
+};
+
+/// Params of `editor.reveal`.
+struct RevealParams
+{
+    /// The file or folder: a virtual path such as "assets:/models/ship.glb", or an absolute path.
+    std::string path{};
+};
+
+/// Result of `editor.reveal`.
+struct RevealResult
+{
+    std::string file{};                   ///< The native path that was revealed (UTF-8).
     std::string program{};                ///< The program that was started.
     std::vector<std::string> arguments{}; ///< Its arguments.
 };
@@ -1835,7 +1904,7 @@ struct illusion::EnumReflection<illusion::editor::PaletteMode>
     /// The values.
     static constexpr std::array kValues{illusion::EnumValue{"commands", 0},
                                         illusion::EnumValue{"entities", 1},
-                                        illusion::EnumValue{"settings", 2}};
+                                        illusion::EnumValue{"settings", 2}, illusion::EnumValue{"assets", 3}};
 };
 
 /// Names of UiNotice values in JSON.

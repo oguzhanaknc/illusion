@@ -4,6 +4,7 @@
 #include "Panels.hpp"
 
 #include <illusion/core/Json.hpp>
+#include <illusion/editor/core/AssetCatalog.hpp>
 #include <illusion/editor/core/CoreCommands.hpp>
 #include <illusion/editor/ui/FontManager.hpp>
 #include <illusion/editor/ui/Icons.hpp>
@@ -36,6 +37,7 @@ enum class Mode : u8
     Commands,
     Entities,
     Settings,
+    Assets,
 };
 
 enum class Kind : u8
@@ -44,6 +46,7 @@ enum class Kind : u8
     Command, // a palette command no action runs (index into the registry's sorted commands)
     Entity,  // an entity of the scene (index into the entity cache)
     Page,    // a preferences page
+    Asset,   // an asset of the project (index into the asset cache)
 };
 
 struct Result
@@ -121,6 +124,9 @@ struct Palette::State
     std::vector<Result> results;
     std::vector<EntitySummary> entities; // cached per scene revision
     u64 entitiesRevision = ~u64{0};
+    std::vector<const AssetRecord*> assets; // cached per catalog version
+    u64 assetsRevision = ~u64{0};
+    u64 lastAssetsVersion = ~u64{0};
 
     // The params form.
     bool form = false;
@@ -138,7 +144,7 @@ struct Palette::State
 
 void Palette::State::refresh(Impl& shell)
 {
-    // "@" lists entities and ">" preference pages, whatever the mode.
+    // "@" lists entities, ">" preference pages and "#" assets, whatever the mode.
     std::string_view typed(query.data());
     Mode effective = mode;
     if (typed.starts_with('@'))
@@ -151,9 +157,14 @@ void Palette::State::refresh(Impl& shell)
         effective = Mode::Settings;
         typed.remove_prefix(1);
     }
+    else if (typed.starts_with('#'))
+    {
+        effective = Mode::Assets;
+        typed.remove_prefix(1);
+    }
     EditorContext& editor = shell.editor;
     if (typed == lastQuery && effective == lastMode && editor.revision() == lastRevision &&
-        editor.commands().revision() == lastCommands)
+        editor.commands().revision() == lastCommands && editor.assetCatalog().version() == lastAssetsVersion)
     {
         return;
     }
@@ -161,6 +172,7 @@ void Palette::State::refresh(Impl& shell)
     lastMode = effective;
     lastRevision = editor.revision();
     lastCommands = editor.commands().revision();
+    lastAssetsVersion = editor.assetCatalog().version();
     results.clear();
     selected = 0;
     text::FuzzyMatcher matcher(typed);
@@ -227,6 +239,26 @@ void Palette::State::refresh(Impl& shell)
             }
         }
     }
+    else if (effective == Mode::Assets)
+    {
+        const AssetCatalog& catalog = editor.assetCatalog();
+        if (assetsRevision != catalog.version())
+        {
+            assetsRevision = catalog.version();
+            assets.clear();
+            for (const auto& [path, record] : catalog.records())
+            {
+                assets.push_back(&record);
+            }
+        }
+        for (usize i = 0; i < assets.size(); ++i)
+        {
+            if (const std::optional<i32> value = score(assets[i]->path, assets[i]->path))
+            {
+                results.push_back(Result{Kind::Asset, i, *value});
+            }
+        }
+    }
     else
     {
         for (usize i = 0; i < static_cast<usize>(PreferencesTab::Count); ++i)
@@ -280,6 +312,11 @@ void Palette::State::runSelected(Impl& shell, Palette& palette)
         shell.preferences->select(static_cast<PreferencesTab>(result.index));
         (void)shell.run("ui.show_panel", R"({"panel":"window.preferences"})", "palette");
         break;
+    case Kind::Asset:
+        palette.close();
+        shell.assetBrowser->reveal(assets[result.index]->path);
+        (void)shell.run("ui.show_panel", R"({"panel":"panel.assets"})", "palette");
+        break;
     }
 }
 
@@ -293,6 +330,7 @@ void Palette::State::drawResults(Impl& shell, Palette& palette, ui::UiKit& kit)
     }
     const text::TextKey hint = mode == Mode::Entities   ? s::kPaletteHintEntities
                                : mode == Mode::Settings ? s::kPaletteHintSettings
+                               : mode == Mode::Assets   ? s::kPaletteHintAssets
                                                         : s::kPaletteHintCommands;
     ImGui::SetNextItemWidth(-1.0f);
     ui::searchField(kit, "palette.query", query, text.format(hint));
@@ -357,6 +395,9 @@ void Palette::State::drawResults(Impl& shell, Palette& palette, ui::UiKit& kit)
                 }
                 case Kind::Entity:
                     label = text.verbatim(entities[result.index].path, id);
+                    break;
+                case Kind::Asset:
+                    label = text.verbatim(assets[result.index]->path, id);
                     break;
                 case Kind::Page:
                     label =
@@ -511,7 +552,10 @@ Palette::~Palette() = default;
 void Palette::open(std::string_view mode, std::string_view query)
 {
     State& state = *m_state;
-    state.mode = mode == "entities" ? Mode::Entities : mode == "settings" ? Mode::Settings : Mode::Commands;
+    state.mode = mode == "entities"   ? Mode::Entities
+                 : mode == "settings" ? Mode::Settings
+                 : mode == "assets"   ? Mode::Assets
+                                      : Mode::Commands;
     const usize length = std::min(query.size(), state.query.size() - 1);
     std::memcpy(state.query.data(), query.data(), length);
     state.query[length] = '\0';

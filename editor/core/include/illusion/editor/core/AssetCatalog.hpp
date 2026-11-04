@@ -110,6 +110,10 @@ public:
     /// True once refresh() has run since construction or clear().
     [[nodiscard]] bool scanned() const noexcept { return m_scanned; }
 
+    /// Counts the refresh() and apply() calls that changed something (and clear()); readers cache their
+    /// view of the catalog against it.
+    [[nodiscard]] u64 version() const noexcept { return m_version; }
+
     /// The record of @p path, or nullptr if the catalog does not have it.
     [[nodiscard]] const AssetRecord* find(std::string_view path) const;
 
@@ -165,6 +169,7 @@ private:
     std::map<std::string, RemovedFile, std::less<>> m_removedHashes; // Erased in the current update.
     std::map<std::string, Sidecar, std::less<>> m_sidecars; // By sidecar path, with or without asset.
     bool m_scanned = false;
+    u64 m_version = 0;
 };
 
 } // namespace illusion::editor

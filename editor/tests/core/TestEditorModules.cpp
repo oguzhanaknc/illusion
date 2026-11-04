@@ -385,6 +385,46 @@ TEST_CASE("code editor command lines are split and their placeholders replaced")
     CHECK(fallback[1] == "x.cpp");
 }
 
+TEST_CASE("file browser command lines are split and their placeholders replaced")
+{
+    const auto arguments = [](std::string_view command) {
+        Expected<std::vector<std::string>, std::string> parsed =
+            revealArguments(command, "C:/p/a b.glb", false);
+        REQUIRE_MESSAGE(parsed.hasValue(), (parsed ? std::string() : parsed.error()));
+        return std::move(parsed).value();
+    };
+    CHECK(arguments("browser --select {file}") ==
+          std::vector<std::string>{"browser", "--select", "C:/p/a b.glb"});
+    CHECK(arguments(R"("C:/Program Files/Browser/browser.exe")") ==
+          std::vector<std::string>{"C:/Program Files/Browser/browser.exe", "C:/p/a b.glb"});
+    CHECK(arguments("nautilus \"{file}\"") == std::vector<std::string>{"nautilus", "C:/p/a b.glb"});
+    CHECK_FALSE(revealArguments("   ", "f", false).hasValue());
+    CHECK_FALSE(revealArguments(R"("" --select {file})", "f", false).hasValue());
+    CHECK_FALSE(revealArguments(R"("browser {file})", "f", false).hasValue());
+
+    // An empty command falls back to the platform default, which selects a file when it can.
+    const std::vector<std::string> file = defaultRevealArguments("C:/p/a b.glb", false);
+    const std::vector<std::string> folder = defaultRevealArguments("C:/p/models", true);
+    REQUIRE_FALSE(file.empty());
+    REQUIRE(folder.size() == 2);
+    CHECK_FALSE(file[0].empty());
+    CHECK_FALSE(folder[0].empty());
+    CHECK(folder[1] == "C:/p/models");
+#if defined(ILL_PLATFORM_WINDOWS)
+    REQUIRE(file.size() == 2);
+    CHECK(file[0] == "explorer");
+    CHECK(file[1] == "/select,C:/p/a b.glb");
+#elif defined(ILL_PLATFORM_MACOS)
+    REQUIRE(file.size() == 3);
+    CHECK(file[0] == "open");
+    CHECK(file[1] == "-R");
+    CHECK(file[2] == "C:/p/a b.glb");
+#else
+    REQUIRE(file.size() == 2);
+    CHECK(file[0] == "xdg-open");
+#endif
+}
+
 TEST_CASE("editor.open_source starts the code editor of the preferences at the line")
 {
     EditorFixture f;
@@ -446,4 +486,59 @@ TEST_CASE("editor.open_source rejects bad paths and unusable code editor prefere
     REQUIRE(editor.setPreferences(preferences).hasValue());
     CHECK(fails(editor, "editor.open_source", R"({"path":"modules:/CMakeLists.txt"})").kind ==
           ErrorKind::IoError);
+}
+
+TEST_CASE("editor.reveal shows a file and a folder in the file browser of the preferences")
+{
+    EditorFixture f;
+    f.buildScene();
+    EditorContext& editor = *f.editor;
+    const std::filesystem::path revealed = f.directory.path / "revealed.txt";
+    const std::filesystem::path scene =
+        (f.directory.path / "project" / "assets" / "scenes" / "main.scene").make_preferred();
+
+    const JsonDocument dry =
+        ok(editor, "editor.reveal", R"({"path":"assets:/scenes/main.scene","dryRun":true})");
+    CHECK(dry.root().find("program").asString() == std::string_view(ILLUSION_FAKE_CMAKE));
+    const std::u8string sceneNative = scene.u8string();
+    CHECK(dry.root().find("file").asString() == std::string(sceneNative.begin(), sceneNative.end()));
+    CHECK_FALSE(std::filesystem::exists(revealed));
+
+    // A folder can be revealed too (it is not a "source file", so open_source rejects it).
+    const JsonDocument result = ok(editor, "editor.reveal", R"({"path":"assets:/scenes"})");
+    // The browser runs detached; wait until it has written what it was asked to reveal.
+    const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(60);
+    std::string text;
+    while (text.find('\n') == std::string::npos && std::chrono::steady_clock::now() < deadline)
+    {
+        text = readText(revealed);
+    }
+    const std::u8string folderNative = scene.parent_path().u8string();
+    CHECK(text == std::string(folderNative.begin(), folderNative.end()) + "\n");
+}
+
+TEST_CASE("editor.reveal rejects bad paths and unusable file browser preferences")
+{
+    EditorFixture f;
+    EditorContext& editor = *f.editor;
+    CHECK(fails(editor, "editor.reveal", R"({"path":""})").kind == ErrorKind::ValidationFailed);
+    CHECK(fails(editor, "editor.reveal", R"({"path":"relative/model.glb"})").kind ==
+          ErrorKind::ValidationFailed);
+    CHECK(fails(editor, "editor.reveal", R"({"path":"nomount:/model.glb"})").kind ==
+          ErrorKind::ValidationFailed);
+    CHECK(fails(editor, "editor.reveal", R"({"path":"assets:/models/missing.glb"})").kind ==
+          ErrorKind::NotFound);
+
+    Preferences preferences = editor.preferences();
+    preferences.fileBrowser = R"("unclosed {file})";
+    REQUIRE(editor.setPreferences(preferences).hasValue());
+    CHECK(fails(editor, "editor.reveal", R"({"path":"modules:/CMakeLists.txt"})").kind ==
+          ErrorKind::PreconditionFailed);
+    preferences.fileBrowser = "illusion-no-such-browser {file}";
+    REQUIRE(editor.setPreferences(preferences).hasValue());
+    CHECK(fails(editor, "editor.reveal", R"({"path":"modules:/CMakeLists.txt"})").kind ==
+          ErrorKind::NotFound);
+    preferences.fileBrowser = "no/such/browser {file}";
+    REQUIRE(editor.setPreferences(preferences).hasValue());
+    CHECK(fails(editor, "editor.reveal", R"({"path":"modules:/CMakeLists.txt"})").kind == ErrorKind::IoError);
 }

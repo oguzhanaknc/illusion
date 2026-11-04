@@ -666,6 +666,29 @@ void reflectCoreCommandTypes(StructRegistry& structs)
         reflectStruct<AssetDeleteResult>("editor.AssetDeleteResult", 1, structs)
             .field("path", &AssetDeleteResult::path)
             .field("dangling", &AssetDeleteResult::dangling);
+        reflectStruct<AssetImportParams>("editor.AssetImportParams", 1, structs)
+            .field("files", &AssetImportParams::files)
+            .field("destination", &AssetImportParams::destination)
+            .field("overwrite", &AssetImportParams::overwrite);
+        reflectStruct<AssetImportResult>("editor.AssetImportResult", 1, structs)
+            .field("imported", &AssetImportResult::imported);
+        reflectStruct<AssetRelinkParams>("editor.AssetRelinkParams", 1, structs)
+            .field("from", &AssetRelinkParams::from)
+            .field("to", &AssetRelinkParams::to);
+        reflectStruct<AssetRelinkResult>("editor.AssetRelinkResult", 1, structs)
+            .field("from", &AssetRelinkResult::from)
+            .field("to", &AssetRelinkResult::to)
+            .field("references", &AssetRelinkResult::references)
+            .field("updated", &AssetRelinkResult::updated);
+        reflectStruct<AssetCookResult>("editor.AssetCookResult", 1, structs)
+            .field("images", &AssetCookResult::images)
+            .field("models", &AssetCookResult::models)
+            .field("materials", &AssetCookResult::materials)
+            .field("errors", &AssetCookResult::errors);
+        reflectStruct<AssetPackParams>("editor.AssetPackParams", 1, structs)
+            .field("path", &AssetPackParams::path);
+        reflectStruct<AssetPackResult>("editor.AssetPackResult", 1, structs)
+            .field("path", &AssetPackResult::path);
         reflectStruct<AssetReferencesResult>("editor.AssetReferencesResult", 1, structs)
             .field("references", &AssetReferencesResult::references);
         reflectStruct<AssetDependenciesResult>("editor.AssetDependenciesResult", 1, structs)
@@ -859,6 +882,11 @@ void reflectCoreCommandTypes(StructRegistry& structs)
         reflectStruct<OpenSourceResult>("editor.OpenSourceResult", 1, structs)
             .field("program", &OpenSourceResult::program)
             .field("arguments", &OpenSourceResult::arguments);
+        reflectStruct<RevealParams>("editor.RevealParams", 1, structs).field("path", &RevealParams::path);
+        reflectStruct<RevealResult>("editor.RevealResult", 1, structs)
+            .field("file", &RevealResult::file)
+            .field("program", &RevealResult::program)
+            .field("arguments", &RevealResult::arguments);
         reflectStruct<ModuleReloadParams>("editor.ModuleReloadParams", 1, structs)
             .field("name", &ModuleReloadParams::name);
         reflectStruct<ModuleReloadResult>("editor.ModuleReloadResult", 1, structs)

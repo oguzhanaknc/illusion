@@ -1,6 +1,7 @@
 #include "ViewportOverlays.hpp"
 
 #include <illusion/assets/AssetStreamer.hpp>
+#include <illusion/assets/Image.hpp>
 #include <illusion/assets/Mesh.hpp>
 #include <illusion/assets/Model.hpp>
 #include <illusion/audio/AudioComponents.hpp>
@@ -32,6 +33,7 @@
 #include <algorithm>
 #include <cmath>
 #include <cstring>
+#include <map>
 #include <unordered_map>
 #include <unordered_set>
 
@@ -335,6 +337,14 @@ struct ViewportService::Impl
     RenderAssetCache cache;
     RenderAssetResolver resolver;
     std::unique_ptr<ThumbnailRenderer> thumbnails; // shares the asset cache
+    // Images of the UI beyond its icons (thumbnail PNGs of the asset browser) by virtual path; a failed
+    // path stays with uiTexture 0 until forgetImage().
+    struct LoadedImage
+    {
+        TextureHandle texture;
+        u64 uiTexture = 0;
+    };
+    std::map<std::string, LoadedImage, std::less<>> images;
     HierarchyIndex hierarchy;
     u32 assetSubscription = 0;
     std::vector<std::string> changedAssets;    // files of `asset.changed` events not reloaded yet
@@ -391,6 +401,38 @@ struct ViewportService::Impl
         const auto found = std::find_if(viewports.begin(), viewports.end(),
                                         [&](const Viewport& viewport) { return viewport.id == id; });
         return found != viewports.end() ? &*found : nullptr;
+    }
+
+    // The UI texture of the image at @p path, loading it on first use; 0 when it cannot be loaded.
+    u64 loadImage(std::string_view path)
+    {
+        const auto known = images.find(path);
+        if (known != images.end())
+        {
+            return known->second.uiTexture;
+        }
+        LoadedImage loaded;
+        std::vector<std::byte> bytes;
+        std::optional<Image> image;
+        if (editor.files().readFile(path, bytes) == FileError::None)
+        {
+            std::string error;
+            image = decodeImage(bytes, false, &error);
+            if (!image)
+            {
+                ILL_LOG_WARN("Editor", "cannot show '%s': %s", std::string(path).c_str(), error.c_str());
+            }
+        }
+        if (image && image->isValid())
+        {
+            loaded.texture = resources.createTexture(*image, "editor.image");
+            if (loaded.texture.index != 0)
+            {
+                loaded.uiTexture = ui.registerTexture(resources.texture(loaded.texture));
+            }
+        }
+        images.emplace(std::string(path), loaded);
+        return loaded.uiTexture;
     }
 
     // The World the viewports show: the play World while a play session runs (ADR 0042), else the edit
@@ -1466,6 +1508,7 @@ ViewportService::ViewportService(std::unique_ptr<Impl> impl) noexcept
 {
     m_impl->editor.setViewports(this);
     m_impl->editor.setThumbnailHost(m_impl->thumbnails.get());
+    m_impl->editor.setImageHost(this);
 }
 
 ViewportService::~ViewportService()
@@ -1479,6 +1522,18 @@ ViewportService::~ViewportService()
     {
         impl.editor.setThumbnailHost(nullptr);
     }
+    if (impl.editor.imageHost() == this)
+    {
+        impl.editor.setImageHost(nullptr);
+    }
+    for (const auto& image : impl.images)
+    {
+        if (image.second.uiTexture != 0)
+        {
+            impl.ui.unregisterTexture(image.second.uiTexture);
+        }
+    }
+    impl.images.clear();
     impl.thumbnails.reset();
     impl.device.waitIdle();
     impl.cache.waitIdle();
@@ -1606,6 +1661,39 @@ const ViewportServiceStats& ViewportService::stats() const noexcept
 ThumbnailRenderer& ViewportService::thumbnails() noexcept
 {
     return *m_impl->thumbnails;
+}
+
+u64 ViewportService::imageTexture(std::string_view path)
+{
+    return m_impl->loadImage(path);
+}
+
+void ViewportService::forgetImage(std::string_view path)
+{
+    const auto forget = [&](auto it) {
+        if (it->second.uiTexture != 0)
+        {
+            m_impl->ui.unregisterTexture(it->second.uiTexture);
+        }
+        if (it->second.texture.index != 0)
+        {
+            m_impl->resources.releaseTexture(it->second.texture);
+        }
+        m_impl->images.erase(it);
+    };
+    if (path.empty())
+    {
+        while (!m_impl->images.empty())
+        {
+            forget(m_impl->images.begin());
+        }
+        return;
+    }
+    const auto found = m_impl->images.find(path);
+    if (found != m_impl->images.end())
+    {
+        forget(found);
+    }
 }
 
 nvrhi::ITexture* ViewportService::target(std::string_view id) const noexcept

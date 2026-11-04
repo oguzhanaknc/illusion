@@ -2,14 +2,18 @@
 #include "../ReflectedObject.hpp"
 #include "CommandSupport.hpp"
 
+#include <illusion/assets/AssetCooker.hpp>
 #include <illusion/assets/ImportSettings.hpp>
 #include <illusion/assets/MaterialAsset.hpp>
 #include <illusion/editor/core/AssetCatalog.hpp>
 #include <illusion/editor/core/ThumbnailCache.hpp>
 #include <illusion/editor/core/ThumbnailHost.hpp>
+#include <illusion/platform/Archive.hpp>
 
 #include <algorithm>
+#include <fstream>
 #include <iterator>
+#include <random>
 #include <tuple>
 
 namespace illusion::editor::detail
@@ -571,6 +575,257 @@ Expected<AssetDeleteResult, CommandError> assetDelete(CommandContext& context,
     return AssetDeleteResult{params.path, std::move(references)};
 }
 
+// The bytes of the external file at @p path (an absolute path outside the project mounts).
+Expected<std::vector<std::byte>, CommandError> readExternal(const std::filesystem::path& path)
+{
+    std::error_code code;
+    if (!std::filesystem::is_regular_file(path, code))
+    {
+        return unexpected(
+            CommandError::make(ErrorKind::NotFound, "file '" + detail::pathText(path) + "' does not exist"));
+    }
+    std::ifstream in(path, std::ios::binary | std::ios::ate);
+    if (!in)
+    {
+        return unexpected(
+            CommandError::make(ErrorKind::IoError, "cannot read '" + detail::pathText(path) + "'"));
+    }
+    const std::streamsize size = in.tellg();
+    std::vector<std::byte> bytes(static_cast<usize>(std::max<std::streamsize>(size, 0)));
+    if (size > 0)
+    {
+        in.seekg(0);
+        in.read(reinterpret_cast<char*>(bytes.data()), size);
+        if (!in)
+        {
+            return unexpected(
+                CommandError::make(ErrorKind::IoError, "cannot read '" + detail::pathText(path) + "'"));
+        }
+    }
+    return bytes;
+}
+
+Expected<AssetImportResult, CommandError> assetImport(CommandContext& context,
+                                                      const AssetImportParams& params)
+{
+    if (params.files.empty())
+    {
+        return unexpected(CommandError::invalid("/files", "must name at least one file to import"));
+    }
+    const std::string destination = params.destination.value_or(std::string(kAssetsRoot));
+    if (Expected<void, CommandError> valid = checkAssetPath(context, destination, "/destination", true);
+        !valid)
+    {
+        return unexpected(std::move(valid).error());
+    }
+    if (Expected<FileStat, CommandError> stat = existing(context, destination); !stat)
+    {
+        return unexpected(std::move(stat).error());
+    }
+    else if (!stat->isDirectory)
+    {
+        return unexpected(
+            CommandError::invalid("/destination", "must be a folder, e.g. \"assets:/textures\""));
+    }
+    AssetImportResult result;
+    result.imported.reserve(params.files.size());
+    for (usize i = 0; i < params.files.size(); ++i)
+    {
+        const std::string& source = params.files[i];
+        const std::filesystem::path file(std::u8string(source.begin(), source.end()));
+        if (source.empty() || !file.is_absolute())
+        {
+            return unexpected(CommandError::invalid("/files/" + std::to_string(i),
+                                                    "must be an absolute path of a file on this machine"));
+        }
+        const std::string name = detail::pathText(file.filename());
+        if (name.empty() || name == "." || name == "..")
+        {
+            return unexpected(CommandError::invalid("/files/" + std::to_string(i), "names no file"));
+        }
+        const std::string target = joinPath(destination, name);
+        if (context.editor().files().exists(target) && !params.overwrite.value_or(false))
+        {
+            return unexpected(CommandError::make(
+                ErrorKind::AlreadyExists, "'" + target + "' exists already; pass overwrite to replace it"));
+        }
+        Expected<std::vector<std::byte>, CommandError> bytes = readExternal(file);
+        if (!bytes)
+        {
+            return unexpected(std::move(bytes).error());
+        }
+        if (Expected<bool, CommandError> written = context.edit().writeFile(target, *bytes); !written)
+        {
+            return unexpected(std::move(written).error());
+        }
+        result.imported.push_back(target);
+    }
+    return result;
+}
+
+Expected<AssetRelinkResult, CommandError> assetRelink(CommandContext& context,
+                                                      const AssetRelinkParams& params)
+{
+    if (Expected<void, CommandError> valid = checkAssetPath(context, params.from, "/from", false); !valid)
+    {
+        return unexpected(std::move(valid).error());
+    }
+    if (Expected<void, CommandError> valid = checkAssetPath(context, params.to, "/to", false); !valid)
+    {
+        return unexpected(std::move(valid).error());
+    }
+    if (params.from == params.to)
+    {
+        return unexpected(CommandError::invalid("/to", "must differ from the path being relinked"));
+    }
+    if (Expected<void, CommandError> valid = notImportSettings(params.from, "/from"); !valid)
+    {
+        return unexpected(std::move(valid).error());
+    }
+    if (Expected<void, CommandError> valid = notImportSettings(params.to, "/to"); !valid)
+    {
+        return unexpected(std::move(valid).error());
+    }
+    if (Expected<FileStat, CommandError> stat = existing(context, params.to); !stat)
+    {
+        return unexpected(std::move(stat).error());
+    }
+    if (Expected<void, CommandError> allowed = notOpenScene(context, params.from, "relinked"); !allowed)
+    {
+        return unexpected(std::move(allowed).error());
+    }
+    EditorContext& editor = context.editor();
+    const ReferenceIndex& index = editor.references();
+    warnProblems(context, index);
+    const std::vector<std::string> referring = index.filesReferring(params.from, editor.document().path());
+    AssetRelinkResult result;
+    result.from = params.from;
+    result.to = params.to;
+    for (const std::string& file : referring)
+    {
+        const std::vector<AssetReference>* held = index.referencesIn(file);
+        result.references +=
+            static_cast<u32>(std::count_if(held->begin(), held->end(), [&](const AssetReference& r) {
+                return refersTo(r.asset, params.from);
+            }));
+        std::string text;
+        if (const FileError error = editor.files().readText(file, text); error != FileError::None)
+        {
+            return unexpected(
+                CommandError::make(ErrorKind::IoError,
+                                   "cannot read '" + file + "' (" + std::string(fileErrorName(error)) + ")"));
+        }
+        const std::string extension = lowerExtension(file);
+        Expected<std::optional<std::string>, std::string> rewritten =
+            extension == kSceneExtension ? rewriteSceneReferences(text, params.from, params.to)
+            : extension == kMaterialAssetExtension
+                ? rewriteMaterialReferences(text, params.from, params.to)
+                : rewriteSettingsFileReferences(text, params.from, params.to);
+        if (!rewritten)
+        {
+            return unexpected(CommandError::make(ErrorKind::Internal, "cannot update the references in '" +
+                                                                          file + "': " + rewritten.error()));
+        }
+        if (!*rewritten)
+        {
+            continue;
+        }
+        if (Expected<bool, CommandError> written = context.edit().writeFile(file, **rewritten); !written)
+        {
+            return unexpected(std::move(written).error());
+        }
+        result.updated.push_back(file);
+    }
+    Expected<u32, CommandError> open = moveWorldReferences(context, params.from, params.to);
+    if (!open)
+    {
+        return unexpected(std::move(open).error());
+    }
+    result.references += *open;
+    std::sort(result.updated.begin(), result.updated.end());
+    if (*open > 0)
+    {
+        context.warn("references in the open scene now point to " + params.to +
+                     "; save the scene to keep them");
+    }
+    return result;
+}
+
+Expected<AssetCookResult, CommandError> assetCook(CommandContext& context, const NoParams&)
+{
+    if (Expected<void, CommandError> open = requireProject(context); !open)
+    {
+        return unexpected(std::move(open).error());
+    }
+    const CookResult cooked = cookAssets(context.editor().files(), "assets:/", "cache:/");
+    AssetCookResult result;
+    result.images = cooked.images;
+    result.models = cooked.models;
+    result.materials = cooked.materials;
+    result.errors = cooked.errors;
+    for (const std::string& error : result.errors)
+    {
+        context.warn(error);
+    }
+    return result;
+}
+
+Expected<AssetPackResult, CommandError> assetPack(CommandContext& context, const AssetPackParams& params)
+{
+    if (Expected<void, CommandError> open = requireProject(context); !open)
+    {
+        return unexpected(std::move(open).error());
+    }
+    if (params.path.empty())
+    {
+        return unexpected(CommandError::invalid("/path", "must name the target .illpak"));
+    }
+    std::filesystem::path assets;
+    if (context.editor().files().resolve("assets:/", assets) != FileError::None)
+    {
+        return unexpected(CommandError::make(ErrorKind::IoError, "cannot resolve assets:/"));
+    }
+    std::filesystem::path target;
+    if (params.path.find(":/") != std::string::npos)
+    {
+        if (context.editor().files().resolve(params.path, target) != FileError::None)
+        {
+            return unexpected(CommandError::invalid("/path",
+                                                    "must be a project path such as "
+                                                    "\"settings:/game.illpak\" or an absolute path"));
+        }
+    }
+    else
+    {
+        target = std::filesystem::path(std::u8string(params.path.begin(), params.path.end()));
+        if (!target.is_absolute())
+        {
+            return unexpected(CommandError::invalid("/path",
+                                                    "must be a project path such as "
+                                                    "\"settings:/game.illpak\" or an absolute path"));
+        }
+    }
+    std::error_code code;
+    const std::filesystem::path temp = std::filesystem::temp_directory_path(code) /
+                                       ("illusion-pack-" + std::to_string(std::random_device{}()));
+    if (const FileError error = packDirectory(assets, temp); error != FileError::None)
+    {
+        return unexpected(CommandError::make(
+            ErrorKind::IoError, "cannot pack assets:/ (" + std::string(fileErrorName(error)) + ")"));
+    }
+    Expected<std::vector<std::byte>, CommandError> bytes = readExternal(temp);
+    std::filesystem::remove(temp, code);
+    if (!bytes)
+    {
+        return unexpected(std::move(bytes).error());
+    }
+    if (Expected<bool, CommandError> written = context.edit().writeFile(params.path, *bytes); !written)
+    {
+        return unexpected(std::move(written).error());
+    }
+    return AssetPackResult{params.path};
+}
+
 Expected<AssetReferencesResult, CommandError> assetReferences(CommandContext& context,
                                                               const FilePathParams& params)
 {
@@ -1033,6 +1288,57 @@ void registerAssetCommands(CommandRegistry& registry)
         .category = "Asset",
         .icon = "delete",
         .flags = {.destructive = true, .undoable = true},
+        .permission = PermissionClass::Files,
+    });
+    registry.add<&assetImport>({
+        .name = "asset.import",
+        .title = strings::kCommandAssetImportTitle,
+        .description = strings::kCommandAssetImportDescription,
+        .agentSummary =
+            "Copies external files (absolute paths, e.g. an OS file drop) into a folder of the assets: "
+            "mount, "
+            "as one undo step. Example: {\"files\": [\"C:/downloads/wood.png\"], \"destination\": "
+            "\"assets:/textures\"}.",
+        .category = "Asset",
+        .icon = "download",
+        .flags = {.undoable = true},
+        .permission = PermissionClass::Files,
+    });
+    registry.add<&assetRelink>({
+        .name = "asset.relink",
+        .title = strings::kCommandAssetRelinkTitle,
+        .description = strings::kCommandAssetRelinkDescription,
+        .agentSummary =
+            "Rewrites every reference to one asset path so it points to another, without moving the file "
+            "(for a rename made outside the editor), as one undo step. Example: {\"from\": "
+            "\"assets:/old.png\", \"to\": \"assets:/textures/new.png\"}.",
+        .category = "Asset",
+        .icon = "link",
+        .flags = {.undoable = true},
+        .permission = PermissionClass::Files,
+    });
+    registry.add<&assetCook>({
+        .name = "asset.cook",
+        .title = strings::kCommandAssetCookTitle,
+        .description = strings::kCommandAssetCookDescription,
+        .agentSummary =
+            "Imports every texture and model under assets:/ into the project's import cache, reporting how "
+            "many were cooked and which files failed. Example: {}.",
+        .category = "Asset",
+        .icon = "local_fire_department",
+        .flags = {.readOnly = true, .idempotent = true},
+        .permission = PermissionClass::Files,
+    });
+    registry.add<&assetPack>({
+        .name = "asset.pack",
+        .title = strings::kCommandAssetPackTitle,
+        .description = strings::kCommandAssetPackDescription,
+        .agentSummary =
+            "Packs everything under assets:/ into a .illpak archive at the given project path, as one undo "
+            "step. Example: {\"path\": \"settings:/game.illpak\"}.",
+        .category = "Asset",
+        .icon = "archive",
+        .flags = {.undoable = true},
         .permission = PermissionClass::Files,
     });
     registry.add<&assetReferences>({

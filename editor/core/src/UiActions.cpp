@@ -90,7 +90,7 @@ constexpr UiAction kActions[] = {
     {.id = "assets.new_folder", .command = "asset.create_folder", .menu = UiMenu::Assets},
     {.id = "assets.new_material", .command = "material.create", .menu = UiMenu::Assets},
     {.id = "assets.import", .command = "asset.import", .menu = UiMenu::Assets, .group = 1,
-     .title = s::kActionAssetsImport, .icon = "download", .milestone = "M7u"},
+     .title = s::kActionAssetsImport, .icon = "download"},
     // Play
     {.id = "play.play", .command = "play.start", .menu = UiMenu::Play, .title = s::kToolPlay,
      .icon = "play_arrow", .shortcut = "F5"},

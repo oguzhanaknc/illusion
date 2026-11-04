@@ -27,6 +27,7 @@
 #include <filesystem>
 #include <memory>
 #include <optional>
+#include <span>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -137,6 +138,8 @@ public:
     [[nodiscard]] Expected<void, CommandError> openPalette(std::string_view mode,
                                                            std::string_view query) override;
     void notify(UiNotice notice, std::string_view message) override;
+    /// Imports the files dropped on the window (absolute paths) into the asset browser's current folder.
+    void importDroppedFiles(std::span<const std::string> paths);
     void requestQuit() override;
     [[nodiscard]] Expected<void, CommandError> beginModalTransform(GizmoModalOperation operation) override;
     [[nodiscard]] Expected<u64, CommandError> requestScreenshot(UVec2 size) override;

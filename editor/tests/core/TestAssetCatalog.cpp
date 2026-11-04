@@ -208,6 +208,31 @@ TEST_CASE("Empty files are never matched as renames")
     CHECK(changes.removed == std::vector<std::string>{"assets:/a.txt"});
 }
 
+TEST_CASE("The catalog version counts the updates that changed something")
+{
+    CatalogFixture f;
+    f.writeProject();
+    AssetCatalog catalog;
+    CHECK(catalog.version() == 0);
+    (void)catalog.refresh(f.files);
+    const u64 scanned = catalog.version();
+    CHECK(scanned == 1);
+    CHECK(catalog.refresh(f.files).empty());
+    CHECK(catalog.version() == scanned); // Nothing changed: same version.
+
+    f.write("textures/red.png", "redder pixels");
+    CHECK_FALSE(catalog.apply(f.files, std::vector<FileEvent>{{FileEventKind::Modified, "textures/red.png"}})
+                    .empty());
+    CHECK(catalog.version() == scanned + 1);
+    CHECK(catalog.apply(f.files, std::vector<FileEvent>{{FileEventKind::Modified, "textures/red.png"}})
+              .empty());
+    CHECK(catalog.version() == scanned + 1); // No change: the version stays.
+
+    catalog.clear();
+    CHECK(catalog.version() == scanned + 2);
+    CHECK(catalog.scanned() == false);
+}
+
 TEST_CASE("Applying watcher events reads reported files again even when their stamp did not change")
 {
     CatalogFixture f;
