@@ -33,6 +33,11 @@ namespace s = strings;
 constexpr f32 kSidebarWidth = 190.0f;
 constexpr f32 kInspectorWidth = 290.0f;
 constexpr usize kMaxThumbnailsPerFrame = 4;
+constexpr f32 kKindComboWidth = 110.0f;
+constexpr f32 kSortComboWidth = 120.0f;
+constexpr f32 kMinSearchWidth = 80.0f;
+// The drag-and-drop payload type of asset fields (Inspector.cpp accepts it).
+constexpr const char* kAssetPayload = "ILLUSION_ASSET";
 
 // The last path component (a file or folder name).
 std::string_view leaf(std::string_view path) noexcept
@@ -586,8 +591,12 @@ void AssetBrowser::State::drawToolbar(Impl& shell, ui::UiKit& kit)
         }
     }
 
-    // Second row: search, kind filter, sort, view toggle, new folder, favourite.
-    ImGui::SetNextItemWidth(-1.0f);
+    // Second row: search, kind filter, sort, view toggle, new folder, favourite. The search field takes the
+    // width the five controls after it leave (two combos, three square icon buttons, five gaps).
+    const f32 trailing = (kKindComboWidth + kSortComboWidth) * kit.scale + 3.0f * ImGui::GetFrameHeight() +
+                         5.0f * ImGui::GetStyle().ItemSpacing.x;
+    ImGui::SetNextItemWidth(
+        std::max(ImGui::GetContentRegionAvail().x - trailing, kMinSearchWidth * kit.scale));
     ui::searchField(kit, "asset_browser.search", search, text.format(s::kAssetBrowserSearch));
     ImGui::SameLine();
     const char* kindItems[8];
@@ -596,7 +605,7 @@ void AssetBrowser::State::drawToolbar(Impl& shell, ui::UiKit& kit)
     {
         kindItems[i + 1] = text.copy(kFileKinds[i]);
     }
-    ImGui::SetNextItemWidth(110.0f * kit.scale);
+    ImGui::SetNextItemWidth(kKindComboWidth * kit.scale);
     if (ImGui::Combo(text.hidden("asset_browser.kind"), &kind, kindItems, 8))
     {
         entriesVersion = ~u64{0};
@@ -605,7 +614,7 @@ void AssetBrowser::State::drawToolbar(Impl& shell, ui::UiKit& kit)
     const char* sortItems[] = {text.format(s::kAssetBrowserSortName), text.format(s::kAssetBrowserSortKind),
                                text.format(s::kAssetBrowserSortSize),
                                text.format(s::kAssetBrowserSortModified)};
-    ImGui::SetNextItemWidth(120.0f * kit.scale);
+    ImGui::SetNextItemWidth(kSortComboWidth * kit.scale);
     if (ImGui::Combo(text.hidden("asset_browser.sort"), &sort, sortItems, 4))
     {
         entriesVersion = ~u64{0};
@@ -692,6 +701,14 @@ void AssetBrowser::State::drawContent(Impl& shell, ui::UiKit& kit)
             }
             ImGui::OpenPopup("###asset_browser.context");
         }
+        // Drag source: an asset carries its virtual path into asset fields (the Inspector's).
+        if (!entry.folder && ImGui::BeginDragDropSource(ImGuiDragDropFlags_SourceNoDisableHover))
+        {
+            const std::string& path = entry.record->path;
+            ImGui::SetDragDropPayload(kAssetPayload, path.c_str(), path.size() + 1);
+            ImGui::TextUnformatted(text.copy(leaf(path)));
+            ImGui::EndDragDropSource();
+        }
     };
 
     if (grid)
@@ -744,7 +761,9 @@ void AssetBrowser::State::drawContent(Impl& shell, ui::UiKit& kit)
                         select(entry.record->path, io.KeyCtrl);
                     }
                     interact(i);
-                    if (col + 1 < columns)
+                    // The last tile of a row (or of the folder) ends the line: the clipper measures rows
+                    // by the cursor moving down.
+                    if (col + 1 < columns && i + 1 < entries.size())
                     {
                         ImGui::SameLine();
                     }
@@ -1073,7 +1092,9 @@ void AssetBrowser::draw(Impl& shell)
                        text.format(s::kAssetBrowserEmptyHint));
         return;
     }
-    const AssetCatalog& catalog = editor.assetCatalog();
+    // The catalog is scanned on first use; once it is, endFrame() keeps it current. Without this, a freshly
+    // opened project would show an empty browser until an asset command or Refresh ran.
+    const AssetCatalog& catalog = editor.assetCatalog().scanned() ? editor.assetCatalog() : editor.assets();
     const u32 stored = editor.thumbnails().isOpen() ? editor.thumbnails().statistics().stored : 0;
     if (st.folder != st.entriesFolder || st.kind != st.entriesKind || st.sort != st.entriesSort ||
         st.entriesSearch != st.search.data() || catalog.version() != st.entriesVersion ||

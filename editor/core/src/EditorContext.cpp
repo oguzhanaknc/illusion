@@ -380,7 +380,7 @@ Expected<void, CommandError> EditorContext::openProject(const std::filesystem::p
     m_references.clear();
     m_assets.clear();
     m_assetChanges.clear();
-    m_assetNews = {};
+    m_assetNews.clear();
     m_assetReimports.clear();
     m_assetWatcher = {};
     if (Expected<FileWatcher, std::string> watcher =
@@ -577,7 +577,7 @@ const AssetCatalog& EditorContext::assets()
 {
     if (m_project)
     {
-        m_assetNews.merge(pollAssets(true));
+        pollAssets(true);
     }
     return m_assets;
 }
@@ -587,26 +587,24 @@ void EditorContext::requestReimport(std::string path)
     m_assetReimports.push_back(std::move(path));
 }
 
-AssetCatalogChanges EditorContext::pollAssets(bool full)
+void EditorContext::pollAssets(bool full)
 {
     m_assetChanges.clear();
     m_assetWatcher.poll(m_assetChanges);
     if (!m_assets.scanned())
     {
         (void)m_assets.refresh(m_files); // The first scan reports every asset; that is not news.
-        return {};
+        return;
     }
-    AssetCatalogChanges changes;
     if (!m_assetChanges.empty())
     {
-        changes = m_assets.apply(m_files, m_assetChanges);
+        m_assetNews.merge(m_assets.apply(m_files, m_assetChanges));
     }
     // Native notifications arrive late, so commands also list the mount: they must see their own writes.
     if (full || !m_assetWatcher.isWatching())
     {
-        changes.merge(m_assets.refresh(m_files));
+        m_assetNews.merge(m_assets.refresh(m_files));
     }
-    return changes;
 }
 
 void EditorContext::postAssetChanges(const AssetCatalogChanges& changes)
@@ -1633,15 +1631,15 @@ void EditorContext::endFrame(f64 deltaSeconds)
         if (m_assetPollTimer >= m_options.assetPollInterval)
         {
             m_assetPollTimer = 0.0;
-            m_assetNews.merge(pollAssets(false));
+            pollAssets(false);
             postAssetChanges(m_assetNews);
-            m_assetNews = {};
+            m_assetNews.clear();
         }
     }
     if (m_project && !m_assetReimports.empty())
     {
         postAssetChanges(m_assetNews); // Reimports do not wait for the poll interval.
-        m_assetNews = {};
+        m_assetNews.clear();
     }
     m_events.flush();
     m_journal.flush();
