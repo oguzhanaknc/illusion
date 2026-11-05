@@ -184,7 +184,7 @@ void randomCommand(EditorContext& editor, std::mt19937& random)
     }
     case 17:
     {
-        const u32 which = static_cast<u32>(random() % 3);
+        const u32 which = static_cast<u32>(random() % 4);
         const std::string entity = pick();
         if (which == 0)
         {
@@ -194,7 +194,7 @@ void randomCommand(EditorContext& editor, std::mt19937& random)
         }
         else
         {
-            name = which == 1 ? "prefab.unpack" : "prefab.revert";
+            name = which == 1 ? "prefab.unpack" : which == 2 ? "prefab.revert" : "prefab.apply";
             params = R"({"entity":")" + entity + R"("})";
         }
         break;

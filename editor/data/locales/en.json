@@ -277,6 +277,8 @@
     "editor.command.play.step.title": {"text": "Step", "comment": "Title of the command play.step"},
     "editor.command.play.stop.description": {"text": "Stops the play session and returns to the edited scene.", "comment": "Tooltip of the command play.stop"},
     "editor.command.play.stop.title": {"text": "Stop", "comment": "Title of the command play.stop"},
+    "editor.command.prefab.apply.description": {"text": "Writes an instance's changes into its prefab.", "comment": "Tooltip of the command prefab.apply"},
+    "editor.command.prefab.apply.title": {"text": "Apply to prefab", "comment": "Title of the command prefab.apply"},
     "editor.command.prefab.create.description": {"text": "Saves the selected entity and its children as a prefab.", "comment": "Tooltip of the command prefab.create"},
     "editor.command.prefab.create.title": {"text": "New prefab", "comment": "Title of the command prefab.create"},
     "editor.command.prefab.instantiate.description": {"text": "Adds an instance of a prefab to the scene.", "comment": "Tooltip of the command prefab.instantiate"},

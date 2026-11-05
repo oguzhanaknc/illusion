@@ -48,15 +48,38 @@ farklı olanı kaydeder.
 {"entity": "/Level/Crate/Lid", "component": "illusion.Name"}
 ```
 
+## Override'ları prefab'a uygulama
+
+`prefab.apply` bir instance'ın değiştirdiklerini prefab dosyasına yazar: bir Entity'nin tek bir
+`component`'ini, Entity'nin her Component'ini ya da `"all": true` ile instance'tan çıkarılan Entity'ler dahil
+bütün instance'ı. Kökün yerleşimi ve hiyerarşi sahnede kalır. Açık sahnedeki diğer her instance ardından yeni
+prefab'ı izler ve kendi override'larını korur; dosya yazımı ve bu düzenlemeler geri alınabilir tek bir
+adımdır.
+
+```json
+{"entity": "/Level/Crate", "all": true}
+```
+
+## Kopyalama ve çoğaltma
+
+Bütün bir instance'ı (kökünü) panoya kopyalayıp yapıştırmak, aynı override'larla yeni, bağlı bir instance
+verir. Kökü olmadan kopyalanan instance Entity'leri ve `entity.duplicate` ile yapılan Entity'ler sıradan
+kopyalardır.
+
 ## Paketi açma
 
 `prefab.unpack` bir instance'ı, prefab'a artık bağlı olmayan, aynı id ve değerlere sahip sıradan Entity'lere
 dönüştürür; içine yerleştirilmiş instance'ların da paketi açılır. Her düzenleme gibi oluşturma, yerleştirme,
 geri alma (revert) ve paket açma da geri alınabilir (undo).
 
+## Başvurular ve taşımalar
+
+Bir sahne, her instance'ının prefab'ına ve onun üzerinden prefab'ın başvurduklarına başvurur:
+`asset.references` ve `asset.move` ikisini de görür. Bir Asset'i taşımak, prefab dosyalarını ve onların
+instance'larını içeren sahneleri tek adımda, taşımayı override'lara dönüştürmeden yeniden yazar.
+
 ## Şimdilik sınırlar
 
-- Instance Entity'lerini panoya kopyalamak sıradan kopyalar yapıştırır.
-- Bir sahne ve instance'ları açıkken prefab dosyası değişirse açık instance'lar, sahne yeniden açıldığında
-  güncellenir. Prefab'ın artık sahip olmadığı Entity'ler o zaman sıradan Entity'ler olarak kaydedilir.
-- `asset.move`, Entity'leri prefab instance'larının içine başvuran kapalı bir sahneyi yeniden yazmayı reddeder.
+- Bir sahne ve instance'ları açıkken bir prefab dosyası diskte (`prefab.apply` dışında) değişirse, açık
+  instance'lar sahne yeniden açıldığında güncellenir. Prefab'ın artık sahip olmadığı Entity'ler o zaman sıradan
+  Entity'ler olarak kaydedilir.

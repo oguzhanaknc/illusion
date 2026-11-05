@@ -7,6 +7,7 @@
 #include <illusion/editor/core/WorldEditor.hpp>
 
 #include <unordered_map>
+#include <unordered_set>
 
 namespace illusion::editor::detail
 {
@@ -424,8 +425,10 @@ bool revertsByDefault(const World& world, Entity entity, ComponentId type)
     {
         return false;
     }
-    // A Transform under a LocalTransform is derived from it.
-    return type != componentId<Transform>() || !world.has<LocalTransform>(entity);
+    // A child's Transform is derived from its LocalTransform (a root's LocalTransform follows its Transform).
+    const Hierarchy* hierarchy = world.tryGet<Hierarchy>(entity);
+    return type != componentId<Transform>() || !world.has<LocalTransform>(entity) || hierarchy == nullptr ||
+           hierarchy->parent.isNull();
 }
 
 Expected<PrefabRevertResult, CommandError> prefabRevert(CommandContext& context,
@@ -565,6 +568,526 @@ Expected<PrefabRevertResult, CommandError> prefabRevert(CommandContext& context,
     return PrefabRevertResult{reverted};
 }
 
+// Writes the Entity fields of an instance's Components as ids in its prefab file: its own entities by local
+// id, others (which a prefab cannot refer to) as null.
+class LocalWriter final : public EntityResolver
+{
+public:
+    LocalWriter(const World& world, EntityGuid instance) noexcept
+        : m_world(world)
+        , m_instance(instance)
+    {
+    }
+
+    JsonMutValue writeEntity(JsonMutDocument& doc, Entity entity) const override
+    {
+        const PrefabMember* member = m_world.isAlive(entity) ? m_world.tryGet<PrefabMember>(entity)
+                                                             : static_cast<const PrefabMember*>(nullptr);
+        if (member == nullptr || member->instance != m_instance)
+        {
+            return doc.makeNull();
+        }
+        return doc.makeString(guidString(member->local));
+    }
+
+    Expected<Entity, std::string> readEntity(JsonValue) const override
+    {
+        return unexpected(std::string("cannot be read by a local writer"));
+    }
+
+private:
+    const World& m_world;
+    EntityGuid m_instance;
+};
+
+// Reads Entity fields as the entities of a World with those ids.
+class GuidReader final : public EntityResolver
+{
+public:
+    explicit GuidReader(const std::unordered_map<u64, Entity>& entities) noexcept
+        : m_entities(entities)
+    {
+    }
+
+    JsonMutValue writeEntity(JsonMutDocument& doc, Entity) const override { return doc.makeNull(); }
+
+    Expected<Entity, std::string> readEntity(JsonValue value) const override
+    {
+        if (value.isNull())
+        {
+            return Entity{};
+        }
+        const std::optional<std::string_view> text = value.asString();
+        const std::optional<EntityGuid> guid = text ? parseGuid(*text) : std::nullopt;
+        const auto it = guid ? m_entities.find(guid->value) : m_entities.end();
+        if (it == m_entities.end())
+        {
+            return unexpected(std::string("must be null or the id of an entity of the prefab"));
+        }
+        return it->second;
+    }
+
+private:
+    const std::unordered_map<u64, Entity>& m_entities;
+};
+
+std::unordered_map<u64, Entity> entitiesByGuid(const World& world)
+{
+    std::vector<Entity> all;
+    world.entities(all);
+    std::unordered_map<u64, Entity> out;
+    out.reserve(all.size());
+    for (const Entity entity : all)
+    {
+        if (const EntityGuid* guid = world.tryGet<EntityGuid>(entity))
+        {
+            out.emplace(guid->value, entity);
+        }
+    }
+    return out;
+}
+
+// The roots of the outermost instances of the edited World.
+std::vector<Entity> instanceRoots(const World& world)
+{
+    std::vector<Entity> all;
+    world.entities(all);
+    std::erase_if(all, [&](Entity entity) {
+        const PrefabInstance* instance = world.tryGet<PrefabInstance>(entity);
+        const PrefabMember* member = world.tryGet<PrefabMember>(entity);
+        return instance == nullptr || member == nullptr || member->instance != instance->instance;
+    });
+    return all;
+}
+
+// The overrides of every instance of the edited World (by instance id, compact JSON), as saved now.
+Expected<std::unordered_map<u64, std::string>, CommandError> allOverrides(CommandContext& context)
+{
+    std::unordered_map<u64, std::string> out;
+    const std::vector<Entity> roots = instanceRoots(context.world());
+    if (roots.empty())
+    {
+        return out;
+    }
+    SceneSaveOptions options;
+    options.subset = std::span<const Entity>(roots);
+    options.prefabs = context.editor().prefabSource();
+    const SceneSaveResult saved = saveScene(context.world(), options);
+    if (!saved.ok())
+    {
+        return unexpected(CommandError::make(ErrorKind::PreconditionFailed, saved.error));
+    }
+    const Expected<JsonDocument, JsonError> doc = JsonDocument::parse(saved.json);
+    if (!doc)
+    {
+        return unexpected(CommandError::make(ErrorKind::Internal, "cannot read the saved instances"));
+    }
+    for (const JsonValue record : doc->root().find("entities").elements())
+    {
+        const std::optional<std::string_view> id = record.find("id").asString();
+        const std::optional<EntityGuid> guid = id ? parseGuid(*id) : std::nullopt;
+        if (record.find("prefab").isAbsent() || !guid)
+        {
+            continue;
+        }
+        std::string text = "{}";
+        if (const JsonValue overrides = record.find("overrides"); overrides.isObject())
+        {
+            text.clear();
+            (void)overrides.write(text, JsonWriteOptions{.pretty = false});
+        }
+        out.emplace(guid->value, std::move(text));
+    }
+    return out;
+}
+
+// Brings the instance whose root is @p root up to date with its prefab as @p prefabs reads it, keeping the
+// overrides @p overrides (compact JSON): its entities keep their handles, so references and added children
+// stay. Returns the number of edits.
+Expected<u32, CommandError> syncInstance(CommandContext& context, Entity root, std::string_view overrides,
+                                         const PrefabSource& prefabs)
+{
+    World& world = context.world();
+    const PrefabInstance instance = world.get<PrefabInstance>(root);
+    const std::vector<Entity> members = membersOf(world, instance.instance);
+    const std::unordered_set<Entity> memberSet(members.begin(), members.end());
+
+    // The instance as it should be, next to stubs of the scene's other entities that overrides may name.
+    JsonMutDocument doc;
+    JsonMutValue top = doc.makeObject();
+    doc.setRoot(top);
+    top.add("format", doc.makeString("illusion.scene")).add("version", doc.makeU64(kSceneFormatVersion));
+    JsonMutValue entries = top.addArray("entities");
+    std::vector<Entity> all;
+    world.entities(all);
+    for (const Entity entity : all)
+    {
+        const EntityGuid* guid = world.tryGet<EntityGuid>(entity);
+        if (guid != nullptr && !memberSet.contains(entity))
+        {
+            entries.pushObject().add("id", doc.makeString(guidString(*guid)));
+        }
+    }
+    JsonMutValue record = entries.pushObject();
+    record.add("prefab", doc.makeString(instance.prefab.path()))
+        .add("id", doc.makeString(guidString(instance.instance)));
+    const Expected<JsonDocument, JsonError> patch = JsonDocument::parse(overrides);
+    if (patch && patch->root().isObject() && patch->root().size() > 0)
+    {
+        record.add("overrides", doc.copy(patch->root()));
+    }
+    std::string text;
+    (void)doc.write(text, JsonWriteOptions{.pretty = false});
+    World target;
+    SceneLoadOptions options;
+    options.prefabs = prefabs;
+    const SceneLoadResult loaded = loadScene(target, text, options);
+    if (!loaded.ok())
+    {
+        return unexpected(CommandError::make(ErrorKind::PreconditionFailed,
+                                             "cannot update the instance " + guidString(instance.instance) +
+                                                 ": " + loaded.error));
+    }
+    const std::vector<Entity> wanted = membersOf(target, instance.instance);
+    if (wanted.empty() || target.has<UnresolvedPrefab>(wanted.front()))
+    {
+        return unexpected(
+            CommandError::make(ErrorKind::PreconditionFailed,
+                               "the prefab '" + std::string(instance.prefab.path()) + "' cannot be loaded"));
+    }
+
+    EntityIndex& index = context.index();
+    u32 edits = 0;
+    // Entities the prefab gained: created first, so that values can refer to them.
+    for (const Entity entity : wanted)
+    {
+        const EntityGuid guid = target.get<EntityGuid>(entity);
+        if (index.find(guid).isNull())
+        {
+            CreateEntityOptions create;
+            create.guid = guid;
+            if (Expected<Entity, CommandError> created = context.edit().create(create); !created)
+            {
+                return unexpected(std::move(created).error());
+            }
+            ++edits;
+        }
+    }
+    const GuidWriter writer(target);
+    std::unordered_set<u64> kept;
+    for (const Entity entity : wanted)
+    {
+        const EntityGuid guid = target.get<EntityGuid>(entity);
+        kept.insert(guid.value);
+        const Entity edited = index.find(guid);
+        const bool isRoot = target.has<PrefabInstance>(entity) &&
+                            target.get<PrefabInstance>(entity).instance == instance.instance;
+        if (!isRoot)
+        {
+            const Hierarchy* hierarchy = target.tryGet<Hierarchy>(entity);
+            const Entity parent = hierarchy != nullptr && !hierarchy->parent.isNull()
+                                      ? index.find(target.get<EntityGuid>(hierarchy->parent))
+                                      : Entity{};
+            if (index.hierarchy().parent(edited) != parent)
+            {
+                if (Expected<void, CommandError> moved =
+                        context.edit().setParent(edited, parent, ParentMode::KeepLocal);
+                    !moved)
+                {
+                    return unexpected(std::move(moved).error());
+                }
+                ++edits;
+            }
+        }
+        for (const ComponentId type : target.componentsOf(entity))
+        {
+            const bool link = type == componentId<PrefabMember>() || type == componentId<PrefabInstance>();
+            if (!link && !revertsByDefault(target, entity, type))
+            {
+                continue;
+            }
+            const TypeReflection& reflection = *target.registry().reflection(type);
+            const std::byte tag{};
+            const void* data = reflection.size == 0 ? &tag : target.componentData(entity, type);
+            Expected<std::string, CommandError> value = writeReflected(reflection, data, &writer);
+            if (!value)
+            {
+                return unexpected(std::move(value).error());
+            }
+            const Expected<JsonDocument, JsonError> json = JsonDocument::parse(*value);
+            if (!json)
+            {
+                return unexpected(CommandError::make(ErrorKind::Internal, "cannot read the prefab's value"));
+            }
+            if (hasType(world, edited, type))
+            {
+                Expected<bool, CommandError> set =
+                    context.edit().setComponent(edited, type, json->root(), JsonReadMode::Replace);
+                if (!set)
+                {
+                    return unexpected(std::move(set).error());
+                }
+                edits += *set ? 1u : 0u;
+            }
+            else
+            {
+                Expected<std::vector<std::string>, CommandError> added =
+                    context.edit().addComponent(edited, type, json->root());
+                if (!added)
+                {
+                    return unexpected(std::move(added).error());
+                }
+                ++edits;
+            }
+        }
+        const std::span<const ComponentId> own = world.componentsOf(edited);
+        const std::vector<ComponentId> types(own.begin(), own.end());
+        for (const ComponentId type : types)
+        {
+            if (revertsByDefault(world, edited, type) && !hasType(target, entity, type))
+            {
+                if (Expected<void, CommandError> removed = context.edit().removeComponent(edited, type);
+                    !removed)
+                {
+                    return unexpected(std::move(removed).error());
+                }
+                ++edits;
+            }
+        }
+    }
+    // Entities the prefab lost.
+    for (const Entity entity : members)
+    {
+        if (world.isAlive(entity) && !kept.contains(world.get<EntityGuid>(entity).value))
+        {
+            if (Expected<u32, CommandError> destroyed = context.edit().destroy(entity); !destroyed)
+            {
+                return unexpected(std::move(destroyed).error());
+            }
+            ++edits;
+        }
+    }
+    return edits;
+}
+
+// True if prefab.apply writes @p type of the instance entity @p entity into its prefab.
+bool appliesByDefault(const World& world, Entity entity, ComponentId type, bool isRoot)
+{
+    const TypeReflection* reflection = world.registry().reflection(type);
+    if (reflection == nullptr || reflection->meta.transient || type == componentId<EntityGuid>() ||
+        type == componentId<Hierarchy>())
+    {
+        return false;
+    }
+    // The root's placement belongs to the scene; a child's Transform is derived from its LocalTransform.
+    if (isRoot)
+    {
+        return type != componentId<Transform>() && type != componentId<LocalTransform>();
+    }
+    return type != componentId<Transform>() || !world.has<LocalTransform>(entity);
+}
+
+Expected<PrefabApplyResult, CommandError> prefabApply(CommandContext& context,
+                                                      const PrefabApplyParams& params)
+{
+    Expected<Entity, CommandError> entity = context.entity(params.entity, "/entity");
+    if (!entity)
+    {
+        return unexpected(std::move(entity).error());
+    }
+    Expected<Entity, CommandError> root = instanceRootOf(context, *entity);
+    if (!root)
+    {
+        return unexpected(std::move(root).error());
+    }
+    World& world = context.world();
+    std::optional<ComponentId> only;
+    if (params.component)
+    {
+        if (params.all.value_or(false))
+        {
+            return unexpected(CommandError::invalid("/all", "cannot be combined with component"));
+        }
+        Expected<ComponentId, CommandError> type = context.componentType(*params.component, "/component");
+        if (!type)
+        {
+            return unexpected(std::move(type).error());
+        }
+        if (!appliesByDefault(world, *entity, *type, *entity == *root))
+        {
+            return unexpected(CommandError::invalid(
+                "/component",
+                "cannot be applied (the hierarchy and the root's placement stay in the scene)"));
+        }
+        only = *type;
+    }
+    const PrefabInstance instance = world.get<PrefabInstance>(*root);
+    const std::string path(instance.prefab.path());
+    Expected<std::string, CommandError> before = readPrefabText(context, path);
+    if (!before)
+    {
+        return unexpected(std::move(before).error());
+    }
+    // The other instances keep their overrides when the prefab changes under them.
+    Expected<std::unordered_map<u64, std::string>, CommandError> overrides = allOverrides(context);
+    if (!overrides)
+    {
+        return unexpected(std::move(overrides).error());
+    }
+
+    // The prefab file as a World: its entity ids are the instance's local ids.
+    World prefab;
+    SceneLoadOptions load;
+    load.prefabs = context.editor().prefabSource();
+    const SceneLoadResult loaded = loadScene(prefab, *before, load);
+    if (!loaded.ok())
+    {
+        return unexpected(CommandError::make(ErrorKind::PreconditionFailed,
+                                             "the prefab '" + path + "' cannot be loaded: " + loaded.error));
+    }
+    const std::unordered_map<u64, Entity> prefabEntities = entitiesByGuid(prefab);
+    const LocalWriter localWriter(world, instance.instance);
+    const GuidWriter prefabWriter(prefab);
+    const GuidReader reader(prefabEntities);
+    const std::vector<Entity> members =
+        params.all.value_or(false) ? membersOf(world, instance.instance) : std::vector<Entity>{*entity};
+    u32 applied = 0;
+    for (const Entity member : members)
+    {
+        const auto found = prefabEntities.find(world.get<PrefabMember>(member).local.value);
+        if (found == prefabEntities.end())
+        {
+            continue; // the prefab no longer has this entity
+        }
+        const Entity target = found->second;
+        const bool isRoot = member == *root;
+        std::vector<ComponentId> types;
+        if (only)
+        {
+            types.push_back(*only);
+        }
+        else
+        {
+            for (const ComponentId type : world.componentsOf(member))
+            {
+                if (appliesByDefault(world, member, type, isRoot))
+                {
+                    types.push_back(type);
+                }
+            }
+            for (const ComponentId type : prefab.componentsOf(target))
+            {
+                if (appliesByDefault(prefab, target, type, isRoot) &&
+                    std::find(types.begin(), types.end(), type) == types.end())
+                {
+                    types.push_back(type);
+                }
+            }
+        }
+        for (const ComponentId type : types)
+        {
+            const TypeReflection& reflection = *world.registry().reflection(type);
+            const bool inInstance = hasType(world, member, type);
+            const bool inPrefab = hasType(prefab, target, type);
+            if (!inInstance)
+            {
+                if (inPrefab)
+                {
+                    (void)prefab.remove(target, type);
+                    ++applied;
+                }
+                continue;
+            }
+            const std::byte tag{};
+            const void* data = reflection.size == 0 ? &tag : world.componentData(member, type);
+            Expected<std::string, CommandError> value = writeReflected(reflection, data, &localWriter);
+            if (!value)
+            {
+                return unexpected(std::move(value).error());
+            }
+            if (inPrefab)
+            {
+                const void* current = reflection.size == 0 ? &tag : prefab.componentData(target, type);
+                Expected<std::string, CommandError> was = writeReflected(reflection, current, &prefabWriter);
+                if (was && *was == *value)
+                {
+                    continue;
+                }
+            }
+            const Expected<JsonDocument, JsonError> json = JsonDocument::parse(*value);
+            if (!json)
+            {
+                return unexpected(
+                    CommandError::make(ErrorKind::Internal, "cannot read the instance's value"));
+            }
+            void* into = inPrefab ? prefab.componentData(target, type) : prefab.emplaceDefault(target, type);
+            ValueReadOptions read;
+            read.mode = JsonReadMode::Replace;
+            read.entities = &reader;
+            if (const ValueReadResult result = readValue(reflection, into, json->root(), read); !result.ok())
+            {
+                return unexpected(
+                    CommandError::make(ErrorKind::Internal, "cannot apply " + std::string(reflection.name) +
+                                                                ": " + result.errors.front().message));
+            }
+            ++applied;
+        }
+    }
+    if (params.all.value_or(false))
+    {
+        // Entities removed from the instance leave the prefab (with their descendants there).
+        std::unordered_set<u64> present;
+        for (const Entity member : membersOf(world, instance.instance))
+        {
+            present.insert(world.get<PrefabMember>(member).local.value);
+        }
+        for (const auto& [guid, target] : prefabEntities)
+        {
+            if (!present.contains(guid) && prefab.isAlive(target))
+            {
+                (void)destroyRecursive(prefab, target);
+                ++applied;
+            }
+        }
+    }
+    PrefabApplyResult result{path, applied, 0};
+    if (applied == 0)
+    {
+        return result;
+    }
+    SceneSaveOptions save;
+    save.prefabFile = true;
+    save.prefabs = context.editor().prefabSource();
+    const SceneSaveResult written = saveScene(prefab, save);
+    if (!written.ok())
+    {
+        return unexpected(
+            CommandError::make(ErrorKind::ValidationFailed, "cannot write the prefab: " + written.error));
+    }
+    if (Expected<bool, CommandError> stored = context.edit().writeFile(path, written.json); !stored)
+    {
+        return unexpected(std::move(stored).error());
+    }
+    // Every other instance follows the new prefab with its own overrides.
+    const PrefabSource source = sourceWith(context, path, written.json);
+    for (const Entity other : instanceRoots(world))
+    {
+        const EntityGuid id = world.get<PrefabInstance>(other).instance;
+        if (id == instance.instance)
+        {
+            continue;
+        }
+        const auto kept = overrides->find(id.value);
+        Expected<u32, CommandError> synced = syncInstance(
+            context, other, kept != overrides->end() ? std::string_view(kept->second) : "{}", source);
+        if (!synced)
+        {
+            return unexpected(std::move(synced).error());
+        }
+        result.instances += *synced > 0 ? 1u : 0u;
+    }
+    return result;
+}
 } // namespace
 
 void registerPrefabCommands(CommandRegistry& registry)
@@ -620,6 +1143,22 @@ void registerPrefabCommands(CommandRegistry& registry)
         .icon = "difference",
         .flags = {.readOnly = true, .idempotent = true},
         .mode = CommandMode::Any,
+    });
+    registry.add<&prefabApply>({
+        .name = "prefab.apply",
+        .title = strings::kCommandPrefabApplyTitle,
+        .description = strings::kCommandPrefabApplyDescription,
+        .agentSummary =
+            "Writes what an instance entity overrides into its prefab file: one Component, every Component "
+            "of the "
+            "entity, or (all) the whole instance including removed entities. The root's placement and the "
+            "hierarchy stay in the scene; other instances in the open scene follow the new prefab and keep "
+            "their "
+            "own overrides. Example: {\"entity\": \"/Crate/Lid\", \"component\": \"illusion.Name\"}.",
+        .category = "Prefab",
+        .icon = "publish",
+        .flags = {.undoable = true},
+        .permission = PermissionClass::Files,
     });
     registry.add<&prefabRevert>({
         .name = "prefab.revert",

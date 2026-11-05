@@ -6,6 +6,7 @@
 #include <illusion/core/Profiler.hpp>
 #include <illusion/ecs/EntityGuid.hpp>
 #include <illusion/ecs/Name.hpp>
+#include <illusion/ecs/Prefab.hpp>
 #include <illusion/ecs/Transform.hpp>
 #include <illusion/ecs/World.hpp>
 #include <illusion/editor/core/ChangeJournal.hpp>
@@ -656,7 +657,9 @@ Expected<Entity, CommandError> WorldEditor::duplicate(Entity root)
         for (const ComponentId type : types)
         {
             const TypeReflection* reflection = registry.reflection(type);
-            if (reflection == nullptr || type == componentId<EntityGuid>())
+            // Copies are plain entities: two entities with the same prefab link would corrupt the instance.
+            if (reflection == nullptr || type == componentId<EntityGuid>() ||
+                type == componentId<PrefabMember>() || type == componentId<PrefabInstance>())
             {
                 continue;
             }

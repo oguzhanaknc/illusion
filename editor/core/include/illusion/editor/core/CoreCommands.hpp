@@ -1394,6 +1394,22 @@ struct PrefabOverridesResult
     JsonText overrides;
 };
 
+/// Params of `prefab.apply`.
+struct PrefabApplyParams
+{
+    std::string entity;                     ///< An entity of an instance.
+    std::optional<std::string> component{}; ///< Only this Component (default: every Component of the entity).
+    std::optional<bool> all{}; ///< The whole instance, removed entities included (default false).
+};
+
+/// Result of `prefab.apply`.
+struct PrefabApplyResult
+{
+    std::string path;   ///< The prefab file that was written (unchanged when components is 0).
+    u32 components = 0; ///< Components (and removed entities) written into the prefab.
+    u32 instances = 0;  ///< Other instances in the open scene that changed to follow the prefab.
+};
+
 /// Params of `prefab.revert`.
 struct PrefabRevertParams
 {

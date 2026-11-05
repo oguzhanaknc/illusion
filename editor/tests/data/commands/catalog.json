@@ -9725,6 +9725,114 @@
       "additionalProperties": false
     }
   },
+  "prefab.apply": {
+    "version": 1,
+    "permission": "files",
+    "mode": "edit",
+    "undoable": true,
+    "readOnly": false,
+    "params": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "type": "object",
+      "properties": {
+        "entity": {
+          "type": "string"
+        },
+        "component": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "all": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "dryRun": {
+          "type": "boolean"
+        },
+        "mergeKey": {
+          "type": "string"
+        },
+        "clientToken": {
+          "type": "string"
+        },
+        "expectRevision": {
+          "anyOf": [
+            {
+              "type": "string",
+              "pattern": "^[0-9]+$"
+            },
+            {
+              "type": "integer",
+              "minimum": 0
+            }
+          ]
+        }
+      },
+      "required": ["entity"],
+      "additionalProperties": false
+    },
+    "result": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "type": "object",
+      "properties": {
+        "path": {
+          "type": "string"
+        },
+        "components": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 4294967295
+        },
+        "instances": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 4294967295
+        },
+        "_editor": {
+          "type": "object",
+          "properties": {
+            "revision": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "transaction": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "dryRun": {
+              "type": "boolean"
+            },
+            "operations": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "warnings": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          },
+          "required": ["revision", "transaction", "dryRun", "operations", "warnings"],
+          "additionalProperties": false
+        }
+      },
+      "required": ["path", "components", "instances", "_editor"],
+      "additionalProperties": false
+    }
+  },
   "prefab.create": {
     "version": 1,
     "permission": "files",

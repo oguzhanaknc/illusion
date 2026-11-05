@@ -46,15 +46,37 @@ entities or add children. Saving the scene records only what differs from the pr
 {"entity": "/Level/Crate/Lid", "component": "illusion.Name"}
 ```
 
+## Applying overrides to the prefab
+
+`prefab.apply` writes what an instance changes into its prefab file: one `component` of an entity, every
+Component of the entity, or with `"all": true` the whole instance, entities removed from it included. The
+root's placement and the hierarchy stay in the scene. Every other instance in the open scene then follows the
+new prefab and keeps its own overrides; the file write and those edits are one undoable step.
+
+```json
+{"entity": "/Level/Crate", "all": true}
+```
+
+## Copying and duplicating
+
+Copying a whole instance (its root) to the clipboard and pasting it gives a new linked instance with the same
+overrides. Entities of an instance copied without its root, and entities made by `entity.duplicate`, are plain
+copies.
+
 ## Unpacking
 
 `prefab.unpack` turns an instance into plain entities with the same ids and values, no longer linked to the
 prefab; instances nested in it are unpacked too. Like every edit, creating, placing, reverting and unpacking
 can be undone.
 
+## References and moves
+
+A scene refers to the prefab of each of its instances, and through it to what the prefab refers to:
+`asset.references` and `asset.move` see both. Moving an asset rewrites prefab files and the scenes that
+instance them in one step, without turning the move into overrides.
+
 ## Current limits
 
-- Copying instance entities to the clipboard pastes plain copies.
-- If a prefab file changes while a scene with its instances is open, the open instances update when the scene
-  is opened again. Entities that the prefab no longer has are then saved as plain entities.
-- `asset.move` refuses to rewrite a closed scene whose entities refer into prefab instances.
+- If a prefab file changes on disk (outside `prefab.apply`) while a scene with its instances is open, the open
+  instances update when the scene is opened again. Entities that the prefab no longer has are then saved as
+  plain entities.
