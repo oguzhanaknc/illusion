@@ -6,6 +6,7 @@
 #include <illusion/core/Json.hpp>
 #include <illusion/core/Profiler.hpp>
 #include <illusion/ecs/ComponentJson.hpp>
+#include <illusion/ecs/Prefab.hpp>
 #include <illusion/ecs/World.hpp>
 #include <illusion/editor/core/EntityIndex.hpp>
 #include <illusion/editor/core/ReferenceIndex.hpp>
@@ -128,8 +129,22 @@ bool visitSetting(PreservedValue& setting, bool rewrite, F&& fn)
     return true;
 }
 
+// True if @p type is the PrefabInstance of the root of an outermost instance, which saveScene() writes as a
+// record that names the prefab.
+bool savesAsRecord(const World& world, Entity entity, ComponentId type)
+{
+    if (type != componentId<PrefabInstance>())
+    {
+        return false;
+    }
+    const PrefabMember* member = world.tryGet<PrefabMember>(entity);
+    return member != nullptr && member->instance == world.get<PrefabInstance>(entity).instance;
+}
+
 // Calls fn(AssetRef&, pointer, entityId, owner) for every reference held by the saved Components of the
-// entities.
+// entities, and for the prefab of every instance the scene saves as a record: the PrefabInstance of an
+// expanded instance's root, or the UnresolvedPrefab that a scene loaded without prefab files keeps (a changed
+// reference is written back into it).
 template <class F>
 void visitEntities(World& world, std::span<const Entity> entities, std::span<const EntityGuid> ids, F&& fn)
 {
@@ -140,8 +155,9 @@ void visitEntities(World& world, std::span<const Entity> entities, std::span<con
         for (const ComponentId type : world.componentsOf(entities[i]))
         {
             const TypeReflection* reflection = registry.reflection(type);
-            if (reflection == nullptr || reflection->meta.transient || reflection->size == 0 ||
-                !hasAssetFields(*reflection))
+            if (reflection == nullptr ||
+                (reflection->meta.transient && !savesAsRecord(world, entities[i], type)) ||
+                reflection->size == 0 || !hasAssetFields(*reflection))
             {
                 continue;
             }
@@ -149,6 +165,15 @@ void visitEntities(World& world, std::span<const Entity> entities, std::span<con
                             [&](AssetRef& reference, std::string_view pointer) {
                                 fn(reference, pointer, id, reflection->name);
                             });
+        }
+        if (UnresolvedPrefab* record = world.tryGet<UnresolvedPrefab>(entities[i]))
+        {
+            AssetRef reference(record->prefab);
+            fn(reference, "/prefab", id, "illusion.PrefabInstance");
+            if (reference.path() != record->prefab)
+            {
+                record->prefab = std::string(reference.path());
+            }
         }
     }
 }
@@ -395,6 +420,12 @@ rewriteSceneReferences(std::string_view json, std::string_view from, std::string
         return unexpected(std::move(loaded).error());
     }
     LoadedScene& scene = **loaded;
+    if (scene.result.clearedReferences > 0)
+    {
+        // Saving would drop references into the instances, whose entities are not loaded here.
+        return unexpected(std::string("entities of the scene refer to entities of prefab instances, which "
+                                      "asset references cannot be rewritten in yet"));
+    }
     bool changed = false;
     const auto move = [&](AssetRef& reference) {
         if (reference.empty() || !refersTo(reference.path(), from))

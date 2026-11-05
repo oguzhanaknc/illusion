@@ -2,8 +2,10 @@
 #include <illusion/ecs/EntityGuid.hpp>
 #include <illusion/ecs/Hierarchy.hpp>
 #include <illusion/ecs/Name.hpp>
+#include <illusion/ecs/Prefab.hpp>
 #include <illusion/ecs/Reflection.hpp>
 #include <illusion/ecs/SceneSerializer.hpp>
+#include <illusion/ecs/StructRegistry.hpp>
 #include <illusion/ecs/Transform.hpp>
 
 #include <cstring>
@@ -661,6 +663,39 @@ void reflectCoreComponents(ComponentRegistry& registry)
                                                       "scene was loaded, saved again unchanged.",
                                        .docsAnchor = "manual/scenes.md#unknown-types"},
                                       registry);
+    // Prefab links name instances by id; runtime state, but editor undo records restore them field by field.
+    reflectStruct<EntityGuid>("illusion.Guid", 1, registry.structs())
+        .meta({.displayName = "Id", .docsAnchor = "manual/scenes.md#entity-ids"})
+        .field("value", &EntityGuid::value, {.readOnly = true});
+    reflectRuntime<PrefabInstance>("illusion.PrefabInstance",
+                                   {.displayName = "Prefab instance",
+                                    .category = "Core",
+                                    .icon = "widgets",
+                                    .description = "The root of an instance of a prefab (runtime state).",
+                                    .docsAnchor = "manual/scenes.md#prefab-instances"},
+                                   registry)
+        .field("prefab", &PrefabInstance::prefab, {.readOnly = true})
+        .field("instance", &PrefabInstance::instance, {.readOnly = true});
+    reflectRuntime<PrefabMember>("illusion.PrefabMember",
+                                 {.displayName = "Prefab member",
+                                  .category = "Core",
+                                  .icon = "widgets",
+                                  .description = "An Entity created by a prefab instance (runtime state).",
+                                  .docsAnchor = "manual/scenes.md#prefab-instances"},
+                                 registry)
+        .field("instance", &PrefabMember::instance, {.readOnly = true})
+        .field("local", &PrefabMember::local, {.readOnly = true});
+    reflectRuntime<UnresolvedPrefab>("illusion.UnresolvedPrefab",
+                                     {.displayName = "Unresolved prefab",
+                                      .category = "Core",
+                                      .icon = "broken_image",
+                                      .description =
+                                          "A prefab instance whose prefab could not be loaded, saved "
+                                          "again unchanged (runtime state).",
+                                      .docsAnchor = "manual/scenes.md#prefab-instances"},
+                                     registry)
+        .field("prefab", &UnresolvedPrefab::prefab, {.readOnly = true})
+        .field("overrides", &UnresolvedPrefab::overrides, {.readOnly = true});
 }
 
 } // namespace illusion

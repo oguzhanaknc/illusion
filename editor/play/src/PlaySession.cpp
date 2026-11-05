@@ -138,7 +138,7 @@ Expected<void, CommandError> PlaySession::start(const PlayStartOptions& options)
         return unexpected(CommandError::make(ErrorKind::ValidationFailed, game.error()));
     }
     // The snapshot keeps the ids, so commands and the selection find the same entities in both Worlds.
-    Expected<std::string, CommandError> scene = impl.editor.sceneJson();
+    Expected<std::string, CommandError> scene = impl.editor.sceneJson(PrefabSaveMode::Expanded);
     if (!scene)
     {
         return unexpected(std::move(scene).error());

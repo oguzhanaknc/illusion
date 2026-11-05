@@ -9,7 +9,8 @@
 /// unchanged. Components that are not reflected, or are runtime state (TypeMeta::transient), are not saved.
 /// Every saved entity needs an EntityGuid (see assignMissingGuids()), its "id" in the file; Entity fields
 /// are written as ids. Values use the JSON forms of ComponentJson.hpp. Version 1 files, which refer to
-/// entities by index, still load (docs/adr/0033-entity-ids-names-scene-format-v2.md).
+/// entities by index, still load (docs/adr/0033-entity-ids-names-scene-format-v2.md). Prefab instances are
+/// stored as records and expanded on load (Prefab.hpp, docs/adr/0046-prefabs-as-instance-records.md).
 ///
 /// @code
 /// illusion::assignMissingGuids(world);
@@ -24,6 +25,7 @@
 #include <illusion/core/TypeName.hpp>
 #include <illusion/ecs/Entity.hpp>
 #include <illusion/ecs/EntityGuid.hpp>
+#include <illusion/ecs/Prefab.hpp>
 #include <illusion/ecs/Reflection.hpp>
 #include <illusion/ecs/StructRegistry.hpp>
 
@@ -108,6 +110,18 @@ enum class SceneOrder : u8
     AsGiven,
 };
 
+/// How saveScene() writes the entities of prefab instances.
+enum class PrefabSaveMode : u8
+{
+    /// One record per instance whose root (PrefabInstance) is saved, with the overrides found by comparing
+    /// the instance with its prefab; its members are saved with it. Members saved without their root are
+    /// written as plain entities. For scene and prefab files.
+    Records,
+    /// Every entity as a plain entity with a "prefabLink" (its PrefabMember, and the prefab of a root) that
+    /// loadScene() restores with IdPolicy::Keep: for snapshots that must recreate entities exactly (undo).
+    Expanded,
+};
+
 /// Options of saveScene().
 struct SceneSaveOptions
 {
@@ -118,6 +132,13 @@ struct SceneSaveOptions
     std::span<const SceneSettings> settings{}; ///< Settings to save.
     /// Settings of unknown types to save again (SceneLoadResult::preservedSettings).
     std::span<const PreservedValue> preservedSettings{};
+    PrefabSaveMode prefabMode = PrefabSaveMode::Records; ///< How instances are written.
+    /// Reads the prefab files of saved instances, to compute their overrides (PrefabSaveMode::Records).
+    /// Saving an instance without it fails.
+    PrefabSource prefabs{};
+    /// Write a prefab file ("format": "illusion.prefab"): fails unless the saved entities have exactly one
+    /// root (one entity or instance whose parent is not saved).
+    bool prefabFile = false;
 };
 
 /// Result of saveScene().
@@ -155,13 +176,21 @@ struct SceneLoadOptions
     /// example through VirtualFileSystem::exists()). Assets for which it returns false are listed in
     /// SceneLoadResult::missingAssets; without it only built-in references are checked.
     std::function<bool(std::string_view path)> assetExists{};
+    /// Reads the prefab files of instance records. Records whose prefab cannot be read or loaded (or that
+    /// nest deeper than kMaxPrefabDepth, or contain themselves) are kept as one UnresolvedPrefab entity, with
+    /// a warning; entity fields that referred to their entities become null.
+    PrefabSource prefabs{};
 };
 
 /// Result of loadScene().
 struct SceneLoadResult
 {
-    std::vector<Entity> entities; ///< Created entities, in file order (empty on failure).
-    /// The id of each entity in the file, in the same order as entities. Empty for version 1 files.
+    /// Created entities, in file order (empty on failure); the entities of an instance come at its record's
+    /// position, in the order of its prefab file.
+    std::vector<Entity> entities;
+    /// The id of each entity in the file, in the same order as entities: for an entity of an instance,
+    /// derivePrefabGuid(record id, its id in the prefab file); for an UnresolvedPrefab, the record id. Empty
+    /// for version 1 files.
     std::vector<EntityGuid> fileIds;
     /// Settings that no SceneLoadOptions::settings target read, to pass to
     /// SceneSaveOptions::preservedSettings.
@@ -169,6 +198,9 @@ struct SceneLoadResult
     /// Paths of referenced assets that do not exist (see SceneLoadOptions::assetExists), sorted. The scene
     /// still loads and keeps the references, so saving it writes them again.
     std::vector<std::string> missingAssets;
+    /// Entity fields read as null because they referred to entities of instances kept unresolved
+    /// (UnresolvedPrefab): saving the World again loses those references.
+    u32 clearedReferences = 0;
     std::string error;                 ///< Why loading failed (empty on success).
     std::vector<std::string> warnings; ///< Skipped fields and types, preserved types, version changes.
     u32 version = 0;                   ///< Format version of the file (0 if it could not be read).
@@ -179,8 +211,8 @@ struct SceneLoadResult
 
 /// Saves the entities of @p world selected by @p options. The Transform of an entity with a LocalTransform
 /// whose parent is saved too is not written: updateTransformHierarchy() derives it after loading. Fails if a
-/// saved entity has no EntityGuid or shares one with another saved entity, or if a floating-point field is
-/// not finite (JSON cannot store it).
+/// saved entity has no EntityGuid or shares one with another saved entity, if a floating-point field is
+/// not finite (JSON cannot store it), or if the prefab of a saved instance cannot be read or loaded.
 [[nodiscard]] SceneSaveResult saveScene(const World& world, const SceneSaveOptions& options = {});
 
 /// Creates the entities of the scene @p json in @p world, which keeps its existing entities. Entity

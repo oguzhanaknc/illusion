@@ -4,6 +4,7 @@
 #include <illusion/ecs/EntityGuid.hpp>
 #include <illusion/ecs/Hierarchy.hpp>
 #include <illusion/ecs/Name.hpp>
+#include <illusion/ecs/Prefab.hpp>
 #include <illusion/ecs/Reflection.hpp>
 #include <illusion/ecs/SceneSerializer.hpp>
 #include <illusion/ecs/Transform.hpp>
@@ -272,4 +273,67 @@ ILL_BENCHMARK("scene/load-v2", 10000.0)
         const SceneLoadResult result = loadScene(loaded, json);
         ankerl::nanobench::doNotOptimizeAway(result);
     });
+}
+
+namespace
+{
+
+constexpr u32 kPrefabEntities = 8;
+constexpr u32 kPrefabInstances = 100;
+
+// A prefab file: a root with seven named children.
+std::string benchPrefab()
+{
+    reflectCoreComponents();
+    World world;
+    const Entity root = world.create(Transform{}, Name{"Root"});
+    for (u32 i = 1; i < kPrefabEntities; ++i)
+    {
+        const Entity child = world.create(Transform{Vec3(static_cast<f32>(i), 0.0f, 0.0f)}, Name{"Part"});
+        (void)setParent(world, child, root);
+    }
+    GuidGenerator guids(7);
+    assignMissingGuids(world, guids);
+    SceneSaveOptions options;
+    options.prefabFile = true;
+    return saveScene(world, options).json;
+}
+
+} // namespace
+
+ILL_BENCHMARK("prefab/instantiate", 20000.0)
+{
+    const PrefabData prefab{"assets:/bench.prefab", benchPrefab()};
+    bench.batch(kPrefabEntities * kPrefabInstances).unit("entity").run("instantiate an 8-entity prefab", [&] {
+        World world;
+        for (u32 i = 0; i < kPrefabInstances; ++i)
+        {
+            const PrefabInstantiateResult placed =
+                instantiatePrefab(world, prefab, Entity{}, EntityGuid{0x1000u + i});
+            ankerl::nanobench::doNotOptimizeAway(placed.root);
+        }
+    });
+}
+
+ILL_BENCHMARK("prefab/save-records", 20000.0)
+{
+    const PrefabData prefab{"assets:/bench.prefab", benchPrefab()};
+    World world;
+    for (u32 i = 0; i < kPrefabInstances; ++i)
+    {
+        const PrefabInstantiateResult placed =
+            instantiatePrefab(world, prefab, Entity{}, EntityGuid{0x1000u + i});
+        world.get<LocalTransform>(placed.root).position = Vec3(static_cast<f32>(i), 0.0f, 0.0f);
+    }
+    SceneSaveOptions options;
+    options.prefabs = [&](std::string_view) -> std::optional<std::string> {
+        return prefab.json;
+    };
+    std::string json;
+    bench.batch(kPrefabEntities * kPrefabInstances)
+        .unit("entity")
+        .run("save 100 instances with overrides", [&] {
+            json = saveScene(world, options).json;
+            ankerl::nanobench::doNotOptimizeAway(json);
+        });
 }

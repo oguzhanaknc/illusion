@@ -8,6 +8,8 @@
 #include <illusion/core/Expected.hpp>
 #include <illusion/core/TypeName.hpp>
 #include <illusion/ecs/EntityGuid.hpp>
+#include <illusion/ecs/Prefab.hpp>
+#include <illusion/ecs/SceneSerializer.hpp>
 #include <illusion/ecs/World.hpp>
 #include <illusion/editor/core/AssetCatalog.hpp>
 #include <illusion/editor/core/ChangeJournal.hpp>
@@ -483,8 +485,14 @@ public:
     /// Saves the scene to @p path, or to its own path when @p path is empty. Returns the number of entities.
     [[nodiscard]] Expected<u32, CommandError> saveScene(std::string_view path = {});
 
-    /// The scene as scene v2 JSON (in hierarchy order).
-    [[nodiscard]] Expected<std::string, CommandError> sceneJson() const;
+    /// The scene as scene v2 JSON (in hierarchy order). PrefabSaveMode::Expanded gives an exact snapshot that
+    /// does not read prefab files (for Play mode).
+    [[nodiscard]] Expected<std::string, CommandError>
+    sceneJson(PrefabSaveMode prefabs = PrefabSaveMode::Records) const;
+
+    /// Reads prefab files through the project's files, for loading and saving scenes with prefab instances
+    /// (SceneLoadOptions::prefabs, SceneSaveOptions::prefabs). Valid while this context lives.
+    [[nodiscard]] PrefabSource prefabSource() const;
 
     /// Runs command @p name with typed params; the Result type must be the command's.
     template <class R, class P>

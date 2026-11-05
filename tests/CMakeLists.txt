@@ -26,6 +26,7 @@ add_executable(illusion_tests
     ecs/TestEntity.cpp
     ecs/TestEntityGuid.cpp
     ecs/TestHierarchy.cpp
+    ecs/TestPrefab.cpp
     ecs/TestQuery.cpp
     ecs/TestReflection.cpp
     ecs/TestReflectionSweep.cpp

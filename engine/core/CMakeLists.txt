@@ -24,6 +24,7 @@ add_library(illusion_core STATIC
     src/ecs/EntityGuid.cpp
     src/ecs/Hierarchy.cpp
     src/ecs/Name.cpp
+    src/ecs/Prefab.cpp
     src/ecs/Reflection.cpp
     src/ecs/ReflectionData.cpp
     src/ecs/SceneSerializer.cpp
