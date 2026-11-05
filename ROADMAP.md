@@ -413,8 +413,8 @@ Plan: `docs/plans/m7-editor.md` (sub-milestones, command API, localization, them
 - M7u-5: ✅ The asset browser panel (ADR 0045): the project's `assets:` mount as a grid or list with
   thumbnails (the `asset.thumbnail` PNGs shown through the new `ImageHost`), a folder tree and favourites
   (the `assetFavourites` preference), breadcrumbs with back/forward/up, search, sorting and a kind filter,
-  multi-select, and a context menu whose operations run the asset commands (Open, Reimport, Rename, Move,
-  Delete, Reveal, Copy path) plus New folder; the import settings inspector edits a texture's color space,
+  multi-select, dragging an asset onto an Inspector asset field, and a context menu whose operations run the
+  asset commands (Open, Reimport, Rename, Move, Delete, Reveal, Copy path) plus New folder; the import settings inspector edits a texture's color space,
   mipmaps and max size or a model's scale with Apply/Revert; `#` in the command palette searches assets
   (`PaletteMode::Assets`); the `editor.reveal` command and the `fileBrowser` preference reveal a file in the
   system's file manager

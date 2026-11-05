@@ -72,6 +72,15 @@ struct AssetCatalogChanges
         return added.empty() && modified.empty() && removed.empty() && renamed.empty();
     }
 
+    /// Empties every list, keeping their capacity (the editor reuses one instance between polls).
+    void clear() noexcept
+    {
+        added.clear();
+        modified.clear();
+        removed.clear();
+        renamed.clear();
+    }
+
     /// Adds the changes of a later update @p next, so that this describes both: a path added and then
     /// removed is in no list, one removed and added again is modified, and so on.
     void merge(const AssetCatalogChanges& next);

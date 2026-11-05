@@ -342,13 +342,17 @@ TEST_CASE("an idle shell frame does not allocate after warming up")
     test::ok(*fixture.editor, "entity.create",
              R"({"name":"Board","components":{"illusion.Transform":{},"illusion.PointLight":{}}})");
     test::ok(*fixture.editor, "selection.set", R"({"entities":["/Board"]})");
+    // Scan the asset catalog, as any asset command or the Asset Browser does: from then on endFrame() polls
+    // it.
+    (void)fixture.editor->assets();
     for (int i = 0; i < 120; ++i)
     {
         fixture.frame();
     }
     const u64 imguiBefore = ui::UiContext::allocationCount();
     test::ScopedAllocationCounter allocations;
-    for (int i = 0; i < 10; ++i)
+    // A second at 60 Hz spans several asset polls (every 0.25 s).
+    for (int i = 0; i < 60; ++i)
     {
         fixture.frame();
     }
@@ -720,6 +724,61 @@ TEST_CASE(
               .root()
               .find("value")
               .asString() == std::optional<std::string_view>(aId));
+}
+
+TEST_CASE("the asset browser lists a fresh project's assets and fits its toolbar in a narrow panel")
+{
+    ShellFixture fixture;
+    EditorContext& editor = *fixture.editor;
+    // No asset command runs before the browser draws: it must scan the catalog itself.
+    REQUIRE_FALSE(editor.assetCatalog().scanned());
+    test::ok(editor, "ui.show_panel", R"({"panel":"panel.assets"})");
+
+    ui::UiDriver driver(fixture.context, [&] { fixture.frame(); });
+    driver.runFrames(3);
+    CHECK(editor.assetCatalog().scanned());
+    // The root holds one folder (scenes) and nothing else: one tile in a row of many columns.
+    CHECK(driver.find("asset_browser.tile.0").has_value());
+    CHECK_FALSE(driver.find("asset_browser.tile.1").has_value());
+
+    // Every toolbar control after the search field is on screen, inside the panel.
+    const std::optional<ui::UiItem> panel = driver.find("panel.assets");
+    REQUIRE(panel.has_value());
+    for (const char* id : {"asset_browser.search", "asset_browser.view", "asset_browser.new_folder",
+                           "asset_browser.favourite"})
+    {
+        CAPTURE(id);
+        const std::optional<ui::UiItem> item = driver.find(id);
+        REQUIRE(item.has_value());
+        CHECK(item->max.x <= panel->max.x);
+    }
+}
+
+TEST_CASE("dragging an asset from the browser into an Inspector asset field sets it")
+{
+    ShellFixture fixture;
+    EditorContext& editor = *fixture.editor;
+    // The empty template's assets:/ has the scenes folder and the open scene; add a material at the root.
+    test::ok(editor, "project.file_write", R"({"path":"assets:/red.material","text":"x"})");
+    test::ok(editor, "entity.create", R"({"name":"Crate","components":{"test.Look":{}}})");
+    test::ok(editor, "selection.set", R"({"entities":["/Crate"]})");
+    // The Assets panel shares its dock with the Console: bring its tab to the front.
+    test::ok(editor, "ui.show_panel", R"({"panel":"panel.assets"})");
+
+    ui::UiDriver driver(fixture.context, [&] { fixture.frame(); });
+    driver.runFrames(4); // let the catalog pick up red.material
+
+    // The root lists folders first, then files: tile 0 is the scenes folder, tile 1 is red.material.
+    const std::optional<ui::UiItem> tile = driver.find("asset_browser.tile.1");
+    REQUIRE(tile.has_value());
+    const std::optional<ui::UiItem> field = driver.find("inspector.card.test.Look.material");
+    REQUIRE(field.has_value());
+    dragBetween(driver, "asset_browser.tile.1", field->center());
+    driver.runFrames(2);
+    CHECK(test::ok(editor, "component.get", R"({"entity":"/Crate","type":"test.Look","path":"material"})")
+              .root()
+              .find("value")
+              .asString() == std::optional<std::string_view>("assets:/red.material"));
 }
 
 namespace

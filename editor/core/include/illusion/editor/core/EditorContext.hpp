@@ -626,8 +626,8 @@ private:
     [[nodiscard]] Expected<void, CommandError> applyStep(const UndoStep& step, bool forward);
     void sceneReplaced(std::string_view path);
     // Brings the asset catalog up to date with the watcher's changes (and, with @p full, a listing of the
-    // mount) and returns what changed.
-    AssetCatalogChanges pollAssets(bool full);
+    // mount) and adds what changed to m_assetNews. A quiet poll constructs no containers.
+    void pollAssets(bool full);
     // Posts `asset.changed` with @p changes unless they are empty.
     void postAssetChanges(const AssetCatalogChanges& changes);
     void afterChange(bool historyChanged = true);
