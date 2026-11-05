@@ -1410,6 +1410,32 @@ struct PrefabApplyResult
     u32 instances = 0;  ///< Other instances in the open scene that changed to follow the prefab.
 };
 
+/// Params of `prefab.refresh`.
+struct PrefabRefreshParams
+{
+    std::optional<std::string> path{}; ///< Only this prefab file (default: every changed one).
+};
+
+/// Result of `prefab.refresh`.
+struct PrefabRefreshResult
+{
+    std::vector<std::string> prefabs; ///< Prefab files that had changed.
+    u32 instances = 0;                ///< Instances of the open scene that changed to follow them.
+};
+
+/// Params of `prefab.open`.
+struct PrefabOpenParams
+{
+    std::string path;                     ///< The `.prefab` file to edit.
+    std::optional<bool> discardChanges{}; ///< Close a scene with unsaved changes (default false).
+};
+
+/// Params of `prefab.close`.
+struct PrefabCloseParams
+{
+    std::optional<bool> discardChanges{}; ///< Leave a prefab with unsaved changes (default false).
+};
+
 /// Params of `prefab.revert`.
 struct PrefabRevertParams
 {

@@ -453,6 +453,25 @@ void Outliner::draw(Impl& shell)
     ui::FrameText& text = shell.text;
     const ImGuiStyle& style = ImGui::GetStyle();
 
+    // Prefab edit mode (prefab.open): a breadcrumb from the scene to the prefab; the back button leaves it.
+    if (!editor.prefabEditStack().empty())
+    {
+        if (ui::iconButton(kit, ui::icons::kArrowBack, "outliner.prefab.close",
+                           text.format(s::kOutlinerPrefabClose)))
+        {
+            (void)shell.run("prefab.close", "", "outliner");
+            return;
+        }
+        ImGui::SameLine();
+        const std::string& back = editor.prefabEditStack().back();
+        const std::string_view scene = back.empty()
+                                           ? std::string_view(text.format(s::kOutlinerPrefabUntitled))
+                                           : std::string_view(back).substr(back.rfind('/') + 1);
+        const std::string_view prefab =
+            std::string_view(editor.document().path()).substr(editor.document().path().rfind('/') + 1);
+        ImGui::TextUnformatted(text.concat(scene, text.concat("  ›  ", prefab)));
+    }
+
     // Header: search field and "+" create entity button.
     const f32 buttonSide = ImGui::GetFrameHeight();
     ImGui::SetNextItemWidth(

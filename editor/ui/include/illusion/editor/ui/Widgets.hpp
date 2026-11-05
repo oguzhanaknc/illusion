@@ -107,8 +107,11 @@ bool colorHdr(UiKit& kit, std::string_view id, Vec3& color, f32& intensity);
 
 /// Starts a component card: a header with @p icon, @p name, an enable toggle (when @p enabled is not
 /// null, "<id>.enabled") and a menu button ("<id>.menu") that opens the card's menu (see
-/// beginComponentCardMenu()). Returns true while the card is open; then call endComponentCard().
-bool beginComponentCard(UiKit& kit, std::string_view id, const Icon& icon, const char* name, bool* enabled);
+/// beginComponentCardMenu()). An @p overridden card (a prefab instance's Component that differs from its
+/// prefab) has a bold title and an accent bar. Returns true while the card is open; then call
+/// endComponentCard().
+bool beginComponentCard(UiKit& kit, std::string_view id, const Icon& icon, const char* name, bool* enabled,
+                        bool overridden = false);
 
 /// Ends a card started with beginComponentCard() that returned true.
 void endComponentCard();

@@ -10,6 +10,8 @@
 #include <illusion/ecs/EntityGuid.hpp>
 #include <illusion/ecs/Hierarchy.hpp>
 #include <illusion/ecs/Name.hpp>
+#include <illusion/ecs/Prefab.hpp>
+#include <illusion/ecs/SceneSerializer.hpp>
 #include <illusion/ecs/Transform.hpp>
 #include <illusion/ecs/World.hpp>
 #include <illusion/editor/ui/Icons.hpp>
@@ -126,9 +128,11 @@ f32 dragSpeed(f32 baseSpeed) noexcept
 // generic component card.
 bool isIntrinsicComponent(ComponentId id, std::string_view stableName) noexcept
 {
+    // The prefab bar shows the prefab links (PrefabMember, PrefabInstance).
     if (id == componentId<Transform>() || id == componentId<LocalTransform>() ||
         id == componentId<Hierarchy>() || id == componentId<Name>() || id == componentId<EntityGuid>() ||
-        id == componentId<Disabled>())
+        id == componentId<Disabled>() || id == componentId<PrefabMember>() ||
+        id == componentId<PrefabInstance>())
     {
         return true;
     }
@@ -627,6 +631,20 @@ struct Inspector::State
         (void)shell.run("editor.batch", steps, "inspector");
     }
 
+    // The prefab instance of the only inspected entity, rebuilt when the scene changes.
+    EntityGuid prefabEntity{};
+    u64 prefabRevision = ~u64{0};
+    bool prefabMember = false;
+    std::string prefabPath;
+    std::vector<std::string> overriddenTypes; // Components of the entity that differ from its prefab
+
+    void refreshPrefab(Impl& shell);
+    [[nodiscard]] bool overridden(std::string_view type) const
+    {
+        return prefabMember &&
+               std::find(overriddenTypes.begin(), overriddenTypes.end(), type) != overriddenTypes.end();
+    }
+    void drawPrefabBar(Impl& shell, ui::UiKit& kit);
     void drawHeader(Impl& shell, ui::UiKit& kit);
     void drawTransformCard(Impl& shell, ui::UiKit& kit);
     void drawComponentCard(Impl& shell, ui::UiKit& kit, ComponentId compId, const TypeReflection& reflection);
@@ -641,6 +659,105 @@ struct Inspector::State
                          bool readOnly);
     void drawAddComponent(Impl& shell, ui::UiKit& kit);
 };
+
+void Inspector::State::refreshPrefab(Impl& shell)
+{
+    EditorContext& editor = shell.editor;
+    const EntityGuid guid = inspected.size() == 1 ? inspected[0].guid : EntityGuid{};
+    if (guid == prefabEntity && editor.revision() == prefabRevision)
+    {
+        return;
+    }
+    prefabEntity = guid;
+    prefabRevision = editor.revision();
+    prefabMember = false;
+    overriddenTypes.clear();
+    const World& world = editor.world();
+    const PrefabMember* member =
+        inspected.size() == 1 ? world.tryGet<PrefabMember>(inspected[0].entity) : nullptr;
+    if (member == nullptr)
+    {
+        return;
+    }
+    // The instance's record as the scene would save it: its overrides of this entity.
+    std::vector<Entity> all;
+    world.entities(all);
+    Entity root;
+    for (const Entity entity : all)
+    {
+        const PrefabInstance* instance = world.tryGet<PrefabInstance>(entity);
+        const PrefabMember* rootMember = world.tryGet<PrefabMember>(entity);
+        if (instance != nullptr && rootMember != nullptr && instance->instance == member->instance &&
+            rootMember->instance == member->instance)
+        {
+            root = entity;
+            prefabPath = std::string(instance->prefab.path());
+        }
+    }
+    if (root.isNull())
+    {
+        return;
+    }
+    prefabMember = true;
+    const std::array subset{root};
+    SceneSaveOptions options;
+    options.subset = std::span<const Entity>(subset);
+    options.prefabs = editor.prefabSource();
+    const SceneSaveResult saved = saveScene(world, options);
+    const Expected<JsonDocument, JsonError> doc =
+        saved.ok() ? JsonDocument::parse(saved.json)
+                   : Expected<JsonDocument, JsonError>(unexpected(JsonError{}));
+    if (!doc)
+    {
+        return;
+    }
+    const std::array<char, kGuidTextLength> local = formatGuid(member->local);
+    for (const JsonValue record : doc->root().find("entities").elements())
+    {
+        const JsonValue patch = record.find("overrides").find(std::string_view(local.data(), local.size()));
+        for (const JsonMember component : patch.members())
+        {
+            overriddenTypes.emplace_back(component.key);
+        }
+    }
+}
+
+void Inspector::State::drawPrefabBar(Impl& shell, ui::UiKit& kit)
+{
+    refreshPrefab(shell);
+    if (!prefabMember)
+    {
+        return;
+    }
+    ui::FrameText& text = shell.text;
+    const auto hex = formatGuid(inspected[0].guid);
+    const std::string entity = jsonQuote(std::string_view(hex.data(), hex.size()));
+    ImGui::TextUnformatted(text.concat(ui::icons::kWidgets.view(), text.concat("  ", prefabPath)));
+    ImGui::SameLine();
+    if (ui::iconButton(kit, ui::icons::kEdit, "inspector.prefab.open", text.format(s::kInspectorPrefabOpen)))
+    {
+        (void)shell.run("prefab.open", "{\"path\":" + jsonQuote(prefabPath) + "}", "inspector");
+        return;
+    }
+    ImGui::SameLine();
+    if (ui::iconButton(kit, ui::icons::kPublish, "inspector.prefab.apply",
+                       text.format(s::kInspectorPrefabApply)))
+    {
+        (void)shell.run("prefab.apply", "{\"entity\":" + entity + ",\"all\":true}", "inspector");
+    }
+    ImGui::SameLine();
+    if (ui::iconButton(kit, ui::icons::kUndo, "inspector.prefab.revert",
+                       text.format(s::kInspectorPrefabRevert)))
+    {
+        (void)shell.run("prefab.revert", "{\"entity\":" + entity + "}", "inspector");
+    }
+    ImGui::SameLine();
+    if (ui::iconButton(kit, ui::icons::kUnarchive, "inspector.prefab.unpack",
+                       text.format(s::kInspectorPrefabUnpack)))
+    {
+        (void)shell.run("prefab.unpack", "{\"entity\":" + entity + "}", "inspector");
+    }
+}
 
 void Inspector::State::drawHeader(Impl& shell, ui::UiKit& kit)
 {
@@ -2079,10 +2196,29 @@ void Inspector::State::drawComponentCard(Impl& shell, ui::UiKit& kit, ComponentI
     const char* cardId = text.concat("inspector.card.", reflection.name);
     const ui::Icon icon = ui::findIcon(reflection.meta.icon).value_or(ui::icons::kExtension);
     const char* title = displayLabel(text, reflection.meta.displayName, reflection.name);
-    const bool open = ui::beginComponentCard(kit, cardId, icon, title, nullptr);
+    const bool open = ui::beginComponentCard(kit, cardId, icon, title, nullptr, overridden(reflection.name));
 
     if (ui::beginComponentCardMenu(kit, cardId))
     {
+        if (prefabMember)
+        {
+            const auto hex = formatGuid(inspected[0].guid);
+            const std::string params = "{\"entity\":" + jsonQuote(std::string_view(hex.data(), hex.size())) +
+                                       ",\"component\":" + jsonQuote(reflection.name) + "}";
+            ImGui::BeginDisabled(!overridden(reflection.name));
+            if (ImGui::MenuItem(text.iconLabel(ui::icons::kPublish, s::kInspectorPrefabApplyComponent,
+                                               text.concat(cardId, ".menu.prefab_apply"))))
+            {
+                (void)shell.run("prefab.apply", params, "inspector");
+            }
+            if (ImGui::MenuItem(text.iconLabel(ui::icons::kUndo, s::kInspectorPrefabRevertComponent,
+                                               text.concat(cardId, ".menu.prefab_revert"))))
+            {
+                (void)shell.run("prefab.revert", params, "inspector");
+            }
+            ImGui::EndDisabled();
+            ImGui::Separator();
+        }
         const bool isTransient = reflection.meta.transient;
         ImGui::BeginDisabled(isTransient);
         if (ImGui::MenuItem(text.iconLabel(ui::icons::kRestartAlt, s::kInspectorReset,
@@ -2400,6 +2536,7 @@ void Inspector::draw(Impl& shell)
     }
 
     state.drawHeader(shell, kit);
+    state.drawPrefabBar(shell, kit);
     state.drawTransformCard(shell, kit);
 
     // Find non-intrinsic reflected components present on all inspected entities, sorted by stable name.

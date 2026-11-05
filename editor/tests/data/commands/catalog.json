@@ -9833,6 +9833,121 @@
       "additionalProperties": false
     }
   },
+  "prefab.close": {
+    "version": 1,
+    "permission": "read",
+    "mode": "edit",
+    "undoable": false,
+    "readOnly": false,
+    "params": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "type": "object",
+      "properties": {
+        "discardChanges": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "dryRun": {
+          "type": "boolean"
+        },
+        "mergeKey": {
+          "type": "string"
+        },
+        "clientToken": {
+          "type": "string"
+        },
+        "expectRevision": {
+          "anyOf": [
+            {
+              "type": "string",
+              "pattern": "^[0-9]+$"
+            },
+            {
+              "type": "integer",
+              "minimum": 0
+            }
+          ]
+        }
+      },
+      "additionalProperties": false
+    },
+    "result": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "type": "object",
+      "properties": {
+        "path": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        },
+        "revision": {
+          "anyOf": [
+            {
+              "type": "string",
+              "pattern": "^[0-9]+$"
+            },
+            {
+              "type": "integer",
+              "minimum": 0
+            }
+          ]
+        },
+        "dirty": {
+          "type": "boolean"
+        },
+        "entities": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 4294967295
+        },
+        "roots": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 4294967295
+        },
+        "hash": {
+          "type": "string"
+        },
+        "_editor": {
+          "type": "object",
+          "properties": {
+            "revision": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "transaction": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "dryRun": {
+              "type": "boolean"
+            },
+            "operations": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "warnings": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          },
+          "required": ["revision", "transaction", "dryRun", "operations", "warnings"],
+          "additionalProperties": false
+        }
+      },
+      "required": ["path", "name", "revision", "dirty", "entities", "roots", "hash", "_editor"],
+      "additionalProperties": false
+    }
+  },
   "prefab.create": {
     "version": 1,
     "permission": "files",
@@ -10089,6 +10204,125 @@
       "additionalProperties": false
     }
   },
+  "prefab.open": {
+    "version": 1,
+    "permission": "read",
+    "mode": "edit",
+    "undoable": false,
+    "readOnly": false,
+    "params": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "type": "object",
+      "properties": {
+        "path": {
+          "type": "string"
+        },
+        "discardChanges": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "dryRun": {
+          "type": "boolean"
+        },
+        "mergeKey": {
+          "type": "string"
+        },
+        "clientToken": {
+          "type": "string"
+        },
+        "expectRevision": {
+          "anyOf": [
+            {
+              "type": "string",
+              "pattern": "^[0-9]+$"
+            },
+            {
+              "type": "integer",
+              "minimum": 0
+            }
+          ]
+        }
+      },
+      "required": ["path"],
+      "additionalProperties": false
+    },
+    "result": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "type": "object",
+      "properties": {
+        "path": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        },
+        "revision": {
+          "anyOf": [
+            {
+              "type": "string",
+              "pattern": "^[0-9]+$"
+            },
+            {
+              "type": "integer",
+              "minimum": 0
+            }
+          ]
+        },
+        "dirty": {
+          "type": "boolean"
+        },
+        "entities": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 4294967295
+        },
+        "roots": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 4294967295
+        },
+        "hash": {
+          "type": "string"
+        },
+        "_editor": {
+          "type": "object",
+          "properties": {
+            "revision": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "transaction": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "dryRun": {
+              "type": "boolean"
+            },
+            "operations": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "warnings": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          },
+          "required": ["revision", "transaction", "dryRun", "operations", "warnings"],
+          "additionalProperties": false
+        }
+      },
+      "required": ["path", "name", "revision", "dirty", "entities", "roots", "hash", "_editor"],
+      "additionalProperties": false
+    }
+  },
   "prefab.overrides": {
     "version": 1,
     "permission": "read",
@@ -10167,6 +10401,98 @@
         }
       },
       "required": ["root", "instance", "prefab", "overrides", "_editor"],
+      "additionalProperties": false
+    }
+  },
+  "prefab.refresh": {
+    "version": 1,
+    "permission": "read",
+    "mode": "edit",
+    "undoable": true,
+    "readOnly": false,
+    "params": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "type": "object",
+      "properties": {
+        "path": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "dryRun": {
+          "type": "boolean"
+        },
+        "mergeKey": {
+          "type": "string"
+        },
+        "clientToken": {
+          "type": "string"
+        },
+        "expectRevision": {
+          "anyOf": [
+            {
+              "type": "string",
+              "pattern": "^[0-9]+$"
+            },
+            {
+              "type": "integer",
+              "minimum": 0
+            }
+          ]
+        }
+      },
+      "additionalProperties": false
+    },
+    "result": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "type": "object",
+      "properties": {
+        "prefabs": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "instances": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 4294967295
+        },
+        "_editor": {
+          "type": "object",
+          "properties": {
+            "revision": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "transaction": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "dryRun": {
+              "type": "boolean"
+            },
+            "operations": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "warnings": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          },
+          "required": ["revision", "transaction", "dryRun", "operations", "warnings"],
+          "additionalProperties": false
+        }
+      },
+      "required": ["prefabs", "instances", "_editor"],
       "additionalProperties": false
     }
   },
