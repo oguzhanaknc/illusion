@@ -141,7 +141,7 @@ TEST_CASE("every core command has a test case")
         cases.emplace(entry.name);
     }
     CHECK(registered == cases);
-    CHECK(registered.size() == 161);
+    CHECK(registered.size() == 166);
 }
 
 TEST_CASE("every command succeeds on the fixture and its params and result match their schemas")
@@ -153,7 +153,7 @@ TEST_CASE("every command succeeds on the fixture and its params and result match
         prepare(fixture);
         if (const std::string_view setup = test::setupOf(entry.name); !setup.empty())
         {
-            ok(*fixture.editor, setup);
+            test::runSetup(*fixture.editor, setup);
         }
         const CommandDescriptor& command = *fixture.editor->commands().find(entry.name);
         const JsonDocument params = test::parseJson(entry.params);
@@ -177,7 +177,7 @@ TEST_CASE("dry runs validate and change nothing")
         prepare(fixture);
         if (const std::string_view setup = test::setupOf(entry.name); !setup.empty())
         {
-            ok(*fixture.editor, setup);
+            test::runSetup(*fixture.editor, setup);
         }
         const State before = capture(fixture);
         const JsonDocument result =

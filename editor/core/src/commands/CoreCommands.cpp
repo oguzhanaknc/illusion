@@ -718,6 +718,39 @@ void reflectCoreCommandTypes(StructRegistry& structs)
             .field("height", &AssetThumbnailResult::height)
             .field("cached", &AssetThumbnailResult::cached);
 
+        reflectStruct<PrefabCreateParams>("editor.PrefabCreateParams", 1, structs)
+            .field("entity", &PrefabCreateParams::entity)
+            .field("path", &PrefabCreateParams::path)
+            .field("overwrite", &PrefabCreateParams::overwrite)
+            .field("replace", &PrefabCreateParams::replace);
+        reflectStruct<PrefabCreateResult>("editor.PrefabCreateResult", 1, structs)
+            .field("path", &PrefabCreateResult::path)
+            .field("created", &PrefabCreateResult::created)
+            .field("entities", &PrefabCreateResult::entities)
+            .field("instance", &PrefabCreateResult::instance);
+        reflectStruct<PrefabInstantiateParams>("editor.PrefabInstantiateParams", 1, structs)
+            .field("path", &PrefabInstantiateParams::path)
+            .field("parent", &PrefabInstantiateParams::parent)
+            .field("index", &PrefabInstantiateParams::index);
+        reflectStruct<PrefabInstanceResult>("editor.PrefabInstanceResult", 1, structs)
+            .field("root", &PrefabInstanceResult::root)
+            .field("instance", &PrefabInstanceResult::instance)
+            .field("prefab", &PrefabInstanceResult::prefab)
+            .field("entities", &PrefabInstanceResult::entities);
+        reflectStruct<PrefabEntityParams>("editor.PrefabEntityParams", 1, structs)
+            .field("entity", &PrefabEntityParams::entity);
+        reflectStruct<PrefabUnpackResult>("editor.PrefabUnpackResult", 1, structs)
+            .field("entities", &PrefabUnpackResult::entities);
+        reflectStruct<PrefabOverridesResult>("editor.PrefabOverridesResult", 1, structs)
+            .field("root", &PrefabOverridesResult::root)
+            .field("instance", &PrefabOverridesResult::instance)
+            .field("prefab", &PrefabOverridesResult::prefab)
+            .field("overrides", &PrefabOverridesResult::overrides);
+        reflectStruct<PrefabRevertParams>("editor.PrefabRevertParams", 1, structs)
+            .field("entity", &PrefabRevertParams::entity)
+            .field("component", &PrefabRevertParams::component);
+        reflectStruct<PrefabRevertResult>("editor.PrefabRevertResult", 1, structs)
+            .field("components", &PrefabRevertResult::components);
         reflectStruct<MaterialCreateParams>("editor.MaterialCreateParams", 1, structs)
             .field("path", &MaterialCreateParams::path)
             .field("value", &MaterialCreateParams::value)
@@ -962,6 +995,7 @@ void registerCoreCommands(CommandRegistry& registry)
     detail::registerClipboardCommands(registry);
     detail::registerAssetCommands(registry);
     detail::registerMaterialCommands(registry);
+    detail::registerPrefabCommands(registry);
     detail::registerLogCommands(registry);
     detail::registerSettingsCommands(registry);
     detail::registerUiCommands(registry);

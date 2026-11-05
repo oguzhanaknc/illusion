@@ -111,6 +111,11 @@ inline constexpr CommandCase kCommandCases[] = {
     {"play.status", R"({})"},
     {"play.step", R"({"steps":2})"},
     {"play.stop", R"({})"},
+    {"prefab.create", R"({"entity":"/Light","path":"assets:/props/light.prefab"})"},
+    {"prefab.instantiate", R"({"path":"assets:/props/light.prefab","parent":"/Game"})"},
+    {"prefab.overrides", R"({"entity":"/Light"})"},
+    {"prefab.revert", R"({"entity":"/Light","component":"illusion.Name"})"},
+    {"prefab.unpack", R"({"entity":"/Light"})"},
     {"preferences.get", R"({})"},
     {"preferences.set", R"({"value":{"theme":"light","uiScale":1.25}})"},
     {"project.create",
@@ -189,12 +194,17 @@ inline constexpr CommandCase kCommandCases[] = {
     {"viewport.view", R"({"view":"top","animate":false})"},
 };
 
-// Commands that need another one to run first (with {} params) on the fixture.
+// Commands that need another one to run first on the fixture: "name" (with {} params) or "name {params}".
 inline constexpr CommandCase kCommandSetups[] = {
     {"camera.bookmark_go", "camera.bookmark_set"},
     {"input.inject", "play.start"},
     {"input.read", "play.start"},
     {"play.keep_changes", "play.start"},
+    {"prefab.instantiate",
+     R"(prefab.create {"entity":"/Light","path":"assets:/props/light.prefab","replace":false})"},
+    {"prefab.overrides", R"(prefab.create {"entity":"/Light","path":"assets:/props/light.prefab"})"},
+    {"prefab.revert", R"(prefab.create {"entity":"/Light","path":"assets:/props/light.prefab"})"},
+    {"prefab.unpack", R"(prefab.create {"entity":"/Light","path":"assets:/props/light.prefab"})"},
     {"play.pause", "play.start"},
     {"play.run_until", "play.start"},
     {"play.step", "play.start"},

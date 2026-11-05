@@ -1162,9 +1162,9 @@ struct AssetListParams
 struct AssetEntry
 {
     std::string path; ///< Virtual path.
-    std::string
-        kind; ///< "Folder", "Scene", "Material", "Model", "Texture", "Environment", "AudioClip" or "Other".
-    u64 size = 0; ///< Size in bytes (0 for folders).
+    std::string kind; ///< "Folder", "Scene", "Prefab", "Material", "Model", "Texture", "Environment",
+                      ///< "AudioClip" or "Other".
+    u64 size = 0;     ///< Size in bytes (0 for folders).
 };
 
 /// Result of `asset.list`.
@@ -1331,6 +1331,80 @@ struct AssetThumbnailResult
     u32 width = 0;         ///< Width in pixels.
     u32 height = 0;        ///< Height in pixels.
     bool cached = false;   ///< The PNG was in the cache already (nothing was rendered).
+};
+
+// --- prefab ------------------------------------------------------------------------------------------------
+
+/// Params of `prefab.create`.
+struct PrefabCreateParams
+{
+    std::string entity;              ///< Root of the entities to save (with its descendants).
+    std::string path;                ///< New `.prefab` file in the assets: mount.
+    std::optional<bool> overwrite{}; ///< Replace an existing file (default false).
+    std::optional<bool>
+        replace{}; ///< Replace the entities with an instance of the new prefab (default true).
+};
+
+/// Result of `prefab.create`.
+struct PrefabCreateResult
+{
+    std::string path;                        ///< The prefab file.
+    bool created = false;                    ///< True if the file did not exist.
+    u32 entities = 0;                        ///< Entities saved in the prefab.
+    std::optional<EntitySummary> instance{}; ///< Root of the instance that replaced them (with replace).
+};
+
+/// Params of `prefab.instantiate`.
+struct PrefabInstantiateParams
+{
+    std::string path;                    ///< The `.prefab` file.
+    std::optional<std::string> parent{}; ///< Parent entity (default: the instance is a root).
+    std::optional<u32> index{};          ///< Position among the parent's children (default: last).
+};
+
+/// An instance of a prefab: result of `prefab.instantiate`.
+struct PrefabInstanceResult
+{
+    EntitySummary root;   ///< The instance's root.
+    std::string instance; ///< Id of the instance (16 hex digits), from which its entity ids derive.
+    std::string prefab;   ///< The prefab file.
+    u32 entities = 0;     ///< Entities of the instance.
+};
+
+/// Params of `prefab.unpack` and `prefab.overrides`.
+struct PrefabEntityParams
+{
+    std::string entity; ///< Any entity of the instance.
+};
+
+/// Result of `prefab.unpack`.
+struct PrefabUnpackResult
+{
+    u32 entities = 0; ///< Entities that are no longer linked to a prefab.
+};
+
+/// Result of `prefab.overrides`.
+struct PrefabOverridesResult
+{
+    EntitySummary root;   ///< The instance's root.
+    std::string instance; ///< Id of the instance (16 hex digits).
+    std::string prefab;   ///< The prefab file.
+    /// What the scene changes, as in the instance's record: by id in the prefab file, Component patches
+    /// (null: the Component is removed) or null (the entity is removed). {} when nothing is overridden.
+    JsonText overrides;
+};
+
+/// Params of `prefab.revert`.
+struct PrefabRevertParams
+{
+    std::string entity;                     ///< An entity of an instance.
+    std::optional<std::string> component{}; ///< Only this Component (default: every Component but Hierarchy).
+};
+
+/// Result of `prefab.revert`.
+struct PrefabRevertResult
+{
+    u32 components = 0; ///< Components given back the prefab's value (added or removed included).
 };
 
 // --- material ----------------------------------------------------------------------------------------------

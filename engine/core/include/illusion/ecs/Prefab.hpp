@@ -36,6 +36,9 @@ namespace illusion
 
 class World;
 
+/// File extension of prefab assets.
+inline constexpr std::string_view kPrefabExtension = ".prefab";
+
 /// Deepest nesting of prefab instances that loadScene() expands; deeper records are kept unresolved.
 inline constexpr u32 kMaxPrefabDepth = 16;
 

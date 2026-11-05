@@ -158,3 +158,120 @@ TEST_CASE("asset references are not rewritten in scenes that refer into prefab i
     CHECK(savedScene(editor).find("assets:/props/crate.prefab") != std::string::npos);
     ok(editor, "project.file_read", R"({"path":"assets:/props/crate.prefab"})");
 }
+
+TEST_CASE("prefab.create saves a subtree and replaces it with a linked instance in its place")
+{
+    EditorFixture fixture;
+    fixture.buildScene();
+    EditorContext& editor = *fixture.editor;
+    const std::string lightId = std::string(ok(editor, "entity.get", R"({"entity":"/Light"})")
+                                                .root()
+                                                .pointer("/entity/id")
+                                                .asString()
+                                                .value_or(""));
+    // Another entity refers to the light: the reference follows it into the instance.
+    ok(editor, "entity.create", R"({"name":"Spot"})");
+    ok(editor, "component.add",
+       std::format(R"({{"entity":"/Spot","type":"test.Link","value":{{"target":"{}"}}}})", lightId));
+
+    const JsonDocument created =
+        ok(editor, "prefab.create", R"({"entity":"/Light","path":"assets:/props/light.prefab"})");
+    CHECK(created.root().find("created").asBool() == true);
+    CHECK(created.root().pointer("/instance/name").asString() == "Light");
+    const std::string instanceId =
+        std::string(created.root().pointer("/instance/id").asString().value_or(""));
+    CHECK(instanceId != lightId);
+    const Entity root = editor.entities().find(*parseGuid(instanceId));
+    REQUIRE(editor.world().has<PrefabInstance>(root));
+    CHECK(ok(editor, "component.get", R"({"entity":"/Spot","type":"test.Link","path":"target"})")
+              .root()
+              .find("value")
+              .asString() == std::optional<std::string_view>(instanceId));
+    CHECK(fails(editor, "prefab.create", R"({"entity":"/Spot","path":"assets:/props/light.prefab"})").kind ==
+          ErrorKind::AlreadyExists);
+    CHECK(fails(editor, "prefab.create", R"({"entity":"/Spot","path":"assets:/props/light.scene"})")
+              .errors.at(0)
+              .pointer == "/path");
+
+    ok(editor, "history.undo");
+    CHECK(editor.entities().find(*parseGuid(lightId)) != Entity{});
+    CHECK(ok(editor, "component.get", R"({"entity":"/Spot","type":"test.Link","path":"target"})")
+              .root()
+              .find("value")
+              .asString() == std::optional<std::string_view>(lightId));
+    CHECK(fails(editor, "project.file_read", R"({"path":"assets:/props/light.prefab"})").kind ==
+          ErrorKind::NotFound);
+}
+
+TEST_CASE("prefab.instantiate places linked instances and rejects files that are not prefabs")
+{
+    EditorFixture fixture;
+    fixture.buildScene();
+    EditorContext& editor = *fixture.editor;
+    ok(editor, "prefab.create", R"({"entity":"/Light","path":"assets:/props/light.prefab","replace":false})");
+    const JsonDocument placed =
+        ok(editor, "prefab.instantiate", R"({"path":"assets:/props/light.prefab","parent":"/Game"})");
+    CHECK(placed.root().pointer("/root/path").asString() == "/Game/Light");
+    CHECK(placed.root().find("prefab").asString() == "assets:/props/light.prefab");
+    CHECK(placed.root().find("entities").asU64() == 1);
+    const JsonDocument again = ok(editor, "prefab.instantiate", R"({"path":"assets:/props/light.prefab"})");
+    CHECK(again.root().find("instance").asString() != placed.root().find("instance").asString());
+
+    CHECK(fails(editor, "prefab.instantiate", R"({"path":"assets:/props/none.prefab"})").kind ==
+          ErrorKind::NotFound);
+    ok(editor, "project.file_write", R"({"path":"assets:/props/bad.prefab","text":"{}"})");
+    CHECK(
+        fails(editor, "prefab.instantiate", R"({"path":"assets:/props/bad.prefab"})").errors.at(0).pointer ==
+        "/path");
+    // Undo the file write and both instances.
+    ok(editor, "history.undo");
+    ok(editor, "history.undo");
+    ok(editor, "history.undo");
+    CHECK(fails(editor, "entity.get", R"({"entity":"/Game/Light"})").kind == ErrorKind::NotFound);
+}
+
+TEST_CASE("prefab.overrides, prefab.revert and prefab.unpack work on any entity of an instance")
+{
+    EditorFixture fixture;
+    EditorContext& editor = *fixture.editor;
+    openCrateScene(editor, false);
+    ok(editor, "entity.rename", R"({"entity":"/Crate/Lid","name":"Top"})");
+    ok(editor, "component.add", R"({"entity":"/Crate/Top","type":"test.Look"})");
+
+    const JsonDocument overrides = ok(editor, "prefab.overrides", R"({"entity":"/Crate/Top"})");
+    CHECK(overrides.root().find("prefab").asString() == "assets:/props/crate.prefab");
+    const Expected<JsonDocument, JsonError> patch =
+        JsonDocument::parse(overrides.root().find("overrides").dump());
+    REQUIRE(patch.hasValue());
+    CHECK(patch->root().pointer("/00000000000000a2/illusion.Name/value").asString() == "Top");
+    CHECK(patch->root().pointer("/00000000000000a2/test.Look").isObject());
+
+    CHECK(ok(editor, "prefab.revert", R"({"entity":"/Crate/Top","component":"illusion.Name"})")
+              .root()
+              .find("components")
+              .asU64() == 1);
+    ok(editor, "entity.get", R"({"entity":"/Crate/Lid"})");
+    CHECK(ok(editor, "prefab.revert", R"({"entity":"/Crate/Lid"})").root().find("components").asU64() == 1);
+    CHECK(ok(editor, "prefab.overrides", R"({"entity":"/Crate"})").root().find("overrides").dump() == "{}");
+    CHECK(fails(editor, "prefab.revert", R"({"entity":"/Crate","component":"illusion.Hierarchy"})")
+              .errors.at(0)
+              .pointer == "/component");
+
+    const JsonDocument unpacked = ok(editor, "prefab.unpack", R"({"entity":"/Crate/Lid"})");
+    CHECK(unpacked.root().find("entities").asU64() == 2);
+    CHECK(fails(editor, "prefab.overrides", R"({"entity":"/Crate"})").errors.at(0).pointer == "/entity");
+    ok(editor, "scene.save");
+    CHECK(savedScene(editor).find("\"prefab\"") == std::string::npos);
+    ok(editor, "history.undo");
+    ok(editor, "prefab.overrides", R"({"entity":"/Crate"})");
+}
+
+TEST_CASE("asset.list knows prefab files")
+{
+    EditorFixture fixture;
+    EditorContext& editor = *fixture.editor;
+    openCrateScene(editor, false);
+    const JsonDocument listed = ok(editor, "asset.list", R"({"recursive":true,"kind":"Prefab"})");
+    REQUIRE(listed.root().find("assets").size() == 1);
+    CHECK(listed.root().pointer("/assets/0/path").asString() == "assets:/props/crate.prefab");
+}

@@ -95,6 +95,7 @@ plugins:
             Scene Viewport: Scene Viewport'u
             Transform Tools: Dönüşüm Araçları
             Play Mode: Play Modu
+            Prefabs: Prefab'lar
             Project Modules: Proje Modülleri
             Preferences: Tercihler
             Tutorials: Eğitimler
@@ -147,6 +148,7 @@ nav:
           - Transform Tools: manual/editor/transform-tools.md
           - Play Mode: manual/editor/play-mode.md
           - Asset Browser: manual/editor/assets.md
+          - Prefabs: manual/editor/prefabs.md
           - Project Modules: manual/editor/project-modules.md
           - Preferences: manual/editor/preferences.md
           - Projects: manual/editor/projects.md

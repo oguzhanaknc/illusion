@@ -291,7 +291,12 @@ public:
         {
             entities = withMembers;
         }
-        if (!collectIds(entities) || !checkPrefabRoot())
+        if (!collectIds(entities))
+        {
+            return false;
+        }
+        findOrphans();
+        if (!checkPrefabRoot())
         {
             return false;
         }
@@ -392,7 +397,8 @@ private:
         if (m_options.prefabMode == PrefabSaveMode::Records)
         {
             const PrefabMember* member = m_world.tryGet<PrefabMember>(entity);
-            if (member != nullptr && m_instances.contains(member->instance.value))
+            if (member != nullptr && m_instances.contains(member->instance.value) &&
+                !m_orphans.contains(entity))
             {
                 const PrefabInstance* instance = m_world.tryGet<PrefabInstance>(entity);
                 return instance != nullptr && instance->instance == member->instance ? Kind::Record
@@ -441,7 +447,52 @@ private:
         return true;
     }
 
-    // A prefab file has exactly one root: one written entity or record whose parent is not saved.
+    // Finds the members whose prefab no longer has them (it changed since they were created): no record can
+    // hold them, so they are saved as plain entities, which keeps references to them. An instance whose root
+    // is such a member is saved entirely as plain entities.
+    void findOrphans()
+    {
+        if (m_instances.empty() || !m_options.prefabs)
+        {
+            return;
+        }
+        std::unordered_map<u64, std::string> paths;
+        for (const Saved& saved : m_order)
+        {
+            const PrefabInstance* instance = m_world.tryGet<PrefabInstance>(saved.entity);
+            const PrefabMember* member = m_world.tryGet<PrefabMember>(saved.entity);
+            if (instance != nullptr && member != nullptr && member->instance == instance->instance)
+            {
+                paths.emplace(instance->instance.value, std::string(instance->prefab.path()));
+            }
+        }
+        std::unordered_set<u64> lostRoots;
+        for (const Saved& saved : m_order)
+        {
+            const PrefabMember* member = m_world.tryGet<PrefabMember>(saved.entity);
+            const auto path = member != nullptr ? paths.find(member->instance.value) : paths.end();
+            if (path == paths.end())
+            {
+                continue;
+            }
+            const BaseExpansion& expansion = baseExpansion(path->second);
+            if (expansion.error.empty() && !expansion.locals.contains(member->local.value))
+            {
+                m_orphans.insert(saved.entity);
+                const PrefabInstance* instance = m_world.tryGet<PrefabInstance>(saved.entity);
+                if (instance != nullptr && instance->instance == member->instance)
+                {
+                    lostRoots.insert(member->instance.value);
+                }
+            }
+        }
+        for (const u64 instance : lostRoots)
+        {
+            m_instances.erase(instance);
+        }
+    }
+
+    // A prefab file has exactly one root: one written entity or expanded record whose parent is not saved.
     bool checkPrefabRoot()
     {
         if (!m_options.prefabFile)
@@ -451,7 +502,9 @@ private:
         usize roots = 0;
         for (const Saved& saved : m_order)
         {
-            if (kindOf(saved.entity) != Kind::Member && savedParent(saved.entity).isNull())
+            // An unresolved nested record names its parent in its overrides, not in a Hierarchy.
+            const Kind kind = kindOf(saved.entity);
+            if (kind != Kind::Member && kind != Kind::Unresolved && savedParent(saved.entity).isNull())
             {
                 ++roots;
             }
@@ -964,7 +1017,8 @@ private:
     const SceneSaveOptions& m_options;
     SceneSaveResult& m_result;
     std::vector<Saved> m_order;
-    std::unordered_set<u64> m_instances;                       // ids of the instances written as records
+    std::unordered_set<u64> m_instances;  // ids of the instances written as records
+    std::unordered_set<Entity> m_orphans; // members their prefab no longer has, written as plain entities
     std::map<std::string, BaseExpansion, std::less<>> m_bases; // by prefab path
     // The saved members of each instance (by instance id), by local id.
     std::unordered_map<u64, std::unordered_map<u64, Entity>> m_members;

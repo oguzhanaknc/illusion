@@ -24,8 +24,8 @@ namespace illusion::editor
 {
 
 /// The asset kinds, in the order the asset commands list them.
-inline constexpr std::array<std::string_view, 8> kAssetKinds{"Folder",  "Scene",       "Material",  "Model",
-                                                             "Texture", "Environment", "AudioClip", "Other"};
+inline constexpr std::array<std::string_view, 9> kAssetKinds{
+    "Folder", "Scene", "Prefab", "Material", "Model", "Texture", "Environment", "AudioClip", "Other"};
 
 /// The kind of the asset at @p path (one of kAssetKinds), decided by its extension in any case.
 [[nodiscard]] std::string_view assetKindOf(std::string_view path, bool isDirectory);

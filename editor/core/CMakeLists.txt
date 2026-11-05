@@ -42,6 +42,7 @@ illusion_add_editor_library(illusion_editor_core STATIC
     src/commands/MaterialCommands.cpp
     src/commands/ModuleCommands.cpp
     src/commands/PlayCommands.cpp
+    src/commands/PrefabCommands.cpp
     src/commands/ProjectCommands.cpp
     src/commands/SceneCommands.cpp
     src/commands/SelectionCommands.cpp

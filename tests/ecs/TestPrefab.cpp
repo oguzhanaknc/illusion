@@ -653,3 +653,33 @@ TEST_CASE("prefab files are written with one root")
     CHECK_FALSE(twoRoots.ok());
     CHECK(twoRoots.error.find("exactly one root") != std::string::npos);
 }
+
+TEST_CASE("members a changed prefab no longer has are saved as plain entities, keeping references to them")
+{
+    reflectAll();
+    Library library;
+    library.files["assets:/crate.prefab"] = cratePrefab();
+    World world;
+    const PrefabInstantiateResult placed =
+        instantiatePrefab(world, PrefabData{"assets:/crate.prefab", cratePrefab()}, Entity{}, kInstance);
+    REQUIRE(placed.ok());
+    const Entity sticker = world.create();
+    world.emplace<EntityGuid>(sticker, EntityGuid{0x55});
+    world.emplace<Name>(sticker, Name{"Sticker"});
+    REQUIRE(setParent(world, sticker, placed.entities[1]).hasValue());
+
+    // The prefab loses its lid after the instance was made.
+    library.files["assets:/crate.prefab"] = prefabFile(
+        R"([{"id": "00000000000000a1", "components": {"illusion.Name": {"value": "Crate"},
+             "illusion.Hierarchy": {"parent": null, "order": 0}, "illusion.LocalTransform": {}}}])");
+    const SceneSaveResult saved = saveScene(world, library.save());
+    REQUIRE(saved.ok());
+    World loaded;
+    const SceneLoadResult result = loadScene(loaded, saved.json, library.load());
+    REQUIRE(result.ok());
+    const Entity lid = byName(loaded, "Lid");
+    REQUIRE_FALSE(lid.isNull());
+    CHECK_FALSE(loaded.has<PrefabMember>(lid));
+    CHECK(loaded.get<Hierarchy>(byName(loaded, "Sticker")).parent == lid);
+    CHECK(loaded.get<PrefabMember>(byName(loaded, "Crate")).local == kRoot);
+}

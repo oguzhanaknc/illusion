@@ -40,7 +40,7 @@ void randomCommand(EditorContext& editor, std::mt19937& random)
     };
     std::string name;
     std::string params;
-    switch (random() % 16)
+    switch (random() % 19)
     {
     case 0:
     case 1:
@@ -172,6 +172,33 @@ void randomCommand(EditorContext& editor, std::mt19937& random)
         name = "transform.snap_to_grid";
         params = R"({"entities":[")" + pick() + R"("],"increment":)" + (coin() ? "0.5" : "3") + "}";
         break;
+    case 16:
+    {
+        name = "prefab.create";
+        const std::string entity = pick();
+        const std::string file = std::to_string(random() % 3);
+        const bool replace = coin();
+        params = R"({"entity":")" + entity + R"(","path":"assets:/props/p)" + file +
+                 R"(.prefab","overwrite":true,"replace":)" + (replace ? "true" : "false") + "}";
+        break;
+    }
+    case 17:
+    {
+        const u32 which = static_cast<u32>(random() % 3);
+        const std::string entity = pick();
+        if (which == 0)
+        {
+            name = "prefab.instantiate";
+            const std::string file = std::to_string(random() % 3);
+            params = R"({"path":"assets:/props/p)" + file + R"(.prefab","parent":")" + entity + R"("})";
+        }
+        else
+        {
+            name = which == 1 ? "prefab.unpack" : "prefab.revert";
+            params = R"({"entity":")" + entity + R"("})";
+        }
+        break;
+    }
     default:
     {
         name = coin() ? "component.remove" : "component.reset";
@@ -244,7 +271,19 @@ TEST_CASE("the crash journal of a session recovers its unsaved changes")
     const std::filesystem::path journal = journals / (fixture.editor->session() + ".jsonl");
     REQUIRE(std::filesystem::exists(journal));
     std::filesystem::copy_file(journal, journals / "crashed.jsonl");
+    // A crash also leaves the session's file blobs, which a clean shutdown deletes: keep them too.
+    const std::filesystem::path trash =
+        fixture.directory.path / "project" / ".illusion" / "trash" / fixture.editor->session();
+    const std::filesystem::path kept = fixture.directory.path / "kept-trash";
+    if (std::filesystem::exists(trash))
+    {
+        std::filesystem::copy(trash, kept, std::filesystem::copy_options::recursive);
+    }
     fixture.open(12);
+    if (std::filesystem::exists(kept))
+    {
+        std::filesystem::copy(kept, trash, std::filesystem::copy_options::recursive);
+    }
     CHECK_FALSE(std::filesystem::exists(journal));
 
     EditorContext& editor = *fixture.editor;

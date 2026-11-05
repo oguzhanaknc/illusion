@@ -17,6 +17,7 @@
 #include <span>
 #include <string>
 #include <string_view>
+#include <unordered_map>
 #include <vector>
 
 namespace illusion
@@ -125,10 +126,14 @@ public:
 
     /// Creates the entities of @p scene (scene v2 JSON, e.g. a clipboard copy) with new ids; entity fields
     /// between them refer to the new entities. Its roots move under @p parent (null: they stay roots) from
-    /// position @p index on (nullopt: last), keeping their world placement. Returns the new roots in file
-    /// order.
-    [[nodiscard]] Expected<std::vector<Entity>, CommandError> paste(std::string_view scene, Entity parent,
-                                                                    std::optional<u32> index);
+    /// position @p index on (nullopt: last), keeping their world placement. Prefab instance records expand
+    /// through @p prefabs (without it they are kept unresolved). Returns the new roots in file order.
+    [[nodiscard]] Expected<std::vector<Entity>, CommandError>
+    paste(std::string_view scene, Entity parent, std::optional<u32> index, const PrefabSource& prefabs = {});
+
+    /// Makes every Entity field that refers to a key of @p targets (by Entity::toBits()) refer to its value,
+    /// except in the keys' own Components and in Hierarchy parents. Returns how many fields changed.
+    [[nodiscard]] u32 redirectReferences(const std::unordered_map<u64, Entity>& targets);
 
     /// Moves @p entity under @p parent (null: to the roots) at @p index (see illusion::setParent()).
     [[nodiscard]] Expected<void, CommandError> setParent(Entity entity, Entity parent, ParentMode mode,
