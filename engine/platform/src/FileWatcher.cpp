@@ -393,20 +393,24 @@ public:
         }
     }
 
+    // Allocates nothing when no events arrived: the editor polls every few frames.
     void collect(ChangeSet& changes)
     {
-        std::vector<RawEvent> events;
         {
             const std::scoped_lock lock(m_mutex);
-            events.swap(m_events);
+            m_collected.swap(m_events); // the callback keeps the emptied buffer's capacity
             if (m_overflow)
             {
                 changes.overflow();
                 m_overflow = false;
             }
         }
+        if (m_collected.empty())
+        {
+            return;
+        }
         const std::filesystem::path root = utf8Path(m_root);
-        for (RawEvent& event : events)
+        for (RawEvent& event : m_collected)
         {
             // Flags accumulate over an item's recent history, so the file system decides what happened.
             std::error_code code;
@@ -424,6 +428,7 @@ public:
                 changes.record(FileEventKind::Modified, std::move(event.path));
             }
         }
+        m_collected.clear();
     }
 
 private:
@@ -468,7 +473,8 @@ private:
     dispatch_queue_t m_queue = nullptr;
     bool m_started = false;
     std::mutex m_mutex;
-    std::vector<RawEvent> m_events;
+    std::vector<RawEvent> m_events;    // filled by the callback (under m_mutex)
+    std::vector<RawEvent> m_collected; // read by collect() (poll thread only)
     bool m_overflow = false;
 };
 
