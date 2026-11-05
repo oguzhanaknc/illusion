@@ -36,9 +36,11 @@ Expected<Copied, CommandError> copyEntities(CommandContext& context, std::vector
             subset.insert(subset.end(), subtree.begin(), subtree.end());
         }
     }
+    // Expanded: the copy matches the saved entities by position, and pastes plain entities (new ids).
     SceneSaveOptions options;
     options.subset = std::span<const Entity>(subset);
     options.order = SceneOrder::AsGiven;
+    options.prefabMode = PrefabSaveMode::Expanded;
     const SceneSaveResult saved = saveScene(world, options);
     if (!saved.ok())
     {
@@ -85,6 +87,7 @@ Expected<Copied, CommandError> copyEntities(CommandContext& context, std::vector
     SceneSaveOptions copyOptions;
     copyOptions.subset = std::span<const Entity>(loaded.entities);
     copyOptions.order = SceneOrder::AsGiven;
+    copyOptions.prefabMode = PrefabSaveMode::Expanded;
     SceneSaveResult text = saveScene(copy, copyOptions);
     if (!text.ok())
     {

@@ -5,6 +5,7 @@
 #include <illusion/assets/AssetCooker.hpp>
 #include <illusion/assets/ImportSettings.hpp>
 #include <illusion/assets/MaterialAsset.hpp>
+#include <illusion/ecs/Prefab.hpp>
 #include <illusion/editor/core/AssetCatalog.hpp>
 #include <illusion/editor/core/ThumbnailCache.hpp>
 #include <illusion/editor/core/ThumbnailHost.hpp>
@@ -179,8 +180,10 @@ Expected<u32, CommandError> moveWorldReferences(CommandContext& context, std::st
         for (const ComponentId type : world.componentsOf(entity))
         {
             const TypeReflection* reflection = registry.reflection(type);
-            if (reflection == nullptr || reflection->meta.transient || reflection->size == 0 ||
-                !hasAssetFields(*reflection))
+            // A PrefabInstance names the prefab its record is saved with.
+            if (reflection == nullptr ||
+                (reflection->meta.transient && type != componentId<PrefabInstance>()) ||
+                reflection->size == 0 || !hasAssetFields(*reflection))
             {
                 continue;
             }

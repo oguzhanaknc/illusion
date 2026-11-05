@@ -6,6 +6,7 @@
 #include <illusion/audio/AudioWorldService.hpp>
 #include <illusion/core/JobSystem.hpp>
 #include <illusion/ecs/Name.hpp>
+#include <illusion/ecs/Prefab.hpp>
 #include <illusion/ecs/Reflection.hpp>
 #include <illusion/ecs/SceneSerializer.hpp>
 #include <illusion/ecs/Transform.hpp>
@@ -171,4 +172,40 @@ TEST_CASE("SceneLoaderService instantiates scene files with new ids and reports 
     CHECK_FALSE(api.instantiate("game:/broken.scene", second));
     CHECK(api.lastError().find("broken.scene") != std::string_view::npos);
     CHECK(world.aliveCount() == 4);
+}
+
+TEST_CASE("SceneLoaderService instantiates prefab files as linked instances and expands scene records")
+{
+    reflectCoreComponents();
+    test::TempDirectory directory;
+    VirtualFileSystem files;
+    REQUIRE(files.mount("game", directory.path, MountAccess::ReadWrite) == FileError::None);
+    {
+        World source;
+        source.create(Transform{}, Name{"Crate"}, EntityGuid{1});
+        SceneSaveOptions options;
+        options.prefabFile = true;
+        const SceneSaveResult prefab = saveScene(source, options);
+        REQUIRE(prefab.ok());
+        REQUIRE(files.writeText("game:/crate.prefab", prefab.json) == FileError::None);
+        REQUIRE(files.writeText("game:/yard.scene",
+                                R"({"format": "illusion.scene", "version": 2, "entities": [
+                                     {"prefab": "game:/crate.prefab", "id": "0000000000000100", "overrides": {
+                                       "0000000000000001": {"illusion.Name": {"value": "Big crate"}}}}]})") ==
+                FileError::None);
+    }
+
+    World world;
+    SceneLoaderService service(world, files);
+    SceneService& api = service;
+    std::array<Entity, 4> created{};
+    REQUIRE(api.instantiate("game:/crate.prefab", created) == 1);
+    CHECK(world.has<PrefabInstance>(created[0]));
+    CHECK(world.get<Name>(created[0]).value == "Crate");
+    REQUIRE(api.instantiate("game:/crate.prefab", created) == 1); // a second instance with a new id
+    CHECK(world.aliveCount() == 2);
+
+    REQUIRE(api.instantiate("game:/yard.scene", created) == 1);
+    CHECK(world.get<Name>(created[0]).value == "Big crate");
+    CHECK(world.has<PrefabMember>(created[0]));
 }

@@ -462,6 +462,7 @@ Expected<bool, CommandError> EditorContext::loadSceneText(std::string_view json,
     options.assetExists = [this](std::string_view path) {
         return path.starts_with("builtin:") || m_files.exists(path);
     };
+    options.prefabs = prefabSource();
     {
         // Load into a scratch World first, so that a broken file leaves the open scene as it is.
         World scratch;
@@ -522,10 +523,21 @@ Expected<void, CommandError> EditorContext::openScene(std::string_view path,
     return {};
 }
 
-Expected<std::string, CommandError> EditorContext::sceneJson() const
+PrefabSource EditorContext::prefabSource() const
+{
+    return [this](std::string_view path) -> std::optional<std::string> {
+        std::string text;
+        return m_files.readText(path, text) == FileError::None ? std::optional<std::string>(std::move(text))
+                                                               : std::nullopt;
+    };
+}
+
+Expected<std::string, CommandError> EditorContext::sceneJson(PrefabSaveMode prefabs) const
 {
     SceneSaveOptions options;
     options.preservedSettings = m_editor.settings();
+    options.prefabMode = prefabs;
+    options.prefabs = prefabSource();
     const SceneSaveResult saved = illusion::saveScene(m_world, options);
     if (!saved.ok())
     {
@@ -551,6 +563,7 @@ Expected<u32, CommandError> EditorContext::saveScene(std::string_view path)
     assignMissingGuids(m_world, m_guids);
     SceneSaveOptions options;
     options.preservedSettings = m_editor.settings();
+    options.prefabs = prefabSource();
     const SceneSaveResult saved = illusion::saveScene(m_world, options);
     if (!saved.ok())
     {

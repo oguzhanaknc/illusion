@@ -418,7 +418,23 @@ Plan: `docs/plans/m7-editor.md` (sub-milestones, command API, localization, them
   mipmaps and max size or a model's scale with Apply/Revert; `#` in the command palette searches assets
   (`PaletteMode::Assets`); the `editor.reveal` command and the `fileBrowser` preference reveal a file in the
   system's file manager
-- M7v: Prefabs with overrides and nesting (ADR 0046)
+- M7v: Prefabs with overrides and nesting (ADR 0046), in three parts:
+  - M7v-1: ✅ Prefab format and engine support: `.prefab` files (`"format": "illusion.prefab"`, one root),
+    instance records in scenes with field-level overrides computed at save time, ids derived with
+    `derivePrefabGuid()`, nesting (depth 16, cycles kept unresolved) and variants, `instantiatePrefab()`,
+    the runtime Components `PrefabInstance`/`PrefabMember`/`UnresolvedPrefab` (missing prefabs pass through),
+    `PrefabSaveMode::Expanded` snapshots for Play mode and the clipboard, `SceneService::instantiate` of
+    `.prefab` files, the editor opening and saving scenes with instances, undo keeping prefab links,
+    `asset.references`/`asset.move` seeing record prefabs; benchmarks `prefab/instantiate` and
+    `prefab/save-records`
+  - M7v-2: `prefab.*` commands (`create`, `instantiate`, `open`, `close`, `apply`, `revert`, `unpack`,
+    `overrides`), the `Prefab` asset kind in the catalog and browser, linked paste of whole instances, and a
+    prefab-aware reference index (asset references inside overrides and in `.prefab` files; rewriting
+    scenes whose entities refer into instances, which M7v-1 refuses)
+  - M7v-3: prefab editor UI: create by dragging a selection to the browser, instantiate by dragging into
+    the viewport or Outliner, prefab edit mode with a breadcrumb, overrides shown in the Inspector with
+    per-field/Component/all apply and revert, and prefab file changes propagating into open scenes as an
+    undoable step
 - M7w: Engine feature panels: rendering, physics, audio mixer, input actions, gamepad tester, profiler,
   diagnostics; gamepad navigation of the editor window through `GamepadSystem` (from M7l)
 - M7x: Showcase scene covering every Component and the scripting API; Tetris built by an agent end to end

@@ -39,9 +39,10 @@ public:
     /// True if a file exists at @p virtualPath.
     [[nodiscard]] virtual bool exists(std::string_view virtualPath) const = 0;
     /// Loads the scene file at @p virtualPath into the World with new EntityGuids, so the same file can be
-    /// instantiated many times. Writes the created entities in file order into @p created (as many as fit)
-    /// and returns how many were created; nullopt if the file cannot be read or is not a valid scene, with
-    /// the reason in lastError().
+    /// instantiated many times. A `.prefab` file becomes a prefab instance with a new id, its root first;
+    /// prefab instances in a scene file expand with their prefabs read from the same files. Writes the
+    /// created entities in file order into @p created (as many as fit) and returns how many were created;
+    /// nullopt if the file cannot be read or is not a valid scene or prefab, with the reason in lastError().
     virtual std::optional<u32> instantiate(std::string_view virtualPath, std::span<Entity> created) = 0;
     /// Why the last instantiate() failed (empty after a success); valid until the next call.
     [[nodiscard]] virtual std::string_view lastError() const = 0;

@@ -52,6 +52,7 @@ Record (ADR) olarak kaydedilir. Her kayıt bağlamı, kararı ve sonuçlarını 
 | [0043](https://github.com/oguzhanaknc/illusion/blob/main/docs/adr/0043-project-modules-built-by-the-editor.md) | Bir modül SDK paketiyle editörün build ettiği proje modülleri |
 | [0044](https://github.com/oguzhanaknc/illusion/blob/main/docs/adr/0044-component-layout-migration-on-hot-reload.md) | Hot reload'da Component layout'unun yerinde taşınması |
 | [0045](https://github.com/oguzhanaknc/illusion/blob/main/docs/adr/0045-asset-catalog-and-file-watching.md) | Asset kataloğu ve dosya izleme |
+| [0046](https://github.com/oguzhanaknc/illusion/blob/main/docs/adr/0046-prefabs-as-instance-records.md) | Prefab'lar: alan düzeyinde override ve iç içe yerleştirme ile instance kayıtları |
 
 Yeni bir karar önermek için `docs/adr/0000-template.md` dosyasını kopyalayın ve
 [katkıda bulunma rehberini](../contributing.md#architecture-decision-recordlar) izleyin.

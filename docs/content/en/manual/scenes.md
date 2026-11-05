@@ -260,6 +260,97 @@ new ones, and Entity fields, which are indices into the `entities` array, are re
 writes version 2. In version 1 files each entity object holds its Components directly and `u64` values
 are numbers.
 
+## Prefab instances
+
+A prefab is a group of entities saved as a `.prefab` asset and placed in scenes as *instances*
+(ADR 0046). A prefab file has the scene layout with `"format": "illusion.prefab"` and exactly one root:
+
+```json
+{
+  "format": "illusion.prefab",
+  "version": 2,
+  "entities": [
+    {
+      "id": "00000000000000a1",
+      "components": {
+        "illusion.Hierarchy": { "parent": null, "order": 0 },
+        "illusion.LocalTransform": {},
+        "illusion.Name": { "value": "Crate" }
+      }
+    },
+    {
+      "id": "00000000000000a2",
+      "components": {
+        "illusion.Hierarchy": { "parent": "00000000000000a1", "order": 0 },
+        "illusion.LocalTransform": {},
+        "illusion.Name": { "value": "Lid" }
+      }
+    }
+  ]
+}
+```
+
+A scene stores an instance as one entry of its `entities` array, a *record*, instead of the instance's
+entities:
+
+```json
+{
+  "prefab": "assets:/props/crate.prefab",
+  "id": "5d0c9e21a7b4f318",
+  "overrides": {
+    "00000000000000a1": {
+      "illusion.Hierarchy": { "order": 3 },
+      "illusion.LocalTransform": { "position": [4.0, 0.0, -2.0] }
+    },
+    "00000000000000a2": {
+      "game.Lock": { "code": 1234 },
+      "illusion.Name": null
+    }
+  }
+}
+```
+
+- `id` is the instance's id. Its entities get ids derived from it and from their id in the prefab file
+  (`derivePrefabGuid()`), so the same instance always has the same entity ids.
+- `overrides` holds what the scene changed, by the entity's id in the prefab file: a Component object is
+  merged field by field into the prefab's value (arrays and other values replace it), a Component that the
+  prefab entity lacks is added, `null` removes a Component, and `null` for a whole entity removes it from
+  the instance. Moving an instance is an override of its root's `illusion.Hierarchy` and
+  `illusion.LocalTransform`.
+- Entities added under an instance are ordinary entities of the scene whose parent is an instance entity.
+- Overrides are computed when the scene is saved, by comparing the instance with a fresh expansion of its
+  prefab, so they stay right after edits made by hand. Everything else follows the prefab: change the
+  prefab file and every instance picks the change up the next time its scene loads.
+
+Loading expands each record with `SceneLoadOptions::prefabs`, which reads prefab files; the entities of an
+instance carry the runtime Component `illusion.PrefabMember` and its root `illusion.PrefabInstance`. Saving
+needs `SceneSaveOptions::prefabs` to compute the overrides.
+
+```cpp
+#include <illusion/ecs/Prefab.hpp>
+
+illusion::PrefabData crate{"assets:/props/crate.prefab", text};
+const illusion::PrefabInstantiateResult placed =
+    illusion::instantiatePrefab(world, crate, parent, guids.next(), readPrefab);
+
+illusion::SceneLoadOptions load;
+load.prefabs = readPrefab; // std::optional<std::string>(std::string_view path)
+illusion::SceneSaveOptions save;
+save.prefabs = readPrefab; // needed to compute the overrides of instances
+```
+
+- **Nesting.** A prefab can contain records of other prefabs; overrides of an outer prefab or of the scene
+  apply on top of the inner ones. A *variant* is a prefab whose root is a record. Nesting stops at depth 16,
+  and a prefab that contains itself is not expanded.
+- **Missing prefabs.** A record whose prefab cannot be read or loaded is kept as one entity with the runtime
+  Component `illusion.UnresolvedPrefab`, which saves the record again unchanged. Entity fields that referred
+  to its entities become `null` (`SceneLoadResult::clearedReferences` counts them) and a warning is
+  reported; the path is listed in `missingAssets`.
+- **Snapshots.** `PrefabSaveMode::Expanded` writes every entity with a `"prefabLink"` instead of records, so
+  that loading with `IdPolicy::Keep` restores the instance exactly without reading prefab files. The editor
+  uses it for Play mode and the clipboard; pasted copies (new ids) are plain entities.
+- Modules instantiate prefabs with `SceneService::instantiate("game:/props/crate.prefab", created)`.
+
 ## Type-erased access
 
 The editor and tools work with `ComponentId`s instead of C++ types. `World` offers `entities()`,

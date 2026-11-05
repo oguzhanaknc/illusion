@@ -265,6 +265,100 @@ olmadığı için yeni id alırlar; `entities` dizisine indeks olan Entity alanl
 kaydetme sürüm 2 yazar. Sürüm 1 dosyalarında her Entity nesnesi Component'lerini doğrudan tutar ve `u64`
 değerleri sayıdır.
 
+## Prefab instance'ları
+
+Prefab, `.prefab` Asset'i olarak kaydedilen ve sahnelere *instance* olarak yerleştirilen bir Entity
+grubudur (ADR 0046). Bir prefab dosyası, `"format": "illusion.prefab"` ile sahne düzenine sahiptir ve tam
+olarak bir kökü vardır:
+
+```json
+{
+  "format": "illusion.prefab",
+  "version": 2,
+  "entities": [
+    {
+      "id": "00000000000000a1",
+      "components": {
+        "illusion.Hierarchy": { "parent": null, "order": 0 },
+        "illusion.LocalTransform": {},
+        "illusion.Name": { "value": "Crate" }
+      }
+    },
+    {
+      "id": "00000000000000a2",
+      "components": {
+        "illusion.Hierarchy": { "parent": "00000000000000a1", "order": 0 },
+        "illusion.LocalTransform": {},
+        "illusion.Name": { "value": "Lid" }
+      }
+    }
+  ]
+}
+```
+
+Sahne bir instance'ı, instance'ın Entity'leri yerine `entities` dizisinin tek bir girdisi olarak, bir
+*kayıt* (record) olarak saklar:
+
+```json
+{
+  "prefab": "assets:/props/crate.prefab",
+  "id": "5d0c9e21a7b4f318",
+  "overrides": {
+    "00000000000000a1": {
+      "illusion.Hierarchy": { "order": 3 },
+      "illusion.LocalTransform": { "position": [4.0, 0.0, -2.0] }
+    },
+    "00000000000000a2": {
+      "game.Lock": { "code": 1234 },
+      "illusion.Name": null
+    }
+  }
+}
+```
+
+- `id`, instance'ın id'sidir. Entity'leri id'lerini bundan ve prefab dosyasındaki kendi id'lerinden
+  türetir (`derivePrefabGuid()`); böylece aynı instance her zaman aynı Entity id'lerine sahip olur.
+- `overrides`, sahnenin değiştirdiklerini Entity'nin prefab dosyasındaki id'sine göre tutar: bir Component
+  nesnesi prefab'daki değere alan alan birleştirilir (diziler ve diğer değerler onun yerini alır), prefab
+  Entity'sinde olmayan bir Component eklenir, `null` bir Component'i kaldırır, bütün bir Entity için `null`
+  ise onu instance'tan çıkarır. Bir instance'ı taşımak, kökünün `illusion.Hierarchy` ve
+  `illusion.LocalTransform` override'ıdır.
+- Bir instance'ın altına eklenen Entity'ler, ebeveyni bir instance Entity'si olan sıradan sahne
+  Entity'leridir.
+- Override'lar sahne kaydedilirken, instance prefab'ının yeni bir açılımıyla karşılaştırılarak hesaplanır;
+  bu yüzden elle yapılan düzenlemelerden sonra da doğru kalırlar. Geri kalan her şey prefab'ı izler: prefab
+  dosyasını değiştirin, her instance değişikliği sahnesi bir sonraki yüklenişinde alır.
+
+Yükleme her kaydı, prefab dosyalarını okuyan `SceneLoadOptions::prefabs` ile açar; bir instance'ın
+Entity'leri runtime Component'i `illusion.PrefabMember`'ı, kökü de `illusion.PrefabInstance`'ı taşır.
+Kaydetme, override'ları hesaplamak için `SceneSaveOptions::prefabs` ister.
+
+```cpp
+#include <illusion/ecs/Prefab.hpp>
+
+illusion::PrefabData crate{"assets:/props/crate.prefab", text};
+const illusion::PrefabInstantiateResult placed =
+    illusion::instantiatePrefab(world, crate, parent, guids.next(), readPrefab);
+
+illusion::SceneLoadOptions load;
+load.prefabs = readPrefab; // std::optional<std::string>(std::string_view path)
+illusion::SceneSaveOptions save;
+save.prefabs = readPrefab; // needed to compute the overrides of instances
+```
+
+- **İç içe yerleştirme.** Bir prefab başka prefab'ların kayıtlarını içerebilir; dıştaki bir prefab'ın ya da
+  sahnenin override'ları içtekilerin üzerine uygulanır. *Variant*, kökü bir kayıt olan prefab'dır. İç içe
+  yerleştirme 16 derinlikte durur ve kendini içeren bir prefab açılmaz.
+- **Eksik prefab'lar.** Prefab'ı okunamayan ya da yüklenemeyen bir kayıt, kaydı değiştirmeden yeniden
+  kaydeden runtime Component'i `illusion.UnresolvedPrefab` ile tek bir Entity olarak tutulur. Onun
+  Entity'lerine başvuran Entity alanları `null` olur (`SceneLoadResult::clearedReferences` bunları sayar) ve
+  bir uyarı bildirilir; yol `missingAssets` içinde listelenir.
+- **Anlık görüntüler.** `PrefabSaveMode::Expanded`, kayıtlar yerine her Entity'yi bir `"prefabLink"` ile
+  yazar; böylece `IdPolicy::Keep` ile yükleme, prefab dosyalarını okumadan instance'ı tam olarak geri
+  getirir. Editör bunu Play modu ve pano için kullanır; yapıştırılan kopyalar (yeni id'lerle) sıradan
+  Entity'lerdir.
+- Modüller prefab'ları `SceneService::instantiate("game:/props/crate.prefab", created)` ile oluşturur.
+
 ## Tipi silinmiş erişim
 
 Editör ve araçlar C++ tipleri yerine `ComponentId`'lerle çalışır. `World` bunun için `entities()`,
