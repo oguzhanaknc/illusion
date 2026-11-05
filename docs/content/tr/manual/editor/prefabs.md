@@ -19,13 +19,16 @@ yerine yazmak için `"overwrite": true` verin.
 {"entity": "/Crate", "path": "assets:/props/crate.prefab"}
 ```
 
-Kök, dünyadaki yerini prefab'daki kendi yerleşimi olarak korur. Kaydedilen Entity'lerin içindeki instance'lar
+Editörde bir Entity'yi Outliner'dan Asset Browser'a sürükleyin: geçerli klasörde, Entity'nin adını taşıyan
+bir prefab olur. Kök, dünyadaki yerini prefab'daki kendi yerleşimi olarak korur. Kaydedilen Entity'lerin içindeki instance'lar
 instance olarak kalır: yeni prefab onları iç içe barındırır.
 
 ## Instance yerleştirme
 
 `prefab.instantiate` bir prefab dosyasının instance'ını kök olarak ya da `parent` altında `index`
-konumunda ekler. Her instance, Entity'lerinin id'lerinin türetildiği yeni bir id alır.
+konumunda, `position` ile de dünyanın o noktasında ekler. Her instance, Entity'lerinin id'lerinin türetildiği
+yeni bir id alır. Editörde bir prefab'ı Asset Browser'dan bir Outliner satırına (onun altında bir instance),
+Outliner'ın boş alanına (bir kök) ya da viewport'a (imlecin altındaki zemine) sürükleyin.
 
 ```json
 {"path": "assets:/props/crate.prefab", "parent": "/Level", "index": 0}
@@ -83,7 +86,9 @@ sonraki karede onu izler ve override'larını korur; güncelleme, ajanların ken
 Bir instance Entity'si adının altında bir prefab çubuğu gösterir: prefab dosyası ve prefab'ı düzenleme
 (`prefab.open`), bütün instance'ı uygulama (`all` ile `prefab.apply`), Entity'yi geri döndürme
 (`prefab.revert`) ve instance'ın paketini açma düğmeleri. Prefab'dan farklı olan Component'lerin başlığı kalın
-ve vurgu çubukludur; menüleri o Component'i uygular ya da geri döndürür.
+ve vurgu çubukludur, override edilmiş alanlarının etiketi de vurgu renginde ve kalındır. Component'in menüsü
+Component'i, bir alanın menüsü o alanı uygular ya da geri döndürür (`field` ile `prefab.apply` ve
+`prefab.revert`).
 
 ## Kopyalama ve çoğaltma
 
@@ -106,5 +111,3 @@ instance'larını içeren sahneleri tek adımda, taşımayı override'lara dön�
 ## Şimdilik sınırlar
 
 - Bir instance'ın prefab'ının artık sahip olmadığı Entity'ler sıradan Entity'ler olarak kaydedilir.
-- Prefab'lar komutlar ve komut paleti ile oluşturulup yerleştirilir; Asset Browser'dan sürüklemek daha sonra
-  gelecek.

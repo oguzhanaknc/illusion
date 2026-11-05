@@ -1186,3 +1186,36 @@ TEST_CASE("the Outliner shows a breadcrumb in prefab edit mode whose back button
     CHECK(editor.document().path() == "assets:/scenes/yard.scene");
     CHECK(editor.prefabEditStack().empty());
 }
+
+TEST_CASE(
+    "dragging an entity into the Asset Browser makes a prefab and a prefab onto an Outliner row places it")
+{
+    ShellFixture fixture;
+    EditorContext& editor = *fixture.editor;
+    test::ok(editor, "entity.create", R"({"name":"Barrel"})");
+    test::ok(editor, "entity.create", R"({"name":"Shelf"})");
+    test::ok(editor, "ui.show_panel", R"({"panel":"panel.assets"})");
+    ui::UiDriver driver(fixture.context, [&] { fixture.frame(); });
+    driver.runFrames(3);
+
+    // Outliner rows: 0 Barrel, 1 Shelf. Drop Barrel on the browser's content area.
+    const std::optional<ui::UiItem> area = driver.find("asset_browser.search");
+    REQUIRE(area.has_value());
+    dragBetween(driver, "outliner.row.0", Vec2(area->center().x, area->max.y + 40.0f));
+    driver.runFrames(3);
+    test::ok(editor, "project.file_stat", R"({"path":"assets:/Barrel.prefab"})");
+    const std::string barrel = std::string(test::ok(editor, "entity.get", R"({"entity":"/Barrel"})")
+                                               .root()
+                                               .pointer("/entity/id")
+                                               .asString()
+                                               .value_or(""));
+    CHECK(editor.world().has<PrefabInstance>(editor.entities().find(*parseGuid(barrel))));
+
+    // The prefab's tile (the root lists folders first: scenes, then Barrel.prefab) onto the Shelf row.
+    driver.runFrames(4);
+    const std::optional<ui::UiItem> shelf = driver.find("outliner.row.1");
+    REQUIRE(shelf.has_value());
+    dragBetween(driver, "asset_browser.tile.1", shelf->center());
+    driver.runFrames(3);
+    test::ok(editor, "entity.get", R"({"entity":"/Shelf/Barrel"})");
+}

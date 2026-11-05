@@ -473,4 +473,22 @@ private:
 /// @p text quoted as a JSON string.
 [[nodiscard]] std::string jsonQuote(std::string_view text);
 
+/// Drag-and-drop payload type of entities: the 16 hex digits of the EntityGuid (Outliner rows).
+inline constexpr const char* kEntityDragPayload = "ILLUSION_ENTITY";
+
+/// Drag-and-drop payload type of assets: the asset's virtual path, zero-terminated (Asset Browser tiles).
+inline constexpr const char* kAssetDragPayload = "ILLUSION_ASSET";
+
+/// The asset path of an ILLUSION_ASSET payload (without its terminating zero).
+[[nodiscard]] inline std::string_view assetPayloadPath(const ImGuiPayload& payload) noexcept
+{
+    const char* data = static_cast<const char*>(payload.Data);
+    usize size = payload.DataSize > 0 ? static_cast<usize>(payload.DataSize) : 0;
+    if (size > 0 && data[size - 1] == '\0')
+    {
+        --size;
+    }
+    return std::string_view(data, size);
+}
+
 } // namespace illusion::editor::shell::detail

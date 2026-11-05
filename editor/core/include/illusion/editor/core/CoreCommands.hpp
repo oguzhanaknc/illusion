@@ -1360,6 +1360,7 @@ struct PrefabInstantiateParams
     std::string path;                    ///< The `.prefab` file.
     std::optional<std::string> parent{}; ///< Parent entity (default: the instance is a root).
     std::optional<u32> index{};          ///< Position among the parent's children (default: last).
+    std::optional<Vec3> position{};      ///< World position of the root (default: as in the prefab).
 };
 
 /// An instance of a prefab: result of `prefab.instantiate`.
@@ -1399,6 +1400,7 @@ struct PrefabApplyParams
 {
     std::string entity;                     ///< An entity of an instance.
     std::optional<std::string> component{}; ///< Only this Component (default: every Component of the entity).
+    std::optional<std::string> field{};     ///< Only this field of the Component (needs component).
     std::optional<bool> all{}; ///< The whole instance, removed entities included (default false).
 };
 
@@ -1441,6 +1443,7 @@ struct PrefabRevertParams
 {
     std::string entity;                     ///< An entity of an instance.
     std::optional<std::string> component{}; ///< Only this Component (default: every Component but Hierarchy).
+    std::optional<std::string> field{};     ///< Only this field of the Component (needs component).
 };
 
 /// Result of `prefab.revert`.

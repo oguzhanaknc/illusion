@@ -469,13 +469,22 @@ bool beginPropertyTable(UiKit& kit, std::string_view id)
     return true;
 }
 
-void propertyLabel(UiKit& kit, const char* label, const char* tooltip)
+void propertyLabel(UiKit& kit, const char* label, const char* tooltip, bool overridden)
 {
     ImGui::TableNextRow();
     ImGui::TableSetColumnIndex(0);
     ImGui::AlignTextToFramePadding();
-    ImGui::PushStyleColor(ImGuiCol_Text, tokenVec(kit, ThemeToken::TextSecondary));
+    ImGui::PushStyleColor(ImGuiCol_Text,
+                          tokenVec(kit, overridden ? ThemeToken::Accent : ThemeToken::TextSecondary));
+    if (overridden)
+    {
+        pushFont(kit, FontRole::Strong);
+    }
     ImGui::TextUnformatted(label);
+    if (overridden)
+    {
+        popFont(kit);
+    }
     ImGui::PopStyleColor();
     if (tooltip != nullptr)
     {

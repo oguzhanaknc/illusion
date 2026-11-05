@@ -6,6 +6,7 @@
 #include <illusion/core/Profiler.hpp>
 #include <illusion/ecs/Hierarchy.hpp>
 #include <illusion/ecs/Name.hpp>
+#include <illusion/ecs/Prefab.hpp>
 #include <illusion/ecs/World.hpp>
 #include <illusion/editor/ui/Icons.hpp>
 #include <illusion/text/FuzzyMatcher.hpp>
@@ -739,6 +740,18 @@ void Outliner::draw(Impl& shell)
                         {
                             drawList->AddRect(itemMin, itemMax, accent, style.FrameRounding);
                         }
+                        // A prefab from the Asset Browser becomes an instance under the row.
+                        if (const ImGuiPayload* payload = ImGui::AcceptDragDropPayload(kAssetDragPayload))
+                        {
+                            const std::string_view path = assetPayloadPath(*payload);
+                            if (path.ends_with(kPrefabExtension))
+                            {
+                                (void)shell.run("prefab.instantiate",
+                                                "{\"path\":" + jsonQuote(path) + ",\"parent\":\"" +
+                                                    std::string(rowIdText) + "\"}",
+                                                "outliner");
+                            }
+                        }
                         if (const ImGuiPayload* payload = ImGui::AcceptDragDropPayload(
                                 kEntityPayload, ImGuiDragDropFlags_AcceptBeforeDelivery))
                         {
@@ -935,6 +948,15 @@ void Outliner::draw(Impl& shell)
                                    ImVec2(std::max(1.0f, remain.x), remain.y));
             if (ImGui::BeginDragDropTarget())
             {
+                if (const ImGuiPayload* payload = ImGui::AcceptDragDropPayload(kAssetDragPayload))
+                {
+                    const std::string_view path = assetPayloadPath(*payload);
+                    if (path.ends_with(kPrefabExtension))
+                    {
+                        (void)shell.run("prefab.instantiate", "{\"path\":" + jsonQuote(path) + "}",
+                                        "outliner");
+                    }
+                }
                 if (const ImGuiPayload* payload = ImGui::AcceptDragDropPayload(kEntityPayload))
                 {
                     if (payload->DataSize == static_cast<int>(kGuidTextLength))
