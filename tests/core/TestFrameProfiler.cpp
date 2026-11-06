@@ -20,6 +20,16 @@ f64 fakeClock() noexcept
     return now;
 }
 
+// A clock that advances 0.7 microseconds per reading.
+f64 g_tinyNow = 0.0;
+
+f64 tinyClock() noexcept
+{
+    const f64 now = g_tinyNow;
+    g_tinyNow += 0.0000007;
+    return now;
+}
+
 FrameProfiler makeProfiler(FrameProfilerDesc desc = {})
 {
     g_now = 0.0;
@@ -156,6 +166,24 @@ TEST_CASE("a paused profiler keeps its frames and records again after resume")
     CHECK(profiler.frame(0).index == 2);
     profiler.clear();
     CHECK(profiler.frameCount() == 0);
+}
+
+TEST_CASE("the average time of a place never exceeds its largest time, even after f32 rounding")
+{
+    // Seven frames of one 0.0007 ms scope: the f32 sum divided by seven rounds above 0.0007.
+    g_tinyNow = 0.0;
+    FrameProfiler profiler(FrameProfilerDesc{}, &tinyClock);
+    for (int i = 0; i < 7; ++i)
+    {
+        profiler.beginFrame();
+        profiler.beginScope("tiny");
+        profiler.endScope();
+        profiler.endFrame();
+    }
+    std::vector<ProfileScopeStats> stats;
+    profiler.summarize(7, stats);
+    REQUIRE(stats.size() == 1);
+    CHECK(stats[0].averageMs <= stats[0].maxMs);
 }
 
 TEST_CASE("summarize sums the time per place and frame, averaged over the frames, in newest-frame order")

@@ -39,7 +39,8 @@ Expected<ProfilerGetResult, CommandError> profilerGet(CommandContext& context,
     }
     if (reported != 0)
     {
-        result.averageMs = total / static_cast<f32>(reported);
+        // Rounding can put the f32 quotient one step above the largest frame.
+        result.averageMs = std::min(total / static_cast<f32>(reported), result.maxMs);
         result.fps = result.averageMs > 0.0f ? 1000.0f / result.averageMs : 0.0f;
     }
     std::vector<ProfileScopeStats> stats;
