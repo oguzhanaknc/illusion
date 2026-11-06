@@ -136,6 +136,33 @@ with their types and bindings:
 
 Every change is one of the commands above and one undo step.
 
+## Gamepads
+
+The editor reads the connected gamepads (Xbox, DualSense, DualShock 4 and others) over USB or Bluetooth, and
+Play mode gives the game the same ones. The **Gamepad Tester** window (Window → Gamepad Tester) shows one live:
+
+- On the left, what the gamepad reads: held buttons, both sticks, the triggers, touchpad fingers and, while
+  they are on, the gyroscope and accelerometer.
+- On the right, what it can be sent: two-motor rumble (and the trigger motors on Xbox One / Series), the light
+  colour, DualSense adaptive trigger effects (resistance, weapon, vibration) and the motion sensors on or off.
+
+Only the controls the gamepad supports appear. Every output is a command, so an agent can test a gamepad too:
+
+| Command | What it does |
+| --- | --- |
+| `gamepad.list` | Lists the connected gamepads with their model, features, held buttons, axes, touchpad and motion sensors. |
+| `gamepad.rumble` | Rumbles the motors (`low`, `high`) and/or the trigger motors (`left`, `right`) for `durationMs`. |
+| `gamepad.set_led` | Sets the light colour (each channel 0 to 1). |
+| `gamepad.set_trigger_effect` | Applies a DualSense effect to the left or right trigger. |
+| `gamepad.set_motion` | Turns the gyroscope and accelerometer on or off. |
+
+Without `gamepad`, the commands use the first connected gamepad. A command that asks for a feature the gamepad
+lacks fails with `unsupported`. A headless editor reads no gamepads.
+
+```json
+{"method": "gamepad.set_trigger_effect", "params": {"trigger": "right", "mode": "weapon", "start": 0.3, "end": 0.6}}
+```
+
 ## Game modules
 
 `module.load` loads a game module from its shared library and starts it on a running session, `module.unload`

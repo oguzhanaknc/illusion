@@ -497,6 +497,23 @@ private:
     std::unique_ptr<State> m_state;
 };
 
+/// The Gamepad Tester window: the live state of a connected gamepad and its outputs (`gamepad.*` commands).
+class GamepadTesterWindow
+{
+public:
+    GamepadTesterWindow();
+    ~GamepadTesterWindow();
+    GamepadTesterWindow(const GamepadTesterWindow&) = delete;
+    GamepadTesterWindow& operator=(const GamepadTesterWindow&) = delete;
+
+    /// Draws the window's content.
+    void draw(Impl& shell);
+
+private:
+    struct State;
+    std::unique_ptr<State> m_state;
+};
+
 /// The Rendering panel: the render quality of the viewports (a preference), the GPU and each viewport's last
 /// frame.
 class RenderingPanel

@@ -34,6 +34,7 @@ illusion_add_editor_library(illusion_editor_core STATIC
     src/commands/CoreCommands.cpp
     src/commands/EditorCommands.cpp
     src/commands/EntityCommands.cpp
+    src/commands/GamepadCommands.cpp
     src/commands/GizmoCommands.cpp
     src/commands/HierarchyCommands.cpp
     src/commands/HistoryCommands.cpp

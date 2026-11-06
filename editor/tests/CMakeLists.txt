@@ -19,6 +19,7 @@ illusion_add_editor_executable(illusion_editor_tests
     core/TestEditorCommands.cpp
     core/TestEditorCore.cpp
     core/TestEditorFuzz.cpp
+    core/TestEditorGamepad.cpp
     core/TestEditorGizmo.cpp
     core/TestEditorHistory.cpp
     core/TestEditorLog.cpp
@@ -35,6 +36,7 @@ illusion_add_editor_executable(illusion_editor_tests
     core/TestEditorViewport.cpp
     mcp/TestMcpBridge.cpp
     mcp/TestMcpProtocol.cpp
+    play/TestEditorGamepads.cpp
     play/TestPlayMode.cpp
     play/TestTetris.cpp
     rpc/TestEditorClient.cpp
@@ -51,7 +53,7 @@ target_include_directories(illusion_editor_tests PRIVATE ${CMAKE_CURRENT_SOURCE_
 target_link_libraries(illusion_editor_tests PRIVATE
     illusion_ui_gallery_pages illusion::editor_core illusion::editor_client illusion::editor_shell
     illusion::editor_viewport illusion::editor_play
-    illusion::render illusion::physics illusion::audio illusion::doctest)
+    illusion::render illusion::input illusion::physics illusion::audio illusion::doctest)
 # Golden files of the editor core (ILLUSION_UPDATE_GOLDENS=1 rewrites them).
 target_compile_definitions(illusion_editor_tests PRIVATE ILLUSION_EDITOR_TEST_DATA="${CMAKE_CURRENT_SOURCE_DIR}/data")
 # The client tests launch the editor.

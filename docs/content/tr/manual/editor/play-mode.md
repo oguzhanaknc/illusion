@@ -139,6 +139,34 @@ bağlamalarıyla listeler:
 
 Her değişiklik yukarıdaki komutlardan biri ve bir undo adımıdır.
 
+## Gamepad'ler
+
+Editör bağlı gamepad'leri (Xbox, DualSense, DualShock 4 ve diğerleri) USB ya da Bluetooth üzerinden okur ve
+Play modu oyuna aynılarını verir. **Gamepad Tester** penceresi (Window → Gamepad Tester) birini canlı gösterir:
+
+- Solda gamepad'in okudukları: basılı düğmeler, iki çubuk, tetikler, touchpad parmakları ve açıkken gyroscope
+  ile accelerometer değerleri.
+- Sağda ona gönderilebilenler: iki motorlu titreşim (Xbox One / Series'te tetik motorları da), ışık rengi,
+  DualSense adaptive trigger efektleri (resistance, weapon, vibration) ve hareket sensörlerini açıp kapatmak.
+
+Yalnızca gamepad'in desteklediği denetimler görünür. Her çıkış bir komuttur; böylece bir ajan da gamepad'i
+sınayabilir:
+
+| Komut | Ne yapar |
+| --- | --- |
+| `gamepad.list` | Bağlı gamepad'leri model, özellik, basılı düğme, eksen, touchpad ve hareket sensörleriyle listeler. |
+| `gamepad.rumble` | Motorları (`low`, `high`) ve/veya tetik motorlarını (`left`, `right`) `durationMs` boyunca titreştirir. |
+| `gamepad.set_led` | Işık rengini ayarlar (her kanal 0 ile 1 arası). |
+| `gamepad.set_trigger_effect` | Sol ya da sağ tetiğe bir DualSense efekti uygular. |
+| `gamepad.set_motion` | Gyroscope'u ve accelerometer'ı açar ya da kapatır. |
+
+`gamepad` verilmezse komutlar ilk bağlanan gamepad'i kullanır. Desteklemediği bir özelliği isteyen komut
+`unsupported` hatasıyla başarısız olur. Headless bir editör gamepad okumaz.
+
+```json
+{"method": "gamepad.set_trigger_effect", "params": {"trigger": "right", "mode": "weapon", "start": 0.3, "end": 0.6}}
+```
+
 ## Oyun modülleri
 
 `module.load` bir oyun modülünü paylaşımlı kütüphanesinden yükler ve çalışan bir oturumda başlatır,
