@@ -58,6 +58,7 @@ struct PanelInfo
     std::string_view icon;        // Material Symbols name
     bool docked;                  // part of the dock layout
     std::string_view milestone{}; // placeholder until this milestone ("" for a real panel)
+    bool background = false;      // stays behind the other tabs of its dock node when it appears
 };
 
 /// The facts of @p panel.

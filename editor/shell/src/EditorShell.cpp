@@ -1055,7 +1055,8 @@ void EditorShell::draw(f64 now, f64 deltaSeconds)
             impl.focus[i] = false;
         }
         ImGuiWindowFlags flags = 0;
-        if (!info.milestone.empty() && panel != Panel::Scene)
+        // Placeholders and background panels do not take their dock node's tab when they appear.
+        if ((!info.milestone.empty() || info.background) && panel != Panel::Scene)
         {
             flags |= ImGuiWindowFlags_NoFocusOnAppearing;
         }

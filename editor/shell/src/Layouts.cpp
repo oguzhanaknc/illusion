@@ -21,7 +21,7 @@ constexpr PanelInfo kPanels[kPanelCount] = {
     {"panel.console", s::kPanelConsole, "terminal", true, ""},
     {"panel.history", s::kPanelHistory, "history", true, ""},
     {"panel.ai_activity", s::kPanelAiActivity, "smart_toy", true, ""},
-    {"panel.profiler", s::kPanelProfiler, "speed", true, ""},
+    {"panel.profiler", s::kPanelProfiler, "speed", true, "", true},
     {"panel.rendering", s::kPanelRendering, "brightness_6", true, "M7w"},
     {"panel.project_settings", s::kPanelProjectSettings, "settings_applications", true, "M7w"},
     {"window.preferences", s::kWindowPreferences, "settings", false, ""},
