@@ -289,6 +289,7 @@ EditorShell::Impl::Impl(EditorShell& owner, EditorContext& editorContext, ui::Ui
     , console(std::make_unique<detail::Console>())
     , history(std::make_unique<detail::History>())
     , profilerPanel(std::make_unique<detail::ProfilerPanel>())
+    , projectSettings(std::make_unique<detail::ProjectSettingsPanel>())
     , agentsPanel(std::make_unique<detail::Agents>())
     , preferences(std::make_unique<detail::PreferencesPage>())
     , projects(std::make_unique<detail::Projects>())
@@ -1101,6 +1102,9 @@ void EditorShell::draw(f64 now, f64 deltaSeconds)
                 break;
             case Panel::Profiler:
                 impl.profilerPanel->draw(impl);
+                break;
+            case Panel::ProjectSettings:
+                impl.projectSettings->draw(impl);
                 break;
             case Panel::AiActivity:
                 impl.agentsPanel->draw(impl);

@@ -453,8 +453,14 @@ Plan: `docs/plans/m7-editor.md` (sub-milestones, command API, localization, them
   log errors and warnings, missing assets, dropped lights, unresolved prefabs; 173 commands). Unit tests for
   the recorder, command tests with a fake viewport host, a headless UI test of the panel, and the
   `profiler/scope` Benchmark (400 ns budget per scope; 50 ns measured)
-- M7w-2: Rendering and Project Settings panels (the remaining placeholders), physics debug and audio mixer
-  panels; physics raycasts for drop to ground (from M7p-2)
+- M7w-2a: ✅ Project Settings panel: a page per project settings type of the `SettingsCatalog` (the
+  runtime's Physics, Audio, Input and Render and the game's own) drawn by the Inspector's widgets in a
+  settings mode (`Inspector::drawSettings()`, edits update a working value and send the changed top-level
+  field to `project.settings_set`, one undo step per drag), reset to defaults, re-read after undo and redo,
+  the physics layers as a table of editable names and a collision-matrix triangle, and named audio buses.
+  A headless UI test edits a game setting with undo, the matrix, a layer name and resets the page
+- M7w-2b: Rendering panel (the last placeholder), physics debug and audio mixer panels for the running game;
+  physics raycasts for drop to ground (from M7p-2)
 - M7w-3: Input actions panel with rebinding, gamepad tester (rumble, LED, gyro, touchpad, triggers) and
   gamepad navigation of the editor window
 - M7w-4: Multiple simultaneous Inspector instances (from M7m)

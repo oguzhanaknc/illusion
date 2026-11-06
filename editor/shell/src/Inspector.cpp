@@ -597,15 +597,61 @@ struct Inspector::State
         return guids;
     }
 
+    // Settings mode (drawSettings()): the fields belong to a project settings value, not to entities.
+    struct SettingsTarget
+    {
+        const TypeReflection* type = nullptr;
+        void* work = nullptr;
+        const void* defaults = nullptr;
+    };
+    SettingsTarget settings{};
+
+    // Writes @p valueJson at @p path ("a/b/2") of the settings value and sends its top-level field.
+    void applySettingsJson(Impl& shell, std::string_view path, std::string_view valueJson, bool merge)
+    {
+        Expected<JsonDocument, JsonError> json = JsonDocument::parse(valueJson);
+        if (!json)
+        {
+            return;
+        }
+        std::string dotPath(path);
+        std::replace(dotPath.begin(), dotPath.end(), '/', '.');
+        if (!setPath(*settings.type, settings.work, dotPath, json->root()))
+        {
+            return;
+        }
+        const std::string_view key =
+            merge ? mergeKey(shell.text, settings.type->name, path) : std::string_view{};
+        (void)writeSettingsField(shell, *settings.type, settings.work, path.substr(0, path.find('/')), key);
+    }
+
     void applyFieldJson(Impl& shell, std::string_view typeName, std::string_view path,
                         std::string_view valueJson, bool merge)
     {
+        if (settings.type != nullptr)
+        {
+            applySettingsJson(shell, path, valueJson, merge);
+            return;
+        }
         const std::string_view key = merge ? mergeKey(shell.text, typeName, path) : std::string_view{};
         setEntityField(shell, inspectedGuids(), typeName, path, valueJson, key);
     }
 
     void resetFieldPath(Impl& shell, std::string_view typeName, std::string_view path)
     {
+        if (settings.type != nullptr)
+        {
+            std::string dotPath(path);
+            std::replace(dotPath.begin(), dotPath.end(), '/', '.');
+            JsonMutDocument doc;
+            const Expected<JsonMutValue, ValueError> value =
+                getPath(doc, *settings.type, settings.defaults, dotPath);
+            if (value)
+            {
+                applySettingsJson(shell, path, value->dump(), false);
+            }
+            return;
+        }
         if (inspected.size() == 1)
         {
             const auto hex = formatGuid(inspected[0].guid);
@@ -2633,6 +2679,54 @@ void Inspector::draw(Impl& shell)
     {
         ++state.dragSerial;
     }
+}
+
+void Inspector::drawSettings(Impl& shell, const TypeReflection& type, void* work, const void* defaults,
+                             std::span<const std::string_view> skip)
+{
+    State& state = *m_state;
+    ui::UiKit kit = shell.kit();
+    ui::FrameText& text = shell.text;
+    state.settings = State::SettingsTarget{&type, work, defaults};
+    state.prefabMember = false;
+    state.componentPtrs.clear();
+    state.componentPtrs.push_back(work);
+    const char* tableId = text.concat("settings.", type.name);
+    if (ui::beginPropertyTable(kit, text.concat(tableId, ".table")))
+    {
+        for (const FieldInfo& field : type.fields)
+        {
+            if (std::find(skip.begin(), skip.end(), field.name) != skip.end() ||
+                !shouldShowComponentField(type, work, field))
+            {
+                continue;
+            }
+            state.drawFieldRow(shell, kit, type, field, field.name,
+                               text.concat(tableId, text.concat(".", field.name)), 0, false);
+        }
+        ui::endPropertyTable();
+    }
+    state.settings = {};
+    if (!ImGui::IsAnyItemActive())
+    {
+        ++state.dragSerial;
+    }
+}
+
+bool writeSettingsField(Impl& shell, const TypeReflection& type, const void* work, std::string_view field,
+                        std::string_view mergeKey)
+{
+    JsonMutDocument doc;
+    const Expected<JsonMutValue, ValueError> value = getPath(doc, type, work, field);
+    if (!value)
+    {
+        return false;
+    }
+    JsonMutValue patch = doc.makeObject();
+    patch.add(field, *value);
+    doc.setRoot(patch);
+    const std::string params = "{\"type\":" + jsonQuote(type.name) + ",\"value\":" + patch.dump() + "}";
+    return shell.run("project.settings_set", params, "project_settings", {}, mergeKey).has_value();
 }
 
 void setEntityField(Impl& shell, std::span<const EntityGuid> entities, std::string_view type,

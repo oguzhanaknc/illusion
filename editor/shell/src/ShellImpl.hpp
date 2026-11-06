@@ -102,6 +102,7 @@ class GameInput;
 class Console;
 class History;
 class ProfilerPanel;
+class ProjectSettingsPanel;
 class Agents;
 class PreferencesPage;
 class Projects;
@@ -199,6 +200,7 @@ struct EditorShell::Impl
     std::unique_ptr<detail::Console> console;
     std::unique_ptr<detail::History> history;
     std::unique_ptr<detail::ProfilerPanel> profilerPanel;
+    std::unique_ptr<detail::ProjectSettingsPanel> projectSettings;
     std::unique_ptr<detail::Agents> agentsPanel;
     std::unique_ptr<detail::PreferencesPage> preferences;
     std::unique_ptr<detail::Projects> projects;

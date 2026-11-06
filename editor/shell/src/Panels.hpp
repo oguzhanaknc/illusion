@@ -130,10 +130,21 @@ public:
     /// Draws the panel's content.
     void draw(Impl& shell);
 
+    /// Draws the fields of the project settings value @p work of @p type with the Inspector's widgets, except
+    /// the fields named in @p skip (drawn by the caller). Edits update @p work and run `project.settings_set`
+    /// with the changed top-level field; resetting a field takes its value from @p defaults.
+    void drawSettings(Impl& shell, const TypeReflection& type, void* work, const void* defaults,
+                      std::span<const std::string_view> skip = {});
+
 private:
     struct State;
     std::unique_ptr<State> m_state;
 };
+
+/// Runs `project.settings_set` for @p type with the top-level field @p field of @p work as the merge patch
+/// (merging undo steps with @p mergeKey). False if the field cannot be written as JSON.
+bool writeSettingsField(Impl& shell, const TypeReflection& type, const void* work, std::string_view field,
+                        std::string_view mergeKey = {});
 
 /// The Console panel: log messages with level filters, search, collapsing, timestamps and source links,
 /// and a command line.
@@ -459,6 +470,23 @@ public:
     struct State;
 
 private:
+    std::unique_ptr<State> m_state;
+};
+
+/// The Project Settings panel: a page per project settings type, edited through `project.settings_set`.
+class ProjectSettingsPanel
+{
+public:
+    ProjectSettingsPanel();
+    ~ProjectSettingsPanel();
+    ProjectSettingsPanel(const ProjectSettingsPanel&) = delete;
+    ProjectSettingsPanel& operator=(const ProjectSettingsPanel&) = delete;
+
+    /// Draws the panel's content.
+    void draw(Impl& shell);
+
+private:
+    struct State;
     std::unique_ptr<State> m_state;
 };
 
