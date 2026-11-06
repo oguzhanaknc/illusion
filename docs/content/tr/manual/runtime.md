@@ -77,7 +77,7 @@ input'unu basılı tuşların üzerine yazar. `updateCount()` ve `time()` günce
 | `GameSessionMode::Play` | Oyunun tamamı |
 | `GameSessionMode::Simulate` | Input ve modül yok: fizik gövdeleri hareket ettirir, oyun kodu çalışmaz |
 | `fixedStep = true` | Her `update()`, geçen zamandan bağımsız olarak tam bir fizik adımı ilerler |
-| `seed` | `fixedStep` ile, çalışırken oluşturulan Entity'ler EntityGuid'lerini bu tohumdan alır |
+| `seed` | `fixedStep` ile, çalışırken oluşturulan Entity'ler EntityGuid'lerini bu tohumdan alır; oyun kodunun `SceneService` ile oluşturduğu sahneler ve prefab'lar da |
 
 `fixedStep` ile aynı sahne, input ve tohum aynı World'ü verir: testler 600 adımdan sonra kaydedilen
 sahnenin hash'ini alıp karşılaştırır. Bu, aynı Build ve makinede geçerlidir; platformlar arasında sonuçlar

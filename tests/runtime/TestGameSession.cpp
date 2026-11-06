@@ -27,6 +27,7 @@
 
 #include <doctest/doctest.h>
 
+#include <array>
 #include <span>
 #include <string>
 
@@ -264,6 +265,56 @@ TEST_CASE("the same scene and seed give the same reflected state after 600 fixed
     const u64 first = run(42);
     CHECK(run(42) == first);
     CHECK(run(43) != first); // the spawned entities get other guids
+}
+
+namespace
+{
+
+EntityGuid g_spawnedGuid;
+
+// Instantiates assets:/spawn.scene through SceneService and records the EntityGuid it got.
+void startSpawning(ModuleContext& context)
+{
+    std::array<Entity, 1> created{};
+    if (SceneService* scenes = context.service<SceneService>();
+        scenes != nullptr && scenes->instantiate("assets:/spawn.scene", created).value_or(0) == 1)
+    {
+        g_spawnedGuid = context.world().get<EntityGuid>(created[0]);
+    }
+}
+
+constexpr ModuleApi kSpawnModule =
+    makeModuleApi("session_spawn", "1.0.0", {.load = &loadLogged, .start = &startSpawning});
+
+} // namespace
+
+TEST_CASE("in fixed steps, scenes that game code instantiates get EntityGuids from the session's seed")
+{
+    // Regression test: SceneService took new ids from the process-wide generator, so a fixed-step run
+    // that spawned a prefab or scene ended in another World each time.
+    const auto run = [](bool fixedStep, u64 seed) {
+        Fixture f;
+        World scene;
+        scene.create(Name{"Spawned"}, EntityGuid{99});
+        const SceneSaveResult saved = saveScene(scene);
+        REQUIRE(saved.ok());
+        REQUIRE(f.files.writeText("assets:/spawn.scene", saved.json) == FileError::None);
+        ModuleHost modules(f.jobs);
+        REQUIRE_FALSE(modules.add(kSpawnModule));
+        f.desc.modules = &modules;
+        f.desc.fixedStep = fixedStep;
+        f.desc.seed = seed;
+        g_spawnedGuid = EntityGuid{};
+        auto session = f.create();
+        session->start();
+        return g_spawnedGuid;
+    };
+    const EntityGuid first = run(true, 5);
+    CHECK(first != EntityGuid{});
+    CHECK(first != EntityGuid{99}); // instantiate() makes new ids
+    CHECK(run(true, 5) == first);
+    CHECK(run(true, 6) != first);
+    CHECK(run(false, 5) != first); // without fixed steps, ids are random
 }
 
 TEST_CASE("injected keys drive the actions of the project's input asset while the game has the focus")

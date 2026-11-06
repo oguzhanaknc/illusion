@@ -15,6 +15,7 @@
 namespace illusion
 {
 
+class GuidGenerator;
 class VirtualFileSystem;
 class World;
 
@@ -24,10 +25,13 @@ class World;
 class SceneLoaderService final : public SceneService
 {
 public:
-    /// Loads scenes from @p files into @p world.
-    SceneLoaderService(World& world, const VirtualFileSystem& files) noexcept
+    /// Loads scenes from @p files into @p world. The new EntityGuids of instantiated entities come from
+    /// @p guids (which must outlive the service), or from GuidGenerator::shared() when it is null; a seeded
+    /// generator makes them repeat from run to run.
+    SceneLoaderService(World& world, const VirtualFileSystem& files, GuidGenerator* guids = nullptr) noexcept
         : m_world(world)
         , m_files(files)
+        , m_guids(guids)
     {
     }
     ~SceneLoaderService() override;
@@ -42,8 +46,9 @@ public:
 private:
     World& m_world;
     const VirtualFileSystem& m_files;
-    std::string m_text;  // the last scene file read, kept for its capacity
-    std::string m_error; // why the last instantiate() failed
+    GuidGenerator* m_guids; // null: GuidGenerator::shared()
+    std::string m_text;     // the last scene file read, kept for its capacity
+    std::string m_error;    // why the last instantiate() failed
 };
 
 } // namespace illusion
