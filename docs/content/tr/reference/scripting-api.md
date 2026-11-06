@@ -58,6 +58,14 @@ void update(illusion::ModuleContext& context, illusion::f64)
 - **Uyumluluk.** Arayüzler modül ABI'sinin parçasıdır: bir fonksiyon eklemek veya değiştirmek
   `kModuleApiVersion`'ı değiştirir ve modüller yeniden Build edilmelidir.
 
+## Kapsam
+
+"Scripting API" Doxygen grubu `ModuleContext`'i ve dört arayüzü içerir.
+[Showcase modülü](../manual/editor/showcase.md#showcase-modulu) grubun her public fonksiyonunu çağırır;
+biri orada çağrılmıyorsa ya da modül testlerinin bir sayaçlı proxy'sinin (`tests/modules/CountingServices.hpp`)
+sayaç sayısı yanlışsa `python tools/check_api_coverage.py` CI'da başarısız olur. Bu yüzden yeni bir
+fonksiyon `samples/showcase/modules/showcase/showcase.cpp`'de gerçek bir kullanım ister.
+
 ## PhysicsService
 
 Aynı adlı `PhysicsWorld` fonksiyonları gibi davranır.

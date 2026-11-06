@@ -497,9 +497,15 @@ Plan: `docs/plans/m7-editor.md` (sub-milestones, command API, localization, them
   every attenuation, prefab instances with overrides), built by Editor commands (`build.jsonl`) from generated
   assets (`tools/make_assets.py`); a gate test fails on any saved Component or field left out or at its default
   and on missing assets or unresolved prefabs
-- M7x-2: A `showcase` module that calls the whole scripting API (core and every service) with counting proxies,
-  `tools/check_api_coverage.py` over the Doxygen "Scripting API" group, 300 deterministic headless frames with a
-  stable state hash and a GPU golden of the showcase
+- M7x-2: ✅ Showcase module (`samples/showcase/modules/showcase`): plays the everything scene through every
+  function of `ModuleContext` and the four host services (a floor and a gem from mesh geometry, a walking and
+  jumping character, pushed bodies, rays, sweeps, overlaps, contacts and trigger visits, chimes on impacts, a
+  prefab spawned at frame 120, moon gravity, layer changes); `tools/check_api_coverage.py` (CI) over the
+  Doxygen "Scripting API" group (now with `ModuleContext`) and the counting proxies, which forward to real
+  services; a 300-frame run on the real services that must reach every function; two fixed-step sessions with
+  the same input that must end in the same state hash; a GPU golden of the scene through its main Camera.
+  Fixed: `SceneService::instantiate()` in a fixed-step session took EntityGuids from the process-wide
+  generator instead of the session's seed, so runs that spawned a scene or prefab never repeated
 - M7x-3: Recorded agent transcript (`illusion_mcp --record`, normalised into `tests/acceptance/tetris/recorded.jsonl`
   with its sources compiled in-tree) and the live-agent workflow (needs the owner's API key and budget)
 - M7x-4: Tutorials (Tetris with an agent, Tetris by hand), editor manual screenshots generated headless, string

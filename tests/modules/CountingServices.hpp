@@ -2,7 +2,8 @@
 
 // Counting proxies of the four service interfaces for the module tests. A class that implements a pure
 // interface does not compile until it implements all of it, so each proxy covers every function; each
-// function counts its calls in its own slot and returns a default value.
+// function counts its calls in its own slot. A proxy made with a real service forwards every call to it;
+// one made without returns default values.
 
 #include <illusion/audio/AudioService.hpp>
 #include <illusion/input/InputService.hpp>
@@ -11,15 +12,17 @@
 
 #include <algorithm>
 #include <array>
+#include <type_traits>
 
 namespace illusion::test
 {
 
-// Counts the calls of every PhysicsService function and returns default values.
-class CountingPhysics final : public PhysicsService
+// The call counters and the forwarding of one proxy of @p Service with @p Functions functions.
+template <class Service, usize Functions>
+class CountingProxy : public Service
 {
 public:
-    static constexpr usize kFunctions = 27;
+    static constexpr usize kFunctions = Functions;
     mutable std::array<u32, kFunctions> calls{};
 
     [[nodiscard]] bool everyFunctionCalledOnce() const noexcept
@@ -27,312 +30,360 @@ public:
         return std::ranges::all_of(calls, [](u32 n) { return n == 1; });
     }
 
-    void setGravity(const Vec3&) override { count(0); }
+    [[nodiscard]] bool everyFunctionCalled() const noexcept
+    {
+        return std::ranges::all_of(calls, [](u32 n) { return n > 0; });
+    }
+
+protected:
+    explicit CountingProxy(Service* inner) noexcept
+        : m_inner(inner)
+    {
+    }
+
+    // Counts a call of function @p index, then runs @p call on the real service (if any).
+    template <class R, class F>
+    R forward(usize index, F&& call) const
+    {
+        ++calls[index];
+        if constexpr (std::is_void_v<R>)
+        {
+            if (m_inner != nullptr)
+            {
+                call(*m_inner);
+            }
+        }
+        else
+        {
+            return m_inner != nullptr ? call(*m_inner) : R{};
+        }
+    }
+
+private:
+    Service* m_inner;
+};
+
+// Counts the calls of every PhysicsService function.
+class CountingPhysics final : public CountingProxy<PhysicsService, 27>
+{
+public:
+    explicit CountingPhysics(PhysicsService* inner = nullptr) noexcept
+        : CountingProxy(inner)
+    {
+    }
+
+    void setGravity(const Vec3& g) override
+    {
+        forward<void>(0, [&](PhysicsService& s) { s.setGravity(g); });
+    }
     [[nodiscard]] Vec3 gravity() const override
     {
-        count(1);
-        return {};
+        return forward<Vec3>(1, [&](PhysicsService& s) { return s.gravity(); });
     }
-    void setLayersCollide(u32, u32, bool) override { count(2); }
-    [[nodiscard]] bool layersCollide(u32, u32) const override
+    void setLayersCollide(u32 a, u32 b, bool collide) override
     {
-        count(3);
-        return {};
+        forward<void>(2, [&](PhysicsService& s) { s.setLayersCollide(a, b, collide); });
     }
-    void rebuild(Entity) override { count(4); }
-    void setLinearVelocity(Entity, const Vec3&) override { count(5); }
-    [[nodiscard]] Vec3 linearVelocity(Entity) const override
+    [[nodiscard]] bool layersCollide(u32 a, u32 b) const override
     {
-        count(6);
-        return {};
+        return forward<bool>(3, [&](PhysicsService& s) { return s.layersCollide(a, b); });
     }
-    void setAngularVelocity(Entity, const Vec3&) override { count(7); }
-    [[nodiscard]] Vec3 angularVelocity(Entity) const override
+    void rebuild(Entity e) override
     {
-        count(8);
-        return {};
+        forward<void>(4, [&](PhysicsService& s) { s.rebuild(e); });
     }
-    void addForce(Entity, const Vec3&) override { count(9); }
-    void addTorque(Entity, const Vec3&) override { count(10); }
-    void addImpulse(Entity, const Vec3&) override { count(11); }
-    [[nodiscard]] f32 mass(Entity) const override
+    void setLinearVelocity(Entity e, const Vec3& v) override
     {
-        count(12);
-        return {};
+        forward<void>(5, [&](PhysicsService& s) { s.setLinearVelocity(e, v); });
     }
-    [[nodiscard]] bool isAwake(Entity) const override
+    [[nodiscard]] Vec3 linearVelocity(Entity e) const override
     {
-        count(13);
-        return {};
+        return forward<Vec3>(6, [&](PhysicsService& s) { return s.linearVelocity(e); });
     }
-    PhysicsMeshHandle createMesh(std::span<const Vec3>, std::span<const u32>) override
+    void setAngularVelocity(Entity e, const Vec3& v) override
     {
-        count(14);
-        return {};
+        forward<void>(7, [&](PhysicsService& s) { s.setAngularVelocity(e, v); });
     }
-    PhysicsMeshHandle createConvexHull(std::span<const Vec3>) override
+    [[nodiscard]] Vec3 angularVelocity(Entity e) const override
     {
-        count(15);
-        return {};
+        return forward<Vec3>(8, [&](PhysicsService& s) { return s.angularVelocity(e); });
     }
-    void destroyMesh(PhysicsMeshHandle) override { count(16); }
-    [[nodiscard]] bool isMeshValid(PhysicsMeshHandle) const override
+    void addForce(Entity e, const Vec3& v) override
     {
-        count(17);
-        return {};
+        forward<void>(9, [&](PhysicsService& s) { s.addForce(e, v); });
     }
-    void setCharacterVelocity(Entity, const Vec3&) override { count(18); }
-    [[nodiscard]] Vec3 characterVelocity(Entity) const override
+    void addTorque(Entity e, const Vec3& v) override
     {
-        count(19);
-        return {};
+        forward<void>(10, [&](PhysicsService& s) { s.addTorque(e, v); });
     }
-    [[nodiscard]] bool isCharacterGrounded(Entity) const override
+    void addImpulse(Entity e, const Vec3& v) override
     {
-        count(20);
-        return {};
+        forward<void>(11, [&](PhysicsService& s) { s.addImpulse(e, v); });
     }
-    [[nodiscard]] f32 jointPosition(Entity) const override
+    [[nodiscard]] f32 mass(Entity e) const override
     {
-        count(21);
-        return {};
+        return forward<f32>(12, [&](PhysicsService& s) { return s.mass(e); });
+    }
+    [[nodiscard]] bool isAwake(Entity e) const override
+    {
+        return forward<bool>(13, [&](PhysicsService& s) { return s.isAwake(e); });
+    }
+    PhysicsMeshHandle createMesh(std::span<const Vec3> vertices, std::span<const u32> indices) override
+    {
+        return forward<PhysicsMeshHandle>(14,
+                                          [&](PhysicsService& s) { return s.createMesh(vertices, indices); });
+    }
+    PhysicsMeshHandle createConvexHull(std::span<const Vec3> points) override
+    {
+        return forward<PhysicsMeshHandle>(15, [&](PhysicsService& s) { return s.createConvexHull(points); });
+    }
+    void destroyMesh(PhysicsMeshHandle mesh) override
+    {
+        forward<void>(16, [&](PhysicsService& s) { s.destroyMesh(mesh); });
+    }
+    [[nodiscard]] bool isMeshValid(PhysicsMeshHandle mesh) const override
+    {
+        return forward<bool>(17, [&](PhysicsService& s) { return s.isMeshValid(mesh); });
+    }
+    void setCharacterVelocity(Entity e, const Vec3& v) override
+    {
+        forward<void>(18, [&](PhysicsService& s) { s.setCharacterVelocity(e, v); });
+    }
+    [[nodiscard]] Vec3 characterVelocity(Entity e) const override
+    {
+        return forward<Vec3>(19, [&](PhysicsService& s) { return s.characterVelocity(e); });
+    }
+    [[nodiscard]] bool isCharacterGrounded(Entity e) const override
+    {
+        return forward<bool>(20, [&](PhysicsService& s) { return s.isCharacterGrounded(e); });
+    }
+    [[nodiscard]] f32 jointPosition(Entity e) const override
+    {
+        return forward<f32>(21, [&](PhysicsService& s) { return s.jointPosition(e); });
     }
     [[nodiscard]] std::span<const Entity> brokenJoints() const override
     {
-        count(22);
-        return {};
+        return forward<std::span<const Entity>>(22, [&](PhysicsService& s) { return s.brokenJoints(); });
     }
-    [[nodiscard]] std::optional<RaycastHit> raycast(const Vec3&, const Vec3&, f32, u32, Entity) const override
+    [[nodiscard]] std::optional<RaycastHit> raycast(const Vec3& origin, const Vec3& direction,
+                                                    f32 maxDistance, u32 layerMask,
+                                                    Entity ignore) const override
     {
-        count(23);
-        return {};
+        return forward<std::optional<RaycastHit>>(23, [&](PhysicsService& s) {
+            return s.raycast(origin, direction, maxDistance, layerMask, ignore);
+        });
     }
-    [[nodiscard]] std::optional<ShapeCastHit> shapeCast(const Collider&, const Vec3&, const Quat&,
-                                                        const Vec3&, f32, u32, Entity) const override
+    [[nodiscard]] std::optional<ShapeCastHit> shapeCast(const Collider& shape, const Vec3& position,
+                                                        const Quat& rotation, const Vec3& direction,
+                                                        f32 maxDistance, u32 layerMask,
+                                                        Entity ignore) const override
     {
-        count(24);
-        return {};
+        return forward<std::optional<ShapeCastHit>>(24, [&](PhysicsService& s) {
+            return s.shapeCast(shape, position, rotation, direction, maxDistance, layerMask, ignore);
+        });
     }
-    [[nodiscard]] u32 overlap(const Collider&, const Vec3&, const Quat&, std::span<Entity>, u32,
-                              Entity) const override
+    [[nodiscard]] u32 overlap(const Collider& shape, const Vec3& position, const Quat& rotation,
+                              std::span<Entity> out, u32 layerMask, Entity ignore) const override
     {
-        count(25);
-        return {};
+        return forward<u32>(25, [&](PhysicsService& s) {
+            return s.overlap(shape, position, rotation, out, layerMask, ignore);
+        });
     }
     [[nodiscard]] std::span<const ContactEvent> contactEvents() const override
     {
-        count(26);
-        return {};
+        return forward<std::span<const ContactEvent>>(26,
+                                                      [&](PhysicsService& s) { return s.contactEvents(); });
     }
-
-private:
-    void count(usize function) const noexcept { ++calls[function]; }
 };
 
-// Counts the calls of every AudioService function and returns default values.
-class CountingAudio final : public AudioService
+// Counts the calls of every AudioService function.
+class CountingAudio final : public CountingProxy<AudioService, 22>
 {
 public:
-    static constexpr usize kFunctions = 22;
-    mutable std::array<u32, kFunctions> calls{};
-
-    [[nodiscard]] bool everyFunctionCalledOnce() const noexcept
+    explicit CountingAudio(AudioService* inner = nullptr) noexcept
+        : CountingProxy(inner)
     {
-        return std::ranges::all_of(calls, [](u32 n) { return n == 1; });
     }
 
-    AudioClipHandle loadClip(std::string_view, AudioClipMode) override
+    AudioClipHandle loadClip(std::string_view path, AudioClipMode mode) override
     {
-        count(0);
-        return {};
+        return forward<AudioClipHandle>(0, [&](AudioService& s) { return s.loadClip(path, mode); });
     }
-    AudioClipHandle requestClip(std::string_view, AudioClipMode) override
+    AudioClipHandle requestClip(std::string_view path, AudioClipMode mode) override
     {
-        count(1);
-        return {};
+        return forward<AudioClipHandle>(1, [&](AudioService& s) { return s.requestClip(path, mode); });
     }
-    [[nodiscard]] AssetState clipState(AudioClipHandle) const override
+    [[nodiscard]] AssetState clipState(AudioClipHandle clip) const override
     {
-        count(2);
-        return {};
+        return forward<AssetState>(2, [&](AudioService& s) { return s.clipState(clip); });
     }
-    AudioClipHandle createClip(std::span<const f32>, u32, u32) override
+    AudioClipHandle createClip(std::span<const f32> samples, u32 channels, u32 sampleRate) override
     {
-        count(3);
-        return {};
+        return forward<AudioClipHandle>(
+            3, [&](AudioService& s) { return s.createClip(samples, channels, sampleRate); });
     }
-    void unloadClip(AudioClipHandle) override { count(4); }
-    [[nodiscard]] std::optional<AudioClipInfo> clipInfo(AudioClipHandle) const override
+    void unloadClip(AudioClipHandle clip) override
     {
-        count(5);
-        return {};
+        forward<void>(4, [&](AudioService& s) { s.unloadClip(clip); });
     }
-    void play(Entity) override { count(6); }
-    void stop(Entity) override { count(7); }
-    [[nodiscard]] bool isPlaying(Entity) const override
+    [[nodiscard]] std::optional<AudioClipInfo> clipInfo(AudioClipHandle clip) const override
     {
-        count(8);
-        return {};
+        return forward<std::optional<AudioClipInfo>>(5, [&](AudioService& s) { return s.clipInfo(clip); });
     }
-    AudioVoiceHandle playOneShot(AudioClipHandle, const AudioPlayParams&) override
+    void play(Entity e) override
     {
-        count(9);
-        return {};
+        forward<void>(6, [&](AudioService& s) { s.play(e); });
     }
-    void stopVoice(AudioVoiceHandle) override { count(10); }
-    [[nodiscard]] bool isVoicePlaying(AudioVoiceHandle) const override
+    void stop(Entity e) override
     {
-        count(11);
-        return {};
+        forward<void>(7, [&](AudioService& s) { s.stop(e); });
     }
-    void setMasterVolume(f32) override { count(12); }
+    [[nodiscard]] bool isPlaying(Entity e) const override
+    {
+        return forward<bool>(8, [&](AudioService& s) { return s.isPlaying(e); });
+    }
+    AudioVoiceHandle playOneShot(AudioClipHandle clip, const AudioPlayParams& params) override
+    {
+        return forward<AudioVoiceHandle>(9, [&](AudioService& s) { return s.playOneShot(clip, params); });
+    }
+    void stopVoice(AudioVoiceHandle voice) override
+    {
+        forward<void>(10, [&](AudioService& s) { s.stopVoice(voice); });
+    }
+    [[nodiscard]] bool isVoicePlaying(AudioVoiceHandle voice) const override
+    {
+        return forward<bool>(11, [&](AudioService& s) { return s.isVoicePlaying(voice); });
+    }
+    void setMasterVolume(f32 volume) override
+    {
+        forward<void>(12, [&](AudioService& s) { s.setMasterVolume(volume); });
+    }
     [[nodiscard]] f32 masterVolume() const override
     {
-        count(13);
-        return {};
+        return forward<f32>(13, [&](AudioService& s) { return s.masterVolume(); });
     }
-    void setBusVolume(AudioBus, f32) override { count(14); }
-    [[nodiscard]] f32 busVolume(AudioBus) const override
+    void setBusVolume(AudioBus bus, f32 volume) override
     {
-        count(15);
-        return {};
+        forward<void>(14, [&](AudioService& s) { s.setBusVolume(bus, volume); });
     }
-    void setBusPaused(AudioBus, bool) override { count(16); }
-    [[nodiscard]] bool isBusPaused(AudioBus) const override
+    [[nodiscard]] f32 busVolume(AudioBus bus) const override
     {
-        count(17);
-        return {};
+        return forward<f32>(15, [&](AudioService& s) { return s.busVolume(bus); });
     }
-    void setBusFilter(AudioBus, const AudioBusFilter&) override { count(18); }
-    [[nodiscard]] AudioBusFilter busFilter(AudioBus) const override
+    void setBusPaused(AudioBus bus, bool paused) override
     {
-        count(19);
-        return {};
+        forward<void>(16, [&](AudioService& s) { s.setBusPaused(bus, paused); });
     }
-    void setReverb(const AudioReverbSettings&) override { count(20); }
+    [[nodiscard]] bool isBusPaused(AudioBus bus) const override
+    {
+        return forward<bool>(17, [&](AudioService& s) { return s.isBusPaused(bus); });
+    }
+    void setBusFilter(AudioBus bus, const AudioBusFilter& filter) override
+    {
+        forward<void>(18, [&](AudioService& s) { s.setBusFilter(bus, filter); });
+    }
+    [[nodiscard]] AudioBusFilter busFilter(AudioBus bus) const override
+    {
+        return forward<AudioBusFilter>(19, [&](AudioService& s) { return s.busFilter(bus); });
+    }
+    void setReverb(const AudioReverbSettings& settings) override
+    {
+        forward<void>(20, [&](AudioService& s) { s.setReverb(settings); });
+    }
     [[nodiscard]] AudioReverbSettings reverb() const override
     {
-        count(21);
-        return {};
+        return forward<AudioReverbSettings>(21, [&](AudioService& s) { return s.reverb(); });
     }
-
-private:
-    void count(usize function) const noexcept { ++calls[function]; }
 };
 
-// Counts the calls of every InputService function and returns default values.
-class CountingInput final : public InputService
+// Counts the calls of every InputService function.
+class CountingInput final : public CountingProxy<InputService, 14>
 {
 public:
-    static constexpr usize kFunctions = 14;
-    mutable std::array<u32, kFunctions> calls{};
-
-    [[nodiscard]] bool everyFunctionCalledOnce() const noexcept
+    explicit CountingInput(InputService* inner = nullptr) noexcept
+        : CountingProxy(inner)
     {
-        return std::ranges::all_of(calls, [](u32 n) { return n == 1; });
     }
 
-    std::optional<ActionId> addAction(std::string_view, ActionType) override
+    std::optional<ActionId> addAction(std::string_view name, ActionType type) override
     {
-        count(0);
-        return {};
+        return forward<std::optional<ActionId>>(0, [&](InputService& s) { return s.addAction(name, type); });
     }
-    [[nodiscard]] std::optional<ActionId> findAction(std::string_view) const override
+    [[nodiscard]] std::optional<ActionId> findAction(std::string_view name) const override
     {
-        count(1);
-        return {};
+        return forward<std::optional<ActionId>>(1, [&](InputService& s) { return s.findAction(name); });
     }
     [[nodiscard]] u32 actionCount() const override
     {
-        count(2);
-        return {};
+        return forward<u32>(2, [&](InputService& s) { return s.actionCount(); });
     }
-    [[nodiscard]] std::string_view actionName(ActionId) const override
+    [[nodiscard]] std::string_view actionName(ActionId action) const override
     {
-        count(3);
-        return {};
+        return forward<std::string_view>(3, [&](InputService& s) { return s.actionName(action); });
     }
-    [[nodiscard]] ActionType actionType(ActionId) const override
+    [[nodiscard]] ActionType actionType(ActionId action) const override
     {
-        count(4);
-        return {};
+        return forward<ActionType>(4, [&](InputService& s) { return s.actionType(action); });
     }
-    [[nodiscard]] std::span<const InputBinding> bindings(ActionId) const override
+    [[nodiscard]] std::span<const InputBinding> bindings(ActionId action) const override
     {
-        count(5);
-        return {};
+        return forward<std::span<const InputBinding>>(5, [&](InputService& s) { return s.bindings(action); });
     }
-    void setBindings(ActionId, std::span<const InputBinding>) override { count(6); }
-    [[nodiscard]] bool isDown(ActionId) const override
+    void setBindings(ActionId action, std::span<const InputBinding> bindings) override
     {
-        count(7);
-        return {};
+        forward<void>(6, [&](InputService& s) { s.setBindings(action, bindings); });
     }
-    [[nodiscard]] bool wasPressed(ActionId) const override
+    [[nodiscard]] bool isDown(ActionId action) const override
     {
-        count(8);
-        return {};
+        return forward<bool>(7, [&](InputService& s) { return s.isDown(action); });
     }
-    [[nodiscard]] bool wasReleased(ActionId) const override
+    [[nodiscard]] bool wasPressed(ActionId action) const override
     {
-        count(9);
-        return {};
+        return forward<bool>(8, [&](InputService& s) { return s.wasPressed(action); });
     }
-    [[nodiscard]] f32 value(ActionId) const override
+    [[nodiscard]] bool wasReleased(ActionId action) const override
     {
-        count(10);
-        return {};
+        return forward<bool>(9, [&](InputService& s) { return s.wasReleased(action); });
     }
-    [[nodiscard]] Vec2 vector(ActionId) const override
+    [[nodiscard]] f32 value(ActionId action) const override
     {
-        count(11);
-        return {};
+        return forward<f32>(10, [&](InputService& s) { return s.value(action); });
+    }
+    [[nodiscard]] Vec2 vector(ActionId action) const override
+    {
+        return forward<Vec2>(11, [&](InputService& s) { return s.vector(action); });
     }
     [[nodiscard]] InputDevice lastDevice() const override
     {
-        count(12);
-        return {};
+        return forward<InputDevice>(12, [&](InputService& s) { return s.lastDevice(); });
     }
     [[nodiscard]] GamepadType lastGamepadType() const override
     {
-        count(13);
-        return {};
+        return forward<GamepadType>(13, [&](InputService& s) { return s.lastGamepadType(); });
     }
-
-private:
-    void count(usize function) const noexcept { ++calls[function]; }
 };
 
-// Counts the calls of every SceneService function and returns default values.
-class CountingScenes final : public SceneService
+// Counts the calls of every SceneService function.
+class CountingScenes final : public CountingProxy<SceneService, 3>
 {
 public:
-    static constexpr usize kFunctions = 3;
-    mutable std::array<u32, kFunctions> calls{};
-
-    [[nodiscard]] bool everyFunctionCalledOnce() const noexcept
+    explicit CountingScenes(SceneService* inner = nullptr) noexcept
+        : CountingProxy(inner)
     {
-        return std::ranges::all_of(calls, [](u32 n) { return n == 1; });
     }
 
-    [[nodiscard]] bool exists(std::string_view) const override
+    [[nodiscard]] bool exists(std::string_view path) const override
     {
-        count(0);
-        return {};
+        return forward<bool>(0, [&](SceneService& s) { return s.exists(path); });
     }
-    std::optional<u32> instantiate(std::string_view, std::span<Entity>) override
+    std::optional<u32> instantiate(std::string_view path, std::span<Entity> created) override
     {
-        count(1);
-        return {};
+        return forward<std::optional<u32>>(1, [&](SceneService& s) { return s.instantiate(path, created); });
     }
     [[nodiscard]] std::string_view lastError() const override
     {
-        count(2);
-        return {};
+        return forward<std::string_view>(2, [&](SceneService& s) { return s.lastError(); });
     }
-
-private:
-    void count(usize function) const noexcept { ++calls[function]; }
 };
 
 } // namespace illusion::test

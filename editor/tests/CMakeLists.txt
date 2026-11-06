@@ -93,6 +93,7 @@ illusion_add_editor_executable(illusion_editor_gpu_tests
     ${PROJECT_SOURCE_DIR}/tests/AllocationCounter.cpp
     gpu/TestEditorShellGpu.cpp
     gpu/TestThumbnailGpu.cpp
+    gpu/TestShowcaseGpu.cpp
     gpu/TestUiRenderer.cpp
     gpu/TestViewportGpu.cpp)
 target_include_directories(illusion_editor_gpu_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR} ${PROJECT_SOURCE_DIR}/tests)
@@ -106,6 +107,7 @@ target_compile_definitions(illusion_editor_gpu_tests PRIVATE
     ILLUSION_UI_CAPTURE_DIR="${CMAKE_BINARY_DIR}/ui-captures"
     ILLUSION_EDITOR_TEST_DATA="${CMAKE_CURRENT_SOURCE_DIR}/data"
     ILLUSION_ENGINE_TEST_DATA="${PROJECT_SOURCE_DIR}/tests/data"
+    ILLUSION_SAMPLES_DIR="${PROJECT_SOURCE_DIR}/samples"
     ILLUSION_EDITOR_EXECUTABLE="$<TARGET_FILE:illusion_editor>")
 add_dependencies(illusion_editor_gpu_tests illusion_editor_data illusion_editor)
 illusion_configure_target(illusion_editor_gpu_tests)

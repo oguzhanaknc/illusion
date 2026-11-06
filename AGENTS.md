@@ -36,14 +36,14 @@ decisions are in `docs/adr/`. Do not reverse an accepted ADR silently: write a n
 | `engine/runtime` | `GameSession` (one running game for Play mode and the player; ADR 0042), project settings (`ProjectSettings.hpp`) and `SceneLoaderService` (`illusion::runtime`), and the `SceneService` interface (`illusion::runtime_api`); the scripting API services of the other libraries are `*Service.hpp` in each library, with adapters (ADR 0041) |
 | `engine/render` | Render device (Vulkan via NVRHI), swapchains, `RenderResources`, `SceneRenderer`, saved render Components (`SceneComponents.hpp`, GPU-free) and runtime ones (`Components.hpp`), `RenderAssetResolver`, `shaders/` (Slang, built with `illusion_add_shaders`) |
 | `editor/` | The editor, never linked by games (ADR 0030): `core/` (headless core: projects, `EditorContext`, commands, `WorldEditor`, undo, journals; ADR 0036), `rpc/` (JSON-RPC server, stdio/`AF_UNIX` streams, endpoint file; ADR 0037), `mcp/` (`illusion::mcp_protocol`: pure MCP server, tools generated from the catalogue; ADR 0039), `client/` (`RpcClient`, `TranscriptRunner`, `EditorToolProvider`, `McpClient`; ADR 0038/0039), `shell/` (`illusion::editor_shell`: the window's UI, `EditorShell`; UI actions, keymaps and preferences live in `core/`), `viewport/` (`illusion::editor_viewport`: `EditorCamera`, `ViewportService` implementing the core's `ViewportHost`; `Grid.slang`, `Outline.slang`), `play/` (`illusion::editor_play`: `PlaySession`, the game runtime of Play mode implementing the core's `PlayHost`; ADR 0042), `app/` (`illusion_editor`: the window, or `--headless`), `tools/ctl` (`illusion_ctl`), `tools/mcp` (`illusion_mcp`, the MCP bridge), `thirdparty/` (Dear ImGui, ImPlot), `strings/` (string table from `data/locales/en.json`), `ui/` (backends, `Theme`, `FontManager`, `Icons.hpp`, `FrameText`, widget kit, `OffscreenUi`, `HeadlessUi`, `UiDriver`), `tools/ui_gallery`, `tools/command_reference`, `data/` (themes, locales, project templates), `tests/` (golden images in `tests/data/golden`, command schemas in `tests/data/commands`, MCP golden transcripts per protocol era in `tests/data/mcp/golden`; core tests in `tests/core`, RPC and client tests in `tests/rpc`, MCP tests in `tests/mcp`, shell tests in `tests/shell`, viewport CPU tests in `tests/viewport`, Play mode tests in `tests/play`, GPU tests in `tests/gpu`), `benchmarks/` |
-| `samples/` | Sample applications (`hello_triangle`, `input_viewer`, `gltf_viewer`, `physics_playground`); shared helpers in `common/`; `showcase/` is an editor project whose scene covers every saved Component (built by `build.jsonl`) |
+| `samples/` | Sample applications (`hello_triangle`, `input_viewer`, `gltf_viewer`, `physics_playground`); shared helpers in `common/`; `showcase/` is an editor project whose scene covers every saved Component (built by `build.jsonl`) and whose module `modules/showcase` calls the whole scripting API |
 | `tests/` | doctest unit tests; one `Test<Feature>.cpp` per feature; shared helpers in `TestSupport.hpp` |
 | `benchmarks/` | nanobench benchmarks with budgets (`ILL_BENCHMARK(name, nsPerOp)`) |
 | `cmake/` | `IllusionOptions`, `IllusionCompilerSettings`, `Dependencies` (pinned), `IllusionModules`, `IllusionEditor` (editor-only targets, boundary check), `IllusionIcons` |
 | `docs/content/{en,tr}` | MkDocs pages (must stay in sync) |
 | `docs/adr/` | Architecture Decision Records (English only) |
 | `tests/acceptance` | Agent acceptance contract and transcripts (`tetris/SPEC.md`, `scripted.jsonl`, `checks.jsonl`; ADR 0038) |
-| `tools/` | `editor/illusion_rpc.py` (Python client of the editor protocol), `check_format.py`, `check_docs_parity.py`, `check_layering.py`, `windows/vsdev.cmd`; `pack/` builds `illusion_pack`; `textc/` builds `illusion_textc` (string tables, locale check) |
+| `tools/` | `editor/illusion_rpc.py` (Python client of the editor protocol), `check_format.py`, `check_docs_parity.py`, `check_layering.py`, `check_api_coverage.py`, `windows/vsdev.cmd`; `pack/` builds `illusion_pack`; `textc/` builds `illusion_textc` (string tables, locale check) |
 
 ## Build, test, check
 
@@ -55,6 +55,7 @@ cmake --build --preset ci-linux-clang-release && ctest --preset ci-linux-clang-r
 python tools/check_format.py                 # --fix to apply; needs clang-format 22 (tools/requirements-dev.txt)
 python tools/check_docs_parity.py
 python tools/check_layering.py               # engine/editor boundary (ADR 0030)
+python tools/check_api_coverage.py           # the showcase module calls the whole scripting API
 mkdocs build --strict                        # pip install -r docs/requirements.txt
 doxygen docs/Doxyfile                        # undocumented public API is an error
 ```

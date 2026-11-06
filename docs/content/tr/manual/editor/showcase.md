@@ -20,3 +20,32 @@ illusion_ctl --launch illusion_editor --editor-arg --headless --editor-arg --no-
 Bir test (`TestShowcase.cpp`) projenin bir kopyasını açar; kaydedilen bir Component ya da alanlarından biri
 sahnede yoksa veya varsayılanında bırakılmışsa ya da projede eksik Asset'ler veya çözümlenmemiş prefab'lar
 varsa başarısız olur. Bu yüzden yeni bir Component ya da alan `build.jsonl`'da bir değer ister.
+
+## Showcase modülü
+
+Projenin oyun kodu olan `modules/showcase`, sahneyi [scripting API](../../reference/scripting-api.md)'nin
+tamamıyla oynatır: `ModuleContext`'in ve dört host servisinin her fonksiyonu `showcase.cpp`'den çağrılır.
+Oturum başlarken mesh geometrisinden bir zemin ve bir mücevher kurar, Jump (Space, gamepad South) ve Move
+(WASD, sol çubuk) eylemlerini ekler, sayılardan bir çan sesi üretir ve mikseri ayarlar. Her karede Player
+karakterini yürütür ve zıplatır, belirli karelerde Ball, Crate, Rock, Drum ve Door'u iter, ışın ve şekil
+atar, temasları ve Trigger'a girenleri sayar, bir şey sertçe düştüğü yerde çan çalar ve 120. karede bir
+fener prefab'ı oluşturur. Sona doğru yerçekimini azaltır ve Crate'in zeminin içinden düşmesine izin verir.
+Gördükleri, Showcase Entity'sinin `showcase.Stats` Component'inde tutulur.
+
+**Modules → Build Modules** (`module.build`) ile Build edin ve **Play**'e basın:
+
+```json
+{"method": "module.build", "params": {}}
+{"method": "play.start", "params": {"mode": "play", "fixedStep": true, "seed": 7}}
+```
+
+Modül yalnızca kare numarasına ve girdiye göre karar verir; bu yüzden sabit adımlı oturumlar birebir
+tekrarlanır. Üç kontrol showcase'i motorla uyumlu tutar:
+
+- `python tools/check_api_coverage.py` (CI), "Scripting API" Doxygen grubunun bir fonksiyonu
+  `showcase.cpp`'de çağrılmıyorsa başarısız olur.
+- `tests/showcase/TestShowcaseModule.cpp` modülü sayaçlı proxy'lerle sarılmış gerçek servisler üzerinde 300
+  kare çalıştırır ve hiç çağrılmayan bir fonksiyon varsa başarısız olur. İkinci bir test aynı girdiyle iki
+  sabit adımlı oturum çalıştırır ve kaydedilen durumlarının hash'ini karşılaştırır.
+- `TestShowcaseGpu.cpp` sahneyi ana Camera'sından bir golden görüntüyle karşılaştırır (`showcase-game.png`,
+  `ILLUSION_UPDATE_GOLDENS=1` ile yeniden yazılır).

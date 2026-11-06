@@ -66,6 +66,7 @@ add_executable(illusion_tests
     render/TestRendererExtensions.cpp
     runtime/TestGameSession.cpp
     runtime/TestProjectSettings.cpp
+    showcase/TestShowcaseModule.cpp
     text/TestLocale.cpp
     text/TestLocalization.cpp
     text/TestMessageFormat.cpp
@@ -125,6 +126,14 @@ foreach(variant 1 2 3 4 5 6)
         TEST_MODULE_V${variant}="$<TARGET_FILE:illusion_test_module_v${variant}>")
     add_dependencies(illusion_tests illusion_test_module_v${variant})
 endforeach()
+# The showcase project's game module (samples/showcase/modules/showcase), loaded by tests/showcase.
+illusion_add_module(illusion_showcase_module SHARED
+    SOURCES ${PROJECT_SOURCE_DIR}/samples/showcase/modules/showcase/showcase.cpp
+    USES physics audio input render runtime)
+target_compile_definitions(illusion_tests PRIVATE
+    SHOWCASE_MODULE="$<TARGET_FILE:illusion_showcase_module>"
+    ILLUSION_SAMPLES_DIR="${PROJECT_SOURCE_DIR}/samples")
+add_dependencies(illusion_tests illusion_showcase_module)
 target_compile_definitions(illusion_test_module_v3 PRIVATE TEST_MODULE_WIDE_COUNTER=1)
 target_compile_definitions(illusion_test_module_v5 PRIVATE TEST_MODULE_LAYOUT_V2=1)
 target_compile_definitions(illusion_test_module_v6 PRIVATE TEST_MODULE_WIDE_OPAQUE=1)

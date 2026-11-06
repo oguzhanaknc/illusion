@@ -185,6 +185,7 @@ struct ModuleCallbacks
 };
 
 /// What a module sees of its host. Owned by the ModuleHost; valid during the call that receives it.
+/// @ingroup scripting_api
 class ModuleContext
 {
 public:

@@ -56,6 +56,14 @@ void update(illusion::ModuleContext& context, illusion::f64)
 - **Compatibility.** The interfaces are part of the module ABI: adding or changing a function changes
   `kModuleApiVersion`, and modules must be rebuilt.
 
+## Coverage
+
+The Doxygen group "Scripting API" holds `ModuleContext` and the four interfaces. The
+[showcase module](../manual/editor/showcase.md#the-showcase-module) calls every public function of the group,
+and `python tools/check_api_coverage.py` fails in CI when one is not called there, or when a counting proxy
+of the module tests (`tests/modules/CountingServices.hpp`) has the wrong number of counters. A new function
+therefore needs a real use in `samples/showcase/modules/showcase/showcase.cpp`.
+
 ## PhysicsService
 
 Behaves like the `PhysicsWorld` functions of the same name.
