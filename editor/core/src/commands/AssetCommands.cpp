@@ -308,8 +308,9 @@ Expected<std::vector<std::string>, CommandError> dependenciesOf(CommandContext& 
                     CommandError::make(ErrorKind::IoError, "cannot read '" + std::string(path) + "' (" +
                                                                std::string(fileErrorName(error)) + ")"));
             }
-            Expected<void, std::string> scanned = sceneLayout ? sceneReferences(text, path, references)
-                                                              : materialReferences(text, path, references);
+            Expected<void, std::string> scanned =
+                sceneLayout ? sceneReferences(text, path, references, editor.prefabSource())
+                            : materialReferences(text, path, references);
             if (!scanned)
             {
                 return unexpected(CommandError::invalid("/path", "cannot be read: " + scanned.error()));
@@ -494,7 +495,7 @@ Expected<AssetMoveResult, CommandError> assetMove(CommandContext& context, const
         const std::string extension = lowerExtension(current);
         Expected<std::optional<std::string>, std::string> rewritten =
             extension == kSceneExtension || extension == kPrefabExtension
-                ? rewriteSceneReferences(text, params.from, params.to)
+                ? rewriteSceneReferences(text, params.from, params.to, editor.prefabSource())
             : extension == kMaterialAssetExtension
                 ? rewriteMaterialReferences(text, params.from, params.to)
                 : rewriteSettingsFileReferences(text, params.from, params.to);
@@ -722,7 +723,7 @@ Expected<AssetRelinkResult, CommandError> assetRelink(CommandContext& context,
         const std::string extension = lowerExtension(file);
         Expected<std::optional<std::string>, std::string> rewritten =
             extension == kSceneExtension || extension == kPrefabExtension
-                ? rewriteSceneReferences(text, params.from, params.to)
+                ? rewriteSceneReferences(text, params.from, params.to, editor.prefabSource())
             : extension == kMaterialAssetExtension
                 ? rewriteMaterialReferences(text, params.from, params.to)
                 : rewriteSettingsFileReferences(text, params.from, params.to);

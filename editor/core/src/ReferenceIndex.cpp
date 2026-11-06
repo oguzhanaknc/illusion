@@ -184,10 +184,13 @@ struct LoadedScene
     SceneLoadResult result;
 };
 
-Expected<std::unique_ptr<LoadedScene>, std::string> loadSceneFile(std::string_view json)
+Expected<std::unique_ptr<LoadedScene>, std::string> loadSceneFile(std::string_view json,
+                                                                  const PrefabSource& prefabs = {})
 {
     auto scene = std::make_unique<LoadedScene>();
-    scene->result = loadScene(scene->world, json, {});
+    SceneLoadOptions options;
+    options.prefabs = prefabs;
+    scene->result = loadScene(scene->world, json, options);
     if (!scene->result.ok())
     {
         return unexpected("not a scene: " + scene->result.error);
@@ -306,10 +309,19 @@ std::string movedReference(std::string_view reference, std::string_view from, st
     return moved;
 }
 
-Expected<void, std::string> sceneReferences(std::string_view json, std::string_view source,
-                                            std::vector<AssetReference>& out)
+PrefabSource prefabSource(const VirtualFileSystem& files)
 {
-    Expected<std::unique_ptr<LoadedScene>, std::string> loaded = loadSceneFile(json);
+    return [&files](std::string_view path) -> std::optional<std::string> {
+        std::string text;
+        return files.readText(path, text) == FileError::None ? std::optional<std::string>(std::move(text))
+                                                             : std::nullopt;
+    };
+}
+
+Expected<void, std::string> sceneReferences(std::string_view json, std::string_view source,
+                                            std::vector<AssetReference>& out, const PrefabSource& prefabs)
+{
+    Expected<std::unique_ptr<LoadedScene>, std::string> loaded = loadSceneFile(json, prefabs);
     if (!loaded)
     {
         return unexpected(std::move(loaded).error());
@@ -411,10 +423,38 @@ u32 rewriteSettingReferences(PreservedValue& setting, std::string_view from, std
     return rewritten ? moved : 0;
 }
 
-Expected<std::optional<std::string>, std::string>
-rewriteSceneReferences(std::string_view json, std::string_view from, std::string_view to)
+Expected<std::optional<std::string>, std::string> rewriteSceneReferences(std::string_view json,
+                                                                         std::string_view from,
+                                                                         std::string_view to,
+                                                                         const PrefabSource& prefabs)
 {
-    Expected<std::unique_ptr<LoadedScene>, std::string> loaded = loadSceneFile(json);
+    // Prefabs as the move leaves them: rewritten the same way, and found at either path while they move.
+    std::vector<std::string> visiting;
+    PrefabSource moved;
+    if (prefabs)
+    {
+        moved = [&](std::string_view path) -> std::optional<std::string> {
+            std::optional<std::string> text = prefabs(path);
+            if (!text && refersTo(path, to))
+            {
+                text = prefabs(movedReference(path, to, from)); // not moved yet
+            }
+            else if (!text && refersTo(path, from))
+            {
+                text = prefabs(movedReference(path, from, to)); // already moved
+            }
+            if (!text || std::find(visiting.begin(), visiting.end(), path) != visiting.end())
+            {
+                return text;
+            }
+            visiting.emplace_back(path);
+            Expected<std::optional<std::string>, std::string> rewritten =
+                rewriteSceneReferences(*text, from, to, moved);
+            visiting.pop_back();
+            return rewritten && *rewritten ? std::optional<std::string>(std::move(**rewritten)) : text;
+        };
+    }
+    Expected<std::unique_ptr<LoadedScene>, std::string> loaded = loadSceneFile(json, moved);
     if (!loaded)
     {
         return unexpected(std::move(loaded).error());
@@ -451,6 +491,7 @@ rewriteSceneReferences(std::string_view json, std::string_view from, std::string
     }
     SceneSaveOptions options;
     options.preservedSettings = scene.result.preservedSettings;
+    options.prefabs = moved;
     // A prefab file stays one (the scene layout is shared).
     const Expected<JsonDocument, JsonError> source = JsonDocument::parse(json);
     options.prefabFile = source && source->root().find("format").asString() == "illusion.prefab";
@@ -586,7 +627,7 @@ void ReferenceIndex::refresh(const VirtualFileSystem& files)
         Expected<void, std::string> scanned;
         if (extension == kSceneExtension || extension == kPrefabExtension)
         {
-            scanned = sceneReferences(text, path, file.references);
+            scanned = sceneReferences(text, path, file.references, prefabSource(files));
         }
         else if (extension == kMaterialAssetExtension)
         {

@@ -3,6 +3,7 @@
 #include <illusion/ecs/Hierarchy.hpp>
 #include <illusion/ecs/SceneSerializer.hpp>
 
+#include <unordered_map>
 #include <unordered_set>
 
 namespace illusion::editor::detail
@@ -17,7 +18,8 @@ struct Copied
 };
 
 // Scene v2 JSON of @p roots and their descendants. Each copied root keeps its world placement, so that
-// pasting it anywhere puts it where it was.
+// pasting it anywhere puts it where it was. Whole prefab instances are copied as records, so that pasting
+// gives linked instances; entities of an instance copied without its root are plain.
 Expected<Copied, CommandError> copyEntities(CommandContext& context, std::vector<Entity> roots)
 {
     World& world = context.world();
@@ -36,11 +38,11 @@ Expected<Copied, CommandError> copyEntities(CommandContext& context, std::vector
             subset.insert(subset.end(), subtree.begin(), subtree.end());
         }
     }
-    // Expanded: the copy matches the saved entities by position, and pastes plain entities (new ids).
+    const PrefabSource prefabs = context.editor().prefabSource();
     SceneSaveOptions options;
     options.subset = std::span<const Entity>(subset);
     options.order = SceneOrder::AsGiven;
-    options.prefabMode = PrefabSaveMode::Expanded;
+    options.prefabs = prefabs;
     const SceneSaveResult saved = saveScene(world, options);
     if (!saved.ok())
     {
@@ -50,27 +52,30 @@ Expected<Copied, CommandError> copyEntities(CommandContext& context, std::vector
 
     // Write each root's world placement into a copy of the saved entities, then save that copy.
     World copy;
-    const SceneLoadResult loaded = loadScene(copy, saved.json, {});
-    if (!loaded.ok() || loaded.entities.size() != subset.size())
+    SceneLoadOptions load;
+    load.prefabs = prefabs;
+    const SceneLoadResult loaded = loadScene(copy, saved.json, load);
+    if (!loaded.ok())
     {
         return unexpected(
             CommandError::make(ErrorKind::Internal, "cannot copy the entities: " + loaded.error));
     }
-    std::unordered_set<u64> rootBits;
-    for (const Entity root : roots)
+    // The copy keeps the ids (instances expand to the same ids), so roots are found by id.
+    std::unordered_map<u64, Entity> copied;
+    for (const Entity entity : loaded.entities)
     {
-        rootBits.insert(root.toBits());
+        copied.emplace(copy.get<EntityGuid>(entity).value, entity);
     }
-    for (usize i = 0; i < subset.size(); ++i)
+    for (const Entity original : roots)
     {
-        const Entity original = subset[i];
-        if (!rootBits.contains(original.toBits()) ||
+        const auto found = copied.find(world.get<EntityGuid>(original).value);
+        if (found == copied.end() ||
             (!world.has<Transform>(original) && !world.has<LocalTransform>(original)))
         {
             continue;
         }
         const Transform placed = worldTransformOf(world, original);
-        const Entity entity = loaded.entities[i];
+        const Entity entity = found->second;
         if (Transform* transform = copy.tryGet<Transform>(entity))
         {
             *transform = placed;
@@ -87,7 +92,7 @@ Expected<Copied, CommandError> copyEntities(CommandContext& context, std::vector
     SceneSaveOptions copyOptions;
     copyOptions.subset = std::span<const Entity>(loaded.entities);
     copyOptions.order = SceneOrder::AsGiven;
-    copyOptions.prefabMode = PrefabSaveMode::Expanded;
+    copyOptions.prefabs = prefabs;
     SceneSaveResult text = saveScene(copy, copyOptions);
     if (!text.ok())
     {
@@ -173,7 +178,8 @@ Expected<EntitiesResult, CommandError> clipboardPaste(CommandContext& context,
                               ? CommandError::invalid("/text", "must be scene JSON")
                               : CommandError::make(ErrorKind::PreconditionFailed, "the clipboard is empty"));
     }
-    Expected<std::vector<Entity>, CommandError> pasted = context.edit().paste(text, parent, params.index);
+    Expected<std::vector<Entity>, CommandError> pasted =
+        context.edit().paste(text, parent, params.index, context.editor().prefabSource());
     if (!pasted)
     {
         return unexpected(withPointerPrefix(std::move(pasted).error(), "/text"));

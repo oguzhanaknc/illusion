@@ -746,6 +746,14 @@ void reflectCoreCommandTypes(StructRegistry& structs)
             .field("instance", &PrefabOverridesResult::instance)
             .field("prefab", &PrefabOverridesResult::prefab)
             .field("overrides", &PrefabOverridesResult::overrides);
+        reflectStruct<PrefabApplyParams>("editor.PrefabApplyParams", 1, structs)
+            .field("entity", &PrefabApplyParams::entity)
+            .field("component", &PrefabApplyParams::component)
+            .field("all", &PrefabApplyParams::all);
+        reflectStruct<PrefabApplyResult>("editor.PrefabApplyResult", 1, structs)
+            .field("path", &PrefabApplyResult::path)
+            .field("components", &PrefabApplyResult::components)
+            .field("instances", &PrefabApplyResult::instances);
         reflectStruct<PrefabRevertParams>("editor.PrefabRevertParams", 1, structs)
             .field("entity", &PrefabRevertParams::entity)
             .field("component", &PrefabRevertParams::component);

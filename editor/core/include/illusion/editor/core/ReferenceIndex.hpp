@@ -134,9 +134,15 @@ void forEachAssetRef(const TypeReflection& type, void* object, F&& fn)
 /// True if objects of the reflected @p type can hold an AssetRef.
 [[nodiscard]] bool hasAssetFields(const TypeReflection& type) noexcept;
 
-/// Appends the references of the scene file @p json to @p out with @p source as their source.
+/// Reads prefab files through @p files (for SceneLoadOptions::prefabs). Valid while @p files lives.
+[[nodiscard]] PrefabSource prefabSource(const VirtualFileSystem& files);
+
+/// Appends the references of the scene file @p json to @p out with @p source as their source. With
+/// @p prefabs, instances expand, so the scene also refers to what its prefabs refer to; without, the prefab
+/// of each instance record is its only reference.
 [[nodiscard]] Expected<void, std::string> sceneReferences(std::string_view json, std::string_view source,
-                                                          std::vector<AssetReference>& out);
+                                                          std::vector<AssetReference>& out,
+                                                          const PrefabSource& prefabs = {});
 
 /// Appends the references of the material file @p json to @p out with @p source as their source.
 [[nodiscard]] Expected<void, std::string> materialReferences(std::string_view json, std::string_view source,
@@ -153,8 +159,12 @@ void worldReferences(World& world, const EntityIndex& index, std::span<const Pre
                                            std::string_view to);
 
 /// The scene file @p json with every reference to @p from moved to @p to, or std::nullopt if it has none.
+/// With @p prefabs, instances expand with their prefabs rewritten the same way (so the move adds no
+/// overrides) and entities that refer into instances keep those references; without, a scene with such
+/// references is refused.
 [[nodiscard]] Expected<std::optional<std::string>, std::string>
-rewriteSceneReferences(std::string_view json, std::string_view from, std::string_view to);
+rewriteSceneReferences(std::string_view json, std::string_view from, std::string_view to,
+                       const PrefabSource& prefabs = {});
 
 /// The material file @p json with every reference to @p from moved to @p to, or std::nullopt if it has none.
 [[nodiscard]] Expected<std::optional<std::string>, std::string>

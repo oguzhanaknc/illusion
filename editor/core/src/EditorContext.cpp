@@ -525,11 +525,7 @@ Expected<void, CommandError> EditorContext::openScene(std::string_view path,
 
 PrefabSource EditorContext::prefabSource() const
 {
-    return [this](std::string_view path) -> std::optional<std::string> {
-        std::string text;
-        return m_files.readText(path, text) == FileError::None ? std::optional<std::string>(std::move(text))
-                                                               : std::nullopt;
-    };
+    return illusion::editor::prefabSource(m_files);
 }
 
 Expected<std::string, CommandError> EditorContext::sceneJson(PrefabSaveMode prefabs) const

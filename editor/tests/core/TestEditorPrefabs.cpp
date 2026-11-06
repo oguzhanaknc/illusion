@@ -144,21 +144,6 @@ TEST_CASE("asset references include the prefabs of instance records")
     }
 }
 
-TEST_CASE("asset references are not rewritten in scenes that refer into prefab instances")
-{
-    EditorFixture fixture;
-    EditorContext& editor = *fixture.editor;
-    openCrateScene(editor, true);
-    ok(editor, "scene.save");
-    ok(editor, "scene.new", R"({"discardChanges":true})");
-    const CommandError error = fails(
-        editor, "asset.move", R"({"from":"assets:/props/crate.prefab","to":"assets:/props/box.prefab"})");
-    CHECK(error.message.find("prefab instances") != std::string::npos);
-    // Nothing moved: the scene still refers to the prefab where it is.
-    CHECK(savedScene(editor).find("assets:/props/crate.prefab") != std::string::npos);
-    ok(editor, "project.file_read", R"({"path":"assets:/props/crate.prefab"})");
-}
-
 TEST_CASE("prefab.create saves a subtree and replaces it with a linked instance in its place")
 {
     EditorFixture fixture;
@@ -274,4 +259,98 @@ TEST_CASE("asset.list knows prefab files")
     const JsonDocument listed = ok(editor, "asset.list", R"({"recursive":true,"kind":"Prefab"})");
     REQUIRE(listed.root().find("assets").size() == 1);
     CHECK(listed.root().pointer("/assets/0/path").asString() == "assets:/props/crate.prefab");
+}
+
+TEST_CASE("prefab.apply writes overrides into the prefab and other instances follow, keeping their own")
+{
+    EditorFixture fixture;
+    EditorContext& editor = *fixture.editor;
+    openCrateScene(editor, false);
+    const JsonDocument second = ok(editor, "prefab.instantiate", R"({"path":"assets:/props/crate.prefab"})");
+    // The second instance overrides the lid's name; the first adds a Component to its lid and renames the
+    // root.
+    const EntityGuid secondInstance = *parseGuid(second.root().find("instance").asString().value_or(""));
+    const std::string secondLid = toString(derivePrefabGuid(secondInstance, kLid));
+    const std::string firstRoot = toString(derivePrefabGuid(kInstance, EntityGuid{0xa1}));
+    const std::string firstLid = toString(derivePrefabGuid(kInstance, kLid));
+    ok(editor, "entity.rename", std::format(R"({{"entity":"{}","name":"Hatch"}})", secondLid));
+    ok(editor, "component.add", std::format(R"({{"entity":"{}","type":"test.Look"}})", firstLid));
+    ok(editor, "entity.rename", std::format(R"({{"entity":"{}","name":"Box"}})", firstRoot));
+
+    CHECK(fails(editor, "prefab.apply",
+                std::format(R"({{"entity":"{}","component":"illusion.LocalTransform"}})", firstRoot))
+              .errors.at(0)
+              .pointer == "/component");
+    const JsonDocument applied =
+        ok(editor, "prefab.apply", std::format(R"({{"entity":"{}","all":true}})", firstRoot));
+    CHECK(applied.root().find("components").asU64() == 2);
+    CHECK(applied.root().find("instances").asU64() == 1);
+    const std::string prefab =
+        std::string(ok(editor, "project.file_read", R"({"path":"assets:/props/crate.prefab"})")
+                        .root()
+                        .find("text")
+                        .asString()
+                        .value_or(""));
+    CHECK(prefab.find("\"Box\"") != std::string::npos);
+    CHECK(prefab.find("test.Look") != std::string::npos);
+    // The applied instance has nothing left to override.
+    CHECK(ok(editor, "prefab.overrides", std::format(R"({{"entity":"{}"}})", firstRoot))
+              .root()
+              .find("overrides")
+              .dump() == "{}");
+    // The other instance follows the prefab but keeps its own lid name.
+    CHECK(ok(editor, "entity.get", std::format(R"({{"entity":"{}"}})", secondLid))
+              .root()
+              .pointer("/entity/path")
+              .asString() == "/Box/Hatch");
+    ok(editor, "component.get", std::format(R"({{"entity":"{}","type":"test.Look"}})", secondLid));
+
+    ok(editor, "history.undo");
+    CHECK(fails(editor, "component.get", std::format(R"({{"entity":"{}","type":"test.Look"}})", secondLid))
+              .kind == ErrorKind::NotFound);
+    CHECK(ok(editor, "project.file_read", R"({"path":"assets:/props/crate.prefab"})")
+              .root()
+              .find("text")
+              .asString()
+              ->find("\"Box\"") == std::string::npos);
+}
+
+TEST_CASE("copying a whole instance pastes a linked instance and duplicates are plain copies")
+{
+    EditorFixture fixture;
+    EditorContext& editor = *fixture.editor;
+    openCrateScene(editor, false);
+    ok(editor, "entity.rename", R"({"entity":"/Crate/Lid","name":"Top"})");
+    ok(editor, "clipboard.copy", R"({"entities":["/Crate"]})");
+    const JsonDocument pasted = ok(editor, "clipboard.paste");
+    const std::string root = std::string(pasted.root().pointer("/entities/0/id").asString().value_or(""));
+    const Entity copy = editor.entities().find(*parseGuid(root));
+    REQUIRE(editor.world().has<PrefabInstance>(copy));
+    CHECK(editor.world().get<PrefabInstance>(copy).instance != kInstance);
+    CHECK(ok(editor, "prefab.overrides", std::format(R"({{"entity":"{}"}})", root))
+              .root()
+              .find("overrides")
+              .dump()
+              .find("Top") != std::string::npos);
+
+    const JsonDocument duplicated =
+        ok(editor, "entity.duplicate",
+           std::format(R"({{"entities":["{}"]}})", toString(derivePrefabGuid(kInstance, EntityGuid{0xa1}))));
+    const std::string twin = std::string(duplicated.root().pointer("/entities/0/id").asString().value_or(""));
+    CHECK_FALSE(editor.world().has<PrefabMember>(editor.entities().find(*parseGuid(twin))));
+}
+
+TEST_CASE("moving an asset rewrites scenes that refer into prefab instances without adding overrides")
+{
+    EditorFixture fixture;
+    EditorContext& editor = *fixture.editor;
+    openCrateScene(editor, true);
+    ok(editor, "scene.save");
+    ok(editor, "scene.new", R"({"discardChanges":true})");
+    ok(editor, "asset.move", R"({"from":"assets:/props/crate.prefab","to":"assets:/props/box.prefab"})");
+    const std::string scene = savedScene(editor);
+    CHECK(scene.find("assets:/props/box.prefab") != std::string::npos);
+    CHECK(scene.find("overrides") == std::string::npos);
+    ok(editor, "scene.open", R"({"path":"assets:/scenes/yard.scene","discardChanges":true})");
+    ok(editor, "entity.get", R"({"entity":"/Crate/Lid/Sticker"})");
 }
