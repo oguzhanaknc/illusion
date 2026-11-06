@@ -190,7 +190,7 @@ void drawCollisionMatrix(Impl& shell, const TypeReflection& type, void* work, La
     {
         return;
     }
-    char cell[48];
+    char cell[64]; // "project_settings.collision.<u32>.<u32>" fits
     ImGui::TableNextRow();
     ImGui::TableNextColumn();
     ImGui::TableNextColumn();
@@ -273,8 +273,8 @@ void drawBusVolumes(Impl& shell, const TypeReflection& type, void* work, u64 ser
         s::kProjectSettingsBusSfx, s::kProjectSettingsBusMusic, s::kProjectSettingsBusAmbience,
         s::kProjectSettingsBusDialogue, s::kProjectSettingsBusUi};
     ui::sectionHeader(kit, text.format(s::kProjectSettingsBusVolumes));
-    char id[48];
-    char key[64];
+    char id[64];
+    char key[80];
     for (u32 bus = 0; bus < kBuses; ++bus)
     {
         std::snprintf(id, sizeof(id), "project_settings.bus.%u", bus);
