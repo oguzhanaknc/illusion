@@ -442,6 +442,26 @@ private:
     std::unique_ptr<State> m_state;
 };
 
+/// The Profiler panel: the editor's frame times and the time per place of the frame, the GPU passes of each
+/// viewport, and the problems `diagnostics.get` finds.
+class ProfilerPanel
+{
+public:
+    ProfilerPanel();
+    ~ProfilerPanel();
+    ProfilerPanel(const ProfilerPanel&) = delete;
+    ProfilerPanel& operator=(const ProfilerPanel&) = delete;
+
+    /// Draws the panel's content.
+    void draw(Impl& shell);
+
+    /// What the panel keeps between frames (defined in ProfilerPanel.cpp).
+    struct State;
+
+private:
+    std::unique_ptr<State> m_state;
+};
+
 /// The Asset Browser panel: the project's `assets:` mount as a navigable grid and list with thumbnails, a
 /// folder tree and favourites, search, sorting and a kind filter; file operations run the asset commands,
 /// and the import settings of a selected texture or model are edited inline.

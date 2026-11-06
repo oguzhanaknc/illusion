@@ -33,6 +33,7 @@ void registerAssetCommands(CommandRegistry& registry);
 void registerMaterialCommands(CommandRegistry& registry);
 void registerPrefabCommands(CommandRegistry& registry);
 void registerLogCommands(CommandRegistry& registry);
+void registerProfilerCommands(CommandRegistry& registry);
 void registerSettingsCommands(CommandRegistry& registry);
 void registerUiCommands(CommandRegistry& registry);
 void registerPlayCommands(CommandRegistry& registry);
@@ -48,6 +49,9 @@ Expected<JsonDocument, CommandError> parseParam(const JsonText& value, std::stri
 
 /// Fails with PreconditionFailed when no project is open.
 Expected<void, CommandError> requireProject(CommandContext& context);
+
+/// The references to assets: paths that do not exist (`asset.find_missing`); fails without a project.
+Expected<AssetFindMissingResult, CommandError> findMissingAssets(CommandContext& context);
 
 /// Matches @p text against @p pattern with `*` (any run) and `?` (one byte).
 bool globMatch(std::string_view pattern, std::string_view text) noexcept;

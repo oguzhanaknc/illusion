@@ -1528,6 +1528,74 @@ struct LogStateResult
     u64 last = 0;      ///< Sequence of the newest message.
 };
 
+// --- profiler and diagnostics ------------------------------------------------------------------------------
+
+/// Params of `profiler.get`.
+struct ProfilerGetParams
+{
+    std::optional<u32> frames{}; ///< Newest frames to report (default 120, at most the frames kept).
+};
+
+/// Time spent in one place of the editor's frame over the reported frames.
+struct ProfilerScopeEntry
+{
+    std::string name;     ///< Name of the scope, e.g. "ui" or "panel.outliner".
+    u32 depth = 0;        ///< Nesting depth: 0 for the frame's phases.
+    u32 calls = 0;        ///< Times it ran in the newest frame.
+    f32 lastMs = 0.0f;    ///< Milliseconds in the newest frame.
+    f32 averageMs = 0.0f; ///< Milliseconds per frame, averaged over the reported frames.
+    f32 maxMs = 0.0f;     ///< Most milliseconds in one frame.
+};
+
+/// Result of `profiler.get`.
+struct ProfilerGetResult
+{
+    bool paused = false;     ///< Recording is paused (the frames are kept).
+    u32 frameIndex = 0;      ///< Frames the editor has run (saturates at 4,294,967,295).
+    std::vector<f32> frames; ///< Milliseconds per reported frame, oldest first.
+    f32 averageMs = 0.0f;    ///< Average of frames (0 without frames).
+    f32 maxMs = 0.0f;        ///< Largest of frames.
+    f32 fps = 0.0f;          ///< 1000 / averageMs (0 without frames).
+    bool truncated = false;  ///< A reported frame had more scopes than the profiler keeps.
+    /// Places, in the newest frame's order (children follow their parents).
+    std::vector<ProfilerScopeEntry> scopes;
+};
+
+/// Params of `profiler.set`.
+struct ProfilerSetParams
+{
+    std::optional<bool> paused{}; ///< Pause or resume recording.
+    std::optional<bool> clear{};  ///< Forget the recorded frames (default false).
+};
+
+/// Result of `profiler.set`.
+struct ProfilerSetResult
+{
+    bool paused = false; ///< Recording is paused.
+    u32 frames = 0;      ///< Frames recorded now.
+};
+
+/// One problem found by `diagnostics.get`.
+struct DiagnosticEntry
+{
+    std::string severity; ///< "error" or "warning".
+    /// What kind of problem: "render.validation", "render.lights_dropped", "log.errors", "log.warnings",
+    /// "asset.missing" or "prefab.unresolved".
+    std::string code;
+    /// What it is about: a viewport id, an asset path or an entity id ("" for the editor as a whole).
+    std::string subject;
+    u32 count = 0;       ///< How many: validation errors, messages, references or lights.
+    std::string message; ///< The problem in English.
+};
+
+/// Result of `diagnostics.get`.
+struct DiagnosticsResult
+{
+    u32 errors = 0;                      ///< Issues with severity "error".
+    u32 warnings = 0;                    ///< Issues with severity "warning".
+    std::vector<DiagnosticEntry> issues; ///< Errors first, then warnings, each in a stable order.
+};
+
 // --- ui ----------------------------------------------------------------------------------------------------
 
 /// A panel or window in `ui.state`.

@@ -15,6 +15,7 @@ illusion_add_editor_library(illusion_editor_shell STATIC
     src/Outliner.cpp
     src/Palette.cpp
     src/PreferencesWindow.cpp
+    src/ProfilerPanel.cpp
     src/Projects.cpp
     src/SceneView.cpp)
 add_library(illusion::editor_shell ALIAS illusion_editor_shell)

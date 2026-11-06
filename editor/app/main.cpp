@@ -10,6 +10,7 @@
 #include <illusion/assets/Image.hpp>
 #include <illusion/audio/AudioComponents.hpp>
 #include <illusion/core/EventBus.hpp>
+#include <illusion/core/FrameProfiler.hpp>
 #include <illusion/core/JobSystem.hpp>
 #include <illusion/core/Log.hpp>
 #include <illusion/core/Time.hpp>
@@ -310,8 +311,16 @@ int runHeadless(const Arguments& arguments, EditorContext& editor, PlaySession& 
             ILL_LOG_INFO("editor", "the stdio client closed the connection");
             break;
         }
-        server.waitForWork(std::chrono::milliseconds(16));
-        server.pump();
+        FrameProfiler& profiler = editor.profiler();
+        profiler.beginFrame();
+        {
+            const FrameProfiler::Scope scope(profiler, "wait");
+            server.waitForWork(std::chrono::milliseconds(16));
+        }
+        {
+            const FrameProfiler::Scope scope(profiler, "requests");
+            server.pump();
+        }
         const auto now = std::chrono::steady_clock::now();
         const f64 elapsed =
             arguments.deterministic ? kFixedStep : std::chrono::duration<f64>(now - last).count();
@@ -319,6 +328,7 @@ int runHeadless(const Arguments& arguments, EditorContext& editor, PlaySession& 
         time += elapsed;
         if (ui)
         {
+            const FrameProfiler::Scope scope(profiler, "ui");
             const std::optional<shell::ScreenshotRequest> request = ui->shell->pendingScreenshot();
             const UVec2 size = request && request->size.x != 0 ? request->size : arguments.uiSize;
             ui->context.makeCurrent();
@@ -348,8 +358,15 @@ int runHeadless(const Arguments& arguments, EditorContext& editor, PlaySession& 
                                                ErrorKind::Internal, "the frame could not be read back"))));
             }
         }
-        play.update(elapsed);
-        editor.endFrame(elapsed);
+        {
+            const FrameProfiler::Scope scope(profiler, "play");
+            play.update(elapsed);
+        }
+        {
+            const FrameProfiler::Scope scope(profiler, "editor");
+            editor.endFrame(elapsed);
+        }
+        profiler.endFrame();
     }
     if (device)
     {
@@ -404,26 +421,38 @@ int runWindowed(const Arguments& arguments, EditorContext& editor, PlaySession& 
         {
             break;
         }
-        // An unfocused editor sleeps until input or a request arrives (the server wakes it).
-        if (window.isFocused())
+        FrameProfiler& profiler = editor.profiler();
+        profiler.beginFrame();
         {
-            platform.pollEvents();
+            // An unfocused editor sleeps until input or a request arrives (the server wakes it).
+            const FrameProfiler::Scope scope(profiler, "events");
+            if (window.isFocused())
+            {
+                platform.pollEvents();
+            }
+            else
+            {
+                platform.waitEvents(0.25);
+            }
+            events.dispatchQueued();
         }
-        else
         {
-            platform.waitEvents(0.25);
+            const FrameProfiler::Scope scope(profiler, "requests");
+            server.pump(std::chrono::milliseconds(8));
         }
-        events.dispatchQueued();
-        server.pump(std::chrono::milliseconds(8));
         const FrameTime& time = clock.tick(monotonicSeconds());
         const f64 delta = arguments.deterministic ? kFixedStep : time.deltaSeconds;
-        ui.context.makeCurrent();
-        ui.shell->beginFrame(backend.contentScale().x);
-        (void)backend.consumeContentScaleChange();
-        backend.newFrame(delta);
-        ImGui::NewFrame();
-        ui.shell->draw(time.totalSeconds, delta);
-        ImGui::Render();
+        {
+            const FrameProfiler::Scope scope(profiler, "ui");
+            ui.context.makeCurrent();
+            ui.shell->beginFrame(backend.contentScale().x);
+            (void)backend.consumeContentScaleChange();
+            backend.newFrame(delta);
+            ImGui::NewFrame();
+            ui.shell->draw(time.totalSeconds, delta);
+            ImGui::Render();
+        }
+        profiler.beginScope("render");
         const bool presenting = swapchain->beginFrame();
         viewports->render(presenting);
         if (presenting)
@@ -445,8 +474,16 @@ int runWindowed(const Arguments& arguments, EditorContext& editor, PlaySession& 
             }
             swapchain->present();
         }
-        play.update(delta);
-        editor.endFrame(delta);
+        profiler.endScope();
+        {
+            const FrameProfiler::Scope scope(profiler, "play");
+            play.update(delta);
+        }
+        {
+            const FrameProfiler::Scope scope(profiler, "editor");
+            editor.endFrame(delta);
+        }
+        profiler.endFrame();
         ++frames;
     }
     device->waitIdle();

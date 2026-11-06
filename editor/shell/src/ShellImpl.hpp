@@ -58,6 +58,7 @@ struct PanelInfo
     std::string_view icon;        // Material Symbols name
     bool docked;                  // part of the dock layout
     std::string_view milestone{}; // placeholder until this milestone ("" for a real panel)
+    bool background = false;      // stays behind the other tabs of its dock node when it appears
 };
 
 /// The facts of @p panel.
@@ -100,6 +101,7 @@ class SceneView;
 class GameInput;
 class Console;
 class History;
+class ProfilerPanel;
 class Agents;
 class PreferencesPage;
 class Projects;
@@ -196,6 +198,7 @@ struct EditorShell::Impl
     u64 followedSelection = 0; // EditorContext::agentSelectionVersion() the Scene view framed last
     std::unique_ptr<detail::Console> console;
     std::unique_ptr<detail::History> history;
+    std::unique_ptr<detail::ProfilerPanel> profilerPanel;
     std::unique_ptr<detail::Agents> agentsPanel;
     std::unique_ptr<detail::PreferencesPage> preferences;
     std::unique_ptr<detail::Projects> projects;

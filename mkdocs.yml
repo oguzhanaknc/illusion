@@ -96,6 +96,7 @@ plugins:
             Transform Tools: Dönüşüm Araçları
             Play Mode: Play Modu
             Prefabs: Prefab'lar
+            Profiler and Diagnostics: Profiler ve Diagnostics
             Project Modules: Proje Modülleri
             Preferences: Tercihler
             Tutorials: Eğitimler
@@ -149,6 +150,7 @@ nav:
           - Play Mode: manual/editor/play-mode.md
           - Asset Browser: manual/editor/assets.md
           - Prefabs: manual/editor/prefabs.md
+          - Profiler and Diagnostics: manual/editor/profiler.md
           - Project Modules: manual/editor/project-modules.md
           - Preferences: manual/editor/preferences.md
           - Projects: manual/editor/projects.md

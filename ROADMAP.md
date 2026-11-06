@@ -444,7 +444,20 @@ Plan: `docs/plans/m7-editor.md` (sub-milestones, command API, localization, them
     dragging a prefab into the viewport (on the ground, `prefab.instantiate` with `position`) or onto the
     Outliner, and per-field override marks with per-field apply and revert (`field`)
 - M7w: Engine feature panels: rendering, physics, audio mixer, input actions, gamepad tester, profiler,
-  diagnostics; gamepad navigation of the editor window through `GamepadSystem` (from M7l)
+  diagnostics; gamepad navigation of the editor window through `GamepadSystem` (from M7l), in parts:
+- M7w-1: ✅ Profiler and Diagnostics: `FrameProfiler` in the core (nested named CPU scopes of the last frames
+  in a fixed ring, allocation-free recording and `summarize()`), the editor's frame loops record their phases
+  (events, requests, ui with one scope per drawn panel, render, play, editor), GPU pass timings per viewport
+  in `render.stats`, the Profiler panel (CPU graph and places, GPU passes per viewport, Diagnostics tab that
+  opens what an issue is about), and `profiler.get`, `profiler.set` and `diagnostics.get` (render validation,
+  log errors and warnings, missing assets, dropped lights, unresolved prefabs; 173 commands). Unit tests for
+  the recorder, command tests with a fake viewport host, a headless UI test of the panel, and the
+  `profiler/scope` Benchmark (400 ns budget per scope; 50 ns measured)
+- M7w-2: Rendering and Project Settings panels (the remaining placeholders), physics debug and audio mixer
+  panels; physics raycasts for drop to ground (from M7p-2)
+- M7w-3: Input actions panel with rebinding, gamepad tester (rumble, LED, gyro, touchpad, triggers) and
+  gamepad navigation of the editor window
+- M7w-4: Multiple simultaneous Inspector instances (from M7m)
 - M7x: Showcase scene covering every Component and the scripting API; Tetris built by an agent end to end
 
 ## M8 — Release pipeline
