@@ -24,7 +24,8 @@ later sessions and does not change `play.step`.
 
 Pass `"fixedStep": true` to `play.start` for repeatable runs: every frame then advances exactly one physics
 step, and entities that the game creates get ids from `seed`, so the same scene, input and seed always give
-the same World.
+the same World. Audio clips and the models of mesh colliders load in the background; with `fixedStep`, and for every
+`play.step`, the game waits for them, so they arrive at the same step on every run.
 
 ```json
 {"method": "play.start", "params": {"mode": "play", "fixedStep": true, "seed": 7}}

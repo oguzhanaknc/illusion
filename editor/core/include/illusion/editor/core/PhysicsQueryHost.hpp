@@ -40,7 +40,8 @@ public:
     /// Writes to @p out (the size of @p queries) how far each query's entities fall straight down (0 or more,
     /// in world units) before they touch the Collider of an entity outside every query, or the ground plane
     /// y = 0. Colliders of the members are swept down; members without any fall from the bottom centre of
-    /// DropQuery::box. Every Collider counts as a static surface, with or without a RigidBody; sensors and
+    /// DropQuery::box (as do members whose only Colliders are triangle meshes, which cannot be swept). Every
+    /// Collider counts as a static surface, with or without a RigidBody; sensors and
     /// Inactive entities do not. Entities that start inside a surface do not move. @p pose places every
     /// entity; the host does not change @p world.
     virtual void dropDistances(World& world, WorldPoseFunction pose, std::span<const DropQuery> queries,

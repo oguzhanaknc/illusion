@@ -40,8 +40,11 @@ class SettingsCatalog;
 /// Creation parameters of a PlaySession. Everything it points at must outlive the session.
 struct PlaySessionDesc
 {
-    JobSystem* jobs = nullptr;                     ///< Runs the game's jobs and the modules. Required.
-    AssetStreamer* streamer = nullptr;             ///< Background loading for play sessions (null: none).
+    JobSystem* jobs = nullptr; ///< Runs the game's jobs and the modules. Required.
+    /// Background loading of audio clips and collision meshes (null: clips load on the calling thread and
+    /// mesh colliders get no shape). The session publishes its loads before every update; steps and
+    /// fixed-step sessions wait for them.
+    AssetStreamer* streamer = nullptr;
     RenderAssetCache* renderAssets = nullptr;      ///< GPU assets of the play World (null: headless).
     GamepadSystem* gamepads = nullptr;             ///< Gamepads the game reads (null: none).
     AudioOutput audioOutput = AudioOutput::Device; ///< Where the sound of play sessions goes.

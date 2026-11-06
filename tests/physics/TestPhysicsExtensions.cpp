@@ -485,6 +485,37 @@ TEST_CASE("shape casts find the first body along the path")
     CHECK(plankHit->distance == doctest::Approx(3.9).epsilon(0.01));
 }
 
+TEST_CASE("a scaled shape cast scales the collider and its offset as a body would")
+{
+    Fixture f;
+    const Entity ground =
+        f.world.create(at(Vec3(0.0f, -0.5f, 0.0f)), body(MotionType::Static), box(Vec3(10.0f, 0.5f, 10.0f)));
+    f.physics.update(0.0);
+    const Quat identity(1.0f, 0.0f, 0.0f, 0.0f);
+    const Vec3 down(0.0f, -1.0f, 0.0f);
+
+    // A sphere of radius 0.5 at twice the size: its bottom is 4 m above the ground.
+    const auto ball =
+        f.physics.shapeCast(sphere(0.5f), Vec3(0.0f, 5.0f, 0.0f), identity, Vec3(2.0f), down, 10.0f);
+    REQUIRE(ball.has_value());
+    CHECK(ball->entity == ground);
+    CHECK(ball->distance == doctest::Approx(4.0).epsilon(0.01));
+
+    // The offset scales with the shape: a box 1 m below the entity is 2 m below it at a height scale of 2.
+    Collider offsetBox = box(Vec3(0.5f));
+    offsetBox.offset = Vec3(0.0f, -1.0f, 0.0f);
+    const auto stretched =
+        f.physics.shapeCast(offsetBox, Vec3(0.0f, 6.0f, 0.0f), identity, Vec3(1.0f, 2.0f, 1.0f), down, 10.0f);
+    REQUIRE(stretched.has_value());
+    CHECK(stretched->distance == doctest::Approx(3.0).epsilon(0.01));
+
+    // A scale of one is the unscaled cast.
+    const auto unscaled =
+        f.physics.shapeCast(offsetBox, Vec3(0.0f, 6.0f, 0.0f), identity, Vec3(1.0f), down, 10.0f);
+    REQUIRE(unscaled.has_value());
+    CHECK(unscaled->distance == doctest::Approx(4.5).epsilon(0.01));
+}
+
 TEST_CASE("overlap lists the bodies inside a shape")
 {
     Fixture f;

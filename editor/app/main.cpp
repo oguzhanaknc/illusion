@@ -7,6 +7,7 @@
 //                     [--no-gpu] [--deterministic] [--seed <n>] [--permissions read-only|ask|auto]
 //                     [--frames <n>] [--ui-size <w>x<h>] [--user-dir <dir>]
 
+#include <illusion/assets/AssetStreamer.hpp>
 #include <illusion/assets/Image.hpp>
 #include <illusion/audio/AudioComponents.hpp>
 #include <illusion/core/EventBus.hpp>
@@ -590,7 +591,10 @@ int run(const std::vector<std::string>& args)
     }
     // Physics queries of the edit World (drop to ground onto colliders).
     EditorPhysicsQueries physicsQueries(editor, jobs);
+    // Background loading of Play mode: audio clips and collision meshes.
+    AssetStreamer playAssets(editor.files(), jobs, AssetStreamerDesc{.cacheMount = ""});
     PlaySession play(editor, {.jobs = &jobs,
+                              .streamer = &playAssets,
                               .gamepads = gamepadSystem.get(),
                               .audioOutput = arguments.headless ? AudioOutput::Null : AudioOutput::Device});
     if (!arguments.project.empty())

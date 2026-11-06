@@ -1,3 +1,4 @@
+#include <illusion/assets/AssetStreamer.hpp>
 #include <illusion/core/Json.hpp>
 #include <illusion/core/Log.hpp>
 #include <illusion/core/Profiler.hpp>
@@ -81,6 +82,24 @@ struct PlaySession::Impl
     PlayStartOptions options;
     bool paused = false;
     f64 timeScale = 1.0;
+
+    // Publishes the background loads (audio clips, collision meshes) before the game advances; @p wait
+    // finishes them first, so that steps and fixed-step sessions are the same on every run.
+    void pumpAssets(bool wait) const
+    {
+        if (desc.streamer == nullptr)
+        {
+            return;
+        }
+        if (wait)
+        {
+            desc.streamer->waitIdle();
+        }
+        else
+        {
+            (void)desc.streamer->update();
+        }
+    }
 };
 
 PlaySession::PlaySession(EditorContext& editor, const PlaySessionDesc& desc)
@@ -190,6 +209,7 @@ u32 PlaySession::step(u32 steps)
     const f64 stepSeconds = impl.game->settings().physics.stepSeconds;
     for (u32 i = 0; i < steps; ++i)
     {
+        impl.pumpAssets(true);
         impl.game->update(stepSeconds);
     }
     impl.editor.playWorldAdvanced();
@@ -209,6 +229,7 @@ void PlaySession::update(f64 deltaSeconds)
     {
         return;
     }
+    impl.pumpAssets(impl.options.fixedStep);
     impl.game->update(deltaSeconds * impl.timeScale);
     impl.editor.playWorldAdvanced();
 }

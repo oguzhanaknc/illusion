@@ -176,7 +176,9 @@ physics.overlap(ball, explosionCenter, identity, inRange);
 - Sorgular `Mesh` dışındaki her `Collider`'ı alır; `offset` ve `rotation` uygulanır.
 - Sensörler atlanır; `ignore` (`raycast()`, `shapeCast()` ve `overlap()`'in son argümanı) bir Entity'nin
   cismini atlar, örneğin oyuncunun kendi karakterini.
-- `shapeCast()` ilk teması bildirir; bir cismin içinde başlayan şekil ona 0 mesafede çarpar.
+- `shapeCast()` ilk teması bildirir; bir cismin içinde başlayan şekil ona 0 mesafede çarpar. Bir overload
+  rotasyondan sonra bir `scale` alır ve şekli (offset dahil) o Transform ölçeğine sahip bir cismin ölçekleyeceği
+  gibi ölçekler; şekli her çağrıda kurar, bu yüzden her frame çalışan kodda ölçeksiz olanı kullanın.
 
 ## Karakterler
 

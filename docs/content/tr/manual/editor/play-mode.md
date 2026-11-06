@@ -24,7 +24,8 @@ kalır ve `play.step`'i değiştirmez.
 
 Tekrarlanabilir çalıştırmalar için `play.start`'a `"fixedStep": true` verin: her kare tam olarak bir fizik
 adımı ilerler ve oyunun oluşturduğu Entity'ler kimliklerini `seed`'den alır; böylece aynı sahne, girdi ve seed
-her zaman aynı World'ü verir.
+her zaman aynı World'ü verir. Ses klipleri ve mesh collider'larının modelleri arka planda yüklenir; `fixedStep` ile ve her `play.step`'te
+oyun onları bekler, böylece her çalıştırmada aynı adımda gelirler.
 
 ```json
 {"method": "play.start", "params": {"mode": "play", "fixedStep": true, "seed": 7}}
