@@ -208,7 +208,7 @@ TEST_CASE("transform.drop_to_ground lets entities fall onto boxes below them or 
     ok(editor, "transform.drop_to_ground", R"({"entities":["/Crate"],"onto":"plane"})");
     CHECK(positionOf(editor, "/Crate").y == doctest::Approx(0.5f));
     ok(editor, "history.undo");
-    CHECK(fails(editor, "transform.drop_to_ground", R"({"entities":["/Crate"],"onto":2})").kind ==
+    CHECK(fails(editor, "transform.drop_to_ground", R"({"entities":["/Crate"],"onto":3})").kind ==
           ErrorKind::ValidationFailed);
 
     // Without viewports every entity is a point.

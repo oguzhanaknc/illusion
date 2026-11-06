@@ -1,11 +1,12 @@
 # illusion::editor_play — the editor's game runtime (ADR 0042): PlaySession runs one GameSession at a time on a
 # copy of the edit World, owns the editor's ModuleHost and implements the PlayHost of the play.*, input.inject,
 # input.read and module.* commands; EditorGamepads implements the GamepadHost of the gamepad.* commands over
-# the GamepadSystem that Play mode reads. GPU-free: the Game view renders the play World through
-# editor_viewport.
+# the GamepadSystem that Play mode reads, and EditorPhysicsQueries the physics queries of drop to ground.
+# GPU-free: the Game view renders the play World through editor_viewport.
 
 illusion_add_editor_library(illusion_editor_play STATIC
     src/EditorGamepads.cpp
+    src/EditorPhysicsQueries.cpp
     src/PlaySession.cpp)
 add_library(illusion::editor_play ALIAS illusion_editor_play)
 target_include_directories(illusion_editor_play PUBLIC

@@ -16030,7 +16030,7 @@
           "anyOf": [
             {
               "type": "string",
-              "enum": ["surfaces", "plane"]
+              "enum": ["surfaces", "plane", "colliders"]
             },
             {
               "type": "null"

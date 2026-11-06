@@ -714,7 +714,7 @@ struct TransformDropParams
 {
     std::vector<std::string>
         entities; ///< Entity references; descendants of other listed entities follow them.
-    std::optional<DropTarget> onto{}; ///< "surfaces" (default) or "plane".
+    std::optional<DropTarget> onto{}; ///< "surfaces" (default), "plane" or "colliders".
 };
 
 /// Params of `transform.align_to_view`.
@@ -2070,14 +2070,14 @@ struct GamepadLedParams
 /// Params of `gamepad.set_trigger_effect`.
 struct GamepadTriggerEffectParams
 {
-    std::optional<u32> gamepad{};                         ///< Gamepad id (default: the first connected).
+    std::optional<u32> gamepad{};                          ///< Gamepad id (default: the first connected).
     GamepadTriggerSide trigger = GamepadTriggerSide::Left; ///< "left" (L2) or "right" (R2).
     GamepadTriggerMode mode = GamepadTriggerMode::Off;     ///< "off", "resistance", "weapon" or "vibration".
-    std::optional<f32> start{};                           ///< Start position in [0, 1] (default 0).
-    std::optional<f32> end{};                             ///< End position in [0, 1] (weapon; default 1).
-    std::optional<f32> strength{};                        ///< Strength in [0, 1] (default 1).
-    std::optional<f32> amplitude{};                       ///< Vibration amplitude in [0, 1] (default 1).
-    std::optional<u32> frequency{};                       ///< Vibration frequency in Hz, 1 to 255 (default 30).
+    std::optional<f32> start{};                            ///< Start position in [0, 1] (default 0).
+    std::optional<f32> end{};                              ///< End position in [0, 1] (weapon; default 1).
+    std::optional<f32> strength{};                         ///< Strength in [0, 1] (default 1).
+    std::optional<f32> amplitude{};                        ///< Vibration amplitude in [0, 1] (default 1).
+    std::optional<u32> frequency{}; ///< Vibration frequency in Hz, 1 to 255 (default 30).
 };
 
 /// Params of `gamepad.set_motion`.
@@ -2156,7 +2156,8 @@ struct illusion::EnumReflection<illusion::editor::GamepadTriggerMode>
 {
     /// The values.
     static constexpr std::array kValues{illusion::EnumValue{"off", 0}, illusion::EnumValue{"resistance", 1},
-                                        illusion::EnumValue{"weapon", 2}, illusion::EnumValue{"vibration", 3}};
+                                        illusion::EnumValue{"weapon", 2},
+                                        illusion::EnumValue{"vibration", 3}};
 };
 
 /// Names of DropTarget values in JSON.
@@ -2164,7 +2165,8 @@ template <>
 struct illusion::EnumReflection<illusion::editor::DropTarget>
 {
     /// The values.
-    static constexpr std::array kValues{illusion::EnumValue{"surfaces", 0}, illusion::EnumValue{"plane", 1}};
+    static constexpr std::array kValues{illusion::EnumValue{"surfaces", 0}, illusion::EnumValue{"plane", 1},
+                                        illusion::EnumValue{"colliders", 2}};
 };
 
 /// Names of GizmoModalOperation values in JSON.

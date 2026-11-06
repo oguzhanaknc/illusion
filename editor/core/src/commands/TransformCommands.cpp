@@ -679,16 +679,43 @@ Expected<EntitiesResult, CommandError> transformDistribute(CommandContext& conte
 Expected<EntitiesResult, CommandError> transformDropToGround(CommandContext& context,
                                                              const TransformDropParams& params)
 {
-    if (Expected<void, CommandError> valid = checkEnum(params.onto, DropTarget::Plane, "/onto"); !valid)
+    if (Expected<void, CommandError> valid = checkEnum(params.onto, DropTarget::Colliders, "/onto"); !valid)
     {
         return unexpected(std::move(valid).error());
+    }
+    const DropTarget onto = params.onto.value_or(DropTarget::Surfaces);
+    PhysicsQueryHost* physics = context.editor().physicsQueries();
+    if (onto == DropTarget::Colliders && physics == nullptr)
+    {
+        return unexpected(CommandError::make(ErrorKind::Unsupported, "this editor has no physics queries"));
     }
     Expected<Arranged, CommandError> found = arranged(context, params.entities);
     if (!found)
     {
         return unexpected(std::move(found).error());
     }
-    const bool plane = params.onto.value_or(DropTarget::Surfaces) == DropTarget::Plane;
+    if (onto == DropTarget::Colliders)
+    {
+        // Each moved root falls with its descendants.
+        const HierarchyIndex& hierarchy = context.index().hierarchy();
+        std::vector<DropQuery> queries(found->entities.size());
+        for (usize i = 0; i < queries.size(); ++i)
+        {
+            const Entity& root = found->entities[i];
+            queries[i].members =
+                hierarchy.contains(root) ? hierarchy.subtree(root) : std::span<const Entity>(&root, 1);
+            queries[i].box = found->boxes[i];
+        }
+        std::vector<f32> distances(queries.size(), 0.0f);
+        physics->dropDistances(context.world(), &worldTransformOf, queries, distances);
+        std::vector<Vec3> offsets(distances.size(), Vec3(0.0f));
+        for (usize i = 0; i < offsets.size(); ++i)
+        {
+            offsets[i].y = -distances[i];
+        }
+        return moveArranged(context, *found, offsets);
+    }
+    const bool plane = onto == DropTarget::Plane;
     const std::span<const Aabb> surfaces =
         plane ? std::span<const Aabb>() : std::span<const Aabb>(found->others);
     std::vector<Vec3> offsets(found->boxes.size(), Vec3(0.0f));
@@ -891,9 +918,10 @@ void registerTransformCommands(CommandRegistry& registry)
         .agentSummary =
             "Moves entities straight down (or up) until the bottom of the box around what they draw rests on "
             "the highest box of another entity below them, or on the ground plane y = 0 when there is none "
-            "(onto \"surfaces\", default), or always on the plane (onto \"plane\"). Render bounds, not "
-            "physics. "
-            "Example: {\"entities\": [\"$selection\"]}.",
+            "(onto \"surfaces\", default, render bounds), or always on the plane (onto \"plane\"), or "
+            "with physics onto the Colliders of other entities or the plane (onto \"colliders\": their "
+            "Colliders are swept down, or a ray from the bottom of their box without any). "
+            "Example: {\"entities\": [\"$selection\"], \"onto\": \"colliders\"}.",
         .category = "Transform",
         .icon = "vertical_align_bottom",
         .flags = {.idempotent = true, .undoable = true},

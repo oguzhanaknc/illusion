@@ -17,6 +17,7 @@
 #include <illusion/core/Version.hpp>
 #include <illusion/editor/core/EditorContext.hpp>
 #include <illusion/editor/play/EditorGamepads.hpp>
+#include <illusion/editor/play/EditorPhysicsQueries.hpp>
 #include <illusion/editor/play/PlaySession.hpp>
 #include <illusion/editor/rpc/RpcProtocol.hpp>
 #include <illusion/editor/rpc/RpcServer.hpp>
@@ -587,6 +588,8 @@ int run(const std::vector<std::string>& args)
     {
         gamepads.emplace(editor, *gamepadSystem);
     }
+    // Physics queries of the edit World (drop to ground onto colliders).
+    EditorPhysicsQueries physicsQueries(editor, jobs);
     PlaySession play(editor, {.jobs = &jobs,
                               .gamepads = gamepadSystem.get(),
                               .audioOutput = arguments.headless ? AudioOutput::Null : AudioOutput::Device});

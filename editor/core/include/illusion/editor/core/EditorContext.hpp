@@ -17,9 +17,10 @@
 #include <illusion/editor/core/CommandRegistry.hpp>
 #include <illusion/editor/core/CrashJournal.hpp>
 #include <illusion/editor/core/EntityIndex.hpp>
+#include <illusion/editor/core/GamepadHost.hpp>
 #include <illusion/editor/core/Gizmo.hpp>
 #include <illusion/editor/core/ImageHost.hpp>
-#include <illusion/editor/core/GamepadHost.hpp>
+#include <illusion/editor/core/PhysicsQueryHost.hpp>
 #include <illusion/editor/core/PlayHost.hpp>
 #include <illusion/editor/core/Preferences.hpp>
 #include <illusion/editor/core/Project.hpp>
@@ -424,6 +425,12 @@ public:
     /// Sets the gamepads (nullptr when they go away). They must outlive their registration.
     void setGamepads(GamepadHost* gamepads) noexcept { m_gamepads = gamepads; }
 
+    /// The physics queries of `transform.drop_to_ground` onto colliders, or nullptr.
+    [[nodiscard]] PhysicsQueryHost* physicsQueries() const noexcept { return m_physicsQueries; }
+
+    /// Sets the physics queries (nullptr when they go away). They must outlive their registration.
+    void setPhysicsQueries(PhysicsQueryHost* queries) noexcept { m_physicsQueries = queries; }
+
     /// Marks a module build as running; false if one runs already (`module.build` builds one at a time).
     [[nodiscard]] bool beginModuleBuild() noexcept { return !std::exchange(m_moduleBuildRunning, true); }
 
@@ -716,6 +723,7 @@ private:
     ThumbnailCache m_thumbnails;
     PlayHost* m_play = nullptr;
     GamepadHost* m_gamepads = nullptr;
+    PhysicsQueryHost* m_physicsQueries = nullptr;
     bool m_moduleBuildRunning = false;
     struct PlayWorld;
     std::unique_ptr<PlayWorld> m_playWorld;
