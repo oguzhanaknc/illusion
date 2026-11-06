@@ -202,7 +202,8 @@ void FrameProfiler::summarize(usize frames, std::vector<ProfileScopeStats>& out)
     }
     for (ProfileScopeStats& stats : out)
     {
-        stats.averageMs /= static_cast<f32>(frames);
+        // Rounding can put the f32 quotient one step above the largest value it averages.
+        stats.averageMs = std::min(stats.averageMs / static_cast<f32>(frames), stats.maxMs);
     }
 }
 
