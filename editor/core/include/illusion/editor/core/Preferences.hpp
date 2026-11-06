@@ -44,7 +44,6 @@ struct ShortcutBinding
     std::string chord;  ///< Chord such as "Ctrl+Shift+Z" (see parseChord()); "" removes the shortcut.
 };
 
-/// Everything a user can set in Preferences.
 /// Render quality of the editor's viewports (the Rendering panel). Secondary Scene views keep at most two
 /// shadow cascades of at most 1,024 texels.
 struct ViewportQuality
@@ -63,6 +62,7 @@ struct ViewportQuality
     friend bool operator==(const ViewportQuality&, const ViewportQuality&) = default;
 };
 
+/// Everything a user can set in Preferences.
 struct Preferences
 {
     // Appearance
