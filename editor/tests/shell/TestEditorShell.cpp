@@ -1190,7 +1190,9 @@ TEST_CASE("the Outliner shows a breadcrumb in prefab edit mode whose back button
 TEST_CASE(
     "dragging an entity into the Asset Browser makes a prefab and a prefab onto an Outliner row places it")
 {
-    ShellFixture fixture;
+    ShellSetup setup;
+    setup.assetWatching = FileWatchBackend::Polling;
+    ShellFixture fixture(setup);
     EditorContext& editor = *fixture.editor;
     test::ok(editor, "entity.create", R"({"name":"Barrel"})");
     test::ok(editor, "entity.create", R"({"name":"Shelf"})");
