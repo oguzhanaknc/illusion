@@ -38,12 +38,11 @@ GamepadEntry entryOf(const GamepadSnapshot& pad)
     entry.type = pad.type;
     entry.player = pad.player;
     const GamepadFeatures& features = pad.features;
-    for (const auto& [has, name] : {std::pair{features.rumble, "rumble"},
-                                    std::pair{features.triggerRumble, "trigger_rumble"},
-                                    std::pair{features.led, "led"},
-                                    std::pair{features.motionSensors, "motion"},
-                                    std::pair{features.touchpad, "touchpad"},
-                                    std::pair{features.adaptiveTriggers, "adaptive_triggers"}})
+    for (const auto& [has, name] :
+         {std::pair{features.rumble, "rumble"}, std::pair{features.triggerRumble, "trigger_rumble"},
+          std::pair{features.led, "led"}, std::pair{features.motionSensors, "motion"},
+          std::pair{features.touchpad, "touchpad"},
+          std::pair{features.adaptiveTriggers, "adaptive_triggers"}})
     {
         if (has)
         {
@@ -94,8 +93,8 @@ Expected<GamepadSnapshot, CommandError> findGamepad(const GamepadHost& host, con
             return std::move(pad);
         }
     }
-    return unexpected(CommandError::make(ErrorKind::NotFound,
-                                         "no connected gamepad has id " + std::to_string(*id)));
+    return unexpected(
+        CommandError::make(ErrorKind::NotFound, "no connected gamepad has id " + std::to_string(*id)));
 }
 
 Expected<void, CommandError> checkUnit(const std::optional<f32>& value, const char* pointer)
@@ -109,9 +108,8 @@ Expected<void, CommandError> checkUnit(const std::optional<f32>& value, const ch
 
 CommandError unsupported(const GamepadSnapshot& pad, std::string_view feature)
 {
-    return CommandError::make(ErrorKind::Unsupported,
-                              "gamepad " + std::to_string(pad.id) + " (" + pad.type + ") has no " +
-                                  std::string(feature));
+    return CommandError::make(ErrorKind::Unsupported, "gamepad " + std::to_string(pad.id) + " (" + pad.type +
+                                                          ") has no " + std::string(feature));
 }
 
 // The state after an output command changed it.
@@ -205,7 +203,8 @@ Expected<GamepadEntry, CommandError> gamepadSetLed(CommandContext& context, cons
         const f32 channel = params.color[static_cast<int>(c)];
         if (!(std::isfinite(channel) && channel >= 0.0f && channel <= 1.0f))
         {
-            return unexpected(CommandError::invalid("/color/" + std::to_string(c), "must be between 0 and 1"));
+            return unexpected(
+                CommandError::invalid("/color/" + std::to_string(c), "must be between 0 and 1"));
         }
     }
     Expected<GamepadSnapshot, CommandError> pad = findGamepad(**host, params.gamepad);
@@ -277,7 +276,8 @@ Expected<GamepadEntry, CommandError> gamepadSetTriggerEffect(CommandContext& con
     return stateOf(**host, pad->id);
 }
 
-Expected<GamepadEntry, CommandError> gamepadSetMotion(CommandContext& context, const GamepadMotionParams& params)
+Expected<GamepadEntry, CommandError> gamepadSetMotion(CommandContext& context,
+                                                      const GamepadMotionParams& params)
 {
     Expected<GamepadHost*, CommandError> host = requireGamepads(context);
     if (!host)
@@ -305,8 +305,9 @@ void registerGamepadCommands(CommandRegistry& registry)
         .name = "gamepad.list",
         .title = strings::kCommandGamepadListTitle,
         .description = strings::kCommandGamepadListDescription,
-        .agentSummary = "Lists the connected gamepads with their model, features, held buttons, axes, touchpad "
-                        "fingers and motion sensors (the devices Play mode reads). Example: {}.",
+        .agentSummary =
+            "Lists the connected gamepads with their model, features, held buttons, axes, touchpad "
+            "fingers and motion sensors (the devices Play mode reads). Example: {}.",
         .category = "Input",
         .icon = "sports_esports",
         .flags = {.readOnly = true, .idempotent = true},
@@ -316,9 +317,10 @@ void registerGamepadCommands(CommandRegistry& registry)
         .name = "gamepad.rumble",
         .title = strings::kCommandGamepadRumbleTitle,
         .description = strings::kCommandGamepadRumbleDescription,
-        .agentSummary = "Rumbles a gamepad (default: the first connected): the low- and high-frequency motors "
-                        "(low, high) and/or the Xbox trigger motors (left, right), each 0 to 1, for durationMs "
-                        "(default 500); 0 stops them. Example: {\"low\": 0.5, \"high\": 0.2, \"durationMs\": 300}.",
+        .agentSummary =
+            "Rumbles a gamepad (default: the first connected): the low- and high-frequency motors "
+            "(low, high) and/or the Xbox trigger motors (left, right), each 0 to 1, for durationMs "
+            "(default 500); 0 stops them. Example: {\"low\": 0.5, \"high\": 0.2, \"durationMs\": 300}.",
         .category = "Input",
         .icon = "vibration",
         .mode = CommandMode::Any,
@@ -328,8 +330,9 @@ void registerGamepadCommands(CommandRegistry& registry)
         .name = "gamepad.set_led",
         .title = strings::kCommandGamepadSetLedTitle,
         .description = strings::kCommandGamepadSetLedDescription,
-        .agentSummary = "Sets the light colour of a gamepad with one (DualShock 4, DualSense); default: the first "
-                        "connected. Each channel is 0 to 1. Example: {\"color\": [1, 0.2, 0]}.",
+        .agentSummary =
+            "Sets the light colour of a gamepad with one (DualShock 4, DualSense); default: the first "
+            "connected. Each channel is 0 to 1. Example: {\"color\": [1, 0.2, 0]}.",
         .category = "Input",
         .icon = "lightbulb",
         .flags = {.idempotent = true},
@@ -340,10 +343,11 @@ void registerGamepadCommands(CommandRegistry& registry)
         .name = "gamepad.set_trigger_effect",
         .title = strings::kCommandGamepadSetTriggerEffectTitle,
         .description = strings::kCommandGamepadSetTriggerEffectDescription,
-        .agentSummary = "Applies a DualSense adaptive trigger effect to the left or right trigger: off, resistance "
-                        "(from start, with strength), weapon (between start and end) or vibration (from start, "
-                        "with amplitude at frequency Hz); positions and strengths are 0 to 1. Example: "
-                        "{\"trigger\": \"right\", \"mode\": \"weapon\", \"start\": 0.3, \"end\": 0.6}.",
+        .agentSummary =
+            "Applies a DualSense adaptive trigger effect to the left or right trigger: off, resistance "
+            "(from start, with strength), weapon (between start and end) or vibration (from start, "
+            "with amplitude at frequency Hz); positions and strengths are 0 to 1. Example: "
+            "{\"trigger\": \"right\", \"mode\": \"weapon\", \"start\": 0.3, \"end\": 0.6}.",
         .category = "Input",
         .icon = "tune",
         .flags = {.idempotent = true},
@@ -371,7 +375,8 @@ namespace illusion::editor
 
 std::string_view gamepadButtonId(usize index) noexcept
 {
-    return index < kGamepadButtons ? gamepadButtonName(static_cast<GamepadButton>(index)) : std::string_view{};
+    return index < kGamepadButtons ? gamepadButtonName(static_cast<GamepadButton>(index))
+                                   : std::string_view{};
 }
 
 } // namespace illusion::editor

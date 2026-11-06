@@ -17,9 +17,9 @@
 #include <illusion/editor/core/CommandRegistry.hpp>
 #include <illusion/editor/core/CrashJournal.hpp>
 #include <illusion/editor/core/EntityIndex.hpp>
+#include <illusion/editor/core/GamepadHost.hpp>
 #include <illusion/editor/core/Gizmo.hpp>
 #include <illusion/editor/core/ImageHost.hpp>
-#include <illusion/editor/core/GamepadHost.hpp>
 #include <illusion/editor/core/PlayHost.hpp>
 #include <illusion/editor/core/Preferences.hpp>
 #include <illusion/editor/core/Project.hpp>
