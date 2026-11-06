@@ -479,6 +479,7 @@ struct Inspector::State
         i32 score = 0;
     };
 
+    std::string_view prefix; // of the stable ids: "inspector" for the Inspector panel
     bool locked = false;
     std::vector<EntityGuid> lockedGuids;
     std::vector<InspectedEntity> inspected;
@@ -512,7 +513,7 @@ struct Inspector::State
     {
         const std::string_view serial = formatUint(text, dragSerial);
         return text.concat(
-            "inspector.drag.",
+            text.concat(prefix, ".drag."),
             text.concat(serial, text.concat(".", text.concat(component, text.concat(".", path)))));
     }
 
@@ -826,25 +827,26 @@ void Inspector::State::drawPrefabBar(Impl& shell, ui::UiKit& kit)
     const std::string entity = jsonQuote(std::string_view(hex.data(), hex.size()));
     ImGui::TextUnformatted(text.concat(ui::icons::kWidgets.view(), text.concat("  ", prefabPath)));
     ImGui::SameLine();
-    if (ui::iconButton(kit, ui::icons::kEdit, "inspector.prefab.open", text.format(s::kInspectorPrefabOpen)))
+    if (ui::iconButton(kit, ui::icons::kEdit, text.concat(prefix, ".prefab.open"),
+                       text.format(s::kInspectorPrefabOpen)))
     {
         (void)shell.run("prefab.open", "{\"path\":" + jsonQuote(prefabPath) + "}", "inspector");
         return;
     }
     ImGui::SameLine();
-    if (ui::iconButton(kit, ui::icons::kPublish, "inspector.prefab.apply",
+    if (ui::iconButton(kit, ui::icons::kPublish, text.concat(prefix, ".prefab.apply"),
                        text.format(s::kInspectorPrefabApply)))
     {
         (void)shell.run("prefab.apply", "{\"entity\":" + entity + ",\"all\":true}", "inspector");
     }
     ImGui::SameLine();
-    if (ui::iconButton(kit, ui::icons::kUndo, "inspector.prefab.revert",
+    if (ui::iconButton(kit, ui::icons::kUndo, text.concat(prefix, ".prefab.revert"),
                        text.format(s::kInspectorPrefabRevert)))
     {
         (void)shell.run("prefab.revert", "{\"entity\":" + entity + "}", "inspector");
     }
     ImGui::SameLine();
-    if (ui::iconButton(kit, ui::icons::kUnarchive, "inspector.prefab.unpack",
+    if (ui::iconButton(kit, ui::icons::kUnarchive, text.concat(prefix, ".prefab.unpack"),
                        text.format(s::kInspectorPrefabUnpack)))
     {
         (void)shell.run("prefab.unpack", "{\"entity\":" + entity + "}", "inspector");
@@ -872,7 +874,7 @@ void Inspector::State::drawHeader(Impl& shell, ui::UiKit& kit)
     {
         ImGui::PushItemFlag(ImGuiItemFlags_MixedValue, true);
     }
-    if (ImGui::Checkbox(text.hidden("inspector.enabled"), &allEnabled))
+    if (ImGui::Checkbox(text.hidden(text.concat(prefix, ".enabled")), &allEnabled))
     {
         const bool targetEnabled = mixedEnabled ? true : allEnabled;
         const char* enabledJson = targetEnabled ? "true" : "false";
@@ -953,7 +955,7 @@ void Inspector::State::drawHeader(Impl& shell, ui::UiKit& kit)
     ImGui::SetNextItemWidth(std::max(40.0f, availWidth - buttonSize - style.ItemInnerSpacing.x));
     const char* nameHint = mixedNames ? text.format(s::kInspectorMixed) : text.format(s::kOutlinerUnnamed);
     const bool enterRename =
-        ImGui::InputTextWithHint(text.hidden("inspector.name"), nameHint, nameBuffer.data(),
+        ImGui::InputTextWithHint(text.hidden(text.concat(prefix, ".name")), nameHint, nameBuffer.data(),
                                  nameBuffer.size(), ImGuiInputTextFlags_EnterReturnsTrue);
     if (enterRename || ImGui::IsItemDeactivatedAfterEdit())
     {
@@ -986,7 +988,7 @@ void Inspector::State::drawHeader(Impl& shell, ui::UiKit& kit)
     }
 
     ImGui::SameLine(0.0f, style.ItemInnerSpacing.x);
-    if (ui::iconButton(kit, locked ? ui::icons::kLock : ui::icons::kLockOpen, "inspector.lock",
+    if (ui::iconButton(kit, locked ? ui::icons::kLock : ui::icons::kLockOpen, text.concat(prefix, ".lock"),
                        text.format(s::kInspectorLock), nullptr, locked))
     {
         locked = !locked;
@@ -1013,7 +1015,7 @@ void Inspector::State::drawHeader(Impl& shell, ui::UiKit& kit)
             ImGui::PopStyleColor();
         }
         ImGui::SameLine(0.0f, style.ItemInnerSpacing.x);
-        if (ui::iconButton(kit, ui::icons::kContentCopy, "inspector.copy_id",
+        if (ui::iconButton(kit, ui::icons::kContentCopy, text.concat(prefix, ".copy_id"),
                            text.format(s::kInspectorCopyId)))
         {
             ImGui::SetClipboardText(text.copy(hexView));
@@ -1043,17 +1045,17 @@ void Inspector::State::drawTransformCard(Impl& shell, ui::UiKit& kit)
         }
     }
 
-    const bool open = ui::beginComponentCard(kit, "inspector.transform", ui::icons::kTransform,
+    const bool open = ui::beginComponentCard(kit, text.concat(prefix, ".transform"), ui::icons::kTransform,
                                              text.format(s::kComponentTransform), nullptr);
-    if (ui::beginComponentCardMenu(kit, "inspector.transform"))
+    if (ui::beginComponentCardMenu(kit, text.concat(prefix, ".transform")))
     {
-        if (ImGui::MenuItem(
-                text.iconLabel(ui::icons::kRestartAlt, s::kInspectorReset, "inspector.transform.menu.reset")))
+        if (ImGui::MenuItem(text.iconLabel(ui::icons::kRestartAlt, s::kInspectorReset,
+                                           text.concat(prefix, ".transform.menu.reset"))))
         {
             (void)shell.run("transform.reset", "{\"entities\":" + entitiesJsonArray() + "}", "inspector");
         }
-        if (ImGui::MenuItem(
-                text.iconLabel(ui::icons::kContentCopy, s::kInspectorCopy, "inspector.transform.menu.copy")))
+        if (ImGui::MenuItem(text.iconLabel(ui::icons::kContentCopy, s::kInspectorCopy,
+                                           text.concat(prefix, ".transform.menu.copy"))))
         {
             const auto hex = formatGuid(inspected[0].guid);
             const char* typeName =
@@ -1066,7 +1068,7 @@ void Inspector::State::drawTransformCard(Impl& shell, ui::UiKit& kit)
         const bool canPaste = clipType == "illusion.Transform" || clipType == "illusion.LocalTransform";
         ImGui::BeginDisabled(!canPaste);
         if (ImGui::MenuItem(text.iconLabel(ui::icons::kContentPaste, s::kInspectorPasteValues,
-                                           "inspector.transform.menu.paste")))
+                                           text.concat(prefix, ".transform.menu.paste"))))
         {
             (void)shell.run("component.paste", "{\"entities\":" + entitiesJsonArray() + "}", "inspector");
         }
@@ -1083,7 +1085,7 @@ void Inspector::State::drawTransformCard(Impl& shell, ui::UiKit& kit)
         text.format(s::kGallerySpaceLocal),
         text.format(s::kGallerySpaceWorld),
     };
-    (void)ui::segmentedControl(kit, "inspector.transform.space", spaceLabels, worldSpace);
+    (void)ui::segmentedControl(kit, text.concat(prefix, ".transform.space"), spaceLabels, worldSpace);
     const char* spaceJson = worldSpace == 1 ? "\"world\"" : "\"local\"";
 
     const Transform primaryTr = worldSpace == 1 ? computeWorldTransform(world, inspected[0].entity)
@@ -1119,13 +1121,14 @@ void Inspector::State::drawTransformCard(Impl& shell, ui::UiKit& kit)
         }
     }
 
-    if (ui::beginPropertyTable(kit, "inspector.transform.table"))
+    if (ui::beginPropertyTable(kit, text.concat(prefix, ".transform.table")))
     {
         // Position
         ui::propertyLabel(kit, text.format(s::kPropertyPosition));
-        if (ImGui::BeginPopupContextItem(text.hidden("inspector.transform.position.context")))
+        if (ImGui::BeginPopupContextItem(text.hidden(text.concat(prefix, ".transform.position.context"))))
         {
-            if (ImGui::MenuItem(text.label(s::kInspectorReset, "inspector.transform.position.reset")))
+            if (ImGui::MenuItem(
+                    text.label(s::kInspectorReset, text.concat(prefix, ".transform.position.reset"))))
             {
                 const std::string params = "{\"entities\":" + entitiesJsonArray() +
                                            ",\"space\":" + spaceJson + ",\"position\":[0,0,0]}";
@@ -1133,8 +1136,8 @@ void Inspector::State::drawTransformCard(Impl& shell, ui::UiKit& kit)
             }
             ImGui::EndPopup();
         }
-        if (const u8 posMask =
-                drawVec3Mixed(kit, "inspector.transform.position", position, mixedPos, 0.05f, "%.3f"))
+        if (const u8 posMask = drawVec3Mixed(kit, text.concat(prefix, ".transform.position"), position,
+                                             mixedPos, 0.05f, "%.3f"))
         {
             const std::string_view key = mergeKey(text, "illusion.Transform", "position");
             if (inspected.size() == 1 || posMask == 0x7u || (!mixedPos[0] && !mixedPos[1] && !mixedPos[2]))
@@ -1175,9 +1178,10 @@ void Inspector::State::drawTransformCard(Impl& shell, ui::UiKit& kit)
 
         // Rotation (Euler degrees with continuity cache)
         ui::propertyLabel(kit, text.format(s::kPropertyRotation));
-        if (ImGui::BeginPopupContextItem(text.hidden("inspector.transform.rotation.context")))
+        if (ImGui::BeginPopupContextItem(text.hidden(text.concat(prefix, ".transform.rotation.context"))))
         {
-            if (ImGui::MenuItem(text.label(s::kInspectorReset, "inspector.transform.rotation.reset")))
+            if (ImGui::MenuItem(
+                    text.label(s::kInspectorReset, text.concat(prefix, ".transform.rotation.reset"))))
             {
                 for (const InspectedEntity& item : inspected)
                 {
@@ -1189,8 +1193,8 @@ void Inspector::State::drawTransformCard(Impl& shell, ui::UiKit& kit)
             }
             ImGui::EndPopup();
         }
-        if (const u8 rotMask =
-                drawVec3Mixed(kit, "inspector.transform.rotation", euler, mixedRot, 0.5f, "%.2f°"))
+        if (const u8 rotMask = drawVec3Mixed(kit, text.concat(prefix, ".transform.rotation"), euler, mixedRot,
+                                             0.5f, "%.2f°"))
         {
             const std::string_view key = mergeKey(text, "illusion.Transform", "rotation");
             if (inspected.size() == 1 || rotMask == 0x7u || (!mixedRot[0] && !mixedRot[1] && !mixedRot[2]))
@@ -1236,9 +1240,10 @@ void Inspector::State::drawTransformCard(Impl& shell, ui::UiKit& kit)
 
         // Scale
         ui::propertyLabel(kit, text.format(s::kPropertyScale));
-        if (ImGui::BeginPopupContextItem(text.hidden("inspector.transform.scale.context")))
+        if (ImGui::BeginPopupContextItem(text.hidden(text.concat(prefix, ".transform.scale.context"))))
         {
-            if (ImGui::MenuItem(text.label(s::kInspectorReset, "inspector.transform.scale.reset")))
+            if (ImGui::MenuItem(
+                    text.label(s::kInspectorReset, text.concat(prefix, ".transform.scale.reset"))))
             {
                 const std::string params = "{\"entities\":" + entitiesJsonArray() +
                                            ",\"space\":" + spaceJson + ",\"scale\":[1,1,1]}";
@@ -1247,7 +1252,7 @@ void Inspector::State::drawTransformCard(Impl& shell, ui::UiKit& kit)
             ImGui::EndPopup();
         }
         if (const u8 scaleMask =
-                drawVec3Mixed(kit, "inspector.transform.scale", scale, mixedScale, 0.02f, "%.3f"))
+                drawVec3Mixed(kit, text.concat(prefix, ".transform.scale"), scale, mixedScale, 0.02f, "%.3f"))
         {
             const std::string_view key = mergeKey(text, "illusion.Transform", "scale");
             if (inspected.size() == 1 || scaleMask == 0x7u ||
@@ -2288,7 +2293,7 @@ void Inspector::State::drawComponentCard(Impl& shell, ui::UiKit& kit, ComponentI
         componentPtrs.push_back(ptr);
     }
 
-    const char* cardId = text.concat("inspector.card.", reflection.name);
+    const char* cardId = text.concat(text.concat(prefix, ".card."), reflection.name);
     const ui::Icon icon = ui::findIcon(reflection.meta.icon).value_or(ui::icons::kExtension);
     const char* title = displayLabel(text, reflection.meta.displayName, reflection.name);
     const bool open = ui::beginComponentCard(kit, cardId, icon, title, nullptr, overridden(reflection.name));
@@ -2452,8 +2457,8 @@ void Inspector::State::drawAddComponent(Impl& shell, ui::UiKit& kit)
     const ComponentRegistry& registry = shell.editor.world().registry();
 
     ImGui::Spacing();
-    if (ui::primaryButton(
-            kit, text.iconLabel(ui::icons::kAdd, s::kInspectorAddComponent, "inspector.add_component")))
+    if (ui::primaryButton(kit, text.iconLabel(ui::icons::kAdd, s::kInspectorAddComponent,
+                                              text.concat(prefix, ".add_component"))))
     {
         addSearchBuffer[0] = '\0';
         focusAddSearch = true;
@@ -2473,7 +2478,7 @@ void Inspector::State::drawAddComponent(Impl& shell, ui::UiKit& kit)
         focusAddSearch = false;
     }
     ImGui::SetNextItemWidth(-FLT_MIN);
-    (void)ui::searchField(kit, "inspector.add_component.search", addSearchBuffer,
+    (void)ui::searchField(kit, text.concat(prefix, ".add_component.search"), addSearchBuffer,
                           text.format(s::kInspectorAddComponentSearch));
     const bool enterPressed = ImGui::IsKeyPressed(ImGuiKey_Enter, false, ImGuiKeyOwner_Any) ||
                               ImGui::IsKeyPressed(ImGuiKey_KeypadEnter, false, ImGuiKeyOwner_Any);
@@ -2559,7 +2564,7 @@ void Inspector::State::drawAddComponent(Impl& shell, ui::UiKit& kit)
         const TypeReflection& refl = *addCandidates[i].reflection;
         const ui::Icon icon = ui::findIcon(refl.meta.icon).value_or(ui::icons::kExtension);
         const char* display = displayLabel(text, refl.meta.displayName, refl.name);
-        const char* itemId = text.concat("inspector.add_component.item.", refl.name);
+        const char* itemId = text.concat(text.concat(prefix, ".add_component.item."), refl.name);
         const char* label = text.verbatim(text.concat(icon.view(), text.concat("  ", display)), itemId);
         if (ImGui::Selectable(label, i == 0 && !query.empty()))
         {
@@ -2580,9 +2585,21 @@ void Inspector::State::drawAddComponent(Impl& shell, ui::UiKit& kit)
     ImGui::EndPopup();
 }
 
-Inspector::Inspector()
+Inspector::Inspector(std::string_view idPrefix)
     : m_state(std::make_unique<State>())
 {
+    m_state->prefix = idPrefix;
+}
+
+void Inspector::lock(std::span<const EntityGuid> entities)
+{
+    m_state->locked = !entities.empty();
+    m_state->lockedGuids.assign(entities.begin(), entities.end());
+}
+
+bool Inspector::locked() const noexcept
+{
+    return m_state->locked;
 }
 
 Inspector::~Inspector() = default;
@@ -2614,8 +2631,8 @@ void Inspector::draw(Impl& shell)
     {
         if (state.locked)
         {
-            if (ui::iconButton(kit, ui::icons::kLock, "inspector.lock", text.format(s::kInspectorLock),
-                               nullptr, true))
+            if (ui::iconButton(kit, ui::icons::kLock, text.concat(state.prefix, ".lock"),
+                               text.format(s::kInspectorLock), nullptr, true))
             {
                 state.locked = false;
                 state.lockedGuids.clear();
@@ -2759,6 +2776,17 @@ void setEntityField(Impl& shell, std::span<const EntityGuid> entities, std::stri
     }
     steps += "]}";
     (void)shell.run("editor.batch", steps, "inspector", {}, mergeKey);
+}
+
+void drawExtraInspector(Impl& shell, usize index)
+{
+    Inspector& inspector = *shell.extraInspectors[index];
+    if (!shell.extraInspectorShown[index])
+    {
+        inspector.lock(shell.editor.selection().items());
+        shell.extraInspectorShown[index] = true;
+    }
+    inspector.draw(shell);
 }
 
 } // namespace illusion::editor::shell::detail

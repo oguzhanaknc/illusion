@@ -293,6 +293,9 @@ EditorShell::Impl::Impl(EditorShell& owner, EditorContext& editorContext, ui::Ui
     , renderingPanel(std::make_unique<detail::RenderingPanel>())
     , inputActions(std::make_unique<detail::InputActionsWindow>())
     , gamepadTester(std::make_unique<detail::GamepadTesterWindow>())
+    , extraInspectors{std::make_unique<detail::Inspector>("inspector_2"),
+                      std::make_unique<detail::Inspector>("inspector_3"),
+                      std::make_unique<detail::Inspector>("inspector_4")}
     , agentsPanel(std::make_unique<detail::Agents>())
     , preferences(std::make_unique<detail::PreferencesPage>())
     , projects(std::make_unique<detail::Projects>())
@@ -1050,6 +1053,12 @@ void EditorShell::draw(f64 now, f64 deltaSeconds)
         const detail::PanelInfo& info = detail::panelInfo(panel);
         if (!impl.open[i] || (maximized && info.docked))
         {
+            if (!impl.open[i] && panel >= Panel::Inspector2 && panel <= Panel::Inspector4)
+            {
+                // A closed Inspector window locks itself to the selection again when it opens.
+                impl.extraInspectorShown[static_cast<usize>(panel) - static_cast<usize>(Panel::Inspector2)] =
+                    false;
+            }
             continue;
         }
         // Focus requests wait until a new layout has docked its windows.
@@ -1123,6 +1132,12 @@ void EditorShell::draw(f64 now, f64 deltaSeconds)
                 break;
             case Panel::GamepadTester:
                 impl.gamepadTester->draw(impl);
+                break;
+            case Panel::Inspector2:
+            case Panel::Inspector3:
+            case Panel::Inspector4:
+                detail::drawExtraInspector(impl,
+                                           static_cast<usize>(panel) - static_cast<usize>(Panel::Inspector2));
                 break;
             case Panel::AiActivity:
                 impl.agentsPanel->draw(impl);

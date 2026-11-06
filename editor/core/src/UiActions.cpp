@@ -163,6 +163,12 @@ constexpr UiAction kActions[] = {
      .menu = UiMenu::Window, .group = 3, .title = s::kWindowInputActions, .icon = "sports_esports"},
     {.id = "window.gamepad_tester", .command = "ui.show_panel", .params = R"({"panel":"window.gamepad_tester"})",
      .menu = UiMenu::Window, .group = 3, .title = s::kWindowGamepadTester, .icon = "gamepad"},
+    {.id = "window.inspector_2", .command = "ui.show_panel", .params = R"({"panel":"window.inspector_2"})",
+     .menu = UiMenu::Window, .group = 4, .title = s::kWindowInspector2, .icon = "tune"},
+    {.id = "window.inspector_3", .command = "ui.show_panel", .params = R"({"panel":"window.inspector_3"})",
+     .menu = UiMenu::Window, .group = 4, .title = s::kWindowInspector3, .icon = "tune"},
+    {.id = "window.inspector_4", .command = "ui.show_panel", .params = R"({"panel":"window.inspector_4"})",
+     .menu = UiMenu::Window, .group = 4, .title = s::kWindowInspector4, .icon = "tune"},
     // Help
     {.id = "help.welcome", .command = "ui.show_panel", .params = R"({"panel":"window.welcome"})",
      .menu = UiMenu::Help, .title = s::kWindowWelcome, .icon = "waving_hand"},

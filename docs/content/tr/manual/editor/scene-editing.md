@@ -42,6 +42,16 @@ Bir süzgeç etkinken, eşleşen Entity'ler sağda tam hiyerarşi yollarıyla d�
 
 Inspector geçerli seçimi gösterir ve düzenler. Başka bir yerde seçimi değiştirirken Inspector'ı mevcut Entity'lerine sabitlemek için panelin sağ üst köşesindeki **iğne** düğmesine tıklayın.
 
+Entity'leri yan yana karşılaştırmak ya da düzenlemek için **Window → Inspector 2**, **Inspector 3** ve
+**Inspector 4** ile (ya da `window.inspector_2` ile `window.inspector_4` arasındaki bir değerle
+`ui.show_panel`) üç Inspector daha açın. Her biri o anki seçime sabitlenmiş olarak açılır; böylece Inspector
+paneli yanında seçimi izlemeye devam eder. Birinin kilidini açarsanız o da seçimi izler. Kararlı id'leri
+`inspector.` yerine `inspector_2.` ile `inspector_4.` arasında bir önekle başlar.
+
+```json
+{"method": "ui.show_panel", "params": {"panel": "window.inspector_2"}}
+```
+
 ### Entity başlığı
 
 Inspector'ın en üstünde:

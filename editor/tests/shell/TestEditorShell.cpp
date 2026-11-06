@@ -1452,3 +1452,49 @@ TEST_CASE("the Gamepad Tester window rumbles, turns on motion and applies trigge
     CHECK(gamepads.effect.end == doctest::Approx(0.6));
     editor.setGamepads(nullptr);
 }
+
+TEST_CASE("an Inspector window locks itself to the selection it opens with, beside the Inspector panel")
+{
+    ShellFixture fixture;
+    EditorContext& editor = *fixture.editor;
+    test::ok(editor, "entity.create", R"({"name":"Lamp","components":{"illusion.Transform":{}}})");
+    test::ok(editor, "entity.create", R"({"name":"Crate","components":{"illusion.Transform":{}}})");
+    test::ok(editor, "selection.set", R"({"entities":["/Lamp"]})");
+    test::ok(editor, "ui.show_panel", R"({"panel":"window.inspector_2"})");
+    ui::UiDriver driver(fixture.context, [&] { fixture.frame(); });
+    driver.runFrames(3);
+    const auto enabled = [&](std::string_view entity) {
+        return test::ok(editor, "entity.get", R"({"entity":")" + std::string(entity) + R"("})")
+            .root()
+            .find("enabled")
+            .asBool();
+    };
+
+    // The Inspector panel follows the selection; Inspector 2 stays on the Lamp. Both have their own ids.
+    test::ok(editor, "selection.set", R"({"entities":["/Crate"]})");
+    driver.runFrames(2);
+    CHECK(driver.find("inspector.enabled").has_value());
+    REQUIRE(driver.click("inspector_2.enabled"));
+    driver.runFrames(1);
+    CHECK(enabled("/Lamp") == false);
+    CHECK(enabled("/Crate") == true);
+    REQUIRE(driver.click("inspector.enabled"));
+    driver.runFrames(1);
+    CHECK(enabled("/Crate") == false);
+
+    // Unlocked, it follows the selection; closed and opened again, it locks to the new selection.
+    REQUIRE(driver.click("inspector_2.lock"));
+    driver.runFrames(1);
+    REQUIRE(driver.click("inspector_2.enabled"));
+    driver.runFrames(1);
+    CHECK(enabled("/Crate") == true);
+    test::ok(editor, "ui.show_panel", R"({"panel":"window.inspector_2","open":false})");
+    driver.runFrames(1);
+    test::ok(editor, "ui.show_panel", R"({"panel":"window.inspector_2"})");
+    driver.runFrames(2);
+    test::ok(editor, "selection.set", R"({"entities":["/Lamp"]})");
+    driver.runFrames(2);
+    REQUIRE(driver.click("inspector_2.enabled"));
+    driver.runFrames(1);
+    CHECK(enabled("/Crate") == false);
+}

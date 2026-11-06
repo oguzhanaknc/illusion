@@ -488,7 +488,9 @@ Plan: `docs/plans/m7-editor.md` (sub-milestones, command API, localization, them
   `PhysicsWorld::shapeCast()` overload. Play mode in the editor now gets an `AssetStreamer` too: before, mesh
   colliders had no shape there and audio clips loaded on the editor thread (fixed-step sessions and steps wait
   for the loads, so they stay deterministic)
-- M7w-4: Multiple simultaneous Inspector instances (from M7m)
+- M7w-4: ✅ Multiple Inspectors: Inspector windows 2 to 4 (Window menu, `ui.show_panel` with
+  `window.inspector_2` to `window.inspector_4`), each locked to the selection of the moment it opens and with its
+  own stable ids (`inspector_2.` ...); a headless UI test edits two entities in two Inspectors
 - M7x: Showcase scene covering every Component and the scripting API; Tetris built by an agent end to end
 
 ## M8 — Release pipeline
