@@ -49,6 +49,18 @@ void reflectPreferences(StructRegistry& structs)
         reflectStruct<ShortcutBinding>("editor.ShortcutBinding", 1, structs)
             .field("action", &ShortcutBinding::action)
             .field("chord", &ShortcutBinding::chord);
+        reflectStruct<ViewportQuality>("editor.ViewportQuality", 1, structs)
+            .field("shadows", &ViewportQuality::shadows)
+            .field("shadowCascades", &ViewportQuality::shadowCascades, {.min = 1.0, .max = 4.0})
+            .field("shadowResolution", &ViewportQuality::shadowResolution, {.min = 512.0, .max = 4096.0})
+            .field("shadowDistance", &ViewportQuality::shadowDistance,
+                   {.unit = Unit::Meters, .min = 5.0, .max = 1000.0})
+            .field("ambientOcclusion", &ViewportQuality::ambientOcclusion)
+            .field("bloom", &ViewportQuality::bloom)
+            .field("bloomIntensity", &ViewportQuality::bloomIntensity,
+                   {.min = 0.0, .max = 1.0, .hint = FieldHint::Slider})
+            .field("temporalAntiAliasing", &ViewportQuality::temporalAntiAliasing)
+            .field("occlusionCulling", &ViewportQuality::occlusionCulling);
         reflectStruct<Preferences>("editor.Preferences", 1, structs)
             .field("theme", &Preferences::theme)
             .field("accent", &Preferences::accent)
@@ -59,6 +71,7 @@ void reflectPreferences(StructRegistry& structs)
             .field("keymap", &Preferences::keymap)
             .field("shortcuts", &Preferences::shortcuts)
             .field("viewportNavigation", &Preferences::viewportNavigation)
+            .field("viewportQuality", &Preferences::viewportQuality)
             .field("agentPermissions", &Preferences::agentPermissions)
             .field("approvalPopups", &Preferences::approvalPopups)
             .field("followAgent", &Preferences::followAgent)
@@ -109,6 +122,23 @@ Expected<void, std::string> validatePreferences(const Preferences& preferences)
     if (!oneOf(kNavigationPresets, preferences.viewportNavigation))
     {
         return unexpected("/viewportNavigation must be one of " + quoted(kNavigationPresets));
+    }
+    const ViewportQuality& quality = preferences.viewportQuality;
+    if (quality.shadowCascades < 1 || quality.shadowCascades > 4)
+    {
+        return unexpected(std::string("/viewportQuality/shadowCascades must be between 1 and 4"));
+    }
+    if (quality.shadowResolution < 512 || quality.shadowResolution > 4096)
+    {
+        return unexpected(std::string("/viewportQuality/shadowResolution must be between 512 and 4096"));
+    }
+    if (!(quality.shadowDistance >= 5.0f && quality.shadowDistance <= 1000.0f))
+    {
+        return unexpected(std::string("/viewportQuality/shadowDistance must be between 5 and 1000"));
+    }
+    if (!(quality.bloomIntensity >= 0.0f && quality.bloomIntensity <= 1.0f))
+    {
+        return unexpected(std::string("/viewportQuality/bloomIntensity must be between 0 and 1"));
     }
     for (usize i = 0; i < preferences.shortcuts.size(); ++i)
     {

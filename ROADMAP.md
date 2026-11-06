@@ -459,8 +459,13 @@ Plan: `docs/plans/m7-editor.md` (sub-milestones, command API, localization, them
   field to `project.settings_set`, one undo step per drag), reset to defaults, re-read after undo and redo,
   the physics layers as a table of editable names and a collision-matrix triangle, and named audio buses.
   A headless UI test edits a game setting with undo, the matrix, a layer name and resets the page
-- M7w-2b: Rendering panel (the last placeholder), physics debug and audio mixer panels for the running game;
-  physics raycasts for drop to ground (from M7p-2)
+- M7w-2b: ✅ Rendering panel (the last placeholder): the `viewportQuality` preference (shadows with their
+  cascades, resolution and distance, ambient occlusion, bloom, temporal anti-aliasing, occlusion culling;
+  validated, applied by `ViewportService` through the GPU-free `shadowSettingsOf()`/`postProcessSettingsOf()`,
+  secondary Scene views keep reduced shadows), the GPU and each viewport's last frame. Unit tests for the
+  mapping and the preference, a headless UI test and a GPU test that turning shadows off stops shadow casters
+- M7w-2c: Physics debug and audio mixer panels for the running game; physics raycasts for drop to ground
+  (from M7p-2)
 - M7w-3: Input actions panel with rebinding, gamepad tester (rumble, LED, gyro, touchpad, triggers) and
   gamepad navigation of the editor window
 - M7w-4: Multiple simultaneous Inspector instances (from M7m)

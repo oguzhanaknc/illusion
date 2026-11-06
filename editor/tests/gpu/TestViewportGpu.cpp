@@ -294,6 +294,35 @@ TEST_CASE("the selection outline appears only around the selection and renders a
     CHECK(gpu.capture().data == first.data);
 }
 
+TEST_CASE("the viewport quality preferences change what the viewports render")
+{
+    GpuViewports gpu;
+    buildScene(gpu);
+    EditorContext& editor = gpu.editor();
+    test::ok(editor, "entity.create",
+             R"({"name":"Sun","components":{"illusion.Transform":{"rotation":[0.92,-0.38,0,0]},)"
+             R"("illusion.DirectionalLight":{"castShadows":true}}})");
+    gpu.frame();
+    gpu.frame();
+    const auto casters = [&] {
+        return test::ok(editor, "render.stats", R"({"viewport":"scene"})")
+            .root()
+            .pointer("/stats/shadowCasters")
+            .asU64()
+            .value_or(0);
+    };
+    CHECK(casters() > 0u);
+
+    test::ok(editor, "preferences.set", R"({"value":{"viewportQuality":{"shadows":false}}})");
+    gpu.frame();
+    CHECK(casters() == 0u); // the renderer draws no shadow maps
+
+    test::ok(editor, "preferences.set", R"({"value":{"viewportQuality":{"shadows":true}}})");
+    gpu.frame();
+    CHECK(casters() > 0u);
+    CHECK(test::ok(editor, "render.diagnostics").root().find("validationErrors").asU64() == 0u);
+}
+
 TEST_CASE("the viewport overlays match the golden image")
 {
     GpuViewports gpu;

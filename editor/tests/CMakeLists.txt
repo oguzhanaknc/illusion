@@ -45,6 +45,7 @@ illusion_add_editor_executable(illusion_editor_tests
     rpc/TestRpcTransport.cpp
     shell/TestEditorShell.cpp
     viewport/TestEditorCamera.cpp
+    viewport/TestRenderQuality.cpp
     viewport/TestVisualisers.cpp)
 target_include_directories(illusion_editor_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR} ${PROJECT_SOURCE_DIR}/tests)
 target_link_libraries(illusion_editor_tests PRIVATE

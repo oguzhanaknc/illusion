@@ -131,6 +131,22 @@ colour-blind preset uses the Okabe-Ito colours).
 When the panel is resized, the image is stretched until the size has stayed for 150 ms or the mouse button is
 released; then the viewport renders at the new size.
 
+## Rendering panel
+
+The **Rendering** panel (Window → Rendering, or the `profiling` layout) sets the render quality of every
+viewport: shadows (on or off, 1 to 4 cascades, 512 to 4,096 texels per cascade, 5 to 1,000 m), ambient
+occlusion, bloom and its intensity, temporal anti-aliasing and GPU occlusion culling. Extra Scene views keep
+at most two cascades of 1,024 texels. The quality is the `viewportQuality` preference, so it is saved for
+the user, and agents change it with `preferences.set`:
+
+```json
+{"value": {"viewportQuality": {"shadows": false, "temporalAntiAliasing": true}}}
+```
+
+Below the quality, the panel shows the GPU (device, driver, Vulkan version, validation errors) and what
+each viewport drew in its last frame: draw calls, triangles, visible objects and shadow casters. The GPU
+time of each pass is in the [Profiler](profiler.md#gpu).
+
 ## Commands
 
 | Command | What it does |
