@@ -30,7 +30,8 @@ alır (anahtarı içeriğini ve import ayarlarını içerir).
 Bir asset'i seçmek için tıklayın (Ctrl-tıklama ile birkaçını seçin). Çift tıklamak onu açar: bir klasör açılır,
 bir sahne editörde açılır, başka bir dosya da [External Tools](preferences.md) code editor'ında
 açılır. Bir asset'i Inspector'daki bir asset alanının (Mesh, Material, clip...) üzerine sürüklemek onu oraya
-atar.
+atar. Bir prefab'ı yerleştirmek için viewport'a ya da Outliner'a, bir Entity'yi [prefab](prefabs.md) yapmak
+için de Outliner'dan browser'a sürükleyin.
 
 ## Dosya işlemleri
 

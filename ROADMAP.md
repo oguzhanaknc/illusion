@@ -418,7 +418,7 @@ Plan: `docs/plans/m7-editor.md` (sub-milestones, command API, localization, them
   mipmaps and max size or a model's scale with Apply/Revert; `#` in the command palette searches assets
   (`PaletteMode::Assets`); the `editor.reveal` command and the `fileBrowser` preference reveal a file in the
   system's file manager
-- M7v: Prefabs with overrides and nesting (ADR 0046), in three parts:
+- M7v: ✅ Prefabs with overrides and nesting (ADR 0046), in parts:
   - M7v-1: ✅ Prefab format and engine support: `.prefab` files (`"format": "illusion.prefab"`, one root),
     instance records in scenes with field-level overrides computed at save time, ids derived with
     `derivePrefabGuid()`, nesting (depth 16, cycles kept unresolved) and variants, `instantiatePrefab()`,
@@ -440,8 +440,9 @@ Plan: `docs/plans/m7-editor.md` (sub-milestones, command API, localization, them
     overrides (`prefab.refresh`, run by the editor when a tracked prefab changes), and the Inspector's prefab
     bar (edit, apply all, revert, unpack) with overridden Components marked bold with an accent bar and
     applied or reverted from their menu
-  - M7v-3b: create a prefab by dragging a selection to the Asset Browser, instantiate by dragging a prefab into
-    the viewport or Outliner, and per-field override marks with per-field apply and revert
+  - M7v-3b: ✅ create a prefab by dragging an entity from the Outliner into the Asset Browser, instantiate by
+    dragging a prefab into the viewport (on the ground, `prefab.instantiate` with `position`) or onto the
+    Outliner, and per-field override marks with per-field apply and revert (`field`)
 - M7w: Engine feature panels: rendering, physics, audio mixer, input actions, gamepad tester, profiler,
   diagnostics; gamepad navigation of the editor window through `GamepadSystem` (from M7l)
 - M7x: Showcase scene covering every Component and the scripting API; Tetris built by an agent end to end

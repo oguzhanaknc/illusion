@@ -19,13 +19,16 @@ existing one.
 {"entity": "/Crate", "path": "assets:/props/crate.prefab"}
 ```
 
-The root keeps its place in the world as its own placement in the prefab. Instances inside the saved entities
+In the editor, drag an entity from the Outliner into the Asset Browser: it becomes a prefab in the current
+folder, named after the entity. The root keeps its place in the world as its own placement in the prefab. Instances inside the saved entities
 stay instances: the new prefab nests them.
 
 ## Placing instances
 
-`prefab.instantiate` adds an instance of a prefab file, as a root or under `parent` at `index`. Each instance
-gets a new id, from which the ids of its entities derive.
+`prefab.instantiate` adds an instance of a prefab file, as a root or under `parent` at `index`, and with
+`position` at that point of the world. Each instance gets a new id, from which the ids of its entities derive.
+In the editor, drag a prefab from the Asset Browser onto an Outliner row (an instance under it), onto the
+Outliner's empty space (a root), or into the viewport (on the ground under the cursor).
 
 ```json
 {"path": "assets:/props/crate.prefab", "parent": "/Level", "index": 0}
@@ -78,8 +81,9 @@ can also run themselves.
 
 An entity of an instance shows a prefab bar under its name: the prefab file and buttons to edit the prefab
 (`prefab.open`), apply the whole instance (`prefab.apply` with `all`), revert the entity (`prefab.revert`) and
-unpack the instance. Components that differ from the prefab have a bold title with an accent bar; their menu
-applies or reverts that Component.
+unpack the instance. Components that differ from the prefab have a bold title with an accent bar, and their
+overridden fields a bold label in the accent colour. The Component's menu applies or reverts the Component, a
+field's menu that field (`prefab.apply` and `prefab.revert` with `field`).
 
 ## Copying and duplicating
 
@@ -102,5 +106,3 @@ instance them in one step, without turning the move into overrides.
 ## Current limits
 
 - Entities of an instance that its prefab no longer has are saved as plain entities.
-- Prefabs are created and placed through commands and the command palette; dragging from the Asset Browser
-  comes later.

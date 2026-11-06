@@ -6,6 +6,8 @@
 #include "Panels.hpp"
 
 #include <illusion/assets/ImportSettings.hpp>
+#include <illusion/ecs/Name.hpp>
+#include <illusion/ecs/Prefab.hpp>
 #include <illusion/editor/core/AssetCatalog.hpp>
 #include <illusion/editor/core/CoreCommands.hpp>
 #include <illusion/editor/core/ThumbnailCache.hpp>
@@ -14,6 +16,7 @@
 
 #include <algorithm>
 #include <array>
+#include <cctype>
 #include <cstdio>
 #include <cstring>
 #include <imgui.h>
@@ -301,6 +304,7 @@ struct AssetBrowser::State
     void drawInspector(Impl& shell, ui::UiKit& kit);
     void drawContextMenu(Impl& shell);
     void drawDialogs(Impl& shell, ui::UiKit& kit);
+    void createPrefab(Impl& shell, std::string_view entityId);
 };
 
 void AssetBrowser::State::rebuild(Impl& shell)
@@ -661,6 +665,44 @@ void AssetBrowser::State::drawToolbar(Impl& shell, ui::UiKit& kit)
         (void)shell.editor.setPreferences(std::move(prefs));
     }
     ImGui::EndDisabled();
+}
+
+// Saves the entity @p entityId (16 hex digits) as a prefab in the current folder, named after it.
+void AssetBrowser::State::createPrefab(Impl& shell, std::string_view entityId)
+{
+    EditorContext& editor = shell.editor;
+    const std::optional<EntityGuid> guid = parseGuid(entityId);
+    const Entity entity = guid ? editor.entities().find(*guid) : Entity{};
+    if (entity.isNull())
+    {
+        return;
+    }
+    // A file name from the entity's name: letters, digits, spaces, '-' and '_'.
+    std::string base;
+    if (const Name* name = editor.world().tryGet<Name>(entity))
+    {
+        for (const char c : name->value)
+        {
+            const auto byte = static_cast<unsigned char>(c);
+            if (std::isalnum(byte) != 0 || c == ' ' || c == '-' || c == '_')
+            {
+                base.push_back(c);
+            }
+        }
+    }
+    if (base.empty())
+    {
+        base = "Prefab";
+    }
+    const std::string directory = folder.ends_with('/') ? folder : folder + "/";
+    std::string path = directory + base + std::string(kPrefabExtension);
+    for (u32 n = 2; editor.files().exists(path); ++n)
+    {
+        path = directory + base + " " + std::to_string(n) + std::string(kPrefabExtension);
+    }
+    (void)shell.run("prefab.create",
+                    "{\"entity\":\"" + std::string(entityId) + "\",\"path\":" + jsonQuote(path) + "}",
+                    "asset_browser");
 }
 
 void AssetBrowser::State::drawContent(Impl& shell, ui::UiKit& kit)
@@ -1122,6 +1164,18 @@ void AssetBrowser::draw(Impl& shell)
     st.drawToolbar(shell, kit);
     ImGui::Separator();
     st.drawContent(shell, kit);
+    // An entity dropped from the Outliner becomes a prefab in the current folder, linked to it.
+    if (ImGui::BeginDragDropTargetCustom(ImGui::GetCurrentWindow()->InnerRect,
+                                         ImGui::GetID("asset_browser.drop")))
+    {
+        if (const ImGuiPayload* payload = ImGui::AcceptDragDropPayload(kEntityDragPayload);
+            payload != nullptr && payload->DataSize == static_cast<int>(kGuidTextLength))
+        {
+            st.createPrefab(shell,
+                            std::string_view(static_cast<const char*>(payload->Data), kGuidTextLength));
+        }
+        ImGui::EndDragDropTarget();
+    }
     ImGui::EndChild();
     if (st.selection.size() == 1)
     {

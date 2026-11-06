@@ -636,7 +636,8 @@ struct Inspector::State
     u64 prefabRevision = ~u64{0};
     bool prefabMember = false;
     std::string prefabPath;
-    std::vector<std::string> overriddenTypes; // Components of the entity that differ from its prefab
+    std::vector<std::string> overriddenTypes;  // Components of the entity that differ from its prefab
+    std::vector<std::string> overriddenFields; // their top-level fields, as "type/field"
 
     void refreshPrefab(Impl& shell);
     [[nodiscard]] bool overridden(std::string_view type) const
@@ -644,6 +645,22 @@ struct Inspector::State
         return prefabMember &&
                std::find(overriddenTypes.begin(), overriddenTypes.end(), type) != overriddenTypes.end();
     }
+    // True if the top-level field of @p fieldPath ("position/x" -> "position") of @p type is overridden.
+    [[nodiscard]] bool fieldOverridden(std::string_view type, std::string_view fieldPath) const
+    {
+        if (!prefabMember)
+        {
+            return false;
+        }
+        const std::string_view field = fieldPath.substr(0, fieldPath.find('/'));
+        return std::any_of(overriddenFields.begin(), overriddenFields.end(), [&](const std::string& entry) {
+            return entry.size() == type.size() + 1 + field.size() && entry.starts_with(type) &&
+                   entry[type.size()] == '/' && std::string_view(entry).substr(type.size() + 1) == field;
+        });
+    }
+    // Field menu items that apply or revert an overridden field.
+    void drawFieldPrefabItems(Impl& shell, std::string_view type, std::string_view fieldPath,
+                              std::string_view fieldId);
     void drawPrefabBar(Impl& shell, ui::UiKit& kit);
     void drawHeader(Impl& shell, ui::UiKit& kit);
     void drawTransformCard(Impl& shell, ui::UiKit& kit);
@@ -672,6 +689,7 @@ void Inspector::State::refreshPrefab(Impl& shell)
     prefabRevision = editor.revision();
     prefabMember = false;
     overriddenTypes.clear();
+    overriddenFields.clear();
     const World& world = editor.world();
     const PrefabMember* member =
         inspected.size() == 1 ? world.tryGet<PrefabMember>(inspected[0].entity) : nullptr;
@@ -718,7 +736,35 @@ void Inspector::State::refreshPrefab(Impl& shell)
         for (const JsonMember component : patch.members())
         {
             overriddenTypes.emplace_back(component.key);
+            for (const JsonMember field : component.value.members())
+            {
+                overriddenFields.push_back(std::string(component.key) + "/" + std::string(field.key));
+            }
         }
+    }
+}
+
+void Inspector::State::drawFieldPrefabItems(Impl& shell, std::string_view type, std::string_view fieldPath,
+                                            std::string_view fieldId)
+{
+    if (!fieldOverridden(type, fieldPath))
+    {
+        return;
+    }
+    ui::FrameText& text = shell.text;
+    const auto hex = formatGuid(inspected[0].guid);
+    const std::string params = "{\"entity\":" + jsonQuote(std::string_view(hex.data(), hex.size())) +
+                               ",\"component\":" + jsonQuote(type) +
+                               ",\"field\":" + jsonQuote(fieldPath.substr(0, fieldPath.find('/'))) + "}";
+    ImGui::Separator();
+    if (ImGui::MenuItem(text.label(s::kInspectorPrefabApplyComponent, text.concat(fieldId, ".prefab_apply"))))
+    {
+        (void)shell.run("prefab.apply", params, "inspector");
+    }
+    if (ImGui::MenuItem(
+            text.label(s::kInspectorPrefabRevertComponent, text.concat(fieldId, ".prefab_revert"))))
+    {
+        (void)shell.run("prefab.revert", params, "inspector");
     }
 }
 
@@ -2027,13 +2073,14 @@ void Inspector::State::drawFieldRow(Impl& shell, ui::UiKit& kit, const TypeRefle
     // Optional<T>: checkbox to toggle presence, plus inner widget when present.
     if (field.type == FieldType::Optional && field.element != nullptr && field.container != nullptr)
     {
-        ui::propertyLabel(kit, label, tooltip);
+        ui::propertyLabel(kit, label, tooltip, fieldOverridden(compReflection.name, fieldPath));
         if (ImGui::BeginPopupContextItem(text.hidden(text.concat(fieldId, ".context"))))
         {
             if (ImGui::MenuItem(text.label(s::kInspectorReset, text.concat(fieldId, ".reset"))))
             {
                 resetFieldPath(shell, compReflection.name, fieldPath);
             }
+            drawFieldPrefabItems(shell, compReflection.name, fieldPath, fieldId);
             ImGui::EndPopup();
         }
         bool hasValue = field.container->size(ptrs[0]) > 0;
@@ -2082,13 +2129,14 @@ void Inspector::State::drawFieldRow(Impl& shell, ui::UiKit& kit, const TypeRefle
     // Array<T> / FixedArray<T>: header row with element count (and + button for Array), then element rows.
     if ((field.type == FieldType::Array || field.type == FieldType::FixedArray) && field.element != nullptr)
     {
-        ui::propertyLabel(kit, label, tooltip);
+        ui::propertyLabel(kit, label, tooltip, fieldOverridden(compReflection.name, fieldPath));
         if (ImGui::BeginPopupContextItem(text.hidden(text.concat(fieldId, ".context"))))
         {
             if (ImGui::MenuItem(text.label(s::kInspectorReset, text.concat(fieldId, ".reset"))))
             {
                 resetFieldPath(shell, compReflection.name, fieldPath);
             }
+            drawFieldPrefabItems(shell, compReflection.name, fieldPath, fieldId);
             ImGui::EndPopup();
         }
         const usize elemCount = field.type == FieldType::FixedArray ? static_cast<usize>(field.count)
@@ -2163,13 +2211,14 @@ void Inspector::State::drawFieldRow(Impl& shell, ui::UiKit& kit, const TypeRefle
         return;
     }
 
-    ui::propertyLabel(kit, label, tooltip);
+    ui::propertyLabel(kit, label, tooltip, fieldOverridden(compReflection.name, fieldPath));
     if (!fieldReadOnly && ImGui::BeginPopupContextItem(text.hidden(text.concat(fieldId, ".context"))))
     {
         if (ImGui::MenuItem(text.label(s::kInspectorReset, text.concat(fieldId, ".reset"))))
         {
             resetFieldPath(shell, compReflection.name, fieldPath);
         }
+        drawFieldPrefabItems(shell, compReflection.name, fieldPath, fieldId);
         ImGui::EndPopup();
     }
     drawValueWidget(shell, kit, compReflection, field, field.meta, fieldPath, fieldId,

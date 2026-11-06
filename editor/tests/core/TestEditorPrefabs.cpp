@@ -410,3 +410,43 @@ TEST_CASE("prefab.open edits a prefab in place of the scene and prefab.close ret
     CHECK(editor.prefabEditStack().empty());
     ok(editor, "entity.get", R"({"entity":"/Chest/Lid"})");
 }
+
+TEST_CASE("prefab.apply and prefab.revert work on one field and place instances at a world position")
+{
+    EditorFixture fixture;
+    EditorContext& editor = *fixture.editor;
+    openCrateScene(editor, false);
+    const std::string lid = toString(derivePrefabGuid(kInstance, kLid));
+    ok(editor, "component.add",
+       std::format(R"({{"entity":"{}","type":"test.Look","value":{{"material":"assets:/m.material"}}}})",
+                   lid));
+    ok(editor, "prefab.apply", std::format(R"({{"entity":"{}","component":"test.Look"}})", lid));
+    // Two fields change; only one goes to the prefab, the other is reverted.
+    ok(editor, "component.set",
+       std::format(R"({{"entity":"{}","type":"test.Look","value":{{"material":"assets:/n.material"}}}})",
+                   lid));
+    CHECK(fails(editor, "prefab.apply", std::format(R"({{"entity":"{}","field":"material"}})", lid))
+              .errors.at(0)
+              .pointer == "/field");
+    CHECK(fails(editor, "prefab.revert",
+                std::format(R"({{"entity":"{}","component":"test.Look","field":"nope"}})", lid))
+              .errors.at(0)
+              .pointer == "/field");
+    CHECK(ok(editor, "prefab.revert",
+             std::format(R"({{"entity":"{}","component":"test.Look","field":"material"}})", lid))
+              .root()
+              .find("components")
+              .asU64() == 1);
+    CHECK(ok(editor, "component.get",
+             std::format(R"({{"entity":"{}","type":"test.Look","path":"material"}})", lid))
+              .root()
+              .find("value")
+              .asString() == "assets:/m.material");
+
+    const JsonDocument placed =
+        ok(editor, "prefab.instantiate", R"({"path":"assets:/props/crate.prefab","position":[4,0,-2]})");
+    const std::string root = std::string(placed.root().pointer("/root/id").asString().value_or(""));
+    const JsonDocument transform = ok(editor, "transform.get", std::format(R"({{"entity":"{}"}})", root));
+    CHECK(transform.root().pointer("/position/0").asF64() == doctest::Approx(4.0));
+    CHECK(transform.root().pointer("/position/2").asF64() == doctest::Approx(-2.0));
+}

@@ -34,6 +34,9 @@ struct ShellSetup
     bool canCapture = false;           ///< The shell can take screenshots.
     std::filesystem::path user{};      ///< User directory (empty: a fresh one in the fixture's directory).
     std::filesystem::path workspace{}; ///< Workspace of projects (empty: the fixture's directory).
+    /// How the catalog watches `assets/`. Native notifications arrive at a time of their own (late on macOS);
+    /// Polling checks every frame, so a test that needs files written by commands to show up uses it.
+    FileWatchBackend assetWatching = FileWatchBackend::Native;
 };
 
 /// The shell with everything it needs.
@@ -68,6 +71,11 @@ struct ShellFixture
         options.seed = 1;
         options.workspace = setup.workspace.empty() ? directory.path : setup.workspace;
         options.userDirectory = user;
+        options.assetWatching = setup.assetWatching;
+        if (setup.assetWatching == FileWatchBackend::Polling)
+        {
+            options.assetPollInterval = 0.0;
+        }
         editor = std::make_unique<editor::EditorContext>(options);
         if (setup.project)
         {

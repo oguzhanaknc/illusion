@@ -731,7 +731,8 @@ void reflectCoreCommandTypes(StructRegistry& structs)
         reflectStruct<PrefabInstantiateParams>("editor.PrefabInstantiateParams", 1, structs)
             .field("path", &PrefabInstantiateParams::path)
             .field("parent", &PrefabInstantiateParams::parent)
-            .field("index", &PrefabInstantiateParams::index);
+            .field("index", &PrefabInstantiateParams::index)
+            .field("position", &PrefabInstantiateParams::position, {.unit = Unit::Meters});
         reflectStruct<PrefabInstanceResult>("editor.PrefabInstanceResult", 1, structs)
             .field("root", &PrefabInstanceResult::root)
             .field("instance", &PrefabInstanceResult::instance)
@@ -749,6 +750,7 @@ void reflectCoreCommandTypes(StructRegistry& structs)
         reflectStruct<PrefabApplyParams>("editor.PrefabApplyParams", 1, structs)
             .field("entity", &PrefabApplyParams::entity)
             .field("component", &PrefabApplyParams::component)
+            .field("field", &PrefabApplyParams::field)
             .field("all", &PrefabApplyParams::all);
         reflectStruct<PrefabApplyResult>("editor.PrefabApplyResult", 1, structs)
             .field("path", &PrefabApplyResult::path)
@@ -766,7 +768,8 @@ void reflectCoreCommandTypes(StructRegistry& structs)
             .field("discardChanges", &PrefabCloseParams::discardChanges);
         reflectStruct<PrefabRevertParams>("editor.PrefabRevertParams", 1, structs)
             .field("entity", &PrefabRevertParams::entity)
-            .field("component", &PrefabRevertParams::component);
+            .field("component", &PrefabRevertParams::component)
+            .field("field", &PrefabRevertParams::field);
         reflectStruct<PrefabRevertResult>("editor.PrefabRevertResult", 1, structs)
             .field("components", &PrefabRevertResult::components);
         reflectStruct<MaterialCreateParams>("editor.MaterialCreateParams", 1, structs)

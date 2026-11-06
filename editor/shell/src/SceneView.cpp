@@ -7,6 +7,7 @@
 #include "Panels.hpp"
 
 #include <illusion/ecs/Name.hpp>
+#include <illusion/ecs/Prefab.hpp>
 #include <illusion/editor/core/ViewCube.hpp>
 #include <illusion/editor/ui/Icons.hpp>
 
@@ -736,6 +737,33 @@ void SceneView::draw(Impl& shell)
     const bool hovered = ImGui::IsItemHovered();
     const bool focused = ImGui::IsWindowFocused();
     const bool imageClicked = ImGui::IsItemClicked(ImGuiMouseButton_Left);
+    // A prefab dropped from the Asset Browser: an instance on the ground under the cursor (or in front of the
+    // camera when the cursor looks away from the ground).
+    if (m_last.kind == ViewportKind::Scene && m_last.size.x != 0 && ImGui::BeginDragDropTarget())
+    {
+        if (const ImGuiPayload* payload = ImGui::AcceptDragDropPayload(kAssetDragPayload))
+        {
+            const std::string_view path = assetPayloadPath(*payload);
+            if (path.ends_with(kPrefabExtension))
+            {
+                const Vec2 local(io.MousePos.x - origin.x, io.MousePos.y - origin.y);
+                const Vec2 pixel = local * Vec2(m_last.size) / Vec2(extent.x, extent.y);
+                const GizmoRay ray = gizmoRay(gizmoCamera(m_last.camera, m_last.size, scale.y), pixel);
+                const f32 along = std::abs(ray.direction.y) > 1e-6f ? -ray.origin.y / ray.direction.y : -1.0f;
+                const Vec3 point = ray.origin + ray.direction * (along > 0.0f ? along : 10.0f);
+                std::array<char, 96> position{};
+                const int written = std::snprintf(
+                    position.data(), position.size(), ",\"position\":[%.4f,%.4f,%.4f]}",
+                    static_cast<double>(point.x), static_cast<double>(point.y), static_cast<double>(point.z));
+                if (written > 0 && static_cast<usize>(written) < position.size())
+                {
+                    (void)shell.run("prefab.instantiate", "{\"path\":" + jsonQuote(path) + position.data(),
+                                    "viewport");
+                }
+            }
+        }
+        ImGui::EndDragDropTarget();
+    }
 
     // Where the image goes in the panel: letterboxed when its shape differs (the shape of the last frame).
     const Vec2 panelOrigin(origin.x, origin.y);

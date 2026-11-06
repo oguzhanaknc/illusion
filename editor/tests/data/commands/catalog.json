@@ -9748,6 +9748,16 @@
             }
           ]
         },
+        "field": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
         "all": {
           "anyOf": [
             {
@@ -10109,6 +10119,21 @@
               "type": "integer",
               "minimum": 0,
               "maximum": 4294967295
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "position": {
+          "anyOf": [
+            {
+              "type": "array",
+              "items": {
+                "type": "number"
+              },
+              "minItems": 3,
+              "maxItems": 3
             },
             {
               "type": "null"
@@ -10510,6 +10535,16 @@
           "type": "string"
         },
         "component": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "field": {
           "anyOf": [
             {
               "type": "string"

@@ -128,8 +128,9 @@ void endComponentCardMenu();
 bool beginPropertyTable(UiKit& kit, std::string_view id);
 
 /// Starts a row: writes @p label in the first column (with @p tooltip on hover) and prepares the second
-/// column for a full-width value widget.
-void propertyLabel(UiKit& kit, const char* label, const char* tooltip = nullptr);
+/// column for a full-width value widget. An @p overridden label (a prefab instance's field that differs
+/// from its prefab) is bold, in the accent colour.
+void propertyLabel(UiKit& kit, const char* label, const char* tooltip = nullptr, bool overridden = false);
 
 /// Ends a property table.
 void endPropertyTable();

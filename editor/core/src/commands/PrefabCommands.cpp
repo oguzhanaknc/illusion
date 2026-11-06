@@ -6,6 +6,7 @@
 #include <illusion/editor/core/ReferenceIndex.hpp>
 #include <illusion/editor/core/WorldEditor.hpp>
 
+#include <cmath>
 #include <map>
 #include <unordered_map>
 #include <unordered_set>
@@ -329,10 +330,43 @@ Expected<PrefabInstanceResult, CommandError> prefabInstantiate(CommandContext& c
         }
         parent = *resolved;
     }
+    if (params.position && !(std::isfinite(params.position->x) && std::isfinite(params.position->y) &&
+                             std::isfinite(params.position->z)))
+    {
+        return unexpected(CommandError::invalid("/position", "must be finite"));
+    }
     Expected<Entity, CommandError> root = placeInstance(context, params.path, *text, parent, params.index);
     if (!root)
     {
         return unexpected(std::move(root).error());
+    }
+    if (params.position)
+    {
+        // The root keeps its rotation and scale; its parent's placement maps the world position into it.
+        World& world = context.world();
+        Transform placed = worldTransformOf(world, *root);
+        placed.position = *params.position;
+        const Entity above = context.index().hierarchy().parent(*root);
+        const Transform local = above.isNull() ? placed : relativeTo(placed, worldTransformOf(world, above));
+        if (world.has<Transform>(*root))
+        {
+            if (Expected<bool, CommandError> set =
+                    context.edit().assignComponent(*root, componentId<Transform>(), &placed);
+                !set)
+            {
+                return unexpected(std::move(set).error());
+            }
+        }
+        if (world.has<LocalTransform>(*root))
+        {
+            const LocalTransform value = LocalTransform::from(local);
+            if (Expected<bool, CommandError> set =
+                    context.edit().assignComponent(*root, componentId<LocalTransform>(), &value);
+                !set)
+            {
+                return unexpected(std::move(set).error());
+            }
+        }
     }
     return instanceResult(context, *root);
 }
@@ -421,6 +455,29 @@ bool hasType(const World& world, Entity entity, ComponentId type)
     return std::find(types.begin(), types.end(), type) != types.end();
 }
 
+// Checks the optional field param of prefab.apply and prefab.revert: a top-level field of @p type.
+Expected<void, CommandError> checkField(const std::optional<std::string>& field,
+                                        const std::optional<std::string>& component,
+                                        const TypeReflection* type)
+{
+    if (!field)
+    {
+        return {};
+    }
+    if (!component || type == nullptr)
+    {
+        return unexpected(CommandError::invalid("/field", "needs component"));
+    }
+    for (const FieldInfo& info : type->fields)
+    {
+        if (info.name == *field)
+        {
+            return {};
+        }
+    }
+    return unexpected(CommandError::invalid("/field", "is not a field of " + std::string(type->name)));
+}
+
 // True if prefab.revert changes @p type of @p entity when no Component is named.
 bool revertsByDefault(const World& world, Entity entity, ComponentId type)
 {
@@ -465,6 +522,12 @@ Expected<PrefabRevertResult, CommandError> prefabRevert(CommandContext& context,
                 "/component", "cannot be reverted (move entities with hierarchy.set_parent)"));
         }
         only = *type;
+    }
+    if (Expected<void, CommandError> valid =
+            checkField(params.field, params.component, only ? world.registry().reflection(*only) : nullptr);
+        !valid)
+    {
+        return unexpected(std::move(valid).error());
     }
 
     // The prefab's entity, expanded with the same instance id: its id and its references match.
@@ -550,6 +613,22 @@ Expected<PrefabRevertResult, CommandError> prefabRevert(CommandContext& context,
         if (!json)
         {
             return unexpected(CommandError::make(ErrorKind::Internal, "cannot read the prefab's value"));
+        }
+        if (params.field)
+        {
+            if (!inInstance)
+            {
+                return unexpected(
+                    CommandError::invalid("/field", "belongs to a Component the entity does not have"));
+            }
+            Expected<bool, CommandError> set =
+                context.edit().setField(*entity, type, *params.field, json->root().find(*params.field));
+            if (!set)
+            {
+                return unexpected(std::move(set).error());
+            }
+            reverted += *set ? 1u : 0u;
+            continue;
         }
         if (!inInstance)
         {
@@ -927,6 +1006,12 @@ Expected<PrefabApplyResult, CommandError> prefabApply(CommandContext& context,
         }
         only = *type;
     }
+    if (Expected<void, CommandError> valid =
+            checkField(params.field, params.component, only ? world.registry().reflection(*only) : nullptr);
+        !valid)
+    {
+        return unexpected(std::move(valid).error());
+    }
     const PrefabInstance instance = world.get<PrefabInstance>(*root);
     const std::string path(instance.prefab.path());
     Expected<std::string, CommandError> before = readPrefabText(context, path);
@@ -1021,16 +1106,38 @@ Expected<PrefabApplyResult, CommandError> prefabApply(CommandContext& context,
                     continue;
                 }
             }
-            const Expected<JsonDocument, JsonError> json = JsonDocument::parse(*value);
+            Expected<JsonDocument, JsonError> json = JsonDocument::parse(*value);
             if (!json)
             {
                 return unexpected(
                     CommandError::make(ErrorKind::Internal, "cannot read the instance's value"));
             }
-            void* into = inPrefab ? prefab.componentData(target, type) : prefab.emplaceDefault(target, type);
             ValueReadOptions read;
             read.mode = JsonReadMode::Replace;
             read.entities = &reader;
+            if (params.field)
+            {
+                if (!inPrefab)
+                {
+                    return unexpected(CommandError::invalid(
+                        "/field", "belongs to a Component the prefab's entity does not have"));
+                }
+                // Only that field merges into the prefab's value.
+                JsonMutDocument one;
+                JsonMutValue object = one.makeObject();
+                object.add(*params.field, one.copy(json->root().find(*params.field)));
+                one.setRoot(object);
+                std::string patch;
+                (void)one.write(patch, JsonWriteOptions{.pretty = false});
+                json = JsonDocument::parse(patch);
+                if (!json)
+                {
+                    return unexpected(
+                        CommandError::make(ErrorKind::Internal, "cannot read the field's value"));
+                }
+                read.mode = JsonReadMode::Merge;
+            }
+            void* into = inPrefab ? prefab.componentData(target, type) : prefab.emplaceDefault(target, type);
             if (const ValueReadResult result = readValue(reflection, into, json->root(), read); !result.ok())
             {
                 return unexpected(

@@ -28,7 +28,9 @@ import settings).
 
 Click an asset to select it (Ctrl-click selects several). Double-click opens it: a folder opens, a scene opens
 in the editor, and another file opens in the code editor of the [External Tools](preferences.md).
-Drag an asset onto an asset field of the Inspector (a mesh, material, clip...) to assign it there.
+Drag an asset onto an asset field of the Inspector (a mesh, material, clip...) to assign it there. Drag a
+prefab into the viewport or the Outliner to place it, and an entity from the Outliner into the browser to make
+it a [prefab](prefabs.md).
 
 ## File operations
 
