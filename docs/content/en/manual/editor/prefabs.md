@@ -57,6 +57,30 @@ new prefab and keeps its own overrides; the file write and those edits are one u
 {"entity": "/Level/Crate", "all": true}
 ```
 
+## Editing a prefab
+
+`prefab.open` opens a prefab file for editing in place of the scene (unsaved changes need `discardChanges`).
+The Outliner then shows a breadcrumb from the scene to the prefab; `scene.save` writes the prefab file, and the
+back button, or `prefab.close`, reopens the scene, whose instances show the changes.
+
+```json
+{"path": "assets:/props/crate.prefab", "discardChanges": false}
+```
+
+## When a prefab file changes
+
+The editor remembers which version of each prefab file the open scene's instances were made from. When a
+prefab file changes on disk (an artist's tool, `git checkout`, another editor), the instances follow it at the
+next frame and keep their overrides; the update is one undoable step named after `prefab.refresh`, which agents
+can also run themselves.
+
+## In the Inspector
+
+An entity of an instance shows a prefab bar under its name: the prefab file and buttons to edit the prefab
+(`prefab.open`), apply the whole instance (`prefab.apply` with `all`), revert the entity (`prefab.revert`) and
+unpack the instance. Components that differ from the prefab have a bold title with an accent bar; their menu
+applies or reverts that Component.
+
 ## Copying and duplicating
 
 Copying a whole instance (its root) to the clipboard and pasting it gives a new linked instance with the same
@@ -77,6 +101,6 @@ instance them in one step, without turning the move into overrides.
 
 ## Current limits
 
-- If a prefab file changes on disk (outside `prefab.apply`) while a scene with its instances is open, the open
-  instances update when the scene is opened again. Entities that the prefab no longer has are then saved as
-  plain entities.
+- Entities of an instance that its prefab no longer has are saved as plain entities.
+- Prefabs are created and placed through commands and the command palette; dragging from the Asset Browser
+  comes later.

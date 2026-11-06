@@ -6,6 +6,7 @@
 #include <illusion/editor/core/ReferenceIndex.hpp>
 #include <illusion/editor/core/WorldEditor.hpp>
 
+#include <map>
 #include <unordered_map>
 #include <unordered_set>
 
@@ -165,6 +166,10 @@ Expected<Entity, CommandError> placeInstance(CommandContext& context, const std:
     if (roots->size() != 1 || !context.world().has<PrefabInstance>(roots->front()))
     {
         return unexpected(CommandError::make(ErrorKind::Internal, "the prefab instance was not created"));
+    }
+    if (!context.dryRun())
+    {
+        context.editor().trackPrefab(path, text);
     }
     return roots->front();
 }
@@ -661,7 +666,8 @@ std::vector<Entity> instanceRoots(const World& world)
 }
 
 // The overrides of every instance of the edited World (by instance id, compact JSON), as saved now.
-Expected<std::unordered_map<u64, std::string>, CommandError> allOverrides(CommandContext& context)
+Expected<std::unordered_map<u64, std::string>, CommandError> allOverrides(CommandContext& context,
+                                                                          const PrefabSource& prefabs)
 {
     std::unordered_map<u64, std::string> out;
     const std::vector<Entity> roots = instanceRoots(context.world());
@@ -671,7 +677,7 @@ Expected<std::unordered_map<u64, std::string>, CommandError> allOverrides(Comman
     }
     SceneSaveOptions options;
     options.subset = std::span<const Entity>(roots);
-    options.prefabs = context.editor().prefabSource();
+    options.prefabs = prefabs;
     const SceneSaveResult saved = saveScene(context.world(), options);
     if (!saved.ok())
     {
@@ -929,7 +935,8 @@ Expected<PrefabApplyResult, CommandError> prefabApply(CommandContext& context,
         return unexpected(std::move(before).error());
     }
     // The other instances keep their overrides when the prefab changes under them.
-    Expected<std::unordered_map<u64, std::string>, CommandError> overrides = allOverrides(context);
+    Expected<std::unordered_map<u64, std::string>, CommandError> overrides =
+        allOverrides(context, context.editor().prefabSource());
     if (!overrides)
     {
         return unexpected(std::move(overrides).error());
@@ -1068,6 +1075,10 @@ Expected<PrefabApplyResult, CommandError> prefabApply(CommandContext& context,
     {
         return unexpected(std::move(stored).error());
     }
+    if (!context.dryRun())
+    {
+        context.editor().trackPrefab(path, written.json); // the open instances follow it below
+    }
     // Every other instance follows the new prefab with its own overrides.
     const PrefabSource source = sourceWith(context, path, written.json);
     for (const Entity other : instanceRoots(world))
@@ -1087,6 +1098,159 @@ Expected<PrefabApplyResult, CommandError> prefabApply(CommandContext& context,
         result.instances += *synced > 0 ? 1u : 0u;
     }
     return result;
+}
+
+Expected<PrefabRefreshResult, CommandError> prefabRefresh(CommandContext& context,
+                                                          const PrefabRefreshParams& params)
+{
+    if (Expected<void, CommandError> open = requireProject(context); !open)
+    {
+        return unexpected(std::move(open).error());
+    }
+    if (params.path)
+    {
+        if (Expected<void, CommandError> valid = checkPrefabPath(context, *params.path); !valid)
+        {
+            return unexpected(std::move(valid).error());
+        }
+    }
+    // The prefabs whose file differs from the text the instances were made from.
+    const std::map<std::string, std::string, std::less<>> tracked = context.editor().trackedPrefabs();
+    const PrefabSource disk = context.editor().prefabSource();
+    PrefabRefreshResult result;
+    for (const auto& [path, text] : tracked)
+    {
+        if (params.path && path != *params.path)
+        {
+            continue;
+        }
+        const std::optional<std::string> now = disk(path);
+        if (now && *now != text)
+        {
+            result.prefabs.push_back(path);
+        }
+    }
+    if (result.prefabs.empty())
+    {
+        return result;
+    }
+    // Overrides as the instances were made (old texts), applied to the files as they are now.
+    const PrefabSource before = [&](std::string_view path) -> std::optional<std::string> {
+        const auto it = tracked.find(path);
+        return it != tracked.end() ? std::optional<std::string>(it->second) : disk(path);
+    };
+    Expected<std::unordered_map<u64, std::string>, CommandError> overrides = allOverrides(context, before);
+    if (!overrides)
+    {
+        return unexpected(std::move(overrides).error());
+    }
+    const PrefabSource after = context.dryRun() ? disk : context.editor().trackedPrefabSource();
+    for (const Entity root : instanceRoots(context.world()))
+    {
+        const auto kept = overrides->find(context.world().get<PrefabInstance>(root).instance.value);
+        Expected<u32, CommandError> synced = syncInstance(
+            context, root, kept != overrides->end() ? std::string_view(kept->second) : "{}", after);
+        if (!synced)
+        {
+            return unexpected(std::move(synced).error());
+        }
+        result.instances += *synced > 0 ? 1u : 0u;
+    }
+    if (!context.dryRun())
+    {
+        for (const std::string& path : result.prefabs)
+        {
+            if (std::optional<std::string> now = disk(path))
+            {
+                context.editor().trackPrefab(path, std::move(*now));
+            }
+        }
+    }
+    return result;
+}
+
+Expected<void, CommandError> checkDiscard(CommandContext& context, const std::optional<bool>& discard)
+{
+    if (context.editor().dirty() && !discard.value_or(false))
+    {
+        return unexpected(CommandError::make(
+            ErrorKind::PreconditionFailed, "the scene has unsaved changes; save it or pass discardChanges"));
+    }
+    return {};
+}
+
+Expected<SceneInfoResult, CommandError> prefabOpen(CommandContext& context, const PrefabOpenParams& params)
+{
+    Expected<std::string, CommandError> text = readPrefabText(context, params.path);
+    if (!text)
+    {
+        return unexpected(std::move(text).error());
+    }
+    if (Expected<void, CommandError> allowed = checkDiscard(context, params.discardChanges); !allowed)
+    {
+        return unexpected(std::move(allowed).error());
+    }
+    EditorContext& editor = context.editor();
+    const std::string from = editor.document().path();
+    if (from == params.path)
+    {
+        return unexpected(CommandError::invalid("/path", "is the file being edited"));
+    }
+    if (context.dryRun())
+    {
+        return sceneInfo(editor);
+    }
+    std::vector<std::string> stack(editor.prefabEditStack().begin(), editor.prefabEditStack().end());
+    std::vector<std::string> warnings;
+    if (Expected<void, CommandError> opened = editor.openScene(params.path, &warnings); !opened)
+    {
+        return unexpected(std::move(opened).error());
+    }
+    stack.push_back(from);
+    editor.setPrefabEditStack(std::move(stack));
+    for (std::string& warning : warnings)
+    {
+        context.warn(std::move(warning));
+    }
+    return sceneInfo(editor);
+}
+
+Expected<SceneInfoResult, CommandError> prefabClose(CommandContext& context, const PrefabCloseParams& params)
+{
+    EditorContext& editor = context.editor();
+    if (editor.prefabEditStack().empty())
+    {
+        return unexpected(CommandError::make(ErrorKind::PreconditionFailed, "no prefab is open for editing"));
+    }
+    if (Expected<void, CommandError> allowed = checkDiscard(context, params.discardChanges); !allowed)
+    {
+        return unexpected(std::move(allowed).error());
+    }
+    if (context.dryRun())
+    {
+        return sceneInfo(editor);
+    }
+    std::vector<std::string> stack(editor.prefabEditStack().begin(), editor.prefabEditStack().end());
+    const std::string back = std::move(stack.back());
+    stack.pop_back();
+    if (back.empty())
+    {
+        editor.newScene();
+    }
+    else
+    {
+        std::vector<std::string> warnings;
+        if (Expected<void, CommandError> opened = editor.openScene(back, &warnings); !opened)
+        {
+            return unexpected(std::move(opened).error());
+        }
+        for (std::string& warning : warnings)
+        {
+            context.warn(std::move(warning));
+        }
+    }
+    editor.setPrefabEditStack(std::move(stack));
+    return sceneInfo(editor);
 }
 } // namespace
 
@@ -1143,6 +1307,45 @@ void registerPrefabCommands(CommandRegistry& registry)
         .icon = "difference",
         .flags = {.readOnly = true, .idempotent = true},
         .mode = CommandMode::Any,
+    });
+    registry.add<&prefabRefresh>({
+        .name = "prefab.refresh",
+        .title = strings::kCommandPrefabRefreshTitle,
+        .description = strings::kCommandPrefabRefreshDescription,
+        .agentSummary = "Brings the open scene's instances up to date with prefab files that changed on "
+                        "disk, keeping their "
+                        "overrides; the editor runs it by itself when it sees a prefab change. Without path, "
+                        "every changed "
+                        "prefab. Example: {\"path\": \"assets:/props/crate.prefab\"}.",
+        .category = "Prefab",
+        .icon = "sync",
+        .flags = {.undoable = true},
+    });
+    registry.add<&prefabOpen>({
+        .name = "prefab.open",
+        .title = strings::kCommandPrefabOpenTitle,
+        .description = strings::kCommandPrefabOpenDescription,
+        .agentSummary =
+            "Opens a .prefab file for editing in place of the scene (unsaved changes need discardChanges); "
+            "scene.save then writes the prefab, and prefab.close returns to the scene, whose instances show "
+            "the "
+            "changes. Example: {\"path\": \"assets:/props/crate.prefab\"}.",
+        .category = "Prefab",
+        .icon = "edit",
+        .flags = {.destructive = true, .outsideTransactions = true},
+        .palette = true,
+    });
+    registry.add<&prefabClose>({
+        .name = "prefab.close",
+        .title = strings::kCommandPrefabCloseTitle,
+        .description = strings::kCommandPrefabCloseDescription,
+        .agentSummary =
+            "Leaves prefab edit mode and reopens the scene it was entered from (unsaved changes to the "
+            "prefab need discardChanges). Example: {}.",
+        .category = "Prefab",
+        .icon = "arrow_back",
+        .flags = {.destructive = true, .outsideTransactions = true},
+        .palette = true,
     });
     registry.add<&prefabApply>({
         .name = "prefab.apply",

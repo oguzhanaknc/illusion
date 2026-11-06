@@ -4,6 +4,7 @@
 #include <illusion/ecs/Prefab.hpp>
 
 #include <format>
+#include <fstream>
 #include <string>
 
 using namespace illusion;
@@ -353,4 +354,59 @@ TEST_CASE("moving an asset rewrites scenes that refer into prefab instances with
     CHECK(scene.find("overrides") == std::string::npos);
     ok(editor, "scene.open", R"({"path":"assets:/scenes/yard.scene","discardChanges":true})");
     ok(editor, "entity.get", R"({"entity":"/Crate/Lid/Sticker"})");
+}
+
+TEST_CASE(
+    "a prefab file changed on disk updates the open instances, keeping their overrides, as one undo step")
+{
+    // Polling sees the change at the next poll; native notifications arrive at a time of their own.
+    EditorContextOptions options;
+    options.assetWatching = FileWatchBackend::Polling;
+    options.assetPollInterval = 0.0;
+    EditorFixture fixture(1, options);
+    EditorContext& editor = *fixture.editor;
+    openCrateScene(editor, false);
+    ok(editor, "entity.rename", R"({"entity":"/Crate/Lid","name":"Top"})");
+    // Another tool rewrites the prefab: the root is renamed and the lid gains a Component.
+    std::string changed(kCratePrefab);
+    changed.replace(changed.find("\"Crate\""), 7, "\"Box\"");
+    changed.replace(changed.find(R"("illusion.Name": {"value": "Lid"})"), 33,
+                    R"("illusion.Name": {"value": "Lid"}, "test.Look": {})");
+    std::ofstream(fixture.directory.path / "project" / "assets" / "props" / "crate.prefab", std::ios::binary)
+        << changed;
+    const usize steps = editor.history().steps().size();
+    for (int i = 0; i < 4; ++i)
+    {
+        editor.endFrame(1.0);
+    }
+    ok(editor, "component.get", R"({"entity":"/Box/Top","type":"test.Look"})");
+    CHECK(editor.history().steps().size() == steps + 1);
+    CHECK(ok(editor, "prefab.refresh").root().find("prefabs").size() == 0); // nothing left to update
+    ok(editor, "history.undo");
+    ok(editor, "entity.get", R"({"entity":"/Crate/Top"})");
+}
+
+TEST_CASE("prefab.open edits a prefab in place of the scene and prefab.close returns to it")
+{
+    EditorFixture fixture;
+    EditorContext& editor = *fixture.editor;
+    openCrateScene(editor, false);
+    CHECK(fails(editor, "prefab.close", "{}").kind == ErrorKind::PreconditionFailed);
+    ok(editor, "prefab.open", R"({"path":"assets:/props/crate.prefab"})");
+    CHECK(editor.document().path() == "assets:/props/crate.prefab");
+    REQUIRE(editor.prefabEditStack().size() == 1);
+    ok(editor, "entity.rename", R"({"entity":"/Crate","name":"Chest"})");
+    CHECK(fails(editor, "prefab.close", "{}").kind == ErrorKind::PreconditionFailed); // unsaved changes
+    ok(editor, "scene.save");
+    const std::string text =
+        std::string(ok(editor, "project.file_read", R"({"path":"assets:/props/crate.prefab"})")
+                        .root()
+                        .find("text")
+                        .asString()
+                        .value_or(""));
+    CHECK(text.find("\"illusion.prefab\"") != std::string::npos);
+    ok(editor, "prefab.close");
+    CHECK(editor.document().path() == "assets:/scenes/yard.scene");
+    CHECK(editor.prefabEditStack().empty());
+    ok(editor, "entity.get", R"({"entity":"/Chest/Lid"})");
 }

@@ -385,13 +385,14 @@ bool colorHdr(UiKit& kit, std::string_view id, Vec3& color, f32& intensity)
     return changed;
 }
 
-bool beginComponentCard(UiKit& kit, std::string_view id, const Icon& icon, const char* name, bool* enabled)
+bool beginComponentCard(UiKit& kit, std::string_view id, const Icon& icon, const char* name, bool* enabled,
+                        bool overridden)
 {
     const ImGuiStyle& style = ImGui::GetStyle();
     ImGui::PushStyleColor(ImGuiCol_Header, tokenVec(kit, ThemeToken::BgRaised));
     ImGui::PushStyleColor(ImGuiCol_HeaderHovered, tokenVec(kit, ThemeToken::BgHover));
     ImGui::PushStyleColor(ImGuiCol_HeaderActive, tokenVec(kit, ThemeToken::BgActive));
-    pushFont(kit, FontRole::Strong);
+    pushFont(kit, overridden ? FontRole::Title : FontRole::Strong);
     const char* label = kit.text.verbatim(kit.text.concat(icon.view(), kit.text.concat("  ", name)), id);
     const bool open =
         ImGui::TreeNodeEx(label, ImGuiTreeNodeFlags_DefaultOpen | ImGuiTreeNodeFlags_Framed |
@@ -403,6 +404,12 @@ bool beginComponentCard(UiKit& kit, std::string_view id, const Icon& icon, const
     // Enable toggle and menu button on the right of the header.
     const ImVec2 headerMin = ImGui::GetItemRectMin();
     const ImVec2 headerMax = ImGui::GetItemRectMax();
+    if (overridden)
+    {
+        ImGui::GetWindowDrawList()->AddRectFilled(
+            headerMin, ImVec2(headerMin.x + 3.0f * kit.scale, headerMax.y),
+            ImGui::ColorConvertFloat4ToU32(tokenVec(kit, ThemeToken::Accent)));
+    }
     const ImVec2 after = ImGui::GetCursorScreenPos();
     const f32 button = ImGui::GetFrameHeight();
     f32 right = headerMax.x - style.FramePadding.x * 0.5f;

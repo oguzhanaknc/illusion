@@ -494,6 +494,27 @@ public:
     /// (SceneLoadOptions::prefabs, SceneSaveOptions::prefabs). Valid while this context lives.
     [[nodiscard]] PrefabSource prefabSource() const;
 
+    /// Like prefabSource(), and remembers each text read as the one the open scene's instances were made
+    /// from: when the file changes, `prefab.refresh` compares the instances with it to keep their overrides.
+    /// Use it to create instances in the edited World.
+    [[nodiscard]] PrefabSource trackedPrefabSource();
+
+    /// The prefab texts remembered by trackedPrefabSource() and trackPrefab(), by path.
+    [[nodiscard]] const std::map<std::string, std::string, std::less<>>& trackedPrefabs() const noexcept
+    {
+        return m_trackedPrefabs;
+    }
+
+    /// Remembers @p text as the prefab file @p path's, after the editor wrote it and updated the instances.
+    void trackPrefab(std::string_view path, std::string text);
+
+    /// The scene files that `prefab.close` returns to, outermost first (empty outside prefab edit mode; ""
+    /// for a scene that had no file).
+    [[nodiscard]] std::span<const std::string> prefabEditStack() const noexcept { return m_prefabEditStack; }
+
+    /// Replaces the prefab edit stack (see prefabEditStack()).
+    void setPrefabEditStack(std::vector<std::string> stack) { m_prefabEditStack = std::move(stack); }
+
     /// Runs command @p name with typed params; the Result type must be the command's.
     template <class R, class P>
     [[nodiscard]] Expected<R, CommandError> execute(std::string_view name, const P& params,
@@ -690,6 +711,9 @@ private:
     u32 m_autosaveCounter = 0;
     u64 m_commandsRevision = 0;
     std::optional<TransactionInfo> m_transaction;
+    std::map<std::string, std::string, std::less<>> m_trackedPrefabs; // see trackedPrefabSource()
+    std::vector<std::string> m_prefabEditStack;                       // see prefabEditStack()
+    std::vector<std::string> m_pendingPrefabRefresh; // changed tracked prefabs, refreshed by endFrame()
     std::vector<Operation> m_transactionOperations;
     std::vector<EntityGuid> m_transactionSelection;
     bool m_running = false;

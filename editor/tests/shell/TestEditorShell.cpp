@@ -1126,3 +1126,63 @@ TEST_CASE("a click on the Game view gives the running game the keyboard and mous
     fixture.editor->setPlay(nullptr);
     fixture.editor->setViewports(nullptr);
 }
+
+namespace
+{
+
+// A crate prefab (root "Crate", child "Lid") and an open scene with one instance of it.
+void openCrateInstance(EditorContext& editor)
+{
+    test::ok(
+        editor, "project.file_write",
+        R"({"path":"assets:/props/crate.prefab","text":"{\"format\":\"illusion.prefab\",\"version\":2,)"
+        R"(\"entities\":[{\"id\":\"00000000000000a1\",\"components\":{\"illusion.Name\":{\"value\":\"Crate\"},)"
+        R"(\"illusion.Hierarchy\":{\"parent\":null,\"order\":0},\"illusion.LocalTransform\":{}}},)"
+        R"({\"id\":\"00000000000000a2\",\"components\":{\"illusion.Name\":{\"value\":\"Lid\"},)"
+        R"(\"illusion.Hierarchy\":{\"parent\":\"00000000000000a1\",\"order\":0},\"illusion.LocalTransform\":{}}}]}"})");
+    test::ok(editor, "scene.new", R"({"discardChanges":true})");
+    test::ok(editor, "prefab.instantiate", R"({"path":"assets:/props/crate.prefab"})");
+}
+
+} // namespace
+
+TEST_CASE("the Inspector shows the prefab bar of instance entities and reverts overridden Components")
+{
+    ShellFixture fixture;
+    EditorContext& editor = *fixture.editor;
+    openCrateInstance(editor);
+    test::ok(editor, "component.add", R"({"entity":"/Crate/Lid","type":"test.Look"})");
+    test::ok(editor, "selection.set", R"({"entities":["/Crate/Lid"]})");
+
+    ui::UiDriver driver(fixture.context, [&] { fixture.frame(); });
+    driver.runFrames(2);
+    CHECK(driver.find("inspector.prefab.apply").has_value());
+    CHECK(driver.find("inspector.prefab.unpack").has_value());
+    REQUIRE(driver.click("inspector.card.test.Look.menu"));
+    driver.runFrames(1);
+    REQUIRE(driver.click("inspector.card.test.Look.menu.prefab_revert"));
+    driver.runFrames(2);
+    CHECK(test::fails(editor, "component.get", R"({"entity":"/Crate/Lid","type":"test.Look"})").kind ==
+          ErrorKind::NotFound);
+
+    REQUIRE(driver.click("inspector.prefab.unpack"));
+    driver.runFrames(2);
+    CHECK_FALSE(driver.find("inspector.prefab.apply").has_value());
+}
+
+TEST_CASE("the Outliner shows a breadcrumb in prefab edit mode whose back button returns to the scene")
+{
+    ShellFixture fixture;
+    EditorContext& editor = *fixture.editor;
+    openCrateInstance(editor);
+    test::ok(editor, "scene.save_as", R"({"path":"assets:/scenes/yard.scene"})");
+    ui::UiDriver driver(fixture.context, [&] { fixture.frame(); });
+    driver.runFrames(2);
+    CHECK_FALSE(driver.find("outliner.prefab.close").has_value());
+    test::ok(editor, "prefab.open", R"({"path":"assets:/props/crate.prefab"})");
+    driver.runFrames(2);
+    REQUIRE(driver.click("outliner.prefab.close"));
+    driver.runFrames(2);
+    CHECK(editor.document().path() == "assets:/scenes/yard.scene");
+    CHECK(editor.prefabEditStack().empty());
+}

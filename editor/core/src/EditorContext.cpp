@@ -448,6 +448,7 @@ void EditorContext::sceneReplaced(std::string_view path)
 
 void EditorContext::newScene()
 {
+    m_trackedPrefabs.clear();
     m_world.clear();
     m_editor.resetSettings({});
     sceneReplaced("");
@@ -474,8 +475,14 @@ Expected<bool, CommandError> EditorContext::loadSceneText(std::string_view json,
         }
     }
     m_world.clear();
+    m_trackedPrefabs.clear();
+    options.prefabs = trackedPrefabSource();
     SceneLoadResult result = loadScene(m_world, json, options);
     m_editor.resetSettings(std::move(result.preservedSettings));
+    if (!m_trackedPrefabs.empty() && m_project)
+    {
+        (void)assets(); // scanned now, so endFrame() notices when one of the prefabs changes
+    }
     if (warnings != nullptr)
     {
         warnings->insert(warnings->end(), result.warnings.begin(), result.warnings.end());
@@ -528,6 +535,24 @@ PrefabSource EditorContext::prefabSource() const
     return illusion::editor::prefabSource(m_files);
 }
 
+PrefabSource EditorContext::trackedPrefabSource()
+{
+    return [this](std::string_view path) -> std::optional<std::string> {
+        std::string text;
+        if (m_files.readText(path, text) != FileError::None)
+        {
+            return std::nullopt;
+        }
+        m_trackedPrefabs.insert_or_assign(std::string(path), text);
+        return text;
+    };
+}
+
+void EditorContext::trackPrefab(std::string_view path, std::string text)
+{
+    m_trackedPrefabs.insert_or_assign(std::string(path), std::move(text));
+}
+
 Expected<std::string, CommandError> EditorContext::sceneJson(PrefabSaveMode prefabs) const
 {
     SceneSaveOptions options;
@@ -560,6 +585,7 @@ Expected<u32, CommandError> EditorContext::saveScene(std::string_view path)
     SceneSaveOptions options;
     options.preservedSettings = m_editor.settings();
     options.prefabs = prefabSource();
+    options.prefabFile = lowerExtension(target) == kPrefabExtension; // prefab edit mode (prefab.open)
     const SceneSaveResult saved = illusion::saveScene(m_world, options);
     if (!saved.ok())
     {
@@ -618,6 +644,16 @@ void EditorContext::pollAssets(bool full)
 
 void EditorContext::postAssetChanges(const AssetCatalogChanges& changes)
 {
+    // Prefabs the open scene's instances were made from: endFrame() brings the instances up to date.
+    for (const std::string& path : changes.modified)
+    {
+        if (m_trackedPrefabs.contains(path) &&
+            std::find(m_pendingPrefabRefresh.begin(), m_pendingPrefabRefresh.end(), path) ==
+                m_pendingPrefabRefresh.end())
+        {
+            m_pendingPrefabRefresh.push_back(path);
+        }
+    }
     std::sort(m_assetReimports.begin(), m_assetReimports.end());
     m_assetReimports.erase(std::unique(m_assetReimports.begin(), m_assetReimports.end()),
                            m_assetReimports.end());
@@ -1649,6 +1685,35 @@ void EditorContext::endFrame(f64 deltaSeconds)
     {
         postAssetChanges(m_assetNews); // Reimports do not wait for the poll interval.
         m_assetNews.clear();
+    }
+    if (!m_pendingPrefabRefresh.empty() && !m_transaction && !playing())
+    {
+        // One undoable step per prefab that changed on disk, keeping the instances' overrides.
+        std::vector<std::string> pending;
+        pending.swap(m_pendingPrefabRefresh);
+        for (const std::string& path : pending)
+        {
+            JsonMutDocument doc;
+            JsonMutValue params = doc.makeObject();
+            params.add("path", doc.makeString(path));
+            doc.setRoot(params);
+            std::string text;
+            (void)doc.write(text, JsonWriteOptions{.pretty = false});
+            const Expected<JsonDocument, JsonError> parsed = JsonDocument::parse(text);
+            if (!parsed)
+            {
+                continue;
+            }
+            CommandOptions options;
+            options.origin = "editor";
+            if (Expected<std::string, CommandError> refreshed =
+                    executeJson("prefab.refresh", parsed->root(), options);
+                !refreshed)
+            {
+                ILL_LOG_WARN("Editor", "Cannot update the instances of '{}': {}", path,
+                             refreshed.error().message);
+            }
+        }
     }
     m_events.flush();
     m_journal.flush();

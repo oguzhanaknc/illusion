@@ -31,6 +31,7 @@ Expected<SceneInfoResult, CommandError> sceneNew(CommandContext& context, const 
     if (!context.dryRun())
     {
         context.editor().newScene();
+        context.editor().setPrefabEditStack({}); // leaving prefab edit mode
     }
     return sceneInfo(context.editor());
 }
@@ -61,6 +62,7 @@ Expected<SceneInfoResult, CommandError> sceneOpen(CommandContext& context, const
     {
         return unexpected(std::move(opened).error());
     }
+    context.editor().setPrefabEditStack({}); // leaving prefab edit mode
     for (std::string& warning : warnings)
     {
         context.warn(std::move(warning));

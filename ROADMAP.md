@@ -435,10 +435,13 @@ Plan: `docs/plans/m7-editor.md` (sub-milestones, command API, localization, them
     and keep their overrides), linked paste of whole instances (`entity.duplicate` makes plain copies), and a
     prefab-aware reference index: scenes refer through their instances, and `asset.move` rewrites prefab
     files and the scenes instancing them without adding overrides
-  - M7v-3: prefab editor UI and edit mode (`prefab.open`, `prefab.close`): create by dragging a selection to the browser, instantiate by dragging into
-    the viewport or Outliner, prefab edit mode with a breadcrumb, overrides shown in the Inspector with
-    per-field/Component/all apply and revert, and prefab file changes propagating into open scenes as an
-    undoable step
+  - M7v-3a: ✅ prefab edit mode (`prefab.open`, `prefab.close`, an Outliner breadcrumb, scene.save writing
+    the prefab), prefab file changes propagating into the open scene as one undoable step that keeps
+    overrides (`prefab.refresh`, run by the editor when a tracked prefab changes), and the Inspector's prefab
+    bar (edit, apply all, revert, unpack) with overridden Components marked bold with an accent bar and
+    applied or reverted from their menu
+  - M7v-3b: create a prefab by dragging a selection to the Asset Browser, instantiate by dragging a prefab into
+    the viewport or Outliner, and per-field override marks with per-field apply and revert
 - M7w: Engine feature panels: rendering, physics, audio mixer, input actions, gamepad tester, profiler,
   diagnostics; gamepad navigation of the editor window through `GamepadSystem` (from M7l)
 - M7x: Showcase scene covering every Component and the scripting API; Tetris built by an agent end to end

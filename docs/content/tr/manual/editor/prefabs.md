@@ -60,6 +60,31 @@ adımdır.
 {"entity": "/Level/Crate", "all": true}
 ```
 
+## Bir prefab'ı düzenleme
+
+`prefab.open` bir prefab dosyasını sahnenin yerine düzenlemek için açar (kaydedilmemiş değişiklikler
+`discardChanges` ister). Outliner ardından sahneden prefab'a uzanan bir breadcrumb gösterir; `scene.save`
+prefab dosyasını yazar, geri düğmesi ya da `prefab.close` ise sahneyi yeniden açar; sahnenin instance'ları
+değişiklikleri gösterir.
+
+```json
+{"path": "assets:/props/crate.prefab", "discardChanges": false}
+```
+
+## Bir prefab dosyası değiştiğinde
+
+Editör, açık sahnenin instance'larının her prefab dosyasının hangi sürümünden yapıldığını hatırlar. Bir
+prefab dosyası diskte değiştiğinde (bir sanatçının aracı, `git checkout`, başka bir editör) instance'lar bir
+sonraki karede onu izler ve override'larını korur; güncelleme, ajanların kendilerinin de çalıştırabildiği
+`prefab.refresh` adını taşıyan, geri alınabilir tek bir adımdır.
+
+## Inspector'da
+
+Bir instance Entity'si adının altında bir prefab çubuğu gösterir: prefab dosyası ve prefab'ı düzenleme
+(`prefab.open`), bütün instance'ı uygulama (`all` ile `prefab.apply`), Entity'yi geri döndürme
+(`prefab.revert`) ve instance'ın paketini açma düğmeleri. Prefab'dan farklı olan Component'lerin başlığı kalın
+ve vurgu çubukludur; menüleri o Component'i uygular ya da geri döndürür.
+
 ## Kopyalama ve çoğaltma
 
 Bütün bir instance'ı (kökünü) panoya kopyalayıp yapıştırmak, aynı override'larla yeni, bağlı bir instance
@@ -80,6 +105,6 @@ instance'larını içeren sahneleri tek adımda, taşımayı override'lara dön�
 
 ## Şimdilik sınırlar
 
-- Bir sahne ve instance'ları açıkken bir prefab dosyası diskte (`prefab.apply` dışında) değişirse, açık
-  instance'lar sahne yeniden açıldığında güncellenir. Prefab'ın artık sahip olmadığı Entity'ler o zaman sıradan
-  Entity'ler olarak kaydedilir.
+- Bir instance'ın prefab'ının artık sahip olmadığı Entity'ler sıradan Entity'ler olarak kaydedilir.
+- Prefab'lar komutlar ve komut paleti ile oluşturulup yerleştirilir; Asset Browser'dan sürüklemek daha sonra
+  gelecek.

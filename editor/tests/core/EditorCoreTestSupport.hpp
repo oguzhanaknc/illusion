@@ -161,9 +161,16 @@ inline JsonDocument ok(editor::EditorContext& editor, std::string_view name, std
     return parseJson(*result);
 }
 
-/// Runs a setup of EditorCommandCases.hpp: "name" (with {} params) or "name {params}".
+/// Runs a setup of EditorCommandCases.hpp: "name" (with {} params) or "name {params}", several separated by
+/// " ; ".
 inline void runSetup(editor::EditorContext& editor, std::string_view setup)
 {
+    if (const usize next = setup.find(" ; "); next != std::string_view::npos)
+    {
+        runSetup(editor, setup.substr(0, next));
+        runSetup(editor, setup.substr(next + 3));
+        return;
+    }
     const usize space = setup.find(' ');
     if (space == std::string_view::npos)
     {
