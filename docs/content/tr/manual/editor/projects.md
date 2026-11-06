@@ -108,6 +108,19 @@ kaydedilmemiş değişiklikleri atmayı reddeder. Çalışma alanı yoksa `unsup
 `version`, struct'ın veri sürümüdür; böylece eski bir sürümün kaydettiği dosyalar okunurken taşınır (migrate,
 `readSettingsFile()`). Dosyanın söz etmediği alanlar varsayılan değerlerini korur.
 
+### Project Settings paneli
+
+**Project Settings** (Window → Project Settings) her proje ayar türünü listeler:
+[runtime](../runtime.md#proje-ayarlar)'ın Physics, Audio, Input ve Render türlerini ve oyunun kendi
+türlerini. Bir sayfa bir türün alanlarını Inspector'ın widget'larıyla gösterir; her değişiklik bir
+`project.settings_set` ve bir undo adımıdır (bir sürükleme tek adımdır). **Reset to defaults** sayfanın
+dosyasını siler. Undo ve redo sayfayı günceller.
+
+- **Physics** çarpışma katmanlarını bir tablo olarak gösterir: adı olan her katman için bir satır ve
+  adlandırmak için bir satır daha; her satırda katmanın adı ve çarpıştığı her katman için bir onay kutusu
+  bulunur. Bir onay kutusunu kaldırmak iki katmanı birbirinden ayırır.
+- **Audio**, `busVolumes`'un bus'larını adlandırır: ses efektleri, müzik, ortam sesi, diyalog ve arayüz.
+
 ## Çöken bir oturumu kurtarmak
 
 Editör bir projeyi açtığında `.illusion/journal/` içindeki diğer oturumların journal'ları, düzgün

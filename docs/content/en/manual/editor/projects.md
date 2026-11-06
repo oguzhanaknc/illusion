@@ -108,6 +108,17 @@ written by `project.settings_set` (see [the editor core](index.md#settings)):
 `version` is the data version of the struct, so files saved by an older version migrate when they are read
 (`readSettingsFile()`); fields the file does not mention keep their defaults.
 
+### The Project Settings panel
+
+**Project Settings** (Window → Project Settings) lists every project settings type: Physics, Audio, Input
+and Render of the [runtime](../runtime.md#project-settings) and the game's own types. A page shows the
+fields of one type with the Inspector's widgets; each change is one `project.settings_set` and one undo step
+(a drag is one step). **Reset to defaults** deletes the page's file. Undo and redo update the page.
+
+- **Physics** shows the collision layers as a table: a row per named layer, plus one more to name, with the
+  layer's name and a checkbox for each layer it collides with. Clearing a checkbox separates both layers.
+- **Audio** names the buses of `busVolumes`: sound effects, music, ambience, dialogue and interface.
+
 ## Recovering a crashed session
 
 When the editor opens a project, journals of other sessions in `.illusion/journal/` are sessions that

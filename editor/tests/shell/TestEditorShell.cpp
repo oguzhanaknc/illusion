@@ -3,6 +3,7 @@
 
 #include <illusion/core/FrameProfiler.hpp>
 #include <illusion/core/Log.hpp>
+#include <illusion/editor/play/PlaySession.hpp>
 #include <illusion/editor/rpc/RpcServer.hpp>
 
 #include <cmath>
@@ -1269,4 +1270,67 @@ TEST_CASE(
     REQUIRE(driver.click("diagnostics.issue.0"));
     driver.runFrames(2);
     CHECK(panelOpen(editor, "panel.console"));
+}
+
+TEST_CASE(
+    "the Project Settings panel edits project settings with undo, the collision matrix and resets a page")
+{
+    ShellFixture fixture;
+    EditorContext& editor = *fixture.editor;
+    test::addTestSettings(editor);
+    editor::registerRuntimeSettings(editor.settings());
+    test::ok(editor, "ui.show_panel", R"({"panel":"panel.project_settings"})");
+    ui::UiDriver driver(fixture.context, [&] { fixture.frame(); });
+    driver.runFrames(3);
+
+    // A field of the game's own settings, drawn by the Inspector's widgets.
+    REQUIRE(driver.click("project_settings.page.test.Controls"));
+    driver.runFrames(2);
+    REQUIRE(driver.click("settings.test.Controls.invertY"));
+    driver.runFrames(2);
+    const auto invertY = [&] {
+        return test::ok(editor, "project.settings_get", R"({"type":"test.Controls"})")
+            .root()
+            .pointer("/settings/0/value/invertY")
+            .asBool();
+    };
+    CHECK(invertY() == std::optional<bool>(true));
+    test::ok(editor, "history.undo");
+    driver.runFrames(2);
+    CHECK(invertY() == std::optional<bool>(false));
+    // The page reads the file again after the undo: clicking turns it on again rather than off.
+    REQUIRE(driver.click("settings.test.Controls.invertY"));
+    driver.runFrames(2);
+    CHECK(invertY() == std::optional<bool>(true));
+
+    // The physics page draws the collision matrix: layer 0 against itself.
+    REQUIRE(driver.click("project_settings.page.illusion.PhysicsSettings"));
+    driver.runFrames(2);
+    REQUIRE(driver.click("project_settings.collision.0.0"));
+    driver.runFrames(2);
+    const auto firstRow = [&] {
+        return test::ok(editor, "project.settings_get", R"({"type":"illusion.PhysicsSettings"})")
+            .root()
+            .pointer("/settings/0/value/collisionMatrix/0")
+            .asU64();
+    };
+    CHECK(firstRow() == std::optional<u64>(0xFFFEu));
+    // Naming the next layer adds a row for it.
+    REQUIRE(driver.click("project_settings.layer.1"));
+    driver.typeText("Debris");
+    driver.pressKey(ImGuiKey_Enter);
+    driver.runFrames(2);
+    CHECK(test::ok(editor, "project.settings_get", R"({"type":"illusion.PhysicsSettings"})")
+              .root()
+              .pointer("/settings/0/value/layerNames/1")
+              .asString() == "Debris");
+    CHECK(driver.find("project_settings.layer.2").has_value());
+    REQUIRE(driver.click("project_settings.reset"));
+    driver.runFrames(2);
+    CHECK(firstRow() == std::optional<u64>(0xFFFFu));
+    CHECK_FALSE(test::ok(editor, "project.settings_get", R"({"type":"illusion.PhysicsSettings"})")
+                    .root()
+                    .pointer("/settings/0/present")
+                    .asBool()
+                    .value_or(true));
 }

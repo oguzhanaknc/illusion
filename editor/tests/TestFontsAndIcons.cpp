@@ -99,7 +99,7 @@ const text::MessageArgument kSampleArguments[] = {
     {"distance", "2.500"}, {"x", "1.500"},           {"y", "-2.000"},
     {"z", "0.000"},        {"elevation", "-53.130"}, {"name", "ship"},
     {"subject", "scene"},  {"average", 8.3},         {"max", 16.7},
-    {"errors", 1},         {"warnings", 2},
+    {"errors", 1},         {"warnings", 2},          {"file", "settings:/physics.json"},
 };
 
 TEST_CASE("every character of the editor strings in English and en-XA has a glyph in every text font")
