@@ -104,7 +104,7 @@ TEST_CASE("invalid params of every command give structured errors and never reac
         EditorContext& editor = *fixture.editor;
         if (const std::string_view setup = test::setupOf(entry.name); !setup.empty())
         {
-            test::ok(editor, setup);
+            test::runSetup(editor, setup);
         }
         const CommandDescriptor& command = *editor.commands().find(entry.name);
         JsonMutDocument schemaDoc;

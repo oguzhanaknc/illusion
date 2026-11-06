@@ -31,6 +31,7 @@ void registerGizmoCommands(CommandRegistry& registry);
 void registerClipboardCommands(CommandRegistry& registry);
 void registerAssetCommands(CommandRegistry& registry);
 void registerMaterialCommands(CommandRegistry& registry);
+void registerPrefabCommands(CommandRegistry& registry);
 void registerLogCommands(CommandRegistry& registry);
 void registerSettingsCommands(CommandRegistry& registry);
 void registerUiCommands(CommandRegistry& registry);

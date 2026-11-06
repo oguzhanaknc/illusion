@@ -1027,8 +1027,53 @@ Expected<bool, CommandError> WorldEditor::assignComponent(Entity entity, Compone
     return changed;
 }
 
+u32 WorldEditor::redirectReferences(const std::unordered_map<u64, Entity>& targets)
+{
+    std::vector<Entity> all;
+    m_world->entities(all);
+    std::vector<Watch> watches;
+    u32 changed = 0;
+    for (const Entity entity : all)
+    {
+        if (targets.contains(entity.toBits()))
+        {
+            continue;
+        }
+        for (const ComponentId type : m_world->componentsOf(entity))
+        {
+            if (type == componentId<Hierarchy>() || !hasEntityFields(type))
+            {
+                continue;
+            }
+            const TypeReflection& reflection = *m_world->registry().reflection(type);
+            void* data = m_world->componentData(entity, type);
+            bool refers = false;
+            auto check = [&](Entity& value) {
+                refers = refers || targets.contains(value.toBits());
+            };
+            forEachEntityField(reflection, data, check);
+            if (!refers)
+            {
+                continue;
+            }
+            watch(watches, entity, type);
+            auto redirect = [&](Entity& value) {
+                if (const auto it = targets.find(value.toBits()); it != targets.end())
+                {
+                    value = it->second;
+                    ++changed;
+                }
+            };
+            forEachEntityField(reflection, data, redirect);
+        }
+    }
+    finish(watches);
+    return changed;
+}
+
 Expected<std::vector<Entity>, CommandError> WorldEditor::paste(std::string_view scene, Entity parent,
-                                                               std::optional<u32> index)
+                                                               std::optional<u32> index,
+                                                               const PrefabSource& prefabs)
 {
     ILL_PROFILE_SCOPE();
     if (!parent.isNull() && !m_world->isAlive(parent))
@@ -1038,6 +1083,7 @@ Expected<std::vector<Entity>, CommandError> WorldEditor::paste(std::string_view 
     SceneLoadOptions options;
     options.ids = IdPolicy::Regenerate;
     options.guids = m_guids;
+    options.prefabs = prefabs;
     // loadScene() adds nothing when it fails.
     const SceneLoadResult loaded = loadScene(*m_world, scene, options);
     if (!loaded.ok())

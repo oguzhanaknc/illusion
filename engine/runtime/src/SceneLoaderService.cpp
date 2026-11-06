@@ -32,7 +32,7 @@ std::optional<u32> SceneLoaderService::instantiate(std::string_view virtualPath,
                                                                : std::nullopt;
     };
     std::vector<Entity> entities;
-    if (virtualPath.ends_with(".prefab"))
+    if (virtualPath.ends_with(kPrefabExtension))
     {
         PrefabInstantiateResult placed =
             instantiatePrefab(m_world, PrefabData{std::string(virtualPath), m_text}, Entity{},

@@ -3,6 +3,7 @@
 #include <illusion/core/Hash.hpp>
 #include <illusion/core/Json.hpp>
 #include <illusion/core/Profiler.hpp>
+#include <illusion/ecs/Prefab.hpp>
 #include <illusion/editor/core/AssetCatalog.hpp>
 #include <illusion/editor/core/ReferenceIndex.hpp>
 #include <illusion/platform/FileSystem.hpp>
@@ -110,7 +111,7 @@ bool dependenciesOf(std::string_view text, const std::string& path, std::vector<
     const std::string extension = lowerExtension(path);
     std::vector<AssetReference> references;
     Expected<void, std::string> scanned;
-    if (extension == kSceneExtension)
+    if (extension == kSceneExtension || extension == kPrefabExtension)
     {
         scanned = sceneReferences(text, path, references);
     }
@@ -142,7 +143,8 @@ bool dependenciesOf(std::string_view text, const std::string& path, std::vector<
 bool parsesDependencies(std::string_view path)
 {
     const std::string extension = lowerExtension(path);
-    return extension == kSceneExtension || extension == kMaterialAssetExtension || extension == ".gltf";
+    return extension == kSceneExtension || extension == kPrefabExtension ||
+           extension == kMaterialAssetExtension || extension == ".gltf";
 }
 
 void sortUnique(std::vector<std::string>& paths)
@@ -224,6 +226,10 @@ std::string_view assetKindOf(std::string_view path, bool isDirectory)
     if (extension == kSceneExtension)
     {
         return "Scene";
+    }
+    if (extension == kPrefabExtension)
+    {
+        return "Prefab";
     }
     if (extension == kMaterialAssetExtension)
     {

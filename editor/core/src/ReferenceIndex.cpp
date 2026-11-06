@@ -451,6 +451,9 @@ rewriteSceneReferences(std::string_view json, std::string_view from, std::string
     }
     SceneSaveOptions options;
     options.preservedSettings = scene.result.preservedSettings;
+    // A prefab file stays one (the scene layout is shared).
+    const Expected<JsonDocument, JsonError> source = JsonDocument::parse(json);
+    options.prefabFile = source && source->root().find("format").asString() == "illusion.prefab";
     SceneSaveResult saved = saveScene(scene.world, options);
     if (!saved.ok())
     {
@@ -559,6 +562,7 @@ void ReferenceIndex::refresh(const VirtualFileSystem& files)
     ILL_PROFILE_SCOPE();
     std::vector<std::string> paths;
     filesWithExtension(files, kAssetsRoot, kSceneExtension, paths);
+    filesWithExtension(files, kAssetsRoot, kPrefabExtension, paths);
     filesWithExtension(files, kAssetsRoot, kMaterialAssetExtension, paths);
     filesWithExtension(files, kSettingsRoot, ".json", paths);
     std::map<std::string, FileEntry, std::less<>> next;
@@ -580,7 +584,7 @@ void ReferenceIndex::refresh(const VirtualFileSystem& files)
         }
         const std::string extension = lowerExtension(path);
         Expected<void, std::string> scanned;
-        if (extension == kSceneExtension)
+        if (extension == kSceneExtension || extension == kPrefabExtension)
         {
             scanned = sceneReferences(text, path, file.references);
         }

@@ -427,11 +427,14 @@ Plan: `docs/plans/m7-editor.md` (sub-milestones, command API, localization, them
     `.prefab` files, the editor opening and saving scenes with instances, undo keeping prefab links,
     `asset.references`/`asset.move` seeing record prefabs; benchmarks `prefab/instantiate` and
     `prefab/save-records`
-  - M7v-2: `prefab.*` commands (`create`, `instantiate`, `open`, `close`, `apply`, `revert`, `unpack`,
-    `overrides`), the `Prefab` asset kind in the catalog and browser, linked paste of whole instances, and a
-    prefab-aware reference index (asset references inside overrides and in `.prefab` files; rewriting
-    scenes whose entities refer into instances, which M7v-1 refuses)
-  - M7v-3: prefab editor UI: create by dragging a selection to the browser, instantiate by dragging into
+  - M7v-2: ✅ `prefab.create` (replaces the entities with an instance and redirects references to it),
+    `prefab.instantiate`, `prefab.unpack`, `prefab.overrides` and `prefab.revert`; the `Prefab` asset kind in
+    the catalog, `asset.list` and the browser; `.prefab` files in the reference index; members a changed
+    prefab no longer has saved as plain entities; `manual/editor/prefabs.md`
+  - M7v-2b: `prefab.apply` (write overrides into the prefab file), linked paste of whole instances, and a
+    prefab-aware reference index (asset references inside overrides; rewriting scenes whose entities refer
+    into instances, which M7v-1 refuses)
+  - M7v-3: prefab editor UI and edit mode (`prefab.open`, `prefab.close`): create by dragging a selection to the browser, instantiate by dragging into
     the viewport or Outliner, prefab edit mode with a breadcrumb, overrides shown in the Inspector with
     per-field/Component/all apply and revert, and prefab file changes propagating into open scenes as an
     undoable step

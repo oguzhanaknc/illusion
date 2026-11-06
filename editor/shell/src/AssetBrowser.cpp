@@ -126,6 +126,10 @@ ui::Icon kindIcon(std::string_view kind) noexcept
     {
         return ui::icons::kLandscape;
     }
+    if (kind == "Prefab")
+    {
+        return ui::icons::kWidgets;
+    }
     if (kind == "Material")
     {
         return ui::icons::kPalette;
@@ -150,8 +154,8 @@ ui::Icon kindIcon(std::string_view kind) noexcept
 }
 
 // The file kinds of kAssetKinds without "Folder", in display order.
-constexpr std::array<std::string_view, 7> kFileKinds{"Scene",       "Material",  "Model", "Texture",
-                                                     "Environment", "AudioClip", "Other"};
+constexpr std::array<std::string_view, 8> kFileKinds{"Scene",   "Prefab",      "Material",  "Model",
+                                                     "Texture", "Environment", "AudioClip", "Other"};
 
 // @p bytes as a short human-readable size into @p out.
 void formatSize(u64 bytes, char* out, usize cap) noexcept
@@ -599,14 +603,15 @@ void AssetBrowser::State::drawToolbar(Impl& shell, ui::UiKit& kit)
         std::max(ImGui::GetContentRegionAvail().x - trailing, kMinSearchWidth * kit.scale));
     ui::searchField(kit, "asset_browser.search", search, text.format(s::kAssetBrowserSearch));
     ImGui::SameLine();
-    const char* kindItems[8];
+    const char* kindItems[kFileKinds.size() + 1];
     kindItems[0] = text.format(s::kAssetBrowserKindAll);
     for (usize i = 0; i < kFileKinds.size(); ++i)
     {
         kindItems[i + 1] = text.copy(kFileKinds[i]);
     }
     ImGui::SetNextItemWidth(kKindComboWidth * kit.scale);
-    if (ImGui::Combo(text.hidden("asset_browser.kind"), &kind, kindItems, 8))
+    if (ImGui::Combo(text.hidden("asset_browser.kind"), &kind, kindItems,
+                     static_cast<int>(kFileKinds.size() + 1)))
     {
         entriesVersion = ~u64{0};
     }
