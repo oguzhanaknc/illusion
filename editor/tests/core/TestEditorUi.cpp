@@ -210,6 +210,27 @@ TEST_CASE("preferences.set saves to the user directory and the next editor loads
               .asString() == std::optional<std::string_view>("high-contrast"));
 }
 
+TEST_CASE("preferences.set merges the viewport quality field by field and refuses values out of range")
+{
+    EditorContext editor(EditorContextOptions{.seed = 1});
+    ok(editor, "preferences.set", R"({"value":{"viewportQuality":{"shadows":false}}})");
+    ok(editor, "preferences.set", R"({"value":{"viewportQuality":{"shadowCascades":2}}})");
+    CHECK_FALSE(editor.preferences().viewportQuality.shadows);
+    CHECK(editor.preferences().viewportQuality.shadowCascades == 2);
+    CHECK(editor.preferences().viewportQuality.bloom);
+    for (const std::string_view bad : {R"({"shadowCascades":5})", R"({"shadowResolution":100})",
+                                       R"({"shadowDistance":2})", R"({"bloomIntensity":1.5})"})
+    {
+        INFO(bad);
+        const CommandError error =
+            fails(editor, "preferences.set",
+                  std::string(R"({"value":{"viewportQuality":)") + std::string(bad) + "}}");
+        REQUIRE_FALSE(error.errors.empty());
+        CHECK(error.errors.front().pointer.starts_with("/value/viewportQuality/"));
+    }
+    CHECK(editor.preferences().viewportQuality.shadowCascades == 2);
+}
+
 TEST_CASE("preferences.set reports the invalid field with a pointer and suggestions")
 {
     EditorContext editor(EditorContextOptions{.seed = 1});

@@ -17,6 +17,7 @@
 #include <illusion/editor/ui/UiRenderer.hpp>
 #include <illusion/editor/viewport/EditorCamera.hpp>
 #include <illusion/editor/viewport/PickCandidates.hpp>
+#include <illusion/editor/viewport/RenderQuality.hpp>
 #include <illusion/editor/viewport/ResizePolicy.hpp>
 #include <illusion/editor/viewport/ThumbnailRenderer.hpp>
 #include <illusion/editor/viewport/ViewportService.hpp>
@@ -52,8 +53,6 @@ constexpr f32 kCycleDistance = 2.0f;
 constexpr std::string_view kSceneId = "scene";
 constexpr std::string_view kGameId = "game";
 // Shadows of the secondary viewports.
-constexpr u32 kSecondaryCascades = 2;
-constexpr u32 kSecondaryShadowResolution = 1024;
 // Marks picks and readbacks of a closed viewport.
 constexpr usize kClosed = ~usize{0};
 // Readback slots shared by picks, hovers and readbacks.
@@ -228,7 +227,9 @@ struct ViewportService::Impl
         Entity sceneCamera{}; // the Camera a Game viewport looked through last
         u32 frames = 0;
         RenderStats renderStats;
-        RenderGpuTimings gpuTimings; // the newest frame the GPU has finished
+        RenderGpuTimings gpuTimings;            // the newest frame the GPU has finished
+        bool secondary = false;                 // an extra Scene view (reduced shadows)
+        std::optional<ViewportQuality> quality; // what the renderer was last set to
         // Hover: the entity under the cursor, read from the ids one pixel at a time.
         bool hoverWanted = false;
         Vec2 hoverPixel{0.0f};
@@ -597,10 +598,11 @@ struct ViewportService::Impl
         desc.gpuTimers = true; // for the Profiler panel and render.stats
         if (secondary)
         {
-            desc.shadows.cascadeCount = kSecondaryCascades;
+            desc.shadows.cascadeCount = kSecondaryShadowCascades;
             desc.shadows.resolution = kSecondaryShadowResolution;
         }
         viewport.renderer = SceneRenderer::create(device, resources, desc);
+        viewport.secondary = secondary;
         viewport.overlays = detail::ViewportOverlays::create(device, kColorFormat);
         viewport.debugRenderer = DebugDrawRenderer::create(device, kColorFormat);
         if (!viewport.renderer || !viewport.overlays || !viewport.debugRenderer)
@@ -610,6 +612,20 @@ struct ViewportService::Impl
         viewport.icons.reserve(64);
         viewports.push_back(std::move(viewport));
         return true;
+    }
+
+    // Gives the renderer of @p viewport the user's render quality when it changed.
+    static void applyQuality(Viewport& viewport, const ViewportQuality& quality)
+    {
+        if (viewport.quality == quality)
+        {
+            return;
+        }
+        viewport.quality = quality;
+        SceneRenderer& renderer = *viewport.renderer;
+        renderer.setShadowSettings(shadowSettingsOf(quality, renderer.shadowSettings(), viewport.secondary));
+        renderer.setPostProcessSettings(postProcessSettingsOf(quality, renderer.postProcessSettings()));
+        renderer.setOcclusionCulling(quality.occlusionCulling);
     }
 
     // Recreates the colour target of @p viewport at its settled size; the old one is retired.
@@ -989,7 +1005,7 @@ struct ViewportService::Impl
         {
             SceneRendererDesc desc;
             desc.colorFormat = kColorFormat;
-            desc.shadows.cascadeCount = kSecondaryCascades;
+            desc.shadows.cascadeCount = kSecondaryShadowCascades;
             desc.shadows.resolution = kSecondaryShadowResolution;
             previewRenderer = SceneRenderer::create(device, resources, desc);
             if (!previewRenderer)
@@ -1205,6 +1221,7 @@ struct ViewportService::Impl
         }
         viewport.renderer->setDebugView(debugViewOf(viewport.settings.shading));
         (void)viewport.renderer->setWireframeOverlay(viewport.settings.wireframe);
+        applyQuality(viewport, editor.preferences().viewportQuality);
 
         commands->open();
         viewport.renderer->render(commands, viewport.color, shown(), view, &jobs);

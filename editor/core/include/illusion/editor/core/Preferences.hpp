@@ -44,6 +44,24 @@ struct ShortcutBinding
     std::string chord;  ///< Chord such as "Ctrl+Shift+Z" (see parseChord()); "" removes the shortcut.
 };
 
+/// Render quality of the editor's viewports (the Rendering panel). Secondary Scene views keep at most two
+/// shadow cascades of at most 1,024 texels.
+struct ViewportQuality
+{
+    bool shadows = true;               ///< Shadows of the first shadow-casting DirectionalLight.
+    u32 shadowCascades = 4;            ///< Shadow cascades, 1 to 4.
+    u32 shadowResolution = 2048;       ///< Size of each cascade's shadow map, 512 to 4,096 texels.
+    f32 shadowDistance = 80.0f;        ///< View distance where shadows end, 5 to 1,000 m.
+    bool ambientOcclusion = true;      ///< Screen-space ambient occlusion.
+    bool bloom = true;                 ///< Bloom.
+    f32 bloomIntensity = 0.04f;        ///< Fraction of the image replaced by its blurred copy, 0 to 1.
+    bool temporalAntiAliasing = false; ///< Temporal anti-aliasing.
+    bool occlusionCulling = true;      ///< GPU occlusion culling of hidden opaque objects.
+
+    /// Member-wise comparison.
+    friend bool operator==(const ViewportQuality&, const ViewportQuality&) = default;
+};
+
 /// Everything a user can set in Preferences.
 struct Preferences
 {
@@ -61,6 +79,8 @@ struct Preferences
     /// Mouse navigation of the Scene views: "keymap" (the keymap preset's), "illusion", "unity", "unreal" or
     /// "blender".
     std::string viewportNavigation = "keymap";
+    // Rendering
+    ViewportQuality viewportQuality{}; ///< Render quality of the viewports.
     // AI agents
     std::string agentPermissions = "ask"; ///< Permission mode of agents in the window: read-only, ask, auto.
     bool approvalPopups = true;           ///< Show a pop-up when an agent asks for approval.
@@ -83,7 +103,8 @@ struct Preferences
     std::string layout = "default";          ///< The layout used last (see `ui.layout_apply`).
 };
 
-/// Reflects ShortcutBinding and Preferences as "editor.ShortcutBinding" and "editor.Preferences" in
+/// Reflects ShortcutBinding, ViewportQuality and Preferences as "editor.ShortcutBinding",
+/// "editor.ViewportQuality" and "editor.Preferences" in
 /// @p structs (once; later calls do nothing).
 void reflectPreferences(StructRegistry& structs);
 

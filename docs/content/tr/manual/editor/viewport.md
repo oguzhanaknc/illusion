@@ -134,6 +134,22 @@ Okabe-Ito renklerini kullanır).
 Panel yeniden boyutlandırılırken görüntü, boyut 150 ms boyunca değişmeyene ya da fare düğmesi bırakılana kadar
 esnetilir; sonra viewport yeni boyutta çizer.
 
+## Rendering paneli
+
+**Rendering** paneli (Window → Rendering veya `profiling` yerleşimi) her viewport'un render kalitesini ayarlar:
+gölgeler (açık veya kapalı, 1 ile 4 arası cascade, cascade başına 512 ile 4.096 texel, 5 ile 1.000 m),
+ambient occlusion, bloom ve şiddeti, temporal anti-aliasing ve GPU occlusion culling. Ek Scene görünümleri en
+fazla 1.024 texel'lik iki cascade tutar. Kalite `viewportQuality` tercihidir; bu yüzden kullanıcı için
+kaydedilir ve ajanlar onu `preferences.set` ile değiştirir:
+
+```json
+{"value": {"viewportQuality": {"shadows": false, "temporalAntiAliasing": true}}}
+```
+
+Panel kalitenin altında GPU'yu (aygıt, sürücü, Vulkan sürümü, validation hataları) ve her viewport'un son
+karesinde ne çizdiğini gösterir: draw call'lar, üçgenler, görünür nesneler ve gölge düşürenler. Her Render
+Pass'in GPU süresi [Profiler](profiler.md#gpu)'dadır.
+
 ## Komutlar
 
 | Komut | Yaptığı iş |

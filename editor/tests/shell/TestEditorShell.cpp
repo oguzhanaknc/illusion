@@ -1334,3 +1334,20 @@ TEST_CASE(
                     .asBool()
                     .value_or(true));
 }
+
+TEST_CASE("the Rendering panel changes the viewport quality preferences")
+{
+    ShellFixture fixture;
+    EditorContext& editor = *fixture.editor;
+    test::ok(editor, "ui.show_panel", R"({"panel":"panel.rendering"})");
+    ui::UiDriver driver(fixture.context, [&] { fixture.frame(); });
+    driver.runFrames(3);
+    REQUIRE(driver.click("rendering.shadows"));
+    driver.runFrames(2);
+    CHECK_FALSE(editor.preferences().viewportQuality.shadows);
+    REQUIRE(driver.click("rendering.temporalAntiAliasing"));
+    driver.runFrames(2);
+    CHECK(editor.preferences().viewportQuality.temporalAntiAliasing);
+    // Without a GPU the panel says so instead of listing viewports.
+    CHECK_FALSE(driver.find("rendering.gpu").has_value());
+}

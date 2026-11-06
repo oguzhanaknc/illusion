@@ -473,6 +473,19 @@ private:
     std::unique_ptr<State> m_state;
 };
 
+/// The Rendering panel: the render quality of the viewports (a preference), the GPU and each viewport's last
+/// frame.
+class RenderingPanel
+{
+public:
+    /// Draws the panel's content.
+    void draw(Impl& shell);
+
+private:
+    std::vector<std::string> m_viewports; // ids, read again when the host's list changes
+    u64 m_viewportsVersion = ~u64{0};
+};
+
 /// The Project Settings panel: a page per project settings type, edited through `project.settings_set`.
 class ProjectSettingsPanel
 {
