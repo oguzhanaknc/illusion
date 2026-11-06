@@ -175,7 +175,9 @@ physics.overlap(ball, explosionCenter, identity, inRange);
 - Queries take any `Collider` except `Mesh`; its `offset` and `rotation` apply.
 - Sensors are skipped; `ignore` (the last argument of `raycast()`, `shapeCast()` and `overlap()`) skips
   one Entity's body, for example the player's own character.
-- `shapeCast()` reports the first contact; a shape that starts inside a body hits it at distance 0.
+- `shapeCast()` reports the first contact; a shape that starts inside a body hits it at distance 0. An
+  overload takes a `scale` after the rotation and scales the shape (offset included) as a body with that
+  Transform scale would; it builds the shape for each call, so keep the unscaled one in per-frame code.
 
 ## Characters
 

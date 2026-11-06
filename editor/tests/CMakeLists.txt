@@ -56,7 +56,8 @@ target_link_libraries(illusion_editor_tests PRIVATE
     illusion::editor_viewport illusion::editor_play
     illusion::render illusion::input illusion::physics illusion::audio illusion::doctest)
 # Golden files of the editor core (ILLUSION_UPDATE_GOLDENS=1 rewrites them).
-target_compile_definitions(illusion_editor_tests PRIVATE ILLUSION_EDITOR_TEST_DATA="${CMAKE_CURRENT_SOURCE_DIR}/data")
+target_compile_definitions(illusion_editor_tests PRIVATE ILLUSION_EDITOR_TEST_DATA="${CMAKE_CURRENT_SOURCE_DIR}/data"
+    ILLUSION_ENGINE_TEST_DATA="${PROJECT_SOURCE_DIR}/tests/data")
 # The client tests launch the editor.
 target_compile_definitions(illusion_editor_tests PRIVATE ILLUSION_EDITOR_EXECUTABLE="$<TARGET_FILE:illusion_editor>"
     ILLUSION_MCP_EXECUTABLE="$<TARGET_FILE:illusion_mcp>")

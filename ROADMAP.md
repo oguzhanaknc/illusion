@@ -482,8 +482,12 @@ Plan: `docs/plans/m7-editor.md` (sub-milestones, command API, localization, them
   world of static bodies from every Collider (sensors and inactive entities left out) and the ground plane;
   the falling Colliders are shape-cast down, entities without one cast a ray from the bottom of their box. Tests
   with Jolt (boxes, a scaled sphere, a capsule, a sensor, a disabled floor, a child following its parent)
-- M7w-3d: Drop onto ConvexHull and Mesh Colliders made from mesh assets (cooked for the edit World through a
-  `PhysicsAssetResolver`)
+- M7w-3d: ✅ Mesh asset colliders: drop onto colliders loads and cooks ConvexHull and Mesh Colliders made from
+  mesh assets (an `AssetStreamer` and a `PhysicsAssetResolver` of `EditorPhysicsQueries`, geometry kept between
+  drops and cooked again when the model file changes) and sweeps falling convex hulls; a scaled
+  `PhysicsWorld::shapeCast()` overload. Play mode in the editor now gets an `AssetStreamer` too: before, mesh
+  colliders had no shape there and audio clips loaded on the editor thread (fixed-step sessions and steps wait
+  for the loads, so they stay deterministic)
 - M7w-4: Multiple simultaneous Inspector instances (from M7m)
 - M7x: Showcase scene covering every Component and the scripting API; Tetris built by an agent end to end
 

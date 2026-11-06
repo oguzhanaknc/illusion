@@ -153,7 +153,9 @@ Her biri tek bir geri alma adımıdır.
 
 **Collider'lara bırak** için her Collider, RigidBody'si olsun ya da olmasın, statik bir yüzeydir; sensor'lar ve
 etkin olmayan Entity'ler değildir. Bir yüzeyin içinde başlayan Entity yerinde kalır. Mesh Asset'lerinden yapılan
-ConvexHull ve Mesh Collider'ları henüz kullanılmaz (editör onları yalnızca Play modunda hazırlar).
+ConvexHull ve Mesh Collider'ları (örneğin bir arazi) onlara ihtiyaç duyan ilk bırakmada yüklenip hazırlanır ve
+model dosyaları değişene kadar sonrakiler için saklanır. Düşen bir ConvexHull diğer şekiller gibi süpürülür;
+üçgen Mesh süpürülemez, bu yüzden tek Collider'ı üçgen Mesh olan bir Entity kutusunun altından düşer.
 
 ## Komutlar
 

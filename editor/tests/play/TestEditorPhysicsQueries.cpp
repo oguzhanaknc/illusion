@@ -2,9 +2,14 @@
 
 #include "core/EditorCoreTestSupport.hpp"
 
+#include <illusion/assets/AssetStreamer.hpp>
+#include <illusion/audio/AudioComponents.hpp>
 #include <illusion/core/JobSystem.hpp>
 #include <illusion/editor/play/EditorPhysicsQueries.hpp>
+#include <illusion/editor/play/PlaySession.hpp>
 #include <illusion/physics/PhysicsComponents.hpp>
+
+#include <filesystem>
 
 using namespace illusion;
 using namespace illusion::editor;
@@ -97,4 +102,66 @@ TEST_CASE("drop to ground onto colliders needs physics queries")
     ok(*fixture.editor, "entity.create", R"({"name":"Crate","components":{"illusion.Transform":{}}})");
     CHECK(fails(*fixture.editor, "transform.drop_to_ground", R"({"entities":["/Crate"],"onto":"colliders"})")
               .kind == ErrorKind::Unsupported);
+}
+
+namespace
+{
+
+// A 10 m quad lying flat at y = 2 as a triangle Mesh Collider from a glTF file of the project (the quad of
+// tests/data/gltf/binary.glb stands in the XY plane: turned -90 degrees about X it faces up), with the
+// Components in @p body as well.
+void addQuadFloor(PhysicsFixture& fixture, std::string_view body = "")
+{
+    const std::filesystem::path models = fixture.base.directory.path / "project" / "assets" / "models";
+    std::filesystem::create_directories(models);
+    std::filesystem::copy_file(utf8Path(ILLUSION_ENGINE_TEST_DATA) / "gltf" / "binary.glb",
+                               models / "quad.glb", std::filesystem::copy_options::overwrite_existing);
+    fixture.create(R"({"name":"Quad","components":{"illusion.Transform":{"position":[0,2,0],)"
+                   R"("rotation":[-0.70710678,0,0,0.70710678],"scale":[5,5,5]},)" +
+                   std::string(body) +
+                   R"("illusion.Collider":{"shape":"Mesh","mesh":"assets:/models/quad.glb#mesh/0"}}})");
+}
+
+} // namespace
+
+TEST_CASE("drop to ground onto colliders loads mesh assets: triangle mesh surfaces and falling convex hulls")
+{
+    PhysicsFixture fixture;
+    EditorContext& editor = fixture.editor();
+    addQuadFloor(fixture);
+    fixture.create(R"({"name":"Crate","components":{"illusion.Transform":{"position":[3,6,0]},)"
+                   R"("illusion.Collider":{"shape":"Box","halfExtents":[0.5,0.5,0.5]}}})");
+    // A convex hull of the built-in unit cube, twice the size: its bottom is 1 m below its position.
+    fixture.create(
+        R"({"name":"Rock","components":{"illusion.Transform":{"position":[2,8,2],"scale":[2,2,2]},)"
+        R"("illusion.Collider":{"shape":"ConvexHull","mesh":"builtin:/mesh/cube"}}})");
+
+    ok(editor, "transform.drop_to_ground", R"({"entities":["/Crate","/Rock"],"onto":"colliders"})");
+    CHECK(fixture.height("/Crate") == doctest::Approx(2.5).epsilon(0.001));
+    CHECK(fixture.height("/Rock") == doctest::Approx(3.0).epsilon(0.001));
+
+    // The quad itself is a triangle mesh: it cannot be swept, so it falls from its position by a ray.
+    ok(editor, "transform.drop_to_ground", R"({"entities":["/Quad"],"onto":"colliders"})");
+    CHECK(fixture.height("/Quad") == doctest::Approx(0.0).epsilon(0.001));
+}
+
+TEST_CASE("Play mode gives mesh asset colliders their shape when the session has a streamer")
+{
+    PhysicsFixture fixture;
+    reflectAudioComponents();
+    EditorContext& editor = fixture.editor();
+    // Play mode simulates bodies only: the floor needs a static RigidBody.
+    addQuadFloor(fixture, R"("illusion.RigidBody":{"motionType":"Static"},)");
+    fixture.create(
+        R"({"name":"Ball","components":{"illusion.Transform":{"position":[0,4,0]},)"
+        R"("illusion.RigidBody":{"motionType":"Dynamic"},"illusion.Collider":{"shape":"Sphere","radius":0.5}}})");
+    AssetStreamer streamer(editor.files(), fixture.jobs, AssetStreamerDesc{.cacheMount = ""});
+    PlaySession play(
+        editor,
+        PlaySessionDesc{.jobs = &fixture.jobs, .streamer = &streamer, .audioOutput = AudioOutput::Offline});
+    ok(editor, "play.start", R"({"fixedStep":true})");
+    ok(editor, "play.step", R"({"steps":180})");
+    // The ball rests on the quad instead of falling through it to the ground.
+    CHECK(fixture.height("/Ball") == doctest::Approx(2.5).epsilon(0.01));
+    ok(editor, "play.stop");
 }

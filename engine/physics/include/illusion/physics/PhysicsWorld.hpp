@@ -203,6 +203,15 @@ public:
                                                         f32 maxDistance, u32 layerMask = 0xFFFFFFFFu,
                                                         Entity ignore = kNullEntity) const;
 
+    /// Like the shapeCast() above with @p shape scaled by @p scale, as a body with that Transform scale
+    /// would scale it (offset included; spheres and capsules need a uniform scale). A scale other than one
+    /// builds the shape for this call, so prefer the unscaled overload in per-frame code.
+    [[nodiscard]] std::optional<ShapeCastHit> shapeCast(const Collider& shape, const Vec3& position,
+                                                        const Quat& rotation, const Vec3& scale,
+                                                        const Vec3& direction, f32 maxDistance,
+                                                        u32 layerMask = 0xFFFFFFFFu,
+                                                        Entity ignore = kNullEntity) const;
+
     /// Replaces @p out with the Entities whose bodies overlap @p shape (any shape except Mesh) placed at
     /// @p position with @p rotation, sorted, each once. Sensors, bodies outside @p layerMask and the body
     /// of @p ignore are skipped. Returns the count. Reuse @p out to avoid allocations.

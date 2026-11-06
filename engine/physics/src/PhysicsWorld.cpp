@@ -1905,20 +1905,45 @@ std::optional<ShapeCastHit> PhysicsWorld::shapeCast(const Collider& shape, const
                                                     const Quat& rotation, const Vec3& direction,
                                                     f32 maxDistance, u32 layerMask, Entity ignore) const
 {
+    return shapeCast(shape, position, rotation, Vec3(1.0f), direction, maxDistance, layerMask, ignore);
+}
+
+std::optional<ShapeCastHit> PhysicsWorld::shapeCast(const Collider& shape, const Vec3& position,
+                                                    const Quat& rotation, const Vec3& scale,
+                                                    const Vec3& direction, f32 maxDistance, u32 layerMask,
+                                                    Entity ignore) const
+{
     const f32 length = glm::length(direction);
     if (length <= 0.0f || maxDistance <= 0.0f)
     {
         return std::nullopt;
     }
-    const QueryShape query(shape, m_impl->resolveGeometry(shape));
-    if (query.get() == nullptr)
+    // Unscaled shapes live on the stack; a scaled one is built like a body's shape (offset included).
+    std::optional<QueryShape> query;
+    JPH::RefConst<JPH::Shape> scaled;
+    const JPH::Shape* castShape = nullptr;
+    JPH::RMat44 placement;
+    if (scale == Vec3(1.0f))
+    {
+        castShape = query.emplace(shape, m_impl->resolveGeometry(shape)).get();
+        placement = QueryShape::transform(shape, position, rotation);
+    }
+    else
+    {
+        ILL_ASSERT(shape.shape != ColliderShape::Mesh,
+                   "queries cannot use Mesh colliders (they are not convex); use ConvexHull");
+        std::string error;
+        scaled = createShape(shape, scale, m_impl->resolveGeometry(shape), error);
+        castShape = scaled.GetPtr();
+        placement = JPH::RMat44::sRotationTranslation(toJolt(glm::normalize(rotation)), toJolt(position));
+    }
+    if (castShape == nullptr)
     {
         return std::nullopt;
     }
     const Vec3 displacement = direction / length * maxDistance;
-    const JPH::RShapeCast cast = JPH::RShapeCast::sFromWorldTransform(
-        query.get(), JPH::Vec3::sOne(), QueryShape::transform(shape, position, rotation),
-        toJolt(displacement));
+    const JPH::RShapeCast cast =
+        JPH::RShapeCast::sFromWorldTransform(castShape, JPH::Vec3::sOne(), placement, toJolt(displacement));
     JPH::ShapeCastSettings settings;
     settings.mReturnDeepestPoint = true;
     JPH::ClosestHitCollisionCollector<JPH::CastShapeCollector> collector;

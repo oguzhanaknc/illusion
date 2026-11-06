@@ -13,5 +13,5 @@ target_include_directories(illusion_editor_play PUBLIC
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>)
 target_link_libraries(illusion_editor_play PUBLIC
     illusion::editor_core illusion::runtime illusion::modules illusion::audio
-    PRIVATE illusion::input illusion::physics)
+    PRIVATE illusion::assets illusion::input illusion::physics)
 illusion_configure_target(illusion_editor_play)

@@ -153,7 +153,9 @@ Each of them is one undo step.
 
 For **Drop onto colliders** every Collider is a static surface, with or without a RigidBody; sensors and
 inactive entities are not. An entity that starts inside a surface stays. ConvexHull and Mesh Colliders made
-from mesh assets are not used yet (the editor cooks them only in Play mode).
+from mesh assets (a terrain, for example) are loaded and cooked by the first drop that needs them, and kept for
+the next ones until their model file changes. A falling ConvexHull is swept like the other shapes; a triangle
+Mesh cannot be swept, so an entity whose only Colliders are triangle meshes falls from the bottom of its box.
 
 ## Commands
 
