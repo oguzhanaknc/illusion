@@ -125,6 +125,17 @@ their default bindings. The `input.*` asset commands edit it as undoable file ch
 
 Point the project at the asset with `project.settings_set` on `illusion.InputSettings` (`actions`).
 
+The **Input Actions** window (Window → Input Actions) edits an asset in the editor. It opens the project's
+first `.input` asset (or `assets:/input/game.input`, created with the first action) and lists its actions
+with their types and bindings:
+
+- **Add binding** captures the next key press as `Key.<name>`, or takes a typed binding such as
+  `Gamepad.South`, `Axis.LeftX` or `Stick.Left`; Esc cancels.
+- Clicking a binding removes it, and the bin removes the action.
+- The row at the bottom adds an action with a name and a type (Button, Axis or Vector2).
+
+Every change is one of the commands above and one undo step.
+
 ## Game modules
 
 `module.load` loads a game module from its shared library and starts it on a running session, `module.unload`

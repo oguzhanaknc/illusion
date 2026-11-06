@@ -1382,3 +1382,38 @@ TEST_CASE(
     test::ok(editor, "play.stop");
     editor.setPlay(nullptr);
 }
+
+TEST_CASE("the Input Actions window adds an action, binds the next key press, unbinds and removes it")
+{
+    ShellFixture fixture;
+    EditorContext& editor = *fixture.editor;
+    test::ok(editor, "ui.show_panel", R"({"panel":"window.input_actions"})");
+    ui::UiDriver driver(fixture.context, [&] { fixture.frame(); });
+    driver.runFrames(3);
+    const auto actions = [&] {
+        return test::ok(editor, "input.actions", R"({"asset":"assets:/input/game.input"})");
+    };
+
+    REQUIRE(driver.click("input_actions.new.name"));
+    driver.typeText("Jump");
+    driver.runFrames(1);
+    REQUIRE(driver.click("input_actions.new.add"));
+    driver.runFrames(3);
+    CHECK(actions().root().pointer("/actions/0/name").asString() == "Jump");
+    CHECK(actions().root().pointer("/actions/0/type").asString() == "Button");
+
+    // The next key press after "Add binding" becomes the binding.
+    REQUIRE(driver.click("input_actions.action.Jump.bind"));
+    driver.runFrames(1);
+    driver.pressKey(ImGuiKey_Space);
+    driver.runFrames(3);
+    CHECK(actions().root().pointer("/actions/0/bindings/0").asString() == "Key.Space");
+
+    REQUIRE(driver.click("input_actions.action.Jump.binding.0"));
+    driver.runFrames(3);
+    CHECK(actions().root().pointer("/actions/0/bindings").size() == 0);
+
+    REQUIRE(driver.click("input_actions.action.Jump.remove"));
+    driver.runFrames(3);
+    CHECK(actions().root().find("actions").size() == 0);
+}
