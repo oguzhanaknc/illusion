@@ -91,6 +91,9 @@ public:
     u32 reloadChangedModules() override;
     bool unloadModule(std::string_view name) override;
     void modules(std::vector<PlayModuleInfo>& out) const override;
+    [[nodiscard]] PlayDiagnostics diagnostics() const override;
+    void setMasterVolume(f32 volume) override;
+    void setBus(u32 bus, f32 volume, bool paused) override;
 
 private:
     struct Impl;

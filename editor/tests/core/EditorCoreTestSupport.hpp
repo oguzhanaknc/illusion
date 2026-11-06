@@ -566,6 +566,32 @@ public:
 
     editor::PlayStatus status() const override { return m_status; }
 
+    editor::PlayDiagnostics diagnostics() const override
+    {
+        editor::PlayDiagnostics out = mix;
+        out.running = m_world != nullptr;
+        return m_world != nullptr ? out : editor::PlayDiagnostics{};
+    }
+
+    void setMasterVolume(f32 volume) override
+    {
+        if (m_world)
+        {
+            mix.masterVolume = volume;
+        }
+    }
+
+    void setBus(u32 bus, f32 volume, bool paused) override
+    {
+        if (m_world)
+        {
+            mix.busVolumes[bus] = volume;
+            mix.busPaused[bus] = paused;
+        }
+    }
+
+    editor::PlayDiagnostics mix{}; // the session's counters and mixer, while playing
+
     Expected<void, editor::CommandError> inject(const editor::PlayInputEvent& event) override
     {
         events.push_back(event);

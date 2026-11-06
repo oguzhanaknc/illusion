@@ -93,6 +93,24 @@ Bir ajan çalışan oyunu üç komutla yönetir:
 {"method": "play.run_until", "params": {"maxSteps": 600, "entity": "Board", "component": "game.Score", "field": "/lines", "equals": 1}}
 ```
 
+## Fizik ve ses
+
+Window menüsündeki iki pencere çalışan oyunun içine bakar:
+
+- **Physics** cisimlerini, karakterlerini ve eklemlerini (joint), son fizik adımının temaslarını ve şimdiye
+  kadarki adımları sayar. **Show collision shapes**, her Entity'nin collider'larını, karakterlerini ve
+  eklemlerini Scene görünümünde çizer; oyun dururken de.
+- **Audio Mixer** ana ses düzeyini ve her bus'ın ses düzeyini ayarlar ve bus'ları duraklatır; yalnızca bu
+  oturum için: projenin [ses ayarları](projects.md#project-settings-paneli) kendi değerlerini korur ve sonraki
+  oturum onlardan başlar. Mikserin altında etkin, düşürülen ve çalınan sesleri (voice) ve yüklü klipleri sayar.
+
+`play.diagnostics` aynı sayıları döndürür (oyun dururken `running` false olur); `play.set_mix` çalışan
+oturumun mikserini değiştirir:
+
+```json
+{"bus": "music", "volume": 0.5, "paused": false}
+```
+
 ## Girdi eylemleri
 
 Girdi eylemleri Asset'i (bir `.input` dosyası, bkz. [Girdi eylemleri](../actions.md)) oyunun eylemlerini ve

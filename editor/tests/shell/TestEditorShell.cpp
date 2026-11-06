@@ -1351,3 +1351,34 @@ TEST_CASE("the Rendering panel changes the viewport quality preferences")
     // Without a GPU the panel says so instead of listing viewports.
     CHECK_FALSE(driver.find("rendering.gpu").has_value());
 }
+
+TEST_CASE(
+    "the Audio Mixer window pauses a bus of the running session and the Physics window shows its counts")
+{
+    ShellFixture fixture;
+    EditorContext& editor = *fixture.editor;
+    EditorContext* current = &editor;
+    test::FakePlay play(current);
+    editor.setPlay(&play);
+    test::ok(editor, "ui.show_panel", R"({"panel":"window.audio_mixer"})");
+    ui::UiDriver driver(fixture.context, [&] { fixture.frame(); });
+    driver.runFrames(3);
+    // Stopped: nothing to mix.
+    CHECK_FALSE(driver.find("mixer.master").has_value());
+
+    test::ok(editor, "play.start");
+    driver.runFrames(2);
+    REQUIRE(driver.click("mixer.bus.music.pause"));
+    driver.runFrames(2);
+    CHECK(play.mix.busPaused[1]);
+    REQUIRE(driver.click("mixer.bus.music.pause")); // now "resume"
+    driver.runFrames(2);
+    CHECK_FALSE(play.mix.busPaused[1]);
+
+    play.mix.bodies = 3;
+    test::ok(editor, "ui.show_panel", R"({"panel":"window.physics"})");
+    driver.runFrames(3);
+    CHECK(driver.find("physics.show_shapes").has_value());
+    test::ok(editor, "play.stop");
+    editor.setPlay(nullptr);
+}

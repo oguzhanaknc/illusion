@@ -45,6 +45,8 @@ enum class Panel : u8
     About,
     Licenses,
     Notifications,
+    Physics,
+    AudioMixer,
     Count,
 };
 

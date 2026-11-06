@@ -1706,6 +1706,42 @@ struct PlayStartParams
     std::optional<u64> seed{};         ///< Seed of the ids of runtime spawns with fixedStep (default 0).
 };
 
+/// One bus of a play session's mixer.
+struct PlayBusEntry
+{
+    std::string name;    ///< "sfx", "music", "ambience", "dialogue" or "ui".
+    f32 volume = 1.0f;   ///< Linear gain.
+    bool paused = false; ///< Paused: its sounds keep their place but are silent.
+};
+
+/// Result of `play.diagnostics` and `play.set_mix`: the physics and audio of the running session.
+struct PlayDiagnosticsResult
+{
+    bool running = false;            ///< A play session runs (everything else is zero otherwise).
+    u32 bodies = 0;                  ///< Physics bodies (characters count one each).
+    u32 characters = 0;              ///< Character controllers.
+    u32 joints = 0;                  ///< Joints.
+    u32 physicsSteps = 0;            ///< Fixed physics steps so far (saturates at 4,294,967,295).
+    u32 contacts = 0;                ///< Contact events of the last step.
+    u32 activeVoices = 0;            ///< Sounds playing (or paused on a bus).
+    u32 droppedSounds = 0;           ///< Sounds that could not start: every voice had a higher priority.
+    u32 stolenVoices = 0;            ///< Voices taken from lower-priority sounds.
+    u32 clips = 0;                   ///< Loaded audio clips.
+    u32 loadingClips = 0;            ///< Clips loading in the background.
+    u32 clipKilobytes = 0;           ///< Memory held by loaded clips, in KiB (rounded up).
+    f32 masterVolume = 1.0f;         ///< Linear gain of the whole mix.
+    std::vector<PlayBusEntry> buses; ///< The buses, in AudioBus order.
+};
+
+/// Params of `play.set_mix`.
+struct PlaySetMixParams
+{
+    std::optional<f32> masterVolume{}; ///< Linear gain of the whole mix, 0 to 4.
+    std::optional<std::string> bus{};  ///< The bus that `volume` and `paused` change.
+    std::optional<f32> volume{};       ///< Linear gain of the bus, 0 to 4.
+    std::optional<bool> paused{};      ///< Pause or resume the bus.
+};
+
 /// Result of the `play.*` commands: the state of the play session.
 struct PlayStatusResult
 {

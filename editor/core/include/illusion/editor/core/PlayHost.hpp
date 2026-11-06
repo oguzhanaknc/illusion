@@ -13,6 +13,7 @@
 #include <illusion/editor/core/Operation.hpp>
 #include <illusion/platform/Input.hpp>
 
+#include <array>
 #include <span>
 #include <string>
 #include <string_view>
@@ -102,6 +103,29 @@ struct PlayComponentMigration
     std::vector<std::string> resetFields{};   ///< Fields reset to their default where the value did not fit.
 };
 
+/// Number of audio buses of a play session's mixer: Sfx, Music, Ambience, Dialogue and Ui (AudioBus order).
+inline constexpr u32 kPlayAudioBuses = 5;
+
+/// The physics and audio of a running play session (`play.diagnostics`).
+struct PlayDiagnostics
+{
+    bool running = false;    ///< A play session runs; the other fields are zero otherwise.
+    u32 bodies = 0;          ///< Physics bodies (characters count one each).
+    u32 characters = 0;      ///< Character controllers.
+    u32 joints = 0;          ///< Joints.
+    u64 physicsSteps = 0;    ///< Fixed physics steps so far.
+    u32 contacts = 0;        ///< Contact events of the last step.
+    u32 activeVoices = 0;    ///< Sounds playing (or paused on a bus).
+    u32 droppedSounds = 0;   ///< Sounds that could not start: every voice had a higher priority.
+    u32 stolenVoices = 0;    ///< Voices taken from lower-priority sounds.
+    u32 clips = 0;           ///< Loaded audio clips.
+    u32 loadingClips = 0;    ///< Clips loading in the background.
+    u64 clipBytes = 0;       ///< Memory held by loaded clips.
+    f32 masterVolume = 1.0f; ///< Linear gain of the whole mix.
+    std::array<f32, kPlayAudioBuses> busVolumes{1.0f, 1.0f, 1.0f, 1.0f, 1.0f}; ///< Linear gain per bus.
+    std::array<bool, kPlayAudioBuses> busPaused{};                             ///< Paused buses.
+};
+
 /// A game module loaded in the editor (module.list).
 struct PlayModuleInfo
 {
@@ -169,6 +193,17 @@ public:
 
     /// Appends the loaded modules to @p out, in load order.
     virtual void modules(std::vector<PlayModuleInfo>& out) const = 0;
+
+    /// The physics and audio of the running session (PlayDiagnostics::running is false when stopped).
+    [[nodiscard]] virtual PlayDiagnostics diagnostics() const = 0;
+
+    /// Sets the master volume (linear gain, at least 0) of the running session's mixer, for this session only
+    /// (the project's audio settings keep theirs). Does nothing when stopped.
+    virtual void setMasterVolume(f32 volume) = 0;
+
+    /// Sets the volume (linear gain, at least 0) of @p bus (< kPlayAudioBuses) and whether it is paused, for
+    /// this session only. Does nothing when stopped.
+    virtual void setBus(u32 bus, f32 volume, bool paused) = 0;
 };
 
 } // namespace illusion::editor
