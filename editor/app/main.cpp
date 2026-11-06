@@ -16,6 +16,7 @@
 #include <illusion/core/Time.hpp>
 #include <illusion/core/Version.hpp>
 #include <illusion/editor/core/EditorContext.hpp>
+#include <illusion/editor/play/EditorGamepads.hpp>
 #include <illusion/editor/play/PlaySession.hpp>
 #include <illusion/editor/rpc/RpcProtocol.hpp>
 #include <illusion/editor/rpc/RpcServer.hpp>
@@ -26,6 +27,7 @@
 #include <illusion/editor/ui/UiContext.hpp>
 #include <illusion/editor/ui/UiPlatformBackend.hpp>
 #include <illusion/editor/viewport/ViewportService.hpp>
+#include <illusion/input/GamepadSystem.hpp>
 #include <illusion/physics/PhysicsComponents.hpp>
 #include <illusion/platform/Events.hpp>
 #include <illusion/platform/FileSystem.hpp>
@@ -42,6 +44,7 @@
 #include <cstdlib>
 #include <filesystem>
 #include <imgui.h>
+#include <memory>
 #include <optional>
 #include <string>
 #include <string_view>
@@ -377,7 +380,7 @@ int runHeadless(const Arguments& arguments, EditorContext& editor, PlaySession& 
 
 // The windowed editor: events, requests (8 ms per frame), the UI, then present.
 int runWindowed(const Arguments& arguments, EditorContext& editor, PlaySession& play, rpc::RpcServer& server,
-                Platform& platform, EventBus& events, Window& window)
+                Platform& platform, EventBus& events, Window& window, GamepadSystem* gamepads)
 {
     auto device = RenderDevice::create();
     auto swapchain = device ? Swapchain::create(*device, window) : nullptr;
@@ -433,6 +436,10 @@ int runWindowed(const Arguments& arguments, EditorContext& editor, PlaySession& 
             else
             {
                 platform.waitEvents(0.25);
+            }
+            if (gamepads != nullptr)
+            {
+                gamepads->update(window.isFocused());
             }
             events.dispatchQueued();
         }
@@ -572,8 +579,17 @@ int run(const std::vector<std::string>& args)
     EditorContext editor(options);
     // The game runtime of Play mode (ADR 0042); a headless editor plays without sound.
     JobSystem jobs;
-    PlaySession play(
-        editor, {.jobs = &jobs, .audioOutput = arguments.headless ? AudioOutput::Null : AudioOutput::Device});
+    // The gamepads of Play mode and the Gamepad Tester; a headless editor stays deterministic without them.
+    const std::unique_ptr<GamepadSystem> gamepadSystem =
+        arguments.headless ? nullptr : GamepadSystem::create(&events);
+    std::optional<EditorGamepads> gamepads;
+    if (gamepadSystem)
+    {
+        gamepads.emplace(editor, *gamepadSystem);
+    }
+    PlaySession play(editor, {.jobs = &jobs,
+                              .gamepads = gamepadSystem.get(),
+                              .audioOutput = arguments.headless ? AudioOutput::Null : AudioOutput::Device});
     if (!arguments.project.empty())
     {
         if (Expected<void, CommandError> opened = editor.openProject(arguments.project); !opened)
@@ -651,9 +667,9 @@ int run(const std::vector<std::string>& args)
         return fail("nothing to do: pass --rpc-stdio, --rpc-listen or --frames");
     }
 
-    const int result = arguments.headless
-                           ? runHeadless(arguments, editor, play, server, stdio)
-                           : runWindowed(arguments, editor, play, server, *platform, events, *window);
+    const int result = arguments.headless ? runHeadless(arguments, editor, play, server, stdio)
+                                          : runWindowed(arguments, editor, play, server, *platform, events,
+                                                        *window, gamepadSystem.get());
     // Send the reply to editor.quit before the process ends.
     server.stop();
     if (!endpoint.empty())

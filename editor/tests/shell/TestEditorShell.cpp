@@ -1417,3 +1417,38 @@ TEST_CASE("the Input Actions window adds an action, binds the next key press, un
     driver.runFrames(3);
     CHECK(actions().root().find("actions").size() == 0);
 }
+
+TEST_CASE("the Gamepad Tester window rumbles, turns on motion and applies trigger effects through commands")
+{
+    ShellFixture fixture;
+    EditorContext& editor = *fixture.editor;
+    test::ok(editor, "ui.show_panel", R"({"panel":"window.gamepad_tester"})");
+    ui::UiDriver driver(fixture.context, [&] { fixture.frame(); });
+    driver.runFrames(3);
+    // Without gamepads the window says how to connect one.
+    CHECK_FALSE(driver.find("gamepad_tester.rumble.test").has_value());
+
+    test::FakeGamepads gamepads;
+    gamepads.pads.front().features = {.rumble = true};
+    editor.setGamepads(&gamepads);
+    driver.runFrames(3);
+    CHECK_FALSE(driver.find("gamepad_tester.effect.apply").has_value());
+    REQUIRE(driver.click("gamepad_tester.rumble.test"));
+    driver.runFrames(1);
+    CHECK(gamepads.rumbled.gamepad == 7);
+    CHECK(gamepads.rumbled.low == 0.5f);
+    CHECK(gamepads.rumbled.durationMs == 500);
+
+    gamepads.pads.front().features = {.motionSensors = true, .adaptiveTriggers = true};
+    driver.runFrames(3);
+    REQUIRE(driver.click("gamepad_tester.motion"));
+    driver.runFrames(1);
+    CHECK(gamepads.pads.front().motionEnabled);
+    REQUIRE(driver.click("gamepad_tester.effect.apply"));
+    driver.runFrames(1);
+    CHECK(gamepads.effectSide == GamepadTriggerSide::Right);
+    CHECK(gamepads.effect.mode == GamepadTriggerMode::Weapon);
+    CHECK(gamepads.effect.start == doctest::Approx(0.3));
+    CHECK(gamepads.effect.end == doctest::Approx(0.6));
+    editor.setGamepads(nullptr);
+}

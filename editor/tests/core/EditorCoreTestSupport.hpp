@@ -12,6 +12,7 @@
 #include <illusion/ecs/StructRegistry.hpp>
 #include <illusion/editor/core/CoreCommands.hpp>
 #include <illusion/editor/core/EditorContext.hpp>
+#include <illusion/editor/core/GamepadHost.hpp>
 #include <illusion/editor/core/PlayHost.hpp>
 #include <illusion/editor/core/ThumbnailHost.hpp>
 #include <illusion/editor/core/UiHost.hpp>
@@ -751,6 +752,98 @@ private:
     std::vector<Waiting> m_waiting;
 };
 
+/// A GamepadHost with scripted gamepads (one DualSense-like pad with id 7 by default) that records the
+/// outputs it is sent.
+class FakeGamepads final : public editor::GamepadHost
+{
+public:
+    /// The last rumble of a gamepad.
+    struct Rumble
+    {
+        u32 gamepad = 0;
+        f32 low = 0.0f;
+        f32 high = 0.0f;
+        f32 left = 0.0f;
+        f32 right = 0.0f;
+        u32 durationMs = 0;
+    };
+
+    std::vector<editor::GamepadSnapshot> pads; ///< The connected gamepads.
+    Rumble rumbled;                            ///< The last rumble (motors and triggers).
+    std::array<u8, 3> led{0, 0, 0};            ///< The last light colour.
+    editor::GamepadTriggerSide effectSide = editor::GamepadTriggerSide::Left; ///< Side of the last effect.
+    editor::GamepadTriggerEffect effect;                                      ///< The last trigger effect.
+    u32 outputs = 0;                                                          ///< Output calls so far.
+
+    FakeGamepads()
+    {
+        editor::GamepadSnapshot& pad = pads.emplace_back();
+        pad.id = 7;
+        pad.name = "Fake DualSense";
+        pad.type = "PS5";
+        pad.features = {
+            .rumble = true, .led = true, .motionSensors = true, .touchpad = true, .adaptiveTriggers = true};
+    }
+
+    void gamepads(std::vector<editor::GamepadSnapshot>& out) const override { out = pads; }
+
+    bool rumble(u32 gamepad, f32 lowFrequency, f32 highFrequency, u32 durationMs) override
+    {
+        rumbled.gamepad = gamepad;
+        rumbled.low = lowFrequency;
+        rumbled.high = highFrequency;
+        rumbled.durationMs = durationMs;
+        return output(gamepad) != nullptr;
+    }
+
+    bool rumbleTriggers(u32 gamepad, f32 left, f32 right, u32 durationMs) override
+    {
+        rumbled.gamepad = gamepad;
+        rumbled.left = left;
+        rumbled.right = right;
+        rumbled.durationMs = durationMs;
+        return output(gamepad) != nullptr;
+    }
+
+    bool setLed(u32 gamepad, u8 red, u8 green, u8 blue) override
+    {
+        led = {red, green, blue};
+        return output(gamepad) != nullptr;
+    }
+
+    bool setTriggerEffect(u32 gamepad, editor::GamepadTriggerSide side,
+                          const editor::GamepadTriggerEffect& applied) override
+    {
+        effectSide = side;
+        effect = applied;
+        return output(gamepad) != nullptr;
+    }
+
+    bool setMotionSensors(u32 gamepad, bool enabled) override
+    {
+        editor::GamepadSnapshot* pad = output(gamepad);
+        if (pad != nullptr)
+        {
+            pad->motionEnabled = enabled;
+        }
+        return pad != nullptr;
+    }
+
+private:
+    editor::GamepadSnapshot* output(u32 gamepad)
+    {
+        ++outputs;
+        for (editor::GamepadSnapshot& pad : pads)
+        {
+            if (pad.id == gamepad)
+            {
+                return &pad;
+            }
+        }
+        return nullptr;
+    }
+};
+
 /// A temporary project made from the empty template, open in an EditorContext.
 struct EditorFixture
 {
@@ -758,6 +851,7 @@ struct EditorFixture
     FakeUi ui;
     FakeViewports viewports;
     FakeThumbnails thumbnails;
+    FakeGamepads gamepads;
     editor::EditorContext* current = nullptr;
     FakePlay play{current};
     std::unique_ptr<editor::EditorContext> editor;
@@ -798,6 +892,7 @@ struct EditorFixture
         }
         editor = std::make_unique<editor::EditorContext>(options);
         editor->setUi(&ui);
+        editor->setGamepads(&gamepads);
         editor->setViewports(&viewports);
         editor->setThumbnailHost(&thumbnails);
         editor->setPlay(&play);

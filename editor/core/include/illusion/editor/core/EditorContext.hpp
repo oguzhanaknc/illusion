@@ -17,6 +17,7 @@
 #include <illusion/editor/core/CommandRegistry.hpp>
 #include <illusion/editor/core/CrashJournal.hpp>
 #include <illusion/editor/core/EntityIndex.hpp>
+#include <illusion/editor/core/GamepadHost.hpp>
 #include <illusion/editor/core/Gizmo.hpp>
 #include <illusion/editor/core/ImageHost.hpp>
 #include <illusion/editor/core/PlayHost.hpp>
@@ -417,6 +418,12 @@ public:
     /// Sets the game runtime (nullptr when it goes away). It must outlive its registration.
     void setPlay(PlayHost* play) noexcept { m_play = play; }
 
+    /// The gamepads the `gamepad.*` commands and the Gamepad Tester use, or nullptr.
+    [[nodiscard]] GamepadHost* gamepads() const noexcept { return m_gamepads; }
+
+    /// Sets the gamepads (nullptr when they go away). They must outlive their registration.
+    void setGamepads(GamepadHost* gamepads) noexcept { m_gamepads = gamepads; }
+
     /// Marks a module build as running; false if one runs already (`module.build` builds one at a time).
     [[nodiscard]] bool beginModuleBuild() noexcept { return !std::exchange(m_moduleBuildRunning, true); }
 
@@ -708,6 +715,7 @@ private:
     ImageHost* m_imageHost = nullptr;
     ThumbnailCache m_thumbnails;
     PlayHost* m_play = nullptr;
+    GamepadHost* m_gamepads = nullptr;
     bool m_moduleBuildRunning = false;
     struct PlayWorld;
     std::unique_ptr<PlayWorld> m_playWorld;

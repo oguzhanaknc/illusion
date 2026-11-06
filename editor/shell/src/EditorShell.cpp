@@ -292,6 +292,7 @@ EditorShell::Impl::Impl(EditorShell& owner, EditorContext& editorContext, ui::Ui
     , projectSettings(std::make_unique<detail::ProjectSettingsPanel>())
     , renderingPanel(std::make_unique<detail::RenderingPanel>())
     , inputActions(std::make_unique<detail::InputActionsWindow>())
+    , gamepadTester(std::make_unique<detail::GamepadTesterWindow>())
     , agentsPanel(std::make_unique<detail::Agents>())
     , preferences(std::make_unique<detail::PreferencesPage>())
     , projects(std::make_unique<detail::Projects>())
@@ -1119,6 +1120,9 @@ void EditorShell::draw(f64 now, f64 deltaSeconds)
                 break;
             case Panel::InputActions:
                 impl.inputActions->draw(impl);
+                break;
+            case Panel::GamepadTester:
+                impl.gamepadTester->draw(impl);
                 break;
             case Panel::AiActivity:
                 impl.agentsPanel->draw(impl);

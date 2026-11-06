@@ -1059,6 +1059,51 @@ void reflectCoreCommandTypes(StructRegistry& structs)
             .field("value", &PlayActionState::value);
         reflectStruct<InputReadResult>("editor.InputReadResult", 1, structs)
             .field("actions", &InputReadResult::actions);
+
+        const FieldMeta unit{.min = 0.0, .max = 1.0};
+        reflectStruct<GamepadAxisEntry>("editor.GamepadAxisEntry", 1, structs)
+            .field("name", &GamepadAxisEntry::name)
+            .field("value", &GamepadAxisEntry::value);
+        reflectStruct<GamepadFingerEntry>("editor.GamepadFingerEntry", 1, structs)
+            .field("down", &GamepadFingerEntry::down)
+            .field("position", &GamepadFingerEntry::position)
+            .field("pressure", &GamepadFingerEntry::pressure);
+        reflectStruct<GamepadEntry>("editor.GamepadEntry", 1, structs)
+            .field("id", &GamepadEntry::id)
+            .field("name", &GamepadEntry::name)
+            .field("type", &GamepadEntry::type)
+            .field("player", &GamepadEntry::player)
+            .field("features", &GamepadEntry::features)
+            .field("buttons", &GamepadEntry::buttons)
+            .field("axes", &GamepadEntry::axes)
+            .field("fingers", &GamepadEntry::fingers)
+            .field("motion", &GamepadEntry::motion)
+            .field("gyroscope", &GamepadEntry::gyroscope)
+            .field("accelerometer", &GamepadEntry::accelerometer);
+        reflectStruct<GamepadListResult>("editor.GamepadListResult", 1, structs)
+            .field("gamepads", &GamepadListResult::gamepads);
+        reflectStruct<GamepadRumbleParams>("editor.GamepadRumbleParams", 1, structs)
+            .field("gamepad", &GamepadRumbleParams::gamepad)
+            .field("low", &GamepadRumbleParams::low, unit)
+            .field("high", &GamepadRumbleParams::high, unit)
+            .field("left", &GamepadRumbleParams::left, unit)
+            .field("right", &GamepadRumbleParams::right, unit)
+            .field("durationMs", &GamepadRumbleParams::durationMs, {.min = 0.0, .max = 10000.0});
+        reflectStruct<GamepadLedParams>("editor.GamepadLedParams", 1, structs)
+            .field("gamepad", &GamepadLedParams::gamepad)
+            .field("color", &GamepadLedParams::color, unit);
+        reflectStruct<GamepadTriggerEffectParams>("editor.GamepadTriggerEffectParams", 1, structs)
+            .field("gamepad", &GamepadTriggerEffectParams::gamepad)
+            .field("trigger", &GamepadTriggerEffectParams::trigger)
+            .field("mode", &GamepadTriggerEffectParams::mode)
+            .field("start", &GamepadTriggerEffectParams::start, unit)
+            .field("end", &GamepadTriggerEffectParams::end, unit)
+            .field("strength", &GamepadTriggerEffectParams::strength, unit)
+            .field("amplitude", &GamepadTriggerEffectParams::amplitude, unit)
+            .field("frequency", &GamepadTriggerEffectParams::frequency, {.min = 1.0, .max = 255.0});
+        reflectStruct<GamepadMotionParams>("editor.GamepadMotionParams", 1, structs)
+            .field("gamepad", &GamepadMotionParams::gamepad)
+            .field("enabled", &GamepadMotionParams::enabled);
         reflectPreferences(structs);
     });
 }
@@ -1089,6 +1134,7 @@ void registerCoreCommands(CommandRegistry& registry)
     detail::registerUiCommands(registry);
     detail::registerPlayCommands(registry);
     detail::registerInputCommands(registry);
+    detail::registerGamepadCommands(registry);
     detail::registerModuleCommands(registry);
     detail::registerToolCommands(registry);
 }

@@ -32,6 +32,7 @@ constexpr PanelInfo kPanels[kPanelCount] = {
     {"window.physics", s::kWindowPhysics, "deployed_code", false, ""},
     {"window.audio_mixer", s::kWindowAudioMixer, "graphic_eq", false, ""},
     {"window.input_actions", s::kWindowInputActions, "sports_esports", false, ""},
+    {"window.gamepad_tester", s::kWindowGamepadTester, "gamepad", false, ""},
 };
 
 // "###panel.console" for every panel, built once.

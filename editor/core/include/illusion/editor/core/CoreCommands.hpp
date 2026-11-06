@@ -11,6 +11,7 @@
 #include <illusion/ecs/Reflection.hpp>
 #include <illusion/editor/core/Arrange.hpp>
 #include <illusion/editor/core/EntityIndex.hpp>
+#include <illusion/editor/core/GamepadHost.hpp>
 #include <illusion/editor/core/Gizmo.hpp>
 #include <illusion/editor/core/PlayHost.hpp>
 #include <illusion/editor/core/ReferenceIndex.hpp>
@@ -2009,6 +2010,83 @@ struct InputReadResult
     std::vector<PlayActionState> actions; ///< The actions of the running game.
 };
 
+// --- gamepad -----------------------------------------------------------------------------------------------
+
+/// One axis of a gamepad in `gamepad.list`.
+struct GamepadAxisEntry
+{
+    std::string name; ///< "LeftX", "LeftY", "RightX", "RightY", "LeftTrigger" or "RightTrigger".
+    f32 value = 0.0f; ///< Raw value: sticks in [-1, 1] (+y up), triggers in [0, 1].
+};
+
+/// One touchpad finger of a gamepad in `gamepad.list`.
+struct GamepadFingerEntry
+{
+    bool down = false;         ///< True while the finger touches the pad.
+    Vec2 position{0.0f, 0.0f}; ///< Normalized position, (0, 0) top-left to (1, 1) bottom-right.
+    f32 pressure = 0.0f;       ///< Pressure in [0, 1].
+};
+
+/// One connected gamepad.
+struct GamepadEntry
+{
+    u32 id = 0;                              ///< Identifier, stable while it stays connected.
+    std::string name;                        ///< Device name.
+    std::string type;                        ///< Model, e.g. "PS5", "XboxOne" or "Generic".
+    u32 player = 0;                          ///< Player slot (0-based).
+    std::vector<std::string> features;       ///< "rumble", "trigger_rumble", "led", "motion", "touchpad", ...
+    std::vector<std::string> buttons;        ///< Held buttons by position name, e.g. "South".
+    std::vector<GamepadAxisEntry> axes;      ///< Every axis.
+    std::vector<GamepadFingerEntry> fingers; ///< Touchpad fingers (empty without a touchpad).
+    bool motion = false;                     ///< The motion sensors report.
+    Vec3 gyroscope{0.0f};                    ///< Angular velocity in rad/s (x pitch, y yaw, z roll).
+    Vec3 accelerometer{0.0f};                ///< Acceleration in m/s², gravity included.
+};
+
+/// Result of `gamepad.list`.
+struct GamepadListResult
+{
+    std::vector<GamepadEntry> gamepads; ///< Connected gamepads, ordered by connection time.
+};
+
+/// Params of `gamepad.rumble`.
+struct GamepadRumbleParams
+{
+    std::optional<u32> gamepad{};    ///< Gamepad id (default: the first connected).
+    std::optional<f32> low{};        ///< Low-frequency motor in [0, 1].
+    std::optional<f32> high{};       ///< High-frequency motor in [0, 1].
+    std::optional<f32> left{};       ///< Left trigger motor in [0, 1] (Xbox One / Series).
+    std::optional<f32> right{};      ///< Right trigger motor in [0, 1] (Xbox One / Series).
+    std::optional<u32> durationMs{}; ///< How long, in ms (default 500, at most 10,000).
+};
+
+/// Params of `gamepad.set_led`.
+struct GamepadLedParams
+{
+    std::optional<u32> gamepad{}; ///< Gamepad id (default: the first connected).
+    Vec3 color{0.0f};             ///< Light colour, each channel in [0, 1].
+};
+
+/// Params of `gamepad.set_trigger_effect`.
+struct GamepadTriggerEffectParams
+{
+    std::optional<u32> gamepad{};                          ///< Gamepad id (default: the first connected).
+    GamepadTriggerSide trigger = GamepadTriggerSide::Left; ///< "left" (L2) or "right" (R2).
+    GamepadTriggerMode mode = GamepadTriggerMode::Off;     ///< "off", "resistance", "weapon" or "vibration".
+    std::optional<f32> start{};                            ///< Start position in [0, 1] (default 0).
+    std::optional<f32> end{};                              ///< End position in [0, 1] (weapon; default 1).
+    std::optional<f32> strength{};                         ///< Strength in [0, 1] (default 1).
+    std::optional<f32> amplitude{};                        ///< Vibration amplitude in [0, 1] (default 1).
+    std::optional<u32> frequency{}; ///< Vibration frequency in Hz, 1 to 255 (default 30).
+};
+
+/// Params of `gamepad.set_motion`.
+struct GamepadMotionParams
+{
+    std::optional<u32> gamepad{}; ///< Gamepad id (default: the first connected).
+    bool enabled = false;         ///< Turn the gyroscope and accelerometer on or off.
+};
+
 } // namespace illusion::editor
 
 /// Names of TransformSpace values in JSON.
@@ -2062,6 +2140,24 @@ struct illusion::EnumReflection<illusion::editor::DistributeMode>
 {
     /// The values.
     static constexpr std::array kValues{illusion::EnumValue{"centers", 0}, illusion::EnumValue{"gaps", 1}};
+};
+
+/// Names of GamepadTriggerSide values in JSON.
+template <>
+struct illusion::EnumReflection<illusion::editor::GamepadTriggerSide>
+{
+    /// The values.
+    static constexpr std::array kValues{illusion::EnumValue{"left", 0}, illusion::EnumValue{"right", 1}};
+};
+
+/// Names of GamepadTriggerMode values in JSON.
+template <>
+struct illusion::EnumReflection<illusion::editor::GamepadTriggerMode>
+{
+    /// The values.
+    static constexpr std::array kValues{illusion::EnumValue{"off", 0}, illusion::EnumValue{"resistance", 1},
+                                        illusion::EnumValue{"weapon", 2},
+                                        illusion::EnumValue{"vibration", 3}};
 };
 
 /// Names of DropTarget values in JSON.

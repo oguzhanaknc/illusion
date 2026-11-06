@@ -471,8 +471,13 @@ Plan: `docs/plans/m7-editor.md` (sub-milestones, command API, localization, them
 - M7w-3a: ✅ Input Actions window: the actions of an input actions asset with their types and bindings,
   rebinding by capturing the next key press or typing a binding, unbinding, adding and removing actions, all
   through the `input.*` commands (one undo step each). A headless UI test adds, binds, unbinds and removes
-- M7w-3b: Gamepad tester (rumble, LED, gyro, touchpad, triggers); physics raycasts for drop to ground (from
-  M7p-2)
+- M7w-3b: ✅ Gamepad Tester window and `gamepad.*` commands: the editor now owns a `GamepadSystem` (Play mode
+  reads it; before, games in the editor saw no gamepads), `GamepadHost` in the core with `EditorGamepads` in
+  `editor_play`, the live state (buttons, sticks, triggers, touchpad, gyroscope, accelerometer) and the outputs
+  (rumble, trigger rumble, light, DualSense adaptive triggers, motion sensors) as `gamepad.list`,
+  `gamepad.rumble`, `gamepad.set_led`, `gamepad.set_trigger_effect` and `gamepad.set_motion` (180 commands).
+  Command tests with a fake host, a test over a virtual DualSense and a headless UI test
+- M7w-3c: Physics raycasts for drop to ground (from M7p-2)
 - M7w-4: Multiple simultaneous Inspector instances (from M7m)
 - M7x: Showcase scene covering every Component and the scripting API; Tetris built by an agent end to end
 
