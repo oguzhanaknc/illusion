@@ -12,6 +12,7 @@
     "editor.action.edit.go_to": "Go to Anything…",
     "editor.action.edit.search": "Search",
     "editor.action.entity.disable": "Disable",
+    "editor.action.entity.drop_to_colliders": {"text": "Drop onto colliders", "comment": "Entity menu: let the selected entities fall onto the colliders below them (physics)"},
     "editor.action.entity.enable": "Enable",
     "editor.action.entity.unparent": {"text": "Move to root", "comment": "Entity menu: make the selected entity a root"},
     "editor.action.file.preferences": "Preferences…",

@@ -38,8 +38,9 @@ enum class DistributeMode : u8
 /// What `transform.drop_to_ground` lets the entities fall onto.
 enum class DropTarget : u8
 {
-    Surfaces, ///< The highest box of another entity below, or the ground plane (y = 0) when there is none.
-    Plane,    ///< The ground plane (y = 0) only.
+    Surfaces,  ///< The highest box of another entity below, or the ground plane (y = 0) when there is none.
+    Plane,     ///< The ground plane (y = 0) only.
+    Colliders, ///< The Colliders of other entities, or the ground plane: physics queries (PhysicsQueryHost).
 };
 
 /// Distance in world units within which a surface counts as below a box that rests slightly inside it.

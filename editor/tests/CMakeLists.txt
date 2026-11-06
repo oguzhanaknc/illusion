@@ -37,6 +37,7 @@ illusion_add_editor_executable(illusion_editor_tests
     mcp/TestMcpBridge.cpp
     mcp/TestMcpProtocol.cpp
     play/TestEditorGamepads.cpp
+    play/TestEditorPhysicsQueries.cpp
     play/TestPlayMode.cpp
     play/TestTetris.cpp
     rpc/TestEditorClient.cpp

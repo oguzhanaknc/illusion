@@ -144,11 +144,16 @@ her Entity konumu olarak sayılır.
 | Eylem | Tuş | Ne yapar |
 | --- | --- | --- |
 | Zemine bırak | **End** | Seçili her Entity, kutusunun altı aşağıdaki başka bir Entity'nin en yüksek kutusuna, yoksa y = 0 zemin düzlemine oturana kadar düşer (ya da yükselir). Gizli ve etkin olmayan Entity'ler yüzey sayılmaz. Fizik collider'ları kullanılmaz. |
+| Collider'lara bırak | | Aynısını fizikle yapar: seçimin Collider'ları, başka bir Entity'nin Collider'ına ya da zemin düzlemine değene kadar dümdüz aşağı süpürülür; böylece eğimler, küreler ve döndürülmüş şekiller değdikleri yerde durur. Collider'ı olmayan seçili bir Entity, kutusunun alt ortasından düşer. |
 | Görünüme hizala | **Ctrl+Shift+F** | Seçimi Scene kamerasının dönüşüne çevirir, böylece görünümün baktığı yere bakar (-z'si boyunca); `move` onu kameranın gözüne de koyar, örneğin bir Camera'yı mevcut görünümden yöneltmek için. |
 | Hizala | | Entity'leri tek bir eksen boyunca sıraya dizer: en küçük, orta ya da en büyük kenarları hepsini çevreleyen kutunun ya da yerinde kalan son listelenen (etkin) Entity'nin aynı kenarına gelir. |
 | Dağıt | | Üç ya da daha fazla Entity'yi tek bir eksen boyunca, yerinde kalan ilk ve son Entity arasında eşit aralıklarla yerleştirir: merkezleri arasında eşit mesafe ya da kutuları arasında eşit boşluk. |
 
 Her biri tek bir geri alma adımıdır.
+
+**Collider'lara bırak** için her Collider, RigidBody'si olsun ya da olmasın, statik bir yüzeydir; sensor'lar ve
+etkin olmayan Entity'ler değildir. Bir yüzeyin içinde başlayan Entity yerinde kalır. Mesh Asset'lerinden yapılan
+ConvexHull ve Mesh Collider'ları henüz kullanılmaz (editör onları yalnızca Play modunda hazırlar).
 
 ## Komutlar
 
@@ -164,7 +169,7 @@ Her biri tek bir geri alma adımıdır.
 | `viewport.snap` | Bir viewport'un bir pikselinin altındaki vertex ya da yüzey (`to`: `vertex`, `surface` ya da `any`); yüzey normali ve bir Entity'yi onun üstüne diken rotasyonla birlikte. Yalnızca okur; Entity'ler `transform.set` ile yerleştirilir. |
 | `gizmo.measure` | İki nokta ya da iki Entity'nin konumu arasını ölçer ve cetveli gösterir. |
 | `gizmo.clear_ruler` | Cetveli kaldırır. |
-| `transform.drop_to_ground` | Entity'leri altlarındaki kutulara (`onto`: `surfaces`) ya da zemin düzlemine (`plane`) bırakır. |
+| `transform.drop_to_ground` | Entity'leri altlarındaki kutulara (`onto`: `surfaces`), zemin düzlemine (`plane`) ya da fizikle altlarındaki Collider'lara (`colliders`) bırakır. |
 | `transform.align_to_view` | Entity'leri bir viewport'un kamerasına çevirir; `move` onları gözüne de yerleştirir. |
 | `transform.align` | Entity'leri `axis` boyunca `min`, `center` ya da `max` kenarlarına göre, `selection`'a ya da `active` Entity'ye (`to`) hizalar. |
 | `transform.distribute` | Entity'leri `axis` boyunca `centers` ya da `gaps` ile aralıklandırır. |
@@ -178,6 +183,7 @@ isteyen bir ajan gizmo'yu sürüklemez; aynı pivotlarla `transform.translate`, 
 {"method": "transform.snap_to_grid", "params": {"entities": ["$selection"]}}
 {"method": "transform.rotate", "params": {"entities": ["$selection"], "euler": [0, 90, 0], "pivot": "center"}}
 {"method": "transform.drop_to_ground", "params": {"entities": ["$selection"]}}
+{"method": "transform.drop_to_ground", "params": {"entities": ["$selection"], "onto": "colliders"}}
 {"method": "viewport.snap", "params": {"x": 640, "y": 360, "to": "surface", "exclude": ["/Crate"]}}
 {"method": "gizmo.measure", "params": {"entities": ["/Door", "/Window"]}}
 {"method": "transform.align", "params": {"entities": ["/Crate 1", "/Crate 2"], "axis": "x", "edge": "min"}}

@@ -144,11 +144,16 @@ every entity counts as its position.
 | Action | Key | What it does |
 | --- | --- | --- |
 | Drop to ground | **End** | Each selected entity falls (or rises) until the bottom of its box rests on the highest box of another entity below it, or on the ground plane y = 0 when there is none. Hidden and inactive entities are not surfaces. Physics colliders are not used. |
+| Drop onto colliders | | The same with physics: the selection's Colliders are swept straight down until they touch the Collider of another entity or the ground plane, so that slopes, spheres and rotated shapes rest where they touch. A selected entity without a Collider falls from the bottom centre of its box. |
 | Align to view | **Ctrl+Shift+F** | Turns the selection to the rotation of the Scene camera, so that it looks where the view looks (along its -z); `move` also puts it at the camera's eye, e.g. to aim a Camera from the current view. |
 | Align | | Lines entities up along one axis: their min, centre or max edges at the same edge of the box around all of them, or of the last listed (active) entity, which stays put. |
 | Distribute | | Spaces three or more entities evenly along one axis between the first and the last, which stay put: equal distances between their centres, or equal gaps between their boxes. |
 
 Each of them is one undo step.
+
+For **Drop onto colliders** every Collider is a static surface, with or without a RigidBody; sensors and
+inactive entities are not. An entity that starts inside a surface stays. ConvexHull and Mesh Colliders made
+from mesh assets are not used yet (the editor cooks them only in Play mode).
 
 ## Commands
 
@@ -164,7 +169,7 @@ Each of them is one undo step.
 | `viewport.snap` | The vertex or surface under a pixel of a viewport (`to`: `vertex`, `surface` or `any`), with the surface normal and the rotation that stands an entity on it. It only reads; place entities with `transform.set`. |
 | `gizmo.measure` | Measure between two points, or between the positions of two entities, and show the ruler. |
 | `gizmo.clear_ruler` | Remove the ruler. |
-| `transform.drop_to_ground` | Drop entities onto the boxes below them (`onto`: `surfaces`) or onto the ground plane (`plane`). |
+| `transform.drop_to_ground` | Drop entities onto the boxes below them (`onto`: `surfaces`), onto the ground plane (`plane`), or with physics onto the Colliders below them (`colliders`). |
 | `transform.align_to_view` | Turn entities to a viewport's camera; `move` also places them at its eye. |
 | `transform.align` | Line entities up along `axis` by their `min`, `center` or `max` edges, `to` the `selection` or the `active` entity. |
 | `transform.distribute` | Space entities along `axis` by `centers` or `gaps`. |
@@ -178,6 +183,7 @@ or `transform.scale` with the same pivots:
 {"method": "transform.snap_to_grid", "params": {"entities": ["$selection"]}}
 {"method": "transform.rotate", "params": {"entities": ["$selection"], "euler": [0, 90, 0], "pivot": "center"}}
 {"method": "transform.drop_to_ground", "params": {"entities": ["$selection"]}}
+{"method": "transform.drop_to_ground", "params": {"entities": ["$selection"], "onto": "colliders"}}
 {"method": "viewport.snap", "params": {"x": 640, "y": 360, "to": "surface", "exclude": ["/Crate"]}}
 {"method": "gizmo.measure", "params": {"entities": ["/Door", "/Window"]}}
 {"method": "transform.align", "params": {"entities": ["/Crate 1", "/Crate 2"], "axis": "x", "edge": "min"}}

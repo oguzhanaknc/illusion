@@ -84,6 +84,9 @@ constexpr UiAction kActions[] = {
      .menu = UiMenu::Entity, .group = 1, .title = s::kActionEntityUnparent, .icon = "move_up"},
     {.id = "entity.drop_to_ground", .command = "transform.drop_to_ground", .params = R"({"entities":["$selection"]})",
      .menu = UiMenu::Entity, .group = 2, .shortcut = "End"},
+    {.id = "entity.drop_to_colliders", .command = "transform.drop_to_ground",
+     .params = R"({"entities":["$selection"],"onto":"colliders"})", .menu = UiMenu::Entity, .group = 2,
+     .title = s::kActionEntityDropToColliders, .icon = "vertical_align_bottom"},
     {.id = "entity.align_to_view", .command = "transform.align_to_view", .params = R"({"entities":["$selection"]})",
      .menu = UiMenu::Entity, .group = 2, .shortcut = "Ctrl+Shift+F"},
     // Assets

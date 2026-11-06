@@ -714,7 +714,7 @@ struct TransformDropParams
 {
     std::vector<std::string>
         entities; ///< Entity references; descendants of other listed entities follow them.
-    std::optional<DropTarget> onto{}; ///< "surfaces" (default) or "plane".
+    std::optional<DropTarget> onto{}; ///< "surfaces" (default), "plane" or "colliders".
 };
 
 /// Params of `transform.align_to_view`.
@@ -2165,7 +2165,8 @@ template <>
 struct illusion::EnumReflection<illusion::editor::DropTarget>
 {
     /// The values.
-    static constexpr std::array kValues{illusion::EnumValue{"surfaces", 0}, illusion::EnumValue{"plane", 1}};
+    static constexpr std::array kValues{illusion::EnumValue{"surfaces", 0}, illusion::EnumValue{"plane", 1},
+                                        illusion::EnumValue{"colliders", 2}};
 };
 
 /// Names of GizmoModalOperation values in JSON.

@@ -241,7 +241,9 @@ The core defines what viewports offer without depending on the GPU: `ViewportHos
 this interface, so they are tested with a fake host and fail with `unsupported` (1400) under `--no-gpu`.
 `ViewportHost::meshBounds()` gives the arranging commands (`transform.align`, `transform.distribute`,
 `transform.drop_to_ground`) the world boxes of the drawn Meshes; their math is GPU-free (`Arrange.hpp`), and
-without a host every entity counts as its position.
+without a host every entity counts as its position. `transform.drop_to_ground` onto colliders asks the
+`PhysicsQueryHost` (`EditorPhysicsQueries` in `editor_play`), which sweeps the Colliders down in a scratch Jolt
+world built from the edit World for that command.
 `ViewportHost::requestSnap()` and `snap()` answer `viewport.snap` and the snapping of the gizmo a frame or two
 later: the vertex nearest to a pixel, searched on the CPU in a `VertexSnapGrid` per Mesh (`Snap.hpp`; a
 uniform grid in the Mesh's own space whose cells along the cursor ray are visited slice by slice), or the

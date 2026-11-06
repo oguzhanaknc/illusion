@@ -245,7 +245,9 @@ yalnızca `editor.screenshot`'ı yanıtlamak için çizer. Kılavuz [pencereyi](
 arayüzü kullanır; bu yüzden sahte bir host ile test edilirler ve `--no-gpu` altında `unsupported` (1400) ile
 başarısız olurlar. `ViewportHost::meshBounds()` yerleştirme komutlarına (`transform.align`,
 `transform.distribute`, `transform.drop_to_ground`) çizilen Mesh'lerin dünya kutularını verir; matematikleri
-GPU'suzdur (`Arrange.hpp`) ve host yokken her Entity konumu olarak sayılır.
+GPU'suzdur (`Arrange.hpp`) ve host yokken her Entity konumu olarak sayılır. Collider'lara bırakan
+`transform.drop_to_ground`, `PhysicsQueryHost`'a (`editor_play` içinde `EditorPhysicsQueries`) sorar; o da
+Collider'ları, o komut için edit World'den kurulan geçici bir Jolt dünyasında aşağı süpürür.
 `ViewportHost::requestSnap()` ve `snap()`, `viewport.snap` komutunu ve gizmo'nun yakalamasını bir iki frame
 sonra yanıtlar: bir piksele en yakın vertex, her Mesh için bir `VertexSnapGrid` içinde CPU'da aranır
 (`Snap.hpp`; Mesh'in kendi uzayında, imleç ışını boyunca hücreleri dilim dilim gezilen düzgün bir grid), ya da

@@ -477,7 +477,13 @@ Plan: `docs/plans/m7-editor.md` (sub-milestones, command API, localization, them
   (rumble, trigger rumble, light, DualSense adaptive triggers, motion sensors) as `gamepad.list`,
   `gamepad.rumble`, `gamepad.set_led`, `gamepad.set_trigger_effect` and `gamepad.set_motion` (180 commands).
   Command tests with a fake host, a test over a virtual DualSense and a headless UI test
-- M7w-3c: Physics raycasts for drop to ground (from M7p-2)
+- M7w-3c: ✅ Drop to ground with physics: `transform.drop_to_ground` `"onto": "colliders"` and the Entity menu's
+  Drop onto colliders. `PhysicsQueryHost` in the core, `EditorPhysicsQueries` in `editor_play`: a scratch Jolt
+  world of static bodies from every Collider (sensors and inactive entities left out) and the ground plane;
+  the falling Colliders are shape-cast down, entities without one cast a ray from the bottom of their box. Tests
+  with Jolt (boxes, a scaled sphere, a capsule, a sensor, a disabled floor, a child following its parent)
+- M7w-3d: Drop onto ConvexHull and Mesh Colliders made from mesh assets (cooked for the edit World through a
+  `PhysicsAssetResolver`)
 - M7w-4: Multiple simultaneous Inspector instances (from M7m)
 - M7x: Showcase scene covering every Component and the scripting API; Tetris built by an agent end to end
 
