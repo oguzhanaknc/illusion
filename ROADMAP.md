@@ -491,7 +491,19 @@ Plan: `docs/plans/m7-editor.md` (sub-milestones, command API, localization, them
 - M7w-4: ✅ Multiple Inspectors: Inspector windows 2 to 4 (Window menu, `ui.show_panel` with
   `window.inspector_2` to `window.inspector_4`), each locked to the selection of the moment it opens and with its
   own stable ids (`inspector_2.` ...); a headless UI test edits two entities in two Inspectors
-- M7x: Showcase scene covering every Component and the scripting API; Tetris built by an agent end to end
+- M7x-1: ✅ Showcase project (`samples/showcase`): `everything.scene` with every saved engine Component and every
+  field set to a non-default value (cameras, lights, sky, Meshes and a submesh, hierarchy, disabled entity, every
+  collider shape including asset meshes, every body kind, a character, every joint type, audio on every bus with
+  every attenuation, prefab instances with overrides), built by Editor commands (`build.jsonl`) from generated
+  assets (`tools/make_assets.py`); a gate test fails on any saved Component or field left out or at its default
+  and on missing assets or unresolved prefabs
+- M7x-2: A `showcase` module that calls the whole scripting API (core and every service) with counting proxies,
+  `tools/check_api_coverage.py` over the Doxygen "Scripting API" group, 300 deterministic headless frames with a
+  stable state hash and a GPU golden of the showcase
+- M7x-3: Recorded agent transcript (`illusion_mcp --record`, normalised into `tests/acceptance/tetris/recorded.jsonl`
+  with its sources compiled in-tree) and the live-agent workflow (needs the owner's API key and budget)
+- M7x-4: Tutorials (Tetris with an agent, Tetris by hand), editor manual screenshots generated headless, string
+  freeze; ROADMAP M7 ticked
 
 ## M8 — Release pipeline
 

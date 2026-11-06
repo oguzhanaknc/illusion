@@ -1,0 +1,1094 @@
+{
+  "format": "illusion.scene",
+  "version": 2,
+  "types": {
+    "illusion.AudioListener": 1,
+    "illusion.AudioSource": 1,
+    "illusion.Camera": 2,
+    "illusion.CharacterController": 1,
+    "illusion.Collider": 1,
+    "illusion.DirectionalLight": 1,
+    "illusion.Disabled": 1,
+    "illusion.Hierarchy": 1,
+    "illusion.Joint": 1,
+    "illusion.LocalTransform": 1,
+    "illusion.MeshRenderer": 1,
+    "illusion.Name": 1,
+    "illusion.PointLight": 1,
+    "illusion.ProceduralSky": 1,
+    "illusion.RigidBody": 1,
+    "illusion.SkyLight": 1,
+    "illusion.Transform": 1
+  },
+  "settings": {},
+  "entities": [
+    {
+      "id": "cb435c8e74616796",
+      "components": {
+        "illusion.Hierarchy": {
+          "parent": null,
+          "order": 0
+        },
+        "illusion.MeshRenderer": {
+          "mesh": "builtin:/mesh/cube",
+          "submesh": 0,
+          "material": "assets:/materials/brass.material",
+          "layers": 1,
+          "castShadows": true,
+          "visible": true
+        },
+        "illusion.Name": {
+          "value": "Table"
+        },
+        "illusion.Transform": {
+          "position": [0.0, 0.0, -4.0],
+          "rotation": [0.0, 0.0, 0.0, 1.0],
+          "scale": [1.0, 1.0, 1.0]
+        }
+      }
+    },
+    {
+      "id": "6775dc7701564f61",
+      "components": {
+        "illusion.Hierarchy": {
+          "parent": "cb435c8e74616796",
+          "order": 0
+        },
+        "illusion.LocalTransform": {
+          "position": [-0.4, -0.5, 0.4],
+          "rotation": [0.0, 0.3826834, 0.0, 0.9238795],
+          "scale": [0.1, 1.0, 0.1]
+        },
+        "illusion.MeshRenderer": {
+          "mesh": "builtin:/mesh/cylinder",
+          "submesh": 0,
+          "material": "builtin:/material/default",
+          "layers": 1,
+          "castShadows": true,
+          "visible": true
+        },
+        "illusion.Name": {
+          "value": "Leg 1"
+        }
+      }
+    },
+    {
+      "id": "9afcd44d14cf8bfe",
+      "components": {
+        "illusion.Hierarchy": {
+          "parent": "cb435c8e74616796",
+          "order": 1
+        },
+        "illusion.LocalTransform": {
+          "position": [0.4, -0.5, 0.4],
+          "rotation": [0.0, 0.0, 0.0, 1.0],
+          "scale": [0.1, 1.0, 0.1]
+        },
+        "illusion.MeshRenderer": {
+          "mesh": "builtin:/mesh/cylinder",
+          "submesh": 0,
+          "material": "builtin:/material/default",
+          "layers": 1,
+          "castShadows": true,
+          "visible": true
+        },
+        "illusion.Name": {
+          "value": "Leg 2"
+        }
+      }
+    },
+    {
+      "prefab": "assets:/prefabs/lantern.prefab",
+      "id": "65ace2685a072c6d",
+      "overrides": {
+        "990cd70b12c5d084": {
+          "illusion.Transform": null,
+          "illusion.LocalTransform": {
+            "position": [-5.0, 0.0, 4.0],
+            "rotation": [0.0, 0.0, 0.0, 1.0],
+            "scale": [1.0, 1.0, 1.0]
+          }
+        }
+      }
+    },
+    {
+      "prefab": "assets:/prefabs/lantern.prefab",
+      "id": "70616f2f48dce01c",
+      "overrides": {
+        "962b1967c90789ba": {
+          "illusion.PointLight": {
+            "color": [0.4, 0.8, 1.0],
+            "intensity": 12.0
+          }
+        },
+        "990cd70b12c5d084": {
+          "illusion.Hierarchy": {
+            "order": 2
+          },
+          "illusion.Name": {
+            "value": "Lantern 2"
+          },
+          "illusion.Transform": null,
+          "illusion.LocalTransform": {
+            "position": [-7.0, 0.0, 4.0],
+            "rotation": [0.0, 0.0, 0.0, 1.0],
+            "scale": [1.0, 1.0, 1.0]
+          }
+        }
+      }
+    },
+    {
+      "id": "0b331645445bcd27",
+      "components": {
+        "illusion.AudioSource": {
+          "clip": "assets:/audio/tone.wav",
+          "bus": "Dialogue",
+          "volume": 1.0,
+          "pitch": 1.0,
+          "pan": 0.0,
+          "loop": false,
+          "playOnStart": false,
+          "spatial": true,
+          "stream": false,
+          "attenuation": "Exponential",
+          "minDistance": 1.0,
+          "maxDistance": 1000.0,
+          "rolloff": 1.0,
+          "dopplerFactor": 1.0,
+          "priority": 128,
+          "lowPassCutoff": 0.0,
+          "reverbSend": 0.0,
+          "coneInnerAngle": 6.2831855,
+          "coneOuterAngle": 6.2831855,
+          "coneOuterVolume": 0.0
+        },
+        "illusion.Name": {
+          "value": "Voice"
+        },
+        "illusion.Transform": {
+          "position": [-3.0, 1.0, 3.0],
+          "rotation": [0.0, 0.0, 0.0, 1.0],
+          "scale": [1.0, 1.0, 1.0]
+        }
+      }
+    },
+    {
+      "id": "0c43407dc177b6f7",
+      "components": {
+        "illusion.Collider": {
+          "shape": "Sphere",
+          "halfExtents": [0.5, 0.5, 0.5],
+          "radius": 0.2,
+          "halfHeight": 0.5,
+          "offset": [0.0, 0.0, 0.0],
+          "rotation": [0.0, 0.0, 0.0, 1.0],
+          "mesh": "",
+          "meshIndex": 0
+        },
+        "illusion.Joint": {
+          "type": "Distance",
+          "connected": "1f8410633ef306ac",
+          "anchor": [0.0, 0.0, 0.0],
+          "connectedAnchor": [0.0, 0.0, 0.0],
+          "axis": [1.0, 0.0, 0.0],
+          "limited": false,
+          "minLimit": 1.0,
+          "maxLimit": 2.0,
+          "motorSpeed": 0.0,
+          "motorMaxForce": 0.0,
+          "breakForce": 0.0
+        },
+        "illusion.Name": {
+          "value": "Rope"
+        },
+        "illusion.RigidBody": {
+          "motionType": "Dynamic",
+          "mass": 0.0,
+          "friction": 0.5,
+          "restitution": 0.0,
+          "linearDamping": 0.05,
+          "angularDamping": 0.05,
+          "gravityFactor": 1.0,
+          "layer": 0,
+          "sensor": false,
+          "allowSleeping": true,
+          "continuousCollision": false
+        },
+        "illusion.Transform": {
+          "position": [14.0, 3.0, 0.0],
+          "rotation": [0.0, 0.0, 0.0, 1.0],
+          "scale": [1.0, 1.0, 1.0]
+        }
+      }
+    },
+    {
+      "id": "10e2c46865e98746",
+      "components": {
+        "illusion.Collider": {
+          "shape": "Box",
+          "halfExtents": [0.1, 1.0, 0.1],
+          "radius": 0.5,
+          "halfHeight": 0.5,
+          "offset": [0.0, 0.0, 0.0],
+          "rotation": [0.0, 0.0, 0.0, 1.0],
+          "mesh": "",
+          "meshIndex": 0
+        },
+        "illusion.Name": {
+          "value": "Door Frame"
+        },
+        "illusion.RigidBody": {
+          "motionType": "Static",
+          "mass": 0.0,
+          "friction": 0.5,
+          "restitution": 0.0,
+          "linearDamping": 0.05,
+          "angularDamping": 0.05,
+          "gravityFactor": 1.0,
+          "layer": 0,
+          "sensor": false,
+          "allowSleeping": true,
+          "continuousCollision": false
+        },
+        "illusion.Transform": {
+          "position": [8.0, 1.0, 0.0],
+          "rotation": [0.0, 0.0, 0.0, 1.0],
+          "scale": [1.0, 1.0, 1.0]
+        }
+      }
+    },
+    {
+      "id": "14d7973c5c2a449c",
+      "components": {
+        "illusion.Collider": {
+          "shape": "Box",
+          "halfExtents": [0.5, 1.0, 0.05],
+          "radius": 0.5,
+          "halfHeight": 0.5,
+          "offset": [0.0, 0.0, 0.0],
+          "rotation": [0.0, 0.0, 0.0, 1.0],
+          "mesh": "",
+          "meshIndex": 0
+        },
+        "illusion.Joint": {
+          "type": "Hinge",
+          "connected": "10e2c46865e98746",
+          "anchor": [-0.5, 0.0, 0.0],
+          "connectedAnchor": [0.1, 0.0, 0.0],
+          "axis": [0.0, 1.0, 0.0],
+          "limited": true,
+          "minLimit": -1.5,
+          "maxLimit": 1.5,
+          "motorSpeed": 0.5,
+          "motorMaxForce": 10.0,
+          "breakForce": 500.0
+        },
+        "illusion.Name": {
+          "value": "Door"
+        },
+        "illusion.RigidBody": {
+          "motionType": "Dynamic",
+          "mass": 0.0,
+          "friction": 0.5,
+          "restitution": 0.0,
+          "linearDamping": 0.05,
+          "angularDamping": 0.05,
+          "gravityFactor": 1.0,
+          "layer": 0,
+          "sensor": false,
+          "allowSleeping": true,
+          "continuousCollision": false
+        },
+        "illusion.Transform": {
+          "position": [8.6, 1.0, 0.0],
+          "rotation": [0.0, 0.0, 0.0, 1.0],
+          "scale": [1.0, 1.0, 1.0]
+        }
+      }
+    },
+    {
+      "id": "1f8410633ef306ac",
+      "components": {
+        "illusion.Collider": {
+          "shape": "Sphere",
+          "halfExtents": [0.5, 0.5, 0.5],
+          "radius": 0.3,
+          "halfHeight": 0.5,
+          "offset": [0.0, 0.0, 0.0],
+          "rotation": [0.0, 0.0, 0.0, 1.0],
+          "mesh": "",
+          "meshIndex": 0
+        },
+        "illusion.Joint": {
+          "type": "Point",
+          "connected": null,
+          "anchor": [0.0, 1.0, 0.0],
+          "connectedAnchor": [0.0, 0.0, 0.0],
+          "axis": [1.0, 0.0, 0.0],
+          "limited": false,
+          "minLimit": 0.0,
+          "maxLimit": 0.0,
+          "motorSpeed": 0.0,
+          "motorMaxForce": 0.0,
+          "breakForce": 0.0
+        },
+        "illusion.Name": {
+          "value": "Pendulum"
+        },
+        "illusion.RigidBody": {
+          "motionType": "Dynamic",
+          "mass": 0.0,
+          "friction": 0.5,
+          "restitution": 0.0,
+          "linearDamping": 0.05,
+          "angularDamping": 0.05,
+          "gravityFactor": 1.0,
+          "layer": 0,
+          "sensor": false,
+          "allowSleeping": true,
+          "continuousCollision": false
+        },
+        "illusion.Transform": {
+          "position": [10.0, 3.0, 0.0],
+          "rotation": [0.0, 0.0, 0.0, 1.0],
+          "scale": [1.0, 1.0, 1.0]
+        }
+      }
+    },
+    {
+      "id": "2ac2ce17a5794a3b",
+      "components": {
+        "illusion.Collider": {
+          "shape": "Cylinder",
+          "halfExtents": [0.5, 0.5, 0.5],
+          "radius": 0.4,
+          "halfHeight": 0.4,
+          "offset": [0.0, 0.0, 0.0],
+          "rotation": [0.0, 0.0, 0.0, 1.0],
+          "mesh": "",
+          "meshIndex": 0
+        },
+        "illusion.Name": {
+          "value": "Drum"
+        },
+        "illusion.RigidBody": {
+          "motionType": "Dynamic",
+          "mass": 0.0,
+          "friction": 0.5,
+          "restitution": 0.0,
+          "linearDamping": 0.05,
+          "angularDamping": 0.05,
+          "gravityFactor": 1.0,
+          "layer": 0,
+          "sensor": false,
+          "allowSleeping": true,
+          "continuousCollision": false
+        },
+        "illusion.Transform": {
+          "position": [-4.0, 5.0, -1.0],
+          "rotation": [0.0, 0.0, 0.0, 1.0],
+          "scale": [1.0, 1.0, 1.0]
+        }
+      }
+    },
+    {
+      "id": "491718de357e3da8",
+      "components": {
+        "illusion.MeshRenderer": {
+          "mesh": "builtin:/mesh/sphere",
+          "submesh": 0,
+          "material": "builtin:/material/default",
+          "layers": 1,
+          "castShadows": true,
+          "visible": false
+        },
+        "illusion.Name": {
+          "value": "Ghost"
+        },
+        "illusion.Transform": {
+          "position": [6.0, 0.5, -3.0],
+          "rotation": [0.0, 0.0, 0.0, 1.0],
+          "scale": [1.0, 1.0, 1.0]
+        }
+      }
+    },
+    {
+      "id": "497305c5d1aab99f",
+      "components": {
+        "illusion.Collider": {
+          "shape": "Box",
+          "halfExtents": [0.3, 0.1, 0.3],
+          "radius": 0.5,
+          "halfHeight": 0.5,
+          "offset": [0.0, 0.0, 0.0],
+          "rotation": [0.0, 0.0, 0.0, 1.0],
+          "mesh": "",
+          "meshIndex": 0
+        },
+        "illusion.Joint": {
+          "type": "Slider",
+          "connected": null,
+          "anchor": [0.0, 0.0, 0.0],
+          "connectedAnchor": [0.0, 0.0, 0.0],
+          "axis": [0.0, 0.0, 1.0],
+          "limited": true,
+          "minLimit": 0.0,
+          "maxLimit": 0.5,
+          "motorSpeed": 0.0,
+          "motorMaxForce": 0.0,
+          "breakForce": 0.0
+        },
+        "illusion.Name": {
+          "value": "Drawer"
+        },
+        "illusion.RigidBody": {
+          "motionType": "Dynamic",
+          "mass": 0.0,
+          "friction": 0.5,
+          "restitution": 0.0,
+          "linearDamping": 0.05,
+          "angularDamping": 0.05,
+          "gravityFactor": 1.0,
+          "layer": 0,
+          "sensor": false,
+          "allowSleeping": true,
+          "continuousCollision": false
+        },
+        "illusion.Transform": {
+          "position": [12.0, 1.0, 0.0],
+          "rotation": [0.0, 0.0, 0.0, 1.0],
+          "scale": [1.0, 1.0, 1.0]
+        }
+      }
+    },
+    {
+      "id": "5692161d100b05e5",
+      "components": {
+        "illusion.AudioListener": {},
+        "illusion.Camera": {
+          "fovY": 0.9,
+          "nearPlane": 0.05,
+          "exposure": 1.2,
+          "projection": "Perspective",
+          "orthoHeight": 10.0,
+          "farPlane": 400.0,
+          "priority": 0
+        },
+        "illusion.Name": {
+          "value": "Camera"
+        },
+        "illusion.Transform": {
+          "position": [0.0, 3.0, 9.0],
+          "rotation": [-0.1305262, 0.0, 0.0, 0.9914449],
+          "scale": [1.0, 1.0, 1.0]
+        }
+      }
+    },
+    {
+      "id": "6f9b6dae6f4c57a8",
+      "components": {
+        "illusion.Collider": {
+          "shape": "Capsule",
+          "halfExtents": [0.5, 0.5, 0.5],
+          "radius": 0.3,
+          "halfHeight": 0.6,
+          "offset": [0.0, 0.0, 0.0],
+          "rotation": [0.0, 0.0, 0.7071068, 0.7071068],
+          "mesh": "",
+          "meshIndex": 0
+        },
+        "illusion.Name": {
+          "value": "Pill"
+        },
+        "illusion.RigidBody": {
+          "motionType": "Dynamic",
+          "mass": 0.0,
+          "friction": 0.5,
+          "restitution": 0.0,
+          "linearDamping": 0.05,
+          "angularDamping": 0.05,
+          "gravityFactor": 1.0,
+          "layer": 0,
+          "sensor": false,
+          "allowSleeping": true,
+          "continuousCollision": false
+        },
+        "illusion.Transform": {
+          "position": [-3.0, 5.0, 2.0],
+          "rotation": [0.0, 0.0, 0.0, 1.0],
+          "scale": [1.0, 1.0, 1.0]
+        }
+      }
+    },
+    {
+      "id": "71bb54d8d101b5b9",
+      "components": {
+        "illusion.Disabled": {},
+        "illusion.Name": {
+          "value": "Night Sky"
+        },
+        "illusion.SkyLight": {
+          "environment": "builtin:/sky/procedural",
+          "intensity": 0.2,
+          "background": false
+        },
+        "illusion.Transform": {
+          "position": [0.0, 0.0, 0.0],
+          "rotation": [0.0, 0.0, 0.0, 1.0],
+          "scale": [1.0, 1.0, 1.0]
+        }
+      }
+    },
+    {
+      "id": "71c18690ee42c90b",
+      "components": {
+        "illusion.Name": {
+          "value": "Sky"
+        },
+        "illusion.ProceduralSky": {
+          "zenith": [0.2, 0.4, 0.85],
+          "horizon": [0.85, 0.9, 0.95],
+          "ground": [0.3, 0.25, 0.2],
+          "sunDirection": [0.4, 0.7, -0.6],
+          "sunRadiance": [20.0, 18.0, 15.0],
+          "sunAngularRadius": 0.03,
+          "resolution": 256
+        },
+        "illusion.SkyLight": {
+          "environment": "builtin:/sky/procedural",
+          "intensity": 0.8,
+          "background": true
+        },
+        "illusion.Transform": {
+          "position": [0.0, 0.0, 0.0],
+          "rotation": [0.0, 0.0, 0.0, 1.0],
+          "scale": [1.0, 1.0, 1.0]
+        }
+      }
+    },
+    {
+      "id": "7476cf8a4baa5dc0",
+      "components": {
+        "illusion.Collider": {
+          "shape": "Box",
+          "halfExtents": [0.5, 0.5, 0.5],
+          "radius": 0.5,
+          "halfHeight": 0.5,
+          "offset": [0.0, 0.01, 0.0],
+          "rotation": [0.0, 0.0, 0.0, 1.0],
+          "mesh": "",
+          "meshIndex": 0
+        },
+        "illusion.MeshRenderer": {
+          "mesh": "builtin:/mesh/cube",
+          "submesh": 0,
+          "material": "builtin:/material/default",
+          "layers": 1,
+          "castShadows": true,
+          "visible": true
+        },
+        "illusion.Name": {
+          "value": "Crate"
+        },
+        "illusion.RigidBody": {
+          "motionType": "Dynamic",
+          "mass": 20.0,
+          "friction": 0.8,
+          "restitution": 0.3,
+          "linearDamping": 0.1,
+          "angularDamping": 0.2,
+          "gravityFactor": 0.5,
+          "layer": 1,
+          "sensor": false,
+          "allowSleeping": false,
+          "continuousCollision": true
+        },
+        "illusion.Transform": {
+          "position": [2.0, 4.0, 0.0],
+          "rotation": [0.0, 0.0, 0.0, 1.0],
+          "scale": [1.0, 1.0, 1.0]
+        }
+      }
+    },
+    {
+      "id": "7ef1fd0ed1548fcd",
+      "components": {
+        "illusion.Collider": {
+          "shape": "Box",
+          "halfExtents": [0.5, 0.5, 0.5],
+          "radius": 0.5,
+          "halfHeight": 0.5,
+          "offset": [0.0, 0.0, 0.0],
+          "rotation": [0.0, 0.0, 0.0, 1.0],
+          "mesh": "",
+          "meshIndex": 0
+        },
+        "illusion.Joint": {
+          "type": "Fixed",
+          "connected": "10e2c46865e98746",
+          "anchor": [0.0, 0.0, 0.0],
+          "connectedAnchor": [0.0, 0.0, 0.0],
+          "axis": [1.0, 0.0, 0.0],
+          "limited": false,
+          "minLimit": 0.0,
+          "maxLimit": 0.0,
+          "motorSpeed": 0.0,
+          "motorMaxForce": 0.0,
+          "breakForce": 0.0
+        },
+        "illusion.Name": {
+          "value": "Weld"
+        },
+        "illusion.RigidBody": {
+          "motionType": "Dynamic",
+          "mass": 0.0,
+          "friction": 0.5,
+          "restitution": 0.0,
+          "linearDamping": 0.05,
+          "angularDamping": 0.05,
+          "gravityFactor": 1.0,
+          "layer": 0,
+          "sensor": false,
+          "allowSleeping": true,
+          "continuousCollision": false
+        },
+        "illusion.Transform": {
+          "position": [8.0, 3.0, 0.0],
+          "rotation": [0.0, 0.0, 0.0, 1.0],
+          "scale": [1.0, 1.0, 1.0]
+        }
+      }
+    },
+    {
+      "id": "83f91ca7864a7135",
+      "components": {
+        "illusion.AudioSource": {
+          "clip": "assets:/audio/tone.wav",
+          "bus": "Music",
+          "volume": 0.5,
+          "pitch": 1.1,
+          "pan": -0.3,
+          "loop": true,
+          "playOnStart": false,
+          "spatial": false,
+          "stream": true,
+          "attenuation": "Linear",
+          "minDistance": 2.0,
+          "maxDistance": 50.0,
+          "rolloff": 0.8,
+          "dopplerFactor": 0.5,
+          "priority": 200,
+          "lowPassCutoff": 8000.0,
+          "reverbSend": 0.3,
+          "coneInnerAngle": 1.0,
+          "coneOuterAngle": 2.0,
+          "coneOuterVolume": 0.25
+        },
+        "illusion.Name": {
+          "value": "Radio"
+        },
+        "illusion.Transform": {
+          "position": [3.0, 1.0, 3.0],
+          "rotation": [0.0, 0.0, 0.0, 1.0],
+          "scale": [1.0, 1.0, 1.0]
+        }
+      }
+    },
+    {
+      "id": "85e7bb0f12278575",
+      "components": {
+        "illusion.Collider": {
+          "shape": "Mesh",
+          "halfExtents": [0.5, 0.5, 0.5],
+          "radius": 0.5,
+          "halfHeight": 0.5,
+          "offset": [0.0, 0.0, 0.0],
+          "rotation": [0.0, 0.0, 0.0, 1.0],
+          "mesh": "assets:/models/blocks.gltf",
+          "meshIndex": 1
+        },
+        "illusion.MeshRenderer": {
+          "mesh": "assets:/models/blocks.gltf#mesh/0",
+          "submesh": 1,
+          "material": "assets:/materials/brass.material",
+          "layers": 1,
+          "castShadows": false,
+          "visible": true
+        },
+        "illusion.Name": {
+          "value": "Blocks"
+        },
+        "illusion.RigidBody": {
+          "motionType": "Static",
+          "mass": 0.0,
+          "friction": 0.5,
+          "restitution": 0.0,
+          "linearDamping": 0.05,
+          "angularDamping": 0.05,
+          "gravityFactor": 1.0,
+          "layer": 0,
+          "sensor": false,
+          "allowSleeping": true,
+          "continuousCollision": false
+        },
+        "illusion.Transform": {
+          "position": [-6.0, 0.25, -3.0],
+          "rotation": [0.0, 0.0, 0.0, 1.0],
+          "scale": [1.0, 1.0, 1.0]
+        }
+      }
+    },
+    {
+      "id": "87b341d690d7a28a",
+      "components": {
+        "illusion.Collider": {
+          "shape": "Sphere",
+          "halfExtents": [0.5, 0.5, 0.5],
+          "radius": 0.5,
+          "halfHeight": 0.5,
+          "offset": [0.0, 0.0, 0.0],
+          "rotation": [0.0, 0.0, 0.0, 1.0],
+          "mesh": "",
+          "meshIndex": 0
+        },
+        "illusion.MeshRenderer": {
+          "mesh": "builtin:/mesh/sphere",
+          "submesh": 0,
+          "material": "builtin:/material/default",
+          "layers": 1,
+          "castShadows": true,
+          "visible": true
+        },
+        "illusion.Name": {
+          "value": "Ball"
+        },
+        "illusion.RigidBody": {
+          "motionType": "Dynamic",
+          "mass": 0.0,
+          "friction": 0.5,
+          "restitution": 0.0,
+          "linearDamping": 0.05,
+          "angularDamping": 0.05,
+          "gravityFactor": 1.0,
+          "layer": 0,
+          "sensor": false,
+          "allowSleeping": true,
+          "continuousCollision": false
+        },
+        "illusion.Transform": {
+          "position": [-2.0, 5.0, 0.0],
+          "rotation": [0.0, 0.0, 0.0, 1.0],
+          "scale": [1.0, 1.0, 1.0]
+        }
+      }
+    },
+    {
+      "id": "910a2dec89025cc1",
+      "components": {
+        "illusion.Camera": {
+          "fovY": 1.0471976,
+          "nearPlane": 0.1,
+          "exposure": 1.0,
+          "projection": "Orthographic",
+          "orthoHeight": 24.0,
+          "farPlane": 1000.0,
+          "priority": -1
+        },
+        "illusion.Name": {
+          "value": "Map Camera"
+        },
+        "illusion.Transform": {
+          "position": [0.0, 20.0, 0.0],
+          "rotation": [-0.7071068, 0.0, 0.0, 0.7071068],
+          "scale": [1.0, 1.0, 1.0]
+        }
+      }
+    },
+    {
+      "id": "a534a6a6b7fd0b63",
+      "components": {
+        "illusion.Collider": {
+          "shape": "ConvexHull",
+          "halfExtents": [0.5, 0.5, 0.5],
+          "radius": 0.5,
+          "halfHeight": 0.5,
+          "offset": [0.0, 0.0, 0.0],
+          "rotation": [0.0, 0.0, 0.0, 1.0],
+          "mesh": "builtin:/mesh/cube",
+          "meshIndex": 0
+        },
+        "illusion.MeshRenderer": {
+          "mesh": "builtin:/mesh/cube",
+          "submesh": 0,
+          "material": "builtin:/material/default",
+          "layers": 1,
+          "castShadows": true,
+          "visible": true
+        },
+        "illusion.Name": {
+          "value": "Rock"
+        },
+        "illusion.RigidBody": {
+          "motionType": "Dynamic",
+          "mass": 0.0,
+          "friction": 0.5,
+          "restitution": 0.0,
+          "linearDamping": 0.05,
+          "angularDamping": 0.05,
+          "gravityFactor": 1.0,
+          "layer": 0,
+          "sensor": false,
+          "allowSleeping": true,
+          "continuousCollision": false
+        },
+        "illusion.Transform": {
+          "position": [4.0, 6.0, 2.0],
+          "rotation": [0.0, 0.0, 0.0, 1.0],
+          "scale": [1.0, 1.0, 1.0]
+        }
+      }
+    },
+    {
+      "id": "ae84379630af89ee",
+      "components": {
+        "illusion.Collider": {
+          "shape": "Box",
+          "halfExtents": [1.0, 1.0, 1.0],
+          "radius": 0.5,
+          "halfHeight": 0.5,
+          "offset": [0.0, 0.0, 0.0],
+          "rotation": [0.0, 0.0, 0.0, 1.0],
+          "mesh": "",
+          "meshIndex": 0
+        },
+        "illusion.Name": {
+          "value": "Trigger"
+        },
+        "illusion.RigidBody": {
+          "motionType": "Static",
+          "mass": 0.0,
+          "friction": 0.5,
+          "restitution": 0.0,
+          "linearDamping": 0.05,
+          "angularDamping": 0.05,
+          "gravityFactor": 1.0,
+          "layer": 0,
+          "sensor": true,
+          "allowSleeping": true,
+          "continuousCollision": false
+        },
+        "illusion.Transform": {
+          "position": [0.0, 1.0, 3.0],
+          "rotation": [0.0, 0.0, 0.0, 1.0],
+          "scale": [1.0, 1.0, 1.0]
+        }
+      }
+    },
+    {
+      "id": "b6b9aeef0d2df7ab",
+      "components": {
+        "illusion.AudioSource": {
+          "clip": "assets:/audio/tone.wav",
+          "bus": "Ambience",
+          "volume": 1.0,
+          "pitch": 1.0,
+          "pan": 0.0,
+          "loop": true,
+          "playOnStart": true,
+          "spatial": true,
+          "stream": false,
+          "attenuation": "None",
+          "minDistance": 1.0,
+          "maxDistance": 1000.0,
+          "rolloff": 1.0,
+          "dopplerFactor": 1.0,
+          "priority": 128,
+          "lowPassCutoff": 0.0,
+          "reverbSend": 0.0,
+          "coneInnerAngle": 6.2831855,
+          "coneOuterAngle": 6.2831855,
+          "coneOuterVolume": 0.0
+        },
+        "illusion.Name": {
+          "value": "Wind"
+        },
+        "illusion.Transform": {
+          "position": [0.0, 0.0, 0.0],
+          "rotation": [0.0, 0.0, 0.0, 1.0],
+          "scale": [1.0, 1.0, 1.0]
+        }
+      }
+    },
+    {
+      "id": "beeb8da1658eec67",
+      "components": {
+        "illusion.DirectionalLight": {
+          "color": [1.0, 0.95, 0.85],
+          "intensity": 4.0,
+          "castShadows": true,
+          "angularDiameter": 0.02
+        },
+        "illusion.Name": {
+          "value": "Sun"
+        },
+        "illusion.Transform": {
+          "position": [0.0, 10.0, 0.0],
+          "rotation": [-0.4226183, 0.2, 0.0, 0.8837],
+          "scale": [1.0, 1.0, 1.0]
+        }
+      }
+    },
+    {
+      "id": "c34d0bff90150280",
+      "components": {
+        "illusion.Name": {
+          "value": "Lamp"
+        },
+        "illusion.PointLight": {
+          "color": [1.0, 0.7, 0.4],
+          "intensity": 25.0,
+          "range": 6.0
+        },
+        "illusion.Transform": {
+          "position": [3.0, 2.5, 1.0],
+          "rotation": [0.0, 0.0, 0.0, 1.0],
+          "scale": [1.0, 1.0, 1.0]
+        }
+      }
+    },
+    {
+      "id": "d0bad0da572baaf1",
+      "components": {
+        "illusion.Collider": {
+          "shape": "Box",
+          "halfExtents": [1.5, 0.1, 1.5],
+          "radius": 0.5,
+          "halfHeight": 0.5,
+          "offset": [0.0, 0.0, 0.0],
+          "rotation": [0.0, 0.0, 0.0, 1.0],
+          "mesh": "",
+          "meshIndex": 0
+        },
+        "illusion.Name": {
+          "value": "Platform"
+        },
+        "illusion.RigidBody": {
+          "motionType": "Kinematic",
+          "mass": 0.0,
+          "friction": 0.5,
+          "restitution": 0.0,
+          "linearDamping": 0.05,
+          "angularDamping": 0.05,
+          "gravityFactor": 1.0,
+          "layer": 0,
+          "sensor": false,
+          "allowSleeping": true,
+          "continuousCollision": false
+        },
+        "illusion.Transform": {
+          "position": [5.0, 1.0, -2.0],
+          "rotation": [0.0, 0.0, 0.0, 1.0],
+          "scale": [1.0, 1.0, 1.0]
+        }
+      }
+    },
+    {
+      "id": "e099ec6cd7363ca5",
+      "components": {
+        "illusion.MeshRenderer": {
+          "mesh": "builtin:/mesh/plane",
+          "submesh": 0,
+          "material": "builtin:/material/default",
+          "layers": 3,
+          "castShadows": true,
+          "visible": true
+        },
+        "illusion.Name": {
+          "value": "Ground"
+        },
+        "illusion.Transform": {
+          "position": [0.0, 0.0, 0.0],
+          "rotation": [0.0, 0.0, 0.0, 1.0],
+          "scale": [20.0, 1.0, 20.0]
+        }
+      }
+    },
+    {
+      "id": "e263183773ef6508",
+      "components": {
+        "illusion.CharacterController": {
+          "radius": 0.4,
+          "height": 1.7,
+          "maxSlope": 0.7,
+          "stepHeight": 0.3,
+          "mass": 80.0,
+          "maxPushForce": 150.0,
+          "gravityFactor": 1.2,
+          "layer": 2
+        },
+        "illusion.Name": {
+          "value": "Player"
+        },
+        "illusion.Transform": {
+          "position": [0.0, 0.1, 5.0],
+          "rotation": [0.0, 0.0, 0.0, 1.0],
+          "scale": [1.0, 1.0, 1.0]
+        }
+      }
+    },
+    {
+      "id": "f893a2eefb32555e",
+      "components": {
+        "illusion.DirectionalLight": {
+          "color": [0.6, 0.7, 1.0],
+          "intensity": 0.1,
+          "castShadows": false,
+          "angularDiameter": 0.0093
+        },
+        "illusion.Name": {
+          "value": "Moon"
+        },
+        "illusion.Transform": {
+          "position": [0.0, 0.0, 0.0],
+          "rotation": [0.5, 0.0, 0.0, 0.8660254],
+          "scale": [1.0, 1.0, 1.0]
+        }
+      }
+    },
+    {
+      "id": "ff6c67e81909778a",
+      "components": {
+        "illusion.AudioSource": {
+          "clip": "assets:/audio/tone.wav",
+          "bus": "Ui",
+          "volume": 1.0,
+          "pitch": 1.0,
+          "pan": 0.0,
+          "loop": false,
+          "playOnStart": false,
+          "spatial": false,
+          "stream": false,
+          "attenuation": "Inverse",
+          "minDistance": 1.0,
+          "maxDistance": 1000.0,
+          "rolloff": 1.0,
+          "dopplerFactor": 1.0,
+          "priority": 128,
+          "lowPassCutoff": 0.0,
+          "reverbSend": 0.0,
+          "coneInnerAngle": 6.2831855,
+          "coneOuterAngle": 6.2831855,
+          "coneOuterVolume": 0.0
+        },
+        "illusion.Name": {
+          "value": "Click"
+        },
+        "illusion.Transform": {
+          "position": [0.0, 0.0, 0.0],
+          "rotation": [0.0, 0.0, 0.0, 1.0],
+          "scale": [1.0, 1.0, 1.0]
+        }
+      }
+    }
+  ]
+}

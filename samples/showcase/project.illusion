@@ -1,0 +1,8 @@
+{
+  "format": "illusion.project",
+  "name": "Showcase",
+  "version": "0.1.0",
+  "engineVersion": "",
+  "startupScene": "assets:/scenes/everything.scene",
+  "modules": []
+}

@@ -90,6 +90,7 @@ plugins:
             Editor Protocol: Editör Protokolü
             Scripting API: Scripting API
             AI Agents: Yapay Zekâ Ajanları
+            Showcase Project: Showcase Projesi
             Editor Window: Editör Penceresi
             Outliner and Inspector: Outliner ve Inspector
             Scene Viewport: Scene Viewport'u
@@ -156,6 +157,7 @@ nav:
           - Projects: manual/editor/projects.md
           - Automation: manual/editor/automation.md
           - AI Agents: manual/editor/ai-agents.md
+          - Showcase Project: manual/editor/showcase.md
   - Tutorials:
       - First Agent Session: tutorials/first-agent-session.md
   - Architecture:

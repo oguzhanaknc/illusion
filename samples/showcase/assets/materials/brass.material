@@ -1,0 +1,48 @@
+{
+  "format": "illusion.material",
+  "version": 1,
+  "material": {
+    "name": "Brass",
+    "baseColorFactor": [0.78, 0.57, 0.11, 1.0],
+    "metallicFactor": 1.0,
+    "roughnessFactor": 0.35,
+    "emissiveFactor": [0.0, 0.0, 0.0],
+    "normalScale": 1.0,
+    "occlusionStrength": 1.0,
+    "alphaCutoff": 0.5,
+    "alphaMode": "Opaque",
+    "doubleSided": false,
+    "baseColorTexture": {
+      "image": -1,
+      "wrapU": "Repeat",
+      "wrapV": "Repeat"
+    },
+    "metallicRoughnessTexture": {
+      "image": -1,
+      "wrapU": "Repeat",
+      "wrapV": "Repeat"
+    },
+    "normalTexture": {
+      "image": -1,
+      "wrapU": "Repeat",
+      "wrapV": "Repeat"
+    },
+    "occlusionTexture": {
+      "image": -1,
+      "wrapU": "Repeat",
+      "wrapV": "Repeat"
+    },
+    "emissiveTexture": {
+      "image": -1,
+      "wrapU": "Repeat",
+      "wrapV": "Repeat"
+    }
+  },
+  "textures": {
+    "baseColor": "",
+    "metallicRoughness": "",
+    "normal": "",
+    "occlusion": "",
+    "emissive": ""
+  }
+}

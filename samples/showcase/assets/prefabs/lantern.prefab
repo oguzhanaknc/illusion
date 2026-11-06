@@ -1,0 +1,62 @@
+{
+  "format": "illusion.prefab",
+  "version": 2,
+  "types": {
+    "illusion.Hierarchy": 1,
+    "illusion.LocalTransform": 1,
+    "illusion.MeshRenderer": 1,
+    "illusion.Name": 1,
+    "illusion.PointLight": 1,
+    "illusion.Transform": 1
+  },
+  "settings": {},
+  "entities": [
+    {
+      "id": "990cd70b12c5d084",
+      "components": {
+        "illusion.Hierarchy": {
+          "parent": null,
+          "order": 1
+        },
+        "illusion.MeshRenderer": {
+          "mesh": "builtin:/mesh/cylinder",
+          "submesh": 0,
+          "material": "assets:/materials/brass.material",
+          "layers": 1,
+          "castShadows": true,
+          "visible": true
+        },
+        "illusion.Name": {
+          "value": "Lantern"
+        },
+        "illusion.Transform": {
+          "position": [-5.0, 0.0, 4.0],
+          "rotation": [0.0, 0.0, 0.0, 1.0],
+          "scale": [1.0, 1.0, 1.0]
+        }
+      }
+    },
+    {
+      "id": "962b1967c90789ba",
+      "components": {
+        "illusion.Hierarchy": {
+          "parent": "990cd70b12c5d084",
+          "order": 0
+        },
+        "illusion.LocalTransform": {
+          "position": [0.0, 0.8, 0.0],
+          "rotation": [0.0, 0.0, 0.0, 1.0],
+          "scale": [1.0, 1.0, 1.0]
+        },
+        "illusion.Name": {
+          "value": "Flame"
+        },
+        "illusion.PointLight": {
+          "color": [1.0, 0.6, 0.2],
+          "intensity": 8.0,
+          "range": 4.0
+        }
+      }
+    }
+  ]
+}
