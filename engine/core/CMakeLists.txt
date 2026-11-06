@@ -5,6 +5,7 @@ add_library(illusion_core STATIC
     src/core/AssetRef.cpp
     src/core/Assert.cpp
     src/core/EventBus.cpp
+    src/core/FrameProfiler.cpp
     src/core/Hash.cpp
     src/core/JobSystem.cpp
     src/core/Json.cpp

@@ -228,6 +228,7 @@ struct ViewportService::Impl
         Entity sceneCamera{}; // the Camera a Game viewport looked through last
         u32 frames = 0;
         RenderStats renderStats;
+        RenderGpuTimings gpuTimings; // the newest frame the GPU has finished
         // Hover: the entity under the cursor, read from the ids one pixel at a time.
         bool hoverWanted = false;
         Vec2 hoverPixel{0.0f};
@@ -593,6 +594,7 @@ struct ViewportService::Impl
         SceneRendererDesc desc;
         desc.colorFormat = kColorFormat;
         desc.entityIds = true;
+        desc.gpuTimers = true; // for the Profiler panel and render.stats
         if (secondary)
         {
             desc.shadows.cascadeCount = kSecondaryCascades;
@@ -1250,6 +1252,7 @@ struct ViewportService::Impl
         commands->close();
         device.device()->executeCommandList(commands);
         viewport.renderStats = viewport.renderer->stats();
+        viewport.gpuTimings = viewport.renderer->gpuTimings();
         ++viewport.frames;
         ++stats.rendered;
         return true;
@@ -2074,6 +2077,7 @@ Expected<ViewportRenderStats, CommandError> ViewportService::renderStats(std::st
         return unexpected(Impl::notFound(id));
     }
     const RenderStats& stats = viewport->renderStats;
+    const RenderGpuTimings& gpu = viewport->gpuTimings;
     return ViewportRenderStats{viewport->frames,
                                stats.candidates,
                                stats.visible,
@@ -2081,7 +2085,9 @@ Expected<ViewportRenderStats, CommandError> ViewportService::renderStats(std::st
                                static_cast<u32>(std::min<u64>(stats.triangles, ~u32{0})),
                                stats.shadowCasters,
                                stats.shadowDrawCalls,
-                               stats.lightsDropped};
+                               stats.lightsDropped,
+                               ViewportGpuTimings{gpu.available && gpu.valid, gpu.shadows, gpu.depth,
+                                                  gpu.ambientOcclusion, gpu.shading, gpu.post}};
 }
 
 ViewportGpuInfo ViewportService::gpuInfo() const

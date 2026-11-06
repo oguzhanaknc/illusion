@@ -7,6 +7,7 @@ add_executable(illusion_tests
     core/TestAssetRef.cpp
     core/TestEventBus.cpp
     core/TestExpected.cpp
+    core/TestFrameProfiler.cpp
     core/TestHash.cpp
     core/TestInplaceFunction.cpp
     core/TestJobSystem.cpp

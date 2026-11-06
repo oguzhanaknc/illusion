@@ -2972,6 +2972,97 @@
       "additionalProperties": false
     }
   },
+  "diagnostics.get": {
+    "version": 1,
+    "permission": "read",
+    "mode": "any",
+    "undoable": false,
+    "readOnly": true,
+    "params": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "type": "object",
+      "properties": {
+        "world": {
+          "type": "string",
+          "enum": ["edit", "play"]
+        }
+      },
+      "additionalProperties": false
+    },
+    "result": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "type": "object",
+      "properties": {
+        "errors": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 4294967295
+        },
+        "warnings": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 4294967295
+        },
+        "issues": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "severity": {
+                "type": "string"
+              },
+              "code": {
+                "type": "string"
+              },
+              "subject": {
+                "type": "string"
+              },
+              "count": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 4294967295
+              },
+              "message": {
+                "type": "string"
+              }
+            },
+            "required": ["severity", "code", "subject", "count", "message"],
+            "additionalProperties": false
+          }
+        },
+        "_editor": {
+          "type": "object",
+          "properties": {
+            "revision": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "transaction": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "dryRun": {
+              "type": "boolean"
+            },
+            "operations": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "warnings": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          },
+          "required": ["revision", "transaction", "dryRun", "operations", "warnings"],
+          "additionalProperties": false
+        }
+      },
+      "required": ["errors", "warnings", "issues", "_editor"],
+      "additionalProperties": false
+    }
+  },
   "editor.batch": {
     "version": 1,
     "permission": "edit",
@@ -10844,6 +10935,233 @@
       "additionalProperties": false
     }
   },
+  "profiler.get": {
+    "version": 1,
+    "permission": "read",
+    "mode": "any",
+    "undoable": false,
+    "readOnly": true,
+    "params": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "type": "object",
+      "properties": {
+        "frames": {
+          "anyOf": [
+            {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 240
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "world": {
+          "type": "string",
+          "enum": ["edit", "play"]
+        }
+      },
+      "additionalProperties": false
+    },
+    "result": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "type": "object",
+      "properties": {
+        "paused": {
+          "type": "boolean"
+        },
+        "frameIndex": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 4294967295
+        },
+        "frames": {
+          "type": "array",
+          "items": {
+            "type": "number"
+          }
+        },
+        "averageMs": {
+          "type": "number"
+        },
+        "maxMs": {
+          "type": "number"
+        },
+        "fps": {
+          "type": "number"
+        },
+        "truncated": {
+          "type": "boolean"
+        },
+        "scopes": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "name": {
+                "type": "string"
+              },
+              "depth": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 4294967295
+              },
+              "calls": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 4294967295
+              },
+              "lastMs": {
+                "type": "number"
+              },
+              "averageMs": {
+                "type": "number"
+              },
+              "maxMs": {
+                "type": "number"
+              }
+            },
+            "required": ["name", "depth", "calls", "lastMs", "averageMs", "maxMs"],
+            "additionalProperties": false
+          }
+        },
+        "_editor": {
+          "type": "object",
+          "properties": {
+            "revision": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "transaction": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "dryRun": {
+              "type": "boolean"
+            },
+            "operations": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "warnings": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          },
+          "required": ["revision", "transaction", "dryRun", "operations", "warnings"],
+          "additionalProperties": false
+        }
+      },
+      "required": ["paused", "frameIndex", "frames", "averageMs", "maxMs", "fps", "truncated", "scopes", "_editor"],
+      "additionalProperties": false
+    }
+  },
+  "profiler.set": {
+    "version": 1,
+    "permission": "read",
+    "mode": "any",
+    "undoable": false,
+    "readOnly": false,
+    "params": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "type": "object",
+      "properties": {
+        "paused": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "clear": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "dryRun": {
+          "type": "boolean"
+        },
+        "mergeKey": {
+          "type": "string"
+        },
+        "clientToken": {
+          "type": "string"
+        },
+        "expectRevision": {
+          "anyOf": [
+            {
+              "type": "string",
+              "pattern": "^[0-9]+$"
+            },
+            {
+              "type": "integer",
+              "minimum": 0
+            }
+          ]
+        },
+        "world": {
+          "type": "string",
+          "enum": ["edit", "play"]
+        }
+      },
+      "additionalProperties": false
+    },
+    "result": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "type": "object",
+      "properties": {
+        "paused": {
+          "type": "boolean"
+        },
+        "frames": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 4294967295
+        },
+        "_editor": {
+          "type": "object",
+          "properties": {
+            "revision": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "transaction": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "dryRun": {
+              "type": "boolean"
+            },
+            "operations": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "warnings": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          },
+          "required": ["revision", "transaction", "dryRun", "operations", "warnings"],
+          "additionalProperties": false
+        }
+      },
+      "required": ["paused", "frames", "_editor"],
+      "additionalProperties": false
+    }
+  },
   "project.create": {
     "version": 1,
     "permission": "files",
@@ -12263,9 +12581,34 @@
               "type": "integer",
               "minimum": 0,
               "maximum": 4294967295
+            },
+            "gpu": {
+              "type": "object",
+              "properties": {
+                "measured": {
+                  "type": "boolean"
+                },
+                "shadows": {
+                  "type": "number"
+                },
+                "depth": {
+                  "type": "number"
+                },
+                "ambientOcclusion": {
+                  "type": "number"
+                },
+                "shading": {
+                  "type": "number"
+                },
+                "post": {
+                  "type": "number"
+                }
+              },
+              "required": ["measured", "shadows", "depth", "ambientOcclusion", "shading", "post"],
+              "additionalProperties": false
             }
           },
-          "required": ["frames", "candidates", "visible", "drawCalls", "triangles", "shadowCasters", "shadowDrawCalls", "lightsDropped"],
+          "required": ["frames", "candidates", "visible", "drawCalls", "triangles", "shadowCasters", "shadowDrawCalls", "lightsDropped", "gpu"],
           "additionalProperties": false
         },
         "_editor": {

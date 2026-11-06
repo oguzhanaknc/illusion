@@ -6,6 +6,7 @@
 
 #include <illusion/core/Assert.hpp>
 #include <illusion/core/Expected.hpp>
+#include <illusion/core/FrameProfiler.hpp>
 #include <illusion/core/TypeName.hpp>
 #include <illusion/ecs/EntityGuid.hpp>
 #include <illusion/ecs/Prefab.hpp>
@@ -456,6 +457,12 @@ public:
     /// Recent log messages of the process (nullptr if EditorContextOptions::logCapacity is 0).
     [[nodiscard]] const LogRingSink* log() const noexcept { return m_log.get(); }
 
+    /// The CPU profiler of the editor's frames (`profiler.get`). The frame loop begins and ends its frames
+    /// and opens a scope per phase; panels add nested scopes. Use on the editor's thread.
+    [[nodiscard]] FrameProfiler& profiler() noexcept { return m_profiler; }
+    /// @copydoc profiler()
+    [[nodiscard]] const FrameProfiler& profiler() const noexcept { return m_profiler; }
+
     /// Sequence of the last log message hidden by clearLog() (`log.read` returns newer ones).
     [[nodiscard]] u64 logCleared() const noexcept { return m_logCleared; }
 
@@ -706,6 +713,7 @@ private:
     std::unique_ptr<PlayWorld> m_playWorld;
     u64 m_playSessions = 0;
     std::shared_ptr<LogRingSink> m_log;
+    FrameProfiler m_profiler;
     u64 m_logCleared = 0;
     f64 m_autosaveTimer = 0.0;
     u32 m_autosaveCounter = 0;

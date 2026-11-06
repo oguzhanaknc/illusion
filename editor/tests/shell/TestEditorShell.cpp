@@ -1,6 +1,8 @@
 #include "rpc/RpcTestSupport.hpp"
 #include "shell/ShellTestSupport.hpp"
 
+#include <illusion/core/FrameProfiler.hpp>
+#include <illusion/core/Log.hpp>
 #include <illusion/editor/rpc/RpcServer.hpp>
 
 #include <cmath>
@@ -1220,4 +1222,51 @@ TEST_CASE(
     dragBetween(driver, "asset_browser.tile.1", shelf->center());
     driver.runFrames(3);
     test::ok(editor, "entity.get", R"({"entity":"/Shelf/Barrel"})");
+}
+
+TEST_CASE(
+    "the Profiler panel shows the frame's places, pauses recording and opens what a diagnostic is about")
+{
+    ShellFixture fixture;
+    EditorContext& editor = *fixture.editor;
+    test::ok(editor, "ui.show_panel", R"({"panel":"panel.profiler"})");
+    test::ok(editor, "ui.show_panel", R"({"panel":"panel.console","open":false})");
+    FrameProfiler& profiler = editor.profiler();
+    ui::UiDriver driver(fixture.context, [&] {
+        profiler.beginFrame();
+        fixture.frame();
+        profiler.endFrame();
+    });
+    driver.runFrames(4);
+
+    // Every drawn panel is a place of the frame.
+    REQUIRE(profiler.frameCount() > 0);
+    bool panelScope = false;
+    for (const ProfileScope& scope : profiler.frame(0).scopes)
+    {
+        panelScope = panelScope || scope.name == "panel.profiler";
+    }
+    CHECK(panelScope);
+    CHECK(driver.find("profiler.tab.cpu").has_value());
+
+    REQUIRE(driver.click("profiler.pause"));
+    driver.runFrames(2);
+    CHECK(profiler.paused());
+    const usize recorded = profiler.frameCount();
+    driver.runFrames(2);
+    CHECK(profiler.frameCount() == recorded);
+    REQUIRE(driver.click("profiler.resume"));
+    driver.runFrames(2);
+    CHECK_FALSE(profiler.paused());
+
+    // The Diagnostics tab lists the log's error; clicking it opens the Console.
+    test::ok(editor, "log.clear");
+    ILL_LOG_ERROR("Test", "the profiler test logs an error");
+    REQUIRE(driver.click("profiler.tab.diagnostics"));
+    driver.runFrames(2);
+    REQUIRE(driver.click("diagnostics.refresh"));
+    driver.runFrames(2);
+    REQUIRE(driver.click("diagnostics.issue.0"));
+    driver.runFrames(2);
+    CHECK(panelOpen(editor, "panel.console"));
 }

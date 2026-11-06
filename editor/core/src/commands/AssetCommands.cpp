@@ -1234,6 +1234,11 @@ assetThumbnail(CommandContext& context, const AssetThumbnailParams& params)
 
 } // namespace
 
+Expected<AssetFindMissingResult, CommandError> findMissingAssets(CommandContext& context)
+{
+    return assetFindMissing(context, NoParams{});
+}
+
 void registerAssetCommands(CommandRegistry& registry)
 {
     registry.add<&assetList>({

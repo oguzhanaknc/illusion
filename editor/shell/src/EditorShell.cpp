@@ -1,5 +1,6 @@
 #include "Panels.hpp"
 
+#include <illusion/core/FrameProfiler.hpp>
 #include <illusion/core/Json.hpp>
 #include <illusion/core/Profiler.hpp>
 #include <illusion/editor/ui/EditorData.hpp>
@@ -287,6 +288,7 @@ EditorShell::Impl::Impl(EditorShell& owner, EditorContext& editorContext, ui::Ui
     , gameInput(std::make_unique<detail::GameInput>())
     , console(std::make_unique<detail::Console>())
     , history(std::make_unique<detail::History>())
+    , profilerPanel(std::make_unique<detail::ProfilerPanel>())
     , agentsPanel(std::make_unique<detail::Agents>())
     , preferences(std::make_unique<detail::PreferencesPage>())
     , projects(std::make_unique<detail::Projects>())
@@ -1071,6 +1073,8 @@ void EditorShell::draw(f64 now, f64 deltaSeconds)
                 text.iconLabel(ui::findIcon(info.icon).value_or(ui::icons::kCircle), info.title, info.id),
                 &keep, flags))
         {
+            // Each panel is a place of the editor's frame in the Profiler (the ids are static text).
+            const FrameProfiler::Scope scope(impl.editor.profiler(), info.id);
             switch (panel)
             {
             case Panel::Outliner:
@@ -1093,6 +1097,9 @@ void EditorShell::draw(f64 now, f64 deltaSeconds)
                 break;
             case Panel::History:
                 impl.history->draw(impl);
+                break;
+            case Panel::Profiler:
+                impl.profilerPanel->draw(impl);
                 break;
             case Panel::AiActivity:
                 impl.agentsPanel->draw(impl);

@@ -1,6 +1,7 @@
 #include "Budget.hpp"
 
 #include <illusion/core/Assert.hpp>
+#include <illusion/core/FrameProfiler.hpp>
 #include <illusion/core/Json.hpp>
 #include <illusion/core/Log.hpp>
 #include <illusion/core/Memory.hpp>
@@ -115,6 +116,24 @@ ILL_BENCHMARK("random/below", 12.0)
             sum += random.below(1000);
         }
         ankerl::nanobench::doNotOptimizeAway(sum);
+    });
+}
+
+// A frame of 64 nested pairs of scopes, as the editor records them: the cost of one scope (begin and end,
+// two clock readings).
+ILL_BENCHMARK("profiler/scope", 400.0)
+{
+    FrameProfiler profiler({.frames = 240, .scopesPerFrame = 256, .maxDepth = 32});
+    constexpr int kPairs = 64;
+    bench.batch(kPairs * 2).unit("scope").run("FrameProfiler scopes", [&] {
+        profiler.beginFrame();
+        for (int i = 0; i < kPairs; ++i)
+        {
+            FrameProfiler::Scope outer(profiler, "outer");
+            FrameProfiler::Scope inner(profiler, "inner");
+        }
+        profiler.endFrame();
+        ankerl::nanobench::doNotOptimizeAway(profiler);
     });
 }
 

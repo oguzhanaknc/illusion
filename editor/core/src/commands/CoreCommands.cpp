@@ -464,6 +464,13 @@ void reflectCoreCommandTypes(StructRegistry& structs)
             .field("viewport", &CameraBookmarkParams::viewport)
             .field("slot", &CameraBookmarkParams::slot, {.min = 1.0, .max = 9.0})
             .field("animate", &CameraBookmarkParams::animate);
+        reflectStruct<ViewportGpuTimings>("editor.ViewportGpuTimings", 1, structs)
+            .field("measured", &ViewportGpuTimings::measured)
+            .field("shadows", &ViewportGpuTimings::shadows)
+            .field("depth", &ViewportGpuTimings::depth)
+            .field("ambientOcclusion", &ViewportGpuTimings::ambientOcclusion)
+            .field("shading", &ViewportGpuTimings::shading)
+            .field("post", &ViewportGpuTimings::post);
         reflectStruct<ViewportRenderStats>("editor.ViewportRenderStats", 1, structs)
             .field("frames", &ViewportRenderStats::frames)
             .field("candidates", &ViewportRenderStats::candidates)
@@ -472,7 +479,8 @@ void reflectCoreCommandTypes(StructRegistry& structs)
             .field("triangles", &ViewportRenderStats::triangles)
             .field("shadowCasters", &ViewportRenderStats::shadowCasters)
             .field("shadowDrawCalls", &ViewportRenderStats::shadowDrawCalls)
-            .field("lightsDropped", &ViewportRenderStats::lightsDropped);
+            .field("lightsDropped", &ViewportRenderStats::lightsDropped)
+            .field("gpu", &ViewportRenderStats::gpu);
         reflectStruct<RenderStatsResult>("editor.RenderStatsResult", 1, structs)
             .field("viewport", &RenderStatsResult::viewport)
             .field("width", &RenderStatsResult::width)
@@ -807,6 +815,40 @@ void reflectCoreCommandTypes(StructRegistry& structs)
         reflectStruct<LogStateResult>("editor.LogStateResult", 1, structs)
             .field("level", &LogStateResult::level)
             .field("last", &LogStateResult::last);
+        reflectStruct<ProfilerGetParams>("editor.ProfilerGetParams", 1, structs)
+            .field("frames", &ProfilerGetParams::frames, {.min = 1.0, .max = 240.0});
+        reflectStruct<ProfilerScopeEntry>("editor.ProfilerScopeEntry", 1, structs)
+            .field("name", &ProfilerScopeEntry::name)
+            .field("depth", &ProfilerScopeEntry::depth)
+            .field("calls", &ProfilerScopeEntry::calls)
+            .field("lastMs", &ProfilerScopeEntry::lastMs)
+            .field("averageMs", &ProfilerScopeEntry::averageMs)
+            .field("maxMs", &ProfilerScopeEntry::maxMs);
+        reflectStruct<ProfilerGetResult>("editor.ProfilerGetResult", 1, structs)
+            .field("paused", &ProfilerGetResult::paused)
+            .field("frameIndex", &ProfilerGetResult::frameIndex)
+            .field("frames", &ProfilerGetResult::frames)
+            .field("averageMs", &ProfilerGetResult::averageMs)
+            .field("maxMs", &ProfilerGetResult::maxMs)
+            .field("fps", &ProfilerGetResult::fps)
+            .field("truncated", &ProfilerGetResult::truncated)
+            .field("scopes", &ProfilerGetResult::scopes);
+        reflectStruct<ProfilerSetParams>("editor.ProfilerSetParams", 1, structs)
+            .field("paused", &ProfilerSetParams::paused)
+            .field("clear", &ProfilerSetParams::clear);
+        reflectStruct<ProfilerSetResult>("editor.ProfilerSetResult", 1, structs)
+            .field("paused", &ProfilerSetResult::paused)
+            .field("frames", &ProfilerSetResult::frames);
+        reflectStruct<DiagnosticEntry>("editor.DiagnosticEntry", 1, structs)
+            .field("severity", &DiagnosticEntry::severity)
+            .field("code", &DiagnosticEntry::code)
+            .field("subject", &DiagnosticEntry::subject)
+            .field("count", &DiagnosticEntry::count)
+            .field("message", &DiagnosticEntry::message);
+        reflectStruct<DiagnosticsResult>("editor.DiagnosticsResult", 1, structs)
+            .field("errors", &DiagnosticsResult::errors)
+            .field("warnings", &DiagnosticsResult::warnings)
+            .field("issues", &DiagnosticsResult::issues);
 
         reflectStruct<UiPanelEntry>("editor.UiPanelEntry", 1, structs)
             .field("id", &UiPanelEntry::id)
@@ -1018,6 +1060,7 @@ void registerCoreCommands(CommandRegistry& registry)
     detail::registerMaterialCommands(registry);
     detail::registerPrefabCommands(registry);
     detail::registerLogCommands(registry);
+    detail::registerProfilerCommands(registry);
     detail::registerSettingsCommands(registry);
     detail::registerUiCommands(registry);
     detail::registerPlayCommands(registry);

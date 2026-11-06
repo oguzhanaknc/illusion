@@ -157,17 +157,29 @@ struct ViewportReadback
     std::vector<Entity> entities; ///< ViewportChannel::Entities: each entity once, by Entity index.
 };
 
+/// GPU time of a viewport's render passes in milliseconds, from the newest frame the GPU has finished.
+struct ViewportGpuTimings
+{
+    bool measured = false;       ///< The GPU supports timestamps and a frame has been measured.
+    f32 shadows = 0.0f;          ///< Shadow maps.
+    f32 depth = 0.0f;            ///< Depth prepass and occlusion culling.
+    f32 ambientOcclusion = 0.0f; ///< Screen-space ambient occlusion.
+    f32 shading = 0.0f;          ///< Lighting and transparency.
+    f32 post = 0.0f;             ///< Temporal resolve, bloom and tonemapping.
+};
+
 /// What the renderer did in a viewport's last frame (`render.stats`).
 struct ViewportRenderStats
 {
-    u32 frames = 0;          ///< Frames rendered since the viewport was created.
-    u32 candidates = 0;      ///< RenderMesh entities considered.
-    u32 visible = 0;         ///< Entities that passed frustum culling.
-    u32 drawCalls = 0;       ///< Instanced draw calls.
-    u32 triangles = 0;       ///< Triangles submitted (saturates at 4,294,967,295).
-    u32 shadowCasters = 0;   ///< Shadow-caster instances, summed over cascades.
-    u32 shadowDrawCalls = 0; ///< Draw calls for shadows.
-    u32 lightsDropped = 0;   ///< Active lights beyond the renderer's limits.
+    u32 frames = 0;           ///< Frames rendered since the viewport was created.
+    u32 candidates = 0;       ///< RenderMesh entities considered.
+    u32 visible = 0;          ///< Entities that passed frustum culling.
+    u32 drawCalls = 0;        ///< Instanced draw calls.
+    u32 triangles = 0;        ///< Triangles submitted (saturates at 4,294,967,295).
+    u32 shadowCasters = 0;    ///< Shadow-caster instances, summed over cascades.
+    u32 shadowDrawCalls = 0;  ///< Draw calls for shadows.
+    u32 lightsDropped = 0;    ///< Active lights beyond the renderer's limits.
+    ViewportGpuTimings gpu{}; ///< GPU time of its passes.
 };
 
 /// The GPU behind the viewports (`render.gpu_info`, `render.diagnostics`).

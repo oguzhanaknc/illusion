@@ -445,6 +445,7 @@ public:
         editor::ViewportGpuInfo info;
         info.name = "Fake GPU";
         info.validation = true;
+        info.validationErrors = validationErrors;
         return info;
     }
 
@@ -490,6 +491,7 @@ public:
     editor::ViewportSnapRequest snapRequest;     ///< The last requestSnap() (without its exclusions).
     std::vector<Entity> snapExcluded;            ///< Its exclusions.
     editor::ViewportRenderStats stats;
+    u32 validationErrors = 0; // reported by gpuInfo()
     editor::ViewportChannel readChannel = editor::ViewportChannel::Color;
     UVec2 readOrigin{0};
     UVec2 readExtent{0};
