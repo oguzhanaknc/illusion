@@ -1,11 +1,11 @@
 #pragma once
 
 /// @file
-/// What the `gamepad.*` commands and the Gamepad Tester window need from the editor's gamepads: the state
-/// of every connected gamepad and its outputs (rumble, light, DualSense adaptive triggers, motion sensors).
-/// The editor process (`illusion::editor_play`, EditorGamepads) implements it over the GamepadSystem that
-/// Play mode reads and registers with EditorContext::setGamepads(); without one, the commands fail with
-/// ErrorKind::Unsupported.
+/// What the gamepad commands (`gamepad.list`, `gamepad.rumble`, ...) and the Gamepad Tester window need from
+/// the editor's gamepads: the state of every connected gamepad and its outputs (rumble, light, DualSense
+/// adaptive triggers, motion sensors). The editor process (`illusion::editor_play`, EditorGamepads)
+/// implements it over the GamepadSystem that Play mode reads and registers with EditorContext::setGamepads();
+/// without one, the commands fail with ErrorKind::Unsupported.
 
 #include <illusion/core/Base.hpp>
 #include <illusion/core/Math.hpp>
@@ -52,17 +52,17 @@ struct GamepadFingerState
 /// The state of one connected gamepad for the current frame.
 struct GamepadSnapshot
 {
-    u32 id = 0;                                    ///< Identifier, stable while it stays connected.
-    std::string name;                              ///< Device name.
-    std::string type;                              ///< Model name, e.g. "PS5" or "XboxOne".
-    u32 player = 0;                                ///< Player slot (0-based).
-    GamepadFeatures features;                      ///< What it supports.
-    std::array<bool, kGamepadButtons> buttons{};   ///< Held buttons.
-    std::array<f32, kGamepadAxes> axes{};          ///< Raw axes: sticks in [-1, 1] (+y up), triggers in [0, 1].
+    u32 id = 0;                                  ///< Identifier, stable while it stays connected.
+    std::string name;                            ///< Device name.
+    std::string type;                            ///< Model name, e.g. "PS5" or "XboxOne".
+    u32 player = 0;                              ///< Player slot (0-based).
+    GamepadFeatures features;                    ///< What it supports.
+    std::array<bool, kGamepadButtons> buttons{}; ///< Held buttons.
+    std::array<f32, kGamepadAxes> axes{};        ///< Raw axes: sticks in [-1, 1] (+y up), triggers in [0, 1].
     std::array<GamepadFingerState, kGamepadFingers> fingers{}; ///< Touchpad fingers.
-    bool motionEnabled = false;                    ///< The motion sensors report (see setMotionSensors()).
-    Vec3 gyroscope{0.0f};                          ///< Angular velocity in rad/s (x pitch, y yaw, z roll).
-    Vec3 accelerometer{0.0f};                      ///< Acceleration in m/s², gravity included.
+    bool motionEnabled = false; ///< The motion sensors report (see setMotionSensors()).
+    Vec3 gyroscope{0.0f};       ///< Angular velocity in rad/s (x pitch, y yaw, z roll).
+    Vec3 accelerometer{0.0f};   ///< Acceleration in m/s², gravity included.
 };
 
 /// Which trigger a DualSense adaptive trigger effect applies to.
@@ -113,7 +113,8 @@ public:
     virtual bool setLed(u32 gamepad, u8 red, u8 green, u8 blue) = 0;
 
     /// Applies a DualSense adaptive trigger effect to @p side.
-    virtual bool setTriggerEffect(u32 gamepad, GamepadTriggerSide side, const GamepadTriggerEffect& effect) = 0;
+    virtual bool setTriggerEffect(u32 gamepad, GamepadTriggerSide side,
+                                  const GamepadTriggerEffect& effect) = 0;
 
     /// Turns the gyroscope and accelerometer on or off (off saves battery).
     virtual bool setMotionSensors(u32 gamepad, bool enabled) = 0;

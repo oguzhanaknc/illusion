@@ -772,8 +772,8 @@ public:
     Rumble rumbled;                            ///< The last rumble (motors and triggers).
     std::array<u8, 3> led{0, 0, 0};            ///< The last light colour.
     editor::GamepadTriggerSide effectSide = editor::GamepadTriggerSide::Left; ///< Side of the last effect.
-    editor::GamepadTriggerEffect effect;       ///< The last trigger effect.
-    u32 outputs = 0;                           ///< Output calls so far.
+    editor::GamepadTriggerEffect effect;                                      ///< The last trigger effect.
+    u32 outputs = 0;                                                          ///< Output calls so far.
 
     FakeGamepads()
     {
@@ -781,8 +781,8 @@ public:
         pad.id = 7;
         pad.name = "Fake DualSense";
         pad.type = "PS5";
-        pad.features = {.rumble = true, .led = true, .motionSensors = true, .touchpad = true,
-                        .adaptiveTriggers = true};
+        pad.features = {
+            .rumble = true, .led = true, .motionSensors = true, .touchpad = true, .adaptiveTriggers = true};
     }
 
     void gamepads(std::vector<editor::GamepadSnapshot>& out) const override { out = pads; }

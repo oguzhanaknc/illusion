@@ -1,8 +1,8 @@
 #pragma once
 
 /// @file
-/// EditorGamepads: the GamepadHost of the `gamepad.*` commands and the Gamepad Tester window, over the
-/// GamepadSystem that Play mode reads (PlaySessionDesc::gamepads).
+/// EditorGamepads: the GamepadHost of the gamepad commands (`gamepad.list`, ...) and the Gamepad Tester
+/// window, over the GamepadSystem that Play mode reads (PlaySessionDesc::gamepads).
 ///
 /// @code
 /// std::unique_ptr<illusion::GamepadSystem> system = illusion::GamepadSystem::create(&events);

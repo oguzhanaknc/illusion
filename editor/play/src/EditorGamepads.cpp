@@ -18,14 +18,14 @@ TriggerEffect engineEffect(const GamepadTriggerEffect& effect) noexcept
 {
     switch (effect.mode)
     {
-        case GamepadTriggerMode::Resistance:
-            return TriggerEffect::resistance(effect.start, effect.strength);
-        case GamepadTriggerMode::Weapon:
-            return TriggerEffect::weapon(effect.start, effect.end, effect.strength);
-        case GamepadTriggerMode::Vibration:
-            return TriggerEffect::vibration(effect.start, effect.amplitude, effect.frequency);
-        case GamepadTriggerMode::Off:
-            break;
+    case GamepadTriggerMode::Resistance:
+        return TriggerEffect::resistance(effect.start, effect.strength);
+    case GamepadTriggerMode::Weapon:
+        return TriggerEffect::weapon(effect.start, effect.end, effect.strength);
+    case GamepadTriggerMode::Vibration:
+        return TriggerEffect::vibration(effect.start, effect.amplitude, effect.frequency);
+    case GamepadTriggerMode::Off:
+        break;
     }
     return TriggerEffect::off();
 }
@@ -76,8 +76,7 @@ void EditorGamepads::gamepads(std::vector<GamepadSnapshot>& out) const
             const TouchpadFinger& finger = state.finger(f);
             snapshot.fingers[f] = {finger.down, finger.position, finger.pressure};
         }
-        snapshot.motionEnabled =
-            std::find(m_motion.begin(), m_motion.end(), snapshot.id) != m_motion.end();
+        snapshot.motionEnabled = std::find(m_motion.begin(), m_motion.end(), snapshot.id) != m_motion.end();
         snapshot.gyroscope = state.gyroscope();
         snapshot.accelerometer = state.accelerometer();
     }
@@ -101,10 +100,12 @@ bool EditorGamepads::setLed(u32 gamepad, u8 red, u8 green, u8 blue)
     return pad != nullptr && pad->setLed(red, green, blue);
 }
 
-bool EditorGamepads::setTriggerEffect(u32 gamepad, GamepadTriggerSide side, const GamepadTriggerEffect& effect)
+bool EditorGamepads::setTriggerEffect(u32 gamepad, GamepadTriggerSide side,
+                                      const GamepadTriggerEffect& effect)
 {
     Gamepad* pad = m_system.find(static_cast<GamepadId>(gamepad));
-    const GamepadTrigger trigger = side == GamepadTriggerSide::Left ? GamepadTrigger::Left : GamepadTrigger::Right;
+    const GamepadTrigger trigger =
+        side == GamepadTriggerSide::Left ? GamepadTrigger::Left : GamepadTrigger::Right;
     return pad != nullptr && pad->setTriggerEffect(trigger, engineEffect(effect));
 }
 
