@@ -1,0 +1,202 @@
+{
+ "asset": {
+  "version": "2.0",
+  "generator": "illusion showcase make_assets.py"
+ },
+ "scene": 0,
+ "scenes": [
+  {
+   "nodes": [
+    0,
+    1
+   ]
+  }
+ ],
+ "nodes": [
+  {
+   "name": "blocks",
+   "mesh": 0
+  },
+  {
+   "name": "step",
+   "mesh": 1,
+   "translation": [
+    0,
+    0,
+    3
+   ]
+  }
+ ],
+ "meshes": [
+  {
+   "name": "blocks",
+   "primitives": [
+    {
+     "attributes": {
+      "POSITION": 0,
+      "NORMAL": 1
+     },
+     "indices": 2
+    },
+    {
+     "attributes": {
+      "POSITION": 3,
+      "NORMAL": 4
+     },
+     "indices": 5
+    }
+   ]
+  },
+  {
+   "name": "step",
+   "primitives": [
+    {
+     "attributes": {
+      "POSITION": 6,
+      "NORMAL": 7
+     },
+     "indices": 8
+    }
+   ]
+  }
+ ],
+ "buffers": [
+  {
+   "byteLength": 1944,
+   "uri": "data:application/octet-stream;base64,AAAAQAAAgL4AAABAAAAAQAAAgL4AAADAAAAAQAAAgD4AAADAAAAAQAAAgD4AAABAAAAAwAAAgL4AAADAAAAAwAAAgL4AAABAAAAAwAAAgD4AAABAAAAAwAAAgD4AAADAAAAAwAAAgD4AAABAAAAAQAAAgD4AAABAAAAAQAAAgD4AAADAAAAAwAAAgD4AAADAAAAAwAAAgL4AAADAAAAAQAAAgL4AAADAAAAAQAAAgL4AAABAAAAAwAAAgL4AAABAAAAAwAAAgL4AAABAAAAAQAAAgL4AAABAAAAAQAAAgD4AAABAAAAAwAAAgD4AAABAAAAAQAAAgL4AAADAAAAAwAAAgL4AAADAAAAAwAAAgD4AAADAAAAAQAAAgD4AAADAAACAPwAAAAAAAAAAAACAPwAAAAAAAAAAAACAPwAAAAAAAAAAAACAPwAAAAAAAAAAAACAvwAAAAAAAAAAAACAvwAAAAAAAAAAAACAvwAAAAAAAAAAAACAvwAAAAAAAAAAAAAAAAAAgD8AAAAAAAAAAAAAgD8AAAAAAAAAAAAAgD8AAAAAAAAAAAAAgD8AAAAAAAAAAAAAgL8AAAAAAAAAAAAAgL8AAAAAAAAAAAAAgL8AAAAAAAAAAAAAgL8AAAAAAAAAAAAAAAAAAIA/AAAAAAAAAAAAAIA/AAAAAAAAAAAAAIA/AAAAAAAAAAAAAIA/AAAAAAAAAAAAAIC/AAAAAAAAAAAAAIC/AAAAAAAAAAAAAIC/AAAAAAAAAAAAAIC/AAABAAIAAAACAAMABAAFAAYABAAGAAcACAAJAAoACAAKAAsADAANAA4ADAAOAA8AEAARABIAEAASABMAFAAVABYAFAAWABcAAAAAPwAAgD4AAAA/AAAAPwAAgD4AAAC/AAAAPwAAoD8AAAC/AAAAPwAAoD8AAAA/AAAAvwAAgD4AAAC/AAAAvwAAgD4AAAA/AAAAvwAAoD8AAAA/AAAAvwAAoD8AAAC/AAAAvwAAoD8AAAA/AAAAPwAAoD8AAAA/AAAAPwAAoD8AAAC/AAAAvwAAoD8AAAC/AAAAvwAAgD4AAAC/AAAAPwAAgD4AAAC/AAAAPwAAgD4AAAA/AAAAvwAAgD4AAAA/AAAAvwAAgD4AAAA/AAAAPwAAgD4AAAA/AAAAPwAAoD8AAAA/AAAAvwAAoD8AAAA/AAAAPwAAgD4AAAC/AAAAvwAAgD4AAAC/AAAAvwAAoD8AAAC/AAAAPwAAoD8AAAC/AACAPwAAAAAAAAAAAACAPwAAAAAAAAAAAACAPwAAAAAAAAAAAACAPwAAAAAAAAAAAACAvwAAAAAAAAAAAACAvwAAAAAAAAAAAACAvwAAAAAAAAAAAACAvwAAAAAAAAAAAAAAAAAAgD8AAAAAAAAAAAAAgD8AAAAAAAAAAAAAgD8AAAAAAAAAAAAAgD8AAAAAAAAAAAAAgL8AAAAAAAAAAAAAgL8AAAAAAAAAAAAAgL8AAAAAAAAAAAAAgL8AAAAAAAAAAAAAAAAAAIA/AAAAAAAAAAAAAIA/AAAAAAAAAAAAAIA/AAAAAAAAAAAAAIA/AAAAAAAAAAAAAIC/AAAAAAAAAAAAAIC/AAAAAAAAAAAAAIC/AAAAAAAAAAAAAIC/AAABAAIAAAACAAMABAAFAAYABAAGAAcACAAJAAoACAAKAAsADAANAA4ADAAOAA8AEAARABIAEAASABMAFAAVABYAFAAWABcAAACAPwAAAAAAAAA/AACAPwAAAAAAAAC/AACAP83MTD4AAAC/AACAP83MTD4AAAA/AACAvwAAAAAAAAC/AACAvwAAAAAAAAA/AACAv83MTD4AAAA/AACAv83MTD4AAAC/AACAv83MTD4AAAA/AACAP83MTD4AAAA/AACAP83MTD4AAAC/AACAv83MTD4AAAC/AACAvwAAAAAAAAC/AACAPwAAAAAAAAC/AACAPwAAAAAAAAA/AACAvwAAAAAAAAA/AACAvwAAAAAAAAA/AACAPwAAAAAAAAA/AACAP83MTD4AAAA/AACAv83MTD4AAAA/AACAPwAAAAAAAAC/AACAvwAAAAAAAAC/AACAv83MTD4AAAC/AACAP83MTD4AAAC/AACAPwAAAAAAAAAAAACAPwAAAAAAAAAAAACAPwAAAAAAAAAAAACAPwAAAAAAAAAAAACAvwAAAAAAAAAAAACAvwAAAAAAAAAAAACAvwAAAAAAAAAAAACAvwAAAAAAAAAAAAAAAAAAgD8AAAAAAAAAAAAAgD8AAAAAAAAAAAAAgD8AAAAAAAAAAAAAgD8AAAAAAAAAAAAAgL8AAAAAAAAAAAAAgL8AAAAAAAAAAAAAgL8AAAAAAAAAAAAAgL8AAAAAAAAAAAAAAAAAAIA/AAAAAAAAAAAAAIA/AAAAAAAAAAAAAIA/AAAAAAAAAAAAAIA/AAAAAAAAAAAAAIC/AAAAAAAAAAAAAIC/AAAAAAAAAAAAAIC/AAAAAAAAAAAAAIC/AAABAAIAAAACAAMABAAFAAYABAAGAAcACAAJAAoACAAKAAsADAANAA4ADAAOAA8AEAARABIAEAASABMAFAAVABYAFAAWABcA"
+  }
+ ],
+ "bufferViews": [
+  {
+   "buffer": 0,
+   "byteOffset": 0,
+   "byteLength": 288
+  },
+  {
+   "buffer": 0,
+   "byteOffset": 288,
+   "byteLength": 288
+  },
+  {
+   "buffer": 0,
+   "byteOffset": 576,
+   "byteLength": 72
+  },
+  {
+   "buffer": 0,
+   "byteOffset": 648,
+   "byteLength": 288
+  },
+  {
+   "buffer": 0,
+   "byteOffset": 936,
+   "byteLength": 288
+  },
+  {
+   "buffer": 0,
+   "byteOffset": 1224,
+   "byteLength": 72
+  },
+  {
+   "buffer": 0,
+   "byteOffset": 1296,
+   "byteLength": 288
+  },
+  {
+   "buffer": 0,
+   "byteOffset": 1584,
+   "byteLength": 288
+  },
+  {
+   "buffer": 0,
+   "byteOffset": 1872,
+   "byteLength": 72
+  }
+ ],
+ "accessors": [
+  {
+   "bufferView": 0,
+   "componentType": 5126,
+   "count": 24,
+   "type": "VEC3",
+   "min": [
+    -2,
+    -0.25,
+    -2
+   ],
+   "max": [
+    2,
+    0.25,
+    2
+   ]
+  },
+  {
+   "bufferView": 1,
+   "componentType": 5126,
+   "count": 24,
+   "type": "VEC3"
+  },
+  {
+   "bufferView": 2,
+   "componentType": 5123,
+   "count": 36,
+   "type": "SCALAR"
+  },
+  {
+   "bufferView": 3,
+   "componentType": 5126,
+   "count": 24,
+   "type": "VEC3",
+   "min": [
+    -0.5,
+    0.25,
+    -0.5
+   ],
+   "max": [
+    0.5,
+    1.25,
+    0.5
+   ]
+  },
+  {
+   "bufferView": 4,
+   "componentType": 5126,
+   "count": 24,
+   "type": "VEC3"
+  },
+  {
+   "bufferView": 5,
+   "componentType": 5123,
+   "count": 36,
+   "type": "SCALAR"
+  },
+  {
+   "bufferView": 6,
+   "componentType": 5126,
+   "count": 24,
+   "type": "VEC3",
+   "min": [
+    -1,
+    0,
+    -0.5
+   ],
+   "max": [
+    1,
+    0.2,
+    0.5
+   ]
+  },
+  {
+   "bufferView": 7,
+   "componentType": 5126,
+   "count": 24,
+   "type": "VEC3"
+  },
+  {
+   "bufferView": 8,
+   "componentType": 5123,
+   "count": 36,
+   "type": "SCALAR"
+  }
+ ]
+}
