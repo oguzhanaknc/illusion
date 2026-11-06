@@ -49,6 +49,9 @@ enum class Panel : u8
     AudioMixer,
     InputActions,
     GamepadTester,
+    Inspector2,
+    Inspector3,
+    Inspector4,
     Count,
 };
 
@@ -211,6 +214,9 @@ struct EditorShell::Impl
     std::unique_ptr<detail::RenderingPanel> renderingPanel;
     std::unique_ptr<detail::InputActionsWindow> inputActions;
     std::unique_ptr<detail::GamepadTesterWindow> gamepadTester;
+    // Inspector windows 2 to 4, each locked to the selection of the moment it opens.
+    std::array<std::unique_ptr<detail::Inspector>, 3> extraInspectors;
+    std::array<bool, 3> extraInspectorShown{};
     std::unique_ptr<detail::Agents> agentsPanel;
     std::unique_ptr<detail::PreferencesPage> preferences;
     std::unique_ptr<detail::Projects> projects;

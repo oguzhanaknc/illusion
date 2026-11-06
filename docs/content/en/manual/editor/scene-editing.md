@@ -42,6 +42,16 @@ When a filter is active, matching entities are shown as a flat list with their f
 
 The Inspector shows and edits the current selection. Click the **pin** button in the top-right corner of the panel to lock the Inspector to its current entities while you change the selection elsewhere.
 
+To compare or edit entities side by side, open up to three more Inspectors from **Window → Inspector 2**,
+**Inspector 3** and **Inspector 4** (or `ui.show_panel` with `window.inspector_2` to `window.inspector_4`).
+Each opens locked to the selection of that moment, so the Inspector panel keeps following the selection
+beside it; unlock one to make it follow the selection too. Their stable ids start with `inspector_2.` to
+`inspector_4.` instead of `inspector.`.
+
+```json
+{"method": "ui.show_panel", "params": {"panel": "window.inspector_2"}}
+```
+
 ### Entity header
 
 At the top of the Inspector:

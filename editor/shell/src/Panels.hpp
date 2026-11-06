@@ -122,13 +122,22 @@ private:
 class Inspector
 {
 public:
-    Inspector();
+    /// An Inspector whose stable ids start with @p idPrefix (a static string, e.g. "inspector" for the
+    /// Inspector panel or "inspector_2" for the second Inspector window).
+    explicit Inspector(std::string_view idPrefix = "inspector");
     ~Inspector();
     Inspector(const Inspector&) = delete;
     Inspector& operator=(const Inspector&) = delete;
 
     /// Draws the panel's content.
     void draw(Impl& shell);
+
+    /// Shows @p entities from now on whatever the selection (the lock button), or the selection again when
+    /// @p entities is empty.
+    void lock(std::span<const EntityGuid> entities);
+
+    /// True while it shows locked entities instead of the selection.
+    [[nodiscard]] bool locked() const noexcept;
 
     /// Draws the fields of the project settings value @p work of @p type with the Inspector's widgets, except
     /// the fields named in @p skip (drawn by the caller). Edits update @p work and run `project.settings_set`
@@ -140,6 +149,9 @@ private:
     struct State;
     std::unique_ptr<State> m_state;
 };
+
+/// Draws Inspector window @p index (0 for "Inspector 2"): it locks itself to the selection when it opens.
+void drawExtraInspector(Impl& shell, usize index);
 
 /// Runs `project.settings_set` for @p type with the top-level field @p field of @p work as the merge patch
 /// (merging undo steps with @p mergeKey). False if the field cannot be written as JSON.
