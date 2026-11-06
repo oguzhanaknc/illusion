@@ -156,6 +156,8 @@ constexpr UiAction kActions[] = {
      .menu = UiMenu::Window, .group = 3, .title = s::kWindowPhysics, .icon = "deployed_code"},
     {.id = "window.audio_mixer", .command = "ui.show_panel", .params = R"({"panel":"window.audio_mixer"})",
      .menu = UiMenu::Window, .group = 3, .title = s::kWindowAudioMixer, .icon = "graphic_eq"},
+    {.id = "window.input_actions", .command = "ui.show_panel", .params = R"({"panel":"window.input_actions"})",
+     .menu = UiMenu::Window, .group = 3, .title = s::kWindowInputActions, .icon = "sports_esports"},
     // Help
     {.id = "help.welcome", .command = "ui.show_panel", .params = R"({"panel":"window.welcome"})",
      .menu = UiMenu::Help, .title = s::kWindowWelcome, .icon = "waving_hand"},

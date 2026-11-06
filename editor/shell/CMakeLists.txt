@@ -11,6 +11,7 @@ illusion_add_editor_library(illusion_editor_shell STATIC
     src/GameInput.cpp
     src/Gizmos.cpp
     src/History.cpp
+    src/InputActionsWindow.cpp
     src/Inspector.cpp
     src/Layouts.cpp
     src/Outliner.cpp

@@ -480,6 +480,23 @@ void drawPhysicsWindow(Impl& shell);
 /// Draws the Audio Mixer window: the mixer and voices of the running play session.
 void drawAudioMixerWindow(Impl& shell);
 
+/// The Input Actions window: the actions of an input actions asset, rebound through the `input.*` commands.
+class InputActionsWindow
+{
+public:
+    InputActionsWindow();
+    ~InputActionsWindow();
+    InputActionsWindow(const InputActionsWindow&) = delete;
+    InputActionsWindow& operator=(const InputActionsWindow&) = delete;
+
+    /// Draws the window's content.
+    void draw(Impl& shell);
+
+private:
+    struct State;
+    std::unique_ptr<State> m_state;
+};
+
 /// The Rendering panel: the render quality of the viewports (a preference), the GPU and each viewport's last
 /// frame.
 class RenderingPanel

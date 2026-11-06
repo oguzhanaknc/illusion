@@ -128,6 +128,17 @@ düzenler:
 Projeyi Asset'e yönlendirmek için `illusion.InputSettings` (`actions`) üzerinde `project.settings_set`
 kullanın.
 
+**Input Actions** penceresi (Window → Input Actions) bir Asset'i editörde düzenler. Projenin ilk `.input`
+Asset'ini (veya ilk eylemle oluşturulan `assets:/input/game.input`'u) açar ve eylemlerini türleri ve
+bağlamalarıyla listeler:
+
+- **Add binding** bir sonraki tuş basışını `Key.<ad>` olarak yakalar ya da `Gamepad.South`, `Axis.LeftX` veya
+  `Stick.Left` gibi yazılmış bir bağlamayı alır; Esc vazgeçer.
+- Bir bağlamaya tıklamak onu kaldırır, çöp kutusu da eylemi kaldırır.
+- En alttaki satır bir ad ve bir türle (Button, Axis veya Vector2) bir eylem ekler.
+
+Her değişiklik yukarıdaki komutlardan biri ve bir undo adımıdır.
+
 ## Oyun modülleri
 
 `module.load` bir oyun modülünü paylaşımlı kütüphanesinden yükler ve çalışan bir oturumda başlatır,

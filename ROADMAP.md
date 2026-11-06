@@ -186,9 +186,9 @@ Plan: `docs/plans/m7-editor.md` (sub-milestones, command API, localization, them
   with en-XA and locale files, keymap presets illusion/Unity/Unreal/Blender with conflict detection and
   rebinding capture, AI agents, autosave, external tools) in `preferences.json`; Welcome window with recent
   projects, templates and the workspace folder browser; About and the third-party licence viewer; the `ui.*`
-  commands, `preferences.get/set` and `editor.screenshot` (91 commands). Cut to later: gamepad navigation of
-  the window through `GamepadSystem` (M7w), follow-agent (done in M7o-3), launching External Tools
-  (M7s), `#` asset search in the palette (M7u)
+  commands, `preferences.get/set` and `editor.screenshot` (91 commands). Cut to later: follow-agent (done in
+  M7o-3), launching External Tools (M7s), `#` asset search in the palette (M7u); gamepad navigation of the
+  window was dropped as unnecessary
 - M7m: ✅ Outliner and Inspector: Outliner (`HierarchyIndex` row cache rebuilt on hierarchy, selection or
   view-state change, `ImGuiListClipper`, multi-select with Ctrl/Shift and keyboard navigation, F2 inline
   rename, drag-and-drop reparenting and sibling reordering with `keepWorld` or Alt `keepLocal`, context menus,
@@ -444,7 +444,7 @@ Plan: `docs/plans/m7-editor.md` (sub-milestones, command API, localization, them
     dragging a prefab into the viewport (on the ground, `prefab.instantiate` with `position`) or onto the
     Outliner, and per-field override marks with per-field apply and revert (`field`)
 - M7w: Engine feature panels: rendering, physics, audio mixer, input actions, gamepad tester, profiler,
-  diagnostics; gamepad navigation of the editor window through `GamepadSystem` (from M7l), in parts:
+  diagnostics, in parts:
 - M7w-1: ✅ Profiler and Diagnostics: `FrameProfiler` in the core (nested named CPU scopes of the last frames
   in a fixed ring, allocation-free recording and `summarize()`), the editor's frame loops record their phases
   (events, requests, ui with one scope per drawn panel, render, play, editor), GPU pass timings per viewport
@@ -468,8 +468,11 @@ Plan: `docs/plans/m7-editor.md` (sub-milestones, command API, localization, them
   characters, joints, physics steps, contacts of the last step, voices, clips, the mixer), a session-only mixer
   (`setMasterVolume()`, `setBus()`), `play.diagnostics` and `play.set_mix` (175 commands), and a button that
   shows every collision shape in the Scene view. Command tests on a real play session and a headless UI test
-- M7w-3: Input actions panel with rebinding, gamepad tester (rumble, LED, gyro, touchpad, triggers) and
-  gamepad navigation of the editor window; physics raycasts for drop to ground (from M7p-2)
+- M7w-3a: ✅ Input Actions window: the actions of an input actions asset with their types and bindings,
+  rebinding by capturing the next key press or typing a binding, unbinding, adding and removing actions, all
+  through the `input.*` commands (one undo step each). A headless UI test adds, binds, unbinds and removes
+- M7w-3b: Gamepad tester (rumble, LED, gyro, touchpad, triggers); physics raycasts for drop to ground (from
+  M7p-2)
 - M7w-4: Multiple simultaneous Inspector instances (from M7m)
 - M7x: Showcase scene covering every Component and the scripting API; Tetris built by an agent end to end
 
