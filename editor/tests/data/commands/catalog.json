@@ -8907,6 +8907,140 @@
       "additionalProperties": false
     }
   },
+  "play.diagnostics": {
+    "version": 1,
+    "permission": "read",
+    "mode": "any",
+    "undoable": false,
+    "readOnly": true,
+    "params": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "type": "object",
+      "properties": {
+        "world": {
+          "type": "string",
+          "enum": ["edit", "play"]
+        }
+      },
+      "additionalProperties": false
+    },
+    "result": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "type": "object",
+      "properties": {
+        "running": {
+          "type": "boolean"
+        },
+        "bodies": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 4294967295
+        },
+        "characters": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 4294967295
+        },
+        "joints": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 4294967295
+        },
+        "physicsSteps": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 4294967295
+        },
+        "contacts": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 4294967295
+        },
+        "activeVoices": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 4294967295
+        },
+        "droppedSounds": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 4294967295
+        },
+        "stolenVoices": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 4294967295
+        },
+        "clips": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 4294967295
+        },
+        "loadingClips": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 4294967295
+        },
+        "clipKilobytes": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 4294967295
+        },
+        "masterVolume": {
+          "type": "number"
+        },
+        "buses": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "name": {
+                "type": "string"
+              },
+              "volume": {
+                "type": "number"
+              },
+              "paused": {
+                "type": "boolean"
+              }
+            },
+            "required": ["name", "volume", "paused"],
+            "additionalProperties": false
+          }
+        },
+        "_editor": {
+          "type": "object",
+          "properties": {
+            "revision": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "transaction": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "dryRun": {
+              "type": "boolean"
+            },
+            "operations": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "warnings": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          },
+          "required": ["revision", "transaction", "dryRun", "operations", "warnings"],
+          "additionalProperties": false
+        }
+      },
+      "required": ["running", "bodies", "characters", "joints", "physicsSteps", "contacts", "activeVoices", "droppedSounds", "stolenVoices", "clips", "loadingClips", "clipKilobytes", "masterVolume", "buses", "_editor"],
+      "additionalProperties": false
+    }
+  },
   "play.keep_changes": {
     "version": 1,
     "permission": "edit",
@@ -9273,6 +9407,201 @@
         }
       },
       "required": ["met", "steps", "status", "_editor"],
+      "additionalProperties": false
+    }
+  },
+  "play.set_mix": {
+    "version": 1,
+    "permission": "edit",
+    "mode": "play",
+    "undoable": false,
+    "readOnly": false,
+    "params": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "type": "object",
+      "properties": {
+        "masterVolume": {
+          "anyOf": [
+            {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 4
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "bus": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "volume": {
+          "anyOf": [
+            {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 4
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "paused": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "dryRun": {
+          "type": "boolean"
+        },
+        "mergeKey": {
+          "type": "string"
+        },
+        "clientToken": {
+          "type": "string"
+        },
+        "expectRevision": {
+          "anyOf": [
+            {
+              "type": "string",
+              "pattern": "^[0-9]+$"
+            },
+            {
+              "type": "integer",
+              "minimum": 0
+            }
+          ]
+        }
+      },
+      "additionalProperties": false
+    },
+    "result": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "type": "object",
+      "properties": {
+        "running": {
+          "type": "boolean"
+        },
+        "bodies": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 4294967295
+        },
+        "characters": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 4294967295
+        },
+        "joints": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 4294967295
+        },
+        "physicsSteps": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 4294967295
+        },
+        "contacts": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 4294967295
+        },
+        "activeVoices": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 4294967295
+        },
+        "droppedSounds": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 4294967295
+        },
+        "stolenVoices": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 4294967295
+        },
+        "clips": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 4294967295
+        },
+        "loadingClips": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 4294967295
+        },
+        "clipKilobytes": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 4294967295
+        },
+        "masterVolume": {
+          "type": "number"
+        },
+        "buses": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "name": {
+                "type": "string"
+              },
+              "volume": {
+                "type": "number"
+              },
+              "paused": {
+                "type": "boolean"
+              }
+            },
+            "required": ["name", "volume", "paused"],
+            "additionalProperties": false
+          }
+        },
+        "_editor": {
+          "type": "object",
+          "properties": {
+            "revision": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "transaction": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "dryRun": {
+              "type": "boolean"
+            },
+            "operations": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "warnings": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          },
+          "required": ["revision", "transaction", "dryRun", "operations", "warnings"],
+          "additionalProperties": false
+        }
+      },
+      "required": ["running", "bodies", "characters", "joints", "physicsSteps", "contacts", "activeVoices", "droppedSounds", "stolenVoices", "clips", "loadingClips", "clipKilobytes", "masterVolume", "buses", "_editor"],
       "additionalProperties": false
     }
   },

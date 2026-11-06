@@ -417,3 +417,61 @@ TEST_CASE("while playing, viewport commands see the play World and refuse the ed
     ok(f.editor(), "play.stop");
     ok(f.editor(), "viewport.camera_get", R"({"world":"edit"})");
 }
+
+TEST_CASE("play.diagnostics reports the physics and audio of the running session")
+{
+    PlayFixture f;
+    f.addBall();
+    JsonDocument result = ok(f.editor(), "play.diagnostics");
+    CHECK(result.root().find("running").asBool() == std::optional<bool>(false));
+    CHECK(result.root().find("buses").size() == 0);
+
+    ok(f.editor(), "play.start", R"({"mode":"simulate","fixedStep":true})");
+    ok(f.editor(), "play.step", R"({"steps":10})");
+    result = ok(f.editor(), "play.diagnostics");
+    CHECK(result.root().find("running").asBool() == std::optional<bool>(true));
+    CHECK(result.root().find("bodies").asU64() == std::optional<u64>(1));
+    CHECK(result.root().find("physicsSteps").asU64().value_or(0) >= 10u);
+    CHECK(result.root().find("masterVolume").asF64() == doctest::Approx(1.0));
+    REQUIRE(result.root().find("buses").size() == 5);
+    CHECK(result.root().pointer("/buses/1/name").asString() == "music");
+    ok(f.editor(), "play.stop");
+    CHECK(ok(f.editor(), "play.diagnostics").root().find("running").asBool() == std::optional<bool>(false));
+}
+
+TEST_CASE("play.set_mix changes the running session's mixer, not the project settings")
+{
+    PlayFixture f;
+    // Only while playing.
+    CHECK(fails(f.editor(), "play.set_mix", R"({"masterVolume":0.5})").kind == ErrorKind::WrongMode);
+    ok(f.editor(), "play.start");
+    JsonDocument result = ok(f.editor(), "play.set_mix", R"({"bus":"music","volume":0.5,"paused":true})");
+    CHECK(result.root().pointer("/buses/1/volume").asF64() == doctest::Approx(0.5));
+    CHECK(result.root().pointer("/buses/1/paused").asBool() == std::optional<bool>(true));
+    // A bus keeps what the change does not mention.
+    result = ok(f.editor(), "play.set_mix", R"({"bus":"music","paused":false})");
+    CHECK(result.root().pointer("/buses/1/volume").asF64() == doctest::Approx(0.5));
+    CHECK(result.root().pointer("/buses/1/paused").asBool() == std::optional<bool>(false));
+    result = ok(f.editor(), "play.set_mix", R"({"masterVolume":0.25})");
+    CHECK(result.root().find("masterVolume").asF64() == doctest::Approx(0.25));
+    // A dry run changes nothing.
+    ok(f.editor(), "play.set_mix", R"({"masterVolume":1.5,"dryRun":true})");
+    CHECK(ok(f.editor(), "play.diagnostics").root().find("masterVolume").asF64() == doctest::Approx(0.25));
+
+    const CommandError misspelt = fails(f.editor(), "play.set_mix", R"({"bus":"musik","volume":1})");
+    REQUIRE_FALSE(misspelt.errors.empty());
+    CHECK(misspelt.errors.front().pointer == "/bus");
+    CHECK(std::find(misspelt.suggestions.begin(), misspelt.suggestions.end(), "music") !=
+          misspelt.suggestions.end());
+    CHECK(fails(f.editor(), "play.set_mix", R"({"bus":"sfx","volume":5})").errors.front().pointer ==
+          "/volume");
+    CHECK(fails(f.editor(), "play.set_mix", R"({"masterVolume":-1})").errors.front().pointer ==
+          "/masterVolume");
+    CHECK(fails(f.editor(), "play.set_mix", R"({"volume":1})").errors.front().pointer == "/bus");
+    CHECK(fails(f.editor(), "play.set_mix", R"({})").kind == ErrorKind::ValidationFailed);
+
+    // The session's mix ends with it: the next session starts from the project's settings.
+    ok(f.editor(), "play.stop");
+    ok(f.editor(), "play.start");
+    CHECK(ok(f.editor(), "play.diagnostics").root().find("masterVolume").asF64() == doctest::Approx(1.0));
+}

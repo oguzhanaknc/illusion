@@ -92,6 +92,24 @@ An agent drives the running game with three commands:
 {"method": "play.run_until", "params": {"maxSteps": 600, "entity": "Board", "component": "game.Score", "field": "/lines", "equals": 1}}
 ```
 
+## Physics and audio
+
+Two windows of the Window menu look into the running game:
+
+- **Physics** counts its bodies, characters and joints, the contacts of the last physics step and the steps
+  so far. **Show collision shapes** draws the colliders, characters and joints of every entity in the Scene
+  view, also while stopped.
+- **Audio Mixer** sets the master volume and each bus's volume, and pauses buses, for this session only:
+  the project's [audio settings](projects.md#the-project-settings-panel) keep theirs, and the next session
+  starts from them. Below the mixer it counts active, dropped and stolen voices and the loaded clips.
+
+`play.diagnostics` returns the same numbers (`running` is false when stopped); `play.set_mix` changes the
+mixer of the running session:
+
+```json
+{"bus": "music", "volume": 0.5, "paused": false}
+```
+
 ## Input actions
 
 The input actions asset (a `.input` file, see [Input actions](../actions.md)) lists the game's actions and

@@ -473,6 +473,13 @@ private:
     std::unique_ptr<State> m_state;
 };
 
+/// Draws the Physics window: the physics of the running play session and a button that shows collision
+/// shapes.
+void drawPhysicsWindow(Impl& shell);
+
+/// Draws the Audio Mixer window: the mixer and voices of the running play session.
+void drawAudioMixerWindow(Impl& shell);
+
 /// The Rendering panel: the render quality of the viewports (a preference), the GPU and each viewport's last
 /// frame.
 class RenderingPanel

@@ -1110,6 +1110,12 @@ void EditorShell::draw(f64 now, f64 deltaSeconds)
             case Panel::Rendering:
                 impl.renderingPanel->draw(impl);
                 break;
+            case Panel::Physics:
+                detail::drawPhysicsWindow(impl);
+                break;
+            case Panel::AudioMixer:
+                detail::drawAudioMixerWindow(impl);
+                break;
             case Panel::AiActivity:
                 impl.agentsPanel->draw(impl);
                 break;

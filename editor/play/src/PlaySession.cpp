@@ -229,6 +229,57 @@ PlayStatus PlaySession::status() const
     return status;
 }
 
+PlayDiagnostics PlaySession::diagnostics() const
+{
+    const Impl& impl = *m_impl;
+    PlayDiagnostics out;
+    if (!impl.game)
+    {
+        return out;
+    }
+    out.running = true;
+    const PhysicsWorld& physics = impl.game->physics();
+    out.bodies = physics.bodyCount();
+    out.characters = physics.characterCount();
+    out.joints = physics.jointCount();
+    out.physicsSteps = physics.stepCount();
+    out.contacts = static_cast<u32>(physics.contactEvents().size());
+    const AudioWorld& audio = impl.game->audio();
+    const AudioStats stats = audio.stats();
+    out.activeVoices = stats.activeVoices;
+    out.droppedSounds = stats.droppedSounds;
+    out.stolenVoices = stats.stolenVoices;
+    out.clips = stats.clips;
+    out.loadingClips = stats.loadingClips;
+    out.clipBytes = stats.clipBytes;
+    out.masterVolume = audio.masterVolume();
+    for (u32 bus = 0; bus < kPlayAudioBuses; ++bus)
+    {
+        out.busVolumes[bus] = audio.busVolume(static_cast<AudioBus>(bus));
+        out.busPaused[bus] = audio.isBusPaused(static_cast<AudioBus>(bus));
+    }
+    return out;
+}
+
+void PlaySession::setMasterVolume(f32 volume)
+{
+    if (m_impl->game)
+    {
+        m_impl->game->audio().setMasterVolume(volume);
+    }
+}
+
+void PlaySession::setBus(u32 bus, f32 volume, bool paused)
+{
+    ILL_ASSERT(bus < kPlayAudioBuses, "audio bus {} out of range", bus);
+    if (m_impl->game)
+    {
+        AudioWorld& audio = m_impl->game->audio();
+        audio.setBusVolume(static_cast<AudioBus>(bus), volume);
+        audio.setBusPaused(static_cast<AudioBus>(bus), paused);
+    }
+}
+
 Expected<void, CommandError> PlaySession::inject(const PlayInputEvent& event)
 {
     Impl& impl = *m_impl;

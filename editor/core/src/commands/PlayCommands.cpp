@@ -4,6 +4,7 @@
 #include <illusion/ecs/Hierarchy.hpp>
 
 #include <algorithm>
+#include <array>
 #include <cmath>
 
 namespace illusion::editor
@@ -169,6 +170,115 @@ Expected<PlayStatusResult, CommandError> playStatus(CommandContext& context, con
         return unexpected(std::move(play).error());
     }
     return statusResult((*play)->status());
+}
+
+constexpr std::array<std::string_view, kPlayAudioBuses> kBusNames{"sfx", "music", "ambience", "dialogue",
+                                                                  "ui"};
+constexpr f32 kMaxVolume = 4.0f;
+
+PlayDiagnosticsResult diagnosticsResult(const PlayDiagnostics& in)
+{
+    PlayDiagnosticsResult out;
+    out.running = in.running;
+    out.bodies = in.bodies;
+    out.characters = in.characters;
+    out.joints = in.joints;
+    out.physicsSteps = static_cast<u32>(std::min<u64>(in.physicsSteps, ~u32{0}));
+    out.contacts = in.contacts;
+    out.activeVoices = in.activeVoices;
+    out.droppedSounds = in.droppedSounds;
+    out.stolenVoices = in.stolenVoices;
+    out.clips = in.clips;
+    out.loadingClips = in.loadingClips;
+    out.clipKilobytes = static_cast<u32>(std::min<u64>((in.clipBytes + 1023) / 1024, ~u32{0}));
+    out.masterVolume = in.masterVolume;
+    if (in.running)
+    {
+        for (u32 bus = 0; bus < kPlayAudioBuses; ++bus)
+        {
+            out.buses.push_back(
+                PlayBusEntry{std::string(kBusNames[bus]), in.busVolumes[bus], in.busPaused[bus]});
+        }
+    }
+    return out;
+}
+
+Expected<PlayDiagnosticsResult, CommandError> playDiagnostics(CommandContext& context, const NoParams&)
+{
+    Expected<PlayHost*, CommandError> play = requirePlay(context);
+    if (!play)
+    {
+        return unexpected(std::move(play).error());
+    }
+    return diagnosticsResult((*play)->diagnostics());
+}
+
+Expected<void, CommandError> checkVolume(std::optional<f32> volume, std::string_view pointer)
+{
+    if (volume && !(std::isfinite(*volume) && *volume >= 0.0f && *volume <= kMaxVolume))
+    {
+        return unexpected(CommandError::invalid(std::string(pointer), "must be between 0 and 4"));
+    }
+    return {};
+}
+
+Expected<PlayDiagnosticsResult, CommandError> playSetMix(CommandContext& context,
+                                                         const PlaySetMixParams& params)
+{
+    Expected<PlayHost*, CommandError> play = requirePlay(context);
+    if (!play)
+    {
+        return unexpected(std::move(play).error());
+    }
+    for (const auto& [volume, pointer] :
+         {std::pair{params.masterVolume, "/masterVolume"}, std::pair{params.volume, "/volume"}})
+    {
+        if (Expected<void, CommandError> valid = checkVolume(volume, pointer); !valid)
+        {
+            return unexpected(std::move(valid).error());
+        }
+    }
+    std::optional<u32> bus;
+    if (params.bus)
+    {
+        const auto found = std::find(kBusNames.begin(), kBusNames.end(), *params.bus);
+        if (found == kBusNames.end())
+        {
+            CommandError error =
+                CommandError::invalid("/bus", "must be sfx, music, ambience, dialogue or ui");
+            error.suggestions = closestMatches(
+                *params.bus, std::vector<std::string_view>(kBusNames.begin(), kBusNames.end()));
+            return unexpected(std::move(error));
+        }
+        bus = static_cast<u32>(found - kBusNames.begin());
+    }
+    else if (params.volume || params.paused)
+    {
+        return unexpected(CommandError::invalid("/bus", "is required with volume or paused"));
+    }
+    if (!params.masterVolume && !bus)
+    {
+        return unexpected(CommandError::invalid("", "give masterVolume, or a bus with volume or paused"));
+    }
+    const PlayDiagnostics current = (*play)->diagnostics();
+    if (!current.running)
+    {
+        return unexpected(
+            CommandError::make(ErrorKind::PreconditionFailed, "no play session runs (play.start)"));
+    }
+    if (!context.dryRun())
+    {
+        if (params.masterVolume)
+        {
+            (*play)->setMasterVolume(*params.masterVolume);
+        }
+        if (bus)
+        {
+            (*play)->setBus(*bus, params.volume.value_or(current.busVolumes[*bus]),
+                            params.paused.value_or(current.busPaused[*bus]));
+        }
+    }
+    return diagnosticsResult((*play)->diagnostics());
 }
 
 // Deep comparison of two JSON values; integers and reals compare by value.
@@ -598,6 +708,34 @@ void registerPlayCommands(CommandRegistry& registry)
         .category = "Play",
         .icon = "info",
         .flags = {.readOnly = true, .idempotent = true},
+    });
+    registry.add<&playDiagnostics>({
+        .name = "play.diagnostics",
+        .title = strings::kCommandPlayDiagnosticsTitle,
+        .description = strings::kCommandPlayDiagnosticsDescription,
+        .agentSummary = "Returns the physics and audio of the running play session: bodies, characters, "
+                        "joints, physics steps and contacts of the last step; active, dropped and stolen "
+                        "voices, clips and their memory; the master volume and each bus (running: false when "
+                        "stopped). Example: {}.",
+        .category = "Play",
+        .icon = "monitor_heart",
+        .flags = {.readOnly = true, .idempotent = true},
+        .mode = CommandMode::Any,
+    });
+    registry.add<&playSetMix>({
+        .name = "play.set_mix",
+        .title = strings::kCommandPlaySetMixTitle,
+        .description = strings::kCommandPlaySetMixDescription,
+        .agentSummary =
+            "Changes the mixer of the running play session for this session only (project audio "
+            "settings are unchanged): masterVolume, or a bus (sfx, music, ambience, dialogue, ui) "
+            "with volume (linear, 0 to 4) and/or paused. Example: {\"bus\": \"music\", \"volume\": "
+            "0.5}.",
+        .category = "Play",
+        .icon = "tune",
+        .flags = {.idempotent = true},
+        .mode = CommandMode::Play,
+        .permission = PermissionClass::Edit,
     });
     registry.add<&playRunUntil>({
         .name = "play.run_until",

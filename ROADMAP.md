@@ -464,10 +464,12 @@ Plan: `docs/plans/m7-editor.md` (sub-milestones, command API, localization, them
   validated, applied by `ViewportService` through the GPU-free `shadowSettingsOf()`/`postProcessSettingsOf()`,
   secondary Scene views keep reduced shadows), the GPU and each viewport's last frame. Unit tests for the
   mapping and the preference, a headless UI test and a GPU test that turning shadows off stops shadow casters
-- M7w-2c: Physics debug and audio mixer panels for the running game; physics raycasts for drop to ground
-  (from M7p-2)
+- M7w-2c: ✅ Physics and Audio Mixer windows for the running game: `PlayHost::diagnostics()` (bodies,
+  characters, joints, physics steps, contacts of the last step, voices, clips, the mixer), a session-only mixer
+  (`setMasterVolume()`, `setBus()`), `play.diagnostics` and `play.set_mix` (175 commands), and a button that
+  shows every collision shape in the Scene view. Command tests on a real play session and a headless UI test
 - M7w-3: Input actions panel with rebinding, gamepad tester (rumble, LED, gyro, touchpad, triggers) and
-  gamepad navigation of the editor window
+  gamepad navigation of the editor window; physics raycasts for drop to ground (from M7p-2)
 - M7w-4: Multiple simultaneous Inspector instances (from M7m)
 - M7x: Showcase scene covering every Component and the scripting API; Tetris built by an agent end to end
 
