@@ -274,7 +274,11 @@ def build():
                                                        "colorEnd": [0.09, 0.09, 0.09, 0.0], "blend": "Alpha",
                                                        "texture": "assets:/textures/smoke.png", "seed": 7}})
     entity("Fire Light", {"illusion.Transform": {"position": [0.0, 0.8, 0.0]},
-                          "illusion.PointLight": {"color": [1.0, 0.55, 0.22], "intensity": 40, "range": 14}})
+                          "illusion.PointLight": {"color": [1.0, 0.55, 0.22], "intensity": 40, "range": 14,
+                                                  # The flames throw soft, moving shadows of the
+                                                  # trees, rocks, benches and the player.
+                                                  "castShadows": True, "sourceRadius": 0.25,
+                                                  "shadowNearPlane": 0.35}})
     entity("Fire Sound", {"illusion.Transform": {"position": [0.0, 0.4, 0.0]},
                           "illusion.AudioSource": {"clip": "assets:/audio/fire.wav", "loop": True, "volume": 0.8,
                                                    "minDistance": 1.5, "maxDistance": 25}})
@@ -308,7 +312,10 @@ def build():
                                  "illusion.MeshRenderer": {"mesh": f"{lantern}#mesh/1", "material": m["glass"],
                                                            "castShadows": False}}, parent=f"/{name}")
         entity(f"{name} Light", {"illusion.Transform": {}, "illusion.LocalTransform": {"position": [0.0, 0.16, 0.0]},
-                                 "illusion.PointLight": {"color": [1.0, 0.7, 0.35], "intensity": 6, "range": 6}},
+                                 "illusion.PointLight": {"color": [1.0, 0.7, 0.35], "intensity": 6, "range": 6,
+                                                         # Past the lantern's own frame.
+                                                         "castShadows": True, "sourceRadius": 0.04,
+                                                         "shadowNearPlane": 0.2}},
                parent=f"/{name}")
 
     # --- Neon: a gate to the north and three hoops around the clearing --------------------------------------------

@@ -1,12 +1,13 @@
-// Shadow casters: depth-only rendering into one cascade of the shadow map. The fragment entry point is
-// used only for alpha-masked materials.
+// Shadow casters: depth-only rendering into one shadow view, a cascade of the directional shadow map or a
+// cube face of a point light's shadow map (cascade >= kMaxShadowCascades). The fragment entry point is used
+// only for alpha-masked materials.
 
 #include "Common.slang"
 
 struct ShadowPush
 {
     uint instanceOffset;
-    uint cascade;
+    uint cascade; // shadow view: a cascade, or kMaxShadowCascades + 6 * point shadow slot + face
 };
 
 ConstantBuffer<ViewConstants> g_view : register(b0, space0);
@@ -49,7 +50,15 @@ VertexOutput vertexMain(VertexInput input, uint instanceId: SV_InstanceID)
     const float3 origin = mul(instance.world, float4(0.0, 0.0, 0.0, 1.0)).xyz;
     world.xyz += windOffset(g_view.wind, g_view.windGusts, g_view.windGusts.w, g_material.wind.xy, origin, world.xyz);
     VertexOutput output;
-    output.position = mul(g_view.cascades[g_push.cascade].viewProjection, world);
+    if (g_push.cascade < kMaxShadowCascades)
+    {
+        output.position = mul(g_view.cascades[g_push.cascade].viewProjection, world);
+    }
+    else
+    {
+        const uint face = g_push.cascade - kMaxShadowCascades;
+        output.position = mul(g_view.pointShadows[face / kPointShadowFaces].faces[face % kPointShadowFaces], world);
+    }
     output.uv = input.uv;
     return output;
 }

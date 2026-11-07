@@ -94,4 +94,53 @@ ShadowCascades computeShadowCascades(const Mat4& view, const Mat4& projection, V
     return result;
 }
 
+Mat4 pointShadowFaceMatrix(Vec3 position, u32 face, f32 nearPlane) noexcept
+{
+    // Right, up and forward axes of each face, chosen so that the image matches the Vulkan cube map
+    // layout (the bases are mirrored, which does not matter: casters are drawn with both faces).
+    struct Basis
+    {
+        Vec3 right;
+        Vec3 up;
+        Vec3 forward;
+    };
+    static constexpr std::array<Basis, kPointShadowFaces> kBases = {{
+        {{0.0f, 0.0f, -1.0f}, {0.0f, 1.0f, 0.0f}, {1.0f, 0.0f, 0.0f}},
+        {{0.0f, 0.0f, 1.0f}, {0.0f, 1.0f, 0.0f}, {-1.0f, 0.0f, 0.0f}},
+        {{1.0f, 0.0f, 0.0f}, {0.0f, 0.0f, -1.0f}, {0.0f, 1.0f, 0.0f}},
+        {{1.0f, 0.0f, 0.0f}, {0.0f, 0.0f, 1.0f}, {0.0f, -1.0f, 0.0f}},
+        {{1.0f, 0.0f, 0.0f}, {0.0f, 1.0f, 0.0f}, {0.0f, 0.0f, 1.0f}},
+        {{-1.0f, 0.0f, 0.0f}, {0.0f, 1.0f, 0.0f}, {0.0f, 0.0f, -1.0f}},
+    }};
+    const Basis& basis = kBases[std::min(face, kPointShadowFaces - 1)];
+    const f32 scale = 1.0f / kPointShadowFaceScale;
+    // Rows: x = right / scale, y = up / scale, z = near, w = forward (all relative to the light).
+    Mat4 m(0.0f);
+    for (int axis = 0; axis < 3; ++axis)
+    {
+        m[axis][0] = basis.right[axis] * scale;
+        m[axis][1] = basis.up[axis] * scale;
+        m[axis][3] = basis.forward[axis];
+    }
+    m[3][0] = -glm::dot(basis.right, position) * scale;
+    m[3][1] = -glm::dot(basis.up, position) * scale;
+    m[3][2] = nearPlane;
+    m[3][3] = -glm::dot(basis.forward, position);
+    return m;
+}
+
+u32 pointShadowFace(Vec3 direction) noexcept
+{
+    const Vec3 a = glm::abs(direction);
+    if (a.x >= a.y && a.x >= a.z)
+    {
+        return direction.x >= 0.0f ? 0u : 1u;
+    }
+    if (a.y >= a.z)
+    {
+        return direction.y >= 0.0f ? 2u : 3u;
+    }
+    return direction.z >= 0.0f ? 4u : 5u;
+}
+
 } // namespace illusion

@@ -597,7 +597,10 @@ After DEMO. Features that bring the renderer and the tech demo to a modern AAA l
 - GFX-1b: ✅ `VolumetricFog` (saved singleton): froxel fog with height falloff and wind-carried noise,
   light shafts from the shadowed sun or moon, glow around point lights, temporal reprojection; applied to
   opaque surfaces, the sky, blended surfaces and particles
-- GFX-1c: Point-light shadows (the campfire)
+- GFX-1c: ✅ Point light shadows: `PointLight::castShadows` with `sourceRadius`, `shadowBias` and
+  `shadowNearPlane`; cube shadow maps for up to 4 lights nearest the view (`ShadowSettings::pointLightCount`,
+  `pointResolution`), drawn with the caster path (wind, alpha masks), PCSS in the forward shading and one tap
+  per froxel in the volumetric fog (ADR 0051); the tech demo's campfire and lanterns cast them
 - GFX-2: Foliage: leaf translucency, GPU-generated dense grass, LODs
 - GFX-3: Lit smoke, clouds, screen-space reflections, contact shadows
 

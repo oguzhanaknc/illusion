@@ -340,6 +340,42 @@ renderer->setShadowSettings(shadows);
 - `stats()` reports `shadowCasters` and `shadowDrawCalls`; `shadowCascades()` returns the cascades of
   the last frame.
 
+### Point light shadows
+
+A `PointLight` with `castShadows` (off by default) throws shadows in every direction: a campfire shades
+the ground behind the trees and the people around it, and the shadows move when the light flickers or the
+casters move in the wind.
+
+```cpp
+illusion::Transform fire;
+fire.position = illusion::Vec3(0.0f, 0.6f, 0.0f);
+illusion::PointLight light{illusion::Vec3(1.0f, 0.55f, 0.22f), 40.0f, 14.0f};
+light.castShadows = true;
+light.sourceRadius = 0.25f;    // a wide flame: soft shadow edges
+light.shadowNearPlane = 0.3f;  // the logs right under the flame do not darken the whole camp
+world.create(fire, light);
+
+illusion::ShadowSettings shadows = renderer->shadowSettings();
+shadows.pointLightCount = 2;   // shadow maps for the two lights nearest the camera
+shadows.pointResolution = 1024;
+renderer->setShadowSettings(shadows);
+```
+
+- Each shadowed light renders a cube shadow map (six faces of `pointResolution`² texels) from the
+  opaque and alpha-masked Meshes within its `range`. Up to `ShadowSettings::pointLightCount` lights (at
+  most `kMaxShadowedPointLights`, 4) get one per frame: those whose range reaches into the view, nearest
+  to the camera first. The others still light the scene, without shadows.
+- `sourceRadius` is the size of the glowing body in metres. As with the sun, shadows are sharp where
+  the caster touches the receiver and soften with distance; penumbrae are limited to 1/32 of a cube face.
+- Casters closer to the light than `shadowNearPlane` are ignored, so a lantern's own glass or housing
+  does not black out its light. If surfaces shadow themselves, raise `shadowBias` (metres) or
+  `ShadowSettings::normalBias`.
+- The [volumetric fog](#volumetric-fog) reads the same shadow maps, so a shadowed light's glow stops at
+  walls and casters cut shafts out of it.
+- `stats()` reports `shadowedPointLights`, `pointShadowCasters` and `pointShadowDrawCalls`. Turning
+  `ShadowSettings::enabled` off disables point light shadows too. See
+  [ADR 0051](https://github.com/oguzhanaknc/illusion/blob/main/docs/adr/0051-point-light-shadows.md).
+
 ### Image-based lighting
 
 A `SkyLight` lights the scene with an environment: an equirectangular image of everything around it,
@@ -490,8 +526,8 @@ the fog and its light, reads the shadowed directional light's shadow cascades fo
 with the previous one so the shafts resolve smoothly, and integrates it front to back. The fog covers opaque
 surfaces, the sky, blended surfaces and particles. Because of the blending a sudden change (a light switched
 off) fades out over a few frames; call `SceneRenderer::resetTemporalHistory()` on a camera cut.
-`RenderStats::fogFroxels` counts the froxels of the frame. Point lights do not cast shadows into the fog yet,
-and diagnostic views show the scene without fog. See
+`RenderStats::fogFroxels` counts the froxels of the frame. Point lights with
+[shadows](#point-light-shadows) cast them into the fog too; diagnostic views show the scene without fog. See
 [ADR 0050](https://github.com/oguzhanaknc/illusion/blob/main/docs/adr/0050-volumetric-fog.md).
 
 ### HDR and post-processing

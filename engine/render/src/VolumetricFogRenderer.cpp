@@ -69,6 +69,7 @@ bool VolumetricFogRenderer::initialize(nvrhi::IDevice* device)
         nvrhi::BindingLayoutItem::Texture_SRV(1),            // scene depth
         nvrhi::BindingLayoutItem::Texture_SRV(2),            // scattering or integrated fog
         nvrhi::BindingLayoutItem::Texture_SRV(4),            // shadow map
+        nvrhi::BindingLayoutItem::Texture_SRV(5),            // point shadow map
         nvrhi::BindingLayoutItem::Sampler(0),
         nvrhi::BindingLayoutItem::Sampler(1),
         nvrhi::BindingLayoutItem::Texture_UAV(0), // volume output
@@ -208,6 +209,7 @@ nvrhi::BindingSetHandle VolumetricFogRenderer::createSet(nvrhi::IBuffer* viewCon
         nvrhi::BindingSetItem::Texture_SRV(1, m_depth),
         nvrhi::BindingSetItem::Texture_SRV(2, volume),
         nvrhi::BindingSetItem::Texture_SRV(4, m_boundShadowMap),
+        nvrhi::BindingSetItem::Texture_SRV(5, m_boundPointShadowMap),
         nvrhi::BindingSetItem::Sampler(0, m_linearClamp),
         nvrhi::BindingSetItem::Sampler(1, m_shadowCompare),
         nvrhi::BindingSetItem::Texture_UAV(0, outVolume),
@@ -216,14 +218,17 @@ nvrhi::BindingSetHandle VolumetricFogRenderer::createSet(nvrhi::IBuffer* viewCon
     return m_device->createBindingSet(set, m_layout);
 }
 
-void VolumetricFogRenderer::createSets(nvrhi::IBuffer* viewConstants, nvrhi::ITexture* shadowMap)
+void VolumetricFogRenderer::createSets(nvrhi::IBuffer* viewConstants, nvrhi::ITexture* shadowMap,
+                                       nvrhi::ITexture* pointShadowMap)
 {
-    if (m_applySet && m_boundConstants == viewConstants && m_boundShadowMap == shadowMap)
+    if (m_applySet && m_boundConstants == viewConstants && m_boundShadowMap == shadowMap &&
+        m_boundPointShadowMap == pointShadowMap)
     {
         return;
     }
     m_boundConstants = viewConstants;
     m_boundShadowMap = shadowMap;
+    m_boundPointShadowMap = pointShadowMap;
     for (u32 parity = 0; parity < 2; ++parity)
     {
         m_injectSets[parity] = createSet(viewConstants, m_scattering[1 - parity], m_placeholderVolume,
@@ -235,14 +240,14 @@ void VolumetricFogRenderer::createSets(nvrhi::IBuffer* viewConstants, nvrhi::ITe
 }
 
 void VolumetricFogRenderer::compute(nvrhi::ICommandList* commands, nvrhi::IBuffer* viewConstants,
-                                    nvrhi::ITexture* shadowMap)
+                                    nvrhi::ITexture* shadowMap, nvrhi::ITexture* pointShadowMap)
 {
     if (!m_active)
     {
         return;
     }
     ILL_PROFILE_SCOPE();
-    createSets(viewConstants, shadowMap);
+    createSets(viewConstants, shadowMap, pointShadowMap);
     commands->beginMarker("Volumetric fog");
     commands->writeBuffer(m_constants, &m_frame, sizeof(m_frame));
     nvrhi::ComputeState state;
