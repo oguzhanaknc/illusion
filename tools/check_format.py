@@ -49,7 +49,9 @@ def source_files() -> list[Path]:
     for directory in SOURCE_DIRS:
         base = ROOT / directory
         if base.is_dir():
-            files.extend(p for p in base.rglob("*") if p.suffix in EXTENSIONS and p.is_file())
+            # .illusion/ holds an editor project's caches and module build trees (git-ignored).
+            files.extend(p for p in base.rglob("*")
+                         if p.suffix in EXTENSIONS and p.is_file() and ".illusion" not in p.relative_to(base).parts)
     return sorted(files)
 
 

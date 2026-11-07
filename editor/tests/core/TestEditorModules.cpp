@@ -5,8 +5,11 @@
 
 #include <illusion/editor/core/ExternalTools.hpp>
 #include <illusion/editor/core/ModuleBuild.hpp>
+#include <illusion/platform/Process.hpp>
 
 #include <chrono>
+#include <cstdlib>
+#include <filesystem>
 #include <fstream>
 #include <sstream>
 
@@ -171,6 +174,18 @@ TEST_CASE("toolchain descriptions are validated")
     emptyCmake.replace(emptyCmake.find("/usr/bin/cmake"), 14, "");
     CHECK_FALSE(parseModuleToolchain(emptyCmake).hasValue());
     CHECK_FALSE(readModuleToolchain("no/such/illusion-sdk.json").hasValue());
+
+    // The environment script is optional and must be a string.
+    CHECK(toolchain->environmentScript.empty());
+    std::string withScript(kValid);
+    withScript.insert(withScript.size() - 1,
+                      R"(,"environmentScript":"C:/VS/VC/Auxiliary/Build/vcvars64.bat")");
+    const Expected<ModuleToolchain, std::string> scripted = parseModuleToolchain(withScript);
+    REQUIRE(scripted.hasValue());
+    CHECK(scripted->environmentScript == std::filesystem::path("C:/VS/VC/Auxiliary/Build/vcvars64.bat"));
+    std::string badScript(kValid);
+    badScript.insert(badScript.size() - 1, R"(,"environmentScript":5)");
+    CHECK_FALSE(parseModuleToolchain(badScript).hasValue());
 }
 
 TEST_CASE("module.create writes a module from the template and undo removes it")
@@ -281,6 +296,69 @@ TEST_CASE("a failed configure returns the CMake error")
     CHECK(result.root().find("output").asString()->find("cmake exited with code 1") !=
           std::string_view::npos);
 }
+
+TEST_CASE("a build after a failed configure configures again instead of building a half-made tree")
+{
+    EditorFixture f;
+    const std::filesystem::path marker = f.directory.path / "project" / "modules" / "FAIL_CONFIGURE";
+    std::ofstream(marker) << "";
+    const JsonDocument failed = ok(*f.editor, "module.build");
+    CHECK(failed.root().find("succeeded").asBool() == false);
+    // CMake leaves its cache behind when the configure fails.
+    const std::filesystem::path build = f.directory.path / "project" / ".illusion" / "build" / "modules";
+    CHECK(std::filesystem::exists(build / "CMakeCache.txt"));
+
+    std::filesystem::remove(marker);
+    const JsonDocument fixed = ok(*f.editor, "module.build");
+    CHECK(fixed.root().find("configured").asBool() == true);
+    CHECK(fixed.root().find("succeeded").asBool() == true);
+    CHECK(ok(*f.editor, "module.build").root().find("configured").asBool() == false);
+}
+
+TEST_CASE("a build with other toolchain arguments configures again")
+{
+    EditorFixture f;
+    CHECK(ok(*f.editor, "module.build").root().find("configured").asBool() == true);
+    CHECK(ok(*f.editor, "module.build").root().find("configured").asBool() == false);
+
+    // The SDK of another editor configuration: the tree is configured again from a fresh cache.
+    const std::filesystem::path sdk = f.directory.path / "sdk.json";
+    std::string text = readText(sdk);
+    text.replace(text.find("-DCMAKE_BUILD_TYPE=Debug"), 24, "-DCMAKE_BUILD_TYPE=Release");
+    std::ofstream(sdk, std::ios::binary | std::ios::trunc) << text;
+    CHECK(ok(*f.editor, "module.build").root().find("configured").asBool() == true);
+    const std::filesystem::path build = f.directory.path / "project" / ".illusion" / "build" / "modules";
+    CHECK(readText(build / "configure-args.txt").find("-DCMAKE_BUILD_TYPE=Release") != std::string::npos);
+}
+
+#if defined(ILL_PLATFORM_WINDOWS)
+TEST_CASE("outside a developer environment, the toolchain's environment script sets up CMake's environment")
+{
+    EditorFixture f;
+    // A stand-in for vcvars64.bat, in a directory with a space and a non-ASCII letter.
+    const std::filesystem::path scripts = f.directory.path / std::filesystem::path(u8"Visual Stüdio");
+    std::filesystem::create_directories(scripts);
+    const std::filesystem::path script = scripts / "vcvars64.bat";
+    std::ofstream(script, std::ios::binary) << "@set ILLUSION_TEST_ENVIRONMENT=from the script\r\n";
+    const std::filesystem::path sdk = f.directory.path / "sdk.json";
+    std::string text = readText(sdk);
+    const std::u8string scriptPath = script.generic_u8string();
+    text.insert(text.rfind('}'), std::string(R"(, "environmentScript": ")") +
+                                     std::string(reinterpret_cast<const char*>(scriptPath.c_str())) + "\"");
+    std::ofstream(sdk, std::ios::binary | std::ios::trunc) << text;
+
+    // The tests may run inside a developer environment: leave it for this test.
+    const std::optional<std::string> installation = environmentVariable("VCINSTALLDIR");
+    REQUIRE(_putenv_s("VCINSTALLDIR", "") == 0);
+    const JsonDocument result = ok(*f.editor, "module.build");
+    CHECK(result.root().find("succeeded").asBool() == true);
+    const std::filesystem::path build = f.directory.path / "project" / ".illusion" / "build" / "modules";
+    CHECK(readText(build / "configure-env.txt") == "from the script");
+    // The environment's values are not part of the output.
+    CHECK(result.root().find("output").asString()->find("from the script") == std::string_view::npos);
+    REQUIRE(_putenv_s("VCINSTALLDIR", installation.value_or("").c_str()) == 0);
+}
+#endif
 
 TEST_CASE("module.build checks the project, the module names and the SDK before it starts")
 {
