@@ -1968,7 +1968,7 @@ struct InputAssetParams
 struct InputActionInfo
 {
     std::string name;                  ///< The action.
-    std::string type;                  ///< "Button", "Axis" or "Vector2".
+    std::string type;                  ///< "Button", "Axis", "Vector2" or "Delta".
     std::vector<std::string> bindings; ///< Bindings in text form, e.g. "Key.Space".
 };
 
@@ -1984,7 +1984,7 @@ struct InputActionDefineParams
 {
     std::string asset;                                  ///< The asset (created when missing).
     std::string name;                                   ///< The action; an existing one is replaced.
-    std::string type;                                   ///< "Button", "Axis" or "Vector2".
+    std::string type;                                   ///< "Button", "Axis", "Vector2" or "Delta".
     std::optional<std::vector<std::string>> bindings{}; ///< Its bindings (default none).
 };
 

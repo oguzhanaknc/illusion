@@ -166,5 +166,7 @@ TEST_CASE("action types have stable names")
 {
     CHECK(actionTypeName(ActionType::Vector2) == "Vector2");
     CHECK(actionTypeFromName("Axis") == ActionType::Axis);
+    CHECK(actionTypeName(ActionType::Delta) == "Delta");
+    CHECK(actionTypeFromName("Delta") == ActionType::Delta);
     CHECK_FALSE(actionTypeFromName("axis"));
 }

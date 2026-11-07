@@ -141,7 +141,8 @@ Expected<InputActionsResult, CommandError> actionDefine(CommandContext& context,
     const std::optional<ActionType> type = actionTypeFromName(params.type);
     if (!type)
     {
-        return unexpected(CommandError::invalid("/type", "must be \"Button\", \"Axis\" or \"Vector2\""));
+        return unexpected(
+            CommandError::invalid("/type", "must be \"Button\", \"Axis\", \"Vector2\" or \"Delta\""));
     }
     std::vector<InputBinding> bindings;
     if (params.bindings)
@@ -409,8 +410,10 @@ void registerInputCommands(CommandRegistry& registry)
         .description = strings::kCommandInputActionDefineDescription,
         .agentSummary =
             "Adds an action to an input actions asset, creating the file if needed, or replaces the type and "
-            "bindings of an existing one; undoable. Types are Button, Axis and Vector2; bindings look like "
-            "\"Key.Space\", \"Gamepad.South\", \"Axis.LeftX\", \"Keys.W.S.A.D\" or \"Stick.Left\". Example: "
+            "bindings of an existing one; undoable. Types are Button, Axis, Vector2 and Delta (mouse "
+            "movement); bindings look like \"Key.Space\", \"Gamepad.South\", \"Axis.LeftX\", "
+            "\"Keys.W.S.A.D\", "
+            "\"Stick.Left\" or \"Mouse.Motion*0.0025\". Example: "
             "{\"asset\": \"assets:/input/game.input\", \"name\": \"Rotate\", \"type\": \"Button\", "
             "\"bindings\": [\"Key.Up\", \"Gamepad.North\"]}.",
         .category = "Input",

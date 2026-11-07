@@ -27,7 +27,26 @@ actions.addBinding(throttle, illusion::InputBinding::key(illusion::Key::S, -1.0f
 | --- | --- | --- |
 | `Button` | on/off with pressed and released edges | Jump, Fire, Interact |
 | `Axis` | one value in [-1, 1] | Throttle, Zoom |
-| `Vector2` | 2D vector, length at most 1 | Move, Look |
+| `Vector2` | 2D vector, length at most 1 | Move, stick Look |
+| `Delta` | 2D movement this frame, unbounded | mouse Look, scroll |
+
+## Mouse look
+
+Mouse movement is not a level like a stick: it is how far the mouse moved this frame, in pixels. Bind it to a
+`Delta` action with `mouseMotion(scale)` (`Mouse.Motion` in text) and the scroll wheel with `mouseScroll(scale)`
+(`Mouse.Scroll`). A `Delta` action adds up its bindings instead of taking the strongest and clamps nothing, so
+multiply by a sensitivity, not by the frame time. A stick bound to the same action gives its usual value in
+[-1, 1]; scale it by the frame time in the game:
+
+```cpp
+const illusion::ActionId look = actions.addAction("Look", illusion::ActionType::Delta);
+actions.addBinding(look, illusion::InputBinding::mouseMotion(0.0025f)); // radians per pixel
+yaw -= actions.vector(look).x;
+pitch -= actions.vector(look).y;
+```
+
+In the editor's Game view the cursor is captured while the game has focus (click the view; Shift+F1 frees it),
+so the mouse keeps turning the camera at the edge of the screen.
 
 A `scale` on a binding flips or weakens it: `key(Key::S, -1.0f)` pushes an axis negative, and
 `gamepadAxis(GamepadAxis::LeftY, -1.0f)` makes a button action trigger when the stick is pulled down.
@@ -49,7 +68,7 @@ if (actions.wasPressed(jump))
 player.move(actions.vector(move));
 ```
 
-When several bindings are active, the strongest value wins. A tap that starts and ends within one frame
+When several bindings are active, the strongest value wins (a `Delta` action adds them up). A tap that starts and ends within one frame
 still reports `wasPressed` and `wasReleased`. For local multiplayer, give each player their own
 `InputActions` and pass only that player's gamepad.
 
@@ -140,6 +159,7 @@ controller family of the device the player used last:
 | `Gamepad.South` | `xbox_a` / A | `ps_cross` / Cross | `switch_b` / B | |
 | `Axis.LeftTrigger` | `xbox_lt` / LT | `ps_l2` / L2 | `switch_zl` / ZL | |
 | `Key.Space` | | | | `key_space` / Space |
+| `Mouse.Motion` | | | | `mouse_motion` / Mouse |
 
 ```cpp
 const illusion::GamepadFamily family = actions.lastDevice() == illusion::InputDevice::Gamepad

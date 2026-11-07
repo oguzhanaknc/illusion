@@ -47,7 +47,10 @@ enum class ActionType : u8
 {
     Button,  ///< On/off with pressed and released edges (Jump, Fire).
     Axis,    ///< One value in [-1, 1] (Throttle, Zoom).
-    Vector2, ///< Two values, length up to 1 (Move, Look).
+    Vector2, ///< Two values, length up to 1 (Move, stick Look).
+    /// Two unbounded values: how far something moved this frame (mouse Look, scroll). Contributions add up
+    /// instead of the strongest one winning, and nothing is clamped.
+    Delta,
 };
 
 /// Device input that drives an action.
@@ -59,6 +62,7 @@ enum class BindingSource : u8
     GamepadAxis,   ///< A gamepad axis (sticks or triggers), scaled by InputBinding::scale.
     GamepadStick,  ///< A whole gamepad stick as a 2D vector.
     KeyVector,     ///< Four keys forming a 2D vector (up, down, left, right), e.g. WASD.
+    MouseMotion, ///< Mouse movement this frame in pixels (code 0) or scroll wheel movement (code 1), scaled.
 };
 
 /// One binding of an action. Create with the static helpers.
@@ -106,12 +110,30 @@ struct InputBinding
         binding.scale = scale;
         return binding;
     }
-    /// Binds a gamepad stick (for Vector2 actions).
+    /// Binds a gamepad stick (for Vector2 or Delta actions).
     [[nodiscard]] static constexpr InputBinding gamepadStick(GamepadStick stick) noexcept
     {
         InputBinding binding;
         binding.source = BindingSource::GamepadStick;
         binding.code = static_cast<u16>(stick);
+        return binding;
+    }
+    /// Binds the mouse movement of a frame in pixels, times @p scale (x right, y down), for Delta actions.
+    [[nodiscard]] static constexpr InputBinding mouseMotion(f32 scale = 1.0f) noexcept
+    {
+        InputBinding binding;
+        binding.source = BindingSource::MouseMotion;
+        binding.code = 0;
+        binding.scale = scale;
+        return binding;
+    }
+    /// Binds the scroll wheel movement of a frame, times @p scale, for Delta actions.
+    [[nodiscard]] static constexpr InputBinding mouseScroll(f32 scale = 1.0f) noexcept
+    {
+        InputBinding binding;
+        binding.source = BindingSource::MouseMotion;
+        binding.code = 1;
+        binding.scale = scale;
         return binding;
     }
     /// Binds four keys as a vector (for Vector2 actions).
@@ -229,15 +251,15 @@ public:
     /// (any number; for split-screen give each player their own InputActions and gamepad).
     void update(const InputState* keyboardMouse, std::span<const GamepadState* const> gamepads);
 
-    /// Returns true while a Button action is held (Axis/Vector2: while non-zero).
+    /// Returns true while a Button action is held (Axis, Vector2, Delta: while non-zero).
     [[nodiscard]] bool isDown(ActionId action) const noexcept;
     /// Returns true in the frame a Button action went down.
     [[nodiscard]] bool wasPressed(ActionId action) const noexcept;
     /// Returns true in the frame a Button action went up.
     [[nodiscard]] bool wasReleased(ActionId action) const noexcept;
-    /// Value of an Axis action in [-1, 1] (Button: 0 or 1; Vector2: x).
+    /// Value of an Axis action in [-1, 1] (Button: 0 or 1; Vector2, Delta: x).
     [[nodiscard]] f32 value(ActionId action) const noexcept;
-    /// Value of a Vector2 action, length at most 1 (Axis: (value, 0)).
+    /// Value of a Vector2 action, length at most 1, or of a Delta action, unbounded (Axis: (value, 0)).
     [[nodiscard]] Vec2 vector(ActionId action) const noexcept;
 
     /// Device kind used most recently (a key, button or axis beyond the threshold).
@@ -285,13 +307,14 @@ public:
     /// Which devices may produce the binding.
     enum class Devices : u8
     {
-        KeyboardMouse, ///< Keys and mouse buttons.
+        KeyboardMouse, ///< Keys, mouse buttons and, for Delta actions, mouse motion.
         Gamepad,       ///< Gamepad buttons and axes.
         Any,           ///< Either.
     };
 
-    /// Starts capturing a binding suitable for an action of type @p type. For Vector2 actions a moved
-    /// stick produces a stick binding.
+    /// Starts capturing a binding suitable for an action of type @p type. For Vector2 and Delta actions a
+    /// moved stick produces a stick binding; for Delta actions a moved mouse (8 pixels or more in a frame) or
+    /// a turned wheel produces a mouse motion or scroll binding.
     BindingCapture(Devices devices, ActionType type) noexcept;
 
     /// Returns the binding for the first new input this frame, or std::nullopt. Inputs that were

@@ -27,7 +27,26 @@ actions.addBinding(throttle, illusion::InputBinding::key(illusion::Key::S, -1.0f
 | --- | --- | --- |
 | `Button` | basılma ve bırakılma kenarları olan açık/kapalı | Zıplama, Ateş, Etkileşim |
 | `Axis` | [-1, 1] aralığında tek değer | Gaz, Yakınlaştırma |
-| `Vector2` | uzunluğu en fazla 1 olan 2D vektör | Hareket, Bakış |
+| `Vector2` | uzunluğu en fazla 1 olan 2D vektör | Hareket, çubukla Bakış |
+| `Delta` | bu karedeki 2D hareket, sınırsız | fareyle Bakış, kaydırma |
+
+## Fareyle bakış
+
+Fare hareketi bir çubuk gibi bir seviye değildir: farenin bu karede kaç piksel hareket ettiğidir. Onu
+`mouseMotion(scale)` ile (metin olarak `Mouse.Motion`), kaydırma tekerleğini ise `mouseScroll(scale)` ile
+(`Mouse.Scroll`) bir `Delta` action'ına bağlayın. Bir `Delta` action'ı binding'lerinden en güçlüsünü almak yerine
+onları toplar ve hiçbir şeyi sınırlamaz; bu yüzden kare süresiyle değil, bir hassasiyetle çarpın. Aynı action'a
+bağlanan bir çubuk her zamanki [-1, 1] değerini verir; oyunda onu kare süresiyle ölçekleyin:
+
+```cpp
+const illusion::ActionId look = actions.addAction("Look", illusion::ActionType::Delta);
+actions.addBinding(look, illusion::InputBinding::mouseMotion(0.0025f)); // radians per pixel
+yaw -= actions.vector(look).x;
+pitch -= actions.vector(look).y;
+```
+
+Editörün Game görünümünde oyun odaktayken imleç yakalanır (görünüme tıklayın; Shift+F1 serbest bırakır); böylece
+fare ekranın kenarında da kamerayı döndürmeye devam eder.
 
 Bir binding üzerindeki `scale` onu ters çevirir veya zayıflatır: `key(Key::S, -1.0f)` bir ekseni
 negatife iter, `gamepadAxis(GamepadAxis::LeftY, -1.0f)` ise çubuk aşağı çekildiğinde bir button
@@ -50,7 +69,7 @@ if (actions.wasPressed(jump))
 player.move(actions.vector(move));
 ```
 
-Birden fazla binding etkin olduğunda en güçlü değer kazanır. Bir kare içinde başlayıp biten bir
+Birden fazla binding etkin olduğunda en güçlü değer kazanır (bir `Delta` action'ı onları toplar). Bir kare içinde başlayıp biten bir
 dokunuş da `wasPressed` ve `wasReleased` bildirir. Yerel çok oyunculu oyunlarda her oyuncuya kendi
 `InputActions` nesnesini verin ve yalnızca o oyuncunun gamepad'ini geçirin.
 
@@ -142,6 +161,7 @@ kullandığı cihazın kontrolcü ailesini izler:
 | `Gamepad.South` | `xbox_a` / A | `ps_cross` / Cross | `switch_b` / B | |
 | `Axis.LeftTrigger` | `xbox_lt` / LT | `ps_l2` / L2 | `switch_zl` / ZL | |
 | `Key.Space` | | | | `key_space` / Space |
+| `Mouse.Motion` | | | | `mouse_motion` / Mouse |
 
 ```cpp
 const illusion::GamepadFamily family = actions.lastDevice() == illusion::InputDevice::Gamepad

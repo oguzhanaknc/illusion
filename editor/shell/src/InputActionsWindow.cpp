@@ -22,7 +22,7 @@ namespace
 namespace s = strings;
 
 constexpr std::string_view kDefaultAsset = "assets:/input/game.input";
-constexpr std::array<std::string_view, 3> kTypes{"Button", "Axis", "Vector2"};
+constexpr std::array<std::string_view, 4> kTypes{"Button", "Axis", "Vector2", "Delta"};
 
 } // namespace
 

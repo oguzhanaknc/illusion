@@ -45,7 +45,7 @@ inline constexpr u32 kInputActionsVersion = 1;
 /// File extension of input actions assets.
 inline constexpr std::string_view kInputActionsExtension = ".input";
 
-/// Name of @p type in input actions assets: "Button", "Axis" or "Vector2".
+/// Name of @p type in input actions assets: "Button", "Axis", "Vector2" or "Delta".
 [[nodiscard]] std::string_view actionTypeName(ActionType type) noexcept;
 
 /// The ActionType named @p name (actionTypeName()), or nullopt.
