@@ -1,7 +1,7 @@
 // The game module of the showcase project. It plays the everything scene through the whole scripting API:
-// every function of ModuleContext and of the four host services (PhysicsService, AudioService, InputService
-// and SceneService) is called from here, which tools/check_api_coverage.py checks and the engine tests count
-// at run time (tests/showcase/TestShowcaseModule.cpp).
+// every function of ModuleContext and of the five host services (PhysicsService, AudioService, InputService,
+// ParticleService and SceneService) is called from here, which tools/check_api_coverage.py checks and the
+// engine tests count at run time (tests/showcase/TestShowcaseModule.cpp).
 //
 // What it does, decided only by the frame number and the input so that fixed-step runs repeat exactly:
 // - start: a floor and a gem from mesh geometry, the Jump and Move actions, a chime made from numbers, the
@@ -11,7 +11,8 @@
 //   stands on the pad, opens and closes the Door with its hinge motor, pushes the Ball, Crate, Rock and Drum,
 //   slides the drawer, lifts the platform,
 //   grows the Ball, sweeps and casts rays, counts contacts and the Trigger's visitors, spawns a lantern
-//   prefab, chimes where something lands hard, and switches to moon gravity for a while;
+//   prefab, chimes where something lands hard and raises dust the first time, bursts sparks when the Player
+//   steps on the pad, stops and restarts the spark fountain, and switches to moon gravity for a while;
 // - stop: unloads the clips.
 // Everything that hot reloads must keep lives in the Components showcase.Stats (saved) and showcase.Runtime.
 
@@ -27,6 +28,7 @@
 #include <illusion/input/Gamepad.hpp>
 #include <illusion/input/InputActions.hpp>
 #include <illusion/input/InputService.hpp>
+#include <illusion/particles/ParticleService.hpp>
 #include <illusion/physics/PhysicsComponents.hpp>
 #include <illusion/physics/PhysicsService.hpp>
 #include <illusion/render/SceneComponents.hpp>
@@ -85,6 +87,10 @@ struct Runtime
     Entity voice{};
     Entity drawer{};
     Entity platform{};
+    Entity sparks{};
+    Entity dust{};
+    u32 particlesAlive = 0;  ///< Live particles of every emitter at the last update.
+    bool dustRaised = false; ///< The first hard landing played the dust.
     InputDevice device{};
     GamepadType gamepad{};
     u32 awakeFrames = 0;
@@ -121,6 +127,7 @@ constexpr u32 kDrawerPeriod = 90;    // frames between pushes of the drawer
 constexpr u32 kPlatformPeriod = 120; // frames of each rise and fall of the platform
 constexpr f32 kPlatformLow = 0.2f;   // its height at the bottom
 constexpr u32 kDoorPeriod = 240;     // frames between the door opening and closing
+constexpr u32 kPadBurst = 40;        // sparks emitted when the Player steps on the pad
 constexpr std::string_view kLantern = "assets:/prefabs/lantern.prefab";
 
 Quat identity() noexcept
@@ -290,6 +297,8 @@ void startModule(ModuleContext& context)
     runtime.voice = findNamed(world, "Voice");
     runtime.drawer = findNamed(world, "Drawer");
     runtime.platform = findNamed(world, "Platform");
+    runtime.sparks = findNamed(world, "Sparks");
+    runtime.dust = findNamed(world, "Dust");
     if (PhysicsService* physics = context.service<PhysicsService>())
     {
         startPhysics(world, *physics, runtime);
@@ -460,7 +469,8 @@ void updateQueries(World& world, const PhysicsService& physics, const Runtime& r
 }
 
 // Counts contacts and plays a chime where something lands hard.
-void updateContacts(const PhysicsService& physics, AudioService* audio, const Runtime& runtime, Stats& stats)
+void updateContacts(const PhysicsService& physics, AudioService* audio, ParticleService* particles,
+                    Runtime& runtime, Stats& stats)
 {
     bool chimed = false;
     for (const ContactEvent& contact : physics.contactEvents())
@@ -478,6 +488,10 @@ void updateContacts(const PhysicsService& physics, AudioService* audio, const Ru
             continue;
         }
         ++stats.contacts;
+        if (particles != nullptr && !runtime.dustRaised && contact.speed > 1.0f)
+        {
+            runtime.dustRaised = particles->play(runtime.dust); // a cloud by the blocks, once
+        }
         if (audio != nullptr && !chimed && contact.speed > 1.0f)
         {
             AudioPlayParams params;
@@ -491,7 +505,8 @@ void updateContacts(const PhysicsService& physics, AudioService* audio, const Ru
 }
 
 // Lights the lamp over the trigger pad and greets the Player while it stands there.
-void updatePad(World& world, AudioService* audio, const Vec3& player, Runtime& runtime)
+void updatePad(World& world, AudioService* audio, ParticleService* particles, const Vec3& player,
+               Runtime& runtime)
 {
     const Transform* pad = world.tryGet<Transform>(runtime.trigger);
     const Collider* area = world.tryGet<Collider>(runtime.trigger);
@@ -511,6 +526,10 @@ void updatePad(World& world, AudioService* audio, const Vec3& player, Runtime& r
         if (onPad && audio != nullptr)
         {
             audio->play(runtime.voice);
+        }
+        if (onPad && particles != nullptr)
+        {
+            static_cast<void>(particles->emit(runtime.sparks, kPadBurst)); // a shower of sparks to greet it
         }
     }
 }
@@ -551,6 +570,24 @@ void updateAudio(AudioService& audio, Runtime& runtime, u32 frame)
     runtime.radioPlaying = audio.isPlaying(runtime.radio);
 }
 
+// The spark fountain stops at frame 270 and starts again at 290; the dust is cleared at 285.
+void updateParticles(ParticleService& particles, Runtime& runtime, u32 frame)
+{
+    if (frame == 270 && particles.isPlaying(runtime.sparks))
+    {
+        particles.stop(runtime.sparks);
+    }
+    if (frame == 285 && particles.aliveCount(runtime.dust) > 0)
+    {
+        particles.clear(runtime.dust);
+    }
+    if (frame == 290)
+    {
+        particles.play(runtime.sparks);
+    }
+    runtime.particlesAlive = static_cast<u32>(std::min<u64>(particles.totalAlive(), ~0u));
+}
+
 // Spawns what the frame calls for. These are structural changes, so they come before any reference into
 // the World is taken.
 u32 spawn(World& world, PhysicsService* physics, SceneService* scenes, const Runtime& runtime, u32 frame)
@@ -582,6 +619,7 @@ void updateModule(ModuleContext& context, f64 deltaSeconds)
     InputService* input = context.service<InputService>();
     AudioService* audio = context.service<AudioService>();
     SceneService* scenes = context.service<SceneService>();
+    ParticleService* particles = context.service<ParticleService>();
     Entity self{};
     world.query<const Stats>().each([&self](Entity entity, const Stats&) { self = entity; });
     if (!world.isAlive(self))
@@ -601,14 +639,18 @@ void updateModule(ModuleContext& context, f64 deltaSeconds)
         {
             updatePlayer(*physics, *input, position, runtime, stats, static_cast<f32>(deltaSeconds));
         }
-        updatePad(world, audio, position, runtime);
+        updatePad(world, audio, particles, position, runtime);
         updateBodies(world, *physics, runtime, stats);
         updateQueries(world, *physics, runtime, stats);
-        updateContacts(*physics, audio, runtime, stats);
+        updateContacts(*physics, audio, particles, runtime, stats);
     }
     if (audio != nullptr)
     {
         updateAudio(*audio, runtime, stats.frames);
+    }
+    if (particles != nullptr)
+    {
+        updateParticles(*particles, runtime, stats.frames);
     }
     ++stats.frames;
 }

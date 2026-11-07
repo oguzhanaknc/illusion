@@ -926,6 +926,21 @@ void reflectCoreCommandTypes(StructRegistry& structs)
             .field("bus", &PlaySetMixParams::bus)
             .field("volume", &PlaySetMixParams::volume, {.min = 0.0, .max = 4.0})
             .field("paused", &PlaySetMixParams::paused);
+        reflectStruct<ParticlesParams>("editor.ParticlesParams", 1, structs)
+            .field("entity", &ParticlesParams::entity);
+        reflectStruct<ParticlesEmitParams>("editor.ParticlesEmitParams", 1, structs)
+            .field("entity", &ParticlesEmitParams::entity)
+            .field("count", &ParticlesEmitParams::count, {.min = 1.0, .max = 65536.0});
+        reflectStruct<ParticlesResult>("editor.ParticlesResult", 1, structs)
+            .field("alive", &ParticlesResult::alive)
+            .field("playing", &ParticlesResult::playing)
+            .field("emitted", &ParticlesResult::emitted);
+        reflectStruct<ParticlesStatsParams>("editor.ParticlesStatsParams", 1, structs)
+            .field("entity", &ParticlesStatsParams::entity);
+        reflectStruct<ParticlesStatsResult>("editor.ParticlesStatsResult", 1, structs)
+            .field("emitters", &ParticlesStatsResult::emitters)
+            .field("playing", &ParticlesStatsResult::playing)
+            .field("alive", &ParticlesStatsResult::alive);
         reflectStruct<PlayPauseParams>("editor.PlayPauseParams", 1, structs)
             .field("paused", &PlayPauseParams::paused);
         reflectStruct<PlayStepParams>("editor.PlayStepParams", 1, structs)
@@ -1134,6 +1149,7 @@ void registerCoreCommands(CommandRegistry& registry)
     detail::registerSettingsCommands(registry);
     detail::registerUiCommands(registry);
     detail::registerPlayCommands(registry);
+    detail::registerParticleCommands(registry);
     detail::registerInputCommands(registry);
     detail::registerGamepadCommands(registry);
     detail::registerModuleCommands(registry);

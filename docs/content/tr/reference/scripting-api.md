@@ -2,7 +2,8 @@
 
 Oyun kodu, bir [oyun modülünde](../manual/modules.md) C++ olarak yazılır. Shared bir modül (editörün hot
 reload yapılabilen Build'i) `illusion::core`'un kendi kopyasını taşır, ama başka hiçbir engine
-kütüphanesini taşımaz: fiziğe, sese, girdiye ve sahnelere dört **host servis arayüzü** üzerinden ulaşır.
+kütüphanesini taşımaz: fiziğe, sese, parçacıklara, girdiye ve sahnelere beş **host servis arayüzü** üzerinden
+ulaşır.
 Her biri veri üyesi olmayan soyut bir sınıftır; host onu kendi engine nesnesi üzerinde bir adaptörle
 uygular ve modüle verir, modül de onu `context.service<T>()` ile bulur. Tasarım ADR 0041'dedir;
 [API referansının](api.md) "Scripting API" Doxygen grubu her fonksiyonu belgeler.
@@ -11,6 +12,7 @@ uygular ve modüle verir, modül de onu `context.service<T>()` ile bulur. Tasar�
 | --- | --- | --- | --- |
 | `PhysicsService` | `physics` | `illusion/physics/PhysicsService.hpp` | `PhysicsWorld` üzerinde `PhysicsWorldService` |
 | `AudioService` | `audio` | `illusion/audio/AudioService.hpp` | `AudioWorld` üzerinde `AudioWorldService` |
+| `ParticleService` | `particles` | `illusion/particles/ParticleService.hpp` | `ParticleWorld` üzerinde `ParticleWorldService` |
 | `InputService` | `input` | `illusion/input/InputService.hpp` | `InputActions` üzerinde `InputActionsService` |
 | `SceneService` | `runtime` | `illusion/runtime/SceneService.hpp` | `SceneLoaderService` (`illusion::runtime`) |
 
@@ -60,7 +62,7 @@ void update(illusion::ModuleContext& context, illusion::f64)
 
 ## Kapsam
 
-"Scripting API" Doxygen grubu `ModuleContext`'i ve dört arayüzü içerir.
+"Scripting API" Doxygen grubu `ModuleContext`'i ve beş arayüzü içerir.
 [Showcase modülü](../manual/editor/showcase.md#showcase-modulu) grubun her public fonksiyonunu çağırır;
 biri orada çağrılmıyorsa ya da modül testlerinin bir sayaçlı proxy'sinin (`tests/modules/CountingServices.hpp`)
 sayaç sayısı yanlışsa `python tools/check_api_coverage.py` CI'da başarısız olur. Bu yüzden yeni bir
@@ -109,6 +111,14 @@ döner; ad başka bir türce alınmışsa nullopt döner.
 | `bindings`, `setBindings` | Yeniden atama |
 | `isDown`, `wasPressed`, `wasReleased`, `value`, `vector` | Geçerli karedeki durum |
 | `lastDevice`, `lastGamepadType` | Hangi glyph'lerin gösterileceği |
+
+## ParticleService
+
+| Fonksiyon | Amaç |
+| --- | --- |
+| `play`, `stop`, `clear` | Bir emitter'ı baştan yeniden başlatır, yaymayı durdurur, canlı parçacıklarını siler |
+| `emit` | Oynasın ya da oynamasın, emitter'ın durduğu yerde hemen bir parçacık patlaması; kaçının sığdığını döner |
+| `aliveCount`, `isPlaying`, `totalAlive` | Bir emitter'ın canlı parçacıkları, yayıp yaymadığı, hepsinin canlı parçacıkları |
 
 ## SceneService
 

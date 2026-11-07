@@ -71,7 +71,8 @@ void resize(ParticlePool& pool, u32 capacity)
     pool.count = 0;
 }
 
-void emit(const ParticleEmitter& emitter, ParticlePool& pool, const Transform& transform, u32 particles)
+void emitParticles(const ParticleEmitter& emitter, ParticlePool& pool, const Transform& transform,
+                   u32 particles)
 {
     const bool world = emitter.space == ParticleSpace::World;
     for (u32 n = 0; n < particles && pool.count < pool.capacity; ++n)
@@ -155,7 +156,7 @@ void simulate(const ParticleEmitter& emitter, ParticlePool& pool, const Transfor
     if (!pool.started)
     {
         pool.started = true;
-        emit(emitter, pool, transform, emitter.burst);
+        emitParticles(emitter, pool, transform, emitter.burst);
     }
     // Emission over the part of this step that lies inside the emitter's duration.
     f32 emitting = step.seconds;
@@ -169,8 +170,8 @@ void simulate(const ParticleEmitter& emitter, ParticlePool& pool, const Transfor
     pool.pending += static_cast<f64>(std::max(emitter.rate, 0.0f)) * static_cast<f64>(emitting);
     const f64 whole = std::floor(pool.pending + 1e-9);
     pool.pending = std::max(pool.pending - whole, 0.0);
-    emit(emitter, pool, transform,
-         static_cast<u32>(std::min(whole, static_cast<f64>(kMaxParticlesPerEmitter))));
+    emitParticles(emitter, pool, transform,
+                  static_cast<u32>(std::min(whole, static_cast<f64>(kMaxParticlesPerEmitter))));
     if (!emitter.loop && pool.elapsed >= static_cast<f64>(emitter.duration))
     {
         pool.playing = false;
@@ -261,6 +262,29 @@ bool ParticleWorld::stop(Entity entity)
     }
     m_world.emplace<ParticlePool>(entity, newPool(*emitter, false));
     return true;
+}
+
+u32 ParticleWorld::emit(Entity entity, u32 count)
+{
+    const ParticleEmitter* emitter = m_world.tryGet<ParticleEmitter>(entity);
+    const Transform* transform = m_world.tryGet<Transform>(entity);
+    if (emitter == nullptr || transform == nullptr)
+    {
+        return 0;
+    }
+    if (!m_world.has<ParticlePool>(entity))
+    {
+        m_world.emplace<ParticlePool>(entity, newPool(*emitter, emitter->playOnStart));
+    }
+    ParticlePool& pool = m_world.get<ParticlePool>(entity);
+    const u32 capacity = std::clamp(emitter->maxParticles, 1u, kMaxParticlesPerEmitter);
+    if (pool.capacity != capacity)
+    {
+        resize(pool, capacity);
+    }
+    const u32 before = pool.count;
+    emitParticles(*emitter, pool, *transform, count);
+    return pool.count - before;
 }
 
 bool ParticleWorld::clear(Entity entity)

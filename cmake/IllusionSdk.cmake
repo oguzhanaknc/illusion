@@ -22,6 +22,7 @@ function(illusion_write_module_sdk)
     endif()
     set(sdk "${PROJECT_BINARY_DIR}/sdk")
     set(targets illusion_core illusion_glm illusion_yyjson illusion_physics_api illusion_audio_api
+        illusion_particles_api
         illusion_input_api illusion_render_api illusion_runtime_api)
     foreach(target IN LISTS targets)
         string(REGEX REPLACE "^illusion_" "" name "${target}")

@@ -131,7 +131,7 @@ endforeach()
 # The showcase project's game module (samples/showcase/modules/showcase), loaded by tests/showcase.
 illusion_add_module(illusion_showcase_module SHARED
     SOURCES ${PROJECT_SOURCE_DIR}/samples/showcase/modules/showcase/showcase.cpp
-    USES physics audio input render runtime)
+    USES physics audio particles input render runtime)
 target_compile_definitions(illusion_tests PRIVATE
     SHOWCASE_MODULE="$<TARGET_FILE:illusion_showcase_module>"
     ILLUSION_SAMPLES_DIR="${PROJECT_SOURCE_DIR}/samples")

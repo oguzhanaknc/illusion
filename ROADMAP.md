@@ -544,9 +544,11 @@ Before M8. Design: ADR 0047 (a saved emitter Component, a deterministic CPU simu
   soft fade (no depth copy), sprite textures resolved into `RenderParticles` by `RenderAssetResolver` (held
   against eviction, re-resolved on reload), `RenderStats::particles`, GPU tests and the GPU benchmark
   `render/100k-particles`; the showcase's spark fountain glows under the lamp
-- PFX-3: Editor and scripting: emitters simulate in the edit World for preview, `particles.*` commands
-  (play, stop, clear, stats) and MCP tools, a `ParticleService` for game modules (play, stop, burst at a
-  point), the showcase module plays the dust when a body lands
+- PFX-3: ✅ Editor and scripting: `EditorContext` previews the edit World's emitters every frame (the
+  scene and its hash do not change), the `particles.play`, `stop`, `clear`, `emit` and `stats` commands act on
+  the active World (and are MCP tools), `ParticleService` (`USES particles`, `ParticleWorldService`, provided
+  by `GameSession`) with `emit` for bursts; the showcase module raises dust on the first hard landing,
+  showers sparks on the pad and stops and restarts the fountain, so the API coverage includes the service
 - PFX-4: GPU simulation in compute shaders for very large emitters, behind the same Component
 
 ## M8 — Release pipeline

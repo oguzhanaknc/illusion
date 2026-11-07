@@ -2,7 +2,7 @@
 # docs/adr/0027-module-system-and-hot-reload.md and docs/adr/0041-module-api-v3.md).
 #
 # illusion_add_module(<target> [SHARED | STATIC] SOURCES <files...>
-#                     [USES <physics | audio | input | render | runtime>...] [LINK <libraries...>])
+#                     [USES <physics | audio | particles | input | render | runtime>...] [LINK <libraries...>])
 #
 # Builds a module from sources that use ILL_MODULE(). SHARED builds a loadable library that a ModuleHost
 # opens and hot-reloads; STATIC builds a library that the game links and adds with ModuleHost::add().

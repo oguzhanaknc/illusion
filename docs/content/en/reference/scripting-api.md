@@ -2,7 +2,7 @@
 
 Game code is C++ in a [game module](../manual/modules.md). A shared module (the editor's hot-reloadable
 build) carries its own copy of `illusion::core` but no other engine library: it reaches physics, audio,
-input and scenes through four **host service interfaces**. Each is an abstract class without data members;
+particles, input and scenes through five **host service interfaces**. Each is an abstract class without data members;
 the host implements it with an adapter over its engine object and hands it to the module, which finds it
 with `context.service<T>()`. The design is in ADR 0041; the Doxygen group "Scripting API" of the
 [API reference](api.md) documents every function.
@@ -11,6 +11,7 @@ with `context.service<T>()`. The design is in ADR 0041; the Doxygen group "Scrip
 | --- | --- | --- | --- |
 | `PhysicsService` | `physics` | `illusion/physics/PhysicsService.hpp` | `PhysicsWorldService` over `PhysicsWorld` |
 | `AudioService` | `audio` | `illusion/audio/AudioService.hpp` | `AudioWorldService` over `AudioWorld` |
+| `ParticleService` | `particles` | `illusion/particles/ParticleService.hpp` | `ParticleWorldService` over `ParticleWorld` |
 | `InputService` | `input` | `illusion/input/InputService.hpp` | `InputActionsService` over `InputActions` |
 | `SceneService` | `runtime` | `illusion/runtime/SceneService.hpp` | `SceneLoaderService` (`illusion::runtime`) |
 
@@ -58,7 +59,7 @@ void update(illusion::ModuleContext& context, illusion::f64)
 
 ## Coverage
 
-The Doxygen group "Scripting API" holds `ModuleContext` and the four interfaces. The
+The Doxygen group "Scripting API" holds `ModuleContext` and the five interfaces. The
 [showcase module](../manual/editor/showcase.md#the-showcase-module) calls every public function of the group,
 and `python tools/check_api_coverage.py` fails in CI when one is not called there, or when a counting proxy
 of the module tests (`tests/modules/CountingServices.hpp`) has the wrong number of counters. A new function
@@ -107,6 +108,14 @@ same name and type, and nullopt if the name is taken by another type.
 | `bindings`, `setBindings` | Rebinding |
 | `isDown`, `wasPressed`, `wasReleased`, `value`, `vector` | State in the current frame |
 | `lastDevice`, `lastGamepadType` | Which glyphs to show |
+
+## ParticleService
+
+| Function | Purpose |
+| --- | --- |
+| `play`, `stop`, `clear` | Start an emitter again from the beginning, stop it emitting, remove its live particles |
+| `emit` | A burst of particles now, where the emitter stands, playing or not; returns how many fit |
+| `aliveCount`, `isPlaying`, `totalAlive` | Live particles of an emitter, whether it emits, live particles of all |
 
 ## SceneService
 
