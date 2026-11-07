@@ -12,8 +12,11 @@
 #include <chrono>
 #include <deque>
 #include <fstream>
+#include <mutex>
+#include <optional>
 #include <sstream>
 #include <system_error>
+#include <utility>
 
 namespace illusion::editor
 {
@@ -277,6 +280,61 @@ std::optional<BuildDiagnostic> parseCMake(std::string_view line)
     return diagnostic;
 }
 
+using Environment = std::vector<std::pair<std::string, std::string>>;
+
+// The environment the toolchain's script set up, once per process: running vcvars takes a second or two.
+std::mutex g_environmentMutex;
+std::optional<Environment> g_environment;
+
+// True when this process already runs inside a Visual Studio developer environment.
+bool insideDeveloperEnvironment()
+{
+    const std::optional<std::string> installation = environmentVariable("VCINSTALLDIR");
+    return installation.has_value() && !installation->empty();
+}
+
+// The command that runs @p script and prints the environment it leaves, as `NAME=value` lines in UTF-8.
+Expected<ProcessOptions, std::string> environmentCommand(const std::filesystem::path& script,
+                                                         const std::filesystem::path& buildDirectory)
+{
+#if defined(ILL_PLATFORM_WINDOWS)
+    // cmd.exe's quoting rules differ from CommandLineToArgvW's, so the script is called from a batch file
+    // instead of a /c command line. chcp 65001 makes `set` print UTF-8.
+    std::error_code code;
+    std::filesystem::create_directories(buildDirectory, code);
+    const std::filesystem::path batch = buildDirectory / "illusion-environment.cmd";
+    std::ofstream out(batch, std::ios::binary | std::ios::trunc);
+    out << "@echo off\r\nchcp 65001 >nul\r\ncall \"" << detail::pathText(script)
+        << "\" >nul\r\nif errorlevel 1 exit /b 1\r\nset\r\n";
+    if (!out.good())
+    {
+        return unexpected("cannot write " + detail::pathText(batch));
+    }
+    const std::optional<std::string> shell = environmentVariable("ComSpec");
+    return ProcessOptions{.executable = pathFromUtf8(shell && !shell->empty() ? *shell : "cmd.exe"),
+                          .arguments = {"/d", "/c", detail::pathText(batch)}};
+#else
+    static_cast<void>(buildDirectory);
+    return unexpected("the toolchain's environment script " + detail::pathText(script) +
+                      " can only run on Windows");
+#endif
+}
+
+// The `NAME=value` lines of `set`; cmd's hidden per-drive variables (`=C:=C:\`) are left out.
+void addEnvironmentLine(std::string_view line, Environment& environment)
+{
+    if (!line.empty() && line.back() == '\r')
+    {
+        line.remove_suffix(1);
+    }
+    const usize equals = line.find('=');
+    if (equals == std::string_view::npos || equals == 0)
+    {
+        return;
+    }
+    environment.emplace_back(std::string(line.substr(0, equals)), std::string(line.substr(equals + 1)));
+}
+
 std::string quoteForLog(const std::vector<std::string>& arguments)
 {
     std::string text;
@@ -325,12 +383,18 @@ Expected<ModuleToolchain, std::string> parseModuleToolchain(std::string_view jso
             std::string("\"cmake\", \"generator\", \"config\", \"package\" and \"moduleSuffix\" "
                         "must not be empty"));
     }
+    const JsonValue script = root.find("environmentScript");
+    if (!script.isAbsent() && !script.isString())
+    {
+        return unexpected(std::string("\"environmentScript\" must be a string"));
+    }
     ModuleToolchain toolchain{.cmake = pathFromUtf8(*cmake),
                               .generator = *generator,
                               .config = *config,
                               .package = pathFromUtf8(*package),
                               .modulePrefix = *prefix,
-                              .moduleSuffix = *suffix};
+                              .moduleSuffix = *suffix,
+                              .environmentScript = pathFromUtf8(script.asString().value_or(""))};
     const JsonValue arguments = root.find("arguments");
     if (!arguments.isArray())
     {
@@ -464,8 +528,10 @@ struct ModuleBuild::Impl
 {
     ModuleBuildOptions options;
     Stage stage = Stage::Configure;
+    bool needsConfigure = false;
     bool configured = false;
     bool succeeded = false;
+    Environment environment;
     Process process;
     BuildOutputParser parser;
     std::vector<BuildDiagnostic> diagnostics;
@@ -498,11 +564,57 @@ struct ModuleBuild::Impl
         return arguments;
     }
 
+    // What a successful configure records in the build tree: the toolchain that configured it.
+    std::string configureStamp() const
+    {
+        std::string text = detail::pathText(options.toolchain.cmake) + "\n";
+        for (const std::string& argument : configureArguments())
+        {
+            text += argument + "\n";
+        }
+        return text;
+    }
+
+    std::filesystem::path stampPath() const { return options.buildDirectory / "illusion-configured.txt"; }
+
+    // Whether the build tree was configured, successfully, with this toolchain.
+    bool upToDate() const
+    {
+        std::ifstream in(stampPath(), std::ios::binary);
+        std::ostringstream text;
+        if (in)
+        {
+            text << in.rdbuf();
+        }
+        return in && text.str() == configureStamp();
+    }
+
+    // Starts the configure step when the tree needs one, otherwise the build step.
+    Expected<void, std::string> begin()
+    {
+        if (!needsConfigure)
+        {
+            stage = Stage::Build;
+            return spawn(buildArguments());
+        }
+        // A configure that fails or is interrupted leaves a cache behind; without the stamp and the cache the
+        // next build configures again, and a toolchain change starts from a clean cache.
+        std::error_code code;
+        std::filesystem::remove(stampPath(), code);
+        std::filesystem::remove(options.buildDirectory / "CMakeCache.txt", code);
+        stage = Stage::Configure;
+        configured = true;
+        return spawn(configureArguments());
+    }
+
+    void writeStamp() { std::ofstream(stampPath(), std::ios::binary | std::ios::trunc) << configureStamp(); }
+
     Expected<void, std::string> spawn(std::vector<std::string> arguments)
     {
         addLine("> cmake " + quoteForLog(arguments));
         ProcessOptions processOptions{.executable = options.toolchain.cmake,
-                                      .arguments = std::move(arguments)};
+                                      .arguments = std::move(arguments),
+                                      .environment = environment};
         Expected<Process, std::string> started = Process::spawn(processOptions);
         if (!started)
         {
@@ -515,6 +627,12 @@ struct ModuleBuild::Impl
 
     void addLine(std::string text)
     {
+        if (stage == Stage::Environment)
+        {
+            // Environment values stay out of the output: they may hold tokens.
+            addEnvironmentLine(text, environment);
+            return;
+        }
         if (stage == Stage::Build)
         {
             if (const std::optional<BuildProgress> reported = parseBuildProgress(text))
@@ -567,23 +685,34 @@ Expected<std::unique_ptr<ModuleBuild>, std::string> ModuleBuild::start(ModuleBui
     std::unique_ptr<ModuleBuild> build(new ModuleBuild());
     Impl& impl = *build->m_impl;
     impl.options = std::move(options);
-    std::error_code code;
-    const bool hasCache = std::filesystem::exists(impl.options.buildDirectory / "CMakeCache.txt", code);
-    if (!hasCache || impl.options.reconfigure)
+    impl.needsConfigure = impl.options.reconfigure || !impl.upToDate();
+    const std::filesystem::path& script = impl.options.toolchain.environmentScript;
+    if (!script.empty() && !insideDeveloperEnvironment())
     {
-        impl.configured = true;
-        if (Expected<void, std::string> spawned = impl.spawn(impl.configureArguments()); !spawned)
+        std::lock_guard lock(g_environmentMutex);
+        if (!g_environment)
         {
-            return unexpected(std::move(spawned).error());
+            Expected<ProcessOptions, std::string> command =
+                environmentCommand(script, impl.options.buildDirectory);
+            if (!command)
+            {
+                return unexpected(std::move(command).error());
+            }
+            impl.tail.push_back("> " + detail::pathText(script));
+            Expected<Process, std::string> started = Process::spawn(*command);
+            if (!started)
+            {
+                return unexpected("cannot run " + detail::pathText(script) + ": " + started.error());
+            }
+            impl.process = std::move(*started);
+            impl.stage = Stage::Environment;
+            return build;
         }
+        impl.environment = *g_environment;
     }
-    else
+    if (Expected<void, std::string> spawned = impl.begin(); !spawned)
     {
-        impl.stage = Stage::Build;
-        if (Expected<void, std::string> spawned = impl.spawn(impl.buildArguments()); !spawned)
-        {
-            return unexpected(std::move(spawned).error());
-        }
+        return unexpected(std::move(spawned).error());
     }
     return build;
 }
@@ -604,17 +733,34 @@ bool ModuleBuild::update()
     impl.readLines();
     if (*exitCode != 0)
     {
-        impl.addLine("cmake exited with code " + std::to_string(*exitCode));
+        const bool environment = impl.stage == Stage::Environment;
         impl.stage = Stage::Done;
+        impl.addLine(environment ? detail::pathText(impl.options.toolchain.environmentScript) +
+                                       " exited with code " + std::to_string(*exitCode)
+                                 : "cmake exited with code " + std::to_string(*exitCode));
         return true;
+    }
+    if (impl.stage == Stage::Environment)
+    {
+        {
+            std::lock_guard lock(g_environmentMutex);
+            g_environment = impl.environment;
+        }
+        if (Expected<void, std::string> spawned = impl.begin(); !spawned)
+        {
+            impl.stage = Stage::Done;
+            impl.addLine(std::move(spawned).error());
+        }
+        return impl.stage == Stage::Done;
     }
     if (impl.stage == Stage::Configure)
     {
+        impl.writeStamp();
         impl.stage = Stage::Build;
         if (Expected<void, std::string> spawned = impl.spawn(impl.buildArguments()); !spawned)
         {
-            impl.addLine(std::move(spawned).error());
             impl.stage = Stage::Done;
+            impl.addLine(std::move(spawned).error());
         }
         return impl.stage == Stage::Done;
     }

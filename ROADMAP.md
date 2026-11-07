@@ -521,6 +521,11 @@ to record the agent session from a Claude Code development session instead of th
   showcase project and compared in the GPU job (`docs.screenshots`); string freeze: `illusion_textc freeze`
   writes `en.freeze.json` and the locale check fails when a frozen string changes or disappears (editor and
   input tables frozen as M7); the M7 status above
+- M7x-5: ✅ Showcase playground: every station in view of the main Camera, child meshes for the bodies whose
+  collider had none, a door opened and closed by its hinge motor, a swinging pendulum and rope, a sliding
+  drawer, a rising platform, a trigger pad that lights a lamp and greets the Player, a Player that walks by
+  itself until it gets input, and five generated sounds instead of one tone. Fixed: changing
+  `Joint::motorSpeed` did not wake a sleeping body, so a motor never moved a door that rested at its limit
 
 ## M8 — Release pipeline
 

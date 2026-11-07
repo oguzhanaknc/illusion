@@ -6,6 +6,7 @@
 
 #include <algorithm>
 #include <array>
+#include <cmath>
 #include <vector>
 
 using namespace illusion;
@@ -316,6 +317,30 @@ TEST_CASE("hinge joints rotate around their axis within limits and with motors")
         simulate(f.physics, 1.5);
         CHECK(f.physics.jointPosition(door) == doctest::Approx(0.5).epsilon(0.05));
     }
+}
+
+TEST_CASE("a hinge motor held at its limit until its body sleeps moves again when its speed changes")
+{
+    Fixture f;
+    Joint hinge = jointOf(JointType::Hinge);
+    hinge.anchor = Vec3(-0.5f, 0.0f, 0.0f);
+    hinge.axis = Vec3(0.0f, 1.0f, 0.0f);
+    hinge.limited = true;
+    hinge.minLimit = 0.0f;
+    hinge.maxLimit = 1.0f;
+    hinge.motorSpeed = 0.5f;
+    hinge.motorMaxForce = 10.0f;
+    RigidBody rigidBody = body(MotionType::Dynamic);
+    rigidBody.mass = 10.0f;
+    const Entity door =
+        f.world.create(at(Vec3(0.5f, 1.0f, 0.0f)), rigidBody, box(Vec3(0.5f, 1.0f, 0.05f)), hinge);
+    simulate(f.physics, 6.0); // opens to the limit in two seconds, then rests there and falls asleep
+    CHECK(f.physics.jointPosition(door) == doctest::Approx(1.0).epsilon(0.02));
+    REQUIRE_FALSE(f.physics.isAwake(door));
+
+    f.world.get<Joint>(door).motorSpeed = -0.5f;
+    simulate(f.physics, 3.0);
+    CHECK(std::abs(f.physics.jointPosition(door)) < 0.05f);
 }
 
 TEST_CASE("slider joints move along their axis")

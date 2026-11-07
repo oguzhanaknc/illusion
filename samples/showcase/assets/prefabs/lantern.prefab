@@ -12,11 +12,11 @@
   "settings": {},
   "entities": [
     {
-      "id": "990cd70b12c5d084",
+      "id": "b54b3c40881e2907",
       "components": {
         "illusion.Hierarchy": {
           "parent": null,
-          "order": 1
+          "order": 12
         },
         "illusion.MeshRenderer": {
           "mesh": "builtin:/mesh/cylinder",
@@ -37,10 +37,10 @@
       }
     },
     {
-      "id": "962b1967c90789ba",
+      "id": "3c821fbf59108163",
       "components": {
         "illusion.Hierarchy": {
-          "parent": "990cd70b12c5d084",
+          "parent": "b54b3c40881e2907",
           "order": 0
         },
         "illusion.LocalTransform": {

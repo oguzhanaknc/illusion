@@ -705,6 +705,23 @@ u64 currentProcessId() noexcept
     return GetCurrentProcessId();
 }
 
+std::optional<std::string> environmentVariable(std::string_view name)
+{
+    const std::wstring key = widen(name);
+    SetLastError(ERROR_SUCCESS);
+    const DWORD needed = GetEnvironmentVariableW(key.c_str(), nullptr, 0);
+    if (needed == 0)
+    {
+        // A set but empty variable reports 0 too, without ERROR_ENVVAR_NOT_FOUND.
+        return GetLastError() == ERROR_ENVVAR_NOT_FOUND ? std::nullopt
+                                                        : std::optional<std::string>(std::string());
+    }
+    std::wstring value(needed, L'\0');
+    const DWORD size = GetEnvironmentVariableW(key.c_str(), value.data(), needed);
+    value.resize(size);
+    return utf8FromPath(std::filesystem::path(value));
+}
+
 std::optional<std::filesystem::path> findExecutable(std::string_view name)
 {
     const std::filesystem::path given = utf8Path(name);
@@ -1072,6 +1089,12 @@ bool isProcessRunning(u64 pid) noexcept
 u64 currentProcessId() noexcept
 {
     return static_cast<u64>(getpid());
+}
+
+std::optional<std::string> environmentVariable(std::string_view name)
+{
+    const char* value = std::getenv(std::string(name).c_str());
+    return value != nullptr ? std::optional<std::string>(value) : std::nullopt;
 }
 
 std::optional<std::filesystem::path> findExecutable(std::string_view name)

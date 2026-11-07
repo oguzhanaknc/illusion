@@ -32,7 +32,12 @@ düzenlenir.
 
 1. İlk Build, editörün modül SDK'sıyla `.illusion/build/modules` içinde (git tarafından yok sayılır) CMake'i
    yapılandırır: derleyicisi, bayrakları ve yapılandırmasıyla; böylece modül editörün build anahtarını alır.
-   Sonraki Build'ler bu adımı atlar; `"reconfigure": true` onu yeniden çalıştırır.
+   Son yapılandırma aynı araç zinciriyle başarılı olduğu sürece sonraki Build'ler bu adımı atlar; başarısız bir
+   yapılandırmadan sonra ya da başka bir editör Build'inin SDK'sıyla bir sonraki Build temiz bir önbellekle
+   yeniden yapılandırır. `"reconfigure": true` onu her zaman çalıştırır.
+   Windows'ta MSVC ve clang-cl, Visual Studio geliştirici ortamına ihtiyaç duyar. Böyle bir ortamın dışında
+   (Başlat menüsünden ya da Explorer'dan) başlatılan editör, SDK'da `environmentScript` olarak kayıtlı olan
+   derleyicinin `vcvars64.bat` dosyasını bir kez çalıştırır ve kurduğu ortamı CMake'e verir.
 2. `cmake --build` modülleri (ya da yalnızca `"modules"` içindekileri) derler ve ilerlemeyi bildirir.
 3. Başarı durumunda henüz yüklenmemiş her modül yüklenir, yüklü olanlar hot reload ile yenilenir:
    Component'leri değerlerini korur ve çalışan bir play oturumu çalışmaya devam eder. `"load": false` yalnızca

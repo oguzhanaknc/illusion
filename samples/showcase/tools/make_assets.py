@@ -1,6 +1,7 @@
-"""Writes the generated assets of the showcase project: a glTF model with two submeshes and a sine tone.
+"""Writes the generated assets of the showcase project: a glTF model with two submeshes and the
+sounds (music, wind, a lamp hum, a voice and a click).
 
-Both are made here from numbers, so they carry no third-party licence. Run it from anywhere:
+All of them are made here from numbers, so they carry no third-party licence. Run it from anywhere:
 
     python samples/showcase/tools/make_assets.py
 """
@@ -78,21 +79,92 @@ def write_model(path):
     path.write_text(json.dumps(gltf, indent=1) + "\n", encoding="utf-8", newline="\n")
 
 
-def write_tone(path, seconds=0.5, frequency=440.0, rate=22050):
-    """A mono 16-bit sine tone that fades in and out."""
-    frames = int(seconds * rate)
-    samples = bytearray()
-    for i in range(frames):
-        fade = min(1.0, i / (0.05 * rate), (frames - i) / (0.05 * rate))
-        samples += struct.pack("<h", int(0.4 * fade * 32767 * math.sin(2 * math.pi * frequency * i / rate)))
+RATE = 22050
+
+
+def write_wav(path, samples):
+    """Writes mono 16-bit PCM from floats in [-1, 1]."""
+    data = bytearray()
+    for value in samples:
+        data += struct.pack("<h", int(max(-1.0, min(1.0, value)) * 32767))
     path.parent.mkdir(parents=True, exist_ok=True)
     with wave.open(str(path), "wb") as out:
         out.setnchannels(1)
         out.setsampwidth(2)
-        out.setframerate(rate)
-        out.writeframes(bytes(samples))
+        out.setframerate(RATE)
+        out.writeframes(bytes(data))
+
+
+def note(frequency, seconds, start, buffer, volume):
+    """Adds a soft plucked note (a few harmonics with a fast attack and an exponential decay) to buffer."""
+    first = int(start * RATE)
+    for i in range(int(seconds * RATE)):
+        if first + i >= len(buffer):
+            break
+        t = i / RATE
+        envelope = min(1.0, t / 0.01) * math.exp(-3.0 * t)
+        wave_value = (math.sin(2 * math.pi * frequency * t) + 0.35 * math.sin(4 * math.pi * frequency * t)
+                      + 0.12 * math.sin(6 * math.pi * frequency * t))
+        buffer[first + i] += volume * envelope * wave_value
+
+
+def music():
+    """Four bars of a gentle arpeggio (C, A minor, F, G) that loop seamlessly: 6.4 seconds."""
+    beat = 0.4
+    loop = int(16 * beat * RATE)
+    buffer = [0.0] * (loop + 2 * RATE)
+    chords = [(261.63, 329.63, 392.00), (220.00, 261.63, 329.63), (174.61, 220.00, 261.63), (196.00, 246.94, 293.66)]
+    for bar, chord in enumerate(chords):
+        pattern = (chord[0], chord[1], chord[2], chord[1])
+        for step, frequency in enumerate(pattern):
+            note(frequency, 1.6, (bar * 4 + step) * beat, buffer, 0.18)
+        note(chord[0] / 2, 1.6, bar * 4 * beat, buffer, 0.14)  # the bass of the bar
+    # The tails of the last bar run past the end: fold them onto the start so the loop has no seam.
+    for i in range(loop, len(buffer)):
+        buffer[i - loop] += buffer[i]
+    return buffer[:loop]
+
+
+def wind():
+    """Soft wind: low-passed noise with a slow swell, 4 seconds, faded at both ends to loop quietly."""
+    state = 12345
+    low = 0.0
+    lower = 0.0
+    frames = int(4.0 * RATE)
+    buffer = []
+    for i in range(frames):
+        state = (1103515245 * state + 12345) % 2**31
+        white = state / 2**30 - 1.0
+        low += 0.02 * (white - low)
+        lower += 0.05 * (low - lower)
+        swell = 0.6 + 0.4 * math.sin(2 * math.pi * i / frames)
+        edge = min(1.0, i / (0.3 * RATE), (frames - i) / (0.3 * RATE))
+        buffer.append(2.5 * lower * swell * edge)
+    return buffer
+
+
+def hum():
+    """The lamp's mains hum: 100 Hz with odd harmonics, 2 seconds (a whole number of periods, so it loops)."""
+    return [0.12 * (math.sin(2 * math.pi * 100 * i / RATE) + 0.3 * math.sin(2 * math.pi * 300 * i / RATE)
+                    + 0.1 * math.sin(2 * math.pi * 500 * i / RATE)) for i in range(int(2.0 * RATE))]
+
+
+def voice():
+    """A friendly three-note greeting (rising, like "hel-lo there"), 0.9 seconds."""
+    buffer = [0.0] * int(0.9 * RATE)
+    for start, frequency in ((0.0, 523.25), (0.22, 659.25), (0.44, 783.99)):
+        note(frequency, 0.45, start, buffer, 0.3)
+    return buffer
+
+
+def click():
+    """A short UI click: 15 ms of a decaying 2 kHz burst."""
+    return [0.5 * math.exp(-i / (0.002 * RATE)) * math.sin(2 * math.pi * 2000 * i / RATE)
+            for i in range(int(0.015 * RATE))]
 
 
 if __name__ == "__main__":
     write_model(ROOT / "models" / "blocks.gltf")
-    write_tone(ROOT / "audio" / "tone.wav")
+    for name, samples in (("music", music()), ("wind", wind()), ("hum", hum()), ("voice", voice()),
+                          ("click", click())):
+        write_wav(ROOT / "audio" / f"{name}.wav", samples)

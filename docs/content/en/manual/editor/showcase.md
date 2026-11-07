@@ -8,8 +8,14 @@ Mesh and a convex hull built from mesh assets), static, kinematic, dynamic and s
 joints of every type, audio sources on every bus with every attenuation and a cone, and two instances of a
 prefab, one with overrides. Open it from the Welcome window or with `--project samples/showcase`.
 
-Its assets are made from numbers by `tools/make_assets.py` (a model with two meshes and a tone), so the project
-carries no third-party licence. The scene is not written by hand: `build.jsonl` builds it through Editor
+It is also a small playground that the main Camera sees whole: shapes that drop onto the ground and a stair of
+blocks, a table with a drawer that slides out and back, a trigger pad under a lamp, a hinged door in a frame,
+a pendulum with a rope hanging from it, and a platform that rises and falls. Bodies whose collider has no
+built-in mesh of its own get a child entity ("Door Mesh", "Pendulum Mesh", ...) sized like the collider, so the
+colliders keep their exact sizes and the joint anchors stay in unscaled body space.
+
+Its assets are made from numbers by `tools/make_assets.py` (a model with two meshes and five sounds: music,
+wind, a lamp hum, a greeting and a click), so the project carries no third-party licence. The scene is not written by hand: `build.jsonl` builds it through Editor
 commands, the same way an agent would, and saves it. To rebuild it:
 
 ```bash
@@ -27,10 +33,15 @@ The project's game code, `modules/showcase`, plays the scene through the whole
 [scripting API](../../reference/scripting-api.md): every function of `ModuleContext` and of the four host
 services is called from `showcase.cpp`. When the session starts, it builds a floor and a gem from mesh
 geometry, adds the Jump (Space, gamepad South) and Move (WASD, left stick) actions, makes a chime from numbers
-and sets up the mixer. Every frame it walks and jumps the Player character, pushes the Ball, Crate, Rock,
-Drum and Door at fixed frames, casts rays and shapes, counts contacts and the Trigger's visitors, chimes where
-something lands hard, and spawns a lantern prefab at frame 120. Near the end it lowers gravity and lets the
-Crate fall through the floor. What it saw is kept in the `showcase.Stats` Component of the Showcase entity.
+and sets up the mixer. Until you press a key or move a stick, the Player walks back and forth across the
+trigger pad by itself; then WASD or the left stick walks it and Space or South jumps. While it stands on the
+pad the lamp above lights up, and each time it steps on, the Voice greets it. The hinge motor opens the Door
+and closes it again every four seconds (game code may change `motorSpeed` at any time), the drawer slides, the
+platform rises and falls, and the Ball, Crate, Rock and Drum get pushed at fixed frames; the Ball grows to one
+and a half times its size at frame 90. The module also casts rays and shapes, counts contacts and the
+Trigger's visitors, chimes where something lands hard, spawns a lantern prefab at frame 120, switches to moon
+gravity for a second from frame 200, and from frame 240 lets the Player walk through the Crate (their layers
+stop colliding). What it saw is kept in the `showcase.Stats` Component of the Showcase entity.
 
 Build it with **Modules → Build Modules** (`module.build`) and press **Play**:
 

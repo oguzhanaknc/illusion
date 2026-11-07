@@ -30,6 +30,9 @@ struct ModuleToolchain
     std::vector<std::string> arguments{}; ///< Further configure arguments: compiler, flags, make program.
     std::string modulePrefix{}; ///< File name prefix of module libraries, e.g. "lib" ("" on Windows).
     std::string moduleSuffix{}; ///< File name suffix of module libraries, e.g. ".dll" or ".so".
+    /// Windows only: the vcvars script of the compiler's Visual Studio ("" when the compiler needs none). A
+    /// build started outside a developer environment runs it first and gives CMake its environment.
+    std::filesystem::path environmentScript{};
 };
 
 /// Reads a toolchain description; the error says what is wrong.
@@ -95,18 +98,21 @@ struct ModuleBuildOptions
     bool reconfigure = false;                ///< Configure even when the build tree has a cache.
 };
 
-/// One build of a project's modules: a CMake configure (when the build tree has no cache yet, or when
-/// asked) and then `cmake --build`, each a child process whose output is read line by line. Destroying a
-/// running build terminates its process.
+/// One build of a project's modules: a CMake configure (when the build tree was never configured with these
+/// toolchain arguments, when its last configure failed, or when asked) and then `cmake --build`, each a child
+/// process whose output is read line by line. A toolchain with an environment script that is started outside
+/// a developer environment runs the script first, once per editor process. Destroying a running build
+/// terminates its process.
 class ModuleBuild : NonCopyable
 {
 public:
     /// The step that runs.
     enum class Stage : u8
     {
-        Configure, ///< `cmake -S ... -B ...`.
-        Build,     ///< `cmake --build ...`.
-        Done,      ///< Finished; see succeeded().
+        Environment, ///< The toolchain's environment script (Windows, outside a developer environment).
+        Configure,   ///< `cmake -S ... -B ...`.
+        Build,       ///< `cmake --build ...`.
+        Done,        ///< Finished; see succeeded().
     };
 
     /// Starts the first step. The error says why CMake could not be started.

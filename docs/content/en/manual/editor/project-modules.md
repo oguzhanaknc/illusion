@@ -32,7 +32,12 @@ file commands.
 
 1. The first build configures CMake in `.illusion/build/modules` (git-ignored) with the editor's module SDK:
    its compiler, flags and configuration, so the module gets the editor's build key. Later builds skip this
-   step; `"reconfigure": true` runs it again.
+   step as long as the last configure succeeded with the same toolchain; after a failed configure, or with
+   another editor build's SDK, the next build configures again from a fresh cache. `"reconfigure": true`
+   always runs it.
+   On Windows, MSVC and clang-cl need the Visual Studio developer environment. An editor started outside one
+   (from the Start menu or Explorer) runs the compiler's `vcvars64.bat` once, recorded in the SDK as
+   `environmentScript`, and gives CMake the environment it sets up.
 2. `cmake --build` compiles the modules (or only those in `"modules"`), reporting progress.
 3. On success every built module that is not loaded yet is loaded, and the loaded ones are hot-reloaded:
    their Components keep their values and a running play session keeps running. `"load": false` only

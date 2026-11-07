@@ -1,13 +1,16 @@
 // A stand-in for the CMake program in the module build tests (core/TestEditorModules.cpp): it answers the two
 // command lines ModuleBuild runs, quickly and without a compiler.
 //
-//   -S <src> -B <build> ...   configure: writes <build>/CMakeCache.txt and <build>/configure-args.txt; fails
-//                             with a CMake error when <src>/FAIL_CONFIGURE exists.
+//   -S <src> -B <build> ...   configure: writes <build>/CMakeCache.txt, <build>/configure-args.txt and
+//                             <build>/configure-env.txt (the value of ILLUSION_TEST_ENVIRONMENT); fails with
+//                             a CMake error when <src>/FAIL_CONFIGURE exists, leaving the cache behind as
+//                             CMake does.
 //   --build <build> ...       build: prints Ninja progress, prints <src>/<module>/ERRORS of every module that
 //                             has one and fails, or writes a library file for every module (or --target).
 //   --record <file> <args...> writes the arguments to <file>, one per line (the code editor of
 //                             editor.open_source in the tests).
 
+#include <cstdlib>
 #include <filesystem>
 #include <fstream>
 #include <iostream>
@@ -67,8 +70,12 @@ int configure(const std::vector<std::string>& args)
             output = arg.substr(key.size());
         }
     }
+    const char* environment = std::getenv("ILLUSION_TEST_ENVIRONMENT");
+    std::ofstream(build / "configure-env.txt", std::ios::binary)
+        << (environment != nullptr ? environment : "");
     if (std::filesystem::exists(source / "FAIL_CONFIGURE"))
     {
+        std::ofstream(build / "CMakeCache.txt", std::ios::binary) << "SOURCE=\n";
         std::cerr << "CMake Error at CMakeLists.txt:6 (find_package):\n"
                   << "  Could not find a package configuration file provided by \"illusion\".\n\n"
                   << "-- Configuring incomplete, errors occurred!\n";

@@ -582,6 +582,7 @@ struct PhysicsWorld::Impl
         Vec3 anchorB{0.0f}; // in body B's space (world space without body B)
         f32 breakForce = 0.0f;
         bool motor = false;
+        f32 motorSpeed = 0.0f; // the speed last given to the constraint
         bool broken = false;
     };
 
@@ -1025,6 +1026,7 @@ struct PhysicsWorld::Impl
         record.anchorB = lockB ? scaleB * joint.connectedAnchor : joint.connectedAnchor;
         record.breakForce = std::max(joint.breakForce, 0.0f);
         record.motor = motor && (joint.type == JointType::Hinge || joint.type == JointType::Slider);
+        record.motorSpeed = joint.motorSpeed;
 
         switch (joint.type)
         {
@@ -1129,10 +1131,12 @@ struct PhysicsWorld::Impl
         return id;
     }
 
-    // Applies Joint::motorSpeed, which game code may change every frame.
+    // Applies Joint::motorSpeed, which game code may change every frame. A changed speed wakes the joint's
+    // bodies: a motor that holds a sleeping body at its limit must move it again when told to.
     void driveJointMotors()
     {
-        for (const JointRecord& record : joints)
+        JPH::BodyInterface& bodies = physics.GetBodyInterfaceNoLock();
+        for (JointRecord& record : joints)
         {
             if (record.constraint == nullptr || !record.motor || record.broken)
             {
@@ -1143,6 +1147,11 @@ struct PhysicsWorld::Impl
             {
                 continue;
             }
+            if (joint->motorSpeed == record.motorSpeed)
+            {
+                continue;
+            }
+            record.motorSpeed = joint->motorSpeed;
             if (record.type == JointType::Hinge)
             {
                 static_cast<JPH::HingeConstraint*>(record.constraint.GetPtr())
@@ -1152,6 +1161,11 @@ struct PhysicsWorld::Impl
             {
                 static_cast<JPH::SliderConstraint*>(record.constraint.GetPtr())
                     ->SetTargetVelocity(joint->motorSpeed);
+            }
+            bodies.ActivateBody(record.bodyA);
+            if (!record.bodyB.IsInvalid())
+            {
+                bodies.ActivateBody(record.bodyB);
             }
         }
     }
