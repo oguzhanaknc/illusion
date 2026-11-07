@@ -2,6 +2,7 @@
 #include "ParticleRenderer.hpp"
 #include "PostProcessor.hpp"
 #include "RenderResourcesImpl.hpp"
+#include "VolumetricFogRenderer.hpp"
 
 #include <illusion/core/JobSystem.hpp>
 #include <illusion/core/Log.hpp>
@@ -74,6 +75,8 @@ struct GpuViewConstants
     Vec4 windHistory;            // x: time of the previous frame
     GpuAtmosphere atmosphere;    // the SkyAtmosphere, when atmosphereLook.z is 1
     Vec4 atmosphereLook; // x: star brightness, y: seconds, z: 1 with a SkyAtmosphere, w: moon lit fraction
+    Vec4 fog;            // x: 1 with VolumetricFog, y: near, z: slices / log(far / near), w: slices
+    Vec4 fogScreen;      // xy: 1 / render size, zw: render size
 };
 static_assert(offsetof(GpuViewConstants, directional) == 112);
 static_assert(offsetof(GpuViewConstants, points) == 240);
@@ -109,8 +112,11 @@ struct DrawItem
 struct ForwardPush
 {
     u32 instanceOffset;
-    u32 flags; // bit 0: apply screen-space ambient occlusion
+    u32 flags; // bit 0: apply screen-space ambient occlusion; bit 1: apply the volumetric fog
 };
+
+constexpr u32 kForwardAmbientOcclusion = 1;
+constexpr u32 kForwardFog = 2;
 
 struct ShadowPush
 {
@@ -246,6 +252,7 @@ struct SceneRenderer::Impl
     bool postDirty = true;
     GpuCulling culling;
     ParticleRenderer particles;
+    VolumetricFogRenderer fog;
     std::vector<GpuCulling::Candidate> cullCandidates;
     std::vector<GpuCulling::Batch> cullBatches;
     std::vector<u32> batchStarts; // first camera-order index of each opaque batch
@@ -420,6 +427,7 @@ bool SceneRenderer::Impl::initialize()
         nvrhi::BindingLayoutItem::Texture_SRV(5),          // screen-space ambient occlusion
         nvrhi::BindingLayoutItem::StructuredBuffer_SRV(6), // draw list
         nvrhi::BindingLayoutItem::StructuredBuffer_SRV(7), // material table
+        nvrhi::BindingLayoutItem::Texture_SRV(8),          // volumetric fog
         nvrhi::BindingLayoutItem::Sampler(2).setSize(9),   // material samplers
         nvrhi::BindingLayoutItem::Sampler(0),
         nvrhi::BindingLayoutItem::Sampler(1), // shadow comparison
@@ -632,7 +640,7 @@ bool SceneRenderer::Impl::initialize()
     }
     ensureInstanceCapacity(1024);
     if (!post.initialize(device, desc.colorFormat) || !culling.initialize(device) ||
-        !particles.initialize(device, *resources, kHdrFormat))
+        !particles.initialize(device, *resources, kHdrFormat) || !fog.initialize(device))
     {
         return false;
     }
@@ -728,6 +736,7 @@ nvrhi::IBindingSet* SceneRenderer::Impl::viewSetFor(EnvironmentHandle environmen
             nvrhi::BindingSetItem::Texture_SRV(5, post.ambientOcclusion()),
             nvrhi::BindingSetItem::StructuredBuffer_SRV(6, culling.drawList()),
             nvrhi::BindingSetItem::StructuredBuffer_SRV(7, resources->materialTable()),
+            nvrhi::BindingSetItem::Texture_SRV(8, fog.volume()),
             nvrhi::BindingSetItem::Sampler(0, clampSampler),
             nvrhi::BindingSetItem::Sampler(1, shadowSampler),
             nvrhi::BindingSetItem::PushConstants(1, sizeof(ForwardPush)),
@@ -765,6 +774,7 @@ nvrhi::IFramebuffer* SceneRenderer::Impl::outputFramebufferFor(nvrhi::ITexture* 
         nvrhi::TextureDesc hdrDesc = depthDesc;
         hdrDesc.format = kHdrFormat;
         hdrDesc.debugName = "Scene HDR";
+        hdrDesc.isUAV = true; // the volumetric fog is applied in a compute pass
         hdrDesc.setClearValue(nvrhi::Color(0.0f));
         hdrDesc.enableAutomaticStateTracking(nvrhi::ResourceStates::RenderTarget);
         hdr = device->createTexture(hdrDesc);
@@ -773,6 +783,7 @@ nvrhi::IFramebuffer* SceneRenderer::Impl::outputFramebufferFor(nvrhi::ITexture* 
         nvrhi::TextureDesc motionDesc = hdrDesc;
         motionDesc.format = kMotionFormat;
         motionDesc.debugName = "Motion vectors";
+        motionDesc.isUAV = false;
         motion = device->createTexture(motionDesc);
         auto prepassDesc = nvrhi::FramebufferDesc().addColorAttachment(motion).setDepthAttachment(depth);
         if (desc.entityIds)
@@ -780,6 +791,7 @@ nvrhi::IFramebuffer* SceneRenderer::Impl::outputFramebufferFor(nvrhi::ITexture* 
             auto idDesc = hdrDesc;
             idDesc.format = nvrhi::Format::RG32_UINT;
             idDesc.debugName = "Entity IDs";
+            idDesc.isUAV = false;
             ids = device->createTexture(idDesc);
             depthDesc.debugName = "Entity ID depth";
             idDepth = device->createTexture(depthDesc);
@@ -795,6 +807,7 @@ nvrhi::IFramebuffer* SceneRenderer::Impl::outputFramebufferFor(nvrhi::ITexture* 
     if (postDirty)
     {
         post.resize(hdr, depth, motion, desc.post);
+        fog.resize(hdr, depth);
         postDirty = false;
         historyValid = false;
         viewSets.clear();
@@ -1188,15 +1201,39 @@ void SceneRenderer::render(nvrhi::ICommandList* commandList, nvrhi::ITexture* co
     f32 angularDiameter = 0.0f;
     const i32 shadowedLight = impl.gatherLights(world, constants, angularDiameter, atmosphere, sky);
     setWind(world, constants);
+    // The first active VolumetricFog fills the air; diagnostic views show the surfaces without it.
+    VolumetricFogRenderer::Frame fogFrame;
+    if (impl.debugView == RenderDebugView::Lit)
+    {
+        world.query<const VolumetricFog>().without<Inactive>().each([&fogFrame](const VolumetricFog& fog) {
+            if (fogFrame.fog == nullptr)
+            {
+                fogFrame.fog = &fog;
+            }
+        });
+    }
+    fogFrame.inverseViewProjection = glm::inverse(constants.unjitteredViewProjection);
+    fogFrame.cameraPosition = view.position;
+    fogFrame.cameraForward = Vec3(constants.cameraForward);
+    fogFrame.frameIndex = impl.frameIndex;
+    constants.fog = impl.fog.prepare(fogFrame);
+    constants.fogScreen = Vec4(1.0f / size.x, 1.0f / size.y, size.x, size.y);
+    impl.stats.fogFroxels = impl.fog.froxels();
+    if (impl.fog.takeVolumeChanged())
+    {
+        impl.viewSets.clear();
+    }
 
     // Particles face the camera: its right and up axes are the first two rows of the view matrix.
-    const ParticleRenderer::View particleView{.viewProjection = constants.viewProjection,
-                                              .projection = projection,
-                                              .position = view.position,
-                                              .forward = Vec3(constants.cameraForward),
-                                              .right =
-                                                  Vec3(view.view[0][0], view.view[1][0], view.view[2][0]),
-                                              .up = Vec3(view.view[0][1], view.view[1][1], view.view[2][1])};
+    ParticleRenderer::View particleView{.viewProjection = constants.viewProjection,
+                                        .projection = projection,
+                                        .position = view.position,
+                                        .forward = Vec3(constants.cameraForward),
+                                        .right = Vec3(view.view[0][0], view.view[1][0], view.view[2][0]),
+                                        .up = Vec3(view.view[0][1], view.view[1][1], view.view[2][1])};
+    particleView.fogVolume = impl.fog.volume();
+    particleView.fog = constants.fog;
+    particleView.fogScreen = constants.fogScreen;
     impl.stats.particles = impl.particles.prepare(world, particleView);
 
     // Shadow cascades for the first shadow-casting directional light.
@@ -1562,15 +1599,16 @@ void SceneRenderer::render(nvrhi::ICommandList* commandList, nvrhi::ITexture* co
 
     endPass(2);
     beginPass(3);
+    impl.fog.compute(commandList, impl.viewConstants, impl.shadowMap);
     commandList->beginMarker("Shading");
     commandList->clearTextureFloat(impl.hdr, nvrhi::AllSubresources,
                                    nvrhi::Color(impl.desc.clearColor.r, impl.desc.clearColor.g,
                                                 impl.desc.clearColor.b, impl.desc.clearColor.a));
     forEachGroup([&](u32 first, u32 count, const DrawItem& item) {
-        drawGroup(shadingPipeline(item), framebuffer, first, count, 1, 1);
+        drawGroup(shadingPipeline(item), framebuffer, first, count, 1, kForwardAmbientOcclusion);
         if (impl.desc.occlusionCulling)
         {
-            drawGroup(shadingPipeline(item), framebuffer, first, count, 2, 1);
+            drawGroup(shadingPipeline(item), framebuffer, first, count, 2, kForwardAmbientOcclusion);
         }
     });
     for (u32 batch = 0; batch < batchCount; ++batch)
@@ -1593,12 +1631,14 @@ void SceneRenderer::render(nvrhi::ICommandList* commandList, nvrhi::ITexture* co
         commandList->draw(nvrhi::DrawArguments().setVertexCount(3));
         ++impl.stats.drawCalls;
     }
+    // Fog over the opaque surfaces and the sky; blended surfaces and particles apply it themselves.
+    impl.fog.apply(commandList);
     // Blended items one by one, back to front.
     for (u32 i = opaqueCount; i < visibleCount; ++i)
     {
         const DrawItem& item = impl.items[impl.cameraOrder[i]];
         setDrawState(impl.pipelines[1][item.material->doubleSided ? 1 : 0], framebuffer, item, false,
-                     blendedSlotBase + (i - opaqueCount), 0);
+                     blendedSlotBase + (i - opaqueCount), kForwardFog);
         const Submesh& submesh = item.mesh->submeshes[item.submesh];
         commandList->drawIndexed(nvrhi::DrawArguments()
                                      .setVertexCount(submesh.indexCount)
@@ -1736,6 +1776,7 @@ void SceneRenderer::resetTemporalHistory() noexcept
         entry.frame = 0;
     }
     m_impl->culling.invalidateHistory();
+    m_impl->fog.invalidateHistory();
 }
 
 void SceneRenderer::setAmbient(Vec3 ambient) noexcept

@@ -216,6 +216,68 @@ void reflectRenderComponents(ComponentRegistry& registry)
                 .category = "Lens",
                 .min = 0.0,
                 .softMax = 8.0});
+    reflect<VolumetricFog>("illusion.VolumetricFog", 1, registry)
+        .meta({.displayName = "Volumetric fog",
+               .category = "Rendering",
+               .icon = "foggy",
+               .description = "Height fog that scatters the sun, moon and point lights into light shafts.",
+               .docsAnchor = "manual/rendering.md#volumetric-fog",
+               .singleton = true})
+        .field("density", &VolumetricFog::density,
+               {.description = "Extinction per metre at the base height.",
+                .category = "Medium",
+                .min = 0.0,
+                .softMax = 0.2,
+                .hint = FieldHint::LogSlider})
+        .field("heightFalloff", &VolumetricFog::heightFalloff,
+               {.description = "How fast the fog thins above the base height, per metre.",
+                .category = "Medium",
+                .min = 0.0,
+                .softMax = 2.0})
+        .field("baseHeight", &VolumetricFog::baseHeight,
+               {.description = "Height below which the fog has its full density.",
+                .category = "Medium",
+                .unit = Unit::Meters})
+        .field("albedo", &VolumetricFog::albedo,
+               {.description = "Colour of the scattered light.",
+                .category = "Medium",
+                .min = 0.0,
+                .max = 1.0,
+                .hint = FieldHint::Color})
+        .field("anisotropy", &VolumetricFog::anisotropy,
+               {.description = "Positive values glow towards the lights, negative away from them.",
+                .category = "Lighting",
+                .min = -0.9,
+                .max = 0.9,
+                .hint = FieldHint::Slider})
+        .field("lightIntensity", &VolumetricFog::lightIntensity,
+               {.description = "Multiplies the sun, moon and point light the fog scatters.",
+                .category = "Lighting",
+                .min = 0.0,
+                .softMax = 4.0})
+        .field("ambientIntensity", &VolumetricFog::ambientIntensity,
+               {.description = "Multiplies the sky light the fog scatters.",
+                .category = "Lighting",
+                .min = 0.0,
+                .softMax = 4.0})
+        .field("maxDistance", &VolumetricFog::maxDistance,
+               {.description = "Distance from the camera the fog reaches.",
+                .unit = Unit::Meters,
+                .min = 1.0,
+                .softMax = 500.0})
+        .field("noiseAmount", &VolumetricFog::noiseAmount,
+               {.description = "How patchy the fog is.",
+                .category = "Noise",
+                .min = 0.0,
+                .max = 1.0,
+                .hint = FieldHint::Slider})
+        .field("noiseSize", &VolumetricFog::noiseSize,
+               {.description = "Size of the patches.", .category = "Noise", .unit = Unit::Meters, .min = 0.1})
+        .field("windFactor", &VolumetricFog::windFactor,
+               {.description = "How fast the Wind carries the patches.",
+                .category = "Noise",
+                .min = 0.0,
+                .softMax = 4.0});
     reflect<SkyAtmosphere>("illusion.SkyAtmosphere", 1, registry)
         .meta({.displayName = "Sky atmosphere",
                .category = "Rendering/Lights",

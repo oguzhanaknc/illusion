@@ -17,6 +17,7 @@ add_library(illusion_render STATIC
     src/Shadows.cpp
     src/Swapchain.cpp
     src/UploadQueue.cpp
+    src/VolumetricFogRenderer.cpp
     src/VulkanDispatch.cpp)
 add_library(illusion::render ALIAS illusion_render)
 
@@ -64,6 +65,9 @@ illusion_add_shaders(illusion_render
         bloomDownsample shaders/BloomDownsample.slang downsampleMain compute
         bloomUpsample shaders/BloomUpsample.slang upsampleMain compute
         exposure shaders/Exposure.slang exposureMain compute
+        fogInject shaders/VolumetricFog.slang injectMain compute
+        fogIntegrate shaders/VolumetricFog.slang integrateMain compute
+        fogApply shaders/VolumetricFog.slang applyMain compute
         tonemapVertex shaders/Tonemap.slang vertexMain vertex
         tonemapFragment shaders/Tonemap.slang fragmentMain fragment
         shadowCasterVertex shaders/ShadowCaster.slang vertexMain vertex

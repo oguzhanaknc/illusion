@@ -40,6 +40,9 @@ public:
         Vec3 forward;
         Vec3 right;
         Vec3 up;
+        nvrhi::ITexture* fogVolume = nullptr; // integrated volumetric fog (a placeholder without fog)
+        Vec4 fog{0.0f};                       // ViewConstants::fog: x is 0 without fog
+        Vec4 fogScreen{0.0f};                 // ViewConstants::fogScreen
     };
 
     bool initialize(nvrhi::IDevice* device, RenderResources& resources, nvrhi::Format colorFormat);
@@ -50,7 +53,7 @@ public:
     u32 prepare(World& world, const View& view);
 
     // Uploads the particles and draws them into @p color. The scene @p depth is read (not attached) for the
-    // depth test and the soft fade. Does nothing when prepare() found none.
+    // depth test and the soft fade; View::fogVolume fogs them. Does nothing when prepare() found none.
     void draw(nvrhi::ICommandList* commands, nvrhi::ITexture* color, nvrhi::ITexture* depth,
               const nvrhi::Viewport& viewport, const View& view);
 
@@ -120,7 +123,7 @@ private:
 
     nvrhi::IBindingSet* bindingSetFor(nvrhi::ITexture* texture);
     void ensureCapacity(u32 particles);
-    void bindTargets(nvrhi::ITexture* color, nvrhi::ITexture* depth);
+    void bindTargets(nvrhi::ITexture* color, nvrhi::ITexture* depth, nvrhi::ITexture* fog);
 
     nvrhi::IDevice* m_device = nullptr;
     RenderResources* m_resources = nullptr;
@@ -147,6 +150,7 @@ private:
     u32 m_capacity = 0;
     nvrhi::TextureHandle m_color;
     nvrhi::TextureHandle m_depth;
+    nvrhi::TextureHandle m_fog;
     nvrhi::FramebufferHandle m_framebuffer;
     nvrhi::TextureHandle m_white; // bound when a batch has no sprite
     nvrhi::SamplerHandle m_sampler;

@@ -594,7 +594,9 @@ After DEMO. Features that bring the renderer and the tech demo to a modern AAA l
 - GFX-1a: ✅ `PostEffects` (saved singleton): automatic exposure (centre-weighted log-luminance metering
   on the GPU, adaptation in stops, limits, compensation; `RenderView::deltaSeconds`), ACES or AgX
   tonemapping, white balance, contrast, saturation, vignette, film grain, chromatic aberration
-- GFX-1b: Volumetric fog with light shafts from the sun, the moon and point lights
+- GFX-1b: ✅ `VolumetricFog` (saved singleton): froxel fog with height falloff and wind-carried noise,
+  light shafts from the shadowed sun or moon, glow around point lights, temporal reprojection; applied to
+  opaque surfaces, the sky, blended surfaces and particles
 - GFX-1c: Point-light shadows (the campfire)
 - GFX-2: Foliage: leaf translucency, GPU-generated dense grass, LODs
 - GFX-3: Lit smoke, clouds, screen-space reflections, contact shadows

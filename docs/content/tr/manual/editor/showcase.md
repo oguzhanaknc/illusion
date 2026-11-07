@@ -31,7 +31,7 @@ oynatılmayı bekleyen bir toz emitter'ı (`playOnStart` kapalı) ve GPU'da sim�
 alan. Bir `Wind` Entity'si tozu (`windFactor`) avlunun öbür ucuna savurur. Devre dışı `Dusk Sky`
 Entity'si gün batımında bir `SkyAtmosphere` tutar: gökyüzünü ve güneşi hareketli olanlarla değiştirmek için onu
 etkinleştirin; devre dışı `Film Look` ise derecelendirilmiş, vinyetli bir görüntü için `PostEffects`
-tutar.
+tutar. Devre dışı `Morning Mist`, alçakta süzülen bir sis için bir `VolumetricFog` tutar.
 
 ## Showcase modülü
 

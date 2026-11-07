@@ -1194,3 +1194,176 @@ TEST_CASE("GPU emitters simulate in compute shaders, draw indirectly and report 
     device->waitIdle();
     CHECK(device->validationErrorCount() == 0);
 }
+
+namespace
+{
+
+// Fog without patches or height falloff, so its effect is predictable.
+VolumetricFog evenFog(f32 density)
+{
+    return VolumetricFog{.density = density, .heightFalloff = 0.0f, .noiseAmount = 0.0f};
+}
+
+int brightness(Rgb pixel)
+{
+    return pixel.r + pixel.g + pixel.b;
+}
+
+SceneRendererDesc fogTarget(Vec3 ambient)
+{
+    SceneRendererDesc desc = unormTarget();
+    desc.ambient = ambient;
+    desc.shadows.resolution = 512;
+    desc.post.bloom.enabled = false;
+    desc.post.temporalAntiAliasing.enabled = false;
+    desc.post.ambientOcclusion.enabled = false;
+    return desc;
+}
+
+} // namespace
+
+TEST_CASE("volumetric fog hides distant surfaces in its colour, and nothing without an active VolumetricFog")
+{
+    auto device = RenderDevice::create(headless());
+    REQUIRE(device != nullptr);
+    {
+        RenderResources resources(*device);
+        auto renderer = SceneRenderer::create(*device, resources, fogTarget(Vec3(1.0f)));
+        REQUIRE(renderer != nullptr);
+
+        // Glowing walls facing the camera: one 3 m away over the left half of the view, one 60 m away behind
+        // everything.
+        World world;
+        ParticleWorld particles(world);
+        MaterialDesc glow;
+        glow.parameters.baseColorFactor = Vec4(0.0f, 0.0f, 0.0f, 1.0f);
+        glow.parameters.emissiveFactor = Vec3(0.2f);
+        const MaterialHandle material = resources.createMaterial(glow);
+        const Quat facing = glm::angleAxis(std::numbers::pi_v<f32> / 2.0f, Vec3(1.0f, 0.0f, 0.0f));
+        Transform near;
+        near.position = Vec3(-2.0f, 0.0f, 2.0f);
+        near.rotation = facing;
+        world.create(near, RenderMesh{resources.createMesh(makePlane(4.0f, 1), "Near"), 0, material});
+        Transform far;
+        far.position = Vec3(0.0f, 0.0f, -55.0f);
+        far.rotation = facing;
+        world.create(far, RenderMesh{resources.createMesh(makePlane(120.0f, 1), "Far"), 0, material});
+        // A bright red additive particle 40 m away in the lower right.
+        particlesAt(world, particles, Vec3(8.0f, -8.0f, -35.0f), Vec4(8.0f, 0.0f, 0.0f, 1.0f), 6.0f, 1,
+                    ParticleBlend::Additive);
+
+        constexpr u32 kNearX = 8;
+        constexpr u32 kFarX = 56;
+        constexpr u32 kParticleX = 40;
+        constexpr u32 kParticleY = 40;
+        const std::vector<u8> clear = renderScene(*device, *renderer, world, nullptr);
+        CHECK(renderer->stats().fogFroxels == 0);
+        const Rgb clearNear = pixelAt(clear, kNearX, 32);
+        const Rgb clearFar = pixelAt(clear, kFarX, 32);
+        const Rgb clearParticle = pixelAt(clear, kParticleX, kParticleY);
+        REQUIRE(clearFar.r > 100);
+        REQUIRE(clearParticle.r > clearFar.r + 20);
+
+        // Fog that only absorbs: the far wall and the particle sink into darkness, the near wall barely
+        // changes.
+        VolumetricFog absorbing = evenFog(0.05f);
+        absorbing.ambientIntensity = 0.0f;
+        const Entity fog = world.create(absorbing);
+        std::vector<u8> pixels = renderScene(*device, *renderer, world, nullptr);
+        CHECK(renderer->stats().fogFroxels > 0);
+        CHECK(pixelAt(pixels, kFarX, 32).r < clearFar.r / 3);
+        CHECK(pixelAt(pixels, kNearX, 32).r > clearNear.r * 8 / 10);
+        CHECK(pixelAt(pixels, kParticleX, kParticleY).r < clearParticle.r * 2 / 3);
+
+        // Fog lit by the sky takes on its albedo in the distance.
+        world.get<VolumetricFog>(fog).ambientIntensity = 1.0f;
+        world.get<VolumetricFog>(fog).albedo = Vec3(1.0f, 0.5f, 0.2f);
+        pixels = renderScene(*device, *renderer, world, nullptr);
+        const Rgb tinted = pixelAt(pixels, kFarX, 32);
+        CHECK(tinted.r > tinted.g + 20);
+        CHECK(tinted.g > tinted.b + 10);
+        // The fog ends at maxDistance: a short fog hides less of the far wall.
+        world.get<VolumetricFog>(fog).ambientIntensity = 0.0f;
+        world.get<VolumetricFog>(fog).maxDistance = 10.0f;
+        pixels = renderScene(*device, *renderer, world, nullptr);
+        CHECK(pixelAt(pixels, kFarX, 32).r > clearFar.r / 2);
+
+        // An inactive or removed VolumetricFog does nothing.
+        world.emplace<Inactive>(fog);
+        pixels = renderScene(*device, *renderer, world, nullptr);
+        CHECK(renderer->stats().fogFroxels == 0);
+        CHECK(pixels == clear);
+        world.remove<Inactive>(fog);
+        world.remove<VolumetricFog>(fog);
+        pixels = renderScene(*device, *renderer, world, nullptr);
+        CHECK(pixels == clear);
+    }
+    device->waitIdle();
+    CHECK(device->validationErrorCount() == 0);
+}
+
+TEST_CASE("volumetric fog glows in sunlight but not in shadow, and around point lights")
+{
+    auto device = RenderDevice::create(headless());
+    REQUIRE(device != nullptr);
+    {
+        RenderResources resources(*device);
+        auto renderer = SceneRenderer::create(*device, resources, fogTarget(Vec3(0.0f)));
+        REQUIRE(renderer != nullptr);
+
+        // A sun straight down and a roof high above the view that shades the air where x < 0: the left half
+        // of the view looks through shadowed fog, the right half through sunlit fog.
+        World world;
+        Transform roof;
+        roof.position = Vec3(-100.0f, 10.0f, 0.0f);
+        world.create(roof,
+                     RenderMesh{resources.createMesh(makePlane(200.0f, 1), "Roof"), 0, MaterialHandle{}});
+        Transform sun;
+        sun.rotation = glm::angleAxis(-std::numbers::pi_v<f32> / 2.0f, Vec3(1.0f, 0.0f, 0.0f));
+        const Entity light = world.create(sun, DirectionalLight{Vec3(1.0f), 10.0f});
+        VolumetricFog shafts = evenFog(0.08f);
+        shafts.maxDistance = 30.0f;
+        shafts.anisotropy = 0.0f;
+        const Entity fog = world.create(shafts);
+
+        constexpr u32 kShadowX = 12;
+        constexpr u32 kLitX = 52;
+        std::vector<u8> pixels = renderScene(*device, *renderer, world, nullptr);
+        CHECK(renderer->shadowCascades().count > 0);
+        const int shadowed = brightness(pixelAt(pixels, kShadowX, 32));
+        const int lit = brightness(pixelAt(pixels, kLitX, 32));
+        CHECK(lit > 60);
+        CHECK(shadowed < lit / 3);
+        // Frames with the temporal history keep the result.
+        for (u32 frame = 0; frame < 4; ++frame)
+        {
+            pixels = renderScene(*device, *renderer, world, nullptr);
+        }
+        CHECK(std::abs(brightness(pixelAt(pixels, kLitX, 32)) - lit) <= lit / 5);
+        CHECK(brightness(pixelAt(pixels, kShadowX, 32)) < lit / 3);
+
+        // Without shadows the whole view glows. The history follows changes over a few frames; a cut drops
+        // it.
+        world.get<DirectionalLight>(light).castShadows = false;
+        renderer->resetTemporalHistory();
+        pixels = renderScene(*device, *renderer, world, nullptr);
+        CHECK(brightness(pixelAt(pixels, kShadowX, 32)) > lit * 2 / 3);
+
+        // A point light in the fog: a glow around it, darkness far from it.
+        world.destroy(light);
+        Transform lamp;
+        world.create(lamp, PointLight{Vec3(1.0f, 0.6f, 0.3f), 40.0f, 4.0f});
+        renderer->resetTemporalHistory();
+        pixels = renderScene(*device, *renderer, world, nullptr);
+        const Rgb glow = pixelAt(pixels, 32, 32);
+        CHECK(glow.r > 60);
+        CHECK(glow.r > glow.b);
+        CHECK(brightness(pixelAt(pixels, 2, 2)) < brightness(glow) / 4);
+        // Without the fog the air is clear: nothing is drawn.
+        world.remove<VolumetricFog>(fog);
+        pixels = renderScene(*device, *renderer, world, nullptr);
+        CHECK(brightness(pixelAt(pixels, 32, 32)) == 0);
+    }
+    device->waitIdle();
+    CHECK(device->validationErrorCount() == 0);
+}

@@ -138,6 +138,26 @@ struct PostEffects
     f32 chromaticAberration = 0.0f; ///< Colour fringes at the corners, in pixels.
 };
 
+/// Light-scattering fog in the air (reflected as "illusion.VolumetricFog", one per scene, ADR 0050): thick
+/// near the ground and thinning with height, it glows where the sun, the moon or a point light shines
+/// through it and stays dark in their shadows, so light shafts appear behind trees and around lamps. Fog
+/// covers opaque surfaces, the sky, blended surfaces and particles up to `maxDistance`; the Wind carries its
+/// drifting noise.
+struct VolumetricFog
+{
+    f32 density = 0.02f; ///< Extinction per metre at the base height: 0.02 hides half the light in 35 m.
+    f32 heightFalloff = 0.15f;     ///< How fast the fog thins above the base height, per metre (0: uniform).
+    f32 baseHeight = 0.0f;         ///< Height in metres below which the fog has its full density.
+    Vec3 albedo{0.9f, 0.9f, 0.9f}; ///< Colour of the light the fog scatters (1: none absorbed).
+    f32 anisotropy = 0.5f;         ///< Henyey-Greenstein g, -0.9 to 0.9: positive glows towards the lights.
+    f32 lightIntensity = 1.0f;     ///< Multiplies the sun, moon and point light scattered by the fog.
+    f32 ambientIntensity = 1.0f;   ///< Multiplies the sky light scattered by the fog.
+    f32 maxDistance = 96.0f; ///< Metres from the camera the fog volume reaches; beyond it the fog stops.
+    f32 noiseAmount = 0.5f;  ///< How patchy the fog is, 0 (even) to 1 (clear gaps between wisps).
+    f32 noiseSize = 12.0f;   ///< Size in metres of the patches.
+    f32 windFactor = 1.0f;   ///< How fast the Wind carries the patches (1: at the wind speed).
+};
+
 /// A sky that follows the time of day (reflected as "illusion.SkyAtmosphere", ADR 0049): air and haze
 /// scattering for any sun height, a sun disc, a moon with its phase, and stars at night. Its sun or moon is
 /// the scene's main light: the renderer adds it as a shadowed directional light, and lights the scene with
