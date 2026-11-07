@@ -33,6 +33,7 @@ add_executable(illusion_tests
     ecs/TestReflection.cpp
     ecs/TestReflectionSweep.cpp
     ecs/TestSceneSerializer.cpp
+    ecs/TestWind.cpp
     ecs/TestWorld.cpp
     platform/TestArchive.cpp
     platform/TestFileSystem.cpp

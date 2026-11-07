@@ -18,8 +18,9 @@ struct GpuMaterialConstants
     f32 roughnessFactor;
     f32 occlusionStrength;
     f32 alphaCutoff; // < 0 disables masking
+    Vec4 wind;       // x: sway, y: flutter (MaterialData::windSway, windFlutter)
 };
-static_assert(sizeof(GpuMaterialConstants) == 48);
+static_assert(sizeof(GpuMaterialConstants) == 64);
 
 /// One material in the bindless material table (must match MaterialRecord in ForwardPbr.slang).
 struct GpuMaterialRecord
@@ -33,7 +34,7 @@ struct GpuMaterialRecord
     u32 sampler; // index into the sampler array (wrapU * 3 + wrapV)
     u32 padding[2];
 };
-static_assert(sizeof(GpuMaterialRecord) == 80);
+static_assert(sizeof(GpuMaterialRecord) == 96);
 
 // Meshes live in shared vertex and index pools; offsets are in vertices and indices.
 struct RenderResources::GpuMesh
@@ -60,6 +61,7 @@ struct RenderResources::GpuMaterial
     nvrhi::BindingSetHandle bindingSet;
     AlphaMode alphaMode = AlphaMode::Opaque;
     bool doubleSided = false;
+    bool wind = false; // moves in the wind: its vertices depend on the material, also in shadow maps
 };
 
 } // namespace illusion

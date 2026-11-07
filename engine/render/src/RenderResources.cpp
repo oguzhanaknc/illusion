@@ -381,6 +381,7 @@ struct RenderResources::Impl
         constants.roughnessFactor = p.roughnessFactor;
         constants.occlusionStrength = p.occlusionStrength;
         constants.alphaCutoff = p.alphaMode == AlphaMode::Mask ? p.alphaCutoff : -1.0f;
+        constants.wind = Vec4(std::max(p.windSway, 0.0f), std::max(p.windFlutter, 0.0f), 0.0f, 0.0f);
 
         const u32 sampler = samplerIndex(p.baseColorTexture.wrapU, p.baseColorTexture.wrapV);
         GpuMaterialRecord& record = parts.record;
@@ -427,7 +428,8 @@ RenderResources::RenderResources(RenderDevice& renderDevice)
     }
 
     nvrhi::BindingLayoutDesc layout;
-    layout.visibility = nvrhi::ShaderType::Pixel;
+    // Vertex shaders read the wind response from the constants.
+    layout.visibility = nvrhi::ShaderType::All;
     layout.registerSpace = 1;
     layout.registerSpaceIsDescriptorSet = true;
     layout.bindings = {
@@ -546,6 +548,7 @@ MaterialHandle RenderResources::createMaterial(const MaterialDesc& desc)
     material.index = index;
     material.alphaMode = desc.parameters.alphaMode;
     material.doubleSided = desc.parameters.doubleSided;
+    material.wind = parts.constants.wind.x > 0.0f || parts.constants.wind.y > 0.0f;
     material.constants = impl.device->createBuffer(
         nvrhi::utils::CreateStaticConstantBufferDesc(sizeof(GpuMaterialConstants), "Material constants")
             .setInitialState(nvrhi::ResourceStates::ConstantBuffer)
@@ -579,6 +582,7 @@ void RenderResources::updateMaterial(MaterialHandle handle, const MaterialDesc& 
     GpuMaterial& material = impl.materials[handle.index];
     material.alphaMode = desc.parameters.alphaMode;
     material.doubleSided = desc.parameters.doubleSided;
+    material.wind = parts.constants.wind.x > 0.0f || parts.constants.wind.y > 0.0f;
 
     impl.uploads->open();
     impl.uploads->writeBuffer(material.constants, &parts.constants, sizeof(parts.constants));

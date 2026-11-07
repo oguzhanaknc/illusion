@@ -21,6 +21,7 @@ struct MaterialConstants
     float roughnessFactor;
     float occlusionStrength;
     float alphaCutoff;      // < 0 when alpha masking is off
+    float4 wind;            // x: sway, y: flutter
 };
 
 ConstantBuffer<ViewConstants> g_view : register(b0, space0);
@@ -123,7 +124,15 @@ VertexOutput vertexMain(VertexInput input, uint instanceId: SV_InstanceID, uint 
     // Multi-draw indirect passes each draw's draw-list offset as its first instance; single draws pass
     // it as a push constant.
     const InstanceData instance = g_instances[g_drawList[g_push.instanceOffset + firstInstance + instanceId]];
-    const float4 world = mul(instance.world, float4(input.position, 1.0));
+    const float2 response = materialConstants(instance.extra.x).wind.xy;
+    float4 world = mul(instance.world, float4(input.position, 1.0));
+    float4 previousWorld = mul(instance.previousWorld, float4(input.position, 1.0));
+    // The prepass runs this shader too, so depth, IDs and motion vectors move with the wind.
+    const float3 origin = mul(instance.world, float4(0.0, 0.0, 0.0, 1.0)).xyz;
+    const float3 previousOrigin = mul(instance.previousWorld, float4(0.0, 0.0, 0.0, 1.0)).xyz;
+    world.xyz += windOffset(g_view.wind, g_view.windGusts, g_view.windGusts.w, response, origin, world.xyz);
+    previousWorld.xyz += windOffset(g_view.wind, g_view.windGusts, g_view.windHistory.x, response, previousOrigin,
+                                    previousWorld.xyz);
     VertexOutput output;
     output.position = mul(g_view.viewProjection, world);
     output.worldPosition = world.xyz;
@@ -133,8 +142,7 @@ VertexOutput vertexMain(VertexInput input, uint instanceId: SV_InstanceID, uint 
     output.material = instance.extra.x;
     output.entity = instance.extra.yz;
     output.currentClip = mul(g_view.unjitteredViewProjection, world);
-    output.previousClip =
-        mul(g_view.previousViewProjection, mul(instance.previousWorld, float4(input.position, 1.0)));
+    output.previousClip = mul(g_view.previousViewProjection, previousWorld);
     return output;
 }
 

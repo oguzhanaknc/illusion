@@ -27,7 +27,8 @@ A test (`TestShowcase.cpp`) opens a copy of the project and fails when a saved C
 is missing from the scene or left at its default, or when the project has missing assets or unresolved prefabs.
 A new Component or field therefore needs a value in `build.jsonl`. Three particle emitters cover
 `ParticleEmitter`: a spark fountain over the trigger pad, a dust emitter by the blocks, which waits to be
-played (`playOnStart` off), and a field of 20,000 fireflies simulated on the GPU.
+played (`playOnStart` off), and a field of 20,000 fireflies simulated on the GPU. A `Wind` entity blows the dust
+(`windFactor`) across the yard.
 
 ## The showcase module
 

@@ -12,6 +12,8 @@
     "alphaCutoff": 0.5,
     "alphaMode": "Opaque",
     "doubleSided": false,
+    "windSway": 0.0,
+    "windFlutter": 0.0,
     "baseColorTexture": {
       "image": -1,
       "wrapU": "Repeat",

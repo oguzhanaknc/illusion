@@ -83,6 +83,7 @@ private:
         f32 seconds = 0.0f;
         u32 generation = 0;
         Vec3 gravity{0.0f};
+        Vec3 wind{0.0f};
     };
 
     // The GPU state of one emitter, kept between frames.

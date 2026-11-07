@@ -6,6 +6,7 @@
 #include <illusion/core/Log.hpp>
 #include <illusion/core/Profiler.hpp>
 #include <illusion/ecs/SceneSerializer.hpp>
+#include <illusion/ecs/Wind.hpp>
 #include <illusion/editor/EditorStrings.hpp>
 #include <illusion/editor/core/CoreCommands.hpp>
 #include <illusion/editor/core/EditorContext.hpp>
@@ -1664,9 +1665,10 @@ usize EditorContext::clearHistory()
 void EditorContext::endFrame(f64 deltaSeconds)
 {
     ILL_PROFILE_SCOPE();
-    // Particle effects preview in the edit World; while playing, the game session advances its own.
+    // Wind and particle effects preview in the edit World; while playing, the game session advances its own.
     if (!playing())
     {
+        advanceWind(m_world, static_cast<f32>(deltaSeconds));
         m_previewParticles.update(static_cast<f32>(deltaSeconds));
     }
     if (m_commands.revision() != m_commandsRevision)

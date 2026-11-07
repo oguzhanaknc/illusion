@@ -18,6 +18,7 @@ struct SimulateConstants
     float4 scale;        // the emitter's scale
     uint4 counts;        // x: births, y: capacity, z: seed, w: step
     uint4 state;         // x: the current buffer (0 or 1)
+    float4 wind;         // xyz: wind velocity in the simulation space, w: windFactor
 };
 
 ConstantBuffer<SimulateConstants> g_sim : register(b0);
@@ -84,7 +85,9 @@ void simulateMain(uint3 id: SV_DispatchThreadID)
         return;
     }
     const float keep = max(0.0, 1.0 - max(g_sim.acceleration.w, 0.0) * seconds);
-    const float3 velocity = (particle.velocityLife.xyz + g_sim.acceleration.xyz * seconds) * keep;
+    float3 velocity = (particle.velocityLife.xyz + g_sim.acceleration.xyz * seconds) * keep;
+    // Make up a share of the gap to the wind's velocity, as ParticleWorld does on the CPU.
+    velocity += (g_sim.wind.xyz - velocity) * saturate(g_sim.wind.w * seconds);
     particle.velocityLife.xyz = velocity;
     particle.positionAge.xyz += velocity * seconds;
     uint slot;

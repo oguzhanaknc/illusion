@@ -564,8 +564,11 @@ particles and physics can do together, and the engine features it needs.
 
 - DEMO-1: ✅ Mouse look: `ActionType::Delta` (unbounded, bindings add up) and `BindingSource::MouseMotion`
   (`Mouse.Motion`, `Mouse.Scroll`, scaled), captured by `BindingCapture` for Delta actions, with glyphs
-- DEMO-2: Wind: a saved `Wind` Component, material sway and flutter displacing vertices in every pass
-  (forward, prepass, shadows, motion vectors), wind on particles (CPU and GPU)
+- DEMO-2: ✅ Wind (ADR 0048): the saved singleton `Wind` (direction, speed, travelling gusts, turbulence)
+  with its runtime clock `WindState` (`advanceWind()`, called by `GameSession` and the editor preview);
+  `MaterialData::windSway`/`windFlutter` displace vertices in the forward pass, prepass (IDs, motion vectors
+  with the previous frame's wind) and shadow casters (batched by Material when they sway); cooked model
+  format 2; `ParticleEmitter::windFactor` on the CPU and GPU paths; GPU test for both material paths
 - DEMO-3: Day and night: a sky that follows the sun cheaply every frame, a moon and stars
 - DEMO-4: Assets: a fetch script for CC0 Poly Haven models (pinned, SHA-256 checked, git-ignored) and
   procedural trees

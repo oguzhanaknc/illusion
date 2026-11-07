@@ -51,6 +51,7 @@ the physics gravity.
 | `shape`, `radius`, `boxExtents` | Where particles are born: `Point`, `Sphere` (radius) or `Box` (half size). |
 | `spread` | Half angle in radians of the initial directions around local +Y (π: every direction). |
 | `gravityFactor`, `drag` | Scales the world's gravity (negative rises); fraction of the velocity lost per second. |
+| `windFactor` | How fast particles take on the velocity of the scene's [Wind](rendering.md#wind), per second (0: none). |
 | `sizeStart`, `sizeEnd` | Width in m at birth and at death. |
 | `colorStart`, `colorEnd` | Linear colour and alpha at birth and at death; values above 1 glow. |
 | `blend` | `Additive` (light: fire, sparks) or `Alpha` (covers: smoke, dust). |

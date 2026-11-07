@@ -52,6 +52,7 @@ ilerletilir.
 | `shape`, `radius`, `boxExtents` | Parçacıkların doğduğu yer: `Point`, `Sphere` (yarıçap) ya da `Box` (yarı boyut). |
 | `spread` | Yerel +Y etrafındaki ilk yönlerin radyan cinsinden yarı açısı (π: her yön). |
 | `gravityFactor`, `drag` | Dünyanın yerçekimini ölçekler (negatif yükselir); saniyede kaybedilen hız oranı. |
+| `windFactor` | Parçacıkların sahnenin [Wind](rendering.md#ruzgar)'ının hızını saniyede ne kadar hızlı aldığı (0: hiç). |
 | `sizeStart`, `sizeEnd` | Doğumda ve ölümde m cinsinden genişlik. |
 | `colorStart`, `colorEnd` | Doğumda ve ölümde doğrusal renk ve alfa; 1'in üzerindeki değerler parlar. |
 | `blend` | `Additive` (ışık: ateş, kıvılcım) ya da `Alpha` (örter: duman, toz). |

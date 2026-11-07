@@ -4,6 +4,7 @@
 #include <illusion/assets/Model.hpp>
 #include <illusion/core/JobSystem.hpp>
 #include <illusion/ecs/Hierarchy.hpp>
+#include <illusion/ecs/Wind.hpp>
 #include <illusion/ecs/World.hpp>
 #include <illusion/particles/ParticleComponents.hpp>
 #include <illusion/particles/ParticleWorld.hpp>
@@ -652,6 +653,76 @@ TEST_CASE("the prepass writes motion vectors for moving objects")
         renderScene(*device, *renderer, world, nullptr);
         motion = readMotion(*device, renderer->motionVectors());
         CHECK(glm::length(motion[32 * kSize + 32]) < 1e-4f);
+    }
+    device->waitIdle();
+    CHECK(device->validationErrorCount() == 0);
+}
+
+TEST_CASE("materials that sway bend with the wind in every pass, the others stay rigid")
+{
+    auto device = RenderDevice::create(headless());
+    REQUIRE(device != nullptr);
+    {
+        RenderResources resources(*device);
+        for (const bool bindless : {true, false})
+        {
+            CAPTURE(bindless);
+            SceneRendererDesc desc = unormTarget();
+            desc.ambient = Vec3(1.0f);
+            desc.post.bloom.enabled = false;
+            desc.bindless = bindless;
+            auto renderer = SceneRenderer::create(*device, resources, desc);
+            REQUIRE(renderer != nullptr);
+
+            // A 2 m square facing the camera with its origin at its centre, (0, -1, 0): the top half bends.
+            World world;
+            Transform plane;
+            plane.position = Vec3(0.0f, -1.0f, 0.0f);
+            plane.rotation = glm::angleAxis(std::numbers::pi_v<f32> / 2.0f, Vec3(1.0f, 0.0f, 0.0f));
+            MaterialDesc grass;
+            grass.parameters.metallicFactor = 0.0f;
+            grass.parameters.windSway = 0.1f;
+            const MaterialHandle swaying = resources.createMaterial(grass);
+            // Subdivided, so the lower half has vertices of its own that stay still.
+            const Entity entity = world.create(
+                plane, RenderMesh{resources.createMesh(makePlane(2.0f, 8), "Plane"), 0, swaying});
+            world.create(Transform{},
+                         DirectionalLight{Vec3(1.0f), 1.0f}); // casts shadows: the wind caster path
+
+            // The right edge (x = 1) is at column 43; near the top (y = -0.1) it moves right in the wind.
+            constexpr u32 kTopY = 33;
+            constexpr u32 kBottomY = 52;
+            const auto covered = [](const std::vector<u8>& pixels, u32 x, u32 y) {
+                return pixelAt(pixels, x, y).r > 40;
+            };
+            std::vector<u8> pixels = renderScene(*device, *renderer, world, nullptr);
+            CHECK(covered(pixels, 42, kTopY));
+            CHECK_FALSE(covered(pixels, 45, kTopY)); // no Wind: calm air
+            CHECK_FALSE(covered(pixels, 45, kBottomY));
+
+            const Entity wind =
+                world.create(Wind{.direction = Vec3(1.0f, 0.0f, 0.0f), .speed = 4.0f, .gustStrength = 0.0f});
+            pixels = renderScene(*device, *renderer, world, nullptr);
+            CHECK(covered(pixels, 45, kTopY));          // about 0.33 m (3.6 pixels) to the right at the top
+            CHECK_FALSE(covered(pixels, 45, kBottomY)); // the lower half stays put
+            CHECK(renderer->stats().shadowDrawCalls >= 1);
+
+            // A steady wind leaves no motion; a moving one gives the top motion vectors.
+            std::vector<Vec2> motion = readMotion(*device, renderer->motionVectors());
+            CHECK(glm::length(motion[kTopY * kSize + 40]) < 1e-4f);
+            advanceWind(world, 0.5f);
+            renderScene(*device, *renderer, world, nullptr);
+            motion = readMotion(*device, renderer->motionVectors());
+            CHECK(glm::length(motion[kTopY * kSize + 40]) > 1e-3f);
+            CHECK(glm::length(motion[kBottomY * kSize + 32]) < 1e-3f);
+
+            // A rigid material ignores the wind.
+            world.get<RenderMesh>(entity).material = MaterialHandle{};
+            pixels = renderScene(*device, *renderer, world, nullptr);
+            CHECK_FALSE(covered(pixels, 45, kTopY));
+            world.destroy(wind);
+            resources.releaseMaterial(swaying);
+        }
     }
     device->waitIdle();
     CHECK(device->validationErrorCount() == 0);

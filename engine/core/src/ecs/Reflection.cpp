@@ -7,6 +7,7 @@
 #include <illusion/ecs/SceneSerializer.hpp>
 #include <illusion/ecs/StructRegistry.hpp>
 #include <illusion/ecs/Transform.hpp>
+#include <illusion/ecs/Wind.hpp>
 
 #include <cstring>
 #include <numbers>
@@ -638,6 +639,35 @@ void reflectCoreComponents(ComponentRegistry& registry)
                .icon = "visibility_off",
                .description = "Switches the Entity and its descendants off.",
                .docsAnchor = "manual/ecs.md#disabled-and-inactive"});
+    reflect<Wind>("illusion.Wind", 1, registry)
+        .meta({.displayName = "Wind",
+               .category = "Environment",
+               .icon = "air",
+               .description = "Wind of the scene: bends vegetation and pushes particles.",
+               .docsAnchor = "manual/rendering.md#wind",
+               .singleton = true})
+        .field("direction", &Wind::direction, {.description = "Direction the wind blows toward."})
+        .field("speed", &Wind::speed,
+               {.description = "Average speed.", .unit = Unit::MetersPerSecond, .min = 0.0, .softMax = 20.0})
+        .field("gustStrength", &Wind::gustStrength,
+               {.description = "How much gusts change the speed.",
+                .min = 0.0,
+                .max = 1.0,
+                .hint = FieldHint::Slider})
+        .field(
+            "gustFrequency", &Wind::gustFrequency,
+            {.description = "Gusts per second at a point.", .unit = Unit::Hertz, .min = 0.0, .softMax = 2.0})
+        .field("turbulence", &Wind::turbulence,
+               {.description = "Multiplies the flutter of leaves and grass.", .min = 0.0, .softMax = 4.0});
+    reflectRuntime<WindState>("illusion.WindState",
+                              {.displayName = "Wind state",
+                               .category = "Environment",
+                               .icon = "air",
+                               .description = "Clock of the wind (runtime state).",
+                               .docsAnchor = "manual/rendering.md#wind"},
+                              registry)
+        .field("time", &WindState::time, {.unit = Unit::Seconds, .readOnly = true})
+        .field("previousTime", &WindState::previousTime, {.unit = Unit::Seconds, .readOnly = true});
     reflectRuntime<Inactive>(
         "illusion.Inactive",
         {.displayName = "Inactive",
