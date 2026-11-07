@@ -328,7 +328,7 @@ void lockPiece(World& world, Entity boardEntity, Entity active, const Board& boa
     for (i32 y = 0; y < field.height(); ++y)
     {
         full[static_cast<usize>(y)] = field.rowFull(y);
-        cleared += full[static_cast<usize>(y)] ? 1 : 0;
+        cleared += full[static_cast<usize>(y)] ? 1u : 0u;
     }
     if (cleared == 0)
     {
