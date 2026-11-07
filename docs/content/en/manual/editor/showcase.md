@@ -41,7 +41,9 @@ pad the lamp above lights up, and each time it steps on, the Voice greets it. Th
 and closes it again every four seconds (game code may change `motorSpeed` at any time), the drawer slides, the
 platform rises and falls, and the Ball, Crate, Rock and Drum get pushed at fixed frames; the Ball grows to one
 and a half times its size at frame 90. The module also casts rays and shapes, counts contacts and the
-Trigger's visitors, chimes where something lands hard, spawns a lantern prefab at frame 120, switches to moon
+Trigger's visitors, chimes where something lands hard and raises the dust the first time, showers sparks
+when the Player steps on the pad, stops the spark fountain at frame 270 and starts it again at 290, spawns a
+lantern prefab at frame 120, switches to moon
 gravity for a second from frame 200, and from frame 240 lets the Player walk through the Crate (their layers
 stop colliding). What it saw is kept in the `showcase.Stats` Component of the Showcase entity.
 

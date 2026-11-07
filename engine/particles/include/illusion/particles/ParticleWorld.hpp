@@ -48,6 +48,11 @@ public:
     /// Removes the live particles of @p entity's emitter at once. Returns false if it has no pool yet.
     bool clear(Entity entity);
 
+    /// Emits up to @p count particles of @p entity's emitter now, where it stands, whether it plays or not
+    /// (a burst on an impact). Adds its pool if it has none, so call it outside queries. Returns how many
+    /// fit below ParticleEmitter::maxParticles; 0 without a ParticleEmitter and a Transform.
+    u32 emit(Entity entity, u32 count);
+
     /// Live particles of @p entity's emitter (0 without a pool).
     [[nodiscard]] u32 aliveCount(Entity entity) const;
 

@@ -10,6 +10,7 @@
 #include <illusion/ecs/World.hpp>
 #include <illusion/particles/ParticleComponents.hpp>
 #include <illusion/particles/ParticleWorld.hpp>
+#include <illusion/particles/ParticleWorldService.hpp>
 
 #include <doctest/doctest.h>
 
@@ -305,4 +306,42 @@ TEST_CASE("updates do not allocate once the pools exist")
     run(particles, 1.0f, &jobs);
     run(particles, 1.0f);
     CHECK(allocations.count() == 0);
+}
+
+TEST_CASE("emit adds a burst at the emitter now, playing or not, up to its capacity")
+{
+    World world;
+    ParticleWorld particles(world);
+    ParticleEmitter e = emitter(0.0f, 10.0f);
+    e.playOnStart = false;
+    e.maxParticles = 10;
+    const Entity entity = world.create(at(Vec3(2.0f, 0.0f, 0.0f)), e);
+    CHECK(particles.emit(entity, 4) == 4); // before any update: the pool is created
+    CHECK(particles.aliveCount(entity) == 4);
+    CHECK_FALSE(particles.isPlaying(entity));
+    CHECK(world.get<ParticlePool>(entity).position(0).x == doctest::Approx(2.0f));
+    CHECK(particles.emit(entity, 20) == 6);
+    CHECK(particles.aliveCount(entity) == 10);
+    run(particles, 1.0f);
+    CHECK(particles.aliveCount(entity) == 10); // not playing: nothing more is emitted
+    CHECK(particles.emit(world.create(at(Vec3(0.0f))), 5) == 0);
+}
+
+TEST_CASE("ParticleWorldService forwards every call to its ParticleWorld")
+{
+    World world;
+    ParticleWorld particles(world);
+    ParticleWorldService service(particles);
+    CHECK(&service.particles() == &particles);
+    const Entity entity = world.create(at(Vec3(0.0f)), emitter(60.0f, 10.0f));
+    CHECK(service.play(entity));
+    run(particles, 0.5f);
+    CHECK(service.isPlaying(entity));
+    CHECK(service.aliveCount(entity) == 30);
+    CHECK(service.totalAlive() == 30);
+    CHECK(service.emit(entity, 5) == 5);
+    CHECK(service.stop(entity));
+    CHECK_FALSE(service.isPlaying(entity));
+    CHECK(service.clear(entity));
+    CHECK(service.aliveCount(entity) == 0);
 }

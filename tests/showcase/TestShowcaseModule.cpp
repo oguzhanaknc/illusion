@@ -19,6 +19,8 @@
 #include <illusion/input/InputActionsService.hpp>
 #include <illusion/modules/ModuleHost.hpp>
 #include <illusion/particles/ParticleComponents.hpp>
+#include <illusion/particles/ParticleWorld.hpp>
+#include <illusion/particles/ParticleWorldService.hpp>
 #include <illusion/physics/PhysicsComponents.hpp>
 #include <illusion/physics/PhysicsWorld.hpp>
 #include <illusion/physics/PhysicsWorldService.hpp>
@@ -183,7 +185,9 @@ TEST_CASE("the showcase module calls every function of the scripting API on the 
     audioDesc.output = AudioOutput::Offline;
     AudioWorld audio(world, files, audioDesc);
     InputActions actions;
+    ParticleWorld particles(world);
     PhysicsWorldService physicsService(physics);
+    ParticleWorldService particleService(particles);
     AudioWorldService audioService(audio);
     InputActionsService inputService(actions);
     SceneLoaderService sceneService(world, files);
@@ -191,11 +195,13 @@ TEST_CASE("the showcase module calls every function of the scripting API on the 
     test::CountingAudio countingAudio(&audioService);
     test::CountingInput countingInput(&inputService);
     test::CountingScenes countingScenes(&sceneService);
+    test::CountingParticles countingParticles(&particleService);
     ServiceSet services;
     services.provide<PhysicsService>(countingPhysics);
     services.provide<AudioService>(countingAudio);
     services.provide<InputService>(countingInput);
     services.provide<SceneService>(countingScenes);
+    services.provide<ParticleService>(countingParticles);
 
     ModuleHostDesc hostDesc;
     hostDesc.shadowDirectory = directory.path / "shadow";
@@ -207,6 +213,7 @@ TEST_CASE("the showcase module calls every function of the scripting API on the 
     {
         modules.update(world, kStep);
         physics.update(kStep);
+        particles.update(static_cast<f32>(kStep), &jobs);
         audio.update(kStep);
     }
     CHECK(modules.detachWorld(world)); // runs stop(), which unloads the clips
@@ -226,10 +233,12 @@ TEST_CASE("the showcase module calls every function of the scripting API on the 
     INFO("uncalled audio functions: " << uncalled(countingAudio.calls));
     INFO("uncalled input functions: " << uncalled(countingInput.calls));
     INFO("uncalled scene functions: " << uncalled(countingScenes.calls));
+    INFO("uncalled particle functions: " << uncalled(countingParticles.calls));
     CHECK(countingPhysics.everyFunctionCalled());
     CHECK(countingAudio.everyFunctionCalled());
     CHECK(countingInput.everyFunctionCalled());
     CHECK(countingScenes.everyFunctionCalled());
+    CHECK(countingParticles.everyFunctionCalled());
 
     // The game ran on the real services: it counted its frames, met contacts and spawned a gem and a lantern.
     CHECK(statsField(world, "frames") == kFrames);

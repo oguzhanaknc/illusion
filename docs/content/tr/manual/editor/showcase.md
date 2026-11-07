@@ -40,7 +40,9 @@ bir çubuğu oynatana kadar Player trigger pedinin üzerinden kendi kendine iler
 Voice onu selamlar. Menteşe motoru Door'u her dört saniyede bir açıp yeniden kapatır (oyun kodu `motorSpeed`'i
 her an değiştirebilir), çekmece kayar, platform inip çıkar ve Ball, Crate, Rock ile Drum belirli karelerde
 itilir; Ball 90. karede bir buçuk katına büyür. Modül ayrıca ışın ve şekil atar, temasları ve Trigger'a
-girenleri sayar, bir şey sertçe düştüğü yerde çan çalar, 120. karede bir fener prefab'ı oluşturur, 200. kareden
+girenleri sayar, bir şey sertçe düştüğü yerde çan çalar ve ilk seferinde tozu kaldırır, Player pede bastığında
+kıvılcım yağdırır, kıvılcım çeşmesini 270. karede durdurup 290. karede yeniden başlatır, 120. karede bir fener
+prefab'ı oluşturur, 200. kareden
 itibaren bir saniyeliğine Ay yerçekimine geçer ve 240. kareden sonra Player'ın Crate'in içinden geçmesine izin
 verir (katmanları artık çarpışmaz). Gördükleri, Showcase Entity'sinin `showcase.Stats` Component'inde tutulur.
 

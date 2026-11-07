@@ -1743,6 +1743,41 @@ struct PlaySetMixParams
     std::optional<bool> paused{};      ///< Pause or resume the bus.
 };
 
+/// Params of `particles.play`, `particles.stop` and `particles.clear`.
+struct ParticlesParams
+{
+    std::string entity; ///< Entity reference of an emitter.
+};
+
+/// Params of `particles.emit`.
+struct ParticlesEmitParams
+{
+    std::string entity; ///< Entity reference of an emitter.
+    u32 count = 1;      ///< Particles to emit now (1 to 65536).
+};
+
+/// Result of `particles.play`, `particles.stop`, `particles.clear` and `particles.emit`.
+struct ParticlesResult
+{
+    u32 alive = 0;        ///< Live particles of the emitter.
+    bool playing = false; ///< The emitter emits.
+    u32 emitted = 0;      ///< `particles.emit`: particles that fit below its maxParticles.
+};
+
+/// Params of `particles.stats`.
+struct ParticlesStatsParams
+{
+    std::optional<std::string> entity{}; ///< One emitter (default: every emitter of the World).
+};
+
+/// Result of `particles.stats`.
+struct ParticlesStatsResult
+{
+    u32 emitters = 0; ///< Emitters counted.
+    u32 playing = 0;  ///< Of them, those that emit.
+    u32 alive = 0;    ///< Their live particles.
+};
+
 /// Result of the `play.*` commands: the state of the play session.
 struct PlayStatusResult
 {

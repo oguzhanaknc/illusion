@@ -7,6 +7,7 @@
 
 #include <illusion/audio/AudioService.hpp>
 #include <illusion/input/InputService.hpp>
+#include <illusion/particles/ParticleService.hpp>
 #include <illusion/physics/PhysicsService.hpp>
 #include <illusion/runtime/SceneService.hpp>
 
@@ -360,6 +361,45 @@ public:
     [[nodiscard]] GamepadType lastGamepadType() const override
     {
         return forward<GamepadType>(13, [&](InputService& s) { return s.lastGamepadType(); });
+    }
+};
+
+// Counts the calls of every ParticleService function.
+class CountingParticles final : public CountingProxy<ParticleService, 7>
+{
+public:
+    explicit CountingParticles(ParticleService* inner = nullptr) noexcept
+        : CountingProxy(inner)
+    {
+    }
+
+    bool play(Entity e) override
+    {
+        return forward<bool>(0, [&](ParticleService& s) { return s.play(e); });
+    }
+    bool stop(Entity e) override
+    {
+        return forward<bool>(1, [&](ParticleService& s) { return s.stop(e); });
+    }
+    bool clear(Entity e) override
+    {
+        return forward<bool>(2, [&](ParticleService& s) { return s.clear(e); });
+    }
+    u32 emit(Entity e, u32 count) override
+    {
+        return forward<u32>(3, [&](ParticleService& s) { return s.emit(e, count); });
+    }
+    [[nodiscard]] u32 aliveCount(Entity e) const override
+    {
+        return forward<u32>(4, [&](ParticleService& s) { return s.aliveCount(e); });
+    }
+    [[nodiscard]] bool isPlaying(Entity e) const override
+    {
+        return forward<bool>(5, [&](ParticleService& s) { return s.isPlaying(e); });
+    }
+    [[nodiscard]] u64 totalAlive() const override
+    {
+        return forward<u64>(6, [&](ParticleService& s) { return s.totalAlive(); });
     }
 };
 

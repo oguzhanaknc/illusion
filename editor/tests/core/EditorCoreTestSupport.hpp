@@ -17,6 +17,7 @@
 #include <illusion/editor/core/ThumbnailHost.hpp>
 #include <illusion/editor/core/UiHost.hpp>
 #include <illusion/editor/core/ViewportHost.hpp>
+#include <illusion/particles/ParticleComponents.hpp>
 #include <illusion/platform/FileSystem.hpp>
 
 #include <doctest/doctest.h>
@@ -76,6 +77,7 @@ inline void reflectEditorTestComponents()
 {
     static const bool reflected = [] {
         reflectCoreComponents();
+        reflectParticleComponents();
         reflect<editortest::Link>("test.Link")
             .meta({.displayName = "Link", .category = "Test"})
             .field("target", &editortest::Link::target)

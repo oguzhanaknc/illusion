@@ -9,6 +9,7 @@
 #include <illusion/input/InputActionsService.hpp>
 #include <illusion/modules/ModuleHost.hpp>
 #include <illusion/particles/ParticleWorld.hpp>
+#include <illusion/particles/ParticleWorldService.hpp>
 #include <illusion/physics/PhysicsAssetResolver.hpp>
 #include <illusion/physics/PhysicsWorld.hpp>
 #include <illusion/physics/PhysicsWorldService.hpp>
@@ -68,6 +69,7 @@ struct GameSession::Impl
         , particles(world)
         , physicsService(physics)
         , audioService(audio)
+        , particleService(particles)
         , inputService(actions)
         , sceneService(world, *sessionDesc.files, &guids())
     {
@@ -123,6 +125,7 @@ struct GameSession::Impl
     HierarchyIndex hierarchy;
     PhysicsWorldService physicsService;
     AudioWorldService audioService;
+    ParticleWorldService particleService;
     InputActionsService inputService;
     SceneLoaderService sceneService;
     std::unique_ptr<PhysicsAssetResolver> physicsAssets;
@@ -193,6 +196,7 @@ void GameSession::start()
         ServiceSet services;
         services.provide<PhysicsService>(impl.physicsService);
         services.provide<AudioService>(impl.audioService);
+        services.provide<ParticleService>(impl.particleService);
         services.provide<InputService>(impl.inputService);
         services.provide<SceneService>(impl.sceneService);
         impl.desc.modules->attachWorld(impl.world, WorldRole::Simulation, services);

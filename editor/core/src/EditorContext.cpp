@@ -1664,6 +1664,11 @@ usize EditorContext::clearHistory()
 void EditorContext::endFrame(f64 deltaSeconds)
 {
     ILL_PROFILE_SCOPE();
+    // Particle effects preview in the edit World; while playing, the game session advances its own.
+    if (!playing())
+    {
+        m_previewParticles.update(static_cast<f32>(deltaSeconds));
+    }
     if (m_commands.revision() != m_commandsRevision)
     {
         m_commandsRevision = m_commands.revision();
