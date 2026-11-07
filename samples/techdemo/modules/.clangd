@@ -1,0 +1,4 @@
+# Written by module.create: lets clangd-based code editors (Zed, VS Code with clangd, CLion) find the
+# engine headers through the compile commands of the last module build. Build the modules once first.
+CompileFlags:
+  CompilationDatabase: ../.illusion/build/modules

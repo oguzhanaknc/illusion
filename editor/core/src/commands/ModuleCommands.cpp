@@ -70,6 +70,15 @@ std::string modulesRootFile()
            "illusion_project_modules()\n";
 }
 
+// Points clangd (Zed, the clangd extension of VS Code, CLion, ...) at the compile commands module.build
+// writes, so code editors know the engine's headers. clangd reads it for every file below modules/.
+constexpr std::string_view kClangdFile = "modules:/.clangd";
+constexpr std::string_view kClangdText =
+    "# Written by module.create: lets clangd-based code editors (Zed, VS Code with clangd, CLion) find the\n"
+    "# engine headers through the compile commands of the last module build. Build the modules once first.\n"
+    "CompileFlags:\n"
+    "  CompilationDatabase: ../.illusion/build/modules\n";
+
 std::string moduleListFile(std::string_view name)
 {
     std::string text = "# The game module ";
@@ -148,6 +157,16 @@ Expected<ModuleCreateResult, CommandError> moduleCreate(CommandContext& context,
             return unexpected(std::move(written).error());
         }
         result.files.emplace_back(kModulesRoot);
+    }
+    if (!context.editor().files().exists(kClangdFile))
+    {
+        if (Expected<bool, CommandError> written =
+                context.edit().writeFile(kClangdFile, std::string(kClangdText));
+            !written)
+        {
+            return unexpected(std::move(written).error());
+        }
+        result.files.emplace_back(kClangdFile);
     }
     const std::string list = directory + "/CMakeLists.txt";
     const std::string source = directory + "/" + params.name + ".cpp";
@@ -482,7 +501,8 @@ void registerModuleCommands(CommandRegistry& registry)
         .agentSummary =
             "Creates a game module in the project: modules:/<name>/CMakeLists.txt and "
             "modules:/<name>/<name>.cpp "
-            "with empty load, start and update functions, plus modules:/CMakeLists.txt when missing. Edit "
+            "with empty load, start and update functions, plus modules:/CMakeLists.txt and modules:/.clangd "
+            "(code editor setup) when missing. Edit "
             "the "
             "source with the file commands, then run module.build. Example: {\"name\": \"tetris\"}.",
         .category = "Module",
