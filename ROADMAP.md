@@ -569,7 +569,12 @@ particles and physics can do together, and the engine features it needs.
   `MaterialData::windSway`/`windFlutter` displace vertices in the forward pass, prepass (IDs, motion vectors
   with the previous frame's wind) and shadow casters (batched by Material when they sway); cooked model
   format 2; `ParticleEmitter::windFactor` on the CPU and GPU paths; GPU test for both material paths
-- DEMO-3: Day and night: a sky that follows the sun cheaply every frame, a moon and stars
+- DEMO-3: ✅ Day and night (ADR 0049): the saved singleton `SkyAtmosphere` (time of day, sun path, moon
+  offset, haze, sun/moon/star brightness); an analytic Rayleigh + Mie + ozone sky (`assets/Atmosphere`, the
+  same model in `Atmosphere.slang`) drawn per pixel with the sun disc, a phased moon, twinkling stars and a
+  Milky Way; its sun or moon is the first shadowed directional light, fading through dusk; a per-renderer
+  cube map redrawn in place (`createAtmosphereEnvironment()`/`updateAtmosphereEnvironment()`) only when the
+  sky changes, CPU spherical harmonics (`atmosphereIrradiance()`, `ShAccumulator`); GPU and CPU tests
 - DEMO-4: Assets: a fetch script for CC0 Poly Haven models (pinned, SHA-256 checked, git-ignored) and
   procedural trees
 - DEMO-5: The scene and its module: walking with a CharacterController, the day cycle, fireflies at night,

@@ -413,6 +413,43 @@ if (resources.readEnvironment(resources.requestEnvironmentReadback(sky), baked, 
   metalness değeri ne olursa olsun arka planla aynı görünür (GPU test'lerindeki "white furnace"
   testi).
 
+### Gece ve gündüz
+
+Bir `SkyAtmosphere` Component'i günün her saati için bir gökyüzü çizer ve sahneyi onunla aydınlatır. `timeOfDay`
+değerini (saat, 0 ile 24 arası) her kare değiştirin, güneş gökyüzünü geçer; hiçbir şey bake edilmez. Her
+SkyLight'ın yerini alır.
+
+- **Gökyüzü.** Hava (Rayleigh) ve pus (Mie), güneş ışığını ufka doğru büyüyen bir hava kütlesi boyunca saçar;
+  ozon alacakaranlığı mavi tutar: koyu mavi bir öğle, parlak bir ufuk, turuncu bir gün batımı. Daha yüksek
+  `turbidity` daha puslu, daha beyaz bir gökyüzü verir. Güneş, bloom oluşturan parlak bir disktir.
+- **Gece.** Ay, güneşin karşısındaki noktanın `moonOffset` saat gerisinde durur (0: dolunay, 12: yeni ay) ve
+  evresini gösterir; yıldızlar parıldar ve soluk bir Samanyolu gökyüzünü geçer; ikisi de gün batımından sonra
+  belirir (`starIntensity`).
+- **Işık.** Havanın renklendirdiği güneş sahnenin ilk directional ışığıdır ve gölgeleri düşürür
+  (`castShadows`); gün batımından sonra ışık söner ve mavimsi ay ışığı belirir; böylece ışık hiç sıçramaz.
+  `sunIntensity` ve `moonIntensity`, `DirectionalLight::intensity` gibi aydınlanma değerleridir.
+- **Görüntü tabanlı aydınlatma.** Her renderer gökyüzünün küçük bir cube map'ini (`lightingResolution`,
+  varsayılan 64) ve yansımalarını yalnızca gökyüzü değiştiğinde yeniden çizer; dağınık ışık için gökyüzünü
+  CPU'da küresel harmoniklere izdüşürür. `stats().atmosphereUpdates` yeniden çizimleri bildirir.
+- `sunAzimuth` güneşin yolunu döndürür (varsayılan olarak +x'ten doğar ve -x'te batar), `sunTilt` öğle
+  güneşinin ne kadar yüksekte durduğunu belirler; `pathDirection()`, `sunDirection()` ve `moonDirection()`
+  yönleri verir.
+
+```cpp
+const illusion::Entity sky = world.create(illusion::SkyAtmosphere{.timeOfDay = 17.5f, .turbidity = 3.0f});
+
+// in a game module: a full day in four minutes
+world.get<illusion::SkyAtmosphere>(sky).timeOfDay = std::fmod(hours + deltaSeconds / 10.0f, 24.0f);
+
+const illusion::SkyAtmosphereState state = illusion::evaluateSkyAtmosphere(world.get<illusion::SkyAtmosphere>(sky));
+const bool lampsOn = state.starVisibility > 0.3f;
+```
+
+`evaluateSkyAtmosphere()` (`illusion/render/SkyAtmosphere.hpp`) renderer'ın kullandıklarını döndürür: ışığı,
+yıldızların ne kadar görünür olduğunu ve ayın aydınlık kısmını. `atmosphereRadiance()` ve
+`atmosphereIrradiance()` (`illusion/assets/Atmosphere.hpp`) gökyüzü modelinin kendisini CPU'da hesaplar
+(ADR 0049).
+
 ### HDR ve post-processing
 
 Renderer, sahneyi dahili bir HDR görüntüye çizer ve her kareyi post-processing ile bitirir:

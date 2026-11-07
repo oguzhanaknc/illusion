@@ -2,6 +2,7 @@
 
 add_library(illusion_render STATIC
     src/Components.cpp
+    src/SkyAtmosphere.cpp
     src/DebugDraw.cpp
     src/DebugTriangle.cpp
     src/EnvironmentBaker.cpp
@@ -79,7 +80,8 @@ illusion_add_shaders(illusion_render
         iblEquirectToCube shaders/IblEquirectToCube.slang equirectToCube compute
         iblDownsample shaders/IblDownsample.slang downsampleCube compute
         iblPrefilter shaders/IblPrefilter.slang prefilterSpecular compute
-        iblBrdfLut shaders/IblBrdfLut.slang integrateBrdf compute)
+        iblBrdfLut shaders/IblBrdfLut.slang integrateBrdf compute
+        atmosphereCube shaders/AtmosphereCube.slang atmosphereCube compute)
 
 illusion_configure_target(illusion_render)
 

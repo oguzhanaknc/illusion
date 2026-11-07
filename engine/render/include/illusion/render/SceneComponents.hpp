@@ -22,6 +22,9 @@
 #include <illusion/core/Math.hpp>
 #include <illusion/ecs/Reflection.hpp>
 
+#include <cmath>
+#include <numbers>
+
 namespace illusion
 {
 
@@ -105,6 +108,45 @@ struct ProceduralSky
     [[nodiscard]] SkyDesc desc() const noexcept
     {
         return SkyDesc{zenith, horizon, ground, sunDirection, sunRadiance, sunAngularRadius};
+    }
+};
+
+/// A sky that follows the time of day (reflected as "illusion.SkyAtmosphere", ADR 0049): air and haze
+/// scattering for any sun height, a sun disc, a moon with its phase, and stars at night. Its sun or moon is
+/// the scene's main light: the renderer adds it as a shadowed directional light, and lights the scene with
+/// the sky. It replaces any SkyLight. Change `timeOfDay` to move the sun; nothing is baked.
+struct SkyAtmosphere
+{
+    f32 timeOfDay = 10.0f; ///< Hours since midnight, 0 to 24: the sun rises at 6 and sets at 18.
+    f32 sunAzimuth = 0.0f; ///< Turn of the sun's path about +y in radians (0: it rises at +x and sets at -x).
+    f32 sunTilt = 0.6f;    ///< Angle in radians of the noon sun from straight up, towards -z.
+    f32 moonOffset = 0.0f; ///< Hours the moon trails the point opposite the sun: 0 full moon, 12 new moon.
+    f32 turbidity = 2.5f;  ///< Haze: 1 clear mountain air, 10 thick haze.
+    f32 skyIntensity = 1.0f;   ///< Multiplies the sky's radiance and its image-based lighting.
+    f32 sunIntensity = 4.0f;   ///< Illuminance of the sunlight at noon (as DirectionalLight::intensity).
+    f32 moonIntensity = 0.15f; ///< Illuminance of a full moon's light.
+    f32 starIntensity = 1.0f;  ///< Brightness of the stars at night (0: none).
+    Vec3 groundAlbedo{0.2f, 0.18f, 0.15f}; ///< Colour of the ground seen below the horizon.
+    bool castShadows = true;               ///< The sun or moon light casts shadows.
+    u32 lightingResolution = 64; ///< Face size of the reflection cube map (a power of two, 16 to 256).
+
+    /// Direction towards the sky body on the sun's path at @p hours (the sun at timeOfDay, the moon 12 hours
+    /// and moonOffset later).
+    [[nodiscard]] Vec3 pathDirection(f32 hours) const noexcept
+    {
+        const f32 angle = (hours - 12.0f) / 24.0f * 2.0f * std::numbers::pi_v<f32>;
+        const Vec3 local(-std::sin(angle), std::cos(angle) * std::cos(sunTilt),
+                         -std::cos(angle) * std::sin(sunTilt));
+        const f32 c = std::cos(sunAzimuth);
+        const f32 s = std::sin(sunAzimuth);
+        return Vec3(local.x * c + local.z * s, local.y, -local.x * s + local.z * c);
+    }
+    /// Direction towards the sun.
+    [[nodiscard]] Vec3 sunDirection() const noexcept { return pathDirection(timeOfDay); }
+    /// Direction towards the moon.
+    [[nodiscard]] Vec3 moonDirection() const noexcept
+    {
+        return pathDirection(timeOfDay + 12.0f + moonOffset);
     }
 };
 

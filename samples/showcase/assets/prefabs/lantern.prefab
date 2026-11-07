@@ -12,7 +12,7 @@
   "settings": {},
   "entities": [
     {
-      "id": "b54b3c40881e2907",
+      "id": "3c821fbf59108163",
       "components": {
         "illusion.Hierarchy": {
           "parent": null,
@@ -37,10 +37,10 @@
       }
     },
     {
-      "id": "3c821fbf59108163",
+      "id": "a7ff0d388687ffb2",
       "components": {
         "illusion.Hierarchy": {
-          "parent": "b54b3c40881e2907",
+          "parent": "3c821fbf59108163",
           "order": 0
         },
         "illusion.LocalTransform": {

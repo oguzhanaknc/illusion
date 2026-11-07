@@ -398,6 +398,41 @@ if (resources.readEnvironment(resources.requestEnvironmentReadback(sky), baked, 
 - The shading is energy-conserving: in a uniform white environment, every white Material looks like the
   background, whatever its roughness or metalness (the "white furnace" test in the GPU tests).
 
+### Day and night
+
+A `SkyAtmosphere` Component draws a sky for any time of day and lights the scene with it. Change
+`timeOfDay` (hours, 0 to 24) every frame and the sun crosses the sky; nothing is baked. It replaces any
+SkyLight.
+
+- **Sky.** Air (Rayleigh) and haze (Mie) scatter the sunlight along an air mass that grows towards the
+  horizon, with ozone keeping the twilight blue: a deep blue noon, a bright horizon, an orange sunset. More
+  `turbidity` gives a hazier, whiter sky. The sun is a bright disc that blooms.
+- **Night.** The moon stands `moonOffset` hours behind the point opposite the sun (0: full moon, 12: new
+  moon) and shows its phase; stars twinkle and a faint Milky Way crosses the sky, both fading in after
+  sunset (`starIntensity`).
+- **Light.** The sun, coloured by the air, is the scene's first directional light and casts the shadows
+  (`castShadows`); after sunset the light fades out and the bluish moonlight fades in, so it never jumps.
+  `sunIntensity` and `moonIntensity` are illuminances like `DirectionalLight::intensity`.
+- **Image-based lighting.** Each renderer redraws a small cube map of the sky
+  (`lightingResolution`, 64 by default) and its reflections only when the sky changed, and projects the sky
+  onto spherical harmonics on the CPU for diffuse light. `stats().atmosphereUpdates` reports the redraws.
+- `sunAzimuth` turns the sun's path (by default it rises at +x and sets at -x) and `sunTilt` sets how high
+  the noon sun stands; `pathDirection()`, `sunDirection()` and `moonDirection()` give the directions.
+
+```cpp
+const illusion::Entity sky = world.create(illusion::SkyAtmosphere{.timeOfDay = 17.5f, .turbidity = 3.0f});
+
+// in a game module: a full day in four minutes
+world.get<illusion::SkyAtmosphere>(sky).timeOfDay = std::fmod(hours + deltaSeconds / 10.0f, 24.0f);
+
+const illusion::SkyAtmosphereState state = illusion::evaluateSkyAtmosphere(world.get<illusion::SkyAtmosphere>(sky));
+const bool lampsOn = state.starVisibility > 0.3f;
+```
+
+`evaluateSkyAtmosphere()` (`illusion/render/SkyAtmosphere.hpp`) returns what the renderer uses: the light,
+how visible the stars are and the moon's lit fraction. `atmosphereRadiance()` and `atmosphereIrradiance()`
+(`illusion/assets/Atmosphere.hpp`) evaluate the sky model itself on the CPU (ADR 0049).
+
 ### HDR and post-processing
 
 The renderer shades into an internal HDR image and finishes each frame with post-processing:

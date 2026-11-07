@@ -78,14 +78,15 @@ struct RenderViewTargets
 /// Counters from the last SceneRenderer::render() call.
 struct RenderStats
 {
-    u32 candidates = 0;      ///< RenderMesh entities considered.
-    u32 visible = 0;         ///< Entities that passed frustum culling.
-    u32 drawCalls = 0;       ///< Instanced draw calls issued.
-    u64 triangles = 0;       ///< Triangles submitted.
-    u32 shadowCasters = 0;   ///< Shadow-caster instances, summed over cascades.
-    u32 shadowDrawCalls = 0; ///< Instanced draw calls issued for shadows.
-    u32 lightsDropped = 0;   ///< Active lights beyond the directional and point light limits.
-    u32 particles = 0;       ///< Live particles drawn (ParticleEmitter, ADR 0047).
+    u32 candidates = 0;        ///< RenderMesh entities considered.
+    u32 visible = 0;           ///< Entities that passed frustum culling.
+    u32 drawCalls = 0;         ///< Instanced draw calls issued.
+    u64 triangles = 0;         ///< Triangles submitted.
+    u32 shadowCasters = 0;     ///< Shadow-caster instances, summed over cascades.
+    u32 shadowDrawCalls = 0;   ///< Instanced draw calls issued for shadows.
+    u32 lightsDropped = 0;     ///< Active lights beyond the directional and point light limits.
+    u32 particles = 0;         ///< Live particles drawn (ParticleEmitter, ADR 0047).
+    u32 atmosphereUpdates = 0; ///< 1 when a SkyAtmosphere redrew its lighting cube map (it changed).
 };
 
 /// Completed GPU pass measurements in milliseconds, obtained without blocking the graphics queue.

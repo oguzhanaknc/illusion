@@ -39,6 +39,20 @@ struct ShIrradiance
     [[nodiscard]] static ShIrradiance uniform(Vec3 radiance) noexcept;
 };
 
+/// Sums radiance samples into ShIrradiance without allocating (computeShIrradiance() uses it).
+class ShAccumulator
+{
+public:
+    /// Adds the radiance @p radiance arriving from the unit direction @p direction over @p solidAngle
+    /// steradians.
+    void add(Vec3 direction, Vec3 radiance, f64 solidAngle) noexcept;
+    /// The irradiance of the samples added so far.
+    [[nodiscard]] ShIrradiance result() const noexcept;
+
+private:
+    std::array<f64, 27> m_sums{}; // 9 coefficients x rgb
+};
+
 /// Projects the equirectangular image @p environment (mip 0, any format; 8-bit images are treated as
 /// radiance in [0, 1]) onto spherical harmonics. Returns zero coefficients for an empty image.
 [[nodiscard]] ShIrradiance computeShIrradiance(const Image& environment);

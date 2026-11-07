@@ -55,6 +55,7 @@ records rather than user documentation.
 | [0046](https://github.com/oguzhanaknc/illusion/blob/main/docs/adr/0046-prefabs-as-instance-records.md) | Prefabs as instance records with field-level overrides and nesting |
 | [0047](https://github.com/oguzhanaknc/illusion/blob/main/docs/adr/0047-particle-effects.md) | Particle effects: a saved emitter Component, a deterministic CPU simulation, GPU billboards |
 | [0048](https://github.com/oguzhanaknc/illusion/blob/main/docs/adr/0048-wind.md) | Wind: a scene Component, vertex displacement per Material, particles that follow it |
+| [0049](https://github.com/oguzhanaknc/illusion/blob/main/docs/adr/0049-day-and-night.md) | Day and night: an analytic sky drawn per pixel, its sun as the main light, a small cube map redrawn in place |
 
 To propose a new decision, copy `docs/adr/0000-template.md` and follow the
 [contributing guide](../contributing.md#architecture-decision-records).

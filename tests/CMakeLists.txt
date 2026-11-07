@@ -49,6 +49,7 @@ add_executable(illusion_tests
     assets/TestAssetDatabase.cpp
     assets/TestAssetFormat.cpp
     assets/TestAssetStreamer.cpp
+    assets/TestAtmosphere.cpp
     assets/TestEnvironment.cpp
     assets/TestGltf.cpp
     assets/TestImageMesh.cpp
@@ -66,6 +67,7 @@ add_executable(illusion_tests
     render/TestPostProcess.cpp
     render/TestRenderComponents.cpp
     render/TestShadows.cpp
+    render/TestSkyAtmosphere.cpp
     render/TestRendererExtensions.cpp
     runtime/TestGameSession.cpp
     runtime/TestProjectSettings.cpp

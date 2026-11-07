@@ -1,5 +1,7 @@
 // Definitions shared by the scene shaders. Layouts must match SceneRenderer.cpp.
 
+#include "Atmosphere.slang"
+
 static const uint kMaxDirectionalLights = 4;
 static const uint kMaxPointLights = 16;
 static const float kPi = 3.14159265358979;
@@ -55,6 +57,8 @@ struct ViewConstants
     float4 wind;        // xyz: normalized direction, w: speed (m/s; 0 without a Wind)
     float4 windGusts;   // x: gust strength, y: gust frequency, z: turbulence, w: time
     float4 windHistory; // x: time of the previous frame
+    AtmosphereData atmosphere; // the SkyAtmosphere, when atmosphereLook.z is 1
+    float4 atmosphereLook;     // x: star brightness, y: seconds (twinkling), z: 1 with a SkyAtmosphere, w: moon lit fraction
 };
 
 // Gust factor of the wind at a world position: 1 on average, fronts travel downwind. Matches windGust() in

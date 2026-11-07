@@ -60,6 +60,30 @@ Vec3 ShIrradiance::evaluate(Vec3 normal) const noexcept
     return glm::max(result, Vec3(0.0f));
 }
 
+void ShAccumulator::add(Vec3 direction, Vec3 radiance, f64 solidAngle) noexcept
+{
+    const std::array<f32, 9> basis = shBasis(direction);
+    for (usize i = 0; i < basis.size(); ++i)
+    {
+        const f64 weight = static_cast<f64>(basis[i]) * solidAngle;
+        m_sums[i * 3 + 0] += static_cast<f64>(radiance.x) * weight;
+        m_sums[i * 3 + 1] += static_cast<f64>(radiance.y) * weight;
+        m_sums[i * 3 + 2] += static_cast<f64>(radiance.z) * weight;
+    }
+}
+
+ShIrradiance ShAccumulator::result() const noexcept
+{
+    ShIrradiance sh;
+    for (usize i = 0; i < sh.coefficients.size(); ++i)
+    {
+        sh.coefficients[i] = Vec3(static_cast<f32>(m_sums[i * 3]), static_cast<f32>(m_sums[i * 3 + 1]),
+                                  static_cast<f32>(m_sums[i * 3 + 2])) *
+                             kBandFactors[i];
+    }
+    return sh;
+}
+
 ShIrradiance ShIrradiance::uniform(Vec3 radiance) noexcept
 {
     // L00 of a constant function is radiance * sqrt(4 pi); convolved and evaluated: pi * radiance.
@@ -78,7 +102,7 @@ ShIrradiance computeShIrradiance(const Image& environment)
     }
     const u32 width = environment.width();
     const u32 height = environment.height();
-    std::array<glm::dvec3, 9> sums{};
+    ShAccumulator sums;
     // Solid angle of a texel: (2 pi / width) * (pi / height) * sin(theta).
     const f64 texelArea = (2.0 * std::numbers::pi / width) * (std::numbers::pi / height);
     for (u32 y = 0; y < height; ++y)
@@ -89,19 +113,10 @@ ShIrradiance computeShIrradiance(const Image& environment)
         {
             const Vec3 direction =
                 equirectDirection(Vec2((static_cast<f32>(x) + 0.5f) / static_cast<f32>(width), v));
-            const glm::dvec3 radiance = glm::dvec3(Vec3(readPixel(environment, x, y))) * weight;
-            const std::array<f32, 9> basis = shBasis(direction);
-            for (usize i = 0; i < basis.size(); ++i)
-            {
-                sums[i] += radiance * static_cast<f64>(basis[i]);
-            }
+            sums.add(direction, Vec3(readPixel(environment, x, y)), weight);
         }
     }
-    for (usize i = 0; i < sums.size(); ++i)
-    {
-        sh.coefficients[i] = Vec3(sums[i]) * kBandFactors[i];
-    }
-    return sh;
+    return sums.result();
 }
 
 Image makeSkyImage(u32 width, const SkyDesc& desc)
