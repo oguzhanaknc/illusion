@@ -38,8 +38,11 @@ Read first: `docs/adr/0027-module-system-and-hot-reload.md`, `docs/adr/0041-modu
    return the total count.
 3. Add the function to the interface, its adapter (`PhysicsWorldService`, `AudioWorldService`,
    `InputActionsService`, `SceneLoaderService`; out-of-line in the library's `src/`), the counting proxy in
-   `tests/modules/CountingServices.hpp`, the call in `callServices()` of `tests/modules/TestModule.cpp`,
-   and a forwarding check in `tests/modules/TestServices.cpp`.
+   `tests/modules/CountingServices.hpp` (one more counter in its `CountingProxy<..., N>`), the call in
+   `callServices()` of `tests/modules/TestModule.cpp`, a forwarding check in `tests/modules/TestServices.cpp`,
+   and a real use in the showcase module (`samples/showcase/modules/showcase/showcase.cpp`):
+   `python tools/check_api_coverage.py` fails until every function of the `scripting_api` group is called
+   there, and `tests/showcase/TestShowcaseModule.cpp` counts the calls at run time.
 4. Any change to an interface changes the module ABI: bump `kModuleApiVersion` in
    `engine/core/include/illusion/core/Module.hpp` and say so in the commit.
 5. Update `reference/scripting-api.md` in English and Turkish.

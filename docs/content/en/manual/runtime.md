@@ -76,7 +76,7 @@ frame's input on top of the held keys. `updateCount()` and `time()` count the up
 | `GameSessionMode::Play` | The whole game |
 | `GameSessionMode::Simulate` | No input and no modules: physics moves bodies, no game code runs |
 | `fixedStep = true` | Each `update()` advances exactly one physics step, whatever time passed |
-| `seed` | With `fixedStep`, Entities created while running get EntityGuids from this seed |
+| `seed` | With `fixedStep`, Entities created while running get EntityGuids from this seed, including the scenes and prefabs game code instantiates through `SceneService` |
 
 With `fixedStep`, the same scene, input and seed give the same World: tests hash the saved scene after 600
 steps and compare. This holds on one build and machine; results across platforms may differ.

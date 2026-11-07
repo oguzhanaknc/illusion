@@ -45,23 +45,30 @@ AudioWorldDesc audioDesc(const GameSessionDesc& session) noexcept
     return desc;
 }
 
+// The generator of the EntityGuids made while running: seeded with fixed steps, else none (the shared one).
+std::optional<GuidGenerator> seededGenerator(const GameSessionDesc& session) noexcept
+{
+    if (session.fixedStep)
+    {
+        return std::optional<GuidGenerator>(std::in_place, session.seed);
+    }
+    return std::nullopt;
+}
+
 } // namespace
 
 struct GameSession::Impl
 {
     explicit Impl(const GameSessionDesc& sessionDesc)
         : desc(sessionDesc)
+        , seededGuids(seededGenerator(sessionDesc))
         , physics(world, *sessionDesc.jobs, physicsDesc(sessionDesc.settings.physics))
         , audio(world, *sessionDesc.files, audioDesc(sessionDesc))
         , physicsService(physics)
         , audioService(audio)
         , inputService(actions)
-        , sceneService(world, *sessionDesc.files)
+        , sceneService(world, *sessionDesc.files, &guids())
     {
-        if (desc.fixedStep)
-        {
-            seededGuids.emplace(desc.seed);
-        }
         gamepads.reserve(kReservedGamepads);
     }
 
@@ -104,6 +111,7 @@ struct GameSession::Impl
     }
 
     GameSessionDesc desc;
+    std::optional<GuidGenerator> seededGuids; // fixedStep: ids of Entities created while running
     World world;
     PhysicsWorld physics;
     AudioWorld audio;
@@ -116,7 +124,6 @@ struct GameSession::Impl
     SceneLoaderService sceneService;
     std::unique_ptr<PhysicsAssetResolver> physicsAssets;
     std::unique_ptr<RenderAssetResolver> renderAssets;
-    std::optional<GuidGenerator> seededGuids;
     std::vector<const GamepadState*> gamepads;
     u64 updates = 0;
     f64 time = 0.0;
