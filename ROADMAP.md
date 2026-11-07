@@ -522,7 +522,7 @@ workflow), which waits for the owner's API key and budget; M7 gets its ✅ with 
   itself until it gets input, and five generated sounds instead of one tone. Fixed: changing
   `Joint::motorSpeed` did not wake a sleeping body, so a motor never moved a door that rested at its limit
 
-## PFX — Particle effects
+## PFX — Particle effects ✅
 
 Before M8. Design: ADR 0047 (a saved emitter Component, a deterministic CPU simulation, GPU billboards).
 
@@ -544,7 +544,13 @@ Before M8. Design: ADR 0047 (a saved emitter Component, a deterministic CPU simu
   the active World (and are MCP tools), `ParticleService` (`USES particles`, `ParticleWorldService`, provided
   by `GameSession`) with `emit` for bursts; the showcase module raises dust on the first hard landing,
   showers sparks on the pad and stops and restarts the fountain, so the API coverage includes the service
-- PFX-4: GPU simulation in compute shaders for very large emitters, behind the same Component
+- PFX-4: ✅ GPU simulation: `ParticleEmitter::simulation = Gpu` keeps the particles on the GPU. Compute
+  shaders (reset, simulate, spawn, finish) ping-pong two state buffers with atomic live counts and write the
+  indirect draw arguments, and a 3-slot readback brings the live count to `ParticlePool::count`.
+  `ParticleWorld` publishes numbered steps (births, seconds, gravity) that every view simulates once, and
+  the step seeds the births, so all views agree. The showcase has a GPU firefly field. GPU benchmark
+  `render/1m-gpu-particles`: 1.4 ns per particle per full frame on an RTX 4070 SUPER. Fixed on the way: the
+  dispatches of one binding set need explicit UAV barriers in NVRHI
 
 ## M8 — Release pipeline
 

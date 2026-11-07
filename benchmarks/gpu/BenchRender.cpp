@@ -145,3 +145,40 @@ ILL_BENCHMARK("render/100k-particles", 200.0)
         scene.frame();
     });
 }
+
+ILL_BENCHMARK("render/1m-gpu-particles", 10.0)
+{
+    Scene scene;
+    ParticleWorld particles(scene.world);
+    for (u32 i = 0; i < 16; ++i)
+    {
+        ParticleEmitter emitter;
+        emitter.simulation = ParticleSimulation::Gpu;
+        emitter.maxParticles = 65536;
+        emitter.rate = 65536.0f; // a full emitter after the first second, refilled as particles die
+        emitter.lifetimeMin = 2.0f;
+        emitter.lifetimeMax = 4.0f;
+        emitter.speedMin = 0.5f;
+        emitter.speedMax = 2.0f;
+        emitter.gravityFactor = 0.2f;
+        emitter.sizeStart = 0.05f;
+        emitter.sizeEnd = 0.02f;
+        emitter.colorStart = Vec4(2.0f, 1.0f, 0.5f, 1.0f);
+        emitter.colorEnd = Vec4(0.5f, 0.2f, 0.1f, 0.0f);
+        emitter.seed = i + 1;
+        Transform at;
+        at.position = Vec3(static_cast<f32>(i % 4) * 8.0f - 12.0f, 2.0f, -static_cast<f32>(i / 4) * 8.0f);
+        scene.world.create(at, emitter);
+    }
+    for (int i = 0; i < 90; ++i)
+    {
+        particles.update(1.0f / 60.0f);
+        scene.frame();
+    }
+    bench.batch(1'048'576)
+        .unit("particle")
+        .run("full frame, 16 GPU emitters of 65536 particles, 1280x720", [&] {
+            particles.update(1.0f / 60.0f);
+            scene.frame();
+        });
+}

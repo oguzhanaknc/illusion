@@ -25,9 +25,9 @@ illusion_ctl --launch illusion_editor --editor-arg --headless --editor-arg --no-
 
 A test (`TestShowcase.cpp`) opens a copy of the project and fails when a saved Component or one of its fields
 is missing from the scene or left at its default, or when the project has missing assets or unresolved prefabs.
-A new Component or field therefore needs a value in `build.jsonl`. Two particle emitters cover
-`ParticleEmitter`: a spark fountain over the trigger pad and a dust emitter by the blocks, which waits to be
-played (`playOnStart` off).
+A new Component or field therefore needs a value in `build.jsonl`. Three particle emitters cover
+`ParticleEmitter`: a spark fountain over the trigger pad, a dust emitter by the blocks, which waits to be
+played (`playOnStart` off), and a field of 20,000 fireflies simulated on the GPU.
 
 ## The showcase module
 

@@ -928,3 +928,55 @@ TEST_CASE("a sprite texture colours the particles that use it")
     device->waitIdle();
     CHECK(device->validationErrorCount() == 0);
 }
+
+TEST_CASE("GPU emitters simulate in compute shaders, draw indirectly and report their live count")
+{
+    auto device = RenderDevice::create(headless());
+    REQUIRE(device != nullptr);
+    {
+        RenderResources resources(*device);
+        auto renderer = plainRenderer(*device, resources);
+        World world;
+        ParticleWorld particles(world);
+        ParticleEmitter emitter;
+        emitter.simulation = ParticleSimulation::Gpu;
+        emitter.rate = 0.0f;
+        emitter.burst = 200;
+        emitter.maxParticles = 50; // the burst does not fit
+        emitter.speedMin = 0.0f;
+        emitter.speedMax = 0.0f;
+        emitter.lifetimeMin = 100.0f;
+        emitter.lifetimeMax = 100.0f;
+        emitter.sizeStart = 2.0f;
+        emitter.sizeEnd = 2.0f;
+        emitter.colorStart = Vec4(0.0f, 0.05f, 0.0f, 1.0f); // 50 additive layers add up
+        emitter.colorEnd = emitter.colorStart;
+        const Entity entity = world.create(Transform{}, emitter);
+        particles.update(1.0f / 60.0f);
+        std::vector<u8> pixels = renderScene(*device, *renderer, world, nullptr);
+        CHECK(pixelAt(pixels, 32, 32).g > 150);
+        CHECK(pixelAt(pixels, 32, 32).r == 0);
+        CHECK(pixelAt(pixels, 2, 2).g == 0);
+
+        // The live count comes back a few frames later; the particles stay where they are.
+        for (int frame = 0; frame < 4; ++frame)
+        {
+            particles.update(1.0f / 60.0f);
+            pixels = renderScene(*device, *renderer, world, nullptr);
+        }
+        CHECK(particles.aliveCount(entity) == 50);
+        CHECK(pixelAt(pixels, 32, 32).g > 150);
+
+        // clear() starts the GPU particles afresh.
+        CHECK(particles.clear(entity));
+        for (int frame = 0; frame < 4; ++frame)
+        {
+            particles.update(1.0f / 60.0f);
+            pixels = renderScene(*device, *renderer, world, nullptr);
+        }
+        CHECK(pixelAt(pixels, 32, 32).g == 0);
+        CHECK(particles.aliveCount(entity) == 0);
+    }
+    device->waitIdle();
+    CHECK(device->validationErrorCount() == 0);
+}

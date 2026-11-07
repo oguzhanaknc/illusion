@@ -58,6 +58,7 @@ ilerletilir.
 | `space` | `World`: parçacıklar doğdukları yerde kalır; `Local`: emitter'la birlikte hareket eder. |
 | `texture` | Sprite Texture'ı; yoksa yumuşak yuvarlak bir nokta çizilir. |
 | `seed` | Eşit seed'ler eşit parçacıklar verir. |
+| `simulation` | `Cpu` (varsayılan) ya da `Gpu`: bkz. [GPU simülasyonu](#gpu-simulasyonu). |
 
 Renk ve boyut parçacığın yaşına göre ara değerlenir; `particleColor()` ve `particleSize()` ömrün bir kesri için
 değerleri verir.
@@ -131,6 +132,26 @@ void onLanding(illusion::ModuleContext& context, illusion::Entity dust)
     }
 }
 ```
+
+## GPU simülasyonu
+
+`simulation` `Gpu` olduğunda bir emitter'ın parçacıkları GPU'da yaşar: renderer onları compute Shader'larda
+yaşlandırır, hareket ettirir, emekliye ayırır ve doğurur; durum buffer'ından dolaylı bir çizimle çizer. Böylece
+bir milyon parçacıklı bir kare, bir CPU geçişi ve bir yükleme yerine bir iki milisaniyeye mal olur
+(`render/1m-gpu-particles` GPU Benchmark'ı). Her emitter en fazla 65.536 parçacık tutar.
+
+Emitter'ın zamanını yine `ParticleWorld` tutar: her güncelleme bir adım yayınlar (doğumları ve saniyeleri,
+numaralı) ve emitter'ı çizen her görünüm her yeni adımı simüle eder. Adım numarası doğumların seed'idir; böylece
+Scene görünümü ile Game görünümü aynı parçacıkları gösterir. Karşılığında:
+
+- Parçacıklar `ParticlePool`'da değildir: kod ve testler konumlarını okuyamaz. `aliveCount()` ve
+  `particles.stats`, bir görünümün birkaç kare önce GPU'dan geri okuduğu sayıyı bildirir.
+- Yalnızca bir görünüm onları çizdiğinde hareket ederler; bir emitter'ı bir süredir çizmeyen görünüm her adımı
+  değil, birkaç adımı yetiştirir.
+- Alpha parçacıklar sıralanmadan, yaşadıkları sırayla çizilir.
+
+Kodun okuduğu ya da testlerde birebir tekrarlanması gereken oyun efektleri için CPU simülasyonunu; ateş
+böcekleri, kar, yağmur, közler gibi büyük ve süs amaçlı olanlar için GPU'yu kullanın.
 
 ## Parçacık havuzu
 

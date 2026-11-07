@@ -45,6 +45,15 @@ enum class ParticleSpace : u8
     Local, ///< Particles move with the emitter (a glow around a torch).
 };
 
+/// Where an emitter's particles are simulated.
+enum class ParticleSimulation : u8
+{
+    Cpu, ///< ParticleWorld on the Job System: deterministic, readable by code (ParticlePool), up to a few
+         ///< hundred thousand particles in all.
+    Gpu, ///< Compute shaders in the renderer: up to kMaxParticlesPerEmitter per emitter at a fraction of the
+         ///< cost, but only where a view draws them; the CPU sees a live count a few frames late.
+};
+
 /// Emits and simulates particles on the Entity (ParticleWorld) and draws them (SceneRenderer). Every field
 /// is saved; the particles themselves are runtime state in ParticlePool.
 struct ParticleEmitter
@@ -73,6 +82,7 @@ struct ParticleEmitter
     ParticleSpace space = ParticleSpace::World;    ///< The space particles live in.
     AssetRef texture{};                            ///< Sprite texture (none: a soft round dot).
     u32 seed = 1; ///< Seed of the emitter's random numbers: equal seeds give equal particles.
+    ParticleSimulation simulation = ParticleSimulation::Cpu; ///< Where the particles are simulated.
 };
 
 /// The live particles of a ParticleEmitter, in structure-of-arrays form (runtime state, not saved).
@@ -80,12 +90,24 @@ struct ParticleEmitter
 /// (ParticleEmitter::space).
 struct ParticlePool
 {
-    u32 capacity = 0;              ///< Slots in the arrays.
-    u32 count = 0;                 ///< Live particles.
-    f64 elapsed = 0.0;             ///< Seconds since the emitter started.
-    f64 pending = 0.0;             ///< Particles owed by the emission rate, less than one.
-    bool playing = false;          ///< Emitting (or waiting to start); false after stop() or the duration.
-    bool started = false;          ///< The burst was emitted.
+    u32 capacity = 0;     ///< Slots in the arrays.
+    u32 count = 0;        ///< Live particles.
+    f64 elapsed = 0.0;    ///< Seconds since the emitter started.
+    f64 pending = 0.0;    ///< Particles owed by the emission rate, less than one.
+    bool playing = false; ///< Emitting (or waiting to start); false after stop() or the duration.
+    bool started = false; ///< The burst was emitted.
+    /// @name GPU emitters (ParticleSimulation::Gpu)
+    /// Each ParticleWorld::update() publishes one step: its births and seconds, numbered by `gpuStep`. Every
+    /// renderer that draws the emitter simulates each new step on the GPU (the step seeds its random
+    /// numbers, so all views agree) and writes the live count it reads back into `count`.
+    /// @{
+    u32 gpuStep = 0;       ///< Steps published so far.
+    u32 gpuBirths = 0;     ///< Particles born in the last step.
+    f32 gpuSeconds = 0.0f; ///< Seconds of the last step.
+    u32 gpuQueued = 0;     ///< Births asked for by emit() since, published with the next step.
+    Vec3 gpuGravity{0.0f}; ///< Gravity of the last step, in the emitter's space for local emitters.
+    u32 gpuGeneration = 0; ///< Changes on play() and clear(): the GPU particles start afresh.
+    /// @}
     Random random{};               ///< The emitter's random numbers.
     std::unique_ptr<f32[]> data{}; ///< capacity * kFloatsPerParticle floats; see the accessors.
 
@@ -158,6 +180,14 @@ struct illusion::EnumReflection<illusion::ParticleBlend>
 {
     /// Value names.
     static constexpr std::array kValues{illusion::EnumValue{"Additive", 0}, illusion::EnumValue{"Alpha", 1}};
+};
+
+/// Names of ParticleSimulation values in scene files.
+template <>
+struct illusion::EnumReflection<illusion::ParticleSimulation>
+{
+    /// Value names.
+    static constexpr std::array kValues{illusion::EnumValue{"Cpu", 0}, illusion::EnumValue{"Gpu", 1}};
 };
 
 /// Names of ParticleSpace values in scene files.
