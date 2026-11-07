@@ -586,6 +586,12 @@ particles and physics can do together, and the engine features it needs.
   neon gate, hoops and bars, pushable orbs, ambience); the `techdemo` module walks a CharacterController with
   mouse/stick look, sprint and jump, runs the day clock (T speeds it up), lets the fireflies, lanterns and
   crickets out at night, flickers the fire and holds props kinematic until the terrain collider is ready
+- DEMO-6: ✅ A Poly Haven fir forest: `fetch_assets.py` pins 34 CC0 assets (234 files, about 900 MB: firs,
+  young firs, saplings, broad-leaved trees, grass, ferns, bushes, flowers, rocks, cliffs, dead wood, props,
+  pine needle litter), merges 16 alpha maps and writes lighter tree copies (`thin_gltf()`: evenly spread
+  foliage cards kept and enlarged, `_far` copies for the hills, texture transforms baked into the UVs);
+  `make_scene.py` builds about 14,700 entities (110 firs, 80 young firs, dense undergrowth, a richer camp,
+  the sun setting behind the neon gate); the procedural trees and bark textures are gone
 
 ## GFX — AAA look
 

@@ -3,7 +3,7 @@
   "version": 1,
   "material": {
     "name": "Grass",
-    "baseColorFactor": [1.0, 1.0, 1.0, 1.0],
+    "baseColorFactor": [0.8, 0.92, 0.62, 1.0],
     "metallicFactor": 1.0,
     "roughnessFactor": 1.0,
     "emissiveFactor": [0.0, 0.0, 0.0],

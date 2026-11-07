@@ -1,0 +1,50 @@
+{
+  "format": "illusion.material",
+  "version": 1,
+  "material": {
+    "name": "Small Tree Leaves",
+    "baseColorFactor": [1.0, 1.0, 1.0, 1.0],
+    "metallicFactor": 1.0,
+    "roughnessFactor": 1.0,
+    "emissiveFactor": [0.0, 0.0, 0.0],
+    "normalScale": 1.0,
+    "occlusionStrength": 1.0,
+    "alphaCutoff": 0.4,
+    "alphaMode": "Mask",
+    "doubleSided": true,
+    "windSway": 0.0025,
+    "windFlutter": 0.012,
+    "baseColorTexture": {
+      "image": -1,
+      "wrapU": "Repeat",
+      "wrapV": "Repeat"
+    },
+    "metallicRoughnessTexture": {
+      "image": -1,
+      "wrapU": "Repeat",
+      "wrapV": "Repeat"
+    },
+    "normalTexture": {
+      "image": -1,
+      "wrapU": "Repeat",
+      "wrapV": "Repeat"
+    },
+    "occlusionTexture": {
+      "image": -1,
+      "wrapU": "Repeat",
+      "wrapV": "Repeat"
+    },
+    "emissiveTexture": {
+      "image": -1,
+      "wrapU": "Repeat",
+      "wrapV": "Repeat"
+    }
+  },
+  "textures": {
+    "baseColor": "assets:/external/tree_small_02/textures/tree_small_02_leaves_leaves_1k.png",
+    "metallicRoughness": "assets:/external/tree_small_02/textures/tree_small_02_leaves_arm_1k.jpg",
+    "normal": "assets:/external/tree_small_02/textures/tree_small_02_leaves_nor_gl_1k.jpg",
+    "occlusion": "assets:/external/tree_small_02/textures/tree_small_02_leaves_arm_1k.jpg",
+    "emissive": ""
+  }
+}

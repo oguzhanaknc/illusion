@@ -3,16 +3,16 @@
   "version": 1,
   "material": {
     "name": "Bark",
-    "baseColorFactor": [0.5, 0.4, 0.33, 1.0],
-    "metallicFactor": 0.0,
-    "roughnessFactor": 0.9,
+    "baseColorFactor": [1.0, 1.0, 1.0, 1.0],
+    "metallicFactor": 1.0,
+    "roughnessFactor": 1.0,
     "emissiveFactor": [0.0, 0.0, 0.0],
     "normalScale": 1.0,
     "occlusionStrength": 1.0,
     "alphaCutoff": 0.5,
     "alphaMode": "Opaque",
     "doubleSided": false,
-    "windSway": 0.0006,
+    "windSway": 0.0,
     "windFlutter": 0.0,
     "baseColorTexture": {
       "image": -1,
@@ -41,10 +41,10 @@
     }
   },
   "textures": {
-    "baseColor": "assets:/models/textures/bark_diff.png",
-    "metallicRoughness": "",
-    "normal": "assets:/models/textures/bark_nor_gl.png",
-    "occlusion": "",
+    "baseColor": "assets:/external/fir_tree_01/textures/fir_tree_01_bark_diff_1k.jpg",
+    "metallicRoughness": "assets:/external/fir_tree_01/textures/fir_tree_01_bark_arm_1k.jpg",
+    "normal": "assets:/external/fir_tree_01/textures/fir_tree_01_bark_nor_gl_1k.jpg",
+    "occlusion": "assets:/external/fir_tree_01/textures/fir_tree_01_bark_arm_1k.jpg",
     "emissive": ""
   }
 }

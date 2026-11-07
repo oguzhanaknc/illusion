@@ -1,0 +1,50 @@
+{
+  "format": "illusion.material",
+  "version": 1,
+  "material": {
+    "name": "Young Fir Branches",
+    "baseColorFactor": [1.0, 1.0, 1.0, 1.0],
+    "metallicFactor": 1.0,
+    "roughnessFactor": 1.0,
+    "emissiveFactor": [0.0, 0.0, 0.0],
+    "normalScale": 1.0,
+    "occlusionStrength": 1.0,
+    "alphaCutoff": 0.5,
+    "alphaMode": "Opaque",
+    "doubleSided": false,
+    "windSway": 0.0011,
+    "windFlutter": 0.0,
+    "baseColorTexture": {
+      "image": -1,
+      "wrapU": "Repeat",
+      "wrapV": "Repeat"
+    },
+    "metallicRoughnessTexture": {
+      "image": -1,
+      "wrapU": "Repeat",
+      "wrapV": "Repeat"
+    },
+    "normalTexture": {
+      "image": -1,
+      "wrapU": "Repeat",
+      "wrapV": "Repeat"
+    },
+    "occlusionTexture": {
+      "image": -1,
+      "wrapU": "Repeat",
+      "wrapV": "Repeat"
+    },
+    "emissiveTexture": {
+      "image": -1,
+      "wrapU": "Repeat",
+      "wrapV": "Repeat"
+    }
+  },
+  "textures": {
+    "baseColor": "assets:/external/fir_sapling_medium/textures/fir_sapling_medium_branches_diff_1k.jpg",
+    "metallicRoughness": "assets:/external/fir_sapling_medium/textures/fir_sapling_medium_branches_arm_1k.jpg",
+    "normal": "assets:/external/fir_sapling_medium/textures/fir_sapling_medium_branches_nor_gl_1k.jpg",
+    "occlusion": "assets:/external/fir_sapling_medium/textures/fir_sapling_medium_branches_arm_1k.jpg",
+    "emissive": ""
+  }
+}

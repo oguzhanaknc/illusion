@@ -43,4 +43,4 @@ Access Agreement.
 
 | Assets | Source | Licence | Use | Shipped |
 | --- | --- | --- | --- | --- |
-| fern_02, grass_medium_01, shrub_01, rock_moss_set_01, boulder_01, dead_tree_trunk, Lantern_01, forest_ground_04 | [Poly Haven](https://polyhaven.com) | CC0 1.0 | The tech demo sample (`samples/techdemo/tools/fetch_assets.py`); not committed | No |
+| bark_debris_01, boulder_01, celandine_01, dandelion_01, dead_tree_trunk, dead_tree_trunk_02, dry_branches_medium_01, fern_02, fir_sapling, fir_sapling_medium, fir_tree_01, forest_leaves_04, grass_medium_01, grass_medium_02, island_tree_01, Lantern_01, nettle_plant, periwinkle_plant, pine_roots, rock_face_01, rock_moss_set_01, rock_moss_set_02, root_cluster_01, shrub_01, shrub_02, shrub_03, shrub_04, stone_01, tree_small_02, tree_stump_01, tree_stump_02, weed_plant_02, wooden_axe, wooden_lantern_01 | [Poly Haven](https://polyhaven.com) | CC0 1.0 | The tech demo sample (`samples/techdemo/tools/fetch_assets.py`); not committed | No |
