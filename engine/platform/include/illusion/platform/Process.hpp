@@ -120,6 +120,9 @@ private:
 /// A @p name with a directory part is returned as is if it exists.
 [[nodiscard]] std::optional<std::filesystem::path> findExecutable(std::string_view name);
 
+/// The value of the environment variable @p name of this process (UTF-8), or nullopt if it is not set.
+[[nodiscard]] std::optional<std::string> environmentVariable(std::string_view name);
+
 /// True if a process with id @p pid exists (it may belong to another user).
 [[nodiscard]] bool isProcessRunning(u64 pid) noexcept;
 

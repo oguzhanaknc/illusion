@@ -249,7 +249,7 @@ public:
             const BuildProgress done = m_build->progress();
             progress.done = done.done;
             progress.total = done.total;
-            progress.message = m_build->stage() == ModuleBuild::Stage::Configure ? "configuring" : "building";
+            progress.message = m_build->stage() == ModuleBuild::Stage::Build ? "building" : "configuring";
             return std::optional<ModuleBuildResult>{};
         }
         return finish(context);

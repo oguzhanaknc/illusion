@@ -275,6 +275,14 @@ TEST_CASE("isProcessRunning sees live processes and not finished ones")
     CHECK_FALSE(isProcessRunning(pid));
 }
 
+TEST_CASE("environmentVariable reads this process's variables and reports missing ones")
+{
+    const std::optional<std::string> path = environmentVariable("PATH");
+    REQUIRE(path.has_value());
+    CHECK_FALSE(path->empty());
+    CHECK_FALSE(environmentVariable("ILLUSION_NO_SUCH_VARIABLE_ANYWHERE").has_value());
+}
+
 TEST_CASE("findExecutable searches PATH and accepts paths")
 {
     CHECK(findExecutable(PROCESS_HELPER).has_value());
