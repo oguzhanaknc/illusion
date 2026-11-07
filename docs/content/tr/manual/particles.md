@@ -3,8 +3,8 @@
 Parçacık efektleri, `ParticleEmitter` taşıyan sıradan Entity'lerdir: kıvılcım, duman, toz, büyü.
 `ParticleWorld` parçacıklarını CPU'da yayar, hareket ettirir ve emekliye ayırır; bunu deterministik olarak ve
 bir efekt başladıktan sonra bellek ayırmadan yapar. Böylece efektler headless oturumlarda, testlerde ve
-tekrarlanabilir sabit adımlı play oturumlarında çalışır (ADR 0047). Canlı parçacıkları renderer çizer
-(PFX-2).
+tekrarlanabilir sabit adımlı play oturumlarında çalışır (ADR 0047). Canlı parçacıkları `SceneRenderer`
+çizer (bkz. [Çizim](#cizim)).
 
 Header'lar: `<illusion/particles/ParticleWorld.hpp>`, `<illusion/particles/ParticleComponents.hpp>`
 
@@ -73,6 +73,22 @@ const illusion::u32 alive = particles.aliveCount(entity);
 
 `play()` bir efekti birebir yeniden oynatır: her başlangıç `seed`'den aynı rastgele sayıları çeker. Inactive
 Entity'lerdeki emitter'lar duraklar.
+
+## Çizim
+
+`SceneRenderer` her canlı parçacığı kameraya bakan bir dörtgen olarak, blend Mesh'lerden sonra ve HDR görüntüye
+çizer; böylece 1'in üzerindeki renkler bloom ile parlar:
+
+- `Additive` parçacıklar ışıklarını ekler ve sıra gerektirmez. `Alpha` parçacıklar arkalarındakini örter:
+  emitter'lar en uzaktan en yakına çizilir, her birinin parçacıkları da öyle.
+- Renderer sahne derinliğini okur: bir yüzeyin arkasındaki parçacık çizilmez, ona yakın olan son 30 cm içinde
+  solar (yumuşak parçacıklar); böylece duman zemine keskin çizgiler kesmez.
+- Bir `texture`, bir `MeshRenderer`'ın Mesh'leri gibi `RenderAssetResolver` tarafından çalışma zamanı
+  Component'i `RenderParticles`'a çözülür; yoksa parçacık yumuşak yuvarlak bir noktadır.
+- Renk ve boyut, parçacıklar kare için toplanırken parçacığın yaşından hesaplanır.
+
+`RenderStats::particles` çizilen parçacıkları sayar. `render/100k-particles` GPU Benchmark'ı 100.000 parçacıklı
+tam bir kareyi ölçer.
 
 ## Parçacık havuzu
 

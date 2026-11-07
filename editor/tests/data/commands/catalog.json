@@ -13900,6 +13900,11 @@
               "minimum": 0,
               "maximum": 4294967295
             },
+            "particles": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 4294967295
+            },
             "gpu": {
               "type": "object",
               "properties": {
@@ -13926,7 +13931,7 @@
               "additionalProperties": false
             }
           },
-          "required": ["frames", "candidates", "visible", "drawCalls", "triangles", "shadowCasters", "shadowDrawCalls", "lightsDropped", "gpu"],
+          "required": ["frames", "candidates", "visible", "drawCalls", "triangles", "shadowCasters", "shadowDrawCalls", "lightsDropped", "particles", "gpu"],
           "additionalProperties": false
         },
         "_editor": {

@@ -387,7 +387,7 @@ Renderer, sahneyi dahili bir HDR görüntüye çizer ve her kareyi post-processi
    kaldırır.
 2. **Ambient occlusion** (GTAO), depth buffer'dan hesaplanır ve kıvrımlarda ve temas noktalarında
    dolaylı ışığı karartır.
-3. Gölgelendirme, gökyüzü, ardından blend Mesh'ler.
+3. Gölgelendirme, gökyüzü, blend Mesh'ler, ardından [parçacıklar](particles.md#cizim).
 4. **Temporal anti-aliasing** (isteğe bağlı), kamerayı her karede bir pikselin küçük bir kesri kadar
    kaydırıp kareleri biriktirerek kenarları ve yumuşak gölgelerin gürültüsünü yumuşatır.
 5. **Bloom**, parlak piksellerden ışığı çevreye yayar.

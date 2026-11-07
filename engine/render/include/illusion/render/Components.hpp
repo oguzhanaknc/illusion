@@ -43,9 +43,18 @@ struct RenderSky
     u64 sourceKey = 0;               ///< Key of the SkyLight it was resolved from; 0 for code.
 };
 
+/// The sprite of a ParticleEmitter on the GPU (runtime state, reflected as "illusion.RenderParticles",
+/// TypeMeta::transient). A RenderAssetResolver writes it for an emitter with a texture; emitters without
+/// one draw a soft round dot.
+struct RenderParticles
+{
+    TextureHandle texture{}; ///< Sprite texture (none: the round dot).
+    u64 sourceKey = 0;       ///< Key of the texture it was resolved from.
+};
+
 /// Reflects the render Components of SceneComponents.hpp (MeshRenderer, Camera, DirectionalLight,
 /// PointLight, SkyLight and ProceduralSky as "illusion.<Name>") with editor metadata, and RenderMesh,
-/// RenderSky as runtime state (TypeMeta::transient). Also reflects the structs
+/// RenderSky and RenderParticles as runtime state (TypeMeta::transient). Also reflects the structs
 /// ShadowSettings, PostProcessSettings (with AmbientOcclusionSettings, BloomSettings and
 /// TemporalAntiAliasingSettings) and EnvironmentDesc as "illusion.<Name>" in registry.structs().
 void reflectRenderComponents(ComponentRegistry& registry = ComponentRegistry::instance());

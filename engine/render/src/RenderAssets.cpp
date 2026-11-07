@@ -9,6 +9,7 @@
 #include <illusion/core/Profiler.hpp>
 #include <illusion/ecs/Hierarchy.hpp>
 #include <illusion/ecs/World.hpp>
+#include <illusion/particles/ParticleComponents.hpp>
 #include <illusion/render/Components.hpp>
 #include <illusion/render/RenderAssets.hpp>
 #include <illusion/render/SceneComponents.hpp>
@@ -82,6 +83,7 @@ struct TextureEntry
     TextureHandle handle;
     AssetId asset;
     bool srgb = true;
+    u32 references = 0; // resolvers that drew it on particles (material textures are kept by materials)
 };
 
 struct MaterialEntry
@@ -175,6 +177,12 @@ TextureHandle& materialTexture(MaterialDesc& desc, usize slot) noexcept
     default:
         return desc.emissive;
     }
+}
+
+// Cache key of the sRGB texture @p id: particle sprites are colour textures.
+u64 particleTextureKey(AssetId id) noexcept
+{
+    return hashCombine(id.value, u64{1});
 }
 
 u64 skyKey(AssetId environment, const ProceduralSky* sky) noexcept
@@ -454,7 +462,7 @@ struct RenderAssetCache::Impl
 
     u64 requestTexture(AssetId id, bool srgb)
     {
-        const u64 key = hashCombine(id.value, srgb ? u64{1} : u64{2});
+        const u64 key = srgb ? particleTextureKey(id) : hashCombine(id.value, u64{2});
         const auto [found, inserted] = textures.try_emplace(key);
         if (inserted)
         {
@@ -505,6 +513,8 @@ struct RenderAssetCache::Impl
                         resources->updateMaterial(material.handle, material.desc);
                     }
                 }
+                // Particles drawn with it hold the handle in RenderParticles: resolve them again.
+                epoch += entry.references > 0 ? 1u : 0u;
                 resources->releaseTexture(previous);
             }
         }
@@ -1045,7 +1055,7 @@ struct RenderAssetCache::Impl
         }
         std::erase_if(textures, [&](auto& item) {
             TextureEntry& texture = item.second;
-            if (used.contains(item.first) || busy(texture))
+            if (used.contains(item.first) || texture.references != 0 || busy(texture))
             {
                 return false;
             }
@@ -1216,6 +1226,10 @@ struct RenderAssetResolver::Impl
         for (const u64 key : heldEnvironments)
         {
             --cache->environments.at(key).references;
+        }
+        for (const u64 key : heldTextures)
+        {
+            --cache->textures.at(key).references;
         }
     }
 
@@ -1390,12 +1404,68 @@ struct RenderAssetResolver::Impl
         }
     }
 
+    // Keeps the RenderParticles of emitters with a sprite texture in step with it, as updateSkies() does.
+    void updateParticles(World& world, bool everything)
+    {
+        scratch.clear();
+        world.query<const ParticleEmitter>().without<RenderParticles, Inactive>().each(
+            [this](Entity entity, const ParticleEmitter& emitter) {
+                if (emitter.texture)
+                {
+                    scratch.push_back(entity);
+                }
+            });
+        for (const Entity entity : scratch)
+        {
+            world.emplace<RenderParticles>(entity, RenderParticles{});
+        }
+        scratch.clear();
+        world.query<const RenderParticles>().without<ParticleEmitter>().each(
+            [this](Entity entity, const RenderParticles&) { scratch.push_back(entity); });
+        world.query<const ParticleEmitter, RenderParticles>().without<Inactive>().each(
+            [this, everything](Entity entity, const ParticleEmitter& emitter, RenderParticles& target) {
+                if (!emitter.texture)
+                {
+                    scratch.push_back(entity);
+                    return;
+                }
+                const u64 key = particleTextureKey(emitter.texture.id);
+                if (key == target.sourceKey && !everything)
+                {
+                    return;
+                }
+                const u64 cacheKey = cache->requestTexture(emitter.texture.id, true);
+                TextureEntry& texture = cache->textures.at(cacheKey);
+                hold(heldTextures, cacheKey, texture.references);
+                if (texture.status == Status::Loading)
+                {
+                    ++statistics.pending;
+                    return;
+                }
+                target.texture = texture.status == Status::Ready ? texture.handle : TextureHandle{};
+                target.sourceKey = key;
+                ++statistics.resolved;
+                statistics.failures += texture.status == Status::Failed ? 1u : 0u;
+            });
+        for (const Entity entity : scratch)
+        {
+            world.remove<RenderParticles>(entity);
+        }
+    }
+
     u32 releaseUnused(World& world)
     {
         ILL_PROFILE_SCOPE_N("RenderAssetResolver::releaseUnused");
         std::unordered_set<u64> meshesInUse;
         std::unordered_set<u64> materialsInUse;
         std::unordered_set<u64> environmentsInUse;
+        std::unordered_set<u64> texturesInUse;
+        world.query<const ParticleEmitter>().each([&](Entity, const ParticleEmitter& emitter) {
+            if (emitter.texture)
+            {
+                texturesInUse.insert(particleTextureKey(emitter.texture.id));
+            }
+        });
         world.query<const MeshRenderer>().each([&](Entity, const MeshRenderer& renderer) {
             meshesInUse.insert(renderer.mesh.id.value);
             materialsInUse.insert(renderer.material.id.value);
@@ -1426,6 +1496,7 @@ struct RenderAssetResolver::Impl
         release(heldMeshes, meshesInUse, cache->meshes);
         release(heldMaterials, materialsInUse, cache->materials);
         release(heldEnvironments, environmentsInUse, cache->environments);
+        release(heldTextures, texturesInUse, cache->textures);
         return released;
     }
 
@@ -1439,6 +1510,7 @@ struct RenderAssetResolver::Impl
     std::unordered_set<u64> heldMeshes;
     std::unordered_set<u64> heldMaterials;
     std::unordered_set<u64> heldEnvironments;
+    std::unordered_set<u64> heldTextures;
 };
 
 RenderAssetResolver::RenderAssetResolver(RenderAssetCache& cache)
@@ -1460,6 +1532,7 @@ void RenderAssetResolver::update(World& world, JobSystem* jobs)
     impl.statistics.reresolves += everything ? 1u : 0u;
     impl.updateMeshes(world, jobs, everything);
     impl.updateSkies(world, everything);
+    impl.updateParticles(world, everything);
 }
 
 u32 RenderAssetResolver::releaseUnused(World& world)
