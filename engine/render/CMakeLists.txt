@@ -68,6 +68,12 @@ illusion_add_shaders(illusion_render
         shadowCasterFragment shaders/ShadowCaster.slang fragmentMain fragment
         particlesVertex shaders/Particles.slang vertexMain vertex
         particlesFragment shaders/Particles.slang fragmentMain fragment
+        particlesGpuVertex shaders/ParticlesGpu.slang vertexMain vertex
+        particlesGpuFragment shaders/ParticlesGpu.slang fragmentMain fragment
+        particleReset shaders/ParticleSimulate.slang resetMain compute
+        particleSimulate shaders/ParticleSimulate.slang simulateMain compute
+        particleSpawn shaders/ParticleSimulate.slang spawnMain compute
+        particleFinish shaders/ParticleSimulate.slang finishMain compute
         skyboxVertex shaders/Skybox.slang vertexMain vertex
         skyboxFragment shaders/Skybox.slang fragmentMain fragment
         iblEquirectToCube shaders/IblEquirectToCube.slang equirectToCube compute

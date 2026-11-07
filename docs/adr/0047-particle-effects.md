@@ -62,3 +62,13 @@ Options considered:
   Until PFX-4, this is the price of a single deterministic simulation.
 - A new saved Component needs a value for every field in the showcase scene (gate test), editor
   registration and docs, like every Component.
+
+## Addendum (PFX-4): GPU emitters
+
+`ParticleEmitter::simulation = Gpu` moves an emitter's particles to compute shaders in the renderer. To keep
+one source of time and let several views (the editor's Scene and Game views) draw the same emitter,
+`ParticleWorld` does not hand births to a renderer. Each update publishes a numbered step in the pool
+(births, seconds, gravity). Every `ParticleRenderer` that draws the emitter simulates each new step once and
+seeds the births with the step number, so the views agree without sharing GPU state. The CPU sees the live
+count through a readback a few frames late; positions stay on the GPU. CPU emitters remain the default:
+they are deterministic, readable by code, and simulated even when nothing is drawn.

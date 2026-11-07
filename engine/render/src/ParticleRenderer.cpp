@@ -36,7 +36,67 @@ struct ParticlePush
     u32 firstInstance;
     u32 textured;
     u32 padding[2];
+    Vec4 colorStart;
+    Vec4 colorEnd;
+    Vec4 size;          // x: width at birth, y: at death
+    Vec4 modelPosition; // w: 1 for local-space particles
+    Vec4 modelRotation; // quaternion xyzw
+    Vec4 modelScale;
 };
+
+// One GPU particle (ParticleState in ParticleState.slang).
+struct GpuParticleState
+{
+    Vec4 positionAge;
+    Vec4 velocityLife;
+};
+
+// Layout matches SimulateConstants in ParticleSimulate.slang.
+struct GpuSimulateConstants
+{
+    Vec4 acceleration;
+    Vec4 timing;
+    Vec4 speed;
+    Vec4 shape;
+    Vec4 position;
+    Vec4 rotation;
+    Vec4 scale;
+    u32 counts[4];
+    u32 state[4];
+};
+
+constexpr u32 kSimulateGroup = 64;
+// After this many steps without a view, a GPU emitter is simulated as if one step passed (its particles
+// do not catch up on every missed frame at once).
+constexpr u32 kMaxCatchUpSteps = 8;
+
+nvrhi::BufferHandle createGpuBuffer(nvrhi::IDevice* device, u64 bytes, u32 stride, bool raw, bool arguments,
+                                    const char* name)
+{
+    nvrhi::BufferDesc desc;
+    desc.byteSize = std::max<u64>(bytes, 16);
+    desc.structStride = stride;
+    desc.canHaveUAVs = true;
+    desc.canHaveRawViews = raw;
+    desc.isDrawIndirectArgs = arguments;
+    desc.debugName = name;
+    desc.enableAutomaticStateTracking(nvrhi::ResourceStates::UnorderedAccess);
+    return device->createBuffer(desc);
+}
+
+nvrhi::ComputePipelineHandle createCompute(nvrhi::IDevice* device, nvrhi::IBindingLayout* layout,
+                                           std::span<const std::byte> code, const char* name)
+{
+    nvrhi::ShaderHandle shader =
+        device->createShader(nvrhi::ShaderDesc().setShaderType(nvrhi::ShaderType::Compute).setDebugName(name),
+                             code.data(), code.size());
+    if (!shader)
+    {
+        return nullptr;
+    }
+    return device->createComputePipeline(
+        nvrhi::ComputePipelineDesc().setComputeShader(shader).addBindingLayout(layout));
+}
 
 nvrhi::ShaderHandle createShader(nvrhi::IDevice* device, nvrhi::ShaderType type,
                                  std::span<const std::byte> code, const char* name)
@@ -83,6 +143,37 @@ bool ParticleRenderer::initialize(nvrhi::IDevice* device, RenderResources& resou
     {
         return false;
     }
+    m_gpuVertexShader =
+        createShader(device, nvrhi::ShaderType::Vertex, shaders::particlesGpuVertex(), "Particles GPU VS");
+    m_gpuFragmentShader =
+        createShader(device, nvrhi::ShaderType::Pixel, shaders::particlesGpuFragment(), "Particles GPU FS");
+    nvrhi::BindingLayoutDesc simulate;
+    simulate.visibility = nvrhi::ShaderType::Compute;
+    simulate.registerSpace = 0;
+    simulate.registerSpaceIsDescriptorSet = true;
+    simulate.bindings = {
+        nvrhi::BindingLayoutItem::VolatileConstantBuffer(0),
+        nvrhi::BindingLayoutItem::StructuredBuffer_SRV(0),
+        nvrhi::BindingLayoutItem::StructuredBuffer_UAV(0),
+        nvrhi::BindingLayoutItem::RawBuffer_UAV(1),
+        nvrhi::BindingLayoutItem::RawBuffer_UAV(2),
+    };
+    m_simulateLayout = device->createBindingLayout(simulate);
+    m_simulateConstants = device->createBuffer(nvrhi::utils::CreateVolatileConstantBufferDesc(
+        sizeof(GpuSimulateConstants), "Particle simulation constants", 64));
+    if (!m_gpuVertexShader || !m_gpuFragmentShader || !m_simulateLayout || !m_simulateConstants)
+    {
+        return false;
+    }
+    m_reset = createCompute(device, m_simulateLayout, shaders::particleReset(), "Particles reset CS");
+    m_simulate =
+        createCompute(device, m_simulateLayout, shaders::particleSimulate(), "Particles simulate CS");
+    m_spawn = createCompute(device, m_simulateLayout, shaders::particleSpawn(), "Particles spawn CS");
+    m_finish = createCompute(device, m_simulateLayout, shaders::particleFinish(), "Particles finish CS");
+    if (!m_reset || !m_simulate || !m_spawn || !m_finish)
+    {
+        return false;
+    }
     const nvrhi::FramebufferInfo info = nvrhi::FramebufferInfo().addColorFormat(colorFormat);
     for (u32 blend = 0; blend < 2; ++blend)
     {
@@ -102,7 +193,10 @@ bool ParticleRenderer::initialize(nvrhi::IDevice* device, RenderResources& resou
             .setSrcBlendAlpha(nvrhi::BlendFactor::Zero)
             .setDestBlendAlpha(nvrhi::BlendFactor::One);
         m_pipelines[blend] = device->createGraphicsPipeline(pipeline, info);
-        if (!m_pipelines[blend])
+        pipeline.VS = m_gpuVertexShader;
+        pipeline.PS = m_gpuFragmentShader;
+        m_gpuPipelines[blend] = device->createGraphicsPipeline(pipeline, info);
+        if (!m_pipelines[blend] || !m_gpuPipelines[blend])
         {
             return false;
         }
@@ -113,11 +207,36 @@ bool ParticleRenderer::initialize(nvrhi::IDevice* device, RenderResources& resou
 u32 ParticleRenderer::prepare(World& world, const View& view)
 {
     ILL_PROFILE_SCOPE();
+    readCounts(world);
     m_particles.clear();
     m_batches.clear();
+    m_gpuBatches.clear();
+    m_gpuAlive = 0;
     world.query<const ParticleEmitter, const ParticlePool, const Transform>().without<Inactive>().each(
         [&](Entity entity, const ParticleEmitter& emitter, const ParticlePool& pool,
             const Transform& transform) {
+            if (emitter.simulation == ParticleSimulation::Gpu)
+            {
+                GpuBatch gpu{entity.toBits(), emitter,        transform,       pool.capacity,
+                             pool.gpuStep,    pool.gpuBirths, pool.gpuSeconds, pool.gpuGeneration,
+                             pool.gpuGravity};
+                if (gpu.capacity == 0)
+                {
+                    return; // not published yet
+                }
+                Batch batch;
+                batch.blend = emitter.blend;
+                batch.distance = glm::dot(transform.position - view.position, view.forward);
+                if (const RenderParticles* resolved = world.tryGet<RenderParticles>(entity))
+                {
+                    batch.texture = m_resources->texture(resolved->texture);
+                }
+                batch.gpu = static_cast<u32>(m_gpuBatches.size());
+                m_gpuBatches.push_back(gpu);
+                m_batches.push_back(batch);
+                m_gpuAlive += pool.count;
+                return;
+            }
             if (pool.count == 0)
             {
                 return;
@@ -154,9 +273,9 @@ u32 ParticleRenderer::prepare(World& world, const View& view)
     });
     for (const Batch& batch : m_batches)
     {
-        if (batch.blend != ParticleBlend::Alpha)
+        if (batch.blend != ParticleBlend::Alpha || batch.gpu != ~0u)
         {
-            continue;
+            continue; // GPU particles are drawn in the order they live in
         }
         m_order.clear();
         for (u32 i = 0; i < batch.count; ++i)
@@ -173,7 +292,132 @@ u32 ParticleRenderer::prepare(World& world, const View& view)
         }
         std::copy(m_sortScratch.begin(), m_sortScratch.end(), m_particles.begin() + batch.first);
     }
-    return static_cast<u32>(m_particles.size());
+    return static_cast<u32>(std::min<u64>(m_particles.size() + m_gpuAlive, ~0u));
+}
+
+void ParticleRenderer::readCounts(World& world)
+{
+    // The slot written kReadbackSlots frames ago: mapping it waits only if the GPU is that far behind.
+    CountReadback& slot = m_readbacks[m_frame % kReadbackSlots];
+    if (!slot.pending)
+    {
+        return;
+    }
+    slot.pending = false;
+    const auto* counts =
+        static_cast<const u32*>(m_device->mapBuffer(slot.buffer, nvrhi::CpuAccessMode::Read));
+    if (counts == nullptr)
+    {
+        return;
+    }
+    for (usize i = 0; i < slot.keys.size(); ++i)
+    {
+        const Entity entity{static_cast<u32>(slot.keys[i]), static_cast<u32>(slot.keys[i] >> 32)};
+        if (world.isAlive(entity))
+        {
+            if (ParticlePool* pool = world.tryGet<ParticlePool>(entity))
+            {
+                pool->count = counts[i];
+            }
+        }
+    }
+    m_device->unmapBuffer(slot.buffer);
+}
+
+ParticleRenderer::GpuEmitter& ParticleRenderer::gpuEmitterFor(const GpuBatch& batch)
+{
+    GpuEmitter& state = m_gpuEmitters[batch.key];
+    if (state.capacity != batch.capacity)
+    {
+        state = GpuEmitter{};
+        state.capacity = batch.capacity;
+        const u64 bytes = static_cast<u64>(batch.capacity) * sizeof(GpuParticleState);
+        for (u32 i = 0; i < 2; ++i)
+        {
+            state.states[i] =
+                createGpuBuffer(m_device, bytes, sizeof(GpuParticleState), false, false, "Particle states");
+        }
+        state.counters = createGpuBuffer(m_device, 8, 0, true, false, "Particle counts");
+        state.arguments = createGpuBuffer(m_device, 16, 0, true, true, "Particle draw arguments");
+        for (u32 current = 0; current < 2; ++current)
+        {
+            nvrhi::BindingSetDesc desc;
+            desc.bindings = {
+                nvrhi::BindingSetItem::ConstantBuffer(0, m_simulateConstants),
+                nvrhi::BindingSetItem::StructuredBuffer_SRV(0, state.states[current]),
+                nvrhi::BindingSetItem::StructuredBuffer_UAV(0, state.states[1 - current]),
+                nvrhi::BindingSetItem::RawBuffer_UAV(1, state.counters),
+                nvrhi::BindingSetItem::RawBuffer_UAV(2, state.arguments),
+            };
+            state.simulate[current] = m_device->createBindingSet(desc, m_simulateLayout);
+        }
+    }
+    return state;
+}
+
+void ParticleRenderer::simulateGpu(nvrhi::ICommandList* commands, const GpuBatch& batch, GpuEmitter& state)
+{
+    const bool reset = !state.valid || state.generation != batch.generation;
+    if (!reset && state.step == batch.step)
+    {
+        return; // this step was simulated already (another frame of the same step, or another pass)
+    }
+    const ParticleEmitter& emitter = batch.emitter;
+    const u32 missed = reset ? 1u : std::min(batch.step - state.step, kMaxCatchUpSteps);
+    GpuSimulateConstants constants{};
+    constants.acceleration = Vec4(batch.gravity * emitter.gravityFactor, emitter.drag);
+    constants.timing =
+        Vec4(batch.seconds * static_cast<f32>(missed), emitter.lifetimeMin, emitter.lifetimeMax, 0.0f);
+    constants.speed =
+        Vec4(emitter.speedMin, emitter.speedMax, emitter.spread, static_cast<f32>(emitter.shape));
+    constants.shape = Vec4(emitter.boxExtents, emitter.radius);
+    const bool world = emitter.space == ParticleSpace::World;
+    constants.position = Vec4(batch.transform.position, world ? 1.0f : 0.0f);
+    constants.rotation = Vec4(batch.transform.rotation.x, batch.transform.rotation.y,
+                              batch.transform.rotation.z, batch.transform.rotation.w);
+    constants.scale = Vec4(batch.transform.scale, 0.0f);
+    constants.counts[0] = batch.births;
+    constants.counts[1] = batch.capacity;
+    constants.counts[2] = emitter.seed;
+    constants.counts[3] = batch.step;
+    if (reset)
+    {
+        state.current = 0;
+    }
+    constants.state[0] = state.current;
+    commands->writeBuffer(m_simulateConstants, &constants, sizeof(constants));
+    nvrhi::ComputeState compute;
+    compute.bindings = {state.simulate[state.current]};
+    // Each pass reads what the previous one wrote. NVRHI does not transition bindings that stay the same,
+    // so the UAV barriers between the passes are explicit.
+    nvrhi::IBuffer* written[] = {state.states[1 - state.current], state.counters, state.arguments};
+    const auto dispatch = [&](nvrhi::IComputePipeline* pipeline, u32 groups) {
+        compute.pipeline = pipeline;
+        commands->setComputeState(compute);
+        commands->dispatch(groups);
+        for (nvrhi::IBuffer* buffer : written)
+        {
+            commands->setBufferState(buffer, nvrhi::ResourceStates::UnorderedAccess);
+        }
+        commands->commitBarriers();
+    };
+    const auto groupsFor = [](u32 threads) {
+        return std::max((threads + kSimulateGroup - 1) / kSimulateGroup, 1u);
+    };
+    if (reset)
+    {
+        dispatch(m_reset, 1);
+    }
+    dispatch(m_simulate, groupsFor(batch.capacity));
+    if (batch.births > 0)
+    {
+        dispatch(m_spawn, groupsFor(batch.births));
+    }
+    dispatch(m_finish, 1);
+    state.current = 1 - state.current;
+    state.step = batch.step;
+    state.generation = batch.generation;
+    state.valid = true;
 }
 
 void ParticleRenderer::ensureCapacity(u32 particles)
@@ -202,6 +446,11 @@ void ParticleRenderer::bindTargets(nvrhi::ITexture* color, nvrhi::ITexture* dept
     m_depth = depth;
     m_framebuffer = m_device->createFramebuffer(nvrhi::FramebufferDesc().addColorAttachment(color));
     m_bindingSets.clear();
+    for (auto& [key, emitter] : m_gpuEmitters)
+    {
+        emitter.draw[0] = nullptr; // they bind the depth
+        emitter.draw[1] = nullptr;
+    }
 }
 
 nvrhi::IBindingSet* ParticleRenderer::bindingSetFor(nvrhi::ITexture* texture)
@@ -228,15 +477,47 @@ void ParticleRenderer::draw(nvrhi::ICommandList* commands, nvrhi::ITexture* colo
                             const nvrhi::Viewport& viewport, const View& view)
 {
     m_drawCalls = 0;
-    if (m_particles.empty())
+    if (m_batches.empty())
     {
         return;
     }
     ILL_PROFILE_SCOPE();
     commands->beginMarker("Particles");
-    ensureCapacity(static_cast<u32>(m_particles.size()));
+    ensureCapacity(static_cast<u32>(std::max<usize>(m_particles.size(), 1)));
     bindTargets(color, depth);
-    commands->writeBuffer(m_instances, m_particles.data(), m_particles.size() * sizeof(Instance));
+    if (!m_particles.empty())
+    {
+        commands->writeBuffer(m_instances, m_particles.data(), m_particles.size() * sizeof(Instance));
+    }
+    // GPU emitters: one simulation step for each new step, then their live counts to the readback slot.
+    CountReadback& slot = m_readbacks[m_frame % kReadbackSlots];
+    if (!m_gpuBatches.empty())
+    {
+        commands->beginMarker("GPU particle simulation");
+        const u32 needed = static_cast<u32>(m_gpuBatches.size());
+        if (slot.capacity < needed)
+        {
+            slot.capacity = std::max(needed, slot.capacity * 2);
+            nvrhi::BufferDesc desc;
+            desc.byteSize = static_cast<u64>(slot.capacity) * sizeof(u32);
+            desc.cpuAccess = nvrhi::CpuAccessMode::Read;
+            desc.debugName = "Particle count readback";
+            desc.enableAutomaticStateTracking(nvrhi::ResourceStates::CopyDest);
+            slot.buffer = m_device->createBuffer(desc);
+        }
+        slot.keys.clear();
+        for (const GpuBatch& batch : m_gpuBatches)
+        {
+            GpuEmitter& state = gpuEmitterFor(batch);
+            simulateGpu(commands, batch, state);
+            state.seenFrame = m_frame;
+            commands->copyBuffer(slot.buffer, slot.keys.size() * sizeof(u32), state.counters,
+                                 state.current * sizeof(u32), sizeof(u32));
+            slot.keys.push_back(batch.key);
+        }
+        slot.pending = true;
+        commands->endMarker();
+    }
     GpuParticleConstants constants{};
     constants.viewProjection = view.viewProjection;
     constants.inverseProjection = glm::inverse(view.projection);
@@ -248,17 +529,62 @@ void ParticleRenderer::draw(nvrhi::ICommandList* commands, nvrhi::ITexture* colo
     commands->writeBuffer(m_constants, &constants, sizeof(constants));
     for (const Batch& batch : m_batches)
     {
+        const u32 blend = batch.blend == ParticleBlend::Additive ? 0 : 1;
         nvrhi::GraphicsState state;
-        state.pipeline = m_pipelines[batch.blend == ParticleBlend::Additive ? 0 : 1];
         state.framebuffer = m_framebuffer;
-        state.bindings = {bindingSetFor(batch.texture)};
         state.viewport.addViewportAndScissorRect(viewport);
+        ParticlePush push{};
+        push.firstInstance = batch.first;
+        push.textured = batch.texture != nullptr ? 1u : 0u;
+        if (batch.gpu == ~0u)
+        {
+            state.pipeline = m_pipelines[blend];
+            state.bindings = {bindingSetFor(batch.texture)};
+            commands->setGraphicsState(state);
+            commands->setPushConstants(&push, sizeof(push));
+            commands->draw(nvrhi::DrawArguments().setVertexCount(6).setInstanceCount(batch.count));
+            ++m_drawCalls;
+            continue;
+        }
+        const GpuBatch& gpu = m_gpuBatches[batch.gpu];
+        GpuEmitter& emitter = m_gpuEmitters.at(gpu.key);
+        nvrhi::ITexture* sprite = batch.texture != nullptr ? batch.texture : m_white.Get();
+        if (emitter.drawSprite != sprite || !emitter.draw[0])
+        {
+            emitter.drawSprite = sprite;
+            for (u32 current = 0; current < 2; ++current)
+            {
+                nvrhi::BindingSetDesc desc;
+                desc.bindings = {
+                    nvrhi::BindingSetItem::ConstantBuffer(0, m_constants),
+                    nvrhi::BindingSetItem::StructuredBuffer_SRV(0, emitter.states[current]),
+                    nvrhi::BindingSetItem::Texture_SRV(1, sprite),
+                    nvrhi::BindingSetItem::Texture_SRV(2, m_depth),
+                    nvrhi::BindingSetItem::Sampler(0, m_sampler),
+                    nvrhi::BindingSetItem::PushConstants(1, sizeof(ParticlePush)),
+                };
+                emitter.draw[current] = m_device->createBindingSet(desc, m_layout);
+            }
+        }
+        push.colorStart = gpu.emitter.colorStart;
+        push.colorEnd = gpu.emitter.colorEnd;
+        push.size = Vec4(gpu.emitter.sizeStart, gpu.emitter.sizeEnd, 0.0f, 0.0f);
+        const bool local = gpu.emitter.space == ParticleSpace::Local;
+        push.modelPosition = Vec4(gpu.transform.position, local ? 1.0f : 0.0f);
+        push.modelRotation = Vec4(gpu.transform.rotation.x, gpu.transform.rotation.y,
+                                  gpu.transform.rotation.z, gpu.transform.rotation.w);
+        push.modelScale = Vec4(gpu.transform.scale, 0.0f);
+        state.pipeline = m_gpuPipelines[blend];
+        state.bindings = {emitter.draw[emitter.current]};
+        state.indirectParams = emitter.arguments;
         commands->setGraphicsState(state);
-        const ParticlePush push{batch.first, batch.texture != nullptr ? 1u : 0u, {0, 0}};
         commands->setPushConstants(&push, sizeof(push));
-        commands->draw(nvrhi::DrawArguments().setVertexCount(6).setInstanceCount(batch.count));
+        commands->drawIndirect(0);
         ++m_drawCalls;
     }
+    // GPU state of emitters that were not drawn for a while is freed.
+    std::erase_if(m_gpuEmitters, [this](const auto& item) { return m_frame - item.second.seenFrame > 120; });
+    ++m_frame;
     commands->endMarker();
 }
 

@@ -72,7 +72,7 @@ TEST_CASE("ParticleEmitter is reflected with every field under a stable name and
     REQUIRE(id != kInvalidComponentId);
     const TypeReflection* type = registry.reflection(id);
     REQUIRE(type != nullptr);
-    CHECK(type->fields.size() == 24);
+    CHECK(type->fields.size() == 25);
     CHECK(registry.findByStableName("illusion.ParticlePool") != kInvalidComponentId);
 }
 
@@ -344,4 +344,48 @@ TEST_CASE("ParticleWorldService forwards every call to its ParticleWorld")
     CHECK_FALSE(service.isPlaying(entity));
     CHECK(service.clear(entity));
     CHECK(service.aliveCount(entity) == 0);
+}
+
+TEST_CASE("GPU emitters publish each step's births and time for the renderers and start afresh on play")
+{
+    World world;
+    ParticleWorld particles(world);
+    ParticleEmitter e = emitter(60.0f, 10.0f);
+    e.simulation = ParticleSimulation::Gpu;
+    e.burst = 5;
+    e.maxParticles = 50;
+    const Entity entity = world.create(at(Vec3(0.0f)), e);
+    particles.update(kStep);
+    ParticlePool& pool = world.get<ParticlePool>(entity);
+    CHECK(pool.gpuStep == 1);
+    CHECK(pool.gpuBirths == 6); // the burst and one particle of the rate
+    CHECK(pool.gpuSeconds == doctest::Approx(kStep));
+    CHECK(pool.data == nullptr); // no CPU particles
+    CHECK(pool.count == 0);      // the renderer writes the live count
+    particles.update(kStep);
+    CHECK(pool.gpuStep == 2);
+    CHECK(pool.gpuBirths == 1);
+
+    // emit() is published with the next step, within the room the live count leaves.
+    pool.count = 45;
+    CHECK(particles.emit(entity, 20) == 5);
+    CHECK(pool.gpuQueued == 5);
+    particles.update(kStep);
+    CHECK(pool.gpuBirths == 6);
+    CHECK(pool.gpuQueued == 0);
+
+    const u32 generation = pool.gpuGeneration;
+    CHECK(particles.clear(entity));
+    CHECK(pool.gpuGeneration == generation + 1);
+    CHECK(particles.play(entity));
+    CHECK(pool.gpuGeneration == generation + 2);
+    CHECK(particles.stop(entity));
+    particles.update(kStep);
+    CHECK(pool.gpuBirths == 0);
+
+    // Back on the CPU, the emitter gets its arrays.
+    world.get<ParticleEmitter>(entity).simulation = ParticleSimulation::Cpu;
+    CHECK(particles.play(entity));
+    run(particles, 0.5f);
+    CHECK(particles.aliveCount(entity) > 0);
 }

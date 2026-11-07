@@ -9,6 +9,7 @@
 #include <algorithm>
 #include <cmath>
 #include <numbers>
+#include <utility>
 
 namespace illusion
 {
@@ -131,11 +132,60 @@ void advance(const ParticleEmitter& emitter, ParticlePool& pool, const Vec3& gra
     }
 }
 
+// Particles the emitter owes for @p seconds of emission (its rate over the part of the step inside its
+// duration), advancing its clock; stops a timed emitter at the end of its duration.
+u32 owedParticles(const ParticleEmitter& emitter, ParticlePool& pool, f32 seconds)
+{
+    f32 emitting = seconds;
+    if (!emitter.loop)
+    {
+        const f64 left = static_cast<f64>(std::max(emitter.duration, 0.0f)) - pool.elapsed;
+        emitting = static_cast<f32>(std::clamp(left, 0.0, static_cast<f64>(seconds)));
+    }
+    pool.elapsed += static_cast<f64>(seconds);
+    // In f64 with a little slack, so that 60 steps of 10/60 particles make exactly 10.
+    pool.pending += static_cast<f64>(std::max(emitter.rate, 0.0f)) * static_cast<f64>(emitting);
+    const f64 whole = std::floor(pool.pending + 1e-9);
+    pool.pending = std::max(pool.pending - whole, 0.0);
+    if (!emitter.loop && pool.elapsed >= static_cast<f64>(emitter.duration))
+    {
+        pool.playing = false;
+    }
+    return static_cast<u32>(std::min(whole, static_cast<f64>(kMaxParticlesPerEmitter)));
+}
+
+// A GPU emitter: publish this step's births and time for the renderers to simulate (ADR 0047).
+void publishGpuStep(const ParticleEmitter& emitter, ParticlePool& pool, const Transform& transform,
+                    const Step& step)
+{
+    pool.capacity = std::clamp(emitter.maxParticles, 1u, kMaxParticlesPerEmitter);
+    u32 births = std::exchange(pool.gpuQueued, 0u);
+    if (pool.playing)
+    {
+        if (!pool.started)
+        {
+            pool.started = true;
+            births += emitter.burst;
+        }
+        births += owedParticles(emitter, pool, step.seconds);
+    }
+    pool.gpuBirths = std::min(births, pool.capacity);
+    pool.gpuSeconds = step.seconds;
+    pool.gpuGravity = emitter.space == ParticleSpace::Local ? glm::inverse(transform.rotation) * step.gravity
+                                                            : step.gravity;
+    ++pool.gpuStep;
+}
+
 void simulate(const ParticleEmitter& emitter, ParticlePool& pool, const Transform& transform,
               const Step& step)
 {
+    if (emitter.simulation == ParticleSimulation::Gpu)
+    {
+        publishGpuStep(emitter, pool, transform, step);
+        return;
+    }
     const u32 capacity = std::clamp(emitter.maxParticles, 1u, kMaxParticlesPerEmitter);
-    if (pool.capacity != capacity)
+    if (pool.capacity != capacity || !pool.data) // a GPU emitter that became a CPU one has no arrays
     {
         resize(pool, capacity);
     }
@@ -158,24 +208,7 @@ void simulate(const ParticleEmitter& emitter, ParticlePool& pool, const Transfor
         pool.started = true;
         emitParticles(emitter, pool, transform, emitter.burst);
     }
-    // Emission over the part of this step that lies inside the emitter's duration.
-    f32 emitting = step.seconds;
-    if (!emitter.loop)
-    {
-        const f64 left = static_cast<f64>(std::max(emitter.duration, 0.0f)) - pool.elapsed;
-        emitting = static_cast<f32>(std::clamp(left, 0.0, static_cast<f64>(step.seconds)));
-    }
-    pool.elapsed += static_cast<f64>(step.seconds);
-    // In f64 with a little slack, so that 60 steps of 10/60 particles make exactly 10.
-    pool.pending += static_cast<f64>(std::max(emitter.rate, 0.0f)) * static_cast<f64>(emitting);
-    const f64 whole = std::floor(pool.pending + 1e-9);
-    pool.pending = std::max(pool.pending - whole, 0.0);
-    emitParticles(emitter, pool, transform,
-                  static_cast<u32>(std::min(whole, static_cast<f64>(kMaxParticlesPerEmitter))));
-    if (!emitter.loop && pool.elapsed >= static_cast<f64>(emitter.duration))
-    {
-        pool.playing = false;
-    }
+    emitParticles(emitter, pool, transform, owedParticles(emitter, pool, step.seconds));
 }
 
 ParticlePool newPool(const ParticleEmitter& emitter, bool playing)
@@ -245,6 +278,8 @@ bool ParticleWorld::play(Entity entity)
     pool->pending = 0.0;
     pool->started = false;
     pool->playing = true;
+    pool->gpuQueued = 0;
+    ++pool->gpuGeneration;
     return true;
 }
 
@@ -278,7 +313,16 @@ u32 ParticleWorld::emit(Entity entity, u32 count)
     }
     ParticlePool& pool = m_world.get<ParticlePool>(entity);
     const u32 capacity = std::clamp(emitter->maxParticles, 1u, kMaxParticlesPerEmitter);
-    if (pool.capacity != capacity)
+    if (emitter->simulation == ParticleSimulation::Gpu)
+    {
+        // Published with the next step; the live count the renderer reports bounds what fits.
+        pool.capacity = capacity;
+        const u32 room = capacity - std::min(capacity, pool.count + pool.gpuQueued);
+        const u32 queued = std::min(count, room);
+        pool.gpuQueued += queued;
+        return queued;
+    }
+    if (pool.capacity != capacity || !pool.data) // a GPU emitter that became a CPU one has no arrays
     {
         resize(pool, capacity);
     }
@@ -295,6 +339,8 @@ bool ParticleWorld::clear(Entity entity)
         return false;
     }
     pool->count = 0;
+    pool->gpuQueued = 0;
+    ++pool->gpuGeneration;
     return true;
 }
 

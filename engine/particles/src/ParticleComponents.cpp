@@ -21,6 +21,12 @@ ParticlePool::ParticlePool(const ParticlePool& other)
     , pending(other.pending)
     , playing(other.playing)
     , started(other.started)
+    , gpuStep(other.gpuStep)
+    , gpuBirths(other.gpuBirths)
+    , gpuSeconds(other.gpuSeconds)
+    , gpuQueued(other.gpuQueued)
+    , gpuGravity(other.gpuGravity)
+    , gpuGeneration(other.gpuGeneration)
     , random(other.random)
 {
     if (other.data)
@@ -133,7 +139,11 @@ void reflectParticleComponents(ComponentRegistry& registry)
                 .category = "Look",
                 .assetKind = AssetKind::Texture})
         .field("seed", &ParticleEmitter::seed,
-               {.description = "Equal seeds give equal particles.", .category = "Emission"});
+               {.description = "Equal seeds give equal particles.", .category = "Emission"})
+        .field("simulation", &ParticleEmitter::simulation,
+               {.description =
+                    "Cpu: deterministic and readable by code; Gpu: compute shaders, for very large emitters.",
+                .category = "Emission"});
     reflectRuntime<ParticlePool>("illusion.ParticlePool", {.displayName = "Particle pool"}, registry);
 }
 

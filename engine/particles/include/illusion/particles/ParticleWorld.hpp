@@ -22,9 +22,10 @@ struct ParticleWorldDesc
 };
 
 /// Emits, moves and retires the particles of every ParticleEmitter in a World, keeping them in the
-/// emitters' ParticlePool Components. Deterministic: the same emitters, seeds and time steps give the same
-/// particles, whatever the number of threads. Allocates only when a pool is created or its capacity
-/// changes. Emitters on Inactive entities pause.
+/// emitters' ParticlePool Components. Emitters with ParticleSimulation::Gpu only keep time here: their births
+/// and seconds are queued in the pool for the renderer, which simulates them on the GPU. Deterministic: the
+/// same emitters, seeds and time steps give the same particles, whatever the number of threads. Allocates
+/// only when a pool is created or its capacity changes. Emitters on Inactive entities pause.
 class ParticleWorld : NonCopyable
 {
 public:

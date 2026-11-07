@@ -1,10 +1,13 @@
 #pragma once
 
 // Internal: draws the live particles of every ParticlePool as camera-facing billboards (ADR 0047). Used by
-// SceneRenderer after the blended geometry, in the HDR target.
+// SceneRenderer after the blended geometry, in the HDR target. CPU-simulated emitters are uploaded each
+// frame; GPU-simulated ones (ParticleSimulation::Gpu) are simulated here in compute shaders, one step for
+// every step ParticleWorld published, and drawn from their state buffers with indirect draws.
 
 #include <illusion/core/Base.hpp>
 #include <illusion/core/Math.hpp>
+#include <illusion/ecs/Transform.hpp>
 #include <illusion/particles/ParticleComponents.hpp>
 
 #include <nvrhi/nvrhi.h>
@@ -65,7 +68,54 @@ private:
         ParticleBlend blend = ParticleBlend::Additive;
         nvrhi::ITexture* texture = nullptr; // null: the round dot
         f32 distance = 0.0f;                // of the emitter from the camera, for sorting
+        u32 gpu = ~0u;                      // index in m_gpuBatches for a GPU emitter
     };
+
+    // What a GPU emitter needs this frame (gathered by prepare()).
+    struct GpuBatch
+    {
+        u64 key = 0; // Entity::toBits()
+        ParticleEmitter emitter;
+        Transform transform;
+        u32 capacity = 0;
+        u32 step = 0;
+        u32 births = 0;
+        f32 seconds = 0.0f;
+        u32 generation = 0;
+        Vec3 gravity{0.0f};
+    };
+
+    // The GPU state of one emitter, kept between frames.
+    struct GpuEmitter
+    {
+        nvrhi::BufferHandle states[2];
+        nvrhi::BufferHandle counters;        // uint[2]: live particles of states[0] and states[1]
+        nvrhi::BufferHandle arguments;       // DrawIndirectArguments of the current buffer
+        nvrhi::BindingSetHandle simulate[2]; // [current]: input states[current], output the other
+        nvrhi::BindingSetHandle draw[2];     // [current]
+        nvrhi::ITexture* drawSprite = nullptr;
+        u32 capacity = 0;
+        u32 current = 0;
+        u32 step = 0;
+        u32 generation = 0;
+        bool valid = false; // simulated at least once since it was (re)created or reset
+        u32 seenFrame = 0;
+    };
+
+    // A readback slot: the live counts of the GPU emitters drawn in one frame.
+    struct CountReadback
+    {
+        nvrhi::BufferHandle buffer;
+        u32 capacity = 0;
+        std::vector<u64> keys;
+        bool pending = false;
+    };
+
+    static constexpr u32 kReadbackSlots = 3;
+
+    void simulateGpu(nvrhi::ICommandList* commands, const GpuBatch& batch, GpuEmitter& state);
+    GpuEmitter& gpuEmitterFor(const GpuBatch& batch);
+    void readCounts(World& world);
 
     nvrhi::IBindingSet* bindingSetFor(nvrhi::ITexture* texture);
     void ensureCapacity(u32 particles);
@@ -76,7 +126,21 @@ private:
     nvrhi::ShaderHandle m_vertexShader;
     nvrhi::ShaderHandle m_fragmentShader;
     nvrhi::BindingLayoutHandle m_layout;
-    nvrhi::GraphicsPipelineHandle m_pipelines[2]; // [ParticleBlend]
+    nvrhi::GraphicsPipelineHandle m_pipelines[2];    // [ParticleBlend]
+    nvrhi::GraphicsPipelineHandle m_gpuPipelines[2]; // [ParticleBlend], drawing GPU state buffers
+    nvrhi::ShaderHandle m_gpuVertexShader;
+    nvrhi::ShaderHandle m_gpuFragmentShader;
+    nvrhi::BindingLayoutHandle m_simulateLayout;
+    nvrhi::ComputePipelineHandle m_reset;
+    nvrhi::ComputePipelineHandle m_simulate;
+    nvrhi::ComputePipelineHandle m_spawn;
+    nvrhi::ComputePipelineHandle m_finish;
+    nvrhi::BufferHandle m_simulateConstants;
+    std::unordered_map<u64, GpuEmitter> m_gpuEmitters;
+    std::vector<GpuBatch> m_gpuBatches;
+    CountReadback m_readbacks[kReadbackSlots];
+    u32 m_frame = 0;
+    u64 m_gpuAlive = 0;
     nvrhi::BufferHandle m_constants;
     nvrhi::BufferHandle m_instances;
     u32 m_capacity = 0;

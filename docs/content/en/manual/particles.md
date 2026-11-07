@@ -57,6 +57,7 @@ the physics gravity.
 | `space` | `World`: particles stay where they were born; `Local`: they move with the emitter. |
 | `texture` | Sprite texture; none draws a soft round dot. |
 | `seed` | Equal seeds give equal particles. |
+| `simulation` | `Cpu` (default) or `Gpu`: see [GPU simulation](#gpu-simulation). |
 
 Colour and size are interpolated from the particle's age; `particleColor()` and `particleSize()` give the
 values for a fraction of the life.
@@ -130,6 +131,26 @@ void onLanding(illusion::ModuleContext& context, illusion::Entity dust)
     }
 }
 ```
+
+## GPU simulation
+
+With `simulation` set to `Gpu`, an emitter's particles live on the GPU: the renderer ages, moves, retires and
+spawns them in compute shaders and draws them from their state buffer with an indirect draw, so a frame of a
+million particles costs a millisecond or two instead of a CPU pass and an upload (GPU benchmark
+`render/1m-gpu-particles`). Each emitter holds up to 65,536 particles.
+
+`ParticleWorld` still keeps the emitter's time: every update publishes one step (its births and seconds,
+numbered), and every view that draws the emitter simulates each new step. The step number seeds the births,
+so the Scene view and the Game view show the same particles. In exchange:
+
+- The particles are not in `ParticlePool`: code and tests cannot read their positions. `aliveCount()` and
+  `particles.stats` report the count a view read back from the GPU a few frames ago.
+- They move only where a view draws them, and a view that has not drawn an emitter for a while catches up by
+  a few steps, not all of them.
+- Alpha particles are drawn in the order they live in, without sorting.
+
+Use the CPU simulation for gameplay effects that code reads or that must repeat exactly in tests; use the GPU
+for large, decorative ones: fireflies, snow, rain, embers.
 
 ## The particle pool
 
