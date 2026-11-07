@@ -370,7 +370,7 @@ The renderer shades into an internal HDR image and finishes each frame with post
 
 1. A depth prepass for opaque and alpha-masked Meshes, which also removes overdraw from shading.
 2. **Ambient occlusion** (GTAO) from the depth buffer darkens indirect light in creases and contacts.
-3. Shading, the sky, then blended Meshes.
+3. Shading, the sky, blended Meshes, then [particles](particles.md#drawing).
 4. **Temporal anti-aliasing** (optional) smooths edges and the noise of soft shadows by jittering the
    camera by a fraction of a pixel every frame and accumulating frames.
 5. **Bloom** spreads light from bright pixels.

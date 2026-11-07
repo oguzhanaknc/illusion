@@ -3,7 +3,7 @@
 Particle effects are ordinary Entities with a `ParticleEmitter`: sparks, smoke, dust, magic. `ParticleWorld`
 emits, moves and retires their particles on the CPU, deterministically and without allocating once an
 effect has started, so effects work in headless sessions, in tests and in repeatable fixed-step play
-sessions (ADR 0047). The renderer draws the live particles (PFX-2).
+sessions (ADR 0047). `SceneRenderer` draws the live particles (see [Drawing](#drawing)).
 
 Headers: `<illusion/particles/ParticleWorld.hpp>`, `<illusion/particles/ParticleComponents.hpp>`
 
@@ -72,6 +72,22 @@ const illusion::u32 alive = particles.aliveCount(entity);
 
 `play()` replays an effect exactly: every start draws the same random numbers from `seed`. Emitters on
 Inactive entities pause.
+
+## Drawing
+
+`SceneRenderer` draws every live particle as a quad facing the camera, after the blended Meshes and into the
+HDR image, so colours above 1 glow through bloom:
+
+- `Additive` particles add their light and need no order. `Alpha` particles cover what is behind them: the
+  emitters are drawn from the farthest to the nearest, and so are the particles of each.
+- The renderer reads the scene depth: a particle behind a surface is not drawn, and one close to it fades
+  out over the last 30 cm (soft particles), so smoke does not cut sharp lines into the ground.
+- A `texture` is resolved by `RenderAssetResolver` into the runtime Component `RenderParticles`, like the
+  Meshes of a `MeshRenderer`; without one, a particle is a soft round dot.
+- Colour and size come from the particle's age, computed when the particles are gathered for the frame.
+
+`RenderStats::particles` counts the particles drawn. The GPU benchmark `render/100k-particles` measures a
+full frame with 100,000 of them.
 
 ## The particle pool
 

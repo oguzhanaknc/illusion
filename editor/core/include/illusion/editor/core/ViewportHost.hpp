@@ -179,6 +179,7 @@ struct ViewportRenderStats
     u32 shadowCasters = 0;    ///< Shadow-caster instances, summed over cascades.
     u32 shadowDrawCalls = 0;  ///< Draw calls for shadows.
     u32 lightsDropped = 0;    ///< Active lights beyond the renderer's limits.
+    u32 particles = 0;        ///< Live particles drawn.
     ViewportGpuTimings gpu{}; ///< GPU time of its passes.
 };
 

@@ -10,6 +10,7 @@
 #include <illusion/ecs/Reflection.hpp>
 #include <illusion/ecs/SceneSerializer.hpp>
 #include <illusion/ecs/World.hpp>
+#include <illusion/particles/ParticleComponents.hpp>
 #include <illusion/render/Components.hpp>
 #include <illusion/render/RenderAssets.hpp>
 #include <illusion/render/RenderDevice.hpp>
@@ -148,6 +149,7 @@ void reflectAll()
     reflectCoreComponents();
     reflectAssetStructs();
     reflectRenderComponents();
+    reflectParticleComponents();
 }
 
 } // namespace
@@ -412,6 +414,40 @@ TEST_CASE("sky lights resolve procedural and file environments")
         resolver.update(world);
         CHECK_FALSE(world.has<RenderSky>(file));
         CHECK(world.has<RenderSky>(coded));
+    }
+    device->waitIdle();
+    CHECK(device->validationErrorCount() == 0);
+}
+
+TEST_CASE("particle emitters resolve their sprite texture and release it when it is gone")
+{
+    reflectAll();
+    auto device = RenderDevice::create(headless());
+    REQUIRE(device != nullptr);
+    {
+        test::AssetProject project;
+        JobSystem jobs(JobSystemDesc{2, 256});
+        AssetStreamer streamer(project.files, jobs);
+        RenderResources resources(*device);
+        RenderAssetCache cache(resources, streamer, smallBakes());
+        RenderAssetResolver resolver(cache);
+        World world;
+        ParticleEmitter sprite;
+        sprite.texture = AssetRef("game:/textures/checker.png");
+        const Entity textured = world.create(Transform{}, sprite);
+        const Entity plain = world.create(Transform{}, ParticleEmitter{});
+        resolver.waitIdle(world);
+        REQUIRE(world.has<RenderParticles>(textured));
+        CHECK(resources.isValid(world.get<RenderParticles>(textured).texture));
+        CHECK_FALSE(world.has<RenderParticles>(plain)); // no texture: the round dot
+
+        // The texture is in use: eviction keeps it. Once no emitter uses it, it can go.
+        CHECK(cache.evictUnused() == 0);
+        world.get<ParticleEmitter>(textured).texture = AssetRef();
+        resolver.update(world);
+        CHECK_FALSE(world.has<RenderParticles>(textured));
+        CHECK(resolver.releaseUnused(world) == 1);
+        CHECK(cache.evictUnused() == 1); // the texture
     }
     device->waitIdle();
     CHECK(device->validationErrorCount() == 0);

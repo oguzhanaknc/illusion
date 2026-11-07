@@ -2103,6 +2103,7 @@ Expected<ViewportRenderStats, CommandError> ViewportService::renderStats(std::st
                                stats.shadowCasters,
                                stats.shadowDrawCalls,
                                stats.lightsDropped,
+                               stats.particles,
                                ViewportGpuTimings{gpu.available && gpu.valid, gpu.shadows, gpu.depth,
                                                   gpu.ambientOcclusion, gpu.shading, gpu.post}};
 }

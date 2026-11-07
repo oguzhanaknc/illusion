@@ -3,7 +3,8 @@
 /// @file
 /// Forward PBR renderer for ECS scenes: frustum culling (parallel on the Job System), sorting into
 /// instanced batches, cascaded soft shadows, a depth prepass, HDR shading (opaque, then
-/// back-to-front transparent), reversed-Z depth, then ambient occlusion, TAA, bloom and tonemapping.
+/// back-to-front transparent, then particles), reversed-Z depth, then ambient occlusion, TAA, bloom and
+/// tonemapping.
 
 #include <illusion/core/Base.hpp>
 #include <illusion/core/Math.hpp>
@@ -84,6 +85,7 @@ struct RenderStats
     u32 shadowCasters = 0;   ///< Shadow-caster instances, summed over cascades.
     u32 shadowDrawCalls = 0; ///< Instanced draw calls issued for shadows.
     u32 lightsDropped = 0;   ///< Active lights beyond the directional and point light limits.
+    u32 particles = 0;       ///< Live particles drawn (ParticleEmitter, ADR 0047).
 };
 
 /// Completed GPU pass measurements in milliseconds, obtained without blocking the graphics queue.

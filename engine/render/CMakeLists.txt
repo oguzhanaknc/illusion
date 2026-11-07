@@ -6,6 +6,7 @@ add_library(illusion_render STATIC
     src/DebugTriangle.cpp
     src/EnvironmentBaker.cpp
     src/GpuCulling.cpp
+    src/ParticleRenderer.cpp
     src/PostProcessor.cpp
     src/ReadbackRing.cpp
     src/RenderAssets.cpp
@@ -24,7 +25,7 @@ target_include_directories(illusion_render PUBLIC
 illusion_require_dependency(nvrhi)
 illusion_require_dependency(glfw)
 target_link_libraries(illusion_render
-    PUBLIC illusion::core illusion::platform illusion::assets nvrhi
+    PUBLIC illusion::core illusion::platform illusion::assets illusion::particles nvrhi
     PRIVATE nvrhi_vk Vulkan::Headers glfw)
 
 if(UNIX AND NOT APPLE)
@@ -65,6 +66,8 @@ illusion_add_shaders(illusion_render
         tonemapFragment shaders/Tonemap.slang fragmentMain fragment
         shadowCasterVertex shaders/ShadowCaster.slang vertexMain vertex
         shadowCasterFragment shaders/ShadowCaster.slang fragmentMain fragment
+        particlesVertex shaders/Particles.slang vertexMain vertex
+        particlesFragment shaders/Particles.slang fragmentMain fragment
         skyboxVertex shaders/Skybox.slang vertexMain vertex
         skyboxFragment shaders/Skybox.slang fragmentMain fragment
         iblEquirectToCube shaders/IblEquirectToCube.slang equirectToCube compute

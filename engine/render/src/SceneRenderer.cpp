@@ -1,4 +1,5 @@
 #include "GpuCulling.hpp"
+#include "ParticleRenderer.hpp"
 #include "PostProcessor.hpp"
 #include "RenderResourcesImpl.hpp"
 
@@ -235,6 +236,7 @@ struct SceneRenderer::Impl
     PostProcessor post;
     bool postDirty = true;
     GpuCulling culling;
+    ParticleRenderer particles;
     std::vector<GpuCulling::Candidate> cullCandidates;
     std::vector<GpuCulling::Batch> cullBatches;
     std::vector<u32> batchStarts; // first camera-order index of each opaque batch
@@ -605,7 +607,8 @@ bool SceneRenderer::Impl::initialize()
         }
     }
     ensureInstanceCapacity(1024);
-    if (!post.initialize(device, desc.colorFormat) || !culling.initialize(device))
+    if (!post.initialize(device, desc.colorFormat) || !culling.initialize(device) ||
+        !particles.initialize(device, *resources, kHdrFormat))
     {
         return false;
     }
@@ -1084,6 +1087,16 @@ void SceneRenderer::render(nvrhi::ICommandList* commandList, nvrhi::ITexture* co
     f32 angularDiameter = 0.0f;
     const i32 shadowedLight = impl.gatherLights(world, constants, angularDiameter);
 
+    // Particles face the camera: its right and up axes are the first two rows of the view matrix.
+    const ParticleRenderer::View particleView{.viewProjection = constants.viewProjection,
+                                              .projection = projection,
+                                              .position = view.position,
+                                              .forward = Vec3(constants.cameraForward),
+                                              .right =
+                                                  Vec3(view.view[0][0], view.view[1][0], view.view[2][0]),
+                                              .up = Vec3(view.view[0][1], view.view[1][1], view.view[2][1])};
+    impl.stats.particles = impl.particles.prepare(world, particleView);
+
     // Shadow cascades for the first shadow-casting directional light.
     const ShadowSettings& shadowSettings = impl.desc.shadows;
     impl.cascades = ShadowCascades{};
@@ -1471,6 +1484,9 @@ void SceneRenderer::render(nvrhi::ICommandList* commandList, nvrhi::ITexture* co
         ++impl.stats.drawCalls;
         impl.stats.triangles += submesh.indexCount / 3;
     }
+    // Particles after the blended geometry, into the HDR colour so bright ones feed bloom.
+    impl.particles.draw(commandList, impl.hdr, impl.depth, viewport, particleView);
+    impl.stats.drawCalls += impl.particles.drawCalls();
     if (impl.wireframe)
     {
         forEachGroup([&](u32 first, u32 count, const DrawItem& item) {

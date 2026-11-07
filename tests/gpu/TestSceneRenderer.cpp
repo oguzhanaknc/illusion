@@ -5,6 +5,9 @@
 #include <illusion/core/JobSystem.hpp>
 #include <illusion/ecs/Hierarchy.hpp>
 #include <illusion/ecs/World.hpp>
+#include <illusion/particles/ParticleComponents.hpp>
+#include <illusion/particles/ParticleWorld.hpp>
+#include <illusion/render/Components.hpp>
 #include <illusion/render/RenderDevice.hpp>
 #include <illusion/render/RenderResources.hpp>
 #include <illusion/render/SceneRenderer.hpp>
@@ -16,6 +19,7 @@
 #include <cmath>
 #include <cstdlib>
 #include <cstring>
+#include <memory>
 #include <numbers>
 
 using namespace illusion;
@@ -799,6 +803,127 @@ TEST_CASE("bindless multi-draw rendering matches per-material rendering")
         }
         CHECK(maxDifference <= 2);
         CHECK(covered > 500); // the scene is actually drawn
+    }
+    device->waitIdle();
+    CHECK(device->validationErrorCount() == 0);
+}
+
+namespace
+{
+
+// A renderer without bloom or temporal anti-aliasing, so a pixel shows exactly what was drawn there.
+std::unique_ptr<SceneRenderer> plainRenderer(RenderDevice& device, RenderResources& resources)
+{
+    auto renderer = SceneRenderer::create(device, resources, unormTarget());
+    REQUIRE(renderer != nullptr);
+    PostProcessSettings settings = renderer->postProcessSettings();
+    settings.bloom.enabled = false;
+    settings.temporalAntiAliasing.enabled = false;
+    settings.ambientOcclusion.enabled = false;
+    renderer->setPostProcessSettings(settings);
+    return renderer;
+}
+
+// @p count particles of @p color and width @p size at @p position, alive for a long time and not moving.
+Entity particlesAt(World& world, ParticleWorld& particles, Vec3 position, Vec4 color, f32 size, u32 count,
+                   ParticleBlend blend)
+{
+    ParticleEmitter emitter;
+    emitter.rate = 0.0f;
+    emitter.burst = count;
+    emitter.speedMin = 0.0f;
+    emitter.speedMax = 0.0f;
+    emitter.lifetimeMin = 100.0f;
+    emitter.lifetimeMax = 100.0f;
+    emitter.sizeStart = size;
+    emitter.sizeEnd = size;
+    emitter.colorStart = color;
+    emitter.colorEnd = color;
+    emitter.blend = blend;
+    Transform transform;
+    transform.position = position;
+    const Entity entity = world.create(transform, emitter);
+    particles.update(1.0f / 60.0f);
+    return entity;
+}
+
+} // namespace
+
+TEST_CASE("particles are drawn as camera-facing quads with a soft round edge and counted")
+{
+    auto device = RenderDevice::create(headless());
+    REQUIRE(device != nullptr);
+    {
+        RenderResources resources(*device);
+        auto renderer = plainRenderer(*device, resources);
+        World world;
+        ParticleWorld particles(world);
+        particlesAt(world, particles, Vec3(0.0f), Vec4(4.0f, 0.0f, 0.0f, 1.0f), 2.0f, 1,
+                    ParticleBlend::Additive);
+        const std::vector<u8> pixels = renderScene(*device, *renderer, world, nullptr);
+        CHECK(pixelAt(pixels, 32, 32).r > 150); // the middle of the dot
+        CHECK(pixelAt(pixels, 32, 32).g == 0);
+        CHECK(pixelAt(pixels, 2, 2).r == 0); // far outside it
+        CHECK(renderer->stats().particles == 1);
+        // The dot fades towards the edge of its quad.
+        CHECK(pixelAt(pixels, 40, 32).r + 20 < pixelAt(pixels, 32, 32).r);
+    }
+    device->waitIdle();
+    CHECK(device->validationErrorCount() == 0);
+}
+
+TEST_CASE("particles behind a surface are hidden and alpha particles cover what is behind them")
+{
+    auto device = RenderDevice::create(headless());
+    REQUIRE(device != nullptr);
+    {
+        RenderResources resources(*device);
+        auto renderer = plainRenderer(*device, resources);
+        MaterialDesc black;
+        black.parameters.baseColorFactor = Vec4(0.0f, 0.0f, 0.0f, 1.0f);
+        const MeshHandle cube = resources.createMesh(makeCube(), "Cube");
+        World world;
+        ParticleWorld particles(world);
+        // A black wall between the camera and red particles.
+        Transform wall;
+        wall.position = Vec3(0.0f, 0.0f, 1.0f);
+        wall.scale = Vec3(4.0f, 4.0f, 0.1f);
+        const Entity blocker = world.create(wall, RenderMesh{cube, 0, resources.createMaterial(black)});
+        particlesAt(world, particles, Vec3(0.0f), Vec4(8.0f, 0.0f, 0.0f, 1.0f), 4.0f, 1,
+                    ParticleBlend::Additive);
+        CHECK(pixelAt(renderScene(*device, *renderer, world, nullptr), 32, 32).r == 0);
+
+        // Without the wall, an opaque black alpha particle in front darkens the red ones behind.
+        world.destroy(blocker);
+        particlesAt(world, particles, Vec3(0.0f, 0.0f, 2.0f), Vec4(0.0f, 0.0f, 0.0f, 1.0f), 0.5f, 1,
+                    ParticleBlend::Alpha);
+        const std::vector<u8> pixels = renderScene(*device, *renderer, world, nullptr);
+        CHECK(pixelAt(pixels, 32, 32).r < 40);
+        CHECK(pixelAt(pixels, 32, 24).r > 100); // beside the small black one, the red shows
+    }
+    device->waitIdle();
+    CHECK(device->validationErrorCount() == 0);
+}
+
+TEST_CASE("a sprite texture colours the particles that use it")
+{
+    auto device = RenderDevice::create(headless());
+    REQUIRE(device != nullptr);
+    {
+        RenderResources resources(*device);
+        auto renderer = plainRenderer(*device, resources);
+        World world;
+        ParticleWorld particles(world);
+        const Entity entity = particlesAt(world, particles, Vec3(0.0f), Vec4(8.0f, 8.0f, 8.0f, 1.0f), 2.0f, 1,
+                                          ParticleBlend::Additive);
+        const TextureHandle blue = resources.createTexture(
+            makeSolidImage(4, 4, Vec4(0.0f, 0.0f, 1.0f, 1.0f), ImageFormat::RGBA8Srgb));
+        world.emplace<RenderParticles>(entity, RenderParticles{blue, 0});
+        const std::vector<u8> pixels = renderScene(*device, *renderer, world, nullptr);
+        CHECK(pixelAt(pixels, 32, 32).b > 200);
+        CHECK(pixelAt(pixels, 32, 32).r == 0);
+        // The sprite covers the whole quad: no round falloff.
+        CHECK(pixelAt(pixels, 40, 32).b > 200);
     }
     device->waitIdle();
     CHECK(device->validationErrorCount() == 0);

@@ -480,6 +480,7 @@ void reflectCoreCommandTypes(StructRegistry& structs)
             .field("shadowCasters", &ViewportRenderStats::shadowCasters)
             .field("shadowDrawCalls", &ViewportRenderStats::shadowDrawCalls)
             .field("lightsDropped", &ViewportRenderStats::lightsDropped)
+            .field("particles", &ViewportRenderStats::particles)
             .field("gpu", &ViewportRenderStats::gpu);
         reflectStruct<RenderStatsResult>("editor.RenderStatsResult", 1, structs)
             .field("viewport", &RenderStatsResult::viewport)
