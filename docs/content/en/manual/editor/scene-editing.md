@@ -2,6 +2,8 @@
 
 The Outliner and the Inspector are the two primary panels for building and editing a scene in `illusion_editor`. Every action in both panels runs an [editor command](../../reference/editor-commands.md), so edits made by hand and edits made by an AI agent share the same undo history, validation rules and transactions.
 
+![The Crate selected: its Transform, Collider and MeshRenderer Components in the Inspector](../../images/editor/scene-editing.png)
+
 ## Outliner
 
 The Outliner lists every entity in the open scene as a tree ordered by hierarchy (`HierarchyIndex`). Disabled entities (and descendants of disabled entities, which carry the `Inactive` tag) are drawn in dimmed italics.

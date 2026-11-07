@@ -75,6 +75,9 @@ CHECK(driver.click("gallery.save"));
   `GoldenSupport.hpp`). After an intended visual
   change: run `illusion_editor_gpu_tests` with `ILLUSION_UPDATE_GOLDENS=1`, open the changed PNGs, check
   them, commit them. Captures of every run land in `<build>/ui-captures/`.
+- The editor manual's screenshots (`docs/content/en/images/editor`) are goldens of the GPU test
+  `docs.screenshots` (`docs/screenshots/manual.jsonl`); a UI change that moves them needs
+  `ILLUSION_UPDATE_GOLDENS=1 ctest -R docs.screenshots` and a look at the new images.
 - Look at your change: `illusion_ui_gallery --headless --page widgets --theme dark --screenshot out.png`,
   also with `--theme high-contrast`, `--scale 1.5` and `--locale en-XA` (long, accented text).
 

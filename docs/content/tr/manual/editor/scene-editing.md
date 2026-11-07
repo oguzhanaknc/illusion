@@ -2,6 +2,8 @@
 
 Outliner ve Inspector, `illusion_editor` içinde bir sahneyi kurmak ve düzenlemek için kullanılan iki ana paneldir. Her iki paneldeki her eylem bir [Editor command](../../reference/editor-commands.md) çalıştırır; böylece elle yapılan düzenlemeler ile bir yapay zekâ ajanının yaptığı düzenlemeler aynı undo geçmişini, doğrulama kurallarını ve transaction'ları paylaşır.
 
+![Seçili Crate: Inspector'da Transform, Collider ve MeshRenderer Component'leri](../../images/editor/scene-editing.png)
+
 ## Outliner
 
 Outliner, açık sahnedeki her Entity'yi hiyerarşi sırasına (`HierarchyIndex`) göre bir ağaç olarak listeler. Devre dışı Entity'ler (ve devre dışı Entity'lerin `Inactive` etiketini taşıyan alt Entity'leri) soluk eğik yazı ile çizilir.

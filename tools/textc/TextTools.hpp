@@ -12,6 +12,7 @@
 #include <optional>
 #include <string>
 #include <string_view>
+#include <utility>
 #include <vector>
 
 namespace illusion::text::tools
@@ -60,6 +61,34 @@ std::optional<LocaleFile> checkEnglish(std::string_view json, std::string_view f
 /// Checks the translation @p json against @p english.
 void checkTranslation(const LocaleFile& english, std::string_view json, std::string_view file,
                       const CheckOptions& options, CheckReport& report);
+
+/// The frozen English strings of a string table (`en.freeze.json` next to `en.json`): what translators were
+/// given at a string freeze. Each key maps to the source hash of its English text.
+struct StringFreeze
+{
+    std::string name;                                 ///< The freeze, e.g. "M7".
+    std::vector<std::pair<std::string, u64>> strings; ///< Keys and source hashes, sorted by key.
+};
+
+/// The name of the freeze file next to `en.json`.
+inline constexpr std::string_view kFreezeFileName = "en.freeze.json";
+
+/// True if @p name can name a freeze: 1 to 32 ASCII letters, digits, '.', '-' or '_'.
+[[nodiscard]] bool isValidFreezeName(std::string_view name) noexcept;
+
+/// The freeze of every string of @p english, named @p name (a valid freeze name).
+[[nodiscard]] StringFreeze freezeStrings(const LocaleFile& english, std::string_view name);
+
+/// @p freeze as the text of a freeze file (sorted keys, one per line, ending with a newline).
+[[nodiscard]] std::string writeFreeze(const StringFreeze& freeze);
+
+/// Parses the freeze file @p json. Returns the freeze or a description of the first problem.
+[[nodiscard]] Expected<StringFreeze, std::string> parseFreeze(std::string_view json);
+
+/// Checks the English source @p english against its freeze @p freeze (file name @p file for messages): a
+/// frozen key that is gone or whose English text changed is an error. Keys added after the freeze are fine.
+void checkFreeze(const LocaleFile& english, const StringFreeze& freeze, std::string_view file,
+                 CheckReport& report);
 
 /// What generateStringTable() needs besides the English file.
 struct GenerateOptions

@@ -27,6 +27,10 @@ table: a key, its English text in `en.json`, and translations in `<locale>.json`
 Changing the English text of an existing key makes every translation of it stale (the check warns until
 its `source` hash is updated). Change keys only when the meaning changes.
 
+The editor and input tables are frozen (`en.freeze.json`, string freeze M7): changing or removing a frozen
+string fails `text.locales`. Add a new key instead; re-freeze (`illusion_textc freeze --name <freeze> <dir>`)
+only when the owner announces a new freeze to translators. New keys need no freeze.
+
 ## Adding a string table
 
 1. Create `data/locales/en.json` with `"format": "illusion.locale"`, `"version": 1`, `"locale": "en"`,

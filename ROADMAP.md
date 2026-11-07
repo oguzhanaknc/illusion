@@ -88,6 +88,9 @@ ADRs for its significant decisions. Items marked ✅ are done.
 
 Plan: `docs/plans/m7-editor.md` (sub-milestones, command API, localization, theme, acceptance test).
 
+Status: every sub-milestone is done except M7x-3 (the recorded live-agent transcript and its nightly
+workflow), which waits for the owner's API key and budget; M7 gets its ✅ with it.
+
 - M7a: ✅ Core toolkit for tools: non-throwing JSON API with canonical writing and arena allocation,
   `Expected`, deterministic `Random` and secure random bytes, log ring sink, stderr-only console, World
   structural version (ADR 0028)
@@ -508,8 +511,11 @@ Plan: `docs/plans/m7-editor.md` (sub-milestones, command API, localization, them
   generator instead of the session's seed, so runs that spawned a scene or prefab never repeated
 - M7x-3: Recorded agent transcript (`illusion_mcp --record`, normalised into `tests/acceptance/tetris/recorded.jsonl`
   with its sources compiled in-tree) and the live-agent workflow (needs the owner's API key and budget)
-- M7x-4: Tutorials (Tetris with an agent, Tetris by hand), editor manual screenshots generated headless, string
-  freeze; ROADMAP M7 ticked
+- M7x-4: ✅ Tutorials (Tetris with an agent, Tetris by hand, whose C++ blocks the test build compiles and
+  loads as a module); editor manual screenshots taken by `docs/screenshots/manual.jsonl` in a headless editor on the
+  showcase project and compared in the GPU job (`docs.screenshots`); string freeze: `illusion_textc freeze`
+  writes `en.freeze.json` and the locale check fails when a frozen string changes or disappears (editor and
+  input tables frozen as M7); the M7 status above
 
 ## M8 — Release pipeline
 

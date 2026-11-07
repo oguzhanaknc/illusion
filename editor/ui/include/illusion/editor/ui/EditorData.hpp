@@ -40,8 +40,9 @@ bool mountEditorData(VirtualFileSystem& vfs);
 /// Loads "editor:/themes/<name>.json". Returns why it failed.
 [[nodiscard]] Expected<Theme, std::string> loadTheme(const VirtualFileSystem& vfs, std::string_view name);
 
-/// Adds every locale file in "editor:/locales" except the compiled English one to @p localization; files
-/// that do not load are skipped with a warning. Returns the number added.
+/// Adds every locale file in "editor:/locales" except the compiled English one and the string freeze
+/// (`en.freeze.json`) to @p localization; files that do not load are skipped with a warning. Returns the
+/// number added.
 u32 loadEditorLocales(const VirtualFileSystem& vfs, text::Localization& localization);
 
 } // namespace illusion::editor::ui

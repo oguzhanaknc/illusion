@@ -5,6 +5,8 @@ the window does runs an [editor command](../../reference/editor-commands.md), so
 use one API: a menu item, a toolbar button and a shortcut are *UI actions* that run a command with fixed
 params, and agents can drive the window itself with the `ui.*` commands.
 
+![The editor window with the showcase project: Outliner, Scene view, Inspector and Asset Browser](../../images/editor/interface.png)
+
 ```bash
 illusion_editor --project games/tetris
 ```

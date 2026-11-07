@@ -6,6 +6,8 @@ World away, so the edited scene is exactly as it was before Play, whatever the g
 of it is an [Editor command](../../reference/editor-commands.md), so an AI agent starts, steps and inspects
 the game with the same API.
 
+![Play mode paused after 90 fixed steps: the Game view and the orange play tint](../../images/editor/play-mode.png)
+
 ## Starting and stopping
 
 | Key | Command | What it does |

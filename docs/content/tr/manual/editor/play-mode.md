@@ -6,6 +6,8 @@ World'ü atar; oyun ne yapmış olursa olsun düzenlenen sahne Play'den önceki 
 parçası bir [Editor commands](../../reference/editor-commands.md) komutudur; böylece bir yapay zekâ ajanı oyunu
 aynı API ile başlatır, adım adım ilerletir ve inceler.
 
+![Play modu 90 sabit adımdan sonra duraklatılmış: Game görünümü ve turuncu play rengi](../../images/editor/play-mode.png)
+
 ## Başlatmak ve durdurmak
 
 | Tuş | Komut | Ne yapar |

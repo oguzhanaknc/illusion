@@ -48,6 +48,9 @@ Türkçe dokümantasyonda teknik terimler İngilizce bırakılır; örneğin Ent
 Archetype, Chunk, Query, Job, Shader, Render Pass, Mesh, Material, Texture, Asset ve Sink. Bunları
 İngilizce metindekiyle birebir aynı yazın.
 
+Görseller `docs/content/en/images` altında durur ve iki dil de aynı dosyaya aynı göreli yolla bağlantı verir
+(`../../images/editor/interface.png`); Türkçe site onları İngilizce klasörden alır.
+
 ## Kullanıcıya görünen metinler
 
 Oyuncuların veya editör kullanıcılarının gördüğü metinler koddaki bir string değişmeziyle değil, her zaman
@@ -60,6 +63,9 @@ bir string tablosu üzerinden gösterilir (bkz. [Yerelleştirme](manual/localiza
 - Sayılan her şey için çoğul biçimler (`{n, plural, one {...} other {...}}`) kullanın.
 - `illusion_textc check` komutunu çalıştırın (CI'da CTest `text.locales` bunu yapar). İngilizce bir metni
   değiştirmek mevcut çevirileri eskitir; hangilerinin eskidiğini `source` hash'leri gösterir.
+- Editör ve input tabloları dondurulmuştur (bkz. [String freeze](manual/localization.md#string-freeze)): yeni
+  anahtarları serbestçe ekleyin, ama dondurulmuş bir anahtarı yalnızca yeni bir dondurmayla değiştirin ya da
+  silin.
 
 Log mesajları, assertion mesajları ve yapay zekâ ajanlarına yönelik metinler İngilizce kalır ve
 yerelleştirilmez.
@@ -81,6 +87,14 @@ kodunu değiştirirken:
   dizilerde veya üyelerde tutun.
 - Bilinçli bir görsel değişiklikten sonra golden görüntüleri `ILLUSION_UPDATE_GOLDENS=1` ile yeniden yazın ve
   yeni görüntüleri pull request'te inceleyin.
+
+Editör kılavuzunun ekran görüntüleri (`docs/content/en/images/editor`) de golden görüntülerdir:
+`docs/screenshots/manual.jsonl` transcript'i bunları `samples/showcase` kopyası üzerinde headless bir editörde
+çeker ve arayüz artık onlarla eşleşmediğinde GPU testi `docs.screenshots` başarısız olur. Yeniden yazmak için:
+
+```bash
+ILLUSION_UPDATE_GOLDENS=1 ctest --preset ci-linux-clang-debug -R docs.screenshots
+```
 
 ## Architecture Decision Record'lar
 

@@ -6,6 +6,8 @@ böylece bir kişi ve bir yapay zekâ ajanı tek bir API kullanır: bir menü ö
 kısayol, bir komutu sabit parametrelerle çalıştıran *UI eylemleridir* ve ajanlar pencerenin kendisini `ui.*`
 komutlarıyla yönetebilir.
 
+![Showcase projesiyle editör penceresi: Outliner, Scene görünümü, Inspector ve Asset Browser](../../images/editor/interface.png)
+
 ```bash
 illusion_editor --project games/tetris
 ```
