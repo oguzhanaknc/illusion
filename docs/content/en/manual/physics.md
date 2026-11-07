@@ -247,6 +247,8 @@ world.create(lampTransform, illusion::RigidBody{}, lampCollider, chain);
 - `jointPosition(entity)` returns the hinge angle, the slider position (both relative to the start) or
   the distance between the anchors. Positive values and motor speeds mean this Entity moves along or
   around +`axis`.
+- Changing `motorSpeed` wakes the joint's bodies, so a motor that holds a sleeping door at its limit turns
+  it back when the speed is reversed.
 - A joint whose force exceeds `breakForce` is disabled: its `PhysicsJoint::broken` is set and the Entity
   is listed in `brokenJoints()` for that update.
 - Joints are removed with either body and recreated when a body is rebuilt. A joint that cannot be

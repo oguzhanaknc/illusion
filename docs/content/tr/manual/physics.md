@@ -249,6 +249,8 @@ world.create(lampTransform, illusion::RigidBody{}, lampCollider, chain);
 - `jointPosition(entity)` hinge açısını, slider konumunu (ikisi de başlangıca göre) ya da anchor'lar
   arasındaki mesafeyi döndürür. Pozitif değerler ve motor hızları, bu Entity'nin +`axis` boyunca ya da
   etrafında hareket ettiği anlamına gelir.
+- `motorSpeed`'i değiştirmek joint'in gövdelerini uyandırır; böylece uyuyan bir kapıyı sınırında tutan bir
+  motor, hız ters çevrildiğinde onu geri döndürür.
 - Kuvveti `breakForce`'u aşan bir joint devre dışı kalır: `PhysicsJoint::broken` ayarlanır ve Entity o
   update için `brokenJoints()` içinde listelenir.
 - Joint'ler cisimlerinden biriyle birlikte kaldırılır ve bir cisim yeniden kurulduğunda yeniden
