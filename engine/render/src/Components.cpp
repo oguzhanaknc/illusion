@@ -161,6 +161,61 @@ void reflectRenderComponents(ComponentRegistry& registry)
                 .max = 0.5,
                 .hint = FieldHint::Angle})
         .field("resolution", &ProceduralSky::resolution, {.min = 8.0, .max = 8192.0, .advanced = true});
+    reflect<PostEffects>("illusion.PostEffects", 1, registry)
+        .meta(
+            {.displayName = "Post effects",
+             .category = "Rendering",
+             .icon = "camera",
+             .description = "Automatic exposure, tonemapping, colour grading and lens effects of the scene.",
+             .docsAnchor = "manual/rendering.md#exposure-and-colour-grading",
+             .singleton = true})
+        .field("autoExposure", &PostEffects::autoExposure, {.category = "Exposure"})
+        .field("exposureCompensation", &PostEffects::exposureCompensation,
+               {.description = "Stops added to the exposure.",
+                .category = "Exposure",
+                .softMin = -4.0,
+                .softMax = 4.0})
+        .field("minExposure", &PostEffects::minExposure,
+               {.description = "Darkest automatic exposure, in stops.",
+                .category = "Exposure",
+                .softMin = -8.0,
+                .softMax = 8.0})
+        .field("maxExposure", &PostEffects::maxExposure,
+               {.description = "Brightest automatic exposure, in stops.",
+                .category = "Exposure",
+                .softMin = -8.0,
+                .softMax = 8.0})
+        .field("adaptationSpeed", &PostEffects::adaptationSpeed,
+               {.description = "How fast the exposure follows the light, per second.",
+                .category = "Exposure",
+                .min = 0.0,
+                .softMax = 10.0})
+        .field("tonemapper", &PostEffects::tonemapper, {.category = "Colour"})
+        .field("contrast", &PostEffects::contrast,
+               {.category = "Colour", .min = 0.0, .softMax = 2.0, .hint = FieldHint::Slider})
+        .field("saturation", &PostEffects::saturation,
+               {.category = "Colour", .min = 0.0, .softMax = 2.0, .hint = FieldHint::Slider})
+        .field("temperature", &PostEffects::temperature,
+               {.description = "Negative cooler, positive warmer.",
+                .category = "Colour",
+                .min = -1.0,
+                .max = 1.0,
+                .hint = FieldHint::Slider})
+        .field("tint", &PostEffects::tint,
+               {.description = "Negative greener, positive more magenta.",
+                .category = "Colour",
+                .min = -1.0,
+                .max = 1.0,
+                .hint = FieldHint::Slider})
+        .field("vignette", &PostEffects::vignette,
+               {.category = "Lens", .min = 0.0, .max = 1.0, .hint = FieldHint::Slider})
+        .field("grain", &PostEffects::grain,
+               {.category = "Lens", .min = 0.0, .max = 1.0, .hint = FieldHint::Slider})
+        .field("chromaticAberration", &PostEffects::chromaticAberration,
+               {.description = "Colour fringes at the corners, in pixels.",
+                .category = "Lens",
+                .min = 0.0,
+                .softMax = 8.0});
     reflect<SkyAtmosphere>("illusion.SkyAtmosphere", 1, registry)
         .meta({.displayName = "Sky atmosphere",
                .category = "Rendering/Lights",

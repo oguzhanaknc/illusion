@@ -33,7 +33,9 @@ struct RenderView
     Mat4 projection{1.0f}; ///< View to clip (reversed-Z, see perspectiveReversedZ()).
     Vec3 position{0.0f};   ///< Camera position in world space.
     f32 exposure = 1.0f;   ///< Exposure multiplier.
-    u32 layerMask = ~0u;   ///< RenderMesh layer bits accepted by this view.
+    /// Seconds since this view's previous frame, for automatic exposure (PostEffects::adaptationSpeed).
+    f32 deltaSeconds = 1.0f / 60.0f;
+    u32 layerMask = ~0u; ///< RenderMesh layer bits accepted by this view.
     /// Borrowed bitset indexed by Entity index (64 entities per word); set bits hide entities in all
     /// passes of this view. Missing words are zero. Keep alive until render() returns.
     std::span<const u64> hiddenEntities{};

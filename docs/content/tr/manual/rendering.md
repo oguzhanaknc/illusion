@@ -450,6 +450,34 @@ yıldızların ne kadar görünür olduğunu ve ayın aydınlık kısmını. `at
 `atmosphereIrradiance()` (`illusion/assets/Atmosphere.hpp`) gökyüzü modelinin kendisini CPU'da hesaplar
 (ADR 0049).
 
+### Pozlama ve renk derecelendirme
+
+Bir `PostEffects` Component'i (sahne başına bir tane) kameranın ışığı görüntüye nasıl çevirdiğini belirler. O
+olmadan renderer `Camera::exposure` ve derecelendirmesiz ACES kullanır.
+
+- **Otomatik pozlama** görüntüyü her kare ölçer (log parlaklığın merkez ağırlıklı ortalaması) ve pozlamayı onu
+  orta griye getirecek değere doğru, stop cinsinden ve saniyede `adaptationSpeed` hızıyla kaydırır; karanlığa
+  alışan bir göz gibi. `minExposure` ve `maxExposure` (stop) onu sınırlar, böylece gece gece kalır;
+  `exposureCompensation` onu kaydırır. Uyum süresi `RenderView::deltaSeconds`'tır.
+- **Tonemapper**: `AgX` parlak doygun ışığın (neon, ateş, gün batımı) tonunu korur ve onu beyaza soldurur;
+  `Aces` daha sert kontrast verir ama parlak renkleri sarıya iter.
+- **Derecelendirme**: `temperature` ve `tint` (beyaz dengesi), orta gri etrafında `contrast` ve `saturation`.
+- **Lens**: `vignette`, hareketli film `grain`'i ve `chromaticAberration` (köşelerde piksel cinsinden renk
+  saçağı).
+
+```cpp
+world.create(illusion::PostEffects{.autoExposure = true,
+                                   .minExposure = -1.0f, // a sunny day is not darkened below half
+                                   .maxExposure = 2.5f,  // a night is lifted by at most 2.5 stops
+                                   .tonemapper = illusion::Tonemapper::AgX,
+                                   .contrast = 1.1f,
+                                   .vignette = 0.25f,
+                                   .grain = 0.15f});
+view.deltaSeconds = frameSeconds; // adaptation follows real time
+```
+
+Tanılama görünümleri (`setDebugView()`) bunların hepsini atlar.
+
 ### HDR ve post-processing
 
 Renderer, sahneyi dahili bir HDR görüntüye çizer ve her kareyi post-processing ile bitirir:

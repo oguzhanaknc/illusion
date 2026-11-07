@@ -1439,6 +1439,13 @@ void SceneRenderer::render(nvrhi::ICommandList* commandList, nvrhi::ITexture* co
     postFrame.diagnostic = impl.debugView != RenderDebugView::Lit;
     postFrame.historyValid = impl.historyValid;
     postFrame.frameIndex = impl.frameIndex;
+    postFrame.deltaSeconds = view.deltaSeconds;
+    world.query<const PostEffects>().without<Inactive>().each([&postFrame](const PostEffects& effects) {
+        if (postFrame.effects == nullptr)
+        {
+            postFrame.effects = &effects;
+        }
+    });
     impl.post.beginFrame(commandList, postFrame, post);
 
     beginPass(0);

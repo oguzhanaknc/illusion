@@ -29,7 +29,8 @@ A new Component or field therefore needs a value in `build.jsonl`. Three particl
 `ParticleEmitter`: a spark fountain over the trigger pad, a dust emitter by the blocks, which waits to be
 played (`playOnStart` off), and a field of 20,000 fireflies simulated on the GPU. A `Wind` entity blows the dust
 (`windFactor`) across the yard. The disabled `Dusk Sky` entity holds a `SkyAtmosphere` at sunset: enable it
-to replace the sky and the sun with a moving one.
+to replace the sky and the sun with a moving one, and the disabled `Film Look` holds `PostEffects` for a
+graded, vignetted image.
 
 ## The showcase module
 

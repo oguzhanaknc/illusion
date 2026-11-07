@@ -12,7 +12,11 @@ struct PostConstants
     float4 ao;       // x: radius (world), y: intensity, z: pixels per world unit at view distance 1, w: noise offset
     float4 temporal; // x: weight of the current frame, y: 1 if the history is valid
     float4 bloom;    // x: number of bloom levels, y: intensity, z: 1 if bloom is on
-    float4 output;   // x: exposure, y: 1 if the output needs sRGB encoding
+    float4 output;   // x: exposure, y: 1 if the output needs sRGB encoding, z: 1 for diagnostic views, w: 1 for AgX
+    float4 exposure; // x: 1 for automatic exposure, y: compensation, z: minimum, w: maximum (linear)
+    float4 adapt;    // x: blend towards the metered exposure (1 snaps), y: grain seed
+    float4 grading;  // x: contrast, y: saturation, z: vignette, w: grain
+    float4 balance;  // rgb: white balance multipliers, w: chromatic aberration in pixels
 };
 
 struct PostPush

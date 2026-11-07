@@ -97,6 +97,7 @@ bool PostProcessor::initialize(nvrhi::IDevice* device, nvrhi::Format outputForma
         nvrhi::BindingLayoutItem::VolatileConstantBuffer(0),
         nvrhi::BindingLayoutItem::Texture_SRV(0),
         nvrhi::BindingLayoutItem::Texture_SRV(1),
+        nvrhi::BindingLayoutItem::Texture_SRV(2),
         nvrhi::BindingLayoutItem::Sampler(0),
         nvrhi::BindingLayoutItem::PushConstants(1, sizeof(Push)),
     };
@@ -110,6 +111,7 @@ bool PostProcessor::initialize(nvrhi::IDevice* device, nvrhi::Format outputForma
     m_linearClamp = device->createSampler(
         nvrhi::SamplerDesc().setAllFilters(true).setAllAddressModes(nvrhi::SamplerAddressMode::Clamp));
     m_dummy = createTarget(device, 1, 1, kHdrFormat, 1, "Post-process placeholder");
+    m_exposureValue = createTarget(device, 1, 1, nvrhi::Format::R32_FLOAT, 1, "Exposure");
 
     const auto pipeline = [&](std::span<const std::byte> code, const char* name) {
         nvrhi::ShaderHandle shader = createShader(device, nvrhi::ShaderType::Compute, code, name);
@@ -123,6 +125,7 @@ bool PostProcessor::initialize(nvrhi::IDevice* device, nvrhi::Format outputForma
     m_taa = pipeline(shaders::taa(), "TAA");
     m_bloomDownsample = pipeline(shaders::bloomDownsample(), "Bloom downsample");
     m_bloomUpsample = pipeline(shaders::bloomUpsample(), "Bloom upsample");
+    m_exposure = pipeline(shaders::exposure(), "Exposure");
 
     m_tonemapVertex = createShader(device, nvrhi::ShaderType::Vertex, shaders::tonemapVertex(), "Tonemap VS");
     m_tonemapFragment =
@@ -141,7 +144,7 @@ bool PostProcessor::initialize(nvrhi::IDevice* device, nvrhi::Format outputForma
     m_tonemap = device->createGraphicsPipeline(tonemapPipeline,
                                                nvrhi::FramebufferInfo().addColorFormat(outputFormat));
     return m_constants && m_linearClamp && m_dummy && m_gtao && m_gtaoBlur && m_taa && m_bloomDownsample &&
-           m_bloomUpsample && m_tonemap;
+           m_bloomUpsample && m_exposure && m_exposureValue && m_tonemap;
 }
 
 nvrhi::BindingSetHandle PostProcessor::computeSet(nvrhi::ITexture* t0, nvrhi::TextureSubresourceSet t0Range,
@@ -170,6 +173,7 @@ void PostProcessor::resize(nvrhi::ITexture* hdr, nvrhi::ITexture* depth, nvrhi::
     ILL_PROFILE_SCOPE();
     m_width = hdr->getDesc().width;
     m_height = hdr->getDesc().height;
+    m_exposureValid = false;
     m_rawAmbientOcclusion =
         createTarget(m_device, m_width, m_height, nvrhi::Format::R32_FLOAT, 1, "GTAO raw");
     m_ambientOcclusion = createTarget(m_device, m_width, m_height, nvrhi::Format::R32_FLOAT, 1, "GTAO");
@@ -193,12 +197,14 @@ void PostProcessor::resize(nvrhi::ITexture* hdr, nvrhi::ITexture* depth, nvrhi::
     for (u32 source = 0; source < kSourceCount; ++source)
     {
         m_bloomFirstSets[source] = computeSet(sources[source], all, nullptr, nullptr, m_bloom, mip(0));
+        m_exposureSets[source] = computeSet(sources[source], all, nullptr, nullptr, m_exposureValue, mip(0));
 
         nvrhi::BindingSetDesc set;
         set.bindings = {
             nvrhi::BindingSetItem::ConstantBuffer(0, m_constants),
             nvrhi::BindingSetItem::Texture_SRV(0, sources[source]),
             nvrhi::BindingSetItem::Texture_SRV(1, m_bloom, nvrhi::Format::UNKNOWN, mip(0)),
+            nvrhi::BindingSetItem::Texture_SRV(2, m_exposureValue),
             nvrhi::BindingSetItem::Sampler(0, m_linearClamp),
             nvrhi::BindingSetItem::PushConstants(1, sizeof(Push)),
         };
@@ -236,7 +242,40 @@ void PostProcessor::beginFrame(nvrhi::ICommandList* commands, const Frame& frame
                               frame.historyValid ? 1.0f : 0.0f, frame.projection[3][3], 0.0f);
     constants.bloom = Vec4(static_cast<f32>(m_bloomLevels), std::clamp(settings.bloom.intensity, 0.0f, 1.0f),
                            settings.bloom.enabled ? 1.0f : 0.0f, 0.0f);
-    constants.output = Vec4(frame.exposure, m_encodeSrgb ? 1.0f : 0.0f, frame.diagnostic ? 1.0f : 0.0f, 0.0f);
+    const PostEffects* effects = frame.diagnostic ? nullptr : frame.effects;
+    constants.output = Vec4(frame.exposure, m_encodeSrgb ? 1.0f : 0.0f, frame.diagnostic ? 1.0f : 0.0f,
+                            effects != nullptr && effects->tonemapper == Tonemapper::AgX ? 1.0f : 0.0f);
+    m_autoExposure = effects != nullptr && effects->autoExposure;
+    constants.grading = Vec4(1.0f, 1.0f, 0.0f, 0.0f);
+    constants.balance = Vec4(1.0f, 1.0f, 1.0f, 0.0f);
+    constants.exposure = Vec4(0.0f, 1.0f, 1.0f, 1.0f);
+    if (effects != nullptr)
+    {
+        const auto finite = [](f32 value, f32 fallback) {
+            return std::isfinite(value) ? value : fallback;
+        };
+        const f32 low = std::clamp(finite(effects->minExposure, -2.0f), -16.0f, 16.0f);
+        const f32 high = std::clamp(finite(effects->maxExposure, 2.5f), low, 16.0f);
+        constants.exposure =
+            Vec4(m_autoExposure ? 1.0f : 0.0f,
+                 std::exp2(std::clamp(finite(effects->exposureCompensation, 0.0f), -16.0f, 16.0f)),
+                 std::exp2(low), std::exp2(high));
+        constants.grading = Vec4(std::clamp(finite(effects->contrast, 1.0f), 0.0f, 4.0f),
+                                 std::clamp(finite(effects->saturation, 1.0f), 0.0f, 4.0f),
+                                 std::clamp(finite(effects->vignette, 0.0f), 0.0f, 1.0f),
+                                 std::clamp(finite(effects->grain, 0.0f), 0.0f, 1.0f));
+        // A warm balance lifts red and lowers blue; a magenta tint lowers green. Brightness is kept.
+        const f32 temperature = std::clamp(finite(effects->temperature, 0.0f), -1.0f, 1.0f);
+        const f32 tint = std::clamp(finite(effects->tint, 0.0f), -1.0f, 1.0f);
+        Vec3 balance(1.0f + 0.25f * temperature, 1.0f - 0.2f * tint, 1.0f - 0.25f * temperature);
+        balance /= glm::dot(balance, Vec3(0.2126f, 0.7152f, 0.0722f));
+        constants.balance =
+            Vec4(balance, std::clamp(finite(effects->chromaticAberration, 0.0f), 0.0f, 32.0f));
+    }
+    const f32 speed = effects != nullptr ? std::max(effects->adaptationSpeed, 0.0f) : 0.0f;
+    const f32 seconds = std::isfinite(frame.deltaSeconds) ? std::max(frame.deltaSeconds, 0.0f) : 0.0f;
+    const f32 blend = m_exposureValid ? 1.0f - std::exp(-seconds * speed) : 1.0f;
+    constants.adapt = Vec4(blend, static_cast<f32>(frame.frameIndex % 1024u), 0.0f, 0.0f);
     commands->writeBuffer(m_constants, &constants, sizeof(constants));
     if (temporal)
     {
@@ -291,6 +330,14 @@ void PostProcessor::resolve(nvrhi::ICommandList* commands, nvrhi::IFramebuffer* 
                      std::max(bloomWidth >> level, 1u), std::max(bloomHeight >> level, 1u));
         }
         commands->endMarker();
+    }
+
+    if (m_autoExposure)
+    {
+        commands->beginMarker("Exposure");
+        dispatch(commands, m_exposure, m_exposureSets[source], Push{}, kGroupSize, kGroupSize);
+        commands->endMarker();
+        m_exposureValid = true;
     }
 
     nvrhi::GraphicsState state;

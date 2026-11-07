@@ -30,7 +30,8 @@ emitter'ı `ParticleEmitter`'ı kapsar: trigger pedinin üzerinde bir kıvılcı
 oynatılmayı bekleyen bir toz emitter'ı (`playOnStart` kapalı) ve GPU'da simüle edilen 20.000 ateş böceklik bir
 alan. Bir `Wind` Entity'si tozu (`windFactor`) avlunun öbür ucuna savurur. Devre dışı `Dusk Sky`
 Entity'si gün batımında bir `SkyAtmosphere` tutar: gökyüzünü ve güneşi hareketli olanlarla değiştirmek için onu
-etkinleştirin.
+etkinleştirin; devre dışı `Film Look` ise derecelendirilmiş, vinyetli bir görüntü için `PostEffects`
+tutar.
 
 ## Showcase modülü
 
