@@ -1,10 +1,12 @@
 #include <illusion/editor/client/ImageCompare.hpp>
 #include <illusion/editor/client/Transcript.hpp>
 
+#include <algorithm>
 #include <cmath>
 #include <fstream>
 #include <iterator>
 #include <regex>
+#include <sstream>
 
 namespace illusion::editor::client
 {
@@ -196,10 +198,47 @@ std::optional<std::string> matchOperator(std::string_view op, JsonValue argument
     return where + "unknown matcher " + std::string(op);
 }
 
-// Replaces ${name} in @p value; unknown names are reported in @p error.
-JsonMutValue substitute(JsonMutDocument& doc, JsonValue value,
-                        const std::map<std::string, std::string>& variables, std::string& error)
+// The text of the file @p name for a `{"$file": name}` value: a relative path below @p base without "..".
+std::optional<std::string> fileText(const std::filesystem::path& base, std::string_view name,
+                                    std::string& error)
 {
+    const std::filesystem::path relative(std::u8string(name.begin(), name.end()));
+    const bool escapes = std::any_of(relative.begin(), relative.end(),
+                                     [](const std::filesystem::path& part) { return part == ".."; });
+    if (name.empty() || base.empty() || relative.is_absolute() || relative.has_root_name() || escapes)
+    {
+        error = "$file needs a relative path inside the transcript's directory, not \"" + std::string(name) +
+                "\"";
+        return std::nullopt;
+    }
+    std::ifstream file(base / relative, std::ios::binary);
+    if (!file)
+    {
+        error = "cannot read the $file " + std::string(name);
+        return std::nullopt;
+    }
+    std::ostringstream text;
+    text << file.rdbuf();
+    return text.str();
+}
+
+// Replaces ${name} in @p value and `{"$file": "relative/path"}` objects by the text of that file below
+// @p base; problems are reported in @p error.
+JsonMutValue substitute(JsonMutDocument& doc, JsonValue value,
+                        const std::map<std::string, std::string>& variables,
+                        const std::filesystem::path& base, std::string& error)
+{
+    if (const JsonValue file = value.find("$file"); value.isObject() && value.size() == 1 && !file.isAbsent())
+    {
+        const std::optional<std::string_view> name = file.asString();
+        const std::optional<std::string> text =
+            name ? fileText(base, *name, error) : std::optional<std::string>();
+        if (!name)
+        {
+            error = "$file needs a path string";
+        }
+        return text ? doc.makeString(*text) : doc.makeNull();
+    }
     if (value.isString())
     {
         const std::string_view text = *value.asString();
@@ -254,7 +293,7 @@ JsonMutValue substitute(JsonMutDocument& doc, JsonValue value,
         JsonMutValue array = doc.makeArray();
         for (const JsonValue element : value.elements())
         {
-            array.push(substitute(doc, element, variables, error));
+            array.push(substitute(doc, element, variables, base, error));
         }
         return array;
     }
@@ -263,20 +302,21 @@ JsonMutValue substitute(JsonMutDocument& doc, JsonValue value,
         JsonMutValue object = doc.makeObject();
         for (const JsonMember member : value.members())
         {
-            object.add(member.key, substitute(doc, member.value, variables, error));
+            object.add(member.key, substitute(doc, member.value, variables, base, error));
         }
         return object;
     }
     return doc.copy(value);
 }
 
-// @p value with variables replaced, as a parsed document.
+// @p value with variables and files replaced, as a parsed document.
 Expected<JsonDocument, std::string> substituted(JsonValue value,
-                                                const std::map<std::string, std::string>& variables)
+                                                const std::map<std::string, std::string>& variables,
+                                                const std::filesystem::path& base)
 {
     JsonMutDocument doc;
     std::string error;
-    doc.setRoot(value.isAbsent() ? doc.makeObject() : substitute(doc, value, variables, error));
+    doc.setRoot(value.isAbsent() ? doc.makeObject() : substitute(doc, value, variables, base, error));
     if (!error.empty())
     {
         return unexpected(std::move(error));
@@ -540,7 +580,8 @@ RunReport TranscriptRunner::run(std::string_view jsonl, std::string_view name)
             std::vector<std::string> arguments;
             if (const JsonValue list = restart.find("arguments"); list.isArray())
             {
-                Expected<JsonDocument, std::string> values = substituted(list, m_variables);
+                Expected<JsonDocument, std::string> values =
+                    substituted(list, m_variables, m_options.goldenDirectory);
                 if (!values)
                 {
                     fail("restart", values.error());
@@ -589,8 +630,9 @@ RunReport TranscriptRunner::run(std::string_view jsonl, std::string_view name)
             break;
         }
         Expected<JsonDocument, std::string> params =
-            framesParams.empty() ? substituted(paramsValue, m_variables)
-                                 : substituted(JsonDocument::parse(framesParams)->root(), m_variables);
+            framesParams.empty() ? substituted(paramsValue, m_variables, m_options.goldenDirectory)
+                                 : substituted(JsonDocument::parse(framesParams)->root(), m_variables,
+                                               m_options.goldenDirectory);
         if (!params)
         {
             fail(method, params.error());
@@ -613,7 +655,8 @@ RunReport TranscriptRunner::run(std::string_view jsonl, std::string_view name)
             expectValue =
                 step.find("requires").isAbsent() || m_options.gpu ? kSuccess.root() : kUnsupported.root();
         }
-        Expected<JsonDocument, std::string> expect = substituted(expectValue, m_variables);
+        Expected<JsonDocument, std::string> expect =
+            substituted(expectValue, m_variables, m_options.goldenDirectory);
         if (!expect)
         {
             fail(method, expect.error());

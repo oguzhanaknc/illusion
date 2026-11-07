@@ -4,7 +4,7 @@ This file is the contract of the agent acceptance test (ADR 0038). CI replays `s
 headless editor and runs `checks.jsonl`; in M7x a live agent receives this file as its prompt and must pass
 the same checks through the editor alone. The full plan is §9 of `docs/plans/m7-editor.md`.
 
-Run it locally (Release build):
+Run it locally (Release build; for the recorded session, replay `recorded.jsonl` without `--var`):
 
 ```bash
 illusion_ctl --launch build/bin/Release/illusion_editor --editor-arg --deterministic --editor-arg --no-gpu \
@@ -55,12 +55,20 @@ play World and play through `input.inject` and `play.step`; the module's own rul
 `editor/tests/play/TestTetris.cpp`. Module schemas and hot reload join the transcript in the milestones that
 add those commands (M7s, M7t, M7u).
 
+M7x-3 adds the **recorded session** `recorded.jsonl`: Claude Code built the game from this file through the
+MCP tools alone (no shell, no file edits outside the editor), wrote its module, compiled it with
+`module.build` and tested the rules in Play mode. `tools/acceptance/normalize_transcript.py` turned the
+`illusion_mcp --record` output into the transcript; the module source is in `files/` and is also built
+in-tree (`illusion_tetris_agent_module`), where `TestTetris.cpp` checks every rule on it. The scripted
+transcript loads the reference module after its restart and the recorded one builds its own, so the same
+checks, from C2 on, run against whichever module the session made.
+
 ## Checks
 
 | Check | Verifies | Since |
 | --- | --- | --- |
 | C1 Project | The manifest, `assets:/scenes/main.scene`, the eight materials and the five actions of `assets:/input/tetris.input` exist (later: `modules:/tetris`). | M7j |
-| C2 Module | `tetris` is loaded with semver 1.x and no error diagnostics; `component.schema` matches the contract. | M7s |
+| C2 Module | `tetris` is loaded with semver 1.x; `component.schema` of `tetris.Cell`, `tetris.Board` and `tetris.Score` matches the contract. | M7x |
 | C3 Scene | Exactly one camera; a DirectionalLight; a SkyLight with `builtin:/sky/procedural`; three MeshRenderers under `/Board` whose material resolves (later: one Board 10x20, one PieceQueue, one Score, an orthographic camera, `scene.validate`). | M7j |
 | C4 Persistence | After a restart the `scene.info` hash is unchanged, the ids survive, the MeshRenderer and SkyLight references survive and a re-save is byte-identical. | M7j |
 | C5 Behaviour | Spawn, walls, kicks, drops, clears, gravity and game over through `input.inject` and `play.step`. | M7r |

@@ -68,9 +68,15 @@ add_dependencies(illusion_editor_tests illusion_editor_data illusion_editor illu
 illusion_add_module(illusion_tetris_module SHARED
     SOURCES ${PROJECT_SOURCE_DIR}/tests/acceptance/tetris/module/Tetris.cpp
     USES input render runtime)
+# The module the recorded agent session wrote (tests/acceptance/tetris/files), built in-tree so that an engine
+# API change that breaks it fails the build; the play tests check every rule on it too.
+illusion_add_module(illusion_tetris_agent_module SHARED
+    SOURCES ${PROJECT_SOURCE_DIR}/tests/acceptance/tetris/files/modules/tetris/tetris.cpp
+    USES input render runtime)
 target_compile_definitions(illusion_editor_tests PRIVATE
-    ILLUSION_TETRIS_MODULE="$<TARGET_FILE:illusion_tetris_module>")
-add_dependencies(illusion_editor_tests illusion_tetris_module)
+    ILLUSION_TETRIS_MODULE="$<TARGET_FILE:illusion_tetris_module>"
+    ILLUSION_TETRIS_AGENT_MODULE="$<TARGET_FILE:illusion_tetris_agent_module>")
+add_dependencies(illusion_editor_tests illusion_tetris_module illusion_tetris_agent_module)
 # The module build tests run a stand-in for CMake, and one real build with the module SDK of this build tree
 # (ADR 0043; profiling builds have no SDK).
 illusion_add_editor_executable(illusion_fake_cmake FakeCMake.cpp)
@@ -136,6 +142,32 @@ add_test(NAME acceptance.tetris.board.gpu
         --var "tetrisModule=\"$<TARGET_FILE:illusion_tetris_module>\"")
 set_tests_properties(acceptance.tetris.board.gpu PROPERTIES LABELS "acceptance;gpu" TIMEOUT 600
     ENVIRONMENT "ILLUSION_UI_CAPTURE_DIR=${CMAKE_BINARY_DIR}/ui-captures")
+
+# The recorded agent session (tests/acceptance/tetris/recorded.jsonl): an agent built the game through the MCP
+# tools, writing and compiling its own module (files/), and the same checks verify it. module.build compiles
+# the module with this build tree's module SDK, which profiling builds do not have.
+if(NOT ILLUSION_PROFILING)
+    add_test(NAME acceptance.tetris.recorded
+        COMMAND illusion_ctl --launch $<TARGET_FILE:illusion_editor>
+            --editor-arg --deterministic --editor-arg --seed --editor-arg 1 --editor-arg --no-gpu
+            replay ${PROJECT_SOURCE_DIR}/tests/acceptance/tetris/recorded.jsonl
+            --checks ${PROJECT_SOURCE_DIR}/tests/acceptance/tetris/checks.jsonl --temp-workspace)
+    set_tests_properties(acceptance.tetris.recorded PROPERTIES LABELS "acceptance" TIMEOUT 600)
+    add_test(NAME acceptance.tetris.recorded.gpu
+        COMMAND illusion_ctl --launch $<TARGET_FILE:illusion_editor>
+            --editor-arg --deterministic --editor-arg --seed --editor-arg 1
+            replay ${PROJECT_SOURCE_DIR}/tests/acceptance/tetris/recorded.jsonl
+            --checks ${PROJECT_SOURCE_DIR}/tests/acceptance/tetris/checks.jsonl --temp-workspace --gpu)
+    set_tests_properties(acceptance.tetris.recorded.gpu PROPERTIES LABELS "acceptance;gpu" TIMEOUT 600
+        ENVIRONMENT "ILLUSION_UI_CAPTURE_DIR=${CMAKE_BINARY_DIR}/ui-captures")
+    add_test(NAME acceptance.tetris.recorded.mcp
+        COMMAND illusion_ctl --launch $<TARGET_FILE:illusion_editor>
+            --editor-arg --deterministic --editor-arg --seed --editor-arg 1 --editor-arg --no-gpu
+            replay ${PROJECT_SOURCE_DIR}/tests/acceptance/tetris/recorded.jsonl
+            --checks ${PROJECT_SOURCE_DIR}/tests/acceptance/tetris/checks.jsonl --temp-workspace
+            --via-mcp $<TARGET_FILE:illusion_mcp> --era modern)
+    set_tests_properties(acceptance.tetris.recorded.mcp PROPERTIES LABELS "acceptance" TIMEOUT 600)
+endif()
 
 # The screenshots of the editor manual (docs/screenshots/manual.jsonl): a headless editor with a GPU on a copy
 # of samples/showcase takes them and compares them with docs/content/en/images/editor/*.png;

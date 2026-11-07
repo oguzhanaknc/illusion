@@ -5,6 +5,10 @@
 #include <illusion/editor/client/RpcClient.hpp>
 #include <illusion/editor/client/Transcript.hpp>
 
+#include <filesystem>
+#include <fstream>
+#include <string>
+
 using namespace illusion;
 using namespace illusion::editor;
 using namespace illusion::editor::client;
@@ -214,4 +218,44 @@ TEST_CASE("a replay stops at the first diverging step")
     REQUIRE(garbage.failures.size() == 1);
     CHECK(garbage.failures[0].reason == "line is not a JSON object");
     runner.stop();
+}
+
+TEST_CASE("a {\"$file\": path} value in a transcript becomes the text of that file next to the transcript")
+{
+    test::TempDirectory workspace;
+    test::TempDirectory transcripts;
+    std::filesystem::create_directories(transcripts.path / "files");
+    {
+        std::ofstream file(transcripts.path / "files" / "notes.txt", std::ios::binary);
+        file << "line 1\n\"quoted\" text\n";
+    }
+    RunnerOptions options;
+    options.launch = editorLaunch(workspace);
+    options.goldenDirectory = transcripts.path;
+    TranscriptRunner runner(std::move(options));
+    const RunReport report = runner.run(R"(
+{"call": "project.create", "params": {"directory": "game", "name": "Game"}}
+{"call": "project.file_write", "params": {"path": "assets:/notes.txt", "text": {"$file": "files/notes.txt"}}}
+{"call": "project.file_read", "params": {"path": "assets:/notes.txt"}, "expect": {"result": {"text": "line 1\n\"quoted\" text\n"}}}
+)",
+                                        "recorded.jsonl");
+    for (const StepFailure& failure : report.failures)
+    {
+        MESSAGE(failure.line << ": " << failure.description << ": " << failure.reason << " "
+                             << failure.actual);
+    }
+    CHECK(report.passed());
+
+    for (const std::string_view bad : {R"({"$file": "../outside.txt"})", R"({"$file": "files/missing.txt"})",
+                                       R"({"$file": 5})", R"({"$file": ""})"})
+    {
+        INFO(bad);
+        const RunReport failed =
+            runner.run(R"({"call": "project.file_write", "params": {"path": "assets:/x.txt", "text": )" +
+                           std::string(bad) + "}}\n",
+                       "bad.jsonl");
+        REQUIRE(failed.failures.size() == 1);
+        CHECK(failed.failures[0].reason.find("$file") != std::string::npos);
+    }
+    CHECK(runner.stop() == 0);
 }

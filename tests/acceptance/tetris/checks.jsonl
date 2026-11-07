@@ -26,8 +26,11 @@
 {"check": "C6", "call": "viewport.project", "params": {"viewport": "game", "entity": "/Board/Floor"}, "requires": "gpu", "expect": {"result": {"x": {"$approx": [320.0, 1.0]}, "y": {"$approx": [332.1, 1.0]}, "inside": true}}}
 {"check": "C6", "call": "viewport.pick", "params": {"viewport": "game", "x": 320.0, "y": 332.1}, "requires": "gpu", "expect": {"result": {"entity": {"path": "/Board/Floor"}}}}
 {"check": "C6", "call": "viewport.sample", "params": {"viewport": "game", "x": 240.33, "y": 180.0, "radius": 1}, "requires": "gpu", "expect": {"result": {"saturation": {"$max": 0.25}, "pixels": 9}}}
-{"check": "C5", "title": "Behaviour: the Tetris module plays through input.inject and play.step", "call": "module.load", "params": {"path": "${tetrisModule}"}, "expect": {"result": {"modules": [{"name": "tetris"}]}}}
-{"check": "C5", "call": "play.start", "params": {"fixedStep": true}}
+{"check": "C2", "title": "Module: tetris 1.x is loaded and reflects the contract's Components", "call": "module.list", "expect": {"result": {"modules": {"$contains": {"name": "tetris", "version": {"$regex": "1\\.[0-9]+\\.[0-9]+"}}}}}}
+{"check": "C2", "call": "component.schema", "params": {"type": "tetris.Cell"}, "expect": {"result": {"schema": {"properties": {"x": {"type": "integer"}, "y": {"type": "integer"}, "kind": {"enum": ["I", "O", "T", "S", "Z", "J", "L"]}}}}}}
+{"check": "C2", "call": "component.schema", "params": {"type": "tetris.Board"}, "expect": {"result": {"schema": {"properties": {"width": {"type": "integer"}, "height": {"type": "integer"}, "gravitySeconds": {"$exists": true}, "origin": {"$exists": true}}}}}}
+{"check": "C2", "call": "component.schema", "params": {"type": "tetris.Score"}, "expect": {"result": {"schema": {"properties": {"lines": {"type": "integer"}, "points": {"type": "integer"}, "level": {"type": "integer"}, "gameOver": {"type": "boolean"}}}}}}
+{"check": "C5", "title": "Behaviour: the Tetris module plays through input.inject and play.step", "call": "play.start", "params": {"fixedStep": true}}
 {"check": "C5", "call": "component.add", "params": {"entity": "/Board", "type": "tetris.Board"}}
 {"check": "C5", "call": "entity.create", "params": {"name": "Queue", "components": {"tetris.PieceQueue": {"seed": 1, "forced": "TI"}}}}
 {"check": "C5", "call": "entity.create", "params": {"name": "Score", "components": {"tetris.Score": {}}}}

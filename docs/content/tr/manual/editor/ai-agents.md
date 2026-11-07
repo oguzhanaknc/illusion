@@ -155,3 +155,24 @@ sonuca bununla ilgili bir not ekler. Bağlanılan bir editör kaybolursa `editor
 | Düzenlemeler `play.stop` sonrasında kayboluyor | Bir play oturumu çalışıyordu: Entity ve Component komutları play World'ü değiştirdi. `"world": "edit"` verin ya da durdurmadan önce değerleri `play.keep_changes` ile kopyalayın (bkz. [Play Modu](play-mode.md)). |
 
 Her mesajı görmek için bir oturumu `--record session.jsonl` ile kaydedin.
+
+## Bir oturumu kaydetmek
+
+`tests/acceptance/tetris/recorded.jsonl` gerçek bir ajan oturumudur: Claude Code, `SPEC.md` oyununu köprü
+üzerinden kurdu, kendi modülünü yazıp derledi ve Play modunda test etti. Yeni bir oturum kaydetmek için köprüyü
+`--record` ile çalıştırın, sözleşmeyi ajana verin, sonra kaydı normalleştirin:
+
+```bash
+illusion_mcp --launch --headless --deterministic --seed 1 --permissions auto --record session.jsonl \
+    --editor-arg --workspace --editor-arg ~/games
+python tools/acceptance/normalize_transcript.py session.jsonl tests/acceptance/tetris/recorded.jsonl
+```
+
+`normalize_transcript.py` başarılı her çağrıyı sırasıyla tutar; başarısız çağrıları ve yalnızca okuyan keşif
+çağrılarını dışarıda bırakır. Entity id'leri capture'lara dönüşür, `project.file_write` metinleri `files/`
+klasörüne gider (`{"$file": ...}` ile geri okunur), `component.get` ve `scene.query` ajanın gördüğünü bekler
+(zamanlamaya bağlı olan duraklatılmamış bir play oturumu hariç) ve kontrollerin ihtiyaç duyduğu adımlar sona
+eklenir: C4 capture'ları, bir yeniden başlatma ve bir `module.build`. Transcript'in ve `files/` klasörünün
+farkını inceleyin, sonra `ctest -R acceptance.tetris.recorded` çalıştırın. Build, `files/` klasörünü
+`illusion_tetris_agent_module` olarak derler ve play testleri her kuralı başvuru modülündeki gibi onda da
+kontrol eder; böylece ajanın kodunu bozan bir motor değişikliği Build'i kırar.

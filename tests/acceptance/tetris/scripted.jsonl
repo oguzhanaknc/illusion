@@ -25,3 +25,5 @@
 {"call": "scene.info", "capture": {"hash": "/hash"}, "expect": {"result": {"dirty": false, "entities": 7, "roots": 4}}}
 {"call": "project.file_read", "params": {"path": "assets:/scenes/main.scene"}, "capture": {"sceneText": "/text"}}
 {"restart": {"arguments": ["--project", "${root}"]}}
+{"comment": "The scripted session has no module of its own: it loads the reference module (tests/acceptance/tetris/module), as the recorded session builds the agent's."}
+{"call": "module.load", "params": {"path": "${tetrisModule}"}, "expect": {"result": {"modules": [{"name": "tetris"}]}}}

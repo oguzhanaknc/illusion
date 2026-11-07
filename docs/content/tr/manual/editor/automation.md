@@ -200,12 +200,29 @@ illusion_ctl --launch build/bin/Release/illusion_editor --editor-arg --determini
     --var 'tetrisModule="build/editor/tests/Release/illusion_tetris_module.dll"'
 ```
 
-`--var name=JSON` ilk adımdan önce bir `${name}` tanımlar; Tetris kontrolleri (C5) başvuru modülü
-`tests/acceptance/tetris/module/Tetris.cpp`'yi `${tetrisModule}` yolundan yükler, Play modunu `fixedStep`
-ile başlatır ve oyunu `input.inject` ile `play.step` üzerinden oynar. CTest modülü (`illusion_tetris_module`)
-build eder ve yolunu verir.
+`--var name=JSON` ilk adımdan önce bir `${name}` tanımlar; senaryolu transcript başvuru modülü
+`tests/acceptance/tetris/module/Tetris.cpp`'yi `${tetrisModule}` yolundan yükler (CTest onu
+`illusion_tetris_module` olarak build eder ve yolunu verir). Kontroller ardından modülün yüklü olduğunu
+doğrular (C2), Play modunu `fixedStep` ile başlatır ve oyunu `input.inject` ile `play.step` üzerinden oynar
+(C5).
+
+Tam olarak `{"$file": "yol"}` olan bir nesne, transcript'e göreli o dosyanın metnine dönüşür. Kaydedilmiş
+transcript, ajanın yazdığı kaynakları bu şekilde `files/` içinde tutar:
+
+```json
+{"call": "project.file_write", "params": {"path": "modules:/tetris/tetris.cpp", "text": {"$file": "files/modules/tetris/tetris.cpp"}}}
+```
+
+`recorded.jsonl` gerçek bir ajanın oturumudur (bkz. [Bir oturumu kaydetmek](ai-agents.md#bir-oturumu-kaydetmek)).
+Ajanın kendi modülünü `module.build` ile build eder ve aynı kontrollerden geçmelidir:
+
+```bash
+illusion_ctl --launch build/bin/Release/illusion_editor --editor-arg --deterministic --editor-arg --no-gpu \
+    replay tests/acceptance/tetris/recorded.jsonl --checks tests/acceptance/tetris/checks.jsonl --temp-workspace
+```
 
 CTest senaryoyu MCP köprüsü üzerinden iki protokol çağında da çalıştırır
-(`--via-mcp` ile `acceptance.tetris.board.mcp-legacy` ve `acceptance.tetris.board.mcp-modern`).
+(`--via-mcp` ile `acceptance.tetris.board.mcp-legacy` ve `acceptance.tetris.board.mcp-modern`); kaydedilmiş
+oturumu da `acceptance.tetris.recorded`, `.gpu` ve `.mcp` olarak çalıştırır.
 
 Protokolün kendisi [editör protokolü başvurusunda](../../reference/editor-protocol.md) anlatılır.

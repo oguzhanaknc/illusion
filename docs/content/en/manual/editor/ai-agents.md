@@ -152,3 +152,24 @@ connects again.
 | Edits vanish after `play.stop` | A play session ran: entity and component commands changed the play World. Pass `"world": "edit"`, or copy values with `play.keep_changes` before stopping (see [Play Mode](play-mode.md)). |
 
 Record a session with `--record session.jsonl` to see every message.
+
+## Recording a session
+
+`tests/acceptance/tetris/recorded.jsonl` is a real agent session: Claude Code built the game of `SPEC.md`
+through the bridge, wrote and compiled its own module and tested it in Play mode. To record a new one, run the
+bridge with `--record`, give the agent the contract, then normalise the record:
+
+```bash
+illusion_mcp --launch --headless --deterministic --seed 1 --permissions auto --record session.jsonl \
+    --editor-arg --workspace --editor-arg ~/games
+python tools/acceptance/normalize_transcript.py session.jsonl tests/acceptance/tetris/recorded.jsonl
+```
+
+`normalize_transcript.py` keeps every successful call in order and leaves out failed calls and read-only
+discovery. Entity ids become captures, the texts of `project.file_write` go to `files/` (read back with
+`{"$file": ...}`), `component.get` and `scene.query` expect what the agent saw (except in an unpaused play
+session, which depends on timing), and the steps the checks need come last: the C4 captures, a restart and a
+`module.build`. Review the diff of the transcript and of `files/`, then run
+`ctest -R acceptance.tetris.recorded`. The build compiles `files/` as `illusion_tetris_agent_module`, and the
+play tests check every rule on it as on the reference module, so an engine change that breaks the agent's
+code fails the build.
