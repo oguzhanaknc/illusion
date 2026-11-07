@@ -38,3 +38,9 @@ mkdocs-static-i18n.
 
 The Steamworks SDK is not distributed with illusion. Users supply it under Valve's Steamworks SDK
 Access Agreement.
+
+## Sample assets downloaded on demand
+
+| Assets | Source | Licence | Use | Shipped |
+| --- | --- | --- | --- | --- |
+| fern_02, grass_medium_01, shrub_01, rock_moss_set_01, boulder_01, dead_tree_trunk, Lantern_01, forest_ground_04 | [Poly Haven](https://polyhaven.com) | CC0 1.0 | The tech demo sample (`samples/techdemo/tools/fetch_assets.py`); not committed | No |

@@ -570,8 +570,11 @@ particles and physics can do together, and the engine features it needs.
   Milky Way; its sun or moon is the first shadowed directional light, fading through dusk; a per-renderer
   cube map redrawn in place (`createAtmosphereEnvironment()`/`updateAtmosphereEnvironment()`) only when the
   sky changes, CPU spherical harmonics (`atmosphereIrradiance()`, `ShAccumulator`); GPU and CPU tests
-- DEMO-4: Assets: a fetch script for CC0 Poly Haven models (pinned, SHA-256 checked, git-ignored) and
-  procedural trees
+- DEMO-4: ✅ Assets: `samples/techdemo/tools/fetch_assets.py` downloads eight CC0 Poly Haven assets (43
+  files pinned by size and SHA-256, git-ignored) and merges the plants' alpha maps into RGBA leaf textures
+  with a standard-library PNG decoder; `make_assets.py` generates the terrain (a flat clearing in a bowl of
+  hills), three branching trees with leaf cards, neon rings and bars, a log, bark and leaf textures, flame
+  and smoke sprites and looping ambient sounds; `test_tools.py` runs in CI
 - DEMO-5: The scene and its module: walking with a CharacterController, the day cycle, fireflies at night,
   neon signs, a campfire with smoke and embers, pushable props, wind gusts, ambient sound
 
