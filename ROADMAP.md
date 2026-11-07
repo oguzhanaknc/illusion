@@ -575,8 +575,12 @@ particles and physics can do together, and the engine features it needs.
   with a standard-library PNG decoder; `make_assets.py` generates the terrain (a flat clearing in a bowl of
   hills), three branching trees with leaf cards, neon rings and bars, a log, bark and leaf textures, flame
   and smoke sprites and looping ambient sounds; `test_tools.py` runs in CI
-- DEMO-5: The scene and its module: walking with a CharacterController, the day cycle, fireflies at night,
-  neon signs, a campfire with smoke and embers, pushable props, wind gusts, ambient sound
+- DEMO-5: ✅ The tech demo project (`samples/techdemo`, manual page "Tech Demo Project"): `make_scene.py`
+  writes `build.jsonl` (32 materials, about 5,500 entities on the terrain: 46 trees, 5,000 grass tufts, ferns,
+  shrubs, rocks, boulders, a campfire with flame/ember/smoke emitters and a light, GPU fireflies, lanterns, a
+  neon gate, hoops and bars, pushable orbs, ambience); the `techdemo` module walks a CharacterController with
+  mouse/stick look, sprint and jump, runs the day clock (T speeds it up), lets the fireflies, lanterns and
+  crickets out at night, flickers the fire and holds props kinematic until the terrain collider is ready
 
 ## M8 — Release pipeline
 

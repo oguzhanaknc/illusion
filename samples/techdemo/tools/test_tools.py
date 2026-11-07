@@ -16,6 +16,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 import fetch_assets  # noqa: E402
 import make_assets  # noqa: E402
+import make_scene  # noqa: E402
 
 
 def write_png(path, width, height, depth, colour, samples):
@@ -143,6 +144,38 @@ class MakeAssetsTest(unittest.TestCase):
         samples = make_assets.crickets(1.0)
         self.assertEqual(len(samples), int(1.0 * make_assets.RATE) - int(0.3 * make_assets.RATE))
         self.assertTrue(all(abs(s) < 2.0 for s in samples))
+
+
+class MakeSceneTest(unittest.TestCase):
+    def test_the_scene_has_unique_names_assets_that_exist_and_saves_once(self):
+        make_scene.commands.clear()
+        make_scene.build()
+        names = [c["params"]["name"] for c in make_scene.commands if c["call"] == "entity.create"]
+        self.assertEqual(len(names), len(set(names)))
+        self.assertEqual([c["call"] for c in make_scene.commands].count("scene.save_as"), 1)
+        materials = {c["params"]["path"] for c in make_scene.commands if c["call"] == "material.create"}
+        local = make_scene.PROJECT / "assets"
+        external = {entry[0] for entry in fetch_assets.MANIFEST} | {leaves for _, _, leaves in fetch_assets.LEAF_TEXTURES}
+        for command in make_scene.commands:
+            for value in re.findall(r'"(assets:/[^"#]+)', json.dumps(command)):
+                if value in materials or value.endswith(".scene"):
+                    continue
+                relative = value[len("assets:/"):]
+                if relative.startswith("external/"):
+                    self.assertIn(relative[len("external/"):], external, value)
+                else:
+                    self.assertTrue((local / relative).is_file(), value)
+
+    def test_parents_are_created_before_their_children(self):
+        make_scene.commands.clear()
+        make_scene.build()
+        seen = set()
+        for command in make_scene.commands:
+            if command["call"] == "entity.create":
+                parent = command["params"].get("parent")
+                if parent:
+                    self.assertIn(parent.lstrip("/"), seen)
+                seen.add(command["params"]["name"])
 
 
 if __name__ == "__main__":
