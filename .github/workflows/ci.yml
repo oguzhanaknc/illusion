@@ -38,6 +38,8 @@ jobs:
         run: python tools/check_layering.py
       - name: Scripting API coverage (showcase module)
         run: python tools/check_api_coverage.py
+      - name: Tech demo asset tools
+        run: python -m unittest discover -s samples/techdemo/tools -p "test_*.py"
 
   build:
     name: ${{ matrix.name }}
