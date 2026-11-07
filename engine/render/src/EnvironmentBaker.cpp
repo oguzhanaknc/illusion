@@ -61,6 +61,21 @@ bool EnvironmentBaker::initialize(nvrhi::IDevice* device)
     m_prefilter = createPipeline(device, m_layout, shaders::iblPrefilter(), "IBL prefilter");
     m_brdfLut = createPipeline(device, m_layout, shaders::iblBrdfLut(), "IBL BRDF table");
 
+    nvrhi::BindingLayoutDesc atmosphereLayout;
+    atmosphereLayout.visibility = nvrhi::ShaderType::Compute;
+    atmosphereLayout.bindings = {
+        nvrhi::BindingLayoutItem::ConstantBuffer(0),
+        nvrhi::BindingLayoutItem::Texture_UAV(0),
+        nvrhi::BindingLayoutItem::PushConstants(1, sizeof(Params)),
+    };
+    m_atmosphereLayout = device->createBindingLayout(atmosphereLayout);
+    if (!m_atmosphereLayout)
+    {
+        return false;
+    }
+    m_atmosphereCube =
+        createPipeline(device, m_atmosphereLayout, shaders::atmosphereCube(), "Atmosphere cube");
+
     nvrhi::TextureDesc dummy;
     dummy.width = 1;
     dummy.height = 1;
@@ -68,7 +83,8 @@ bool EnvironmentBaker::initialize(nvrhi::IDevice* device)
     dummy.debugName = "IBL dummy source";
     dummy.enableAutomaticStateTracking(nvrhi::ResourceStates::ShaderResource);
     m_dummySource = device->createTexture(dummy);
-    return m_sampler && m_equirectToCube && m_downsample && m_prefilter && m_brdfLut && m_dummySource;
+    return m_sampler && m_equirectToCube && m_downsample && m_prefilter && m_brdfLut && m_atmosphereCube &&
+           m_dummySource;
 }
 
 nvrhi::TextureHandle EnvironmentBaker::createCube(u32 size, u32 mips, const char* debugName) const
@@ -90,6 +106,13 @@ void EnvironmentBaker::dispatch(nvrhi::ICommandList* commands, nvrhi::IComputePi
                                 nvrhi::BindingSetItem source, nvrhi::BindingSetItem output,
                                 const Params& params, u32 faces)
 {
+    const nvrhi::BindingSetHandle bindings = passSet(source, output);
+    run(commands, pipeline, bindings, params, faces);
+}
+
+nvrhi::BindingSetHandle EnvironmentBaker::passSet(nvrhi::BindingSetItem source,
+                                                  nvrhi::BindingSetItem output) const
+{
     nvrhi::BindingSetDesc set;
     set.bindings = {
         source,
@@ -97,8 +120,13 @@ void EnvironmentBaker::dispatch(nvrhi::ICommandList* commands, nvrhi::IComputePi
         output,
         nvrhi::BindingSetItem::PushConstants(0, sizeof(Params)),
     };
-    nvrhi::BindingSetHandle bindings = m_device->createBindingSet(set, m_layout);
-    commands->setComputeState(nvrhi::ComputeState().setPipeline(pipeline).addBindingSet(bindings));
+    return m_device->createBindingSet(set, m_layout);
+}
+
+void EnvironmentBaker::run(nvrhi::ICommandList* commands, nvrhi::IComputePipeline* pipeline,
+                           nvrhi::IBindingSet* set, const Params& params, u32 faces)
+{
+    commands->setComputeState(nvrhi::ComputeState().setPipeline(pipeline).addBindingSet(set));
     commands->setPushConstants(&params, sizeof(params));
     commands->dispatch(groups(params.size), groups(params.size), faces);
 }
@@ -165,6 +193,87 @@ RenderResources::GpuEnvironment EnvironmentBaker::bake(nvrhi::ICommandList* comm
     }
     commands->endMarker();
     return environment;
+}
+
+RenderResources::GpuEnvironment EnvironmentBaker::createAtmosphere(u32 cubeSize, u32 specularSize,
+                                                                   const char* debugName)
+{
+    ILL_PROFILE_SCOPE();
+    cubeSize = std::bit_floor(std::clamp(cubeSize, 1u, 4096u));
+    specularSize = std::bit_floor(std::clamp(specularSize, 1u, cubeSize));
+    const u32 cubeMips = fullMipCount(cubeSize, cubeSize);
+    const u32 specularMips = std::min(fullMipCount(specularSize, specularSize), kMaxSpecularMips);
+
+    RenderResources::GpuEnvironment environment;
+    environment.background = createCube(cubeSize, cubeMips, debugName);
+    environment.specular = createCube(specularSize, specularMips, debugName);
+    environment.specularMips = specularMips;
+    environment.atmosphereConstants =
+        m_device->createBuffer(nvrhi::BufferDesc()
+                                   .setByteSize(sizeof(GpuAtmosphere))
+                                   .setIsConstantBuffer(true)
+                                   .setInitialState(nvrhi::ResourceStates::ConstantBuffer)
+                                   .setKeepInitialState(true)
+                                   .setDebugName(debugName));
+
+    const auto mipView = [](u32 mip) {
+        return nvrhi::TextureSubresourceSet(mip, 1, 0, 6);
+    };
+    const auto mipUav = [&](nvrhi::ITexture* texture, u32 mip) {
+        return nvrhi::BindingSetItem::Texture_UAV(0, texture, nvrhi::Format::UNKNOWN, mipView(mip),
+                                                  nvrhi::TextureDimension::Texture2DArray);
+    };
+    nvrhi::BindingSetDesc sky;
+    sky.bindings = {
+        nvrhi::BindingSetItem::ConstantBuffer(0, environment.atmosphereConstants),
+        mipUav(environment.background, 0),
+        nvrhi::BindingSetItem::PushConstants(1, sizeof(Params)),
+    };
+    environment.atmosphereSets.push_back(m_device->createBindingSet(sky, m_atmosphereLayout));
+    for (u32 mip = 1; mip < cubeMips; ++mip)
+    {
+        environment.atmosphereSets.push_back(passSet(
+            nvrhi::BindingSetItem::Texture_SRV(0, environment.background, nvrhi::Format::UNKNOWN,
+                                               mipView(mip - 1), nvrhi::TextureDimension::Texture2DArray),
+            mipUav(environment.background, mip)));
+    }
+    for (u32 mip = 0; mip < specularMips; ++mip)
+    {
+        environment.atmosphereSets.push_back(
+            passSet(nvrhi::BindingSetItem::Texture_SRV(0, environment.background),
+                    mipUav(environment.specular, mip)));
+    }
+    return environment;
+}
+
+void EnvironmentBaker::redrawAtmosphere(nvrhi::ICommandList* commands,
+                                        const RenderResources::GpuEnvironment& environment,
+                                        const GpuAtmosphere& atmosphere, u32 sampleCount)
+{
+    ILL_PROFILE_SCOPE();
+    const u32 cubeSize = environment.background->getDesc().width;
+    const u32 cubeMips = environment.background->getDesc().mipLevels;
+    const u32 specularSize = environment.specular->getDesc().width;
+    commands->beginMarker("Atmosphere environment");
+    commands->writeBuffer(environment.atmosphereConstants, &atmosphere, sizeof(atmosphere));
+    usize set = 0;
+    run(commands, m_atmosphereCube, environment.atmosphereSets[set++], Params{cubeSize, 0.0f, 0.0f, 0}, 6);
+    for (u32 mip = 1; mip < cubeMips; ++mip)
+    {
+        run(commands, m_downsample, environment.atmosphereSets[set++],
+            Params{std::max(cubeSize >> mip, 1u), 0.0f, 0.0f, 0}, 6);
+    }
+    for (u32 mip = 0; mip < environment.specularMips; ++mip)
+    {
+        const f32 roughness = environment.specularMips > 1
+                                  ? static_cast<f32>(mip) / static_cast<f32>(environment.specularMips - 1)
+                                  : 0.0f;
+        run(commands, m_prefilter, environment.atmosphereSets[set++],
+            Params{std::max(specularSize >> mip, 1u), roughness, static_cast<f32>(cubeSize),
+                   std::max(sampleCount, 1u)},
+            6);
+    }
+    commands->endMarker();
 }
 
 RenderResources::GpuEnvironment EnvironmentBaker::makeBlack(nvrhi::ICommandList* commands)

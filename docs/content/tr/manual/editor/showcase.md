@@ -28,7 +28,9 @@ sahnede yoksa veya varsayılanında bırakılmışsa ya da projede eksik Asset'l
 varsa başarısız olur. Bu yüzden yeni bir Component ya da alan `build.jsonl`'da bir değer ister. Üç parçacık
 emitter'ı `ParticleEmitter`'ı kapsar: trigger pedinin üzerinde bir kıvılcım çeşmesi, blokların yanında
 oynatılmayı bekleyen bir toz emitter'ı (`playOnStart` kapalı) ve GPU'da simüle edilen 20.000 ateş böceklik bir
-alan. Bir `Wind` Entity'si tozu (`windFactor`) avlunun öbür ucuna savurur.
+alan. Bir `Wind` Entity'si tozu (`windFactor`) avlunun öbür ucuna savurur. Devre dışı `Dusk Sky`
+Entity'si gün batımında bir `SkyAtmosphere` tutar: gökyüzünü ve güneşi hareketli olanlarla değiştirmek için onu
+etkinleştirin.
 
 ## Showcase modülü
 

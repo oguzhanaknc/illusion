@@ -679,6 +679,49 @@ EnvironmentHandle RenderResources::createEnvironment(const Image& equirect, cons
     return impl.storeEnvironment(std::move(environment));
 }
 
+GpuAtmosphere packAtmosphere(const AtmosphereDesc& desc) noexcept
+{
+    const auto unit = [](Vec3 v, Vec3 fallback) {
+        const f32 length = glm::length(v);
+        return length > 1e-6f && std::isfinite(length) ? v / length : fallback;
+    };
+    GpuAtmosphere gpu;
+    gpu.sun = Vec4(unit(desc.sunDirection, Vec3(0.0f, 1.0f, 0.0f)), std::max(desc.sunRadiance, 0.0f));
+    gpu.moon = Vec4(unit(desc.moonDirection, Vec3(0.0f, -1.0f, 0.0f)), std::max(desc.moonRadiance, 0.0f));
+    gpu.params = Vec4(std::clamp(desc.turbidity, 1.0f, 10.0f), 0.0f, 0.0f, 0.0f);
+    gpu.ground = Vec4(glm::max(desc.groundAlbedo, Vec3(0.0f)), 0.0f);
+    return gpu;
+}
+
+EnvironmentHandle RenderResources::createAtmosphereEnvironment(u32 cubeSize, u32 specularSize,
+                                                               const char* debugName)
+{
+    ILL_PROFILE_SCOPE();
+    Impl& impl = *m_impl;
+    impl.collect();
+    return impl.storeEnvironment(impl.baker.createAtmosphere(cubeSize, specularSize, debugName));
+}
+
+void RenderResources::updateAtmosphereEnvironment(nvrhi::ICommandList* commands,
+                                                  EnvironmentHandle environment,
+                                                  const AtmosphereDesc& atmosphere,
+                                                  const ShIrradiance& irradiance, u32 sampleCount)
+{
+    ILL_PROFILE_SCOPE();
+    Impl& impl = *m_impl;
+    if (!impl.environmentSlots.valid(environment.index, environment.generation))
+    {
+        return;
+    }
+    GpuEnvironment& gpu = impl.environments[environment.index];
+    if (gpu.atmosphereSets.empty())
+    {
+        return;
+    }
+    impl.baker.redrawAtmosphere(commands, gpu, packAtmosphere(atmosphere), sampleCount);
+    gpu.irradiance = irradiance;
+}
+
 namespace
 {
 

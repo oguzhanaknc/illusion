@@ -9,6 +9,7 @@
 /// memory and slot are reused once the GPU finished the work submitted before the release (see
 /// RenderResources::collect()). See docs/adr/0045-asset-catalog-and-file-watching.md.
 
+#include <illusion/assets/Atmosphere.hpp>
 #include <illusion/assets/Environment.hpp>
 #include <illusion/assets/Model.hpp>
 #include <illusion/core/Base.hpp>
@@ -131,6 +132,20 @@ public:
     /// again, for example from a bake cache. @p baked must be valid (BakedEnvironment::isValid(), asserted).
     [[nodiscard]] EnvironmentHandle createEnvironment(const BakedEnvironment& baked,
                                                       const char* debugName = "Environment");
+
+    /// Creates an environment for a sky that changes every frame (SkyAtmosphere): cube maps that
+    /// updateAtmosphereEnvironment() redraws in place, so the Handle and the binding sets that use it stay
+    /// valid. Face sizes are rounded down to powers of two; the reflections are at most @p cubeSize.
+    [[nodiscard]] EnvironmentHandle createAtmosphereEnvironment(u32 cubeSize = 64, u32 specularSize = 64,
+                                                                const char* debugName = "Atmosphere");
+
+    /// Records into @p commands the redraw of @p environment (made by createAtmosphereEnvironment()) from
+    /// the sky @p atmosphere, and sets its diffuse irradiance to @p irradiance (for example from
+    /// atmosphereIrradiance()). Reflections are prefiltered with @p sampleCount samples. Does nothing for
+    /// other environments; does not allocate.
+    void updateAtmosphereEnvironment(nvrhi::ICommandList* commands, EnvironmentHandle environment,
+                                     const AtmosphereDesc& atmosphere, const ShIrradiance& irradiance,
+                                     u32 sampleCount = 32);
 
     /// Starts copying the cube maps of @p environment to the CPU: records the copies after the work already
     /// submitted (its bake) and an event query, and returns a ticket for readEnvironment(). Returns 0 for an

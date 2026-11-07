@@ -728,6 +728,56 @@ TEST_CASE("materials that sway bend with the wind in every pass, the others stay
     CHECK(device->validationErrorCount() == 0);
 }
 
+TEST_CASE("a SkyAtmosphere draws a day and a night sky, lights the scene and redraws only when it changes")
+{
+    auto device = RenderDevice::create(headless());
+    REQUIRE(device != nullptr);
+    {
+        RenderResources resources(*device);
+        SceneRendererDesc desc = unormTarget();
+        desc.post.bloom.enabled = false;
+        auto renderer = SceneRenderer::create(*device, resources, desc);
+        REQUIRE(renderer != nullptr);
+
+        World world;
+        Transform ground;
+        ground.position = Vec3(0.0f, -1.0f, 0.0f);
+        world.create(ground,
+                     RenderMesh{resources.createMesh(makePlane(40.0f, 1), "Ground"), 0, MaterialHandle{}});
+        const Entity skyEntity = world.create(SkyAtmosphere{.timeOfDay = 12.0f});
+
+        constexpr u32 kSkyY = 2;     // near the top of the view: sky
+        constexpr u32 kGroundY = 60; // near the bottom: the ground
+        std::vector<u8> pixels = renderScene(*device, *renderer, world, nullptr);
+        CHECK(renderer->stats().atmosphereUpdates == 1);
+        const Rgb daySky = pixelAt(pixels, 32, kSkyY);
+        const Rgb dayGround = pixelAt(pixels, 32, kGroundY);
+        CHECK(daySky.b > daySky.r + 30);             // blue
+        CHECK(dayGround.r > 60);                     // lit by the sun and the sky
+        CHECK(renderer->stats().shadowCasters >= 1); // the sun casts shadows
+
+        // An unchanged sky is not redrawn.
+        renderScene(*device, *renderer, world, nullptr);
+        CHECK(renderer->stats().atmosphereUpdates == 0);
+
+        world.get<SkyAtmosphere>(skyEntity).timeOfDay = 0.0f;
+        pixels = renderScene(*device, *renderer, world, nullptr);
+        CHECK(renderer->stats().atmosphereUpdates == 1);
+        const Rgb nightSky = pixelAt(pixels, 32, kSkyY);
+        const Rgb nightGround = pixelAt(pixels, 32, kGroundY);
+        CHECK(nightSky.r + nightSky.g + nightSky.b < daySky.r + daySky.g + daySky.b - 150);
+        CHECK(nightGround.r < dayGround.r - 30);
+        CHECK(nightGround.b >= nightGround.r); // bluish moonlight
+
+        // An inactive atmosphere is ignored: the clear colour is back.
+        world.emplace<Inactive>(skyEntity);
+        pixels = renderScene(*device, *renderer, world, nullptr);
+        CHECK(pixelAt(pixels, 32, kSkyY).b == 0);
+    }
+    device->waitIdle();
+    CHECK(device->validationErrorCount() == 0);
+}
+
 TEST_CASE("occlusion culling skips hidden objects without popping when they appear")
 {
     auto device = RenderDevice::create(headless());

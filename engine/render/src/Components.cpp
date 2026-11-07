@@ -161,6 +161,61 @@ void reflectRenderComponents(ComponentRegistry& registry)
                 .max = 0.5,
                 .hint = FieldHint::Angle})
         .field("resolution", &ProceduralSky::resolution, {.min = 8.0, .max = 8192.0, .advanced = true});
+    reflect<SkyAtmosphere>("illusion.SkyAtmosphere", 1, registry)
+        .meta({.displayName = "Sky atmosphere",
+               .category = "Rendering/Lights",
+               .icon = "routine",
+               .description =
+                   "A sky that follows the time of day, with its sun, moon and stars as the main light.",
+               .docsAnchor = "manual/rendering.md#day-and-night",
+               .singleton = true})
+        .field("timeOfDay", &SkyAtmosphere::timeOfDay,
+               {.description = "Hours since midnight: the sun rises at 6 and sets at 18.",
+                .category = "Sun and moon",
+                .min = 0.0,
+                .max = 24.0,
+                .hint = FieldHint::Slider})
+        .field("sunAzimuth", &SkyAtmosphere::sunAzimuth,
+               {.description = "Turn of the sun's path about the up axis.",
+                .category = "Sun and moon",
+                .unit = Unit::Radians,
+                .displayUnit = Unit::Degrees,
+                .hint = FieldHint::Angle})
+        .field("sunTilt", &SkyAtmosphere::sunTilt,
+               {.description = "Angle of the noon sun from straight up.",
+                .category = "Sun and moon",
+                .unit = Unit::Radians,
+                .displayUnit = Unit::Degrees,
+                .min = 0.0,
+                .max = 1.5,
+                .hint = FieldHint::Angle})
+        .field("moonOffset", &SkyAtmosphere::moonOffset,
+               {.description = "Hours the moon trails the point opposite the sun: 0 full moon, 12 new moon.",
+                .category = "Sun and moon",
+                .min = -12.0,
+                .max = 12.0})
+        .field("turbidity", &SkyAtmosphere::turbidity,
+               {.description = "Haze: 1 clear mountain air, 10 thick haze.",
+                .category = "Sky",
+                .min = 1.0,
+                .max = 10.0,
+                .hint = FieldHint::Slider})
+        .field("skyIntensity", &SkyAtmosphere::skyIntensity,
+               {.category = "Sky", .min = 0.0, .hint = FieldHint::LogSlider})
+        .field("sunIntensity", &SkyAtmosphere::sunIntensity,
+               {.description = "Illuminance of the noon sunlight.", .category = "Sun and moon", .min = 0.0})
+        .field("moonIntensity", &SkyAtmosphere::moonIntensity,
+               {.description = "Illuminance of a full moon's light.", .category = "Sun and moon", .min = 0.0})
+        .field("starIntensity", &SkyAtmosphere::starIntensity,
+               {.category = "Sky", .min = 0.0, .softMax = 4.0})
+        .field("groundAlbedo", &SkyAtmosphere::groundAlbedo,
+               {.category = "Sky", .min = 0.0, .max = 1.0, .hint = FieldHint::Color})
+        .field("castShadows", &SkyAtmosphere::castShadows, {.category = "Sun and moon"})
+        .field("lightingResolution", &SkyAtmosphere::lightingResolution,
+               {.description = "Face size of the reflection cube map.",
+                .min = 16.0,
+                .max = 256.0,
+                .advanced = true});
     reflectRuntime<RenderMesh>(
         "illusion.RenderMesh",
         {.displayName = "Render mesh",

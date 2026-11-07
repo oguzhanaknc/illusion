@@ -7,6 +7,7 @@ add_library(illusion_assets STATIC
     src/AssetImport.cpp
     src/AssetReflection.cpp
     src/AssetStreamer.cpp
+    src/Atmosphere.cpp
     src/Environment.cpp
     src/Gltf.cpp
     src/Image.cpp

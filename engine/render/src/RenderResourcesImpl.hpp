@@ -2,6 +2,7 @@
 
 // Internal GPU representations shared by RenderResources and SceneRenderer.
 
+#include <illusion/assets/Atmosphere.hpp>
 #include <illusion/render/RenderResources.hpp>
 
 #include <vector>
@@ -52,7 +53,24 @@ struct RenderResources::GpuEnvironment
     nvrhi::TextureHandle specular;   // RGBA16F cube map, mip i prefiltered for roughness i / (mips - 1)
     u32 specularMips = 1;
     ShIrradiance irradiance;
+    // Atmosphere environments (createAtmosphereEnvironment()) are redrawn in place with these: the sky
+    // constants and the binding sets of the sky, downsample and prefilter passes, made once.
+    nvrhi::BufferHandle atmosphereConstants;
+    std::vector<nvrhi::BindingSetHandle> atmosphereSets;
 };
+
+/// GPU layout of an AtmosphereDesc (must match AtmosphereData in Atmosphere.slang).
+struct GpuAtmosphere
+{
+    Vec4 sun;    // xyz: towards the sun, w: sun radiance scale
+    Vec4 moon;   // xyz: towards the moon, w: moon radiance scale
+    Vec4 params; // x: turbidity
+    Vec4 ground; // rgb: ground albedo
+};
+static_assert(sizeof(GpuAtmosphere) == 64);
+
+/// Packs @p desc for the shaders, with normalized directions.
+[[nodiscard]] GpuAtmosphere packAtmosphere(const AtmosphereDesc& desc) noexcept;
 
 struct RenderResources::GpuMaterial
 {

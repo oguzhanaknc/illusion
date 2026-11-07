@@ -12,12 +12,14 @@
 #include <illusion/render/BuiltinShaders.hpp>
 #include <illusion/render/RenderDevice.hpp>
 #include <illusion/render/SceneRenderer.hpp>
+#include <illusion/render/SkyAtmosphere.hpp>
 
 #include <nvrhi/utils.h>
 
 #include <algorithm>
 #include <array>
 #include <atomic>
+#include <bit>
 #include <cmath>
 #include <cstddef>
 #include <unordered_map>
@@ -70,6 +72,8 @@ struct GpuViewConstants
     Vec4 wind;                   // xyz: normalized direction, w: speed (m/s; 0 without a Wind)
     Vec4 windGusts;              // x: gust strength, y: gust frequency, z: turbulence, w: time
     Vec4 windHistory;            // x: time of the previous frame
+    GpuAtmosphere atmosphere;    // the SkyAtmosphere, when atmosphereLook.z is 1
+    Vec4 atmosphereLook; // x: star brightness, y: seconds, z: 1 with a SkyAtmosphere, w: moon lit fraction
 };
 static_assert(offsetof(GpuViewConstants, directional) == 112);
 static_assert(offsetof(GpuViewConstants, points) == 240);
@@ -286,7 +290,22 @@ struct SceneRenderer::Impl
     nvrhi::IFramebuffer* outputFramebufferFor(nvrhi::ITexture* color);
     void ensureInstanceCapacity(u32 count);
     void cull(World& world, const RenderView& view, JobSystem* jobs);
-    i32 gatherLights(World& world, GpuViewConstants& constants, f32& angularDiameter);
+    i32 gatherLights(World& world, GpuViewConstants& constants, f32& angularDiameter,
+                     const SkyAtmosphere* atmosphere, const SkyAtmosphereState& sky);
+    // The environment a SkyAtmosphere draws into, made on first use and redrawn when the sky changes.
+    EnvironmentHandle atmosphereEnvironment;
+    u32 atmosphereResolution = 0;
+    bool atmosphereDrawn = false;
+    AtmosphereDesc atmosphereLast;
+    void updateAtmosphere(nvrhi::ICommandList* commandList, const SkyAtmosphere& atmosphere,
+                          const SkyAtmosphereState& sky);
+    ~Impl()
+    {
+        if (resources != nullptr && atmosphereEnvironment.index != 0)
+        {
+            resources->releaseEnvironment(atmosphereEnvironment);
+        }
+    }
     nvrhi::IBindingSet* viewSetFor(EnvironmentHandle environment);
     [[nodiscard]] const RenderResources::GpuMaterial* shadowMaterial(const DrawItem& item) const noexcept;
     void sortShadowCasters(u32 cascade);
@@ -927,10 +946,22 @@ void setWind(World& world, GpuViewConstants& constants)
 
 } // namespace
 
-i32 SceneRenderer::Impl::gatherLights(World& world, GpuViewConstants& constants, f32& angularDiameter)
+i32 SceneRenderer::Impl::gatherLights(World& world, GpuViewConstants& constants, f32& angularDiameter,
+                                      const SkyAtmosphere* atmosphere, const SkyAtmosphereState& sky)
 {
     i32 shadowed = -1;
     constants.directionalCount = 0;
+    // The sun or moon of a SkyAtmosphere comes first and casts the shadows.
+    if (atmosphere != nullptr && sky.light.intensity > 0.0f)
+    {
+        if (atmosphere->castShadows)
+        {
+            shadowed = 0;
+            angularDiameter = sky.light.moon ? 0.009f : 0.0093f;
+        }
+        constants.directional[constants.directionalCount++] = GpuDirectionalLight{
+            Vec4(sky.light.direction, 0.0f), Vec4(sky.light.color * sky.light.intensity, 0.0f)};
+    }
     world.query<const Transform, const DirectionalLight>().without<Inactive>().each(
         [&](const Transform& transform, const DirectionalLight& light) {
             if (constants.directionalCount < kMaxDirectionalLights)
@@ -970,6 +1001,34 @@ i32 SceneRenderer::Impl::gatherLights(World& world, GpuViewConstants& constants,
 const RenderResources::GpuMaterial* SceneRenderer::Impl::shadowMaterial(const DrawItem& item) const noexcept
 {
     return item.material->alphaMode == AlphaMode::Mask || item.material->wind ? item.material : nullptr;
+}
+
+void SceneRenderer::Impl::updateAtmosphere(nvrhi::ICommandList* commandList, const SkyAtmosphere& atmosphere,
+                                           const SkyAtmosphereState& sky)
+{
+    ILL_PROFILE_SCOPE();
+    const u32 resolution = std::bit_floor(std::clamp(atmosphere.lightingResolution, 16u, 256u));
+    if (atmosphereEnvironment.index == 0 || resolution != atmosphereResolution)
+    {
+        if (atmosphereEnvironment.index != 0)
+        {
+            resources->releaseEnvironment(atmosphereEnvironment);
+        }
+        atmosphereEnvironment =
+            resources->createAtmosphereEnvironment(resolution, resolution, "SkyAtmosphere");
+        atmosphereResolution = resolution;
+        atmosphereDrawn = false;
+    }
+    // A still sky is drawn once; a moving one every frame (a few small compute passes).
+    if (atmosphereDrawn && sky.atmosphere == atmosphereLast)
+    {
+        return;
+    }
+    resources->updateAtmosphereEnvironment(commandList, atmosphereEnvironment, sky.atmosphere,
+                                           atmosphereIrradiance(sky.atmosphere));
+    atmosphereLast = sky.atmosphere;
+    atmosphereDrawn = true;
+    ++stats.atmosphereUpdates;
 }
 
 void SceneRenderer::Impl::sortShadowCasters(u32 cascade)
@@ -1116,8 +1175,18 @@ void SceneRenderer::render(nvrhi::ICommandList* commandList, nvrhi::ITexture* co
         impl.cameraHistoryValid ? impl.previousViewProjection : constants.unjitteredViewProjection;
     constants.effects = Vec4(post.ambientOcclusion.enabled ? 1.0f : 0.0f, static_cast<f32>(impl.debugView),
                              view.projection[3][3], 0.0f);
+    // The first active SkyAtmosphere draws the sky and its sun or moon is the main light.
+    const SkyAtmosphere* atmosphere = nullptr;
+    world.query<const SkyAtmosphere>().without<Inactive>().each([&](const SkyAtmosphere& candidate) {
+        if (atmosphere == nullptr)
+        {
+            atmosphere = &candidate;
+        }
+    });
+    const SkyAtmosphereState sky =
+        atmosphere != nullptr ? evaluateSkyAtmosphere(*atmosphere) : SkyAtmosphereState{};
     f32 angularDiameter = 0.0f;
-    const i32 shadowedLight = impl.gatherLights(world, constants, angularDiameter);
+    const i32 shadowedLight = impl.gatherLights(world, constants, angularDiameter, atmosphere, sky);
     setWind(world, constants);
 
     // Particles face the camera: its right and up axes are the first two rows of the view matrix.
@@ -1226,32 +1295,46 @@ void SceneRenderer::render(nvrhi::ICommandList* commandList, nvrhi::ITexture* co
     }
     impl.ensureInstanceCapacity(instanceCount);
 
-    // The first SkyLight with an environment provides image-based lighting; without one, the constant
-    // ambient light does.
+    // A SkyAtmosphere lights the scene with its sky. Otherwise the first SkyLight with an environment
+    // provides image-based lighting; without one, the constant ambient light does.
     const SkyLight* skyLight = nullptr;
     EnvironmentHandle environment;
     Quat skyOrientation(1.0f, 0.0f, 0.0f, 0.0f);
-    world.query<const Transform, const SkyLight, const RenderSky>().without<Inactive>().each(
-        [&](const Transform& transform, const SkyLight& sky, const RenderSky& gpuSky) {
-            if (skyLight == nullptr && gpuSky.environment.index != 0)
-            {
-                skyLight = &sky;
-                environment = gpuSky.environment;
-                skyOrientation = transform.rotation;
-            }
-        });
+    if (atmosphere != nullptr)
+    {
+        impl.updateAtmosphere(commandList, *atmosphere, sky);
+        environment = impl.atmosphereEnvironment;
+        constants.atmosphere = packAtmosphere(sky.atmosphere);
+        constants.atmosphereLook =
+            Vec4(std::max(atmosphere->starIntensity, 0.0f) * sky.starVisibility,
+                 static_cast<f32>(impl.frameIndex % 1'000'000u) / 60.0f, 1.0f, sky.moonIllumination);
+    }
+    else
+    {
+        world.query<const Transform, const SkyLight, const RenderSky>().without<Inactive>().each(
+            [&](const Transform& transform, const SkyLight& light, const RenderSky& gpuSky) {
+                if (skyLight == nullptr && gpuSky.environment.index != 0)
+                {
+                    skyLight = &light;
+                    environment = gpuSky.environment;
+                    skyOrientation = transform.rotation;
+                }
+            });
+    }
     const RenderResources::GpuEnvironment& gpuEnvironment = impl.resources->environment(environment);
-    const f32 skyIntensity = skyLight != nullptr ? skyLight->intensity : 0.0f;
+    const bool lit = skyLight != nullptr || atmosphere != nullptr;
+    const f32 skyIntensity =
+        skyLight != nullptr ? skyLight->intensity : (atmosphere != nullptr ? 1.0f : 0.0f);
     const ShIrradiance irradiance =
-        skyLight != nullptr ? gpuEnvironment.irradiance : ShIrradiance::uniform(impl.desc.ambient);
-    const f32 irradianceScale = skyLight != nullptr ? skyIntensity : 1.0f;
+        lit ? gpuEnvironment.irradiance : ShIrradiance::uniform(impl.desc.ambient);
+    const f32 irradianceScale = lit ? skyIntensity : 1.0f;
     for (usize i = 0; i < irradiance.coefficients.size(); ++i)
     {
         constants.sh[i] = Vec4(irradiance.coefficients[i] * irradianceScale, 0.0f);
     }
     constants.skyRotation = glm::mat4_cast(glm::inverse(glm::normalize(skyOrientation)));
     constants.sky = Vec4(skyIntensity, static_cast<f32>(gpuEnvironment.specularMips - 1), skyIntensity, 0.0f);
-    const bool drawBackground = skyLight != nullptr && skyLight->background;
+    const bool drawBackground = atmosphere != nullptr || (skyLight != nullptr && skyLight->background);
 
     // Opaque and masked items come first in the camera order; they form batches of identical
     // (mesh, submesh, material) that the GPU culls and draws indirectly.

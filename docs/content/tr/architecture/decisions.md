@@ -55,6 +55,7 @@ Record (ADR) olarak kaydedilir. Her kayıt bağlamı, kararı ve sonuçlarını 
 | [0046](https://github.com/oguzhanaknc/illusion/blob/main/docs/adr/0046-prefabs-as-instance-records.md) | Prefab'lar: alan düzeyinde override ve iç içe yerleştirme ile instance kayıtları |
 | [0047](https://github.com/oguzhanaknc/illusion/blob/main/docs/adr/0047-particle-effects.md) | Parçacık efektleri: kaydedilen bir emitter Component, deterministik bir CPU simülasyonu, GPU billboard'ları |
 | [0048](https://github.com/oguzhanaknc/illusion/blob/main/docs/adr/0048-wind.md) | Rüzgar: bir sahne Component'i, Material başına vertex kaydırma, onu izleyen parçacıklar |
+| [0049](https://github.com/oguzhanaknc/illusion/blob/main/docs/adr/0049-day-and-night.md) | Gece ve gündüz: piksel başına çizilen analitik bir gökyüzü, ana ışık olarak güneşi, yerinde yeniden çizilen küçük bir cube map |
 
 Yeni bir karar önermek için `docs/adr/0000-template.md` dosyasını kopyalayın ve
 [katkıda bulunma rehberini](../contributing.md#architecture-decision-recordlar) izleyin.
