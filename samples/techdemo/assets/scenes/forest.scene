@@ -4253,7 +4253,11 @@
         "illusion.PointLight": {
           "color": [1.0, 0.7, 0.35],
           "intensity": 6.0,
-          "range": 6.0
+          "range": 6.0,
+          "castShadows": true,
+          "sourceRadius": 0.04,
+          "shadowBias": 0.03,
+          "shadowNearPlane": 0.2
         }
       }
     },
@@ -4348,7 +4352,11 @@
         "illusion.PointLight": {
           "color": [1.0, 0.7, 0.35],
           "intensity": 6.0,
-          "range": 6.0
+          "range": 6.0,
+          "castShadows": true,
+          "sourceRadius": 0.04,
+          "shadowBias": 0.03,
+          "shadowNearPlane": 0.2
         }
       }
     },
@@ -4443,7 +4451,11 @@
         "illusion.PointLight": {
           "color": [1.0, 0.7, 0.35],
           "intensity": 6.0,
-          "range": 6.0
+          "range": 6.0,
+          "castShadows": true,
+          "sourceRadius": 0.04,
+          "shadowBias": 0.03,
+          "shadowNearPlane": 0.2
         }
       }
     },
@@ -8466,7 +8478,11 @@
         "illusion.PointLight": {
           "color": [1.0, 0.25, 0.85],
           "intensity": 22.0,
-          "range": 9.0
+          "range": 9.0,
+          "castShadows": false,
+          "sourceRadius": 0.05,
+          "shadowBias": 0.03,
+          "shadowNearPlane": 0.1
         },
         "illusion.Transform": {
           "position": [11.942, 1.639, 3.694],
@@ -18278,7 +18294,11 @@
         "illusion.PointLight": {
           "color": [0.2, 0.9, 1.0],
           "intensity": 22.0,
-          "range": 9.0
+          "range": 9.0,
+          "castShadows": false,
+          "sourceRadius": 0.05,
+          "shadowBias": 0.03,
+          "shadowNearPlane": 0.1
         },
         "illusion.Transform": {
           "position": [-5.01, 1.408, -11.452],
@@ -48676,7 +48696,11 @@
         "illusion.PointLight": {
           "color": [0.55, 0.3, 1.0],
           "intensity": 22.0,
-          "range": 9.0
+          "range": 9.0,
+          "castShadows": false,
+          "sourceRadius": 0.05,
+          "shadowBias": 0.03,
+          "shadowNearPlane": 0.1
         },
         "illusion.Transform": {
           "position": [-10.014, 1.564, 7.481],
@@ -71165,7 +71189,11 @@
         "illusion.PointLight": {
           "color": [1.0, 0.55, 0.22],
           "intensity": 40.0,
-          "range": 14.0
+          "range": 14.0,
+          "castShadows": true,
+          "sourceRadius": 0.25,
+          "shadowBias": 0.03,
+          "shadowNearPlane": 0.35
         },
         "illusion.Transform": {
           "position": [0.0, 0.8, 0.0],
@@ -88608,7 +88636,11 @@
         "illusion.PointLight": {
           "color": [0.2, 0.85, 1.0],
           "intensity": 30.0,
-          "range": 10.0
+          "range": 10.0,
+          "castShadows": false,
+          "sourceRadius": 0.05,
+          "shadowBias": 0.03,
+          "shadowNearPlane": 0.1
         },
         "illusion.Transform": {
           "position": [0.0, 1.723, -10.4],

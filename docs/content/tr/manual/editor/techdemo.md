@@ -42,9 +42,10 @@ Tam bir gün altı dakika sürer.
   eğrelti ve çalı da onunla eğilir.
 - **Gökyüzü**: saatini modülün ilerlettiği bir `SkyAtmosphere`; güneşi gündüzü aydınlatır ve gölgeleri düşürür,
   ay geceyi.
-- **Kamp ateşi**: alev, köz ve duman emitter'ları (közler ve duman rüzgarla sürüklenir), titreyen bir nokta ışık
-  ve döngüsel bir çıtırtı.
-- **Gece**: 4.000 GPU ateş böceği, alacakaranlıkta parlayan üç fener, cırcır böcekleri.
+- **Kamp ateşi**: alev, köz ve duman emitter'ları (közler ve duman rüzgarla sürüklenir), titreyen, alevlerle
+  birlikte oynayan ve yumuşak, hareketli [gölgeler](../rendering.md#point-light-shadows) düşüren bir nokta
+  ışık ve döngüsel bir çıtırtı.
+- **Gece**: 4.000 GPU ateş böceği, alacakaranlıkta parlayan ve gölge düşüren üç fener, cırcır böcekleri.
 - **Neon**: camgöbeği, eflatun ve mor renklerde bir kapı, üç halka ve çubuklar; bloom oluşturan HDR ışımayla.
 - **Fizik**: küreler ve fenerler oyuncunun ittiği dinamik gövdelerdir. Arazinin collider'ı hazır olana kadar
   kinematik kalırlar; böylece o pişirilirken içinden düşmezler.

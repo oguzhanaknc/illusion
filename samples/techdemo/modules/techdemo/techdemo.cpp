@@ -48,6 +48,7 @@ struct Player
     Entity eye{};
     Entity sky{};
     Entity fireLight{};
+    Vec3 fireBase{0.0f}; ///< Where the fire light sits; it dances around this point.
     Entity fireflies{};
     Entity crickets{};
     std::array<Entity, 3> lanterns{};
@@ -123,6 +124,10 @@ void startModule(ModuleContext& context)
     player.eye = findNamed(world, "Eye");
     player.sky = findNamed(world, "Sky");
     player.fireLight = findNamed(world, "Fire Light");
+    if (const Transform* fire = world.tryGet<Transform>(player.fireLight))
+    {
+        player.fireBase = fire->position;
+    }
     player.fireflies = findNamed(world, "Fireflies");
     player.crickets = findNamed(world, "Crickets");
     constexpr std::array<std::string_view, 3> kLanterns{"Lantern 0 Light", "Lantern 1 Light",
@@ -277,7 +282,7 @@ void updateTime(World& world, const InputService* input, ParticleService* partic
     }
 }
 
-// The campfire flickers and the neon hums.
+// The campfire flickers and its light dances with the flames, so the shadows it casts move; the neon hums.
 void updateLights(World& world, Player& player)
 {
     const f32 t = player.seconds;
@@ -286,6 +291,13 @@ void updateLights(World& world, Player& player)
     if (PointLight* fire = world.tryGet<PointLight>(player.fireLight))
     {
         fire->intensity = kFireIntensity * flicker;
+    }
+    if (Transform* fire = world.tryGet<Transform>(player.fireLight))
+    {
+        fire->position =
+            player.fireBase + Vec3(0.05f * std::sin(t * 7.3f) + 0.03f * std::sin(t * 17.0f + 0.6f),
+                                   0.06f * (flicker - 0.82f),
+                                   0.05f * std::sin(t * 5.9f + 2.1f) + 0.03f * std::sin(t * 13.0f));
     }
     for (u32 i = 0; i < player.neonLights.size(); ++i)
     {

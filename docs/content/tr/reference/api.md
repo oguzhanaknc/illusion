@@ -94,7 +94,7 @@ doxygen docs/Doxyfile
 | `illusion/render/SceneRenderer.hpp` | `SceneRenderer`, `RenderView`, `RenderStats`, `RenderViewTargets`, `RenderGpuTimings`, `RenderDebugView`, `findMainCamera` |
 | `illusion/render/ReadbackRing.hpp` | Event query kullanan sınırlı asenkron Texture okumaları |
 | `illusion/render/DebugDraw.hpp` | Önceden ayrılmış debug geometrisi ve derinlik örnekleyen overlay'ler |
-| `illusion/render/Shadows.hpp` | `ShadowSettings`, `ShadowCascades`, `computeShadowCascades` |
+| `illusion/render/Shadows.hpp` | `ShadowSettings`, `ShadowCascades`, `computeShadowCascades`, `pointShadowFaceMatrix`, `pointShadowFace` |
 | `illusion/render/UploadQueue.hpp` | `UploadQueue`: streaming ile gelen modellerin byte bütçeli GPU yüklemesi |
 | `illusion/render/PostProcess.hpp` | `PostProcessSettings` (ambient occlusion, bloom, TAA), `temporalJitter` |
 | `illusion/render/SceneComponents.hpp` | Kaydedilen render Component'leri: `MeshRenderer`, `Camera`, `DirectionalLight`, `PointLight`, `SkyLight`, `ProceduralSky` |

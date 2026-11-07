@@ -57,6 +57,7 @@ Record (ADR) olarak kaydedilir. Her kayıt bağlamı, kararı ve sonuçlarını 
 | [0048](https://github.com/oguzhanaknc/illusion/blob/main/docs/adr/0048-wind.md) | Rüzgar: bir sahne Component'i, Material başına vertex kaydırma, onu izleyen parçacıklar |
 | [0049](https://github.com/oguzhanaknc/illusion/blob/main/docs/adr/0049-day-and-night.md) | Gece ve gündüz: piksel başına çizilen analitik bir gökyüzü, ana ışık olarak güneşi, yerinde yeniden çizilen küçük bir cube map |
 | [0050](https://github.com/oguzhanaknc/illusion/blob/main/docs/adr/0050-volumetric-fog.md) | Froxel ızgarasında hacimsel sis: gölgeli ışıkla doldurulur, zamansal olarak yeniden yansıtılır, önden arkaya toplanır |
+| [0051](https://github.com/oguzhanaknc/illusion/blob/main/docs/adr/0051-point-light-shadows.md) | Noktasal ışık gölgeleri: ışık başına isteğe bağlı, tek dizide sınırlı sayıda küp map, ters derinlik, PCSS |
 
 Yeni bir karar önermek için `docs/adr/0000-template.md` dosyasını kopyalayın ve
 [katkıda bulunma rehberini](../contributing.md#architecture-decision-recordlar) izleyin.

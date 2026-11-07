@@ -43,8 +43,9 @@ A full day lasts six minutes.
 - **Sky**: a `SkyAtmosphere` whose time the module advances; its sun lights the day and casts the shadows,
   the moon the night.
 - **Campfire**: flame, ember and smoke emitters (the embers and smoke drift downwind), a flickering point light
-  and a looping crackle.
-- **Night**: 4,000 GPU fireflies, three lanterns that brighten at dusk, crickets.
+  that dances with the flames and casts soft, moving [shadows](../rendering.md#point-light-shadows), and a
+  looping crackle.
+- **Night**: 4,000 GPU fireflies, three lanterns that brighten at dusk and cast shadows, crickets.
 - **Neon**: a gate, three hoops and bars in cyan, magenta and violet, with HDR emission that blooms.
 - **Physics**: the orbs and lanterns are dynamic bodies the player pushes. They stay kinematic until the
   terrain's collider is ready, so they do not fall through it while it is cooked.

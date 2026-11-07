@@ -1042,7 +1042,11 @@
         "illusion.PointLight": {
           "color": [1.0, 0.7, 0.4],
           "intensity": 25.0,
-          "range": 6.0
+          "range": 6.0,
+          "castShadows": true,
+          "sourceRadius": 0.15,
+          "shadowBias": 0.04,
+          "shadowNearPlane": 0.2
         },
         "illusion.Transform": {
           "position": [0.0, 2.6, 2.0],

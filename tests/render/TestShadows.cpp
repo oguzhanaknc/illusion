@@ -151,3 +151,64 @@ TEST_CASE("shadow cascades do not change size when the camera turns and move in 
         CHECK(std::abs(shift.y - std::round(shift.y)) < 0.01f);
     }
 }
+
+TEST_CASE("point shadow faces follow the Vulkan cube map layout with reversed depth")
+{
+    const Vec3 light(1.0f, 2.0f, -3.0f);
+    constexpr f32 kNearPlane = 0.1f;
+    // Direction, face, and the cube map coordinates (s, t) of the Vulkan specification's face table.
+    struct Expected
+    {
+        Vec3 direction;
+        u32 face;
+        Vec2 st;
+    };
+    const Expected cases[] = {
+        {{1.0f, 0.5f, 0.25f}, 0, {-0.25f, -0.5f}}, {{-1.0f, 0.5f, 0.25f}, 1, {0.25f, -0.5f}},
+        {{0.5f, 1.0f, 0.25f}, 2, {0.5f, 0.25f}},   {{0.5f, -1.0f, 0.25f}, 3, {0.5f, -0.25f}},
+        {{0.5f, 0.25f, 1.0f}, 4, {0.5f, -0.25f}},  {{0.5f, 0.25f, -1.0f}, 5, {-0.5f, -0.25f}},
+    };
+    for (const Expected& expected : cases)
+    {
+        CAPTURE(expected.face);
+        CHECK(pointShadowFace(expected.direction) == expected.face);
+        for (const f32 distance : {0.5f, 3.0f, 40.0f})
+        {
+            const Vec3 point = light + expected.direction * distance;
+            const Vec4 clip = pointShadowFaceMatrix(light, expected.face, kNearPlane) * Vec4(point, 1.0f);
+            REQUIRE(clip.w == doctest::Approx(distance));
+            // Texel coordinates as the shaders compute them, against the cube map's (inside 90 degrees).
+            const Vec2 uv(clip.x / clip.w * 0.5f + 0.5f, 0.5f - clip.y / clip.w * 0.5f);
+            const Vec2 cube = (expected.st / kPointShadowFaceScale) * 0.5f + 0.5f;
+            CHECK(uv.x == doctest::Approx(cube.x));
+            CHECK(uv.y == doctest::Approx(cube.y));
+            // Reversed, infinite depth: near / distance along the face axis.
+            CHECK(clip.z / clip.w == doctest::Approx(kNearPlane / distance));
+        }
+    }
+    // Ties go to the positive axis, then to x before y before z; the light's own position picks +x.
+    CHECK(pointShadowFace(Vec3(1.0f, 1.0f, 1.0f)) == 0);
+    CHECK(pointShadowFace(Vec3(0.0f, -1.0f, -1.0f)) == 3);
+    CHECK(pointShadowFace(Vec3(0.0f)) == 0);
+}
+
+TEST_CASE("the six point shadow faces cover every direction with a border past 90 degrees")
+{
+    const Vec3 light(0.0f);
+    for (u32 face = 0; face < kPointShadowFaces; ++face)
+    {
+        const Frustum frustum = Frustum::fromViewProjection(pointShadowFaceMatrix(light, face, 0.1f));
+        // A small sphere just past the face's 45 degree edge is still inside (the border), one further
+        // round is not, and anything closer than the near plane is culled.
+        const Mat4 matrix = pointShadowFaceMatrix(light, face, 0.1f);
+        const Vec3 forward(matrix[0][3], matrix[1][3], matrix[2][3]);
+        const Vec3 right(matrix[0][0], matrix[1][0], matrix[2][0]);
+        const Vec3 rightAxis = glm::normalize(right);
+        CHECK(frustum.intersects(Sphere{forward * 10.0f + rightAxis * 10.4f, 0.01f}));
+        CHECK_FALSE(frustum.intersects(Sphere{forward * 10.0f + rightAxis * 12.0f, 0.01f}));
+        CHECK_FALSE(frustum.intersects(Sphere{forward * 0.05f, 0.01f}));
+        CHECK_FALSE(frustum.intersects(Sphere{-forward * 10.0f, 1.0f}));
+    }
+    // Out-of-range faces clamp to the last one instead of reading past the table.
+    CHECK(pointShadowFaceMatrix(light, 99, 0.1f) == pointShadowFaceMatrix(light, 5, 0.1f));
+}

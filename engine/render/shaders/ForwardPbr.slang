@@ -1,8 +1,8 @@
 // Forward PBR shading (glTF metallic-roughness): Cook-Torrance GGX specular with height-correlated
 // Smith visibility and Schlick Fresnel, Lambert diffuse, directional and point lights, image-based
 // lighting (SH irradiance + prefiltered specular cube map + split-sum BRDF table with multiple-scattering
-// compensation), screen-space ambient occlusion on indirect light and cascaded PCSS shadows for one
-// directional light. Writes linear HDR radiance; exposure and tonemapping happen in Tonemap.slang.
+// compensation), screen-space ambient occlusion on indirect light, cascaded PCSS shadows for one
+// directional light and cube-map PCSS shadows for up to four point lights. Writes linear HDR radiance; exposure and tonemapping happen in Tonemap.slang.
 // Must match the C++ layouts in SceneRenderer.cpp and RenderResources.cpp.
 
 #include "Common.slang"
@@ -313,7 +313,18 @@ float4 fragmentMain(VertexOutput input, bool frontFace: SV_IsFrontFace) : SV_Tar
         // Inverse-square falloff windowed to reach zero at the range (Karis 2013).
         const float ratio = distanceSquared / (light.positionRange.w * light.positionRange.w);
         const float window = saturate(1.0 - ratio * ratio);
-        const float attenuation = window * window / distanceSquared;
+        float attenuation = window * window / distanceSquared;
+        const uint shadowSlot = uint(light.color.w);
+        if (shadowSlot > 0u && attenuation > 0.0)
+        {
+            float3 geometricNormal = normalize(input.normal);
+            if (!frontFace)
+            {
+                geometricNormal = -geometricNormal;
+            }
+            attenuation *= pointShadowVisibility(shadowSlot - 1u, input.worldPosition, geometricNormal,
+                                                 input.position.xy);
+        }
         color += shade(surface, toLight * rsqrt(distanceSquared), light.color.rgb * attenuation);
     }
     color += emissive;

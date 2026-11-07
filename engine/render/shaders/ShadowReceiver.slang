@@ -1,12 +1,18 @@
 // Shadow lookup for lit surfaces: cascade selection with dithered transitions, then PCSS (percentage-
 // closer soft shadows, Fernando 2005): a blocker search estimates the penumbra from the light's angular
-// size, and a rotated Vogel-disc PCF filters with that radius. Requires ViewConstants g_view.
+// size, and a rotated Vogel-disc PCF filters with that radius. Point lights with a cube shadow map
+// (ADR 0051) use the same filter in the face that holds the receiver. Requires ViewConstants g_view.
 
 Texture2DArray<float> g_shadowMap : register(t4, space0);
+Texture2DArray<float> g_pointShadowMap : register(t9, space0); // reversed depth: 1 - comparison = lit
 SamplerComparisonState g_shadowCompare : register(s1, space0); // NVRHI compares with LESS: 1 = lit
 
 static const uint kBlockerSamples = 16;
 static const uint kFilterSamples = 24;
+static const uint kPointBlockerSamples = 12;
+static const uint kPointFilterSamples = 16;
+static const float kPointShadowFaceScale = 16.0 / 15.0; // Shadows.hpp
+static const float kPointShadowBorder = 1.0 / 32.0;     // the border of a face beyond 90 degrees, in UV
 
 // Interleaved gradient noise (Jimenez 2014), stable per pixel.
 float interleavedGradientNoise(float2 pixel)
@@ -107,4 +113,58 @@ float shadowVisibility(float3 position, float3 normal, float2 pixel)
     // Fade out over the last 10% of the shadow distance.
     const float fade = saturate((maxDistance - viewDepth) / (0.1 * maxDistance));
     return lerp(1.0, visibility, fade);
+}
+
+// Visibility (0 = fully shadowed, 1 = lit) of the point light with shadow slot @p slot at @p position: a
+// blocker search over the face border's reach, then a filter as wide as the penumbra that a light of
+// PointLight::sourceRadius casts.
+float pointShadowVisibility(uint slot, float3 position, float3 normal, float2 pixel)
+{
+    const PointShadowData data = g_view.pointShadows[slot];
+    const float nearPlane = data.positionNear.w;
+    const float resolution = data.params.w;
+    const float3 fromLight = position - data.positionNear.xyz;
+    const float axisDistance = max(max(abs(fromLight.x), abs(fromLight.y)), abs(fromLight.z));
+    const float texelWorld = 2.0 * kPointShadowFaceScale * axisDistance / resolution;
+    uint face;
+    float2 uv;
+    const float distance =
+        pointShadowProject(data, position + normal * (data.params.y * texelWorld), face, uv);
+    if (distance <= nearPlane)
+    {
+        return 1.0;
+    }
+    const float receiverDepth = nearPlane / max(distance - data.params.x, nearPlane);
+    const float layer = float(slot * kPointShadowFaces + face);
+    const float rotation = interleavedGradientNoise(pixel) * 6.2831853;
+
+    float blockerSum = 0.0;
+    float blockerCount = 0.0;
+    for (uint i = 0; i < kPointBlockerSamples; ++i)
+    {
+        const float2 sampleUv = uv + vogelDisk(i, kPointBlockerSamples, rotation) * kPointShadowBorder;
+        const int2 texel = int2(saturate(sampleUv) * (resolution - 1.0));
+        const float depth = g_pointShadowMap.Load(int4(texel, int(layer), 0));
+        if (depth > receiverDepth)
+        {
+            blockerSum += nearPlane / depth;
+            blockerCount += 1.0;
+        }
+    }
+    if (blockerCount == 0.0)
+    {
+        return 1.0;
+    }
+    const float blockerDistance = blockerSum / blockerCount;
+    // Penumbra at the receiver in metres, then in face UV (a face is 2 * scale * distance wide there).
+    const float penumbra = data.params.z * max(distance - blockerDistance, 0.0) / blockerDistance;
+    const float filterRadius =
+        clamp(penumbra / (2.0 * kPointShadowFaceScale * distance), 1.0 / resolution, kPointShadowBorder);
+    float lit = 0.0;
+    for (uint i = 0; i < kPointFilterSamples; ++i)
+    {
+        const float2 sampleUv = saturate(uv + vogelDisk(i, kPointFilterSamples, rotation) * filterRadius);
+        lit += g_pointShadowMap.SampleCmpLevelZero(g_shadowCompare, float3(sampleUv, layer), receiverDepth);
+    }
+    return 1.0 - lit / float(kPointFilterSamples);
 }

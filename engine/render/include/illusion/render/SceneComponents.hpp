@@ -78,6 +78,12 @@ struct PointLight
     Vec3 color{1.0f};      ///< Linear colour.
     f32 intensity = 10.0f; ///< Luminous intensity multiplier.
     f32 range = 10.0f;     ///< Distance at which the light fades to zero.
+    /// Cast shadows in every direction (ADR 0051). Up to ShadowSettings::pointLightCount such lights get
+    /// a shadow map each frame, the ones nearest the camera first; the others light without shadows.
+    bool castShadows = false;
+    f32 sourceRadius = 0.05f;   ///< Size of the glowing body in metres; larger gives softer shadows.
+    f32 shadowBias = 0.03f;     ///< Receiver depth bias in metres; raise it if surfaces shadow themselves.
+    f32 shadowNearPlane = 0.1f; ///< Casters closer to the light than this (a lamp's housing) are ignored.
 };
 
 /// Image-based lighting and background from an environment (reflected as "illusion.SkyLight"). The
