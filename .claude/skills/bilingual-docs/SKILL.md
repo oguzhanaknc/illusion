@@ -15,6 +15,11 @@ Policy: `docs/adr/0006-documentation-languages.md`.
 | Navigation | `nav:` in `mkdocs.yml` (paths without language prefix) + `nav_translations` for `tr` | EN + TR |
 | API reference | `///` comments in public headers (Doxygen) | EN |
 | Design decisions | `docs/adr/NNNN-*.md` | EN |
+| Images | `docs/content/en/images/**` (one copy; Turkish pages link the same relative path) | shared |
+| Editor manual screenshots | taken by `docs/screenshots/manual.jsonl`, never by hand | shared |
+
+The C++ blocks of `tutorials/tetris-by-hand.md` are compiled as a module by the test build
+(`cmake/ExtractCppBlocks.cmake`, `tests/docs/TestTutorials.cpp`): keep them a complete, warning-free source.
 
 ## Steps
 

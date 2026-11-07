@@ -1,4 +1,5 @@
 #include "EditorTestSupport.hpp"
+#include "TestSupport.hpp"
 
 #include <illusion/editor/EditorStrings.hpp>
 #include <illusion/editor/ui/EditorData.hpp>
@@ -10,6 +11,8 @@
 #include <doctest/doctest.h>
 
 #include <algorithm>
+#include <filesystem>
+#include <fstream>
 #include <imgui.h>
 #include <string>
 
@@ -161,4 +164,27 @@ TEST_CASE("loading fonts from a directory without them fails with the missing pa
     auto fonts = ui::FontManager::load(context, vfs, "editor:/themes");
     REQUIRE_FALSE(fonts.hasValue());
     CHECK(fonts.error().find("Roboto-Regular.ttf") != std::string::npos);
+}
+
+TEST_CASE("editor locales load every translation and skip the compiled English file and the string freeze")
+{
+    const test::TempDirectory directory;
+    std::filesystem::create_directories(directory.path / "locales");
+    const auto write = [&](std::string_view name, std::string_view text) {
+        std::ofstream file(directory.path / "locales" / std::string(name), std::ios::binary);
+        file << text;
+    };
+    write("en.json", "not a locale: compiled in");
+    write("en.freeze.json",
+          R"({"format": "illusion.string-freeze", "version": 1, "freeze": "M7", "strings": {}})");
+    write("notes.txt", "ignored");
+    write("tr.json", R"({"format": "illusion.locale", "version": 1, "locale": "tr", "displayName": "Türkçe",
+        "plural": "tr", "strings": {}})");
+    VirtualFileSystem vfs;
+    REQUIRE(vfs.mount("editor", directory.path) == FileError::None);
+    text::Localization localization;
+    CHECK(ui::loadEditorLocales(vfs, localization) == 1u);
+    const std::vector<text::LocaleId> locales = localization.availableLocales();
+    CHECK(locales.size() == 3u); // en, en-XA and tr
+    CHECK(std::ranges::count(locales, *text::LocaleId::parse("tr")) == 1);
 }

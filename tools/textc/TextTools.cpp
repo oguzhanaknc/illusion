@@ -1,5 +1,6 @@
 #include "TextTools.hpp"
 
+#include <illusion/core/Json.hpp>
 #include <illusion/text/MessageFormat.hpp>
 
 #include <algorithm>
@@ -285,6 +286,129 @@ void checkTranslation(const LocaleFile& english, std::string_view json, std::str
         if (!present.contains(entry.key))
         {
             add(report, soft, file, entry.key, "missing translation (English is shown)");
+        }
+    }
+}
+
+bool isValidFreezeName(std::string_view name) noexcept
+{
+    if (name.empty() || name.size() > 32)
+    {
+        return false;
+    }
+    return std::ranges::all_of(name, [](char c) {
+        return (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9') || c == '.' ||
+               c == '-' || c == '_';
+    });
+}
+
+StringFreeze freezeStrings(const LocaleFile& english, std::string_view name)
+{
+    StringFreeze freeze;
+    freeze.name = std::string(name);
+    freeze.strings.reserve(english.entries.size());
+    for (const LocaleEntry& entry : english.entries)
+    {
+        freeze.strings.emplace_back(entry.key, sourceHash(entry.text));
+    }
+    std::ranges::sort(freeze.strings);
+    return freeze;
+}
+
+std::string writeFreeze(const StringFreeze& freeze)
+{
+    // Keys are valid text keys and names valid freeze names, so nothing needs escaping.
+    std::string text = std::format(
+        "{{\n  \"format\": \"illusion.string-freeze\",\n  \"version\": 1,\n  \"freeze\": \"{}\",\n  \"strings\": {{",
+        freeze.name);
+    for (usize i = 0; i < freeze.strings.size(); ++i)
+    {
+        text += std::format("{}\n    \"{}\": \"{}\"", i == 0 ? "" : ",", freeze.strings[i].first,
+                            sourceHashText(freeze.strings[i].second));
+    }
+    text += freeze.strings.empty() ? "}\n}\n" : "\n  }\n}\n";
+    return text;
+}
+
+Expected<StringFreeze, std::string> parseFreeze(std::string_view json)
+{
+    const auto document = JsonDocument::parse(json);
+    if (!document)
+    {
+        const JsonError& error = document.error();
+        return unexpected(std::format("{}:{}: {}", error.line, error.column, error.message));
+    }
+    const JsonValue root = document->root();
+    if (root.find("format").asString() != std::optional<std::string_view>("illusion.string-freeze"))
+    {
+        return unexpected(std::string("\"format\" must be \"illusion.string-freeze\""));
+    }
+    if (root.find("version").asU64() != std::optional<u64>(1))
+    {
+        return unexpected(std::string("\"version\" must be 1"));
+    }
+    StringFreeze freeze;
+    const std::optional<std::string_view> name = root.find("freeze").asString();
+    if (!name || !isValidFreezeName(*name))
+    {
+        return unexpected(std::string("\"freeze\" must name the freeze (1 to 32 letters, digits, '.', '-', '_')"));
+    }
+    freeze.name = std::string(*name);
+    const JsonValue strings = root.find("strings");
+    if (strings.type() != JsonType::Object)
+    {
+        return unexpected(std::string("\"strings\" must be an object"));
+    }
+    for (const JsonMember member : strings.members())
+    {
+        const std::optional<std::string_view> hash = member.value.asString();
+        const bool hex = hash && hash->size() == 16 && std::ranges::all_of(*hash, [](char c) {
+                             return (c >= '0' && c <= '9') || (c >= 'a' && c <= 'f');
+                         });
+        if (!isValidTextKey(member.key) || !hex)
+        {
+            return unexpected(
+                std::format("\"{}\": every string needs a valid key and a 16-digit source hash", member.key));
+        }
+        if (!freeze.strings.empty() && member.key <= freeze.strings.back().first)
+        {
+            return unexpected(std::format("\"{}\": keys must be sorted and unique", member.key));
+        }
+        u64 value = 0;
+        for (const char c : *hash)
+        {
+            value = value * 16 + static_cast<u64>(c <= '9' ? c - '0' : c - 'a' + 10);
+        }
+        freeze.strings.emplace_back(std::string(member.key), value);
+    }
+    return freeze;
+}
+
+void checkFreeze(const LocaleFile& english, const StringFreeze& freeze, std::string_view file,
+                 CheckReport& report)
+{
+    std::map<std::string_view, const LocaleEntry*> entries;
+    for (const LocaleEntry& entry : english.entries)
+    {
+        entries.emplace(entry.key, &entry);
+    }
+    for (const auto& [key, hash] : freeze.strings)
+    {
+        const auto entry = entries.find(key);
+        if (entry == entries.end())
+        {
+            add(report, Severity::Error, file, key,
+                std::format("the string is frozen ({}) and was removed; translators still have it. Re-freeze "
+                            "with `illusion_textc freeze` only once the change is announced to them",
+                            freeze.name));
+        }
+        else if (sourceHash(entry->second->text) != hash)
+        {
+            add(report, Severity::Error, file, key,
+                std::format("the English text of a frozen string ({}) changed from source hash {}; add a new key "
+                            "instead, or re-freeze with `illusion_textc freeze` once the change is announced to "
+                            "translators",
+                            freeze.name, sourceHashText(hash)));
         }
     }
 }

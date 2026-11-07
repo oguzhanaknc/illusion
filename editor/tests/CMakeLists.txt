@@ -137,6 +137,22 @@ add_test(NAME acceptance.tetris.board.gpu
 set_tests_properties(acceptance.tetris.board.gpu PROPERTIES LABELS "acceptance;gpu" TIMEOUT 600
     ENVIRONMENT "ILLUSION_UI_CAPTURE_DIR=${CMAKE_BINARY_DIR}/ui-captures")
 
+# The screenshots of the editor manual (docs/screenshots/manual.jsonl): a headless editor with a GPU on a copy
+# of samples/showcase takes them and compares them with docs/content/en/images/editor/*.png;
+# ILLUSION_UPDATE_GOLDENS=1 rewrites them. The copy keeps the editor's cache files out of the source tree.
+set(ILLUSION_DOCS_SHOWCASE ${CMAKE_BINARY_DIR}/docs-screenshots/showcase)
+add_test(NAME docs.screenshots.project
+    COMMAND ${CMAKE_COMMAND} -D SOURCE=${PROJECT_SOURCE_DIR}/samples/showcase -D DESTINATION=${ILLUSION_DOCS_SHOWCASE}
+        -P ${PROJECT_SOURCE_DIR}/docs/screenshots/CopyProject.cmake)
+add_test(NAME docs.screenshots
+    COMMAND illusion_ctl --launch $<TARGET_FILE:illusion_editor>
+        --editor-arg --headless --editor-arg --deterministic --editor-arg --seed --editor-arg 1
+        --editor-arg --project --editor-arg ${ILLUSION_DOCS_SHOWCASE}
+        replay ${PROJECT_SOURCE_DIR}/docs/screenshots/manual.jsonl --gpu)
+set_tests_properties(docs.screenshots.project PROPERTIES LABELS "gpu" FIXTURES_SETUP docs_showcase)
+set_tests_properties(docs.screenshots PROPERTIES LABELS "gpu" TIMEOUT 600 FIXTURES_REQUIRED docs_showcase
+    ENVIRONMENT "ILLUSION_UI_CAPTURE_DIR=${CMAKE_BINARY_DIR}/ui-captures")
+
 # The same scenario through the MCP bridge in both protocol eras (ADR 0039): every step is a tool call.
 foreach(era legacy modern)
     add_test(NAME acceptance.tetris.board.mcp-${era}

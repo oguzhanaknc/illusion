@@ -41,7 +41,7 @@ plugins:
   - search
   - i18n:
       docs_structure: folder
-      fallback_to_default: false
+      fallback_to_default: true
       reconfigure_material: true
       languages:
         - locale: en
@@ -102,6 +102,8 @@ plugins:
             Preferences: Tercihler
             Tutorials: Eğitimler
             First Agent Session: İlk Ajan Oturumu
+            Tetris with an Agent: Ajanla Tetris
+            Tetris by Hand: Elle Tetris
             Contributing: Katkıda Bulunma
 
 markdown_extensions:
@@ -160,6 +162,8 @@ nav:
           - Showcase Project: manual/editor/showcase.md
   - Tutorials:
       - First Agent Session: tutorials/first-agent-session.md
+      - Tetris with an Agent: tutorials/tetris-with-an-agent.md
+      - Tetris by Hand: tutorials/tetris-by-hand.md
   - Architecture:
       - Overview: architecture/overview.md
       - Editor: architecture/editor.md

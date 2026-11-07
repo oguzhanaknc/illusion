@@ -5,6 +5,8 @@ selection; the whole drag is one undo step. Every part of it is also an
 [Editor command](../../reference/editor-commands.md), so an AI agent chooses the same tool, axes, pivot and
 snapping, and moves entities with the `transform.*` commands.
 
+![The rotate gizmo on the Door, a hinge Joint](../../images/editor/transform-tools.png)
+
 ## Tools
 
 The tool buttons are on the left of the toolbar; the keys work while no text field has the keyboard.

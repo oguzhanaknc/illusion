@@ -39,9 +39,10 @@ decisions are in `docs/adr/`. Do not reverse an accepted ADR silently: write a n
 | `samples/` | Sample applications (`hello_triangle`, `input_viewer`, `gltf_viewer`, `physics_playground`); shared helpers in `common/`; `showcase/` is an editor project whose scene covers every saved Component (built by `build.jsonl`) and whose module `modules/showcase` calls the whole scripting API |
 | `tests/` | doctest unit tests; one `Test<Feature>.cpp` per feature; shared helpers in `TestSupport.hpp` |
 | `benchmarks/` | nanobench benchmarks with budgets (`ILL_BENCHMARK(name, nsPerOp)`) |
-| `cmake/` | `IllusionOptions`, `IllusionCompilerSettings`, `Dependencies` (pinned), `IllusionModules`, `IllusionEditor` (editor-only targets, boundary check), `IllusionIcons` |
+| `cmake/` | `IllusionOptions`, `IllusionCompilerSettings`, `Dependencies` (pinned), `IllusionModules`, `IllusionEditor` (editor-only targets, boundary check), `IllusionIcons`, `ExtractCppBlocks` (builds the code of a tutorial page) |
 | `docs/content/{en,tr}` | MkDocs pages (must stay in sync) |
 | `docs/adr/` | Architecture Decision Records (English only) |
+| `docs/screenshots/` | `manual.jsonl`: the editor transcript that takes the manual's screenshots (`docs/content/en/images/editor`, CTest `docs.screenshots`) |
 | `tests/acceptance` | Agent acceptance contract and transcripts (`tetris/SPEC.md`, `scripted.jsonl`, `checks.jsonl`; ADR 0038) |
 | `tools/` | `editor/illusion_rpc.py` (Python client of the editor protocol), `check_format.py`, `check_docs_parity.py`, `check_layering.py`, `check_api_coverage.py`, `windows/vsdev.cmd`; `pack/` builds `illusion_pack`; `textc/` builds `illusion_textc` (string tables, locale check) |
 

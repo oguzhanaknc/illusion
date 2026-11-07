@@ -5,6 +5,7 @@
 #include <TextTools.hpp>
 #include <string>
 #include <string_view>
+#include <utility>
 
 using namespace illusion;
 using namespace illusion::text;
@@ -238,4 +239,116 @@ TEST_CASE("the generator rejects invalid tables")
     REQUIRE_FALSE(empty.hasValue());
     CHECK(empty.error().find("no strings") != std::string::npos);
     CHECK_FALSE(generateStringTable("{", options).hasValue());
+}
+
+namespace
+{
+
+// kEnglish with the text of "app.quit" replaced by @p quit, or without the key when @p quit is empty.
+LocaleFile englishWithQuit(std::string_view quit)
+{
+    std::string json(kEnglish);
+    const usize at = json.find(",\n    \"app.quit\": \"Quit\"");
+    REQUIRE(at != std::string::npos);
+    json.replace(at, std::string_view(",\n    \"app.quit\": \"Quit\"").size(),
+                 quit.empty() ? std::string() : ",\n    \"app.quit\": \"" + std::string(quit) + "\"");
+    CheckReport report;
+    const std::optional<LocaleFile> file = checkEnglish(json, "en.json", report);
+    REQUIRE(file.has_value());
+    return *file;
+}
+
+} // namespace
+
+TEST_CASE("a string freeze records every English key with its source hash and reads back the same")
+{
+    const StringFreeze freeze = freezeStrings(englishFile(), "M7");
+    CHECK(freeze.name == "M7");
+    REQUIRE(freeze.strings.size() == 3);
+    CHECK(freeze.strings[0].first == "app.files");
+    CHECK(freeze.strings[1] == std::pair<std::string, u64>("app.greeting", sourceHash("Hello, {name}!")));
+    CHECK(freeze.strings[2].first == "app.quit");
+
+    const std::string text = writeFreeze(freeze);
+    CHECK(text == "{\n  \"format\": \"illusion.string-freeze\",\n  \"version\": 1,\n  \"freeze\": \"M7\",\n"
+                  "  \"strings\": {\n    \"app.files\": \"" +
+                      source("{count, plural, one {# file} other {# files}}") +
+                      "\",\n    \"app.greeting\": \"" + source("Hello, {name}!") +
+                      "\",\n    \"app.quit\": \"" + source("Quit") + "\"\n  }\n}\n");
+    const auto parsed = parseFreeze(text);
+    REQUIRE(parsed.hasValue());
+    CHECK(parsed->name == "M7");
+    CHECK(parsed->strings == freeze.strings);
+
+    const auto empty = parseFreeze(writeFreeze(StringFreeze{"empty", {}}));
+    REQUIRE(empty.hasValue());
+    CHECK(empty->strings.empty());
+}
+
+TEST_CASE("the freeze check fails on a frozen string that changed or is gone and accepts new keys")
+{
+    const StringFreeze freeze = freezeStrings(englishWithQuit("Quit"), "M7");
+    CheckReport unchanged;
+    checkFreeze(englishWithQuit("Quit"), freeze, "en.json", unchanged);
+    CHECK(unchanged.diagnostics.empty());
+
+    // A key added after the freeze is not part of it.
+    CheckReport added;
+    checkFreeze(englishWithQuit("Quit"), freezeStrings(englishWithQuit(""), "M7"), "en.json", added);
+    CHECK(added.diagnostics.empty());
+
+    CheckReport changed;
+    checkFreeze(englishWithQuit("Exit"), freeze, "en.json", changed);
+    REQUIRE(changed.diagnostics.size() == 1);
+    CHECK(changed.diagnostics[0].severity == Severity::Error);
+    CHECK(changed.diagnostics[0].key == "app.quit");
+    CHECK(changed.diagnostics[0].message.find("frozen string (M7) changed from source hash " +
+                                              source("Quit")) != std::string::npos);
+
+    CheckReport removed;
+    checkFreeze(englishWithQuit(""), freeze, "en.json", removed);
+    REQUIRE(removed.diagnostics.size() == 1);
+    CHECK(removed.errorCount() == 1);
+    CHECK(removed.diagnostics[0].key == "app.quit");
+    CHECK(removed.diagnostics[0].message.find("frozen (M7) and was removed") != std::string::npos);
+}
+
+TEST_CASE("freeze files and names are validated")
+{
+    CHECK(isValidFreezeName("M7"));
+    CHECK(isValidFreezeName("v1.0-rc_2"));
+    CHECK_FALSE(isValidFreezeName(""));
+    CHECK_FALSE(isValidFreezeName("M 7"));
+    CHECK_FALSE(isValidFreezeName("\"M7\""));
+    CHECK_FALSE(isValidFreezeName(std::string(33, 'a')));
+
+    const std::string hash = source("Quit");
+    const auto file = [&](std::string_view head, std::string_view strings) {
+        return std::string(head) + R"("strings": {)" + std::string(strings) + "}}";
+    };
+    constexpr std::string_view kHead =
+        R"({"format": "illusion.string-freeze", "version": 1, "freeze": "M7", )";
+    CHECK(parseFreeze(file(kHead, "\"app.quit\": \"" + hash + "\"")).hasValue());
+    CHECK_FALSE(parseFreeze("{").hasValue());
+    CHECK(parseFreeze(file(R"({"format": "illusion.locale", "version": 1, "freeze": "M7", )", ""))
+              .error()
+              .find("format") != std::string::npos);
+    CHECK(parseFreeze(file(R"({"format": "illusion.string-freeze", "version": 2, "freeze": "M7", )", ""))
+              .error()
+              .find("version") != std::string::npos);
+    CHECK(parseFreeze(file(R"({"format": "illusion.string-freeze", "version": 1, "freeze": "M 7", )", ""))
+              .error()
+              .find("freeze") != std::string::npos);
+    CHECK_FALSE(
+        parseFreeze(R"({"format": "illusion.string-freeze", "version": 1, "freeze": "M7", "strings": []})")
+            .hasValue());
+    CHECK(parseFreeze(file(kHead, "\"app.quit\": \"" + hash.substr(1) + "\"")).error().find("16-digit") !=
+          std::string::npos);
+    CHECK(parseFreeze(file(kHead, R"("app.quit": "0123456789ABCDEF")")).error().find("16-digit") !=
+          std::string::npos);
+    CHECK(parseFreeze(file(kHead, "\"quit\": \"" + hash + "\"")).error().find("valid key") !=
+          std::string::npos);
+    CHECK(parseFreeze(file(kHead, "\"app.quit\": \"" + hash + "\", \"app.files\": \"" + hash + "\""))
+              .error()
+              .find("sorted") != std::string::npos);
 }

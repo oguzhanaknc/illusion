@@ -97,6 +97,8 @@ world.query<Position, const Velocity>().each([](Position& p, const Velocity& v) 
 ## Documentation
 
 - English: [docs/content/en](docs/content/en/index.md) · Türkçe: [docs/content/tr](docs/content/tr/index.md)
+- Tutorials: [Tetris with an agent](docs/content/en/tutorials/tetris-with-an-agent.md) ·
+  [Tetris by hand](docs/content/en/tutorials/tetris-by-hand.md)
 - Build the site locally: `pip install -r docs/requirements.txt && mkdocs serve`
 - API reference: `doxygen docs/Doxyfile`
 - Design decisions: [docs/adr](docs/adr)

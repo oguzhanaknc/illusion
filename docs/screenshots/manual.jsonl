@@ -1,0 +1,31 @@
+{"comment": "Takes the screenshots of the editor manual (docs/content/en/images/editor) in a headless editor on a copy of samples/showcase. CTest docs.screenshots (label gpu) compares them with the committed images; ILLUSION_UPDATE_GOLDENS=1 rewrites them. See docs/screenshots/README.md."}
+{"call": "editor.wait", "params": {"frames": 10}}
+{"comment": "interface.png: the default layout with the Player selected."}
+{"call": "ui.layout_apply", "params": {"name": "default"}}
+{"call": "ui.show_panel", "params": {"panel": "panel.assets"}}
+{"call": "selection.set", "params": {"entities": ["/Player"]}}
+{"call": "viewport.camera_set", "params": {"viewport": "scene", "pivot": [0, 1, 0], "eye": [8, 5, 10], "animate": false}}
+{"call": "editor.wait", "params": {"frames": 30}}
+{"call": "editor.screenshot", "params": {"width": 1280, "height": 720}, "requires": "gpu", "image": {"golden": "../content/en/images/editor/interface.png", "channelTolerance": 8, "maxDifferent": 0.03, "notUniform": true}}
+{"comment": "scene-editing.png: the Crate's physics Components in the Inspector, the History panel below."}
+{"call": "ui.show_panel", "params": {"panel": "panel.history"}}
+{"call": "selection.set", "params": {"entities": ["/Crate"]}}
+{"call": "viewport.camera_set", "params": {"viewport": "scene", "pivot": [2, 3, 0], "eye": [7, 6, 8], "animate": false}}
+{"call": "editor.wait", "params": {"frames": 30}}
+{"call": "editor.screenshot", "params": {"width": 1280, "height": 720}, "requires": "gpu", "image": {"golden": "../content/en/images/editor/scene-editing.png", "channelTolerance": 8, "maxDifferent": 0.03, "notUniform": true}}
+{"comment": "transform-tools.png: the rotate gizmo on the Door."}
+{"call": "gizmo.set_tool", "params": {"tool": "rotate"}}
+{"call": "selection.set", "params": {"entities": ["/Door"]}}
+{"call": "viewport.camera_set", "params": {"viewport": "scene", "pivot": [8.6, 1, 0], "eye": [13, 4, 7], "animate": false}}
+{"call": "editor.wait", "params": {"frames": 30}}
+{"call": "editor.screenshot", "params": {"width": 1280, "height": 720}, "requires": "gpu", "image": {"golden": "../content/en/images/editor/transform-tools.png", "channelTolerance": 8, "maxDifferent": 0.03, "notUniform": true}}
+{"comment": "play-mode.png: the Game view after 90 fixed steps of Play mode."}
+{"call": "gizmo.set_tool", "params": {"tool": "translate"}}
+{"call": "selection.clear", "params": {}}
+{"call": "ui.show_panel", "params": {"panel": "panel.game"}}
+{"call": "play.start", "params": {"mode": "play", "fixedStep": true}}
+{"call": "play.pause", "params": {"paused": true}}
+{"call": "play.step", "params": {"steps": 90}}
+{"call": "editor.wait", "params": {"frames": 30}}
+{"call": "editor.screenshot", "params": {"width": 1280, "height": 720}, "requires": "gpu", "image": {"golden": "../content/en/images/editor/play-mode.png", "channelTolerance": 8, "maxDifferent": 0.03, "notUniform": true}}
+{"call": "play.stop", "params": {}}

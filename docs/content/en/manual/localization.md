@@ -160,6 +160,23 @@ CTest `text.locales` runs it over every string table in every build job:
 | A key that is not in English | |
 | Argument names that differ from English | |
 | A plural without every form of the locale's rule | |
+| A frozen string that changed or is gone (see below) | |
+
+## String freeze
+
+A string freeze fixes the English text that translators work from. `en.freeze.json`, next to `en.json`,
+records the `source` hash of every string at the freeze; the editor and input tables were frozen at the end
+of M7:
+
+```bash
+illusion_textc freeze --name M7 editor/data/locales engine/input/data/locales
+```
+
+After the freeze, `illusion_textc check` fails when a frozen string's English text changes or the key is
+removed. New keys are allowed: they are not part of the freeze and reach translators with the next one. To
+change a frozen text, add a new key with a name of its own, or run
+`illusion_textc freeze` again and announce the change to translators; the diff of `en.freeze.json` shows
+exactly which strings moved. The editor does not load `en.freeze.json` as a translation.
 
 ## Search
 

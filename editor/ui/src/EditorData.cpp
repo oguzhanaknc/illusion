@@ -51,7 +51,9 @@ u32 loadEditorLocales(const VirtualFileSystem& vfs, text::Localization& localiza
     u32 added = 0;
     for (const DirectoryEntry& entry : entries)
     {
-        if (entry.isDirectory || entry.name == "en.json" || !entry.name.ends_with(".json"))
+        // en.json is compiled in; en.freeze.json is the string freeze of the CI check, not a locale.
+        if (entry.isDirectory || entry.name == "en.json" || entry.name == "en.freeze.json" ||
+            !entry.name.ends_with(".json"))
         {
             continue;
         }

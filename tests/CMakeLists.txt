@@ -21,6 +21,7 @@ add_executable(illusion_tests
     core/TestTime.cpp
     core/TestTypeName.cpp
     core/TestVersion.cpp
+    docs/TestTutorials.cpp
     ecs/TestCommandBuffer.cpp
     ecs/TestComponent.cpp
     ecs/TestComponentJson.cpp
@@ -134,6 +135,20 @@ target_compile_definitions(illusion_tests PRIVATE
     SHOWCASE_MODULE="$<TARGET_FILE:illusion_showcase_module>"
     ILLUSION_SAMPLES_DIR="${PROJECT_SOURCE_DIR}/samples")
 add_dependencies(illusion_tests illusion_showcase_module)
+# The C++ of the tutorial "Tetris by Hand", taken from the code blocks of its English page and built as a
+# module, so that the tutorial keeps compiling and loading (tests/docs/TestTutorials.cpp).
+set(tutorial_page ${PROJECT_SOURCE_DIR}/docs/content/en/tutorials/tetris-by-hand.md)
+set(tutorial_source ${CMAKE_CURRENT_BINARY_DIR}/generated/tutorials/tetris_by_hand.cpp)
+add_custom_command(OUTPUT ${tutorial_source}
+    COMMAND ${CMAKE_COMMAND} -D SOURCE=${tutorial_page} -D OUTPUT=${tutorial_source}
+        -P ${PROJECT_SOURCE_DIR}/cmake/ExtractCppBlocks.cmake
+    DEPENDS ${tutorial_page} ${PROJECT_SOURCE_DIR}/cmake/ExtractCppBlocks.cmake
+    COMMENT "Extracting the code of the Tetris by Hand tutorial"
+    VERBATIM)
+illusion_add_module(illusion_tutorial_tetris_module SHARED SOURCES ${tutorial_source} USES input render runtime)
+target_compile_definitions(illusion_tests PRIVATE
+    TUTORIAL_TETRIS_MODULE="$<TARGET_FILE:illusion_tutorial_tetris_module>")
+add_dependencies(illusion_tests illusion_tutorial_tetris_module)
 target_compile_definitions(illusion_test_module_v3 PRIVATE TEST_MODULE_WIDE_COUNTER=1)
 target_compile_definitions(illusion_test_module_v5 PRIVATE TEST_MODULE_LAYOUT_V2=1)
 target_compile_definitions(illusion_test_module_v6 PRIVATE TEST_MODULE_WIDE_OPAQUE=1)

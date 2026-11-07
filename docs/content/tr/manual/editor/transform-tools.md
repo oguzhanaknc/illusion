@@ -5,6 +5,8 @@ döndürür ya da ölçekler; sürüklemenin tamamı tek bir geri alma adımıd�
 [Editor command](../../reference/editor-commands.md) olduğu için bir yapay zekâ ajanı da aynı aracı, eksenleri,
 pivotu ve yakalamayı seçer ve Entity'leri `transform.*` komutlarıyla hareket ettirir.
 
+![Door üzerinde döndürme gizmosu, bir menteşe Joint](../../images/editor/transform-tools.png)
+
 ## Araçlar
 
 Araç düğmeleri araç çubuğunun solundadır; tuşlar klavye bir metin alanında değilken çalışır.

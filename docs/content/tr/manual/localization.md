@@ -164,6 +164,23 @@ eder. CTest `text.locales`, bunu her Build işinde bütün string tabloları iç
 | İngilizcede olmayan bir anahtar | |
 | İngilizceden farklı argüman adları | |
 | Yerel ayarın kuralındaki biçimlerden birini içermeyen bir çoğul | |
+| Değişen ya da silinen dondurulmuş bir string (aşağıya bakın) | |
+
+## String freeze
+
+String freeze, çevirmenlerin üzerinde çalıştığı İngilizce metni sabitler. `en.json` dosyasının yanındaki
+`en.freeze.json`, dondurma anındaki her string'in `source` hash'ini kaydeder; editör ve input tabloları M7'nin
+sonunda donduruldu:
+
+```bash
+illusion_textc freeze --name M7 editor/data/locales engine/input/data/locales
+```
+
+Dondurmadan sonra dondurulmuş bir string'in İngilizce metni değişirse ya da anahtarı silinirse
+`illusion_textc check` başarısız olur. Yeni anahtarlara izin verilir: dondurmanın parçası değildir ve
+çevirmenlere bir sonrakiyle ulaşır. Dondurulmuş bir metni değiştirmek için kendi adı olan yeni bir
+anahtar ekleyin ya da `illusion_textc freeze` komutunu yeniden çalıştırıp değişikliği çevirmenlere duyurun; `en.freeze.json` farkı hangi string'lerin değiştiğini tam olarak
+gösterir. Editör `en.freeze.json` dosyasını bir çeviri olarak yüklemez.
 
 ## Arama
 

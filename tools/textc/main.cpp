@@ -3,9 +3,12 @@
 //   illusion_textc generate --source <en.json> --table <name> --namespace <ns> --header <out.hpp>
 //                           --cpp <out.cpp> --include <path the .cpp includes the header with>
 //   illusion_textc check [--strict] <locale directory>...
+//   illusion_textc freeze --name <freeze> <locale directory>...
 //
-// `check` reads en.json in every directory and checks it and every other <locale>.json against it. It
-// prints one line per problem and fails if there is an error (with --strict, also for warnings).
+// `check` reads en.json in every directory and checks it and every other <locale>.json against it, and
+// against the string freeze en.freeze.json when there is one. It prints one line per problem and fails if
+// there is an error (with --strict, also for warnings). `freeze` writes en.freeze.json: the source hash of
+// every English string at a string freeze, so that changing or removing one fails the check.
 
 #include "TextTools.hpp"
 
@@ -30,7 +33,8 @@ constexpr std::string_view kUsage =
     "usage:\n"
     "  illusion_textc generate --source <en.json> --table <name> --namespace <ns> --header <out.hpp>\n"
     "                          --cpp <out.cpp> --include <header include path>\n"
-    "  illusion_textc check [--strict] <locale directory>...\n";
+    "  illusion_textc check [--strict] <locale directory>...\n"
+    "  illusion_textc freeze --name <freeze> <locale directory>...\n";
 
 int usage()
 {
@@ -168,12 +172,30 @@ void checkDirectory(const fs::path& directory, const tools::CheckOptions& option
         return;
     }
     const std::optional<LocaleFile> english = tools::checkEnglish(*englishText, utf8FromPath(englishPath), report);
+    const fs::path freezePath = directory / tools::kFreezeFileName;
+    if (std::error_code exists; english && fs::exists(freezePath, exists))
+    {
+        const std::string name = utf8FromPath(freezePath);
+        if (const std::optional<std::string> text = readFile(freezePath); !text)
+        {
+            report.diagnostics.push_back({tools::Severity::Error, name, "", "cannot read the file"});
+        }
+        else if (const auto freeze = tools::parseFreeze(*text); !freeze)
+        {
+            report.diagnostics.push_back({tools::Severity::Error, name, "", freeze.error()});
+        }
+        else
+        {
+            tools::checkFreeze(*english, *freeze, utf8FromPath(englishPath), report);
+        }
+    }
 
     std::vector<fs::path> translations;
     std::error_code error;
     for (const fs::directory_entry& entry : fs::directory_iterator(directory, error))
     {
-        if (entry.path().extension() == ".json" && entry.path().filename() != "en.json")
+        if (entry.path().extension() == ".json" && entry.path().filename() != "en.json" &&
+            entry.path().filename() != tools::kFreezeFileName)
         {
             translations.push_back(entry.path());
         }
@@ -236,6 +258,50 @@ int check(const std::vector<std::string_view>& arguments)
     return report.errorCount() == 0 ? 0 : 1;
 }
 
+int freeze(const std::vector<std::string_view>& arguments)
+{
+    std::string_view name;
+    std::vector<fs::path> directories;
+    for (usize i = 0; i < arguments.size(); ++i)
+    {
+        if (arguments[i] == "--name" && i + 1 < arguments.size())
+        {
+            name = arguments[++i];
+        }
+        else
+        {
+            directories.push_back(pathFromUtf8(arguments[i]));
+        }
+    }
+    if (directories.empty() || !tools::isValidFreezeName(name))
+    {
+        return usage();
+    }
+    for (const fs::path& directory : directories)
+    {
+        const fs::path englishPath = directory / "en.json";
+        const std::optional<std::string> englishText = readFile(englishPath);
+        tools::CheckReport report;
+        const std::optional<LocaleFile> english =
+            englishText ? tools::checkEnglish(*englishText, utf8FromPath(englishPath), report) : std::nullopt;
+        if (!english || report.errorCount() != 0)
+        {
+            std::fprintf(stderr, "illusion_textc: %s cannot be frozen\n%s", utf8FromPath(englishPath).c_str(),
+                         report.format().c_str());
+            return 1;
+        }
+        const fs::path freezePath = directory / tools::kFreezeFileName;
+        if (!writeIfChanged(freezePath, tools::writeFreeze(tools::freezeStrings(*english, name))))
+        {
+            std::fprintf(stderr, "illusion_textc: cannot write %s\n", utf8FromPath(freezePath).c_str());
+            return 1;
+        }
+        std::printf("illusion_textc: froze %zu strings in %s\n", english->entries.size(),
+                    utf8FromPath(freezePath).c_str());
+    }
+    return 0;
+}
+
 int run(const std::vector<std::string>& utf8Arguments)
 {
     if (utf8Arguments.size() < 2)
@@ -251,6 +317,10 @@ int run(const std::vector<std::string>& utf8Arguments)
     if (command == "check")
     {
         return check(arguments);
+    }
+    if (command == "freeze")
+    {
+        return freeze(arguments);
     }
     return usage();
 }

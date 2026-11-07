@@ -47,6 +47,9 @@ The Turkish documentation keeps technical terms in English, for example Entity, 
 Archetype, Chunk, Query, Job, Shader, Render Pass, Mesh, Material, Texture, Asset and Sink. Write them
 exactly as in the English text.
 
+Images live under `docs/content/en/images` and both languages link the same file with the same relative path
+(`../../images/editor/interface.png`); the Turkish site takes them from the English folder.
+
 ## User-visible strings
 
 Text that players or editor users see goes through a string table, never a string literal in code (see
@@ -58,6 +61,8 @@ Text that players or editor users see goes through a string table, never a strin
 - Use plural forms (`{n, plural, one {...} other {...}}`) for anything that is counted.
 - Run `illusion_textc check` (CTest `text.locales` does it in CI). Changing English text makes existing
   translations stale; their `source` hash shows which ones.
+- The editor and input tables are frozen (see [String freeze](manual/localization.md#string-freeze)): add
+  new keys freely, but change or remove a frozen one only with a new freeze.
 
 Log messages, assertion messages and text for AI agents stay English and are not localized.
 
@@ -77,6 +82,14 @@ editor UI code:
 - Idle frames must not allocate: build text with `FrameText`, keep buffers in fixed-size arrays or members.
 - After an intended visual change, rewrite the golden images with `ILLUSION_UPDATE_GOLDENS=1` and review the
   new images in the pull request.
+
+The screenshots of the editor manual (`docs/content/en/images/editor`) are golden images too: the transcript
+`docs/screenshots/manual.jsonl` takes them in a headless editor on a copy of `samples/showcase`, and the GPU
+test `docs.screenshots` fails when the UI no longer matches them. Rewrite them with:
+
+```bash
+ILLUSION_UPDATE_GOLDENS=1 ctest --preset ci-linux-clang-debug -R docs.screenshots
+```
 
 ## Architecture Decision Records
 
