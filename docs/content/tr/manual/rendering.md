@@ -478,6 +478,40 @@ view.deltaSeconds = frameSeconds; // adaptation follows real time
 
 Tanılama görünümleri (`setDebugView()`) bunların hepsini atlar.
 
+### Hacimsel sis
+
+Bir `VolumetricFog` Component'i (sahne başına bir tane) havayı ışığı saçan bir sisle doldurur. Güneşin ya da
+ayın içinden geçtiği yerde sis parlar; ağaçların ya da duvarların gölgelediği yerde karanlık kalır, böylece
+ışık huzmeleri belirir. Noktasal ışıklar da onun içinde parlar: bir kamp ateşi ya da neon bir tabela etrafındaki
+havayı aydınlatır.
+
+- **Ortam**: `density`, `baseHeight` yüksekliğinde metre başına sönümdür; onun üzerinde sis metre başına
+  `heightFalloff` kadar incelir (0 havayı eşit doldurur). `albedo`, saçtığı ışığın rengidir.
+- **Aydınlatma**: `anisotropy` (Henyey-Greenstein g) sisi ışıklara doğru (pozitif) ya da onlardan uzağa
+  (negatif) parlatır. `lightIntensity` sisteki güneşi, ayı ve noktasal ışıkları, `ambientIntensity` ise
+  gökyüzü ışığını ölçekler.
+- **Biçim**: sis kameradan `maxDistance` metreye kadar uzanır. `noiseAmount` ve `noiseSize` onu `Wind`'in
+  taşıdığı (`windFactor`) parçalara böler.
+
+```cpp
+world.create(illusion::VolumetricFog{.density = 0.03f,      // half the light is gone after 23 m
+                                     .heightFalloff = 0.15f, // and the fog thins with height
+                                     .baseHeight = 0.0f,
+                                     .anisotropy = 0.6f, // glows towards the sun and the lamps
+                                     .maxDistance = 90.0f,
+                                     .noiseAmount = 0.6f, // patchy wisps, carried by the Wind
+                                     .noiseSize = 10.0f});
+```
+
+Renderer, bir froxel ızgarasını (yaklaşık 8x8 piksellik hücreler, derinlikte üstel aralıklı 64 dilim) sisle ve
+ışığıyla doldurur, huzmeler için gölgeli directional ışığın gölge kademelerini okur, huzmeler pürüzsüz
+otursun diye her kareyi bir öncekiyle harmanlar ve sonucu önden arkaya toplar. Sis opak yüzeyleri,
+gökyüzünü, harmanlanan yüzeyleri ve parçacıkları kaplar. Harmanlama yüzünden ani bir değişiklik (kapatılan bir
+ışık) birkaç karede söner; kamera kesmelerinde `SceneRenderer::resetTemporalHistory()` çağırın.
+`RenderStats::fogFroxels` karedeki froxel'leri sayar. Noktasal ışıklar henüz sise gölge düşürmez ve tanılama
+görünümleri sahneyi sissiz gösterir. Bkz.
+[ADR 0050](https://github.com/oguzhanaknc/illusion/blob/main/docs/adr/0050-volumetric-fog.md).
+
 ### HDR ve post-processing
 
 Renderer, sahneyi dahili bir HDR görüntüye çizer ve her kareyi post-processing ile bitirir:

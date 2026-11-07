@@ -10,7 +10,7 @@
 struct PushConstants
 {
     uint instanceOffset;
-    uint flags; // bit 0: apply screen-space ambient occlusion (off for blended surfaces)
+    uint flags; // bit 0: apply screen-space ambient occlusion (off for blended surfaces); bit 1: apply the fog
 };
 
 struct MaterialConstants
@@ -32,8 +32,11 @@ TextureCube g_specularCube : register(t1, space0);
 Texture2D g_brdfLut : register(t2, space0);
 Texture2D<float> g_ambientOcclusion : register(t5, space0);
 SamplerState g_clampSampler : register(s0, space0);
+// Integrated volumetric fog; opaque surfaces get it in VolumetricFog.slang, blended ones here.
+Texture3D<float4> g_fogVolume : register(t8, space0);
 [[vk::push_constant]] ConstantBuffer<PushConstants> g_push;
 
+#include "FogSample.slang"
 #include "ShadowReceiver.slang"
 
 // Material slots, used by sampleMaterial().
@@ -335,6 +338,13 @@ float4 fragmentMain(VertexOutput input, bool frontFace: SV_IsFrontFace) : SV_Tar
         break;
     }
     case 8: color = float3(motionVector(input) * 8.0 + 0.5, 0.5); break;
+    }
+    if ((g_push.flags & 2u) != 0u && uint(g_view.effects.y) == 0u)
+    {
+        const float viewDepth = dot(input.worldPosition - g_view.cameraPosition.xyz, g_view.cameraForward.xyz);
+        const float4 fog =
+            sampleFog(g_fogVolume, g_clampSampler, g_view.fog, input.position.xy * g_view.fogScreen.xy, viewDepth);
+        color = color * fog.a + fog.rgb;
     }
     return float4(color, baseColor.a);
 }

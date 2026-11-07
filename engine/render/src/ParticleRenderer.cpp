@@ -29,13 +29,16 @@ struct GpuParticleConstants
     Vec4 cameraForward;
     Vec4 cameraPosition;
     Vec4 params;
+    Vec4 fog;       // ViewConstants::fog (FogSample.slang)
+    Vec4 fogScreen; // ViewConstants::fogScreen
 };
 
 struct ParticlePush
 {
     u32 firstInstance;
     u32 textured;
-    u32 padding[2];
+    u32 additive;
+    u32 padding;
     Vec4 colorStart;
     Vec4 colorEnd;
     Vec4 size;          // x: width at birth, y: at death
@@ -130,6 +133,7 @@ bool ParticleRenderer::initialize(nvrhi::IDevice* device, RenderResources& resou
         nvrhi::BindingLayoutItem::StructuredBuffer_SRV(0),
         nvrhi::BindingLayoutItem::Texture_SRV(1), // sprite
         nvrhi::BindingLayoutItem::Texture_SRV(2), // scene depth
+        nvrhi::BindingLayoutItem::Texture_SRV(3), // volumetric fog
         nvrhi::BindingLayoutItem::Sampler(0),
         nvrhi::BindingLayoutItem::PushConstants(1, sizeof(ParticlePush)),
     };
@@ -438,19 +442,20 @@ void ParticleRenderer::ensureCapacity(u32 particles)
     m_bindingSets.clear();
 }
 
-void ParticleRenderer::bindTargets(nvrhi::ITexture* color, nvrhi::ITexture* depth)
+void ParticleRenderer::bindTargets(nvrhi::ITexture* color, nvrhi::ITexture* depth, nvrhi::ITexture* fog)
 {
-    if (m_color.Get() == color && m_depth.Get() == depth)
+    if (m_color.Get() == color && m_depth.Get() == depth && m_fog.Get() == fog)
     {
         return;
     }
     m_color = color;
     m_depth = depth;
+    m_fog = fog;
     m_framebuffer = m_device->createFramebuffer(nvrhi::FramebufferDesc().addColorAttachment(color));
     m_bindingSets.clear();
     for (auto& [key, emitter] : m_gpuEmitters)
     {
-        emitter.draw[0] = nullptr; // they bind the depth
+        emitter.draw[0] = nullptr; // they bind the depth and the fog
         emitter.draw[1] = nullptr;
     }
 }
@@ -467,6 +472,7 @@ nvrhi::IBindingSet* ParticleRenderer::bindingSetFor(nvrhi::ITexture* texture)
             nvrhi::BindingSetItem::StructuredBuffer_SRV(0, m_instances),
             nvrhi::BindingSetItem::Texture_SRV(1, sprite),
             nvrhi::BindingSetItem::Texture_SRV(2, m_depth),
+            nvrhi::BindingSetItem::Texture_SRV(3, m_fog),
             nvrhi::BindingSetItem::Sampler(0, m_sampler),
             nvrhi::BindingSetItem::PushConstants(1, sizeof(ParticlePush)),
         };
@@ -486,7 +492,7 @@ void ParticleRenderer::draw(nvrhi::ICommandList* commands, nvrhi::ITexture* colo
     ILL_PROFILE_SCOPE();
     commands->beginMarker("Particles");
     ensureCapacity(static_cast<u32>(std::max<usize>(m_particles.size(), 1)));
-    bindTargets(color, depth);
+    bindTargets(color, depth, view.fogVolume);
     if (!m_particles.empty())
     {
         commands->writeBuffer(m_instances, m_particles.data(), m_particles.size() * sizeof(Instance));
@@ -528,6 +534,8 @@ void ParticleRenderer::draw(nvrhi::ICommandList* commands, nvrhi::ITexture* colo
     constants.cameraForward = Vec4(view.forward, 0.0f);
     constants.cameraPosition = Vec4(view.position, 1.0f);
     constants.params = Vec4(m_softDistance > 0.0f ? 1.0f / m_softDistance : 0.0f, 0.0f, 0.0f, 0.0f);
+    constants.fog = view.fog;
+    constants.fogScreen = view.fogScreen;
     commands->writeBuffer(m_constants, &constants, sizeof(constants));
     for (const Batch& batch : m_batches)
     {
@@ -538,6 +546,7 @@ void ParticleRenderer::draw(nvrhi::ICommandList* commands, nvrhi::ITexture* colo
         ParticlePush push{};
         push.firstInstance = batch.first;
         push.textured = batch.texture != nullptr ? 1u : 0u;
+        push.additive = batch.blend == ParticleBlend::Additive ? 1u : 0u;
         if (batch.gpu == ~0u)
         {
             state.pipeline = m_pipelines[blend];
@@ -562,6 +571,7 @@ void ParticleRenderer::draw(nvrhi::ICommandList* commands, nvrhi::ITexture* colo
                     nvrhi::BindingSetItem::StructuredBuffer_SRV(0, emitter.states[current]),
                     nvrhi::BindingSetItem::Texture_SRV(1, sprite),
                     nvrhi::BindingSetItem::Texture_SRV(2, m_depth),
+                    nvrhi::BindingSetItem::Texture_SRV(3, m_fog),
                     nvrhi::BindingSetItem::Sampler(0, m_sampler),
                     nvrhi::BindingSetItem::PushConstants(1, sizeof(ParticlePush)),
                 };

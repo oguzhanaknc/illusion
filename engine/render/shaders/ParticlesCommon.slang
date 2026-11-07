@@ -2,7 +2,10 @@
 // particle is a camera-facing quad of two triangles, drawn instanced into the HDR target after the blended
 // geometry (ADR 0047). Colours are premultiplied by alpha, so additive particles use One/One blending and
 // alpha particles One/InverseSourceAlpha. The scene depth is read, not attached: a particle behind the scene
-// is discarded and one near it fades out (soft particles). Layouts must match ParticleRenderer.cpp.
+// is discarded and one near it fades out (soft particles). Volumetric fog in front of a particle dims it, and
+// alpha particles take on the fog's glow (FogSample.slang). Layouts must match ParticleRenderer.cpp.
+
+#include "FogSample.slang"
 
 struct ParticleConstants
 {
@@ -13,13 +16,15 @@ struct ParticleConstants
     float4 cameraForward;       // xyz
     float4 cameraPosition;      // xyz
     float4 params;              // x: 1 / soft distance (0: a hard edge)
+    float4 fog;                 // ViewConstants::fog
+    float4 fogScreen;           // ViewConstants::fogScreen
 };
 
 struct ParticlePush
 {
     uint firstInstance;
     uint textured; // 1: sample the sprite; 0: a soft round dot
-    uint padding0;
+    uint additive; // 1: additive blending (the fog dims the particle but adds no glow of its own)
     uint padding1;
     // GPU-simulated emitters only: the look over life and the placement of local-space particles.
     float4 colorStart;
@@ -33,6 +38,7 @@ struct ParticlePush
 ConstantBuffer<ParticleConstants> g_particles : register(b0, space0);
 Texture2D g_sprite : register(t1, space0);
 Texture2D<float> g_depth : register(t2, space0); // the scene depth (reversed-Z)
+Texture3D<float4> g_fogVolume : register(t3, space0); // integrated volumetric fog
 SamplerState g_sampler : register(s0, space0);
 [[vk::push_constant]] ConstantBuffer<ParticlePush> g_push;
 
@@ -101,5 +107,9 @@ float4 shadeParticle(VertexOutput input)
     {
         discard;
     }
-    return float4(color.rgb * color.a, color.a);
+    float3 premultiplied = color.rgb * color.a;
+    const float4 fog = sampleFog(g_fogVolume, g_sampler, g_particles.fog,
+                                 input.position.xy * g_particles.fogScreen.xy, input.viewDepth);
+    premultiplied = premultiplied * fog.a + (g_push.additive != 0u ? float3(0.0, 0.0, 0.0) : fog.rgb * color.a);
+    return float4(premultiplied, color.a);
 }

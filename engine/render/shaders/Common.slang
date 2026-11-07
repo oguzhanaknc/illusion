@@ -59,6 +59,8 @@ struct ViewConstants
     float4 windHistory; // x: time of the previous frame
     AtmosphereData atmosphere; // the SkyAtmosphere, when atmosphereLook.z is 1
     float4 atmosphereLook;     // x: star brightness, y: seconds (twinkling), z: 1 with a SkyAtmosphere, w: moon lit fraction
+    float4 fog;       // VolumetricFog (FogSample.slang): x: 1 with fog, y: near, z: slices / log(far / near), w: slices
+    float4 fogScreen; // xy: 1 / render size, zw: render size in pixels
 };
 
 // Gust factor of the wind at a world position: 1 on average, fronts travel downwind. Matches windGust() in

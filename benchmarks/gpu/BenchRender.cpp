@@ -107,6 +107,20 @@ ILL_BENCHMARK("render/empty-frame", 3'000'000.0)
                                      [&] { scene.frame(); });
 }
 
+ILL_BENCHMARK("render/volumetric-fog", 3'000'000.0)
+{
+    Scene scene;
+    scene.world.create(VolumetricFog{});
+    for (u32 i = 0; i < SceneRenderer::kMaxPointLights; ++i)
+    {
+        Transform at;
+        at.position = Vec3(static_cast<f32>(i % 4) * 6.0f - 9.0f, 1.0f, -static_cast<f32>(i / 4) * 6.0f);
+        scene.world.create(at, PointLight{});
+    }
+    bench.batch(1).unit("frame").run("empty frame plus shadowed fog with 16 point lights at 1280x720",
+                                     [&] { scene.frame(); });
+}
+
 ILL_BENCHMARK("render/10k-instances", 2'000.0)
 {
     Scene scene;

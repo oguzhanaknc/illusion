@@ -89,6 +89,7 @@ struct RenderStats
     u32 lightsDropped = 0;     ///< Active lights beyond the directional and point light limits.
     u32 particles = 0;         ///< Live particles drawn (ParticleEmitter, ADR 0047).
     u32 atmosphereUpdates = 0; ///< 1 when a SkyAtmosphere redrew its lighting cube map (it changed).
+    u32 fogFroxels = 0;        ///< Froxels of the VolumetricFog lit this frame (0 without fog, ADR 0050).
 };
 
 /// Completed GPU pass measurements in milliseconds, obtained without blocking the graphics queue.
@@ -99,7 +100,7 @@ struct RenderGpuTimings
     f32 shadows = 0.0f;          ///< Shadow maps.
     f32 depth = 0.0f;            ///< Depth/ID prepass and occlusion culling.
     f32 ambientOcclusion = 0.0f; ///< Screen-space ambient occlusion.
-    f32 shading = 0.0f;          ///< Lighting, transparency, wireframe and transparent IDs.
+    f32 shading = 0.0f;          ///< Volumetric fog, lighting, transparency, wireframe and transparent IDs.
     f32 post = 0.0f;             ///< Temporal resolve, bloom and tonemapping.
 };
 

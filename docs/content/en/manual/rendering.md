@@ -461,6 +461,39 @@ view.deltaSeconds = frameSeconds; // adaptation follows real time
 
 Diagnostic views (`setDebugView()`) skip all of it.
 
+### Volumetric fog
+
+A `VolumetricFog` Component (one per scene) fills the air with fog that scatters light. Where the sun or the
+moon shines through it the fog glows, and where trees or walls shade it, it stays dark, so light shafts appear;
+point lights glow in it too, so a campfire or a neon sign lights the air around it.
+
+- **Medium**: `density` is the extinction per metre at `baseHeight`; above it the fog thins by
+  `heightFalloff` per metre (0 fills the air evenly). `albedo` is the colour of the light it scatters.
+- **Lighting**: `anisotropy` (Henyey-Greenstein g) makes the fog glow towards the lights (positive) or away
+  from them (negative). `lightIntensity` scales the sun, moon and point lights in the fog, `ambientIntensity`
+  the sky light.
+- **Shape**: the fog reaches `maxDistance` metres from the camera. `noiseAmount` and `noiseSize` break it
+  into patches that the `Wind` carries (`windFactor`).
+
+```cpp
+world.create(illusion::VolumetricFog{.density = 0.03f,      // half the light is gone after 23 m
+                                     .heightFalloff = 0.15f, // and the fog thins with height
+                                     .baseHeight = 0.0f,
+                                     .anisotropy = 0.6f, // glows towards the sun and the lamps
+                                     .maxDistance = 90.0f,
+                                     .noiseAmount = 0.6f, // patchy wisps, carried by the Wind
+                                     .noiseSize = 10.0f});
+```
+
+The renderer fills a froxel grid (cells of about 8x8 pixels, 64 slices spaced exponentially in depth) with
+the fog and its light, reads the shadowed directional light's shadow cascades for the shafts, blends each frame
+with the previous one so the shafts resolve smoothly, and integrates it front to back. The fog covers opaque
+surfaces, the sky, blended surfaces and particles. Because of the blending a sudden change (a light switched
+off) fades out over a few frames; call `SceneRenderer::resetTemporalHistory()` on a camera cut.
+`RenderStats::fogFroxels` counts the froxels of the frame. Point lights do not cast shadows into the fog yet,
+and diagnostic views show the scene without fog. See
+[ADR 0050](https://github.com/oguzhanaknc/illusion/blob/main/docs/adr/0050-volumetric-fog.md).
+
 ### HDR and post-processing
 
 The renderer shades into an internal HDR image and finishes each frame with post-processing:
