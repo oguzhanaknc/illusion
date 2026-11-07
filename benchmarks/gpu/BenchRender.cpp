@@ -7,6 +7,8 @@
 #include <illusion/core/Assert.hpp>
 #include <illusion/core/JobSystem.hpp>
 #include <illusion/ecs/World.hpp>
+#include <illusion/particles/ParticleComponents.hpp>
+#include <illusion/particles/ParticleWorld.hpp>
 #include <illusion/render/RenderDevice.hpp>
 #include <illusion/render/RenderResources.hpp>
 #include <illusion/render/SceneRenderer.hpp>
@@ -110,6 +112,36 @@ ILL_BENCHMARK("render/10k-instances", 2'000.0)
     Scene scene;
     scene.addCubes(10'000, 50);
     bench.batch(10'000).unit("instance").run("full frame, 10k cubes, 50 materials, 1280x720", [&] {
+        scene.frame();
+    });
+}
+
+ILL_BENCHMARK("render/100k-particles", 200.0)
+{
+    Scene scene;
+    ParticleWorld particles(scene.world);
+    for (u32 i = 0; i < 50; ++i)
+    {
+        ParticleEmitter emitter;
+        emitter.maxParticles = 2000;
+        emitter.rate = 0.0f;
+        emitter.burst = 2000;
+        emitter.speedMin = 0.5f;
+        emitter.speedMax = 2.0f;
+        emitter.lifetimeMin = 1000.0f;
+        emitter.lifetimeMax = 1000.0f;
+        emitter.sizeStart = 0.2f;
+        emitter.sizeEnd = 0.2f;
+        emitter.colorStart = Vec4(2.0f, 1.0f, 0.5f, 0.5f);
+        emitter.colorEnd = emitter.colorStart;
+        emitter.blend = i % 2 == 0 ? ParticleBlend::Additive : ParticleBlend::Alpha; // half are sorted
+        emitter.seed = i + 1;
+        Transform at;
+        at.position = Vec3(static_cast<f32>(i % 10) * 4.0f - 20.0f, 2.0f, -static_cast<f32>(i / 10) * 4.0f);
+        scene.world.create(at, emitter);
+    }
+    particles.update(0.5f, &scene.jobs);
+    bench.batch(100'000).unit("particle").run("full frame, 100k particles in 50 emitters, 1280x720", [&] {
         scene.frame();
     });
 }

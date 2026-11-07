@@ -170,6 +170,10 @@ void reflectRenderComponents(ComponentRegistry& registry)
         "illusion.RenderSky",
         {.displayName = "Render sky", .description = "GPU environment of a SkyLight (runtime state)."},
         registry);
+    reflectRuntime<RenderParticles>("illusion.RenderParticles",
+                                    {.displayName = "Render particles",
+                                     .description = "GPU sprite of a ParticleEmitter (runtime state)."},
+                                    registry);
 }
 
 namespace

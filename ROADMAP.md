@@ -538,9 +538,12 @@ Before M8. Design: ADR 0047 (a saved emitter Component, a deterministic CPU simu
   retires particles as parallel Jobs, deterministically and without per-frame allocations, with
   play/stop/clear; `GameSession` advances it after physics with the physics gravity; benchmark
   `particles/update`; the showcase has a spark fountain over the trigger pad and a dust emitter
-- PFX-2: Rendering: the live particles as instanced camera-facing billboards after the blended geometry in
-  the HDR target (bloom), additive and alpha blending, soft particles against the scene depth, sprite
-  textures, sorted alpha particles; GPU golden of the showcase effects
+- PFX-2: ✅ Rendering: `SceneRenderer` draws the live particles as instanced camera-facing quads after the
+  blended geometry in the HDR target (bloom), additive and premultiplied-alpha blending, alpha emitters and
+  their particles sorted back to front, the scene depth read in the shader for the depth test and a 30 cm
+  soft fade (no depth copy), sprite textures resolved into `RenderParticles` by `RenderAssetResolver` (held
+  against eviction, re-resolved on reload), `RenderStats::particles`, GPU tests and the GPU benchmark
+  `render/100k-particles`; the showcase's spark fountain glows under the lamp
 - PFX-3: Editor and scripting: emitters simulate in the edit World for preview, `particles.*` commands
   (play, stop, clear, stats) and MCP tools, a `ParticleService` for game modules (play, stop, burst at a
   point), the showcase module plays the dust when a body lands
