@@ -2,18 +2,18 @@
   "format": "illusion.material",
   "version": 1,
   "material": {
-    "name": "Tree Leaves",
+    "name": "Creeper",
     "baseColorFactor": [1.0, 1.0, 1.0, 1.0],
-    "metallicFactor": 0.0,
-    "roughnessFactor": 0.7,
+    "metallicFactor": 1.0,
+    "roughnessFactor": 1.0,
     "emissiveFactor": [0.0, 0.0, 0.0],
     "normalScale": 1.0,
     "occlusionStrength": 1.0,
-    "alphaCutoff": 0.45,
+    "alphaCutoff": 0.4,
     "alphaMode": "Mask",
     "doubleSided": true,
-    "windSway": 0.0006,
-    "windFlutter": 0.008,
+    "windSway": 0.2,
+    "windFlutter": 0.004,
     "baseColorTexture": {
       "image": -1,
       "wrapU": "Repeat",
@@ -41,10 +41,10 @@
     }
   },
   "textures": {
-    "baseColor": "assets:/models/textures/tree_leaves.png",
-    "metallicRoughness": "",
-    "normal": "",
-    "occlusion": "",
+    "baseColor": "assets:/external/shrub_04/textures/shrub_04_leaves_1k.png",
+    "metallicRoughness": "assets:/external/shrub_04/textures/shrub_04_arm_1k.jpg",
+    "normal": "assets:/external/shrub_04/textures/shrub_04_nor_gl_1k.jpg",
+    "occlusion": "assets:/external/shrub_04/textures/shrub_04_arm_1k.jpg",
     "emissive": ""
   }
 }

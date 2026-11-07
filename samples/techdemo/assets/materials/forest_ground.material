@@ -3,7 +3,7 @@
   "version": 1,
   "material": {
     "name": "Forest Ground",
-    "baseColorFactor": [0.62, 0.72, 0.42, 1.0],
+    "baseColorFactor": [0.36, 0.47, 0.3, 1.0],
     "metallicFactor": 1.0,
     "roughnessFactor": 1.0,
     "emissiveFactor": [0.0, 0.0, 0.0],
@@ -41,10 +41,10 @@
     }
   },
   "textures": {
-    "baseColor": "assets:/external/forest_ground_04/forest_ground_04_diff_1k.jpg",
-    "metallicRoughness": "assets:/external/forest_ground_04/forest_ground_04_arm_1k.jpg",
-    "normal": "assets:/external/forest_ground_04/forest_ground_04_nor_gl_1k.jpg",
-    "occlusion": "assets:/external/forest_ground_04/forest_ground_04_arm_1k.jpg",
+    "baseColor": "assets:/external/forest_leaves_04/forest_leaves_04_diff_2k.jpg",
+    "metallicRoughness": "assets:/external/forest_leaves_04/forest_leaves_04_arm_2k.jpg",
+    "normal": "assets:/external/forest_leaves_04/forest_leaves_04_nor_gl_2k.jpg",
+    "occlusion": "assets:/external/forest_leaves_04/forest_leaves_04_arm_2k.jpg",
     "emissive": ""
   }
 }

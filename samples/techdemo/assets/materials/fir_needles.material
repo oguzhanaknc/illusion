@@ -1,0 +1,50 @@
+{
+  "format": "illusion.material",
+  "version": 1,
+  "material": {
+    "name": "Fir Needles",
+    "baseColorFactor": [0.82, 0.9, 0.8, 1.0],
+    "metallicFactor": 1.0,
+    "roughnessFactor": 1.0,
+    "emissiveFactor": [0.0, 0.0, 0.0],
+    "normalScale": 1.0,
+    "occlusionStrength": 1.0,
+    "alphaCutoff": 0.2,
+    "alphaMode": "Mask",
+    "doubleSided": true,
+    "windSway": 0.00028,
+    "windFlutter": 0.006,
+    "baseColorTexture": {
+      "image": -1,
+      "wrapU": "Repeat",
+      "wrapV": "Repeat"
+    },
+    "metallicRoughnessTexture": {
+      "image": -1,
+      "wrapU": "Repeat",
+      "wrapV": "Repeat"
+    },
+    "normalTexture": {
+      "image": -1,
+      "wrapU": "Repeat",
+      "wrapV": "Repeat"
+    },
+    "occlusionTexture": {
+      "image": -1,
+      "wrapU": "Repeat",
+      "wrapV": "Repeat"
+    },
+    "emissiveTexture": {
+      "image": -1,
+      "wrapU": "Repeat",
+      "wrapV": "Repeat"
+    }
+  },
+  "textures": {
+    "baseColor": "assets:/external/fir_tree_01/textures/fir_tree_01_twig_leaves_1k.png",
+    "metallicRoughness": "assets:/external/fir_tree_01/textures/fir_tree_01_twig_arm_1k.jpg",
+    "normal": "assets:/external/fir_tree_01/textures/fir_tree_01_twig_nor_gl_1k.jpg",
+    "occlusion": "assets:/external/fir_tree_01/textures/fir_tree_01_twig_arm_1k.jpg",
+    "emissive": ""
+  }
+}

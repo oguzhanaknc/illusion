@@ -1,0 +1,50 @@
+{
+  "format": "illusion.material",
+  "version": 1,
+  "material": {
+    "name": "Axe",
+    "baseColorFactor": [1.0, 1.0, 1.0, 1.0],
+    "metallicFactor": 1.0,
+    "roughnessFactor": 1.0,
+    "emissiveFactor": [0.0, 0.0, 0.0],
+    "normalScale": 1.0,
+    "occlusionStrength": 1.0,
+    "alphaCutoff": 0.5,
+    "alphaMode": "Opaque",
+    "doubleSided": false,
+    "windSway": 0.0,
+    "windFlutter": 0.0,
+    "baseColorTexture": {
+      "image": -1,
+      "wrapU": "Repeat",
+      "wrapV": "Repeat"
+    },
+    "metallicRoughnessTexture": {
+      "image": -1,
+      "wrapU": "Repeat",
+      "wrapV": "Repeat"
+    },
+    "normalTexture": {
+      "image": -1,
+      "wrapU": "Repeat",
+      "wrapV": "Repeat"
+    },
+    "occlusionTexture": {
+      "image": -1,
+      "wrapU": "Repeat",
+      "wrapV": "Repeat"
+    },
+    "emissiveTexture": {
+      "image": -1,
+      "wrapU": "Repeat",
+      "wrapV": "Repeat"
+    }
+  },
+  "textures": {
+    "baseColor": "assets:/external/wooden_axe/textures/wooden_axe_diff_1k.jpg",
+    "metallicRoughness": "assets:/external/wooden_axe/textures/wooden_axe_arm_1k.jpg",
+    "normal": "assets:/external/wooden_axe/textures/wooden_axe_nor_gl_1k.jpg",
+    "occlusion": "assets:/external/wooden_axe/textures/wooden_axe_arm_1k.jpg",
+    "emissive": ""
+  }
+}
