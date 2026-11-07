@@ -4,6 +4,7 @@
 // size-dependent textures and cached binding sets.
 
 #include <illusion/render/PostProcess.hpp>
+#include <illusion/render/SceneComponents.hpp>
 
 #include <nvrhi/nvrhi.h>
 
@@ -26,6 +27,8 @@ public:
         bool historyValid = false;
         bool diagnostic = false;
         u32 frameIndex = 0;
+        f32 deltaSeconds = 1.0f / 60.0f;
+        const PostEffects* effects = nullptr; // the scene's, or none: manual exposure, ACES, no grading
     };
 
     bool initialize(nvrhi::IDevice* device, nvrhi::Format outputFormat);
@@ -59,6 +62,10 @@ private:
         Vec4 temporal;
         Vec4 bloom;
         Vec4 output;
+        Vec4 exposure; // x: 1 for automatic, y: compensation, z: minimum, w: maximum (linear multipliers)
+        Vec4 adapt;    // x: blend towards the metered exposure (1 snaps), y: grain seed
+        Vec4 grading;  // x: contrast, y: saturation, z: vignette, w: grain
+        Vec4 balance;  // rgb: white balance multipliers, w: chromatic aberration in pixels
     };
     struct Push
     {
@@ -94,6 +101,10 @@ private:
     nvrhi::ComputePipelineHandle m_taa;
     nvrhi::ComputePipelineHandle m_bloomDownsample;
     nvrhi::ComputePipelineHandle m_bloomUpsample;
+    nvrhi::ComputePipelineHandle m_exposure;
+    nvrhi::TextureHandle m_exposureValue; // 1x1 R32F: the adapted exposure, kept between frames
+    bool m_exposureValid = false;         // m_exposureValue holds an exposure (it adapts from it)
+    bool m_autoExposure = false;          // this frame meters the image
     nvrhi::ShaderHandle m_tonemapVertex;
     nvrhi::ShaderHandle m_tonemapFragment;
     nvrhi::GraphicsPipelineHandle m_tonemap;
@@ -114,6 +125,7 @@ private:
     std::vector<nvrhi::BindingSetHandle> m_bloomDownsampleSets; // level i >= 1 from level i - 1
     std::vector<nvrhi::BindingSetHandle> m_bloomUpsampleSets;   // level i from level i + 1
     std::array<nvrhi::BindingSetHandle, kSourceCount> m_tonemapSets{};
+    std::array<nvrhi::BindingSetHandle, kSourceCount> m_exposureSets{};
 };
 
 } // namespace illusion

@@ -141,6 +141,10 @@ def build():
                                               "moonOffset": 1.5, "turbidity": 2.5, "sunIntensity": 4.5,
                                               "moonIntensity": 0.8, "starIntensity": 1.5,
                                               "groundAlbedo": [0.12, 0.13, 0.08]}})
+    entity("Camera Look", {"illusion.PostEffects": {"autoExposure": True, "minExposure": -1.0, "maxExposure": 1.0,
+                                                    "adaptationSpeed": 1.2, "tonemapper": "AgX", "contrast": 1.12,
+                                                    "saturation": 1.2, "temperature": 0.05, "vignette": 0.3,
+                                                    "grain": 0.12, "chromaticAberration": 0.8}})
     entity("Wind", {"illusion.Wind": {"direction": [0.8, 0.0, 0.45], "speed": 3.0, "gustStrength": 0.6,
                                       "gustFrequency": 0.12}})
     entity("Player", {"illusion.Transform": {"position": ground(0.0, 7.0, -0.05)},

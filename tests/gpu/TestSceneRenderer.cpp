@@ -778,6 +778,99 @@ TEST_CASE("a SkyAtmosphere draws a day and a night sky, lights the scene and red
     CHECK(device->validationErrorCount() == 0);
 }
 
+TEST_CASE("PostEffects adapt the exposure to the scene within limits and grade the image")
+{
+    auto device = RenderDevice::create(headless());
+    REQUIRE(device != nullptr);
+    {
+        RenderResources resources(*device);
+        SceneRendererDesc desc = unormTarget();
+        desc.post.bloom.enabled = false;
+        desc.post.ambientOcclusion.enabled = false;
+        desc.ambient = Vec3(0.02f); // a dim scene
+        auto renderer = SceneRenderer::create(*device, resources, desc);
+        REQUIRE(renderer != nullptr);
+
+        World world;
+        Transform plane; // fills the view, facing the camera
+        plane.rotation = glm::angleAxis(std::numbers::pi_v<f32> / 2.0f, Vec3(1.0f, 0.0f, 0.0f));
+        MaterialDesc orange;
+        orange.parameters.baseColorFactor = Vec4(0.9f, 0.4f, 0.1f, 1.0f);
+        orange.parameters.metallicFactor = 0.0f;
+        world.create(plane, RenderMesh{resources.createMesh(makePlane(20.0f, 1), "Plane"), 0,
+                                       resources.createMaterial(orange)});
+
+        const auto centre = [](const std::vector<u8>& pixels) {
+            return pixelAt(pixels, 32, 32);
+        };
+        std::vector<u8> pixels = renderScene(*device, *renderer, world, nullptr);
+        const Rgb manual = centre(pixels);
+
+        // Automatic exposure brightens the dim scene, up to its limit.
+        const Entity effects = world.create(
+            PostEffects{.autoExposure = true, .maxExposure = 6.0f, .tonemapper = Tonemapper::Aces});
+        pixels = renderScene(*device, *renderer, world, nullptr);
+        const Rgb adapted = centre(pixels);
+        CHECK(adapted.r > manual.r + 60);
+        world.get<PostEffects>(effects).maxExposure = 0.0f;     // at most x1: like the manual exposure
+        world.get<PostEffects>(effects).adaptationSpeed = 1e4f; // adapt at once
+        pixels = renderScene(*device, *renderer, world, nullptr);
+        CHECK(std::abs(centre(pixels).r - manual.r) <= 4);
+
+        // At a normal speed it adapts gradually: one frame at 1/60 s moves only part of the way.
+        world.get<PostEffects>(effects).maxExposure = 6.0f;
+        world.get<PostEffects>(effects).adaptationSpeed = 1.0f;
+        pixels = renderScene(*device, *renderer, world, nullptr);
+        const Rgb step = centre(pixels);
+        CHECK(step.r > manual.r);
+        CHECK(step.r < adapted.r - 10);
+
+        // Grading: no saturation gives grey, AgX differs from ACES, the vignette darkens the corners and
+        // grain varies a flat area.
+        PostEffects& graded = world.get<PostEffects>(effects);
+        graded = PostEffects{.autoExposure = false,
+                             .exposureCompensation = 3.0f,
+                             .tonemapper = Tonemapper::Aces,
+                             .saturation = 0.0f};
+        pixels = renderScene(*device, *renderer, world, nullptr);
+        const Rgb grey = centre(pixels);
+        CHECK(std::abs(grey.r - grey.g) <= 2);
+        CHECK(std::abs(grey.g - grey.b) <= 2);
+        world.get<PostEffects>(effects) =
+            PostEffects{.autoExposure = false, .exposureCompensation = 3.0f, .tonemapper = Tonemapper::Aces};
+        pixels = renderScene(*device, *renderer, world, nullptr);
+        const Rgb aces = centre(pixels);
+        const Rgb acesCorner = pixelAt(pixels, 1, 1);
+        world.get<PostEffects>(effects).tonemapper = Tonemapper::AgX;
+        pixels = renderScene(*device, *renderer, world, nullptr);
+        const Rgb agx = centre(pixels);
+        CHECK(std::abs(agx.r - aces.r) + std::abs(agx.g - aces.g) + std::abs(agx.b - aces.b) > 10);
+        world.get<PostEffects>(effects) = PostEffects{.autoExposure = false,
+                                                      .exposureCompensation = 3.0f,
+                                                      .tonemapper = Tonemapper::Aces,
+                                                      .vignette = 1.0f};
+        pixels = renderScene(*device, *renderer, world, nullptr);
+        CHECK(pixelAt(pixels, 1, 1).r < acesCorner.r - 30);
+        CHECK(std::abs(centre(pixels).r - aces.r) <= 2);
+        world.get<PostEffects>(effects) = PostEffects{.autoExposure = false,
+                                                      .exposureCompensation = 3.0f,
+                                                      .tonemapper = Tonemapper::Aces,
+                                                      .grain = 1.0f,
+                                                      .chromaticAberration = 4.0f};
+        pixels = renderScene(*device, *renderer, world, nullptr);
+        int lowest = 255;
+        int highest = 0;
+        for (u32 x = 24; x < 40; ++x)
+        {
+            lowest = std::min(lowest, pixelAt(pixels, x, 32).g);
+            highest = std::max(highest, pixelAt(pixels, x, 32).g);
+        }
+        CHECK(highest - lowest >= 4);
+    }
+    device->waitIdle();
+    CHECK(device->validationErrorCount() == 0);
+}
+
 TEST_CASE("occlusion culling skips hidden objects without popping when they appear")
 {
     auto device = RenderDevice::create(headless());

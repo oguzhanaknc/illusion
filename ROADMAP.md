@@ -582,6 +582,18 @@ particles and physics can do together, and the engine features it needs.
   mouse/stick look, sprint and jump, runs the day clock (T speeds it up), lets the fireflies, lanterns and
   crickets out at night, flickers the fire and holds props kinematic until the terrain collider is ready
 
+## GFX — AAA look
+
+After DEMO. Features that bring the renderer and the tech demo to a modern AAA look.
+
+- GFX-1a: ✅ `PostEffects` (saved singleton): automatic exposure (centre-weighted log-luminance metering
+  on the GPU, adaptation in stops, limits, compensation; `RenderView::deltaSeconds`), ACES or AgX
+  tonemapping, white balance, contrast, saturation, vignette, film grain, chromatic aberration
+- GFX-1b: Volumetric fog with light shafts from the sun, the moon and point lights
+- GFX-1c: Point-light shadows (the campfire)
+- GFX-2: Foliage: leaf translucency, GPU-generated dense grass, LODs
+- GFX-3: Lit smoke, clouds, screen-space reflections, contact shadows
+
 ## M8 — Release pipeline
 
 - Export: clean runtime build, packed assets, no editor code

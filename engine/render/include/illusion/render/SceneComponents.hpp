@@ -111,6 +111,33 @@ struct ProceduralSky
     }
 };
 
+/// Curve that maps HDR colours to the display (PostEffects::tonemapper).
+enum class Tonemapper : u8
+{
+    Aces, ///< ACES filmic fit: punchy contrast; very bright saturated colours shift towards yellow and white.
+    AgX,  ///< AgX: keeps hues of bright saturated light (neon, fire) and fades them to white gracefully.
+};
+
+/// How the camera turns light into the image (reflected as "illusion.PostEffects", one per scene): automatic
+/// exposure that adapts like an eye, the tonemapping curve, colour grading and lens effects. Without it the
+/// renderer uses Camera::exposure and ACES with no grading.
+struct PostEffects
+{
+    bool autoExposure = true;        ///< Meter the image and adapt the exposure to it.
+    f32 exposureCompensation = 0.0f; ///< Stops (EV) added to the exposure: +1 doubles the brightness.
+    f32 minExposure = -2.0f;    ///< Darkest automatic exposure in stops: a bright scene is not darkened more.
+    f32 maxExposure = 2.5f;     ///< Brightest automatic exposure in stops: a dark night stays dark.
+    f32 adaptationSpeed = 1.5f; ///< How fast the exposure follows the light, per second.
+    Tonemapper tonemapper = Tonemapper::AgX; ///< Curve from HDR to the display.
+    f32 contrast = 1.0f;    ///< Contrast around middle grey: above 1 deepens shadows and lifts lights.
+    f32 saturation = 1.0f;  ///< Colourfulness: 0 grey, 1 unchanged, above 1 more vivid.
+    f32 temperature = 0.0f; ///< White balance: negative cooler (blue), positive warmer (orange), -1 to 1.
+    f32 tint = 0.0f;        ///< White balance: negative greener, positive more magenta, -1 to 1.
+    f32 vignette = 0.0f;    ///< Darkening of the corners, 0 to 1.
+    f32 grain = 0.0f;       ///< Strength of animated film grain, 0 to 1.
+    f32 chromaticAberration = 0.0f; ///< Colour fringes at the corners, in pixels.
+};
+
 /// A sky that follows the time of day (reflected as "illusion.SkyAtmosphere", ADR 0049): air and haze
 /// scattering for any sun height, a sun disc, a moon with its phase, and stars at night. Its sun or moon is
 /// the scene's main light: the renderer adds it as a shadowed directional light, and lights the scene with
@@ -151,6 +178,14 @@ struct SkyAtmosphere
 };
 
 } // namespace illusion
+
+/// Stable scene-file names of tonemappers.
+template <>
+struct illusion::EnumReflection<illusion::Tonemapper>
+{
+    /// Value names.
+    static constexpr std::array kValues{illusion::EnumValue{"Aces", 0}, illusion::EnumValue{"AgX", 1}};
+};
 
 /// Stable scene-file names of camera projection modes.
 template <>

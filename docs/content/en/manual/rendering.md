@@ -433,6 +433,34 @@ const bool lampsOn = state.starVisibility > 0.3f;
 how visible the stars are and the moon's lit fraction. `atmosphereRadiance()` and `atmosphereIrradiance()`
 (`illusion/assets/Atmosphere.hpp`) evaluate the sky model itself on the CPU (ADR 0049).
 
+### Exposure and colour grading
+
+A `PostEffects` Component (one per scene) sets how the camera turns light into the image. Without it the
+renderer uses `Camera::exposure` and ACES with no grading.
+
+- **Automatic exposure** meters the image every frame (a centre-weighted average of log luminance) and moves
+  the exposure towards the one that puts it at middle grey, in stops and at `adaptationSpeed` per second,
+  like an eye getting used to the dark. `minExposure` and `maxExposure` (stops) limit it, so night stays
+  night; `exposureCompensation` shifts it. `RenderView::deltaSeconds` is the time it adapts by.
+- **Tonemapper**: `AgX` keeps the hue of bright saturated light (neon, fire, sunsets) and fades it to white;
+  `Aces` gives punchier contrast but pushes bright colours towards yellow.
+- **Grading**: `temperature` and `tint` (white balance), `contrast` around middle grey and `saturation`.
+- **Lens**: `vignette`, animated film `grain` and `chromaticAberration` (pixels of colour fringe at the
+  corners).
+
+```cpp
+world.create(illusion::PostEffects{.autoExposure = true,
+                                   .minExposure = -1.0f, // a sunny day is not darkened below half
+                                   .maxExposure = 2.5f,  // a night is lifted by at most 2.5 stops
+                                   .tonemapper = illusion::Tonemapper::AgX,
+                                   .contrast = 1.1f,
+                                   .vignette = 0.25f,
+                                   .grain = 0.15f});
+view.deltaSeconds = frameSeconds; // adaptation follows real time
+```
+
+Diagnostic views (`setDebugView()`) skip all of it.
+
 ### HDR and post-processing
 
 The renderer shades into an internal HDR image and finishes each frame with post-processing:

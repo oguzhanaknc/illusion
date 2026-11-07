@@ -63,6 +63,7 @@ illusion_add_shaders(illusion_render
         taa shaders/Taa.slang taaMain compute
         bloomDownsample shaders/BloomDownsample.slang downsampleMain compute
         bloomUpsample shaders/BloomUpsample.slang upsampleMain compute
+        exposure shaders/Exposure.slang exposureMain compute
         tonemapVertex shaders/Tonemap.slang vertexMain vertex
         tonemapFragment shaders/Tonemap.slang fragmentMain fragment
         shadowCasterVertex shaders/ShadowCaster.slang vertexMain vertex
