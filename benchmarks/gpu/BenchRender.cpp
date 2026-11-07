@@ -121,6 +121,22 @@ ILL_BENCHMARK("render/volumetric-fog", 3'000'000.0)
                                      [&] { scene.frame(); });
 }
 
+ILL_BENCHMARK("render/point-light-shadows", 6'000'000.0)
+{
+    Scene scene;
+    scene.addCubes(2'000, 10);
+    for (u32 i = 0; i < kMaxShadowedPointLights; ++i)
+    {
+        Transform at;
+        at.position = Vec3(static_cast<f32>(i) * 12.0f - 18.0f, 2.0f, -5.0f);
+        PointLight light{Vec3(1.0f), 40.0f, 12.0f};
+        light.castShadows = true;
+        scene.world.create(at, light);
+    }
+    bench.batch(1).unit("frame").run("2k cubes lit by 4 point lights with 512x512 cube shadow maps, 1280x720",
+                                     [&] { scene.frame(); });
+}
+
 ILL_BENCHMARK("render/10k-instances", 2'000.0)
 {
     Scene scene;

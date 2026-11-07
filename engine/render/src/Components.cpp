@@ -27,9 +27,10 @@ void reflectRenderComponents(ComponentRegistry& registry)
 {
     StructRegistry& structs = registry.structs();
     reflectStruct<ShadowSettings>("illusion.ShadowSettings", 1, structs)
-        .meta({.displayName = "Shadows",
-               .description = "Cascaded soft shadows of the first shadow-casting light.",
-               .docsAnchor = "manual/rendering.md#shadows"})
+        .meta(
+            {.displayName = "Shadows",
+             .description = "Soft shadows of the first shadow-casting directional light and of point lights.",
+             .docsAnchor = "manual/rendering.md#shadows"})
         .field("enabled", &ShadowSettings::enabled)
         .field("cascadeCount", &ShadowSettings::cascadeCount,
                {.min = 1.0, .max = static_cast<f64>(kMaxShadowCascades), .hint = FieldHint::Slider})
@@ -43,7 +44,10 @@ void reflectRenderComponents(ComponentRegistry& registry)
                {.description = "Receiver offset along its normal, in shadow-map texels.",
                 .min = 0.0,
                 .advanced = true})
-        .field("slopeBias", &ShadowSettings::slopeBias, {.min = 0.0, .advanced = true});
+        .field("slopeBias", &ShadowSettings::slopeBias, {.min = 0.0, .advanced = true})
+        .field("pointLightCount", &ShadowSettings::pointLightCount,
+               {.min = 0.0, .max = static_cast<f64>(kMaxShadowedPointLights), .hint = FieldHint::Slider})
+        .field("pointResolution", &ShadowSettings::pointResolution, {.min = 16.0, .max = 4096.0});
     reflectStruct<AmbientOcclusionSettings>("illusion.AmbientOcclusionSettings", 1, structs)
         .meta({.displayName = "Ambient occlusion"})
         .field("enabled", &AmbientOcclusionSettings::enabled)
@@ -132,7 +136,19 @@ void reflectRenderComponents(ComponentRegistry& registry)
                .requiredComponents = kRequiresTransform})
         .field("color", &PointLight::color, {.min = 0.0, .hint = FieldHint::HdrColor})
         .field("intensity", &PointLight::intensity, {.min = 0.0})
-        .field("range", &PointLight::range, {.unit = Unit::Meters, .min = 0.0});
+        .field("range", &PointLight::range, {.unit = Unit::Meters, .min = 0.0})
+        .field("castShadows", &PointLight::castShadows)
+        .field("sourceRadius", &PointLight::sourceRadius,
+               {.description = "Size of the glowing body; larger gives softer shadows.",
+                .unit = Unit::Meters,
+                .min = 0.0,
+                .softMax = 1.0})
+        .field("shadowBias", &PointLight::shadowBias, {.unit = Unit::Meters, .min = 0.0, .advanced = true})
+        .field("shadowNearPlane", &PointLight::shadowNearPlane,
+               {.description = "Casters closer to the light than this are ignored.",
+                .unit = Unit::Meters,
+                .min = 0.001,
+                .advanced = true});
     reflect<SkyLight>("illusion.SkyLight", 1, registry)
         .meta({.displayName = "Sky light",
                .category = "Rendering/Lights",

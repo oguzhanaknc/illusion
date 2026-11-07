@@ -353,6 +353,43 @@ renderer->setShadowSettings(shadows);
 - `stats()`, `shadowCasters` ve `shadowDrawCalls` değerlerini raporlar; `shadowCascades()` son karenin
   cascade'lerini döndürür.
 
+### Noktasal ışık gölgeleri {#point-light-shadows}
+
+`castShadows` ayarı açık olan (varsayılan olarak kapalı) bir `PointLight` her yöne gölge düşürür: bir kamp
+ateşi ağaçların ve çevresindeki insanların arkasındaki zemini gölgeler; ışık titrediğinde veya gölge
+düşüren nesneler rüzgârda hareket ettiğinde gölgeler de hareket eder.
+
+```cpp
+illusion::Transform fire;
+fire.position = illusion::Vec3(0.0f, 0.6f, 0.0f);
+illusion::PointLight light{illusion::Vec3(1.0f, 0.55f, 0.22f), 40.0f, 14.0f};
+light.castShadows = true;
+light.sourceRadius = 0.25f;    // a wide flame: soft shadow edges
+light.shadowNearPlane = 0.3f;  // the logs right under the flame do not darken the whole camp
+world.create(fire, light);
+
+illusion::ShadowSettings shadows = renderer->shadowSettings();
+shadows.pointLightCount = 2;   // shadow maps for the two lights nearest the camera
+shadows.pointResolution = 1024;
+renderer->setShadowSettings(shadows);
+```
+
+- Gölgeli her ışık, `range` mesafesindeki opak ve alpha-mask'li Mesh'lerden bir küp shadow map'i (her biri
+  `pointResolution`² texel olan altı yüz) çizer. Her karede en fazla `ShadowSettings::pointLightCount`
+  ışık (en çok `kMaxShadowedPointLights`, yani 4) bir tane alır: menzili görüşe uzananlar, kameraya en
+  yakın olandan başlayarak. Diğerleri sahneyi yine aydınlatır, ama gölgesiz.
+- `sourceRadius`, parlayan gövdenin metre cinsinden boyutudur. Güneşte olduğu gibi gölgeler, gölgeyi
+  düşüren nesnenin yüzeye değdiği yerde keskindir ve uzaklaştıkça yumuşar; yarı gölgeler bir küp yüzünün
+  1/32'siyle sınırlıdır.
+- Işığa `shadowNearPlane` mesafesinden yakın nesneler gölge düşürmez; böylece bir fenerin kendi camı veya
+  gövdesi ışığını karartmaz. Yüzeyler kendi üzerine gölge düşürüyorsa `shadowBias` (metre) veya
+  `ShadowSettings::normalBias` değerini artırın.
+- [Hacimsel sis](#hacimsel-sis) aynı shadow map'leri okur; böylece gölgeli bir ışığın parıltısı
+  duvarlarda durur ve gölge düşüren nesneler içinde huzmeler oyar.
+- `stats()`, `shadowedPointLights`, `pointShadowCasters` ve `pointShadowDrawCalls` değerlerini raporlar.
+  `ShadowSettings::enabled` kapatılınca noktasal ışık gölgeleri de kapanır. Bkz.
+  [ADR 0051](https://github.com/oguzhanaknc/illusion/blob/main/docs/adr/0051-point-light-shadows.md).
+
 ### Görüntü tabanlı aydınlatma
 
 Bir `SkyLight`, sahneyi bir ortamla aydınlatır: çevredeki her şeyin equirectangular bir görüntüsü,
@@ -508,8 +545,8 @@ Renderer, bir froxel ızgarasını (yaklaşık 8x8 piksellik hücreler, derinlik
 otursun diye her kareyi bir öncekiyle harmanlar ve sonucu önden arkaya toplar. Sis opak yüzeyleri,
 gökyüzünü, harmanlanan yüzeyleri ve parçacıkları kaplar. Harmanlama yüzünden ani bir değişiklik (kapatılan bir
 ışık) birkaç karede söner; kamera kesmelerinde `SceneRenderer::resetTemporalHistory()` çağırın.
-`RenderStats::fogFroxels` karedeki froxel'leri sayar. Noktasal ışıklar henüz sise gölge düşürmez ve tanılama
-görünümleri sahneyi sissiz gösterir. Bkz.
+`RenderStats::fogFroxels` karedeki froxel'leri sayar. [Gölgeli](#point-light-shadows) noktasal ışıklar sise de
+gölge düşürür; tanılama görünümleri sahneyi sissiz gösterir. Bkz.
 [ADR 0050](https://github.com/oguzhanaknc/illusion/blob/main/docs/adr/0050-volumetric-fog.md).
 
 ### HDR ve post-processing

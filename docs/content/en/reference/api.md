@@ -93,7 +93,7 @@ Open `build/api/index.html` in a browser.
 | `illusion/render/SceneRenderer.hpp` | `SceneRenderer`, `RenderView`, `RenderStats`, `RenderViewTargets`, `RenderGpuTimings`, `RenderDebugView`, `findMainCamera` |
 | `illusion/render/ReadbackRing.hpp` | Bounded asynchronous texture readbacks with event queries |
 | `illusion/render/DebugDraw.hpp` | Reserved debug geometry and depth-sampled overlays |
-| `illusion/render/Shadows.hpp` | `ShadowSettings`, `ShadowCascades`, `computeShadowCascades` |
+| `illusion/render/Shadows.hpp` | `ShadowSettings`, `ShadowCascades`, `computeShadowCascades`, `pointShadowFaceMatrix`, `pointShadowFace` |
 | `illusion/render/UploadQueue.hpp` | `UploadQueue`: GPU uploads of streamed models with a byte budget |
 | `illusion/render/PostProcess.hpp` | `PostProcessSettings` (ambient occlusion, bloom, TAA), `temporalJitter` |
 | `illusion/render/SceneComponents.hpp` | Saved render Components: `MeshRenderer`, `Camera`, `DirectionalLight`, `PointLight`, `SkyLight`, `ProceduralSky` |

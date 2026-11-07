@@ -15,10 +15,48 @@ struct DirectionalLightData
 struct PointLightData
 {
     float4 positionRange; // xyz: position, w: range
-    float4 color;         // rgb: colour * intensity
+    float4 color;         // rgb: colour * intensity, w: 1 + its slot in ViewConstants::pointShadows (0: none)
 };
 
 static const uint kMaxShadowCascades = 4;
+static const uint kMaxShadowedPointLights = 4;
+// Shadow views: the cascades, then six cube faces per shadowed point light (ShadowCaster.slang).
+static const uint kPointShadowFaces = 6;
+
+// The cube shadow map of one point light (ADR 0051): perspective faces with reversed, infinite depth
+// near / distance along the face axis, in layers [6 * slot, 6 * slot + 6) of the point shadow map.
+struct PointShadowData
+{
+    float4x4 faces[kPointShadowFaces]; // world -> face clip, order +x, -x, +y, -y, +z, -z
+    float4 positionNear;               // xyz: light position, w: near distance
+    float4 params; // x: depth bias (m), y: normal bias (texels), z: source radius (m), w: resolution
+};
+
+// Face of a cube shadow map that holds direction @p v from the light (Shadows.cpp pointShadowFace()).
+uint pointShadowFace(float3 v)
+{
+    const float3 a = abs(v);
+    if (a.x >= a.y && a.x >= a.z)
+    {
+        return v.x >= 0.0 ? 0u : 1u;
+    }
+    if (a.y >= a.z)
+    {
+        return v.y >= 0.0 ? 2u : 3u;
+    }
+    return v.z >= 0.0 ? 4u : 5u;
+}
+
+// Projects @p position into the cube shadow map of @p data: the face, its texture coordinates and the
+// distance along the face axis (at most the near distance when the point is too close to the light).
+float pointShadowProject(PointShadowData data, float3 position, out uint face, out float2 uv)
+{
+    face = pointShadowFace(position - data.positionNear.xyz);
+    const float4 clip = mul(data.faces[face], float4(position, 1.0));
+    const float w = max(clip.w, 1e-6);
+    uv = float2(clip.x / w * 0.5 + 0.5, 0.5 - clip.y / w * 0.5);
+    return clip.w;
+}
 
 struct ShadowCascadeData
 {
@@ -61,6 +99,7 @@ struct ViewConstants
     float4 atmosphereLook;     // x: star brightness, y: seconds (twinkling), z: 1 with a SkyAtmosphere, w: moon lit fraction
     float4 fog;       // VolumetricFog (FogSample.slang): x: 1 with fog, y: near, z: slices / log(far / near), w: slices
     float4 fogScreen; // xy: 1 / render size, zw: render size in pixels
+    PointShadowData pointShadows[kMaxShadowedPointLights]; // the shadowed point lights of the frame
 };
 
 // Gust factor of the wind at a world position: 1 on average, fronts travel downwind. Matches windGust() in

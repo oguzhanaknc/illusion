@@ -2,9 +2,9 @@
 
 /// @file
 /// Forward PBR renderer for ECS scenes: frustum culling (parallel on the Job System), sorting into
-/// instanced batches, cascaded soft shadows, a depth prepass, HDR shading (opaque, then
-/// back-to-front transparent, then particles), reversed-Z depth, then ambient occlusion, TAA, bloom and
-/// tonemapping.
+/// instanced batches, cascaded soft shadows and cube shadow maps for point lights, a depth prepass, HDR
+/// shading (opaque, then back-to-front transparent, then particles), reversed-Z depth, then ambient
+/// occlusion, TAA, bloom and tonemapping.
 
 #include <illusion/core/Base.hpp>
 #include <illusion/core/Math.hpp>
@@ -80,16 +80,19 @@ struct RenderViewTargets
 /// Counters from the last SceneRenderer::render() call.
 struct RenderStats
 {
-    u32 candidates = 0;        ///< RenderMesh entities considered.
-    u32 visible = 0;           ///< Entities that passed frustum culling.
-    u32 drawCalls = 0;         ///< Instanced draw calls issued.
-    u64 triangles = 0;         ///< Triangles submitted.
-    u32 shadowCasters = 0;     ///< Shadow-caster instances, summed over cascades.
-    u32 shadowDrawCalls = 0;   ///< Instanced draw calls issued for shadows.
-    u32 lightsDropped = 0;     ///< Active lights beyond the directional and point light limits.
-    u32 particles = 0;         ///< Live particles drawn (ParticleEmitter, ADR 0047).
-    u32 atmosphereUpdates = 0; ///< 1 when a SkyAtmosphere redrew its lighting cube map (it changed).
-    u32 fogFroxels = 0;        ///< Froxels of the VolumetricFog lit this frame (0 without fog, ADR 0050).
+    u32 candidates = 0;           ///< RenderMesh entities considered.
+    u32 visible = 0;              ///< Entities that passed frustum culling.
+    u32 drawCalls = 0;            ///< Instanced draw calls issued.
+    u64 triangles = 0;            ///< Triangles submitted.
+    u32 shadowCasters = 0;        ///< Shadow-caster instances, summed over cascades.
+    u32 shadowDrawCalls = 0;      ///< Instanced draw calls issued for the directional light's cascades.
+    u32 shadowedPointLights = 0;  ///< Point lights that got a cube shadow map this frame (ADR 0051).
+    u32 pointShadowCasters = 0;   ///< Shadow-caster instances, summed over the cube faces of point lights.
+    u32 pointShadowDrawCalls = 0; ///< Instanced draw calls issued for point light shadows.
+    u32 lightsDropped = 0;        ///< Active lights beyond the directional and point light limits.
+    u32 particles = 0;            ///< Live particles drawn (ParticleEmitter, ADR 0047).
+    u32 atmosphereUpdates = 0;    ///< 1 when a SkyAtmosphere redrew its lighting cube map (it changed).
+    u32 fogFroxels = 0;           ///< Froxels of the VolumetricFog lit this frame (0 without fog, ADR 0050).
 };
 
 /// Completed GPU pass measurements in milliseconds, obtained without blocking the graphics queue.

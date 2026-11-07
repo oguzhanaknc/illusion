@@ -50,9 +50,10 @@ A full day lasts six minutes.
 - **Sky**: a `SkyAtmosphere` whose time the module advances; the sun sets behind the neon gate, lights the
   day and casts the shadows, the moon the night. `VolumetricFog` turns its light into shafts between the trunks.
 - **Campfire**: logs leaning over the embers in a ring of stones, flame, ember and smoke emitters (the embers
-  and smoke drift downwind), a flickering point light and a looping crackle. Two fallen trunks and a stump to
+  and smoke drift downwind), a flickering point light that dances with the flames and casts soft, moving
+  [shadows](../rendering.md#point-light-shadows), and a looping crackle. Two fallen trunks and a stump to
   sit on, a woodpile and an axe in a stump.
-- **Night**: 5,000 GPU fireflies, three lanterns that brighten at dusk, crickets.
+- **Night**: 5,000 GPU fireflies, three lanterns that brighten at dusk and cast shadows, crickets.
 - **Neon**: a gate, three hoops and bars in cyan, magenta and violet, with HDR emission that blooms.
 - **Physics**: the orbs and lanterns are dynamic bodies the player pushes. They stay kinematic until the
   terrain's collider is ready, so they do not fall through it while it is cooked.
@@ -67,8 +68,8 @@ on the hills, which the player never comes close to, use copies with fewer needl
 only the trees near the clearing cast needle shadows. The script also bakes the models' texture transforms
 (`KHR_texture_transform`) into their UVs.
 
-With all of this, a frame at 1280 × 720 costs about 20 ms on the GPU of a desktop RTX 4070 SUPER (shadows
-11 ms, depth 4 ms, shading 5 ms).
+With all of this, a night frame at 1280 × 720, with the shadows of the fire and the three lanterns, costs
+about 30 ms on the GPU of a desktop RTX 4070 SUPER (shadows 12 ms, depth 6 ms, shading 11 ms).
 
 ## How it is built
 

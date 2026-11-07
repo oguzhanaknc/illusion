@@ -1367,3 +1367,212 @@ TEST_CASE("volumetric fog glows in sunlight but not in shadow, and around point 
     device->waitIdle();
     CHECK(device->validationErrorCount() == 0);
 }
+
+namespace
+{
+
+// A point light that casts shadows, bright enough to light the test scenes.
+PointLight shadowedLamp(f32 range = 10.0f)
+{
+    PointLight light{Vec3(1.0f), 60.0f, range};
+    light.castShadows = true;
+    return light;
+}
+
+} // namespace
+
+TEST_CASE("a point light casts soft shadows of casters in its range in every direction")
+{
+    auto device = RenderDevice::create(headless());
+    REQUIRE(device != nullptr);
+    {
+        RenderResources resources(*device);
+        SceneRendererDesc desc = fogTarget(Vec3(0.02f));
+        desc.shadows.pointResolution = 256;
+        auto renderer = SceneRenderer::create(*device, resources, desc);
+        REQUIRE(renderer != nullptr);
+
+        // A floor at y = -1, a lamp 3 m above it and a 1 m plate halfway: the plate shades the floor for
+        // |x|, |z| < 1 (seen from below, the plate is culled, so the camera looks past it).
+        World world;
+        Transform ground;
+        ground.position = Vec3(0.0f, -1.0f, 0.0f);
+        world.create(ground,
+                     RenderMesh{resources.createMesh(makePlane(40.0f, 1), "Ground"), 0, MaterialHandle{}});
+        Transform plate;
+        plate.position = Vec3(0.0f, 0.5f, 0.0f);
+        const Entity caster = world.create(
+            plate, RenderMesh{resources.createMesh(makePlane(1.0f, 1), "Plate"), 0, MaterialHandle{}});
+        Transform lampTransform;
+        lampTransform.position = Vec3(0.0f, 2.0f, 0.0f);
+        const Entity lamp = world.create(lampTransform, shadowedLamp());
+
+        // Ground points (0, -1, 0) and (1.8, -1, 0) seen from the test camera.
+        constexpr u32 kShadowX = 32;
+        constexpr u32 kLitX = 54;
+        constexpr u32 kGroundY = 43;
+        std::vector<u8> pixels = renderScene(*device, *renderer, world, nullptr);
+        CHECK(renderer->stats().shadowedPointLights == 1);
+        CHECK(renderer->stats().pointShadowCasters >= 2); // the plate and the floor, in several faces
+        CHECK(renderer->stats().pointShadowDrawCalls >= 1);
+        CHECK(renderer->stats().shadowCasters == 0); // no directional light
+        const int shadowed = pixelAt(pixels, kShadowX, kGroundY).r;
+        const int lit = pixelAt(pixels, kLitX, kGroundY).r;
+
+        // A larger light gives a wider penumbra: (0.875, -1, 0), just inside the shadow edge, brightens.
+        constexpr u32 kEdgeX = 42;
+        world.get<PointLight>(lamp).sourceRadius = 0.0f;
+        pixels = renderScene(*device, *renderer, world, nullptr);
+        const int hard = pixelAt(pixels, kEdgeX, kGroundY).r;
+        world.get<PointLight>(lamp).sourceRadius = 1.0f;
+        pixels = renderScene(*device, *renderer, world, nullptr);
+        const int soft = pixelAt(pixels, kEdgeX, kGroundY).r;
+        CHECK(soft > hard + 10);
+        CHECK(soft < lit);
+
+        // The same light without shadows lights the floor behind the plate.
+        world.get<PointLight>(lamp).castShadows = false;
+        pixels = renderScene(*device, *renderer, world, nullptr);
+        CHECK(renderer->stats().shadowedPointLights == 0);
+        CHECK(renderer->stats().pointShadowDrawCalls == 0);
+        const int open = pixelAt(pixels, kShadowX, kGroundY).r;
+        CHECK(open > 100);
+        CHECK(shadowed < open / 3);
+        CHECK(std::abs(pixelAt(pixels, kLitX, kGroundY).r - lit) <= 3);
+
+        // A light beside the plate shades the floor through a side face of its cube: a block on the line from
+        // the lamp at (2.5, 0, 0) to (0, -1, 0).
+        world.get<PointLight>(lamp).castShadows = true;
+        world.get<Transform>(lamp).position = Vec3(2.5f, 0.0f, 0.0f);
+        world.destroy(caster);
+        Transform blockTransform;
+        blockTransform.position = Vec3(1.25f, -0.5f, 0.0f);
+        const Entity block = world.create(
+            blockTransform, RenderMesh{resources.createMesh(makeCube(0.3f), "Block"), 0, MaterialHandle{}});
+        pixels = renderScene(*device, *renderer, world, nullptr);
+        const int side = pixelAt(pixels, kShadowX, kGroundY).r;
+        world.get<RenderMesh>(block).flags &= ~RenderMesh::kCastShadows;
+        pixels = renderScene(*device, *renderer, world, nullptr);
+        const int sideOpen = pixelAt(pixels, kShadowX, kGroundY).r;
+        CHECK(sideOpen > 60);
+        CHECK(side < sideOpen / 3);
+
+        // Casters closer to the light than its near plane (a lamp's housing) are ignored.
+        world.get<RenderMesh>(block).flags |= RenderMesh::kCastShadows;
+        world.get<PointLight>(lamp).shadowNearPlane = 1.6f;
+        pixels = renderScene(*device, *renderer, world, nullptr);
+        CHECK(std::abs(pixelAt(pixels, kShadowX, kGroundY).r - sideOpen) <= 3);
+
+        // An inactive light neither lights nor casts.
+        world.emplace<Inactive>(lamp);
+        pixels = renderScene(*device, *renderer, world, nullptr);
+        CHECK(renderer->stats().shadowedPointLights == 0);
+        CHECK(renderer->stats().pointShadowCasters == 0);
+        CHECK(pixelAt(pixels, kShadowX, kGroundY).r < sideOpen / 4);
+    }
+    device->waitIdle();
+    CHECK(device->validationErrorCount() == 0);
+}
+
+TEST_CASE("point light shadows go to the lights nearest the view, up to the budget of the settings")
+{
+    auto device = RenderDevice::create(headless());
+    REQUIRE(device != nullptr);
+    {
+        RenderResources resources(*device);
+        SceneRendererDesc desc = fogTarget(Vec3(0.02f));
+        desc.shadows.pointResolution = 64;
+        auto renderer = SceneRenderer::create(*device, resources, desc);
+        REQUIRE(renderer != nullptr);
+
+        World world;
+        Transform ground;
+        ground.position = Vec3(0.0f, -1.0f, 0.0f);
+        world.create(ground,
+                     RenderMesh{resources.createMesh(makePlane(40.0f, 1), "Ground"), 0, MaterialHandle{}});
+        // Six shadowed lights in view and one whose range lies behind the camera.
+        for (u32 i = 0; i < 6; ++i)
+        {
+            Transform t;
+            t.position = Vec3(-5.0f + 2.0f * static_cast<f32>(i), 1.0f, -2.0f - static_cast<f32>(i));
+            world.create(t, shadowedLamp(4.0f));
+        }
+        Transform behind;
+        behind.position = Vec3(0.0f, 0.0f, 30.0f);
+        world.create(behind, shadowedLamp(4.0f));
+
+        renderScene(*device, *renderer, world, nullptr);
+        CHECK(renderer->stats().shadowedPointLights == kMaxShadowedPointLights);
+        CHECK(renderer->stats().lightsDropped == 0);
+
+        ShadowSettings settings = renderer->shadowSettings();
+        settings.pointLightCount = 2;
+        renderer->setShadowSettings(settings);
+        renderScene(*device, *renderer, world, nullptr);
+        CHECK(renderer->stats().shadowedPointLights == 2);
+
+        settings.pointLightCount = 99; // clamped to kMaxShadowedPointLights
+        renderer->setShadowSettings(settings);
+        renderScene(*device, *renderer, world, nullptr);
+        CHECK(renderer->stats().shadowedPointLights == kMaxShadowedPointLights);
+
+        settings.pointLightCount = 0;
+        renderer->setShadowSettings(settings);
+        renderScene(*device, *renderer, world, nullptr);
+        CHECK(renderer->stats().shadowedPointLights == 0);
+        CHECK(renderer->stats().pointShadowDrawCalls == 0);
+
+        settings.pointLightCount = kMaxShadowedPointLights;
+        settings.enabled = false; // turns every shadow off
+        renderer->setShadowSettings(settings);
+        renderScene(*device, *renderer, world, nullptr);
+        CHECK(renderer->stats().shadowedPointLights == 0);
+    }
+    device->waitIdle();
+    CHECK(device->validationErrorCount() == 0);
+}
+
+TEST_CASE("volumetric fog around a shadowed point light stays dark where casters block the light")
+{
+    auto device = RenderDevice::create(headless());
+    REQUIRE(device != nullptr);
+    {
+        RenderResources resources(*device);
+        SceneRendererDesc desc = fogTarget(Vec3(0.0f));
+        desc.shadows.pointResolution = 256;
+        auto renderer = SceneRenderer::create(*device, resources, desc);
+        REQUIRE(renderer != nullptr);
+
+        // A lamp in fog under a wide roof at y = 0.5 (culled from below): the air above the roof gets no
+        // light.
+        World world;
+        Transform roof;
+        roof.position = Vec3(0.0f, 0.5f, 0.0f);
+        world.create(roof,
+                     RenderMesh{resources.createMesh(makePlane(200.0f, 1), "Roof"), 0, MaterialHandle{}});
+        const Entity lamp = world.create(Transform{}, shadowedLamp(8.0f));
+        VolumetricFog fog = evenFog(0.08f);
+        fog.maxDistance = 30.0f;
+        fog.anisotropy = 0.0f;
+        world.create(fog);
+
+        constexpr u32 kAboveY = 6;
+        constexpr u32 kCenterY = 32;
+        renderer->resetTemporalHistory();
+        std::vector<u8> pixels = renderScene(*device, *renderer, world, nullptr);
+        CHECK(renderer->stats().shadowedPointLights == 1);
+        const int above = brightness(pixelAt(pixels, 32, kAboveY));
+        const int center = brightness(pixelAt(pixels, 32, kCenterY));
+
+        world.get<PointLight>(lamp).castShadows = false;
+        renderer->resetTemporalHistory();
+        pixels = renderScene(*device, *renderer, world, nullptr);
+        const int aboveOpen = brightness(pixelAt(pixels, 32, kAboveY));
+        const int centerOpen = brightness(pixelAt(pixels, 32, kCenterY));
+        CHECK(aboveOpen > 30);
+        CHECK(above < aboveOpen / 2);
+        CHECK(center > centerOpen * 3 / 4); // the air around the lamp, below the roof, stays lit
+    }
+    device->waitIdle();
+    CHECK(device->validationErrorCount() == 0);
+}

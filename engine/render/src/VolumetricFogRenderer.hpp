@@ -50,8 +50,10 @@ public:
     [[nodiscard]] nvrhi::ITexture* volume() const noexcept;
 
     // Injects and integrates this frame's fog. `viewConstants` holds the frame's ViewConstants, `shadowMap`
-    // the cascades. Does nothing when prepare() found no fog.
-    void compute(nvrhi::ICommandList* commands, nvrhi::IBuffer* viewConstants, nvrhi::ITexture* shadowMap);
+    // the cascades and `pointShadowMap` the cube faces of the shadowed point lights. Does nothing when
+    // prepare() found no fog.
+    void compute(nvrhi::ICommandList* commands, nvrhi::IBuffer* viewConstants, nvrhi::ITexture* shadowMap,
+                 nvrhi::ITexture* pointShadowMap);
 
     // Fogs the HDR image by the scene depth (after the opaque surfaces and the sky).
     void apply(nvrhi::ICommandList* commands);
@@ -77,7 +79,8 @@ private:
     };
 
     void createVolumes();
-    void createSets(nvrhi::IBuffer* viewConstants, nvrhi::ITexture* shadowMap);
+    void createSets(nvrhi::IBuffer* viewConstants, nvrhi::ITexture* shadowMap,
+                    nvrhi::ITexture* pointShadowMap);
     [[nodiscard]] nvrhi::BindingSetHandle createSet(nvrhi::IBuffer* viewConstants, nvrhi::ITexture* history,
                                                     nvrhi::ITexture* volume, nvrhi::ITexture* outVolume,
                                                     nvrhi::ITexture* outImage) const;
@@ -105,6 +108,7 @@ private:
     nvrhi::BindingSetHandle m_applySet;
     nvrhi::IBuffer* m_boundConstants = nullptr; // what the cached sets bind
     nvrhi::ITexture* m_boundShadowMap = nullptr;
+    nvrhi::ITexture* m_boundPointShadowMap = nullptr;
     bool m_volumeChanged = false;
 
     Constants m_frame{};

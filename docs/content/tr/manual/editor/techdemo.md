@@ -53,9 +53,10 @@ Tam bir gün altı dakika sürer.
   aydınlatır ve gölgeleri düşürür, ay geceyi. `VolumetricFog` onun ışığını gövdelerin arasında ışık huzmelerine
   çevirir.
 - **Kamp ateşi**: taş halkanın içinde közlerin üzerine yaslanmış odunlar, alev, köz ve duman emitter'ları
-  (közler ve duman rüzgarla sürüklenir), titreyen bir nokta ışık ve döngüsel bir çıtırtı. Oturmak için iki
+  (közler ve duman rüzgarla sürüklenir), titreyen, alevlerle birlikte oynayan ve yumuşak, hareketli
+  [gölgeler](../rendering.md#point-light-shadows) düşüren bir nokta ışık ve döngüsel bir çıtırtı. Oturmak için iki
   devrik gövde ve bir kütük, bir odun yığını ve kütüğe saplanmış bir balta.
-- **Gece**: 5.000 GPU ateş böceği, alacakaranlıkta parlayan üç fener, cırcır böcekleri.
+- **Gece**: 5.000 GPU ateş böceği, alacakaranlıkta parlayan ve gölge düşüren üç fener, cırcır böcekleri.
 - **Neon**: camgöbeği, eflatun ve mor renklerde bir kapı, üç halka ve çubuklar; bloom oluşturan HDR ışımayla.
 - **Fizik**: küreler ve fenerler oyuncunun ittiği dinamik gövdelerdir. Arazinin collider'ı hazır olana kadar
   kinematik kalırlar; böylece o pişirilirken içinden düşmezler.
@@ -70,8 +71,8 @@ olduğu gibi kalır. Oyuncunun asla yaklaşamadığı tepelerdeki köknarlar dah
 (`*_far.gltf`) kullanır ve yalnızca açıklığa yakın ağaçların iğneleri gölge düşürür. Script ayrıca modellerin
 doku dönüşümlerini (`KHR_texture_transform`) UV'lerine işler.
 
-Tüm bunlarla 1280 × 720'de bir kare, masaüstü bir RTX 4070 SUPER GPU'sunda yaklaşık 20 ms sürer (gölgeler
-11 ms, derinlik 4 ms, gölgelendirme 5 ms).
+Tüm bunlarla 1280 × 720'de, ateşin ve üç fenerin gölgeleriyle bir gece karesi, masaüstü bir RTX 4070 SUPER
+GPU'sunda yaklaşık 30 ms sürer (gölgeler 12 ms, derinlik 6 ms, gölgelendirme 11 ms).
 
 ## Nasıl kurulur
 

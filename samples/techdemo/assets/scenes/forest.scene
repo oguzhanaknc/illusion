@@ -114,10 +114,10 @@
           "color": [1.0, 0.7, 0.35],
           "intensity": 6.0,
           "range": 6.0,
-          "castShadows": false,
-          "sourceRadius": 0.05,
+          "castShadows": true,
+          "sourceRadius": 0.04,
           "shadowBias": 0.03,
-          "shadowNearPlane": 0.1
+          "shadowNearPlane": 0.2
         }
       }
     },
@@ -213,10 +213,10 @@
           "color": [1.0, 0.7, 0.35],
           "intensity": 6.0,
           "range": 6.0,
-          "castShadows": false,
-          "sourceRadius": 0.05,
+          "castShadows": true,
+          "sourceRadius": 0.04,
           "shadowBias": 0.03,
-          "shadowNearPlane": 0.1
+          "shadowNearPlane": 0.2
         }
       }
     },
@@ -362,10 +362,10 @@
           "color": [1.0, 0.68, 0.32],
           "intensity": 6.0,
           "range": 6.0,
-          "castShadows": false,
-          "sourceRadius": 0.05,
+          "castShadows": true,
+          "sourceRadius": 0.04,
           "shadowBias": 0.03,
-          "shadowNearPlane": 0.1
+          "shadowNearPlane": 0.2
         }
       }
     },
@@ -335103,10 +335103,10 @@
           "color": [1.0, 0.55, 0.22],
           "intensity": 45.0,
           "range": 16.0,
-          "castShadows": false,
-          "sourceRadius": 0.05,
+          "castShadows": true,
+          "sourceRadius": 0.25,
           "shadowBias": 0.03,
-          "shadowNearPlane": 0.1
+          "shadowNearPlane": 0.35
         },
         "illusion.Transform": {
           "position": [0.0, 0.8, 0.0],

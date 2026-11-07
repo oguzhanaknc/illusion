@@ -2,7 +2,8 @@
 // pixels across, with slices spaced exponentially in view depth (Wronski 2014, Hillaire 2015).
 //   injectMain:    the fog medium (height falloff, drifting noise) and the light it scatters towards the
 //                  camera per froxel: sky light, every directional light (the shadowed one through the
-//                  cascaded shadow map, so shafts appear) and every point light, with a Henyey-Greenstein
+//                  cascaded shadow map, so shafts appear) and every point light (the shadowed ones through
+//                  their cube shadow maps, ADR 0051), with a Henyey-Greenstein
 //                  phase. The sample moves along the depth every frame and blends with the reprojected last
 //                  frame, so the shafts resolve smoothly.
 //   integrateMain: front to back along each column, energy-conserving: in-scattered light and transmittance
@@ -32,6 +33,7 @@ Texture3D<float4> g_history : register(t0, space0); // inject: the scattering of
 Texture2D<float> g_depth : register(t1, space0);    // apply: the scene depth (reversed-Z)
 Texture3D<float4> g_volume : register(t2, space0);  // integrate: this frame's scattering; apply: integrated
 Texture2DArray<float> g_shadowMap : register(t4, space0);
+Texture2DArray<float> g_pointShadowMap : register(t5, space0); // reversed depth: 1 - comparison = lit
 SamplerState g_linearClamp : register(s0, space0);
 SamplerComparisonState g_shadowCompare : register(s1, space0); // 1 = lit
 [[vk::image_format("rgba16f")]] RWTexture3D<float4> g_outVolume : register(u0, space0);
@@ -124,6 +126,23 @@ float fogShadow(float3 position, float viewDepth)
     return g_shadowMap.SampleCmpLevelZero(g_shadowCompare, float3(uv, float(cascade)), depth);
 }
 
+// Visibility of the point light with shadow slot @p slot at a froxel: one filtered tap of its cube face.
+float fogPointShadow(uint slot, float3 position)
+{
+    const PointShadowData data = g_view.pointShadows[slot];
+    uint face;
+    float2 uv;
+    const float distance = pointShadowProject(data, position, face, uv);
+    const float nearPlane = data.positionNear.w;
+    if (distance <= nearPlane)
+    {
+        return 1.0;
+    }
+    const float depth = nearPlane / max(distance - data.params.x, nearPlane);
+    const float layer = float(slot * kPointShadowFaces + face);
+    return 1.0 - g_pointShadowMap.SampleCmpLevelZero(g_shadowCompare, float3(uv, layer), depth);
+}
+
 [shader("compute")]
 [numthreads(4, 4, 4)]
 void injectMain(uint3 id: SV_DispatchThreadID)
@@ -162,7 +181,12 @@ void injectMain(uint3 id: SV_DispatchThreadID)
         // The falloff of ForwardPbr.slang: inverse square, windowed to reach zero at the range.
         const float ratio = distanceSquared / (light.positionRange.w * light.positionRange.w);
         const float window = saturate(1.0 - ratio * ratio);
-        const float attenuation = window * window / distanceSquared;
+        float attenuation = window * window / distanceSquared;
+        const uint shadowSlot = uint(light.color.w);
+        if (shadowSlot > 0u && attenuation > 0.0)
+        {
+            attenuation *= fogPointShadow(shadowSlot - 1u, position);
+        }
         const float3 travel = -toLight * rsqrt(distanceSquared);
         direct += light.color.rgb * (attenuation * phase(dot(travel, -ray), g));
     }

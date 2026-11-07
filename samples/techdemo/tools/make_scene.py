@@ -307,7 +307,11 @@ def build():
                                                        "colorEnd": [0.09, 0.09, 0.09, 0.0], "blend": "Alpha",
                                                        "texture": "assets:/textures/smoke.png", "seed": 7}})
     entity("Fire Light", {"illusion.Transform": {"position": [0.0, 0.8, 0.0]},
-                          "illusion.PointLight": {"color": [1.0, 0.55, 0.22], "intensity": 45, "range": 16}})
+                          "illusion.PointLight": {"color": [1.0, 0.55, 0.22], "intensity": 45, "range": 16,
+                                                  # The flames throw soft, moving shadows of the
+                                                  # trees, rocks, benches and the player.
+                                                  "castShadows": True, "sourceRadius": 0.25,
+                                                  "shadowNearPlane": 0.35}})
     entity("Fire Sound", {"illusion.Transform": {"position": [0.0, 0.4, 0.0]},
                           "illusion.AudioSource": {"clip": "assets:/audio/fire.wav", "loop": True, "volume": 0.8,
                                                    "minDistance": 1.5, "maxDistance": 25}})
@@ -344,6 +348,7 @@ def build():
     scatter.take([(-4.9, -1.4)], 1.0)
 
     # --- Lanterns: two brass ones on the benches, a wooden one on the stump ----------------------------------------
+    # With the fire they are the four point lights that cast shadows (ShadowSettings::pointLightCount).
     brass = f"{EXTERNAL}/Lantern_01/Lantern_01_1k.gltf"
     for index, (x, z) in enumerate(((-1.1, -2.55), (2.0, 0.6))):
         top = terrain_height(x, z) + 0.45
@@ -356,7 +361,10 @@ def build():
                                  "illusion.MeshRenderer": {"mesh": f"{brass}#mesh/1", "material": m["glass"],
                                                            "castShadows": False}}, parent=f"/{name}")
         entity(f"{name} Light", {"illusion.Transform": {}, "illusion.LocalTransform": {"position": [0.0, 0.16, 0.0]},
-                                 "illusion.PointLight": {"color": [1.0, 0.7, 0.35], "intensity": 6, "range": 6}},
+                                 "illusion.PointLight": {"color": [1.0, 0.7, 0.35], "intensity": 6, "range": 6,
+                                                         # Past the lantern's own frame.
+                                                         "castShadows": True, "sourceRadius": 0.04,
+                                                         "shadowNearPlane": 0.2}},
                parent=f"/{name}")
     wooden = f"{EXTERNAL}/wooden_lantern_01/wooden_lantern_01_1k.gltf"
     seat_top = terrain_height(-2.5, 2.2) - 0.06 + 0.38 * 0.9
@@ -375,7 +383,9 @@ def build():
                                 "illusion.MeshRenderer": {"mesh": f"{wooden}#mesh/2", "material": m["wood_lantern"]}},
            parent="/Lantern 2")
     entity("Lantern 2 Light", {"illusion.Transform": {}, "illusion.LocalTransform": {"position": [0.0, 0.17, 0.0]},
-                               "illusion.PointLight": {"color": [1.0, 0.68, 0.32], "intensity": 6, "range": 6}},
+                               "illusion.PointLight": {"color": [1.0, 0.68, 0.32], "intensity": 6, "range": 6,
+                                                       "castShadows": True, "sourceRadius": 0.04,
+                                                       "shadowNearPlane": 0.2}},
            parent="/Lantern 2")
 
     # --- Neon: a gate to the north and three hoops around the clearing --------------------------------------------

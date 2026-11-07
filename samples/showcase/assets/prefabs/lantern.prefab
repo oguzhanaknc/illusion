@@ -54,7 +54,11 @@
         "illusion.PointLight": {
           "color": [1.0, 0.6, 0.2],
           "intensity": 8.0,
-          "range": 4.0
+          "range": 4.0,
+          "castShadows": false,
+          "sourceRadius": 0.05,
+          "shadowBias": 0.03,
+          "shadowNearPlane": 0.1
         }
       }
     }
