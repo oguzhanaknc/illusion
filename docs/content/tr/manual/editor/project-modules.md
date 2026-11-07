@@ -16,10 +16,13 @@ sonucu yeniden başlatmadan [Play moduna](play-mode.md) yükler (ADR 0043). Bir 
 ```text
 modules/
   CMakeLists.txt          finds the engine's module SDK and adds every module directory
+  .clangd                 points code editors at the compile commands of the last module build
   tetris/
     CMakeLists.txt        illusion_add_module(tetris SHARED SOURCES tetris.cpp USES ...)
     tetris.cpp            ILL_MODULE(tetris, ...) with empty load, start and update functions
 ```
+
+**Modules → New module...** onu editörün menüsünden çalıştırır: palet adı sorar.
 
 Modül adı, bir harfle başlayan 1 ile 48 arası küçük harf, rakam ve alt çizgidir; dizinin, CMake hedefinin ve
 kütüphanenin adıdır. Kaynakları modülün `CMakeLists.txt` dosyasına ekleyin. Dosyalar sıradan proje
@@ -80,6 +83,28 @@ event'i alır:
 
 ```json
 {"module": "tetris", "types": ["tetris.Score"], "components": 1}
+```
+
+## Kod editörü kurulumu
+
+`module.build`, `compile_commands.json` dosyasını (her kaynak, include yolları ve tanımlarıyla)
+`.illusion/build/modules/` altına yazar; `module.create` ise clangd'yi ona yönlendiren `modules/.clangd`
+dosyasını ekler. clangd tabanlı kod editörleri (Zed, clangd eklentili VS Code, CLion) modüller bir kez
+derlendikten sonra motor header'larını tamamlar ve aralarında gezinir; editörde proje klasörünü (ya da
+`modules/`) açın:
+
+```yaml
+CompileFlags:
+  CompilationDatabase: ../.illusion/build/modules
+```
+
+VS Code'un Microsoft C/C++ eklentisiyle veritabanını bunun yerine projenin `.vscode/settings.json` dosyasında
+ayarlayın:
+
+```json
+{
+  "C_Cpp.default.compileCommands": "${workspaceFolder}/.illusion/build/modules/compile_commands.json"
+}
 ```
 
 ## Kaynakları açma

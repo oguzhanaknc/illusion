@@ -108,6 +108,9 @@ constexpr UiAction kActions[] = {
      .icon = "build", .shortcut = "Ctrl+B"},
     {.id = "modules.reload", .command = "module.reload", .menu = UiMenu::Modules,
      .title = s::kActionModulesReload, .icon = "refresh", .shortcut = "Ctrl+R"},
+    // The palette asks for the name.
+    {.id = "modules.new", .command = "module.create", .menu = UiMenu::Modules, .group = 1,
+     .title = s::kActionModulesNew, .icon = "add_box"},
     // Tools
     {.id = "tools.screenshot", .command = "editor.screenshot", .menu = UiMenu::Tools},
     {.id = "tools.clear_log", .command = "log.clear", .menu = UiMenu::Tools},

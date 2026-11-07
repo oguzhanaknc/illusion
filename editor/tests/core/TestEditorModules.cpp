@@ -196,8 +196,11 @@ TEST_CASE("module.create writes a module from the template and undo removes it")
     std::filesystem::remove(modules / "CMakeLists.txt");
     const JsonDocument created = ok(editor, "module.create", R"({"name":"tetris"})");
     CHECK(created.root().find("directory").asString() == "modules:/tetris");
-    CHECK(created.root().find("files").size() == 3);
+    CHECK(created.root().find("files").size() == 4);
     CHECK(readText(modules / "CMakeLists.txt").find("illusion_project_modules()") != std::string::npos);
+    // clangd-based code editors find the engine headers through the last build's compile commands.
+    CHECK(readText(modules / ".clangd").find("CompilationDatabase: ../.illusion/build/modules") !=
+          std::string::npos);
     CHECK(readText(modules / "tetris" / "CMakeLists.txt").find("illusion_add_module(tetris SHARED") !=
           std::string::npos);
     CHECK(readText(modules / "tetris" / "tetris.cpp").find("ILL_MODULE(tetris, kModule)") !=
@@ -209,12 +212,13 @@ TEST_CASE("module.create writes a module from the template and undo removes it")
     CHECK(fails(editor, "module.create", R"({"name":""})").kind == ErrorKind::ValidationFailed);
     CHECK(fails(editor, "module.create", R"({"name":"a-b"})").kind == ErrorKind::ValidationFailed);
 
-    // A second module keeps the existing root file.
+    // A second module keeps the existing root and clangd files.
     CHECK(ok(editor, "module.create", R"({"name":"scores"})").root().find("files").size() == 2);
     ok(editor, "history.undo");
     ok(editor, "history.undo");
     CHECK_FALSE(std::filesystem::exists(modules / "tetris" / "tetris.cpp"));
     CHECK_FALSE(std::filesystem::exists(modules / "CMakeLists.txt"));
+    CHECK_FALSE(std::filesystem::exists(modules / ".clangd"));
 }
 
 TEST_CASE("module.build configures once, builds and loads new modules, then hot-reloads them")

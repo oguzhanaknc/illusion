@@ -16,10 +16,13 @@ through the [Editor commands](../../reference/editor-commands.md).
 ```text
 modules/
   CMakeLists.txt          finds the engine's module SDK and adds every module directory
+  .clangd                 points code editors at the compile commands of the last module build
   tetris/
     CMakeLists.txt        illusion_add_module(tetris SHARED SOURCES tetris.cpp USES ...)
     tetris.cpp            ILL_MODULE(tetris, ...) with empty load, start and update functions
 ```
+
+**Modules → New module...** runs it from the editor's menu: the palette asks for the name.
 
 A module name is 1 to 48 lower case letters, digits and underscores, starting with a letter; it is the
 directory, the CMake target and the library name. Add sources to the module's `CMakeLists.txt`. The files are
@@ -81,6 +84,27 @@ with their `components` and their `addedFields`, `removedFields` and `resetField
 
 ```json
 {"module": "tetris", "types": ["tetris.Score"], "components": 1}
+```
+
+## Code editor setup
+
+`module.build` writes `compile_commands.json` (every source with its include paths and defines) to
+`.illusion/build/modules/`, and `module.create` adds `modules/.clangd`, which points clangd at it. Code editors
+based on clangd (Zed, VS Code with the clangd extension, CLion) then complete and navigate the engine headers
+once the modules have been built once; open the project folder (or `modules/`) in the editor:
+
+```yaml
+CompileFlags:
+  CompilationDatabase: ../.illusion/build/modules
+```
+
+With Microsoft's C/C++ extension for VS Code, set the database in the project's `.vscode/settings.json`
+instead:
+
+```json
+{
+  "C_Cpp.default.compileCommands": "${workspaceFolder}/.illusion/build/modules/compile_commands.json"
+}
 ```
 
 ## Opening sources

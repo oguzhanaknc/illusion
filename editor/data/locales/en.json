@@ -18,6 +18,7 @@
     "editor.action.file.preferences": "Preferences…",
     "editor.action.file.projects": "Projects…",
     "editor.action.modules.build": "Build modules",
+    "editor.action.modules.new": {"text": "New module...", "comment": "Modules menu item: creates a game module; the palette asks for its name"},
     "editor.action.modules.reload": "Reload modules",
     "editor.action.play.simulate": {"text": "Simulate", "comment": "Play menu: run physics without the game's input"},
     "editor.action.view.frame_all": "Frame all",
