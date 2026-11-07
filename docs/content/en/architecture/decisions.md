@@ -53,6 +53,7 @@ records rather than user documentation.
 | [0044](https://github.com/oguzhanaknc/illusion/blob/main/docs/adr/0044-component-layout-migration-on-hot-reload.md) | In-place Component layout migration on hot reload |
 | [0045](https://github.com/oguzhanaknc/illusion/blob/main/docs/adr/0045-asset-catalog-and-file-watching.md) | Asset catalog and file watching |
 | [0046](https://github.com/oguzhanaknc/illusion/blob/main/docs/adr/0046-prefabs-as-instance-records.md) | Prefabs as instance records with field-level overrides and nesting |
+| [0047](https://github.com/oguzhanaknc/illusion/blob/main/docs/adr/0047-particle-effects.md) | Particle effects: a saved emitter Component, a deterministic CPU simulation, GPU billboards |
 
 To propose a new decision, copy `docs/adr/0000-template.md` and follow the
 [contributing guide](../contributing.md#architecture-decision-records).

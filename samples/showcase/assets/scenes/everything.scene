@@ -14,6 +14,7 @@
     "illusion.LocalTransform": 1,
     "illusion.MeshRenderer": 1,
     "illusion.Name": 1,
+    "illusion.ParticleEmitter": 1,
     "illusion.PointLight": 1,
     "illusion.ProceduralSky": 1,
     "illusion.RigidBody": 1,
@@ -912,6 +913,45 @@
       }
     },
     {
+      "id": "530e0e6118e9685e",
+      "components": {
+        "illusion.Name": {
+          "value": "Dust"
+        },
+        "illusion.ParticleEmitter": {
+          "maxParticles": 128,
+          "rate": 12.0,
+          "burst": 0,
+          "loop": false,
+          "duration": 8.0,
+          "playOnStart": false,
+          "lifetimeMin": 2.0,
+          "lifetimeMax": 3.0,
+          "speedMin": 0.2,
+          "speedMax": 0.5,
+          "shape": "Box",
+          "radius": 0.5,
+          "boxExtents": [1.0, 0.1, 1.0],
+          "spread": 1.2,
+          "gravityFactor": -0.05,
+          "drag": 1.0,
+          "sizeStart": 0.3,
+          "sizeEnd": 0.8,
+          "colorStart": [0.6, 0.55, 0.5, 0.5],
+          "colorEnd": [0.6, 0.55, 0.5, 0.0],
+          "blend": "Alpha",
+          "space": "Local",
+          "texture": "assets:/textures/smoke.png",
+          "seed": 3
+        },
+        "illusion.Transform": {
+          "position": [-6.0, 0.1, -3.0],
+          "rotation": [0.0, 0.0, 0.0, 1.0],
+          "scale": [1.0, 1.0, 1.0]
+        }
+      }
+    },
+    {
       "id": "5692161d100b05e5",
       "components": {
         "illusion.AudioListener": {},
@@ -1280,6 +1320,45 @@
         },
         "illusion.Transform": {
           "position": [0.0, 0.0, 0.0],
+          "rotation": [0.0, 0.0, 0.0, 1.0],
+          "scale": [1.0, 1.0, 1.0]
+        }
+      }
+    },
+    {
+      "id": "d6de6acd12c87e38",
+      "components": {
+        "illusion.Name": {
+          "value": "Sparks"
+        },
+        "illusion.ParticleEmitter": {
+          "maxParticles": 512,
+          "rate": 60.0,
+          "burst": 30,
+          "loop": true,
+          "duration": 5.0,
+          "playOnStart": true,
+          "lifetimeMin": 0.4,
+          "lifetimeMax": 0.9,
+          "speedMin": 1.5,
+          "speedMax": 3.5,
+          "shape": "Sphere",
+          "radius": 0.1,
+          "boxExtents": [0.5, 0.5, 0.5],
+          "spread": 0.6,
+          "gravityFactor": 0.6,
+          "drag": 0.5,
+          "sizeStart": 0.06,
+          "sizeEnd": 0.01,
+          "colorStart": [6.0, 3.0, 1.0, 1.0],
+          "colorEnd": [2.0, 0.3, 0.05, 0.0],
+          "blend": "Additive",
+          "space": "World",
+          "texture": "",
+          "seed": 7
+        },
+        "illusion.Transform": {
+          "position": [0.0, 2.45, 2.0],
           "rotation": [0.0, 0.0, 0.0, 1.0],
           "scale": [1.0, 1.0, 1.0]
         }

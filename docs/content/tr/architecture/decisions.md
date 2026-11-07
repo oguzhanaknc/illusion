@@ -53,6 +53,7 @@ Record (ADR) olarak kaydedilir. Her kayıt bağlamı, kararı ve sonuçlarını 
 | [0044](https://github.com/oguzhanaknc/illusion/blob/main/docs/adr/0044-component-layout-migration-on-hot-reload.md) | Hot reload'da Component layout'unun yerinde taşınması |
 | [0045](https://github.com/oguzhanaknc/illusion/blob/main/docs/adr/0045-asset-catalog-and-file-watching.md) | Asset kataloğu ve dosya izleme |
 | [0046](https://github.com/oguzhanaknc/illusion/blob/main/docs/adr/0046-prefabs-as-instance-records.md) | Prefab'lar: alan düzeyinde override ve iç içe yerleştirme ile instance kayıtları |
+| [0047](https://github.com/oguzhanaknc/illusion/blob/main/docs/adr/0047-particle-effects.md) | Parçacık efektleri: kaydedilen bir emitter Component, deterministik bir CPU simülasyonu, GPU billboard'ları |
 
 Yeni bir karar önermek için `docs/adr/0000-template.md` dosyasını kopyalayın ve
 [katkıda bulunma rehberini](../contributing.md#architecture-decision-recordlar) izleyin.

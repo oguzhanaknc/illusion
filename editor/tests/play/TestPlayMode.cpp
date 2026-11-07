@@ -7,6 +7,7 @@
 #include <illusion/core/JobSystem.hpp>
 #include <illusion/ecs/Transform.hpp>
 #include <illusion/editor/play/PlaySession.hpp>
+#include <illusion/particles/ParticleComponents.hpp>
 #include <illusion/physics/PhysicsComponents.hpp>
 #include <illusion/runtime/GameSession.hpp>
 
@@ -27,6 +28,7 @@ struct PlayFixture
     {
         reflectPhysicsComponents();
         reflectAudioComponents();
+        reflectParticleComponents();
         play = std::make_unique<PlaySession>(
             *base.editor, PlaySessionDesc{.jobs = &jobs, .audioOutput = AudioOutput::Offline});
     }
@@ -318,6 +320,7 @@ TEST_CASE("module.build compiles a project module with the module SDK of this bu
                                                    std::u8string_view(u8"" ILLUSION_MODULE_SDK))});
     reflectPhysicsComponents();
     reflectAudioComponents();
+    reflectParticleComponents();
     JobSystem jobs{JobSystemDesc{2, 1024}};
     PlaySession play(*base.editor, PlaySessionDesc{.jobs = &jobs, .audioOutput = AudioOutput::Offline});
     EditorContext& editor = *base.editor;

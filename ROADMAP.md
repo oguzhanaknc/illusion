@@ -522,6 +522,25 @@ workflow), which waits for the owner's API key and budget; M7 gets its ✅ with 
   itself until it gets input, and five generated sounds instead of one tone. Fixed: changing
   `Joint::motorSpeed` did not wake a sleeping body, so a motor never moved a door that rested at its limit
 
+## PFX — Particle effects
+
+Before M8. Design: ADR 0047 (a saved emitter Component, a deterministic CPU simulation, GPU billboards).
+
+- PFX-1: ✅ `illusion::particles`: the saved `ParticleEmitter` (rate, burst, looping and duration, lifetime
+  and speed ranges, point/sphere/box shapes with a spread angle, gravity factor and drag, size and HDR
+  colour over life, additive or alpha blending, world or local space, texture, seed) and the runtime
+  `ParticlePool` (structure-of-arrays, allocated once per capacity); `ParticleWorld` emits, moves and
+  retires particles as parallel Jobs, deterministically and without per-frame allocations, with
+  play/stop/clear; `GameSession` advances it after physics with the physics gravity; benchmark
+  `particles/update`; the showcase has a spark fountain over the trigger pad and a dust emitter
+- PFX-2: Rendering: the live particles as instanced camera-facing billboards after the blended geometry in
+  the HDR target (bloom), additive and alpha blending, soft particles against the scene depth, sprite
+  textures, sorted alpha particles; GPU golden of the showcase effects
+- PFX-3: Editor and scripting: emitters simulate in the edit World for preview, `particles.*` commands
+  (play, stop, clear, stats) and MCP tools, a `ParticleService` for game modules (play, stop, burst at a
+  point), the showcase module plays the dust when a body lands
+- PFX-4: GPU simulation in compute shaders for very large emitters, behind the same Component
+
 ## M8 — Release pipeline
 
 - Export: clean runtime build, packed assets, no editor code

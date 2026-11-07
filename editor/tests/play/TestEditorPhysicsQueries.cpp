@@ -7,6 +7,7 @@
 #include <illusion/core/JobSystem.hpp>
 #include <illusion/editor/play/EditorPhysicsQueries.hpp>
 #include <illusion/editor/play/PlaySession.hpp>
+#include <illusion/particles/ParticleComponents.hpp>
 #include <illusion/physics/PhysicsComponents.hpp>
 
 #include <filesystem>
@@ -149,6 +150,7 @@ TEST_CASE("Play mode gives mesh asset colliders their shape when the session has
 {
     PhysicsFixture fixture;
     reflectAudioComponents();
+    reflectParticleComponents();
     EditorContext& editor = fixture.editor();
     // Play mode simulates bodies only: the floor needs a static RigidBody.
     addQuadFloor(fixture, R"("illusion.RigidBody":{"motionType":"Static"},)");

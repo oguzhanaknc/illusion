@@ -58,6 +58,7 @@ add_executable(illusion_tests
     modules/TestModules.cpp
     modules/TestServices.cpp
     physics/TestPhysicsAssets.cpp
+    particles/TestParticles.cpp
     physics/TestPhysicsExtensions.cpp
     physics/TestPhysicsHierarchy.cpp
     physics/TestPhysicsWorld.cpp
@@ -79,7 +80,7 @@ add_executable(illusion_tests
 target_include_directories(illusion_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
 target_link_libraries(illusion_tests PRIVATE
     illusion::core illusion::platform illusion::input illusion::assets illusion::audio illusion::physics
-    illusion::render illusion::modules illusion::runtime illusion::text illusion_text_tools illusion::doctest)
+    illusion::particles illusion::render illusion::modules illusion::runtime illusion::text illusion_text_tools illusion::doctest)
 target_compile_definitions(illusion_tests PRIVATE ILLUSION_TEST_DATA_DIR="${CMAKE_CURRENT_SOURCE_DIR}/data")
 illusion_configure_target(illusion_tests)
 

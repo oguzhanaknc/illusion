@@ -5,6 +5,7 @@
 
 #include <illusion/audio/AudioComponents.hpp>
 #include <illusion/ecs/ComponentJson.hpp>
+#include <illusion/particles/ParticleComponents.hpp>
 #include <illusion/physics/PhysicsComponents.hpp>
 #include <illusion/render/Components.hpp>
 
@@ -33,6 +34,7 @@ struct ShowcaseFixture
         reflectRenderComponents();
         reflectPhysicsComponents();
         reflectAudioComponents();
+        reflectParticleComponents();
         const std::filesystem::path project = directory.path / "showcase";
         std::filesystem::copy(utf8Path(ILLUSION_SAMPLES_DIR) / "showcase", project,
                               std::filesystem::copy_options::recursive);

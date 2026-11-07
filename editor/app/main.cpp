@@ -30,6 +30,7 @@
 #include <illusion/editor/ui/UiPlatformBackend.hpp>
 #include <illusion/editor/viewport/ViewportService.hpp>
 #include <illusion/input/GamepadSystem.hpp>
+#include <illusion/particles/ParticleComponents.hpp>
 #include <illusion/physics/PhysicsComponents.hpp>
 #include <illusion/platform/Events.hpp>
 #include <illusion/platform/FileSystem.hpp>
@@ -534,6 +535,7 @@ int run(const std::vector<std::string>& args)
     reflectRenderComponents();
     reflectPhysicsComponents();
     reflectAudioComponents();
+    reflectParticleComponents();
 
     // The window needs the windowing system before the editor starts (the server wakes its event loop).
     EventBus events;

@@ -13,6 +13,7 @@ add_executable(illusion_benchmarks
     BenchJobSystem.cpp
     BenchMath.cpp
     BenchModules.cpp
+    BenchParticles.cpp
     BenchPhysics.cpp
     BenchReflection.cpp
     BenchRuntime.cpp
@@ -20,7 +21,7 @@ add_executable(illusion_benchmarks
 
 target_include_directories(illusion_benchmarks PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
 target_link_libraries(illusion_benchmarks PRIVATE
-    illusion::core illusion::input illusion::assets illusion::audio illusion::physics illusion::modules
+    illusion::core illusion::input illusion::assets illusion::audio illusion::physics illusion::particles illusion::modules
     illusion::runtime illusion::text illusion::render illusion::nanobench)
 illusion_configure_target(illusion_benchmarks)
 
