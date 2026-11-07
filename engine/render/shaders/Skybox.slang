@@ -86,7 +86,7 @@ float3 stars(float3 d, float seconds, float pixel)
     const float2 cell = floor(grid);
     const uint3 key = uint3(uint2(cell), face);
     const float presence = skyRandom(key, 1u);
-    if (presence > 0.35)
+    if (presence > 0.12)
     {
         return float3(0.0, 0.0, 0.0);
     }
@@ -94,11 +94,11 @@ float3 stars(float3 d, float seconds, float pixel)
     // A cell spans about 2 / kCells radians.
     const float distance = length(grid - centre) * (2.0 / kCells);
     const float width = max(pixel * 0.7, 2e-4);
-    const float magnitude = pow(skyRandom(key, 7u), 6.0); // many faint stars, few bright ones
+    const float magnitude = pow(skyRandom(key, 7u), 8.0); // many faint stars, few bright ones
     const float twinkle = 0.75 + 0.25 * sin(seconds * (2.0 + 4.0 * skyRandom(key, 11u)) + 40.0 * presence);
     const float temperature = skyRandom(key, 13u);
     const float3 colour = lerp(float3(1.0, 0.75, 0.55), float3(0.7, 0.8, 1.0), temperature);
-    return colour * (magnitude * 6.0 * twinkle * exp(-distance * distance / (2.0 * width * width)));
+    return colour * (magnitude * 5.0 * twinkle * exp(-distance * distance / (2.0 * width * width)));
 }
 
 // A faint band of light across the night sky.

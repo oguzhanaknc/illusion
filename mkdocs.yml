@@ -92,6 +92,7 @@ plugins:
             Scripting API: Scripting API
             AI Agents: Yapay Zekâ Ajanları
             Showcase Project: Showcase Projesi
+            Tech Demo Project: Teknoloji Demosu Projesi
             Editor Window: Editör Penceresi
             Outliner and Inspector: Outliner ve Inspector
             Scene Viewport: Scene Viewport'u
@@ -162,6 +163,7 @@ nav:
           - Automation: manual/editor/automation.md
           - AI Agents: manual/editor/ai-agents.md
           - Showcase Project: manual/editor/showcase.md
+          - Tech Demo Project: manual/editor/techdemo.md
   - Tutorials:
       - First Agent Session: tutorials/first-agent-session.md
       - Tetris with an Agent: tutorials/tetris-with-an-agent.md

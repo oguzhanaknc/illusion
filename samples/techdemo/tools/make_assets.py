@@ -577,8 +577,8 @@ def main():
         write_gltf(ROOT / "models" / f"tree_{'abc'[index]}.gltf",
                    [mesh_part("Trunk", trunk, 0), mesh_part("Leaves", foliage, 1)], [bark, leaves])
     write_gltf(ROOT / "models" / "neon.gltf",
-               [mesh_part("Ring", torus(1.6, 0.035), 0), mesh_part("Arch", torus(2.2, 0.04, 96, 10, math.pi), 0),
-                mesh_part("Bar", bar(2.4, 0.03), 0)], [{"name": "Neon", "emissive": [1.0, 0.2, 0.9]}])
+               [mesh_part("Ring", torus(1.6, 0.05), 0), mesh_part("Arch", torus(2.2, 0.06, 96, 10, math.pi), 0),
+                mesh_part("Bar", bar(2.4, 0.045), 0)], [{"name": "Neon", "emissive": [1.0, 0.2, 0.9]}])
     write_gltf(ROOT / "models" / "log.gltf", [mesh_part("Log", log(1.3, 0.09), 0)], [bark])
     bark_textures()
     leaf_texture()
