@@ -17,6 +17,8 @@
 #include <illusion/input/InputActionsAsset.hpp>
 #include <illusion/input/InputService.hpp>
 #include <illusion/modules/ModuleHost.hpp>
+#include <illusion/particles/ParticleComponents.hpp>
+#include <illusion/particles/ParticleWorld.hpp>
 #include <illusion/physics/PhysicsComponents.hpp>
 #include <illusion/physics/PhysicsService.hpp>
 #include <illusion/physics/PhysicsWorld.hpp>
@@ -46,6 +48,7 @@ void reflectAll()
     reflectCoreComponents();
     reflectPhysicsComponents();
     reflectAudioComponents();
+    reflectParticleComponents();
     reflectRuntimeStructs();
 }
 
@@ -165,6 +168,31 @@ TEST_CASE("a game session moves bodies and propagates the hierarchy on every upd
     CHECK(session->physics().bodyCount() == 2);
     CHECK(session->updateCount() == 30);
     CHECK(session->time() == doctest::Approx(30.0 * kStep));
+}
+
+TEST_CASE("a game session emits particles that fall with the physics gravity")
+{
+    Fixture f;
+    auto session = f.create();
+    World& world = session->world();
+    ParticleEmitter emitter;
+    emitter.rate = 0.0f;
+    emitter.burst = 4;
+    emitter.speedMin = 0.0f;
+    emitter.speedMax = 0.0f;
+    emitter.lifetimeMin = 10.0f;
+    emitter.lifetimeMax = 10.0f;
+    emitter.gravityFactor = 1.0f;
+    const Entity sparks = world.create(at(Vec3(0.0f, 5.0f, 0.0f)), emitter);
+    session->start();
+    session->physics().setGravity(Vec3(0.0f, -2.0f, 0.0f));
+    for (int i = 0; i < 30; ++i)
+    {
+        session->update(kStep);
+    }
+    CHECK(session->particles().aliveCount(sparks) == 4);
+    CHECK(session->particles().gravity() == Vec3(0.0f, -2.0f, 0.0f));
+    CHECK(world.get<ParticlePool>(sparks).position(0).y < 5.0f);
 }
 
 TEST_CASE("a game session starts, updates and stops its modules on its World")

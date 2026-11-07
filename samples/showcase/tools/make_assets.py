@@ -1,5 +1,5 @@
-"""Writes the generated assets of the showcase project: a glTF model with two submeshes and the
-sounds (music, wind, a lamp hum, a voice and a click).
+"""Writes the generated assets of the showcase project: a glTF model with two submeshes, the
+sounds (music, wind, a lamp hum, a voice and a click) and a smoke sprite.
 
 All of them are made here from numbers, so they carry no third-party licence. Run it from anywhere:
 
@@ -11,6 +11,7 @@ import json
 import math
 import struct
 import wave
+import zlib
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent / "assets"
@@ -163,8 +164,34 @@ def click():
             for i in range(int(0.015 * RATE))]
 
 
+PNG_SIGNATURE = bytes([137, 80, 78, 71, 13, 10, 26, 10])
+
+
+def write_smoke(path, size=64):
+    """A soft grey puff for the dust particles: an RGBA PNG whose alpha falls off from the centre."""
+    rows = bytearray()
+    for y in range(size):
+        rows.append(0)  # PNG filter type: none
+        for x in range(size):
+            dx = (x + 0.5) / size * 2 - 1
+            dy = (y + 0.5) / size * 2 - 1
+            falloff = max(0.0, 1.0 - math.sqrt(dx * dx + dy * dy))
+            alpha = int(255 * falloff ** 1.5)
+            rows += bytes((235, 230, 220, alpha))
+
+    def chunk(kind, data):
+        body = kind + data
+        return struct.pack(">I", len(data)) + body + struct.pack(">I", zlib.crc32(body) & 0xFFFFFFFF)
+
+    png = (PNG_SIGNATURE + chunk(b"IHDR", struct.pack(">IIBBBBB", size, size, 8, 6, 0, 0, 0))
+           + chunk(b"IDAT", zlib.compress(bytes(rows), 9)) + chunk(b"IEND", b""))
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_bytes(png)
+
+
 if __name__ == "__main__":
     write_model(ROOT / "models" / "blocks.gltf")
     for name, samples in (("music", music()), ("wind", wind()), ("hum", hum()), ("voice", voice()),
                           ("click", click())):
         write_wav(ROOT / "audio" / f"{name}.wav", samples)
+    write_smoke(ROOT / "textures" / "smoke.png")

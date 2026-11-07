@@ -18,6 +18,7 @@
 #include <illusion/input/InputActions.hpp>
 #include <illusion/input/InputActionsService.hpp>
 #include <illusion/modules/ModuleHost.hpp>
+#include <illusion/particles/ParticleComponents.hpp>
 #include <illusion/physics/PhysicsComponents.hpp>
 #include <illusion/physics/PhysicsWorld.hpp>
 #include <illusion/physics/PhysicsWorldService.hpp>
@@ -48,6 +49,7 @@ void reflectAll()
     reflectCoreComponents();
     reflectPhysicsComponents();
     reflectAudioComponents();
+    reflectParticleComponents();
     reflectRenderComponents();
     reflectRuntimeStructs();
 }

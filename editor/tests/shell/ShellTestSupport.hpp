@@ -12,6 +12,7 @@
 #include <illusion/editor/ui/HeadlessUi.hpp>
 #include <illusion/editor/ui/UiContext.hpp>
 #include <illusion/editor/ui/UiDriver.hpp>
+#include <illusion/particles/ParticleComponents.hpp>
 #include <illusion/physics/PhysicsComponents.hpp>
 #include <illusion/render/Components.hpp>
 
@@ -59,6 +60,7 @@ struct ShellFixture
         reflectRenderComponents();
         reflectPhysicsComponents();
         reflectAudioComponents();
+        reflectParticleComponents();
         REQUIRE(editor::ui::mountEditorData(data));
         auto loaded = editor::ui::FontManager::load(context, data, "editor:/fonts");
         REQUIRE_MESSAGE(loaded.hasValue(), (loaded ? std::string() : loaded.error()));

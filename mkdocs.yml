@@ -73,6 +73,7 @@ plugins:
             Assets and Models: Asset'ler ve Modeller
             Physics: Fizik
             Audio: Ses
+            Particles: Parçacıklar
             Game Modules: Oyun Modülleri
             Game Runtime: Oyun Runtime'ı
             Gamepads: Gamepad'ler
@@ -141,6 +142,7 @@ nav:
       - Assets and Models: manual/assets.md
       - Physics: manual/physics.md
       - Audio: manual/audio.md
+      - Particles: manual/particles.md
       - Game Modules: manual/modules.md
       - Game Runtime: manual/runtime.md
       - Profiling: manual/profiling.md

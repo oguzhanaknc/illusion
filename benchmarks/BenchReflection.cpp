@@ -4,6 +4,7 @@
 #include <illusion/core/Json.hpp>
 #include <illusion/ecs/ComponentJson.hpp>
 #include <illusion/ecs/Reflection.hpp>
+#include <illusion/particles/ParticleComponents.hpp>
 
 #include <string>
 
@@ -13,6 +14,7 @@ using namespace illusion;
 ILL_BENCHMARK("reflection/field-read-write", 40.0)
 {
     reflectAudioComponents();
+    reflectParticleComponents();
     const TypeReflection& type = *ComponentRegistry::instance().reflection(componentId<AudioSource>());
     const FieldInfo& volume = *type.field("volume");
     AudioSource source;
@@ -29,6 +31,7 @@ ILL_BENCHMARK("reflection/field-read-write", 40.0)
 ILL_BENCHMARK("reflection/component-json", 2500.0)
 {
     reflectAudioComponents();
+    reflectParticleComponents();
     const TypeReflection& type = *ComponentRegistry::instance().reflection(componentId<AudioSource>());
     AudioSource source;
     source.clip = AssetRef("game:/audio/footstep.ogg");

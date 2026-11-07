@@ -100,7 +100,7 @@ target_include_directories(illusion_editor_gpu_tests PRIVATE ${CMAKE_CURRENT_SOU
 target_link_libraries(illusion_editor_gpu_tests PRIVATE
     illusion_ui_gallery_pages illusion::editor_shell illusion::editor_client illusion::editor_viewport
     illusion::render
-    illusion::physics illusion::audio illusion::doctest)
+    illusion::physics illusion::audio illusion::particles illusion::doctest)
 target_compile_definitions(illusion_editor_gpu_tests PRIVATE
     ILLUSION_FAKE_CMAKE="$<TARGET_FILE:illusion_fake_cmake>"
     ILLUSION_GOLDEN_DIR="${CMAKE_CURRENT_SOURCE_DIR}/data/golden"

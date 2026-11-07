@@ -42,6 +42,7 @@ class InputActions;
 class InputState;
 class JobSystem;
 class ModuleHost;
+class ParticleWorld;
 class PhysicsWorld;
 class RenderAssetCache;
 class VirtualFileSystem;
@@ -141,6 +142,9 @@ public:
 
     /// The audio of the World.
     [[nodiscard]] AudioWorld& audio() noexcept;
+
+    /// The particle effects of the World, advanced after physics with its gravity.
+    [[nodiscard]] ParticleWorld& particles() noexcept;
 
     /// What the session runs.
     [[nodiscard]] GameSessionMode mode() const noexcept;

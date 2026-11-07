@@ -9,6 +9,7 @@
 #include <illusion/editor/ui/OffscreenUi.hpp>
 #include <illusion/editor/ui/UiContext.hpp>
 #include <illusion/editor/viewport/ViewportService.hpp>
+#include <illusion/particles/ParticleComponents.hpp>
 #include <illusion/physics/PhysicsComponents.hpp>
 #include <illusion/render/Components.hpp>
 #include <illusion/render/RenderDevice.hpp>
@@ -71,6 +72,7 @@ struct ShowcaseGpu
         reflectRenderComponents();
         reflectPhysicsComponents();
         reflectAudioComponents();
+        reflectParticleComponents();
         const std::filesystem::path project = directory.path / "showcase";
         std::filesystem::copy(utf8Path(ILLUSION_SAMPLES_DIR) / "showcase", project,
                               std::filesystem::copy_options::recursive);

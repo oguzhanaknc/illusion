@@ -8,6 +8,7 @@
 #include <illusion/input/InputActionsAsset.hpp>
 #include <illusion/input/InputActionsService.hpp>
 #include <illusion/modules/ModuleHost.hpp>
+#include <illusion/particles/ParticleWorld.hpp>
 #include <illusion/physics/PhysicsAssetResolver.hpp>
 #include <illusion/physics/PhysicsWorld.hpp>
 #include <illusion/physics/PhysicsWorldService.hpp>
@@ -64,6 +65,7 @@ struct GameSession::Impl
         , seededGuids(seededGenerator(sessionDesc))
         , physics(world, *sessionDesc.jobs, physicsDesc(sessionDesc.settings.physics))
         , audio(world, *sessionDesc.files, audioDesc(sessionDesc))
+        , particles(world)
         , physicsService(physics)
         , audioService(audio)
         , inputService(actions)
@@ -115,6 +117,7 @@ struct GameSession::Impl
     World world;
     PhysicsWorld physics;
     AudioWorld audio;
+    ParticleWorld particles;
     InputActions actions;
     InputState input;
     HierarchyIndex hierarchy;
@@ -231,6 +234,9 @@ void GameSession::update(f64 deltaSeconds)
     assignMissingGuids(impl.world, impl.guids());
     impl.physics.update(step);
     updateTransformHierarchy(impl.world, impl.hierarchy, impl.desc.jobs);
+    // Particles fall with the physics gravity, which game code may change.
+    impl.particles.setGravity(impl.physics.gravity());
+    impl.particles.update(static_cast<f32>(step), impl.desc.jobs);
     impl.audio.update(step);
     if (impl.physicsAssets)
     {
@@ -268,6 +274,11 @@ InputActions& GameSession::actions() noexcept
 PhysicsWorld& GameSession::physics() noexcept
 {
     return m_impl->physics;
+}
+
+ParticleWorld& GameSession::particles() noexcept
+{
+    return m_impl->particles;
 }
 
 AudioWorld& GameSession::audio() noexcept

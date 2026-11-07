@@ -25,7 +25,9 @@ illusion_ctl --launch illusion_editor --editor-arg --headless --editor-arg --no-
 
 Bir test (`TestShowcase.cpp`) projenin bir kopyasını açar; kaydedilen bir Component ya da alanlarından biri
 sahnede yoksa veya varsayılanında bırakılmışsa ya da projede eksik Asset'ler veya çözümlenmemiş prefab'lar
-varsa başarısız olur. Bu yüzden yeni bir Component ya da alan `build.jsonl`'da bir değer ister.
+varsa başarısız olur. Bu yüzden yeni bir Component ya da alan `build.jsonl`'da bir değer ister. İki parçacık
+emitter'ı `ParticleEmitter`'ı kapsar: trigger pedinin üzerinde bir kıvılcım çeşmesi ve blokların yanında
+oynatılmayı bekleyen bir toz emitter'ı (`playOnStart` kapalı).
 
 ## Showcase modülü
 
