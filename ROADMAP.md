@@ -3,6 +3,13 @@
 Milestones are delivered in order; each one ends with tests, benchmarks, bilingual documentation and
 ADRs for its significant decisions. Items marked ✅ are done.
 
+## Order after DEMO
+
+1. GFX-2 (foliage and LODs), 2. GFX-3, 3. TEX (texture compression), 4. UI (game interface),
+5. SAVE (saved games), 6. ANIM (skeletal animation), 7. NAV (navigation and AI), 8. M8 (release pipeline),
+9. PROBE (reflection and light probes), 10. MAT (custom shaders and materials), 11. DECAL, 12. TERRAIN,
+13. WATER, 14. M9 (upscaling and frame generation), 15. M10 (hybrid ray tracing).
+
 ## M0 — Foundation ✅
 
 - ✅ Repository, CMake presets, pinned dependencies (FetchContent + SHA-256)
@@ -607,8 +614,43 @@ After DEMO. Features that bring the renderer and the tech demo to a modern AAA l
   `shadowNearPlane`; cube shadow maps for up to 4 lights nearest the view (`ShadowSettings::pointLightCount`,
   `pointResolution`), drawn with the caster path (wind, alpha masks), PCSS in the forward shading and one tap
   per froxel in the volumetric fog (ADR 0051); the tech demo's campfire and lanterns cast them
-- GFX-2: Foliage: leaf translucency, GPU-generated dense grass, LODs
+- GFX-2: Foliage and level of detail: leaf translucency, GPU-generated dense grass, and LODs for every
+  mesh: generated on import with meshoptimizer (MIT), chosen per instance by screen size with dithered
+  cross-fades, also for shadows; impostors for distant trees
 - GFX-3: Lit smoke, clouds, screen-space reflections, contact shadows
+
+## TEX — Texture compression
+
+Every platform: textures reach the GPU uncompressed (RGBA8), using 4 to 8 times the memory they need.
+
+- BC7 (colour, colour + alpha), BC5 (normal maps), BC4 (masks), BC6H (HDR environments), encoded on import
+  into the cooked image format with mip chains, on the Job System, with quality settings per texture in the
+  import sidecar; one format family on Windows, Linux and macOS (Apple Silicon supports BC through
+  MoltenVK)
+- GPU upload of compressed mips, streaming by mip level, memory statistics in `RenderResources`; tests
+  (round trips, error bounds) and benchmarks (encode speed, memory); permissive encoder (ADR)
+
+## UI — Game interface
+
+Games have no way to draw a HUD or a menu: the editor's Dear ImGui is not shipped in games.
+
+- UI-1: Rendering: signed-distance-field fonts (with the string tables and `MessageFormat` of
+  `engine/text`, right-to-left later), images, nine-slice panels, a batched UI pass after tonemapping,
+  resolution-independent scaling (anchors, safe areas)
+- UI-2: Layout and widgets: saved UI documents (a tree of elements with anchors, stacks and grids),
+  buttons, sliders, toggles, lists, text fields; focus and navigation with the keyboard and gamepads
+  through `InputActions`, glyphs per device
+- UI-3: Scripting and tools: a `UiService` for game modules (bind values, events), an editor for UI
+  documents with live preview, `ui.*` commands for agents, transitions and animations; the tech demo gets a
+  pause menu and a HUD
+
+## SAVE — Saved games
+
+- Save slots written to `user:/` through the VFS: chosen Components and module state serialized with the
+  reflection, versioned with migrations, checksummed, written atomically in the background; screenshots and
+  metadata per slot
+- `SaveService` for game modules; Steam Cloud through the Steamworks module when present (M8); the UI's
+  pause menu gets Save and Load; tests for corruption, versions and interrupted writes
 
 ## ANIM — Skeletal animation
 
@@ -630,6 +672,15 @@ Nothing of it exists yet: glTF skins and animations are skipped on import and th
   `animation.*` commands (MCP tools), skeleton debug drawing; the tech demo gets an animated creature;
   documentation (EN/TR) and an ADR for the runtime and GPU skinning design
 
+## NAV — Navigation and AI
+
+- Navigation meshes baked from colliders and walkable surfaces with Recast (zlib), in the editor and at run
+  time for changing levels, tiled for large worlds; path queries and crowds with Detour on the Job System;
+  off-mesh links (jumps, ladders)
+- A `NavAgent` Component steering CharacterControllers, avoidance, debug drawing; behaviour trees as saved
+  assets with blackboards, perception (sight, hearing) and an `AiService`; `nav.*` and `ai.*` commands; a
+  creature that wanders the tech demo
+
 ## M8 — Release pipeline
 
 - Export: clean runtime build, packed assets, no editor code
@@ -637,6 +688,43 @@ Nothing of it exists yet: glTF skins and animations are skipped on import and th
   "sniper" compatible)
 - Optional Steamworks module (achievements, cloud saves, Steam Input); SDK supplied by the user
 - Release and Steam guide (EN/TR)
+
+## PROBE — Reflection and light probes
+
+Correct indirect light indoors and in shadow until ray tracing (M10) is available.
+
+- Reflection probes (box-projected, blended between volumes), baked in the editor and refreshed at run time
+  on demand; irradiance probes (spherical harmonics) on a grid or placed volumes with visibility, baked
+  from the scene with the existing renderer, interpolated per pixel; specular occlusion
+- Probe Components, `probe.*` commands, a bake panel; tests and benchmarks
+
+## MAT — Custom shaders and materials
+
+Today games can only set the parameters of the built-in PBR material.
+
+- Material templates in Slang: a surface function (base colour, normal, roughness, emission, opacity,
+  world offset) compiled into the forward, prepass, shadow and bindless variants, with typed parameters and
+  textures exposed to `.material` files and the Inspector; shader permutations cached and hot-reloaded
+- Shading models (default, subsurface, two-sided foliage, unlit, clear coat); a node-based material editor
+  later; documentation of the surface API
+
+## DECAL — Decals
+
+- Deferred-style decals projected onto opaque surfaces in a box (base colour, normal, roughness, emission),
+  sorted, layered and culled by mask; decal materials on the MAT system; footprints and impacts from game
+  code through a pooled `DecalService`
+
+## TERRAIN — Terrain
+
+- Heightmap terrain in tiles with GPU tessellation-free LOD (CDLOD), layered materials painted in the
+  editor (splat maps, triplanar on slopes), holes, Jolt height-field colliders, vegetation painted onto it
+  with the GFX-2 instancing; streaming of tiles for large worlds
+
+## WATER — Water
+
+- Lakes and rivers (flow maps, shoreline foam, refraction, depth colour, caustics) and an ocean (FFT
+  waves, foam, LOD grid), lit by the sky, probes and fog; buoyancy for physics bodies; water as MAT
+  materials
 
 ## M9 — Upscaling and frame generation
 
