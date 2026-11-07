@@ -5,10 +5,13 @@
 //
 // What it does, decided only by the frame number and the input so that fixed-step runs repeat exactly:
 // - start: a floor and a gem from mesh geometry, the Jump and Move actions, a chime made from numbers, the
-//   tone clip, the mixer settings;
-// - update: walks and jumps the Player character, pushes the Ball, Crate, Rock, Drum and Door, sweeps and
-//   casts rays, counts contacts and the Trigger's visitors, spawns a lantern prefab, plays sounds on impacts,
-//   lowers gravity and lets the Crate fall through the floor near the end;
+//   lamp hum and the music, the mixer settings;
+// - update: walks the Player back and forth across the trigger pad until a key or stick moves it (then WASD
+//   or the left stick walks and Space or South jumps), lights the lamp and plays a greeting while the Player
+//   stands on the pad, opens and closes the Door with its hinge motor, pushes the Ball, Crate, Rock and Drum,
+//   slides the drawer, lifts the platform,
+//   grows the Ball, sweeps and casts rays, counts contacts and the Trigger's visitors, spawns a lantern
+//   prefab, chimes where something lands hard, and switches to moon gravity for a while;
 // - stop: unloads the clips.
 // Everything that hot reloads must keep lives in the Components showcase.Stats (saved) and showcase.Runtime.
 
@@ -26,6 +29,7 @@
 #include <illusion/input/InputService.hpp>
 #include <illusion/physics/PhysicsComponents.hpp>
 #include <illusion/physics/PhysicsService.hpp>
+#include <illusion/render/SceneComponents.hpp>
 #include <illusion/runtime/SceneService.hpp>
 
 #include <algorithm>
@@ -64,9 +68,9 @@ struct Runtime
     PhysicsMeshHandle floor{};
     PhysicsMeshHandle gem{};
     AudioClipHandle chime{};
-    AudioClipHandle tone{};
+    AudioClipHandle hum{};
     AudioClipHandle music{};
-    AudioVoiceHandle hum{};
+    AudioVoiceHandle humVoice{};
     ActionId jump = 0;
     ActionId move = 0;
     Entity ball{};
@@ -77,9 +81,16 @@ struct Runtime
     Entity door{};
     Entity radio{};
     Entity trigger{};
+    Entity lamp{};
+    Entity voice{};
+    Entity drawer{};
+    Entity platform{};
     InputDevice device{};
     GamepadType gamepad{};
     u32 awakeFrames = 0;
+    f32 walkDirection = -1.0f; ///< -1 away from the camera, +1 towards it.
+    bool manual = false;       ///< A key or stick moved the Player: it no longer walks by itself.
+    bool onPad = false;        ///< The Player stands on the trigger pad.
     bool humPlaying = false;
     bool radioPlaying = false;
     bool uiPaused = false;
@@ -99,7 +110,17 @@ constexpr u32 kAllLayers = 0xFFFFFFFFu;
 constexpr f32 kFloorHalfSize = 10.0f; // the Ground plane of the scene, 20 m wide
 constexpr u32 kChimeRate = 22050;
 constexpr u32 kChimeFrames = kChimeRate / 4;
-constexpr std::string_view kTone = "assets:/audio/tone.wav";
+constexpr std::string_view kHum = "assets:/audio/hum.wav";
+constexpr std::string_view kMusic = "assets:/audio/music.wav";
+constexpr f32 kWalkSpeed = 2.0f;      // m/s of the Player when it walks by itself
+constexpr f32 kPathNear = 6.0f;       // z of the end of its path nearest the camera
+constexpr f32 kPathFar = -0.5f;       // z of the far end, past the trigger pad
+constexpr f32 kLampIntensity = 25.0f; // the lamp over the pad, off the pad and on it
+constexpr f32 kLampLit = 90.0f;
+constexpr u32 kDrawerPeriod = 90;    // frames between pushes of the drawer
+constexpr u32 kPlatformPeriod = 120; // frames of each rise and fall of the platform
+constexpr f32 kPlatformLow = 0.2f;   // its height at the bottom
+constexpr u32 kDoorPeriod = 240;     // frames between the door opening and closing
 constexpr std::string_view kLantern = "assets:/prefabs/lantern.prefab";
 
 Quat identity() noexcept
@@ -163,7 +184,7 @@ std::vector<f32> chimeSamples(JobSystem& jobs)
 void startPhysics(World& world, PhysicsService& physics, Runtime& runtime)
 {
     physics.setGravity(Vec3(0.0f, -9.81f, 0.0f));
-    physics.setLayersCollide(0, 1, true);
+    physics.setLayersCollide(1, 2, true); // the Crate (layer 1) and the Player (layer 2)
 
     // The floor under the Ground plane: two triangles.
     const std::array<Vec3, 4> corners{
@@ -221,8 +242,8 @@ void startAudio(JobSystem& jobs, AudioService& audio, Runtime& runtime)
 {
     const std::vector<f32> chime = chimeSamples(jobs);
     runtime.chime = audio.createClip(chime, 1, kChimeRate);
-    runtime.tone = audio.loadClip(kTone, AudioClipMode::Decode);
-    runtime.music = audio.requestClip(kTone, AudioClipMode::Stream);
+    runtime.hum = audio.loadClip(kHum, AudioClipMode::Decode);
+    runtime.music = audio.requestClip(kMusic, AudioClipMode::Stream);
     if (const std::optional<AudioClipInfo> info = audio.clipInfo(runtime.chime))
     {
         ILL_LOG_INFO("Showcase", "chime: {} frames, {} bytes", info->frames, info->memoryBytes);
@@ -265,6 +286,10 @@ void startModule(ModuleContext& context)
     runtime.door = findNamed(world, "Door");
     runtime.radio = findNamed(world, "Radio");
     runtime.trigger = findNamed(world, "Trigger");
+    runtime.lamp = findNamed(world, "Lamp");
+    runtime.voice = findNamed(world, "Voice");
+    runtime.drawer = findNamed(world, "Drawer");
+    runtime.platform = findNamed(world, "Platform");
     if (PhysicsService* physics = context.service<PhysicsService>())
     {
         startPhysics(world, *physics, runtime);
@@ -284,8 +309,9 @@ void startModule(ModuleContext& context)
     world.create(Name{"Showcase"}, Stats{}, runtime);
 }
 
-// Walks the Player with Move and jumps with Jump.
-void updatePlayer(PhysicsService& physics, const InputService& input, Runtime& runtime, Stats& stats, f32 dt)
+// Walks the Player by itself until Move or Jump is used, then with Move, and jumps with Jump.
+void updatePlayer(PhysicsService& physics, const InputService& input, const Vec3& position, Runtime& runtime,
+                  Stats& stats, f32 dt)
 {
     runtime.device = input.lastDevice();
     runtime.gamepad = input.lastGamepadType();
@@ -293,9 +319,24 @@ void updatePlayer(PhysicsService& physics, const InputService& input, Runtime& r
     const bool pressed = input.wasPressed(runtime.jump);
     const bool held = input.isDown(runtime.jump);
     const f32 strength = input.value(runtime.jump);
+    runtime.manual = runtime.manual || pressed || glm::length(move) > 0.0f;
     Vec3 velocity = physics.characterVelocity(runtime.player);
-    velocity.x = 3.0f * move.x;
-    velocity.z = -3.0f * move.y;
+    if (runtime.manual)
+    {
+        velocity.x = 3.0f * move.x;
+        velocity.z = -3.0f * move.y;
+    }
+    else
+    {
+        // Back and forth across the trigger pad, turning at the ends of the path.
+        if ((runtime.walkDirection < 0.0f && position.z <= kPathFar) ||
+            (runtime.walkDirection > 0.0f && position.z >= kPathNear))
+        {
+            runtime.walkDirection = -runtime.walkDirection;
+        }
+        velocity.x = 0.0f;
+        velocity.z = kWalkSpeed * runtime.walkDirection;
+    }
     if (physics.isCharacterGrounded(runtime.player))
     {
         ++stats.groundedFrames;
@@ -323,7 +364,7 @@ void updateBodies(World& world, PhysicsService& physics, Runtime& runtime, Stats
     const u32 frame = stats.frames;
     if (frame == 30)
     {
-        physics.addImpulse(runtime.ball, physics.mass(runtime.ball) * Vec3(2.0f, 3.0f, 0.0f));
+        physics.addImpulse(runtime.ball, physics.mass(runtime.ball) * Vec3(-2.0f, 3.0f, 0.0f));
     }
     if (frame == 45)
     {
@@ -338,22 +379,44 @@ void updateBodies(World& world, PhysicsService& physics, Runtime& runtime, Stats
     {
         physics.addForce(runtime.crate, Vec3(0.0f, 0.0f, -30.0f));
     }
-    if (frame == 90 && world.has<Collider>(runtime.ball))
+    if (frame == 90 && world.has<Transform>(runtime.ball))
     {
-        world.get<Collider>(runtime.ball).radius *= 1.5f; // a bigger ball from here on
+        // A bigger ball from here on: the scale grows its collider and its mesh alike.
+        world.get<Transform>(runtime.ball).scale = Vec3(1.5f);
         physics.rebuild(runtime.ball);
     }
-    if (frame == 150)
+    if (frame % kDrawerPeriod == 0 && world.isAlive(runtime.drawer))
     {
-        physics.addImpulse(runtime.door, Vec3(0.0f, 0.0f, 20.0f));
+        // Out from under the table and back in again.
+        const f32 out = (frame / kDrawerPeriod) % 2 == 0 ? 1.0f : -1.0f;
+        physics.addImpulse(runtime.drawer, physics.mass(runtime.drawer) * Vec3(0.0f, 0.0f, 0.9f * out));
+    }
+    if (Transform* platform = world.tryGet<Transform>(runtime.platform))
+    {
+        // A kinematic body follows its Transform: up 0.8 m and down again, smoothly.
+        const f32 phase = static_cast<f32>(frame % (2 * kPlatformPeriod)) / static_cast<f32>(kPlatformPeriod);
+        platform->position.y = kPlatformLow + 0.4f * (1.0f - std::cos(std::numbers::pi_v<f32> * phase));
+    }
+    if (frame > 0 && frame % kDoorPeriod == 0)
+    {
+        // The hinge motor opens the door to its limit, then closes it: game code may change motorSpeed any
+        // time.
+        if (Joint* hinge = world.tryGet<Joint>(runtime.door))
+        {
+            hinge->motorSpeed = -hinge->motorSpeed;
+        }
     }
     if (frame == 200)
     {
-        physics.setGravity(Vec3(0.0f, -4.0f, 0.0f)); // moon gravity
+        physics.setGravity(Vec3(0.0f, -1.62f, 0.0f)); // moon gravity: the pendulum and the rope slow down
     }
-    if (frame == 240 && physics.layersCollide(0, 1))
+    if (frame == 260)
     {
-        physics.setLayersCollide(0, 1, false); // the Crate (layer 1) falls through the floor
+        physics.setGravity(Vec3(0.0f, -9.81f, 0.0f));
+    }
+    if (frame == 240 && physics.layersCollide(1, 2))
+    {
+        physics.setLayersCollide(1, 2, false); // from here on the Player walks through the Crate
     }
     if (physics.isAwake(runtime.crate))
     {
@@ -427,6 +490,31 @@ void updateContacts(const PhysicsService& physics, AudioService* audio, const Ru
     }
 }
 
+// Lights the lamp over the trigger pad and greets the Player while it stands there.
+void updatePad(World& world, AudioService* audio, const Vec3& player, Runtime& runtime)
+{
+    const Transform* pad = world.tryGet<Transform>(runtime.trigger);
+    const Collider* area = world.tryGet<Collider>(runtime.trigger);
+    if (pad == nullptr || area == nullptr)
+    {
+        return;
+    }
+    const Vec3 offset = glm::abs(player - pad->position);
+    const bool onPad = offset.x <= area->halfExtents.x && offset.z <= area->halfExtents.z;
+    if (onPad != runtime.onPad)
+    {
+        runtime.onPad = onPad;
+        if (PointLight* light = world.tryGet<PointLight>(runtime.lamp))
+        {
+            light->intensity = onPad ? kLampLit : kLampIntensity;
+        }
+        if (onPad && audio != nullptr)
+        {
+            audio->play(runtime.voice);
+        }
+    }
+}
+
 void updateAudio(AudioService& audio, Runtime& runtime, u32 frame)
 {
     runtime.toneReady = runtime.toneReady || audio.clipState(runtime.music) == AssetState::Ready;
@@ -435,8 +523,8 @@ void updateAudio(AudioService& audio, Runtime& runtime, u32 frame)
         AudioPlayParams params;
         params.bus = AudioBus::Music;
         params.loop = true;
-        params.volume = 0.3f;
-        runtime.hum = audio.playOneShot(runtime.tone, params);
+        params.volume = 0.15f;
+        runtime.humVoice = audio.playOneShot(runtime.hum, params); // the lamp hums until frame 200
     }
     if (frame == 30)
     {
@@ -452,14 +540,14 @@ void updateAudio(AudioService& audio, Runtime& runtime, u32 frame)
     }
     if (frame == 200)
     {
-        audio.stopVoice(runtime.hum);
+        audio.stopVoice(runtime.humVoice);
     }
     if (frame == 270)
     {
         audio.stop(runtime.radio);
     }
     runtime.uiPaused = audio.isBusPaused(AudioBus::Ui);
-    runtime.humPlaying = audio.isVoicePlaying(runtime.hum);
+    runtime.humPlaying = audio.isVoicePlaying(runtime.humVoice);
     runtime.radioPlaying = audio.isPlaying(runtime.radio);
 }
 
@@ -474,9 +562,9 @@ u32 spawn(World& world, PhysicsService* physics, SceneService* scenes, const Run
         gem.shape = ColliderShape::ConvexHull;
         gem.geometry = runtime.gem;
         Transform at;
-        at.position = Vec3(0.0f, 3.0f, -1.0f);
+        at.position = Vec3(-1.5f, 3.0f, -1.0f);
         const Entity created = world.create(at, RigidBody{}, gem, Name{"Gem"});
-        physics->setLinearVelocity(created, Vec3(1.0f, 0.0f, 0.0f));
+        physics->setLinearVelocity(created, Vec3(-1.0f, 0.0f, 0.0f));
         ++spawned;
     }
     if (frame == 120 && scenes != nullptr)
@@ -507,10 +595,13 @@ void updateModule(ModuleContext& context, f64 deltaSeconds)
     stats.spawned += spawned;
     if (physics != nullptr)
     {
-        if (input != nullptr)
+        const Transform* player = world.tryGet<Transform>(runtime.player);
+        const Vec3 position = player != nullptr ? player->position : Vec3(0.0f);
+        if (input != nullptr && player != nullptr)
         {
-            updatePlayer(*physics, *input, runtime, stats, static_cast<f32>(deltaSeconds));
+            updatePlayer(*physics, *input, position, runtime, stats, static_cast<f32>(deltaSeconds));
         }
+        updatePad(world, audio, position, runtime);
         updateBodies(world, *physics, runtime, stats);
         updateQueries(world, *physics, runtime, stats);
         updateContacts(*physics, audio, runtime, stats);
@@ -531,7 +622,7 @@ void stopModule(ModuleContext& context)
     }
     context.world().query<const Runtime>().each([audio](const Runtime& runtime) {
         audio->unloadClip(runtime.chime);
-        audio->unloadClip(runtime.tone);
+        audio->unloadClip(runtime.hum);
         audio->unloadClip(runtime.music);
     });
 }

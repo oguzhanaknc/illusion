@@ -8,8 +8,14 @@ yapılan bir üçgen Mesh ve bir convex hull dahil), statik, kinematik, dinamik 
 her türden joint, her bus'ta her zayıflamayla ve bir koniyle ses kaynakları ve biri override'lı iki prefab
 örneği. Welcome penceresinden ya da `--project samples/showcase` ile açın.
 
-Asset'leri `tools/make_assets.py` tarafından sayılardan üretilir (iki mesh'li bir model ve bir ton); bu yüzden
-proje hiçbir üçüncü taraf lisansı taşımaz. Sahne elle yazılmaz: `build.jsonl` onu bir ajanın yapacağı gibi
+Aynı zamanda ana Camera'nın tamamını gördüğü küçük bir oyun alanıdır: zemine ve basamaklı bloklara düşen
+şekiller, çekmecesi dışarı kayıp geri giren bir masa, bir lambanın altında bir trigger pedi, kasasında
+menteşeli bir kapı, ucundan bir ip sarkan bir sarkaç ve inip çıkan bir platform. Collider'ının kendine ait
+yerleşik bir Mesh'i olmayan gövdeler, collider boyutunda bir çocuk Entity alır ("Door Mesh", "Pendulum Mesh",
+...); böylece collider'lar tam boyutlarını korur ve joint anchor'ları ölçeklenmemiş gövde uzayında kalır.
+
+Asset'leri `tools/make_assets.py` tarafından sayılardan üretilir (iki mesh'li bir model ve beş ses: müzik,
+rüzgâr, bir lamba uğultusu, bir selamlama ve bir tık); bu yüzden proje hiçbir üçüncü taraf lisansı taşımaz. Sahne elle yazılmaz: `build.jsonl` onu bir ajanın yapacağı gibi
 Editor commands ile kurar ve kaydeder. Yeniden kurmak için:
 
 ```bash
@@ -26,11 +32,15 @@ varsa başarısız olur. Bu yüzden yeni bir Component ya da alan `build.jsonl`'
 Projenin oyun kodu olan `modules/showcase`, sahneyi [scripting API](../../reference/scripting-api.md)'nin
 tamamıyla oynatır: `ModuleContext`'in ve dört host servisinin her fonksiyonu `showcase.cpp`'den çağrılır.
 Oturum başlarken mesh geometrisinden bir zemin ve bir mücevher kurar, Jump (Space, gamepad South) ve Move
-(WASD, sol çubuk) eylemlerini ekler, sayılardan bir çan sesi üretir ve mikseri ayarlar. Her karede Player
-karakterini yürütür ve zıplatır, belirli karelerde Ball, Crate, Rock, Drum ve Door'u iter, ışın ve şekil
-atar, temasları ve Trigger'a girenleri sayar, bir şey sertçe düştüğü yerde çan çalar ve 120. karede bir
-fener prefab'ı oluşturur. Sona doğru yerçekimini azaltır ve Crate'in zeminin içinden düşmesine izin verir.
-Gördükleri, Showcase Entity'sinin `showcase.Stats` Component'inde tutulur.
+(WASD, sol çubuk) eylemlerini ekler, sayılardan bir çan sesi üretir ve mikseri ayarlar. Bir tuşa basana ya da
+bir çubuğu oynatana kadar Player trigger pedinin üzerinden kendi kendine ileri geri yürür; sonra WASD ya da sol
+çubuk onu yürütür, Space ya da South zıplatır. Ped üzerindeyken üstteki lamba yanar ve pede her bastığında
+Voice onu selamlar. Menteşe motoru Door'u her dört saniyede bir açıp yeniden kapatır (oyun kodu `motorSpeed`'i
+her an değiştirebilir), çekmece kayar, platform inip çıkar ve Ball, Crate, Rock ile Drum belirli karelerde
+itilir; Ball 90. karede bir buçuk katına büyür. Modül ayrıca ışın ve şekil atar, temasları ve Trigger'a
+girenleri sayar, bir şey sertçe düştüğü yerde çan çalar, 120. karede bir fener prefab'ı oluşturur, 200. kareden
+itibaren bir saniyeliğine Ay yerçekimine geçer ve 240. kareden sonra Player'ın Crate'in içinden geçmesine izin
+verir (katmanları artık çarpışmaz). Gördükleri, Showcase Entity'sinin `showcase.Stats` Component'inde tutulur.
 
 **Modules → Build Modules** (`module.build`) ile Build edin ve **Play**'e basın:
 
