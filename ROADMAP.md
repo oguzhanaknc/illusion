@@ -610,6 +610,26 @@ After DEMO. Features that bring the renderer and the tech demo to a modern AAA l
 - GFX-2: Foliage: leaf translucency, GPU-generated dense grass, LODs
 - GFX-3: Lit smoke, clouds, screen-space reflections, contact shadows
 
+## ANIM — Skeletal animation
+
+After DEMO, independent of GFX. Characters, creatures and machines that move with bones, at AAA quality.
+Nothing of it exists yet: glTF skins and animations are skipped on import and the vertex has no bone data.
+
+- ANIM-1: Import and playback: glTF skins, joints and animation channels (translation, rotation, scale,
+  morph weights later) into cooked `Skeleton` and `AnimationClip` assets; bone indices and weights as a
+  separate vertex stream for skinned meshes; a saved `Animator` Component (clip, speed, loop, time) evaluated
+  on the Job System; GPU skinning in a compute pass feeding the existing forward, prepass, shadow and
+  motion-vector paths (previous pose for TAA); skinned bounds for culling; GPU tests and benchmarks
+  (hundreds of skinned characters)
+- ANIM-2: Blending and control: cross-fades, additive and masked (per-bone) layers, 1D/2D blend spaces,
+  a data-driven state machine with parameters and transitions, animation events (footsteps, effects),
+  root motion into the CharacterController; `AnimationService` for game modules
+- ANIM-3: Sockets and procedural animation: attach entities to bones (a lantern in a hand), look-at and
+  two-bone IK (feet on uneven ground), ragdolls on Jolt from the skeleton, physics-driven secondary motion
+- ANIM-4: Editor and agents: clip and state-machine preview in the Inspector, a timeline scrubber,
+  `animation.*` commands (MCP tools), skeleton debug drawing; the tech demo gets an animated creature;
+  documentation (EN/TR) and an ADR for the runtime and GPU skinning design
+
 ## M8 — Release pipeline
 
 - Export: clean runtime build, packed assets, no editor code
