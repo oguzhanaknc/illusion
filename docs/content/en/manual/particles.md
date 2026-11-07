@@ -89,6 +89,48 @@ HDR image, so colours above 1 glow through bloom:
 `RenderStats::particles` counts the particles drawn. The GPU benchmark `render/100k-particles` measures a
 full frame with 100,000 of them.
 
+## In the editor
+
+The Scene view previews every emitter of the edit World: `EditorContext` advances them each frame, so an
+effect plays while you tune it in the Inspector. While a play session runs, the play World's emitters are
+the game's and the session advances them. Particles are runtime state: the preview never changes the scene
+file or its hash.
+
+The `particles.*` [Editor commands](../reference/editor-commands.md) drive the emitters of the active World
+(the play World while playing) for people and agents; they are not undoable:
+
+| Command | What it does |
+| --- | --- |
+| `particles.play`, `particles.stop`, `particles.clear` | Start an emitter again, stop it emitting, remove its particles |
+| `particles.emit` | A burst of `count` particles now; `emitted` says how many fit |
+| `particles.stats` | Emitters, those that emit and their live particles (one emitter with `entity`) |
+
+```json
+{"method": "particles.emit", "params": {"entity": "/Sparks", "count": 40}}
+{"method": "particles.stats", "params": {}}
+```
+
+## Game modules
+
+Game code reaches the particles of its World through `ParticleService` (`USES particles`, see the
+[scripting API](../reference/scripting-api.md#particleservice)):
+
+```cpp
+#include <illusion/particles/ParticleService.hpp>
+
+void onLanding(illusion::ModuleContext& context, illusion::Entity dust)
+{
+    if (illusion::ParticleService* particles = context.service<illusion::ParticleService>())
+    {
+        particles->play(dust);          // the dust cloud from the beginning
+        if (particles->aliveCount(dust) == 0)
+        {
+            particles->emit(dust, 20);  // and a puff right now
+        }
+    }
+}
+```
+
 ## The particle pool
 
 `ParticleWorld` gives each emitter a `ParticlePool` (runtime state, not saved). Particles `[0, count)` are

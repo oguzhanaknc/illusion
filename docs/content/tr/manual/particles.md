@@ -90,6 +90,48 @@ Entity'lerdeki emitter'lar duraklar.
 `RenderStats::particles` çizilen parçacıkları sayar. `render/100k-particles` GPU Benchmark'ı 100.000 parçacıklı
 tam bir kareyi ölçer.
 
+## Editörde
+
+Scene görünümü edit World'deki her emitter'ı önizler: `EditorContext` onları her karede ilerletir; böylece bir
+efekti Inspector'da ayarlarken oynadığını görürsünüz. Bir play oturumu çalışırken play World'ün emitter'ları
+oyunundur ve onları oturum ilerletir. Parçacıklar çalışma durumudur: önizleme sahne dosyasını ya da hash'ini
+asla değiştirmez.
+
+`particles.*` [Editor commands](../reference/editor-commands.md), kişiler ve ajanlar için etkin World'ün
+(oynarken play World'ün) emitter'larını yönetir; geri alınamaz:
+
+| Komut | Ne yapar |
+| --- | --- |
+| `particles.play`, `particles.stop`, `particles.clear` | Bir emitter'ı yeniden başlatır, yaymayı durdurur, parçacıklarını siler |
+| `particles.emit` | Hemen `count` parçacıklık bir patlama; `emitted` kaçının sığdığını söyler |
+| `particles.stats` | Emitter'lar, yayanlar ve canlı parçacıkları (`entity` ile tek bir emitter) |
+
+```json
+{"method": "particles.emit", "params": {"entity": "/Sparks", "count": 40}}
+{"method": "particles.stats", "params": {}}
+```
+
+## Oyun modülleri
+
+Oyun kodu kendi World'ünün parçacıklarına `ParticleService` üzerinden ulaşır (`USES particles`, bkz.
+[scripting API](../reference/scripting-api.md#particleservice)):
+
+```cpp
+#include <illusion/particles/ParticleService.hpp>
+
+void onLanding(illusion::ModuleContext& context, illusion::Entity dust)
+{
+    if (illusion::ParticleService* particles = context.service<illusion::ParticleService>())
+    {
+        particles->play(dust);          // the dust cloud from the beginning
+        if (particles->aliveCount(dust) == 0)
+        {
+            particles->emit(dust, 20);  // and a puff right now
+        }
+    }
+}
+```
+
 ## Parçacık havuzu
 
 `ParticleWorld` her emitter'a bir `ParticlePool` verir (çalışma durumu, kaydedilmez). `[0, count)` aralığındaki

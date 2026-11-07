@@ -47,8 +47,9 @@ while (running)
 
 `create()` proje ayarlarından boş bir World ve System'lerini kurar ve `InputSettings::actions` ile
 belirtilen input action'larını yükler. Sahneyi `world()` içine yükleyin; ardından `start()` World'ü
-`ModuleHost`'a dört servisle birlikte bir Simulation World olarak ekler. Modüller bu servislere
-`context.service<T>()` ile ulaşır: `PhysicsService`, `AudioService`, `InputService` ve `SceneService`
+`ModuleHost`'a beş servisle birlikte bir Simulation World olarak ekler. Modüller bu servislere
+`context.service<T>()` ile ulaşır: `PhysicsService`, `AudioService`, `ParticleService`, `InputService` ve
+`SceneService`
 (bkz. [scripting API](../reference/scripting-api.md)).
 
 Host, diğer görünümlerle paylaştıklarını kendisi tutar: `AssetStreamer`'ı ve `GamepadSystem`'i her karede

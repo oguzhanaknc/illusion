@@ -16,7 +16,7 @@ Read first: `docs/adr/0027-module-system-and-hot-reload.md`, `docs/adr/0041-modu
    (`context.world()` asserts; `hasWorld()` tells).
 3. `start`/`stop`: once per Simulation World; spawn entities in `start`. Hot reloads call neither.
 4. `update`: Simulation Worlds only. Keep all game state in Components; globals do not survive a reload.
-5. Build with `illusion_add_module(<target> SOURCES ... USES physics audio input render runtime)`. A shared
+5. Build with `illusion_add_module(<target> SOURCES ... USES physics audio particles input render runtime)`. A shared
    module must not `LINK` an engine library (configure error); `LINK` is for third-party code.
 
 ## Using services

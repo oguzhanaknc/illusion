@@ -46,8 +46,8 @@ while (running)
 
 `create()` builds an empty World and its systems from the project settings and loads the input actions
 named by `InputSettings::actions`. Load the scene into `world()`, then `start()` attaches the World to the
-`ModuleHost` as a Simulation World with four services, which modules reach with `context.service<T>()`:
-`PhysicsService`, `AudioService`, `InputService` and `SceneService` (see the
+`ModuleHost` as a Simulation World with five services, which modules reach with `context.service<T>()`:
+`PhysicsService`, `AudioService`, `ParticleService`, `InputService` and `SceneService` (see the
 [scripting API](../reference/scripting-api.md)).
 
 The host keeps what it shares with other views: it updates the `AssetStreamer` and the `GamepadSystem`

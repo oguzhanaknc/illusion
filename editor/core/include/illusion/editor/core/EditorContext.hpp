@@ -35,6 +35,7 @@
 #include <illusion/editor/core/ViewState.hpp>
 #include <illusion/editor/core/ViewportHost.hpp>
 #include <illusion/editor/core/WorldEditor.hpp>
+#include <illusion/particles/ParticleWorld.hpp>
 #include <illusion/platform/FileSystem.hpp>
 #include <illusion/platform/FileWatcher.hpp>
 #include <illusion/text/Localization.hpp>
@@ -630,7 +631,8 @@ public:
     /// Forgets the undo history; returns the number of removed steps.
     usize clearHistory();
 
-    /// End of a frame: posts `commands.changed` if commands were registered since the last frame, checks
+    /// End of a frame: advances the particle preview of the edit World (not while playing), posts
+    /// `commands.changed` if commands were registered since the last frame, checks
     /// for asset changes made outside the editor once the catalog was used (see assets()) and posts
     /// `asset.changed`, delivers events, flushes the crash journal and autosaves when it is time.
     void endFrame(f64 deltaSeconds);
@@ -689,6 +691,7 @@ private:
     VirtualFileSystem m_files;
     std::optional<Project> m_project;
     World m_world;
+    ParticleWorld m_previewParticles{m_world}; // advances the edit World's emitters for the Scene view
     GuidGenerator m_guids;
     std::string m_session;
     EntityIndex m_index;
