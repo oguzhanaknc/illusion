@@ -30,7 +30,7 @@ actions.addBinding(throttle, illusion::InputBinding::key(illusion::Key::S, -1.0f
 | `Vector2` | uzunluğu en fazla 1 olan 2D vektör | Hareket, çubukla Bakış |
 | `Delta` | bu karedeki 2D hareket, sınırsız | fareyle Bakış, kaydırma |
 
-## Fareyle bakış
+## Fareyle bakış {#fareyle-bakis}
 
 Fare hareketi bir çubuk gibi bir seviye değildir: farenin bu karede kaç piksel hareket ettiğidir. Onu
 `mouseMotion(scale)` ile (metin olarak `Mouse.Motion`), kaydırma tekerleğini ise `mouseScroll(scale)` ile
