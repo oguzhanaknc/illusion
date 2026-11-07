@@ -199,12 +199,28 @@ illusion_ctl --launch build/bin/Release/illusion_editor --editor-arg --determini
     --var 'tetrisModule="build/editor/tests/Release/illusion_tetris_module.dll"'
 ```
 
-`--var name=JSON` sets a `${name}` before the first step; the Tetris checks (C5) load the reference module
-`tests/acceptance/tetris/module/Tetris.cpp` from `${tetrisModule}`, start Play mode with `fixedStep` and
-play the game through `input.inject` and `play.step`. CTest builds the module (`illusion_tetris_module`) and
-passes its path.
+`--var name=JSON` sets a `${name}` before the first step; the scripted transcript loads the reference module
+`tests/acceptance/tetris/module/Tetris.cpp` from `${tetrisModule}` (CTest builds it as
+`illusion_tetris_module` and passes its path). The checks then find the module loaded (C2), start Play mode
+with `fixedStep` and play the game through `input.inject` and `play.step` (C5).
+
+An object that is exactly `{"$file": "path"}` becomes the text of that file, relative to the transcript. The
+recorded transcript keeps the sources the agent wrote in `files/` this way:
+
+```json
+{"call": "project.file_write", "params": {"path": "modules:/tetris/tetris.cpp", "text": {"$file": "files/modules/tetris/tetris.cpp"}}}
+```
+
+`recorded.jsonl` is the session of a real agent (see [Recording a session](ai-agents.md#recording-a-session)).
+It builds the agent's own module with `module.build` and must pass the same checks:
+
+```bash
+illusion_ctl --launch build/bin/Release/illusion_editor --editor-arg --deterministic --editor-arg --no-gpu \
+    replay tests/acceptance/tetris/recorded.jsonl --checks tests/acceptance/tetris/checks.jsonl --temp-workspace
+```
 
 CTest also runs the scenario through the MCP bridge in both protocol eras
-(`acceptance.tetris.board.mcp-legacy` and `acceptance.tetris.board.mcp-modern`, with `--via-mcp`).
+(`acceptance.tetris.board.mcp-legacy` and `acceptance.tetris.board.mcp-modern`, with `--via-mcp`), and the
+recorded session as `acceptance.tetris.recorded`, `.gpu` and `.mcp`.
 
 The protocol itself is described in the [editor protocol reference](../../reference/editor-protocol.md).

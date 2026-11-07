@@ -84,12 +84,12 @@ ADRs for its significant decisions. Items marked ✅ are done.
 - ✅ Reflection-based migration of module Components whose layout changed, so that such a change survives a
   hot reload instead of needing a restart (M7t, ADR 0044)
 
-## M7 — Editor and AI control
+## M7 — Editor and AI control ✅
 
 Plan: `docs/plans/m7-editor.md` (sub-milestones, command API, localization, theme, acceptance test).
 
-Status: every sub-milestone is done except M7x-3 (the recorded live-agent transcript and its nightly
-workflow), which waits for the owner's API key and budget; M7 gets its ✅ with it.
+Status: every sub-milestone is done. The nightly live-agent workflow of the plan is deferred: the owner chose
+to record the agent session from a Claude Code development session instead of through the API (2026-11-07).
 
 - M7a: ✅ Core toolkit for tools: non-throwing JSON API with canonical writing and arena allocation,
   `Expected`, deterministic `Random` and secure random bytes, log ring sink, stderr-only console, World
@@ -509,8 +509,13 @@ workflow), which waits for the owner's API key and budget; M7 gets its ✅ with 
   the same input that must end in the same state hash; a GPU golden of the scene through its main Camera.
   Fixed: `SceneService::instantiate()` in a fixed-step session took EntityGuids from the process-wide
   generator instead of the session's seed, so runs that spawned a scene or prefab never repeated
-- M7x-3: Recorded agent transcript (`illusion_mcp --record`, normalised into `tests/acceptance/tetris/recorded.jsonl`
-  with its sources compiled in-tree) and the live-agent workflow (needs the owner's API key and budget)
+- M7x-3: ✅ Recorded agent transcript: Claude Code built the SPEC.md game through the MCP tools alone (its own
+  module, compiled with `module.build`, materials, scene, input actions, rules tested in Play mode);
+  `tools/acceptance/normalize_transcript.py` turned the `illusion_mcp --record` output into
+  `tests/acceptance/tetris/recorded.jsonl` with the sources in `files/` (`{"$file": ...}` transcript values);
+  CTest replays it with the checks (`acceptance.tetris.recorded`, `.gpu`, `.mcp`), the build compiles its
+  module and the play tests check every rule on it and on the reference module; C2 (module loaded, schemas)
+  is checked for both transcripts. Deferred: the nightly live-agent workflow (needs an API key and budget)
 - M7x-4: ✅ Tutorials (Tetris with an agent, Tetris by hand, whose C++ blocks the test build compiles and
   loads as a module); editor manual screenshots taken by `docs/screenshots/manual.jsonl` in a headless editor on the
   showcase project and compared in the GPU job (`docs.screenshots`); string freeze: `illusion_textc freeze`

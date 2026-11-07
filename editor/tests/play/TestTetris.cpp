@@ -1,5 +1,7 @@
-// The Tetris reference module (tests/acceptance/tetris/module/Tetris.cpp) played through the editor's
-// commands, as an agent plays it: input actions from an .input asset, input.inject and play.step.
+// The Tetris modules of the acceptance test played through the editor's commands, as an agent plays them:
+// input actions from an .input asset, input.inject and play.step. Every rule is checked on the reference
+// module (tests/acceptance/tetris/module/Tetris.cpp) and on the module the recorded agent wrote
+// (tests/acceptance/tetris/files/modules/tetris/tetris.cpp).
 
 #include "core/EditorCoreTestSupport.hpp"
 
@@ -18,7 +20,7 @@ namespace
 // A project with the Tetris actions and module, a Board, a PieceQueue and a Score.
 struct TetrisFixture
 {
-    explicit TetrisFixture(std::string_view forced = "", u32 seed = 1)
+    explicit TetrisFixture(std::string_view library, std::string_view forced = "", u32 seed = 1)
     {
         play = std::make_unique<PlaySession>(
             *base.editor, PlaySessionDesc{.jobs = &jobs, .audioOutput = AudioOutput::Offline});
@@ -38,8 +40,7 @@ struct TetrisFixture
         }
         ok(editor(), "project.settings_set",
            R"({"type":"illusion.InputSettings","value":{"actions":"assets:/input/tetris.input"}})");
-        const JsonDocument loaded =
-            ok(editor(), "module.load", std::format(R"({{"path":"{}"}})", ILLUSION_TETRIS_MODULE));
+        const JsonDocument loaded = ok(editor(), "module.load", std::format(R"({{"path":"{}"}})", library));
         CHECK(loaded.root().pointer("/modules/0/name").asString() == "tetris");
         ok(editor(), "entity.create",
            R"({"name":"Board","components":{"illusion.Transform":{},"tetris.Board":{}}})");
@@ -132,11 +133,26 @@ struct TetrisFixture
     std::unique_ptr<PlaySession> play;
 };
 
+// The two modules, as the template types of the tests.
+struct ReferenceModule
+{
+    static constexpr std::string_view kLibrary = ILLUSION_TETRIS_MODULE;
+};
+
+struct RecordedAgentModule
+{
+    static constexpr std::string_view kLibrary = ILLUSION_TETRIS_AGENT_MODULE;
+};
+
 } // namespace
 
-TEST_CASE("a Tetris piece spawns at x 3 with its box's top row at the top, and walls stop it")
+TYPE_TO_STRING(ReferenceModule);
+TYPE_TO_STRING(RecordedAgentModule);
+
+TEST_CASE_TEMPLATE("a Tetris piece spawns at x 3 with its box's top row at the top, and walls stop it",
+                   Module, ReferenceModule, RecordedAgentModule)
 {
-    TetrisFixture f("TI");
+    TetrisFixture f(Module::kLibrary, "TI");
     f.step();
     TetrisFixture::Piece piece = f.active();
     CHECK(piece.kind == "T");
@@ -155,9 +171,10 @@ TEST_CASE("a Tetris piece spawns at x 3 with its box's top row at the top, and w
     CHECK(f.active().x == 7); // the T's box is three wide
 }
 
-TEST_CASE("Tetris rotation follows SRS with wall kicks")
+TEST_CASE_TEMPLATE("Tetris rotation follows SRS with wall kicks", Module, ReferenceModule,
+                   RecordedAgentModule)
 {
-    TetrisFixture f("I");
+    TetrisFixture f(Module::kLibrary, "I");
     f.step();
     f.press("Up");
     TetrisFixture::Piece piece = f.active();
@@ -176,9 +193,10 @@ TEST_CASE("Tetris rotation follows SRS with wall kicks")
     CHECK(piece.x >= 0);
 }
 
-TEST_CASE("Tetris soft drop moves one row, hard drop locks four Cells and the next piece spawns")
+TEST_CASE_TEMPLATE("Tetris soft drop moves one row, hard drop locks four Cells and the next piece spawns",
+                   Module, ReferenceModule, RecordedAgentModule)
 {
-    TetrisFixture f("OT");
+    TetrisFixture f(Module::kLibrary, "OT");
     f.step();
     const i64 top = f.active().y;
     f.press("Down");
@@ -191,9 +209,10 @@ TEST_CASE("Tetris soft drop moves one row, hard drop locks four Cells and the ne
     CHECK(f.active().kind == "T");
 }
 
-TEST_CASE("Tetris clears full rows, moves the rows above down and scores 100 times the level")
+TEST_CASE_TEMPLATE("Tetris clears full rows, moves the rows above down and scores 100 times the level",
+                   Module, ReferenceModule, RecordedAgentModule)
 {
-    TetrisFixture f("I");
+    TetrisFixture f(Module::kLibrary, "I");
     for (const i32 x : {0, 1, 2, 7, 8, 9})
     {
         f.addCell(x, 0);
@@ -210,9 +229,10 @@ TEST_CASE("Tetris clears full rows, moves the rows above down and scores 100 tim
     CHECK(f.value(cells[0], "tetris.Cell").root().pointer("/value/y").asI64() == 0);
 }
 
-TEST_CASE("Tetris gravity moves the piece one row per gravitySeconds")
+TEST_CASE_TEMPLATE("Tetris gravity moves the piece one row per gravitySeconds", Module, ReferenceModule,
+                   RecordedAgentModule)
 {
-    TetrisFixture f("O");
+    TetrisFixture f(Module::kLibrary, "O");
     f.step();
     const i64 top = f.active().y;
     f.step(40); // 41 steps of 1/60 s: under 0.8 s
@@ -221,9 +241,10 @@ TEST_CASE("Tetris gravity moves the piece one row per gravitySeconds")
     CHECK(f.active().y == top - 1);
 }
 
-TEST_CASE("Tetris ends when a new piece overlaps a Cell")
+TEST_CASE_TEMPLATE("Tetris ends when a new piece overlaps a Cell", Module, ReferenceModule,
+                   RecordedAgentModule)
 {
-    TetrisFixture f("O");
+    TetrisFixture f(Module::kLibrary, "O");
     f.addCell(4, 19);
     f.step();
     CHECK(f.score("gameOver") == 1);
@@ -232,10 +253,11 @@ TEST_CASE("Tetris ends when a new piece overlaps a Cell")
     CHECK(f.ids("tetris.ActivePiece").empty());
 }
 
-TEST_CASE("Tetris deals the forced pieces, then 7-bags that repeat for the same seed")
+TEST_CASE_TEMPLATE("Tetris deals the forced pieces, then 7-bags that repeat for the same seed", Module,
+                   ReferenceModule, RecordedAgentModule)
 {
     const auto deal = [](u32 seed) {
-        TetrisFixture f("", seed);
+        TetrisFixture f(Module::kLibrary, "", seed);
         std::vector<std::string> kinds;
         for (int i = 0; i < 7; ++i)
         {

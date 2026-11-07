@@ -17,7 +17,9 @@
 /// exactly `${name}` becomes the captured JSON value; elsewhere the text is substituted). Expectations are
 /// matchers (see matchJson()). A step with `"requires": "gpu"` expects `otherwise` (by default error 1400)
 /// when the editor runs without a GPU; the call is still made, only its captures and image are skipped.
-/// `{"frames": n}` steps call `play.step`.
+/// `{"frames": n}` steps call `play.step`. An object that is exactly `{"$file": "files/a.cpp"}` becomes the
+/// text of that file, relative to RunnerOptions::goldenDirectory (recorded transcripts keep the sources an
+/// agent wrote in files next to them).
 ///
 /// A step with `"image"` compares the base64 PNG of its result with a golden image:
 ///
@@ -88,10 +90,10 @@ struct RunnerOptions
     LaunchOptions launch;                         ///< How to start (and restart) the editor.
     std::map<std::string, std::string> variables; ///< Initial variables (name -> JSON value text).
     bool gpu = false;                             ///< The editor has a GPU (`requires: "gpu"` steps run).
-    std::filesystem::path goldenDirectory{};      ///< Directory `image.golden` paths are relative to.
-    bool updateGoldens = false;                   ///< Rewrite golden images instead of comparing them.
-    std::filesystem::path captureDirectory{};     ///< Where images are also written (empty: nowhere).
-    std::function<void(std::string_view)> log{};  ///< Receives a line per step (optional).
+    std::filesystem::path goldenDirectory{};  ///< Directory `image.golden` and `$file` paths are relative to.
+    bool updateGoldens = false;               ///< Rewrite golden images instead of comparing them.
+    std::filesystem::path captureDirectory{}; ///< Where images are also written (empty: nowhere).
+    std::function<void(std::string_view)> log{}; ///< Receives a line per step (optional).
     /// Starts the editor and connects to it (empty: RpcClient::launch()). illusion_ctl passes one that starts
     /// illusion_mcp and runs every step as an MCP tool call (`--via-mcp`).
     std::function<Expected<std::unique_ptr<CallChannel>, std::string>(const LaunchOptions&)> connect{};
