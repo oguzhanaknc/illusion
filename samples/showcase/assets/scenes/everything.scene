@@ -19,7 +19,8 @@
     "illusion.ProceduralSky": 1,
     "illusion.RigidBody": 1,
     "illusion.SkyLight": 1,
-    "illusion.Transform": 1
+    "illusion.Transform": 1,
+    "illusion.Wind": 1
   },
   "settings": {},
   "entities": [
@@ -914,6 +915,7 @@
           "spread": 3.1415927,
           "gravityFactor": -0.01,
           "drag": 0.2,
+          "windFactor": 0.0,
           "sizeStart": 0.09,
           "sizeEnd": 0.03,
           "colorStart": [1.6, 2.2, 0.4, 1.0],
@@ -975,6 +977,7 @@
           "spread": 1.2,
           "gravityFactor": -0.05,
           "drag": 1.0,
+          "windFactor": 0.8,
           "sizeStart": 0.3,
           "sizeEnd": 0.8,
           "colorStart": [0.6, 0.55, 0.5, 0.5],
@@ -1389,6 +1392,7 @@
           "spread": 0.6,
           "gravityFactor": 0.6,
           "drag": 0.5,
+          "windFactor": 0.0,
           "sizeStart": 0.14,
           "sizeEnd": 0.03,
           "colorStart": [6.0, 3.0, 1.0, 1.0],
@@ -1459,6 +1463,21 @@
           "position": [0.0, 0.0, 0.0],
           "rotation": [0.0, 0.0, 0.0, 1.0],
           "scale": [20.0, 1.0, 20.0]
+        }
+      }
+    },
+    {
+      "id": "e4d9303221373073",
+      "components": {
+        "illusion.Name": {
+          "value": "Wind"
+        },
+        "illusion.Wind": {
+          "direction": [0.8, 0.0, 0.6],
+          "speed": 2.5,
+          "gustStrength": 0.6,
+          "gustFrequency": 0.3,
+          "turbulence": 1.4
         }
       }
     },

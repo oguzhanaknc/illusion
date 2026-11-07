@@ -2,6 +2,7 @@
 #include <illusion/core/Profiler.hpp>
 #include <illusion/ecs/Hierarchy.hpp>
 #include <illusion/ecs/Transform.hpp>
+#include <illusion/ecs/Wind.hpp>
 #include <illusion/ecs/World.hpp>
 #include <illusion/particles/ParticleComponents.hpp>
 #include <illusion/particles/ParticleWorld.hpp>
@@ -24,7 +25,20 @@ struct Step
 {
     Vec3 gravity;
     f32 seconds;
+    const Wind* wind; // the scene's wind, or nullptr
+    f32 windTime;
 };
+
+// The wind velocity at the emitter, in the particles' space.
+Vec3 stepWind(const ParticleEmitter& emitter, const Transform& transform, const Step& step) noexcept
+{
+    if (step.wind == nullptr || emitter.windFactor <= 0.0f)
+    {
+        return Vec3(0.0f);
+    }
+    const Vec3 velocity = windVelocity(*step.wind, step.windTime, transform.position);
+    return emitter.space == ParticleSpace::Local ? glm::inverse(transform.rotation) * velocity : velocity;
+}
 
 f32 lerp(f32 a, f32 b, f32 t) noexcept
 {
@@ -98,10 +112,13 @@ void emitParticles(const ParticleEmitter& emitter, ParticlePool& pool, const Tra
 }
 
 // Ages, moves and retires the live particles; the dead are replaced by the last live one.
-void advance(const ParticleEmitter& emitter, ParticlePool& pool, const Vec3& gravity, f32 seconds)
+void advance(const ParticleEmitter& emitter, ParticlePool& pool, const Vec3& gravity, const Vec3& wind,
+             f32 seconds)
 {
     const Vec3 acceleration = gravity * emitter.gravityFactor;
     const f32 keep = std::max(0.0f, 1.0f - std::max(emitter.drag, 0.0f) * seconds);
+    // The share of the gap to the wind's velocity made up in this step.
+    const f32 follow = std::clamp(emitter.windFactor * seconds, 0.0f, 1.0f);
     std::span<f32> age = pool.ages();
     std::span<const f32> lifetime = pool.lifetimes();
     std::array<std::span<f32>, 3> position{pool.positions(0), pool.positions(1), pool.positions(2)};
@@ -123,8 +140,9 @@ void advance(const ParticleEmitter& emitter, ParticlePool& pool, const Vec3& gra
         }
         for (u32 axis = 0; axis < 3; ++axis)
         {
-            const f32 v =
-                (velocity[axis][i] + acceleration[static_cast<glm::length_t>(axis)] * seconds) * keep;
+            const auto a = static_cast<glm::length_t>(axis);
+            f32 v = (velocity[axis][i] + acceleration[a] * seconds) * keep;
+            v += (wind[a] - v) * follow;
             velocity[axis][i] = v;
             position[axis][i] += v * seconds;
         }
@@ -173,6 +191,7 @@ void publishGpuStep(const ParticleEmitter& emitter, ParticlePool& pool, const Tr
     pool.gpuSeconds = step.seconds;
     pool.gpuGravity = emitter.space == ParticleSpace::Local ? glm::inverse(transform.rotation) * step.gravity
                                                             : step.gravity;
+    pool.gpuWind = stepWind(emitter, transform, step);
     ++pool.gpuStep;
 }
 
@@ -198,7 +217,7 @@ void simulate(const ParticleEmitter& emitter, ParticlePool& pool, const Transfor
     const Vec3 gravity = emitter.space == ParticleSpace::Local
                              ? glm::inverse(transform.rotation) * step.gravity
                              : step.gravity;
-    advance(emitter, pool, gravity, step.seconds);
+    advance(emitter, pool, gravity, stepWind(emitter, transform, step), step.seconds);
     if (!pool.playing)
     {
         return;
@@ -240,7 +259,18 @@ void ParticleWorld::update(f32 deltaSeconds, JobSystem* jobs)
         m_world.emplace<ParticlePool>(entity, newPool(emitter, emitter.playOnStart));
     }
 
-    const Step step{m_desc.gravity, std::max(deltaSeconds, 0.0f)};
+    // The scene's wind: the first active one (its clock is advanced by advanceWind()).
+    const Wind* wind = nullptr;
+    f32 windTime = 0.0f;
+    m_world.query<const Wind>().without<Inactive>().each([&](Entity entity, const Wind& candidate) {
+        if (wind == nullptr)
+        {
+            wind = &candidate;
+            const WindState* state = m_world.tryGet<WindState>(entity);
+            windTime = state != nullptr ? state->time : 0.0f;
+        }
+    });
+    const Step step{m_desc.gravity, std::max(deltaSeconds, 0.0f), wind, windTime};
     auto query = m_world.query<const ParticleEmitter, ParticlePool, const Transform>().without<Inactive>();
     const Step* shared = &step;
     const auto run = [shared](const ParticleEmitter& emitter, ParticlePool& pool,

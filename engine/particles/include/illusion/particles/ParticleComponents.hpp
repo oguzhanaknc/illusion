@@ -74,9 +74,12 @@ struct ParticleEmitter
     f32 spread = kParticleFullSpread; ///< Half angle in radians around local +Y of the initial directions.
     f32 gravityFactor = 0.0f;         ///< Multiplies the world's gravity (0: none, 1: full, negative: rises).
     f32 drag = 0.0f;                  ///< Fraction of the velocity lost per second.
-    f32 sizeStart = 0.1f;             ///< Width in m at birth.
-    f32 sizeEnd = 0.1f;               ///< Width in m at death.
-    Vec4 colorStart{1.0f};            ///< Linear colour and alpha at birth (HDR: may exceed 1).
+    /// How fast particles take on the velocity of the scene's Wind: the fraction of the difference made up
+    /// per second (0: no wind, 1: about a second, 10: at once).
+    f32 windFactor = 0.0f;
+    f32 sizeStart = 0.1f;                          ///< Width in m at birth.
+    f32 sizeEnd = 0.1f;                            ///< Width in m at death.
+    Vec4 colorStart{1.0f};                         ///< Linear colour and alpha at birth (HDR: may exceed 1).
     Vec4 colorEnd{1.0f, 1.0f, 1.0f, 0.0f};         ///< Linear colour and alpha at death.
     ParticleBlend blend = ParticleBlend::Additive; ///< How particles are blended.
     ParticleSpace space = ParticleSpace::World;    ///< The space particles live in.
@@ -106,6 +109,7 @@ struct ParticlePool
     f32 gpuSeconds = 0.0f; ///< Seconds of the last step.
     u32 gpuQueued = 0;     ///< Births asked for by emit() since, published with the next step.
     Vec3 gpuGravity{0.0f}; ///< Gravity of the last step, in the emitter's space for local emitters.
+    Vec3 gpuWind{0.0f};    ///< Wind velocity of the last step, in the same space.
     u32 gpuGeneration = 0; ///< Changes on play() and clear(): the GPU particles start afresh.
     /// @}
     Random random{};               ///< The emitter's random numbers.

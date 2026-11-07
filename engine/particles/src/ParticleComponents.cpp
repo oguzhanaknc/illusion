@@ -26,6 +26,7 @@ ParticlePool::ParticlePool(const ParticlePool& other)
     , gpuSeconds(other.gpuSeconds)
     , gpuQueued(other.gpuQueued)
     , gpuGravity(other.gpuGravity)
+    , gpuWind(other.gpuWind)
     , gpuGeneration(other.gpuGeneration)
     , random(other.random)
 {
@@ -121,6 +122,11 @@ void reflectParticleComponents(ComponentRegistry& registry)
                {.category = "Motion", .softMin = -2.0, .softMax = 2.0})
         .field("drag", &ParticleEmitter::drag,
                {.description = "Fraction of the velocity lost per second.",
+                .category = "Motion",
+                .min = 0.0,
+                .softMax = 10.0})
+        .field("windFactor", &ParticleEmitter::windFactor,
+               {.description = "How fast particles take on the wind's velocity, per second.",
                 .category = "Motion",
                 .min = 0.0,
                 .softMax = 10.0})

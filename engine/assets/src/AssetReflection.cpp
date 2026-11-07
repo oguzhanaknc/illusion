@@ -47,6 +47,17 @@ void reflectAssetStructs(ComponentRegistry& registry)
         .field("alphaCutoff", &MaterialData::alphaCutoff, {.min = 0.0, .max = 1.0, .hint = FieldHint::Slider})
         .field("alphaMode", &MaterialData::alphaMode)
         .field("doubleSided", &MaterialData::doubleSided)
+        .field("windSway", &MaterialData::windSway,
+               {.description =
+                    "Metres of bend per m/s of wind at 1 m above the origin, growing with height squared.",
+                .category = "Wind",
+                .min = 0.0,
+                .softMax = 0.5})
+        .field("windFlutter", &MaterialData::windFlutter,
+               {.description = "Metres of leaf flutter per m/s of wind.",
+                .category = "Wind",
+                .min = 0.0,
+                .softMax = 0.02})
         .field("baseColorTexture", &MaterialData::baseColorTexture)
         .field("metallicRoughnessTexture", &MaterialData::metallicRoughnessTexture)
         .field("normalTexture", &MaterialData::normalTexture)

@@ -63,6 +63,7 @@ struct GpuSimulateConstants
     Vec4 scale;
     u32 counts[4];
     u32 state[4];
+    Vec4 wind; // xyz: wind velocity, w: ParticleEmitter::windFactor
 };
 
 constexpr u32 kSimulateGroup = 64;
@@ -219,7 +220,7 @@ u32 ParticleRenderer::prepare(World& world, const View& view)
             {
                 GpuBatch gpu{entity.toBits(), emitter,        transform,       pool.capacity,
                              pool.gpuStep,    pool.gpuBirths, pool.gpuSeconds, pool.gpuGeneration,
-                             pool.gpuGravity};
+                             pool.gpuGravity, pool.gpuWind};
                 if (gpu.capacity == 0)
                 {
                     return; // not published yet
@@ -366,6 +367,7 @@ void ParticleRenderer::simulateGpu(nvrhi::ICommandList* commands, const GpuBatch
     const u32 missed = reset ? 1u : std::min(batch.step - state.step, kMaxCatchUpSteps);
     GpuSimulateConstants constants{};
     constants.acceleration = Vec4(batch.gravity * emitter.gravityFactor, emitter.drag);
+    constants.wind = Vec4(batch.wind, std::max(emitter.windFactor, 0.0f));
     constants.timing =
         Vec4(batch.seconds * static_cast<f32>(missed), emitter.lifetimeMin, emitter.lifetimeMax, 0.0f);
     constants.speed =

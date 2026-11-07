@@ -21,6 +21,7 @@ struct MaterialConstants
     float roughnessFactor;
     float occlusionStrength;
     float alphaCutoff;
+    float4 wind; // x: sway, y: flutter
 };
 
 ConstantBuffer<MaterialConstants> g_material : register(b0, space1);
@@ -43,8 +44,12 @@ struct VertexOutput
 VertexOutput vertexMain(VertexInput input, uint instanceId: SV_InstanceID)
 {
     const InstanceData instance = g_instances[g_push.instanceOffset + instanceId];
+    float4 world = mul(instance.world, float4(input.position, 1.0));
+    // Casters that move in the wind are drawn with their own material; the others ignore it (zero response).
+    const float3 origin = mul(instance.world, float4(0.0, 0.0, 0.0, 1.0)).xyz;
+    world.xyz += windOffset(g_view.wind, g_view.windGusts, g_view.windGusts.w, g_material.wind.xy, origin, world.xyz);
     VertexOutput output;
-    output.position = mul(g_view.cascades[g_push.cascade].viewProjection, mul(instance.world, float4(input.position, 1.0)));
+    output.position = mul(g_view.cascades[g_push.cascade].viewProjection, world);
     output.uv = input.uv;
     return output;
 }

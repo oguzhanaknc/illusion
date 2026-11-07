@@ -3,6 +3,7 @@
 #include <illusion/core/Profiler.hpp>
 #include <illusion/ecs/EntityGuid.hpp>
 #include <illusion/ecs/Hierarchy.hpp>
+#include <illusion/ecs/Wind.hpp>
 #include <illusion/ecs/World.hpp>
 #include <illusion/input/GamepadSystem.hpp>
 #include <illusion/input/InputActionsAsset.hpp>
@@ -238,6 +239,8 @@ void GameSession::update(f64 deltaSeconds)
     assignMissingGuids(impl.world, impl.guids());
     impl.physics.update(step);
     updateTransformHierarchy(impl.world, impl.hierarchy, impl.desc.jobs);
+    // The wind blows before particles and the renderer read it.
+    advanceWind(impl.world, static_cast<f32>(step));
     // Particles fall with the physics gravity, which game code may change.
     impl.particles.setGravity(impl.physics.gravity());
     impl.particles.update(static_cast<f32>(step), impl.desc.jobs);

@@ -220,6 +220,40 @@ tonemapping. Indirect light comes from a `SkyLight` (see below).
 To draw a glTF model, load it with `loadGltf()` (see [Assets and Models](assets.md)), upload it with
 `RenderResources::uploadModel()` and create its Entities with `spawnModel()`.
 
+### Wind
+
+A `Wind` Component (one per scene) makes vegetation move and particles drift. It has a direction, an
+average `speed` in m/s, and gusts: `gustStrength` (0 steady, 1 from calm to double speed) and
+`gustFrequency` (gusts per second at a point). Gust fronts travel downwind at the wind's speed, so a field of
+grass bends in waves.
+
+Materials choose how they react, so trunks, leaves and rocks of one model can differ:
+
+- `windSway` bends the whole object away from the wind: metres of offset per m/s at 1 m above its origin,
+  growing with the height squared, so the base stays put and the top leans. The top sinks a little as it
+  leans, keeping the stem's length.
+- `windFlutter` adds a fast jitter of every vertex with its own phase (leaves, grass blades): metres per m/s,
+  times the wind's `turbulence`.
+
+The offsets are computed in the vertex shader of every pass: shading, the depth prepass, entity IDs,
+shadow maps and motion vectors (with the previous frame's wind), so TAA and shadows stay stable. Casters
+with wind are drawn with their own Material in shadow maps instead of batching by Mesh alone.
+`ParticleEmitter::windFactor` makes particles take on the wind's velocity (see [Particles](particles.md)).
+
+```cpp
+world.create(illusion::Name{"Wind"}, illusion::Wind{.direction = {1.0f, 0.0f, 0.4f}, .speed = 4.0f});
+
+illusion::MaterialData leaves = illusion::MaterialData{};
+leaves.windSway = 0.004f;    // a 6 m tree leans about 0.6 m in a 4 m/s wind
+leaves.windFlutter = 0.006f; // leaves shake by about 2 cm
+emitter.windFactor = 1.5f;   // smoke drifts downwind
+
+illusion::advanceWind(world, deltaSeconds); // GameSession and the editor call this for you
+```
+
+The wind's clock is the runtime `WindState`; `advanceWind()` adds and advances it. `windVelocity()` gives
+the air's velocity at a point for gameplay, matching what the renderer shows.
+
 ### Culling
 
 Entities with the `Inactive` tag (they or an ancestor are [Disabled](ecs.md#disabled-and-inactive)) are not

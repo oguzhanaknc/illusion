@@ -7,6 +7,7 @@
 #include <illusion/core/Log.hpp>
 #include <illusion/core/Profiler.hpp>
 #include <illusion/ecs/Hierarchy.hpp>
+#include <illusion/ecs/Wind.hpp>
 #include <illusion/ecs/World.hpp>
 #include <illusion/render/BuiltinShaders.hpp>
 #include <illusion/render/RenderDevice.hpp>
@@ -66,6 +67,9 @@ struct GpuViewConstants
     Vec4 cameraForward; // xyz
     Mat4 unjitteredViewProjection;
     Mat4 previousViewProjection; // unjittered, previous frame
+    Vec4 wind;                   // xyz: normalized direction, w: speed (m/s; 0 without a Wind)
+    Vec4 windGusts;              // x: gust strength, y: gust frequency, z: turbulence, w: time
+    Vec4 windHistory;            // x: time of the previous frame
 };
 static_assert(offsetof(GpuViewConstants, directional) == 112);
 static_assert(offsetof(GpuViewConstants, points) == 240);
@@ -74,6 +78,7 @@ static_assert(offsetof(GpuViewConstants, sh) == 896);
 static_assert(offsetof(GpuViewConstants, cascades) == 1040);
 static_assert(offsetof(GpuViewConstants, cameraForward) == 1392);
 static_assert(offsetof(GpuViewConstants, previousViewProjection) == 1472);
+static_assert(offsetof(GpuViewConstants, wind) == 1536);
 
 struct GpuInstance
 {
@@ -896,6 +901,32 @@ void SceneRenderer::Impl::cull(World& world, const RenderView& view, JobSystem* 
     stats.visible = static_cast<u32>(cameraOrder.size());
 }
 
+namespace
+{
+
+// The first active Wind of the World, or calm air (ADR 0048).
+void setWind(World& world, GpuViewConstants& constants)
+{
+    bool found = false;
+    world.query<const Wind>().without<Inactive>().each([&](Entity entity, const Wind& wind) {
+        if (found)
+        {
+            return;
+        }
+        found = true;
+        const f32 length = glm::length(wind.direction);
+        const bool valid = length > 1e-6f && std::isfinite(length) && std::isfinite(wind.speed);
+        const WindState* state = world.tryGet<WindState>(entity);
+        const f32 time = state != nullptr ? state->time : 0.0f;
+        constants.wind = valid ? Vec4(wind.direction / length, std::max(wind.speed, 0.0f)) : Vec4(0.0f);
+        constants.windGusts = Vec4(std::clamp(wind.gustStrength, 0.0f, 1.0f),
+                                   std::max(wind.gustFrequency, 0.0f), std::max(wind.turbulence, 0.0f), time);
+        constants.windHistory = Vec4(state != nullptr ? state->previousTime : time, 0.0f, 0.0f, 0.0f);
+    });
+}
+
+} // namespace
+
 i32 SceneRenderer::Impl::gatherLights(World& world, GpuViewConstants& constants, f32& angularDiameter)
 {
     i32 shadowed = -1;
@@ -934,10 +965,11 @@ i32 SceneRenderer::Impl::gatherLights(World& world, GpuViewConstants& constants,
     return shadowed;
 }
 
-// Opaque casters ignore their material, so they batch by mesh alone; masked casters need it.
+// Opaque rigid casters ignore their material, so they batch by mesh alone; masked casters and casters that
+// move in the wind need it.
 const RenderResources::GpuMaterial* SceneRenderer::Impl::shadowMaterial(const DrawItem& item) const noexcept
 {
-    return item.material->alphaMode == AlphaMode::Mask ? item.material : nullptr;
+    return item.material->alphaMode == AlphaMode::Mask || item.material->wind ? item.material : nullptr;
 }
 
 void SceneRenderer::Impl::sortShadowCasters(u32 cascade)
@@ -967,22 +999,22 @@ void SceneRenderer::Impl::drawShadows(nvrhi::ICommandList* commandList, u32 casc
     while (begin < count)
     {
         const DrawItem& first = items[order[begin]];
-        const RenderResources::GpuMaterial* masked = shadowMaterial(first);
+        const RenderResources::GpuMaterial* own = shadowMaterial(first); // nullptr: any material will do
         u32 end = begin + 1;
         while (end < count)
         {
             const DrawItem& next = items[order[end]];
-            if (shadowMaterial(next) != masked || next.mesh != first.mesh || next.submesh != first.submesh)
+            if (shadowMaterial(next) != own || next.mesh != first.mesh || next.submesh != first.submesh)
             {
                 break;
             }
             ++end;
         }
         nvrhi::GraphicsState state;
-        state.pipeline = shadowPipelines[masked != nullptr ? 1 : 0];
+        state.pipeline = shadowPipelines[own != nullptr && own->alphaMode == AlphaMode::Mask ? 1 : 0];
         state.framebuffer = framebuffer;
         // The material set is bound for opaque casters too: the pipeline layout includes it.
-        state.bindings = {shadowSet, masked != nullptr ? masked->bindingSet : first.material->bindingSet};
+        state.bindings = {shadowSet, own != nullptr ? own->bindingSet : first.material->bindingSet};
         state.vertexBuffers = {
             nvrhi::VertexBufferBinding().setBuffer(resources->vertexPool()).setSlot(0).setOffset(0)};
         state.indexBuffer =
@@ -1086,6 +1118,7 @@ void SceneRenderer::render(nvrhi::ICommandList* commandList, nvrhi::ITexture* co
                              view.projection[3][3], 0.0f);
     f32 angularDiameter = 0.0f;
     const i32 shadowedLight = impl.gatherLights(world, constants, angularDiameter);
+    setWind(world, constants);
 
     // Particles face the camera: its right and up axes are the first two rows of the view matrix.
     const ParticleRenderer::View particleView{.viewProjection = constants.viewProjection,

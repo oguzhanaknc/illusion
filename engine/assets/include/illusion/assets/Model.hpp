@@ -58,11 +58,16 @@ struct MaterialData
     f32 alphaCutoff = 0.5f;                  ///< Mask threshold.
     AlphaMode alphaMode = AlphaMode::Opaque; ///< Alpha usage.
     bool doubleSided = false;                ///< Disables back-face culling.
-    TextureRef baseColorTexture;             ///< sRGB base colour (+ alpha).
-    TextureRef metallicRoughnessTexture;     ///< Linear: roughness in G, metalness in B.
-    TextureRef normalTexture;                ///< Tangent-space normal map.
-    TextureRef occlusionTexture;             ///< Linear: occlusion in R.
-    TextureRef emissiveTexture;              ///< sRGB emissive colour.
+    /// Bend in the scene's Wind: metres of sideways offset per m/s of wind at 1 m above the object's
+    /// origin, growing with the height squared (trees, grass stems). 0 keeps the object rigid.
+    f32 windSway = 0.0f;
+    /// Flutter in the Wind: metres of fast, small jitter per m/s of wind (leaves, grass blades).
+    f32 windFlutter = 0.0f;
+    TextureRef baseColorTexture;         ///< sRGB base colour (+ alpha).
+    TextureRef metallicRoughnessTexture; ///< Linear: roughness in G, metalness in B.
+    TextureRef normalTexture;            ///< Tangent-space normal map.
+    TextureRef occlusionTexture;         ///< Linear: occlusion in R.
+    TextureRef emissiveTexture;          ///< sRGB emissive colour.
 };
 
 /// A node of the model hierarchy.

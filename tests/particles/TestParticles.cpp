@@ -7,6 +7,7 @@
 #include <illusion/ecs/ComponentJson.hpp>
 #include <illusion/ecs/Hierarchy.hpp>
 #include <illusion/ecs/Transform.hpp>
+#include <illusion/ecs/Wind.hpp>
 #include <illusion/ecs/World.hpp>
 #include <illusion/particles/ParticleComponents.hpp>
 #include <illusion/particles/ParticleWorld.hpp>
@@ -15,6 +16,7 @@
 #include <doctest/doctest.h>
 
 #include <cmath>
+#include <numbers>
 #include <vector>
 
 using namespace illusion;
@@ -72,7 +74,7 @@ TEST_CASE("ParticleEmitter is reflected with every field under a stable name and
     REQUIRE(id != kInvalidComponentId);
     const TypeReflection* type = registry.reflection(id);
     REQUIRE(type != nullptr);
-    CHECK(type->fields.size() == 25);
+    CHECK(type->fields.size() == 26);
     CHECK(registry.findByStableName("illusion.ParticlePool") != kInvalidComponentId);
 }
 
@@ -134,6 +136,48 @@ TEST_CASE("particles move with their speed, gravity and drag")
     CHECK(world.get<ParticlePool>(slowed).position(0).y < 0.5f * 2.0f * t);
     CHECK(world.get<ParticlePool>(slowed).position(0).y > 0.0f);
     CHECK(world.get<ParticlePool>(rising).position(0).x == doctest::Approx(0.0f));
+}
+
+TEST_CASE("particles with a wind factor take on the wind's velocity, in their own space")
+{
+    World world;
+    ParticleWorld particles(world);
+    ParticleEmitter e = emitter(0.0f, 100.0f);
+    e.burst = 1;
+    e.speedMin = 0.0f;
+    e.speedMax = 0.0f;
+    const Entity still = world.create(at(Vec3(0.0f)), e);
+    e.windFactor = 2.0f;
+    const Entity blown = world.create(at(Vec3(5.0f, 0.0f, 0.0f)), e);
+    e.space = ParticleSpace::Local;
+    Transform turned = at(Vec3(10.0f, 0.0f, 0.0f));
+    turned.rotation =
+        glm::angleAxis(std::numbers::pi_v<f32> / 2.0f, Vec3(0.0f, 1.0f, 0.0f)); // a quarter turn about +y
+    const Entity local = world.create(turned, e);
+
+    // Without a Wind nothing moves.
+    run(particles, 0.5f);
+    CHECK(world.get<ParticlePool>(blown).position(0) == Vec3(5.0f, 0.0f, 0.0f));
+
+    world.create(Wind{.direction = Vec3(0.0f, 0.0f, 1.0f), .speed = 3.0f, .gustStrength = 0.0f});
+    run(particles, 3.0f);
+    CHECK(world.get<ParticlePool>(still).position(0) == Vec3(0.0f));
+    // After 3 s at a factor of 2 the particle moves at nearly the wind's 3 m/s.
+    const ParticlePool& pool = world.get<ParticlePool>(blown);
+    CHECK(pool.velocities(2)[0] == doctest::Approx(3.0).epsilon(0.01));
+    CHECK(pool.position(0).z > 6.0f);
+    CHECK(pool.position(0).x == doctest::Approx(5.0));
+    // A local particle feels the wind in the emitter's space: world +z is local -x after a quarter turn.
+    const ParticlePool& localPool = world.get<ParticlePool>(local);
+    CHECK(localPool.velocities(0)[0] == doctest::Approx(-3.0).epsilon(0.01));
+    CHECK(std::abs(localPool.velocities(2)[0]) < 1e-3f);
+
+    // GPU emitters publish the wind velocity with each step.
+    e.space = ParticleSpace::World;
+    e.simulation = ParticleSimulation::Gpu;
+    const Entity gpu = world.create(at(Vec3(0.0f)), e);
+    particles.update(kStep);
+    CHECK(world.get<ParticlePool>(gpu).gpuWind.z == doctest::Approx(3.0));
 }
 
 TEST_CASE("emission shapes place particles inside them and the spread bounds their directions")

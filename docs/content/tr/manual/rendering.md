@@ -230,6 +230,40 @@ Bir glTF modelini çizmek için onu `loadGltf()` ile yükleyin ([Asset'ler ve Mo
 sayfasına bakın), `RenderResources::uploadModel()` ile GPU'ya yükleyin ve Entity'lerini `spawnModel()`
 ile oluşturun.
 
+### Rüzgar
+
+Bir `Wind` Component'i (sahne başına bir tane) bitki örtüsünü hareket ettirir ve parçacıkları sürükler. Bir
+yönü, m/s cinsinden ortalama bir `speed` değeri ve esintileri vardır: `gustStrength` (0 sabit, 1 durgundan iki
+katı hıza) ve `gustFrequency` (bir noktada saniyedeki esinti sayısı). Esinti cepheleri rüzgarın hızıyla rüzgar
+yönünde ilerler; böylece bir çimen tarlası dalga dalga eğilir.
+
+Nasıl tepki vereceklerini Material'ler seçer; böylece bir modelin gövdesi, yaprakları ve kayaları farklı
+davranabilir:
+
+- `windSway` tüm nesneyi rüzgardan uzağa eğer: orijinin 1 m üzerinde m/s başına metre cinsinden kayma; yüksekliğin
+  karesiyle büyür, yani taban yerinde kalır ve tepe eğilir. Tepe eğildikçe biraz alçalır ve gövdenin boyu korunur.
+- `windFlutter` her vertex'e kendi fazıyla hızlı bir titreşim ekler (yapraklar, çimen yaprakları): m/s başına
+  metre, rüzgarın `turbulence` değeriyle çarpılır.
+
+Kaymalar her geçişin vertex Shader'ında hesaplanır: gölgelendirme, derinlik prepass'i, Entity ID'leri, gölge
+haritaları ve hareket vektörleri (önceki karenin rüzgarıyla); böylece TAA ve gölgeler kararlı kalır. Rüzgarlı
+gölge düşürenler, gölge haritalarında yalnızca Mesh'e göre gruplanmak yerine kendi Material'leriyle çizilir.
+`ParticleEmitter::windFactor` parçacıkların rüzgarın hızını almasını sağlar (bkz. [Parçacıklar](particles.md)).
+
+```cpp
+world.create(illusion::Name{"Wind"}, illusion::Wind{.direction = {1.0f, 0.0f, 0.4f}, .speed = 4.0f});
+
+illusion::MaterialData leaves = illusion::MaterialData{};
+leaves.windSway = 0.004f;    // a 6 m tree leans about 0.6 m in a 4 m/s wind
+leaves.windFlutter = 0.006f; // leaves shake by about 2 cm
+emitter.windFactor = 1.5f;   // smoke drifts downwind
+
+illusion::advanceWind(world, deltaSeconds); // GameSession and the editor call this for you
+```
+
+Rüzgarın saati çalışma zamanı durumu olan `WindState`'tir; `advanceWind()` onu ekler ve ilerletir.
+`windVelocity()` oyun kodu için bir noktadaki havanın hızını, renderer'ın gösterdiğiyle aynı şekilde verir.
+
 ### Culling
 
 `Inactive` etiketli Entity'ler (kendileri veya bir ataları [Disabled](ecs.md#disabled-ve-inactive)) çizilmez;
