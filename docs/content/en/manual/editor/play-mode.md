@@ -135,7 +135,7 @@ with their types and bindings:
 - **Add binding** captures the next key press as `Key.<name>`, or takes a typed binding such as
   `Gamepad.South`, `Axis.LeftX` or `Stick.Left`; Esc cancels.
 - Clicking a binding removes it, and the bin removes the action.
-- The row at the bottom adds an action with a name and a type (Button, Axis or Vector2).
+- The row at the bottom adds an action with a name and a type (Button, Axis, Vector2 or Delta).
 
 Every change is one of the commands above and one undo step.
 

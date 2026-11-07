@@ -172,6 +172,13 @@ Contribution evaluate(const InputBinding& binding, const InputState* keyboardMou
             result.value = strongest(result.value, pad->stick(static_cast<GamepadStick>(binding.code)));
         }
         break;
+    case BindingSource::MouseMotion:
+        if (keyboardMouse != nullptr)
+        {
+            result.value = (binding.code == 0 ? keyboardMouse->mouseDelta() : keyboardMouse->scrollDelta()) *
+                           binding.scale;
+        }
+        break;
     }
     return result;
 }
@@ -535,6 +542,8 @@ std::string bindingToString(const InputBinding& binding)
     case BindingSource::KeyVector:
         return std::format("Keys.{}.{}.{}.{}", keyName(binding.keys[0]), keyName(binding.keys[1]),
                            keyName(binding.keys[2]), keyName(binding.keys[3]));
+    case BindingSource::MouseMotion:
+        return std::format("Mouse.{}{}", binding.code == 0 ? "Motion" : "Scroll", scaleSuffix(binding.scale));
     }
     return {};
 }
@@ -592,6 +601,10 @@ std::optional<InputBinding> bindingFromString(std::string_view text)
     }
     else if (kind == "Mouse")
     {
+        if (name == "Motion" || name == "Scroll")
+        {
+            return name == "Motion" ? InputBinding::mouseMotion(scale) : InputBinding::mouseScroll(scale);
+        }
         for (usize i = 0; i < kMouseButtonCount; ++i)
         {
             if (mouseButtonName(static_cast<MouseButton>(i)) == name)
@@ -684,6 +697,8 @@ std::string glyphId(const InputBinding& binding, GamepadFamily family)
     case BindingSource::GamepadStick:
         return std::string(familyPrefix(family)) +
                (binding.code == static_cast<u16>(GamepadStick::Left) ? "left_stick" : "right_stick");
+    case BindingSource::MouseMotion:
+        return binding.code == 0 ? "mouse_motion" : "mouse_scroll";
     }
     return {};
 }
@@ -753,6 +768,8 @@ std::string glyphLabel(const InputBinding& binding, GamepadFamily family)
     }
     case BindingSource::GamepadStick:
         return binding.code == static_cast<u16>(GamepadStick::Left) ? "Left Stick" : "Right Stick";
+    case BindingSource::MouseMotion:
+        return binding.code == 0 ? "Mouse" : "Wheel";
     }
     return {};
 }
@@ -800,6 +817,8 @@ text::TextKey glyphLabelKey(const InputBinding& binding, GamepadFamily family) n
     }
     case BindingSource::GamepadStick:
         return stickLabel(binding.code == static_cast<u16>(GamepadStick::Left), family);
+    case BindingSource::MouseMotion:
+        return binding.code == 0 ? strings::kGlyphMouseMotion : strings::kGlyphMouseScroll;
     }
     return kKeyLabels[0];
 }
@@ -993,7 +1012,9 @@ void InputActions::update(const InputState* keyboardMouse, std::span<const Gamep
         for (const InputBinding& binding : action.bindings)
         {
             const Contribution contribution = evaluate(binding, keyboardMouse, gamepads);
-            value = strongest(value, contribution.value);
+            // Movements add up (the mouse and a second mouse binding); levels take the strongest.
+            value = action.type == ActionType::Delta ? value + contribution.value
+                                                     : strongest(value, contribution.value);
             tapped = tapped || contribution.tapped;
         }
 
@@ -1013,6 +1034,9 @@ void InputActions::update(const InputState* keyboardMouse, std::span<const Gamep
             {
                 value = glm::normalize(value);
             }
+            down = value != Vec2(0.0f);
+            break;
+        case ActionType::Delta:
             down = value != Vec2(0.0f);
             break;
         }
@@ -1165,6 +1189,19 @@ std::optional<InputBinding> BindingCapture::poll(const InputState* keyboardMouse
                 return InputBinding::mouseButton(static_cast<MouseButton>(i));
             }
         }
+        if (m_type == ActionType::Delta)
+        {
+            // A deliberate move, not the jitter of a hand resting on the mouse.
+            constexpr f32 kMotionPixels = 8.0f;
+            if (glm::length(km->mouseDelta()) >= kMotionPixels)
+            {
+                return InputBinding::mouseMotion();
+            }
+            if (km->scrollDelta() != Vec2(0.0f))
+            {
+                return InputBinding::mouseScroll();
+            }
+        }
     }
 
     for (const GamepadState* pad : pads)
@@ -1176,7 +1213,7 @@ std::optional<InputBinding> BindingCapture::poll(const InputState* keyboardMouse
                 return InputBinding::gamepadButton(static_cast<GamepadButton>(i));
             }
         }
-        if (m_type == ActionType::Vector2)
+        if (m_type == ActionType::Vector2 || m_type == ActionType::Delta)
         {
             for (const GamepadStick stick : {GamepadStick::Left, GamepadStick::Right})
             {

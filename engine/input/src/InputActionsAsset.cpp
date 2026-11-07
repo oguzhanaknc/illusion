@@ -13,7 +13,7 @@ namespace
 {
 
 constexpr std::array kActionTypeNames{std::string_view("Button"), std::string_view("Axis"),
-                                      std::string_view("Vector2")};
+                                      std::string_view("Vector2"), std::string_view("Delta")};
 
 } // namespace
 

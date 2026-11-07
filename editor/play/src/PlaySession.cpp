@@ -341,8 +341,9 @@ void PlaySession::actionStates(std::vector<PlayActionState>& out) const
         state.down = actions.isDown(action);
         state.pressed = actions.wasPressed(action);
         state.released = actions.wasReleased(action);
-        state.value =
-            type == ActionType::Vector2 ? actions.vector(action) : Vec2(actions.value(action), 0.0f);
+        state.value = type == ActionType::Vector2 || type == ActionType::Delta
+                          ? actions.vector(action)
+                          : Vec2(actions.value(action), 0.0f);
         out.push_back(std::move(state));
     }
 }

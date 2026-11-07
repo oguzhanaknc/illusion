@@ -85,7 +85,7 @@ struct PlayInputEvent
 struct PlayActionState
 {
     std::string name;      ///< The action.
-    std::string type;      ///< "Button", "Axis" or "Vector2".
+    std::string type;      ///< "Button", "Axis", "Vector2" or "Delta".
     bool down = false;     ///< Held.
     bool pressed = false;  ///< Went down in the last update.
     bool released = false; ///< Went up in the last update.

@@ -557,6 +557,21 @@ Before M8. Design: ADR 0047 (a saved emitter Component, a deterministic CPU simu
   `render/1m-gpu-particles`: 1.4 ns per particle per full frame on an RTX 4070 SUPER. Fixed on the way: the
   dispatches of one binding set need explicit UAV barriers in NVRHI
 
+## DEMO — Tech demo scene
+
+Before M8. A first-person night-and-day forest clearing (`samples/techdemo`) that shows what the renderer,
+particles and physics can do together, and the engine features it needs.
+
+- DEMO-1: ✅ Mouse look: `ActionType::Delta` (unbounded, bindings add up) and `BindingSource::MouseMotion`
+  (`Mouse.Motion`, `Mouse.Scroll`, scaled), captured by `BindingCapture` for Delta actions, with glyphs
+- DEMO-2: Wind: a saved `Wind` Component, material sway and flutter displacing vertices in every pass
+  (forward, prepass, shadows, motion vectors), wind on particles (CPU and GPU)
+- DEMO-3: Day and night: a sky that follows the sun cheaply every frame, a moon and stars
+- DEMO-4: Assets: a fetch script for CC0 Poly Haven models (pinned, SHA-256 checked, git-ignored) and
+  procedural trees
+- DEMO-5: The scene and its module: walking with a CharacterController, the day cycle, fireflies at night,
+  neon signs, a campfire with smoke and embers, pushable props, wind gusts, ambient sound
+
 ## M8 — Release pipeline
 
 - Export: clean runtime build, packed assets, no editor code

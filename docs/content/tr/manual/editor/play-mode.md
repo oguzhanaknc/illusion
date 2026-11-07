@@ -138,7 +138,7 @@ bağlamalarıyla listeler:
 - **Add binding** bir sonraki tuş basışını `Key.<ad>` olarak yakalar ya da `Gamepad.South`, `Axis.LeftX` veya
   `Stick.Left` gibi yazılmış bir bağlamayı alır; Esc vazgeçer.
 - Bir bağlamaya tıklamak onu kaldırır, çöp kutusu da eylemi kaldırır.
-- En alttaki satır bir ad ve bir türle (Button, Axis veya Vector2) bir eylem ekler.
+- En alttaki satır bir ad ve bir türle (Button, Axis, Vector2 veya Delta) bir eylem ekler.
 
 Her değişiklik yukarıdaki komutlardan biri ve bir undo adımıdır.
 

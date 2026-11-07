@@ -131,6 +131,52 @@ TEST_CASE("vector actions from WASD and sticks are limited to length 1")
     CHECK_FALSE(f.actions.isDown(move));
 }
 
+TEST_CASE("delta actions add up mouse motion and scroll without a limit")
+{
+    Fixture f;
+    const ActionId look = f.actions.addAction("Look", ActionType::Delta);
+    f.actions.addBinding(look, InputBinding::mouseMotion(0.5f));
+    f.actions.addBinding(look, InputBinding::mouseScroll(-2.0f));
+
+    f.keyboard.setMousePosition(Vec2(100.0f, 100.0f)); // the first position is no movement
+    f.frame();
+    CHECK(f.actions.vector(look) == Vec2(0.0f));
+    CHECK_FALSE(f.actions.isDown(look));
+
+    f.keyboard.setMousePosition(Vec2(140.0f, 90.0f));
+    f.keyboard.addScroll(Vec2(0.0f, 1.0f));
+    f.frame();
+    CHECK(f.actions.vector(look).x == doctest::Approx(20.0));       // 40 px * 0.5, not clamped to 1
+    CHECK(f.actions.vector(look).y == doctest::Approx(-5.0 - 2.0)); // motion and scroll add up
+    CHECK(f.actions.value(look) == doctest::Approx(20.0));
+    CHECK(f.actions.isDown(look));
+    CHECK(f.actions.wasPressed(look));
+
+    f.frame(); // the mouse rests
+    CHECK(f.actions.vector(look) == Vec2(0.0f));
+    CHECK(f.actions.wasReleased(look));
+}
+
+TEST_CASE("a stick on a delta action gives its own value and mouse motion needs a mouse")
+{
+    Fixture f;
+    const ActionId look = f.actions.addAction("Look", ActionType::Delta);
+    f.actions.addBinding(look, InputBinding::gamepadStick(GamepadStick::Right));
+    f.pad.setAxis(GamepadAxis::RightX, 1.0f);
+    f.pad.setAxis(GamepadAxis::RightY, 1.0f);
+    f.frame();
+    const Vec2 stick = f.pad.stick(GamepadStick::Right);
+    CHECK(stick.x > 0.5f);
+    CHECK(f.actions.vector(look).x == doctest::Approx(stick.x)); // the stick's own value, as for Vector2
+    CHECK(f.actions.vector(look).y == doctest::Approx(stick.y));
+
+    InputActions noMouse;
+    const ActionId turn = noMouse.addAction("Turn", ActionType::Delta);
+    noMouse.addBinding(turn, InputBinding::mouseMotion());
+    noMouse.update(nullptr, {});
+    CHECK(noMouse.vector(turn) == Vec2(0.0f));
+}
+
 TEST_CASE("bindings round-trip through text")
 {
     const InputBinding bindings[] = {
@@ -142,6 +188,9 @@ TEST_CASE("bindings round-trip through text")
         InputBinding::gamepadAxis(GamepadAxis::RightTrigger, 0.5f),
         InputBinding::gamepadStick(GamepadStick::Right),
         InputBinding::keyVector(Key::Up, Key::Down, Key::Left, Key::Right),
+        InputBinding::mouseMotion(),
+        InputBinding::mouseMotion(0.0025f),
+        InputBinding::mouseScroll(-1.0f),
     };
     for (const InputBinding& binding : bindings)
     {
@@ -152,8 +201,10 @@ TEST_CASE("bindings round-trip through text")
     }
     CHECK(bindingToString(InputBinding::key(Key::Space)) == "Key.Space");
     CHECK(bindingToString(InputBinding::gamepadAxis(GamepadAxis::LeftY, -1.0f)) == "Axis.LeftY*-1");
+    CHECK(bindingToString(InputBinding::mouseMotion(0.5f)) == "Mouse.Motion*0.5");
+    CHECK(bindingToString(InputBinding::mouseScroll()) == "Mouse.Scroll");
     for (const char* bad : {"", "Key", "Key.NotAKey", "Gamepad.Jump", "Axis.LeftX*abc", "Axis.LeftX*0",
-                            "Keys.W.S.A", "Stick.Middle", "Key.Unknown"})
+                            "Keys.W.S.A", "Stick.Middle", "Key.Unknown", "Mouse.Wheel"})
     {
         CHECK_MESSAGE(!bindingFromString(bad).has_value(), bad);
     }
@@ -225,6 +276,10 @@ TEST_CASE("glyphs follow the controller family")
     CHECK(glyphId(InputBinding::key(Key::LeftControl), GamepadFamily::Xbox) == "key_left_control");
     CHECK(glyphLabel(InputBinding::key(Key::Space), GamepadFamily::Xbox) == "Space");
     CHECK(glyphLabel(InputBinding::keyVector(Key::W, Key::S, Key::A, Key::D), GamepadFamily::Xbox) == "WSAD");
+    CHECK(glyphId(InputBinding::mouseMotion(0.1f), GamepadFamily::Generic) == "mouse_motion");
+    CHECK(glyphId(InputBinding::mouseScroll(), GamepadFamily::Generic) == "mouse_scroll");
+    CHECK(glyphLabel(InputBinding::mouseMotion(), GamepadFamily::Xbox) == "Mouse");
+    CHECK(glyphLabelKey(InputBinding::mouseScroll(), GamepadFamily::Generic).english() == "Wheel");
     CHECK(glyphId(InputBinding::mouseButton(MouseButton::Left), GamepadFamily::Xbox) == "mouse_left");
     CHECK(glyphId(InputBinding::gamepadStick(GamepadStick::Right), GamepadFamily::PlayStation) ==
           "ps_right_stick");
@@ -273,6 +328,31 @@ TEST_CASE("BindingCapture respects the device filter and captures sticks for vec
     const auto key = keyboardOnly.poll(&keys, pads);
     REQUIRE(key.has_value());
     CHECK(*key == InputBinding::key(Key::F));
+}
+
+TEST_CASE("BindingCapture captures mouse motion and scroll only for delta actions")
+{
+    InputState keyboard;
+    keyboard.setMousePosition(Vec2(0.0f));
+    keyboard.beginFrame();
+
+    BindingCapture button(BindingCapture::Devices::KeyboardMouse, ActionType::Button);
+    BindingCapture delta(BindingCapture::Devices::KeyboardMouse, ActionType::Delta);
+    keyboard.setMousePosition(Vec2(3.0f, 0.0f)); // jitter
+    CHECK_FALSE(delta.poll(&keyboard, {}).has_value());
+    keyboard.beginFrame();
+    keyboard.setMousePosition(Vec2(30.0f, 0.0f));
+    CHECK_FALSE(button.poll(&keyboard, {}).has_value());
+    const auto motion = delta.poll(&keyboard, {});
+    REQUIRE(motion.has_value());
+    CHECK(*motion == InputBinding::mouseMotion());
+
+    keyboard.beginFrame();
+    keyboard.addScroll(Vec2(0.0f, -1.0f));
+    BindingCapture wheel(BindingCapture::Devices::Any, ActionType::Delta);
+    const auto scroll = wheel.poll(&keyboard, {});
+    REQUIRE(scroll.has_value());
+    CHECK(*scroll == InputBinding::mouseScroll());
 }
 
 TEST_CASE("a stick resting deflected does not keep claiming the last used device")

@@ -56,9 +56,9 @@ public:
     [[nodiscard]] virtual bool wasPressed(ActionId action) const = 0;
     /// True in the frame a Button action was released.
     [[nodiscard]] virtual bool wasReleased(ActionId action) const = 0;
-    /// Value of a Button (0 or 1) or Axis action, or the x of a Vector2 action.
+    /// Value of a Button (0 or 1) or Axis action, or the x of a Vector2 or Delta action.
     [[nodiscard]] virtual f32 value(ActionId action) const = 0;
-    /// Value of a Vector2 action, length up to 1.
+    /// Value of a Vector2 action (length up to 1) or a Delta action (this frame's movement, unbounded).
     [[nodiscard]] virtual Vec2 vector(ActionId action) const = 0;
     /// Device that changed an action last, for glyphs.
     [[nodiscard]] virtual InputDevice lastDevice() const = 0;
