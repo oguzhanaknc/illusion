@@ -70,6 +70,14 @@ jobs:
       - name: Set up MSVC environment
         if: runner.os == 'Windows'
         uses: ilammy/msvc-dev-cmd@0b201ec74fa43914dc39ae48a89fd1d8cb592756 # v1.13.0
+      - name: Restore the Slang compiler download
+        # Release downloads from GitHub fail during outages (HTTP 504); FetchContent skips a download whose
+        # file is already there with the pinned SHA-256, so a cached archive keeps configure working.
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: build/${{ matrix.preset }}/_deps/slang-subbuild/slang-populate-prefix/src/slang-*.tar.gz
+          key: slang-${{ matrix.preset }}-${{ hashFiles('cmake/Dependencies.cmake') }}
+          restore-keys: slang-${{ matrix.preset }}-
       - name: Configure
         run: cmake --preset ${{ matrix.preset }} 2>&1 | tee configure.log
       - name: Build (Debug)
@@ -100,6 +108,14 @@ jobs:
           sudo apt-get update && sudo apt-get install -y --no-install-recommends
           libwayland-dev libxkbcommon-dev libx11-dev libxrandr-dev libxinerama-dev libxcursor-dev
           libxi-dev libxext-dev
+      - name: Restore the Slang compiler download
+        # Release downloads from GitHub fail during outages (HTTP 504); FetchContent skips a download whose
+        # file is already there with the pinned SHA-256, so a cached archive keeps configure working.
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: build/ci-linux-gcc/_deps/slang-subbuild/slang-populate-prefix/src/slang-*.tar.gz
+          key: slang-ci-linux-gcc-${{ hashFiles('cmake/Dependencies.cmake') }}
+          restore-keys: slang-ci-linux-gcc-
       - name: Configure (editor off)
         run: cmake --preset ci-linux-gcc -DILLUSION_BUILD_EDITOR=OFF 2>&1 | tee configure.log
       - name: No editor targets
@@ -138,6 +154,14 @@ jobs:
           libxi-dev libxext-dev
       - name: Reduce ASLR entropy (required by TSan on recent kernels)
         run: sudo sysctl vm.mmap_rnd_bits=28
+      - name: Restore the Slang compiler download
+        # Release downloads from GitHub fail during outages (HTTP 504); FetchContent skips a download whose
+        # file is already there with the pinned SHA-256, so a cached archive keeps configure working.
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: build/${{ matrix.preset }}/_deps/slang-subbuild/slang-populate-prefix/src/slang-*.tar.gz
+          key: slang-${{ matrix.preset }}-${{ hashFiles('cmake/Dependencies.cmake') }}
+          restore-keys: slang-${{ matrix.preset }}-
       - name: Configure
         run: cmake --preset ${{ matrix.preset }} 2>&1 | tee configure.log
       - name: Build
@@ -168,6 +192,14 @@ jobs:
           sudo apt-get update && sudo apt-get install -y --no-install-recommends
           libwayland-dev libxkbcommon-dev libx11-dev libxrandr-dev libxinerama-dev libxcursor-dev
           libxi-dev libxext-dev libvulkan1 mesa-vulkan-drivers vulkan-validationlayers xvfb xauth
+      - name: Restore the Slang compiler download
+        # Release downloads from GitHub fail during outages (HTTP 504); FetchContent skips a download whose
+        # file is already there with the pinned SHA-256, so a cached archive keeps configure working.
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: build/ci-linux-clang/_deps/slang-subbuild/slang-populate-prefix/src/slang-*.tar.gz
+          key: slang-ci-linux-clang-${{ hashFiles('cmake/Dependencies.cmake') }}
+          restore-keys: slang-ci-linux-clang-
       - name: Configure
         run: cmake --preset ci-linux-clang 2>&1 | tee configure.log
       - name: Build
