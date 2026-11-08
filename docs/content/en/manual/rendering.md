@@ -296,17 +296,27 @@ illusion::MeshData tree = illusion::makeSphere(1.0f, 64, 32);
 illusion::generateLods(tree); // up to three coarser levels, each about half the triangles
 
 illusion::RenderView view = illusion::RenderView::fromCamera(cameraTransform, camera, aspect);
-view.lodPixelError = 1.0f; // the default; 0 always draws full detail
+view.lodPixelError = 1.0f;   // the default; 0 always draws full detail
+view.lodFadeSeconds = 0.25f; // the default; 0 switches levels at once
+view.deltaSeconds = frameSeconds;
 renderer->render(commands, target, world, view, &jobs);
-ILL_LOG_INFO("Game", "{} instances at full detail, {} at the coarsest level",
-             renderer->stats().lodInstances[0], renderer->stats().lodInstances[illusion::kMaxSubmeshLods]);
+ILL_LOG_INFO("Game", "{} instances at full detail, {} at the coarsest level, {} cross-fading",
+             renderer->stats().lodInstances[0], renderer->stats().lodInstances[illusion::kMaxSubmeshLods],
+             renderer->stats().lodFades);
 ```
 
 - The level is chosen from the camera's distance and the instance's scale, once per frame, and the same
   level is drawn into the shadow maps, so shadows match the surfaces that cast them.
 - Instances of one Mesh at different levels form separate batches; the GPU culls and draws each with one
   indirect draw, as before.
-- Levels switch without a transition for now; dithered cross-fades follow (see the roadmap, GFX-2b).
+- When an instance's level changes, it cross-fades to the new one over `lodFadeSeconds`: both levels are
+  drawn, dithered per pixel with complementary patterns, so every pixel shows one of them and nothing pops.
+  The fade covers the depth prepass, the shading, Entity IDs and the shadow maps; going back to the level it
+  is leaving reverses the fade. An instance that comes into view starts at its level without a fade.
+- The renderer keeps each Entity's level and fade between frames, so give `deltaSeconds` the real frame
+  time. `RenderStats::lodFades` counts the instances fading (`lodInstances` counts them at both levels).
+- `setDebugView(RenderDebugView::LevelOfDetail)` colours every surface by the level it draws: green for
+  full detail, then yellow, orange and red.
 
 ### Bindless rendering
 
@@ -667,7 +677,7 @@ GPU support. `DebugDepth::Tested` samples reversed-Z scene depth; `OnTop` remain
 Separate render/output sizes keep occlusion correct when output resolution differs.
 
 `setDebugView()` selects Lit, Unlit, Albedo, Normals, Roughness, Metallic, AmbientOcclusion,
-ShadowCascades or MotionVectors. Diagnostic modes bypass temporal accumulation, bloom, exposure and ACES,
+ShadowCascades, MotionVectors or LevelOfDetail. Diagnostic modes bypass temporal accumulation, bloom, exposure and ACES,
 while preserving output colour encoding. `setWireframeOverlay(true)` overlays opaque triangle edges and
 returns false on GPUs without non-solid fill. `setClearColor()` changes background radiance.
 

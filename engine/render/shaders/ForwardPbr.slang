@@ -119,6 +119,7 @@ struct VertexOutput
     float4 previousClip : TEXCOORD2; // previous frame
     nointerpolation uint2 entity : ENTITY;
     nointerpolation uint material : MATERIAL; // material table index (bindless)
+    nointerpolation uint lod : LOD;           // InstanceData::extra.w: level of detail and cross-fade
 };
 
 [shader("vertex")]
@@ -144,6 +145,7 @@ VertexOutput vertexMain(VertexInput input, uint instanceId: SV_InstanceID, uint 
     output.uv = input.uv;
     output.material = instance.extra.x;
     output.entity = instance.extra.yz;
+    output.lod = instance.extra.w;
     output.currentClip = mul(g_view.unjitteredViewProjection, world);
     output.previousClip = mul(g_view.previousViewProjection, previousWorld);
     return output;
@@ -265,7 +267,8 @@ float4 fragmentMain(VertexOutput input, bool frontFace: SV_IsFrontFace) : SV_Tar
 {
     const MaterialConstants material = materialConstants(input.material);
     const float4 baseColor = sampleMaterial(input.material, kBaseColor, input.uv) * material.baseColorFactor;
-    if (material.alphaCutoff >= 0.0 && baseColor.a < material.alphaCutoff)
+    if ((material.alphaCutoff >= 0.0 && baseColor.a < material.alphaCutoff) ||
+        lodFadeDiscard(input.lod, input.position.xy))
     {
         discard;
     }
@@ -349,6 +352,13 @@ float4 fragmentMain(VertexOutput input, bool frontFace: SV_IsFrontFace) : SV_Tar
         break;
     }
     case 8: color = float3(motionVector(input) * 8.0 + 0.5, 0.5); break;
+    case 9:
+    {
+        const float3 levels[4] = {float3(0.2, 0.9, 0.2), float3(0.95, 0.9, 0.2), float3(1.0, 0.55, 0.1),
+                                  float3(0.95, 0.15, 0.15)};
+        color = levels[min((input.lod >> kLodFadeLevelShift) & 0xFu, 3u)] * (0.35 + 0.65 * baseColor.rgb);
+        break;
+    }
     }
     if ((g_push.flags & 2u) != 0u && uint(g_view.effects.y) == 0u)
     {
@@ -373,7 +383,7 @@ float2 prepassMaskedMain(VertexOutput input) : SV_Target
 {
     const MaterialConstants material = materialConstants(input.material);
     const float alpha = sampleMaterial(input.material, kBaseColor, input.uv).a * material.baseColorFactor.a;
-    if (alpha < material.alphaCutoff)
+    if (alpha < material.alphaCutoff || lodFadeDiscard(input.lod, input.position.xy))
     {
         discard;
     }
@@ -401,7 +411,7 @@ PrepassIds prepassMaskedIdsMain(VertexOutput input)
 {
     const MaterialConstants material = materialConstants(input.material);
     const float alpha = sampleMaterial(input.material, kBaseColor, input.uv).a * material.baseColorFactor.a;
-    if (alpha < material.alphaCutoff) { discard; }
+    if (alpha < material.alphaCutoff || lodFadeDiscard(input.lod, input.position.xy)) { discard; }
     return prepassIdsMain(input);
 }
 
@@ -410,7 +420,11 @@ PrepassIds prepassMaskedIdsMain(VertexOutput input)
 uint2 entityIdMain(VertexOutput input) : SV_Target0
 {
     const MaterialConstants material = materialConstants(input.material);
-    if (sampleMaterial(input.material, kBaseColor, input.uv).a * material.baseColorFactor.a <= 0.0) { discard; }
+    if (sampleMaterial(input.material, kBaseColor, input.uv).a * material.baseColorFactor.a <= 0.0 ||
+        lodFadeDiscard(input.lod, input.position.xy))
+    {
+        discard;
+    }
     return input.entity;
 }
 

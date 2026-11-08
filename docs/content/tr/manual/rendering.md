@@ -307,17 +307,29 @@ illusion::MeshData tree = illusion::makeSphere(1.0f, 64, 32);
 illusion::generateLods(tree); // up to three coarser levels, each about half the triangles
 
 illusion::RenderView view = illusion::RenderView::fromCamera(cameraTransform, camera, aspect);
-view.lodPixelError = 1.0f; // the default; 0 always draws full detail
+view.lodPixelError = 1.0f;   // the default; 0 always draws full detail
+view.lodFadeSeconds = 0.25f; // the default; 0 switches levels at once
+view.deltaSeconds = frameSeconds;
 renderer->render(commands, target, world, view, &jobs);
-ILL_LOG_INFO("Game", "{} instances at full detail, {} at the coarsest level",
-             renderer->stats().lodInstances[0], renderer->stats().lodInstances[illusion::kMaxSubmeshLods]);
+ILL_LOG_INFO("Game", "{} instances at full detail, {} at the coarsest level, {} cross-fading",
+             renderer->stats().lodInstances[0], renderer->stats().lodInstances[illusion::kMaxSubmeshLods],
+             renderer->stats().lodFades);
 ```
 
 - Seviye, kameranın uzaklığından ve instance'ın ölçeğinden karede bir kez seçilir ve aynı seviye gölge
   haritalarına da çizilir; böylece gölgeler onları düşüren yüzeylerle örtüşür.
 - Bir Mesh'in farklı seviyelerdeki instance'ları ayrı batch'ler oluşturur; GPU her birini eskisi gibi tek bir
   indirect draw ile eler ve çizer.
-- Seviyeler şimdilik geçişsiz değişir; dithered cross-fade'ler ardından gelecek (yol haritasında GFX-2b).
+- Bir instance'ın seviyesi değiştiğinde `lodFadeSeconds` boyunca yenisine cross-fade yapar: iki seviye de
+  çizilir ve piksel başına birbirini tamamlayan desenlerle dither'lanır; böylece her piksel ikisinden birini
+  gösterir ve hiçbir şey birden belirmez. Geçiş depth prepass'i, gölgelendirmeyi, Entity ID'lerini ve gölge
+  haritalarını kapsar; bıraktığı seviyeye geri dönmek geçişi tersine çevirir. Görüşe giren bir instance
+  geçiş yapmadan kendi seviyesinde başlar.
+- Renderer her Entity'nin seviyesini ve geçişini kareler arasında saklar; bu yüzden `deltaSeconds`'a gerçek
+  kare süresini verin. `RenderStats::lodFades` geçiş yapan instance'ları sayar (`lodInstances` onları iki
+  seviyede de sayar).
+- `setDebugView(RenderDebugView::LevelOfDetail)` her yüzeyi çizdiği seviyeye göre renklendirir: tam detay
+  yeşil, ardından sarı, turuncu ve kırmızı.
 
 ### Bindless rendering
 
@@ -690,8 +702,8 @@ Overlay renderer'ını bir kez oluşturun. Genişlik çıktı pikseli cinsindend
 quad kullanılır. `DebugDepth::Tested`, reversed-Z sahne derinliğini örnekler; `OnTop` geometri arkasında da
 görünür. Ayrı render/çıktı boyutları, çıktı çözünürlüğü farklıyken de doğru örtüşme sağlar.
 
-`setDebugView()`, Lit, Unlit, Albedo, Normals, Roughness, Metallic, AmbientOcclusion, ShadowCascades veya
-MotionVectors seçer. Tanılama modları temporal biriktirme, bloom, pozlama ve ACES'i atlar; çıktı renk
+`setDebugView()`, Lit, Unlit, Albedo, Normals, Roughness, Metallic, AmbientOcclusion, ShadowCascades,
+MotionVectors veya LevelOfDetail seçer. Tanılama modları temporal biriktirme, bloom, pozlama ve ACES'i atlar; çıktı renk
 kodlaması korunur. `setWireframeOverlay(true)` opak üçgen kenarlarını çizer; non-solid fill olmayan GPU'da
 false döndürür. `setClearColor()` arka plan radiance değerini değiştirir.
 

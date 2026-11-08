@@ -112,6 +112,26 @@ constexpr u32 kShadowViews = kMaxShadowCascades + kPointShadowViews;
 // Distance below which every object draws at full detail (the camera is at or inside its bounds).
 constexpr f32 kLodMinDistance = 1.0e-3f;
 
+// GpuInstance::extra[3] (layout matches kLodFade* in Common.slang): the level of detail in bits 20-23 (for
+// the debug view) and, while an instance cross-fades between two levels, the dither of this copy: bit 17
+// set, bits 0-15 the fade threshold, bit 16 set for the outgoing level (it keeps the pixels whose noise is
+// at or above the threshold; the incoming level keeps the others, so every pixel is covered once).
+constexpr u32 kLodFadeActive = 1u << 17;
+constexpr u32 kLodFadeOutgoing = 1u << 16;
+constexpr u32 kLodFadeLevelShift = 20;
+
+// The extra[3] code of one copy of an instance at level @p lod; @p fade in [0, 1) while cross-fading.
+u32 lodFadeCode(u32 lod, f32 fade, bool fading, bool outgoing) noexcept
+{
+    u32 code = lod << kLodFadeLevelShift;
+    if (fading)
+    {
+        code |= kLodFadeActive | static_cast<u32>(std::clamp(fade, 0.0f, 1.0f) * 65535.0f + 0.5f);
+        code |= outgoing ? kLodFadeOutgoing : 0u;
+    }
+    return code;
+}
+
 // Bit 0: visible to the camera; bit 1 + v: casts a shadow into shadow view v.
 constexpr u32 kCameraPass = 1;
 static_assert(kShadowViews + 1 <= 32);
@@ -124,6 +144,8 @@ struct DrawItem
     u32 submesh;
     u32 lod; // level of detail (0: full detail), chosen from the camera for every pass
     u32 passes;
+    // Drawn with dithering while it cross-fades between two levels (instance.extra[3], see kLodFadeActive).
+    [[nodiscard]] bool fading() const noexcept { return (instance.extra[3] & kLodFadeActive) != 0; }
     f32 distanceSquared;
     Sphere bounds; // world space
 
@@ -319,6 +341,10 @@ struct SceneRenderer::Impl
         Mat4 matrix{1.0f};
         u64 frame = 0;
         u32 generation = 0;
+        // Level of detail drawn last frame; while `fade` < 1 it cross-fades in from `previousLod`.
+        u32 lod = 0;
+        u32 previousLod = 0;
+        f32 fade = 1.0f;
     };
     std::vector<MotionEntry> motionHistory;
     u64 motionFrame = 0;
@@ -906,9 +932,10 @@ void SceneRenderer::Impl::cull(World& world, const RenderView& view, f32 viewpor
     ILL_PROFILE_SCOPE_N("SceneRenderer::cull");
     const u32 candidates = world.query<const Transform, const RenderMesh>().without<Inactive>().count();
     stats.candidates = candidates;
-    if (items.size() < candidates)
+    // An instance that cross-fades between two levels of detail is drawn twice.
+    if (items.size() < static_cast<usize>(candidates) * 2)
     {
-        items.resize(candidates);
+        items.resize(static_cast<usize>(candidates) * 2);
     }
     const Frustum frustum = Frustum::fromViewProjection(view.projection * view.view);
     std::array<Frustum, kMaxShadowCascades> cascadeFrusta{};
@@ -922,6 +949,8 @@ void SceneRenderer::Impl::cull(World& world, const RenderView& view, f32 viewpor
     const bool orthographic = view.projection[3][3] == 1.0f;
     const f32 pixelsPerUnit = 0.5f * viewportHeight * std::abs(view.projection[1][1]);
     const f32 lodPixelError = view.lodPixelError;
+    const f32 fadeStep =
+        view.lodFadeSeconds > 0.0f ? std::max(view.deltaSeconds, 0.0f) / view.lodFadeSeconds : 1.0f;
     std::atomic<u32> count{0};
     auto query = world.query<const Transform, const RenderMesh>().without<Inactive>();
     usize historySize = 0;
@@ -933,8 +962,9 @@ void SceneRenderer::Impl::cull(World& world, const RenderView& view, f32 viewpor
         motionHistory.resize(historySize);
     }
     // Tests one entity; `previous` is its world matrix from the last frame (equal to `matrix` when new).
-    const auto test = [&](Entity entity, const Mat4& matrix, const Mat4& previous,
-                          const RenderMesh& renderer) {
+    // `state` holds its level of detail from the last frame (`known`: it was drawn then) and is updated.
+    const auto test = [&](Entity entity, const Mat4& matrix, const Mat4& previous, const RenderMesh& renderer,
+                          MotionEntry& state, bool known) {
         const RenderResources::GpuMesh* mesh = resources->mesh(renderer.mesh);
         if (mesh == nullptr || renderer.submesh >= mesh->submeshes.size() ||
             (renderer.flags & RenderMesh::kVisible) == 0 || (renderer.layers & view.layerMask) == 0 ||
@@ -972,10 +1002,6 @@ void SceneRenderer::Impl::cull(World& world, const RenderView& view, f32 viewpor
                 }
             }
         }
-        if (passes == 0)
-        {
-            return;
-        }
         const Vec3 offset = bounds.center - view.position;
         u32 lod = 0;
         if (submesh.lodCount != 0 && lodPixelError > 0.0f)
@@ -985,28 +1011,67 @@ void SceneRenderer::Impl::cull(World& world, const RenderView& view, f32 viewpor
             lod = selectLod(submesh, scale * (orthographic ? pixelsPerUnit : pixelsPerUnit / distance),
                             lodPixelError);
         }
-        items[count.fetch_add(1, std::memory_order_relaxed)] =
-            DrawItem{GpuInstance{matrix,
-                                 glm::transpose(glm::inverse(matrix)),
-                                 previous,
-                                 {material->index, entity.index, entity.generation, 0}},
-                     mesh,
-                     material,
-                     renderer.submesh,
-                     lod,
-                     passes,
-                     glm::dot(offset, offset),
-                     bounds};
+        if (passes == 0)
+        {
+            // Not drawn: it reappears at its current level without a fade.
+            state.lod = lod;
+            state.previousLod = lod;
+            state.fade = 1.0f;
+            return;
+        }
+        if (!known)
+        {
+            state.lod = lod;
+            state.previousLod = lod;
+            state.fade = 1.0f;
+        }
+        else if (lod != state.lod)
+        {
+            if (state.fade < 1.0f && lod == state.previousLod)
+            {
+                // Back to the level it was leaving: reverse the fade from where it is.
+                std::swap(state.lod, state.previousLod);
+                state.fade = 1.0f - state.fade;
+            }
+            else
+            {
+                state.previousLod = state.lod;
+                state.lod = lod;
+                state.fade = 0.0f;
+            }
+        }
+        if (state.fade < 1.0f)
+        {
+            state.fade = std::min(state.fade + fadeStep, 1.0f);
+        }
+        const bool fading = state.fade < 1.0f && state.previousLod != state.lod;
+        const GpuInstance instance{matrix,
+                                   glm::transpose(glm::inverse(matrix)),
+                                   previous,
+                                   {material->index, entity.index, entity.generation,
+                                    lodFadeCode(state.lod, state.fade, fading, false)}};
+        const f32 distanceSquared = glm::dot(offset, offset);
+        const u32 slot = count.fetch_add(fading ? 2u : 1u, std::memory_order_relaxed);
+        items[slot] =
+            DrawItem{instance, mesh, material, renderer.submesh, state.lod, passes, distanceSquared, bounds};
+        if (fading)
+        {
+            DrawItem& outgoing = items[slot + 1];
+            outgoing = items[slot];
+            outgoing.lod = state.previousLod;
+            outgoing.instance.extra[3] = lodFadeCode(state.previousLod, state.fade, true, true);
+        }
     };
     const auto drawEntity = [&](Entity entity, const Transform& transform, const RenderMesh& renderer) {
         const Mat4 matrix = transform.matrix();
         MotionEntry& entry = motionHistory[entity.index];
-        const Mat4& previous =
-            entry.frame == motionFrame && motionFrame != 0 && entry.generation == entity.generation
-                ? entry.matrix
-                : matrix;
-        test(entity, matrix, previous, renderer);
-        entry = MotionEntry{matrix, motionFrame + 1, entity.generation};
+        const bool known =
+            entry.frame == motionFrame && motionFrame != 0 && entry.generation == entity.generation;
+        const Mat4 previous = known ? entry.matrix : matrix;
+        test(entity, matrix, previous, renderer, entry, known);
+        entry.matrix = matrix;
+        entry.frame = motionFrame + 1;
+        entry.generation = entity.generation;
     };
     if (jobs != nullptr)
     {
@@ -1042,7 +1107,9 @@ void SceneRenderer::Impl::cull(World& world, const RenderView& view, f32 viewpor
     stats.visible = static_cast<u32>(cameraOrder.size());
     for (const u32 index : cameraOrder)
     {
-        ++stats.lodInstances[items[index].lod];
+        const DrawItem& item = items[index];
+        ++stats.lodInstances[item.lod];
+        stats.lodFades += item.fading() && (item.instance.extra[3] & kLodFadeOutgoing) == 0 ? 1u : 0u;
     }
 }
 
@@ -1238,7 +1305,11 @@ void SceneRenderer::Impl::sortShadowCasters(u32 shadowView)
         {
             return x.submesh < y.submesh;
         }
-        return x.lod < y.lod;
+        if (x.lod != y.lod)
+        {
+            return x.lod < y.lod;
+        }
+        return x.fading() < y.fading();
     });
 }
 
@@ -1261,14 +1332,16 @@ void SceneRenderer::Impl::drawShadows(nvrhi::ICommandList* commandList, u32 shad
         {
             const DrawItem& next = items[order[end]];
             if (shadowMaterial(next) != own || next.mesh != first.mesh || next.submesh != first.submesh ||
-                next.lod != first.lod)
+                next.lod != first.lod || next.fading() != first.fading())
             {
                 break;
             }
             ++end;
         }
         nvrhi::GraphicsState state;
-        state.pipeline = casterPipelines[own != nullptr && own->alphaMode == AlphaMode::Mask ? 1 : 0];
+        // Cross-fading casters dither in the alpha-tested pipeline (an opaque material never fails its test).
+        const bool masked = (own != nullptr && own->alphaMode == AlphaMode::Mask) || first.fading();
+        state.pipeline = casterPipelines[masked ? 1 : 0];
         state.framebuffer = framebuffer;
         // The material set is bound for opaque casters too: the pipeline layout includes it.
         state.bindings = {shadowSet, own != nullptr ? own->bindingSet : first.material->bindingSet};
@@ -1462,7 +1535,7 @@ void SceneRenderer::render(nvrhi::ICommandList* commandList, nvrhi::ITexture* co
     // Bindless rendering draws each pipeline's batches with one multi-draw; materials vary per instance.
     const bool bindless = impl.desc.bindless && impl.resources->bindless() && impl.multiDrawIndirect;
     const auto pipelineKey = [](const DrawItem& item) {
-        return (item.material->alphaMode == AlphaMode::Mask ? 2u : 0u) +
+        return (item.material->alphaMode == AlphaMode::Mask || item.fading() ? 2u : 0u) +
                (item.material->doubleSided ? 1u : 0u);
     };
     // Opaque and masked first, grouped by material (or pipeline) and mesh; then blended back to front.
@@ -1495,7 +1568,11 @@ void SceneRenderer::render(nvrhi::ICommandList* commandList, nvrhi::ITexture* co
         {
             return x.submesh < y.submesh;
         }
-        return x.lod < y.lod;
+        if (x.lod != y.lod)
+        {
+            return x.lod < y.lod;
+        }
+        return x.fading() < y.fading();
     });
 
     // Instance data: the camera's instances, then each shadow view's casters.
@@ -1594,7 +1671,7 @@ void SceneRenderer::render(nvrhi::ICommandList* commandList, nvrhi::ITexture* co
             const bool sameState =
                 bindless ? pipelineKey(next) == pipelineKey(first) : next.material == first.material;
             if (!sameState || next.mesh != first.mesh || next.submesh != first.submesh ||
-                next.lod != first.lod)
+                next.lod != first.lod || next.fading() != first.fading())
             {
                 break;
             }
@@ -1777,7 +1854,8 @@ void SceneRenderer::render(nvrhi::ICommandList* commandList, nvrhi::ITexture* co
         ++impl.stats.drawCalls;
     };
     const auto prepassPipeline = [&](const DrawItem& first) {
-        const u32 masked = first.material->alphaMode == AlphaMode::Mask ? 1 : 0;
+        // Cross-fading instances dither in the alpha-tested prepass.
+        const u32 masked = first.material->alphaMode == AlphaMode::Mask || first.fading() ? 1 : 0;
         const u32 doubleSided = first.material->doubleSided ? 1 : 0;
         return bindless ? impl.bindlessPrepassPipelines[masked][doubleSided].Get()
                         : impl.prepassPipelines[masked][doubleSided].Get();

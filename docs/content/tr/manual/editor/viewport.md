@@ -120,7 +120,7 @@ gölge draw call'larını ve görüntü boyutunu gösterir.
 
 | Menü | İçerik |
 | --- | --- |
-| **Shading** | Lit, Unlit, Albedo, Normals, Roughness, Metallic, Ambient occlusion, Shadow cascades, Motion vectors ve wireframe katmanı. |
+| **Shading** | Lit, Unlit, Albedo, Normals, Roughness, Metallic, Ambient occlusion, Shadow cascades, Motion vectors, Level of detail (her nesne çizdiği [level of detail](../rendering.md#levels-of-detail)'e göre renklenir) ve wireframe katmanı. |
 | **Overlays** | Grid, seçim outline'ı, hover, simgeler, görünüm küpü, kamera önizlemesi, istatistikler ve **Visualisers** menüsü (her tür için bir öğe ve Selected ya da All). Game görünümünde yalnızca outline, hover ve istatistikler vardır. |
 | **View** | Perspektif ve pivotun çevresinde ortografik Top, Bottom, Front, Back, Left ve Right görünümleri. |
 | Frame | Seçimi çerçeveler. |

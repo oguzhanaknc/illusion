@@ -271,7 +271,7 @@ Expected<ViewportSettingsResult, CommandError> setMode(CommandContext& context,
         return unexpected(std::move(target).error());
     }
     if (Expected<void, CommandError> shading =
-            checkEnum(params.shading, ViewportShading::MotionVectors, "/shading");
+            checkEnum(params.shading, ViewportShading::LevelOfDetail, "/shading");
         !shading)
     {
         return unexpected(std::move(shading).error());
@@ -1104,7 +1104,8 @@ void registerViewportCommands(CommandRegistry& registry)
         .title = strings::kCommandViewportSetModeTitle,
         .description = strings::kCommandViewportSetModeDescription,
         .agentSummary = "Changes how a viewport shades the scene: lit, unlit, albedo, normals, roughness, "
-                        "metallic, ambientOcclusion, shadowCascades or motionVectors, and the wireframe "
+                        "metallic, ambientOcclusion, shadowCascades, motionVectors or levelOfDetail, and the "
+                        "wireframe "
                         "overlay. Example: {\"shading\": \"normals\", \"wireframe\": true}.",
         .category = "Viewport",
         .icon = "contrast",

@@ -117,7 +117,7 @@ draw calls and the image size in the top left corner.
 
 | Menu | Contents |
 | --- | --- |
-| **Shading** | Lit, Unlit, Albedo, Normals, Roughness, Metallic, Ambient occlusion, Shadow cascades, Motion vectors, and the wireframe overlay. |
+| **Shading** | Lit, Unlit, Albedo, Normals, Roughness, Metallic, Ambient occlusion, Shadow cascades, Motion vectors, Level of detail (each object coloured by the [level of detail](../rendering.md#levels-of-detail) it draws), and the wireframe overlay. |
 | **Overlays** | The grid, the selection outline, hover, icons, the view cube, the camera preview, stats and the **Visualisers** menu (one item per kind, and Selected or All). The Game view has only the outline, hover and stats. |
 | **View** | Perspective and the orthographic Top, Bottom, Front, Back, Left and Right views around the pivot. |
 | Frame | Frames the selection. |

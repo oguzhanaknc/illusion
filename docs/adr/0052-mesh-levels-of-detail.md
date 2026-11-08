@@ -61,9 +61,25 @@ Options for choosing a level:
 - Index memory grows by up to about 75 % of the full-detail indices with the default reduction; vertex
   memory does not change.
 - Levels switch abruptly when the camera moves; at one pixel of error this is rarely visible, and dithered
-  cross-fades (GFX-2b) will hide it. Impostors for distant trees (GFX-2e) replace the coarsest levels where
+  cross-fades (GFX-2b, see the addendum) hide it. Impostors for distant trees (GFX-2e) replace the coarsest levels where
   simplification cannot go further (leaf cards, which locked borders keep).
 - Shadow casters outside the view use the camera's level, which can be coarser than a shadow seen up close
   needs; acceptable at one pixel, revisited with impostors.
 - Selection stays on the CPU (one division and up to three comparisons per instance in the culling Jobs);
   moving it to the GPU remains possible because the data is already in the shared index pool.
+
+## Addendum (2026-11-08, GFX-2b): dithered cross-fades
+
+- The renderer keeps, per Entity, the level drawn last frame, the level it fades from and the fade progress
+  (next to its motion-vector history). A changed level starts a fade of `RenderView::lodFadeSeconds`
+  (default 0.25 s), advanced by `deltaSeconds`; turning back to the level being left reverses it. Instances
+  that were not drawn last frame, or are not drawn now, take their level without a fade.
+- A fading instance is drawn twice, once per level. `InstanceData::extra.w` carries the level and the fade
+  threshold; the incoming copy keeps the pixels whose interleaved gradient noise is below the threshold and
+  the outgoing copy the others, so each pixel is covered exactly once in the depth prepass, the shading pass,
+  the Entity IDs and the shadow maps.
+- Fading copies go through the alpha-tested pipelines (a separate batch key), which already discard;
+  opaque draws keep their discard-free prepass and early depth testing. Opaque materials have an alpha
+  cutoff of -1, so the alpha test never removes their pixels.
+- Considered: alpha blending between levels (needs sorting and breaks the depth prepass) and morphing
+  vertices between levels (needs vertex correspondence that simplification does not keep).

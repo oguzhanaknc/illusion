@@ -5,7 +5,7 @@ ADRs for its significant decisions. Items marked ✅ are done.
 
 ## Order after DEMO
 
-1. GFX-2 (foliage and LODs; GFX-2a done), 2. GFX-3, 3. TEX (texture compression), 4. UI (game interface),
+1. GFX-2 (foliage and LODs; GFX-2a and 2b done), 2. GFX-3, 3. TEX (texture compression), 4. UI (game interface),
 5. SAVE (saved games), 6. ANIM (skeletal animation), 7. NAV (navigation and AI), 8. M8 (release pipeline),
 9. PROBE (reflection and light probes), 10. MAT (custom shaders and materials), 11. DECAL, 12. TERRAIN,
 13. WATER, 14. M9 (upscaling and frame generation), 15. M10 (hybrid ray tracing).
@@ -622,11 +622,16 @@ After DEMO. Features that bring the renderer and the tech demo to a modern AAA l
     (`RenderView::lodPixelError`, 1 pixel) in the culling Jobs and drawn at the same level into every
     shadow view; batches keyed by level; `RenderStats::lodInstances`; import settings in the Asset Browser;
     triangle-mesh colliders keep the full-detail triangles (`fullDetailIndices()`)
-  - GFX-2b: Dithered cross-fades between levels (camera and shadows), a per-MeshRenderer LOD bias, a
-    level-of-detail debug view; the tech demo drops its hand-made `_far` tree copies
-  - GFX-2c: Leaf translucency (thin-surface transmission for foliage Materials)
-  - GFX-2d: GPU-generated dense grass
-  - GFX-2e: Impostors for distant trees
+  - GFX-2b: ✅ Dithered cross-fades between levels (ADR 0052 addendum): the renderer keeps each Entity's
+    level and fade between frames (`RenderView::lodFadeSeconds`, 0.25 s; reversed when it turns back), draws
+    a fading instance at both levels with complementary interleaved-gradient-noise dithering in the
+    prepass, shading, Entity IDs and shadow casters (through the alpha-tested pipelines, so opaque draws
+    keep early depth testing), `RenderStats::lodFades`; `RenderDebugView::LevelOfDetail` and the
+    viewport's Level of detail shading mode
+  - GFX-2c: A per-MeshRenderer LOD bias; the tech demo drops its hand-made `_far` tree copies
+  - GFX-2d: Leaf translucency (thin-surface transmission for foliage Materials)
+  - GFX-2e: GPU-generated dense grass
+  - GFX-2f: Impostors for distant trees
 - GFX-3: Lit smoke, clouds, screen-space reflections, contact shadows
 
 ## TEX — Texture compression

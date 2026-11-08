@@ -2293,7 +2293,8 @@ struct illusion::EnumReflection<illusion::editor::ViewportShading>
                                         illusion::EnumValue{"metallic", 5},
                                         illusion::EnumValue{"ambientOcclusion", 6},
                                         illusion::EnumValue{"shadowCascades", 7},
-                                        illusion::EnumValue{"motionVectors", 8}};
+                                        illusion::EnumValue{"motionVectors", 8},
+                                        illusion::EnumValue{"levelOfDetail", 9}};
 };
 
 /// Names of ViewportView values in JSON.

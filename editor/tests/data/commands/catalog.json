@@ -19235,7 +19235,7 @@
           "properties": {
             "shading": {
               "type": "string",
-              "enum": ["lit", "unlit", "albedo", "normals", "roughness", "metallic", "ambientOcclusion", "shadowCascades", "motionVectors"]
+              "enum": ["lit", "unlit", "albedo", "normals", "roughness", "metallic", "ambientOcclusion", "shadowCascades", "motionVectors", "levelOfDetail"]
             },
             "wireframe": {
               "type": "boolean"
@@ -19694,7 +19694,7 @@
                 "properties": {
                   "shading": {
                     "type": "string",
-                    "enum": ["lit", "unlit", "albedo", "normals", "roughness", "metallic", "ambientOcclusion", "shadowCascades", "motionVectors"]
+                    "enum": ["lit", "unlit", "albedo", "normals", "roughness", "metallic", "ambientOcclusion", "shadowCascades", "motionVectors", "levelOfDetail"]
                   },
                   "wireframe": {
                     "type": "boolean"
@@ -20524,7 +20524,7 @@
           "properties": {
             "shading": {
               "type": "string",
-              "enum": ["lit", "unlit", "albedo", "normals", "roughness", "metallic", "ambientOcclusion", "shadowCascades", "motionVectors"]
+              "enum": ["lit", "unlit", "albedo", "normals", "roughness", "metallic", "ambientOcclusion", "shadowCascades", "motionVectors", "levelOfDetail"]
             },
             "wireframe": {
               "type": "boolean"
@@ -20654,7 +20654,7 @@
           "anyOf": [
             {
               "type": "string",
-              "enum": ["lit", "unlit", "albedo", "normals", "roughness", "metallic", "ambientOcclusion", "shadowCascades", "motionVectors"]
+              "enum": ["lit", "unlit", "albedo", "normals", "roughness", "metallic", "ambientOcclusion", "shadowCascades", "motionVectors", "levelOfDetail"]
             },
             {
               "type": "null"
@@ -20711,7 +20711,7 @@
           "properties": {
             "shading": {
               "type": "string",
-              "enum": ["lit", "unlit", "albedo", "normals", "roughness", "metallic", "ambientOcclusion", "shadowCascades", "motionVectors"]
+              "enum": ["lit", "unlit", "albedo", "normals", "roughness", "metallic", "ambientOcclusion", "shadowCascades", "motionVectors", "levelOfDetail"]
             },
             "wireframe": {
               "type": "boolean"
@@ -21031,7 +21031,7 @@
           "properties": {
             "shading": {
               "type": "string",
-              "enum": ["lit", "unlit", "albedo", "normals", "roughness", "metallic", "ambientOcclusion", "shadowCascades", "motionVectors"]
+              "enum": ["lit", "unlit", "albedo", "normals", "roughness", "metallic", "ambientOcclusion", "shadowCascades", "motionVectors", "levelOfDetail"]
             },
             "wireframe": {
               "type": "boolean"
