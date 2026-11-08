@@ -105,9 +105,14 @@ def solid(sway=0.0, roughness=1.0):
     return values
 
 
-def foliage(sway, flutter, cutoff=0.4, colour=None):
+# Light through leaves turns yellow-green; needles are thicker and let less through.
+TRANSLUCENCY_TINT = [0.9, 1.0, 0.55]
+
+
+def foliage(sway, flutter, cutoff=0.4, colour=None, translucency=0.35):
     values = {"metallicFactor": 1.0, "roughnessFactor": 1.0, "alphaMode": "Mask", "alphaCutoff": cutoff,
-              "doubleSided": True, "windSway": sway, "windFlutter": flutter}
+              "doubleSided": True, "windSway": sway, "windFlutter": flutter,
+              "diffuseTransmission": translucency, "diffuseTransmissionColor": TRANSLUCENCY_TINT}
     if colour:
         values["baseColorFactor"] = colour
     return values
@@ -174,13 +179,13 @@ def build():
     m["fir_bark"] = material("Fir Bark", solid(fir_sway), textures(fir, f"{fir}_bark"))
     for part in "ab":
         m[f"fir_trunk_{part}"] = material(f"Fir Trunk {part.upper()}", solid(fir_sway), textures(fir, f"{fir}_trunk_{part}"))
-    m["fir_twig"] = material("Fir Needles", foliage(fir_sway, 0.006, 0.2, [0.82, 0.9, 0.8, 1.0]), leaves(fir, f"{fir}_twig"))
+    m["fir_twig"] = material("Fir Needles", foliage(fir_sway, 0.006, 0.2, [0.82, 0.9, 0.8, 1.0], translucency=0.2), leaves(fir, f"{fir}_twig"))
     young = "fir_sapling_medium"
     young_sway = 0.0011
     m["young_branches"] = material("Young Fir Branches", solid(young_sway), textures(young, f"{young}_branches"))
-    m["young_twigs"] = material("Young Fir Needles", foliage(young_sway, 0.006, 0.2), leaves(young, f"{young}_twigs"))
+    m["young_twigs"] = material("Young Fir Needles", foliage(young_sway, 0.006, 0.2, translucency=0.2), leaves(young, f"{young}_twigs"))
     m["sapling_branches"] = material("Fir Sapling Branches", solid(0.02), textures("fir_sapling", "fir_sapling_branches"))
-    m["sapling_twigs"] = material("Fir Sapling Needles", foliage(0.02, 0.006, 0.2), leaves("fir_sapling", "fir_sapling_twigs"))
+    m["sapling_twigs"] = material("Fir Sapling Needles", foliage(0.02, 0.006, 0.2, translucency=0.2), leaves("fir_sapling", "fir_sapling_twigs"))
     island = "island_tree_01"
     m["island_trunk"] = material("Broadleaf Trunk", solid(0.0022), textures(island))
     m["island_branches"] = material("Broadleaf Branches", solid(0.0022), textures(island, f"{island}_branches"))

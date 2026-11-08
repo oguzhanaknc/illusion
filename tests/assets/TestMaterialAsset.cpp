@@ -63,6 +63,8 @@ TEST_CASE("material files round-trip")
     asset.material.roughnessFactor = 0.25f;
     asset.material.emissiveFactor = Vec3(1.0f, 0.5f, 0.0f);
     asset.material.doubleSided = true;
+    asset.material.diffuseTransmission = 0.5f;
+    asset.material.diffuseTransmissionColor = Vec3(0.75f, 1.0f, 0.25f);
     asset.textures.metallicRoughness = AssetRef("game:/textures/orm.png");
     const Expected<std::string, std::string> text = writeMaterialAsset(asset);
     REQUIRE(text.hasValue());
@@ -75,6 +77,8 @@ TEST_CASE("material files round-trip")
     CHECK(read->material.roughnessFactor == 0.25f);
     CHECK(read->material.emissiveFactor == asset.material.emissiveFactor);
     CHECK(read->material.doubleSided);
+    CHECK(read->material.diffuseTransmission == 0.5f);
+    CHECK(read->material.diffuseTransmissionColor == asset.material.diffuseTransmissionColor);
     CHECK(read->textures == asset.textures);
     CHECK(writeMaterialAsset(*read).value() == *text);
 }

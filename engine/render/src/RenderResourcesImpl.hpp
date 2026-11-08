@@ -18,10 +18,11 @@ struct GpuMaterialConstants
     f32 metallicFactor;
     f32 roughnessFactor;
     f32 occlusionStrength;
-    f32 alphaCutoff; // < 0 disables masking
-    Vec4 wind;       // x: sway, y: flutter (MaterialData::windSway, windFlutter)
+    f32 alphaCutoff;   // < 0 disables masking
+    Vec4 wind;         // x: sway, y: flutter (MaterialData::windSway, windFlutter)
+    Vec4 transmission; // rgb: diffuseTransmission * diffuseTransmissionColor, w: diffuseTransmission
 };
-static_assert(sizeof(GpuMaterialConstants) == 64);
+static_assert(sizeof(GpuMaterialConstants) == 80);
 
 /// One material in the bindless material table (must match MaterialRecord in ForwardPbr.slang).
 struct GpuMaterialRecord
@@ -35,7 +36,7 @@ struct GpuMaterialRecord
     u32 sampler; // index into the sampler array (wrapU * 3 + wrapV)
     u32 padding[2];
 };
-static_assert(sizeof(GpuMaterialRecord) == 96);
+static_assert(sizeof(GpuMaterialRecord) == 112);
 
 // Meshes live in shared vertex and index pools; offsets are in vertices and indices.
 struct RenderResources::GpuMesh

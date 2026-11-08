@@ -12,6 +12,7 @@
 
 #include <algorithm>
 #include <array>
+#include <cmath>
 #include <cstddef>
 #include <cstring>
 #include <format>
@@ -382,6 +383,14 @@ struct RenderResources::Impl
         constants.occlusionStrength = p.occlusionStrength;
         constants.alphaCutoff = p.alphaMode == AlphaMode::Mask ? p.alphaCutoff : -1.0f;
         constants.wind = Vec4(std::max(p.windSway, 0.0f), std::max(p.windFlutter, 0.0f), 0.0f, 0.0f);
+        // Material files are edited by hand: keep the transmission in [0, 1] and treat NaN as 0.
+        const auto unit = [](f32 value) {
+            return std::isnan(value) ? 0.0f : std::clamp(value, 0.0f, 1.0f);
+        };
+        const f32 transmission = unit(p.diffuseTransmission);
+        const Vec3& tint = p.diffuseTransmissionColor;
+        constants.transmission =
+            Vec4(Vec3(unit(tint.x), unit(tint.y), unit(tint.z)) * transmission, transmission);
 
         const u32 sampler = samplerIndex(p.baseColorTexture.wrapU, p.baseColorTexture.wrapV);
         GpuMaterialRecord& record = parts.record;

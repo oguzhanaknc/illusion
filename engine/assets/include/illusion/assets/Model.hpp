@@ -63,6 +63,12 @@ struct MaterialData
     f32 windSway = 0.0f;
     /// Flutter in the Wind: metres of fast, small jitter per m/s of wind (leaves, grass blades).
     f32 windFlutter = 0.0f;
+    /// Thin-surface translucency (KHR_materials_diffuse_transmission): the fraction of diffuse light that
+    /// passes through the surface to the other side, so that leaves glow when lit from behind. 0 is opaque
+    /// to light, 1 sends all diffuse light through. Metals do not transmit.
+    f32 diffuseTransmission = 0.0f;
+    /// Linear tint of the light that passes through (multiplied with the base colour).
+    Vec3 diffuseTransmissionColor{1.0f};
     TextureRef baseColorTexture;         ///< sRGB base colour (+ alpha).
     TextureRef metallicRoughnessTexture; ///< Linear: roughness in G, metalness in B.
     TextureRef normalTexture;            ///< Tangent-space normal map.

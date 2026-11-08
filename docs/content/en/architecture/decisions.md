@@ -59,6 +59,7 @@ records rather than user documentation.
 | [0050](https://github.com/oguzhanaknc/illusion/blob/main/docs/adr/0050-volumetric-fog.md) | Volumetric fog in a froxel grid: injected with shadowed light, temporally reprojected, integrated front to back |
 | [0051](https://github.com/oguzhanaknc/illusion/blob/main/docs/adr/0051-point-light-shadows.md) | Point light shadows: opt-in per light, a budget of cube maps in one array, reversed depth, PCSS |
 | [0052](https://github.com/oguzhanaknc/illusion/blob/main/docs/adr/0052-mesh-levels-of-detail.md) | Mesh levels of detail: index ranges per submesh, made on import with meshoptimizer, chosen by projected error; foliage cards are thinned; per-renderer bias |
+| [0053](https://github.com/oguzhanaknc/illusion/blob/main/docs/adr/0053-leaf-translucency.md) | Leaf translucency: thin-surface diffuse transmission in the glTF model |
 
 To propose a new decision, copy `docs/adr/0000-template.md` and follow the
 [contributing guide](../contributing.md#architecture-decision-records).

@@ -254,6 +254,27 @@ illusion::advanceWind(world, deltaSeconds); // GameSession and the editor call t
 The wind's clock is the runtime `WindState`; `advanceWind()` adds and advances it. `windVelocity()` gives
 the air's velocity at a point for gameplay, matching what the renderer shows.
 
+### Translucency
+
+Thin surfaces such as leaves, grass blades, paper and cloth let light through. `diffuseTransmission` (0 to
+1) is the fraction of a Material's diffuse light that passes to the other side: light reaching the back
+face leaves the front as soft diffuse light, tinted by the base colour times `diffuseTransmissionColor`,
+and the light reflected on the lit side drops by the same fraction, so the surface creates no energy.
+Under an even sky a white translucent surface therefore looks the same as an opaque one; against the sun
+it glows. Metals do not transmit. This is the glTF `KHR_materials_diffuse_transmission` extension: models
+that use it import their factors (its two textures are not read).
+
+Shadows still apply: a leaf behind another leaf, or behind a trunk, stays dark. The shadow test of a
+translucent surface uses the side the light reaches, so a single leaf does not shade itself.
+
+```cpp
+illusion::MaterialData leaf = illusion::MaterialData{};
+leaf.alphaMode = illusion::AlphaMode::Mask;
+leaf.doubleSided = true;
+leaf.diffuseTransmission = 0.4f;                    // 40% of the diffuse light passes through
+leaf.diffuseTransmissionColor = {0.9f, 1.0f, 0.5f}; // the light inside a leaf turns yellow-green
+```
+
 ### Culling
 
 Entities with the `Inactive` tag (they or an ancestor are [Disabled](ecs.md#disabled-and-inactive)) are not

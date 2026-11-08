@@ -43,7 +43,8 @@ Tam bir gün altı dakika sürer.
 - **Orman**: 110 uzun köknar (13 ile 19 m), 80 genç köknar, 14 geniş yapraklı ağaç ve 36 fidan; hepsi Poly
   Haven modelleridir ve her birinin bir silindir collider'ı vardır. Bir ağacın tüm parçaları boyuna göre
   seçilmiş tek bir `windSway` paylaşır; böylece gövde ve iğneler birlikte eğilir. Yapraklar ve iğneler ayrıca
-  titrer (`windFlutter`).
+  titrer (`windFlutter`). Yapraklar, iğneler ve bodur bitkiler alçak güneşin ışığını geçirir
+  (`diffuseTransmission`); güneşe karşı sarımsı yeşil parlarlar.
 - **Bodur bitkiler**: sabit bir seed ile dağıtılmış yaklaşık 14.000 çimen öbeği, eğrelti, çalı, ısırgan, çiçek
   (kırlangıçotu, karahindiba, cezayir menekşesi), yabani ot, kök, kuru dal ve kabuk. Yalnızca uzaktan görülen
   tepelerde bitki örtüsü daha seyrektir.

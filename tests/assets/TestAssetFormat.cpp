@@ -87,7 +87,9 @@ TEST_CASE("cooked images round-trip with their mips and reject inconsistent data
 
 TEST_CASE("cooked models round-trip exactly and deterministically")
 {
-    const ModelData model = loadTestModel();
+    ModelData model = loadTestModel();
+    model.materials[0].diffuseTransmission = 0.5f;
+    model.materials[0].diffuseTransmissionColor = Vec3(1.0f, 0.5f, 0.25f);
     const std::vector<std::byte> bytes = serializeModel(model);
     CHECK(serializeModel(model) == bytes); // no padding or uninitialized bytes reach the file
     const std::optional<ModelData> read = deserializeModel(bytes);
@@ -97,6 +99,8 @@ TEST_CASE("cooked models round-trip exactly and deterministically")
     CHECK(read->meshes[0].indices == model.meshes[0].indices);
     CHECK(read->materials[0].name == model.materials[0].name);
     CHECK(read->materials[0].baseColorTexture.image == model.materials[0].baseColorTexture.image);
+    CHECK(read->materials[0].diffuseTransmission == 0.5f);
+    CHECK(read->materials[0].diffuseTransmissionColor == Vec3(1.0f, 0.5f, 0.25f));
     CHECK(read->nodes[1].parent == 0);
     CHECK(read->images[0].data == model.images[0].data);
 

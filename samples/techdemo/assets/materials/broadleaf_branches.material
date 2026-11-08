@@ -14,6 +14,8 @@
     "doubleSided": false,
     "windSway": 0.0022,
     "windFlutter": 0.0,
+    "diffuseTransmission": 0.0,
+    "diffuseTransmissionColor": [1.0, 1.0, 1.0],
     "baseColorTexture": {
       "image": -1,
       "wrapU": "Repeat",

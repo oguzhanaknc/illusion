@@ -928,6 +928,97 @@ TEST_CASE("materials that sway bend with the wind in every pass, the others stay
     CHECK(device->validationErrorCount() == 0);
 }
 
+TEST_CASE("translucent materials glow when lit from behind, keep their energy and stay dark in shadow")
+{
+    auto device = RenderDevice::create(headless());
+    REQUIRE(device != nullptr);
+    {
+        RenderResources resources(*device);
+        MaterialDesc opaqueDesc;
+        opaqueDesc.parameters.metallicFactor = 0.0f;
+        opaqueDesc.parameters.doubleSided = true;
+        MaterialDesc leafDesc = opaqueDesc;
+        leafDesc.parameters.diffuseTransmission = 0.5f;
+        leafDesc.parameters.diffuseTransmissionColor = Vec3(1.0f, 0.5f, 0.25f);
+        MaterialDesc whiteLeafDesc = opaqueDesc;
+        whiteLeafDesc.parameters.diffuseTransmission = 0.5f;
+        const MaterialHandle opaque = resources.createMaterial(opaqueDesc);
+        const MaterialHandle leaf = resources.createMaterial(leafDesc);
+        const MaterialHandle whiteLeaf = resources.createMaterial(whiteLeafDesc);
+        for (const bool bindless : {true, false})
+        {
+            CAPTURE(bindless);
+            SceneRendererDesc desc = unormTarget();
+            desc.ambient = Vec3(0.0f);
+            desc.post.bloom.enabled = false;
+            desc.bindless = bindless;
+            // Coarse shadow maps, as in distant cascades: the receiver's normal offset (1.5 texels) is then
+            // far larger than the depth bias, so an offset towards the viewer would put the leaf behind
+            // itself.
+            desc.shadows.resolution = 64;
+            auto renderer = SceneRenderer::create(*device, resources, desc);
+            REQUIRE(renderer != nullptr);
+
+            // A 2 m square at the origin facing the camera, the sun shining from behind it towards the
+            // camera.
+            World world;
+            Transform plane;
+            plane.rotation = glm::angleAxis(std::numbers::pi_v<f32> / 2.0f, Vec3(1.0f, 0.0f, 0.0f));
+            const Entity entity =
+                world.create(plane, RenderMesh{resources.createMesh(makePlane(2.0f, 1), "Leaf"), 0, opaque});
+            Transform sun;
+            sun.rotation = glm::angleAxis(std::numbers::pi_v<f32>, Vec3(0.0f, 1.0f, 0.0f));
+            const Entity light = world.create(sun, DirectionalLight{Vec3(1.0f), 3.0f}); // casts shadows
+            const auto centre = [&](MaterialHandle material) {
+                world.get<RenderMesh>(entity).material = material;
+                return pixelAt(renderScene(*device, *renderer, world, nullptr), 32, 32);
+            };
+
+            // Back-lit: opaque surfaces stay dark, translucent ones glow in their transmission colour. The
+            // leaf is the caster in front of itself: its shadow test must not shade its own lit back face.
+            CHECK(centre(opaque).r <= 2);
+            const Rgb glow = centre(leaf);
+            CHECK(glow.r > 40);
+            CHECK(glow.g < glow.r);
+            CHECK(glow.b < glow.g);
+            CHECK(renderer->stats().shadowDrawCalls >= 1);
+
+            // A caster between the sun and the leaf puts the glow out.
+            Transform blocker;
+            blocker.position = Vec3(0.0f, 0.0f, -3.0f);
+            blocker.rotation = glm::angleAxis(-std::numbers::pi_v<f32> / 2.0f, Vec3(1.0f, 0.0f, 0.0f));
+            const Entity wall = world.create(
+                blocker, RenderMesh{resources.createMesh(makePlane(6.0f, 1), "Blocker"), 0, opaque});
+            CHECK(centre(leaf).r < glow.r / 4);
+            world.destroy(wall);
+
+            // Front-lit, the light a translucent surface sends through no longer reaches the viewer.
+            world.get<Transform>(light).rotation = Quat(1.0f, 0.0f, 0.0f, 0.0f);
+            const Rgb front = centre(opaque);
+            CHECK(front.r > 60);
+            CHECK(centre(leaf).r < front.r);
+
+            // Even ambient light reaches both sides alike: a white translucent surface looks like an opaque
+            // one.
+            world.destroy(light);
+            renderer.reset();
+            desc.ambient = Vec3(1.0f);
+            renderer = SceneRenderer::create(*device, resources, desc);
+            REQUIRE(renderer != nullptr);
+            const Rgb ambientOpaque = centre(opaque);
+            const Rgb ambientLeaf = centre(whiteLeaf);
+            CHECK(ambientOpaque.r > 40);
+            CHECK(std::abs(ambientLeaf.r - ambientOpaque.r) <= 3);
+            CHECK(std::abs(ambientLeaf.b - ambientOpaque.b) <= 3);
+        }
+        resources.releaseMaterial(opaque);
+        resources.releaseMaterial(leaf);
+        resources.releaseMaterial(whiteLeaf);
+    }
+    device->waitIdle();
+    CHECK(device->validationErrorCount() == 0);
+}
+
 TEST_CASE("a SkyAtmosphere draws a day and a night sky, lights the scene and redraws only when it changes")
 {
     auto device = RenderDevice::create(headless());

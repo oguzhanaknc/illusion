@@ -9,6 +9,7 @@ The outputs are committed; rerun only when changing the test data.
 - embedded.gltf: triangle without normals, uint8 indices, buffer as a base64 data URI.
 - binary.glb: the textured quad as a GLB with the PNG stored in the binary chunk.
 - unsupported.gltf: requires KHR_draco_mesh_compression (must be rejected).
+- translucent.gltf: the triangle with a leaf material that requires KHR_materials_diffuse_transmission.
 - scene/bad_image_uri.gltf: the quad with a malformed base64 image data URI (must be rejected).
 - textures/checker.png: 2x2 RGBA checker (red, green / blue, white).
 """
@@ -145,6 +146,18 @@ def main():
     unsupported["extensionsUsed"] = ["KHR_draco_mesh_compression"]
     unsupported["extensionsRequired"] = ["KHR_draco_mesh_compression"]
     write("unsupported.gltf", (json.dumps(unsupported, indent=2) + "\n").encode())
+
+    translucent = json.loads(json.dumps(embedded))
+    translucent["extensionsUsed"] = ["KHR_materials_diffuse_transmission"]
+    translucent["extensionsRequired"] = ["KHR_materials_diffuse_transmission"]
+    translucent["materials"] = [{
+        "name": "leaf",
+        "doubleSided": True,
+        "extensions": {"KHR_materials_diffuse_transmission": {
+            "diffuseTransmissionFactor": 0.25, "diffuseTransmissionColorFactor": [1.0, 0.75, 0.5]}},
+    }]
+    translucent["meshes"][0]["primitives"][0]["material"] = 0
+    write("translucent.gltf", (json.dumps(translucent, indent=2) + "\n").encode())
 
     doc = quad_document("two_nodes.bin", len(buffer), {"uri": "data:image/png;base64,===="})
     write("scene/bad_image_uri.gltf", (json.dumps(doc, indent=2) + "\n").encode())

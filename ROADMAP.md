@@ -5,7 +5,7 @@ ADRs for its significant decisions. Items marked ✅ are done.
 
 ## Order after DEMO
 
-1. GFX-2 (foliage and LODs; GFX-2a to 2c done), 2. GFX-3, 3. TEX (texture compression), 4. UI (game interface),
+1. GFX-2 (foliage and LODs; GFX-2a to 2d done), 2. GFX-3, 3. TEX (texture compression), 4. UI (game interface),
 5. SAVE (saved games), 6. ANIM (skeletal animation), 7. NAV (navigation and AI), 8. M8 (release pipeline),
 9. PROBE (reflection and light probes), 10. MAT (custom shaders and materials), 11. DECAL, 12. TERRAIN,
 13. WATER, 14. M9 (upscaling and frame generation), 15. M10 (hybrid ray tracing).
@@ -632,7 +632,9 @@ After DEMO. Features that bring the renderer and the tech demo to a modern AAA l
     vertex-disjoint parts keep an evenly spread half of their cards per level, enlarged to keep the leaf
     area; `MeshRenderer::lodBias` scales the pixel allowance per renderer; the tech demo drops its hand-made
     `_far` tree copies for a bias of 2
-  - GFX-2d: Leaf translucency (thin-surface transmission for foliage Materials)
+  - GFX-2d: ✅ Leaf translucency (ADR 0053): `MaterialData::diffuseTransmission` and its colour (glTF
+    `KHR_materials_diffuse_transmission`) send part of the diffuse light to the other side; the shadow test
+    of translucent surfaces offsets towards the lit side; the tech demo's foliage glows against the sun
   - GFX-2e: GPU-generated dense grass
   - GFX-2f: Impostors for distant trees
 - GFX-3: Lit smoke, clouds, screen-space reflections, contact shadows
