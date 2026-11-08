@@ -124,6 +124,37 @@ ILL_BENCHMARK("assets/generate-lods", 4'000.0)
     });
 }
 
+ILL_BENCHMARK("assets/generate-lods-cards", 4'000.0)
+{
+    // Foliage: 8k two-triangle cards that share no vertices, which the levels thin instead of simplifying.
+    MeshData cards;
+    u32 state = 1u;
+    for (u32 card = 0; card < 8192; ++card)
+    {
+        state = state * 1664525u + 1013904223u;
+        const Vec3 centre(static_cast<f32>(state % 1000u), static_cast<f32>((state >> 10) % 1000u),
+                          static_cast<f32>((state >> 20) % 1000u));
+        const u32 base = static_cast<u32>(cards.vertices.size());
+        for (const Vec2 corner : {Vec2(-1.0f, -1.0f), Vec2(1.0f, -1.0f), Vec2(1.0f, 1.0f), Vec2(-1.0f, 1.0f)})
+        {
+            Vertex vertex;
+            vertex.position = centre * 0.01f + Vec3(corner * 0.1f, 0.0f);
+            cards.vertices.push_back(vertex);
+        }
+        cards.indices.insert(cards.indices.end(), {base, base + 1, base + 2, base, base + 2, base + 3});
+    }
+    Submesh all;
+    all.indexCount = static_cast<u32>(cards.indices.size());
+    cards.submeshes = {all};
+    cards.computeBounds();
+    const usize triangles = cards.indices.size() / 3;
+    bench.batch(triangles).unit("triangle").run("three thinned levels of 8k foliage cards", [&] {
+        MeshData mesh = cards;
+        generateLods(mesh, MeshLodSettings{.maxError = 0.5f});
+        ankerl::nanobench::doNotOptimizeAway(mesh.indices.size());
+    });
+}
+
 ILL_BENCHMARK("platform/archive", 2000.0)
 {
     // 10k small files in one archive: lookups are binary searches over the sorted table of contents.

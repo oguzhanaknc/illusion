@@ -6,6 +6,8 @@
 #include <cmath>
 #include <meshoptimizer.h>
 #include <numbers>
+#include <numeric>
+#include <vector>
 
 namespace illusion
 {
@@ -26,6 +28,128 @@ constexpr f32 kNormalWeight = 0.5f;
 
 // A level must remove at least this fraction of the previous level's triangles to be kept.
 constexpr f32 kMinReduction = 0.1f;
+
+// Foliage made of cards (leaves, needle sprigs): parts that share no vertices. The simplifier cannot reduce
+// them (every vertex is on a border), so their levels keep a part of the cards instead. A submesh is thinned
+// when it has at least kMinCards parts of at most kMaxCardTriangles triangles on average.
+constexpr u32 kMinCards = 16;
+constexpr u32 kMaxCardTriangles = 64;
+// Kept cards grow about their centres by (fraction of the cards kept)^-kCardScaleExponent to make up for the
+// leaf area of the dropped ones. Less than the 1/2 that keeps the area: kept cards overlap less than the
+// dense originals did.
+constexpr f32 kCardScaleExponent = 0.3f;
+
+// Whether card @p index is kept when @p fraction of the cards are: a hash of the index against the fraction,
+// so the kept cards are spread evenly over the foliage.
+bool keepsCard(u32 index, f32 fraction) noexcept
+{
+    return static_cast<f64>(index * 2654435761u) < static_cast<f64>(fraction) * 4294967296.0;
+}
+
+// The cards of a triangle list: the vertex-connected parts, numbered in the order of their first triangle.
+struct Cards
+{
+    std::vector<u32> ofTriangle; // card of each triangle
+    u32 count = 0;
+    f32 meanSize = 0.0f; // mean of the cards' largest bounding-box extents
+};
+
+u32 findRoot(std::vector<u32>& parent, u32 vertex) noexcept
+{
+    while (parent[vertex] != vertex)
+    {
+        parent[vertex] = parent[parent[vertex]];
+        vertex = parent[vertex];
+    }
+    return vertex;
+}
+
+Cards findCards(const MeshData& mesh, std::span<const u32> indices)
+{
+    std::vector<u32> parent(mesh.vertices.size());
+    std::iota(parent.begin(), parent.end(), 0u);
+    for (usize i = 0; i + 2 < indices.size(); i += 3)
+    {
+        const u32 a = findRoot(parent, indices[i]);
+        parent[findRoot(parent, indices[i + 1])] = a;
+        parent[findRoot(parent, indices[i + 2])] = a;
+    }
+    constexpr u32 kNone = ~0u;
+    std::vector<u32> cardOfRoot(mesh.vertices.size(), kNone);
+    Cards cards;
+    cards.ofTriangle.resize(indices.size() / 3);
+    std::vector<Aabb> bounds;
+    for (usize t = 0; t < cards.ofTriangle.size(); ++t)
+    {
+        u32& card = cardOfRoot[findRoot(parent, indices[3 * t])];
+        if (card == kNone)
+        {
+            card = cards.count++;
+            bounds.emplace_back();
+        }
+        cards.ofTriangle[t] = card;
+        for (usize corner = 0; corner < 3; ++corner)
+        {
+            bounds[card].expand(mesh.vertices[indices[3 * t + corner]].position);
+        }
+    }
+    f64 total = 0.0;
+    for (const Aabb& box : bounds)
+    {
+        const Vec3 extent = box.max - box.min;
+        total += std::max({extent.x, extent.y, extent.z});
+    }
+    cards.meanSize = cards.count > 0 ? static_cast<f32>(total / cards.count) : 0.0f;
+    return cards;
+}
+
+// Writes to @p out the triangles of the cards of @p source that keepsCard() keeps at @p fraction, over new
+// vertices appended to @p mesh: copies of the cards' vertices scaled by @p scale about each card's centre.
+// Returns the number of cards kept.
+u32 thinCards(MeshData& mesh, std::span<const u32> source, const Cards& cards, f32 fraction, f32 scale,
+              std::vector<u32>& out)
+{
+    constexpr u32 kNone = ~0u;
+    std::vector<Vec3> centreSum(cards.count, Vec3(0.0f));
+    std::vector<u32> vertexCount(cards.count, 0);
+    std::vector<u32> copyOf(mesh.vertices.size(), kNone);
+    for (usize i = 0; i < source.size(); ++i)
+    {
+        const u32 card = cards.ofTriangle[i / 3];
+        if (keepsCard(card, fraction) && copyOf[source[i]] == kNone)
+        {
+            copyOf[source[i]] = 0; // counted
+            centreSum[card] += mesh.vertices[source[i]].position;
+            ++vertexCount[card];
+        }
+    }
+    std::fill(copyOf.begin(), copyOf.end(), kNone);
+    u32 kept = 0;
+    for (u32 card = 0; card < cards.count; ++card)
+    {
+        kept += vertexCount[card] > 0 ? 1u : 0u;
+    }
+    out.clear();
+    for (usize i = 0; i < source.size(); ++i)
+    {
+        const u32 card = cards.ofTriangle[i / 3];
+        if (vertexCount[card] == 0)
+        {
+            continue;
+        }
+        u32& copy = copyOf[source[i]];
+        if (copy == kNone)
+        {
+            const Vec3 centre = centreSum[card] / static_cast<f32>(vertexCount[card]);
+            Vertex vertex = mesh.vertices[source[i]];
+            vertex.position = centre + (vertex.position - centre) * scale;
+            copy = static_cast<u32>(mesh.vertices.size());
+            mesh.vertices.push_back(vertex);
+        }
+        out.push_back(copy);
+    }
+    return kept;
+}
 
 } // namespace
 
@@ -96,6 +220,20 @@ void clearLods(MeshData& mesh)
     }
     if (any && lodStart >= fullEnd && fullEnd <= mesh.indices.size())
     {
+        // Thinned foliage levels append their own vertices after every full-detail one.
+        const auto highest = [&](usize begin, usize end) {
+            u32 top = 0;
+            for (usize i = begin; i < end; ++i)
+            {
+                top = std::max(top, mesh.indices[i]);
+            }
+            return top;
+        };
+        const u32 fullTop = highest(0, fullEnd);
+        if (highest(lodStart, mesh.indices.size()) > fullTop && fullTop < mesh.vertices.size())
+        {
+            mesh.vertices.resize(usize{fullTop} + 1);
+        }
         mesh.indices.resize(fullEnd);
     }
 }
@@ -109,9 +247,6 @@ void generateLods(MeshData& mesh, const MeshLodSettings& settings)
     {
         return;
     }
-    const usize vertexCount = mesh.vertices.size();
-    const f32* positions = &mesh.vertices[0].position.x;
-    const f32* normals = &mesh.vertices[0].normal.x;
     const std::array<f32, 3> normalWeights{kNormalWeight, kNormalWeight, kNormalWeight};
     std::vector<u32> source;
     std::vector<u32> simplified;
@@ -124,7 +259,8 @@ void generateLods(MeshData& mesh, const MeshLodSettings& settings)
         }
         source.assign(mesh.indices.begin() + submesh.indexOffset,
                       mesh.indices.begin() + submesh.indexOffset + submesh.indexCount);
-        if (std::any_of(source.begin(), source.end(), [&](u32 index) { return index >= vertexCount; }))
+        if (std::any_of(source.begin(), source.end(),
+                        [&](u32 index) { return index >= mesh.vertices.size(); }))
         {
             continue;
         }
@@ -141,23 +277,61 @@ void generateLods(MeshData& mesh, const MeshLodSettings& settings)
         }
         const f32 maxError = settings.maxError * size;
         f32 previousError = 0.0f;
+        // Card thinning, once the simplifier makes no progress: the card count and mean card size of the
+        // first thinned level's source.
+        u32 originalCards = 0;
+        f32 cardSize = 0.0f;
         for (u32 level = 0; level < levels; ++level)
         {
             const usize target =
                 static_cast<usize>(static_cast<f32>(source.size() / 3) * settings.reduction) * 3;
             simplified.resize(source.size());
             f32 error = 0.0f;
-            const usize count = meshopt_simplifyWithAttributes(
-                simplified.data(), source.data(), source.size(), positions, vertexCount, sizeof(Vertex),
-                normals, sizeof(Vertex), normalWeights.data(), normalWeights.size(), nullptr, target,
-                maxError, meshopt_SimplifyLockBorder | meshopt_SimplifyErrorAbsolute, &error);
+            usize count = 0;
+            if (originalCards == 0)
+            {
+                count = meshopt_simplifyWithAttributes(
+                    simplified.data(), source.data(), source.size(), &mesh.vertices[0].position.x,
+                    mesh.vertices.size(), sizeof(Vertex), &mesh.vertices[0].normal.x, sizeof(Vertex),
+                    normalWeights.data(), normalWeights.size(), nullptr, target, maxError,
+                    meshopt_SimplifyLockBorder | meshopt_SimplifyErrorAbsolute, &error);
+            }
             if (count == 0 ||
                 static_cast<f32>(count) > static_cast<f32>(source.size()) * (1.0f - kMinReduction))
             {
-                break;
+                // The simplifier is stuck: thin the cards if this is foliage.
+                const Cards cards = findCards(mesh, source);
+                if (cards.count < kMinCards || source.size() / 3 > usize{cards.count} * kMaxCardTriangles)
+                {
+                    break;
+                }
+                if (originalCards == 0)
+                {
+                    originalCards = cards.count;
+                    cardSize = cards.meanSize;
+                }
+                const usize vertexEnd = mesh.vertices.size();
+                const u32 kept = thinCards(mesh, source, cards, settings.reduction,
+                                           std::pow(settings.reduction, -kCardScaleExponent), simplified);
+                // The gaps left between the kept cards grow with their spacing, as 1/sqrt(fraction kept).
+                const f32 fraction = static_cast<f32>(kept) / static_cast<f32>(originalCards);
+                error = cardSize * (1.0f / std::sqrt(fraction) - 1.0f);
+                if (kept < kMinCards || error > maxError ||
+                    static_cast<f32>(simplified.size()) >
+                        static_cast<f32>(source.size()) * (1.0f - kMinReduction))
+                {
+                    mesh.vertices.resize(vertexEnd);
+                    break;
+                }
+                for (usize v = vertexEnd; v < mesh.vertices.size(); ++v)
+                {
+                    submesh.bounds.expand(mesh.vertices[v].position);
+                    mesh.bounds.expand(mesh.vertices[v].position);
+                }
+                count = simplified.size();
             }
             simplified.resize(count);
-            meshopt_optimizeVertexCache(simplified.data(), simplified.data(), count, vertexCount);
+            meshopt_optimizeVertexCache(simplified.data(), simplified.data(), count, mesh.vertices.size());
             previousError = std::max(previousError, error);
             submesh.lods[level] =
                 SubmeshLod{static_cast<u32>(mesh.indices.size()), static_cast<u32>(count), previousError};

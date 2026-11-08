@@ -67,8 +67,9 @@ Poly Haven ağaçları yakın çekim için yapılmıştır: bir köknarda dört 
 `fetch_assets.py` indirilen dosyaların yanına onların hafif kopyalarını (`*_lite.gltf`) yazar. İğneler ve
 yapraklar birbiriyle vertex paylaşmayan kartlardır; script kartların eşit dağılmış bir kısmını tutar ve
 düşürdüğü yaprak alanını telafi etmek için her birini kendi merkezi etrafında büyütür; gövdeler ve dallar
-olduğu gibi kalır. Oyuncunun asla yaklaşamadığı tepelerdeki köknarlar daha da az iğneli kopyaları
-(`*_far.gltf`) kullanır ve yalnızca açıklığa yakın ağaçların iğneleri gölge düşürür. Script ayrıca modellerin
+olduğu gibi kalır. Motorun [levels of detail](../rendering.md#levels-of-detail)'i bu kartları uzaklıkla
+birlikte daha da seyreltir; oyuncunun asla yaklaşamadığı tepelerdeki köknarların `lodBias`'ı 2'dir, böylece
+daha erken seyrelirler; yalnızca açıklığa yakın ağaçların iğneleri gölge düşürür. Script ayrıca modellerin
 doku dönüşümlerini (`KHR_texture_transform`) UV'lerine işler.
 
 Tüm bunlarla 1280 × 720'de, ateşin ve üç fenerin gölgeleriyle bir gece karesi, masaüstü bir RTX 4070 SUPER
@@ -91,7 +92,7 @@ Sahneyi değiştirmek için bir script'i düzenleyin ve yeniden kurun:
 ```bash
 python samples/techdemo/tools/make_assets.py
 python samples/techdemo/tools/make_scene.py
-illusion_ctl --launch illusion_editor --editor-arg --headless --editor-arg --no-gpu --editor-arg --project --editor-arg samples/techdemo replay samples/techdemo/build.jsonl
+illusion_ctl --launch illusion_editor --editor-arg --headless --editor-arg --no-gpu --editor-arg --deterministic --editor-arg --project --editor-arg samples/techdemo replay samples/techdemo/build.jsonl
 ```
 
 `tools/test_tools.py` script'leri test eder; CI onu çalıştırır.

@@ -40,7 +40,8 @@
           "material": "assets:/materials/brass.material",
           "layers": 1,
           "castShadows": true,
-          "visible": true
+          "visible": true,
+          "lodBias": 1.0
         },
         "illusion.Name": {
           "value": "Table"
@@ -70,7 +71,8 @@
           "material": "builtin:/material/default",
           "layers": 1,
           "castShadows": true,
-          "visible": true
+          "visible": true,
+          "lodBias": 1.0
         },
         "illusion.Name": {
           "value": "Leg 1"
@@ -95,7 +97,8 @@
           "material": "builtin:/material/default",
           "layers": 1,
           "castShadows": true,
-          "visible": true
+          "visible": true,
+          "lodBias": 1.0
         },
         "illusion.Name": {
           "value": "Leg 2"
@@ -160,7 +163,8 @@
           "material": "assets:/materials/blue.material",
           "layers": 1,
           "castShadows": true,
-          "visible": true
+          "visible": true,
+          "lodBias": 1.0
         },
         "illusion.Name": {
           "value": "Pill Mesh"
@@ -225,7 +229,8 @@
           "material": "assets:/materials/red.material",
           "layers": 1,
           "castShadows": true,
-          "visible": true
+          "visible": true,
+          "lodBias": 1.0
         },
         "illusion.Name": {
           "value": "Drum Mesh"
@@ -290,7 +295,8 @@
           "material": "assets:/materials/wood.material",
           "layers": 1,
           "castShadows": true,
-          "visible": true
+          "visible": true,
+          "lodBias": 1.0
         },
         "illusion.Name": {
           "value": "Platform Mesh"
@@ -355,7 +361,8 @@
           "material": "assets:/materials/pad.material",
           "layers": 1,
           "castShadows": true,
-          "visible": true
+          "visible": true,
+          "lodBias": 1.0
         },
         "illusion.Name": {
           "value": "Trigger Mesh"
@@ -407,7 +414,8 @@
           "material": "assets:/materials/blue.material",
           "layers": 1,
           "castShadows": true,
-          "visible": true
+          "visible": true,
+          "lodBias": 1.0
         },
         "illusion.Name": {
           "value": "Player Mesh"
@@ -472,7 +480,8 @@
           "material": "assets:/materials/wood.material",
           "layers": 1,
           "castShadows": true,
-          "visible": true
+          "visible": true,
+          "lodBias": 1.0
         },
         "illusion.Name": {
           "value": "Door Frame Mesh"
@@ -550,7 +559,8 @@
           "material": "assets:/materials/wood.material",
           "layers": 1,
           "castShadows": true,
-          "visible": true
+          "visible": true,
+          "lodBias": 1.0
         },
         "illusion.Name": {
           "value": "Door Mesh"
@@ -628,7 +638,8 @@
           "material": "assets:/materials/red.material",
           "layers": 1,
           "castShadows": true,
-          "visible": true
+          "visible": true,
+          "lodBias": 1.0
         },
         "illusion.Name": {
           "value": "Pendulum Mesh"
@@ -706,7 +717,8 @@
           "material": "assets:/materials/wood.material",
           "layers": 1,
           "castShadows": true,
-          "visible": true
+          "visible": true,
+          "lodBias": 1.0
         },
         "illusion.Name": {
           "value": "Drawer Mesh"
@@ -784,7 +796,8 @@
           "material": "assets:/materials/brass.material",
           "layers": 1,
           "castShadows": true,
-          "visible": true
+          "visible": true,
+          "lodBias": 1.0
         },
         "illusion.Name": {
           "value": "Rope Mesh"
@@ -848,7 +861,8 @@
           "material": "assets:/materials/brass.material",
           "layers": 1,
           "castShadows": true,
-          "visible": true
+          "visible": true,
+          "lodBias": 1.0
         },
         "illusion.Name": {
           "value": "Radio Mesh"
@@ -914,7 +928,8 @@
           "material": "builtin:/material/default",
           "layers": 1,
           "castShadows": true,
-          "visible": true
+          "visible": true,
+          "lodBias": 1.0
         },
         "illusion.Name": {
           "value": "Rock"
@@ -973,7 +988,8 @@
           "material": "builtin:/material/default",
           "layers": 1,
           "castShadows": true,
-          "visible": true
+          "visible": true,
+          "lodBias": 1.0
         },
         "illusion.Name": {
           "value": "Crate"
@@ -1151,7 +1167,8 @@
           "material": "assets:/materials/wood.material",
           "layers": 1,
           "castShadows": true,
-          "visible": true
+          "visible": true,
+          "lodBias": 1.0
         },
         "illusion.Name": {
           "value": "Weld"
@@ -1195,7 +1212,8 @@
           "material": "assets:/materials/brass.material",
           "layers": 1,
           "castShadows": false,
-          "visible": true
+          "visible": true,
+          "lodBias": 1.5
         },
         "illusion.Name": {
           "value": "Blocks"
@@ -1319,7 +1337,8 @@
           "material": "builtin:/material/default",
           "layers": 1,
           "castShadows": true,
-          "visible": false
+          "visible": false,
+          "lodBias": 1.0
         },
         "illusion.Name": {
           "value": "Ghost"
@@ -1350,7 +1369,8 @@
           "material": "builtin:/material/default",
           "layers": 1,
           "castShadows": true,
-          "visible": true
+          "visible": true,
+          "lodBias": 1.0
         },
         "illusion.Name": {
           "value": "Ball"
@@ -1496,7 +1516,8 @@
           "material": "assets:/materials/ground.material",
           "layers": 3,
           "castShadows": true,
-          "visible": true
+          "visible": true,
+          "lodBias": 1.0
         },
         "illusion.Name": {
           "value": "Ground"

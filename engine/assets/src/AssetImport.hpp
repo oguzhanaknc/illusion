@@ -23,9 +23,10 @@ namespace detail
 {
 
 // Bump an importer's version when its output changes for the same input, to invalidate old caches.
-// Version 2 records the import settings sidecar as a dependency.
+// Version 2 records the import settings sidecar as a dependency; model version 3 thins foliage cards in its
+// levels of detail.
 inline constexpr std::string_view kImageImporter = "image:2";
-inline constexpr std::string_view kModelImporter = "gltf:2";
+inline constexpr std::string_view kModelImporter = "gltf:3";
 
 [[nodiscard]] std::string imageImportKey(const ImageImportSettings& settings);
 

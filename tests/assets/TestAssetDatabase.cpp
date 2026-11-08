@@ -22,7 +22,7 @@ TEST_CASE("the asset database imports once and then loads from the cache")
     REQUIRE(imported.has_value());
     CHECK(database.statistics().imports == 1);
     CHECK(database.statistics().cacheWrites == 1);
-    CHECK(project.files.exists(database.cachePath("game:/scene/two_nodes.gltf", "gltf:2")));
+    CHECK(project.files.exists(database.cachePath("game:/scene/two_nodes.gltf", "gltf:3")));
 
     const std::optional<ModelData> cached = database.loadModel("game:/scene/../scene/two_nodes.gltf", &error);
     REQUIRE(cached.has_value());

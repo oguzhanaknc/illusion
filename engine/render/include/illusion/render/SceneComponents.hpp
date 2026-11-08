@@ -41,6 +41,10 @@ struct MeshRenderer
     u32 layers = 1;          ///< Render layer bits, for cameras and passes that select layers.
     bool castShadows = true; ///< Drawn into shadow maps.
     bool visible = true;     ///< Drawn at all; hidden renderers keep their assets loaded.
+    /// Multiplies the level-of-detail error the view allows (RenderView::lodPixelError) for this renderer:
+    /// above 1 it switches to coarser levels nearer the camera, below 1 it keeps detail further away, and 0
+    /// always draws full detail.
+    f32 lodBias = 1.0f;
 };
 
 /// Projection used by a Camera.

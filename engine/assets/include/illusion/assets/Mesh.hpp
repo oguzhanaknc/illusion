@@ -30,7 +30,7 @@ static_assert(sizeof(Vertex) == 48, "Vertex layout must match the shaders");
 /// Most levels of detail a submesh carries besides its full detail (level 0).
 inline constexpr u32 kMaxSubmeshLods = 3;
 
-/// A simplified version of a submesh: a range of indices into the same vertices (see generateLods()).
+/// A simplified version of a submesh: a range of indices into the mesh's vertices (see generateLods()).
 struct SubmeshLod
 {
     u32 indexOffset = 0; ///< First index.
@@ -90,7 +90,15 @@ struct MeshLodSettings
 /// MeshData::indices), keeps the borders between materials closed and accounts for normals, and records its
 /// object-space error. A level that removes less than a tenth of the previous level's triangles, or would
 /// exceed MeshLodSettings::maxError, is not made, so meshes that cannot be simplified get fewer levels or
-/// none. Deterministic: the same mesh and settings always give the same indices.
+/// none.
+///
+/// Foliage made of cards (at least 16 parts that share no vertices, of at most 64 triangles on average)
+/// cannot be simplified that way, so once the simplifier makes no progress its levels thin the cards: each
+/// keeps an evenly spread MeshLodSettings::reduction of the previous level's cards and enlarges them about
+/// their centres to make up for the leaf area of the others. The enlarged cards are new vertices appended to
+/// MeshData::vertices (the bounds grow to include them). The error of a thinned level is the mean card size
+/// times (1 / sqrt(fraction of the cards kept) - 1), the growth of the gaps between cards. Deterministic: the
+/// same mesh and settings always give the same vertices and indices.
 void generateLods(MeshData& mesh, const MeshLodSettings& settings = {});
 
 /// The coarsest level of @p submesh (0 to Submesh::lodCount) whose error stays at or below @p maxPixelError
@@ -103,8 +111,8 @@ void generateLods(MeshData& mesh, const MeshLodSettings& settings = {});
 /// for collision, picking and anything else that needs the real surface once.
 [[nodiscard]] std::span<const u32> fullDetailIndices(const MeshData& mesh) noexcept;
 
-/// Removes the levels of detail of every submesh and the indices only they used (when every level sits
-/// after the full-detail indices, as generateLods() leaves them).
+/// Removes the levels of detail of every submesh and the indices and appended vertices only they used (when
+/// every level sits after the full-detail indices, as generateLods() leaves them).
 void clearLods(MeshData& mesh);
 
 /// Computes flat-shaded normals for meshes that have none (each triangle's face normal, accumulated).

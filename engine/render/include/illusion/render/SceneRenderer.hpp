@@ -40,7 +40,7 @@ struct RenderView
     u32 layerMask = ~0u; ///< RenderMesh layer bits accepted by this view.
     /// Largest error, in pixels of the colour target's height, a coarser level of detail (Submesh::lods)
     /// may show; each instance draws the coarsest level within it, in the camera pass and its shadows.
-    /// 0 always draws full detail.
+    /// RenderMesh::lodBias scales it per instance. 0 always draws full detail.
     f32 lodPixelError = 1.0f;
     /// Seconds an instance takes to cross-fade (dithered) from one level of detail to the next; 0 switches at
     /// once. Uses deltaSeconds; a renderer keeps the fades of the views it draws per Entity.

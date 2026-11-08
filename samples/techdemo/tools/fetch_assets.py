@@ -307,13 +307,8 @@ LEAF_TEXTURES = [
 THINNED = [
     ("fir_tree_01/fir_tree_01_1k.gltf", "fir_tree_01/fir_tree_01_lite.gltf",
      {(0, 2): (0.08, 2.1), (1, 2): (0.14, 1.8), (2, 1): (0.6, 1.2)}),
-    # For firs that stay far from the player (the *_far copies): a third of the needles again.
-    ("fir_tree_01/fir_tree_01_1k.gltf", "fir_tree_01/fir_tree_01_far.gltf",
-     {(0, 2): (0.03, 2.8), (1, 2): (0.05, 2.5), (2, 1): (0.22, 1.7)}),
     ("fir_sapling_medium/fir_sapling_medium_1k.gltf", "fir_sapling_medium/fir_sapling_medium_lite.gltf",
      {(0, 1): (0.25, 1.45), (1, 1): (0.35, 1.35), (2, 1): (0.35, 1.35)}),
-    ("fir_sapling_medium/fir_sapling_medium_1k.gltf", "fir_sapling_medium/fir_sapling_medium_far.gltf",
-     {(0, 1): (0.1, 1.9), (1, 1): (0.14, 1.8), (2, 1): (0.14, 1.8)}),
     ("fir_sapling/fir_sapling_1k.gltf", "fir_sapling/fir_sapling_lite.gltf",
      {(0, 1): (0.3, 1.4), (1, 1): (0.3, 1.4), (2, 1): (0.3, 1.4)}),
     ("island_tree_01/island_tree_01_1k.gltf", "island_tree_01/island_tree_01_lite.gltf",

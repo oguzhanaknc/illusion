@@ -5,7 +5,7 @@ ADRs for its significant decisions. Items marked ✅ are done.
 
 ## Order after DEMO
 
-1. GFX-2 (foliage and LODs; GFX-2a and 2b done), 2. GFX-3, 3. TEX (texture compression), 4. UI (game interface),
+1. GFX-2 (foliage and LODs; GFX-2a to 2c done), 2. GFX-3, 3. TEX (texture compression), 4. UI (game interface),
 5. SAVE (saved games), 6. ANIM (skeletal animation), 7. NAV (navigation and AI), 8. M8 (release pipeline),
 9. PROBE (reflection and light probes), 10. MAT (custom shaders and materials), 11. DECAL, 12. TERRAIN,
 13. WATER, 14. M9 (upscaling and frame generation), 15. M10 (hybrid ray tracing).
@@ -614,7 +614,7 @@ After DEMO. Features that bring the renderer and the tech demo to a modern AAA l
   `shadowNearPlane`; cube shadow maps for up to 4 lights nearest the view (`ShadowSettings::pointLightCount`,
   `pointResolution`), drawn with the caster path (wind, alpha masks), PCSS in the forward shading and one tap
   per froxel in the volumetric fog (ADR 0051); the tech demo's campfire and lanterns cast them
-- GFX-2: Foliage and level of detail, in five steps:
+- GFX-2: Foliage and level of detail, in six steps:
   - GFX-2a: ✅ Levels of detail for every Mesh (ADR 0052): up to three coarser index ranges per submesh over
     the same vertices (`Submesh::lods`, cooked model format 3), generated on import with meshoptimizer 1.3
     (MIT; simplifier with normals and locked borders, vertex cache order; sidecar `lodCount`,
@@ -628,7 +628,10 @@ After DEMO. Features that bring the renderer and the tech demo to a modern AAA l
     prepass, shading, Entity IDs and shadow casters (through the alpha-tested pipelines, so opaque draws
     keep early depth testing), `RenderStats::lodFades`; `RenderDebugView::LevelOfDetail` and the
     viewport's Level of detail shading mode
-  - GFX-2c: A per-MeshRenderer LOD bias; the tech demo drops its hand-made `_far` tree copies
+  - GFX-2c: ✅ Card thinning for foliage levels of detail (ADR 0052 addendum): submeshes of many small
+    vertex-disjoint parts keep an evenly spread half of their cards per level, enlarged to keep the leaf
+    area; `MeshRenderer::lodBias` scales the pixel allowance per renderer; the tech demo drops its hand-made
+    `_far` tree copies for a bias of 2
   - GFX-2d: Leaf translucency (thin-surface transmission for foliage Materials)
   - GFX-2e: GPU-generated dense grass
   - GFX-2f: Impostors for distant trees

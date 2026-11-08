@@ -157,7 +157,7 @@ resolver.update(world, &jobs);
 ```
 
 - `MeshRenderer` holds `mesh`, `submesh`, `material` (empty: the model's material for that submesh),
-  `layers`, `castShadows` and `visible`. Every `update()` compares each one with the key its `RenderMesh`
+  `layers`, `castShadows`, `visible` and `lodBias` (see [levels of detail](#levels-of-detail)). Every `update()` compares each one with the key its `RenderMesh`
   was resolved from (in parallel, without allocating) and resolves only those that changed.
 - Assets load in the background: a renderer keeps drawing what it drew before until its new assets are
   on the GPU (new renderers draw nothing until then). Streamed models are uploaded within
@@ -285,7 +285,7 @@ ILL_LOG_INFO("Game", "{} of {} opaque instances drawn", renderer->readGpuDrawnIn
 ### Levels of detail
 
 A submesh can carry up to three coarser **levels of detail** (`Submesh::lods`): simplified versions that
-use fewer triangles of the same vertices. Imported glTF models get them automatically (see
+use fewer triangles. Imported glTF models get them automatically (see
 [import settings](assets.md#import-settings)); for your own Meshes call `generateLods()`. For every instance
 the culling Jobs pick the coarsest level whose geometric error, projected onto the screen, stays within
 `RenderView::lodPixelError` pixels (1 by default), so objects keep their silhouette while far ones cost a
@@ -317,6 +317,13 @@ ILL_LOG_INFO("Game", "{} instances at full detail, {} at the coarsest level, {} 
   time. `RenderStats::lodFades` counts the instances fading (`lodInstances` counts them at both levels).
 - `setDebugView(RenderDebugView::LevelOfDetail)` colours every surface by the level it draws: green for
   full detail, then yellow, orange and red.
+- `MeshRenderer::lodBias` (and `RenderMesh::lodBias` for code) multiplies the allowance for one renderer: 2
+  switches to each coarser level at half the distance, 0.5 at twice the distance, and 0 always draws full
+  detail. Give it to objects the player only sees from afar, or to foliage that may thin out sooner.
+- Foliage made of cards (leaves, needle sprigs: many small parts that share no vertices) cannot be simplified
+  like a closed surface. Its levels keep an evenly spread half of the previous level's cards instead, each
+  enlarged about its centre to make up for the leaf area of the others; the error of such a level is how much
+  the gaps between cards grow. These enlarged cards are extra vertices of the Mesh.
 
 ### Bindless rendering
 

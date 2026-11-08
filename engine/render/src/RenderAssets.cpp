@@ -19,6 +19,7 @@
 #include <array>
 #include <atomic>
 #include <bit>
+#include <cmath>
 #include <format>
 #include <string>
 #include <unordered_map>
@@ -1202,6 +1203,7 @@ u64 renderSourceKey(const MeshRenderer& renderer) noexcept
     u64 key = hashCombine(renderer.mesh.id.value, renderer.material.id.value);
     key = hashCombine(key, (u64{renderer.submesh} << 32) | renderer.layers);
     key = hashCombine(key, (renderer.castShadows ? 1u : 0u) | (renderer.visible ? 2u : 0u));
+    key = hashCombine(key, std::bit_cast<u32>(renderer.lodBias));
     return key == 0 ? 1 : key;
 }
 
@@ -1287,6 +1289,7 @@ struct RenderAssetResolver::Impl
         target.flags = (renderer.visible ? RenderMesh::kVisible : 0u) |
                        (renderer.castShadows ? RenderMesh::kCastShadows : 0u);
         target.sourceKey = key;
+        target.lodBias = std::isfinite(renderer.lodBias) ? std::max(renderer.lodBias, 0.0f) : 1.0f;
         ++statistics.resolved;
         statistics.failures += failed ? 1u : 0u;
     }

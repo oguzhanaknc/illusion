@@ -1004,12 +1004,12 @@ void SceneRenderer::Impl::cull(World& world, const RenderView& view, f32 viewpor
         }
         const Vec3 offset = bounds.center - view.position;
         u32 lod = 0;
-        if (submesh.lodCount != 0 && lodPixelError > 0.0f)
+        if (submesh.lodCount != 0 && lodPixelError > 0.0f && renderer.lodBias > 0.0f)
         {
             const f32 scale = local.radius > 0.0f ? bounds.radius / local.radius : 1.0f;
             const f32 distance = std::max(glm::length(offset) - bounds.radius, kLodMinDistance);
             lod = selectLod(submesh, scale * (orthographic ? pixelsPerUnit : pixelsPerUnit / distance),
-                            lodPixelError);
+                            lodPixelError * renderer.lodBias);
         }
         if (passes == 0)
         {
