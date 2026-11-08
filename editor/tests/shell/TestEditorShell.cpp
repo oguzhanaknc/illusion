@@ -13,6 +13,7 @@
 #include <imgui.h>
 #include <imgui_internal.h>
 #include <set>
+#include <sstream>
 
 using namespace illusion;
 using namespace illusion::editor;
@@ -781,8 +782,14 @@ std::string waitForRecord(const std::filesystem::path& file)
     std::string text;
     while (text.find('\n') == std::string::npos && std::chrono::steady_clock::now() < deadline)
     {
+        // Through rdbuf(): GCC 13 Release reports a -Wnull-dereference false positive in istreambuf_iterator.
         std::ifstream stream(file, std::ios::binary);
-        text.assign(std::istreambuf_iterator<char>(stream), std::istreambuf_iterator<char>());
+        std::ostringstream contents;
+        if (stream)
+        {
+            contents << stream.rdbuf();
+        }
+        text = contents.str();
     }
     return text;
 }
