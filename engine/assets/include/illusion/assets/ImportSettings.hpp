@@ -66,6 +66,11 @@ struct TextureImportSettings
 struct ModelImportSettings
 {
     f32 scale = 1.0f; ///< Uniform scale of positions and node translations (greater than 0, at most 1000).
+    /// Coarser levels of detail generated per submesh (0 to kMaxSubmeshLods; 0 turns them off). See
+    /// generateLods().
+    u32 lodCount = 3;
+    /// Fraction of the previous level's triangles each level aims for (0.1 to 0.9).
+    f32 lodReduction = 0.5f;
 
     /// Compares every setting.
     friend bool operator==(const ModelImportSettings&, const ModelImportSettings&) = default;
@@ -121,7 +126,8 @@ mergeImportSettings(ImportSettings& settings, const JsonValue& patch, ImportSett
 [[nodiscard]] std::string writeImportSettings(const ImportSettings& settings, ImportSettingsKind kind);
 
 /// Every setting of @p kind as compact JSON, defaults included, e.g.
-/// `{"texture":{"colorSpace":"auto","generateMips":true,"maxSize":0}}`; "{}" for ImportSettingsKind::None.
+/// `{"texture":{"colorSpace":"auto","generateMips":true,"maxSize":0}}` or
+/// `{"model":{"scale":1.0,"lodCount":3,"lodReduction":0.5}}`; "{}" for ImportSettingsKind::None.
 [[nodiscard]] std::string importSettingsValue(const ImportSettings& settings, ImportSettingsKind kind);
 
 /// What an image is imported with: @p requested (what its user asks for) changed by @p settings.

@@ -146,6 +146,23 @@ ILL_BENCHMARK("render/10k-instances", 2'000.0)
     });
 }
 
+ILL_BENCHMARK("render/10k-lod-spheres", 2'000.0)
+{
+    Scene scene;
+    MeshData sphere = makeSphere(0.5f, 64, 32); // 4096 triangles at full detail
+    generateLods(sphere);
+    const MeshHandle mesh = scene.resources->createMesh(sphere, "LOD sphere");
+    for (u32 i = 0; i < 10'000; ++i)
+    {
+        Transform t;
+        t.position = Vec3(static_cast<f32>(i % 100) - 50.0f, 0.0f, -static_cast<f32>(i / 100));
+        scene.world.create(t, RenderMesh{mesh, 0, MaterialHandle{}});
+    }
+    bench.batch(10'000).unit("instance").run("full frame, 10k spheres with levels of detail, 1280x720", [&] {
+        scene.frame();
+    });
+}
+
 ILL_BENCHMARK("render/100k-particles", 200.0)
 {
     Scene scene;

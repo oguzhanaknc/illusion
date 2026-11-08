@@ -59,7 +59,9 @@ sidecar'ı varsayılandan farklı ayarları tutar; **Apply** onu yazar (bütün 
 
 - **Textures** (`.png`, `.jpg`, `.jpeg`, `.tga`, `.bmp`, `.hdr`): color space (automatic, sRGB veya linear),
   mipmap üretilip üretilmeyeceği ve piksel cinsinden maksimum boyut.
-- **Models** (`.gltf`, `.glb`): pozisyonlara ve node çevirilerine uygulanan uniform scale.
+- **Models** (`.gltf`, `.glb`): pozisyonlara ve node çevirilerine uygulanan uniform scale, mesh başına kaç
+  [level of detail](../rendering.md#levels-of-detail) üretileceği (0 ile 3 arası) ve her seviyenin koruduğu
+  üçgen oranı.
 
 Import ayarları paneli, seçili asset'e kaç dosyanın referans verdiğini de söyler.
 

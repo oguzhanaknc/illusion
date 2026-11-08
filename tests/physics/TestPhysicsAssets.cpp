@@ -87,6 +87,28 @@ TEST_CASE("mesh and hull colliders from assets collide after a scene reload")
     CHECK(world.get<Transform>(box).position.y == doctest::Approx(0.5).epsilon(0.02));
 }
 
+TEST_CASE("mesh colliders of a model with levels of detail use its full-detail triangles only")
+{
+    reflectCoreComponents();
+    reflectPhysicsComponents();
+    AssetProject project;
+    writeSphereGltf(project.files, "game:/sphere.gltf"); // 4096 triangles: imports with levels of detail
+    JobSystem jobs(JobSystemDesc{2, 256});
+    AssetStreamer streamer(project.files, jobs);
+
+    World world;
+    world.create(Transform{}, body(MotionType::Static),
+                 meshCollider(ColliderShape::Mesh, "game:/sphere.gltf#mesh/0"));
+    PhysicsWorld physics(world, jobs);
+    PhysicsAssetResolver colliders(physics, streamer);
+    physics.update(kStep);
+    colliders.waitIdle();
+    colliders.update();
+    CHECK(colliders.statistics().geometries == 1);
+    CHECK(colliders.statistics().failures == 0);
+    CHECK(colliders.statistics().triangles == makeSphere(1.0f, 64, 32).indices.size() / 3);
+}
+
 TEST_CASE("colliders share cooked geometry and rebuild when their asset changes")
 {
     reflectPhysicsComponents();

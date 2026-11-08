@@ -22,8 +22,9 @@ target_include_directories(illusion_assets PUBLIC
 
 illusion_require_dependency(cgltf)
 illusion_require_dependency(stb)
+illusion_require_dependency(meshoptimizer)
 target_link_libraries(illusion_assets
     PUBLIC illusion::core illusion::platform
-    PRIVATE illusion::cgltf illusion::stb)
+    PRIVATE illusion::cgltf illusion::stb illusion::meshoptimizer)
 
 illusion_configure_target(illusion_assets)

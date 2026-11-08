@@ -81,6 +81,13 @@ const illusion::MeshHandle groundMesh = resources.createMesh(ground, "Ground");
 
 All Meshes use counter-clockwise front faces in a right-handed, y-up space.
 
+`generateLods()` adds coarser [levels of detail](rendering.md#levels-of-detail) to every submesh with
+[meshoptimizer](https://github.com/zeux/meshoptimizer): each level keeps the vertices, appends its own
+indices and records its error in object-space units. It keeps the borders between materials closed, stops
+when a level would remove less than a tenth of the triangles or exceed `MeshLodSettings::maxError`, and
+skips submeshes below `MeshLodSettings::minTriangles`. Model imports call it with the sidecar's `lodCount`
+and `lodReduction`; `clearLods()` removes the levels again.
+
 ## Environments
 
 Header: `<illusion/assets/Environment.hpp>`
@@ -236,6 +243,8 @@ only those settings:
 | | `generateMips` | `true` | `false` imports only the top level, even when a user asks for mips. |
 | | `maxSize` | `0` | Halve the image until no side exceeds this (1 to 16384; 0 is no limit). |
 | Model (`.gltf`, `.glb`) | `scale` | `1` | Uniform scale of positions and node translations (greater than 0, at most 1000). |
+| | `lodCount` | `3` | Coarser [levels of detail](rendering.md#levels-of-detail) generated per submesh (0 to 3; 0 turns them off). |
+| | `lodReduction` | `0.5` | Fraction of the previous level's triangles each level aims for (0.1 to 0.9). |
 
 - `AssetDatabase`, `AssetStreamer` and `cookAssets()` read the sidecar of every image and model they
   import, so the editor, the game and the cooked build all see the same result.

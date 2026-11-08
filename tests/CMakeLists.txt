@@ -55,6 +55,7 @@ add_executable(illusion_tests
     assets/TestImageMesh.cpp
     assets/TestImportSettings.cpp
     assets/TestMaterialAsset.cpp
+    assets/TestMeshLods.cpp
     audio/TestAudioEffects.cpp
     audio/TestAudioWorld.cpp
     modules/TestModules.cpp

@@ -57,6 +57,15 @@ FetchContent_Declare(stb
     SYSTEM
     SOURCE_SUBDIR _illusion_no_cmake)
 
+# meshoptimizer 1.3 (MIT): mesh simplification for levels of detail and vertex cache ordering. Only the
+# sources the engine uses are compiled, as a small static library.
+FetchContent_Declare(meshoptimizer
+    URL https://github.com/zeux/meshoptimizer/archive/refs/tags/v1.3.tar.gz
+    URL_HASH SHA256=ca4f47d451201593904b9e3067fa54b65db94bc34ab5173864950862b748a145
+    DOWNLOAD_EXTRACT_TIMESTAMP TRUE
+    SYSTEM
+    SOURCE_SUBDIR _illusion_no_cmake)
+
 # yyjson 0.13.0 (MIT): JSON reader and writer (scene files). Compiled as a small static library.
 FetchContent_Declare(yyjson
     URL https://github.com/ibireme/yyjson/archive/refs/tags/0.13.0.tar.gz
@@ -211,6 +220,7 @@ endforeach()
 #   cgltf     -> illusion::cgltf (headers; the implementation is compiled in illusion::assets)
 #   stb       -> illusion::stb (headers; the implementation is compiled in illusion::assets)
 #   yyjson    -> illusion::yyjson (static library; strict JSON only)
+#   meshoptimizer -> illusion::meshoptimizer (static library: simplifier and vertex cache optimizer)
 #   jolt      -> Jolt::Jolt (static library)
 #   miniaudio -> illusion::miniaudio (headers; the implementation is compiled in illusion::audio)
 #   imgui     -> ILLUSION_IMGUI_SOURCE_DIR (sources; the editor defines illusion::imgui)
@@ -346,6 +356,15 @@ function(illusion_require_dependency name)
         # Only standard JSON and the DOM reader/writer are used.
         target_compile_definitions(illusion_yyjson PUBLIC YYJSON_DISABLE_NON_STANDARD=1
             YYJSON_DISABLE_INCR_READER=1 YYJSON_DISABLE_UTILS=1)
+    elseif(name STREQUAL "meshoptimizer")
+        FetchContent_MakeAvailable(meshoptimizer)
+        add_library(illusion_meshoptimizer STATIC
+            "${meshoptimizer_SOURCE_DIR}/src/allocator.cpp"
+            "${meshoptimizer_SOURCE_DIR}/src/simplifier.cpp"
+            "${meshoptimizer_SOURCE_DIR}/src/vcacheoptimizer.cpp")
+        add_library(illusion::meshoptimizer ALIAS illusion_meshoptimizer)
+        target_include_directories(illusion_meshoptimizer SYSTEM PUBLIC "${meshoptimizer_SOURCE_DIR}/src")
+        target_compile_features(illusion_meshoptimizer PRIVATE cxx_std_20)
     elseif(name STREQUAL "slang")
         if(ILLUSION_SLANGC_EXECUTABLE)
             set(ILLUSION_SLANGC "${ILLUSION_SLANGC_EXECUTABLE}" CACHE INTERNAL "")

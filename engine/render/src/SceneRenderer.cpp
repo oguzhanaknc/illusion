@@ -109,6 +109,9 @@ struct GpuInstance
 constexpr u32 kPointShadowViews = kMaxShadowedPointLights * kPointShadowFaces;
 constexpr u32 kShadowViews = kMaxShadowCascades + kPointShadowViews;
 
+// Distance below which every object draws at full detail (the camera is at or inside its bounds).
+constexpr f32 kLodMinDistance = 1.0e-3f;
+
 // Bit 0: visible to the camera; bit 1 + v: casts a shadow into shadow view v.
 constexpr u32 kCameraPass = 1;
 static_assert(kShadowViews + 1 <= 32);
@@ -119,9 +122,13 @@ struct DrawItem
     const RenderResources::GpuMesh* mesh;
     const RenderResources::GpuMaterial* material;
     u32 submesh;
+    u32 lod; // level of detail (0: full detail), chosen from the camera for every pass
     u32 passes;
     f32 distanceSquared;
     Sphere bounds; // world space
+
+    // The index range this item draws.
+    [[nodiscard]] SubmeshLod range() const noexcept { return mesh->submeshes[submesh].level(lod); }
 };
 
 struct ForwardPush
@@ -334,7 +341,7 @@ struct SceneRenderer::Impl
     bool updateShadowResources();
     nvrhi::IFramebuffer* outputFramebufferFor(nvrhi::ITexture* color);
     void ensureInstanceCapacity(u32 count);
-    void cull(World& world, const RenderView& view, JobSystem* jobs);
+    void cull(World& world, const RenderView& view, f32 viewportHeight, JobSystem* jobs);
     i32 gatherLights(World& world, GpuViewConstants& constants, f32& angularDiameter,
                      const SkyAtmosphere* atmosphere, const SkyAtmosphereState& sky);
     // The environment a SkyAtmosphere draws into, made on first use and redrawn when the sky changes.
@@ -894,7 +901,7 @@ nvrhi::IFramebuffer* SceneRenderer::Impl::outputFramebufferFor(nvrhi::ITexture* 
     return framebuffer;
 }
 
-void SceneRenderer::Impl::cull(World& world, const RenderView& view, JobSystem* jobs)
+void SceneRenderer::Impl::cull(World& world, const RenderView& view, f32 viewportHeight, JobSystem* jobs)
 {
     ILL_PROFILE_SCOPE_N("SceneRenderer::cull");
     const u32 candidates = world.query<const Transform, const RenderMesh>().without<Inactive>().count();
@@ -911,6 +918,10 @@ void SceneRenderer::Impl::cull(World& world, const RenderView& view, JobSystem* 
     }
     const u32 cascadeCount = cascades.count;
     const u32 pointCount = pointShadowCount;
+    // Pixels covered by one world unit at distance 1 (perspective) or at any distance (orthographic).
+    const bool orthographic = view.projection[3][3] == 1.0f;
+    const f32 pixelsPerUnit = 0.5f * viewportHeight * std::abs(view.projection[1][1]);
+    const f32 lodPixelError = view.lodPixelError;
     std::atomic<u32> count{0};
     auto query = world.query<const Transform, const RenderMesh>().without<Inactive>();
     usize historySize = 0;
@@ -933,7 +944,9 @@ void SceneRenderer::Impl::cull(World& world, const RenderView& view, JobSystem* 
             return;
         }
         const RenderResources::GpuMaterial* material = resources->material(renderer.material);
-        const Sphere bounds = Sphere::fromAabb(mesh->submeshes[renderer.submesh].bounds).transformed(matrix);
+        const Submesh& submesh = mesh->submeshes[renderer.submesh];
+        const Sphere local = Sphere::fromAabb(submesh.bounds);
+        const Sphere bounds = local.transformed(matrix);
         u32 passes = frustum.intersects(bounds) ? kCameraPass : 0u;
         if (material->alphaMode != AlphaMode::Blend && (renderer.flags & RenderMesh::kCastShadows) != 0)
         {
@@ -964,6 +977,14 @@ void SceneRenderer::Impl::cull(World& world, const RenderView& view, JobSystem* 
             return;
         }
         const Vec3 offset = bounds.center - view.position;
+        u32 lod = 0;
+        if (submesh.lodCount != 0 && lodPixelError > 0.0f)
+        {
+            const f32 scale = local.radius > 0.0f ? bounds.radius / local.radius : 1.0f;
+            const f32 distance = std::max(glm::length(offset) - bounds.radius, kLodMinDistance);
+            lod = selectLod(submesh, scale * (orthographic ? pixelsPerUnit : pixelsPerUnit / distance),
+                            lodPixelError);
+        }
         items[count.fetch_add(1, std::memory_order_relaxed)] =
             DrawItem{GpuInstance{matrix,
                                  glm::transpose(glm::inverse(matrix)),
@@ -972,6 +993,7 @@ void SceneRenderer::Impl::cull(World& world, const RenderView& view, JobSystem* 
                      mesh,
                      material,
                      renderer.submesh,
+                     lod,
                      passes,
                      glm::dot(offset, offset),
                      bounds};
@@ -1018,6 +1040,10 @@ void SceneRenderer::Impl::cull(World& world, const RenderView& view, JobSystem* 
         }
     }
     stats.visible = static_cast<u32>(cameraOrder.size());
+    for (const u32 index : cameraOrder)
+    {
+        ++stats.lodInstances[items[index].lod];
+    }
 }
 
 namespace
@@ -1208,7 +1234,11 @@ void SceneRenderer::Impl::sortShadowCasters(u32 shadowView)
         {
             return x.mesh < y.mesh;
         }
-        return x.submesh < y.submesh;
+        if (x.submesh != y.submesh)
+        {
+            return x.submesh < y.submesh;
+        }
+        return x.lod < y.lod;
     });
 }
 
@@ -1230,7 +1260,8 @@ void SceneRenderer::Impl::drawShadows(nvrhi::ICommandList* commandList, u32 shad
         while (end < count)
         {
             const DrawItem& next = items[order[end]];
-            if (shadowMaterial(next) != own || next.mesh != first.mesh || next.submesh != first.submesh)
+            if (shadowMaterial(next) != own || next.mesh != first.mesh || next.submesh != first.submesh ||
+                next.lod != first.lod)
             {
                 break;
             }
@@ -1249,11 +1280,11 @@ void SceneRenderer::Impl::drawShadows(nvrhi::ICommandList* commandList, u32 shad
         commandList->setGraphicsState(state);
         const ShadowPush push{instanceOffset + begin, shadowView};
         commandList->setPushConstants(&push, sizeof(push));
-        const Submesh& submesh = first.mesh->submeshes[first.submesh];
+        const SubmeshLod range = first.range();
         commandList->drawIndexed(nvrhi::DrawArguments()
-                                     .setVertexCount(submesh.indexCount)
+                                     .setVertexCount(range.indexCount)
                                      .setInstanceCount(end - begin)
-                                     .setStartIndexLocation(first.mesh->indexOffset + submesh.indexOffset)
+                                     .setStartIndexLocation(first.mesh->indexOffset + range.indexOffset)
                                      .setStartVertexLocation(first.mesh->vertexOffset));
         ++(point ? stats.pointShadowDrawCalls : stats.shadowDrawCalls);
         begin = end;
@@ -1425,7 +1456,7 @@ void SceneRenderer::render(nvrhi::ICommandList* commandList, nvrhi::ITexture* co
                                      UVec2(colorTarget->getDesc().width, colorTarget->getDesc().height),
                                      constants.viewProjection,
                                      constants.unjitteredViewProjection};
-    impl.cull(world, view, jobs);
+    impl.cull(world, view, size.y, jobs);
     const u32 visibleCount = impl.stats.visible;
 
     // Bindless rendering draws each pipeline's batches with one multi-draw; materials vary per instance.
@@ -1460,7 +1491,11 @@ void SceneRenderer::render(nvrhi::ICommandList* commandList, nvrhi::ITexture* co
         {
             return x.mesh < y.mesh;
         }
-        return x.submesh < y.submesh;
+        if (x.submesh != y.submesh)
+        {
+            return x.submesh < y.submesh;
+        }
+        return x.lod < y.lod;
     });
 
     // Instance data: the camera's instances, then each shadow view's casters.
@@ -1558,17 +1593,17 @@ void SceneRenderer::render(nvrhi::ICommandList* commandList, nvrhi::ITexture* co
             const DrawItem& next = impl.items[impl.cameraOrder[end]];
             const bool sameState =
                 bindless ? pipelineKey(next) == pipelineKey(first) : next.material == first.material;
-            if (!sameState || next.mesh != first.mesh || next.submesh != first.submesh)
+            if (!sameState || next.mesh != first.mesh || next.submesh != first.submesh ||
+                next.lod != first.lod)
             {
                 break;
             }
             ++end;
         }
         const auto batch = static_cast<u32>(impl.cullBatches.size());
-        const Submesh& submesh = first.mesh->submeshes[first.submesh];
-        impl.cullBatches.push_back(GpuCulling::Batch{submesh.indexCount,
-                                                     first.mesh->indexOffset + submesh.indexOffset,
-                                                     first.mesh->vertexOffset, begin});
+        const SubmeshLod range = first.range();
+        impl.cullBatches.push_back(GpuCulling::Batch{
+            range.indexCount, first.mesh->indexOffset + range.indexOffset, first.mesh->vertexOffset, begin});
         impl.batchStarts.push_back(begin);
         for (u32 i = begin; i < end; ++i)
         {
@@ -1825,13 +1860,13 @@ void SceneRenderer::render(nvrhi::ICommandList* commandList, nvrhi::ITexture* co
         const DrawItem& item = impl.items[impl.cameraOrder[i]];
         setDrawState(impl.pipelines[1][item.material->doubleSided ? 1 : 0], framebuffer, item, false,
                      blendedSlotBase + (i - opaqueCount), kForwardFog);
-        const Submesh& submesh = item.mesh->submeshes[item.submesh];
+        const SubmeshLod range = item.range();
         commandList->drawIndexed(nvrhi::DrawArguments()
-                                     .setVertexCount(submesh.indexCount)
-                                     .setStartIndexLocation(item.mesh->indexOffset + submesh.indexOffset)
+                                     .setVertexCount(range.indexCount)
+                                     .setStartIndexLocation(item.mesh->indexOffset + range.indexOffset)
                                      .setStartVertexLocation(item.mesh->vertexOffset));
         ++impl.stats.drawCalls;
-        impl.stats.triangles += submesh.indexCount / 3;
+        impl.stats.triangles += range.indexCount / 3;
     }
     // Particles after the blended geometry, into the HDR colour so bright ones feed bloom.
     impl.particles.draw(commandList, impl.hdr, impl.depth, viewport, particleView);
@@ -1859,10 +1894,10 @@ void SceneRenderer::render(nvrhi::ICommandList* commandList, nvrhi::ITexture* co
             const DrawItem& item = impl.items[impl.cameraOrder[i]];
             setDrawState(impl.entityIdPipelines[item.material->doubleSided ? 1 : 0], impl.idFramebuffer, item,
                          false, blendedSlotBase + i - opaqueCount, 0);
-            const Submesh& submesh = item.mesh->submeshes[item.submesh];
+            const SubmeshLod range = item.range();
             commandList->drawIndexed(nvrhi::DrawArguments()
-                                         .setVertexCount(submesh.indexCount)
-                                         .setStartIndexLocation(item.mesh->indexOffset + submesh.indexOffset)
+                                         .setVertexCount(range.indexCount)
+                                         .setStartIndexLocation(item.mesh->indexOffset + range.indexOffset)
                                          .setStartVertexLocation(item.mesh->vertexOffset));
             ++impl.stats.drawCalls;
         }

@@ -40,6 +40,7 @@ struct GeometryEntry
     bool triangles = false;       // ColliderShape::Mesh; otherwise a convex hull
     AssetHandle<ModelData> model; // until cooked
     PhysicsMeshHandle geometry;
+    u32 triangleCount = 0;  // triangles of `geometry` (Mesh shapes only)
     bool reloading = false; // `model` is a reload of a file that changed (AssetReloadedEvent)
     bool again = false;     // the file changed again during the reload
 };
@@ -97,8 +98,10 @@ struct PhysicsAssetResolver::Impl
         {
             positions.push_back(vertex.position);
         }
-        const PhysicsMeshHandle geometry = entry.triangles ? physics->createMesh(positions, mesh.indices)
-                                                           : physics->createConvexHull(positions);
+        // Levels of detail are for drawing: collide with the full-detail surface only.
+        const std::span<const u32> indices = fullDetailIndices(mesh);
+        const PhysicsMeshHandle geometry =
+            entry.triangles ? physics->createMesh(positions, indices) : physics->createConvexHull(positions);
         if (!geometry.valid())
         {
             failReload(entry, "the mesh is empty or degenerate");
@@ -112,6 +115,9 @@ struct PhysicsAssetResolver::Impl
         {
             ++statistics.geometries;
         }
+        const u32 triangleCount = entry.triangles ? static_cast<u32>(indices.size() / 3) : 0u;
+        statistics.triangles = statistics.triangles - entry.triangleCount + triangleCount;
+        entry.triangleCount = triangleCount;
         entry.geometry = geometry;
         entry.status = Status::Ready;
     }

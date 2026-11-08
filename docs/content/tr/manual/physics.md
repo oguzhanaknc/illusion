@@ -110,7 +110,9 @@ world.create(rockTransform, illusion::RigidBody{}, rockShape);
   kullanın.
 - `destroyMesh()` bir handle'ı serbest bırakır; geometriyi zaten kullanan cisimler onu korur.
 - `PhysicsAssetResolver`, her Asset, `meshIndex` (parçasız bir model yolunun Mesh'i) ve şekil türü
-  için bir kez, tüm submesh'lerden bir üçgen Mesh'i ya da tüm vertex'lerin convex hull'ünü hazırlar.
+  için bir kez, tüm submesh'lerin tam detayından bir üçgen Mesh'i (level of detail'ler yalnızca çizim
+  içindir, bkz. `fullDetailIndices()`; `statistics().triangles` hazırlanan üçgenleri sayar) ya da tüm
+  vertex'lerin convex hull'ünü hazırlar.
   Asset'ini bekleyen bir Collider, geometri hazırlanınca cismini alır; Asset'i değişen bir Collider
   yeniden kurulur. Yüklenemeyen bir Asset bir uyarı yazar ve `statistics().failures` içinde sayılır.
 - Canlı yeniden yükleme: `AssetStreamer::reload()` bir model dosyasını bildirdiğinde (bkz.

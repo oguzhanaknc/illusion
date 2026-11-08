@@ -5,7 +5,7 @@ ADRs for its significant decisions. Items marked ✅ are done.
 
 ## Order after DEMO
 
-1. GFX-2 (foliage and LODs), 2. GFX-3, 3. TEX (texture compression), 4. UI (game interface),
+1. GFX-2 (foliage and LODs; GFX-2a done), 2. GFX-3, 3. TEX (texture compression), 4. UI (game interface),
 5. SAVE (saved games), 6. ANIM (skeletal animation), 7. NAV (navigation and AI), 8. M8 (release pipeline),
 9. PROBE (reflection and light probes), 10. MAT (custom shaders and materials), 11. DECAL, 12. TERRAIN,
 13. WATER, 14. M9 (upscaling and frame generation), 15. M10 (hybrid ray tracing).
@@ -614,9 +614,19 @@ After DEMO. Features that bring the renderer and the tech demo to a modern AAA l
   `shadowNearPlane`; cube shadow maps for up to 4 lights nearest the view (`ShadowSettings::pointLightCount`,
   `pointResolution`), drawn with the caster path (wind, alpha masks), PCSS in the forward shading and one tap
   per froxel in the volumetric fog (ADR 0051); the tech demo's campfire and lanterns cast them
-- GFX-2: Foliage and level of detail: leaf translucency, GPU-generated dense grass, and LODs for every
-  mesh: generated on import with meshoptimizer (MIT), chosen per instance by screen size with dithered
-  cross-fades, also for shadows; impostors for distant trees
+- GFX-2: Foliage and level of detail, in five steps:
+  - GFX-2a: ✅ Levels of detail for every Mesh (ADR 0052): up to three coarser index ranges per submesh over
+    the same vertices (`Submesh::lods`, cooked model format 3), generated on import with meshoptimizer 1.3
+    (MIT; simplifier with normals and locked borders, vertex cache order; sidecar `lodCount`,
+    `lodReduction`; `generateLods()`/`clearLods()`), chosen per instance by projected error
+    (`RenderView::lodPixelError`, 1 pixel) in the culling Jobs and drawn at the same level into every
+    shadow view; batches keyed by level; `RenderStats::lodInstances`; import settings in the Asset Browser;
+    triangle-mesh colliders keep the full-detail triangles (`fullDetailIndices()`)
+  - GFX-2b: Dithered cross-fades between levels (camera and shadows), a per-MeshRenderer LOD bias, a
+    level-of-detail debug view; the tech demo drops its hand-made `_far` tree copies
+  - GFX-2c: Leaf translucency (thin-surface transmission for foliage Materials)
+  - GFX-2d: GPU-generated dense grass
+  - GFX-2e: Impostors for distant trees
 - GFX-3: Lit smoke, clouds, screen-space reflections, contact shadows
 
 ## TEX — Texture compression

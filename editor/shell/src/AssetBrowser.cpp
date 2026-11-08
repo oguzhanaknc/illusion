@@ -6,6 +6,7 @@
 #include "Panels.hpp"
 
 #include <illusion/assets/ImportSettings.hpp>
+#include <illusion/assets/Mesh.hpp>
 #include <illusion/ecs/Name.hpp>
 #include <illusion/ecs/Prefab.hpp>
 #include <illusion/editor/core/AssetCatalog.hpp>
@@ -991,6 +992,22 @@ void AssetBrowser::State::drawInspector(Impl& shell, ui::UiKit& kit)
             ImGui::SetNextItemWidth(-1.0f);
             if (ImGui::DragFloat(text.hidden("asset_browser.import.scale"), &settings.model.scale, 0.01f,
                                  0.001f, 1000.0f))
+            {
+                changed = true;
+            }
+            ui::propertyLabel(kit, text.format(s::kAssetBrowserImportLodCount));
+            int lodCount = static_cast<int>(settings.model.lodCount);
+            ImGui::SetNextItemWidth(-1.0f);
+            if (ImGui::SliderInt(text.hidden("asset_browser.import.lod_count"), &lodCount, 0,
+                                 static_cast<int>(kMaxSubmeshLods)))
+            {
+                settings.model.lodCount = static_cast<u32>(lodCount);
+                changed = true;
+            }
+            ui::propertyLabel(kit, text.format(s::kAssetBrowserImportLodReduction));
+            ImGui::SetNextItemWidth(-1.0f);
+            if (ImGui::SliderFloat(text.hidden("asset_browser.import.lod_reduction"),
+                                   &settings.model.lodReduction, 0.1f, 0.9f, "%.2f"))
             {
                 changed = true;
             }

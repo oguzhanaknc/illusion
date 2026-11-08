@@ -1387,7 +1387,7 @@ void registerAssetCommands(CommandRegistry& registry)
             "Merges import settings into a texture's or model's <file>.import.json sidecar (written only "
             "while a setting differs from its default, deleted when all are defaults; null resets) and "
             "reloads it. Texture: colorSpace auto|srgb|linear, generateMips, maxSize (0 = none). Model: "
-            "scale. "
+            "scale, lodCount (levels of detail per mesh, 0-3; 0 = none), lodReduction (0.1-0.9). "
             "Example: {\"path\": \"assets:/textures/ui.png\", \"value\": {\"texture\": {\"colorSpace\": "
             "\"linear\", \"maxSize\": 512}}}.",
         .category = "Asset",

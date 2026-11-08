@@ -1,5 +1,6 @@
 #include <illusion/assets/AssetDatabase.hpp>
 #include <illusion/assets/ImportSettings.hpp>
+#include <illusion/assets/Mesh.hpp>
 #include <illusion/core/Json.hpp>
 
 #include <algorithm>
@@ -15,6 +16,8 @@ namespace
 constexpr std::string_view kFormatName = "illusion.import";
 constexpr u32 kMaxTextureSize = 16384;
 constexpr f64 kMaxModelScale = 1000.0;
+constexpr f64 kMinLodReduction = 0.1;
+constexpr f64 kMaxLodReduction = 0.9;
 
 constexpr std::array<std::string_view, 3> kColorSpaceNames{"auto", "srgb", "linear"};
 
@@ -120,24 +123,58 @@ Expected<void, ImportSettingsError> mergeModel(ModelImportSettings& model, const
         return unexpected(fail("/model", "must be an object or null"));
     }
     ModelImportSettings merged = model;
+    const ModelImportSettings defaults{};
     for (const JsonMember member : patch.members())
     {
         const std::string pointer = std::format("/model/{}", member.key);
-        if (member.key != "scale")
+        const JsonValue value = member.value;
+        if (member.key == "scale")
         {
-            return unexpected(fail(pointer, "is not a model setting (scale)"));
+            if (value.isNull())
+            {
+                merged.scale = defaults.scale;
+                continue;
+            }
+            const std::optional<f64> scale = value.asF64();
+            if (!scale || !(*scale > 0.0) || *scale > kMaxModelScale)
+            {
+                return unexpected(fail(pointer, "must be a number greater than 0 and at most 1000"));
+            }
+            merged.scale = static_cast<f32>(*scale);
         }
-        if (member.value.isNull())
+        else if (member.key == "lodCount")
         {
-            merged.scale = ModelImportSettings{}.scale;
-            continue;
+            if (value.isNull())
+            {
+                merged.lodCount = defaults.lodCount;
+                continue;
+            }
+            const std::optional<u64> count = value.isInteger() ? value.asU64() : std::nullopt;
+            if (!count || *count > kMaxSubmeshLods)
+            {
+                return unexpected(
+                    fail(pointer, std::format("must be an integer from 0 to {}", kMaxSubmeshLods)));
+            }
+            merged.lodCount = static_cast<u32>(*count);
         }
-        const std::optional<f64> scale = member.value.asF64();
-        if (!scale || !(*scale > 0.0) || *scale > kMaxModelScale)
+        else if (member.key == "lodReduction")
         {
-            return unexpected(fail(pointer, "must be a number greater than 0 and at most 1000"));
+            if (value.isNull())
+            {
+                merged.lodReduction = defaults.lodReduction;
+                continue;
+            }
+            const std::optional<f64> reduction = value.asF64();
+            if (!reduction || !(*reduction >= kMinLodReduction && *reduction <= kMaxLodReduction))
+            {
+                return unexpected(fail(pointer, "must be a number from 0.1 to 0.9"));
+            }
+            merged.lodReduction = static_cast<f32>(*reduction);
         }
-        merged.scale = static_cast<f32>(*scale);
+        else
+        {
+            return unexpected(fail(pointer, "is not a model setting (scale, lodCount, lodReduction)"));
+        }
     }
     model = merged;
     return {};
@@ -302,7 +339,18 @@ std::string writeImportSettings(const ImportSettings& settings, ImportSettingsKi
     if (kind == ImportSettingsKind::Model && settings.model != defaultModel)
     {
         JsonMutValue model = root.addObject("model");
-        model.add("scale", document.makeF32(settings.model.scale));
+        if (settings.model.scale != defaultModel.scale)
+        {
+            model.add("scale", document.makeF32(settings.model.scale));
+        }
+        if (settings.model.lodCount != defaultModel.lodCount)
+        {
+            model.add("lodCount", document.makeU64(settings.model.lodCount));
+        }
+        if (settings.model.lodReduction != defaultModel.lodReduction)
+        {
+            model.add("lodReduction", document.makeF32(settings.model.lodReduction));
+        }
         any = true;
     }
     if (!any)
@@ -330,7 +378,10 @@ std::string importSettingsValue(const ImportSettings& settings, ImportSettingsKi
     {
         JsonMutDocument document;
         JsonMutValue root = document.makeObject();
-        root.addObject("model").add("scale", document.makeF32(settings.model.scale));
+        JsonMutValue model = root.addObject("model");
+        model.add("scale", document.makeF32(settings.model.scale));
+        model.add("lodCount", document.makeU64(settings.model.lodCount));
+        model.add("lodReduction", document.makeF32(settings.model.lodReduction));
         document.setRoot(root);
         std::string text;
         if (document.write(text, JsonWriteOptions{.pretty = false}))

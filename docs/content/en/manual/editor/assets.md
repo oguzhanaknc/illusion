@@ -58,7 +58,9 @@ default), **Revert** reloads what is on disk.
 
 - **Textures** (`.png`, `.jpg`, `.jpeg`, `.tga`, `.bmp`, `.hdr`): the color space (automatic, sRGB or linear),
   whether mipmaps are generated, and the maximum size in pixels.
-- **Models** (`.gltf`, `.glb`): a uniform scale applied to positions and node translations.
+- **Models** (`.gltf`, `.glb`): a uniform scale applied to positions and node translations, how many
+  [levels of detail](../rendering.md#levels-of-detail) are generated per mesh (0 to 3) and the fraction of
+  triangles each level keeps.
 
 The import settings inspector also says how many files refer to the selected asset.
 

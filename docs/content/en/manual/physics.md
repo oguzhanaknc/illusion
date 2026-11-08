@@ -108,8 +108,9 @@ world.create(rockTransform, illusion::RigidBody{}, rockShape);
 
 - Mesh colliders on dynamic bodies are rejected (Jolt cannot compute their mass); use a convex hull.
 - `destroyMesh()` releases a handle; bodies that already use the geometry keep it.
-- The `PhysicsAssetResolver` cooks a triangle mesh of all submeshes, or the convex hull of all
-  vertices, once per asset, `meshIndex` (the mesh of a model path without a fragment) and shape kind.
+- The `PhysicsAssetResolver` cooks a triangle mesh of all submeshes at full detail (levels of detail are
+  for drawing only, see `fullDetailIndices()`; `statistics().triangles` counts the cooked triangles), or
+  the convex hull of all vertices, once per asset, `meshIndex` (the mesh of a model path without a fragment) and shape kind.
   A Collider waiting for its asset gets its body once the geometry is cooked; a Collider whose asset
   changes is rebuilt. An asset that cannot be loaded logs a warning and counts in
   `statistics().failures`.
