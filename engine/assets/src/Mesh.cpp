@@ -97,7 +97,7 @@ Cards findCards(const MeshData& mesh, std::span<const u32> indices)
     for (const Aabb& box : bounds)
     {
         const Vec3 extent = box.max - box.min;
-        total += std::max({extent.x, extent.y, extent.z});
+        total += static_cast<f64>(std::max({extent.x, extent.y, extent.z}));
     }
     cards.meanSize = cards.count > 0 ? static_cast<f32>(total / cards.count) : 0.0f;
     return cards;
