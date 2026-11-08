@@ -265,6 +265,27 @@ illusion::advanceWind(world, deltaSeconds); // GameSession and the editor call t
 Rüzgarın saati çalışma zamanı durumu olan `WindState`'tir; `advanceWind()` onu ekler ve ilerletir.
 `windVelocity()` oyun kodu için bir noktadaki havanın hızını, renderer'ın gösterdiğiyle aynı şekilde verir.
 
+### Yarı saydamlık
+
+Yapraklar, çimen yaprakları, kâğıt ve kumaş gibi ince yüzeyler ışığı geçirir. `diffuseTransmission` (0 ile
+1 arası), bir Material'in diffuse ışığının öbür tarafa geçen payıdır: arka yüze ulaşan ışık ön yüzden
+yumuşak diffuse ışık olarak çıkar; rengi base colour ile `diffuseTransmissionColor`'ın çarpımıdır. Aydınlık
+tarafta yansıyan ışık da aynı oranda azalır, böylece yüzey enerji yaratmaz. Bu yüzden düzgün bir gökyüzü
+altında beyaz, yarı saydam bir yüzey opak bir yüzeyle aynı görünür; güneşe karşı ise parlar. Metaller ışık
+geçirmez. Bu, glTF'nin `KHR_materials_diffuse_transmission` eklentisidir: onu kullanan modellerin
+çarpanları içe aktarılır (eklentinin iki Texture'ı okunmaz).
+
+Gölgeler yine geçerlidir: başka bir yaprağın ya da bir gövdenin arkasındaki yaprak karanlık kalır. Yarı
+saydam bir yüzeyin gölge testi ışığın ulaştığı tarafı kullanır, böylece tek bir yaprak kendini gölgelemez.
+
+```cpp
+illusion::MaterialData leaf = illusion::MaterialData{};
+leaf.alphaMode = illusion::AlphaMode::Mask;
+leaf.doubleSided = true;
+leaf.diffuseTransmission = 0.4f;                    // 40% of the diffuse light passes through
+leaf.diffuseTransmissionColor = {0.9f, 1.0f, 0.5f}; // the light inside a leaf turns yellow-green
+```
+
 ### Culling
 
 `Inactive` etiketli Entity'ler (kendileri veya bir ataları [Disabled](ecs.md#disabled-ve-inactive)) çizilmez;

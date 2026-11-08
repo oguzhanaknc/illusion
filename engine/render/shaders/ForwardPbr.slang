@@ -22,6 +22,7 @@ struct MaterialConstants
     float occlusionStrength;
     float alphaCutoff;      // < 0 when alpha masking is off
     float4 wind;            // x: sway, y: flutter
+    float4 transmission;    // rgb: diffuse transmission * its colour, w: diffuse transmission
 };
 
 ConstantBuffer<ViewConstants> g_view : register(b0, space0);
@@ -186,8 +187,12 @@ struct Surface
     float alpha; // roughness squared
     float3 normal;
     float3 view;
+    float4 transmission; // rgb: transmitted tint, w: fraction of diffuse light transmitted (0 for most)
 };
 
+// Direct lighting from one light. Translucent surfaces (KHR_materials_diffuse_transmission) split their
+// diffuse light between this side and the other: light that reaches the back face leaves this side as
+// Lambertian light tinted by the transmission colour.
 float3 shade(Surface surface, float3 lightDirection, float3 radiance)
 {
     const float3 l = lightDirection;
@@ -200,7 +205,17 @@ float3 shade(Surface surface, float3 lightDirection, float3 radiance)
     const float3 specular = distributionGgx(nDotH, surface.alpha) *
                             visibilitySmithGgxCorrelated(nDotV, nDotL, surface.alpha) * fresnel;
     const float3 diffuse = (1.0 - fresnel) * surface.albedo / kPi;
-    return (diffuse + specular) * radiance * nDotL;
+    const float3 reflected = (diffuse * (1.0 - surface.transmission.w) + specular) * nDotL;
+    const float backDotL = saturate(-dot(surface.normal, l));
+    const float3 transmitted = surface.transmission.rgb * (1.0 - surface.f0) * surface.albedo / kPi * backDotL;
+    return (reflected + transmitted) * radiance;
+}
+
+// Normal along which the shadow test offsets the receiver: the lit side's. Light reaches translucent
+// surfaces from behind too, so their test offsets towards the light rather than towards the viewer.
+float3 receiverNormal(float3 geometricNormal, float3 toLight, bool translucent)
+{
+    return translucent && dot(geometricNormal, toLight) < 0.0 ? -geometricNormal : geometricNormal;
 }
 
 // Normal from the normal map; without vertex tangents the tangent frame comes from screen-space
@@ -251,7 +266,13 @@ float3 environmentLighting(Surface surface, float roughness, float occlusion)
     const float3 diffuseWeight = surface.albedo * (1.0 - singleScatter - multiScatter * multiScatterEnergy);
 
     const float3x3 toEnvironment = (float3x3)g_view.skyRotation;
-    const float3 irradiance = shIrradiance(g_view.sh, mul(toEnvironment, surface.normal)) / kPi;
+    float3 irradiance = shIrradiance(g_view.sh, mul(toEnvironment, surface.normal)) / kPi;
+    if (surface.transmission.w > 0.0)
+    {
+        // The sky and ground light reaching the back face pass through translucent surfaces.
+        const float3 behind = shIrradiance(g_view.sh, mul(toEnvironment, -surface.normal)) / kPi;
+        irradiance = irradiance * (1.0 - surface.transmission.w) + behind * surface.transmission.rgb;
+    }
     const float3 reflected = reflect(-surface.view, surface.normal);
     const float3 radiance =
         g_specularCube.SampleLevel(g_clampSampler, mul(toEnvironment, reflected), roughness * g_view.sky.y).rgb *
@@ -285,6 +306,13 @@ float4 fragmentMain(VertexOutput input, bool frontFace: SV_IsFrontFace) : SV_Tar
     surface.alpha = roughness * roughness;
     surface.normal = surfaceNormal(input, frontFace);
     surface.view = g_view.effects.z > 0.5 ? -g_view.cameraForward.xyz : normalize(g_view.cameraPosition.xyz - input.worldPosition);
+    surface.transmission = material.transmission;
+    const bool translucent = material.transmission.w > 0.0;
+    float3 geometricNormal = normalize(input.normal);
+    if (!frontFace)
+    {
+        geometricNormal = -geometricNormal;
+    }
 
     float ambientOcclusion = occlusion;
     if ((g_push.flags & 1u) != 0u && g_view.effects.x > 0.5)
@@ -299,12 +327,9 @@ float4 fragmentMain(VertexOutput input, bool frontFace: SV_IsFrontFace) : SV_Tar
         float visibility = 1.0;
         if (i == shadowedLight)
         {
-            float3 geometricNormal = normalize(input.normal);
-            if (!frontFace)
-            {
-                geometricNormal = -geometricNormal;
-            }
-            visibility = shadowVisibility(input.worldPosition, geometricNormal, input.position.xy);
+            visibility = shadowVisibility(input.worldPosition,
+                                          receiverNormal(geometricNormal, -light.direction.xyz, translucent),
+                                          input.position.xy);
         }
         color += shade(surface, -light.direction.xyz, light.color.rgb * visibility);
     }
@@ -320,12 +345,8 @@ float4 fragmentMain(VertexOutput input, bool frontFace: SV_IsFrontFace) : SV_Tar
         const uint shadowSlot = uint(light.color.w);
         if (shadowSlot > 0u && attenuation > 0.0)
         {
-            float3 geometricNormal = normalize(input.normal);
-            if (!frontFace)
-            {
-                geometricNormal = -geometricNormal;
-            }
-            attenuation *= pointShadowVisibility(shadowSlot - 1u, input.worldPosition, geometricNormal,
+            attenuation *= pointShadowVisibility(shadowSlot - 1u, input.worldPosition,
+                                                 receiverNormal(geometricNormal, toLight, translucent),
                                                  input.position.xy);
         }
         color += shade(surface, toLight * rsqrt(distanceSquared), light.color.rgb * attenuation);

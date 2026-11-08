@@ -201,6 +201,14 @@ private:
         {
             material.emissiveFactor *= source.emissive_strength.emissive_strength;
         }
+        if (source.has_diffuse_transmission)
+        {
+            const cgltf_diffuse_transmission& transmission = source.diffuse_transmission;
+            material.diffuseTransmission = transmission.diffuse_transmission_factor;
+            material.diffuseTransmissionColor = Vec3(transmission.diffuse_transmission_color_factor[0],
+                                                     transmission.diffuse_transmission_color_factor[1],
+                                                     transmission.diffuse_transmission_color_factor[2]);
+        }
         material.normalTexture = textureRef(source.normal_texture, false);
         material.normalScale = source.normal_texture.scale;
         material.occlusionTexture = textureRef(source.occlusion_texture, false);
@@ -584,7 +592,8 @@ std::optional<ModelData> loadGltf(const VirtualFileSystem& files, std::string_vi
     for (cgltf_size i = 0; i < data->extensions_required_count; ++i)
     {
         const std::string_view extension = data->extensions_required[i];
-        if (extension != "KHR_mesh_quantization" && extension != "KHR_materials_emissive_strength")
+        if (extension != "KHR_mesh_quantization" && extension != "KHR_materials_emissive_strength" &&
+            extension != "KHR_materials_diffuse_transmission")
         {
             return fail(std::format("required extension {} is not supported", extension));
         }

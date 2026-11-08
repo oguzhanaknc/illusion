@@ -203,6 +203,8 @@ std::vector<std::byte> serializeModel(const ModelData& model)
         writer.write(static_cast<u8>(material.doubleSided ? 1 : 0));
         writer.write(material.windSway);
         writer.write(material.windFlutter);
+        writer.write(material.diffuseTransmission);
+        writer.write(material.diffuseTransmissionColor);
         writeTexture(writer, material.baseColorTexture);
         writeTexture(writer, material.metallicRoughnessTexture);
         writeTexture(writer, material.normalTexture);
@@ -301,6 +303,8 @@ std::optional<ModelData> deserializeModel(std::span<const std::byte> bytes)
         reader.read(doubleSided);
         reader.read(material.windSway);
         reader.read(material.windFlutter);
+        reader.read(material.diffuseTransmission);
+        reader.read(material.diffuseTransmissionColor);
         const usize images = model.images.size();
         readTexture(reader, material.baseColorTexture, images);
         readTexture(reader, material.metallicRoughnessTexture, images);

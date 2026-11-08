@@ -105,6 +105,23 @@ TEST_CASE("glTF with a data URI buffer and missing normals loads")
     CHECK(model->materials.empty());
 }
 
+TEST_CASE("glTF diffuse transmission makes a translucent material, other materials stay opaque to light")
+{
+    VirtualFileSystem files;
+    mountTestData(files);
+    std::string error;
+    const auto leaf = loadGltf(files, "test:/gltf/translucent.gltf", &error); // requires the extension
+    REQUIRE_MESSAGE(leaf.has_value(), error);
+    REQUIRE(leaf->materials.size() == 1);
+    CHECK(leaf->materials[0].diffuseTransmission == doctest::Approx(0.25));
+    CHECK(leaf->materials[0].diffuseTransmissionColor == Vec3(1.0f, 0.75f, 0.5f));
+
+    const auto quad = loadGltf(files, "test:/gltf/scene/two_nodes.gltf", &error);
+    REQUIRE_MESSAGE(quad.has_value(), error);
+    CHECK(quad->materials[0].diffuseTransmission == 0.0f);
+    CHECK(quad->materials[0].diffuseTransmissionColor == Vec3(1.0f));
+}
+
 TEST_CASE("glTF errors are reported instead of crashing")
 {
     VirtualFileSystem files;

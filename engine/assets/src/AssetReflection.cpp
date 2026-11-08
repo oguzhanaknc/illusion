@@ -58,6 +58,18 @@ void reflectAssetStructs(ComponentRegistry& registry)
                 .category = "Wind",
                 .min = 0.0,
                 .softMax = 0.02})
+        .field("diffuseTransmission", &MaterialData::diffuseTransmission,
+               {.description = "Fraction of diffuse light that passes through to the other side (leaves).",
+                .category = "Translucency",
+                .min = 0.0,
+                .max = 1.0,
+                .hint = FieldHint::Slider})
+        .field("diffuseTransmissionColor", &MaterialData::diffuseTransmissionColor,
+               {.description = "Tint of the light that passes through, multiplied with the base colour.",
+                .category = "Translucency",
+                .min = 0.0,
+                .max = 1.0,
+                .hint = FieldHint::Color})
         .field("baseColorTexture", &MaterialData::baseColorTexture)
         .field("metallicRoughnessTexture", &MaterialData::metallicRoughnessTexture)
         .field("normalTexture", &MaterialData::normalTexture)

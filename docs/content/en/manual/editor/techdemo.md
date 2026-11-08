@@ -41,7 +41,8 @@ A full day lasts six minutes.
   needle litter of a pine forest.
 - **Forest**: 110 tall firs (13 to 19 m), 80 young firs, 14 broad-leaved trees and 36 saplings, all Poly Haven
   models with a cylinder collider each. Every part of a tree shares one `windSway`, matched to its height, so
-  trunks and needles bend together; leaves and needles also flutter (`windFlutter`).
+  trunks and needles bend together; leaves and needles also flutter (`windFlutter`). Leaves, needles and
+  undergrowth let the low sun through (`diffuseTransmission`), so they glow yellow-green against it.
 - **Undergrowth**: about 14,000 grass tufts, ferns, bushes, nettles, flowers (celandine, dandelion,
   periwinkle), weeds, roots, dry branches and bark, scattered with a fixed seed. The undergrowth is thinner on
   the hills, which are only seen from afar.

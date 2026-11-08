@@ -23,6 +23,7 @@ struct MaterialConstants
     float occlusionStrength;
     float alphaCutoff;
     float4 wind; // x: sway, y: flutter
+    float4 transmission; // unused here; keeps the layout of GpuMaterialConstants
 };
 
 ConstantBuffer<MaterialConstants> g_material : register(b0, space1);
