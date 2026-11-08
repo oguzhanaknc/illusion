@@ -50,6 +50,21 @@ Right-click an asset for its menu, or use the toolbar:
 Rename and move are one `asset.move`; deleting is `asset.delete`. Every one is a single undo step, and files
 the operation changes are reported so you see what a move fixed up.
 
+## Game modules
+
+A project with [game modules](../modules.md) also shows its `modules:` folder as a second root,
+**Modules**, below the asset folders in the left side and in the breadcrumbs. Browse it like the assets:
+folders open, the search field filters by name, and list and grid work the same. Source files (`.cpp`, `.hpp`,
+`.h`, `.c`, `CMakeLists.txt`, `.cmake`...) show a code icon.
+
+Double-click a file, or choose **Open** in its menu, to open it in the code editor of the
+[External Tools](preferences.md) (`editor.open_source`). The browser hides dot files (`.clangd`, `.illusion`)
+and build output (`build`, `out`, `CMakeFiles`, `cmake-build-*`). Modules are code, not assets, so the
+asset-only features are off there: no kind filter, thumbnails, import settings, favourites, new folder, rename,
+move, delete, or dragging into fields. **Reveal in the file manager** and **Copy path** work. The module list is
+read again when a `module.*` command runs from the editor and when you press **Refresh**; the Modules root
+appears once the folder holds a visible file.
+
 ## Import settings
 
 Select a texture or a model to edit how it is imported. A sidecar `<file>.import.json` next to the asset holds

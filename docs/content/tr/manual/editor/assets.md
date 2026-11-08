@@ -51,6 +51,21 @@ Menüsü için bir asset'e sağ tıklayın veya araç çubuğunu kullanın:
 Rename ve move tek bir `asset.move`'dur; silme `asset.delete`'dir. Her biri tek bir undo adımıdır ve işlemin
 değiştirdiği dosyalar raporlanır; böylece bir move'un neleri düzelttiğini görürsünüz.
 
+## Game modules
+
+[Game module](../modules.md) içeren bir proje, `modules:` klasörünü de ikinci bir kök olarak, **Modules**
+adıyla gösterir: solda Asset klasörlerinin altında ve breadcrumb'larda. Asset'lerdeki gibi gezinin: klasörler
+açılır, arama alanı ada göre filtreler, liste ve grid aynı çalışır. Kaynak dosyalar (`.cpp`, `.hpp`, `.h`, `.c`,
+`CMakeLists.txt`, `.cmake`...) bir kod ikonu gösterir.
+
+Bir dosyaya çift tıklayın veya menüsünden **Open**'ı seçin; dosya [External Tools](preferences.md) code
+editor'ında açılır (`editor.open_source`). Browser nokta ile başlayan dosyaları (`.clangd`, `.illusion`) ve build
+çıktısını (`build`, `out`, `CMakeFiles`, `cmake-build-*`) gizler. Module'ler asset değil koddur; bu yüzden
+yalnızca asset'lere özgü özellikler orada kapalıdır: tür filtresi, thumbnail, import ayarları, favoriler, yeni
+klasör, rename, move, delete ve alanlara sürükleme yoktur. **Reveal in the file manager** ve **Copy path**
+çalışır. Module listesi, editörden bir `module.*` komutu çalıştığında ve **Refresh**'e bastığınızda yeniden
+okunur; Modules kökü, klasörde görünür bir dosya olunca belirir.
+
 ## Import ayarları
 
 Bir texture veya model seçerek nasıl import edildiğini düzenleyin. Asset'in yanındaki `<file>.import.json`

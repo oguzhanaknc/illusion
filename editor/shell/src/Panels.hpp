@@ -558,7 +558,9 @@ private:
 
 /// The Asset Browser panel: the project's `assets:` mount as a navigable grid and list with thumbnails, a
 /// folder tree and favourites, search, sorting and a kind filter; file operations run the asset commands,
-/// and the import settings of a selected texture or model are edited inline.
+/// and the import settings of a selected texture or model are edited inline. A project with game modules
+/// also shows its `modules:` mount as a second root, to browse and to open sources in the code editor (the
+/// asset-only features are off there).
 class AssetBrowser
 {
 public:
@@ -573,8 +575,12 @@ public:
     /// Navigates to the folder of @p path and selects it (the palette's "#" search).
     void reveal(std::string_view path);
 
-    /// The folder shown now (the destination of OS file drops), e.g. "assets:/models".
+    /// The folder of `assets:` that OS file drops import into, e.g. "assets:/models": the folder shown now,
+    /// or the assets root while a `modules:` folder is shown.
     [[nodiscard]] std::string_view currentFolder() const noexcept;
+
+    /// Lists the `modules:` mount again at the next draw (a module command ran).
+    void markModulesStale() noexcept;
 
 private:
     struct State;

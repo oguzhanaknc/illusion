@@ -79,6 +79,7 @@
     "editor.asset_browser.kind": {"text": "Kind", "comment": "Asset browser: filter by asset kind"},
     "editor.asset_browser.kind.all": {"text": "All kinds", "comment": "Asset browser: show assets of every kind"},
     "editor.asset_browser.list": {"text": "List view", "comment": "Asset browser view mode"},
+    "editor.asset_browser.modules": {"text": "Modules", "comment": "Asset browser: root folder and side panel section of the project's game modules"},
     "editor.asset_browser.move": {"text": "Move to folder…", "comment": "Asset browser context menu"},
     "editor.asset_browser.move.action": {"text": "Move", "comment": "Asset browser: confirm a move"},
     "editor.asset_browser.move.hint": {"text": "Target folder, e.g. assets:/materials", "comment": "Asset browser: move dialog"},
