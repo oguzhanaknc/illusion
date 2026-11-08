@@ -69,6 +69,8 @@
     "editor.asset_browser.import.color_space.linear": {"text": "Linear", "comment": "Texture import setting value"},
     "editor.asset_browser.import.color_space.srgb": {"text": "sRGB", "comment": "Texture import setting value"},
     "editor.asset_browser.import.generate_mips": {"text": "Generate mipmaps", "comment": "Texture import setting"},
+    "editor.asset_browser.import.lod_count": {"text": "Levels of detail", "comment": "Model import setting: number of simplified versions generated per mesh"},
+    "editor.asset_browser.import.lod_reduction": {"text": "Level reduction", "comment": "Model import setting: fraction of triangles each level of detail keeps"},
     "editor.asset_browser.import.max_size": {"text": "Max size", "comment": "Texture import setting in pixels"},
     "editor.asset_browser.import.none": {"text": "This asset has no import settings.", "comment": "Asset browser: selected asset without a sidecar kind"},
     "editor.asset_browser.import.revert": {"text": "Revert", "comment": "Asset browser: reload import settings"},

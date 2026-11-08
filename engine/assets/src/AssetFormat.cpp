@@ -251,9 +251,20 @@ std::optional<ModelData> deserializeModel(std::span<const std::byte> bytes)
         }
         for (const Submesh& submesh : mesh.submeshes)
         {
-            if (static_cast<u64>(submesh.indexOffset) + submesh.indexCount > mesh.indices.size())
+            if (static_cast<u64>(submesh.indexOffset) + submesh.indexCount > mesh.indices.size() ||
+                submesh.lodCount > kMaxSubmeshLods)
             {
                 return std::nullopt;
+            }
+            for (u32 level = 0; level < submesh.lodCount; ++level)
+            {
+                const SubmeshLod& lod = submesh.lods[level];
+                if (lod.indexCount == 0 || lod.indexCount % 3 != 0 ||
+                    static_cast<u64>(lod.indexOffset) + lod.indexCount > mesh.indices.size() ||
+                    !(lod.error >= 0.0f))
+                {
+                    return std::nullopt;
+                }
             }
         }
     }

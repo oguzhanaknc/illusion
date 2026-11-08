@@ -91,6 +91,17 @@ TEST_CASE("sidecars hold only the settings that differ from their defaults")
         parseImportSettings(writeImportSettings(model, ImportSettingsKind::Model), ImportSettingsKind::Model);
     REQUIRE(again.hasValue());
     CHECK(again->model.scale == doctest::Approx(0.01f));
+    CHECK(writeImportSettings(model, ImportSettingsKind::Model).find("lod") == std::string::npos); // defaults
+
+    ImportSettings lods;
+    lods.model.lodCount = 1;
+    lods.model.lodReduction = 0.25f;
+    const Expected<ImportSettings, ImportSettingsError> lodsAgain =
+        parseImportSettings(writeImportSettings(lods, ImportSettingsKind::Model), ImportSettingsKind::Model);
+    REQUIRE(lodsAgain.hasValue());
+    CHECK(*lodsAgain == lods);
+    CHECK(importSettingsValue(ImportSettings{}, ImportSettingsKind::Model) ==
+          R"({"model":{"scale":1.0,"lodCount":3,"lodReduction":0.5}})");
 
     CHECK(importSettingsValue(settings, ImportSettingsKind::Texture) ==
           R"({"texture":{"colorSpace":"auto","generateMips":true,"maxSize":512}})");
@@ -117,6 +128,13 @@ TEST_CASE("merging import settings follows JSON merge patch rules")
 
     REQUIRE(merge(settings, R"({"model": {"scale": 2}})", ImportSettingsKind::Model));
     CHECK(settings.model.scale == 2.0f);
+    REQUIRE(
+        merge(settings, R"({"model": {"lodCount": 0, "lodReduction": 0.75}})", ImportSettingsKind::Model));
+    CHECK(settings.model.scale == 2.0f);
+    CHECK(settings.model.lodCount == 0);
+    CHECK(settings.model.lodReduction == 0.75f);
+    REQUIRE(merge(settings, R"({"model": {"lodCount": null}})", ImportSettingsKind::Model));
+    CHECK(settings.model.lodCount == ModelImportSettings{}.lodCount);
     REQUIRE(merge(settings, "null", ImportSettingsKind::Model));
     CHECK(settings.isDefault());
     REQUIRE(merge(settings, "{}"));
@@ -148,6 +166,12 @@ TEST_CASE("invalid import settings are rejected with a pointer and change nothin
         {R"({"model": {"scale": 1001}})", ImportSettingsKind::Model, "/model/scale"},
         {R"({"model": {"scale": "big"}})", ImportSettingsKind::Model, "/model/scale"},
         {R"({"model": {"up": "z"}})", ImportSettingsKind::Model, "/model/up"},
+        {R"({"model": {"lodCount": 4}})", ImportSettingsKind::Model, "/model/lodCount"},
+        {R"({"model": {"lodCount": 1.5}})", ImportSettingsKind::Model, "/model/lodCount"},
+        {R"({"model": {"lodCount": -1}})", ImportSettingsKind::Model, "/model/lodCount"},
+        {R"({"model": {"lodReduction": 0.05}})", ImportSettingsKind::Model, "/model/lodReduction"},
+        {R"({"model": {"lodReduction": 0.95}})", ImportSettingsKind::Model, "/model/lodReduction"},
+        {R"({"model": {"lodReduction": "half"}})", ImportSettingsKind::Model, "/model/lodReduction"},
         {R"({})", ImportSettingsKind::None, ""},
     };
     for (const Case& c : cases)

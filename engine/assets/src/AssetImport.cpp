@@ -161,6 +161,11 @@ std::optional<ModelData> importModel(const VirtualFileSystem& files, std::string
         return std::nullopt;
     }
     scaleModel(*model, settings->model.scale);
+    const MeshLodSettings lods{.levels = settings->model.lodCount, .reduction = settings->model.lodReduction};
+    for (MeshData& mesh : model->meshes)
+    {
+        generateLods(mesh, lods);
+    }
     cooked.type = AssetType::Model;
     cooked.version = kModelFormatVersion;
     cooked.dependencies.clear();

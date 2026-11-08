@@ -113,6 +113,17 @@ ILL_BENCHMARK("assets/model-load", 250.0)
     });
 }
 
+ILL_BENCHMARK("assets/generate-lods", 4'000.0)
+{
+    const MeshData sphere = makeSphere(1.0f, 128, 64); // 16k triangles
+    const usize triangles = sphere.indices.size() / 3;
+    bench.batch(triangles).unit("triangle").run("three levels of a 16k-triangle sphere", [&] {
+        MeshData mesh = sphere;
+        generateLods(mesh);
+        ankerl::nanobench::doNotOptimizeAway(mesh.indices.size());
+    });
+}
+
 ILL_BENCHMARK("platform/archive", 2000.0)
 {
     // 10k small files in one archive: lookups are binary searches over the sorted table of contents.

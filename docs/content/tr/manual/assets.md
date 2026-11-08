@@ -82,6 +82,13 @@ const illusion::MeshHandle groundMesh = resources.createMesh(ground, "Ground");
 
 Tüm Mesh'ler sağ elli, y yukarı bir uzayda saat yönünün tersindeki ön yüzleri kullanır.
 
+`generateLods()`, [meshoptimizer](https://github.com/zeux/meshoptimizer) ile her submesh'e daha kaba
+[level of detail](rendering.md#levels-of-detail)'ler ekler: her seviye vertex'leri korur, kendi index'lerini
+sona ekler ve hatasını nesne uzayı birimleriyle kaydeder. Material'ler arasındaki sınırları kapalı tutar; bir
+seviye üçgenlerin onda birinden azını kaldıracaksa ya da `MeshLodSettings::maxError`'ı aşacaksa durur ve
+`MeshLodSettings::minTriangles`'ın altındaki submesh'leri atlar. Model içe aktarımı onu sidecar'ın `lodCount`
+ve `lodReduction` ayarlarıyla çağırır; `clearLods()` seviyeleri yeniden kaldırır.
+
 ## Ortamlar
 
 Header: `<illusion/assets/Environment.hpp>`
@@ -243,6 +250,8 @@ farklıyken vardır ve yalnızca o ayarları tutar:
 | | `generateMips` | `true` | `false`, kullanan mip istese bile yalnızca en üst seviyeyi içe aktarır. |
 | | `maxSize` | `0` | Hiçbir kenar bunu aşmayana kadar görüntüyü yarıya indirir (1 ile 16384 arası; 0 sınır yok demektir). |
 | Model (`.gltf`, `.glb`) | `scale` | `1` | Konumların ve node ötelemelerinin düzgün ölçeği (0'dan büyük, en çok 1000). |
+| | `lodCount` | `3` | Submesh başına üretilen daha kaba [level of detail](rendering.md#levels-of-detail) sayısı (0 ile 3 arası; 0 kapatır). |
+| | `lodReduction` | `0.5` | Her seviyenin hedeflediği, önceki seviyenin üçgenlerinin oranı (0.1 ile 0.9 arası). |
 
 - `AssetDatabase`, `AssetStreamer` ve `cookAssets()` içe aktardıkları her görüntünün ve modelin
   sidecar'ını okur; böylece editör, oyun ve hazırlanmış Build aynı sonucu görür.

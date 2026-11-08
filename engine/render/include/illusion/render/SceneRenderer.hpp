@@ -6,6 +6,7 @@
 /// shading (opaque, then back-to-front transparent, then particles), reversed-Z depth, then ambient
 /// occlusion, TAA, bloom and tonemapping.
 
+#include <illusion/assets/Mesh.hpp>
 #include <illusion/core/Base.hpp>
 #include <illusion/core/Math.hpp>
 #include <illusion/ecs/Transform.hpp>
@@ -15,6 +16,7 @@
 
 #include <nvrhi/nvrhi.h>
 
+#include <array>
 #include <memory>
 #include <span>
 
@@ -36,6 +38,10 @@ struct RenderView
     /// Seconds since this view's previous frame, for automatic exposure (PostEffects::adaptationSpeed).
     f32 deltaSeconds = 1.0f / 60.0f;
     u32 layerMask = ~0u; ///< RenderMesh layer bits accepted by this view.
+    /// Largest error, in pixels of the colour target's height, a coarser level of detail (Submesh::lods)
+    /// may show; each instance draws the coarsest level within it, in the camera pass and its shadows.
+    /// 0 always draws full detail.
+    f32 lodPixelError = 1.0f;
     /// Borrowed bitset indexed by Entity index (64 entities per word); set bits hide entities in all
     /// passes of this view. Missing words are zero. Keep alive until render() returns.
     std::span<const u64> hiddenEntities{};
@@ -93,6 +99,8 @@ struct RenderStats
     u32 particles = 0;            ///< Live particles drawn (ParticleEmitter, ADR 0047).
     u32 atmosphereUpdates = 0;    ///< 1 when a SkyAtmosphere redrew its lighting cube map (it changed).
     u32 fogFroxels = 0;           ///< Froxels of the VolumetricFog lit this frame (0 without fog, ADR 0050).
+    /// Camera-visible instances per level of detail (index 0: full detail; see RenderView::lodPixelError).
+    std::array<u32, kMaxSubmeshLods + 1> lodInstances{};
 };
 
 /// Completed GPU pass measurements in milliseconds, obtained without blocking the graphics queue.

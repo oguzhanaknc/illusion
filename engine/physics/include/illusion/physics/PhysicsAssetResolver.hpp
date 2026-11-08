@@ -31,6 +31,9 @@ struct PhysicsAssetStatistics
     u32 pending = 0;    ///< Colliders waiting for their model after the last update().
     u32 failures = 0;   ///< Mesh assets that could not be cooked (or cooked again), since construction.
     u32 reloads = 0;    ///< Reloads of changed models finished, since construction.
+    /// Triangles of the cooked Mesh shapes (their latest geometry). Only full-detail triangles collide: the
+    /// levels of detail of a model (Submesh::lods) are not part of its collision mesh.
+    u64 triangles = 0;
 };
 
 /// Keeps Collider::geometry of the ConvexHull and Mesh Colliders of a PhysicsWorld's World in step with their

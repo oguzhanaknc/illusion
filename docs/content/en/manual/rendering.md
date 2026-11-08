@@ -282,6 +282,32 @@ ILL_LOG_INFO("Game", "{} of {} opaque instances drawn", renderer->readGpuDrawnIn
   a few large objects, `setOcclusionCulling(false)` saves the depth-pyramid passes.
 - Blended Meshes and shadow casters are culled against the frustum only.
 
+### Levels of detail
+
+A submesh can carry up to three coarser **levels of detail** (`Submesh::lods`): simplified versions that
+use fewer triangles of the same vertices. Imported glTF models get them automatically (see
+[import settings](assets.md#import-settings)); for your own Meshes call `generateLods()`. For every instance
+the culling Jobs pick the coarsest level whose geometric error, projected onto the screen, stays within
+`RenderView::lodPixelError` pixels (1 by default), so objects keep their silhouette while far ones cost a
+fraction of their triangles.
+
+```cpp
+illusion::MeshData tree = illusion::makeSphere(1.0f, 64, 32);
+illusion::generateLods(tree); // up to three coarser levels, each about half the triangles
+
+illusion::RenderView view = illusion::RenderView::fromCamera(cameraTransform, camera, aspect);
+view.lodPixelError = 1.0f; // the default; 0 always draws full detail
+renderer->render(commands, target, world, view, &jobs);
+ILL_LOG_INFO("Game", "{} instances at full detail, {} at the coarsest level",
+             renderer->stats().lodInstances[0], renderer->stats().lodInstances[illusion::kMaxSubmeshLods]);
+```
+
+- The level is chosen from the camera's distance and the instance's scale, once per frame, and the same
+  level is drawn into the shadow maps, so shadows match the surfaces that cast them.
+- Instances of one Mesh at different levels form separate batches; the GPU culls and draws each with one
+  indirect draw, as before.
+- Levels switch without a transition for now; dithered cross-fades follow (see the roadmap, GFX-2b).
+
 ### Bindless rendering
 
 On GPUs that support it, the renderer draws all opaque Meshes with a handful of calls:

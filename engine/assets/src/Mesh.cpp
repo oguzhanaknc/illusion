@@ -1,12 +1,33 @@
 #include <illusion/assets/Mesh.hpp>
+#include <illusion/core/Profiler.hpp>
 
 #include <algorithm>
 #include <array>
 #include <cmath>
+#include <meshoptimizer.h>
 #include <numbers>
 
 namespace illusion
 {
+
+namespace
+{
+
+// One submesh over every index of a procedural mesh, drawn with the default material.
+Submesh wholeSubmesh(const MeshData& mesh)
+{
+    Submesh submesh;
+    submesh.indexCount = static_cast<u32>(mesh.indices.size());
+    return submesh;
+}
+
+// Weight of the normal in the simplifier's error metric, relative to positions in units of the mesh size.
+constexpr f32 kNormalWeight = 0.5f;
+
+// A level must remove at least this fraction of the previous level's triangles to be kept.
+constexpr f32 kMinReduction = 0.1f;
+
+} // namespace
 
 void MeshData::computeBounds()
 {
@@ -25,6 +46,124 @@ void MeshData::computeBounds()
             {
                 submesh.bounds.expand(vertices[index].position);
             }
+        }
+    }
+}
+
+u32 selectLod(const Submesh& submesh, f32 pixelsPerUnit, f32 maxPixelError) noexcept
+{
+    if (!(maxPixelError > 0.0f))
+    {
+        return 0;
+    }
+    u32 level = 0;
+    const u32 count = std::min(submesh.lodCount, kMaxSubmeshLods);
+    while (level < count && submesh.lods[level].error * pixelsPerUnit <= maxPixelError)
+    {
+        ++level;
+    }
+    return level;
+}
+
+std::span<const u32> fullDetailIndices(const MeshData& mesh) noexcept
+{
+    usize end = mesh.indices.size();
+    for (const Submesh& submesh : mesh.submeshes)
+    {
+        for (u32 level = 0; level < submesh.lodCount && level < kMaxSubmeshLods; ++level)
+        {
+            end = std::min(end, static_cast<usize>(submesh.lods[level].indexOffset));
+        }
+    }
+    return std::span<const u32>(mesh.indices).first(end);
+}
+
+void clearLods(MeshData& mesh)
+{
+    usize fullEnd = 0;
+    usize lodStart = mesh.indices.size();
+    bool any = false;
+    for (Submesh& submesh : mesh.submeshes)
+    {
+        fullEnd = std::max(fullEnd, static_cast<usize>(submesh.indexOffset) + submesh.indexCount);
+        for (u32 level = 0; level < submesh.lodCount && level < kMaxSubmeshLods; ++level)
+        {
+            lodStart = std::min(lodStart, static_cast<usize>(submesh.lods[level].indexOffset));
+            any = true;
+        }
+        submesh.lodCount = 0;
+        submesh.lods = {};
+    }
+    if (any && lodStart >= fullEnd && fullEnd <= mesh.indices.size())
+    {
+        mesh.indices.resize(fullEnd);
+    }
+}
+
+void generateLods(MeshData& mesh, const MeshLodSettings& settings)
+{
+    ILL_PROFILE_SCOPE();
+    clearLods(mesh);
+    const u32 levels = std::min(settings.levels, kMaxSubmeshLods);
+    if (levels == 0 || mesh.vertices.empty() || !(settings.reduction > 0.0f && settings.reduction < 1.0f))
+    {
+        return;
+    }
+    const usize vertexCount = mesh.vertices.size();
+    const f32* positions = &mesh.vertices[0].position.x;
+    const f32* normals = &mesh.vertices[0].normal.x;
+    const std::array<f32, 3> normalWeights{kNormalWeight, kNormalWeight, kNormalWeight};
+    std::vector<u32> source;
+    std::vector<u32> simplified;
+    for (Submesh& submesh : mesh.submeshes)
+    {
+        if (static_cast<usize>(submesh.indexOffset) + submesh.indexCount > mesh.indices.size() ||
+            submesh.indexCount / 3 < std::max(settings.minTriangles, 1u))
+        {
+            continue;
+        }
+        source.assign(mesh.indices.begin() + submesh.indexOffset,
+                      mesh.indices.begin() + submesh.indexOffset + submesh.indexCount);
+        if (std::any_of(source.begin(), source.end(), [&](u32 index) { return index >= vertexCount; }))
+        {
+            continue;
+        }
+        Aabb bounds;
+        for (const u32 index : source)
+        {
+            bounds.expand(mesh.vertices[index].position);
+        }
+        const Vec3 extent = bounds.max - bounds.min;
+        const f32 size = std::max({extent.x, extent.y, extent.z});
+        if (!(size > 0.0f))
+        {
+            continue;
+        }
+        const f32 maxError = settings.maxError * size;
+        f32 previousError = 0.0f;
+        for (u32 level = 0; level < levels; ++level)
+        {
+            const usize target =
+                static_cast<usize>(static_cast<f32>(source.size() / 3) * settings.reduction) * 3;
+            simplified.resize(source.size());
+            f32 error = 0.0f;
+            const usize count = meshopt_simplifyWithAttributes(
+                simplified.data(), source.data(), source.size(), positions, vertexCount, sizeof(Vertex),
+                normals, sizeof(Vertex), normalWeights.data(), normalWeights.size(), nullptr, target,
+                maxError, meshopt_SimplifyLockBorder | meshopt_SimplifyErrorAbsolute, &error);
+            if (count == 0 ||
+                static_cast<f32>(count) > static_cast<f32>(source.size()) * (1.0f - kMinReduction))
+            {
+                break;
+            }
+            simplified.resize(count);
+            meshopt_optimizeVertexCache(simplified.data(), simplified.data(), count, vertexCount);
+            previousError = std::max(previousError, error);
+            submesh.lods[level] =
+                SubmeshLod{static_cast<u32>(mesh.indices.size()), static_cast<u32>(count), previousError};
+            submesh.lodCount = level + 1;
+            mesh.indices.insert(mesh.indices.end(), simplified.begin(), simplified.end());
+            source.swap(simplified);
         }
     }
 }
@@ -91,7 +230,7 @@ MeshData makeCube(f32 size)
             mesh.indices.push_back(base + index);
         }
     }
-    mesh.submeshes.push_back(Submesh{0, static_cast<u32>(mesh.indices.size()), -1, {}});
+    mesh.submeshes.push_back(wholeSubmesh(mesh));
     mesh.computeBounds();
     return mesh;
 }
@@ -133,7 +272,7 @@ MeshData makeSphere(f32 radius, u32 segments, u32 rings)
             }
         }
     }
-    mesh.submeshes.push_back(Submesh{0, static_cast<u32>(mesh.indices.size()), -1, {}});
+    mesh.submeshes.push_back(wholeSubmesh(mesh));
     mesh.computeBounds();
     return mesh;
 }
@@ -169,7 +308,7 @@ MeshData makePlane(f32 size, u32 subdivisions)
             }
         }
     }
-    mesh.submeshes.push_back(Submesh{0, static_cast<u32>(mesh.indices.size()), -1, {}});
+    mesh.submeshes.push_back(wholeSubmesh(mesh));
     mesh.computeBounds();
     return mesh;
 }
@@ -215,7 +354,7 @@ MeshData makeCapsule(f32 radius, f32 halfHeight, u32 segments, u32 rings)
             }
         }
     }
-    mesh.submeshes.push_back(Submesh{0, static_cast<u32>(mesh.indices.size()), -1, {}});
+    mesh.submeshes.push_back(wholeSubmesh(mesh));
     mesh.computeBounds();
     return mesh;
 }
@@ -279,7 +418,7 @@ MeshData makeCylinder(f32 radius, f32 halfHeight, u32 segments)
             }
         }
     }
-    mesh.submeshes.push_back(Submesh{0, static_cast<u32>(mesh.indices.size()), -1, {}});
+    mesh.submeshes.push_back(wholeSubmesh(mesh));
     mesh.computeBounds();
     return mesh;
 }

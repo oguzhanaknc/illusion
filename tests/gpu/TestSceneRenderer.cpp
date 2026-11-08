@@ -38,7 +38,9 @@ struct Rgb
 };
 
 /// Renders @p world from a camera at (0, 0, 5) looking down -z into a 64x64 RGBA8 target and reads it back.
-std::vector<u8> renderScene(RenderDevice& device, SceneRenderer& renderer, World& world, JobSystem* jobs)
+/// @p lodPixelError is RenderView::lodPixelError.
+std::vector<u8> renderScene(RenderDevice& device, SceneRenderer& renderer, World& world, JobSystem* jobs,
+                            f32 lodPixelError = 1.0f)
 {
     nvrhi::IDevice* gpu = device.device();
     nvrhi::TextureDesc targetDesc;
@@ -56,7 +58,8 @@ std::vector<u8> renderScene(RenderDevice& device, SceneRenderer& renderer, World
 
     Transform cameraTransform;
     cameraTransform.position = Vec3(0.0f, 0.0f, 5.0f);
-    const RenderView view = RenderView::fromCamera(cameraTransform, Camera{}, 1.0f);
+    RenderView view = RenderView::fromCamera(cameraTransform, Camera{}, 1.0f);
+    view.lodPixelError = lodPixelError;
 
     nvrhi::CommandListHandle commands = gpu->createCommandList();
     commands->open();
@@ -153,6 +156,75 @@ TEST_CASE("the scene renderer lights, culls and instances meshes")
         CHECK(renderer->stats().visible == 4);
         CHECK(renderer->stats().drawCalls == 4); // one indirect draw per phase and pass
         CHECK(renderer->stats().triangles == 4ull * resources.submeshCount(sphere) * 32 * 16 * 2);
+    }
+    device->waitIdle();
+    CHECK(device->validationErrorCount() == 0);
+}
+
+TEST_CASE("meshes draw the coarsest level of detail within the pixel error, in every pass")
+{
+    auto device = RenderDevice::create(headless());
+    REQUIRE(device != nullptr);
+    {
+        RenderResources resources(*device);
+        SceneRendererDesc desc;
+        desc.colorFormat = nvrhi::Format::RGBA8_UNORM;
+        desc.clearColor = Vec4(0.0f, 0.0f, 0.0f, 1.0f);
+        desc.post.bloom.enabled = false;
+        auto renderer = SceneRenderer::create(*device, resources, desc);
+        REQUIRE(renderer != nullptr);
+
+        MeshData sphereData = makeSphere(1.0f, 64, 32);
+        generateLods(sphereData);
+        const Submesh& levels = sphereData.submeshes[0];
+        REQUIRE(levels.lodCount == kMaxSubmeshLods);
+        const MeshHandle sphere = resources.createMesh(sphereData, "Sphere");
+
+        World world;
+        world.create(Transform{}, RenderMesh{sphere, 0, MaterialHandle{}});
+        Transform sun; // from the camera's side, so the sphere also casts into the shadow cascades
+        sun.rotation = glm::angleAxis(-0.3f, Vec3(1.0f, 0.0f, 0.0f));
+        world.create(sun, DirectionalLight{Vec3(1.0f), 3.0f});
+        Transform floor;
+        floor.position = Vec3(0.0f, -1.5f, 0.0f);
+        world.create(floor,
+                     RenderMesh{resources.createMesh(makePlane(20.0f, 1), "Floor"), 0, MaterialHandle{}});
+
+        // Full detail when levels of detail are off.
+        const std::vector<u8> full = renderScene(*device, *renderer, world, nullptr, 0.0f);
+        CHECK(renderer->stats().lodInstances[0] == 2);
+        const u64 fullTriangles = renderer->stats().triangles;
+        CHECK(fullTriangles >= levels.indexCount / 3);
+
+        // At 4 m in a 64 pixel target the sphere is small: a coarser level is within one pixel.
+        const std::vector<u8> reduced = renderScene(*device, *renderer, world, nullptr, 1.0f);
+        CHECK(renderer->stats().lodInstances[0] == 1); // the floor has no levels
+        CHECK(renderer->stats().lodInstances[1] + renderer->stats().lodInstances[2] +
+                  renderer->stats().lodInstances[3] ==
+              1);
+        CHECK(renderer->stats().triangles < fullTriangles);
+        CHECK(renderer->stats().shadowCasters >= 1);
+        // The coarser sphere looks the same, within a pixel along its outline.
+        u32 different = 0;
+        for (u32 y = 0; y < kSize; ++y)
+        {
+            for (u32 x = 0; x < kSize; ++x)
+            {
+                const Rgb a = pixelAt(full, x, y);
+                const Rgb b = pixelAt(reduced, x, y);
+                different += std::abs(a.r - b.r) + std::abs(a.g - b.g) + std::abs(a.b - b.b) > 24 ? 1u : 0u;
+            }
+        }
+        CHECK(different <= kSize * 2);
+
+        // A huge allowance draws the coarsest level; a tiny one keeps full detail.
+        renderScene(*device, *renderer, world, nullptr, 1.0e6f);
+        CHECK(renderer->stats().lodInstances[kMaxSubmeshLods] == 1);
+        CHECK(renderer->stats().triangles ==
+              levels.lods[kMaxSubmeshLods - 1].indexCount / 3 + 2); // + the floor's two triangles
+        renderScene(*device, *renderer, world, nullptr, 1.0e-6f);
+        CHECK(renderer->stats().lodInstances[0] == 2);
+        CHECK(renderer->stats().triangles == fullTriangles);
     }
     device->waitIdle();
     CHECK(device->validationErrorCount() == 0);

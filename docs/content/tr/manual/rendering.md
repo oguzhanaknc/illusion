@@ -293,6 +293,32 @@ ILL_LOG_INFO("Game", "{} of {} opaque instances drawn", renderer->readGpuDrawnIn
   tasarruf sağlar.
 - Blend Mesh'ler ve gölge düşürenler yalnızca frustum'a göre elenir.
 
+### Levels of detail
+
+Bir submesh en fazla üç daha kaba **level of detail** (`Submesh::lods`) taşıyabilir: aynı vertex'lerin daha
+az üçgenini kullanan sadeleştirilmiş sürümler. İçe aktarılan glTF modelleri bunları otomatik olarak alır
+(bkz. [içe aktarma ayarları](assets.md#ice-aktarma-ayarlar)); kendi Mesh'leriniz için `generateLods()`
+çağırın. Culling Job'ları her instance için, ekrana yansıtılan geometrik hatası `RenderView::lodPixelError`
+pikseli (varsayılan 1) içinde kalan en kaba seviyeyi seçer; böylece nesneler siluetlerini korurken uzaktakiler
+üçgenlerinin küçük bir kısmına mal olur.
+
+```cpp
+illusion::MeshData tree = illusion::makeSphere(1.0f, 64, 32);
+illusion::generateLods(tree); // up to three coarser levels, each about half the triangles
+
+illusion::RenderView view = illusion::RenderView::fromCamera(cameraTransform, camera, aspect);
+view.lodPixelError = 1.0f; // the default; 0 always draws full detail
+renderer->render(commands, target, world, view, &jobs);
+ILL_LOG_INFO("Game", "{} instances at full detail, {} at the coarsest level",
+             renderer->stats().lodInstances[0], renderer->stats().lodInstances[illusion::kMaxSubmeshLods]);
+```
+
+- Seviye, kameranın uzaklığından ve instance'ın ölçeğinden karede bir kez seçilir ve aynı seviye gölge
+  haritalarına da çizilir; böylece gölgeler onları düşüren yüzeylerle örtüşür.
+- Bir Mesh'in farklı seviyelerdeki instance'ları ayrı batch'ler oluşturur; GPU her birini eskisi gibi tek bir
+  indirect draw ile eler ve çizer.
+- Seviyeler şimdilik geçişsiz değişir; dithered cross-fade'ler ardından gelecek (yol haritasında GFX-2b).
+
 ### Bindless rendering
 
 Destekleyen GPU'larda renderer tüm opak Mesh'leri birkaç çağrıyla çizer:
