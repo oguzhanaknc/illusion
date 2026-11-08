@@ -1,7 +1,9 @@
 // The Asset Browser panel: the project's `assets:` mount as a navigable grid and list with thumbnails, a
 // folder tree and favourites, search, sorting and a kind filter. File operations (rename, move, delete,
 // reimport, reveal) run the asset commands, and the import settings of a selected texture or model are
-// edited inline.
+// edited inline. A project with game modules also shows its `modules:` mount as a second root: folders and
+// sources, opened in the code editor with `editor.open_source`; build output and dot files are hidden, and
+// the asset-only features (kinds, thumbnails, import settings, dragging, rename/move/delete) are off there.
 
 #include "Panels.hpp"
 
@@ -49,37 +51,91 @@ std::string_view leaf(std::string_view path) noexcept
     return slash == std::string_view::npos ? path : path.substr(slash + 1);
 }
 
-// The folder that contains @p folder ("assets:/a/b" -> "assets:/a"; "assets:/" -> "assets:/").
+// The two roots of the browser: the project's assets, and its game modules (sources only).
+constexpr std::string_view kAssetsRoot = "assets:/";
+constexpr std::string_view kModulesRoot = "modules:/";
+// Most entries listed from `modules:`; a build tree inside it must not stall the editor.
+constexpr usize kMaxModuleEntries = 20000;
+
+// True if @p path is in the `modules:` mount.
+bool isModulesPath(std::string_view path) noexcept
+{
+    return path.starts_with("modules:");
+}
+
+// The root that contains @p path.
+std::string_view rootOf(std::string_view path) noexcept
+{
+    return isModulesPath(path) ? kModulesRoot : kAssetsRoot;
+}
+
+// The folder that contains @p folder ("assets:/a/b" -> "assets:/a"; "assets:/" -> "assets:/"); the same for
+// `modules:`.
 std::string parentFolder(std::string_view folder)
 {
+    const std::string_view root = rootOf(folder);
     std::string_view base = folder;
     while (base.size() > 1 && base.back() == '/')
     {
         base.remove_suffix(1);
     }
-    if (base == "assets:/" || base == "assets:")
+    if (base.size() < root.size())
     {
-        return "assets:/";
+        return std::string(root);
     }
     const usize slash = base.find_last_of('/');
     if (slash == std::string_view::npos)
     {
-        return "assets:/";
+        return std::string(root);
     }
     std::string parent(base.substr(0, slash));
-    if (parent == "assets" || parent == "assets:")
+    if (parent.size() < root.size())
     {
-        return "assets:/";
+        return std::string(root);
     }
     return parent;
+}
+
+// True for the entries of `modules:` the browser hides: dot files (`.clangd`, `.illusion`) and build output.
+bool isHiddenModuleEntry(std::string_view name, bool isDirectory) noexcept
+{
+    if (name.empty() || name.front() == '.')
+    {
+        return true;
+    }
+    return isDirectory && (name == "build" || name == "out" || name == "CMakeFiles" || name == "_deps" ||
+                           name.starts_with("cmake-build"));
+}
+
+// True for the files of a module that the code editor opens as source.
+bool isSourceFile(std::string_view name) noexcept
+{
+    if (name == "CMakeLists.txt")
+    {
+        return true;
+    }
+    const usize dot = name.find_last_of('.');
+    if (dot == std::string_view::npos)
+    {
+        return false;
+    }
+    constexpr std::array<std::string_view, 12> kExtensions{".cpp", ".cc", ".cxx", ".c",   ".hpp",   ".hh",
+                                                           ".hxx", ".h",  ".inl", ".ipp", ".cmake", ".slang"};
+    const std::string_view extension = name.substr(dot);
+    return std::any_of(kExtensions.begin(), kExtensions.end(), [&](std::string_view candidate) {
+        return extension.size() == candidate.size() &&
+               std::equal(extension.begin(), extension.end(), candidate.begin(), [](char a, char b) {
+                   return (a >= 'A' && a <= 'Z' ? static_cast<char>(a - 'A' + 'a') : a) == b;
+               });
+    });
 }
 
 // True if @p path is a direct child of @p folder.
 bool isDirectChild(std::string_view folder, std::string_view path) noexcept
 {
-    if (folder == "assets:/")
+    if (folder == kAssetsRoot || folder == kModulesRoot)
     {
-        return path.starts_with("assets:/") && path.size() > folder.size() &&
+        return path.starts_with(folder) && path.size() > folder.size() &&
                path.find('/', folder.size()) == std::string_view::npos;
     }
     return path.starts_with(folder) && path.size() > folder.size() + 1 && path[folder.size()] == '/' &&
@@ -124,6 +180,10 @@ ui::Icon kindIcon(std::string_view kind) noexcept
     if (kind == "Folder")
     {
         return ui::icons::kFolder;
+    }
+    if (kind == "Source")
+    {
+        return ui::icons::kCode;
     }
     if (kind == "Scene")
     {
@@ -196,7 +256,7 @@ struct AssetBrowser::State
     };
 
     // Navigation.
-    std::string folder = "assets:/";
+    std::string folder = std::string(kAssetsRoot);
     std::vector<std::string> back;
     std::vector<std::string> forward;
 
@@ -229,9 +289,19 @@ struct AssetBrowser::State
     bool hasInfo = false;
     u64 infoVersion = ~u64{0};
 
+    // The visible files and folders of the `modules:` mount (all depths, sorted by path), listed when
+    // moduleScanStale is set; entries of a `modules:` folder point into moduleRecords.
+    std::vector<AssetRecord> moduleRecords;
+    std::vector<std::string> moduleFolders;
+    bool moduleScanStale = true;
+    u64 moduleScanCatalogVersion = ~u64{0};
+
     // The asset the context menu opened for.
     std::string contextPath;
     bool contextFolder = false;
+    // Set when a right click asks for the menu. It opens where the menu is drawn: a popup is identified
+    // within its window's id stack, and the items sit in child windows of their own.
+    bool openContext = false;
 
     // Dialogs.
     enum class Dialog : u8
@@ -294,6 +364,9 @@ struct AssetBrowser::State
         inspected.clear();
     }
 
+    bool inModules() const noexcept { return isModulesPath(folder); }
+
+    void scanModules(Impl& shell);
     void rebuild(Impl& shell);
     void refreshInspector(Impl& shell);
     void openEntry(Impl& shell, std::string_view path, bool isFolder);
@@ -302,10 +375,55 @@ struct AssetBrowser::State
     void drawToolbar(Impl& shell, ui::UiKit& kit);
     void drawContent(Impl& shell, ui::UiKit& kit);
     void drawInspector(Impl& shell, ui::UiKit& kit);
+    void drawAssetOperations(Impl& shell);
     void drawContextMenu(Impl& shell);
     void drawDialogs(Impl& shell, ui::UiKit& kit);
     void createPrefab(Impl& shell, std::string_view entityId);
 };
+
+void AssetBrowser::State::scanModules(Impl& shell)
+{
+    moduleScanStale = false;
+    moduleScanCatalogVersion = shell.editor.assetCatalog().version();
+    entriesVersion = ~u64{0}; // The entries point into moduleRecords: rebuild them.
+    moduleRecords.clear();
+    moduleFolders.clear();
+    const VirtualFileSystem& files = shell.editor.files();
+    std::vector<DirectoryEntry> listing;
+    std::vector<std::string> pending{std::string(kModulesRoot)};
+    while (!pending.empty() && moduleRecords.size() < kMaxModuleEntries)
+    {
+        const std::string directory = std::move(pending.back());
+        pending.pop_back();
+        listing.clear();
+        if (files.list(directory, listing) != FileError::None)
+        {
+            continue;
+        }
+        const std::string prefix = directory.ends_with('/') ? directory : directory + "/";
+        for (const DirectoryEntry& item : listing)
+        {
+            if (isHiddenModuleEntry(item.name, item.isDirectory))
+            {
+                continue;
+            }
+            AssetRecord record;
+            record.path = prefix + item.name;
+            record.kind = item.isDirectory ? "Folder" : (isSourceFile(item.name) ? "Source" : "Other");
+            record.size = item.size;
+            record.modified = item.modified;
+            if (item.isDirectory)
+            {
+                moduleFolders.push_back(record.path);
+                pending.push_back(record.path);
+            }
+            moduleRecords.push_back(std::move(record));
+        }
+    }
+    std::sort(moduleRecords.begin(), moduleRecords.end(),
+              [](const AssetRecord& a, const AssetRecord& b) { return a.path < b.path; });
+    std::sort(moduleFolders.begin(), moduleFolders.end());
+}
 
 void AssetBrowser::State::rebuild(Impl& shell)
 {
@@ -320,26 +438,27 @@ void AssetBrowser::State::rebuild(Impl& shell)
     storedVersion = editor.thumbnails().isOpen() ? editor.thumbnails().statistics().stored : 0;
     const bool haveHost = editor.imageHost() != nullptr;
     const bool thumbsOpen = editor.thumbnails().isOpen();
-    for (const auto& [path, record] : catalog.records())
-    {
+    // Sources have no kind filter, thumbnails or import settings: only assets do.
+    const bool modulesView = inModules();
+    const auto consider = [&](const std::string& path, const AssetRecord& record) {
         if (!isDirectChild(folder, path))
         {
-            continue;
+            return;
         }
         Entry entry;
         entry.record = &record;
         entry.folder = record.kind == "Folder";
         if (!entry.folder)
         {
-            if (kind > 0 && record.kind != kFileKinds[static_cast<usize>(kind - 1)])
+            if (!modulesView && kind > 0 && record.kind != kFileKinds[static_cast<usize>(kind - 1)])
             {
-                continue;
+                return;
             }
             if (!containsIgnoreCase(leaf(path), entriesSearch))
             {
-                continue;
+                return;
             }
-            if (haveHost && thumbsOpen && thumbnailKindOf(path))
+            if (!modulesView && haveHost && thumbsOpen && thumbnailKindOf(path))
             {
                 entry.thumbKey = thumbnailKey(catalog, path);
                 if (entry.thumbKey != 0)
@@ -351,6 +470,20 @@ void AssetBrowser::State::rebuild(Impl& shell)
             }
         }
         entries.push_back(entry);
+    };
+    if (modulesView)
+    {
+        for (const AssetRecord& record : moduleRecords)
+        {
+            consider(record.path, record);
+        }
+    }
+    else
+    {
+        for (const auto& [path, record] : catalog.records())
+        {
+            consider(path, record);
+        }
     }
     std::sort(entries.begin(), entries.end(), [&](const Entry& a, const Entry& b) {
         if (a.folder != b.folder)
@@ -386,7 +519,7 @@ void AssetBrowser::State::refreshInspector(Impl& shell)
     settingsKind = ImportSettingsKind::None;
     references = 0;
     hasInfo = false;
-    if (inspected.empty())
+    if (inspected.empty() || isModulesPath(inspected))
     {
         return;
     }
@@ -482,6 +615,30 @@ void AssetBrowser::State::drawSidebar(Impl& shell, ui::UiKit& kit)
         }
     }
 
+    if (!moduleRecords.empty())
+    {
+        ImGui::Separator();
+        if (ImGui::Selectable(text.label(s::kAssetBrowserModules, "asset_browser.modules.root"),
+                              folder == kModulesRoot))
+        {
+            goTo(std::string(kModulesRoot));
+            moduleScanStale = true;
+        }
+        for (usize i = 0; i < moduleFolders.size(); ++i)
+        {
+            const std::string& path = moduleFolders[i];
+            const usize depth = static_cast<usize>(std::count(path.begin(), path.end(), '/'));
+            char number[24];
+            std::snprintf(number, sizeof(number), "%zu", i);
+            const char* id = text.concat("asset_browser.modules.folder.", number);
+            ImGui::SetCursorPosX(ImGui::GetCursorPosX() + static_cast<f32>(depth) * 14.0f * kit.scale);
+            if (ImGui::Selectable(text.verbatim(leaf(path), id), folder == path))
+            {
+                goTo(path);
+            }
+        }
+    }
+
     ImGui::Separator();
     ui::sectionHeader(kit, text.format(s::kAssetBrowserFavourites));
     const Preferences& prefs = editor.preferences();
@@ -548,18 +705,20 @@ void AssetBrowser::State::drawToolbar(Impl& shell, ui::UiKit& kit)
     };
     navButton("back", ui::icons::kArrowBack, !back.empty(), s::kAssetBrowserBack);
     navButton("forward", ui::icons::kArrowForward, !forward.empty(), s::kAssetBrowserForward);
-    navButton("up", ui::icons::kArrowUpward, folder != "assets:/", s::kAssetBrowserUp);
+    navButton("up", ui::icons::kArrowUpward, folder != rootOf(folder), s::kAssetBrowserUp);
     if (ui::iconButton(kit, ui::icons::kRefresh, "asset_browser.refresh",
                        text.format(s::kAssetBrowserRefresh)))
     {
         (void)shell.editor.assets();
+        moduleScanStale = true;
     }
     ImGui::SameLine();
 
-    // Breadcrumbs: the root "Assets" then each folder name.
+    // Breadcrumbs: the root ("Assets" or "Modules") then each folder name.
+    const std::string_view root = rootOf(folder);
     std::array<std::string_view, 32> segments{};
     usize count = 0;
-    if (folder != "assets:/")
+    if (folder != root)
     {
         usize start = folder.find('/') + 1;
         while (start <= folder.size() && count < segments.size())
@@ -571,7 +730,7 @@ void AssetBrowser::State::drawToolbar(Impl& shell, ui::UiKit& kit)
         }
     }
     std::array<const char*, 32> parts{};
-    parts[0] = text.format(s::kAssetBrowserRoot);
+    parts[0] = text.format(root == kModulesRoot ? s::kAssetBrowserModules : s::kAssetBrowserRoot);
     usize partCount = 1;
     for (usize i = 0; i < count; ++i)
     {
@@ -582,11 +741,11 @@ void AssetBrowser::State::drawToolbar(Impl& shell, ui::UiKit& kit)
     {
         if (*clicked == 0)
         {
-            goTo("assets:/");
+            goTo(std::string(root));
         }
         else
         {
-            std::string target = "assets:/";
+            std::string target(root);
             for (usize i = 0; i < *clicked; ++i)
             {
                 if (i > 0)
@@ -613,12 +772,16 @@ void AssetBrowser::State::drawToolbar(Impl& shell, ui::UiKit& kit)
     {
         kindItems[i + 1] = text.copy(kFileKinds[i]);
     }
+    // Kinds, new folders and favourites are about assets: not for the sources of `modules:`.
+    const bool modulesView = isModulesPath(folder);
+    ImGui::BeginDisabled(modulesView);
     ImGui::SetNextItemWidth(kKindComboWidth * kit.scale);
     if (ImGui::Combo(text.hidden("asset_browser.kind"), &kind, kindItems,
                      static_cast<int>(kFileKinds.size() + 1)))
     {
         entriesVersion = ~u64{0};
     }
+    ImGui::EndDisabled();
     ImGui::SameLine();
     const char* sortItems[] = {text.format(s::kAssetBrowserSortName), text.format(s::kAssetBrowserSortKind),
                                text.format(s::kAssetBrowserSortSize),
@@ -635,18 +798,20 @@ void AssetBrowser::State::drawToolbar(Impl& shell, ui::UiKit& kit)
         grid = !grid;
     }
     ImGui::SameLine();
+    ImGui::BeginDisabled(modulesView);
     if (ui::iconButton(kit, ui::icons::kCreateNewFolder, "asset_browser.new_folder",
                        text.format(s::kAssetBrowserNewFolder)))
     {
         dialog = Dialog::NewFolder;
         dialogText[0] = '\0';
     }
+    ImGui::EndDisabled();
     ImGui::SameLine();
     const bool favourite =
         selection.size() == 1 && std::find(shell.editor.preferences().assetFavourites.begin(),
                                            shell.editor.preferences().assetFavourites.end(),
                                            selection[0]) != shell.editor.preferences().assetFavourites.end();
-    ImGui::BeginDisabled(selection.size() != 1);
+    ImGui::BeginDisabled(selection.size() != 1 || modulesView);
     if (ui::iconButton(
             kit, favourite ? ui::icons::kStar : ui::icons::kStarOutline, "asset_browser.favourite",
             text.format(favourite ? s::kAssetBrowserFavouriteRemove : s::kAssetBrowserFavouriteAdd)))
@@ -746,10 +911,11 @@ void AssetBrowser::State::drawContent(Impl& shell, ui::UiKit& kit)
             {
                 select(contextPath, io.KeyCtrl);
             }
-            ImGui::OpenPopup("###asset_browser.context");
+            openContext = true;
         }
         // Drag source: an asset carries its virtual path into asset fields (the Inspector's).
-        if (!entry.folder && ImGui::BeginDragDropSource(ImGuiDragDropFlags_SourceNoDisableHover))
+        if (!entry.folder && !isModulesPath(entry.record->path) &&
+            ImGui::BeginDragDropSource(ImGuiDragDropFlags_SourceNoDisableHover))
         {
             const std::string& path = entry.record->path;
             ImGui::SetDragDropPayload(kAssetPayload, path.c_str(), path.size() + 1);
@@ -875,17 +1041,10 @@ void AssetBrowser::State::drawContent(Impl& shell, ui::UiKit& kit)
     drawContextMenu(shell);
 }
 
-void AssetBrowser::State::drawContextMenu(Impl& shell)
+// The context menu items that change an asset: reimport, rename, move and delete.
+void AssetBrowser::State::drawAssetOperations(Impl& shell)
 {
     ui::FrameText& text = shell.text;
-    if (!ImGui::BeginPopup("###asset_browser.context"))
-    {
-        return;
-    }
-    if (ImGui::MenuItem(text.label(s::kAssetBrowserOpen, "asset_browser.context.open")))
-    {
-        openEntry(shell, contextPath, contextFolder);
-    }
     if (!contextFolder && importSettingsKindOf(contextPath) != ImportSettingsKind::None)
     {
         if (ImGui::MenuItem(text.label(s::kAssetBrowserReimport, "asset_browser.context.reimport")))
@@ -923,6 +1082,30 @@ void AssetBrowser::State::drawContextMenu(Impl& shell)
         {
             deleteReferences = info->references;
         }
+    }
+}
+
+void AssetBrowser::State::drawContextMenu(Impl& shell)
+{
+    ui::FrameText& text = shell.text;
+    if (openContext)
+    {
+        openContext = false;
+        ImGui::OpenPopup("###asset_browser.context");
+    }
+    if (!ImGui::BeginPopup("###asset_browser.context"))
+    {
+        return;
+    }
+    if (ImGui::MenuItem(text.label(s::kAssetBrowserOpen, "asset_browser.context.open")))
+    {
+        openEntry(shell, contextPath, contextFolder);
+    }
+    // Sources are opened, revealed and copied; renaming, moving and deleting are asset commands, which only
+    // accept `assets:` paths.
+    if (!isModulesPath(contextPath))
+    {
+        drawAssetOperations(shell);
     }
     ImGui::Separator();
     if (ImGui::MenuItem(text.label(s::kAssetBrowserReveal, "asset_browser.context.reveal")))
@@ -1123,7 +1306,12 @@ void AssetBrowser::reveal(std::string_view path)
 
 std::string_view AssetBrowser::currentFolder() const noexcept
 {
-    return m_state->folder;
+    return m_state->inModules() ? kAssetsRoot : std::string_view(m_state->folder);
+}
+
+void AssetBrowser::markModulesStale() noexcept
+{
+    m_state->moduleScanStale = true;
 }
 
 void AssetBrowser::draw(Impl& shell)
@@ -1143,6 +1331,12 @@ void AssetBrowser::draw(Impl& shell)
     // opened project would show an empty browser until an asset command or Refresh ran.
     const AssetCatalog& catalog = editor.assetCatalog().scanned() ? editor.assetCatalog() : editor.assets();
     const u32 stored = editor.thumbnails().isOpen() ? editor.thumbnails().statistics().stored : 0;
+    // The sources of `modules:` are listed again when asked to (Refresh, a module command), and whenever
+    // the catalog changed (a project was opened or closed, assets changed).
+    if (st.moduleScanStale || st.moduleScanCatalogVersion != catalog.version())
+    {
+        st.scanModules(shell);
+    }
     if (st.folder != st.entriesFolder || st.kind != st.entriesKind || st.sort != st.entriesSort ||
         st.entriesSearch != st.search.data() || catalog.version() != st.entriesVersion ||
         stored != st.storedVersion)
@@ -1165,8 +1359,8 @@ void AssetBrowser::draw(Impl& shell)
     ImGui::Separator();
     st.drawContent(shell, kit);
     // An entity dropped from the Outliner becomes a prefab in the current folder, linked to it.
-    if (ImGui::BeginDragDropTargetCustom(ImGui::GetCurrentWindow()->InnerRect,
-                                         ImGui::GetID("asset_browser.drop")))
+    if (!st.inModules() && ImGui::BeginDragDropTargetCustom(ImGui::GetCurrentWindow()->InnerRect,
+                                                            ImGui::GetID("asset_browser.drop")))
     {
         if (const ImGuiPayload* payload = ImGui::AcceptDragDropPayload(kEntityDragPayload);
             payload != nullptr && payload->DataSize == static_cast<int>(kGuidTextLength))
@@ -1177,7 +1371,7 @@ void AssetBrowser::draw(Impl& shell)
         ImGui::EndDragDropTarget();
     }
     ImGui::EndChild();
-    if (st.selection.size() == 1)
+    if (st.selection.size() == 1 && !st.inModules())
     {
         ImGui::SameLine();
         st.drawInspector(shell, kit);

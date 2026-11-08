@@ -389,6 +389,10 @@ std::optional<std::string> EditorShell::Impl::run(std::string_view command, std:
         failed(command, result.error());
         return std::nullopt;
     }
+    if (command.starts_with("module."))
+    {
+        assetBrowser->markModulesStale();
+    }
     return std::move(result).value();
 }
 

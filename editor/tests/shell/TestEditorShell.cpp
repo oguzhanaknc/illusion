@@ -6,7 +6,9 @@
 #include <illusion/editor/play/PlaySession.hpp>
 #include <illusion/editor/rpc/RpcServer.hpp>
 
+#include <chrono>
 #include <cmath>
+#include <filesystem>
 #include <fstream>
 #include <imgui.h>
 #include <imgui_internal.h>
@@ -755,6 +757,154 @@ TEST_CASE("the asset browser lists a fresh project's assets and fits its toolbar
         REQUIRE(item.has_value());
         CHECK(item->max.x <= panel->max.x);
     }
+}
+
+namespace
+{
+
+// Points the code editor of the preferences at the recorder of FakeCMake.cpp, which writes what it was asked
+// to open (`file:line:column`) to the returned file.
+std::filesystem::path recordCodeEditor(ShellFixture& fixture)
+{
+    const std::filesystem::path opened = fixture.directory.path / "opened.txt";
+    Preferences preferences = fixture.editor->preferences();
+    preferences.codeEditor =
+        "\"" ILLUSION_FAKE_CMAKE "\" --record \"" + opened.generic_string() + "\" {file}:{line}:{column}";
+    REQUIRE(fixture.editor->setPreferences(std::move(preferences)).hasValue());
+    return opened;
+}
+
+// The text the recorder wrote to @p file once it has written a whole line (it runs detached).
+std::string waitForRecord(const std::filesystem::path& file)
+{
+    const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(60);
+    std::string text;
+    while (text.find('\n') == std::string::npos && std::chrono::steady_clock::now() < deadline)
+    {
+        std::ifstream stream(file, std::ios::binary);
+        text.assign(std::istreambuf_iterator<char>(stream), std::istreambuf_iterator<char>());
+    }
+    return text;
+}
+
+// Writes the files of a game module "game" (and files the browser hides) into the project's modules: mount.
+void writeModuleFiles(EditorContext& editor)
+{
+    for (const char* path : {"modules:/CMakeLists.txt", "modules:/game/CMakeLists.txt",
+                             "modules:/game/game.cpp", "modules:/.clangd", "modules:/game/build/game.obj"})
+    {
+        test::ok(editor, "project.file_write", std::string(R"({"path":")") + path + R"(","text":"x"})");
+    }
+}
+
+} // namespace
+
+TEST_CASE("the asset browser shows the modules mount and opens a source in the code editor")
+{
+    ShellFixture fixture;
+    EditorContext& editor = *fixture.editor;
+    const std::filesystem::path opened = recordCodeEditor(fixture);
+    writeModuleFiles(editor);
+    test::ok(editor, "ui.show_panel", R"({"panel":"panel.assets"})");
+
+    ui::UiDriver driver(fixture.context, [&] { fixture.frame(); });
+    driver.runFrames(4);
+
+    // The assets root is still shown first; the Modules root is in the folder tree, with the module folder.
+    REQUIRE(driver.find("asset_browser.tile.0").has_value());
+    REQUIRE(driver.find("asset_browser.modules.root").has_value());
+    CHECK(driver.find("asset_browser.modules.folder.0").has_value());
+    CHECK_FALSE(driver.find("asset_browser.modules.folder.1").has_value()); // build/ is hidden
+
+    REQUIRE(driver.click("asset_browser.modules.root"));
+    driver.runFrames(2);
+    // The root of modules: holds the folder game, then CMakeLists.txt; `.clangd` is hidden.
+    CHECK(driver.find("asset_browser.tile.1").has_value());
+    CHECK_FALSE(driver.find("asset_browser.tile.2").has_value());
+
+    // Opening the folder goes into it: CMakeLists.txt and game.cpp, and no build output.
+    REQUIRE(driver.click("asset_browser.tile.0"));
+    REQUIRE(driver.click("asset_browser.tile.0"));
+    driver.runFrames(2);
+    CHECK(driver.find("asset_browser.tile.1").has_value());
+    CHECK_FALSE(driver.find("asset_browser.tile.2").has_value());
+    CHECK(driver.find("asset_browser.up").has_value());
+
+    // The import settings of a selected asset are not shown for a source.
+    CHECK_FALSE(driver.find("asset_browser.import.apply").has_value());
+
+    // Opening the source (tile 1 is game.cpp) runs editor.open_source with its path.
+    REQUIRE(driver.click("asset_browser.tile.1"));
+    REQUIRE(driver.click("asset_browser.tile.1"));
+    const std::filesystem::path source =
+        (fixture.directory.path / "project" / "modules" / "game" / "game.cpp").make_preferred();
+    const std::u8string native = source.u8string();
+    CHECK(waitForRecord(opened) == std::string(native.begin(), native.end()) + ":1:1\n");
+}
+
+TEST_CASE("the asset browser's context menu offers only open, reveal and copy path on a source")
+{
+    ShellFixture fixture;
+    EditorContext& editor = *fixture.editor;
+    writeModuleFiles(editor);
+    test::ok(editor, "ui.show_panel", R"({"panel":"panel.assets"})");
+
+    ui::UiDriver driver(fixture.context, [&] { fixture.frame(); });
+    driver.runFrames(4);
+    REQUIRE(driver.click("asset_browser.modules.root"));
+    driver.runFrames(2);
+    REQUIRE(driver.click("asset_browser.tile.1", 1));
+    driver.runFrames(2);
+    CHECK(driver.find("asset_browser.context.open").has_value());
+    CHECK(driver.find("asset_browser.context.reveal").has_value());
+    CHECK(driver.find("asset_browser.context.copy_path").has_value());
+    for (const char* id : {"asset_browser.context.rename", "asset_browser.context.move",
+                           "asset_browser.context.delete", "asset_browser.context.reimport"})
+    {
+        CAPTURE(id);
+        CHECK_FALSE(driver.find(id).has_value());
+    }
+}
+
+TEST_CASE("the asset browser keeps its asset operations on assets next to the modules root")
+{
+    ShellFixture fixture;
+    EditorContext& editor = *fixture.editor;
+    writeModuleFiles(editor);
+    test::ok(editor, "ui.show_panel", R"({"panel":"panel.assets"})");
+
+    ui::UiDriver driver(fixture.context, [&] { fixture.frame(); });
+    driver.runFrames(4);
+    REQUIRE(driver.click("asset_browser.tile.0", 1)); // the scenes folder of assets:/
+    driver.runFrames(2);
+    for (const char* id : {"asset_browser.context.open", "asset_browser.context.rename",
+                           "asset_browser.context.move", "asset_browser.context.delete"})
+    {
+        CAPTURE(id);
+        CHECK(driver.find(id).has_value());
+    }
+}
+
+TEST_CASE("the asset browser has no Modules root in a project without module files, until some appear")
+{
+    ShellFixture fixture;
+    EditorContext& editor = *fixture.editor;
+    // Dot files and build output alone are no modules.
+    test::ok(editor, "project.file_write", R"({"path":"modules:/.clangd","text":"x"})");
+    test::ok(editor, "ui.show_panel", R"({"panel":"panel.assets"})");
+
+    ui::UiDriver driver(fixture.context, [&] { fixture.frame(); });
+    driver.runFrames(4);
+    CHECK(driver.find("asset_browser.tile.0").has_value());
+    CHECK_FALSE(driver.find("asset_browser.modules.root").has_value());
+
+    // Files written behind the browser's back show up when it lists again: Refresh.
+    writeModuleFiles(editor);
+    driver.runFrames(2);
+    CHECK_FALSE(driver.find("asset_browser.modules.root").has_value());
+    REQUIRE(driver.click("asset_browser.refresh"));
+    driver.runFrames(2);
+    CHECK(driver.find("asset_browser.modules.root").has_value());
 }
 
 TEST_CASE("dragging an asset from the browser into an Inspector asset field sets it")
