@@ -69,8 +69,30 @@ struct InstanceData
     float4x4 world;
     float4x4 normalMatrix;
     float4x4 previousWorld; // world matrix of the previous frame, for motion vectors
-    uint4 extra;            // x: material table index
+    uint4 extra;            // x: material table index, yz: Entity, w: level of detail and its cross-fade
 };
+
+// InstanceData::extra.w (matches kLodFade* in SceneRenderer.cpp): the level of detail in bits 20-23 and,
+// while an instance cross-fades between two levels, bit 17 with the fade threshold in bits 0-15; bit 16 marks
+// the outgoing level.
+static const uint kLodFadeActive = 1u << 17;
+static const uint kLodFadeOutgoing = 1u << 16;
+static const uint kLodFadeLevelShift = 20u;
+
+// True if this copy of a cross-fading instance leaves pixel @p pixel to the other copy. Both copies test
+// the same noise against the same threshold, the incoming one keeping the pixels below it and the outgoing
+// one the rest, so every pixel is drawn exactly once.
+bool lodFadeDiscard(uint code, float2 pixel)
+{
+    if ((code & kLodFadeActive) == 0u)
+    {
+        return false;
+    }
+    const float threshold = float(code & 0xFFFFu) / 65535.0;
+    // Interleaved gradient noise (Jimenez 2014): evenly spread values per pixel.
+    const float noise = frac(52.9829189 * frac(dot(floor(pixel), float2(0.06711056, 0.00583715))));
+    return (code & kLodFadeOutgoing) != 0u ? noise < threshold : noise >= threshold;
+}
 
 struct ViewConstants
 {

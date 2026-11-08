@@ -42,6 +42,9 @@ struct RenderView
     /// may show; each instance draws the coarsest level within it, in the camera pass and its shadows.
     /// 0 always draws full detail.
     f32 lodPixelError = 1.0f;
+    /// Seconds an instance takes to cross-fade (dithered) from one level of detail to the next; 0 switches at
+    /// once. Uses deltaSeconds; a renderer keeps the fades of the views it draws per Entity.
+    f32 lodFadeSeconds = 0.25f;
     /// Borrowed bitset indexed by Entity index (64 entities per word); set bits hide entities in all
     /// passes of this view. Missing words are zero. Keep alive until render() returns.
     std::span<const u64> hiddenEntities{};
@@ -66,6 +69,7 @@ enum class RenderDebugView : u32
     AmbientOcclusion, ///< Combined material and screen-space occlusion.
     ShadowCascades,   ///< Colour of the shadow cascade covering each surface.
     MotionVectors,    ///< Screen-space velocity around neutral grey.
+    LevelOfDetail,    ///< Colour of the level of detail drawn (green: full detail, then yellow, orange, red).
 };
 
 /// Borrowed targets of the last render(), valid until resize or renderer destruction. Record overlays
@@ -100,7 +104,9 @@ struct RenderStats
     u32 atmosphereUpdates = 0;    ///< 1 when a SkyAtmosphere redrew its lighting cube map (it changed).
     u32 fogFroxels = 0;           ///< Froxels of the VolumetricFog lit this frame (0 without fog, ADR 0050).
     /// Camera-visible instances per level of detail (index 0: full detail; see RenderView::lodPixelError).
+    /// An instance cross-fading between two levels counts at both.
     std::array<u32, kMaxSubmeshLods + 1> lodInstances{};
+    u32 lodFades = 0; ///< Camera-visible instances cross-fading between two levels of detail.
 };
 
 /// Completed GPU pass measurements in milliseconds, obtained without blocking the graphics queue.

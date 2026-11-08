@@ -88,6 +88,8 @@ RenderDebugView debugViewOf(ViewportShading shading) noexcept
         return RenderDebugView::ShadowCascades;
     case ViewportShading::MotionVectors:
         return RenderDebugView::MotionVectors;
+    case ViewportShading::LevelOfDetail:
+        return RenderDebugView::LevelOfDetail;
     }
     return RenderDebugView::Lit;
 }

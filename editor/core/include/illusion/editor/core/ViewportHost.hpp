@@ -41,6 +41,7 @@ enum class ViewportShading : u8
     AmbientOcclusion, ///< Material and screen-space occlusion.
     ShadowCascades,   ///< The shadow cascade of each surface.
     MotionVectors,    ///< Screen-space velocity.
+    LevelOfDetail,    ///< The level of detail each instance draws.
 };
 
 /// A standard view of `viewport.view`.

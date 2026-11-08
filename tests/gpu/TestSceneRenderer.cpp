@@ -38,9 +38,17 @@ struct Rgb
 };
 
 /// Renders @p world from a camera at (0, 0, 5) looking down -z into a 64x64 RGBA8 target and reads it back.
-/// @p lodPixelError is RenderView::lodPixelError.
+/// Level-of-detail settings of the test view (RenderView fields of the same names). Fades are off unless a
+/// test asks for them, so every frame shows the level chosen for it.
+struct LodOptions
+{
+    f32 lodPixelError = 1.0f;
+    f32 lodFadeSeconds = 0.0f;
+    f32 deltaSeconds = 1.0f / 60.0f;
+};
+
 std::vector<u8> renderScene(RenderDevice& device, SceneRenderer& renderer, World& world, JobSystem* jobs,
-                            f32 lodPixelError = 1.0f)
+                            const LodOptions& lod = {})
 {
     nvrhi::IDevice* gpu = device.device();
     nvrhi::TextureDesc targetDesc;
@@ -59,7 +67,9 @@ std::vector<u8> renderScene(RenderDevice& device, SceneRenderer& renderer, World
     Transform cameraTransform;
     cameraTransform.position = Vec3(0.0f, 0.0f, 5.0f);
     RenderView view = RenderView::fromCamera(cameraTransform, Camera{}, 1.0f);
-    view.lodPixelError = lodPixelError;
+    view.lodPixelError = lod.lodPixelError;
+    view.lodFadeSeconds = lod.lodFadeSeconds;
+    view.deltaSeconds = lod.deltaSeconds;
 
     nvrhi::CommandListHandle commands = gpu->createCommandList();
     commands->open();
@@ -191,13 +201,14 @@ TEST_CASE("meshes draw the coarsest level of detail within the pixel error, in e
                      RenderMesh{resources.createMesh(makePlane(20.0f, 1), "Floor"), 0, MaterialHandle{}});
 
         // Full detail when levels of detail are off.
-        const std::vector<u8> full = renderScene(*device, *renderer, world, nullptr, 0.0f);
+        const std::vector<u8> full = renderScene(*device, *renderer, world, nullptr, {.lodPixelError = 0.0f});
         CHECK(renderer->stats().lodInstances[0] == 2);
         const u64 fullTriangles = renderer->stats().triangles;
         CHECK(fullTriangles >= levels.indexCount / 3);
 
         // At 4 m in a 64 pixel target the sphere is small: a coarser level is within one pixel.
-        const std::vector<u8> reduced = renderScene(*device, *renderer, world, nullptr, 1.0f);
+        const std::vector<u8> reduced =
+            renderScene(*device, *renderer, world, nullptr, {.lodPixelError = 1.0f});
         CHECK(renderer->stats().lodInstances[0] == 1); // the floor has no levels
         CHECK(renderer->stats().lodInstances[1] + renderer->stats().lodInstances[2] +
                   renderer->stats().lodInstances[3] ==
@@ -218,13 +229,121 @@ TEST_CASE("meshes draw the coarsest level of detail within the pixel error, in e
         CHECK(different <= kSize * 2);
 
         // A huge allowance draws the coarsest level; a tiny one keeps full detail.
-        renderScene(*device, *renderer, world, nullptr, 1.0e6f);
+        renderScene(*device, *renderer, world, nullptr, {.lodPixelError = 1.0e6f});
         CHECK(renderer->stats().lodInstances[kMaxSubmeshLods] == 1);
         CHECK(renderer->stats().triangles ==
               levels.lods[kMaxSubmeshLods - 1].indexCount / 3 + 2); // + the floor's two triangles
-        renderScene(*device, *renderer, world, nullptr, 1.0e-6f);
+        renderScene(*device, *renderer, world, nullptr, {.lodPixelError = 1.0e-6f});
         CHECK(renderer->stats().lodInstances[0] == 2);
         CHECK(renderer->stats().triangles == fullTriangles);
+    }
+    device->waitIdle();
+    CHECK(device->validationErrorCount() == 0);
+}
+
+TEST_CASE("an instance changing its level of detail cross-fades with complementary dithering, without holes")
+{
+    auto device = RenderDevice::create(headless());
+    REQUIRE(device != nullptr);
+    {
+        RenderResources resources(*device);
+        SceneRendererDesc desc;
+        desc.colorFormat = nvrhi::Format::RGBA8_UNORM;
+        desc.clearColor = Vec4(0.0f, 0.0f, 0.0f, 1.0f);
+        desc.post.bloom.enabled = false;
+        desc.post.temporalAntiAliasing.enabled = false; // compare single frames
+        auto renderer = SceneRenderer::create(*device, resources, desc);
+        REQUIRE(renderer != nullptr);
+
+        MeshData sphereData = makeSphere(1.0f, 64, 32);
+        generateLods(sphereData);
+        REQUIRE(sphereData.submeshes[0].lodCount == kMaxSubmeshLods);
+        World world;
+        world.create(Transform{},
+                     RenderMesh{resources.createMesh(sphereData, "Sphere"), 0, MaterialHandle{}});
+        Transform sun; // casts the sphere's shadow, so cross-fading casters are drawn too
+        sun.rotation = glm::angleAxis(-0.3f, Vec3(1.0f, 0.0f, 0.0f));
+        world.create(sun, DirectionalLight{Vec3(1.0f), 3.0f});
+
+        // Pixels the sphere covers (anything brighter than the black background).
+        const auto covered = [](const std::vector<u8>& pixels) {
+            u32 count = 0;
+            for (u32 y = 0; y < kSize; ++y)
+            {
+                for (u32 x = 0; x < kSize; ++x)
+                {
+                    const Rgb p = pixelAt(pixels, x, y);
+                    count += p.r + p.g + p.b > 0 ? 1u : 0u;
+                }
+            }
+            return count;
+        };
+        const LodOptions fine{.lodPixelError = 1.0e-6f, .lodFadeSeconds = 1.0f, .deltaSeconds = 0.25f};
+        const LodOptions coarse{.lodPixelError = 1.0e6f, .lodFadeSeconds = 1.0f, .deltaSeconds = 0.25f};
+
+        const u32 fullCoverage = covered(renderScene(*device, *renderer, world, nullptr, fine));
+        CHECK(renderer->stats().lodFades == 0);
+        CHECK(renderer->stats().lodInstances[0] == 1);
+
+        // Switching to the coarsest level fades over four 0.25 s frames: both levels are drawn, dithered so
+        // that together they cover the sphere's whole outline.
+        for (u32 frame = 1; frame <= 3; ++frame)
+        {
+            const std::vector<u8> pixels = renderScene(*device, *renderer, world, nullptr, coarse);
+            CAPTURE(frame);
+            CHECK(renderer->stats().lodFades == 1);
+            CHECK(renderer->stats().lodInstances[0] == 1);
+            CHECK(renderer->stats().lodInstances[kMaxSubmeshLods] == 1);
+            CHECK(covered(pixels) + kSize / 2 >= fullCoverage); // no holes; the outlines differ slightly
+            const Rgb center = pixelAt(pixels, kSize / 2, kSize / 2);
+            CHECK(center.r + center.g + center.b > 0);
+        }
+        renderScene(*device, *renderer, world, nullptr, coarse);
+        CHECK(renderer->stats().lodFades == 0);
+        CHECK(renderer->stats().lodInstances[0] == 0);
+        CHECK(renderer->stats().lodInstances[kMaxSubmeshLods] == 1);
+
+        // Going back mid-fade reverses the fade instead of restarting it.
+        renderScene(*device, *renderer, world, nullptr, fine); // fade 0.25 towards full detail
+        CHECK(renderer->stats().lodFades == 1);
+        renderScene(*device, *renderer, world, nullptr, coarse); // back: 0.75 + 0.25 = done
+        CHECK(renderer->stats().lodFades == 0);
+        CHECK(renderer->stats().lodInstances[kMaxSubmeshLods] == 1);
+
+        // Without a fade time the level switches at once.
+        renderScene(*device, *renderer, world, nullptr, {.lodPixelError = 1.0e-6f});
+        CHECK(renderer->stats().lodFades == 0);
+        CHECK(renderer->stats().lodInstances[0] == 1);
+        CHECK(renderer->stats().lodInstances[kMaxSubmeshLods] == 0);
+
+        // The level-of-detail debug view colours full detail green and the coarsest level red.
+        renderer->setDebugView(RenderDebugView::LevelOfDetail);
+        Rgb center = pixelAt(renderScene(*device, *renderer, world, nullptr, {.lodPixelError = 1.0e-6f}),
+                             kSize / 2, kSize / 2);
+        CHECK(center.g > center.r + 50);
+        center = pixelAt(renderScene(*device, *renderer, world, nullptr, {.lodPixelError = 1.0e6f}),
+                         kSize / 2, kSize / 2);
+        CHECK(center.r > center.g + 50);
+
+        // Halfway through a fade, about half of the sphere's pixels come from each level.
+        renderScene(*device, *renderer, world, nullptr, {.lodPixelError = 1.0e-6f});
+        const std::vector<u8> half =
+            renderScene(*device, *renderer, world, nullptr,
+                        {.lodPixelError = 1.0e6f, .lodFadeSeconds = 1.0f, .deltaSeconds = 0.5f});
+        u32 fullDetail = 0;
+        u32 coarsest = 0;
+        for (u32 y = 0; y < kSize; ++y)
+        {
+            for (u32 x = 0; x < kSize; ++x)
+            {
+                const Rgb p = pixelAt(half, x, y);
+                fullDetail += p.g > p.r + 50 ? 1u : 0u;
+                coarsest += p.r > p.g + 50 ? 1u : 0u;
+            }
+        }
+        CHECK(fullDetail > fullCoverage / 4);
+        CHECK(coarsest > fullCoverage / 4);
+        CHECK(fullDetail + coarsest + kSize >= fullCoverage);
     }
     device->waitIdle();
     CHECK(device->validationErrorCount() == 0);

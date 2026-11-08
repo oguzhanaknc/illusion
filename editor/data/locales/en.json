@@ -867,6 +867,7 @@
     "editor.viewport.shading": {"text": "Shading", "comment": "Menu of viewport shading modes"},
     "editor.viewport.shading.albedo": {"text": "Albedo", "comment": "Shading mode: base colour"},
     "editor.viewport.shading.ambient_occlusion": {"text": "Ambient occlusion", "comment": "Shading mode"},
+    "editor.viewport.shading.level_of_detail": {"text": "Level of detail", "comment": "Shading mode: colours each object by the level of detail it draws"},
     "editor.viewport.shading.lit": {"text": "Lit", "comment": "Shading mode: normal lighting"},
     "editor.viewport.shading.metallic": {"text": "Metallic", "comment": "Shading mode"},
     "editor.viewport.shading.motion_vectors": {"text": "Motion vectors", "comment": "Shading mode"},

@@ -49,6 +49,8 @@ constexpr std::array kShadings = {
                 "viewport.shading.shadow_cascades", R"({"shading":"shadowCascades"})"},
     ShadingItem{ViewportShading::MotionVectors, s::kViewportShadingMotionVectors,
                 "viewport.shading.motion_vectors", R"({"shading":"motionVectors"})"},
+    ShadingItem{ViewportShading::LevelOfDetail, s::kViewportShadingLevelOfDetail,
+                "viewport.shading.level_of_detail", R"({"shading":"levelOfDetail"})"},
 };
 
 struct ViewItem

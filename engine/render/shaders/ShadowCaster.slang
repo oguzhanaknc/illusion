@@ -1,6 +1,6 @@
 // Shadow casters: depth-only rendering into one shadow view, a cascade of the directional shadow map or a
 // cube face of a point light's shadow map (cascade >= kMaxShadowCascades). The fragment entry point is used
-// only for alpha-masked materials.
+// only for alpha-masked materials and for casters cross-fading between levels of detail.
 
 #include "Common.slang"
 
@@ -39,6 +39,7 @@ struct VertexOutput
 {
     float4 position : SV_Position;
     float2 uv : TEXCOORD0;
+    nointerpolation uint lod : LOD; // InstanceData::extra.w: level of detail and cross-fade
 };
 
 [shader("vertex")]
@@ -60,6 +61,7 @@ VertexOutput vertexMain(VertexInput input, uint instanceId: SV_InstanceID)
         output.position = mul(g_view.pointShadows[face / kPointShadowFaces].faces[face % kPointShadowFaces], world);
     }
     output.uv = input.uv;
+    output.lod = instance.extra.w;
     return output;
 }
 
@@ -67,7 +69,7 @@ VertexOutput vertexMain(VertexInput input, uint instanceId: SV_InstanceID)
 void fragmentMain(VertexOutput input)
 {
     const float alpha = g_baseColorTexture.Sample(g_sampler, input.uv).a * g_material.baseColorFactor.a;
-    if (alpha < g_material.alphaCutoff)
+    if (alpha < g_material.alphaCutoff || lodFadeDiscard(input.lod, input.position.xy))
     {
         discard;
     }
