@@ -24,6 +24,7 @@ PLAYER_START = (0.0, 7.0)
 FAR_FIRS = BOWL_RADIUS + 6.0  # metres from the centre
 SHADOWED_FIRS = 28.0
 SHADOWED_YOUNG_FIRS = 22.0
+FAR_LOD_BIAS = 2.0  # MeshRenderer.lodBias of the trees beyond FAR_FIRS and SHADOWED_YOUNG_FIRS
 
 commands = []
 
@@ -417,7 +418,7 @@ def build():
         scatter.take([(x, z)], 1.6)
 
     # --- Trees: tall firs on the hills, young firs and broad-leaved trees nearer the clearing ---------------------
-    def tree(name, model, mesh, parts, x, z, size, yaw, radius, height):
+    def tree(name, model, mesh, parts, x, z, size, yaw, radius, height, lod_bias=1.0):
         entity(name, {"illusion.Transform": {"position": ground(x, z, 0.12 * size),
                                              "rotation": r3(tilted(rng, yaw, 0.03)), "scale": [size, size, size]},
                       "illusion.RigidBody": {"motionType": "Static"},
@@ -429,6 +430,8 @@ def build():
                 renderer["submesh"] = submesh
             if not shadows:
                 renderer["castShadows"] = False
+            if lod_bias != 1.0:
+                renderer["lodBias"] = lod_bias
             entity(f"{name} {part}", {"illusion.Transform": {}, "illusion.LocalTransform": {},
                                       "illusion.MeshRenderer": renderer}, parent=f"/{name}")
 
@@ -441,8 +444,9 @@ def build():
         {"Branches": (0, m["fir_bark"], True), "Needles": (1, m["fir_twig"], True), "Dead Branches": (2, m["fir_bark"], False),
          "Trunk": (3, m["fir_bark"], True)},
     ]
-    # Firs beyond FAR_FIRS, where the hills keep the player away, use the copy with fewer needles; only the
-    # needles of firs within SHADOWED_FIRS cast shadows (all trunks do).
+    # Firs beyond FAR_FIRS, where the hills keep the player away, switch to their coarser levels of detail
+    # (fewer, larger needle cards) at twice the usual distance; only the needles of firs within SHADOWED_FIRS
+    # cast shadows (all trunks do).
     firs = scatter.points(40, CLEARING_RADIUS + 5.0, FAR_FIRS, spacing=6.0, keep_out=1.0)
     firs += scatter.points(70, FAR_FIRS, 58.0, spacing=5.0, keep_out=1.0)
     scatter.take(firs, 2.0)
@@ -450,13 +454,11 @@ def build():
         variant = index % 3
         size = rng.uniform(0.8, 1.15)
         parts = fir_parts[variant]
-        model = fir_model
         distance = math.hypot(x, z)
-        if distance > FAR_FIRS:
-            model = f"{EXTERNAL}/{fir}/{fir}_far.gltf"
         if distance > SHADOWED_FIRS:
             parts = dict(parts, Needles=(parts["Needles"][0], m["fir_twig"], False))
-        tree(f"Fir {index:02d}", model, variant, parts, x, z, size, rng.uniform(0, 6.28), 0.45, 8.0)
+        tree(f"Fir {index:02d}", fir_model, variant, parts, x, z, size, rng.uniform(0, 6.28), 0.45, 8.0,
+             FAR_LOD_BIAS if distance > FAR_FIRS else 1.0)
 
     young_model = f"{EXTERNAL}/{young}/{young}_lite.gltf"
     young_parts = {"Branches": (0, m["young_branches"], True), "Needles": (1, m["young_twigs"], True),
@@ -465,13 +467,13 @@ def build():
     scatter.take(youngs, 1.5)
     for index, (x, z) in enumerate(youngs):
         # Only the young firs near the camp throw needle shadows; the others' would cost more than they show.
-        # Those further out use the copy with fewer needles.
-        model, parts = young_model, young_parts
+        # Those further out switch to their coarser levels of detail sooner.
+        parts, lod_bias = young_parts, 1.0
         if math.hypot(x, z) >= SHADOWED_YOUNG_FIRS:
-            model = f"{EXTERNAL}/{young}/{young}_far.gltf"
             parts = dict(young_parts, Needles=(1, m["young_twigs"], False))
-        tree(f"Young Fir {index:02d}", model, index % 3, parts, x, z, rng.uniform(0.75, 1.1),
-             rng.uniform(0, 6.28), 0.2, 4.0)
+            lod_bias = FAR_LOD_BIAS
+        tree(f"Young Fir {index:02d}", young_model, index % 3, parts, x, z, rng.uniform(0.75, 1.1),
+             rng.uniform(0, 6.28), 0.2, 4.0, lod_bias)
 
     broadleaf = [(f"{EXTERNAL}/{island}/{island}_lite.gltf",
                   {"Trunk": (0, m["island_trunk"], True), "Leaves": (1, m["island_leaves"], True),

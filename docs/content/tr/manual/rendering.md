@@ -162,7 +162,8 @@ resolver.update(world, &jobs);
 ```
 
 - `MeshRenderer`; `mesh`, `submesh`, `material` (boşsa modelin o submesh için verdiği Material),
-  `layers`, `castShadows` ve `visible` alanlarını tutar. Her `update()` her birini, `RenderMesh`'inin
+  `layers`, `castShadows`, `visible` ve `lodBias` (bkz. [levels of detail](#levels-of-detail)) alanlarını
+  tutar. Her `update()` her birini, `RenderMesh`'inin
   çözüldüğü anahtarla karşılaştırır (paralel ve bellek ayırmadan) ve yalnızca değişenleri yeniden çözer.
 - Asset'ler arka planda yüklenir: bir renderer, yeni Asset'leri GPU'ya ulaşana kadar önceden çizdiğini
   çizmeye devam eder (yeni renderer'lar o zamana kadar hiçbir şey çizmez). Akışla gelen modeller
@@ -295,8 +296,8 @@ ILL_LOG_INFO("Game", "{} of {} opaque instances drawn", renderer->readGpuDrawnIn
 
 ### Levels of detail
 
-Bir submesh en fazla üç daha kaba **level of detail** (`Submesh::lods`) taşıyabilir: aynı vertex'lerin daha
-az üçgenini kullanan sadeleştirilmiş sürümler. İçe aktarılan glTF modelleri bunları otomatik olarak alır
+Bir submesh en fazla üç daha kaba **level of detail** (`Submesh::lods`) taşıyabilir: daha az üçgen kullanan
+sadeleştirilmiş sürümler. İçe aktarılan glTF modelleri bunları otomatik olarak alır
 (bkz. [içe aktarma ayarları](assets.md#ice-aktarma-ayarlar)); kendi Mesh'leriniz için `generateLods()`
 çağırın. Culling Job'ları her instance için, ekrana yansıtılan geometrik hatası `RenderView::lodPixelError`
 pikseli (varsayılan 1) içinde kalan en kaba seviyeyi seçer; böylece nesneler siluetlerini korurken uzaktakiler
@@ -330,6 +331,14 @@ ILL_LOG_INFO("Game", "{} instances at full detail, {} at the coarsest level, {} 
   seviyede de sayar).
 - `setDebugView(RenderDebugView::LevelOfDetail)` her yüzeyi çizdiği seviyeye göre renklendirir: tam detay
   yeşil, ardından sarı, turuncu ve kırmızı.
+- `MeshRenderer::lodBias` (kod için `RenderMesh::lodBias`) tek bir renderer'ın payını çarpar: 2 her daha kaba
+  seviyeye yarı uzaklıkta, 0.5 iki kat uzaklıkta geçer, 0 ise her zaman tam detay çizer. Oyuncunun yalnızca
+  uzaktan gördüğü nesnelere ya da daha erken seyrelebilecek bitki örtüsüne verin.
+- Kartlardan oluşan bitki örtüsü (yapraklar, iğne dalcıkları: vertex paylaşmayan çok sayıda küçük parça) kapalı
+  bir yüzey gibi sadeleştirilemez. Bunun yerine seviyeleri, bir önceki seviyenin kartlarının eşit dağılmış
+  yarısını tutar ve diğerlerinin yaprak alanını telafi etmek için her birini merkezi etrafında büyütür; böyle
+  bir seviyenin hatası kartlar arasındaki boşlukların ne kadar büyüdüğüdür. Büyütülen kartlar Mesh'in ek
+  vertex'leridir.
 
 ### Bindless rendering
 

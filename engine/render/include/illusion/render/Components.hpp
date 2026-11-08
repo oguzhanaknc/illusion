@@ -32,6 +32,7 @@ struct RenderMesh
     u32 layers = 1;                      ///< Render layer bits (see MeshRenderer::layers).
     u32 flags = kVisible | kCastShadows; ///< kVisible, kCastShadows.
     u64 sourceKey = 0;                   ///< Key of the MeshRenderer it was resolved from; 0 for code.
+    f32 lodBias = 1.0f;                  ///< Level-of-detail error multiplier (see MeshRenderer::lodBias).
 };
 
 /// The lighting environment of a SkyLight on the GPU (runtime state, reflected as "illusion.RenderSky",

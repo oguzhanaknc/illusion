@@ -24,7 +24,8 @@
           "material": "assets:/materials/brass.material",
           "layers": 1,
           "castShadows": true,
-          "visible": true
+          "visible": true,
+          "lodBias": 1.0
         },
         "illusion.Name": {
           "value": "Lantern"

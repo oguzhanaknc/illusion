@@ -63,8 +63,9 @@ A full day lasts six minutes.
 The Poly Haven trees are made for close-ups: one fir has four million needle triangles. `fetch_assets.py`
 therefore writes lighter copies of them (`*_lite.gltf`) next to the downloads. Needles and leaves are cards
 that share no vertices with each other, so the script keeps an evenly spread part of the cards and enlarges
-each one about its centre to make up for the leaf area it drops; trunks and branches stay as they are. Firs
-on the hills, which the player never comes close to, use copies with fewer needles still (`*_far.gltf`), and
+each one about its centre to make up for the leaf area it drops; trunks and branches stay as they are. The
+engine's [levels of detail](../rendering.md#levels-of-detail) thin these cards further with distance; firs
+on the hills, which the player never comes close to, have a `lodBias` of 2 so that they thin out sooner, and
 only the trees near the clearing cast needle shadows. The script also bakes the models' texture transforms
 (`KHR_texture_transform`) into their UVs.
 
@@ -88,7 +89,7 @@ To change the scene, edit a script and rebuild:
 ```bash
 python samples/techdemo/tools/make_assets.py
 python samples/techdemo/tools/make_scene.py
-illusion_ctl --launch illusion_editor --editor-arg --headless --editor-arg --no-gpu --editor-arg --project --editor-arg samples/techdemo replay samples/techdemo/build.jsonl
+illusion_ctl --launch illusion_editor --editor-arg --headless --editor-arg --no-gpu --editor-arg --deterministic --editor-arg --project --editor-arg samples/techdemo replay samples/techdemo/build.jsonl
 ```
 
 `tools/test_tools.py` tests the scripts; CI runs it.

@@ -191,7 +191,7 @@ TEST_CASE("meshes draw the coarsest level of detail within the pixel error, in e
         const MeshHandle sphere = resources.createMesh(sphereData, "Sphere");
 
         World world;
-        world.create(Transform{}, RenderMesh{sphere, 0, MaterialHandle{}});
+        const Entity ball = world.create(Transform{}, RenderMesh{sphere, 0, MaterialHandle{}});
         Transform sun; // from the camera's side, so the sphere also casts into the shadow cascades
         sun.rotation = glm::angleAxis(-0.3f, Vec3(1.0f, 0.0f, 0.0f));
         world.create(sun, DirectionalLight{Vec3(1.0f), 3.0f});
@@ -234,6 +234,15 @@ TEST_CASE("meshes draw the coarsest level of detail within the pixel error, in e
         CHECK(renderer->stats().triangles ==
               levels.lods[kMaxSubmeshLods - 1].indexCount / 3 + 2); // + the floor's two triangles
         renderScene(*device, *renderer, world, nullptr, {.lodPixelError = 1.0e-6f});
+        CHECK(renderer->stats().lodInstances[0] == 2);
+        CHECK(renderer->stats().triangles == fullTriangles);
+
+        // A renderer's bias multiplies the allowance: a large one draws coarser levels, 0 full detail.
+        world.get<RenderMesh>(ball).lodBias = 1.0e12f;
+        renderScene(*device, *renderer, world, nullptr, {.lodPixelError = 1.0e-6f});
+        CHECK(renderer->stats().lodInstances[kMaxSubmeshLods] == 1);
+        world.get<RenderMesh>(ball).lodBias = 0.0f;
+        renderScene(*device, *renderer, world, nullptr, {.lodPixelError = 1.0e6f});
         CHECK(renderer->stats().lodInstances[0] == 2);
         CHECK(renderer->stats().triangles == fullTriangles);
     }

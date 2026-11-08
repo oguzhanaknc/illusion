@@ -327,6 +327,17 @@ TEST_CASE("the resolver follows changes, removals and failures")
         CHECK(first.material != resources.defaultMaterial()); // the model's material
         CHECK(first.flags == (RenderMesh::kVisible | RenderMesh::kCastShadows));
         CHECK(first.sourceKey == renderSourceKey(world.get<MeshRenderer>(entity)));
+        CHECK(first.lodBias == 1.0f);
+
+        // The level-of-detail bias is copied (negative values clamp to 0).
+        world.get<MeshRenderer>(entity).lodBias = 4.0f;
+        resolver.update(world);
+        CHECK(world.get<RenderMesh>(entity).lodBias == 4.0f);
+        world.get<MeshRenderer>(entity).lodBias = -1.0f;
+        resolver.update(world);
+        CHECK(world.get<RenderMesh>(entity).lodBias == 0.0f);
+        world.get<MeshRenderer>(entity).lodBias = 1.0f;
+        resolver.update(world);
 
         // A material of the loaded model is picked up on the next update.
         world.get<MeshRenderer>(entity).material = AssetRef("builtin:/material/default");

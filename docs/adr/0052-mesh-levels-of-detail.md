@@ -83,3 +83,24 @@ Options for choosing a level:
   cutoff of -1, so the alpha test never removes their pixels.
 - Considered: alpha blending between levels (needs sorting and breaks the depth prepass) and morphing
   vertices between levels (needs vertex correspondence that simplification does not keep).
+
+## Addendum (2026-11-08, GFX-2c): foliage cards and a per-renderer bias
+
+- Foliage made of cards (needle sprigs, leaves) is many small parts that share no vertices. Every vertex is
+  on a border, so the simplifier, which keeps borders closed, cannot reduce it: the tech demo's firs got no
+  levels for their 300,000 needle triangles. When the simplifier makes no progress on a submesh of at least
+  16 parts of at most 64 triangles on average, each further level keeps an evenly spread `reduction` of the
+  previous level's cards (a multiplicative hash of the card number) and scales them about their centres by
+  `reduction^-0.3`, the curve the tech demo's hand-tuned thinning followed.
+- Scaled cards need their own vertices, so these levels append vertices to the Mesh: a level is no longer
+  always a range of indices over the same vertices. Full-detail vertices and indices keep their places, so
+  `fullDetailIndices()` and the cooked format (version 3) are unchanged; `clearLods()` also drops the
+  appended vertices. The model importer's version becomes `gltf:3`, so models cooked before get thinned
+  levels on their next load.
+- A thinned level's error is the mean card size times `1/sqrt(fraction kept) - 1`: how much the gaps between
+  cards grow. It is compared with the same pixel allowance and the same `maxError` as simplified levels.
+- `MeshRenderer::lodBias` (copied to `RenderMesh::lodBias`) multiplies the view's pixel allowance per
+  renderer, so a scene can let distant or less important objects coarsen sooner without new assets. It
+  replaces the tech demo's hand-made `_far` copies.
+- Considered: meshoptimizer's sloppy simplifier (merges cards into blobs and loses the leaf silhouette) and
+  removing small parts by error alone (thins without making up for the lost leaf area, so far trees go bald).

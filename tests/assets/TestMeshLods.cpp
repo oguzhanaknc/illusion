@@ -8,6 +8,7 @@
 #include <doctest/doctest.h>
 
 #include <algorithm>
+#include <cmath>
 #include <vector>
 
 using namespace illusion;
@@ -38,6 +39,54 @@ MeshData twoMaterialSphere()
     mesh.submeshes = {upper, lower};
     mesh.computeBounds();
     return mesh;
+}
+
+// Foliage: @p count square cards of two triangles each (no shared vertices), 0.2 units wide, spread over a
+// 10 unit cube by a fixed sequence.
+MeshData cardFoliage(u32 count)
+{
+    MeshData mesh;
+    u32 state = 12345u;
+    const auto next = [&state] {
+        state = state * 1664525u + 1013904223u;
+        return static_cast<f32>(state >> 8) / static_cast<f32>(1u << 24);
+    };
+    for (u32 card = 0; card < count; ++card)
+    {
+        const Vec3 centre(next() * 10.0f, next() * 10.0f, next() * 10.0f);
+        const u32 base = static_cast<u32>(mesh.vertices.size());
+        for (const Vec2 corner : {Vec2(-0.1f, -0.1f), Vec2(0.1f, -0.1f), Vec2(0.1f, 0.1f), Vec2(-0.1f, 0.1f)})
+        {
+            Vertex vertex;
+            vertex.position = centre + Vec3(corner.x, corner.y, 0.0f);
+            vertex.normal = Vec3(0.0f, 0.0f, 1.0f);
+            vertex.uv = corner * 5.0f + Vec2(0.5f);
+            mesh.vertices.push_back(vertex);
+        }
+        mesh.indices.insert(mesh.indices.end(), {base, base + 1, base + 2, base, base + 2, base + 3});
+    }
+    Submesh submesh;
+    submesh.indexCount = static_cast<u32>(mesh.indices.size());
+    mesh.submeshes = {submesh};
+    mesh.computeBounds();
+    return mesh;
+}
+
+// Largest bounding-box extent of the triangles of @p indices (each triangle of a square card spans it).
+f32 largestCard(const MeshData& mesh, std::span<const u32> indices)
+{
+    f32 largest = 0.0f;
+    for (usize i = 0; i + 2 < indices.size(); i += 3)
+    {
+        Aabb box;
+        for (usize corner = 0; corner < 3; ++corner)
+        {
+            box.expand(mesh.vertices[indices[i + corner]].position);
+        }
+        const Vec3 extent = box.max - box.min;
+        largest = std::max({largest, extent.x, extent.y, extent.z});
+    }
+    return largest;
 }
 
 } // namespace
@@ -139,6 +188,99 @@ TEST_CASE("generateLods simplifies every submesh within its own triangles")
             }
         }
     }
+}
+
+TEST_CASE("generateLods thins foliage cards and enlarges the cards it keeps")
+{
+    MeshData mesh = cardFoliage(2000);
+    const usize fullVertices = mesh.vertices.size();
+    const std::vector<u32> fullIndices = mesh.indices;
+    const Aabb fullBounds = mesh.bounds;
+    generateLods(mesh, MeshLodSettings{.maxError = 0.5f});
+    const Submesh& submesh = mesh.submeshes[0];
+    REQUIRE(submesh.lodCount == kMaxSubmeshLods);
+
+    u32 previousTriangles = submesh.indexCount / 3;
+    f32 previousError = 0.0f;
+    f32 previousCard = 0.2f;
+    for (u32 level = 1; level <= submesh.lodCount; ++level)
+    {
+        CAPTURE(level);
+        const SubmeshLod range = submesh.level(level);
+        const u32 triangles = range.indexCount / 3;
+        // About half of the previous level's cards (a hash decides), each still whole.
+        CHECK(triangles % 2 == 0);
+        CHECK(triangles > previousTriangles * 4 / 10);
+        CHECK(triangles < previousTriangles * 6 / 10);
+        CHECK(range.error > previousError);
+        // The kept cards are new, enlarged vertices; the full-detail ones are untouched.
+        const std::span<const u32> indices = levelIndices(mesh, submesh, level);
+        CHECK(std::all_of(indices.begin(), indices.end(), [&](u32 index) { return index >= fullVertices; }));
+        const f32 card = largestCard(mesh, indices);
+        CHECK(card > previousCard * 1.1f);
+        previousTriangles = triangles;
+        previousError = range.error;
+        previousCard = card;
+    }
+    // Cards grow by (fraction kept)^-0.3 overall, and the bounds include them.
+    CHECK(previousCard == doctest::Approx(0.2f * std::pow(0.125f, -0.3f)).epsilon(0.1));
+    CHECK(mesh.bounds.min.x <= fullBounds.min.x);
+    CHECK(mesh.bounds.max.y >= fullBounds.max.y);
+    CHECK(submesh.bounds.max.z >= fullBounds.max.z);
+    // The full detail is unchanged, and collisions still see only it.
+    CHECK(std::equal(fullIndices.begin(), fullIndices.end(), mesh.indices.begin()));
+    CHECK(fullDetailIndices(mesh).size() == fullIndices.size());
+
+    // Deterministic.
+    MeshData again = cardFoliage(2000);
+    generateLods(again, MeshLodSettings{.maxError = 0.5f});
+    CHECK(again.indices == mesh.indices);
+    CHECK(again.vertices.size() == mesh.vertices.size());
+
+    // clearLods drops the appended cards too.
+    clearLods(mesh);
+    CHECK(mesh.vertices.size() == fullVertices);
+    CHECK(mesh.indices == fullIndices);
+}
+
+TEST_CASE("card thinning stops at the error limit and skips meshes that are not foliage")
+{
+    // At 3% of the 10 unit size, the third level's gaps (0.2 * (sqrt(8) - 1) = 0.37) are too large.
+    MeshData limited = cardFoliage(2000);
+    generateLods(limited, MeshLodSettings{.maxError = 0.03f});
+    CHECK(limited.submeshes[0].lodCount == 2);
+    CHECK(limited.submeshes[0].level(2).error <= 0.31f);
+
+    // Too few cards to thin.
+    MeshData few = cardFoliage(10);
+    generateLods(few, MeshLodSettings{.maxError = 0.5f, .minTriangles = 0});
+    CHECK(few.submeshes[0].lodCount == 0);
+    CHECK(few.vertices.size() == 40);
+
+    // Large separate parts are not cards: a sphere copied 20 times cannot be thinned, only simplified.
+    MeshData sphere = makeSphere(1.0f, 64, 32);
+    MeshData spheres;
+    for (u32 copy = 0; copy < 20; ++copy)
+    {
+        const u32 base = static_cast<u32>(spheres.vertices.size());
+        for (Vertex vertex : sphere.vertices)
+        {
+            vertex.position.x += 3.0f * static_cast<f32>(copy);
+            spheres.vertices.push_back(vertex);
+        }
+        for (const u32 index : sphere.indices)
+        {
+            spheres.indices.push_back(base + index);
+        }
+    }
+    Submesh all;
+    all.indexCount = static_cast<u32>(spheres.indices.size());
+    spheres.submeshes = {all};
+    spheres.computeBounds();
+    const usize vertices = spheres.vertices.size();
+    generateLods(spheres);
+    CHECK(spheres.submeshes[0].lodCount == kMaxSubmeshLods);
+    CHECK(spheres.vertices.size() == vertices);
 }
 
 TEST_CASE("clearLods removes the levels and their indices")

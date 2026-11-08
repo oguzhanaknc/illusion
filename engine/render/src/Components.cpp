@@ -88,7 +88,14 @@ void reflectRenderComponents(ComponentRegistry& registry)
                 .assetKind = AssetKind::Material})
         .field("layers", &MeshRenderer::layers, {.advanced = true})
         .field("castShadows", &MeshRenderer::castShadows)
-        .field("visible", &MeshRenderer::visible);
+        .field("visible", &MeshRenderer::visible)
+        .field("lodBias", &MeshRenderer::lodBias,
+               {.displayName = "LOD bias",
+                .description = "Multiplies the level-of-detail error the view allows: above 1 switches to "
+                               "coarser levels nearer, 0 always draws full detail.",
+                .min = 0.0,
+                .softMax = 8.0,
+                .step = 0.05});
     reflect<Camera>("illusion.Camera", 2, registry)
         .meta({.displayName = "Camera",
                .category = "Rendering",
