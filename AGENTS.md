@@ -182,6 +182,9 @@ The Steamworks SDK is never committed. See `.claude/skills/add-dependency/SKILL.
 - One logical change per commit. Commit only after the pre-commit checklist in
   `.claude/skills/pre-commit-review/SKILL.md` passes.
 - Never commit build trees, `CMakeUserPresets.json`, secrets or SDKs.
+- CI skips the build, sanitizer and GPU jobs when a change touches only `ROADMAP.md`, `AGENTS.md`,
+  `CLAUDE.md`, `README.md`, `.gitignore`, `.claude/` or `docs/adr/` (the `changes` job in `ci.yml`); Format
+  and Docs always run. Add a path to that list only if no build, test or check reads it.
 
 ## Agent roles
 
