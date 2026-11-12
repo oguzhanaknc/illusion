@@ -48,11 +48,11 @@ struct AssetFile
 };
 
 /// Payload format versions; bump when the serialized layout changes.
-inline constexpr u32 kImageFormatVersion = 1;
+inline constexpr u32 kImageFormatVersion = 2;
 /// @copydoc kImageFormatVersion
-inline constexpr u32 kModelFormatVersion = 4;
+inline constexpr u32 kModelFormatVersion = 5;
 /// @copydoc kImageFormatVersion
-inline constexpr u32 kEnvironmentFormatVersion = 1;
+inline constexpr u32 kEnvironmentFormatVersion = 2;
 
 /// Encodes @p file: magic, container version, type, version, dependencies, payload size and checksum,
 /// payload.
@@ -63,10 +63,11 @@ inline constexpr u32 kEnvironmentFormatVersion = 1;
 [[nodiscard]] std::optional<AssetFile> readAssetFile(std::span<const std::byte> bytes,
                                                      std::string* error = nullptr);
 
-/// Serializes an image with all its mips.
+/// Serializes an image of any format, block-compressed ones included, with all its mips.
 [[nodiscard]] std::vector<std::byte> serializeImage(const Image& image);
 
-/// Reads an image written by serializeImage(); returns std::nullopt for invalid data.
+/// Reads an image written by serializeImage(); returns std::nullopt for invalid data (including levels
+/// whose size does not match imageLevelSize()).
 [[nodiscard]] std::optional<Image> deserializeImage(std::span<const std::byte> bytes);
 
 /// Serializes a model (meshes, materials, images, nodes).
@@ -76,7 +77,8 @@ inline constexpr u32 kEnvironmentFormatVersion = 1;
 /// that point outside their arrays).
 [[nodiscard]] std::optional<ModelData> deserializeModel(std::span<const std::byte> bytes);
 
-/// Serializes a baked environment (sizes, both cube maps with their mips, irradiance).
+/// Serializes a baked environment (sizes, both cube maps with their mips as texels or BC6H blocks,
+/// irradiance).
 [[nodiscard]] std::vector<std::byte> serializeEnvironment(const BakedEnvironment& environment);
 
 /// Reads an environment written by serializeEnvironment(); returns std::nullopt for invalid data (including

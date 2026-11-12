@@ -53,10 +53,13 @@ struct MaterialTextureUse
 {
     AssetRef texture{}; ///< The image (may be empty).
     bool srgb = false;  ///< Colour data (base colour, emissive); false for linear data.
+    /// BC7 for base colour, emissive and metallic-roughness, BC5 for normals, BC4 for occlusion (BC7 when it
+    /// is the metallic-roughness file).
+    TextureCompression compression = TextureCompression::None;
 };
 
 /// The textures of @p textures in the order baseColor, metallicRoughness, normal, occlusion, emissive, with
-/// the import setting each needs (renderers and cookAssets() load them with these settings).
+/// the import settings each needs (renderers and cookAssets() load them with these settings).
 [[nodiscard]] std::array<MaterialTextureUse, 5>
 materialTextureUses(const MaterialTextures& textures) noexcept;
 

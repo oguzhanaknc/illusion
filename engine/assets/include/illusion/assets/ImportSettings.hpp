@@ -7,8 +7,8 @@
 /// ```json
 /// {
 ///   "format": "illusion.import",
-///   "version": 1,
-///   "texture": {"colorSpace": "linear", "maxSize": 1024}
+///   "version": 2,
+///   "texture": {"colorSpace": "linear", "maxSize": 1024, "compression": "bc5", "quality": "high"}
 /// }
 /// ```
 ///
@@ -17,6 +17,7 @@
 /// import cache. Cache entries stay keyed by the settings the caller asked for, so a game that ships only
 /// the cooked cache finds them without the sidecars.
 
+#include <illusion/assets/TextureCompression.hpp>
 #include <illusion/core/Base.hpp>
 #include <illusion/core/Expected.hpp>
 
@@ -33,7 +34,7 @@ struct ImageImportSettings;
 inline constexpr std::string_view kImportSettingsSuffix = ".import.json";
 
 /// Version of the sidecar format written by writeImportSettings().
-inline constexpr u32 kImportSettingsVersion = 1;
+inline constexpr u32 kImportSettingsVersion = 2;
 
 /// Which settings an asset has, decided by its extension.
 enum class ImportSettingsKind : u8
@@ -51,12 +52,26 @@ enum class ImportColorSpace : u8
     Linear, ///< Always linear.
 };
 
+/// Block compression of a texture in its sidecar.
+enum class ImportCompression : u8
+{
+    Auto, ///< As the user of the image asks (see materialTextureUses()).
+    None, ///< Never compressed.
+    BC7,  ///< Always TextureCompression::BC7.
+    BC5,  ///< Always TextureCompression::BC5.
+    BC4,  ///< Always TextureCompression::BC4.
+    BC6H, ///< Always TextureCompression::BC6H.
+};
+
 /// Settings of a texture sidecar ("texture" member).
 struct TextureImportSettings
 {
     ImportColorSpace colorSpace = ImportColorSpace::Auto; ///< Overrides the colour space users ask for.
     bool generateMips = true; ///< false imports only the top level, even when a user asks for mips.
     u32 maxSize = 0;          ///< Halve the image until no side exceeds this (0: no limit; else 1 to 16384).
+    /// Overrides the compression users ask for; a user that asks for None (a CPU reader) still gets pixels.
+    ImportCompression compression = ImportCompression::Auto;
+    TextureQuality quality = TextureQuality::Normal; ///< Encoder effort when the image is compressed.
 
     /// Compares every setting.
     friend bool operator==(const TextureImportSettings&, const TextureImportSettings&) = default;
@@ -71,6 +86,8 @@ struct ModelImportSettings
     u32 lodCount = 3;
     /// Fraction of the previous level's triangles each level aims for (0.1 to 0.9).
     f32 lodReduction = 0.5f;
+    bool compressTextures = true; ///< Compress the model's images by their use in its materials.
+    TextureQuality textureQuality = TextureQuality::Normal; ///< Encoder effort for the model's images.
 
     /// Compares every setting.
     friend bool operator==(const ModelImportSettings&, const ModelImportSettings&) = default;
@@ -126,11 +143,12 @@ mergeImportSettings(ImportSettings& settings, const JsonValue& patch, ImportSett
 [[nodiscard]] std::string writeImportSettings(const ImportSettings& settings, ImportSettingsKind kind);
 
 /// Every setting of @p kind as compact JSON, defaults included, e.g.
-/// `{"texture":{"colorSpace":"auto","generateMips":true,"maxSize":0}}` or
-/// `{"model":{"scale":1.0,"lodCount":3,"lodReduction":0.5}}`; "{}" for ImportSettingsKind::None.
+/// `{"texture":{"colorSpace":"auto","generateMips":true,"maxSize":0,"compression":"auto","quality":"normal"}}`
+/// or `{"model":{"scale":1.0,"lodCount":3,"lodReduction":0.5,"compressTextures":true,"textureQuality":"normal"}}`; "{}" for ImportSettingsKind::None.
 [[nodiscard]] std::string importSettingsValue(const ImportSettings& settings, ImportSettingsKind kind);
 
-/// What an image is imported with: @p requested (what its user asks for) changed by @p settings.
+/// What an image is imported with: @p requested (what its user asks for) changed by @p settings. The
+/// compression of @p settings applies only when @p requested asks for one.
 [[nodiscard]] ImageImportSettings effectiveImageImport(const ImageImportSettings& requested,
                                                        const TextureImportSettings& settings) noexcept;
 
