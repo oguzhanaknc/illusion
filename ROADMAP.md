@@ -5,10 +5,15 @@ ADRs for its significant decisions. Items marked ✅ are done.
 
 ## Order after DEMO
 
-1. GFX-2 (foliage and LODs; GFX-2a to 2d done), 2. GFX-3, 3. TEX (texture compression), 4. UI (game interface),
-5. SAVE (saved games), 6. ANIM (skeletal animation), 7. NAV (navigation and AI), 8. M8 (release pipeline),
-9. PROBE (reflection and light probes), 10. MAT (custom shaders and materials), 11. DECAL, 12. TERRAIN,
-13. WATER, 14. M9 (upscaling and frame generation), 15. M10 (hybrid ray tracing).
+1. TEX (texture compression), 2. M8 (release pipeline), 3. UI (game interface), 4. SAVE (saved games),
+5. ANIM (skeletal animation), 6. NAV (navigation and AI), 7. MAT (custom shaders and materials),
+8. PROBE (reflection and light probes, screen-space reflections, contact shadows), 9. DECAL,
+10. TERRAIN (with GPU grass and impostors), 11. WATER, 12. GFX-3 (lit smoke, clouds),
+13. M9 (upscaling and frame generation), 14. M10 (hybrid ray tracing).
+
+The release pipeline comes early so that every later milestone is exercised by an exported build in CI.
+MAT comes before the render features that add shader paths (decals, grass, impostors, water), so they are
+written once on the material system.
 
 ## M0 — Foundation ✅
 
@@ -64,7 +69,7 @@ ADRs for its significant decisions. Items marked ✅ are done.
 - M4c: ✅ Packed archives (`.illpak`, memory-mapped, hash-checked), VFS archive mounts, `illusion_pack` with
   asset cooking, shipping without sources (ADR 0021)
 
-## M5 — Gameplay services
+## M5 — Gameplay services ✅
 
 - M5a: ✅ Component reflection with stable, explicit names; JSON scene files (yyjson); type-erased World
   access; semantic versions (ADR 0022)
@@ -614,7 +619,8 @@ After DEMO. Features that bring the renderer and the tech demo to a modern AAA l
   `shadowNearPlane`; cube shadow maps for up to 4 lights nearest the view (`ShadowSettings::pointLightCount`,
   `pointResolution`), drawn with the caster path (wind, alpha masks), PCSS in the forward shading and one tap
   per froxel in the volumetric fog (ADR 0051); the tech demo's campfire and lanterns cast them
-- GFX-2: Foliage and level of detail, in six steps:
+- GFX-2: ✅ Foliage and level of detail (GPU grass and impostors moved to TERRAIN; screen-space reflections
+  and contact shadows moved to PROBE):
   - GFX-2a: ✅ Levels of detail for every Mesh (ADR 0052): up to three coarser index ranges per submesh over
     the same vertices (`Submesh::lods`, cooked model format 3), generated on import with meshoptimizer 1.3
     (MIT; simplifier with normals and locked borders, vertex cache order; sidecar `lodCount`,
@@ -635,9 +641,7 @@ After DEMO. Features that bring the renderer and the tech demo to a modern AAA l
   - GFX-2d: ✅ Leaf translucency (ADR 0053): `MaterialData::diffuseTransmission` and its colour (glTF
     `KHR_materials_diffuse_transmission`) send part of the diffuse light to the other side; the shadow test
     of translucent surfaces offsets towards the lit side; the tech demo's foliage glows against the sun
-  - GFX-2e: GPU-generated dense grass
-  - GFX-2f: Impostors for distant trees
-- GFX-3: Lit smoke, clouds, screen-space reflections, contact shadows
+- GFX-3: Lit smoke and clouds (after WATER)
 
 ## TEX — Texture compression
 
@@ -649,6 +653,14 @@ Every platform: textures reach the GPU uncompressed (RGBA8), using 4 to 8 times 
   MoltenVK)
 - GPU upload of compressed mips, streaming by mip level, memory statistics in `RenderResources`; tests
   (round trips, error bounds) and benchmarks (encode speed, memory); permissive encoder (ADR)
+
+## M8 — Release pipeline
+
+- Export: clean runtime build, packed assets, no editor code
+- CPack installers: Windows (signing-ready), macOS `.app` (notarization-ready), Linux (Steam Runtime
+  "sniper" compatible)
+- Optional Steamworks module (achievements, cloud saves, Steam Input); SDK supplied by the user
+- Release and Steam guide (EN/TR)
 
 ## UI — Game interface
 
@@ -701,23 +713,6 @@ Nothing of it exists yet: glTF skins and animations are skipped on import and th
   assets with blackboards, perception (sight, hearing) and an `AiService`; `nav.*` and `ai.*` commands; a
   creature that wanders the tech demo
 
-## M8 — Release pipeline
-
-- Export: clean runtime build, packed assets, no editor code
-- CPack installers: Windows (signing-ready), macOS `.app` (notarization-ready), Linux (Steam Runtime
-  "sniper" compatible)
-- Optional Steamworks module (achievements, cloud saves, Steam Input); SDK supplied by the user
-- Release and Steam guide (EN/TR)
-
-## PROBE — Reflection and light probes
-
-Correct indirect light indoors and in shadow until ray tracing (M10) is available.
-
-- Reflection probes (box-projected, blended between volumes), baked in the editor and refreshed at run time
-  on demand; irradiance probes (spherical harmonics) on a grid or placed volumes with visibility, baked
-  from the scene with the existing renderer, interpolated per pixel; specular occlusion
-- Probe Components, `probe.*` commands, a bake panel; tests and benchmarks
-
 ## MAT — Custom shaders and materials
 
 Today games can only set the parameters of the built-in PBR material.
@@ -727,6 +722,17 @@ Today games can only set the parameters of the built-in PBR material.
   textures exposed to `.material` files and the Inspector; shader permutations cached and hot-reloaded
 - Shading models (default, subsurface, two-sided foliage, unlit, clear coat); a node-based material editor
   later; documentation of the surface API
+
+## PROBE — Reflection and light probes
+
+Correct indirect light indoors and in shadow until ray tracing (M10) is available.
+
+- Reflection probes (box-projected, blended between volumes), baked in the editor and refreshed at run time
+  on demand; irradiance probes (spherical harmonics) on a grid or placed volumes with visibility, baked
+  from the scene with the existing renderer, interpolated per pixel; specular occlusion
+- Probe Components, `probe.*` commands, a bake panel; tests and benchmarks
+- Screen-space reflections that fall back to the reflection probes off screen, and contact shadows
+  (formerly part of GFX-3)
 
 ## DECAL — Decals
 
@@ -739,6 +745,8 @@ Today games can only set the parameters of the built-in PBR material.
 - Heightmap terrain in tiles with GPU tessellation-free LOD (CDLOD), layered materials painted in the
   editor (splat maps, triplanar on slopes), holes, Jolt height-field colliders, vegetation painted onto it
   with the GFX-2 instancing; streaming of tiles for large worlds
+- GPU-generated dense grass placed from the terrain's density maps, and impostors for distant trees
+  (formerly GFX-2e and GFX-2f)
 
 ## WATER — Water
 
