@@ -1,6 +1,7 @@
 #include <illusion/assets/AssetStreamer.hpp>
 #include <illusion/assets/Image.hpp>
 #include <illusion/assets/Model.hpp>
+#include <illusion/assets/TextureCompression.hpp>
 #include <illusion/core/Assert.hpp>
 #include <illusion/core/AssetId.hpp>
 #include <illusion/core/JobSystem.hpp>
@@ -93,6 +94,11 @@ ThumbnailImage textureThumbnail(const Image& image, u32 size)
     if (!image.isValid() || size == 0)
     {
         return out;
+    }
+    if (isBlockCompressed(image.format))
+    {
+        const std::optional<Image> pixels = decompressImage(image);
+        return pixels ? textureThumbnail(*pixels, size) : out;
     }
     // The smallest mip that still covers the thumbnail.
     usize level = 0;

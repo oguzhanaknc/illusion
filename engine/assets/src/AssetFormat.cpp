@@ -56,19 +56,18 @@ void writeImage(BinaryWriter& writer, const Image& image)
 bool readImage(BinaryReader& reader, Image& image)
 {
     u8 format = 0;
-    if (!reader.read(format) || format > static_cast<u8>(ImageFormat::RGBA32F) ||
+    if (!reader.read(format) || format > static_cast<u8>(ImageFormat::BC6H) ||
         !reader.readVector(image.mips) || !reader.readVector(image.data))
     {
         reader.fail();
         return false;
     }
     image.format = static_cast<ImageFormat>(format);
-    const usize pixelSize = bytesPerPixel(image.format);
     for (const ImageMip& mip : image.mips)
     {
-        const usize expected = static_cast<usize>(mip.width) * mip.height * pixelSize;
-        if (mip.width == 0 || mip.height == 0 || mip.size != expected || mip.offset > image.data.size() ||
-            mip.size > image.data.size() - mip.offset)
+        if (mip.width == 0 || mip.height == 0 ||
+            mip.size != imageLevelSize(image.format, mip.width, mip.height) ||
+            mip.offset > image.data.size() || mip.size > image.data.size() - mip.offset)
         {
             reader.fail();
             return false;
@@ -358,14 +357,24 @@ std::optional<ModelData> deserializeModel(std::span<const std::byte> bytes)
 std::vector<std::byte> serializeEnvironment(const BakedEnvironment& environment)
 {
     std::vector<std::byte> bytes;
-    bytes.reserve((environment.background.size() + environment.specular.size()) * sizeof(u64) + 256);
+    bytes.reserve((environment.background.size() + environment.specular.size()) * sizeof(u64) +
+                  environment.backgroundBlocks.size() + environment.specularBlocks.size() + 256);
     BinaryWriter writer(bytes);
     writer.write(environment.backgroundSize);
     writer.write(environment.backgroundMips);
     writer.write(environment.specularSize);
     writer.write(environment.specularMips);
-    writer.writeVector(std::span<const u64>(environment.background));
-    writer.writeVector(std::span<const u64>(environment.specular));
+    writer.write(static_cast<u8>(environment.compressed ? 1 : 0));
+    if (environment.compressed)
+    {
+        writer.writeVector(std::span<const std::byte>(environment.backgroundBlocks));
+        writer.writeVector(std::span<const std::byte>(environment.specularBlocks));
+    }
+    else
+    {
+        writer.writeVector(std::span<const u64>(environment.background));
+        writer.writeVector(std::span<const u64>(environment.specular));
+    }
     for (const Vec3& coefficient : environment.irradiance.coefficients)
     {
         writer.write(coefficient.x);
@@ -379,9 +388,19 @@ std::optional<BakedEnvironment> deserializeEnvironment(std::span<const std::byte
 {
     BinaryReader reader(bytes);
     BakedEnvironment environment;
+    u8 compressed = 0;
     if (!reader.read(environment.backgroundSize) || !reader.read(environment.backgroundMips) ||
         !reader.read(environment.specularSize) || !reader.read(environment.specularMips) ||
-        !reader.readVector(environment.background) || !reader.readVector(environment.specular))
+        !reader.read(compressed) || compressed > 1)
+    {
+        return std::nullopt;
+    }
+    environment.compressed = compressed != 0;
+    const bool cubes =
+        environment.compressed
+            ? reader.readVector(environment.backgroundBlocks) && reader.readVector(environment.specularBlocks)
+            : reader.readVector(environment.background) && reader.readVector(environment.specular);
+    if (!cubes)
     {
         return std::nullopt;
     }

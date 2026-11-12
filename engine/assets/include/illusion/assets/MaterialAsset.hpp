@@ -19,6 +19,7 @@
 
 #include <illusion/assets/AssetStreamer.hpp>
 #include <illusion/assets/Model.hpp>
+#include <illusion/assets/TextureCompression.hpp>
 #include <illusion/core/AssetRef.hpp>
 #include <illusion/core/Expected.hpp>
 

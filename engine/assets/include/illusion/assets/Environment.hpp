@@ -118,8 +118,9 @@ struct BakedEnvironment
     std::vector<u64> specular;   ///< cubeTexelCount(specularSize, specularMips) texels.
     ShIrradiance irradiance;     ///< Diffuse irradiance.
     bool compressed = false;     ///< The cube maps are in the block vectors and the texel vectors are empty.
-    std::vector<std::byte> backgroundBlocks; ///< cubeBlockBytes(backgroundSize, backgroundMips) bytes of BC6H.
-    std::vector<std::byte> specularBlocks;   ///< cubeBlockBytes(specularSize, specularMips) bytes of BC6H.
+    std::vector<std::byte>
+        backgroundBlocks;                  ///< cubeBlockBytes(backgroundSize, backgroundMips) bytes of BC6H.
+    std::vector<std::byte> specularBlocks; ///< cubeBlockBytes(specularSize, specularMips) bytes of BC6H.
 
     /// True if both sizes are non-zero powers of two, the mip counts fit them and the texel counts (or, when
     /// compressed, the block byte counts) match.

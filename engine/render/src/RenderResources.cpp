@@ -1,6 +1,7 @@
 #include "EnvironmentBaker.hpp"
 #include "RenderResourcesImpl.hpp"
 
+#include <illusion/assets/TextureCompression.hpp>
 #include <illusion/core/Assert.hpp>
 #include <illusion/core/Log.hpp>
 #include <illusion/core/Memory.hpp>
@@ -33,6 +34,16 @@ nvrhi::Format formatOf(ImageFormat format) noexcept
         return nvrhi::Format::SRGBA8_UNORM;
     case ImageFormat::RGBA32F:
         return nvrhi::Format::RGBA32_FLOAT;
+    case ImageFormat::BC7:
+        return nvrhi::Format::BC7_UNORM;
+    case ImageFormat::BC7Srgb:
+        return nvrhi::Format::BC7_UNORM_SRGB;
+    case ImageFormat::BC5:
+        return nvrhi::Format::BC5_UNORM;
+    case ImageFormat::BC4:
+        return nvrhi::Format::BC4_UNORM;
+    case ImageFormat::BC6H:
+        return nvrhi::Format::BC6H_UFLOAT;
     }
     return nvrhi::Format::RGBA8_UNORM;
 }
@@ -506,6 +517,12 @@ TextureHandle RenderResources::createTexture(const Image& image, const char* deb
 {
     ILL_PROFILE_SCOPE();
     ILL_CHECK(image.isValid(), "createTexture: invalid image");
+    if (isBlockCompressed(image.format))
+    {
+        const std::optional<Image> pixels = decompressImage(image);
+        ILL_CHECK(pixels.has_value(), "createTexture: invalid compressed image");
+        return createTexture(*pixels, debugName);
+    }
     Impl& impl = *m_impl;
     impl.collect();
 
@@ -655,6 +672,12 @@ EnvironmentHandle RenderResources::createEnvironment(const Image& equirect, cons
 {
     ILL_PROFILE_SCOPE();
     ILL_CHECK(equirect.isValid(), "createEnvironment: invalid image");
+    if (isBlockCompressed(equirect.format))
+    {
+        const std::optional<Image> pixels = decompressImage(equirect);
+        ILL_CHECK(pixels.has_value(), "createEnvironment: invalid compressed image");
+        return createEnvironment(*pixels, desc, debugName);
+    }
     Impl& impl = *m_impl;
     impl.collect();
 
@@ -814,6 +837,12 @@ EnvironmentHandle RenderResources::createEnvironment(const BakedEnvironment& bak
 {
     ILL_PROFILE_SCOPE();
     ILL_CHECK(baked.isValid(), "createEnvironment: invalid baked environment");
+    if (baked.compressed)
+    {
+        const std::optional<BakedEnvironment> texels = decompressEnvironment(baked);
+        ILL_CHECK(texels.has_value(), "createEnvironment: invalid compressed environment");
+        return createEnvironment(*texels, debugName);
+    }
     Impl& impl = *m_impl;
     impl.collect();
 

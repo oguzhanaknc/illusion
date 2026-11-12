@@ -651,7 +651,7 @@ BC7 (colour, colour + alpha), BC5 (normal maps), BC4 (masks) and BC6H (HDR envir
 on the Job System, one format family on Windows, Linux and macOS (Apple Silicon supports BC through
 MoltenVK); design in ADR 0054, public API in `illusion/assets/TextureCompression.hpp`.
 
-- TEX-1: Encoders. `engine/assets`: `ImageFormat` BC formats, `compressImage()`/`decompressImage()`
+- TEX-1: ✅ Encoders. `engine/assets`: `ImageFormat` BC formats, `compressImage()`/`decompressImage()`
   (bc7enc_rdo for BC7/BC5/BC4, own BC6H encoder in `Bc6hEncoder.cpp`, bcdec to decode), dependencies pinned
   and recorded. Done: `tests/assets/TestTextureCompression.cpp` (round trips, error bounds per format and
   quality, odd sizes, same bytes with and without jobs), `benchmarks/BenchTextureCompression.cpp` (encode

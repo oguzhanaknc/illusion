@@ -42,7 +42,8 @@ enum class TextureQuality : u8
 
 /// The compression an image of format @p source gets when @p requested is asked for: None stays None, float
 /// images always become BC6H and 8-bit images BC7 instead of BC6H. @p source must not be block-compressed.
-[[nodiscard]] TextureCompression resolveCompression(TextureCompression requested, ImageFormat source) noexcept;
+[[nodiscard]] TextureCompression resolveCompression(TextureCompression requested,
+                                                    ImageFormat source) noexcept;
 
 /// The format compressImage() produces for @p compression (already resolved) from @p source.
 [[nodiscard]] ImageFormat compressedFormat(TextureCompression compression, ImageFormat source) noexcept;
@@ -62,9 +63,9 @@ enum class TextureQuality : u8
 
 /// Compresses the cube maps of a half-float @p baked environment to BC6H (BakedEnvironment::compressed).
 /// Returns std::nullopt if @p baked is invalid or compressed already.
-[[nodiscard]] std::optional<BakedEnvironment> compressEnvironment(const BakedEnvironment& baked,
-                                                                  TextureQuality quality = TextureQuality::Normal,
-                                                                  JobSystem* jobs = nullptr);
+[[nodiscard]] std::optional<BakedEnvironment>
+compressEnvironment(const BakedEnvironment& baked, TextureQuality quality = TextureQuality::Normal,
+                    JobSystem* jobs = nullptr);
 
 /// Decodes a compressed @p baked environment back to half-float texels. Returns std::nullopt if @p baked is
 /// invalid or not compressed.

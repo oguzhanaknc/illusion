@@ -401,6 +401,29 @@ ImageImportSettings effectiveImageImport(const ImageImportSettings& requested,
         effective.srgb = settings.colorSpace == ImportColorSpace::Srgb;
     }
     effective.generateMips = requested.generateMips && settings.generateMips;
+    if (requested.compression != TextureCompression::None)
+    {
+        switch (settings.compression)
+        {
+        case ImportCompression::Auto:
+            break;
+        case ImportCompression::None:
+            effective.compression = TextureCompression::None;
+            break;
+        case ImportCompression::BC7:
+            effective.compression = TextureCompression::BC7;
+            break;
+        case ImportCompression::BC5:
+            effective.compression = TextureCompression::BC5;
+            break;
+        case ImportCompression::BC4:
+            effective.compression = TextureCompression::BC4;
+            break;
+        case ImportCompression::BC6H:
+            effective.compression = TextureCompression::BC6H;
+            break;
+        }
+    }
     return effective;
 }
 

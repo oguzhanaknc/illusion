@@ -24,9 +24,15 @@ const StructReflection* reflectionOf()
 
 std::array<MaterialTextureUse, 5> materialTextureUses(const MaterialTextures& textures) noexcept
 {
-    return {MaterialTextureUse{textures.baseColor, true},
-            MaterialTextureUse{textures.metallicRoughness, false}, MaterialTextureUse{textures.normal, false},
-            MaterialTextureUse{textures.occlusion, false}, MaterialTextureUse{textures.emissive, true}};
+    const TextureCompression occlusion =
+        !textures.occlusion.empty() && textures.occlusion == textures.metallicRoughness
+            ? TextureCompression::BC7
+            : TextureCompression::BC4;
+    return {MaterialTextureUse{textures.baseColor, true, TextureCompression::BC7},
+            MaterialTextureUse{textures.metallicRoughness, false, TextureCompression::BC7},
+            MaterialTextureUse{textures.normal, false, TextureCompression::BC5},
+            MaterialTextureUse{textures.occlusion, false, occlusion},
+            MaterialTextureUse{textures.emissive, true, TextureCompression::BC7}};
 }
 
 Expected<MaterialAsset, std::string> parseMaterialAsset(std::string_view json)

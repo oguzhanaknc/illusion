@@ -57,7 +57,8 @@ a level of `w x h` pixels holds `ceil(w/4) * ceil(h/4)` blocks in row order (16 
   pixels.
 - `TextureQuality` maps to encoder effort: `Fast` (bc7enc uber level 0, 16 partitions; BC6H without
   refinement), `Normal` (uber 1, 64 partitions; one refinement pass), `High` (uber 4, 64 partitions; three
-  passes). BC7 uses perceptual weights for sRGB images and linear weights otherwise.
+  passes). BC4 and BC5 use rgbcx's fast encoder at `Fast` and its exhaustive one with a search radius of 1
+  (`Normal`) or 3 (`High`). BC7 uses perceptual weights for sRGB images and linear weights otherwise.
 
 **Who decides the format.** The user of an image asks for a compression in `ImageImportSettings::compression`
 (default `None`, so CPU readers are unaffected); it is part of the import cache key. The renderer and

@@ -22,6 +22,8 @@ must be included with distributed games (the export pipeline will collect them a
 | [yyjson](https://github.com/ibireme/yyjson) | 0.13.0 | MIT | JSON (scene files) | Yes |
 | [meshoptimizer](https://github.com/zeux/meshoptimizer) | 1.3 | MIT | Mesh levels of detail (simplification), vertex cache ordering | Yes |
 | [stb_image](https://github.com/nothings/stb) | commit `2c980bb` (v2.30) | Public domain or MIT | PNG, JPEG and HDR decoding | Yes |
+| [bc7enc_rdo](https://github.com/richgel999/bc7enc_rdo) | commit `b943862` (`bc7enc.cpp`, `rgbcx.cpp` only) | MIT or public domain | BC7, BC5 and BC4 texture encoding | Yes |
+| [bcdec](https://github.com/iOrange/bcdec) | commit `80859ed` | MIT or Unlicense | BC texture decoding on the CPU | Yes |
 | [Slang](https://github.com/shader-slang/slang) | 2026.19 | Apache-2.0 WITH LLVM-exception | Shader compiler, run at build time only | No |
 | [Dear ImGui](https://github.com/ocornut/imgui) | 1.93.0 (docking) | MIT | Editor UI | No (editor only) |
 | [ImPlot](https://github.com/epezent/implot) | commit `851cdbd` | MIT | Editor plots | No (editor only) |

@@ -12,8 +12,13 @@ namespace illusion::detail
 
 std::string imageImportKey(const ImageImportSettings& settings)
 {
-    return std::format("{}|srgb={}|mips={}", kImageImporter, settings.srgb ? 1 : 0,
-                       settings.generateMips ? 1 : 0);
+    std::string key = std::format("{}|srgb={}|mips={}", kImageImporter, settings.srgb ? 1 : 0,
+                                  settings.generateMips ? 1 : 0);
+    if (settings.compression != TextureCompression::None)
+    {
+        key += std::format("|compression={}", textureCompressionName(settings.compression));
+    }
+    return key;
 }
 
 std::string assetCachePath(std::string_view cacheMount, std::string_view virtualPath,
@@ -130,6 +135,20 @@ std::optional<Image> importImage(std::span<const std::byte> source, std::span<co
         generateMips(*image);
     }
     limitImageSize(*image, sidecarSettings->texture.maxSize);
+    if (effective.compression != TextureCompression::None)
+    {
+        std::optional<Image> compressed =
+            compressImage(*image, effective.compression, sidecarSettings->texture.quality);
+        if (!compressed)
+        {
+            if (error != nullptr)
+            {
+                *error = std::format("{}: the image cannot be compressed", path);
+            }
+            return std::nullopt;
+        }
+        image = std::move(compressed);
+    }
     cooked.type = AssetType::Image;
     cooked.version = kImageFormatVersion;
     cooked.dependencies = {AssetDependency{path, xxhash64(source)},

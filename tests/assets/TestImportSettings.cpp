@@ -204,7 +204,7 @@ TEST_CASE("parsing a sidecar checks its format and version")
     CHECK(parse("{ not json").error().message.find("invalid JSON") != std::string::npos);
     CHECK(parse(R"({"version": 1})").error().pointer == "/format");
     CHECK(parse(R"({"format": "illusion.material", "version": 1})").error().pointer == "/format");
-    CHECK(parse(R"({"format": "illusion.import", "version": 2})").error().pointer == "/version");
+    CHECK(parse(R"({"format": "illusion.import", "version": 3})").error().pointer == "/version");
     CHECK(parse(R"({"format": "illusion.import", "version": 0})").error().pointer == "/version");
     CHECK(parse(R"({"format": "illusion.import", "version": 1, "model": {}})").error().pointer == "/model");
     CHECK_FALSE(

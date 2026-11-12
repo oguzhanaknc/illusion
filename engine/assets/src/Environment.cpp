@@ -96,7 +96,7 @@ ShIrradiance computeShIrradiance(const Image& environment)
 {
     ILL_PROFILE_SCOPE();
     ShIrradiance sh;
-    if (!environment.isValid())
+    if (!environment.isValid() || isBlockCompressed(environment.format))
     {
         return sh;
     }
@@ -160,12 +160,18 @@ Image makeSkyImage(u32 width, const SkyDesc& desc)
 
 bool BakedEnvironment::isValid() const noexcept
 {
-    const auto cubeValid = [](u32 size, u32 mips, usize texels) {
-        return size > 0 && std::has_single_bit(size) && mips > 0 &&
-               mips <= static_cast<u32>(std::bit_width(size)) && texels == cubeTexelCount(size, mips);
+    const auto cubeValid = [this](u32 size, u32 mips, const std::vector<u64>& texels,
+                                  const std::vector<std::byte>& blocks) {
+        if (size == 0 || !std::has_single_bit(size) || mips == 0 ||
+            mips > static_cast<u32>(std::bit_width(size)))
+        {
+            return false;
+        }
+        return compressed ? texels.empty() && blocks.size() == cubeBlockBytes(size, mips)
+                          : blocks.empty() && texels.size() == cubeTexelCount(size, mips);
     };
-    return cubeValid(backgroundSize, backgroundMips, background.size()) &&
-           cubeValid(specularSize, specularMips, specular.size());
+    return cubeValid(backgroundSize, backgroundMips, background, backgroundBlocks) &&
+           cubeValid(specularSize, specularMips, specular, specularBlocks);
 }
 
 } // namespace illusion

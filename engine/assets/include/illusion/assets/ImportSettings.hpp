@@ -144,7 +144,9 @@ mergeImportSettings(ImportSettings& settings, const JsonValue& patch, ImportSett
 
 /// Every setting of @p kind as compact JSON, defaults included, e.g.
 /// `{"texture":{"colorSpace":"auto","generateMips":true,"maxSize":0,"compression":"auto","quality":"normal"}}`
-/// or `{"model":{"scale":1.0,"lodCount":3,"lodReduction":0.5,"compressTextures":true,"textureQuality":"normal"}}`; "{}" for ImportSettingsKind::None.
+/// or
+/// `{"model":{"scale":1.0,"lodCount":3,"lodReduction":0.5,"compressTextures":true,"textureQuality":"normal"}}`;
+/// "{}" for ImportSettingsKind::None.
 [[nodiscard]] std::string importSettingsValue(const ImportSettings& settings, ImportSettingsKind kind);
 
 /// What an image is imported with: @p requested (what its user asks for) changed by @p settings. The
