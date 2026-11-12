@@ -24,6 +24,42 @@ env:
   CTEST_OUTPUT_ON_FAILURE: "1"
 
 jobs:
+  changes:
+    name: Changes
+    runs-on: ubuntu-24.04
+    permissions:
+      pull-requests: read
+      contents: read
+    outputs:
+      code: ${{ steps.detect.outputs.code }}
+    steps:
+      # The build jobs are skipped only when every changed file is one that no build, test or check reads.
+      # Anything unknown (manual runs, first pushes, API errors, huge diffs) counts as a code change.
+      - id: detect
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          EVENT: ${{ github.event_name }}
+          PR: ${{ github.event.pull_request.number }}
+          BEFORE: ${{ github.event.before }}
+          AFTER: ${{ github.sha }}
+        run: |
+          names='.[] | .filename, (.previous_filename // empty)'
+          files=""
+          if [[ "$EVENT" == pull_request ]]; then
+            files=$(gh api "repos/$REPO/pulls/$PR/files" --paginate -q "$names") || files=""
+          elif [[ "$EVENT" == push && -n "$BEFORE" && "$BEFORE" != 0000000* ]]; then
+            compared="if (.files | length) < 300 then .files | $names else empty end"
+            files=$(gh api "repos/$REPO/compare/$BEFORE...$AFTER" -q "$compared") || files=""
+          fi
+          skippable='^(ROADMAP\.md|AGENTS\.md|CLAUDE\.md|README\.md|\.gitignore|\.claude/.*|docs/adr/.*)$'
+          code=true
+          if [[ -n "$files" ]] && ! grep -qvE "$skippable" <<<"$files"; then
+            code=false
+          fi
+          echo "code=$code" >> "$GITHUB_OUTPUT"
+          echo "code=$code"
+
   format:
     name: Format
     runs-on: ubuntu-24.04
@@ -42,6 +78,8 @@ jobs:
         run: python -m unittest discover -s samples/techdemo/tools -p "test_*.py"
 
   build:
+    needs: changes
+    if: needs.changes.outputs.code == 'true'
     name: ${{ matrix.name }}
     runs-on: ${{ matrix.os }}
     strategy:
@@ -93,6 +131,8 @@ jobs:
         run: python tools/ci/annotate_log.py configure.log build-debug.log test-debug.log build-release.log test-release.log
 
   runtime-only:
+    needs: changes
+    if: needs.changes.outputs.code == 'true'
     # The engine without the editor (ADR 0030): proves that nothing outside editor/ needs it.
     name: Runtime-only build (Linux GCC)
     runs-on: ubuntu-24.04
@@ -130,6 +170,8 @@ jobs:
         run: python tools/ci/annotate_log.py configure.log build.log test.log
 
   sanitizers:
+    needs: changes
+    if: needs.changes.outputs.code == 'true'
     name: Linux Clang ${{ matrix.name }}
     runs-on: ubuntu-24.04
     strategy:
@@ -177,6 +219,8 @@ jobs:
         run: python tools/ci/annotate_log.py configure.log build.log test.log
 
   gpu:
+    needs: changes
+    if: needs.changes.outputs.code == 'true'
     name: Linux GPU (lavapipe)
     runs-on: ubuntu-24.04
     steps:
