@@ -83,6 +83,8 @@ are within budget, format and docs checks pass, and Doxygen reports nothing.
 - Formatting is clang-format 22 with the repository `.clang-format`. Never hand-format against it.
 - Every public declaration in `include/` has a `///` Doxygen comment. Internals go in `src/` or
   `namespace detail`.
+- Comments are for what the code cannot say: a reason, an invariant, a unit, a reference. Do not narrate
+  the code line by line; keep the `///` comment of a simple declaration to one short line.
 - Prefer `[[nodiscard]]`, `noexcept` (where truthful), `constexpr`, `std::span`, `std::string_view`.
 - Use fixed-width aliases from `illusion/core/Base.hpp` (`u32`, `f32`, `usize`, ...).
 - Errors: programmer errors → `ILL_ASSERT` (with a message). Unrecoverable runtime failures (out of
@@ -180,6 +182,21 @@ The Steamworks SDK is never committed. See `.claude/skills/add-dependency/SKILL.
 - One logical change per commit. Commit only after the pre-commit checklist in
   `.claude/skills/pre-commit-review/SKILL.md` passes.
 - Never commit build trees, `CMakeUserPresets.json`, secrets or SDKs.
+
+## Agent roles
+
+A milestone is split by cost: the most capable model designs and reviews, cheaper ones write and verify.
+The definitions are in `.claude/agents/`.
+
+| Role | Model | Does |
+| --- | --- | --- |
+| Architect (the main session) | Fable | ADR, public headers, the brief of each work package (the ROADMAP sub-items), the final review of the diff; does not run builds or read logs |
+| `implementer` | Opus | One work package that needs judgement: rendering, GPU, threading, physics, asset formats |
+| `mechanic` | Sonnet | Pattern-following work: editor commands with reference and goldens, EN/TR documentation, tests, CPack/CI, `build.jsonl` |
+| `verifier` | Haiku | Builds, tests, benchmarks and checks; reports only what failed |
+
+One work package per session; two agents never write the same files; builds run one at a time on a
+machine. A brief names the files or area, the ADR and what done looks like.
 
 ## Skills index
 
