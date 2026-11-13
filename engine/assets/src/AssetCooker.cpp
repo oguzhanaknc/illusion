@@ -1,3 +1,5 @@
+#include "AssetImport.hpp"
+
 #include <illusion/assets/AssetCooker.hpp>
 #include <illusion/assets/AssetDatabase.hpp>
 #include <illusion/assets/ImportSettings.hpp>
@@ -51,11 +53,48 @@ void cookMaterial(VirtualFileSystem& files, AssetDatabase& database, const std::
     for (const MaterialTextureUse& use : materialTextureUses(material->textures))
     {
         std::string error;
-        if (use.texture && !database.loadImage(use.texture.path(), {.srgb = use.srgb}, &error))
+        if (use.texture && !database.loadImage(use.texture.path(),
+                                               {.srgb = use.srgb, .compression = use.compression}, &error))
         {
             result.errors.push_back(std::format("{}: {}", path, error));
         }
     }
+}
+
+// What a standalone image is cooked with: uncompressed, unless its sidecar names a compression. An unreadable
+// or invalid sidecar is reported by the import itself.
+ImageImportSettings standaloneImageImport(const VirtualFileSystem& files, const std::string& path)
+{
+    std::vector<std::byte> sidecar;
+    std::optional<ImportSettings> settings;
+    if (detail::readImportSettingsFile(files, path, sidecar, nullptr))
+    {
+        settings = detail::parseImportSettingsFile(sidecar, path, ImportSettingsKind::Texture, nullptr);
+    }
+    ImageImportSettings import;
+    if (!settings)
+    {
+        return import;
+    }
+    switch (settings->texture.compression)
+    {
+    case ImportCompression::Auto:
+    case ImportCompression::None:
+        break;
+    case ImportCompression::BC7:
+        import.compression = TextureCompression::BC7;
+        break;
+    case ImportCompression::BC5:
+        import.compression = TextureCompression::BC5;
+        break;
+    case ImportCompression::BC4:
+        import.compression = TextureCompression::BC4;
+        break;
+    case ImportCompression::BC6H:
+        import.compression = TextureCompression::BC6H;
+        break;
+    }
+    return import;
 }
 
 void cookDirectory(VirtualFileSystem& files, AssetDatabase& database, const std::string& directory,
@@ -109,7 +148,7 @@ void cookDirectory(VirtualFileSystem& files, AssetDatabase& database, const std:
         }
         else if (isImage(extension))
         {
-            if (database.loadImage(path, {}, &error))
+            if (database.loadImage(path, standaloneImageImport(files, path), &error))
             {
                 ++result.images;
             }

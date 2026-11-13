@@ -914,6 +914,29 @@ TEST_CASE("the asset browser has no Modules root in a project without module fil
     CHECK(driver.find("asset_browser.modules.root").has_value());
 }
 
+TEST_CASE("the asset browser shows the texture compression setting only for models")
+{
+    ShellFixture fixture;
+    EditorContext& editor = *fixture.editor;
+    test::ok(editor, "project.file_write", R"({"path":"assets:/rock.png","text":"x"})");
+    test::ok(editor, "project.file_write", R"({"path":"assets:/ship.glb","text":"x"})");
+    test::ok(editor, "ui.show_panel", R"({"panel":"panel.assets"})");
+
+    ui::UiDriver driver(fixture.context, [&] { fixture.frame(); });
+    driver.runFrames(4);
+
+    // Tile 0 is the scenes folder, then rock.png and ship.glb.
+    REQUIRE(driver.click("asset_browser.tile.1"));
+    driver.runFrames(3);
+    CHECK(driver.find("asset_browser.import.generate_mips").has_value());
+    CHECK_FALSE(driver.find("asset_browser.import.compress_textures").has_value());
+
+    REQUIRE(driver.click("asset_browser.tile.2"));
+    driver.runFrames(3);
+    CHECK_FALSE(driver.find("asset_browser.import.generate_mips").has_value());
+    CHECK(driver.find("asset_browser.import.compress_textures").has_value());
+}
+
 TEST_CASE("dragging an asset from the browser into an Inspector asset field sets it")
 {
     ShellFixture fixture;

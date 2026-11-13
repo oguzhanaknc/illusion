@@ -42,7 +42,7 @@ void appendLevel(Image& image, u32 width, u32 height)
     mip.width = width;
     mip.height = height;
     mip.offset = image.data.size();
-    mip.size = static_cast<usize>(width) * height * bytesPerPixel(image.format);
+    mip.size = imageLevelSize(image.format, width, height);
     image.mips.push_back(mip);
     image.data.resize(image.data.size() + mip.size);
 }
@@ -70,7 +70,9 @@ void downsample(u32 srcWidth, u32 srcHeight, u32 dstWidth, u32 dstHeight, Load l
 
 void limitImageSize(Image& image, u32 maxSize)
 {
-    if (maxSize == 0 || !image.isValid() || std::max(image.width(), image.height()) <= maxSize)
+    ILL_ASSERT(!isBlockCompressed(image.format), "limitImageSize on a block-compressed image");
+    if (maxSize == 0 || !image.isValid() || isBlockCompressed(image.format) ||
+        std::max(image.width(), image.height()) <= maxSize)
     {
         return;
     }
@@ -110,7 +112,12 @@ u32 fullMipCount(u32 width, u32 height) noexcept
 
 Image makeSolidImage(u32 width, u32 height, Vec4 color, ImageFormat format)
 {
+    ILL_ASSERT(!isBlockCompressed(format), "makeSolidImage needs an uncompressed format");
     Image image;
+    if (isBlockCompressed(format))
+    {
+        return image;
+    }
     image.format = format;
     appendLevel(image, std::max(width, 1u), std::max(height, 1u));
     const usize pixels = static_cast<usize>(image.mips[0].width) * image.mips[0].height;
@@ -190,7 +197,7 @@ std::optional<Image> decodeImage(std::span<const std::byte> encoded, bool srgb, 
 std::vector<std::byte> encodePng(const Image& image)
 {
     std::vector<std::byte> png;
-    if (!image.isValid() || image.format == ImageFormat::RGBA32F)
+    if (!image.isValid() || (image.format != ImageFormat::RGBA8 && image.format != ImageFormat::RGBA8Srgb))
     {
         return png;
     }
@@ -208,6 +215,11 @@ std::vector<std::byte> encodePng(const Image& image)
 Vec4 readPixel(const Image& image, u32 x, u32 y) noexcept
 {
     ILL_ASSERT(x < image.width() && y < image.height(), "readPixel outside the image");
+    ILL_ASSERT(!isBlockCompressed(image.format), "readPixel on a block-compressed image");
+    if (isBlockCompressed(image.format))
+    {
+        return Vec4(0.0f);
+    }
     const usize index = static_cast<usize>(y) * image.width() + x;
     if (image.format == ImageFormat::RGBA32F)
     {
@@ -227,7 +239,8 @@ Vec4 readPixel(const Image& image, u32 x, u32 y) noexcept
 void generateMips(Image& image)
 {
     ILL_ASSERT(image.isValid(), "generateMips on an empty image");
-    if (!image.isValid())
+    ILL_ASSERT(!isBlockCompressed(image.format), "generateMips on a block-compressed image");
+    if (!image.isValid() || isBlockCompressed(image.format))
     {
         return;
     }

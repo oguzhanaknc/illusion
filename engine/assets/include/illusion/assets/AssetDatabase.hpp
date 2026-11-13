@@ -8,6 +8,7 @@
 #include <illusion/assets/AssetFormat.hpp>
 #include <illusion/assets/Image.hpp>
 #include <illusion/assets/Model.hpp>
+#include <illusion/assets/TextureCompression.hpp>
 #include <illusion/core/Base.hpp>
 
 #include <optional>
@@ -24,6 +25,8 @@ struct ImageImportSettings
 {
     bool srgb = true;         ///< Decode 8-bit images as sRGB colour data (false for normal maps, masks).
     bool generateMips = true; ///< Build a full mip chain.
+    /// Block compression for the GPU (resolved by resolveCompression()); None keeps pixels for CPU readers.
+    TextureCompression compression = TextureCompression::None;
 };
 
 /// Counters of an AssetDatabase.

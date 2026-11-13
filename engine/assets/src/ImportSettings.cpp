@@ -20,6 +20,8 @@ constexpr f64 kMinLodReduction = 0.1;
 constexpr f64 kMaxLodReduction = 0.9;
 
 constexpr std::array<std::string_view, 3> kColorSpaceNames{"auto", "srgb", "linear"};
+constexpr std::array<std::string_view, 6> kCompressionNames{"auto", "none", "bc7", "bc5", "bc4", "bc6h"};
+constexpr std::array<std::string_view, 3> kQualityNames{"fast", "normal", "high"};
 
 bool endsWithNoCase(std::string_view text, std::string_view suffix) noexcept
 {
@@ -34,6 +36,19 @@ bool endsWithNoCase(std::string_view text, std::string_view suffix) noexcept
 ImportSettingsError fail(std::string pointer, std::string message)
 {
     return ImportSettingsError{std::move(pointer), std::move(message)};
+}
+
+// The index of @p value in @p names, or std::nullopt if it is not a string or not one of them.
+template <usize N>
+std::optional<usize> nameIndex(const JsonValue& value, const std::array<std::string_view, N>& names)
+{
+    const std::optional<std::string_view> name = value.asString();
+    const auto found = name ? std::find(names.begin(), names.end(), *name) : names.end();
+    if (found == names.end())
+    {
+        return std::nullopt;
+    }
+    return static_cast<usize>(found - names.begin());
 }
 
 std::string_view sectionName(ImportSettingsKind kind) noexcept
@@ -64,14 +79,12 @@ Expected<void, ImportSettingsError> mergeTexture(TextureImportSettings& texture,
                 merged.colorSpace = TextureImportSettings{}.colorSpace;
                 continue;
             }
-            const std::optional<std::string_view> name = value.asString();
-            const auto found = name ? std::find(kColorSpaceNames.begin(), kColorSpaceNames.end(), *name)
-                                    : kColorSpaceNames.end();
-            if (found == kColorSpaceNames.end())
+            const std::optional<usize> index = nameIndex(value, kColorSpaceNames);
+            if (!index)
             {
                 return unexpected(fail(pointer, "must be \"auto\", \"srgb\" or \"linear\""));
             }
-            merged.colorSpace = static_cast<ImportColorSpace>(found - kColorSpaceNames.begin());
+            merged.colorSpace = static_cast<ImportColorSpace>(*index);
         }
         else if (member.key == "generateMips")
         {
@@ -102,9 +115,40 @@ Expected<void, ImportSettingsError> mergeTexture(TextureImportSettings& texture,
             }
             merged.maxSize = static_cast<u32>(*size);
         }
+        else if (member.key == "compression")
+        {
+            if (value.isNull())
+            {
+                merged.compression = TextureImportSettings{}.compression;
+                continue;
+            }
+            const std::optional<usize> index = nameIndex(value, kCompressionNames);
+            if (!index)
+            {
+                return unexpected(
+                    fail(pointer, "must be \"auto\", \"none\", \"bc7\", \"bc5\", \"bc4\" or \"bc6h\""));
+            }
+            merged.compression = static_cast<ImportCompression>(*index);
+        }
+        else if (member.key == "quality")
+        {
+            if (value.isNull())
+            {
+                merged.quality = TextureImportSettings{}.quality;
+                continue;
+            }
+            const std::optional<usize> index = nameIndex(value, kQualityNames);
+            if (!index)
+            {
+                return unexpected(fail(pointer, "must be \"fast\", \"normal\" or \"high\""));
+            }
+            merged.quality = static_cast<TextureQuality>(*index);
+        }
         else
         {
-            return unexpected(fail(pointer, "is not a texture setting (colorSpace, generateMips, maxSize)"));
+            return unexpected(
+                fail(pointer,
+                     "is not a texture setting (colorSpace, generateMips, maxSize, compression, quality)"));
         }
     }
     texture = merged;
@@ -171,9 +215,38 @@ Expected<void, ImportSettingsError> mergeModel(ModelImportSettings& model, const
             }
             merged.lodReduction = static_cast<f32>(*reduction);
         }
+        else if (member.key == "compressTextures")
+        {
+            if (value.isNull())
+            {
+                merged.compressTextures = defaults.compressTextures;
+                continue;
+            }
+            const std::optional<bool> flag = value.asBool();
+            if (!flag)
+            {
+                return unexpected(fail(pointer, "must be true or false"));
+            }
+            merged.compressTextures = *flag;
+        }
+        else if (member.key == "textureQuality")
+        {
+            if (value.isNull())
+            {
+                merged.textureQuality = defaults.textureQuality;
+                continue;
+            }
+            const std::optional<usize> index = nameIndex(value, kQualityNames);
+            if (!index)
+            {
+                return unexpected(fail(pointer, "must be \"fast\", \"normal\" or \"high\""));
+            }
+            merged.textureQuality = static_cast<TextureQuality>(*index);
+        }
         else
         {
-            return unexpected(fail(pointer, "is not a model setting (scale, lodCount, lodReduction)"));
+            return unexpected(fail(pointer, "is not a model setting (scale, lodCount, lodReduction, "
+                                            "compressTextures, textureQuality)"));
         }
     }
     model = merged;
@@ -334,6 +407,17 @@ std::string writeImportSettings(const ImportSettings& settings, ImportSettingsKi
         {
             texture.add("maxSize", document.makeU64(settings.texture.maxSize));
         }
+        if (settings.texture.compression != defaultTexture.compression)
+        {
+            texture.add(
+                "compression",
+                document.makeString(kCompressionNames[static_cast<usize>(settings.texture.compression)]));
+        }
+        if (settings.texture.quality != defaultTexture.quality)
+        {
+            texture.add("quality",
+                        document.makeString(kQualityNames[static_cast<usize>(settings.texture.quality)]));
+        }
         any = true;
     }
     if (kind == ImportSettingsKind::Model && settings.model != defaultModel)
@@ -350,6 +434,15 @@ std::string writeImportSettings(const ImportSettings& settings, ImportSettingsKi
         if (settings.model.lodReduction != defaultModel.lodReduction)
         {
             model.add("lodReduction", document.makeF32(settings.model.lodReduction));
+        }
+        if (settings.model.compressTextures != defaultModel.compressTextures)
+        {
+            model.add("compressTextures", document.makeBool(settings.model.compressTextures));
+        }
+        if (settings.model.textureQuality != defaultModel.textureQuality)
+        {
+            model.add("textureQuality",
+                      document.makeString(kQualityNames[static_cast<usize>(settings.model.textureQuality)]));
         }
         any = true;
     }
@@ -370,9 +463,12 @@ std::string importSettingsValue(const ImportSettings& settings, ImportSettingsKi
 {
     if (kind == ImportSettingsKind::Texture)
     {
-        return std::format("{{\"texture\":{{\"colorSpace\":\"{}\",\"generateMips\":{},\"maxSize\":{}}}}}",
+        return std::format("{{\"texture\":{{\"colorSpace\":\"{}\",\"generateMips\":{},\"maxSize\":{},"
+                           "\"compression\":\"{}\",\"quality\":\"{}\"}}}}",
                            kColorSpaceNames[static_cast<usize>(settings.texture.colorSpace)],
-                           settings.texture.generateMips, settings.texture.maxSize);
+                           settings.texture.generateMips, settings.texture.maxSize,
+                           kCompressionNames[static_cast<usize>(settings.texture.compression)],
+                           kQualityNames[static_cast<usize>(settings.texture.quality)]);
     }
     if (kind == ImportSettingsKind::Model)
     {
@@ -382,6 +478,9 @@ std::string importSettingsValue(const ImportSettings& settings, ImportSettingsKi
         model.add("scale", document.makeF32(settings.model.scale));
         model.add("lodCount", document.makeU64(settings.model.lodCount));
         model.add("lodReduction", document.makeF32(settings.model.lodReduction));
+        model.add("compressTextures", document.makeBool(settings.model.compressTextures));
+        model.add("textureQuality",
+                  document.makeString(kQualityNames[static_cast<usize>(settings.model.textureQuality)]));
         document.setRoot(root);
         std::string text;
         if (document.write(text, JsonWriteOptions{.pretty = false}))
@@ -401,6 +500,29 @@ ImageImportSettings effectiveImageImport(const ImageImportSettings& requested,
         effective.srgb = settings.colorSpace == ImportColorSpace::Srgb;
     }
     effective.generateMips = requested.generateMips && settings.generateMips;
+    if (requested.compression != TextureCompression::None)
+    {
+        switch (settings.compression)
+        {
+        case ImportCompression::Auto:
+            break;
+        case ImportCompression::None:
+            effective.compression = TextureCompression::None;
+            break;
+        case ImportCompression::BC7:
+            effective.compression = TextureCompression::BC7;
+            break;
+        case ImportCompression::BC5:
+            effective.compression = TextureCompression::BC5;
+            break;
+        case ImportCompression::BC4:
+            effective.compression = TextureCompression::BC4;
+            break;
+        case ImportCompression::BC6H:
+            effective.compression = TextureCompression::BC6H;
+            break;
+        }
+    }
     return effective;
 }
 

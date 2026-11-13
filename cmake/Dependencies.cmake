@@ -74,6 +74,24 @@ FetchContent_Declare(yyjson
     SYSTEM
     SOURCE_SUBDIR _illusion_no_cmake)
 
+# bc7enc_rdo (MIT or public domain): BC7 (bc7enc.cpp) and BC4/BC5 (rgbcx.cpp) encoders. No release tags;
+# pinned to a commit archive. Only those two sources are compiled (not bc7e.ispc, the RDO tools or the
+# image libraries the repository bundles).
+FetchContent_Declare(bc7enc
+    URL https://github.com/richgel999/bc7enc_rdo/archive/b9438627eef73a1157e84201b6fa6eb2ffd6d9f0.tar.gz
+    URL_HASH SHA256=bbb33d1dbb6178a3a2c044956c3cc0b8ea9fc2f2903824379dd86f87d53b64c6
+    DOWNLOAD_EXTRACT_TIMESTAMP TRUE
+    SYSTEM
+    SOURCE_SUBDIR _illusion_no_cmake)
+
+# bcdec (MIT or Unlicense): BC1-7 block decoder (single header). No release tags; pinned to a commit archive.
+FetchContent_Declare(bcdec
+    URL https://github.com/iOrange/bcdec/archive/80859ed3b7afb1c527a2a99d70c61457bea72d0c.tar.gz
+    URL_HASH SHA256=c54b589fd1db768994c8bb4bbe9dbd658fb9401ce56cb7a1c544cb1ca2c0a033
+    DOWNLOAD_EXTRACT_TIMESTAMP TRUE
+    SYSTEM
+    SOURCE_SUBDIR _illusion_no_cmake)
+
 # --- Declared for upcoming modules (see ROADMAP.md) ---------------------------------------------------
 
 # GLFW 3.5.1 (Zlib): window, keyboard, mouse.
@@ -221,6 +239,8 @@ endforeach()
 #   stb       -> illusion::stb (headers; the implementation is compiled in illusion::assets)
 #   yyjson    -> illusion::yyjson (static library; strict JSON only)
 #   meshoptimizer -> illusion::meshoptimizer (static library: simplifier and vertex cache optimizer)
+#   bc7enc    -> illusion::bc7enc (static library: bc7enc and rgbcx encoders)
+#   bcdec     -> illusion::bcdec (header; the implementation is compiled in illusion::assets)
 #   jolt      -> Jolt::Jolt (static library)
 #   miniaudio -> illusion::miniaudio (headers; the implementation is compiled in illusion::audio)
 #   imgui     -> ILLUSION_IMGUI_SOURCE_DIR (sources; the editor defines illusion::imgui)
@@ -365,6 +385,17 @@ function(illusion_require_dependency name)
         add_library(illusion::meshoptimizer ALIAS illusion_meshoptimizer)
         target_include_directories(illusion_meshoptimizer SYSTEM PUBLIC "${meshoptimizer_SOURCE_DIR}/src")
         target_compile_features(illusion_meshoptimizer PRIVATE cxx_std_20)
+    elseif(name STREQUAL "bc7enc")
+        FetchContent_MakeAvailable(bc7enc)
+        add_library(illusion_bc7enc STATIC "${bc7enc_SOURCE_DIR}/bc7enc.cpp" "${bc7enc_SOURCE_DIR}/rgbcx.cpp")
+        add_library(illusion::bc7enc ALIAS illusion_bc7enc)
+        target_include_directories(illusion_bc7enc SYSTEM PUBLIC "${bc7enc_SOURCE_DIR}")
+        target_compile_features(illusion_bc7enc PRIVATE cxx_std_20)
+    elseif(name STREQUAL "bcdec")
+        FetchContent_MakeAvailable(bcdec)
+        add_library(illusion_bcdec INTERFACE)
+        add_library(illusion::bcdec ALIAS illusion_bcdec)
+        target_include_directories(illusion_bcdec SYSTEM INTERFACE "${bcdec_SOURCE_DIR}")
     elseif(name STREQUAL "slang")
         if(ILLUSION_SLANGC_EXECUTABLE)
             set(ILLUSION_SLANGC "${ILLUSION_SLANGC_EXECUTABLE}" CACHE INTERNAL "")

@@ -15,3 +15,6 @@
 
 #define CGLTF_IMPLEMENTATION
 #include <cgltf.h>
+
+#define BCDEC_IMPLEMENTATION
+#include <bcdec.h>

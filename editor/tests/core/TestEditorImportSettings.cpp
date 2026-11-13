@@ -139,6 +139,58 @@ TEST_CASE("asset.set_import_settings validates the asset and every setting")
     CHECK_FALSE(editor.files().exists(kSidecar));
 }
 
+TEST_CASE("asset.set_import_settings sets texture compression and the texture settings of models")
+{
+    EditorFixture fixture;
+    fixture.buildScene();
+    fixture.addAssets();
+    EditorContext& editor = *fixture.editor;
+
+    JsonDocument set = ok(
+        editor, "asset.set_import_settings",
+        R"({"path":"assets:/textures/red.png","value":{"texture":{"compression":"bc5","quality":"high"}}})");
+    CHECK(set.root().find("changed").asBool() == true);
+    CHECK(set.root().pointer("/value/texture/compression").asString() == "bc5");
+    CHECK(set.root().pointer("/value/texture/quality").asString() == "high");
+    const std::string text = read(editor, kSidecar);
+    CHECK(text.find("\"version\": 2") != std::string::npos);
+    CHECK(text.find("\"compression\": \"bc5\"") != std::string::npos);
+    JsonDocument info = ok(editor, "asset.info", R"({"path":"assets:/textures/red.png"})");
+    CHECK(info.root().pointer("/importSettings/texture/compression").asString() == "bc5");
+    CHECK(info.root().pointer("/importSettings/texture/quality").asString() == "high");
+
+    set =
+        ok(editor, "asset.set_import_settings",
+           R"({"path":"assets:/textures/red.png","value":{"texture":{"compression":null,"quality":null}}})");
+    CHECK(set.root().find("sidecar").asString() == "");
+    CHECK_FALSE(editor.files().exists(kSidecar));
+    ok(editor, "history.undo");
+    CHECK(read(editor, kSidecar) == text);
+
+    const auto pointer = [&](std::string_view params) {
+        const CommandError error = fails(editor, "asset.set_import_settings", params);
+        REQUIRE_FALSE(error.errors.empty());
+        return error.errors.at(0).pointer;
+    };
+    CHECK(pointer(R"({"path":"assets:/textures/red.png","value":{"texture":{"compression":"astc"}}})") ==
+          "/value/texture/compression");
+    CHECK(pointer(R"({"path":"assets:/textures/red.png","value":{"texture":{"quality":3}}})") ==
+          "/value/texture/quality");
+
+    ok(editor, "project.file_write", R"({"path":"assets:/models/ship.glb","text":"not a model"})");
+    set = ok(
+        editor, "asset.set_import_settings",
+        R"({"path":"assets:/models/ship.glb","value":{"model":{"compressTextures":false,"textureQuality":"fast"}}})");
+    CHECK(set.root().pointer("/value/model/compressTextures").asBool() == false);
+    CHECK(set.root().pointer("/value/model/textureQuality").asString() == "fast");
+    CHECK(read(editor, "assets:/models/ship.glb.import.json").find("\"compressTextures\": false") !=
+          std::string::npos);
+    CHECK(pointer(R"({"path":"assets:/models/ship.glb","value":{"model":{"compressTextures":1}}})") ==
+          "/value/model/compressTextures");
+    CHECK(pointer(R"({"path":"assets:/models/ship.glb","value":{"model":{"compression":"bc7"}}})") ==
+          "/value/model/compression");
+}
+
 TEST_CASE("asset.move and asset.delete carry the sidecar with its asset, and undo restores both")
 {
     EditorFixture fixture;

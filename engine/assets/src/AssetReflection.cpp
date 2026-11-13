@@ -12,7 +12,9 @@ void reflectAssetStructs(ComponentRegistry& registry)
         .meta({.displayName = "Image import", .docsAnchor = "manual/assets.md"})
         .field("srgb", &ImageImportSettings::srgb,
                {.displayName = "sRGB", .description = "Colour data; turn off for normal maps and masks."})
-        .field("generateMips", &ImageImportSettings::generateMips);
+        .field("generateMips", &ImageImportSettings::generateMips)
+        .field("compression", &ImageImportSettings::compression,
+               {.description = "Block compression for the GPU; None keeps pixels for CPU readers."});
     reflectStruct<SkyDesc>("illusion.SkyDesc", 1, structs)
         .meta({.displayName = "Procedural sky", .docsAnchor = "manual/rendering.md#image-based-lighting"})
         .field("zenith", &SkyDesc::zenith, {.min = 0.0, .hint = FieldHint::HdrColor})

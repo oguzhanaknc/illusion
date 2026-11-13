@@ -60,6 +60,7 @@ records rather than user documentation.
 | [0051](https://github.com/oguzhanaknc/illusion/blob/main/docs/adr/0051-point-light-shadows.md) | Point light shadows: opt-in per light, a budget of cube maps in one array, reversed depth, PCSS |
 | [0052](https://github.com/oguzhanaknc/illusion/blob/main/docs/adr/0052-mesh-levels-of-detail.md) | Mesh levels of detail: index ranges per submesh, made on import with meshoptimizer, chosen by projected error; foliage cards are thinned; per-renderer bias |
 | [0053](https://github.com/oguzhanaknc/illusion/blob/main/docs/adr/0053-leaf-translucency.md) | Leaf translucency: thin-surface diffuse transmission in the glTF model |
+| [0054](https://github.com/oguzhanaknc/illusion/blob/main/docs/adr/0054-texture-compression.md) | Texture compression: BC7, BC5, BC4 and BC6H made on import (bc7enc, rgbcx and an own BC6H encoder), chosen by material use with a sidecar override; mip streaming by resident range |
 
 To propose a new decision, copy `docs/adr/0000-template.md` and follow the
 [contributing guide](../contributing.md#architecture-decision-records).

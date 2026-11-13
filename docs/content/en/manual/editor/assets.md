@@ -72,10 +72,12 @@ the settings that differ from their defaults; **Apply** writes it (and deletes i
 default), **Revert** reloads what is on disk.
 
 - **Textures** (`.png`, `.jpg`, `.jpeg`, `.tga`, `.bmp`, `.hdr`): the color space (automatic, sRGB or linear),
-  whether mipmaps are generated, and the maximum size in pixels.
+  whether mipmaps are generated, the maximum size in pixels, the **Compression** (automatic, none, BC7, BC5,
+  BC4 or BC6H) and its **Quality** (fast, normal or high); see [texture compression](../assets.md#texture-compression).
 - **Models** (`.gltf`, `.glb`): a uniform scale applied to positions and node translations, how many
   [levels of detail](../rendering.md#levels-of-detail) are generated per mesh (0 to 3) and the fraction of
-  triangles each level keeps.
+  triangles each level keeps, whether the model's images are compressed (**Compress textures**) and their
+  **Texture quality**.
 
 The import settings inspector also says how many files refer to the selected asset.
 

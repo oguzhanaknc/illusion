@@ -22,12 +22,54 @@ enum class ImageFormat : u8
     RGBA8,     ///< 8-bit linear RGBA (normal maps, roughness/metallic, masks).
     RGBA8Srgb, ///< 8-bit sRGB-encoded RGBA (colour textures).
     RGBA32F,   ///< 32-bit float RGBA (HDR environments).
+    BC7,       ///< Block-compressed linear RGBA.
+    BC7Srgb,   ///< Block-compressed sRGB-encoded RGBA.
+    BC5,       ///< Block-compressed R and G, unsigned (normal maps).
+    BC4,       ///< Block-compressed R, unsigned (masks).
+    BC6H,      ///< Block-compressed unsigned half-float RGB (HDR).
 };
 
-/// Bytes per pixel of @p format.
+/// True for the BC formats, whose levels are stored as 4x4 blocks (see TextureCompression.hpp).
+[[nodiscard]] constexpr bool isBlockCompressed(ImageFormat format) noexcept
+{
+    return format >= ImageFormat::BC7;
+}
+
+/// Bytes per pixel of an uncompressed @p format; 0 for block-compressed formats.
 [[nodiscard]] constexpr u32 bytesPerPixel(ImageFormat format) noexcept
 {
+    if (isBlockCompressed(format))
+    {
+        return 0u;
+    }
     return format == ImageFormat::RGBA32F ? 16u : 4u;
+}
+
+/// Bytes per 4x4 block of a block-compressed @p format; 0 for uncompressed formats.
+[[nodiscard]] constexpr u32 bytesPerBlock(ImageFormat format) noexcept
+{
+    if (!isBlockCompressed(format))
+    {
+        return 0u;
+    }
+    return format == ImageFormat::BC4 ? 8u : 16u;
+}
+
+/// Size in bytes of a level of @p width x @p height pixels in @p format (whole blocks for BC formats).
+[[nodiscard]] constexpr usize imageLevelSize(ImageFormat format, u32 width, u32 height) noexcept
+{
+    if (isBlockCompressed(format))
+    {
+        return static_cast<usize>((width + 3u) / 4u) * ((height + 3u) / 4u) * bytesPerBlock(format);
+    }
+    return static_cast<usize>(width) * height * bytesPerPixel(format);
+}
+
+/// Bytes of one row of a level @p width pixels wide: a row of pixels, or a row of blocks for BC formats.
+[[nodiscard]] constexpr usize imageRowPitch(ImageFormat format, u32 width) noexcept
+{
+    return isBlockCompressed(format) ? static_cast<usize>((width + 3u) / 4u) * bytesPerBlock(format)
+                                     : static_cast<usize>(width) * bytesPerPixel(format);
 }
 
 /// One level of a mip chain inside Image::data.
@@ -36,7 +78,7 @@ struct ImageMip
     u32 width = 0;    ///< Width in pixels.
     u32 height = 0;   ///< Height in pixels.
     usize offset = 0; ///< Byte offset in Image::data.
-    usize size = 0;   ///< Size in bytes.
+    usize size = 0;   ///< Size in bytes (imageLevelSize()).
 };
 
 /// A 2D image with zero or more mip levels stored contiguously.
@@ -73,19 +115,20 @@ struct Image
                                                std::string* error = nullptr);
 
 /// Encodes mip 0 of an RGBA8 or RGBA8Srgb image as PNG. Returns an empty vector for other formats.
+/// Decode block-compressed images with decompressImage() first.
 [[nodiscard]] std::vector<std::byte> encodePng(const Image& image);
 
 /// Pixel (@p x, @p y) of mip 0 as linear RGBA: sRGB images are decoded, 8-bit values are scaled to
-/// [0, 1]. Coordinates must be inside the image.
+/// [0, 1]. Coordinates must be inside the image, which must not be block-compressed.
 [[nodiscard]] Vec4 readPixel(const Image& image, u32 x, u32 y) noexcept;
 
 /// Replaces the mip chain below level 0 with a full chain down to 1x1, using a 2x2 box filter.
-/// sRGB images are filtered in linear space.
+/// sRGB images are filtered in linear space. @p image must not be block-compressed (generate, then compress).
 void generateMips(Image& image);
 
 /// Halves @p image with the filter of generateMips() until neither side of level 0 exceeds @p maxSize
 /// (0: no limit). An image with a mip chain keeps the chain below the new level 0; one without stays
-/// without. Does nothing if the image is within the limit already.
+/// without. Does nothing if the image is within the limit already. @p image must not be block-compressed.
 void limitImageSize(Image& image, u32 maxSize);
 
 /// Number of levels in a full mip chain for @p width x @p height.

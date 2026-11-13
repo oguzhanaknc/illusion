@@ -647,12 +647,35 @@ After DEMO. Features that bring the renderer and the tech demo to a modern AAA l
 
 Every platform: textures reach the GPU uncompressed (RGBA8), using 4 to 8 times the memory they need.
 
-- BC7 (colour, colour + alpha), BC5 (normal maps), BC4 (masks), BC6H (HDR environments), encoded on import
-  into the cooked image format with mip chains, on the Job System, with quality settings per texture in the
-  import sidecar; one format family on Windows, Linux and macOS (Apple Silicon supports BC through
-  MoltenVK)
-- GPU upload of compressed mips, streaming by mip level, memory statistics in `RenderResources`; tests
-  (round trips, error bounds) and benchmarks (encode speed, memory); permissive encoder (ADR)
+BC7 (colour, colour + alpha), BC5 (normal maps), BC4 (masks) and BC6H (HDR environments), encoded on import
+on the Job System, one format family on Windows, Linux and macOS (Apple Silicon supports BC through
+MoltenVK); design in ADR 0054, public API in `illusion/assets/TextureCompression.hpp`.
+
+- TEX-1: ✅ Encoders. `engine/assets`: `ImageFormat` BC formats, `compressImage()`/`decompressImage()`
+  (bc7enc_rdo for BC7/BC5/BC4, own BC6H encoder in `Bc6hEncoder.cpp`, bcdec to decode), dependencies pinned
+  and recorded. Done: `tests/assets/TestTextureCompression.cpp` (round trips, error bounds per format and
+  quality, odd sizes, same bytes with and without jobs), `benchmarks/BenchTextureCompression.cpp` (encode
+  speed per format) within budget.
+- TEX-2: ✅ Import. `ImageImportSettings::compression`, sidecar version 2 (`compression`, `quality`; model
+  `compressTextures`, `textureQuality`), cooked image version 2 and model version 5, compression by
+  material use (`materialTextureUses()`, images of glTF models), `cookAssets()`; the editor's import
+  settings (commands, Asset Browser, thumbnails). Done: tests of sidecars, cache keys, cooked round trips
+  and the cooker pass; command reference and goldens updated.
+- TEX-3: GPU upload. `RenderResources::createTexture()` uploads BC levels (CPU decode without
+  `textureCompressionBC`), the render asset cache asks for compressed material textures, shaders rebuild
+  normal z, `RenderResourceStatistics` reports texture bytes. Done: GPU tests draw every BC format within
+  an error bound and check the memory ratio; validation stays clean.
+- TEX-4: Environments. `compressEnvironment()`, cooked environment version 2, the bake cache stores BC6H
+  and later sessions upload it. Done: tests of the round trip and error bound, GPU test of a BC6H
+  environment, statistics report environment bytes.
+- TEX-5: Mip streaming. `RenderResources::setTextureMips()` (resident range per texture) and the budget
+  policy of `RenderAssetCache` fed by `TextureStreamingView`. Done: GPU tests of raising and dropping
+  levels with stable Handles, deterministic policy tests (budget, cooldown), a benchmark of the policy
+  update, no allocation in an idle update.
+- TEX-6: Documentation (EN/TR): manual pages for assets and rendering, the editor's import settings, the
+  showcase with a non-default texture sidecar; in step with each pull request.
+- TEX-7 (later): cooked container with separately addressed mip levels, so raising a texture reads only the
+  missing levels, and streaming of the images inside glTF models.
 
 ## M8 — Release pipeline
 

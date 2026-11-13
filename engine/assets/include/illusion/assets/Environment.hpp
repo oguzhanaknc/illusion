@@ -9,6 +9,7 @@
 #include <illusion/core/Math.hpp>
 
 #include <array>
+#include <cstddef>
 #include <vector>
 
 namespace illusion
@@ -73,6 +74,18 @@ struct SkyDesc
 /// and for tests.
 [[nodiscard]] Image makeSkyImage(u32 width, const SkyDesc& desc = {});
 
+/// Bytes of a BC6H cube map with face size @p size and @p mips mip levels (all six faces).
+[[nodiscard]] constexpr usize cubeBlockBytes(u32 size, u32 mips) noexcept
+{
+    usize bytes = 0;
+    for (u32 mip = 0; mip < mips; ++mip)
+    {
+        const u32 width = size >> mip > 0u ? size >> mip : 1u;
+        bytes += 6u * imageLevelSize(ImageFormat::BC6H, width, width);
+    }
+    return bytes;
+}
+
 /// Number of texels of a cube map with face size @p size and @p mips mip levels (all six faces).
 [[nodiscard]] constexpr usize cubeTexelCount(u32 size, u32 mips) noexcept
 {
@@ -92,6 +105,9 @@ struct SkyDesc
 ///
 /// Texels are RGBA16F (glm::packHalf4x16) in mip order, then face order (+x, -x, +y, -y, +z, -z), then rows
 /// from the top; a face of mip `m` is `max(size >> m, 1)` texels wide.
+///
+/// A compressed environment (compressEnvironment(), TextureCompression.hpp) holds BC6H blocks instead, in
+/// the same mip and face order: each face is imageLevelSize(ImageFormat::BC6H, width, width) bytes.
 struct BakedEnvironment
 {
     u32 backgroundSize = 0; ///< Face size of the background cube map (a power of two).
@@ -101,8 +117,13 @@ struct BakedEnvironment
     std::vector<u64> background; ///< cubeTexelCount(backgroundSize, backgroundMips) texels.
     std::vector<u64> specular;   ///< cubeTexelCount(specularSize, specularMips) texels.
     ShIrradiance irradiance;     ///< Diffuse irradiance.
+    bool compressed = false;     ///< The cube maps are in the block vectors and the texel vectors are empty.
+    std::vector<std::byte>
+        backgroundBlocks;                  ///< cubeBlockBytes(backgroundSize, backgroundMips) bytes of BC6H.
+    std::vector<std::byte> specularBlocks; ///< cubeBlockBytes(specularSize, specularMips) bytes of BC6H.
 
-    /// True if both sizes are non-zero powers of two, the mip counts fit them and the texel counts match.
+    /// True if both sizes are non-zero powers of two, the mip counts fit them and the texel counts (or, when
+    /// compressed, the block byte counts) match.
     [[nodiscard]] bool isValid() const noexcept;
 };
 

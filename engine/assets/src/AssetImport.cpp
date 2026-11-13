@@ -12,8 +12,13 @@ namespace illusion::detail
 
 std::string imageImportKey(const ImageImportSettings& settings)
 {
-    return std::format("{}|srgb={}|mips={}", kImageImporter, settings.srgb ? 1 : 0,
-                       settings.generateMips ? 1 : 0);
+    std::string key = std::format("{}|srgb={}|mips={}", kImageImporter, settings.srgb ? 1 : 0,
+                                  settings.generateMips ? 1 : 0);
+    if (settings.compression != TextureCompression::None)
+    {
+        key += std::format("|compression={}", textureCompressionName(settings.compression));
+    }
+    return key;
 }
 
 std::string assetCachePath(std::string_view cacheMount, std::string_view virtualPath,
@@ -105,7 +110,7 @@ std::optional<ImportSettings> parseImportSettingsFile(std::span<const std::byte>
 
 std::optional<Image> importImage(std::span<const std::byte> source, std::span<const std::byte> sidecar,
                                  const std::string& path, const ImageImportSettings& settings,
-                                 AssetFile& cooked, std::string* error)
+                                 AssetFile& cooked, std::string* error, JobSystem* jobs)
 {
     ILL_PROFILE_SCOPE();
     const std::optional<ImportSettings> sidecarSettings =
@@ -130,6 +135,20 @@ std::optional<Image> importImage(std::span<const std::byte> source, std::span<co
         generateMips(*image);
     }
     limitImageSize(*image, sidecarSettings->texture.maxSize);
+    if (effective.compression != TextureCompression::None)
+    {
+        std::optional<Image> compressed =
+            compressImage(*image, effective.compression, sidecarSettings->texture.quality, jobs);
+        if (!compressed)
+        {
+            if (error != nullptr)
+            {
+                *error = std::format("{}: the image cannot be compressed", path);
+            }
+            return std::nullopt;
+        }
+        image = std::move(compressed);
+    }
     cooked.type = AssetType::Image;
     cooked.version = kImageFormatVersion;
     cooked.dependencies = {AssetDependency{path, xxhash64(source)},
@@ -138,8 +157,52 @@ std::optional<Image> importImage(std::span<const std::byte> source, std::span<co
     return image;
 }
 
+std::vector<TextureCompression> modelImageCompressions(const ModelData& model)
+{
+    enum Use : u8
+    {
+        kNormal = 1,
+        kOcclusion = 2,
+        kOther = 4,
+    };
+    std::vector<u8> uses(model.images.size(), 0);
+    const auto use = [&](const TextureRef& texture, u8 bit) {
+        if (texture.isSet() && static_cast<usize>(texture.image) < uses.size())
+        {
+            uses[static_cast<usize>(texture.image)] |= bit;
+        }
+    };
+    for (const MaterialData& material : model.materials)
+    {
+        use(material.baseColorTexture, kOther);
+        use(material.metallicRoughnessTexture, kOther);
+        use(material.emissiveTexture, kOther);
+        use(material.normalTexture, kNormal);
+        use(material.occlusionTexture, kOcclusion);
+    }
+    std::vector<TextureCompression> compressions(uses.size(), TextureCompression::None);
+    for (usize i = 0; i < uses.size(); ++i)
+    {
+        switch (uses[i])
+        {
+        case 0:
+            break;
+        case kNormal:
+            compressions[i] = TextureCompression::BC5;
+            break;
+        case kOcclusion:
+            compressions[i] = TextureCompression::BC4;
+            break;
+        default:
+            compressions[i] = TextureCompression::BC7;
+            break;
+        }
+    }
+    return compressions;
+}
+
 std::optional<ModelData> importModel(const VirtualFileSystem& files, std::string_view path, AssetFile& cooked,
-                                     std::string* error)
+                                     std::string* error, JobSystem* jobs)
 {
     ILL_PROFILE_SCOPE();
     const std::string normalized = VirtualFileSystem::normalizePath(path).value_or(std::string(path));
@@ -165,6 +228,28 @@ std::optional<ModelData> importModel(const VirtualFileSystem& files, std::string
     for (MeshData& mesh : model->meshes)
     {
         generateLods(mesh, lods);
+    }
+    if (settings->model.compressTextures)
+    {
+        const std::vector<TextureCompression> compressions = modelImageCompressions(*model);
+        for (usize i = 0; i < model->images.size(); ++i)
+        {
+            if (compressions[i] == TextureCompression::None || !model->images[i].isValid())
+            {
+                continue;
+            }
+            std::optional<Image> compressed =
+                compressImage(model->images[i], compressions[i], settings->model.textureQuality, jobs);
+            if (!compressed)
+            {
+                if (error != nullptr)
+                {
+                    *error = std::format("{}: image {} cannot be compressed", normalized, i);
+                }
+                return std::nullopt;
+            }
+            model->images[i] = std::move(*compressed);
+        }
     }
     cooked.type = AssetType::Model;
     cooked.version = kModelFormatVersion;

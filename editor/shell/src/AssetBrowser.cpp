@@ -1168,6 +1168,31 @@ void AssetBrowser::State::drawInspector(Impl& shell, ui::UiKit& kit)
                 settings.texture.maxSize = static_cast<u32>(maxSize);
                 changed = true;
             }
+            ui::propertyLabel(kit, text.format(s::kAssetBrowserImportCompression));
+            const char* compressions[] = {text.format(s::kAssetBrowserImportCompressionAuto),
+                                          text.format(s::kAssetBrowserImportCompressionNone),
+                                          text.format(s::kAssetBrowserImportCompressionBc7),
+                                          text.format(s::kAssetBrowserImportCompressionBc5),
+                                          text.format(s::kAssetBrowserImportCompressionBc4),
+                                          text.format(s::kAssetBrowserImportCompressionBc6h)};
+            int compression = static_cast<int>(settings.texture.compression);
+            ImGui::SetNextItemWidth(-1.0f);
+            if (ImGui::Combo(text.hidden("asset_browser.import.compression"), &compression, compressions, 6))
+            {
+                settings.texture.compression = static_cast<ImportCompression>(compression);
+                changed = true;
+            }
+            ui::propertyLabel(kit, text.format(s::kAssetBrowserImportQuality));
+            const char* qualities[] = {text.format(s::kAssetBrowserImportQualityFast),
+                                       text.format(s::kAssetBrowserImportQualityNormal),
+                                       text.format(s::kAssetBrowserImportQualityHigh)};
+            int quality = static_cast<int>(settings.texture.quality);
+            ImGui::SetNextItemWidth(-1.0f);
+            if (ImGui::Combo(text.hidden("asset_browser.import.quality"), &quality, qualities, 3))
+            {
+                settings.texture.quality = static_cast<TextureQuality>(quality);
+                changed = true;
+            }
         }
         else
         {
@@ -1192,6 +1217,23 @@ void AssetBrowser::State::drawInspector(Impl& shell, ui::UiKit& kit)
             if (ImGui::SliderFloat(text.hidden("asset_browser.import.lod_reduction"),
                                    &settings.model.lodReduction, 0.1f, 0.9f, "%.2f"))
             {
+                changed = true;
+            }
+            ui::propertyLabel(kit, text.format(s::kAssetBrowserImportCompressTextures));
+            if (ImGui::Checkbox(text.hidden("asset_browser.import.compress_textures"),
+                                &settings.model.compressTextures))
+            {
+                changed = true;
+            }
+            ui::propertyLabel(kit, text.format(s::kAssetBrowserImportTextureQuality));
+            const char* qualities[] = {text.format(s::kAssetBrowserImportQualityFast),
+                                       text.format(s::kAssetBrowserImportQualityNormal),
+                                       text.format(s::kAssetBrowserImportQualityHigh)};
+            int quality = static_cast<int>(settings.model.textureQuality);
+            ImGui::SetNextItemWidth(-1.0f);
+            if (ImGui::Combo(text.hidden("asset_browser.import.texture_quality"), &quality, qualities, 3))
+            {
+                settings.model.textureQuality = static_cast<TextureQuality>(quality);
                 changed = true;
             }
         }

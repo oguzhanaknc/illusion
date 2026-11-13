@@ -130,9 +130,12 @@ TEST_CASE("cooking checks material files and cooks their textures with their col
     CHECK(cooked.errors.size() == 2); // the broken glTF files of the test data
     CHECK(cooked.materials == 1);
 
-    // The normal map was cooked as linear data: loading it from the cache imports nothing.
+    // The normal map was cooked as linear BC5 data: loading it from the cache imports nothing.
     AssetDatabase database(project.files, "cache");
-    CHECK(database.loadImage("game:/textures/checker.png", {.srgb = false}).has_value());
+    CHECK(
+        database
+            .loadImage("game:/textures/checker.png", {.srgb = false, .compression = TextureCompression::BC5})
+            .has_value());
     CHECK(database.statistics().imports == 0);
 
     REQUIRE(project.files.writeFile("game:/bad.material", bytesOf("[]")) == FileError::None);

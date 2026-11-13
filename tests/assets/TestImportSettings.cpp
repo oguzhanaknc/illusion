@@ -2,8 +2,11 @@
 
 #include <illusion/assets/AssetCooker.hpp>
 #include <illusion/assets/AssetDatabase.hpp>
+#include <illusion/assets/AssetReflection.hpp>
 #include <illusion/assets/AssetStreamer.hpp>
 #include <illusion/assets/ImportSettings.hpp>
+#include <illusion/assets/MaterialAsset.hpp>
+#include <illusion/assets/TextureCompression.hpp>
 #include <illusion/core/JobSystem.hpp>
 #include <illusion/core/Json.hpp>
 #include <illusion/platform/Archive.hpp>
@@ -11,6 +14,7 @@
 #include <doctest/doctest.h>
 
 #include <algorithm>
+#include <format>
 #include <string>
 
 using namespace illusion;
@@ -100,11 +104,13 @@ TEST_CASE("sidecars hold only the settings that differ from their defaults")
         parseImportSettings(writeImportSettings(lods, ImportSettingsKind::Model), ImportSettingsKind::Model);
     REQUIRE(lodsAgain.hasValue());
     CHECK(*lodsAgain == lods);
-    CHECK(importSettingsValue(ImportSettings{}, ImportSettingsKind::Model) ==
-          R"({"model":{"scale":1.0,"lodCount":3,"lodReduction":0.5}})");
+    CHECK(
+        importSettingsValue(ImportSettings{}, ImportSettingsKind::Model) ==
+        R"({"model":{"scale":1.0,"lodCount":3,"lodReduction":0.5,"compressTextures":true,"textureQuality":"normal"}})");
 
-    CHECK(importSettingsValue(settings, ImportSettingsKind::Texture) ==
-          R"({"texture":{"colorSpace":"auto","generateMips":true,"maxSize":512}})");
+    CHECK(
+        importSettingsValue(settings, ImportSettingsKind::Texture) ==
+        R"({"texture":{"colorSpace":"auto","generateMips":true,"maxSize":512,"compression":"auto","quality":"normal"}})");
     CHECK(importSettingsValue(settings, ImportSettingsKind::None) == "{}");
 }
 
@@ -172,6 +178,14 @@ TEST_CASE("invalid import settings are rejected with a pointer and change nothin
         {R"({"model": {"lodReduction": 0.05}})", ImportSettingsKind::Model, "/model/lodReduction"},
         {R"({"model": {"lodReduction": 0.95}})", ImportSettingsKind::Model, "/model/lodReduction"},
         {R"({"model": {"lodReduction": "half"}})", ImportSettingsKind::Model, "/model/lodReduction"},
+        {R"({"texture": {"compression": "dxt1"}})", ImportSettingsKind::Texture, "/texture/compression"},
+        {R"({"texture": {"compression": "BC7"}})", ImportSettingsKind::Texture, "/texture/compression"},
+        {R"({"texture": {"compression": 7}})", ImportSettingsKind::Texture, "/texture/compression"},
+        {R"({"texture": {"quality": "best"}})", ImportSettingsKind::Texture, "/texture/quality"},
+        {R"({"texture": {"quality": true}})", ImportSettingsKind::Texture, "/texture/quality"},
+        {R"({"model": {"compression": "bc7"}})", ImportSettingsKind::Model, "/model/compression"},
+        {R"({"model": {"compressTextures": "yes"}})", ImportSettingsKind::Model, "/model/compressTextures"},
+        {R"({"model": {"textureQuality": "ultra"}})", ImportSettingsKind::Model, "/model/textureQuality"},
         {R"({})", ImportSettingsKind::None, ""},
     };
     for (const Case& c : cases)
@@ -204,11 +218,100 @@ TEST_CASE("parsing a sidecar checks its format and version")
     CHECK(parse("{ not json").error().message.find("invalid JSON") != std::string::npos);
     CHECK(parse(R"({"version": 1})").error().pointer == "/format");
     CHECK(parse(R"({"format": "illusion.material", "version": 1})").error().pointer == "/format");
-    CHECK(parse(R"({"format": "illusion.import", "version": 2})").error().pointer == "/version");
+    CHECK(parse(R"({"format": "illusion.import", "version": 3})").error().pointer == "/version");
     CHECK(parse(R"({"format": "illusion.import", "version": 0})").error().pointer == "/version");
     CHECK(parse(R"({"format": "illusion.import", "version": 1, "model": {}})").error().pointer == "/model");
     CHECK_FALSE(
         parseImportSettings(R"({"format": "illusion.import", "version": 1})", ImportSettingsKind::None));
+}
+
+TEST_CASE("sidecar version 2 reads, writes and round trips compression and quality")
+{
+    ImportSettings texture;
+    texture.texture.compression = ImportCompression::BC5;
+    texture.texture.quality = TextureQuality::High;
+    const std::string text = writeImportSettings(texture, ImportSettingsKind::Texture);
+    CHECK(text.find("\"version\": 2") != std::string::npos);
+    CHECK(text.find("\"compression\": \"bc5\"") != std::string::npos);
+    CHECK(text.find("\"quality\": \"high\"") != std::string::npos);
+    CHECK(text.find("maxSize") == std::string::npos);
+    Expected<ImportSettings, ImportSettingsError> parsed =
+        parseImportSettings(text, ImportSettingsKind::Texture);
+    REQUIRE(parsed.hasValue());
+    CHECK(*parsed == texture);
+
+    const ImportCompression compressions[] = {ImportCompression::Auto, ImportCompression::None,
+                                              ImportCompression::BC7,  ImportCompression::BC5,
+                                              ImportCompression::BC4,  ImportCompression::BC6H};
+    for (const ImportCompression compression : compressions)
+    {
+        for (const TextureQuality quality :
+             {TextureQuality::Fast, TextureQuality::Normal, TextureQuality::High})
+        {
+            ImportSettings settings;
+            settings.texture.compression = compression;
+            settings.texture.quality = quality;
+            const std::string written = writeImportSettings(settings, ImportSettingsKind::Texture);
+            CHECK(written.empty() == settings.isDefault());
+            if (!written.empty())
+            {
+                CHECK(parseImportSettings(written, ImportSettingsKind::Texture).value() == settings);
+            }
+        }
+    }
+
+    ImportSettings model;
+    model.model.compressTextures = false;
+    model.model.textureQuality = TextureQuality::Fast;
+    const std::string modelText = writeImportSettings(model, ImportSettingsKind::Model);
+    CHECK(modelText.find("\"compressTextures\": false") != std::string::npos);
+    CHECK(modelText.find("\"textureQuality\": \"fast\"") != std::string::npos);
+    CHECK(modelText.find("scale") == std::string::npos);
+    parsed = parseImportSettings(modelText, ImportSettingsKind::Model);
+    REQUIRE(parsed.hasValue());
+    CHECK(*parsed == model);
+    CHECK(
+        importSettingsValue(model, ImportSettingsKind::Model) ==
+        R"({"model":{"scale":1.0,"lodCount":3,"lodReduction":0.5,"compressTextures":false,"textureQuality":"fast"}})");
+    CHECK(
+        importSettingsValue(texture, ImportSettingsKind::Texture) ==
+        R"({"texture":{"colorSpace":"auto","generateMips":true,"maxSize":0,"compression":"bc5","quality":"high"}})");
+
+    // Merge patches set and reset the new settings like the others.
+    ImportSettings merged;
+    REQUIRE(merge(merged, R"({"texture": {"compression": "bc6h", "quality": "fast"}})"));
+    CHECK(merged.texture.compression == ImportCompression::BC6H);
+    CHECK(merged.texture.quality == TextureQuality::Fast);
+    REQUIRE(merge(merged, R"({"texture": {"compression": null}})"));
+    CHECK(merged.texture.compression == ImportCompression::Auto);
+    CHECK(merged.texture.quality == TextureQuality::Fast);
+    REQUIRE(merge(merged, R"({"model": {"compressTextures": false, "textureQuality": "high"}})",
+                  ImportSettingsKind::Model));
+    CHECK_FALSE(merged.model.compressTextures);
+    CHECK(merged.model.textureQuality == TextureQuality::High);
+    REQUIRE(merge(merged, R"({"model": {"compressTextures": null, "textureQuality": null}})",
+                  ImportSettingsKind::Model));
+    CHECK(merged.model == ModelImportSettings{});
+}
+
+TEST_CASE("version 1 sidecars still load and leave the compression settings at their defaults")
+{
+    const Expected<ImportSettings, ImportSettingsError> texture =
+        parseImportSettings(R"({"format": "illusion.import", "version": 1, "texture": {"maxSize": 64}})",
+                            ImportSettingsKind::Texture);
+    REQUIRE(texture.hasValue());
+    CHECK(texture->texture.maxSize == 64);
+    CHECK(texture->texture.compression == ImportCompression::Auto);
+    CHECK(texture->texture.quality == TextureQuality::Normal);
+    const Expected<ImportSettings, ImportSettingsError> model = parseImportSettings(
+        R"({"format": "illusion.import", "version": 1, "model": {"scale": 2}})", ImportSettingsKind::Model);
+    REQUIRE(model.hasValue());
+    CHECK(model->model.compressTextures);
+    CHECK(model->model.textureQuality == TextureQuality::Normal);
+    CHECK(parseImportSettings(R"({"format": "illusion.import", "version": 2, "texture": {"quality": "x"}})",
+                              ImportSettingsKind::Texture)
+              .error()
+              .pointer == "/texture/quality");
 }
 
 TEST_CASE("texture settings override what the user of an image asks for")
@@ -426,4 +529,181 @@ TEST_CASE("cookAssets honours sidecars and reports orphans, so a shipped game ne
     REQUIRE(image.has_value());
     CHECK(image->width() == 32);
     CHECK(database.statistics().imports == 0);
+}
+
+TEST_CASE("compressed image imports are cached per compression and a quality change imports again")
+{
+    test::AssetProject project;
+    writeImage(project, "game:/textures/rock.png", 16, 16);
+    AssetDatabase database(project.files, "cache");
+    const std::optional<Image> pixels = database.loadImage("game:/textures/rock.png");
+    REQUIRE(pixels.has_value());
+    CHECK(pixels->format == ImageFormat::RGBA8Srgb);
+
+    const std::optional<Image> bc7 =
+        database.loadImage("game:/textures/rock.png", {.compression = TextureCompression::BC7});
+    REQUIRE(bc7.has_value());
+    CHECK(bc7->format == ImageFormat::BC7Srgb);
+    CHECK(bc7->mips.size() == pixels->mips.size());
+    const std::optional<Image> bc5 = database.loadImage(
+        "game:/textures/rock.png", {.srgb = false, .compression = TextureCompression::BC5});
+    REQUIRE(bc5.has_value());
+    CHECK(bc5->format == ImageFormat::BC5);
+    CHECK(database.statistics().imports == 3);
+    CHECK(database.statistics().cacheWrites == 3);
+    CHECK(database.cachePath("game:/textures/rock.png", "image:2|srgb=1|mips=1|compression=bc7") !=
+          database.cachePath("game:/textures/rock.png", "image:2|srgb=0|mips=1|compression=bc5"));
+    CHECK(project.files.exists(
+        database.cachePath("game:/textures/rock.png", "image:2|srgb=1|mips=1|compression=bc7")));
+
+    // Cooked BC levels come back from the cache unchanged.
+    const std::optional<Image> cached =
+        database.loadImage("game:/textures/rock.png", {.compression = TextureCompression::BC7});
+    REQUIRE(cached.has_value());
+    CHECK(database.statistics().cacheHits == 1);
+    CHECK(cached->format == ImageFormat::BC7Srgb);
+    CHECK(cached->data == bc7->data);
+
+    // The sidecar is a source of every entry: changing only the quality imports again.
+    writeSidecar(project, "game:/textures/rock.png",
+                 R"({"format": "illusion.import", "version": 2, "texture": {"quality": "fast"}})");
+    REQUIRE(database.loadImage("game:/textures/rock.png", {.compression = TextureCompression::BC7}));
+    CHECK(database.statistics().imports == 4);
+    CHECK(database.statistics().cacheHits == 1);
+
+    // A sidecar compression overrides what a GPU user asks for, but a CPU reader still gets pixels.
+    writeSidecar(project, "game:/textures/rock.png",
+                 R"({"format": "illusion.import", "version": 2, "texture": {"compression": "bc4"}})");
+    const std::optional<Image> overridden =
+        database.loadImage("game:/textures/rock.png", {.compression = TextureCompression::BC7});
+    REQUIRE(overridden.has_value());
+    CHECK(overridden->format == ImageFormat::BC4);
+    const std::optional<Image> reader = database.loadImage("game:/textures/rock.png");
+    REQUIRE(reader.has_value());
+    CHECK(reader->format == ImageFormat::RGBA8Srgb);
+}
+
+TEST_CASE("the asset streamer compresses images on the Job System like the asset database")
+{
+    test::AssetProject project;
+    writeImage(project, "game:/textures/rock.png", 32, 16);
+    std::vector<std::byte> streamed;
+    {
+        JobSystem jobs(smallPool());
+        AssetStreamer streamer(project.files, jobs, {.cacheMount = "cache"});
+        AssetHandle<Image> image =
+            streamer.loadImage("game:/textures/rock.png", {.compression = TextureCompression::BC7});
+        streamer.waitIdle();
+        REQUIRE(image.ready());
+        CHECK(image.value().format == ImageFormat::BC7Srgb);
+        streamed = image.value().data;
+    } // the streamer writes its cache entries before it stops
+
+    AssetDatabase database(project.files, "cache");
+    const std::optional<Image> same =
+        database.loadImage("game:/textures/rock.png", {.compression = TextureCompression::BC7});
+    REQUIRE(same.has_value());
+    CHECK(database.statistics().cacheHits == 1);
+    CHECK(same->data == streamed);
+}
+
+namespace
+{
+
+// A model with one material that uses four images: base colour, normal, occlusion, and one file for both
+// metallic-roughness and occlusion of a second material.
+void writeTexturedModel(test::AssetProject& project, std::string_view path)
+{
+    for (const std::string_view name : {"albedo", "normal", "ao", "orm"})
+    {
+        writeImage(project, std::format("game:/textured/{}.png", name), 8, 8);
+    }
+    REQUIRE(project.files.writeText(path, R"({"asset": {"version": "2.0"},
+"materials": [
+  {"pbrMetallicRoughness": {"baseColorTexture": {"index": 0}}, "normalTexture": {"index": 1},
+   "occlusionTexture": {"index": 2}},
+  {"pbrMetallicRoughness": {"metallicRoughnessTexture": {"index": 3}}, "occlusionTexture": {"index": 3}}],
+"textures": [{"source": 0}, {"source": 1}, {"source": 2}, {"source": 3}],
+"images": [{"uri": "albedo.png"}, {"uri": "normal.png"}, {"uri": "ao.png"}, {"uri": "orm.png"}]})") ==
+            FileError::None);
+}
+
+} // namespace
+
+TEST_CASE("the images of a model are compressed by their use in its materials")
+{
+    test::AssetProject project;
+    writeTexturedModel(project, "game:/textured/props.gltf");
+    AssetDatabase database(project.files, "cache");
+    std::string error;
+    const std::optional<ModelData> model = database.loadModel("game:/textured/props.gltf", &error);
+    INFO(error);
+    REQUIRE(model.has_value());
+    REQUIRE(model->images.size() == 4);
+    CHECK(model->images[0].format == ImageFormat::BC7Srgb);
+    CHECK(model->images[1].format == ImageFormat::BC5);
+    CHECK(model->images[2].format == ImageFormat::BC4);
+    CHECK(model->images[3].format == ImageFormat::BC7);
+    CHECK(model->images[0].mips.size() == 4);
+
+    // The cooked model keeps the BC levels.
+    const std::optional<ModelData> cached = database.loadModel("game:/textured/props.gltf");
+    REQUIRE(cached.has_value());
+    CHECK(database.statistics().cacheHits == 1);
+    CHECK(serializeModel(*cached) == serializeModel(*model));
+
+    // compressTextures: false keeps pixels; the sidecar is a source, so the model imports again.
+    writeSidecar(project, "game:/textured/props.gltf",
+                 R"({"format": "illusion.import", "version": 2, "model": {"compressTextures": false}})");
+    const std::optional<ModelData> plain = database.loadModel("game:/textured/props.gltf");
+    REQUIRE(plain.has_value());
+    CHECK(database.statistics().imports == 2);
+    CHECK(plain->images[0].format == ImageFormat::RGBA8Srgb);
+    CHECK(plain->images[1].format == ImageFormat::RGBA8);
+    CHECK(plain->images[2].format == ImageFormat::RGBA8);
+
+    // A quality change imports again too.
+    writeSidecar(project, "game:/textured/props.gltf",
+                 R"({"format": "illusion.import", "version": 2, "model": {"textureQuality": "fast"}})");
+    const std::optional<ModelData> fast = database.loadModel("game:/textured/props.gltf");
+    REQUIRE(fast.has_value());
+    CHECK(database.statistics().imports == 3);
+    CHECK(fast->images[1].format == ImageFormat::BC5);
+}
+
+TEST_CASE("cookAssets compresses material textures and leaves other images uncompressed")
+{
+    reflectAssetStructs();
+    test::AssetProject project;
+    writeImage(project, "game:/textures/albedo.png", 8, 8);
+    writeImage(project, "game:/textures/normal.png", 8, 8);
+    writeImage(project, "game:/textures/mask.png", 8, 8);
+    writeSidecar(project, "game:/textures/mask.png",
+                 R"({"format": "illusion.import", "version": 2, "texture": {"compression": "bc4"}})");
+    MaterialAsset material;
+    material.textures.baseColor = AssetRef("game:/textures/albedo.png");
+    material.textures.normal = AssetRef("game:/textures/normal.png");
+    const Expected<std::string, std::string> text = writeMaterialAsset(material);
+    REQUIRE(text.hasValue());
+    REQUIRE(project.files.writeText("game:/textures/rock.material", *text) == FileError::None);
+    const CookResult result = cookAssets(project.files, "game:/", "cache");
+    CHECK(result.materials == 1);
+
+    AssetDatabase database(project.files, "cache");
+    const std::optional<Image> albedo = database.loadImage(
+        "game:/textures/albedo.png", {.srgb = true, .compression = TextureCompression::BC7});
+    const std::optional<Image> normal = database.loadImage(
+        "game:/textures/normal.png", {.srgb = false, .compression = TextureCompression::BC5});
+    const std::optional<Image> standalone = database.loadImage("game:/textures/albedo.png");
+    const std::optional<Image> mask =
+        database.loadImage("game:/textures/mask.png", {.compression = TextureCompression::BC4});
+    REQUIRE(albedo.has_value());
+    REQUIRE(normal.has_value());
+    REQUIRE(standalone.has_value());
+    REQUIRE(mask.has_value());
+    CHECK(database.statistics().imports == 0);
+    CHECK(albedo->format == ImageFormat::BC7Srgb);
+    CHECK(normal->format == ImageFormat::BC5);
+    CHECK(standalone->format == ImageFormat::RGBA8Srgb);
+    CHECK(mask->format == ImageFormat::BC4);
 }
