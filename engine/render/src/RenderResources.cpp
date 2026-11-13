@@ -48,6 +48,59 @@ nvrhi::Format formatOf(ImageFormat format) noexcept
     return nvrhi::Format::RGBA8_UNORM;
 }
 
+// The format a texture of @p format would be uploaded as without block compression.
+ImageFormat uncompressedFormat(ImageFormat format) noexcept
+{
+    switch (format)
+    {
+    case ImageFormat::RGBA32F:
+    case ImageFormat::BC6H:
+        return ImageFormat::RGBA32F;
+    case ImageFormat::RGBA8Srgb:
+    case ImageFormat::BC7Srgb:
+        return ImageFormat::RGBA8Srgb;
+    default:
+        return ImageFormat::RGBA8;
+    }
+}
+
+// Bytes of every level of @p image stored as @p format.
+u64 imageBytes(const Image& image, ImageFormat format) noexcept
+{
+    u64 bytes = 0;
+    for (const ImageMip& mip : image.mips)
+    {
+        bytes += imageLevelSize(format, mip.width, mip.height);
+    }
+    return bytes;
+}
+
+// Row pitch and size in bytes of a square level @p width pixels wide in @p format (rows of blocks for BC).
+struct LevelLayout
+{
+    usize rowPitch = 0;
+    usize rows = 0;
+};
+
+LevelLayout levelLayout(nvrhi::Format format, u32 width) noexcept
+{
+    const nvrhi::FormatInfo& info = nvrhi::getFormatInfo(format);
+    const usize blocks = (static_cast<usize>(width) + info.blockSize - 1) / info.blockSize;
+    return LevelLayout{blocks * info.bytesPerBlock, blocks};
+}
+
+// Bytes of every level and array slice of the square texture @p desc.
+u64 cubeBytes(const nvrhi::TextureDesc& desc) noexcept
+{
+    u64 bytes = 0;
+    for (u32 mip = 0; mip < desc.mipLevels; ++mip)
+    {
+        const LevelLayout layout = levelLayout(desc.format, std::max(desc.width >> mip, 1u));
+        bytes += static_cast<u64>(layout.rowPitch) * layout.rows * desc.arraySize;
+    }
+    return bytes;
+}
+
 nvrhi::SamplerAddressMode addressOf(TextureWrap wrap) noexcept
 {
     switch (wrap)
@@ -157,6 +210,12 @@ struct RenderResources::Impl
     // Slot 0 of each vector is unused so that handle index 0 means "none".
     std::vector<GpuMesh> meshes{1};
     std::vector<nvrhi::TextureHandle> textures{1};
+    struct TextureBytes
+    {
+        u64 gpu = 0;
+        u64 uncompressed = 0;
+    };
+    std::vector<TextureBytes> textureSizes{1}; // indexed like `textures`
     std::vector<GpuMaterial> materials{1};
     std::vector<GpuEnvironment> environments{1};
     SlotTable meshSlots;
@@ -187,6 +246,23 @@ struct RenderResources::Impl
 
     TextureHandle white;
     TextureHandle flatNormal;
+
+    bool compressedTextures = false; // the device samples BC formats
+    bool warnedDecode = false;
+    u64 textureBytes = 0;
+    u64 textureBytesUncompressed = 0;
+    u64 environmentBytes = 0;
+    u64 environmentBytesUncompressed = 0;
+
+    void warnDecode()
+    {
+        if (!std::exchange(warnedDecode, true))
+        {
+            ILL_LOG_WARN("Render",
+                         "the GPU cannot sample BC textures: compressed images are decoded on the CPU "
+                         "and take 4 to 8 times the memory");
+        }
+    }
 
     static u32 samplerIndex(TextureWrap u, TextureWrap v) noexcept
     {
@@ -311,6 +387,9 @@ struct RenderResources::Impl
                                                                    release.index, textures[white.index]));
             }
             textures[release.index] = nullptr;
+            textureBytes -= textureSizes[release.index].gpu;
+            textureBytesUncompressed -= textureSizes[release.index].uncompressed;
+            textureSizes[release.index] = TextureBytes{};
             textureSlots.recycle(release.index);
             break;
         case ResourceKind::Material:
@@ -318,6 +397,8 @@ struct RenderResources::Impl
             materialSlots.recycle(release.index);
             break;
         case ResourceKind::Environment:
+            environmentBytes -= environments[release.index].bytes;
+            environmentBytesUncompressed -= environments[release.index].uncompressedBytes;
             environments[release.index] = GpuEnvironment{};
             environmentSlots.recycle(release.index);
             break;
@@ -326,6 +407,14 @@ struct RenderResources::Impl
 
     EnvironmentHandle storeEnvironment(GpuEnvironment&& environment)
     {
+        const nvrhi::TextureDesc& background = environment.background->getDesc();
+        const nvrhi::TextureDesc& specular = environment.specular->getDesc();
+        environment.bytes = cubeBytes(background) + cubeBytes(specular);
+        environment.uncompressedBytes = (cubeTexelCount(background.width, background.mipLevels) +
+                                         cubeTexelCount(specular.width, specular.mipLevels)) *
+                                        sizeof(u64);
+        environmentBytes += environment.bytes;
+        environmentBytesUncompressed += environment.uncompressedBytes;
         const bool reused = !environmentSlots.free.empty();
         const u32 index = environmentSlots.acquire();
         ensureSlot(environments, index);
@@ -434,6 +523,7 @@ RenderResources::RenderResources(RenderDevice& renderDevice)
     impl.uploads = impl.device->createCommandList();
     impl.createSamplers();
     impl.bindless = renderDevice.gpu().bindless;
+    impl.compressedTextures = renderDevice.gpu().textureCompressionBC;
     if (impl.bindless)
     {
         nvrhi::BindlessLayoutDesc bindlessDesc;
@@ -517,13 +607,14 @@ TextureHandle RenderResources::createTexture(const Image& image, const char* deb
 {
     ILL_PROFILE_SCOPE();
     ILL_CHECK(image.isValid(), "createTexture: invalid image");
-    if (isBlockCompressed(image.format))
+    Impl& impl = *m_impl;
+    if (isBlockCompressed(image.format) && !impl.compressedTextures)
     {
+        impl.warnDecode();
         const std::optional<Image> pixels = decompressImage(image);
         ILL_CHECK(pixels.has_value(), "createTexture: invalid compressed image");
         return createTexture(*pixels, debugName);
     }
-    Impl& impl = *m_impl;
     impl.collect();
 
     nvrhi::TextureDesc desc;
@@ -536,18 +627,23 @@ TextureHandle RenderResources::createTexture(const Image& image, const char* deb
     nvrhi::TextureHandle texture = impl.device->createTexture(desc);
 
     impl.uploads->open();
-    const usize pixelSize = bytesPerPixel(image.format);
     for (u32 level = 0; level < image.mips.size(); ++level)
     {
         const ImageMip& mip = image.mips[level];
-        impl.uploads->writeTexture(texture, 0, level, image.data.data() + mip.offset, mip.width * pixelSize);
+        impl.uploads->writeTexture(texture, 0, level, image.data.data() + mip.offset,
+                                   imageRowPitch(image.format, mip.width));
     }
     impl.uploads->close();
     impl.device->executeCommandList(impl.uploads);
 
     const u32 index = impl.textureSlots.acquire();
     Impl::ensureSlot(impl.textures, index);
+    Impl::ensureSlot(impl.textureSizes, index);
     impl.textures[index] = texture;
+    impl.textureSizes[index] = {imageBytes(image, image.format),
+                                imageBytes(image, uncompressedFormat(image.format))};
+    impl.textureBytes += impl.textureSizes[index].gpu;
+    impl.textureBytesUncompressed += impl.textureSizes[index].uncompressed;
     if (impl.bindless)
     {
         ILL_CHECK(index < kBindlessTextureCapacity, "too many textures for the bindless table");
@@ -757,8 +853,9 @@ void RenderResources::updateAtmosphereEnvironment(nvrhi::ICommandList* commands,
 namespace
 {
 
-// Creates an RGBA16F cube map for an environment uploaded from a bake.
-nvrhi::TextureHandle createEnvironmentCube(nvrhi::IDevice* device, u32 size, u32 mips, const char* debugName)
+// Creates an RGBA16F or BC6H cube map for an environment uploaded from a bake.
+nvrhi::TextureHandle createEnvironmentCube(nvrhi::IDevice* device, u32 size, u32 mips, nvrhi::Format format,
+                                           const char* debugName)
 {
     nvrhi::TextureDesc desc;
     desc.dimension = nvrhi::TextureDimension::TextureCube;
@@ -766,22 +863,24 @@ nvrhi::TextureHandle createEnvironmentCube(nvrhi::IDevice* device, u32 size, u32
     desc.height = size;
     desc.arraySize = 6;
     desc.mipLevels = mips;
-    desc.format = nvrhi::Format::RGBA16_FLOAT;
+    desc.format = format;
     desc.debugName = debugName;
     desc.enableAutomaticStateTracking(nvrhi::ResourceStates::ShaderResource);
     return device->createTexture(desc);
 }
 
-// Uploads `texels` (mip order, then face order, tightly packed rows) into every subresource of `cube`.
-void uploadCube(nvrhi::ICommandList* commands, nvrhi::ITexture* cube, u32 size, u32 mips, const u64* texels)
+// Uploads @p data (mip order, then face order, tightly packed rows of texels or blocks) into every
+// subresource of @p cube.
+void uploadCube(nvrhi::ICommandList* commands, nvrhi::ITexture* cube, const std::byte* data)
 {
-    for (u32 mip = 0; mip < mips; ++mip)
+    const nvrhi::TextureDesc& desc = cube->getDesc();
+    for (u32 mip = 0; mip < desc.mipLevels; ++mip)
     {
-        const u32 face = std::max(size >> mip, 1u);
+        const LevelLayout layout = levelLayout(desc.format, std::max(desc.width >> mip, 1u));
         for (u32 slice = 0; slice < 6; ++slice)
         {
-            commands->writeTexture(cube, slice, mip, texels, static_cast<usize>(face) * sizeof(u64));
-            texels += static_cast<usize>(face) * face;
+            commands->writeTexture(cube, slice, mip, data, layout.rowPitch);
+            data += layout.rowPitch * layout.rows;
         }
     }
 }
@@ -800,15 +899,13 @@ void copyCube(nvrhi::ICommandList* commands, nvrhi::IStagingTexture* staging, nv
     }
 }
 
-// Reads every subresource of `staging` (a cube map of `size` and `mips`) into `out` in upload order.
-bool readCube(nvrhi::IDevice* device, nvrhi::IStagingTexture* staging, u32 size, u32 mips,
-              std::vector<u64>& out)
+// Reads every subresource of the cube map @p staging into @p target in upload order (see uploadCube()).
+bool readCube(nvrhi::IDevice* device, nvrhi::IStagingTexture* staging, std::byte* target)
 {
-    out.resize(cubeTexelCount(size, mips));
-    u64* target = out.data();
-    for (u32 mip = 0; mip < mips; ++mip)
+    const nvrhi::TextureDesc& desc = staging->getDesc();
+    for (u32 mip = 0; mip < desc.mipLevels; ++mip)
     {
-        const u32 face = std::max(size >> mip, 1u);
+        const LevelLayout layout = levelLayout(desc.format, std::max(desc.width >> mip, 1u));
         for (u32 slice = 0; slice < 6; ++slice)
         {
             usize pitch = 0;
@@ -819,11 +916,10 @@ bool readCube(nvrhi::IDevice* device, nvrhi::IStagingTexture* staging, u32 size,
             {
                 return false;
             }
-            const usize row = static_cast<usize>(face) * sizeof(u64);
-            for (u32 y = 0; y < face; ++y)
+            for (usize row = 0; row < layout.rows; ++row)
             {
-                std::memcpy(target, source + static_cast<usize>(y) * pitch, row);
-                target += face;
+                std::memcpy(target, source + row * pitch, layout.rowPitch);
+                target += layout.rowPitch;
             }
             device->unmapStagingTexture(staging);
         }
@@ -837,27 +933,31 @@ EnvironmentHandle RenderResources::createEnvironment(const BakedEnvironment& bak
 {
     ILL_PROFILE_SCOPE();
     ILL_CHECK(baked.isValid(), "createEnvironment: invalid baked environment");
-    if (baked.compressed)
+    Impl& impl = *m_impl;
+    if (baked.compressed && !impl.compressedTextures)
     {
+        impl.warnDecode();
         const std::optional<BakedEnvironment> texels = decompressEnvironment(baked);
         ILL_CHECK(texels.has_value(), "createEnvironment: invalid compressed environment");
         return createEnvironment(*texels, debugName);
     }
-    Impl& impl = *m_impl;
     impl.collect();
 
+    const nvrhi::Format format = baked.compressed ? nvrhi::Format::BC6H_UFLOAT : nvrhi::Format::RGBA16_FLOAT;
     GpuEnvironment environment;
     environment.background =
-        createEnvironmentCube(impl.device, baked.backgroundSize, baked.backgroundMips, debugName);
+        createEnvironmentCube(impl.device, baked.backgroundSize, baked.backgroundMips, format, debugName);
     environment.specular =
-        createEnvironmentCube(impl.device, baked.specularSize, baked.specularMips, debugName);
+        createEnvironmentCube(impl.device, baked.specularSize, baked.specularMips, format, debugName);
     environment.specularMips = baked.specularMips;
     environment.irradiance = baked.irradiance;
+    const auto* background = baked.compressed ? baked.backgroundBlocks.data()
+                                              : reinterpret_cast<const std::byte*>(baked.background.data());
+    const auto* specular = baked.compressed ? baked.specularBlocks.data()
+                                            : reinterpret_cast<const std::byte*>(baked.specular.data());
     impl.uploads->open();
-    uploadCube(impl.uploads, environment.background, baked.backgroundSize, baked.backgroundMips,
-               baked.background.data());
-    uploadCube(impl.uploads, environment.specular, baked.specularSize, baked.specularMips,
-               baked.specular.data());
+    uploadCube(impl.uploads, environment.background, background);
+    uploadCube(impl.uploads, environment.specular, specular);
     impl.uploads->close();
     impl.device->executeCommandList(impl.uploads);
 
@@ -873,6 +973,10 @@ u64 RenderResources::requestEnvironmentReadback(EnvironmentHandle environment)
         return 0;
     }
     const GpuEnvironment& source = impl.environments[environment.index];
+    if (source.background->getDesc().format != nvrhi::Format::RGBA16_FLOAT)
+    {
+        return 0; // BC6H: the caller already had the blocks
+    }
     Impl::EnvironmentReadback readback;
     readback.irradiance = source.irradiance;
     readback.background =
@@ -920,10 +1024,11 @@ ReadbackStatus RenderResources::readEnvironment(u64 ticket, BakedEnvironment& ou
     result.specularSize = specular.width;
     result.specularMips = specular.mipLevels;
     result.irradiance = found->irradiance;
+    result.background.resize(cubeTexelCount(result.backgroundSize, result.backgroundMips));
+    result.specular.resize(cubeTexelCount(result.specularSize, result.specularMips));
     const bool ok =
-        readCube(impl.device, found->background, result.backgroundSize, result.backgroundMips,
-                 result.background) &&
-        readCube(impl.device, found->specular, result.specularSize, result.specularMips, result.specular);
+        readCube(impl.device, found->background, reinterpret_cast<std::byte*>(result.background.data())) &&
+        readCube(impl.device, found->specular, reinterpret_cast<std::byte*>(result.specular.data()));
     impl.readbacks.erase(found);
     if (!ok)
     {
@@ -1095,6 +1200,11 @@ RenderResourceStatistics RenderResources::statistics() const noexcept
         statistics.retiring += static_cast<u32>(batch.releases.size());
     }
     statistics.materialCapacity = impl.materialCapacity;
+    statistics.textures = impl.textureSlots.live;
+    statistics.textureBytes = impl.textureBytes;
+    statistics.textureBytesUncompressed = impl.textureBytesUncompressed;
+    statistics.environmentBytes = impl.environmentBytes;
+    statistics.environmentBytesUncompressed = impl.environmentBytesUncompressed;
     return statistics;
 }
 

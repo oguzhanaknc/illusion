@@ -72,27 +72,10 @@ ImageImportSettings standaloneImageImport(const VirtualFileSystem& files, const 
         settings = detail::parseImportSettingsFile(sidecar, path, ImportSettingsKind::Texture, nullptr);
     }
     ImageImportSettings import;
-    if (!settings)
+    if (settings)
     {
-        return import;
-    }
-    switch (settings->texture.compression)
-    {
-    case ImportCompression::Auto:
-    case ImportCompression::None:
-        break;
-    case ImportCompression::BC7:
-        import.compression = TextureCompression::BC7;
-        break;
-    case ImportCompression::BC5:
-        import.compression = TextureCompression::BC5;
-        break;
-    case ImportCompression::BC4:
-        import.compression = TextureCompression::BC4;
-        break;
-    case ImportCompression::BC6H:
-        import.compression = TextureCompression::BC6H;
-        break;
+        import.compression =
+            detail::sidecarCompression(settings->texture.compression).value_or(TextureCompression::None);
     }
     return import;
 }

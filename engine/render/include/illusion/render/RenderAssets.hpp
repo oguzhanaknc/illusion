@@ -33,8 +33,10 @@
 ///
 /// Bake cache: environments of image files are baked once and kept in the streamer's import cache
 /// (AssetType::Environment, keyed by the image and its import settings sidecar and by the EnvironmentDesc),
-/// so later runs upload the cube maps without baking. A bake is read back from the GPU and stored a few
-/// frames after it was made; waitIdle() finishes the pending ones.
+/// so later runs upload the cube maps without baking. A bake is read back from the GPU, compressed to BC6H on
+/// the streamer's Job System (EnvironmentDesc::compress) and stored a few frames after it was made;
+/// waitIdle() finishes the pending ones. Material files ask for their textures compressed
+/// (materialTextureUses()).
 
 #include <illusion/core/AssetId.hpp>
 #include <illusion/core/Base.hpp>

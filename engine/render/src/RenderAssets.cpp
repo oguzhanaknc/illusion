@@ -2,9 +2,11 @@
 #include <illusion/assets/Environment.hpp>
 #include <illusion/assets/MaterialAsset.hpp>
 #include <illusion/assets/Mesh.hpp>
+#include <illusion/assets/TextureCompression.hpp>
 #include <illusion/core/AssetRef.hpp>
 #include <illusion/core/EventBus.hpp>
 #include <illusion/core/Hash.hpp>
+#include <illusion/core/JobSystem.hpp>
 #include <illusion/core/Log.hpp>
 #include <illusion/core/Profiler.hpp>
 #include <illusion/ecs/Hierarchy.hpp>
@@ -21,6 +23,8 @@
 #include <bit>
 #include <cmath>
 #include <format>
+#include <memory>
+#include <optional>
 #include <string>
 #include <unordered_map>
 #include <unordered_set>
@@ -84,6 +88,7 @@ struct TextureEntry
     TextureHandle handle;
     AssetId asset;
     bool srgb = true;
+    TextureCompression compression = TextureCompression::None;
     u32 references = 0; // resolvers that drew it on particles (material textures are kept by materials)
 };
 
@@ -114,13 +119,22 @@ struct EnvironmentEntry
     u32 references = 0;
 };
 
-// A bake being read back from the GPU to be stored in the bake cache.
+// A bake compressed to BC6H on the Job System before it is stored.
+struct EnvironmentCompression
+{
+    BakedEnvironment baked; // the half-float bake, then the compressed one when `compressed`
+    bool compressed = false;
+    JobCounter done;
+};
+
+// A bake being read back from the GPU (and compressed) to be stored in the bake cache.
 struct EnvironmentStore
 {
     u64 ticket = 0;
     AssetId asset;
     std::string importKey;
     std::vector<AssetDependency> sources;
+    std::unique_ptr<EnvironmentCompression> compression; // after the readback, when compressing
 };
 
 // Bump when the baker's output changes for the same image and EnvironmentDesc (shaders, layout).
@@ -207,10 +221,23 @@ struct RenderAssetCache::Impl
         reloaded = streamer->events().subscribe<AssetReloadedEvent>(
             [this](const AssetReloadedEvent& event) { reloads.emplace_back(event.asset, event.mode); });
         // The bake cache key holds the EnvironmentDesc the baker actually uses.
-        bakeKey = std::format("envbake:{}:{}:{}:{}", kEnvironmentBakeVersion,
+        bakeKey = std::format("envbake:{}:{}:{}:{}:{}", kEnvironmentBakeVersion,
                               std::bit_floor(std::max(desc.environment.cubeSize, 1u)),
                               std::bit_floor(std::max(desc.environment.specularSize, 1u)),
-                              std::max(desc.environment.sampleCount, 1u));
+                              std::max(desc.environment.sampleCount, 1u),
+                              desc.environment.compress ? "bc6h" : "half");
+    }
+
+    ~Impl()
+    {
+        // Compression jobs write into the stores.
+        for (EnvironmentStore& store : stores)
+        {
+            if (store.compression)
+            {
+                streamer->jobs().wait(store.compression->done);
+            }
+        }
     }
 
     Impl(const Impl&) = delete;
@@ -461,16 +488,22 @@ struct RenderAssetCache::Impl
 
     // Textures and materials -----------------------------------------------------------------------------
 
-    u64 requestTexture(AssetId id, bool srgb)
+    // Particle sprites are uncompressed sRGB textures; material textures ask for their compression.
+    u64 requestTexture(AssetId id, bool srgb, TextureCompression compression = TextureCompression::None)
     {
-        const u64 key = srgb ? particleTextureKey(id) : hashCombine(id.value, u64{2});
+        const u64 key =
+            srgb && compression == TextureCompression::None
+                ? particleTextureKey(id)
+                : hashCombine(id.value, u64{2} + (srgb ? 1u : 0u) + 2u * static_cast<u64>(compression));
         const auto [found, inserted] = textures.try_emplace(key);
         if (inserted)
         {
             TextureEntry& entry = found->second;
             entry.asset = id;
             entry.srgb = srgb;
-            entry.image = streamer->loadImage(AssetPathTable::instance().path(id), {.srgb = srgb});
+            entry.compression = compression;
+            entry.image = streamer->loadImage(AssetPathTable::instance().path(id),
+                                              {.srgb = srgb, .compression = compression});
             loadingTextures.push_back(key);
         }
         return key;
@@ -628,7 +661,9 @@ struct RenderAssetCache::Impl
         {
             for (usize t = 0; t < uses.size(); ++t)
             {
-                entry.textures[t] = uses[t].texture ? requestTexture(uses[t].texture.id, uses[t].srgb) : 0;
+                entry.textures[t] =
+                    uses[t].texture ? requestTexture(uses[t].texture.id, uses[t].srgb, uses[t].compression)
+                                    : 0;
             }
             entry.texturesRequested = true;
         }
@@ -763,31 +798,72 @@ struct RenderAssetCache::Impl
         {
             if (const u64 ticket = resources->requestEnvironmentReadback(handle); ticket != 0)
             {
-                stores.push_back(EnvironmentStore{ticket, entry.asset, bakeKey, std::move(entry.sources)});
+                stores.push_back(
+                    EnvironmentStore{ticket, entry.asset, bakeKey, std::move(entry.sources), nullptr});
             }
         }
         entry.sources.clear();
         return handle;
     }
 
-    // Writes the bakes whose readbacks finished into the bake cache (all of them with `block`).
+    void writeBake(EnvironmentStore& store, const BakedEnvironment& baked)
+    {
+        AssetFile file;
+        file.type = AssetType::Environment;
+        file.version = kEnvironmentFormatVersion;
+        file.dependencies = std::move(store.sources);
+        file.payload = serializeEnvironment(baked);
+        streamer->storeCooked(AssetPathTable::instance().path(store.asset), store.importKey, file);
+    }
+
+    // Writes the bakes whose readbacks (and compressions) finished into the bake cache (all of them with
+    // `block`). Compression runs on the Job System, so the frame never waits for it without `block`.
     void storeBakes(bool block)
     {
+        JobSystem& jobs = streamer->jobs();
         std::erase_if(stores, [&](EnvironmentStore& store) {
-            BakedEnvironment baked;
-            const ReadbackStatus status = resources->readEnvironment(store.ticket, baked, block);
-            if (status == ReadbackStatus::Pending)
+            if (!store.compression)
+            {
+                BakedEnvironment baked;
+                const ReadbackStatus status = resources->readEnvironment(store.ticket, baked, block);
+                if (status == ReadbackStatus::Pending)
+                {
+                    return false;
+                }
+                if (status == ReadbackStatus::Invalid)
+                {
+                    return true;
+                }
+                if (!desc.environment.compress)
+                {
+                    writeBake(store, baked);
+                    return true;
+                }
+                store.compression = std::make_unique<EnvironmentCompression>();
+                EnvironmentCompression* work = store.compression.get();
+                work->baked = std::move(baked);
+                jobs.submit(
+                    [work, pool = &jobs] {
+                        if (std::optional<BakedEnvironment> compressed =
+                                compressEnvironment(work->baked, TextureQuality::Normal, pool))
+                        {
+                            work->baked = std::move(*compressed);
+                            work->compressed = true;
+                        }
+                    },
+                    &work->done);
+            }
+            if (block)
+            {
+                jobs.wait(store.compression->done);
+            }
+            else if (!store.compression->done.isDone())
             {
                 return false;
             }
-            if (status == ReadbackStatus::Ready)
+            if (store.compression->compressed)
             {
-                AssetFile file;
-                file.type = AssetType::Environment;
-                file.version = kEnvironmentFormatVersion;
-                file.dependencies = std::move(store.sources);
-                file.payload = serializeEnvironment(baked);
-                streamer->storeCooked(AssetPathTable::instance().path(store.asset), store.importKey, file);
+                writeBake(store, store.compression->baked);
             }
             return true;
         });
@@ -909,7 +985,8 @@ struct RenderAssetCache::Impl
         {
             return;
         }
-        entry.image = streamer->loadImage(AssetPathTable::instance().path(entry.asset), {.srgb = entry.srgb});
+        entry.image = streamer->loadImage(AssetPathTable::instance().path(entry.asset),
+                                          {.srgb = entry.srgb, .compression = entry.compression});
         loadingTextures.push_back(key);
         if (!failed)
         {

@@ -227,8 +227,8 @@ float3 surfaceNormal(VertexOutput input, bool frontFace)
     {
         n = -n;
     }
-    float3 sampled = sampleMaterial(input.material, kNormal, input.uv).xyz * 2.0 - 1.0;
-    sampled.xy *= materialConstants(input.material).emissiveFactor.w;
+    const float3 sampled = decodeNormalMap(sampleMaterial(input.material, kNormal, input.uv).xy,
+                                           materialConstants(input.material).emissiveFactor.w);
     float3 t;
     float3 b;
     if (input.tangent.w != 0.0)

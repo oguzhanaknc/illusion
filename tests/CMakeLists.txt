@@ -204,6 +204,7 @@ add_executable(illusion_gpu_tests
     gpu/TestRendererExtensions.cpp
     gpu/TestResourceLifetime.cpp
     gpu/TestSwapchain.cpp
+    gpu/TestTextureUpload.cpp
     gpu/TestUploadQueue.cpp)
 target_include_directories(illusion_gpu_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
 target_link_libraries(illusion_gpu_tests PRIVATE illusion::render illusion::doctest)

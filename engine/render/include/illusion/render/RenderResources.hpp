@@ -69,6 +69,9 @@ struct EnvironmentDesc
     u32 specularSize =
         256; ///< Face size of the prefiltered specular cube map (rounded down to a power of two).
     u32 sampleCount = 128; ///< GGX samples per texel when prefiltering (at least 1).
+    /// Store bakes in a bake cache (RenderAssetCache) as BC6H; the session that bakes draws the half-float
+    /// bake, later sessions upload the compressed one.
+    bool compress = true;
 };
 
 /// Material parameters with GPU textures (unset textures use neutral defaults).
@@ -100,6 +103,15 @@ struct RenderResourceStatistics
     u32 freeRanges = 0;       ///< Free ranges inside the used part of both pools (fragmentation).
     u32 retiring = 0;         ///< Released resources waiting for the GPU before they are freed.
     u32 materialCapacity = 0; ///< Records the material table holds.
+    u32 textures = 0;         ///< Textures stored, the default textures included (as textureCount()).
+    /// Bytes of the textures' levels on the GPU (released textures count until they are freed).
+    u64 textureBytes = 0;
+    /// Bytes the same textures would take uncompressed (RGBA8, or RGBA32F for float images).
+    u64 textureBytesUncompressed = 0;
+    u64 environmentBytes = 0; ///< Bytes of the environments' cube maps on the GPU (as textureBytes).
+    /// Bytes the same environments would take as RGBA16F cube maps.
+    u64 environmentBytesUncompressed = 0;
+    u64 streamingSavedBytes = 0; ///< Bytes of texture levels left out by mip streaming.
 };
 
 /// Owns GPU resources. Not thread-safe; use from the render thread.
@@ -113,7 +125,8 @@ public:
     /// Uploads a mesh.
     [[nodiscard]] MeshHandle createMesh(const MeshData& mesh, const char* debugName = "Mesh");
 
-    /// Uploads an image with all its mips.
+    /// Uploads an image with all its mips. Block-compressed images are uploaded as they are when the device
+    /// samples BC formats (GpuInfo::textureCompressionBC) and decoded on the CPU otherwise.
     [[nodiscard]] TextureHandle createTexture(const Image& image, const char* debugName = "Texture");
 
     /// Creates a material.
@@ -130,6 +143,7 @@ public:
 
     /// Creates a lighting environment from a bake read back before (readEnvironment()) without baking it
     /// again, for example from a bake cache. @p baked must be valid (BakedEnvironment::isValid(), asserted).
+    /// A compressed bake is uploaded as BC6H, or decoded on the CPU as for createTexture().
     [[nodiscard]] EnvironmentHandle createEnvironment(const BakedEnvironment& baked,
                                                       const char* debugName = "Environment");
 
@@ -149,7 +163,8 @@ public:
 
     /// Starts copying the cube maps of @p environment to the CPU: records the copies after the work already
     /// submitted (its bake) and an event query, and returns a ticket for readEnvironment(). Returns 0 for an
-    /// empty, invalid or released handle. Never waits.
+    /// empty, invalid or released handle and for an environment uploaded from a compressed bake (block
+    /// formats are not read back). Never waits.
     [[nodiscard]] u64 requestEnvironmentReadback(EnvironmentHandle environment);
 
     /// Finishes the readback @p ticket. Pending while the GPU copies; Ready fills @p out and consumes the
@@ -215,7 +230,7 @@ public:
     /// @copydoc meshCount
     [[nodiscard]] u32 environmentCount() const noexcept;
 
-    /// Memory use of the geometry pools and resources waiting to be freed.
+    /// Memory use of the geometry pools, textures and environments, and resources waiting to be freed.
     [[nodiscard]] RenderResourceStatistics statistics() const noexcept;
 
     /// @cond INTERNAL

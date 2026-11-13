@@ -440,7 +440,8 @@ bool RenderDevice::Impl::createLogicalDevice()
     enabled.core.features.samplerAnisotropy = supported.core.features.samplerAnisotropy;
     enabled.core.features.fillModeNonSolid = supported.core.features.fillModeNonSolid;
     enabled.core.features.independentBlend = supported.core.features.independentBlend;
-    enabled.core.features.textureCompressionBC = supported.core.features.textureCompressionBC;
+    enabled.core.features.textureCompressionBC =
+        compressedTextures ? supported.core.features.textureCompressionBC : VK_FALSE;
     enabled.core.features.shaderInt16 = supported.core.features.shaderInt16;
     enabled.core.features.multiDrawIndirect = supported.core.features.multiDrawIndirect;
     enabled.core.features.drawIndirectFirstInstance = supported.core.features.drawIndirectFirstInstance;
@@ -462,6 +463,7 @@ bool RenderDevice::Impl::createLogicalDevice()
     gpu.wireframe = supported.core.features.fillModeNonSolid != VK_FALSE;
     gpu.multiDrawIndirect =
         supported.core.features.multiDrawIndirect && supported.core.features.drawIndirectFirstInstance;
+    gpu.textureCompressionBC = enabled.core.features.textureCompressionBC != VK_FALSE;
 
     const std::vector<std::string> available = availableDeviceExtensions(physicalDevice);
     if (!headless)
@@ -561,6 +563,7 @@ std::unique_ptr<RenderDevice> RenderDevice::create(const RenderDeviceDesc& desc)
     std::unique_ptr<RenderDevice> renderDevice(new RenderDevice());
     Impl& impl = *renderDevice->m_impl;
     impl.headless = desc.headless;
+    impl.compressedTextures = desc.compressedTextures;
     if (!impl.createInstance(desc) || !impl.selectPhysicalDevice(desc) || !impl.createLogicalDevice() ||
         !impl.createNvrhiDevice())
     {
