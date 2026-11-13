@@ -18,9 +18,12 @@ add_executable(illusion_benchmarks
     BenchReflection.cpp
     BenchRuntime.cpp
     BenchText.cpp
-    BenchTextureCompression.cpp)
+    BenchTextureCompression.cpp
+    BenchTextureStreaming.cpp)
 
-target_include_directories(illusion_benchmarks PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
+# BenchTextureStreaming.cpp measures an internal policy of the render library.
+target_include_directories(illusion_benchmarks PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}
+    ${PROJECT_SOURCE_DIR}/engine/render/src)
 target_link_libraries(illusion_benchmarks PRIVATE
     illusion::core illusion::input illusion::assets illusion::audio illusion::physics illusion::particles illusion::modules
     illusion::runtime illusion::text illusion::render illusion::nanobench)

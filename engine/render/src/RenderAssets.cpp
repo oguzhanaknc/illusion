@@ -1,3 +1,5 @@
+#include "TextureStreamingPolicy.hpp"
+
 #include <illusion/assets/AssetStreamer.hpp>
 #include <illusion/assets/Environment.hpp>
 #include <illusion/assets/MaterialAsset.hpp>
@@ -10,6 +12,7 @@
 #include <illusion/core/Log.hpp>
 #include <illusion/core/Profiler.hpp>
 #include <illusion/ecs/Hierarchy.hpp>
+#include <illusion/ecs/Transform.hpp>
 #include <illusion/ecs/World.hpp>
 #include <illusion/particles/ParticleComponents.hpp>
 #include <illusion/render/Components.hpp>
@@ -80,6 +83,8 @@ struct MeshEntry
     u32 references = 0;
 };
 
+constexpr u32 kNotStreamed = ~0u;
+
 struct TextureEntry
 {
     Status status = Status::Loading;
@@ -90,6 +95,14 @@ struct TextureEntry
     bool srgb = true;
     TextureCompression compression = TextureCompression::None;
     u32 references = 0; // resolvers that drew it on particles (material textures are kept by materials)
+    // Mip streaming (material textures with a texture budget).
+    bool material = false;          // requested by a material file
+    detail::StreamedTexture levels; // size, levels and bytes of the image on the GPU
+    AssetHandle<Image> stream;      // the image to add levels from: loading, or kept one update after a load
+    bool streamFresh = false;       // `stream` was loaded to create the texture: keep it for one more update
+    bool streamFailed = false;      // loading `stream` failed: no more levels are added until a reload
+    u32 streamSlot = kNotStreamed;  // index in RenderAssetCache::Impl::streamed
+    u32 streamCooldown = 0;         // detail::StreamedTexture::cooldown between rebuilds of the table
 };
 
 struct MaterialEntry
@@ -139,6 +152,53 @@ struct EnvironmentStore
 
 // Bump when the baker's output changes for the same image and EnvironmentDesc (shaders, layout).
 constexpr u32 kEnvironmentBakeVersion = 1;
+
+// Largest projected size reported for a renderer (in pixels; more than any texture side).
+constexpr f32 kMaxDemand = 65536.0f;
+
+// The format a texture of @p format takes on the GPU (block formats are decoded without BC support).
+ImageFormat gpuFormat(ImageFormat format, bool compressedTextures) noexcept
+{
+    if (compressedTextures || !isBlockCompressed(format))
+    {
+        return format;
+    }
+    switch (format)
+    {
+    case ImageFormat::BC6H:
+        return ImageFormat::RGBA32F;
+    case ImageFormat::BC7Srgb:
+        return ImageFormat::RGBA8Srgb;
+    default:
+        return ImageFormat::RGBA8;
+    }
+}
+
+// Largest projected size in pixels of @p bounds placed by @p transform, over @p views (the nearest wins).
+f32 projectedSize(const Aabb& bounds, const Transform& transform,
+                  std::span<const TextureStreamingView> views) noexcept
+{
+    const Vec3 scale = glm::abs(transform.scale);
+    const f32 radius = 0.5f * glm::length(bounds.max - bounds.min) * std::max({scale.x, scale.y, scale.z});
+    const Vec3 center = transform.position + transform.rotation * (transform.scale * bounds.center());
+    f32 size = 0.0f;
+    for (const TextureStreamingView& view : views)
+    {
+        const f32 gap = glm::distance(center, view.position) - radius;
+        size = std::max(size, gap > 1e-3f ? 2.0f * radius * view.pixelsPerUnit / gap : kMaxDemand);
+    }
+    return std::isfinite(size) ? std::min(size, kMaxDemand) : 0.0f;
+}
+
+// Raises the demand in @p slot (the bits of a non-negative f32, which order like the values) to @p value.
+void raiseDemand(std::atomic<u32>& slot, f32 value) noexcept
+{
+    const u32 bits = std::bit_cast<u32>(value);
+    u32 current = slot.load(std::memory_order_relaxed);
+    while (current < bits && !slot.compare_exchange_weak(current, bits, std::memory_order_relaxed))
+    {
+    }
+}
 
 bool endsWithIgnoreCase(std::string_view text, std::string_view suffix) noexcept
 {
@@ -269,6 +329,24 @@ struct RenderAssetCache::Impl
     u64 epoch = 0;
     u32 reloadsDone = 0;
     u32 evicted = 0;
+
+    // Mip streaming: the streamed textures (the textures of ready material files) and the materials that use
+    // them, rebuilt when materials or textures change. Resolvers raise the demand of each material, indexed
+    // by material handle, between two updates.
+    struct StreamLink
+    {
+        u32 material = 0; // material handle index
+        u32 texture = 0;  // index in `streamed`
+    };
+    std::vector<detail::StreamedTexture> streamed;
+    std::vector<TextureEntry*> streamEntries; // indexed like `streamed`
+    std::vector<StreamLink> streamLinks;
+    std::unique_ptr<std::atomic<u32>[]> materialDemand;
+    u32 materialDemandCapacity = 0;
+    bool streamingDirty = false;
+    u32 streamingBias = 0;
+    u32 textureRaises = 0;
+    u32 textureDrops = 0;
 
     void fail(Status& status, AssetId asset, std::string message)
     {
@@ -509,6 +587,33 @@ struct RenderAssetCache::Impl
         return key;
     }
 
+    // The first level to create the texture @p key with from @p image: 0 unless it is a streamed material
+    // texture, else the level the demand of its materials and the current bias ask for.
+    u32 streamedFirstMip(u64 key, TextureEntry& entry, const Image& image)
+    {
+        entry.levels = detail::prepareStreamedTexture(
+            image.width(), image.height(), static_cast<u32>(image.mips.size()),
+            gpuFormat(image.format, resources->compressedTextures()), desc.textureStreamingMinSize);
+        if (desc.textureBudgetBytes == 0 || !entry.material || entry.references > 0 ||
+            image.mips.size() > detail::kMaxStreamedMips)
+        {
+            return 0;
+        }
+        f32 demand = 0.0f;
+        for (const auto& [materialKey, material] : materials)
+        {
+            const u32 index = material.handle.index;
+            if (material.fromFile && index != 0 && index < materialDemandCapacity &&
+                std::find(material.textures.begin(), material.textures.end(), key) != material.textures.end())
+            {
+                demand = std::max(demand,
+                                  std::bit_cast<f32>(materialDemand[index].load(std::memory_order_relaxed)));
+            }
+        }
+        return std::min(detail::wantedFirstMip(entry.levels, demand) + streamingBias,
+                        entry.levels.lowestFirstMip);
+    }
+
     bool advanceTexture(u64 key)
     {
         TextureEntry& entry = textures.at(key);
@@ -519,11 +624,17 @@ struct RenderAssetCache::Impl
         const bool replacing = entry.reload.active && entry.status == Status::Ready;
         if (entry.image.ready())
         {
+            const Image& image = entry.image.value();
+            const u32 firstMip = streamedFirstMip(key, entry, image);
             const TextureHandle texture = resources->createTexture(
-                entry.image.value(), std::string(AssetPathTable::instance().path(entry.asset)).c_str());
+                image, firstMip, std::string(AssetPathTable::instance().path(entry.asset)).c_str());
             const TextureHandle previous = std::exchange(entry.handle, texture);
             entry.status = Status::Ready;
             errors.erase(entry.asset.value);
+            entry.stream = firstMip > 0 ? entry.image : AssetHandle<Image>{};
+            entry.streamFresh = firstMip > 0;
+            entry.streamFailed = false;
+            streamingDirty = true;
             if (replacing)
             {
                 // Materials made from files that use it switch to the new texture, then the old one goes.
@@ -664,6 +775,10 @@ struct RenderAssetCache::Impl
                 entry.textures[t] =
                     uses[t].texture ? requestTexture(uses[t].texture.id, uses[t].srgb, uses[t].compression)
                                     : 0;
+                if (entry.textures[t] != 0)
+                {
+                    textures.at(entry.textures[t]).material = true;
+                }
             }
             entry.texturesRequested = true;
         }
@@ -706,6 +821,7 @@ struct RenderAssetCache::Impl
         }
         entry.desc = material;
         entry.status = Status::Ready;
+        streamingDirty = true;
         errors.erase(key);
         entry.file = {};
         finishMaterialReload(key, replacing);
@@ -987,6 +1103,8 @@ struct RenderAssetCache::Impl
         }
         entry.image = streamer->loadImage(AssetPathTable::instance().path(entry.asset),
                                           {.srgb = entry.srgb, .compression = entry.compression});
+        entry.stream = {}; // levels of the previous version: the reload creates the texture again
+        entry.streamFresh = false;
         loadingTextures.push_back(key);
         if (!failed)
         {
@@ -1158,6 +1276,7 @@ struct RenderAssetCache::Impl
             return true;
         });
         evicted += count;
+        streamingDirty = streamingDirty || count > 0;
         // RenderMesh and RenderSky Components written by resolvers that are gone may hold freed handles.
         epoch += count > 0 ? 1u : 0u;
         return count;
@@ -1167,6 +1286,149 @@ struct RenderAssetCache::Impl
     {
         return static_cast<u32>(loadingModels.size() + loadingTextures.size() + loadingMeshes.size() +
                                 loadingMaterials.size() + loadingEnvironments.size() + reloads.size());
+    }
+
+    // Mip streaming --------------------------------------------------------------------------------------
+
+    void rebuildStreaming()
+    {
+        streamingDirty = false;
+        streamed.clear();
+        streamEntries.clear();
+        streamLinks.clear();
+        for (auto& [key, texture] : textures)
+        {
+            texture.streamSlot = kNotStreamed;
+        }
+        u32 capacity = 0;
+        for (const auto& [materialKey, material] : materials)
+        {
+            if (!material.fromFile || material.status != Status::Ready || material.handle.index == 0)
+            {
+                continue;
+            }
+            for (const u64 textureKey : material.textures)
+            {
+                const auto found = textureKey != 0 ? textures.find(textureKey) : textures.end();
+                if (found == textures.end() || found->second.status != Status::Ready ||
+                    resources->textureMipCount(found->second.handle) > detail::kMaxStreamedMips)
+                {
+                    continue;
+                }
+                TextureEntry& texture = found->second;
+                if (texture.streamSlot == kNotStreamed)
+                {
+                    texture.streamSlot = static_cast<u32>(streamed.size());
+                    streamed.push_back(texture.levels);
+                    streamed.back().cooldown = texture.streamCooldown;
+                    streamEntries.push_back(&texture);
+                }
+                streamLinks.push_back(StreamLink{material.handle.index, texture.streamSlot});
+                capacity = std::max(capacity, material.handle.index + 1);
+            }
+        }
+        for (auto& [key, texture] : textures)
+        {
+            if (texture.streamSlot == kNotStreamed)
+            {
+                texture.stream = {}; // not used by a ready material: raised again once it is
+                texture.streamFresh = false;
+            }
+        }
+        if (capacity > materialDemandCapacity)
+        {
+            materialDemand = std::make_unique<std::atomic<u32>[]>(capacity);
+            materialDemandCapacity = capacity;
+        }
+        for (u32 i = 0; i < materialDemandCapacity; ++i)
+        {
+            materialDemand[i].store(0, std::memory_order_relaxed);
+        }
+    }
+
+    // Applies the policy's target to streamed texture @p slot; @p uploaded counts the bytes of added levels.
+    void streamTexture(u32 slot, u64& uploaded)
+    {
+        const detail::StreamedTexture& levels = streamed[slot];
+        TextureEntry& entry = *streamEntries[slot];
+        entry.streamCooldown = levels.cooldown;
+        bool keep = false; // the image is loading or waits for the upload budget
+        if (levels.target > levels.firstMip)
+        {
+            textureDrops += resources->setTextureMips(entry.handle, levels.target) ? 1u : 0u;
+        }
+        else if (levels.target < levels.firstMip && !entry.streamFailed)
+        {
+            const u64 added = levels.residentBytes[levels.target] - levels.residentBytes[levels.firstMip];
+            if (!entry.stream)
+            {
+                entry.stream = streamer->loadImage(AssetPathTable::instance().path(entry.asset),
+                                                   {.srgb = entry.srgb, .compression = entry.compression});
+                keep = true;
+            }
+            else if (entry.stream.state() == AssetState::Loading)
+            {
+                keep = true;
+            }
+            else if (!entry.stream.ready())
+            {
+                ILL_LOG_WARN("Render", "cannot load asset '{}' to add texture levels: {}",
+                             AssetPathTable::instance().path(entry.asset), entry.stream.error());
+                entry.streamFailed = true;
+            }
+            else if (uploaded > 0 && uploaded + added > desc.uploadBytesPerUpdate)
+            {
+                keep = true;
+            }
+            else if (resources->setTextureMips(entry.handle, levels.target, &entry.stream.value()))
+            {
+                ++textureRaises;
+                uploaded += added;
+                entry.streamFresh = false;
+            }
+        }
+        if (entry.stream && !keep && !std::exchange(entry.streamFresh, false))
+        {
+            entry.stream = {};
+        }
+    }
+
+    void updateStreaming()
+    {
+        if (desc.textureBudgetBytes == 0)
+        {
+            return;
+        }
+        ILL_PROFILE_SCOPE_N("RenderAssetCache::updateStreaming");
+        if (streamingDirty)
+        {
+            rebuildStreaming();
+        }
+        for (u32 slot = 0; slot < streamed.size(); ++slot)
+        {
+            const TextureEntry& entry = *streamEntries[slot];
+            streamed[slot].demand = 0.0f;
+            streamed[slot].pinned = entry.references > 0;
+            streamed[slot].firstMip = resources->textureFirstMip(entry.handle);
+        }
+        for (const StreamLink& link : streamLinks)
+        {
+            const f32 demand =
+                std::bit_cast<f32>(materialDemand[link.material].load(std::memory_order_relaxed));
+            streamed[link.texture].demand = std::max(streamed[link.texture].demand, demand);
+        }
+        for (const StreamLink& link : streamLinks)
+        {
+            materialDemand[link.material].store(0, std::memory_order_relaxed);
+        }
+        const detail::TextureStreamingSettings settings{
+            desc.textureBudgetBytes, desc.textureStreamingCooldown, desc.textureStreamingMinSize};
+        streamingBias = detail::updateTextureStreaming(streamed, settings);
+        u64 uploaded = 0;
+        for (u32 slot = 0; slot < streamed.size(); ++slot)
+        {
+            streamTexture(slot, uploaded);
+        }
     }
 
     void update()
@@ -1181,16 +1443,16 @@ struct RenderAssetCache::Impl
         {
             startReloads();
         }
-        if (loading() == 0)
+        if (loading() != 0)
         {
-            return;
+            uploads.process(desc.uploadBytesPerUpdate);
+            advanceAll(loadingModels, [this](u64 key) { return advanceModel(key); });
+            advanceAll(loadingTextures, [this](u64 key) { return advanceTexture(key); });
+            advanceAll(loadingMeshes, [this](u64 key) { return advanceMesh(key); });
+            advanceAll(loadingMaterials, [this](u64 key) { return advanceMaterial(key); });
+            advanceAll(loadingEnvironments, [this](u64 key) { return advanceEnvironment(key); });
         }
-        uploads.process(desc.uploadBytesPerUpdate);
-        advanceAll(loadingModels, [this](u64 key) { return advanceModel(key); });
-        advanceAll(loadingTextures, [this](u64 key) { return advanceTexture(key); });
-        advanceAll(loadingMeshes, [this](u64 key) { return advanceMesh(key); });
-        advanceAll(loadingMaterials, [this](u64 key) { return advanceMaterial(key); });
-        advanceAll(loadingEnvironments, [this](u64 key) { return advanceEnvironment(key); });
+        updateStreaming();
     }
 };
 
@@ -1248,6 +1510,14 @@ RenderAssetCacheStatistics RenderAssetCache::statistics() const noexcept
     statistics.evicted = m_impl->evicted;
     statistics.bakeCacheHits = m_impl->bakeCacheHits;
     statistics.bakes = m_impl->bakes;
+    for (const auto& [key, texture] : m_impl->textures)
+    {
+        statistics.streamedTextures +=
+            texture.status == Status::Ready && m_impl->resources->textureFirstMip(texture.handle) > 0 ? 1u
+                                                                                                      : 0u;
+    }
+    statistics.textureRaises = m_impl->textureRaises;
+    statistics.textureDrops = m_impl->textureDrops;
     return statistics;
 }
 
@@ -1533,6 +1803,39 @@ struct RenderAssetResolver::Impl
         }
     }
 
+    // Raises the cache's demand of the material of every visible renderer to its projected size.
+    void reportDemand(World& world, JobSystem* jobs, std::span<const TextureStreamingView> views)
+    {
+        if (views.empty() || cache->materialDemandCapacity == 0)
+        {
+            return;
+        }
+        ILL_PROFILE_SCOPE_N("RenderAssetResolver::reportDemand");
+        const auto report = [demand = cache->materialDemand.get(), capacity = cache->materialDemandCapacity,
+                             resources = cache->resources,
+                             views](Entity, const RenderMesh& mesh, const Transform& transform) {
+            if ((mesh.flags & RenderMesh::kVisible) == 0 || mesh.material.index == 0 ||
+                mesh.material.index >= capacity)
+            {
+                return;
+            }
+            const Aabb& bounds = resources->submeshBounds(mesh.mesh, mesh.submesh);
+            if (bounds.isValid())
+            {
+                raiseDemand(demand[mesh.material.index], projectedSize(bounds, transform, views));
+            }
+        };
+        auto query = world.query<const RenderMesh, const Transform>().without<Inactive>();
+        if (jobs != nullptr)
+        {
+            query.parallelEach(*jobs, report);
+        }
+        else
+        {
+            query.each(report);
+        }
+    }
+
     u32 releaseUnused(World& world)
     {
         ILL_PROFILE_SCOPE_N("RenderAssetResolver::releaseUnused");
@@ -1602,6 +1905,11 @@ RenderAssetResolver::~RenderAssetResolver() = default;
 
 void RenderAssetResolver::update(World& world, JobSystem* jobs)
 {
+    update(world, jobs, {});
+}
+
+void RenderAssetResolver::update(World& world, JobSystem* jobs, std::span<const TextureStreamingView> views)
+{
     ILL_PROFILE_SCOPE_N("RenderAssetResolver::update");
     Impl& impl = *m_impl;
     impl.statistics.resolved = 0;
@@ -1613,6 +1921,7 @@ void RenderAssetResolver::update(World& world, JobSystem* jobs)
     impl.updateMeshes(world, jobs, everything);
     impl.updateSkies(world, everything);
     impl.updateParticles(world, everything);
+    impl.reportDemand(world, jobs, views);
 }
 
 u32 RenderAssetResolver::releaseUnused(World& world)

@@ -37,12 +37,19 @@
 /// the streamer's Job System (EnvironmentDesc::compress) and stored a few frames after it was made;
 /// waitIdle() finishes the pending ones. Material files ask for their textures compressed
 /// (materialTextureUses()).
+///
+/// Mip streaming: with RenderAssetCacheDesc::textureBudgetBytes set, the textures of material files keep only
+/// the levels the renderers that use them need. Resolvers given views (TextureStreamingView) report how large
+/// each material appears; the cache keeps the textures within the budget (RenderResources::setTextureMips()),
+/// loads an image again to add levels and drops levels only after a cooldown. See
+/// docs/adr/0054-texture-compression.md.
 
 #include <illusion/core/AssetId.hpp>
 #include <illusion/core/Base.hpp>
 #include <illusion/render/RenderResources.hpp>
 
 #include <memory>
+#include <span>
 #include <string_view>
 
 namespace illusion
@@ -57,8 +64,27 @@ struct ProceduralSky;
 /// Creation parameters of a RenderAssetCache.
 struct RenderAssetCacheDesc
 {
-    u64 uploadBytesPerUpdate = 64ull << 20; ///< GPU bytes of streamed models uploaded per update().
-    EnvironmentDesc environment{};          ///< Bake resolution of environments.
+    /// GPU bytes of streamed models uploaded per update(), and separately of texture levels added by mip
+    /// streaming (at least one model and one texture per update).
+    u64 uploadBytesPerUpdate = 64ull << 20;
+    EnvironmentDesc environment{}; ///< Bake resolution of environments.
+    /// GPU bytes the textures of material files may take; 0 keeps every level resident (no streaming).
+    u64 textureBudgetBytes = 0;
+    /// Updates of lower demand before a streamed texture drops levels.
+    u32 textureStreamingCooldown = 120;
+    /// Levels up to this many pixels on their longer side are always resident.
+    u32 textureStreamingMinSize = 64;
+};
+
+/// A view whose renderers ask for texture levels (see RenderAssetResolver::update()).
+///
+/// For a perspective view, @p pixelsPerUnit is the viewport height / (2 tan(fovY / 2)): the size in pixels of
+/// one world unit at distance one. For an orthographic view, place @p position far behind the camera (a
+/// distance D much larger than the scene's depth) and pass the pixels per world unit times D.
+struct TextureStreamingView
+{
+    Vec3 position{0.0f};      ///< Camera position in world space.
+    f32 pixelsPerUnit = 0.0f; ///< Projected pixels of one world unit at distance one.
 };
 
 /// Counters of a RenderAssetCache.
@@ -75,6 +101,9 @@ struct RenderAssetCacheStatistics
     u32 evicted = 0;       ///< Assets freed by RenderAssetCache::evictUnused() since construction.
     u32 bakeCacheHits = 0; ///< Environments created from the bake cache without baking, since construction.
     u32 bakes = 0;         ///< Environments baked from their image files, since construction.
+    u32 streamedTextures = 0; ///< Textures of material files with levels left out now.
+    u32 textureRaises = 0;    ///< Streamed textures that got levels added, since construction.
+    u32 textureDrops = 0;     ///< Streamed textures that dropped levels, since construction.
 };
 
 /// The assets loaded for the renderer, shared by the RenderAssetResolvers of several Worlds. Assets are
@@ -90,9 +119,10 @@ public:
     ~RenderAssetCache();
 
     /// Starts the reloads asked for by AssetStreamer::reload() since the last call, uploads loaded models
-    /// within the byte budget, finishes materials and environments whose files are loaded and lets
+    /// within the byte budget, finishes materials and environments whose files are loaded, changes the
+    /// resident levels of streamed textures from the demand resolvers reported since the last call and lets
     /// RenderResources free what was released (RenderResources::collect()). Call once per frame after
-    /// AssetStreamer::update().
+    /// AssetStreamer::update(). Does not allocate when nothing changes.
     void update();
 
     /// Frees the GPU resources of assets no resolver uses (see RenderAssetResolver::releaseUnused()), and of
@@ -149,8 +179,14 @@ public:
     ~RenderAssetResolver();
 
     /// Adds RenderMesh to new MeshRenderers (and RenderSky to new SkyLights with an environment), removes
-    /// the ones whose source Component is gone, and re-resolves those whose source changed.
+    /// the ones whose source Component is gone, and re-resolves those whose source changed. Reports no
+    /// texture demand: with a texture budget, the textures of materials not seen fall to their lowest levels.
     void update(World& world, JobSystem* jobs = nullptr);
+
+    /// Calls update(world, jobs), then reports to the cache, per material, the largest projected size in
+    /// pixels of the visible renderers that use it (bounds of the submesh, world scale, distance to the
+    /// nearest of @p views), for mip streaming. Does not allocate.
+    void update(World& world, JobSystem* jobs, std::span<const TextureStreamingView> views);
 
     /// Calls update() and RenderAssetCache::waitIdle() until nothing in @p world waits for assets.
     void waitIdle(World& world, JobSystem* jobs = nullptr);

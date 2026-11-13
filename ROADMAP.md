@@ -668,7 +668,7 @@ MoltenVK); design in ADR 0054, public API in `illusion/assets/TextureCompression
 - TEX-4: ✅ Environments. `compressEnvironment()`, cooked environment version 2, the bake cache stores BC6H
   and later sessions upload it. Done: tests of the round trip and error bound, GPU test of a BC6H
   environment, statistics report environment bytes.
-- TEX-5: Mip streaming. `RenderResources::setTextureMips()` (resident range per texture) and the budget
+- TEX-5: ✅ Mip streaming. `RenderResources::setTextureMips()` (resident range per texture) and the budget
   policy of `RenderAssetCache` fed by `TextureStreamingView`. Done: GPU tests of raising and dropping
   levels with stable Handles, deterministic policy tests (budget, cooldown), a benchmark of the policy
   update, no allocation in an idle update.

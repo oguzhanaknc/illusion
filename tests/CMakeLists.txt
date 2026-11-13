@@ -70,6 +70,7 @@ add_executable(illusion_tests
     render/TestRenderComponents.cpp
     render/TestShadows.cpp
     render/TestSkyAtmosphere.cpp
+    render/TestTextureStreamingPolicy.cpp
     render/TestRendererExtensions.cpp
     runtime/TestGameSession.cpp
     runtime/TestProjectSettings.cpp
@@ -82,7 +83,9 @@ add_executable(illusion_tests
     text/TestTextTools.cpp
     text/TestUtf8.cpp)
 
-target_include_directories(illusion_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
+# The render library's internal policies are tested directly (render/TestTextureStreamingPolicy.cpp).
+target_include_directories(illusion_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}
+    ${PROJECT_SOURCE_DIR}/engine/render/src)
 target_link_libraries(illusion_tests PRIVATE
     illusion::core illusion::platform illusion::input illusion::assets illusion::audio illusion::physics
     illusion::particles illusion::render illusion::modules illusion::runtime illusion::text illusion_text_tools illusion::doctest)
@@ -204,6 +207,7 @@ add_executable(illusion_gpu_tests
     gpu/TestRendererExtensions.cpp
     gpu/TestResourceLifetime.cpp
     gpu/TestSwapchain.cpp
+    gpu/TestTextureStreaming.cpp
     gpu/TestTextureUpload.cpp
     gpu/TestUploadQueue.cpp)
 target_include_directories(illusion_gpu_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})

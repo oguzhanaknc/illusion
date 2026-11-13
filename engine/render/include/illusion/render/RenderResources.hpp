@@ -111,7 +111,8 @@ struct RenderResourceStatistics
     u64 environmentBytes = 0; ///< Bytes of the environments' cube maps on the GPU (as textureBytes).
     /// Bytes the same environments would take as RGBA16F cube maps.
     u64 environmentBytesUncompressed = 0;
-    u64 streamingSavedBytes = 0; ///< Bytes of texture levels left out by mip streaming.
+    /// Bytes of the texture levels left out by mip streaming (see RenderResources::setTextureMips()).
+    u64 streamingSavedBytes = 0;
 };
 
 /// Owns GPU resources. Not thread-safe; use from the render thread.
@@ -128,6 +129,29 @@ public:
     /// Uploads an image with all its mips. Block-compressed images are uploaded as they are when the device
     /// samples BC formats (GpuInfo::textureCompressionBC) and decoded on the CPU otherwise.
     [[nodiscard]] TextureHandle createTexture(const Image& image, const char* debugName = "Texture");
+
+    /// Uploads the levels of @p image from @p firstMip on (clamped to the last level), as createTexture()
+    /// does; setTextureMips() changes the resident range later.
+    [[nodiscard]] TextureHandle createTexture(const Image& image, u32 firstMip,
+                                              const char* debugName = "Texture");
+
+    /// Makes the levels `[firstMip, textureMipCount())` of @p texture resident (@p firstMip clamped to the
+    /// last level): creates a texture for the new range, copies the levels both ranges share on the GPU,
+    /// uploads the added ones from @p image, and binds it in place of the old texture once the GPU has
+    /// finished writing it (in a later collect()), so materials never draw a half-written texture; the old
+    /// texture is retired then. The handle stays valid; textureFirstMip() and statistics() report the new
+    /// range at once, and both textures count until the old one is freed. Changing it again before the swap
+    /// copies from the newest texture and replaces the pending one. @p image must be the image the texture
+    /// was created from (same format, size and level count); it is needed only when levels are added. Returns
+    /// false and changes nothing for an empty, invalid, released or default texture, a raise without an image
+    /// or a different image.
+    bool setTextureMips(TextureHandle texture, u32 firstMip, const Image* image = nullptr);
+
+    /// First resident level of @p texture (0 for an invalid or released handle).
+    [[nodiscard]] u32 textureFirstMip(TextureHandle texture) const noexcept;
+
+    /// Levels of the image @p texture was created from (0 for an invalid or released handle).
+    [[nodiscard]] u32 textureMipCount(TextureHandle texture) const noexcept;
 
     /// Creates a material.
     [[nodiscard]] MaterialHandle createMaterial(const MaterialDesc& desc);
@@ -253,6 +277,8 @@ public:
     [[nodiscard]] nvrhi::IBuffer* materialTable() const noexcept;
     [[nodiscard]] nvrhi::ISampler* materialSampler(u32 index) const noexcept;
     [[nodiscard]] bool bindless() const noexcept;
+    // True if block-compressed images are uploaded as they are (false: decoded on the CPU).
+    [[nodiscard]] bool compressedTextures() const noexcept;
     [[nodiscard]] nvrhi::IBindingLayout* bindlessLayout() const noexcept;
     [[nodiscard]] nvrhi::IDescriptorTable* bindlessTextures() const noexcept;
     // Increments whenever a pool or the material table is recreated or an environment slot changes owner

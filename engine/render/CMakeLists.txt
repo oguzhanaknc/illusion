@@ -16,6 +16,7 @@ add_library(illusion_render STATIC
     src/SceneRenderer.cpp
     src/Shadows.cpp
     src/Swapchain.cpp
+    src/TextureStreamingPolicy.cpp
     src/UploadQueue.cpp
     src/VolumetricFogRenderer.cpp
     src/VulkanDispatch.cpp)
