@@ -16,7 +16,8 @@ yerleşik bir Mesh'i olmayan gövdeler, collider boyutunda bir çocuk Entity al�
 
 Asset'leri `tools/make_assets.py` tarafından sayılardan üretilir (iki mesh'li bir model ve beş ses: müzik,
 rüzgâr, bir lamba uğultusu, bir selamlama ve bir tık); bu yüzden proje hiçbir üçüncü taraf lisansı taşımaz. Sahne elle yazılmaz: `build.jsonl` onu bir ajanın yapacağı gibi
-Editor commands ile kurar ve kaydeder. Yeniden kurmak için:
+Editor commands ile kurar ve kaydeder. Aynı dosya, duman sprite'ına `asset.set_import_settings` ile bir içe
+aktarma ayarları sidecar'ı (`"quality": "high"`) da verir. Yeniden kurmak için:
 
 ```bash
 python samples/showcase/tools/make_assets.py

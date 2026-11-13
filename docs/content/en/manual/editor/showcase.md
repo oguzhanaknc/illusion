@@ -16,7 +16,8 @@ colliders keep their exact sizes and the joint anchors stay in unscaled body spa
 
 Its assets are made from numbers by `tools/make_assets.py` (a model with two meshes and five sounds: music,
 wind, a lamp hum, a greeting and a click), so the project carries no third-party licence. The scene is not written by hand: `build.jsonl` builds it through Editor
-commands, the same way an agent would, and saves it. To rebuild it:
+commands, the same way an agent would, and saves it. It also gives the smoke sprite an import settings sidecar
+(`"quality": "high"`) through `asset.set_import_settings`. To rebuild it:
 
 ```bash
 python samples/showcase/tools/make_assets.py
