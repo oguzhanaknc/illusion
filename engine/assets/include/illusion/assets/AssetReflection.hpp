@@ -39,3 +39,13 @@ struct illusion::EnumReflection<illusion::TextureWrap>
                                         illusion::EnumValue{"ClampToEdge", 1},
                                         illusion::EnumValue{"MirrorRepeat", 2}};
 };
+
+/// Names of TextureCompression values in JSON.
+template <>
+struct illusion::EnumReflection<illusion::TextureCompression>
+{
+    /// The values.
+    static constexpr std::array kValues{illusion::EnumValue{"None", 0}, illusion::EnumValue{"BC7", 1},
+                                        illusion::EnumValue{"BC5", 2}, illusion::EnumValue{"BC4", 3},
+                                        illusion::EnumValue{"BC6H", 4}};
+};

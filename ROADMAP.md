@@ -656,7 +656,7 @@ MoltenVK); design in ADR 0054, public API in `illusion/assets/TextureCompression
   and recorded. Done: `tests/assets/TestTextureCompression.cpp` (round trips, error bounds per format and
   quality, odd sizes, same bytes with and without jobs), `benchmarks/BenchTextureCompression.cpp` (encode
   speed per format) within budget.
-- TEX-2: Import. `ImageImportSettings::compression`, sidecar version 2 (`compression`, `quality`; model
+- TEX-2: ✅ Import. `ImageImportSettings::compression`, sidecar version 2 (`compression`, `quality`; model
   `compressTextures`, `textureQuality`), cooked image version 2 and model version 5, compression by
   material use (`materialTextureUses()`, images of glTF models), `cookAssets()`; the editor's import
   settings (commands, Asset Browser, thumbnails). Done: tests of sidecars, cache keys, cooked round trips

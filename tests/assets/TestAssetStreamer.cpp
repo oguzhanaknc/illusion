@@ -109,7 +109,9 @@ TEST_CASE("streamed loads use and refresh the import cache")
     CHECK(streamer.statistics().imports == 2);
     CHECK(static_cast<u8>(image.value().mip(0)[0]) == 255);
     CHECK(static_cast<u8>(image.value().mip(0)[1]) == 0);
-    CHECK(static_cast<u8>(model.value().images[0].mip(0)[1]) == 0);
+    const std::optional<Image> pixels = decompressImage(model.value().images[0]);
+    REQUIRE(pixels.has_value());
+    CHECK(static_cast<u8>(pixels->mip(0)[1]) <= 5); // BC7 is lossy
 }
 
 TEST_CASE("failed streamed loads report why")

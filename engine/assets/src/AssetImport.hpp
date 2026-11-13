@@ -17,6 +17,7 @@
 namespace illusion
 {
 
+class JobSystem;
 class VirtualFileSystem;
 
 namespace detail
@@ -59,16 +60,23 @@ inline constexpr std::string_view kModelImporter = "gltf:3";
                                                                     std::string* error);
 
 // Decodes `source` (the bytes of `path`) with `settings` changed by `sidecar` (the bytes of its import
-// settings sidecar, empty if none), builds mips if requested and fills `cooked`.
+// settings sidecar, empty if none), builds mips if requested, compresses and fills `cooked`. Compression runs
+// on `jobs` when given (callers may be jobs themselves: JobSystem::wait() helps instead of blocking).
 [[nodiscard]] std::optional<Image> importImage(std::span<const std::byte> source,
                                                std::span<const std::byte> sidecar, const std::string& path,
                                                const ImageImportSettings& settings, AssetFile& cooked,
-                                               std::string* error);
+                                               std::string* error, JobSystem* jobs = nullptr);
 
-// Imports the glTF model at `path` (reading its files and its import settings sidecar) and fills `cooked`
-// (empty payload if a source could not be re-read for hashing, which only disables caching).
+// The compression each image of `model` gets from its uses in the model's materials: BC5 for images used
+// only as normal maps, BC4 for images used only as occlusion, None for unused images and BC7 otherwise.
+[[nodiscard]] std::vector<TextureCompression> modelImageCompressions(const ModelData& model);
+
+// Imports the glTF model at `path` (reading its files and its import settings sidecar), compresses its
+// images by their use unless the sidecar turns that off, and fills `cooked` (empty payload if a source could
+// not be re-read for hashing, which only disables caching). Compression runs on `jobs` when given.
 [[nodiscard]] std::optional<ModelData> importModel(const VirtualFileSystem& files, std::string_view path,
-                                                   AssetFile& cooked, std::string* error);
+                                                   AssetFile& cooked, std::string* error,
+                                                   JobSystem* jobs = nullptr);
 
 } // namespace detail
 } // namespace illusion

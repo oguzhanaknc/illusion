@@ -54,9 +54,12 @@ TEST_CASE("changing any source file of a model invalidates its cache entry")
     REQUIRE(reloaded.has_value());
     CHECK(database.statistics().imports == 2);
     CHECK(database.statistics().cacheHits == 0);
-    const auto pixel = reloaded->images[0].mip(0);
-    CHECK(static_cast<u8>(pixel[0]) == 255);
-    CHECK(static_cast<u8>(pixel[1]) == 0);
+    CHECK(reloaded->images[0].format == ImageFormat::BC7Srgb); // base colour of the model's material
+    const std::optional<Image> pixels = decompressImage(reloaded->images[0]);
+    REQUIRE(pixels.has_value());
+    const auto pixel = pixels->mip(0);
+    CHECK(static_cast<u8>(pixel[0]) >= 250); // BC7 is lossy
+    CHECK(static_cast<u8>(pixel[1]) <= 5);
 
     REQUIRE(database.loadModel("game:/scene/two_nodes.gltf").has_value());
     CHECK(database.statistics().cacheHits == 1);

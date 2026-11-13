@@ -306,7 +306,7 @@ void AssetStreamer::Impl::importModel(std::unique_ptr<Request> request)
     imports.fetch_add(1, std::memory_order_relaxed);
     AssetFile cooked;
     auto& slot = slotOf<ModelData>(*request);
-    slot.value = detail::importModel(*files, request->path, cooked, &slot.error);
+    slot.value = detail::importModel(*files, request->path, cooked, &slot.error, jobs);
     const bool ok = slot.value.has_value();
     if (ok && !desc.cacheMount.empty() && !cooked.dependencies.empty())
     {
@@ -401,7 +401,7 @@ void AssetStreamer::Impl::process(Request* raw)
     auto& slot = slotOf<Image>(*request);
     AssetFile cooked;
     slot.value = detail::importImage(request->source, request->sidecar, request->path, request->settings,
-                                     cooked, &slot.error);
+                                     cooked, &slot.error, jobs);
     if (slot.value)
     {
         queueWrite(request->cachePath, cooked);

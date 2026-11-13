@@ -1,6 +1,6 @@
 # 0054. Compress textures to BC on import with bc7enc and an own BC6H encoder; stream mips by resident range
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-11-12
 
 ## Context

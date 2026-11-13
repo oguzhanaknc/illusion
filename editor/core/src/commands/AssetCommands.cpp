@@ -1386,10 +1386,13 @@ void registerAssetCommands(CommandRegistry& registry)
         .agentSummary =
             "Merges import settings into a texture's or model's <file>.import.json sidecar (written only "
             "while a setting differs from its default, deleted when all are defaults; null resets) and "
-            "reloads it. Texture: colorSpace auto|srgb|linear, generateMips, maxSize (0 = none). Model: "
-            "scale, lodCount (levels of detail per mesh, 0-3; 0 = none), lodReduction (0.1-0.9). "
-            "Example: {\"path\": \"assets:/textures/ui.png\", \"value\": {\"texture\": {\"colorSpace\": "
-            "\"linear\", \"maxSize\": 512}}}.",
+            "reloads it. Texture: colorSpace auto|srgb|linear, generateMips, maxSize (0 = none), "
+            "compression auto|none|bc7|bc5|bc4|bc6h (GPU block compression; auto = as the material asks), "
+            "quality fast|normal|high (encoder effort). Model: scale, lodCount (levels of detail per mesh, "
+            "0-3; 0 = none), lodReduction (0.1-0.9), compressTextures (compress its images by use), "
+            "textureQuality fast|normal|high. Example: {\"path\": \"assets:/textures/rock_n.png\", "
+            "\"value\": {\"texture\": {\"colorSpace\": \"linear\", \"compression\": \"bc5\", "
+            "\"quality\": \"high\"}}}.",
         .category = "Asset",
         .icon = "tune",
         .flags = {.idempotent = true, .undoable = true},

@@ -26,13 +26,14 @@ struct CookResult
 
 /// Imports every image (.png, .jpg, .jpeg, .tga, .bmp, .hdr) and glTF model (.gltf, .glb) under the
 /// virtual directory @p directory (for example "game:/") into the import cache on @p cacheMount.
-/// Standalone images are cooked with the default ImageImportSettings; other settings are imported on
-/// first use. Material files (.material) are parsed, and their textures cooked with the settings the
-/// renderer uses (see materialTextureUses()); the material files themselves are read directly, so ship
-/// them with the game's files. Every import honours the asset's import settings sidecar
-/// (ImportSettings.hpp); an invalid sidecar fails its asset, and a sidecar whose asset does not exist or
-/// has no import settings is reported as an error. Files are visited in sorted order, so the result is
-/// deterministic.
+/// Standalone images are cooked with the default ImageImportSettings (uncompressed, unless their sidecar
+/// names a compression); other settings are imported on first use. Material files (.material) are parsed,
+/// and their textures cooked with the settings and compression the renderer uses (see
+/// materialTextureUses()); the material files themselves are read directly, so ship them with the game's
+/// files. Models are cooked with their images compressed by use (ModelImportSettings). Every import honours
+/// the asset's import settings sidecar (ImportSettings.hpp); an invalid sidecar fails its asset, and a
+/// sidecar whose asset does not exist or has no import settings is reported as an error. Files are visited in
+/// sorted order, so the result is deterministic.
 [[nodiscard]] CookResult cookAssets(VirtualFileSystem& files, std::string_view directory,
                                     std::string_view cacheMount);
 
