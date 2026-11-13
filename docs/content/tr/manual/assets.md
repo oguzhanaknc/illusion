@@ -249,7 +249,7 @@ farklıyken vardır ve yalnızca o ayarları tutar:
 | Texture (`.png`, `.jpg`, `.jpeg`, `.tga`, `.bmp`, `.hdr`) | `colorSpace` | `"auto"` | `"srgb"` ya da `"linear"`, görüntüyü kullananın istediği renk uzayını geçersiz kılar (bir Material temel rengi sRGB, normal map'leri doğrusal ister). |
 | | `generateMips` | `true` | `false`, kullanan mip istese bile yalnızca en üst seviyeyi içe aktarır. |
 | | `maxSize` | `0` | Hiçbir kenar bunu aşmayana kadar görüntüyü yarıya indirir (1 ile 16384 arası; 0 sınır yok demektir). |
-| | `compression` | `"auto"` | `"none"`, `"bc7"`, `"bc5"`, `"bc4"` ya da `"bc6h"`, görüntüyü kullananın istediği [sıkıştırmayı](#texture-sıkıştırma) geçersiz kılar; `"auto"` onu korur. |
+| | `compression` | `"auto"` | `"none"`, `"bc7"`, `"bc5"`, `"bc4"` ya da `"bc6h"`, görüntüyü kullananın istediği [sıkıştırmayı](#texture-skstrma) geçersiz kılar; `"auto"` onu korur. |
 | | `quality` | `"normal"` | Görüntü sıkıştırılırken encoder eforu: `"fast"`, `"normal"` ya da `"high"`. |
 | Model (`.gltf`, `.glb`) | `scale` | `1` | Konumların ve node ötelemelerinin düzgün ölçeği (0'dan büyük, en çok 1000). |
 | | `lodCount` | `3` | Submesh başına üretilen daha kaba [level of detail](rendering.md#levels-of-detail) sayısı (0 ile 3 arası; 0 kapatır). |

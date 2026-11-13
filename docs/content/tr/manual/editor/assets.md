@@ -74,7 +74,7 @@ sidecar'ı varsayılandan farklı ayarları tutar; **Apply** onu yazar (bütün 
 
 - **Textures** (`.png`, `.jpg`, `.jpeg`, `.tga`, `.bmp`, `.hdr`): color space (automatic, sRGB veya linear),
   mipmap üretilip üretilmeyeceği, piksel cinsinden maksimum boyut, **Compression** (automatic, none, BC7, BC5,
-  BC4 veya BC6H) ve **Quality** (fast, normal veya high); bkz. [texture sıkıştırma](../assets.md#texture-sıkıştırma).
+  BC4 veya BC6H) ve **Quality** (fast, normal veya high); bkz. [texture sıkıştırma](../assets.md#texture-skstrma).
 - **Models** (`.gltf`, `.glb`): pozisyonlara ve node çevirilerine uygulanan uniform scale, mesh başına kaç
   [level of detail](../rendering.md#levels-of-detail) üretileceği (0 ile 3 arası) ve her seviyenin koruduğu
   üçgen oranı, modelin görüntülerinin sıkıştırılıp sıkıştırılmayacağı (**Compress textures**) ve

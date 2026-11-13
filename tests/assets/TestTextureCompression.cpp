@@ -153,7 +153,8 @@ f64 logRmse(const Image& expected, const Image& actual)
     {
         for (usize c = 0; c < 3; ++c)
         {
-            const f64 d = std::log2((b[i * 4 + c] + 1e-3) / (a[i * 4 + c] + 1e-3));
+            const f64 d =
+                std::log2((static_cast<f64>(b[i * 4 + c]) + 1e-3) / (static_cast<f64>(a[i * 4 + c]) + 1e-3));
             sum += d * d;
         }
     }
@@ -196,8 +197,8 @@ BakedEnvironment makeBakedEnvironment()
                     {
                         const f32 u = (static_cast<f32>(x) + 0.5f) / static_cast<f32>(width);
                         const f32 v = (static_cast<f32>(y) + 0.5f) / static_cast<f32>(width);
-                        const f32 sky =
-                            scale * (0.2f + 0.8f * (1.0f - v) * (1.0f - v)) * (1.0f + 0.1f * face);
+                        const f32 sky = scale * (0.2f + 0.8f * (1.0f - v) * (1.0f - v)) *
+                                        (1.0f + 0.1f * static_cast<f32>(face));
                         texels.push_back(
                             glm::packHalf4x16(Vec4(sky * (0.8f + 0.4f * u), sky, sky * 1.3f, 1.0f)));
                     }
@@ -353,7 +354,7 @@ TEST_CASE("BC6H round trips HDR images within the error bound of each quality")
         const f64 measured = logRmse(hdr, decoded);
         CHECK(measured <= kMeasuredLogRmse[q] + kLogRmseMargin);
         const Vec4 spot = readPixel(decoded, 32, 32);
-        CHECK(std::abs(spot.r - 1000.0f) <= 1000.0f * kSpotRelativeError);
+        CHECK(std::abs(static_cast<f64>(spot.r) - 1000.0) <= 1000.0 * kSpotRelativeError);
         CHECK(spot.a == 1.0f);
     }
 }
