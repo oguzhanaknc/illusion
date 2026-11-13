@@ -232,7 +232,7 @@ only those settings:
 ```json
 {
   "format": "illusion.import",
-  "version": 1,
+  "version": 2,
   "texture": {"colorSpace": "linear", "maxSize": 1024}
 }
 ```
@@ -242,16 +242,20 @@ only those settings:
 | Texture (`.png`, `.jpg`, `.jpeg`, `.tga`, `.bmp`, `.hdr`) | `colorSpace` | `"auto"` | `"srgb"` or `"linear"` overrides the colour space the image's user asks for (a material asks for sRGB base colour and linear normal maps). |
 | | `generateMips` | `true` | `false` imports only the top level, even when a user asks for mips. |
 | | `maxSize` | `0` | Halve the image until no side exceeds this (1 to 16384; 0 is no limit). |
+| | `compression` | `"auto"` | `"none"`, `"bc7"`, `"bc5"`, `"bc4"` or `"bc6h"` overrides the [compression](#texture-compression) the image's user asks for; `"auto"` keeps it. |
+| | `quality` | `"normal"` | Encoder effort when the image is compressed: `"fast"`, `"normal"` or `"high"`. |
 | Model (`.gltf`, `.glb`) | `scale` | `1` | Uniform scale of positions and node translations (greater than 0, at most 1000). |
 | | `lodCount` | `3` | Coarser [levels of detail](rendering.md#levels-of-detail) generated per submesh (0 to 3; 0 turns them off). |
 | | `lodReduction` | `0.5` | Fraction of the previous level's triangles each level aims for (0.1 to 0.9). |
+| | `compressTextures` | `true` | Compress the model's images by their use in its materials. |
+| | `textureQuality` | `"normal"` | Encoder effort for the model's images: `"fast"`, `"normal"` or `"high"`. |
 
 - `AssetDatabase`, `AssetStreamer` and `cookAssets()` read the sidecar of every image and model they
   import, so the editor, the game and the cooked build all see the same result.
 - The sidecar is one of the sources of the cache entry: editing, adding or removing it makes the entry
   stale and the next load imports again. Cache entries stay keyed by the settings the caller asked for,
   so a game that ships only the cooked cache finds them without the sidecars.
-- Sidecars are versioned (`"version"`) and validated: an unknown member, a section of the wrong kind
+- Sidecars are versioned (`"version"`, currently 2; version 1 files still load) and validated: an unknown member, a section of the wrong kind
   (`"model"` next to a texture), a wrong type or an out-of-range value fails the import with an error
   that names the sidecar and the JSON pointer of the value.
 - `parseImportSettings()`, `mergeImportSettings()` (JSON merge patch: `null` resets a setting or a
@@ -269,6 +273,64 @@ files.writeText(illusion::importSettingsPath("game:/textures/ui.png"), text);
 
 In the editor, `asset.set_import_settings` changes the settings (with undo) and `asset.reimport` imports
 an asset again; see [the editor manual](editor/index.md#import-settings).
+
+## Texture compression
+
+Images are compressed to GPU block formats on import. An image keeps its pixel size; each level is stored
+as 4x4 blocks of 16 bytes (8 for BC4).
+
+| Format | Channels | Used for |
+| --- | --- | --- |
+| BC7 | RGBA | Base colour, emissive, metallic-roughness: any colour data (`BC7Srgb` for sRGB images). |
+| BC5 | R, G | Tangent-space normals; shaders rebuild z from x and y. |
+| BC4 | R | Single-channel masks such as occlusion. |
+| BC6H | RGB, unsigned half float | HDR colour. A float image always becomes BC6H and an 8-bit image never does. |
+
+Who decides the format, strongest first:
+
+1. The sidecar: `"compression"` of a texture, `"auto"` unless set.
+2. The user of the image. A material asks for BC7 for base colour, emissive and metallic-roughness, BC5 for
+   normals and BC4 for occlusion (BC7 when it is the same file as metallic-roughness, so one texture is
+   loaded); see `materialTextureUses()`.
+3. Code that reads pixels (thumbnails, environment bakes, screenshots) asks for no compression and gets
+   uncompressed pixels, whatever the sidecar says.
+
+Images inside a glTF model are compressed by their use in its materials: normal maps as BC5, images used
+only for occlusion as BC4, everything else as BC7. `"compressTextures": false` in the model sidecar turns
+this off. A texture sidecar and a model sidecar:
+
+```json
+{
+  "format": "illusion.import",
+  "version": 2,
+  "texture": {"compression": "bc7", "quality": "fast"}
+}
+```
+
+```json
+{
+  "format": "illusion.import",
+  "version": 2,
+  "model": {"compressTextures": true, "textureQuality": "high"}
+}
+```
+
+`TextureQuality` sets the encoder effort: `Fast` for iteration, `Normal` (the default) and `High` for final
+builds. Each step is several times slower than the one before. The import cache keeps the result, so the
+cost is paid on the first import, and `cookAssets()` compresses the textures of material files (and the
+images of models) at export time.
+
+`compressImage()` compresses every level of an image, in parallel when given a Job System, and produces the
+same bytes with any worker count. `decompressImage()` decodes it back on the CPU:
+
+```cpp
+#include <illusion/assets/TextureCompression.hpp>
+
+// image is an RGBA8 illusion::Image; jobs may be nullptr.
+const auto bc7 = illusion::compressImage(image, illusion::TextureCompression::BC7,
+                                         illusion::TextureQuality::High, &jobs);
+const auto pixels = illusion::decompressImage(*bc7); // RGBA8 again, for tools and tests
+```
 
 ## Streaming
 

@@ -239,7 +239,7 @@ farklıyken vardır ve yalnızca o ayarları tutar:
 ```json
 {
   "format": "illusion.import",
-  "version": 1,
+  "version": 2,
   "texture": {"colorSpace": "linear", "maxSize": 1024}
 }
 ```
@@ -249,16 +249,20 @@ farklıyken vardır ve yalnızca o ayarları tutar:
 | Texture (`.png`, `.jpg`, `.jpeg`, `.tga`, `.bmp`, `.hdr`) | `colorSpace` | `"auto"` | `"srgb"` ya da `"linear"`, görüntüyü kullananın istediği renk uzayını geçersiz kılar (bir Material temel rengi sRGB, normal map'leri doğrusal ister). |
 | | `generateMips` | `true` | `false`, kullanan mip istese bile yalnızca en üst seviyeyi içe aktarır. |
 | | `maxSize` | `0` | Hiçbir kenar bunu aşmayana kadar görüntüyü yarıya indirir (1 ile 16384 arası; 0 sınır yok demektir). |
+| | `compression` | `"auto"` | `"none"`, `"bc7"`, `"bc5"`, `"bc4"` ya da `"bc6h"`, görüntüyü kullananın istediği [sıkıştırmayı](#texture-sıkıştırma) geçersiz kılar; `"auto"` onu korur. |
+| | `quality` | `"normal"` | Görüntü sıkıştırılırken encoder eforu: `"fast"`, `"normal"` ya da `"high"`. |
 | Model (`.gltf`, `.glb`) | `scale` | `1` | Konumların ve node ötelemelerinin düzgün ölçeği (0'dan büyük, en çok 1000). |
 | | `lodCount` | `3` | Submesh başına üretilen daha kaba [level of detail](rendering.md#levels-of-detail) sayısı (0 ile 3 arası; 0 kapatır). |
 | | `lodReduction` | `0.5` | Her seviyenin hedeflediği, önceki seviyenin üçgenlerinin oranı (0.1 ile 0.9 arası). |
+| | `compressTextures` | `true` | Modelin görüntülerini Material'lerindeki kullanımlarına göre sıkıştırır. |
+| | `textureQuality` | `"normal"` | Modelin görüntüleri için encoder eforu: `"fast"`, `"normal"` ya da `"high"`. |
 
 - `AssetDatabase`, `AssetStreamer` ve `cookAssets()` içe aktardıkları her görüntünün ve modelin
   sidecar'ını okur; böylece editör, oyun ve hazırlanmış Build aynı sonucu görür.
 - Sidecar, önbellek kaydının kaynaklarından biridir: onu düzenlemek, eklemek ya da silmek kaydı eskitir ve
   sonraki yükleme yeniden içe aktarır. Önbellek kayıtları çağıranın istediği ayarlara göre anahtarlanmaya
   devam eder; böylece yalnızca hazırlanmış önbelleği dağıtan bir oyun onları sidecar'lar olmadan bulur.
-- Sidecar'lar sürümlüdür (`"version"`) ve doğrulanır: bilinmeyen bir üye, yanlış türden bir bölüm (bir
+- Sidecar'lar sürümlüdür (`"version"`, şu an 2; sürüm 1 dosyalar yine yüklenir) ve doğrulanır: bilinmeyen bir üye, yanlış türden bir bölüm (bir
   Texture'ın yanında `"model"`), yanlış bir tip ya da aralık dışı bir değer, içe aktarmayı sidecar'ı ve
   değerin JSON pointer'ını belirten bir hatayla başarısız kılar.
 - `parseImportSettings()`, `mergeImportSettings()` (JSON merge patch: `null` bir ayarı ya da bölümü
@@ -276,6 +280,64 @@ files.writeText(illusion::importSettingsPath("game:/textures/ui.png"), text);
 
 Editörde `asset.set_import_settings` ayarları değiştirir (geri alınabilir) ve `asset.reimport` bir Asset'i
 yeniden içe aktarır; bkz. [editör kılavuzu](editor/index.md#ice-aktarma-ayarlar).
+
+## Texture sıkıştırma
+
+Görüntüler içe aktarılırken GPU blok formatlarına sıkıştırılır. Görüntü piksel boyutunu korur; her seviye
+16 baytlık (BC4 için 8) 4x4 bloklar olarak saklanır.
+
+| Format | Kanallar | Kullanım |
+| --- | --- | --- |
+| BC7 | RGBA | Temel renk, emissive, metallic-roughness: her renk verisi (sRGB görüntüler için `BC7Srgb`). |
+| BC5 | R, G | Tangent-space normal'ler; Shader'lar z'yi x ve y'den yeniden kurar. |
+| BC4 | R | Occlusion gibi tek kanallı maskeler. |
+| BC6H | RGB, işaretsiz half float | HDR renk. Float bir görüntü her zaman BC6H olur, 8 bit bir görüntü asla olmaz. |
+
+Formatı kimin belirlediği, en güçlüden başlayarak:
+
+1. Sidecar: bir Texture'ın `"compression"` değeri; ayarlanmadıysa `"auto"`.
+2. Görüntüyü kullanan. Bir Material temel renk, emissive ve metallic-roughness için BC7, normal'ler için
+   BC5, occlusion için BC4 ister (metallic-roughness ile aynı dosyaysa BC7, böylece tek bir Texture
+   yüklenir); bkz. `materialTextureUses()`.
+3. Piksel okuyan kod (thumbnail'ler, environment bake'leri, ekran görüntüleri) sıkıştırma istemez ve
+   sidecar ne derse desin sıkıştırılmamış pikselleri alır.
+
+Bir glTF modelinin içindeki görüntüler Material'lerindeki kullanımlarına göre sıkıştırılır: normal map'ler
+BC5, yalnızca occlusion için kullanılanlar BC4, geri kalan her şey BC7. Model sidecar'ında
+`"compressTextures": false` bunu kapatır. Bir Texture sidecar'ı ve bir model sidecar'ı:
+
+```json
+{
+  "format": "illusion.import",
+  "version": 2,
+  "texture": {"compression": "bc7", "quality": "fast"}
+}
+```
+
+```json
+{
+  "format": "illusion.import",
+  "version": 2,
+  "model": {"compressTextures": true, "textureQuality": "high"}
+}
+```
+
+`TextureQuality` encoder eforunu belirler: iterasyon için `Fast`, `Normal` (varsayılan) ve son Build'ler
+için `High`. Her adım bir öncekinden birkaç kat yavaştır. İçe aktarma önbelleği sonucu saklar; bu yüzden
+maliyet ilk içe aktarmada ödenir ve `cookAssets()` Material dosyalarının Texture'larını (ve modellerin
+görüntülerini) export sırasında sıkıştırır.
+
+`compressImage()` bir görüntünün her seviyesini sıkıştırır, Job System verilirse paralel çalışır ve her
+Worker sayısıyla aynı baytları üretir. `decompressImage()` onu CPU'da yeniden çözer:
+
+```cpp
+#include <illusion/assets/TextureCompression.hpp>
+
+// image is an RGBA8 illusion::Image; jobs may be nullptr.
+const auto bc7 = illusion::compressImage(image, illusion::TextureCompression::BC7,
+                                         illusion::TextureQuality::High, &jobs);
+const auto pixels = illusion::decompressImage(*bc7); // RGBA8 again, for tools and tests
+```
 
 ## Streaming
 

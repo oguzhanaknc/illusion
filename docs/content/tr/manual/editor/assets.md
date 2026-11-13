@@ -73,10 +73,12 @@ sidecar'ı varsayılandan farklı ayarları tutar; **Apply** onu yazar (bütün 
 **Revert** disktekini yeniden yükler.
 
 - **Textures** (`.png`, `.jpg`, `.jpeg`, `.tga`, `.bmp`, `.hdr`): color space (automatic, sRGB veya linear),
-  mipmap üretilip üretilmeyeceği ve piksel cinsinden maksimum boyut.
+  mipmap üretilip üretilmeyeceği, piksel cinsinden maksimum boyut, **Compression** (automatic, none, BC7, BC5,
+  BC4 veya BC6H) ve **Quality** (fast, normal veya high); bkz. [texture sıkıştırma](../assets.md#texture-sıkıştırma).
 - **Models** (`.gltf`, `.glb`): pozisyonlara ve node çevirilerine uygulanan uniform scale, mesh başına kaç
   [level of detail](../rendering.md#levels-of-detail) üretileceği (0 ile 3 arası) ve her seviyenin koruduğu
-  üçgen oranı.
+  üçgen oranı, modelin görüntülerinin sıkıştırılıp sıkıştırılmayacağı (**Compress textures**) ve
+  **Texture quality**.
 
 Import ayarları paneli, seçili asset'e kaç dosyanın referans verdiğini de söyler.
 
