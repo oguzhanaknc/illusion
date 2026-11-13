@@ -50,10 +50,12 @@ struct RenderResources::GpuMesh
 
 struct RenderResources::GpuEnvironment
 {
-    nvrhi::TextureHandle background; // RGBA16F cube map with a full mip chain
-    nvrhi::TextureHandle specular;   // RGBA16F cube map, mip i prefiltered for roughness i / (mips - 1)
+    nvrhi::TextureHandle background; // RGBA16F or BC6H cube map with a full mip chain
+    nvrhi::TextureHandle specular; // RGBA16F or BC6H cube map, mip i prefiltered for roughness i / (mips - 1)
     u32 specularMips = 1;
     ShIrradiance irradiance;
+    u64 bytes = 0;             // of both cube maps on the GPU
+    u64 uncompressedBytes = 0; // of both cube maps as RGBA16F
     // Atmosphere environments (createAtmosphereEnvironment()) are redrawn in place with these: the sky
     // constants and the binding sets of the sky, downsample and prefilter passes, made once.
     nvrhi::BufferHandle atmosphereConstants;

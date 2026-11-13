@@ -59,6 +59,9 @@ inline constexpr std::string_view kModelImporter = "gltf:3";
                                                                     ImportSettingsKind kind,
                                                                     std::string* error);
 
+// The compression a sidecar's `compression` names; std::nullopt for Auto (the user of the image decides).
+[[nodiscard]] std::optional<TextureCompression> sidecarCompression(ImportCompression compression) noexcept;
+
 // Decodes `source` (the bytes of `path`) with `settings` changed by `sidecar` (the bytes of its import
 // settings sidecar, empty if none), builds mips if requested, compresses and fills `cooked`. Compression runs
 // on `jobs` when given (callers may be jobs themselves: JobSystem::wait() helps instead of blocking).

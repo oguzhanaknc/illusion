@@ -91,6 +91,7 @@ struct GpuViewports
         {
             service->render(false);
             device->waitIdle();
+            device->collectGarbage(); // no swapchain does it: a slow import renders many frames here
             Expected<std::optional<std::string>, CommandError> updated = started.value()->update();
             REQUIRE(updated.hasValue());
             result = *updated;

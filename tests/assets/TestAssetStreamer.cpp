@@ -32,6 +32,7 @@ TEST_CASE("the asset streamer loads in the background and publishes in update")
     test::AssetProject project;
     JobSystem jobs(smallPool());
     AssetStreamer streamer(project.files, jobs);
+    CHECK(&streamer.jobs() == &jobs);
 
     const AssetHandle<Image> image = streamer.loadImage("game:/textures/checker.png");
     const AssetHandle<ModelData> model = streamer.loadModel("game:/scene/two_nodes.gltf");

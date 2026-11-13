@@ -45,6 +45,7 @@ struct RenderDevice::Impl
     bool validation = false;          // Vulkan validation layer active
     bool nvrhiValidationOnly = false; // validation requested, but only NVRHI's layer is available
     bool bufferDeviceAddress = false;
+    bool compressedTextures = true; // RenderDeviceDesc::compressedTextures
 
     std::vector<std::string> instanceExtensions;
     std::vector<std::string> deviceExtensions;

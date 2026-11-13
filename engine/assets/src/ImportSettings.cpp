@@ -1,3 +1,5 @@
+#include "AssetImport.hpp"
+
 #include <illusion/assets/AssetDatabase.hpp>
 #include <illusion/assets/ImportSettings.hpp>
 #include <illusion/assets/Mesh.hpp>
@@ -502,28 +504,30 @@ ImageImportSettings effectiveImageImport(const ImageImportSettings& requested,
     effective.generateMips = requested.generateMips && settings.generateMips;
     if (requested.compression != TextureCompression::None)
     {
-        switch (settings.compression)
-        {
-        case ImportCompression::Auto:
-            break;
-        case ImportCompression::None:
-            effective.compression = TextureCompression::None;
-            break;
-        case ImportCompression::BC7:
-            effective.compression = TextureCompression::BC7;
-            break;
-        case ImportCompression::BC5:
-            effective.compression = TextureCompression::BC5;
-            break;
-        case ImportCompression::BC4:
-            effective.compression = TextureCompression::BC4;
-            break;
-        case ImportCompression::BC6H:
-            effective.compression = TextureCompression::BC6H;
-            break;
-        }
+        effective.compression =
+            detail::sidecarCompression(settings.compression).value_or(requested.compression);
     }
     return effective;
+}
+
+std::optional<TextureCompression> detail::sidecarCompression(ImportCompression compression) noexcept
+{
+    switch (compression)
+    {
+    case ImportCompression::Auto:
+        break;
+    case ImportCompression::None:
+        return TextureCompression::None;
+    case ImportCompression::BC7:
+        return TextureCompression::BC7;
+    case ImportCompression::BC5:
+        return TextureCompression::BC5;
+    case ImportCompression::BC4:
+        return TextureCompression::BC4;
+    case ImportCompression::BC6H:
+        return TextureCompression::BC6H;
+    }
+    return std::nullopt;
 }
 
 } // namespace illusion

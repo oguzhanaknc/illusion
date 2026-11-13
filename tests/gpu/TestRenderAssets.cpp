@@ -5,6 +5,7 @@
 #include <illusion/assets/AssetStreamer.hpp>
 #include <illusion/assets/Environment.hpp>
 #include <illusion/assets/MaterialAsset.hpp>
+#include <illusion/assets/TextureCompression.hpp>
 #include <illusion/core/AssetRef.hpp>
 #include <illusion/core/JobSystem.hpp>
 #include <illusion/ecs/Reflection.hpp>
@@ -51,11 +52,11 @@ RenderDeviceDesc headless()
     return desc;
 }
 
-// Small bakes keep the tests fast.
-RenderAssetCacheDesc smallBakes()
+// Small bakes keep the tests fast; uncompressed ones read back exactly as they were baked.
+RenderAssetCacheDesc smallBakes(bool compress = false)
 {
     RenderAssetCacheDesc desc;
-    desc.environment = EnvironmentDesc{32, 16, 8};
+    desc.environment = EnvironmentDesc{32, 16, 8, compress};
     return desc;
 }
 
@@ -185,8 +186,9 @@ TEST_CASE("a scene of asset references renders like the same scene built from ha
         std::vector<u8> expected;
         {
             const AssetHandle<ModelData> model = streamer.loadModel("game:/binary.glb");
-            const AssetHandle<Image> checker =
-                streamer.loadImage("game:/textures/checker.png", {.srgb = true});
+            // Material files ask for their base colour in BC7 (materialTextureUses()).
+            const AssetHandle<Image> checker = streamer.loadImage(
+                "game:/textures/checker.png", {.srgb = true, .compression = TextureCompression::BC7});
             const AssetHandle<Image> sky =
                 streamer.loadImage("game:/sky.hdr", {.srgb = true, .generateMips = false});
             streamer.waitIdle();
@@ -629,6 +631,57 @@ TEST_CASE("the environment bake cache hits after a restart and bakes again when 
         CHECK(restarted.bakes == 0);
         CHECK(restarted.bakeCacheHits == 1);
         CHECK(again.background == changed.background);
+    }
+    device->waitIdle();
+    CHECK(device->validationErrorCount() == 0);
+}
+
+TEST_CASE("the bake cache stores bakes compressed to BC6H and later sessions upload them")
+{
+    reflectAll();
+    auto device = RenderDevice::create(headless());
+    REQUIRE(device != nullptr);
+    {
+        test::AssetProject project;
+        REQUIRE(project.files.writeFile("game:/sky.hdr", encodeRadiance(makeSkyImage(32))) ==
+                FileError::None);
+        JobSystem jobs(JobSystemDesc{2, 256});
+
+        // One session: whether the sky light's environment can be read back (only a half-float one can), and
+        // the memory it takes.
+        const auto run = [&](bool& halfFloat, RenderResourceStatistics& memory) {
+            AssetStreamer streamer(project.files, jobs);
+            RenderResources resources(*device);
+            RenderAssetCache cache(resources, streamer, smallBakes(true));
+            RenderAssetResolver resolver(cache);
+            World world;
+            const Entity sky = world.create(Transform{}, SkyLight{.environment = AssetRef("game:/sky.hdr")});
+            resolver.waitIdle(world);
+            cache.waitIdle();
+            const EnvironmentHandle handle = world.get<RenderSky>(sky).environment;
+            BakedEnvironment environment;
+            halfFloat = resources.readEnvironment(resources.requestEnvironmentReadback(handle), environment,
+                                                  true) == ReadbackStatus::Ready;
+            CHECK(cache.statistics().failed == 0);
+            memory = resources.statistics();
+            return cache.statistics();
+        };
+
+        bool bakedHalfFloat = false;
+        RenderResourceStatistics bakedMemory;
+        const RenderAssetCacheStatistics first = run(bakedHalfFloat, bakedMemory);
+        CHECK(first.bakes == 1);
+        CHECK(bakedHalfFloat); // the session that bakes keeps drawing the half-float bake
+        CHECK(bakedMemory.environmentBytesUncompressed == bakedMemory.environmentBytes);
+
+        bool cachedHalfFloat = true;
+        RenderResourceStatistics cachedMemory;
+        const RenderAssetCacheStatistics second = run(cachedHalfFloat, cachedMemory);
+        CHECK(second.bakes == 0);
+        CHECK(second.bakeCacheHits == 1);
+        CHECK_FALSE(cachedHalfFloat);
+        CHECK(cachedMemory.environmentBytesUncompressed == bakedMemory.environmentBytes);
+        CHECK(cachedMemory.environmentBytes * 7 < bakedMemory.environmentBytes);
     }
     device->waitIdle();
     CHECK(device->validationErrorCount() == 0);

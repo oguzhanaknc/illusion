@@ -158,6 +158,14 @@ float3 windOffset(float4 wind, float4 gusts, float time, float2 response, float3
     return offset + flutter * (response.y * gusts.z * speed);
 }
 
+// Tangent-space normal from the red and green channels of a normal map with z rebuilt, so that two-channel
+// (BC5) and RGB maps decode alike (ADR 0054). @p scale is the glTF normal scale, applied after the rebuild.
+float3 decodeNormalMap(float2 encoded, float scale)
+{
+    const float2 xy = encoded * 2.0 - 1.0;
+    return float3(xy * scale, sqrt(saturate(1.0 - dot(xy, xy))));
+}
+
 // Irradiance from the 9 SH coefficients (order Y00, Y1-1, Y10, Y11, Y2-2, Y2-1, Y20, Y21, Y22); see
 // assets/Environment.cpp.
 float3 shIrradiance(float4 sh[9], float3 n)

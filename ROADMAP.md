@@ -661,11 +661,11 @@ MoltenVK); design in ADR 0054, public API in `illusion/assets/TextureCompression
   material use (`materialTextureUses()`, images of glTF models), `cookAssets()`; the editor's import
   settings (commands, Asset Browser, thumbnails). Done: tests of sidecars, cache keys, cooked round trips
   and the cooker pass; command reference and goldens updated.
-- TEX-3: GPU upload. `RenderResources::createTexture()` uploads BC levels (CPU decode without
+- TEX-3: ✅ GPU upload. `RenderResources::createTexture()` uploads BC levels (CPU decode without
   `textureCompressionBC`), the render asset cache asks for compressed material textures, shaders rebuild
   normal z, `RenderResourceStatistics` reports texture bytes. Done: GPU tests draw every BC format within
   an error bound and check the memory ratio; validation stays clean.
-- TEX-4: Environments. `compressEnvironment()`, cooked environment version 2, the bake cache stores BC6H
+- TEX-4: ✅ Environments. `compressEnvironment()`, cooked environment version 2, the bake cache stores BC6H
   and later sessions upload it. Done: tests of the round trip and error bound, GPU test of a BC6H
   environment, statistics report environment bytes.
 - TEX-5: Mip streaming. `RenderResources::setTextureMips()` (resident range per texture) and the budget

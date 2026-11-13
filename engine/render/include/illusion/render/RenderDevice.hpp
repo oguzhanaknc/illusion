@@ -49,6 +49,10 @@ struct RenderDeviceDesc
 
     /// GPU preference when more than one suitable GPU is present.
     GpuPreference gpuPreference = GpuPreference::HighPerformance;
+
+    /// Enables block-compressed (BC) textures when the GPU supports them. When off or unsupported,
+    /// RenderResources decodes compressed images on the CPU and uploads them uncompressed.
+    bool compressedTextures = true;
 };
 
 /// Description of the selected GPU.
@@ -67,6 +71,8 @@ struct GpuInfo
     bool timestamps = false; ///< Graphics-queue timestamp queries are available.
     /// Multi-draw indirect with a first-instance offset per draw is available.
     bool multiDrawIndirect = false;
+    /// BC1-BC7 textures can be sampled (enabled by RenderDeviceDesc::compressedTextures).
+    bool textureCompressionBC = false;
 };
 
 /// Number of textures a bindless texture table can hold; GpuInfo::bindless requires the device to allow it.

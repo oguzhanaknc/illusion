@@ -222,6 +222,9 @@ public:
     /// Cache hits, imports and cache writes so far.
     [[nodiscard]] AssetDatabaseStatistics statistics() const noexcept;
 
+    /// The Job System the streamer runs on (for work that callers do on loaded assets).
+    [[nodiscard]] JobSystem& jobs() const noexcept;
+
 private:
     using FileDecoder = std::function<bool(std::vector<std::byte>&&, detail::AssetSlotBase&)>;
 

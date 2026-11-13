@@ -730,6 +730,11 @@ void AssetStreamer::waitIdle()
     }
 }
 
+JobSystem& AssetStreamer::jobs() const noexcept
+{
+    return *m_impl->jobs;
+}
+
 AssetDatabaseStatistics AssetStreamer::statistics() const noexcept
 {
     AssetDatabaseStatistics statistics;
