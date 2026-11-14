@@ -852,6 +852,38 @@ anti-aliasing'i açar. `--screenshot` son görüntüyü 1280x720 PNG olarak kayd
 ./build/linux-clang/samples/Debug/illusion_gltf_viewer --frames 60 --screenshot scene.png
 ```
 
+## UI pass
+
+Header'lar: `<illusion/ui/UiDrawList.hpp>`, `<illusion/render/UiRenderer.hpp>`
+
+`UiDrawList` dikdörtgenleri, görüntüleri, nine-slice panelleri ve metni canvas birimleriyle, toplu quad'lar
+olarak kaydeder. `UiRenderer::render()` listeyi `SceneRenderer::render()` sonrasında bir renk hedefinin üzerine
+çizer; renkli görüntüler ve signed distance field metni tek Pipeline'dadır ([font'lar](assets.md#fontlar)).
+Kayıt allocation yapmaz; sığmayan bir primitive atılır ve sayılır (`droppedPrimitives()`).
+
+```cpp
+auto ui = illusion::UiRenderer::create(device, resources);
+const illusion::UiTextureId atlas = ui->addFont(font);
+
+illusion::UiDrawList list;
+// each frame, after the scene:
+sceneRenderer->render(commands, target, world, view);
+list.begin(illusion::canvasMetrics({}, targetSize));
+list.rect({{24.0f, 24.0f}, {344.0f, 88.0f}}, {0.0f, 0.0f, 0.0f, 0.6f});
+illusion::UiTextStyle style;
+style.size = 32.0f;
+list.text({&font, atlas}, {40.0f, 36.0f}, "Score 1200", style);
+ui->render(commands, target, list.data());
+```
+
+- `addFont()` bir font'un atlas'ını yükler, `addImage()` ise `RenderResources`'a ait bir Texture'ı kaydeder;
+  ikisi de listenin başvurduğu bir `UiTextureId` döndürür. `remove()` onu unutur.
+- `pushClip()`, `setTransform()` ve `measureText()` kırpar, dönüştürür ve ölçer; `canvasMetrics()` canvas
+  birimlerini hedefin piksellerine eşler.
+
+Bu, düşük seviyeli API'dir. Element'ler, layout, widget'lar ve `UiService` (kaydedilen UI) sonraki iş
+paketlerinde gelir ([ADR 0057](https://github.com/oguzhanaknc/illusion/blob/main/docs/adr/0057-game-ui.md)).
+
 ## Koordinat kuralları
 
 Renderer, Direct3D tarzı clip space'i izler: **y yukarıyı gösterir** ve derinlik 0'dan 1'e gider. NVRHI

@@ -251,6 +251,10 @@ std::string_view assetKindOf(std::string_view path, bool isDirectory)
     {
         return "AudioClip";
     }
+    if (extension == ".ttf" || extension == ".otf")
+    {
+        return "Font";
+    }
     return "Other";
 }
 

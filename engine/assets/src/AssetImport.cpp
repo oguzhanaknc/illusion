@@ -9,6 +9,26 @@
 
 namespace illusion::detail
 {
+namespace
+{
+
+std::string_view fontErrorMessage(FontError error) noexcept
+{
+    switch (error)
+    {
+    case FontError::InvalidFont:
+        return "not a TrueType or OpenType font that can be read";
+    case FontError::InvalidSettings:
+        return "the import settings are out of range";
+    case FontError::NoGlyphs:
+        return "the font has none of the requested code points";
+    case FontError::AtlasFull:
+        return "the glyphs do not fit into the largest atlas; bake fewer code points or a smaller pixelSize";
+    }
+    return "the font cannot be baked";
+}
+
+} // namespace
 
 std::string imageImportKey(const ImageImportSettings& settings)
 {
@@ -155,6 +175,33 @@ std::optional<Image> importImage(std::span<const std::byte> source, std::span<co
                            AssetDependency{importSettingsPath(path), xxhash64(sidecar)}};
     cooked.payload = serializeImage(*image);
     return image;
+}
+
+std::optional<Font> importFont(std::span<const std::byte> source, std::span<const std::byte> sidecar,
+                               const std::string& path, AssetFile& cooked, std::string* error)
+{
+    ILL_PROFILE_SCOPE();
+    const std::optional<ImportSettings> settings =
+        parseImportSettingsFile(sidecar, path, ImportSettingsKind::Font, error);
+    if (!settings)
+    {
+        return std::nullopt;
+    }
+    Expected<Font, FontError> font = Font::bake(source, fontBakeSettings(settings->font));
+    if (!font)
+    {
+        if (error != nullptr)
+        {
+            *error = std::format("{}: {}", path, fontErrorMessage(font.error()));
+        }
+        return std::nullopt;
+    }
+    cooked.type = AssetType::Font;
+    cooked.version = kFontFormatVersion;
+    cooked.dependencies = {AssetDependency{path, xxhash64(source)},
+                           AssetDependency{importSettingsPath(path), xxhash64(sidecar)}};
+    cooked.payload = serializeFont(*font);
+    return std::move(*font);
 }
 
 std::vector<TextureCompression> modelImageCompressions(const ModelData& model)

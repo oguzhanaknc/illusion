@@ -53,6 +53,7 @@ add_executable(illusion_tests
     assets/TestAtmosphere.cpp
     assets/TestEnvironment.cpp
     assets/TestFont.cpp
+    assets/TestFontAsset.cpp
     assets/TestGltf.cpp
     assets/TestImageMesh.cpp
     assets/TestImportSettings.cpp
@@ -268,10 +269,12 @@ add_executable(illusion_gpu_tests
     gpu/TestSwapchain.cpp
     gpu/TestTextureStreaming.cpp
     gpu/TestTextureUpload.cpp
+    gpu/TestUiRenderer.cpp
     gpu/TestUploadQueue.cpp)
 target_include_directories(illusion_gpu_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
 target_link_libraries(illusion_gpu_tests PRIVATE illusion::render illusion::doctest)
-target_compile_definitions(illusion_gpu_tests PRIVATE ILLUSION_TEST_DATA_DIR="${CMAKE_CURRENT_SOURCE_DIR}/data")
+target_compile_definitions(illusion_gpu_tests PRIVATE ILLUSION_TEST_DATA_DIR="${CMAKE_CURRENT_SOURCE_DIR}/data"
+    ILLUSION_TEST_FONT="${ILLUSION_TEST_FONT}")
 illusion_configure_target(illusion_gpu_tests)
 # The exported showcase (samples/CMakeLists.txt) against the golden image of the editor's Play mode.
 if(ILLUSION_BUILD_SAMPLES AND ILLUSION_BUILD_TOOLS)

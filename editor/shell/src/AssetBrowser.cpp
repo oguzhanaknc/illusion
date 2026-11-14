@@ -214,12 +214,16 @@ ui::Icon kindIcon(std::string_view kind) noexcept
     {
         return ui::icons::kVolumeUp;
     }
+    if (kind == "Font")
+    {
+        return ui::icons::kTextFields;
+    }
     return ui::icons::kDescription;
 }
 
 // The file kinds of kAssetKinds without "Folder", in display order.
-constexpr std::array<std::string_view, 8> kFileKinds{"Scene",   "Prefab",      "Material",  "Model",
-                                                     "Texture", "Environment", "AudioClip", "Other"};
+constexpr std::array<std::string_view, 9> kFileKinds{
+    "Scene", "Prefab", "Material", "Model", "Texture", "Environment", "AudioClip", "Font", "Other"};
 
 // @p bytes as a short human-readable size into @p out.
 void formatSize(u64 bytes, char* out, usize cap) noexcept
@@ -1192,6 +1196,25 @@ void AssetBrowser::State::drawInspector(Impl& shell, ui::UiKit& kit)
             if (ImGui::Combo(text.hidden("asset_browser.import.quality"), &quality, qualities, 3))
             {
                 settings.texture.quality = static_cast<TextureQuality>(quality);
+                changed = true;
+            }
+        }
+        else if (settingsKind == ImportSettingsKind::Font)
+        {
+            ui::propertyLabel(kit, text.format(s::kAssetBrowserImportPixelSize));
+            int pixelSize = static_cast<int>(settings.font.pixelSize);
+            ImGui::SetNextItemWidth(-1.0f);
+            if (ImGui::SliderInt(text.hidden("asset_browser.import.pixel_size"), &pixelSize, 16, 128))
+            {
+                settings.font.pixelSize = static_cast<u32>(pixelSize);
+                changed = true;
+            }
+            ui::propertyLabel(kit, text.format(s::kAssetBrowserImportSpread));
+            int spread = static_cast<int>(settings.font.spread);
+            ImGui::SetNextItemWidth(-1.0f);
+            if (ImGui::SliderInt(text.hidden("asset_browser.import.spread"), &spread, 2, 16))
+            {
+                settings.font.spread = static_cast<u32>(spread);
                 changed = true;
             }
         }

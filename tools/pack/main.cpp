@@ -174,8 +174,8 @@ int cook(std::string_view mount, std::filesystem::path directory, const std::fil
     {
         std::fprintf(stderr, "illusion_pack: %s\n", error.c_str());
     }
-    std::printf("cooked %u model(s), %u image(s) and %u material(s)\n", result.models, result.images,
-                result.materials);
+    std::printf("cooked %u model(s), %u image(s), %u material(s) and %u font(s)\n", result.models,
+                result.images, result.materials, result.fonts);
     return result.errors.empty() ? pack(cache, archive) : 1;
 }
 

@@ -797,9 +797,18 @@ distance field fonts, and a batched pass draws the UI after tonemapping. Public 
   count in a line's width.
 - UI-1b: The pass. `UiRenderer` in `engine/render` (`Ui.slang`, one pipeline for images and distance fields,
   premultiplied blending, scissor per command), `AssetType::Font` with cooking and import settings
-  (ranges, pixel size, spread), drawn by the player after the scene. Done: GPU golden images of text at three
+  (ranges, pixel size, spread); the player and the Game view draw a session's UI in UI-2a, when a session
+  has one. Done: GPU golden images of text at three
   sizes, a nine-slice panel and clipping, at two target sizes with the same canvas; zero validation errors; a
   steady frame of the pass allocates nothing; benchmark of `render()` for a HUD-sized list.
+  ✅ Done: six golden images (`ui-{text,panel,clip}-{1280x720,1920x1080}.png`); fonts are an asset kind
+  with `FontImportSettings` sidecars, cooked by `cookAssets()` and loaded by `AssetStreamer::loadFont()`; the
+  Asset Browser shows pixel size and spread; `ui/render-hud` 67 µs for 195 quads with submit and wait (budget
+  500 µs). Open: the pass's own code allocates nothing, but NVRHI allocates a constant handful per frame for
+  the two buffer uploads (the test asserts the count does not grow; zero needs persistently mapped buffers);
+  made and verified on an RTX 4070 only before CI (lavapipe and MoltenVK first run there); the Asset
+  Browser has no editor for code point ranges; images registered with `addImage()` must not be streamed
+  textures (their GPU texture is replaced when levels change).
 - UI-2a: Elements and layout. The saved Components of `UiComponents.hpp` reflected as `illusion.Ui*` with
   metadata and icons, the UI System in `GameSession` (layout only when something changed, draw list per
   session), font and image resolution through `RenderAssetCache`, the session's `Localization` from

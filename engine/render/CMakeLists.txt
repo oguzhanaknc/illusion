@@ -17,6 +17,7 @@ add_library(illusion_render STATIC
     src/Shadows.cpp
     src/Swapchain.cpp
     src/TextureStreamingPolicy.cpp
+    src/UiRenderer.cpp
     src/UploadQueue.cpp
     src/VolumetricFogRenderer.cpp
     src/VulkanDispatch.cpp)
@@ -28,7 +29,7 @@ target_include_directories(illusion_render PUBLIC
 illusion_require_dependency(nvrhi)
 illusion_require_dependency(glfw)
 target_link_libraries(illusion_render
-    PUBLIC illusion::core illusion::platform illusion::assets illusion::particles nvrhi
+    PUBLIC illusion::core illusion::platform illusion::assets illusion::particles illusion::ui nvrhi
     PRIVATE nvrhi_vk Vulkan::Headers glfw)
 
 if(UNIX AND NOT APPLE)
@@ -87,7 +88,9 @@ illusion_add_shaders(illusion_render
         iblDownsample shaders/IblDownsample.slang downsampleCube compute
         iblPrefilter shaders/IblPrefilter.slang prefilterSpecular compute
         iblBrdfLut shaders/IblBrdfLut.slang integrateBrdf compute
-        atmosphereCube shaders/AtmosphereCube.slang atmosphereCube compute)
+        atmosphereCube shaders/AtmosphereCube.slang atmosphereCube compute
+        uiVertex shaders/Ui.slang vertexMain vertex
+        uiFragment shaders/Ui.slang fragmentMain fragment)
 
 illusion_configure_target(illusion_render)
 

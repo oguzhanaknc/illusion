@@ -1165,7 +1165,7 @@ struct AssetEntry
 {
     std::string path; ///< Virtual path.
     std::string kind; ///< "Folder", "Scene", "Prefab", "Material", "Model", "Texture", "Environment",
-                      ///< "AudioClip" or "Other".
+                      ///< "AudioClip", "Font" or "Other".
     u64 size = 0;     ///< Size in bytes (0 for folders).
 };
 
@@ -1255,6 +1255,7 @@ struct AssetCookResult
     u32 images = 0;                  ///< Images cooked.
     u32 models = 0;                  ///< glTF models cooked (with the images they use).
     u32 materials = 0;               ///< Material files checked.
+    u32 fonts = 0;                   ///< Fonts cooked (.ttf, .otf).
     std::vector<std::string> errors; ///< One message per file that failed.
 };
 

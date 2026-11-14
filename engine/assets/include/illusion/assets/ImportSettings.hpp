@@ -1,8 +1,9 @@
 #pragma once
 
 /// @file
-/// Import settings sidecars: `<asset>.import.json` files next to a texture or model that change how it is
-/// imported. A sidecar exists only while a setting differs from its default, and holds only those settings:
+/// Import settings sidecars: `<asset>.import.json` files next to a texture, model or font that change how it
+/// is imported. A sidecar exists only while a setting differs from its default, and holds only those
+/// settings:
 ///
 /// ```json
 /// {
@@ -12,17 +13,20 @@
 /// }
 /// ```
 ///
-/// AssetDatabase, AssetStreamer and so cookAssets() read the sidecar of every image and model they import,
-/// and record it as a source of the cooked file: editing, adding or removing a sidecar invalidates the
-/// import cache. Cache entries stay keyed by the settings the caller asked for, so a game that ships only
+/// AssetDatabase, AssetStreamer and so cookAssets() read the sidecar of every image, model and font they
+/// import, and record it as a source of the cooked file: editing, adding or removing a sidecar invalidates
+/// the import cache. Cache entries stay keyed by the settings the caller asked for, so a game that ships only
 /// the cooked cache finds them without the sidecars.
 
+#include <illusion/assets/Font.hpp>
 #include <illusion/assets/TextureCompression.hpp>
 #include <illusion/core/Base.hpp>
 #include <illusion/core/Expected.hpp>
 
+#include <iterator>
 #include <string>
 #include <string_view>
+#include <vector>
 
 namespace illusion
 {
@@ -42,6 +46,7 @@ enum class ImportSettingsKind : u8
     None,    ///< Not imported (scenes, materials, audio, ...): no sidecar.
     Texture, ///< Images (.png, .jpg, .jpeg, .tga, .bmp, .hdr).
     Model,   ///< glTF models (.gltf, .glb).
+    Font,    ///< TrueType and OpenType fonts (.ttf, .otf).
 };
 
 /// How the colour data of an 8-bit image is decoded.
@@ -93,11 +98,30 @@ struct ModelImportSettings
     friend bool operator==(const ModelImportSettings&, const ModelImportSettings&) = default;
 };
 
+/// Settings of a font sidecar ("font" member): how Font::bake() makes its atlas (see FontBakeSettings).
+struct FontImportSettings
+{
+    u32 pixelSize = FontBakeSettings{}.pixelSize; ///< Pixels per em in the atlas, 16 to 128.
+    u32 spread = FontBakeSettings{}.spread;       ///< Distance field spread in atlas pixels, 2 to 16.
+    /// Code points to bake, 1 to kMaxFontImportRanges ranges, written as `[first, last]` pairs.
+    std::vector<CodePointRange> ranges{std::begin(kDefaultFontRanges), std::end(kDefaultFontRanges)};
+
+    /// Compares every setting.
+    friend bool operator==(const FontImportSettings&, const FontImportSettings&) = default;
+};
+
+/// Most code point ranges a font sidecar may list.
+inline constexpr u32 kMaxFontImportRanges = 64;
+
+/// The bake settings of @p settings; its ranges stay borrowed from @p settings.
+[[nodiscard]] FontBakeSettings fontBakeSettings(const FontImportSettings& settings) noexcept;
+
 /// The settings of one sidecar; only the member that matches the asset's kind is used.
 struct ImportSettings
 {
     TextureImportSettings texture{}; ///< Used for ImportSettingsKind::Texture.
     ModelImportSettings model{};     ///< Used for ImportSettingsKind::Model.
+    FontImportSettings font{};       ///< Used for ImportSettingsKind::Font.
 
     /// True if every setting has its default (the asset needs no sidecar).
     [[nodiscard]] bool isDefault() const noexcept { return *this == ImportSettings{}; }
@@ -127,7 +151,7 @@ struct ImportSettingsError
 [[nodiscard]] std::string_view importSettingsOwner(std::string_view sidecarPath) noexcept;
 
 /// Merges the JSON merge patch @p patch (RFC 7386) into @p settings: an object whose members name the
-/// settings of @p kind ("texture" or "model"), with null resetting a member or a whole section to its
+/// settings of @p kind ("texture", "model" or "font"), with null resetting a member or a whole section to its
 /// defaults. A null @p patch resets everything. Unknown members, members of another kind, wrong types and
 /// out-of-range values are rejected and leave @p settings unchanged.
 [[nodiscard]] Expected<void, ImportSettingsError>

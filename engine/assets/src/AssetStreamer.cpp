@@ -28,6 +28,7 @@ enum class Kind : u8
 {
     Image,
     Model,
+    Font,
     File,   // read the file and run a decoder from another module (AssetStreamer::loadFile())
     Cooked, // look up a cache entry the caller makes itself (AssetStreamer::loadCooked())
 };
@@ -50,8 +51,9 @@ struct Request
     std::optional<AssetFile> cached;
     std::vector<std::vector<std::byte>> dependencies; // current contents of cached->dependencies
     std::vector<std::byte> source;
-    std::vector<std::byte> sidecar; // Kind::Image, Kind::Cooked: its import settings sidecar (empty if none)
-    bool sourceRead = false;        // Kind::Cooked: `source` and `sidecar` hold the current files
+    std::vector<std::byte>
+        sidecar; // Kind::Image, Kind::Font, Kind::Cooked: its import settings sidecar (empty if none)
+    bool sourceRead = false; // Kind::Cooked: `source` and `sidecar` hold the current files
 };
 
 struct CacheWrite
@@ -221,8 +223,8 @@ void AssetStreamer::Impl::ioLoop()
             {
                 importModel(std::move(load));
             }
-            else if ((load->kind == Kind::Image || load->kind == Kind::File) && !load->cached &&
-                     load->source.empty())
+            else if ((load->kind == Kind::Image || load->kind == Kind::Font || load->kind == Kind::File) &&
+                     !load->cached && load->source.empty())
             {
                 finish(std::move(load), false);
             }
@@ -256,6 +258,11 @@ void AssetStreamer::Impl::read(Request& request)
     }
     AssetType type = request.kind == Kind::Image ? AssetType::Image : AssetType::Model;
     u32 version = request.kind == Kind::Image ? kImageFormatVersion : kModelFormatVersion;
+    if (request.kind == Kind::Font)
+    {
+        type = AssetType::Font;
+        version = kFontFormatVersion;
+    }
     if (request.kind == Kind::Cooked)
     {
         type = request.cookedType;
@@ -281,7 +288,7 @@ void AssetStreamer::Impl::read(Request& request)
             }
         }
     }
-    if (!request.cached && request.kind == Kind::Image)
+    if (!request.cached && (request.kind == Kind::Image || request.kind == Kind::Font))
     {
         if (const FileError result = files->readFile(request.path, request.source); result != FileError::None)
         {
@@ -344,6 +351,12 @@ void AssetStreamer::Impl::process(Request* raw)
             slot.value = deserializeImage(request->cached->payload);
             ok = slot.value.has_value();
         }
+        else if (request->kind == Kind::Font)
+        {
+            auto& slot = slotOf<Font>(*request);
+            slot.value = deserializeFont(request->cached->payload);
+            ok = slot.value.has_value();
+        }
         else
         {
             auto& slot = slotOf<ModelData>(*request);
@@ -365,7 +378,8 @@ void AssetStreamer::Impl::process(Request* raw)
         queueLoad(std::move(request));
         return;
     }
-    // Image: the stale entry's dependencies are the image and its sidecar, so their bytes are already here.
+    // Image or font: the stale entry's dependencies are the file and its sidecar, so their bytes are already
+    // here.
     if (request->cached && request->source.empty())
     {
         const std::string sidecarPath = importSettingsPath(request->path);
@@ -398,15 +412,26 @@ void AssetStreamer::Impl::process(Request* raw)
         return;
     }
     imports.fetch_add(1, std::memory_order_relaxed);
-    auto& slot = slotOf<Image>(*request);
     AssetFile cooked;
-    slot.value = detail::importImage(request->source, request->sidecar, request->path, request->settings,
-                                     cooked, &slot.error, jobs);
-    if (slot.value)
+    bool ok = false;
+    if (request->kind == Kind::Font)
+    {
+        auto& slot = slotOf<Font>(*request);
+        slot.value =
+            detail::importFont(request->source, request->sidecar, request->path, cooked, &slot.error);
+        ok = slot.value.has_value();
+    }
+    else
+    {
+        auto& slot = slotOf<Image>(*request);
+        slot.value = detail::importImage(request->source, request->sidecar, request->path, request->settings,
+                                         cooked, &slot.error, jobs);
+        ok = slot.value.has_value();
+    }
+    if (ok)
     {
         queueWrite(request->cachePath, cooked);
     }
-    const bool ok = slot.value.has_value();
     finish(std::move(request), ok);
 }
 
@@ -549,6 +574,35 @@ AssetHandle<ModelData> AssetStreamer::loadModel(std::string_view virtualPath)
     return AssetHandle<ModelData>(std::move(slot));
 }
 
+AssetHandle<Font> AssetStreamer::loadFont(std::string_view virtualPath)
+{
+    Impl& impl = *m_impl;
+    const std::optional<std::string> path = VirtualFileSystem::normalizePath(virtualPath);
+    const std::string key =
+        std::format("{}|{}", detail::kFontImporter, path.value_or(std::string(virtualPath)));
+    if (auto existing = impl.requests[key].lock())
+    {
+        return AssetHandle<Font>(std::static_pointer_cast<detail::AssetSlot<Font>>(existing));
+    }
+    auto slot = std::make_shared<detail::AssetSlot<Font>>();
+    slot->id = AssetId::fromPath(virtualPath);
+    impl.requests[key] = slot;
+    if (!path)
+    {
+        slot->state = AssetState::Failed;
+        slot->error = std::format("{}: invalid path", virtualPath);
+        return AssetHandle<Font>(std::move(slot));
+    }
+    auto request = std::make_unique<Request>();
+    request->slot = slot;
+    request->kind = Kind::Font;
+    request->path = *path;
+    request->cachePath = detail::assetCachePath(impl.desc.cacheMount, *path, detail::kFontImporter);
+    ++impl.pendingCount;
+    impl.queueLoad(std::move(request));
+    return AssetHandle<Font>(std::move(slot));
+}
+
 AssetHandle<CookedAsset> AssetStreamer::loadCooked(std::string_view virtualPath, std::string_view importKey,
                                                    AssetType type, u32 version, AssetReloadMode mode)
 {
@@ -668,8 +722,9 @@ bool AssetStreamer::reload(std::string_view virtualPath, AssetReloadMode mode)
         // Keys are "<importer>|<path>"; the importer part (with its settings) is the cache file's import key.
         for (const auto& [key, slot] : m_impl->requests)
         {
-            const bool imported =
-                key.starts_with(detail::kImageImporter) || key.starts_with(detail::kModelImporter);
+            const bool imported = key.starts_with(detail::kImageImporter) ||
+                                  key.starts_with(detail::kModelImporter) ||
+                                  key.starts_with(detail::kFontImporter);
             if (imported && key.size() > path->size() && key.ends_with(*path) &&
                 key[key.size() - path->size() - 1] == '|')
             {

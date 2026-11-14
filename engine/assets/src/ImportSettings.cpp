@@ -20,6 +20,7 @@ constexpr u32 kMaxTextureSize = 16384;
 constexpr f64 kMaxModelScale = 1000.0;
 constexpr f64 kMinLodReduction = 0.1;
 constexpr f64 kMaxLodReduction = 0.9;
+constexpr u64 kMaxCodePoint = 0x10FFFF;
 
 constexpr std::array<std::string_view, 3> kColorSpaceNames{"auto", "srgb", "linear"};
 constexpr std::array<std::string_view, 6> kCompressionNames{"auto", "none", "bc7", "bc5", "bc4", "bc6h"};
@@ -55,7 +56,15 @@ std::optional<usize> nameIndex(const JsonValue& value, const std::array<std::str
 
 std::string_view sectionName(ImportSettingsKind kind) noexcept
 {
-    return kind == ImportSettingsKind::Texture ? "texture" : "model";
+    switch (kind)
+    {
+    case ImportSettingsKind::Texture:
+        return "texture";
+    case ImportSettingsKind::Font:
+        return "font";
+    default:
+        return "model";
+    }
 }
 
 Expected<void, ImportSettingsError> mergeTexture(TextureImportSettings& texture, const JsonValue& patch)
@@ -255,7 +264,108 @@ Expected<void, ImportSettingsError> mergeModel(ModelImportSettings& model, const
     return {};
 }
 
-// Merges the section @p member ("texture" or "model") into @p settings; only the section of @p kind exists.
+// A u32 in [@p min, @p max] from @p value, or std::nullopt.
+std::optional<u32> integerIn(const JsonValue& value, u64 min, u64 max)
+{
+    const std::optional<u64> number = value.isInteger() ? value.asU64() : std::nullopt;
+    if (!number || *number < min || *number > max)
+    {
+        return std::nullopt;
+    }
+    return static_cast<u32>(*number);
+}
+
+// The ranges of @p value: a non-empty array of at most kMaxFontImportRanges `[first, last]` pairs of code
+// points with first <= last.
+Expected<std::vector<CodePointRange>, ImportSettingsError> parseFontRanges(const JsonValue& value,
+                                                                           const std::string& pointer)
+{
+    if (!value.isArray() || value.size() == 0 || value.size() > kMaxFontImportRanges)
+    {
+        return unexpected(fail(pointer, "must be a list of 1 to 64 [first, last] code point pairs"));
+    }
+    std::vector<CodePointRange> ranges;
+    ranges.reserve(value.size());
+    for (usize i = 0; i < value.size(); ++i)
+    {
+        const JsonValue pair = value[i];
+        const std::string at = std::format("{}/{}", pointer, i);
+        if (!pair.isArray() || pair.size() != 2)
+        {
+            return unexpected(fail(at, "must be a [first, last] pair"));
+        }
+        const std::optional<u32> first = integerIn(pair[0], 0, kMaxCodePoint);
+        const std::optional<u32> last = integerIn(pair[1], 0, kMaxCodePoint);
+        if (!first || !last || *first > *last)
+        {
+            return unexpected(fail(at, "must be two code points from 0 to 1114111 with first <= last"));
+        }
+        ranges.push_back(CodePointRange{static_cast<char32_t>(*first), static_cast<char32_t>(*last)});
+    }
+    return ranges;
+}
+
+Expected<void, ImportSettingsError> mergeFont(FontImportSettings& font, const JsonValue& patch)
+{
+    if (patch.isNull())
+    {
+        font = {};
+        return {};
+    }
+    if (!patch.isObject())
+    {
+        return unexpected(fail("/font", "must be an object or null"));
+    }
+    FontImportSettings merged = font;
+    const FontImportSettings defaults{};
+    for (const JsonMember member : patch.members())
+    {
+        const std::string pointer = std::format("/font/{}", member.key);
+        const JsonValue value = member.value;
+        if (member.key == "pixelSize")
+        {
+            const std::optional<u32> size = value.isNull() ? defaults.pixelSize : integerIn(value, 16, 128);
+            if (!size)
+            {
+                return unexpected(fail(pointer, "must be an integer from 16 to 128"));
+            }
+            merged.pixelSize = *size;
+        }
+        else if (member.key == "spread")
+        {
+            const std::optional<u32> spread = value.isNull() ? defaults.spread : integerIn(value, 2, 16);
+            if (!spread)
+            {
+                return unexpected(fail(pointer, "must be an integer from 2 to 16"));
+            }
+            merged.spread = *spread;
+        }
+        else if (member.key == "ranges")
+        {
+            if (value.isNull())
+            {
+                merged.ranges = defaults.ranges;
+                continue;
+            }
+            Expected<std::vector<CodePointRange>, ImportSettingsError> ranges =
+                parseFontRanges(value, pointer);
+            if (!ranges)
+            {
+                return unexpected(std::move(ranges).error());
+            }
+            merged.ranges = std::move(*ranges);
+        }
+        else
+        {
+            return unexpected(fail(pointer, "is not a font setting (pixelSize, spread, ranges)"));
+        }
+    }
+    font = std::move(merged);
+    return {};
+}
+
+// Merges the section @p member ("texture", "model" or "font") into @p settings; only the section of @p kind
+// exists.
 Expected<void, ImportSettingsError> mergeSection(ImportSettings& settings, const JsonMember& member,
                                                  ImportSettingsKind kind)
 {
@@ -263,15 +373,45 @@ Expected<void, ImportSettingsError> mergeSection(ImportSettings& settings, const
     {
         return unexpected(
             fail(std::format("/{}", member.key),
-                 member.key == "texture" || member.key == "model"
+                 member.key == "texture" || member.key == "model" || member.key == "font"
                      ? std::format("does not apply to this asset (it has \"{}\" settings)", sectionName(kind))
                      : std::format("is not a settings section (\"{}\")", sectionName(kind))));
     }
-    return kind == ImportSettingsKind::Texture ? mergeTexture(settings.texture, member.value)
-                                               : mergeModel(settings.model, member.value);
+    switch (kind)
+    {
+    case ImportSettingsKind::Texture:
+        return mergeTexture(settings.texture, member.value);
+    case ImportSettingsKind::Font:
+        return mergeFont(settings.font, member.value);
+    default:
+        return mergeModel(settings.model, member.value);
+    }
+}
+
+// @p ranges as an array of [first, last] pairs.
+JsonMutValue fontRangesValue(JsonMutDocument& document, const std::vector<CodePointRange>& ranges)
+{
+    JsonMutValue list = document.makeArray();
+    for (const CodePointRange& range : ranges)
+    {
+        JsonMutValue pair = document.makeArray();
+        pair.push(document.makeU64(range.first));
+        pair.push(document.makeU64(range.last));
+        list.push(pair);
+    }
+    return list;
 }
 
 } // namespace
+
+FontBakeSettings fontBakeSettings(const FontImportSettings& settings) noexcept
+{
+    FontBakeSettings bake;
+    bake.pixelSize = settings.pixelSize;
+    bake.spread = settings.spread;
+    bake.ranges = settings.ranges;
+    return bake;
+}
 
 ImportSettingsKind importSettingsKindOf(std::string_view path) noexcept
 {
@@ -290,6 +430,10 @@ ImportSettingsKind importSettingsKindOf(std::string_view path) noexcept
     if (endsWithNoCase(path, ".gltf") || endsWithNoCase(path, ".glb"))
     {
         return ImportSettingsKind::Model;
+    }
+    if (endsWithNoCase(path, ".ttf") || endsWithNoCase(path, ".otf"))
+    {
+        return ImportSettingsKind::Font;
     }
     return ImportSettingsKind::None;
 }
@@ -317,7 +461,8 @@ Expected<void, ImportSettingsError> mergeImportSettings(ImportSettings& settings
 {
     if (kind == ImportSettingsKind::None)
     {
-        return unexpected(fail("", "this kind of asset has no import settings (only textures and models)"));
+        return unexpected(
+            fail("", "this kind of asset has no import settings (only textures, models and fonts)"));
     }
     if (patch.isNull())
     {
@@ -367,7 +512,8 @@ Expected<ImportSettings, ImportSettingsError> parseImportSettings(std::string_vi
     }
     if (kind == ImportSettingsKind::None)
     {
-        return unexpected(fail("", "this kind of asset has no import settings (only textures and models)"));
+        return unexpected(
+            fail("", "this kind of asset has no import settings (only textures, models and fonts)"));
     }
     ImportSettings settings;
     for (const JsonMember member : root.members())
@@ -448,6 +594,24 @@ std::string writeImportSettings(const ImportSettings& settings, ImportSettingsKi
         }
         any = true;
     }
+    const FontImportSettings defaultFont;
+    if (kind == ImportSettingsKind::Font && settings.font != defaultFont)
+    {
+        JsonMutValue font = root.addObject("font");
+        if (settings.font.pixelSize != defaultFont.pixelSize)
+        {
+            font.add("pixelSize", document.makeU64(settings.font.pixelSize));
+        }
+        if (settings.font.spread != defaultFont.spread)
+        {
+            font.add("spread", document.makeU64(settings.font.spread));
+        }
+        if (settings.font.ranges != defaultFont.ranges)
+        {
+            font.add("ranges", fontRangesValue(document, settings.font.ranges));
+        }
+        any = true;
+    }
     if (!any)
     {
         return {};
@@ -471,6 +635,21 @@ std::string importSettingsValue(const ImportSettings& settings, ImportSettingsKi
                            settings.texture.generateMips, settings.texture.maxSize,
                            kCompressionNames[static_cast<usize>(settings.texture.compression)],
                            kQualityNames[static_cast<usize>(settings.texture.quality)]);
+    }
+    if (kind == ImportSettingsKind::Font)
+    {
+        JsonMutDocument document;
+        JsonMutValue root = document.makeObject();
+        JsonMutValue font = root.addObject("font");
+        font.add("pixelSize", document.makeU64(settings.font.pixelSize));
+        font.add("spread", document.makeU64(settings.font.spread));
+        font.add("ranges", fontRangesValue(document, settings.font.ranges));
+        document.setRoot(root);
+        std::string text;
+        if (document.write(text, JsonWriteOptions{.pretty = false}))
+        {
+            return text;
+        }
     }
     if (kind == ImportSettingsKind::Model)
     {

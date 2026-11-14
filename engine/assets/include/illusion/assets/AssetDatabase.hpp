@@ -6,6 +6,7 @@
 /// read the cooked file as long as those files are unchanged.
 
 #include <illusion/assets/AssetFormat.hpp>
+#include <illusion/assets/Font.hpp>
 #include <illusion/assets/Image.hpp>
 #include <illusion/assets/Model.hpp>
 #include <illusion/assets/TextureCompression.hpp>
@@ -56,6 +57,10 @@ public:
     /// sidecar, if it has one.
     [[nodiscard]] std::optional<ModelData> loadModel(std::string_view virtualPath,
                                                      std::string* error = nullptr);
+
+    /// Loads the font at @p virtualPath (.ttf or .otf), baked with the settings of its import settings
+    /// sidecar, if it has one.
+    [[nodiscard]] std::optional<Font> loadFont(std::string_view virtualPath, std::string* error = nullptr);
 
     /// Virtual path of the cached file for an import of @p virtualPath with @p importKey (importer name,
     /// version and settings). Exposed for tools and tests.

@@ -820,6 +820,38 @@ HDR file instead of the built-in procedural sky, and `--taa` turns on temporal a
 ./build/linux-clang/samples/Debug/illusion_gltf_viewer --frames 60 --screenshot scene.png
 ```
 
+## UI pass
+
+Headers: `<illusion/ui/UiDrawList.hpp>`, `<illusion/render/UiRenderer.hpp>`
+
+`UiDrawList` records rectangles, images, nine-slice panels and text in canvas units as batched quads.
+`UiRenderer::render()` draws the list over a colour target after `SceneRenderer::render()`, in one pipeline
+for colour images and signed distance field text ([fonts](assets.md#fonts)). Recording does not allocate; a
+primitive that does not fit is dropped and counted (`droppedPrimitives()`).
+
+```cpp
+auto ui = illusion::UiRenderer::create(device, resources);
+const illusion::UiTextureId atlas = ui->addFont(font);
+
+illusion::UiDrawList list;
+// each frame, after the scene:
+sceneRenderer->render(commands, target, world, view);
+list.begin(illusion::canvasMetrics({}, targetSize));
+list.rect({{24.0f, 24.0f}, {344.0f, 88.0f}}, {0.0f, 0.0f, 0.0f, 0.6f});
+illusion::UiTextStyle style;
+style.size = 32.0f;
+list.text({&font, atlas}, {40.0f, 36.0f}, "Score 1200", style);
+ui->render(commands, target, list.data());
+```
+
+- `addFont()` uploads a font's atlas and `addImage()` registers a Texture of the `RenderResources`; both
+  return a `UiTextureId` that the list refers to. `remove()` forgets it.
+- `pushClip()`, `setTransform()` and `measureText()` clip, transform and measure; `canvasMetrics()` maps
+  canvas units to the target's pixels.
+
+This is the low-level API. Elements, layout, widgets and `UiService` (saved UI) come in later work packages
+([ADR 0057](https://github.com/oguzhanaknc/illusion/blob/main/docs/adr/0057-game-ui.md)).
+
 ## Coordinate conventions
 
 The renderer follows Direct3D-style clip space: **y points up** and depth goes from 0 to 1. NVRHI flips

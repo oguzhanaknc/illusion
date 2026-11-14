@@ -30,6 +30,11 @@
           "minimum": 0,
           "maximum": 4294967295
         },
+        "fonts": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 4294967295
+        },
         "errors": {
           "type": "array",
           "items": {
@@ -65,7 +70,7 @@
           "additionalProperties": false
         }
       },
-      "required": ["images", "models", "materials", "errors", "_editor"],
+      "required": ["images", "models", "materials", "fonts", "errors", "_editor"],
       "additionalProperties": false
     }
   },

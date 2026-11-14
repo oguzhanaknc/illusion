@@ -21,11 +21,13 @@ struct CookResult
     u32 images = 0;                  ///< Images cooked (default import settings).
     u32 models = 0;                  ///< glTF models cooked (with the images they use).
     u32 materials = 0;               ///< Material files checked (their textures are cooked).
+    u32 fonts = 0;                   ///< Fonts cooked (.ttf, .otf).
     std::vector<std::string> errors; ///< One message per file that failed.
 };
 
-/// Imports every image (.png, .jpg, .jpeg, .tga, .bmp, .hdr) and glTF model (.gltf, .glb) under the
-/// virtual directory @p directory (for example "game:/") into the import cache on @p cacheMount.
+/// Imports every image (.png, .jpg, .jpeg, .tga, .bmp, .hdr), glTF model (.gltf, .glb) and font (.ttf,
+/// .otf) under the virtual directory @p directory (for example "game:/") into the import cache on
+/// @p cacheMount.
 /// Standalone images are cooked with the default ImageImportSettings (uncompressed, unless their sidecar
 /// names a compression); other settings are imported on first use. Material files (.material) are parsed,
 /// and their textures cooked with the settings and compression the renderer uses (see

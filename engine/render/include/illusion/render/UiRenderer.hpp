@@ -51,8 +51,8 @@ public:
     void remove(UiTextureId texture);
 
     /// Records the draw of @p data over @p target without clearing it. Commands with an unknown texture are
-    /// skipped. Returns false for a missing or incompatible target or data beyond the capacities. Steady
-    /// frames do not allocate.
+    /// skipped. Returns false for a missing or incompatible target or data beyond the capacities. The pass
+    /// allocates nothing in a steady frame; NVRHI allocates a small, constant amount for the buffer uploads.
     bool render(nvrhi::ICommandList* commands, nvrhi::ITexture* target, const UiDrawData& data);
 
 private:
