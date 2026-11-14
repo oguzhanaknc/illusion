@@ -5,8 +5,8 @@
 #   - the module SDK: the imported targets a module links (illusion::core and the header-only
 #     illusion::<name>_api targets), illusion_add_module() and illusion_project_modules();
 #   - the component `player` (find_package(illusion CONFIG COMPONENTS player)): illusion::player with every
-#     engine and third-party static library it links, the imported executable illusion::pack and
-#     illusion_add_game().
+#     engine and third-party static library it links, the imported executables illusion::pack and
+#     illusion::icon, illusion_add_game() and illusion_package_game().
 #
 # Next to it, <build>/sdk/<Config>/illusion-sdk.json describes the toolchain of that configuration, which the
 # editor passes to CMake when it configures a project's modules, so they get the build key of the editor, and
@@ -210,9 +210,11 @@ function(illusion_write_sdk)
     if(TARGET illusion_player)
         set(player ON)
         set(roots illusion_player)
-        if(TARGET illusion_pack)
-            list(APPEND roots illusion_pack)
-        endif()
+        foreach(tool illusion_pack illusion_icon)
+            if(TARGET ${tool})
+                list(APPEND roots ${tool})
+            endif()
+        endforeach()
         _illusion_sdk_link_closure(player_targets imported ${roots})
         list(REMOVE_ITEM player_targets ${module_targets})
         list(REMOVE_ITEM imported Threads::Threads)
@@ -230,7 +232,8 @@ function(illusion_write_sdk)
         _illusion_sdk_wrap("${sdk}" "${package_dir}" ${wrappers})
         export(EXPORT illusionPlayerTargets NAMESPACE illusion:: FILE "${sdk}/illusionPlayerTargets.cmake")
         install(EXPORT illusionPlayerTargets NAMESPACE illusion:: DESTINATION "${package_dir}" COMPONENT player)
-        install(FILES "${PROJECT_SOURCE_DIR}/cmake/IllusionGame.cmake" "${PROJECT_SOURCE_DIR}/cmake/PackGameData.cmake"
+        install(FILES "${PROJECT_SOURCE_DIR}/cmake/IllusionGame.cmake" "${PROJECT_SOURCE_DIR}/cmake/IllusionGamePackage.cmake"
+            "${PROJECT_SOURCE_DIR}/cmake/PackGameData.cmake"
             DESTINATION "${package_dir}" COMPONENT player)
         list(APPEND header_targets ${player_targets})
     endif()

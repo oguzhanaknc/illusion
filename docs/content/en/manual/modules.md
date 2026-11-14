@@ -307,7 +307,8 @@ find_package(illusion REQUIRED CONFIG COMPONENTS player)
 ```
 
 It imports `illusion::player` (the player library with every engine and third-party static library it links),
-the executable `illusion::pack` and the function `illusion_add_game()`. A package without the component (a
+the executables `illusion::pack` and `illusion::icon` (which makes the icon files of each platform) and the
+functions `illusion_add_game()` and `illusion_package_game()`. A package without the component (a
 profiling build, or a configuration built without the player) reports it as not found. The package holds no
 editor target, so a game cannot link editor code.
 
@@ -318,10 +319,19 @@ editor target, so a game cannot link editor code.
 | --- | --- |
 | `MODULES <targets...>` | Static modules made by `illusion_add_module(... STATIC)`. |
 | `NAME`, `ORGANIZATION` | Required. The window title and the user data directory. |
-| `VERSION` | Written to the log. |
+| `VERSION` | Written to the log, to the Windows version resource and to the macOS bundle. |
 | `STARTUP_SCENE` | Required. The virtual path of the first scene, such as `assets:/scenes/main.scene`. |
 | `DATA_DIRECTORY` | Where the player looks for its archives, relative to the executable (default `data`). |
 | `PROJECT <directory>` | Packs `<directory>/assets` and `<directory>/settings` into `assets.illpak`, `settings.illpak` and `cache.illpak` next to the executable with `illusion::pack`. |
+| `ICON <png>` | Square PNG of at least 256 pixels that `illusion::icon` turns into the icon of the platform (an `.ico`, an `.icns` or a 512-pixel PNG). Without it the game gets the engine's icon. |
+| `IDENTIFIER` | Reverse-DNS bundle identifier on macOS (default `com.<organization>.<name>`). |
+| `COPYRIGHT` | Copyright line of the Windows version resource and of the macOS `Info.plist`. |
+
+On Windows the target gets an icon and a version resource, on macOS it becomes an application bundle with the
+Vulkan loader and MoltenVK inside, and on Linux it gets a PNG and a `.desktop` file next to the executable; the
+[export guide](editor/export.md#icon-identifier-and-copyright) lists them. `illusion_package_game(<target> DATA
+<archives...>)` then installs the game and configures CPack for the packages that
+[`export.build`](editor/export.md#packages) writes; call it once, after the target's `OUTPUT_NAME` is final.
 
 `<build>/sdk/<Config>/illusion-sdk.json` is version 2: it adds `"player": true` when the package has the
 component for that configuration, and `"player": false` otherwise. The editor reads it before it exports a game.

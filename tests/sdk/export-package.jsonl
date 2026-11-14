@@ -1,0 +1,2 @@
+{"comment": "Exports the open project as a game with a package (ADR 0055; editor/tests/CMakeLists.txt sets output, configuration, package, codesignIdentity and signed; Windows signs through ILLUSION_SIGN_COMMAND). Replayed after a project is open."}
+{"call": "export.build", "params": {"output": "${output}", "configuration": "${configuration}", "package": "${package}", "codesignIdentity": "${codesignIdentity}"}, "expect": {"result": {"succeeded": true, "stage": "done", "errors": 0, "signedBinaries": "${signed}", "package": {"$regex": ".+"}}}}

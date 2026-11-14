@@ -6,8 +6,8 @@
     "productName": "Showcase",
     "organization": "illusion",
     "identifier": "dev.illusion.showcase",
-    "copyright": "",
-    "icon": "",
+    "copyright": "Copyright 2026 the illusion contributors",
+    "icon": "assets:/icons/showcase.png",
     "exclude": ["unused/**"]
   }
 }

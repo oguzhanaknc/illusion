@@ -1921,13 +1921,17 @@ struct ExportBuildParams
     /// SDK configuration to build, e.g. "Release" (default: "Release" when the SDK has it, else the
     /// editor's).
     std::optional<std::string> configuration{};
-    std::optional<std::string>
-        package{};               ///< "none" (default); "archive" and "installer" are not supported yet.
-    std::optional<bool> clean{}; ///< Discard the export's build tree first (default false).
+    /// "none" (default), "archive" (ZIP; .tar.gz on Linux) or "installer" (NSIS on Windows, DMG on macOS).
+    std::optional<std::string> package{};
+    std::optional<bool> clean{};               ///< Discard the export's build tree first (default false).
     std::optional<std::string> linuxRuntime{}; ///< Steam Runtime to check against; not supported yet ("").
-    std::optional<std::string> signCommand{};  ///< Windows signing command line; not supported yet ("").
-    std::optional<std::string> codesignIdentity{}; ///< macOS codesign identity; not supported yet ("").
-    std::optional<std::string> notaryProfile{};    ///< macOS notarytool profile; not supported yet ("").
+    /// Windows: command line run on the executable and the installer, `{file}` replaced by the path
+    /// (default: env ILLUSION_SIGN_COMMAND; "" signs nothing).
+    std::optional<std::string> signCommand{};
+    /// macOS: codesign identity, "-" for ad hoc (default: env ILLUSION_CODESIGN_IDENTITY; "" signs nothing).
+    std::optional<std::string> codesignIdentity{};
+    /// macOS: notarytool keychain profile for the DMG (default: env ILLUSION_NOTARY_PROFILE; "" skips it).
+    std::optional<std::string> notaryProfile{};
 };
 
 /// Result of `export.build`.
@@ -1942,7 +1946,7 @@ struct ExportBuildResult
     std::string package{};       ///< The archive or installer ("" for none).
     std::vector<ExportedFile> files{};           ///< Every file of the game's directory, sorted by path.
     u64 totalBytes = 0;                          ///< Sum of the files' sizes.
-    bool signedBinaries = false;                 ///< The executable was signed.
+    bool signedBinaries = false;                 ///< The executable (and the installer) were signed.
     bool notarized = false;                      ///< macOS: the package was notarized.
     std::vector<std::string> skipped{};          ///< Asset files left out by the exclude patterns, sorted.
     u32 errors = 0;                              ///< Diagnostics with severity "error".

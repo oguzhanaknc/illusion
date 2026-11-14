@@ -708,11 +708,13 @@ compatible). Design in ADR 0055; public API in `illusion/player/Player.hpp` and
   Open: image sources still ship in `assets.illpak` next to their cooked form (the runtime loads some
   images, such as environment maps, with settings the cook does not cover; only glTF sources are dropped);
   the allocation test of a steady player frame needs a player that tests can drive without a window.
-- M8-4: Packaging and signing. Icon and version resources (Windows `.ico`/`.rc`, macOS `.icns` and
+- M8-4: ✅ Packaging and signing. Icon and version resources (Windows `.ico`/`.rc`, macOS `.icns` and
   `Info.plist`, Linux PNG and `.desktop`), the macOS bundle with MoltenVK, CPack packages (ZIP, NSIS, DMG,
   `.tar.gz`), the signing hooks and notarization. Done: per-platform CTests check the layout and that the
   packaged game starts; the Windows hook is tested with a recording command, macOS with an ad hoc identity
-  (`codesign --verify`); a missing tool fails with its name.
+  (`codesign --verify`); a missing tool fails with its name. Open: signing with a real certificate and
+  notarization are a manual check before a release (CI has no certificate); a failed Package stage keeps
+  the finished game directory.
 - M8-5: Export window. The editor's Export window (settings, target, progress, diagnostics with source
   links, "Show in folder"), string table entries, UiDriver tests and a golden image.
 - M8-6: Steamworks (own ADR): optional module built only when the user supplies the SDK path;

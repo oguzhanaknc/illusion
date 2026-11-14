@@ -103,6 +103,8 @@ plugins:
             Project Modules: Proje Modülleri
             Exporting a game: Oyunu Export Etmek
             Preferences: Tercihler
+            Guides: Rehberler
+            Releasing a game: Oyunu Yayınlamak
             Tutorials: Eğitimler
             First Agent Session: İlk Ajan Oturumu
             Tetris with an Agent: Ajanla Tetris
@@ -166,6 +168,8 @@ nav:
           - AI Agents: manual/editor/ai-agents.md
           - Showcase Project: manual/editor/showcase.md
           - Tech Demo Project: manual/editor/techdemo.md
+  - Guides:
+      - Releasing a game: guides/release.md
   - Tutorials:
       - First Agent Session: tutorials/first-agent-session.md
       - Tetris with an Agent: tutorials/tetris-with-an-agent.md

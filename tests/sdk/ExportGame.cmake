@@ -8,6 +8,19 @@
 #   -DMODE=symbols -DGAME=<executable>
 #       fails if the executable names Dear ImGui, ImPlot or the editor's namespace (ADR 0030): in symbols,
 #       RTTI names or strings, mangled the MSVC or the Itanium way.
+#   -DMODE=windows-package -DOUTPUT=<directory> -DNAME=<product> -DEXE=<executable name> -DVERSION=<version>
+#         -DORGANIZATION=<organization> -DKIND=archive|installer -DLOG=<sign log> -DRESOURCES=<ps1 script>
+#       checks a Windows export made with tests/sdk/RecordSign.cmake as its sign command: the executable was
+#       signed once in the build tree before the install (and the installer after packaging), the installed and
+#       packaged executables are the signed ones, the ZIP holds <NAME>/<EXE>.exe and <NAME>/data/*.illpak, and
+#       the executable has an icon and a version resource.
+#   -DMODE=macos-package -DOUTPUT=<directory> -DNAME=<product> -DVERSION=<version>
+#       checks a macOS export with the ad hoc identity and package "installer": the bundle layout (with the Vulkan
+#       loader, MoltenVK and the .icns that CFBundleIconFile names), plutil -lint on Info.plist, codesign --verify
+#       --deep --strict on the app, and that the DMG mounts and holds the app.
+#   -DMODE=linux-package -DOUTPUT=<directory> -DNAME=<product> -DEXE=<executable name> -DVERSION=<version>
+#       checks the .tar.gz of a Linux export: <NAME>/<EXE>, its .png and .desktop (desktop-file-validate when it
+#       is installed) and <NAME>/data/*.illpak.
 
 cmake_minimum_required(VERSION 3.28)
 
@@ -17,6 +30,68 @@ function(require)
             message(FATAL_ERROR "ExportGame.cmake: ${variable} is not set")
         endif()
     endforeach()
+endfunction()
+
+# Runs a command and fails with the command line and its output when it fails.
+function(run_checked what)
+    execute_process(COMMAND ${ARGN} RESULT_VARIABLE result OUTPUT_VARIABLE output ERROR_VARIABLE output
+        TIMEOUT 600)
+    if(NOT result EQUAL 0)
+        list(JOIN ARGN " " command)
+        message(FATAL_ERROR "${what} failed (${result}): ${command}\n${output}")
+    endif()
+endfunction()
+
+function(require_files)
+    foreach(file IN LISTS ARGN)
+        if(NOT EXISTS "${file}")
+            message(FATAL_ERROR "${file} does not exist")
+        endif()
+    endforeach()
+endfunction()
+
+# How many times the marker of RecordSign.cmake ends @p file (0, 1 or 2).
+function(signatures out file)
+    set(marker "ILLUSION-TEST-SIGNATURE")
+    string(LENGTH "${marker}" length)
+    file(SIZE "${file}" size)
+    set(count 0)
+    foreach(times 1 2)
+        math(EXPR offset "${size} - ${length} * ${times}")
+        if(offset LESS 0)
+            break()
+        endif()
+        file(READ "${file}" tail OFFSET ${offset} LIMIT ${length})
+        if(NOT tail STREQUAL marker)
+            break()
+        endif()
+        set(count ${times})
+    endforeach()
+    set(${out} ${count} PARENT_SCOPE)
+endfunction()
+
+function(require_signed_once file)
+    signatures(count "${file}")
+    if(NOT count EQUAL 1)
+        message(FATAL_ERROR "${file} carries ${count} signatures of the recording sign command instead of 1")
+    endif()
+endfunction()
+
+# Extracts @p archive into a fresh @p directory.
+function(extract archive directory)
+    file(REMOVE_RECURSE "${directory}")
+    file(MAKE_DIRECTORY "${directory}")
+    run_checked("extracting ${archive}" "${CMAKE_COMMAND}" -E chdir "${directory}" "${CMAKE_COMMAND}" -E tar xf
+        "${archive}")
+endfunction()
+
+function(require_top_level directory expected)
+    file(GLOB entries RELATIVE "${directory}" "${directory}/*")
+    list(SORT entries)
+    list(SORT expected)
+    if(NOT entries STREQUAL expected)
+        message(FATAL_ERROR "${directory} holds '${entries}' instead of '${expected}'")
+    endif()
 endfunction()
 
 require(MODE)
@@ -63,6 +138,108 @@ elseif(MODE STREQUAL "symbols")
         list(SUBLIST found 0 20 found)
         list(JOIN found "\n  " found)
         message(FATAL_ERROR "${GAME} holds editor code (ADR 0030):\n  ${found}")
+    endif()
+elseif(MODE STREQUAL "windows-package")
+    require(OUTPUT NAME EXE VERSION ORGANIZATION KIND LOG RESOURCES)
+    set(game "${OUTPUT}/${NAME}")
+    set(executable "${game}/${EXE}.exe")
+    require_files("${executable}" "${game}/data/assets.illpak" "${game}/data/settings.illpak"
+        "${game}/data/cache.illpak" "${LOG}")
+    file(STRINGS "${LOG}" signed)
+    list(LENGTH signed count)
+    list(GET signed 0 first)
+    if(NOT first MATCHES "/build/game/${EXE}\\.exe$")
+        message(FATAL_ERROR "the first signed file is ${first}, not the executable in the build tree")
+    endif()
+    require_signed_once("${executable}")
+    if(KIND STREQUAL "archive")
+        if(NOT count EQUAL 1)
+            message(FATAL_ERROR "the sign command ran ${count} times instead of once: ${signed}")
+        endif()
+        set(package "${OUTPUT}/${NAME}-${VERSION}-windows.zip")
+        require_files("${package}")
+        set(extracted "${OUTPUT}/zip-contents")
+        extract("${package}" "${extracted}")
+        require_top_level("${extracted}" "${NAME}")
+        require_top_level("${extracted}/${NAME}" "${EXE}.exe;data")
+        require_top_level("${extracted}/${NAME}/data" "assets.illpak;cache.illpak;settings.illpak")
+        require_signed_once("${extracted}/${NAME}/${EXE}.exe")
+    else()
+        set(package "${OUTPUT}/${NAME}-${VERSION}-windows-setup.exe")
+        require_files("${package}")
+        list(GET signed -1 last)
+        if(NOT count EQUAL 2 OR NOT last STREQUAL package)
+            message(FATAL_ERROR "the sign command did not sign the executable, then ${package}: ${signed}")
+        endif()
+        require_signed_once("${package}")
+    endif()
+    run_checked("checking the resources of ${executable}" powershell -NoProfile -ExecutionPolicy Bypass
+        -File "${RESOURCES}" -Executable "${executable}" -Product "${NAME}" -Version "${VERSION}"
+        -Company "${ORGANIZATION}")
+elseif(MODE STREQUAL "macos-package")
+    require(OUTPUT NAME VERSION)
+    set(app "${OUTPUT}/${NAME}.app")
+    set(contents "${app}/Contents")
+    require_files("${contents}/MacOS/${NAME}" "${contents}/Info.plist"
+        "${contents}/Resources/data/assets.illpak" "${contents}/Resources/data/settings.illpak"
+        "${contents}/Resources/data/cache.illpak" "${contents}/Frameworks/libvulkan.1.dylib"
+        "${contents}/Frameworks/libMoltenVK.dylib" "${contents}/Resources/vulkan/icd.d/MoltenVK_icd.json")
+    run_checked("checking Info.plist" plutil -lint "${contents}/Info.plist")
+    file(READ "${contents}/Info.plist" plist)
+    foreach(key CFBundleIdentifier CFBundleExecutable CFBundleIconFile NSHighResolutionCapable
+            LSMinimumSystemVersion NSHumanReadableCopyright)
+        if(NOT plist MATCHES "<key>${key}</key>")
+            message(FATAL_ERROR "Info.plist has no ${key}:\n${plist}")
+        endif()
+    endforeach()
+    if(NOT plist MATCHES "<key>CFBundleExecutable</key>[ \t\r\n]*<string>([^<]*)</string>"
+            OR NOT CMAKE_MATCH_1 STREQUAL NAME)
+        message(FATAL_ERROR "the CFBundleExecutable of Info.plist is not ${NAME}:\n${plist}")
+    endif()
+    # The icon is named after the game's CMake target; Info.plist names it, the check must not guess.
+    if(NOT plist MATCHES "<key>CFBundleIconFile</key>[ \t\r\n]*<string>([^<]+)</string>")
+        message(FATAL_ERROR "the CFBundleIconFile of Info.plist names no file:\n${plist}")
+    endif()
+    set(icon "${CMAKE_MATCH_1}")
+    if(NOT icon MATCHES "\\.icns$")
+        string(APPEND icon ".icns")
+    endif()
+    require_files("${contents}/Resources/${icon}")
+    run_checked("verifying the signature of ${app}" codesign --verify --deep --strict --verbose=2 "${app}")
+    set(dmg "${OUTPUT}/${NAME}-${VERSION}-macos.dmg")
+    require_files("${dmg}")
+    set(mount "${OUTPUT}/dmg-mount")
+    file(REMOVE_RECURSE "${mount}")
+    file(MAKE_DIRECTORY "${mount}")
+    run_checked("mounting ${dmg}" hdiutil attach -nobrowse -readonly -mountpoint "${mount}" "${dmg}")
+    set(found FALSE)
+    if(EXISTS "${mount}/${NAME}.app/Contents/MacOS/${NAME}")
+        set(found TRUE)
+    endif()
+    run_checked("unmounting ${dmg}" hdiutil detach "${mount}")
+    if(NOT found)
+        message(FATAL_ERROR "${dmg} does not hold ${NAME}.app")
+    endif()
+elseif(MODE STREQUAL "linux-package")
+    require(OUTPUT NAME EXE VERSION)
+    set(package "${OUTPUT}/${NAME}-${VERSION}-linux.tar.gz")
+    require_files("${package}")
+    set(extracted "${OUTPUT}/tar-contents")
+    extract("${package}" "${extracted}")
+    require_top_level("${extracted}" "${NAME}")
+    require_top_level("${extracted}/${NAME}" "${EXE};${EXE}.desktop;${EXE}.png;data")
+    require_top_level("${extracted}/${NAME}/data" "assets.illpak;cache.illpak;settings.illpak")
+    find_program(desktop_file_validate desktop-file-validate)
+    if(desktop_file_validate)
+        run_checked("validating ${EXE}.desktop" "${desktop_file_validate}" "${extracted}/${NAME}/${EXE}.desktop")
+    else()
+        file(READ "${extracted}/${NAME}/${EXE}.desktop" desktop)
+        foreach(line "[Desktop Entry]" "Type=Application" "Name=${NAME}" "Exec=${EXE}" "Icon=${EXE}")
+            string(FIND "${desktop}" "${line}\n" at)
+            if(at EQUAL -1)
+                message(FATAL_ERROR "${EXE}.desktop has no line '${line}':\n${desktop}")
+            endif()
+        endforeach()
     endif()
 else()
     message(FATAL_ERROR "ExportGame.cmake: unknown MODE '${MODE}'")

@@ -31,8 +31,22 @@ An export targets the platform and architecture of the machine that builds it; t
 | `icon` | Square PNG asset of at least 256 pixels. |
 | `exclude` | Files under `assets:/` that are not shipped. |
 
-The version of the game is the project's `version`. `identifier`, `copyright` and `icon` are checked and kept in
-the settings, but the executable does not use them yet; they take effect with the packages of M8-4.
+The version of the game is the project's `version`. The next section says what each platform makes of
+`identifier`, `copyright` and `icon`.
+
+### Icon, identifier and copyright
+
+The icon is a square PNG of at least 256 pixels under `assets:/`; without one the game gets the engine's icon.
+The export makes every size a platform needs from it with `illusion::icon`.
+
+| Platform | Icon | `identifier` | `copyright` |
+| --- | --- | --- | --- |
+| Windows | An `.ico` with every size from 16 to 256 pixels, embedded in the executable and used by the installer. | Not used. | `LegalCopyright` of the executable's version resource, next to the product name, the version and the organization (`CompanyName`). |
+| macOS | An `.icns` in the bundle's `Contents/Resources`. | The bundle identifier in `Info.plist`. Empty: `com.<organization>.<name>`, made of the organization and the product name. | `NSHumanReadableCopyright`. |
+| Linux | `<executable>.png` (512 pixels) next to the executable. | Not used. | Not used. |
+
+The copyright line is also the second line of the license text of the Windows installer. The export checks the settings before it writes anything: an icon that is not a PNG, not square or smaller than 256
+pixels, an `identifier` that is not reverse-DNS and a `copyright` of more than one line each fail the command.
 
 ### Exclude patterns
 
@@ -66,6 +80,11 @@ illusion_ctl --project ~/games/tetris call export.build '{"output": "/tmp/tetris
 | `output` | Directory that receives the game. Default `.illusion/export/<platform>/out` in the project. It must not lie inside the project's `assets`, `settings` or `modules` directories. |
 | `configuration` | Configuration of the SDK to build with. Default `Release`, else the editor's own. The modules compile with its flags. |
 | `clean` | Discards the export's build tree and configures again. |
+| `package` | `none` (default), `archive` or `installer`; see [Packages](#packages). |
+| `signCommand` | Windows: the command line that signs a file; see [Signing](#signing). |
+| `codesignIdentity` | macOS: the `codesign` identity. |
+| `notaryProfile` | macOS: the `notarytool` keychain profile that notarizes the DMG. |
+| `linuxRuntime` | Reserved for the Steam Runtime check; leave it empty. |
 
 `export.build` is [asynchronous](automation.md): it reports its stage as progress and returns when the export
 is done. Only one module build or export runs at a time; a second one fails with a retryable `Busy`.
@@ -78,8 +97,10 @@ is done. Only one module build or export runs at a time; a second one fails with
 3. **cook**: imports every asset under `assets:/` into a fresh cache; a stale cache cannot ship.
 4. **pack**: writes `assets.illpak`, `settings.illpak` and `cache.illpak`.
 5. **configure** and **build**: `cmake` configures and builds the executable from the modules and the SDK's
-   player.
-6. **install**: installs into a staging directory and moves it to `<output>/<Product>` only when complete.
+   player, then signs what it built (see [Signing](#signing)).
+6. **install**: installs into a staging directory and moves it to `<output>/<Product>` only when complete
+   (`<output>/<Product>.app` on macOS).
+7. **package**: with `package` set, CPack writes the package; the installer is signed and, on macOS, notarized.
 
 ## Output
 
@@ -93,15 +114,121 @@ is done. Only one module build or export runs at a time; a second one fails with
       cache.illpak        the cooked assets
 ```
 
+On Linux the icon and the desktop file sit next to the executable (see [Linux](#linux)); on macOS the game is a
+bundle (see [The macOS bundle](#the-macos-bundle)).
+
 glTF sources (`.gltf`, `.glb` and the buffers they name) are dropped because the cache replaces them; image
 sources stay in `assets.illpak`. The executable contains no editor code.
+
+## Packages
+
+`package` makes one file for distribution next to the game's directory, in `output`. The file is named
+`<Product>-<version>-<platform><suffix>`; the version is the project's, with characters that are not letters,
+digits, `.`, `-`, `+` or `_` written as `_`.
+
+| `package` | Windows | macOS | Linux |
+| --- | --- | --- | --- |
+| `none` | Only the game's directory. | Only the bundle. | Only the game's directory. |
+| `archive` | `Showcase-1.0.0-windows.zip` with the `Showcase` directory. | `Showcase-1.0.0-macos.zip` with `Showcase.app`. | `Showcase-1.0.0-linux.tar.gz` with the `Showcase` directory. |
+| `installer` | `Showcase-1.0.0-windows-setup.exe`, an NSIS installer. | `Showcase-1.0.0-macos.dmg` with the bundle and a link to `/Applications`. | The same `.tar.gz` as `archive`. |
+
+The Windows installer installs into `Program Files\<Product>`, adds a Start menu shortcut, an uninstaller and the
+game's icon, and removes an older installation first. The result's `package` is the full path of the file; a
+failed export leaves none.
+
+The packages are made by CPack from the SDK's CMake, which must sit next to its `cpack`. The installers need one
+more tool, and a missing tool fails the validation with an error that names it:
+
+- Windows: `makensis` from [NSIS](https://nsis.sourceforge.io), on `PATH` or in `Program Files\NSIS`;
+- macOS: `hdiutil`, which every macOS has.
+
+## Signing
+
+Signing is optional and never changes what the game does. A setting that is not given in the params comes from
+an environment variable of the editor's process, so a build machine keeps its secrets out of commands and
+projects; an empty string in the params turns that setting off for this export. Secrets are never written to
+project files, and the output shows only the name of the program that `signCommand` runs, never its arguments,
+which may hold a password. A setting of the other platform is an error: `signCommand` on macOS and Linux,
+`codesignIdentity` and `notaryProfile` on Windows and Linux.
+
+Signing happens before the install, on the files the build made. The game's directory and every package are
+copied from those files, so they hold the same signed bytes, and the report's `signedBinaries` is true.
+
+### Windows
+
+`signCommand` (default: the environment variable `ILLUSION_SIGN_COMMAND`) is a command line with a program and
+the placeholder `{file}`. Double quotes group a part that contains spaces; backslashes need no escaping. The
+export runs it on the executable and, for `package: "installer"`, on the setup program:
+
+```json
+{"call": "export.build", "params": {"output": "C:/Games/out", "package": "installer", "signCommand": "signtool sign /fd SHA256 /tr http://timestamp.digicert.com /td SHA256 /a {file}"}}
+```
+
+The program must be on `PATH`. A command without a program and `{file}` fails the validation.
+
+### macOS
+
+- `codesignIdentity` (default: `ILLUSION_CODESIGN_IDENTITY`) is the identity that `codesign` uses, for example
+  `Developer ID Application: Example Ltd (TEAMID)`. The export signs every library in `Contents/Frameworks`, then
+  the bundle, with the hardened runtime and a timestamp. A bundle that you ship needs a Developer ID identity.
+- The identity `-` signs ad hoc: no certificate and no timestamp, good for a local check that the bundle starts.
+  The generated entitlements then disable library validation so that the bundled Vulkan loader loads; a real
+  identity needs no entitlement.
+- With the `installer` package the DMG is signed too, unless the identity is `-`.
+- `notaryProfile` (default: `ILLUSION_NOTARY_PROFILE`) names a keychain profile of `notarytool`. The export
+  submits the DMG with `xcrun notarytool submit --wait`, then staples the ticket with `xcrun stapler staple`, and
+  the report's `notarized` is true. It needs a Developer ID identity (not none and not `-`), `package:
+  "installer"` and `xcrun`.
+
+Create the profile once on the machine that exports; the password is an app-specific password of your Apple ID,
+and it stays in the keychain:
+
+```bash
+xcrun notarytool store-credentials "illusion-notary" --apple-id you@example.com --team-id TEAMID
+```
+
+The profile name `illusion-notary` is what you pass as `notaryProfile`. A failed signing or notarization quotes
+the last lines of the tool in the error, and the export fails with no package.
+
+Without any of these settings the export is unsigned: `signedBinaries` and `notarized` are false.
+
+## The macOS bundle
+
+On macOS the game is `<Product>.app`, with the executable named after the product:
+
+```text
+Showcase.app/
+  Contents/
+    Info.plist                   bundle identifier, name, version, copyright, icon, minimum macOS
+    MacOS/Showcase               the game
+    Resources/
+      data/*.illpak              the archives
+      *.icns                     the icon
+      vulkan/icd.d/MoltenVK_icd.json
+    Frameworks/
+      libvulkan.1.dylib          the Vulkan loader
+      libMoltenVK.dylib          MoltenVK
+```
+
+The bundle carries its own Vulkan loader and MoltenVK, so it runs on a Mac without a Vulkan SDK. The export
+copies them from the machine that builds: the Vulkan SDK (set `VULKAN_SDK`) or Homebrew
+(`brew install vulkan-loader molten-vk`). When neither is found, CMake warns and the bundle needs a Vulkan loader
+on the player's Mac.
+
+## Linux
+
+The game's directory holds, besides the executable and `data/`, `<executable>.png` (the icon, 512 pixels) and
+`<executable>.desktop`, a desktop entry with the product name, the executable as `Exec`, the icon and the
+category `Game`. Copy the three into a desktop's application directories to list the game in menus. The
+`.tar.gz` package holds them too.
 
 ## The report
 
 The result has `succeeded`, the `stage` it reached, `error`, `platform`, `configuration`, `directory` (the game's
 directory), `files` (every shipped file with its size, relative to `output`), `totalBytes`, `skipped`, `output`
-(the last lines of tool output) and the counts `errors` and `warnings`. `package`, `signedBinaries` and
-`notarized` are empty or false until packages and signing exist.
+(the last lines of tool output) and the counts `errors` and `warnings`. `package` (the full path of the package file, empty
+without one), `signedBinaries` (the executable or bundle was signed) and `notarized` (the DMG was notarized and
+stapled).
 
 ## When an export fails
 
@@ -112,12 +239,9 @@ Read `diagnostics` first and `output` for the raw tool lines.
 
 ## Not there yet
 
-The following parameters are rejected with "not supported yet" until M8-4:
-
-- packages (`package`: `archive`, `installer`);
-- signing and notarization (`signCommand`, `codesignIdentity`, `notaryProfile`);
-- the Linux Steam Runtime check (`linuxRuntime`);
-- the macOS `.app` bundle.
+A non-empty `linuxRuntime` is rejected with "not supported yet": the check of the executable against the Steam
+Runtime comes with the Steam work (M8-6). The [release guide](../../guides/release.md) says what you can do
+until then.
 
 ## Limits
 

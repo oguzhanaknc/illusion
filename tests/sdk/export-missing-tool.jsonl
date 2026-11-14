@@ -1,0 +1,2 @@
+{"comment": "A Windows installer export on a machine without NSIS fails and names makensis (ADR 0055; editor/tests/CMakeLists.txt sets output and configuration)."}
+{"call": "export.build", "params": {"output": "${output}", "configuration": "${configuration}", "package": "installer"}, "expect": {"error": {"message": {"$regex": ".*makensis.*"}}}}

@@ -32,8 +32,10 @@ PFN_vkGetInstanceProcAddr openLoader() noexcept
         reinterpret_cast<void*>(GetProcAddress(library, "vkGetInstanceProcAddr")));
 #else
 #if defined(ILL_PLATFORM_MACOS)
-    // The loader from the Vulkan SDK or the app bundle; MoltenVK can also be used directly.
-    constexpr std::array kCandidates = {"libvulkan.1.dylib", "libvulkan.dylib", "libMoltenVK.dylib"};
+    // The loader that an exported game's bundle carries (cmake/IllusionGame.cmake; it finds MoltenVK through
+    // Contents/Resources/vulkan/icd.d), then the Vulkan SDK's; MoltenVK can also be used directly.
+    constexpr std::array kCandidates = {"@executable_path/../Frameworks/libvulkan.1.dylib",
+                                        "libvulkan.1.dylib", "libvulkan.dylib", "libMoltenVK.dylib"};
 #else
     constexpr std::array kCandidates = {"libvulkan.so.1", "libvulkan.so"};
 #endif

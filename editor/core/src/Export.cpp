@@ -1,20 +1,27 @@
 // Exports of a project as a game (ADR 0055): validation, the generated CMake project, cooking and packing
-// with the SDK's illusion_pack, and CMake's configure, build and install. Every step but the generation is a
-// child process, so update() never blocks.
+// with the SDK's illusion_pack, CMake's configure, build and install, signing, and CPack. Every step but the
+// generation is a child process, so update() never blocks.
+//
+// Signing changes the files in the build tree, before `cmake --install`: the generated project sets
+// CMAKE_SKIP_INSTALL_ALL_DEPENDENCY, so the install and CPack (which installs the build tree again) copy the
+// signed files without building, and the game's directory and every package hold the same bytes.
 
 #include "PathText.hpp"
 #include "ToolProcess.hpp"
 
+#include <illusion/core/AssetRef.hpp>
 #include <illusion/core/Json.hpp>
 #include <illusion/ecs/Component.hpp>
 #include <illusion/ecs/SettingsFile.hpp>
 #include <illusion/ecs/StructRegistry.hpp>
 #include <illusion/editor/core/Export.hpp>
+#include <illusion/editor/core/ExportTools.hpp>
 #include <illusion/editor/core/Project.hpp>
 #include <illusion/platform/Process.hpp>
 
 #include <algorithm>
 #include <array>
+#include <deque>
 #include <fstream>
 #include <set>
 #include <sstream>
@@ -40,17 +47,47 @@ constexpr std::string_view kExportSettingsName = "illusion.ExportSettings";
 constexpr std::array<std::string_view, 3> kArchives{"assets.illpak", "settings.illpak", "cache.illpak"};
 
 // Share of the whole export when each stage begins; Build is weighted by the build's own progress.
-constexpr std::array<f64, 9> kStageStart{0.0, 0.0, 0.02, 0.17, 0.27, 0.40, 0.90, 1.0, 1.0};
+constexpr std::array<f64, 9> kStageStart{0.0, 0.0, 0.02, 0.15, 0.25, 0.35, 0.80, 0.88, 1.0};
+
+using detail::ExportPlatform;
+using detail::kExportPlatform;
 
 std::string_view platformName() noexcept
 {
-#if defined(ILL_PLATFORM_WINDOWS)
-    return "windows";
-#elif defined(ILL_PLATFORM_MACOS)
-    return "macos";
-#else
-    return "linux";
-#endif
+    return detail::exportPlatformName(kExportPlatform);
+}
+
+detail::ExportPackageFormat packageFormat(ExportPackage package) noexcept
+{
+    return detail::exportPackageFormat(package, kExportPlatform);
+}
+
+// cpack of the SDK's CMake: next to the cmake program, with its extension.
+std::filesystem::path cpackOf(const std::filesystem::path& cmake)
+{
+    return cmake.parent_path() / ("cpack" + pathText(cmake.extension()));
+}
+
+// The size of a square PNG from its header, or nullopt if @p path is not a PNG.
+std::optional<std::pair<u32, u32>> pngSize(const std::filesystem::path& path)
+{
+    std::ifstream in(path, std::ios::binary);
+    std::array<unsigned char, 24> header{};
+    if (!in.read(reinterpret_cast<char*>(header.data()), header.size()))
+    {
+        return std::nullopt;
+    }
+    constexpr std::array<unsigned char, 8> kSignature{0x89, 'P', 'N', 'G', '\r', '\n', 0x1a, '\n'};
+    if (!std::equal(kSignature.begin(), kSignature.end(), header.begin()) ||
+        std::string_view(reinterpret_cast<const char*>(header.data() + 12), 4) != "IHDR")
+    {
+        return std::nullopt;
+    }
+    const auto big = [&](usize at) {
+        return (u32{header[at]} << 24) | (u32{header[at + 1]} << 16) | (u32{header[at + 2]} << 8) |
+               u32{header[at + 3]};
+    };
+    return std::pair{big(16), big(20)};
 }
 
 std::string relativeText(const std::filesystem::path& path, const std::filesystem::path& base)
@@ -298,8 +335,18 @@ struct ExportPlan
     std::string organization;
     std::string version;
     std::string startupScene;
+    std::string identifier;
+    std::string copyright;
+    std::filesystem::path icon; // empty for the engine's icon
     std::vector<std::string> modules;
     std::vector<std::string> exclude;
+    // Signing and packaging, resolved during validation.
+    std::filesystem::path signProgram;
+    std::vector<std::string> signArguments;
+    std::filesystem::path cpack;
+    std::filesystem::path makensis;
+    std::filesystem::path codesign;
+    std::filesystem::path xcrun;
 };
 
 Expected<ExportSettings, std::string> readExportSettings(const std::filesystem::path& root)
@@ -330,6 +377,118 @@ Expected<ExportSettings, std::string> readExportSettings(const std::filesystem::
     return settings;
 }
 
+// The programs that the package and signing options need, each an error naming it when it is missing.
+void checkTools(const ExportOptions& options, ExportPlan& plan, std::vector<std::string>& errors)
+{
+    std::error_code code;
+    const ExportSigning& signing = options.signing;
+    if (options.package != ExportPackage::None)
+    {
+        plan.cpack = cpackOf(options.toolchain.cmake);
+        if (!std::filesystem::is_regular_file(plan.cpack, code))
+        {
+            errors.emplace_back("packaging needs cpack, which is not next to the SDK's cmake at " +
+                                pathText(plan.cpack));
+        }
+    }
+    if (options.package == ExportPackage::Installer)
+    {
+        if constexpr (kExportPlatform == ExportPlatform::Windows)
+        {
+            const std::optional<std::filesystem::path> makensis = detail::findMakensis();
+            if (makensis)
+            {
+                plan.makensis = *makensis;
+            }
+            else
+            {
+                errors.emplace_back(
+                    "the installer needs makensis (NSIS, https://nsis.sourceforge.io), which is "
+                    "neither on PATH nor in Program Files\\NSIS");
+            }
+        }
+        else if constexpr (kExportPlatform == ExportPlatform::MacOS)
+        {
+            if (!findExecutable("hdiutil"))
+            {
+                errors.emplace_back("the installer (a DMG) needs hdiutil, which is not on PATH");
+            }
+        }
+    }
+
+    if (!signing.signCommand.empty())
+    {
+        const std::vector<std::string> parts = detail::splitCommandLine(signing.signCommand);
+        if constexpr (kExportPlatform != ExportPlatform::Windows)
+        {
+            errors.emplace_back("signCommand signs Windows exports; use codesignIdentity on macOS");
+        }
+        else if (signing.signCommand.find("{file}") == std::string::npos || parts.size() < 2)
+        {
+            errors.emplace_back("the sign command must name a program and {file}, e.g. "
+                                "signtool sign /fd SHA256 /a {file}");
+        }
+        else if (const std::optional<std::filesystem::path> program = findExecutable(parts[0]))
+        {
+            plan.signProgram = *program;
+            plan.signArguments.assign(parts.begin() + 1, parts.end());
+        }
+        else
+        {
+            errors.emplace_back("the sign command's program '" + parts[0] + "' was not found");
+        }
+    }
+    if (!signing.codesignIdentity.empty() || !signing.notaryProfile.empty())
+    {
+        if constexpr (kExportPlatform != ExportPlatform::MacOS)
+        {
+            errors.emplace_back("codesignIdentity and notaryProfile sign macOS exports; use signCommand on "
+                                "Windows");
+        }
+        else
+        {
+            if (!signing.codesignIdentity.empty())
+            {
+                const std::optional<std::filesystem::path> codesign = findExecutable("codesign");
+                if (codesign)
+                {
+                    plan.codesign = *codesign;
+                }
+                else
+                {
+                    errors.emplace_back(
+                        "signing needs codesign (the Xcode command line tools), which is not on "
+                        "PATH");
+                }
+            }
+            if (!signing.notaryProfile.empty())
+            {
+                if (signing.codesignIdentity.empty() || signing.codesignIdentity == "-")
+                {
+                    errors.emplace_back(
+                        "notarization needs a Developer ID codesignIdentity, not none or the ad "
+                        "hoc identity \"-\"");
+                }
+                if (options.package != ExportPackage::Installer)
+                {
+                    errors.emplace_back("notarization submits and staples the DMG; export with package "
+                                        "'installer'");
+                }
+                const std::optional<std::filesystem::path> xcrun = findExecutable("xcrun");
+                if (xcrun)
+                {
+                    plan.xcrun = *xcrun;
+                }
+                else
+                {
+                    errors.emplace_back(
+                        "notarization needs xcrun (notarytool and stapler), which is not on PATH");
+                }
+            }
+        }
+    }
+}
+
 void checkOptions(const ExportOptions& options, std::vector<std::string>& errors)
 {
     if (!options.toolchain.player)
@@ -344,15 +503,10 @@ void checkOptions(const ExportOptions& options, std::vector<std::string>& errors
             "the SDK of configuration '" + options.toolchain.config + "' has no illusion_pack" +
             (options.toolchain.pack.empty() ? "" : " at " + pathText(options.toolchain.pack)));
     }
-    if (options.package != ExportPackage::None)
+    if (hasControl(options.signing.signCommand) || hasControl(options.signing.codesignIdentity) ||
+        hasControl(options.signing.notaryProfile))
     {
-        errors.emplace_back("packages ('" + std::string(exportPackageName(options.package)) +
-                            "') are not supported yet; export with package 'none'");
-    }
-    if (!options.signing.signCommand.empty() || !options.signing.codesignIdentity.empty() ||
-        !options.signing.notaryProfile.empty())
-    {
-        errors.emplace_back("signing and notarization are not supported yet");
+        errors.emplace_back("the signing settings must be single lines of text");
     }
     if (!options.linuxRuntime.empty())
     {
@@ -376,6 +530,41 @@ void checkOptions(const ExportOptions& options, std::vector<std::string>& errors
             }
         }
     }
+}
+
+// The icon of the export settings: a square PNG of at least 256 pixels under assets:/.
+void checkIcon(const std::filesystem::path& root, const AssetRef& icon, ExportPlan& plan,
+               std::vector<std::string>& errors)
+{
+    const std::string_view path = icon.path();
+    if (path.empty())
+    {
+        return;
+    }
+    constexpr std::string_view kAssets = "assets:/";
+    if (!path.starts_with(kAssets) || path.find_first_of("#\\") != std::string_view::npos ||
+        path.find("..") != std::string_view::npos || lowerExtension(path) != ".png")
+    {
+        errors.emplace_back("the icon '" + std::string(path) + "' must be a PNG file under assets:/");
+        return;
+    }
+    const std::filesystem::path file = root / "assets" / pathFromUtf8(path.substr(kAssets.size()));
+    std::error_code code;
+    if (!std::filesystem::is_regular_file(file, code))
+    {
+        errors.emplace_back("the icon '" + std::string(path) + "' does not exist");
+        return;
+    }
+    const std::optional<std::pair<u32, u32>> size = pngSize(file);
+    if (!size || size->first != size->second || size->first < 256)
+    {
+        errors.emplace_back(
+            "the icon '" + std::string(path) + "' must be a square PNG of at least 256 pixels" +
+            (size ? " (it is " + std::to_string(size->first) + "x" + std::to_string(size->second) + ")"
+                  : std::string(" (it is not a PNG)")));
+        return;
+    }
+    plan.icon = file;
 }
 
 // Every module of the project: those the manifest names and every directory of modules/ with a
@@ -459,6 +648,14 @@ Expected<ExportPlan, std::string> planExport(const ExportOptions& options)
         errors.emplace_back("the identifier '" + settings->identifier +
                             "' must be reverse-DNS, e.g. \"com.example.game\"");
     }
+    plan.identifier = settings->identifier;
+    plan.copyright = settings->copyright;
+    if (hasControl(plan.copyright))
+    {
+        errors.emplace_back("the copyright must be one line of text");
+    }
+    checkIcon(root, settings->icon, plan, errors);
+    checkTools(options, plan, errors);
     plan.version = manifest->version;
     if (plan.version.empty() || hasControl(plan.version))
     {
@@ -514,19 +711,25 @@ Expected<ExportPlan, std::string> planExport(const ExportOptions& options)
 std::string generatedCMakeLists(const ExportPlan& plan, const std::filesystem::path& root)
 {
     const std::string target = plan.executable + "_game";
-    std::string text = "# Generated by export.build (ADR 0055) for the game " + plan.product +
-                       "; every export rewrites it.\n"
-                       "cmake_minimum_required(VERSION 3.28)\n"
-                       "project(illusion_export LANGUAGES CXX)\n"
-                       "\n"
-                       "set(CMAKE_CXX_STANDARD 20)\n"
-                       "set(CMAKE_CXX_STANDARD_REQUIRED ON)\n"
-                       "set(CMAKE_CXX_EXTENSIONS OFF)\n"
-                       "\n"
-                       "find_package(illusion REQUIRED CONFIG COMPONENTS player)\n"
-                       "\n"
-                       "# The project's modules, built from their own CMakeLists as static libraries.\n"
-                       "set(ILLUSION_STATIC_MODULES ON)\n";
+    std::string text =
+        "# Generated by export.build (ADR 0055) for the game " + plan.product +
+        "; every export rewrites it.\n"
+        "cmake_minimum_required(VERSION 3.28)\n"
+        "project(illusion_export LANGUAGES CXX)\n"
+        "\n"
+        "set(CMAKE_CXX_STANDARD 20)\n"
+        "set(CMAKE_CXX_STANDARD_REQUIRED ON)\n"
+        "set(CMAKE_CXX_EXTENSIONS OFF)\n"
+        "\n"
+        "# Exports sign the executable in the build tree: installing and packaging must not build.\n"
+        "set(CMAKE_SKIP_INSTALL_ALL_DEPENDENCY ON)\n"
+        "# A macOS bundle must carry the Vulkan loader and MoltenVK: without them configuring fails.\n"
+        "set(ILLUSION_GAME_REQUIRE_VULKAN ON)\n"
+        "\n"
+        "find_package(illusion REQUIRED CONFIG COMPONENTS player)\n"
+        "\n"
+        "# The project's modules, built from their own CMakeLists as static libraries.\n"
+        "set(ILLUSION_STATIC_MODULES ON)\n";
     for (const std::string& module : plan.modules)
     {
         text += "add_subdirectory(" + bracket(pathText((root / "modules" / module).generic_u8string())) +
@@ -538,20 +741,41 @@ std::string generatedCMakeLists(const ExportPlan& plan, const std::filesystem::p
         text += " " + module;
     }
     text += "\n    NAME " + bracket(plan.product) + "\n    ORGANIZATION " + bracket(plan.organization) +
-            "\n    VERSION " + bracket(plan.version) + "\n    STARTUP_SCENE " + bracket(plan.startupScene) +
-            ")\n"
-            "set_target_properties(" +
-            target + " PROPERTIES OUTPUT_NAME " + plan.executable +
-            ")\n"
-            "\n"
-            "install(TARGETS " +
-            target + " RUNTIME DESTINATION .)\ninstall(FILES";
+            "\n    VERSION " + bracket(plan.version) + "\n    STARTUP_SCENE " + bracket(plan.startupScene);
+    if (!plan.icon.empty())
+    {
+        text += "\n    ICON " + bracket(pathText(plan.icon.generic_u8string()));
+    }
+    if (!plan.identifier.empty())
+    {
+        text += "\n    IDENTIFIER " + bracket(plan.identifier);
+    }
+    if (!plan.copyright.empty())
+    {
+        text += "\n    COPYRIGHT " + bracket(plan.copyright);
+    }
+    // A macOS bundle is named after the product, with the executable of the same name inside.
+    const std::string outputName = kExportPlatform == ExportPlatform::MacOS ? plan.product : plan.executable;
+    text += ")\nset_target_properties(" + target + " PROPERTIES OUTPUT_NAME " + bracket(outputName) +
+            "\n    RUNTIME_OUTPUT_DIRECTORY \"${CMAKE_BINARY_DIR}/game\")\n\nillusion_package_game(" +
+            target + " DATA";
     for (const std::string_view archive : kArchives)
     {
         text += " data/" + std::string(archive);
     }
-    text += " DESTINATION data)\n";
+    text += ")\n";
     return text;
+}
+
+// A file name made of @p text: characters that are not portable in file names become '_'.
+std::string fileNamePart(std::string_view text)
+{
+    std::string part;
+    for (const char c : text)
+    {
+        part += isAsciiAlnum(c) || c == '.' || c == '-' || c == '+' || c == '_' ? c : '_';
+    }
+    return part;
 }
 
 } // namespace
@@ -615,18 +839,50 @@ std::string_view exportStageName(ProjectExport::Stage stage) noexcept
     return "done";
 }
 
+namespace
+{
+
+constexpr usize kQuotedLines = 20;
+
+// One child process of an export.
+struct ToolCommand
+{
+    std::filesystem::path executable{};
+    std::vector<std::string> arguments{};
+    std::string shown{};      // the line of the output that names the command
+    std::string what{};       // what failed, e.g. "signing tetris.exe"
+    bool quoteOutput = false; // a failure quotes the tool's last lines in the error
+};
+
+} // namespace
+
 struct ProjectExport::Impl
 {
+    // The work that the current process belongs to.
+    enum class Phase : u8
+    {
+        Cook,
+        Pack,
+        Sign,
+        Install,
+        Package,
+        PackageSign,
+    };
+
     ExportOptions options;
     ExportPlan plan;
     Stage stage = Stage::Validate;
+    Phase phase = Phase::Cook;
     bool succeeded = false;
     std::string error;
     ExportReport report;
     ToolOutput output;
     Process process;
     std::string line;
-    u32 archive = 0; // the archive the Pack stage writes: 0 assets, 1 settings
+    ToolCommand running;
+    std::deque<ToolCommand> queue;
+    std::deque<std::string> runningLines; // the last lines of the running process
+    u32 archive = 0;                      // the archive the Pack stage writes: 0 assets, 1 settings
     std::unique_ptr<ModuleBuild> build;
     usize buildDiagnostics = 0;
 
@@ -636,14 +892,32 @@ struct ProjectExport::Impl
     }
     std::filesystem::path dataDirectory() const { return exportRoot() / "data"; }
     std::filesystem::path buildDirectory() const { return exportRoot() / "build"; }
-    std::filesystem::path gameDirectory() const
+    std::filesystem::path packageDirectory() const { return exportRoot() / "package"; }
+    // The name of the game's directory in the output directory (the bundle on macOS).
+    std::string gameName() const
     {
-        return options.outputDirectory / pathFromUtf8(plan.product);
+        return kExportPlatform == ExportPlatform::MacOS ? plan.product + ".app" : plan.product;
     }
+    std::filesystem::path gameDirectory() const { return options.outputDirectory / pathFromUtf8(gameName()); }
     // The install goes here first and is renamed when complete, so no partial game is ever in the output.
     std::filesystem::path stagingDirectory() const
     {
         return options.outputDirectory / pathFromUtf8(plan.product + ".partial");
+    }
+    // What the build made and signing changes: the executable, or the bundle on macOS.
+    std::filesystem::path builtGame() const
+    {
+        const std::filesystem::path directory = buildDirectory() / "game";
+        const std::string name = kExportPlatform == ExportPlatform::Windows ? plan.executable + ".exe"
+                                 : kExportPlatform == ExportPlatform::MacOS ? gameName()
+                                                                            : plan.executable;
+        return directory / pathFromUtf8(name);
+    }
+    std::filesystem::path packageFile() const
+    {
+        return options.outputDirectory /
+               pathFromUtf8(plan.product + "-" + fileNamePart(plan.version) + "-" +
+                            std::string(platformName()) + std::string(packageFormat(options.package).suffix));
     }
 
     void fail(std::string message)
@@ -652,8 +926,15 @@ struct ProjectExport::Impl
         error = std::move(message);
         stage = Stage::Done;
         process = Process{};
+        queue.clear();
         build.reset();
         removeStaging();
+        if (!report.package.empty())
+        {
+            std::error_code code;
+            std::filesystem::remove(report.package, code);
+            report.package.clear();
+        }
     }
 
     void removeStaging() const
@@ -662,18 +943,39 @@ struct ProjectExport::Impl
         std::filesystem::remove_all(stagingDirectory(), code);
     }
 
-    void spawn(const std::filesystem::path& executable, std::vector<std::string> arguments, Stage next)
+    void spawn(ToolCommand command, Stage next)
     {
         stage = next;
-        output.addUnparsed("> " + pathText(executable.filename()) + " " + commandText(arguments));
+        output.addUnparsed(command.shown);
+        runningLines.clear();
+        running = std::move(command);
         Expected<Process, std::string> started =
-            Process::spawn(ProcessOptions{.executable = executable, .arguments = std::move(arguments)});
+            Process::spawn(ProcessOptions{.executable = running.executable, .arguments = running.arguments});
         if (!started)
         {
-            fail("cannot start " + pathText(executable) + ": " + started.error());
+            fail("cannot start " + pathText(running.executable) + ": " + started.error());
             return;
         }
         process = std::move(*started);
+    }
+
+    ToolCommand tool(const std::filesystem::path& executable, std::vector<std::string> arguments,
+                     std::string what) const
+    {
+        std::string shown = "> " + pathText(executable.filename()) + " " + commandText(arguments);
+        return ToolCommand{.executable = executable,
+                           .arguments = std::move(arguments),
+                           .shown = std::move(shown),
+                           .what = std::move(what),
+                           .quoteOutput = false};
+    }
+
+    void runQueue(Phase next, Stage nextStage)
+    {
+        phase = next;
+        ToolCommand command = std::move(queue.front());
+        queue.pop_front();
+        spawn(std::move(command), nextStage);
     }
 
     void generate()
@@ -721,9 +1023,11 @@ struct ProjectExport::Impl
         {
             return;
         }
-        spawn(options.toolchain.pack,
-              {"--cook", "assets", pathText(assets), pathText(exportRoot() / "cook.files"),
-               pathText(dataDirectory() / std::string(kArchives[2]))},
+        phase = Phase::Cook;
+        spawn(tool(options.toolchain.pack,
+                   {"--cook", "assets", pathText(assets), pathText(exportRoot() / "cook.files"),
+                    pathText(dataDirectory() / std::string(kArchives[2]))},
+                   "cooking the assets"),
               Stage::Cook);
     }
 
@@ -747,11 +1051,13 @@ struct ProjectExport::Impl
     void pack(u32 index)
     {
         archive = index;
+        phase = Phase::Pack;
         const std::filesystem::path source = options.projectRoot / (index == 0 ? "assets" : "settings");
         const std::filesystem::path list = exportRoot() / (index == 0 ? "assets.files" : "settings.files");
-        spawn(options.toolchain.pack,
-              {"--files", pathText(source), pathText(list),
-               pathText(dataDirectory() / std::string(kArchives[index]))},
+        spawn(tool(options.toolchain.pack,
+                   {"--files", pathText(source), pathText(list),
+                    pathText(dataDirectory() / std::string(kArchives[index]))},
+                   "packing " + std::string(kArchives[index])),
               Stage::Pack);
     }
 
@@ -793,10 +1099,96 @@ struct ProjectExport::Impl
             fail("the build of the game failed");
             return;
         }
+        startSigning();
+    }
+
+    // The sign command of the export settings on @p file; its arguments are never shown, they may hold a
+    // password.
+    ToolCommand signCommand(const std::filesystem::path& file) const
+    {
+        const std::string name = pathText(file.filename());
+        return ToolCommand{.executable = plan.signProgram,
+                           .arguments = detail::substituteFile(plan.signArguments, pathText(file)),
+                           .shown = "> " + pathText(plan.signProgram.filename()) + " (signing " + name + ")",
+                           .what = "signing " + name,
+                           .quoteOutput = true};
+    }
+
+    // `codesign` of @p file with the hardened runtime; ad hoc signatures get no timestamp.
+    ToolCommand codesignCommand(const std::filesystem::path& file,
+                                const std::filesystem::path& entitlementsFile) const
+    {
+        ToolCommand command = tool(plan.codesign,
+                                   detail::codesignArguments(options.signing.codesignIdentity, pathText(file),
+                                                             pathText(entitlementsFile)),
+                                   "signing " + pathText(file.filename()));
+        command.quoteOutput = true;
+        return command;
+    }
+
+    // Signs what the build made, before the install copies it: Windows the executable, macOS the bundle from
+    // the inside out (the libraries in Contents/Frameworks, then the app with its entitlements).
+    void startSigning()
+    {
+        const std::filesystem::path game = builtGame();
+        std::error_code code;
+        if (!std::filesystem::exists(game, code))
+        {
+            fail("the build made no game at " + pathText(game));
+            return;
+        }
+        if constexpr (kExportPlatform == ExportPlatform::Windows)
+        {
+            if (!plan.signProgram.empty())
+            {
+                queue.push_back(signCommand(game.lexically_normal().make_preferred()));
+            }
+        }
+        else if constexpr (kExportPlatform == ExportPlatform::MacOS)
+        {
+            if (!options.signing.codesignIdentity.empty())
+            {
+                std::vector<std::filesystem::path> libraries;
+                for (std::filesystem::directory_iterator it(game / "Contents" / "Frameworks", code), end;
+                     !code && it != end; it.increment(code))
+                {
+                    if (it->is_regular_file(code) &&
+                        lowerExtension(pathText(it->path().filename())) == ".dylib")
+                    {
+                        libraries.push_back(it->path());
+                    }
+                }
+                std::sort(libraries.begin(), libraries.end());
+                for (const std::filesystem::path& library : libraries)
+                {
+                    queue.push_back(codesignCommand(library, {}));
+                }
+                const std::filesystem::path file = exportRoot() / "entitlements.plist";
+                if (!writeIfChanged(file,
+                                    detail::codesignEntitlements(options.signing.codesignIdentity == "-")))
+                {
+                    fail("cannot write " + pathText(file));
+                    return;
+                }
+                queue.push_back(codesignCommand(game, file));
+            }
+        }
+        if (queue.empty())
+        {
+            startInstall();
+            return;
+        }
+        runQueue(Phase::Sign, Stage::Build);
+    }
+
+    void startInstall()
+    {
         removeStaging();
-        spawn(options.toolchain.cmake,
-              {"--install", pathText(buildDirectory()), "--config", options.toolchain.config, "--prefix",
-               pathText(stagingDirectory())},
+        phase = Phase::Install;
+        spawn(tool(options.toolchain.cmake,
+                   {"--install", pathText(buildDirectory()), "--config", options.toolchain.config, "--prefix",
+                    pathText(stagingDirectory())},
+                   "installing the game"),
               Stage::Install);
     }
 
@@ -805,7 +1197,18 @@ struct ProjectExport::Impl
         std::error_code code;
         const std::filesystem::path game = gameDirectory();
         std::filesystem::remove_all(game, code);
-        std::filesystem::rename(stagingDirectory(), game, code);
+        if constexpr (kExportPlatform == ExportPlatform::MacOS)
+        {
+            std::filesystem::rename(stagingDirectory() / pathFromUtf8(gameName()), game, code);
+            if (!code)
+            {
+                removeStaging();
+            }
+        }
+        else
+        {
+            std::filesystem::rename(stagingDirectory(), game, code);
+        }
         if (code)
         {
             fail("cannot move the installed game to " + pathText(game) + ": " + code.message());
@@ -817,48 +1220,181 @@ struct ProjectExport::Impl
         for (const std::string& file : filesBelow(game))
         {
             const u64 bytes = std::filesystem::file_size(game / pathFromUtf8(file), code);
-            report.files.push_back(
-                ExportedFile{.path = plan.product + "/" + file, .bytes = code ? 0 : bytes});
+            report.files.push_back(ExportedFile{.path = gameName() + "/" + file, .bytes = code ? 0 : bytes});
             report.totalBytes += report.files.back().bytes;
+        }
+        if (options.package == ExportPackage::None)
+        {
+            complete();
+            return;
+        }
+        startPackage();
+    }
+
+    void startPackage()
+    {
+        std::error_code code;
+        std::filesystem::remove_all(packageDirectory(), code);
+        const detail::ExportPackageFormat format = packageFormat(options.package);
+        std::vector<std::string> arguments{"--config", pathText(buildDirectory() / "CPackConfig.cmake"),
+                                           "-G",       std::string(format.generator),
+                                           "-C",       options.toolchain.config,
+                                           "-B",       pathText(packageDirectory()),
+                                           "-D",       "CPACK_PACKAGE_FILE_NAME=" + plan.product};
+        if (format.generator == "NSIS" && !plan.makensis.empty())
+        {
+            arguments.emplace_back("-D");
+            arguments.push_back("CPACK_NSIS_EXECUTABLE=" + pathText(plan.makensis));
+        }
+        phase = Phase::Package;
+        spawn(tool(plan.cpack, std::move(arguments), "packaging the game"), Stage::Package);
+    }
+
+    void finishPackage()
+    {
+        const detail::ExportPackageFormat format = packageFormat(options.package);
+        const std::filesystem::path made =
+            packageDirectory() / pathFromUtf8(plan.product + std::string(format.extension));
+        const std::filesystem::path package = packageFile();
+        std::error_code code;
+        if (!std::filesystem::is_regular_file(made, code))
+        {
+            fail("cpack made no package at " + pathText(made));
+            return;
+        }
+        std::filesystem::remove(package, code);
+        std::filesystem::rename(made, package, code);
+        if (code)
+        {
+            // The output directory may be on another volume.
+            code.clear();
+            std::filesystem::copy_file(made, package, std::filesystem::copy_options::overwrite_existing,
+                                       code);
+        }
+        if (code)
+        {
+            fail("cannot move the package to " + pathText(package) + ": " + code.message());
+            return;
+        }
+        report.package = package;
+        const bool installer = options.package == ExportPackage::Installer;
+        if constexpr (kExportPlatform == ExportPlatform::Windows)
+        {
+            if (installer && !plan.signProgram.empty())
+            {
+                queue.push_back(signCommand(package.lexically_normal().make_preferred()));
+            }
+        }
+        else if constexpr (kExportPlatform == ExportPlatform::MacOS)
+        {
+            const std::string& identity = options.signing.codesignIdentity;
+            if (installer && !identity.empty() && identity != "-")
+            {
+                queue.push_back(codesignCommand(package, {}));
+            }
+            if (!options.signing.notaryProfile.empty())
+            {
+                // The profile names a keychain item; the secret stays in the keychain.
+                ToolCommand submit = tool(
+                    plan.xcrun, detail::notarizeArguments(pathText(package), options.signing.notaryProfile),
+                    "notarizing " + pathText(package.filename()));
+                submit.quoteOutput = true;
+                queue.push_back(std::move(submit));
+                ToolCommand staple = tool(plan.xcrun, detail::stapleArguments(pathText(package)),
+                                          "stapling " + pathText(package.filename()));
+                staple.quoteOutput = true;
+                queue.push_back(std::move(staple));
+            }
+        }
+        if (queue.empty())
+        {
+            complete();
+            return;
+        }
+        runQueue(Phase::PackageSign, Stage::Package);
+    }
+
+    void complete()
+    {
+        if (phase == Phase::PackageSign && !options.signing.notaryProfile.empty())
+        {
+            report.notarized = true;
         }
         std::sort(report.skipped.begin(), report.skipped.end());
         succeeded = true;
         stage = Stage::Done;
     }
 
+    void keepLine(std::string text)
+    {
+        if (running.quoteOutput)
+        {
+            runningLines.push_back(text);
+            if (runningLines.size() > kQuotedLines)
+            {
+                runningLines.pop_front();
+            }
+        }
+        output.add(std::move(text));
+    }
+
     void advanceProcess()
     {
-        drainLines(process, line, [this](std::string text) { output.add(std::move(text)); });
+        drainLines(process, line, [this](std::string text) { keepLine(std::move(text)); });
         const std::optional<i32> exitCode = process.poll();
         if (!exitCode || !outputDrained(process))
         {
             return;
         }
-        drainLines(process, line, [this](std::string text) { output.add(std::move(text)); });
+        drainLines(process, line, [this](std::string text) { keepLine(std::move(text)); });
         process = Process{};
         if (*exitCode != 0)
         {
-            const std::string what = stage == Stage::Cook      ? "cooking the assets"
-                                     : stage == Stage::Install ? "installing the game"
-                                                               : "packing " + std::string(kArchives[archive]);
-            fail(what + " failed (exit code " + std::to_string(*exitCode) + ")");
+            std::string message = running.what + " failed (exit code " + std::to_string(*exitCode) + ")";
+            if (!runningLines.empty())
+            {
+                message += ":";
+                for (const std::string& text : runningLines)
+                {
+                    message += "\n" + text;
+                }
+            }
+            fail(std::move(message));
             return;
         }
-        if (stage == Stage::Cook)
+        if (!queue.empty())
         {
+            runQueue(phase, stage);
+            return;
+        }
+        switch (phase)
+        {
+        case Phase::Cook:
             pack(0);
-        }
-        else if (stage == Stage::Pack && archive == 0)
-        {
-            pack(1);
-        }
-        else if (stage == Stage::Pack)
-        {
-            startBuild();
-        }
-        else
-        {
+            break;
+        case Phase::Pack:
+            if (archive == 0)
+            {
+                pack(1);
+            }
+            else
+            {
+                startBuild();
+            }
+            break;
+        case Phase::Sign:
+            report.signedBinaries = true;
+            startInstall();
+            break;
+        case Phase::Install:
             finishInstall();
+            break;
+        case Phase::Package:
+            finishPackage();
+            break;
+        case Phase::PackageSign:
+            complete();
+            break;
         }
     }
 };
@@ -908,14 +1444,22 @@ bool ProjectExport::update()
     case Stage::Cook:
     case Stage::Pack:
     case Stage::Install:
+    case Stage::Package:
         impl.advanceProcess();
         break;
     case Stage::Configure:
     case Stage::Build:
-        impl.advanceBuild();
+        // After the build, the Build stage signs what it made.
+        if (impl.build != nullptr)
+        {
+            impl.advanceBuild();
+        }
+        else
+        {
+            impl.advanceProcess();
+        }
         break;
     case Stage::Validate:
-    case Stage::Package:
     case Stage::Done:
         break;
     }

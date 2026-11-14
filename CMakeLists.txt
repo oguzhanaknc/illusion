@@ -40,6 +40,7 @@ endif()
 
 if(ILLUSION_BUILD_TOOLS)
     add_subdirectory(tools/pack)
+    add_subdirectory(tools/icon)
 endif()
 
 if(ILLUSION_BUILD_BENCHMARKS)

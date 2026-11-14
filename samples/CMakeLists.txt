@@ -29,5 +29,8 @@ if(ILLUSION_BUILD_TOOLS)
         ORGANIZATION "illusion"
         VERSION "0.1.0"
         STARTUP_SCENE "assets:/scenes/everything.scene"
-        PROJECT showcase)
+        PROJECT showcase
+        ICON showcase/assets/icons/showcase.png
+        IDENTIFIER "dev.illusion.showcase"
+        COPYRIGHT "Copyright 2026 the illusion contributors")
 endif()
