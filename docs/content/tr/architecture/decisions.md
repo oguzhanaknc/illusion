@@ -61,6 +61,7 @@ Record (ADR) olarak kaydedilir. Her kayıt bağlamı, kararı ve sonuçlarını 
 | [0052](https://github.com/oguzhanaknc/illusion/blob/main/docs/adr/0052-mesh-levels-of-detail.md) | Mesh level of detail'ları: submesh başına index aralıkları, içe aktarırken meshoptimizer ile üretilir, yansıtılan hataya göre seçilir; bitki örtüsü kartları seyreltilir; renderer başına bias |
 | [0053](https://github.com/oguzhanaknc/illusion/blob/main/docs/adr/0053-leaf-translucency.md) | Yaprak yarı saydamlığı: glTF modelinde ince yüzey diffuse geçirgenliği |
 | [0054](https://github.com/oguzhanaknc/illusion/blob/main/docs/adr/0054-texture-compression.md) | Texture sıkıştırma: içe aktarırken üretilen BC7, BC5, BC4 ve BC6H (bc7enc, rgbcx ve kendi BC6H encoder'ımız), Material kullanımına göre seçilir, sidecar ile geçersiz kılınır; resident aralıkla mip streaming |
+| [0055](https://github.com/oguzhanaknc/illusion/blob/main/docs/adr/0055-exported-games.md) | Dışa aktarılan oyunlar: SDK'dan projenin statik modülleriyle bağlanan bir player kütüphanesi, derlemeye gömülü oyun tanımı, paketlenmiş veri, CPack paketleri ve imzalama kancaları |
 
 Yeni bir karar önermek için `docs/adr/0000-template.md` dosyasını kopyalayın ve
 [katkıda bulunma rehberini](../contributing.md#architecture-decision-recordlar) izleyin.

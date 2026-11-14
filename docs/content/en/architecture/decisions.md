@@ -61,6 +61,7 @@ records rather than user documentation.
 | [0052](https://github.com/oguzhanaknc/illusion/blob/main/docs/adr/0052-mesh-levels-of-detail.md) | Mesh levels of detail: index ranges per submesh, made on import with meshoptimizer, chosen by projected error; foliage cards are thinned; per-renderer bias |
 | [0053](https://github.com/oguzhanaknc/illusion/blob/main/docs/adr/0053-leaf-translucency.md) | Leaf translucency: thin-surface diffuse transmission in the glTF model |
 | [0054](https://github.com/oguzhanaknc/illusion/blob/main/docs/adr/0054-texture-compression.md) | Texture compression: BC7, BC5, BC4 and BC6H made on import (bc7enc, rgbcx and an own BC6H encoder), chosen by material use with a sidecar override; mip streaming by resident range |
+| [0055](https://github.com/oguzhanaknc/illusion/blob/main/docs/adr/0055-exported-games.md) | Exported games: a player library linked with the project's static modules from the SDK, the game's description compiled in, packed data, CPack packages and signing hooks |
 
 To propose a new decision, copy `docs/adr/0000-template.md` and follow the
 [contributing guide](../contributing.md#architecture-decision-records).

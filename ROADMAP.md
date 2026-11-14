@@ -679,11 +679,46 @@ MoltenVK); design in ADR 0054, public API in `illusion/assets/TextureCompression
 
 ## M8 — Release pipeline
 
-- Export: clean runtime build, packed assets, no editor code
-- CPack installers: Windows (signing-ready), macOS `.app` (notarization-ready), Linux (Steam Runtime
-  "sniper" compatible)
-- Optional Steamworks module (achievements, cloud saves, Steam Input); SDK supplied by the user
-- Release and Steam guide (EN/TR)
+"Export" turns a project into a clean runtime build: static modules, packed assets, no editor code, with
+packages for Windows (signing-ready), macOS (`.app`, notarization-ready) and Linux (Steam Runtime "sniper"
+compatible). Design in ADR 0055; public API in `illusion/player/Player.hpp` and
+`illusion/editor/core/Export.hpp`.
+
+- M8-1: Player. `engine/player` (`illusion::player`, `runPlayer()`), `WindowSettings`
+  (`settings:/window.json`) in the project settings and the Project Settings window, the `user:` mount, the
+  log file and the failure dialog; `illusion_add_game()` in `cmake/IllusionGame.cmake`, used in-tree to build
+  `showcase_game` from the showcase project. Done: unit tests of the command line and of the mounts from
+  archives; a GPU test runs `showcase_game --fixed-step --frames 300 --screenshot` on packed data and
+  matches the golden image of the editor's Play mode; the showcase sets non-default window settings; no
+  allocation in a steady player frame beyond what `GameSession` and `SceneRenderer` already prove.
+- M8-2: Player SDK. The `player` component of the CMake package (every engine and third-party static
+  library behind `illusion::player`), `illusion-sdk.json` version 2, install rules that write a relocatable
+  SDK (headers, libraries per configuration, package). Done: a CTest configures and builds a game outside
+  the engine tree against the build-tree SDK and against an installed copy moved to another directory, and
+  runs it for one frame; the boundary check covers the package (no editor target reachable).
+- M8-3: Export. `ExportSettings`, `ProjectExport` and the async command `export.build` (with
+  `export.settings`/`export.set_settings` if the generic settings commands do not cover the file), headless
+  and windowed; cooking into a fresh cache, the three archives, exclude patterns, the report. Done: tests of
+  generation, exclusion and the report on a temporary project; the fuzz test covers the commands; a CTest
+  exports the showcase and the acceptance Tetris project and runs each for 300 frames; a symbol scan of the
+  exported executable finds no editor or Dear ImGui symbol; command reference and goldens updated.
+- M8-4: Packaging and signing. Icon and version resources (Windows `.ico`/`.rc`, macOS `.icns` and
+  `Info.plist`, Linux PNG and `.desktop`), the macOS bundle with MoltenVK, CPack packages (ZIP, NSIS, DMG,
+  `.tar.gz`), the signing hooks and notarization. Done: per-platform CTests check the layout and that the
+  packaged game starts; the Windows hook is tested with a recording command, macOS with an ad hoc identity
+  (`codesign --verify`); a missing tool fails with its name.
+- M8-5: Export window. The editor's Export window (settings, target, progress, diagnostics with source
+  links, "Show in folder"), string table entries, UiDriver tests and a golden image.
+- M8-6: Steamworks (own ADR): optional module built only when the user supplies the SDK path;
+  achievements, cloud saves, Steam Input glyphs and the overlay behind a service interface with a null
+  implementation that is always built and tested; `linuxRuntime: "sniper"` check and a CI job that exports
+  inside the sniper SDK container and runs the game in the sniper platform container.
+- M8-7: Engine releases. Install rules and CPack packages of the editor, tools, data and SDK; a `release`
+  workflow on tags (three platforms, checksums, the Linux build in the sniper container) that exports the
+  showcase from the installed package and runs it; semver and changelog rules.
+- M8-8: Documentation (EN/TR): manual page "Exporting a game", the release and Steam guide (signing,
+  notarization, depots, the sniper container), the runtime page's player section, tutorials end with an
+  export; in step with each pull request.
 
 ## UI — Game interface
 
