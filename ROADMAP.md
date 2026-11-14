@@ -694,7 +694,7 @@ compatible). Design in ADR 0055; public API in `illusion/player/Player.hpp` and
   Open: a way for a module to end the game (with UI), an allocation test of a steady player frame (M8-3),
   and GPU particle emitters whose state depends on which steps were rendered (a renderer that skips frames
   shows different particles; PFX follow-up).
-- M8-2: Player SDK. The `player` component of the CMake package (every engine and third-party static
+- M8-2: ✅ Player SDK. The `player` component of the CMake package (every engine and third-party static
   library behind `illusion::player`), `illusion-sdk.json` version 2, install rules that write a relocatable
   SDK (headers, libraries per configuration, package). Done: a CTest configures and builds a game outside
   the engine tree against the build-tree SDK and against an installed copy moved to another directory, and
@@ -718,7 +718,8 @@ compatible). Design in ADR 0055; public API in `illusion/player/Player.hpp` and
   inside the sniper SDK container and runs the game in the sniper platform container.
 - M8-7: Engine releases. Install rules and CPack packages of the editor, tools, data and SDK; a `release`
   workflow on tags (three platforms, checksums, the Linux build in the sniper container) that exports the
-  showcase from the installed package and runs it; semver and changelog rules.
+  showcase from the installed package and runs it; semver and changelog rules. The installed SDK carries its
+  debug information (MSVC compile PDBs are not installed yet: LNK4099 against a moved SDK).
 - M8-8: Documentation (EN/TR): manual page "Exporting a game", the release and Steam guide (signing,
   notarization, depots, the sniper container), the runtime page's player section, tutorials end with an
   export; in step with each pull request.

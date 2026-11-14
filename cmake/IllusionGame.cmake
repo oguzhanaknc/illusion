@@ -10,7 +10,8 @@
 # point is illusionModuleEntry_<id>, with the id of its ILLUSION_MODULE_ID property. DATA_DIRECTORY is where
 # the player looks for its archives, relative to the executable (default "data").
 #
-# With PROJECT, a build step packs the project's data next to the executable with illusion_pack:
+# With PROJECT, a build step packs the project's data next to the executable with illusion::pack (the target
+# illusion_pack in the engine's build, an imported executable in the package):
 # <DATA_DIRECTORY>/assets.illpak from <project>/assets, settings.illpak from <project>/settings (empty when the
 # project has none) and cache.illpak with the assets cooked for the `assets` mount.
 
@@ -101,10 +102,10 @@ int main(int argc, char** argv)
         set(stamp "${CMAKE_CURRENT_BINARY_DIR}/${target}_data_$<CONFIG>.stamp")
         add_custom_command(
             OUTPUT "${stamp}"
-            COMMAND "${CMAKE_COMMAND}" "-DPACK=$<TARGET_FILE:illusion_pack>" "-DPROJECT=${arg_PROJECT}"
+            COMMAND "${CMAKE_COMMAND}" "-DPACK=$<TARGET_FILE:illusion::pack>" "-DPROJECT=${arg_PROJECT}"
                     "-DOUTPUT=$<TARGET_FILE_DIR:${target}>/${arg_DATA_DIRECTORY}" "-DSTAMP=${stamp}"
                     -P "${ILLUSION_PACK_GAME_DATA_SCRIPT}"
-            DEPENDS illusion_pack ${inputs} "${ILLUSION_PACK_GAME_DATA_SCRIPT}"
+            DEPENDS "$<TARGET_FILE:illusion::pack>" ${inputs} "${ILLUSION_PACK_GAME_DATA_SCRIPT}"
             COMMENT "Packing the data of ${target}"
             VERBATIM)
         add_custom_target(${target}_data ALL DEPENDS "${stamp}")

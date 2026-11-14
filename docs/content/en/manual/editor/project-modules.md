@@ -134,7 +134,7 @@ program's `.exe` (for example `Code.exe`), since batch files such as `code.cmd` 
 The engine's build writes a CMake package to `<build>/sdk`: `illusionConfig.cmake` imports `illusion::core` and
 the API targets (`illusion::physics_api`, `audio_api`, `input_api`, `render_api`, `runtime_api`) and defines
 `illusion_add_module()` and `illusion_project_modules()`. `<build>/sdk/<Config>/illusion-sdk.json` describes the
-toolchain, and the editor uses the one of its own build. Profiling builds write no SDK, since they link modules
+toolchain (version 2 adds `player`, see [Player SDK](../modules.md#player-sdk)), and the editor uses the one of its own build. Profiling builds write no SDK, since they link modules
 statically.
 
 The editor finds the compiler through its environment. On Windows, start it from a developer command prompt

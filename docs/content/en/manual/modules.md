@@ -296,3 +296,81 @@ if (const auto error = modules.add(*illusionModuleEntry_tetris()))
 ```
 
 Static modules share the game's engine, so they need no services and cannot be reloaded.
+
+## Player SDK
+
+The CMake package of the engine has a second part for building an exported game outside the engine's source
+tree: the component `player`.
+
+```cmake
+find_package(illusion REQUIRED CONFIG COMPONENTS player)
+```
+
+It imports `illusion::player` (the player library with every engine and third-party static library it links),
+the executable `illusion::pack` and the function `illusion_add_game()`. A package without the component (a
+profiling build, or a configuration built without the player) reports it as not found. The package holds no
+editor target, so a game cannot link editor code.
+
+`illusion_add_game(<target> ...)` builds the executable of a game, as described in
+[The player](runtime.md#the-player):
+
+| Argument | Meaning |
+| --- | --- |
+| `MODULES <targets...>` | Static modules made by `illusion_add_module(... STATIC)`. |
+| `NAME`, `ORGANIZATION` | Required. The window title and the user data directory. |
+| `VERSION` | Written to the log. |
+| `STARTUP_SCENE` | Required. The virtual path of the first scene, such as `assets:/scenes/main.scene`. |
+| `DATA_DIRECTORY` | Where the player looks for its archives, relative to the executable (default `data`). |
+| `PROJECT <directory>` | Packs `<directory>/assets` and `<directory>/settings` into `assets.illpak`, `settings.illpak` and `cache.illpak` next to the executable with `illusion::pack`. |
+
+`<build>/sdk/<Config>/illusion-sdk.json` is version 2: it adds `"player": true` when the package has the
+component for that configuration, and `"player": false` otherwise. The editor reads it before it exports a game.
+
+This is a complete game outside the engine tree (`tests/sdk/game`):
+
+```cmake
+cmake_minimum_required(VERSION 3.28)
+project(sdk_game LANGUAGES CXX)
+
+set(CMAKE_CXX_STANDARD 20)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+set(CMAKE_CXX_EXTENSIONS OFF)
+
+find_package(illusion REQUIRED CONFIG COMPONENTS player)
+
+illusion_add_module(hello STATIC SOURCES modules/hello/hello.cpp)
+illusion_add_game(sdk_game
+    MODULES hello
+    NAME "SDK Game"
+    ORGANIZATION "illusion tests"
+    VERSION "1.0.0"
+    STARTUP_SCENE "assets:/scenes/main.scene"
+    PROJECT "${CMAKE_CURRENT_SOURCE_DIR}")
+```
+
+Point CMake at the package with `-Dillusion_DIR=<build>/sdk` for the engine's build tree, or with
+`-DCMAKE_PREFIX_PATH=<dir>` for an installed SDK.
+
+### Installing the SDK
+
+```bash
+cmake --install <build> --prefix <dir> --component sdk
+cmake --install <build> --prefix <dir> --component player
+```
+
+The `sdk` component holds the headers, the module SDK and the package files; the `player` component holds the
+libraries behind `illusion::player`, `illusion_pack` and `illusion_add_game()`. Use `--config <Config>` with a
+multi-config generator. The prefix then contains:
+
+| Path | Content |
+| --- | --- |
+| `include/` | The public headers. |
+| `lib/<Config>/` | The static libraries. |
+| `bin/<Config>/` | `illusion_pack`. |
+| `lib/cmake/illusion/` | The package: `illusionConfig.cmake`, the target files, the CMake modules and `<Config>/illusion-sdk.json`. |
+
+The installed package refers to its own files relative to its location, so you can move the directory.
+
+!!! note "Known limit"
+    The MSVC compile PDBs of the static libraries are not installed, so linking against a moved SDK can print
+    LNK4099 warnings.

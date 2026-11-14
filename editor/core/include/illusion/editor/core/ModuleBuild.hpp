@@ -33,6 +33,7 @@ struct ModuleToolchain
     /// Windows only: the vcvars script of the compiler's Visual Studio ("" when the compiler needs none). A
     /// build started outside a developer environment runs it first and gives CMake its environment.
     std::filesystem::path environmentScript{};
+    bool player = false; ///< The package has the component `player` for this configuration (version 2 only).
 };
 
 /// Reads a toolchain description; the error says what is wrong.

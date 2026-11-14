@@ -362,9 +362,16 @@ Expected<ModuleToolchain, std::string> parseModuleToolchain(std::string_view jso
         return unexpected("not a module SDK description (\"format\" must be \"" +
                           std::string(kModuleSdkFormat) + "\")");
     }
-    if (root.find("version").asU64() != 1u)
+    const std::optional<u64> version = root.find("version").asU64();
+    if (version != 1u && version != 2u)
     {
-        return unexpected(std::string("unsupported module SDK description version (expected 1)"));
+        return unexpected(std::string("unsupported module SDK description version (expected 1 or 2)"));
+    }
+    // Version 2 says whether the package has the player component (ADR 0055); version 1 never has it.
+    const JsonValue player = root.find("player");
+    if (version == 2u && !player.isBool())
+    {
+        return unexpected(std::string("\"player\" must be true or false"));
     }
     std::string error;
     const std::optional<std::string> cmake = readField(root, "cmake", error);
@@ -394,7 +401,8 @@ Expected<ModuleToolchain, std::string> parseModuleToolchain(std::string_view jso
                               .package = pathFromUtf8(*package),
                               .modulePrefix = *prefix,
                               .moduleSuffix = *suffix,
-                              .environmentScript = pathFromUtf8(script.asString().value_or(""))};
+                              .environmentScript = pathFromUtf8(script.asString().value_or("")),
+                              .player = version == 2u && player.asBool() == true};
     const JsonValue arguments = root.find("arguments");
     if (!arguments.isArray())
     {
@@ -425,6 +433,17 @@ Expected<ModuleToolchain, std::string> readModuleToolchain(const std::filesystem
     if (!toolchain)
     {
         return unexpected(detail::pathText(file) + ": " + toolchain.error());
+    }
+    // An installed SDK names its package relative to this file, so that it can move.
+    if (toolchain->package.is_relative())
+    {
+        std::filesystem::path package = (file.parent_path() / toolchain->package).lexically_normal();
+        // "a/b/.." normalizes to "a/".
+        if (package.filename().empty() && package.has_relative_path())
+        {
+            package = package.parent_path();
+        }
+        toolchain->package = std::move(package);
     }
     return toolchain;
 }

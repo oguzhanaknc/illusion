@@ -234,7 +234,7 @@ endforeach()
 #   glfw      -> glfw
 #   nvrhi     -> nvrhi, nvrhi_vk (Vulkan backend only) and Vulkan::Headers
 #   slang     -> ILLUSION_SLANGC (path of the slangc executable)
-#   sdl3      -> SDL3::SDL3-static (gamepad subsystems only)
+#   sdl3      -> illusion::sdl3 (SDL3::SDL3-static: gamepad subsystems only)
 #   cgltf     -> illusion::cgltf (headers; the implementation is compiled in illusion::assets)
 #   stb       -> illusion::stb (headers; the implementation is compiled in illusion::assets)
 #   yyjson    -> illusion::yyjson (static library; strict JSON only)
@@ -275,7 +275,9 @@ function(illusion_require_dependency name)
         FetchContent_MakeAvailable(glm)
         add_library(illusion_glm INTERFACE)
         add_library(illusion::glm ALIAS illusion_glm)
-        target_include_directories(illusion_glm SYSTEM INTERFACE "${glm_SOURCE_DIR}")
+        target_include_directories(illusion_glm SYSTEM INTERFACE "$<BUILD_INTERFACE:${glm_SOURCE_DIR}>")
+        # The SDK installs these headers (cmake/IllusionSdk.cmake): engine headers include glm.
+        set_property(TARGET illusion_glm PROPERTY ILLUSION_INSTALL_HEADERS "${glm_SOURCE_DIR}/glm")
         # Vulkan conventions: depth in [0, 1]; angles in radians; no implicit experimental extensions.
         target_compile_definitions(illusion_glm INTERFACE GLM_FORCE_DEPTH_ZERO_TO_ONE GLM_FORCE_RADIANS
             GLM_FORCE_SILENT_WARNINGS)
@@ -303,6 +305,8 @@ function(illusion_require_dependency name)
         # nvrhi_vk uses nvrhi's common code but does not declare it; single-pass linkers (GNU ld) then
         # fail when nvrhi precedes nvrhi_vk on the link line.
         target_link_libraries(nvrhi_vk PUBLIC nvrhi)
+        # illusion::render's public headers include nvrhi.h; the SDK installs them (cmake/IllusionSdk.cmake).
+        set_property(TARGET nvrhi PROPERTY ILLUSION_INSTALL_HEADERS "${nvrhi_SOURCE_DIR}/include/nvrhi")
     elseif(name STREQUAL "sdl3")
         set(SDL_SHARED OFF CACHE BOOL "" FORCE)
         set(SDL_STATIC ON CACHE BOOL "" FORCE)
@@ -319,16 +323,23 @@ function(illusion_require_dependency name)
         # Video is disabled on purpose (GLFW owns windows); tell SDL's Linux build not to require X11/Wayland.
         set(SDL_UNIX_CONSOLE_BUILD ON CACHE BOOL "" FORCE)
         FetchContent_MakeAvailable(sdl3)
+        # SDL exports SDL3-static and SDL3_Headers to its own build tree, so the engine's package cannot export
+        # them too. illusion::sdl3 links SDL3-static inside this build; the package recreates it as an
+        # imported library (ILLUSION_SDK_WRAPS, cmake/IllusionSdk.cmake).
+        add_library(illusion_sdl3 INTERFACE)
+        add_library(illusion::sdl3 ALIAS illusion_sdl3)
+        target_link_libraries(illusion_sdl3 INTERFACE $<BUILD_LOCAL_INTERFACE:SDL3::SDL3-static>)
+        set_property(TARGET illusion_sdl3 PROPERTY ILLUSION_SDK_WRAPS SDL3-static)
     elseif(name STREQUAL "cgltf")
         FetchContent_MakeAvailable(cgltf)
         add_library(illusion_cgltf INTERFACE)
         add_library(illusion::cgltf ALIAS illusion_cgltf)
-        target_include_directories(illusion_cgltf SYSTEM INTERFACE "${cgltf_SOURCE_DIR}")
+        target_include_directories(illusion_cgltf SYSTEM INTERFACE "$<BUILD_INTERFACE:${cgltf_SOURCE_DIR}>")
     elseif(name STREQUAL "stb")
         FetchContent_MakeAvailable(stb)
         add_library(illusion_stb INTERFACE)
         add_library(illusion::stb ALIAS illusion_stb)
-        target_include_directories(illusion_stb SYSTEM INTERFACE "${stb_SOURCE_DIR}")
+        target_include_directories(illusion_stb SYSTEM INTERFACE "$<BUILD_INTERFACE:${stb_SOURCE_DIR}>")
     elseif(name STREQUAL "jolt")
         # Library only, built with the engine's flags and runtime. The instruction set baseline is SSE4.2
         # (x86-64) so games run on every CPU Steam supports; GPU compute, the debug renderer, the
@@ -354,7 +365,7 @@ function(illusion_require_dependency name)
         # header must see them: no resource manager (clips come through the VFS), encoders or generators.
         add_library(illusion_miniaudio INTERFACE)
         add_library(illusion::miniaudio ALIAS illusion_miniaudio)
-        target_include_directories(illusion_miniaudio SYSTEM INTERFACE "${miniaudio_SOURCE_DIR}")
+        target_include_directories(illusion_miniaudio SYSTEM INTERFACE "$<BUILD_INTERFACE:${miniaudio_SOURCE_DIR}>")
         target_compile_definitions(illusion_miniaudio INTERFACE MA_NO_RESOURCE_MANAGER MA_NO_ENCODING
             MA_NO_GENERATION)
         find_package(Threads REQUIRED)
@@ -372,7 +383,7 @@ function(illusion_require_dependency name)
         FetchContent_MakeAvailable(yyjson)
         add_library(illusion_yyjson STATIC "${yyjson_SOURCE_DIR}/src/yyjson.c")
         add_library(illusion::yyjson ALIAS illusion_yyjson)
-        target_include_directories(illusion_yyjson SYSTEM PUBLIC "${yyjson_SOURCE_DIR}/src")
+        target_include_directories(illusion_yyjson SYSTEM PUBLIC "$<BUILD_INTERFACE:${yyjson_SOURCE_DIR}/src>")
         # Only standard JSON and the DOM reader/writer are used.
         target_compile_definitions(illusion_yyjson PUBLIC YYJSON_DISABLE_NON_STANDARD=1
             YYJSON_DISABLE_INCR_READER=1 YYJSON_DISABLE_UTILS=1)
@@ -383,19 +394,19 @@ function(illusion_require_dependency name)
             "${meshoptimizer_SOURCE_DIR}/src/simplifier.cpp"
             "${meshoptimizer_SOURCE_DIR}/src/vcacheoptimizer.cpp")
         add_library(illusion::meshoptimizer ALIAS illusion_meshoptimizer)
-        target_include_directories(illusion_meshoptimizer SYSTEM PUBLIC "${meshoptimizer_SOURCE_DIR}/src")
+        target_include_directories(illusion_meshoptimizer SYSTEM PUBLIC "$<BUILD_INTERFACE:${meshoptimizer_SOURCE_DIR}/src>")
         target_compile_features(illusion_meshoptimizer PRIVATE cxx_std_20)
     elseif(name STREQUAL "bc7enc")
         FetchContent_MakeAvailable(bc7enc)
         add_library(illusion_bc7enc STATIC "${bc7enc_SOURCE_DIR}/bc7enc.cpp" "${bc7enc_SOURCE_DIR}/rgbcx.cpp")
         add_library(illusion::bc7enc ALIAS illusion_bc7enc)
-        target_include_directories(illusion_bc7enc SYSTEM PUBLIC "${bc7enc_SOURCE_DIR}")
+        target_include_directories(illusion_bc7enc SYSTEM PUBLIC "$<BUILD_INTERFACE:${bc7enc_SOURCE_DIR}>")
         target_compile_features(illusion_bc7enc PRIVATE cxx_std_20)
     elseif(name STREQUAL "bcdec")
         FetchContent_MakeAvailable(bcdec)
         add_library(illusion_bcdec INTERFACE)
         add_library(illusion::bcdec ALIAS illusion_bcdec)
-        target_include_directories(illusion_bcdec SYSTEM INTERFACE "${bcdec_SOURCE_DIR}")
+        target_include_directories(illusion_bcdec SYSTEM INTERFACE "$<BUILD_INTERFACE:${bcdec_SOURCE_DIR}>")
     elseif(name STREQUAL "slang")
         if(ILLUSION_SLANGC_EXECUTABLE)
             set(ILLUSION_SLANGC "${ILLUSION_SLANGC_EXECUTABLE}" CACHE INTERNAL "")

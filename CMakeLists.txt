@@ -51,6 +51,7 @@ endif()
 
 if(ILLUSION_BUILD_EDITOR)
     add_subdirectory(editor)
-    # The package that projects build their modules with (ADR 0043).
-    illusion_write_module_sdk()
 endif()
+
+# The package that projects build their modules (ADR 0043) and games (ADR 0055) with, after every target exists.
+illusion_write_sdk()

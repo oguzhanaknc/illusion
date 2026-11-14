@@ -14,7 +14,7 @@ target_include_directories(illusion_input PUBLIC
 illusion_require_dependency(sdl3)
 target_link_libraries(illusion_input
     PUBLIC illusion::core illusion::platform
-    PRIVATE SDL3::SDL3-static)
+    PRIVATE illusion::sdl3)
 
 # Translatable labels of keys and gamepad glyphs (glyphLabelKey()).
 illusion_add_string_table(illusion_input

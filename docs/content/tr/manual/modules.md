@@ -304,3 +304,81 @@ if (const auto error = modules.add(*illusionModuleEntry_tetris()))
 ```
 
 Statik modüller oyunun engine'ini paylaşır; bu yüzden servise ihtiyaç duymaz ve yeniden yüklenemez.
+
+## Player SDK
+
+Motorun CMake paketinin, dışa aktarılan bir oyunu motorun kaynak ağacının dışında derlemek için ikinci bir
+bölümü vardır: `player` component'i.
+
+```cmake
+find_package(illusion REQUIRED CONFIG COMPONENTS player)
+```
+
+`illusion::player` (player kütüphanesi ve bağladığı tüm motor ve üçüncü taraf statik kütüphaneleri),
+`illusion::pack` çalıştırılabilir dosyası ve `illusion_add_game()` fonksiyonunu içe aktarır. Component'i
+olmayan bir paket (profiling Build'i ya da player olmadan derlenen bir konfigürasyon) onu bulunamadı olarak
+bildirir. Paket hiçbir editör hedefi içermez; bu yüzden bir oyun editör kodunu bağlayamaz.
+
+`illusion_add_game(<target> ...)` bir oyunun çalıştırılabilir dosyasını, [Player](runtime.md#oyuncu-player)
+bölümünde anlatıldığı gibi üretir:
+
+| Argüman | Anlamı |
+| --- | --- |
+| `MODULES <targets...>` | `illusion_add_module(... STATIC)` ile üretilmiş statik modüller. |
+| `NAME`, `ORGANIZATION` | Zorunlu. Pencere başlığı ve kullanıcı veri dizini. |
+| `VERSION` | Log'a yazılır. |
+| `STARTUP_SCENE` | Zorunlu. İlk sahnenin sanal yolu, örneğin `assets:/scenes/main.scene`. |
+| `DATA_DIRECTORY` | Player'ın arşivlerini aradığı yer, çalıştırılabilir dosyaya göre (varsayılan `data`). |
+| `PROJECT <directory>` | `<directory>/assets` ve `<directory>/settings` dizinlerini `illusion::pack` ile çalıştırılabilir dosyanın yanında `assets.illpak`, `settings.illpak` ve `cache.illpak` olarak paketler. |
+
+`<build>/sdk/<Config>/illusion-sdk.json` sürüm 2'dir: paket o konfigürasyon için component'e sahipse
+`"player": true`, değilse `"player": false` ekler. Editör bir oyunu dışa aktarmadan önce onu okur.
+
+Motor ağacının dışındaki eksiksiz bir oyun (`tests/sdk/game`):
+
+```cmake
+cmake_minimum_required(VERSION 3.28)
+project(sdk_game LANGUAGES CXX)
+
+set(CMAKE_CXX_STANDARD 20)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+set(CMAKE_CXX_EXTENSIONS OFF)
+
+find_package(illusion REQUIRED CONFIG COMPONENTS player)
+
+illusion_add_module(hello STATIC SOURCES modules/hello/hello.cpp)
+illusion_add_game(sdk_game
+    MODULES hello
+    NAME "SDK Game"
+    ORGANIZATION "illusion tests"
+    VERSION "1.0.0"
+    STARTUP_SCENE "assets:/scenes/main.scene"
+    PROJECT "${CMAKE_CURRENT_SOURCE_DIR}")
+```
+
+CMake'i pakete, motorun Build ağacı için `-Dillusion_DIR=<build>/sdk` ile, kurulmuş bir SDK için
+`-DCMAKE_PREFIX_PATH=<dir>` ile gösterin.
+
+### SDK'yı kurma
+
+```bash
+cmake --install <build> --prefix <dir> --component sdk
+cmake --install <build> --prefix <dir> --component player
+```
+
+`sdk` component'i header'ları, modül SDK'sını ve paket dosyalarını; `player` component'i
+`illusion::player`'ın arkasındaki kütüphaneleri, `illusion_pack`'i ve `illusion_add_game()`'i içerir. Multi-config
+bir generator ile `--config <Config>` kullanın. Prefix'in içeriği şöyledir:
+
+| Yol | İçerik |
+| --- | --- |
+| `include/` | Public header'lar. |
+| `lib/<Config>/` | Statik kütüphaneler. |
+| `bin/<Config>/` | `illusion_pack`. |
+| `lib/cmake/illusion/` | Paket: `illusionConfig.cmake`, hedef dosyaları, CMake modülleri ve `<Config>/illusion-sdk.json`. |
+
+Kurulmuş paket kendi dosyalarına konumuna göre göreli yollarla başvurur; bu yüzden dizini taşıyabilirsiniz.
+
+!!! note "Bilinen sınır"
+    Statik kütüphanelerin MSVC derleme PDB'leri kurulmaz; bu yüzden taşınmış bir SDK'ya bağlarken LNK4099
+    uyarıları görülebilir.
