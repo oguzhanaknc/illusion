@@ -236,11 +236,16 @@ function(_illusion_game_macos_resources target name organization version copyrig
     set(directory "${CMAKE_CURRENT_BINARY_DIR}/${target}_resources")
     set(iconset "${directory}/${target}.iconset")
     set(icns "${directory}/${target}.icns")
+    find_program(ILLUSION_ICONUTIL_EXECUTABLE iconutil)
+    if(NOT ILLUSION_ICONUTIL_EXECUTABLE)
+        message(FATAL_ERROR "illusion_add_game(${target}): iconutil not found; it makes the .icns of the bundle and "
+            "comes with the Xcode command line tools (`xcode-select --install`)")
+    endif()
     add_custom_command(
         OUTPUT "${icns}"
         COMMAND "${CMAKE_COMMAND}" -E rm -rf "${iconset}"
         COMMAND "$<TARGET_FILE:illusion::icon>" "${icon_input}" --iconset "${iconset}"
-        COMMAND iconutil -c icns -o "${icns}" "${iconset}"
+        COMMAND "${ILLUSION_ICONUTIL_EXECUTABLE}" -c icns -o "${icns}" "${iconset}"
         DEPENDS "$<TARGET_FILE:illusion::icon>" ${icon_depends}
         COMMENT "Making the icon of ${target}"
         VERBATIM)

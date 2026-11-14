@@ -15,8 +15,9 @@
 #       packaged executables are the signed ones, the ZIP holds <NAME>/<EXE>.exe and <NAME>/data/*.illpak, and
 #       the executable has an icon and a version resource.
 #   -DMODE=macos-package -DOUTPUT=<directory> -DNAME=<product> -DVERSION=<version>
-#       checks a macOS export with the ad hoc identity and package "installer": the bundle layout (with the Vulkan loader and MoltenVK), plutil -lint
-#       on Info.plist, codesign --verify --deep --strict on the app, and that the DMG mounts and holds the app.
+#       checks a macOS export with the ad hoc identity and package "installer": the bundle layout (with the Vulkan
+#       loader, MoltenVK and the .icns that CFBundleIconFile names), plutil -lint on Info.plist, codesign --verify
+#       --deep --strict on the app, and that the DMG mounts and holds the app.
 #   -DMODE=linux-package -DOUTPUT=<directory> -DNAME=<product> -DEXE=<executable name> -DVERSION=<version>
 #       checks the .tar.gz of a Linux export: <NAME>/<EXE>, its .png and .desktop (desktop-file-validate when it
 #       is installed) and <NAME>/data/*.illpak.
@@ -179,7 +180,7 @@ elseif(MODE STREQUAL "macos-package")
     require(OUTPUT NAME VERSION)
     set(app "${OUTPUT}/${NAME}.app")
     set(contents "${app}/Contents")
-    require_files("${contents}/MacOS/${NAME}" "${contents}/Info.plist" "${contents}/Resources/${NAME}.icns"
+    require_files("${contents}/MacOS/${NAME}" "${contents}/Info.plist"
         "${contents}/Resources/data/assets.illpak" "${contents}/Resources/data/settings.illpak"
         "${contents}/Resources/data/cache.illpak" "${contents}/Frameworks/libvulkan.1.dylib"
         "${contents}/Frameworks/libMoltenVK.dylib" "${contents}/Resources/vulkan/icd.d/MoltenVK_icd.json")
@@ -191,6 +192,19 @@ elseif(MODE STREQUAL "macos-package")
             message(FATAL_ERROR "Info.plist has no ${key}:\n${plist}")
         endif()
     endforeach()
+    if(NOT plist MATCHES "<key>CFBundleExecutable</key>[ \t\r\n]*<string>([^<]*)</string>"
+            OR NOT CMAKE_MATCH_1 STREQUAL NAME)
+        message(FATAL_ERROR "the CFBundleExecutable of Info.plist is not ${NAME}:\n${plist}")
+    endif()
+    # The icon is named after the game's CMake target; Info.plist names it, the check must not guess.
+    if(NOT plist MATCHES "<key>CFBundleIconFile</key>[ \t\r\n]*<string>([^<]+)</string>")
+        message(FATAL_ERROR "the CFBundleIconFile of Info.plist names no file:\n${plist}")
+    endif()
+    set(icon "${CMAKE_MATCH_1}")
+    if(NOT icon MATCHES "\\.icns$")
+        string(APPEND icon ".icns")
+    endif()
+    require_files("${contents}/Resources/${icon}")
     run_checked("verifying the signature of ${app}" codesign --verify --deep --strict --verbose=2 "${app}")
     set(dmg "${OUTPUT}/${NAME}-${VERSION}-macos.dmg")
     require_files("${dmg}")
