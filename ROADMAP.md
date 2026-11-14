@@ -672,7 +672,7 @@ MoltenVK); design in ADR 0054, public API in `illusion/assets/TextureCompression
   policy of `RenderAssetCache` fed by `TextureStreamingView`. Done: GPU tests of raising and dropping
   levels with stable Handles, deterministic policy tests (budget, cooldown), a benchmark of the policy
   update, no allocation in an idle update.
-- TEX-6: Documentation (EN/TR): manual pages for assets and rendering, the editor's import settings, the
+- TEX-6: ✅ Documentation (EN/TR): manual pages for assets and rendering, the editor's import settings, the
   showcase with a non-default texture sidecar; in step with each pull request.
 - TEX-7 (later): cooked container with separately addressed mip levels, so raising a texture reads only the
   missing levels, and streaming of the images inside glTF models.

@@ -167,7 +167,8 @@ resolver.update(world, &jobs);
   çözüldüğü anahtarla karşılaştırır (paralel ve bellek ayırmadan) ve yalnızca değişenleri yeniden çözer.
 - Asset'ler arka planda yüklenir: bir renderer, yeni Asset'leri GPU'ya ulaşana kadar önceden çizdiğini
   çizmeye devam eder (yeni renderer'lar o zamana kadar hiçbir şey çizmez). Akışla gelen modeller
-  `RenderAssetCacheDesc::uploadBytesPerUpdate` sınırı içinde yüklenir.
+  `RenderAssetCacheDesc::uploadBytesPerUpdate` sınırı içinde yüklenir
+  ([mip streaming](#texture-compression-and-mip-streaming) ile eklenen seviyelerin kendi bütçesi vardır).
 - Yüklenemeyen bir Mesh hiçbir şey çizmez; yüklenemeyen bir Material varsayılan Material ile çizilir.
   Önbellek nedenini log'a yazar, `RenderAssetCache::error()` onu döndürür ve
   `RenderAssetResolver::statistics().failures` etkilenen renderer'ları sayar.
@@ -217,7 +218,8 @@ resources.updateMaterial(material, paint); // same handle, no new binding set
   katsayıları her karede düzenlemek ucuzdur. Bir Texture'ı serbest bırakmadan önce onu kullanan
   Material'leri güncelleyin ya da serbest bırakın.
 - `statistics()`, havuzların kullanımını ve kapasitesini, serbest aralıklarını ve kaç serbest bırakılmış
-  kaynağın hâlâ GPU'yu beklediğini bildirir.
+  kaynağın hâlâ GPU'yu beklediğini bildirir. Texture ve ortam belleğini de bildirir
+  ([Texture sıkıştırma ve mip streaming](#texture-compression-and-mip-streaming) bölümüne bakın).
 
 ### Material'ler ve gölgelendirme
 
@@ -230,6 +232,91 @@ pozlama ve ACES tonemapping uygulanır. Dolaylı ışık bir `SkyLight`'tan geli
 Bir glTF modelini çizmek için onu `loadGltf()` ile yükleyin ([Asset'ler ve Modeller](assets.md)
 sayfasına bakın), `RenderResources::uploadModel()` ile GPU'ya yükleyin ve Entity'lerini `spawnModel()`
 ile oluşturun.
+
+### Texture sıkıştırma ve mip streaming {#texture-compression-and-mip-streaming}
+
+Görüntüler içe aktarılırken BC formatlarına sıkıştırılır (formatlar ve onları seçen ayarlar için
+[texture sıkıştırma](assets.md#texture-skstrma) bölümüne bakın). Sıkıştırılmış bir `Image` GPU'ya olduğu gibi
+ulaşır; bu yüzden bir Texture RGBA8'in dörtte biri (BC7, BC5) ya da sekizde biri (BC4) kadar, bir ortam da
+RGBA16F'nin sekizde biri (BC6H) kadar bellek tutar.
+
+- `RenderResources::createTexture()`, cihaz BC formatlarını örnekleyebiliyorsa
+  (`GpuInfo::textureCompressionBC`) blok sıkıştırmalı bir görüntünün seviyelerini değiştirmeden yükler.
+  `RenderDeviceDesc::compressedTextures` (varsayılan olarak açık) bunu kapatabilir. BC desteği yoksa
+  görüntüler CPU'da çözülür ve RGBA8 olarak yüklenir; renderer bunların 4 ila 8 kat bellek tuttuğunu
+  söyleyen tek bir uyarı yazar. Bugün desteklenen hiçbir platform buna ihtiyaç duymaz.
+- Her normal map aynı şekilde örneklenir: shader x ve y'yi okur ve z'yi yeniden kurar; bu yüzden bir BC5 map
+  ile bir RGB map aynı görünür.
+- `RenderResources::statistics()`, `textureBytes` ve `environmentBytes` (GPU'da olanlar),
+  `textureBytesUncompressed` ve `environmentBytesUncompressed` (aynı Texture'ların RGBA8 ya da RGBA32F, aynı
+  ortamların RGBA16F olarak tutacağı bayt sayısı) ve `streamingSavedBytes` (mip streaming'in dışarıda
+  bıraktığı seviyeler) değerlerini bildirir.
+
+```cpp
+const illusion::RenderResourceStatistics stats = resources.statistics();
+ILL_LOG_DEBUG("Game", "textures {} bytes of {} uncompressed, {} saved by streaming", stats.textureBytes,
+              stats.textureBytesUncompressed, stats.streamingSavedBytes);
+```
+
+**Mip streaming.** Bir Texture seviyelerinin yalnızca bir kısmını bellekte tutabilir. *Resident aralığı*
+`[textureFirstMip(), textureMipCount())` aralığıdır: seviye 0 en büyüğüdür; bu yüzden ilk seviye 2 ise en
+büyük iki seviye dışarıda kalır ve Texture yaklaşık on altıda bir bellek tutar.
+`createTexture(image, firstMip)` yalnızca `firstMip`'ten itibaren olan seviyelerle bir Texture yükler,
+`setTextureMips()` ise aralığı sonradan değiştirir:
+
+```cpp
+// image is the illusion::Image the Texture is made from.
+const illusion::TextureHandle texture = resources.createTexture(image, 2u, "Rock"); // levels 2 and up
+const bool raised = resources.setTextureMips(texture, 0u, &image);                  // all levels again
+resources.setTextureMips(texture, 3u);                                              // drop to levels 3 and up
+```
+
+- Bir değişiklik, aralık için yeni bir Texture kurar, iki aralığın ortak seviyelerini GPU'da kopyalar ve
+  yalnızca eklenen seviyeleri `Image`'dan yükler. Handle geçerli kalır; `textureFirstMip()` ve `statistics()`
+  yeni aralığı hemen bildirir. Material'ler yeni Texture'ı, GPU onu yazmayı bitirdikten sonraki bir
+  `collect()` çağrısında kullanmaya başlar; böylece yarım yazılmış hiçbir şey çizilmez, eski Texture bundan
+  sonra serbest bırakılır. Bir Texture'ı yükseltmek, yapıldığı `Image`'ı gerektirir; seviye düşürmek
+  gerektirmez.
+- `setTextureMips()`, boş, geçersiz ya da varsayılan bir Texture için, `Image` verilmeyen bir yükseltme için
+  veya farklı bir `Image` için false döndürür ve hiçbir şeyi değiştirmez.
+
+`RenderAssetCache`, `.material` dosyalarının Texture'larını kendi başına stream eder. Bu Texture'ların
+tutabileceği GPU baytını `RenderAssetCacheDesc::textureBudgetBytes` ile belirleyin ve resolver'ı
+güncellerken sahnenin görüldüğü görünümleri verin:
+
+```cpp
+illusion::RenderAssetCacheDesc desc;
+desc.textureBudgetBytes = 256ull << 20; // 0 (the default) keeps every level resident
+illusion::RenderAssetCache cache(resources, streamer, desc);
+illusion::RenderAssetResolver resolver(cache);
+
+// Every frame, for a perspective camera with a vertical field of view of fovY radians:
+const illusion::UVec2 size = swapchain->size();
+const float pixelsPerUnit = static_cast<float>(size.y) / (2.0f * std::tan(fovY * 0.5f));
+const illusion::TextureStreamingView views[] = {{.position = camera.position, .pixelsPerUnit = pixelsPerUnit}};
+streamer.update();
+cache.update();
+resolver.update(world, &jobs, views);
+```
+
+- `update(world, jobs, views)`, `update(world, jobs)`'in yaptığını yapar, ardından her Material için onu
+  kullanan görünür bir renderer'ın göründüğü en büyük boyutu piksel olarak bildirir (alt Mesh'inin sınırları,
+  dünya ölçeği ve en yakın görünüme uzaklık). Bellek ayırmaz. Ortografik bir görünümde `position`'ı kameranın
+  çok arkasına koyun ve `pixelsPerUnit`'i bu uzaklıkla çarpın.
+- Cache, bu talepten her Texture'ın ihtiyaç duyduğu ilk seviyeyi seçer: ilk resident seviyenin uzun kenarı,
+  Texture'ın ekranda kapladığı piksel sayısı kadar olur. İstenen seviyelerin toplamı bütçeyi aştığı sürece,
+  sığana kadar her Texture'ın en büyük seviyelerini birer adım düşürür. Hiçbir renderer'ın bildirmediği bir
+  Material en küçük seviyelerine düşer.
+- Seviye eklemek, görüntüyü `AssetStreamer` ile yeniden yükler ve model yüklemeleri gibi
+  `uploadBytesPerUpdate` sınırına sayılır. Seviye düşürmek, `textureStreamingCooldown` güncelleme boyunca
+  (varsayılan 120) daha düşük talep görmeyi bekler; böylece bir an görüşten çıkan bir Texture boyutlar
+  arasında titremez. Uzun kenarı `textureStreamingMinSize` piksele (varsayılan 64) kadar olan seviyeler her
+  zaman resident'tır.
+- `RenderAssetCache::statistics()`, `streamedTextures` (şu an seviyeleri dışarıda olan Texture'lar),
+  `textureRaises` ve `textureDrops` değerlerini sayar.
+- Stream edilmeyenler: particle emitter'ların sprite Texture'ları ve glTF modellerinin içindeki görüntüler;
+  bunlar tamamen resident kalır. Bütçe 0 ise hiçbir şey stream edilmez. Bkz.
+  [ADR 0054](https://github.com/oguzhanaknc/illusion/blob/main/docs/adr/0054-texture-compression.md).
 
 ### Rüzgar
 
@@ -495,9 +582,16 @@ world.create(illusion::Transform{}, illusion::SkyLight{}, illusion::RenderSky{en
   edilir; `AssetReloadMode::Reimport` ile yapılan bir yeniden yükleme hiçbir şey değişmese de yeniden bake
   eder. `statistics()`, `bakes` ve `bakeCacheHits` değerlerini sayar. Prosedürel gökyüzleri önbelleğe
   alınmaz (dosyaları yoktur).
+- **Sıkıştırılmış bake'ler.** `EnvironmentDesc::compress` açıkken (varsayılan) cache, bir bake'i geri
+  okuduktan sonra Job System üzerinde BC6H'ye sıkıştırır ve onu saklar. Bake'i yapan oturum half-float
+  bake'i çizmeye devam eder; sonraki oturumlar BC6H'yi yaklaşık sekizde bir bellekle yükler
+  ([texture sıkıştırma](#texture-compression-and-mip-streaming) bölümüne bakın). Prosedürel ve atmosfer
+  gökyüzleri half-float kalır.
 - `requestEnvironmentReadback()` ve `readEnvironment()` bir ortamın cube map'lerini beklemeden CPU'ya bir
   `BakedEnvironment` olarak kopyalar (araçlarda ve test'lerde `block = true` verin);
-  `createEnvironment(const BakedEnvironment&)` ise birini bake etmeden yükler:
+  `createEnvironment(const BakedEnvironment&)` ise birini bake etmeden yükler (sıkıştırılmış bir
+  `BakedEnvironment` BC6H olarak yüklenir ya da her sıkıştırılmış Texture gibi CPU'da çözülür). Sıkıştırılmış
+  bir bake'ten oluşturulan ortam geri okunamaz: `requestEnvironmentReadback()` onun için 0 döndürür.
 
 ```cpp
 // Bake once, read the result back (here waiting for it), and upload it later without baking.

@@ -161,7 +161,8 @@ resolver.update(world, &jobs);
   was resolved from (in parallel, without allocating) and resolves only those that changed.
 - Assets load in the background: a renderer keeps drawing what it drew before until its new assets are
   on the GPU (new renderers draw nothing until then). Streamed models are uploaded within
-  `RenderAssetCacheDesc::uploadBytesPerUpdate`.
+  `RenderAssetCacheDesc::uploadBytesPerUpdate` (levels added by
+  [mip streaming](#texture-compression-and-mip-streaming) have a budget of their own).
 - A mesh that cannot be loaded draws nothing; a material that cannot be loaded draws with the default
   material. The cache logs why, `RenderAssetCache::error()` returns it and
   `RenderAssetResolver::statistics().failures` counts the renderers affected.
@@ -207,7 +208,8 @@ resources.updateMaterial(material, paint); // same handle, no new binding set
   binding set only when a Texture or the wrapping changed, so editing factors every frame is cheap.
   Update or release the Materials that use a Texture before releasing it.
 - `statistics()` reports the use and capacity of the pools, their free ranges and how many released
-  resources still wait for the GPU.
+  resources still wait for the GPU. It also reports Texture and environment memory (see
+  [Texture compression and mip streaming](#texture-compression-and-mip-streaming)).
 
 ### Materials and shading
 
@@ -219,6 +221,87 @@ tonemapping. Indirect light comes from a `SkyLight` (see below).
 
 To draw a glTF model, load it with `loadGltf()` (see [Assets and Models](assets.md)), upload it with
 `RenderResources::uploadModel()` and create its Entities with `spawnModel()`.
+
+### Texture compression and mip streaming
+
+Images are compressed to BC formats on import (see [texture compression](assets.md#texture-compression) for
+the formats and the settings that choose them). A compressed `Image` reaches the GPU as it is, so a Texture
+takes a quarter of the memory of RGBA8 (BC7, BC5) or an eighth (BC4), and an environment an eighth of
+RGBA16F (BC6H).
+
+- `RenderResources::createTexture()` uploads the levels of a block-compressed image unchanged when the
+  device samples BC formats (`GpuInfo::textureCompressionBC`). `RenderDeviceDesc::compressedTextures` (on by
+  default) can turn that off. Without BC support the images are decoded on the CPU and uploaded as RGBA8,
+  and the renderer logs one warning that they take 4 to 8 times the memory. No supported platform needs
+  this today.
+- Every normal map is sampled the same way: the shader reads x and y and rebuilds z, so a BC5 map and an
+  RGB map look alike.
+- `RenderResources::statistics()` reports `textureBytes` and `environmentBytes` (what is on the GPU),
+  `textureBytesUncompressed` and `environmentBytesUncompressed` (what the same Textures would take as RGBA8
+  or RGBA32F, and the environments as RGBA16F) and `streamingSavedBytes` (levels left out by mip streaming).
+
+```cpp
+const illusion::RenderResourceStatistics stats = resources.statistics();
+ILL_LOG_DEBUG("Game", "textures {} bytes of {} uncompressed, {} saved by streaming", stats.textureBytes,
+              stats.textureBytesUncompressed, stats.streamingSavedBytes);
+```
+
+**Mip streaming.** A Texture can keep only some of its levels in memory. Its *resident range* is
+`[textureFirstMip(), textureMipCount())`: level 0 is the largest, so a first level of 2 leaves out the two
+largest levels and the Texture takes about a sixteenth of the memory. `createTexture(image, firstMip)` uploads
+a Texture with only the levels from `firstMip` on, and `setTextureMips()` changes the range later:
+
+```cpp
+// image is the illusion::Image the Texture is made from.
+const illusion::TextureHandle texture = resources.createTexture(image, 2u, "Rock"); // levels 2 and up
+const bool raised = resources.setTextureMips(texture, 0u, &image);                  // all levels again
+resources.setTextureMips(texture, 3u);                                              // drop to levels 3 and up
+```
+
+- A change builds a new Texture for the range, copies the levels both ranges share on the GPU and uploads
+  only the added levels from the `Image`. The Handle stays valid and `textureFirstMip()` and `statistics()`
+  report the new range at once. Materials start using the new Texture in a later `collect()`, once the GPU
+  has finished writing it, so nothing half-written is drawn; the old Texture is freed after that. Raising a
+  Texture needs the `Image` it was made from; dropping levels does not.
+- `setTextureMips()` returns false and changes nothing for an empty, stale or default Texture, for a raise
+  without an `Image`, or for a different `Image`.
+
+`RenderAssetCache` streams the Textures of `.material` files on its own. Set
+`RenderAssetCacheDesc::textureBudgetBytes` to the GPU bytes those Textures may take and pass the views the
+scene is seen from when you update the resolver:
+
+```cpp
+illusion::RenderAssetCacheDesc desc;
+desc.textureBudgetBytes = 256ull << 20; // 0 (the default) keeps every level resident
+illusion::RenderAssetCache cache(resources, streamer, desc);
+illusion::RenderAssetResolver resolver(cache);
+
+// Every frame, for a perspective camera with a vertical field of view of fovY radians:
+const illusion::UVec2 size = swapchain->size();
+const float pixelsPerUnit = static_cast<float>(size.y) / (2.0f * std::tan(fovY * 0.5f));
+const illusion::TextureStreamingView views[] = {{.position = camera.position, .pixelsPerUnit = pixelsPerUnit}};
+streamer.update();
+cache.update();
+resolver.update(world, &jobs, views);
+```
+
+- `update(world, jobs, views)` does what `update(world, jobs)` does and then reports, for every material, the
+  largest size in pixels at which a visible renderer that uses it appears (the bounds of its submesh, the
+  world scale and the distance to the nearest view). It does not allocate. For an orthographic view, put
+  `position` far behind the camera and multiply `pixelsPerUnit` by that distance.
+- From the demand, the cache picks the first level each Texture needs, so that its first resident level has
+  about as many pixels on its longer side as the Texture covers on screen. While the wanted levels together exceed the budget, it
+  drops the largest levels of every Texture one step at a time until they fit. A material that no renderer
+  reports falls to its smallest levels.
+- Adding levels loads the image again through the `AssetStreamer` and counts against
+  `uploadBytesPerUpdate`, like model uploads. Dropping levels waits for `textureStreamingCooldown` updates of
+  lower demand (120 by default), so a Texture that goes out of view for a moment does not flicker between
+  sizes. Levels up to `textureStreamingMinSize` pixels on their longer side (64 by default) are always resident.
+- `RenderAssetCache::statistics()` counts `streamedTextures` (Textures with levels left out now),
+  `textureRaises` and `textureDrops`.
+- Not streamed: the sprite Textures of particle emitters and the images inside glTF models; they stay
+  fully resident. With a budget of 0 nothing is streamed. See
+  [ADR 0054](https://github.com/oguzhanaknc/illusion/blob/main/docs/adr/0054-texture-compression.md).
 
 ### Wind
 
@@ -476,9 +559,16 @@ world.create(illusion::Transform{}, illusion::SkyLight{}, illusion::RenderSky{en
   the readbacks still pending. A changed image bakes again; a reload in `AssetReloadMode::Reimport` bakes
   again although nothing changed. `statistics()` counts `bakes` and `bakeCacheHits`. Procedural skies are
   not cached (they have no file).
+- **Compressed bakes.** With `EnvironmentDesc::compress` on (the default), the cache compresses a bake to
+  BC6H on the Job System after reading it back and stores that. The session that bakes keeps drawing the
+  half-float bake; later sessions upload BC6H at about an eighth of the memory (see
+  [texture compression](#texture-compression-and-mip-streaming)). Procedural and atmosphere skies stay
+  half-float.
 - `requestEnvironmentReadback()` and `readEnvironment()` copy an environment's cube maps back to the CPU
   as a `BakedEnvironment` without waiting (pass `block = true` in tools and tests), and
-  `createEnvironment(const BakedEnvironment&)` uploads one without baking:
+  `createEnvironment(const BakedEnvironment&)` uploads one without baking (a compressed `BakedEnvironment`
+  is uploaded as BC6H, or decoded on the CPU like any compressed Texture). An environment created from a
+  compressed bake cannot be read back: `requestEnvironmentReadback()` returns 0 for it.
 
 ```cpp
 // Bake once, read the result back (here waiting for it), and upload it later without baking.
