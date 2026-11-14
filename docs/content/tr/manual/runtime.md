@@ -173,7 +173,7 @@ derlenir:
 ```cmake
 illusion_add_module(showcase_game_module STATIC ID showcase
     SOURCES showcase/modules/showcase/showcase.cpp
-    USES physics audio particles input render runtime)
+    USES physics audio particles input render runtime store)
 illusion_add_game(showcase_game
     MODULES showcase_game_module
     NAME "Showcase"
@@ -186,3 +186,66 @@ illusion_add_game(showcase_game
 `illusion_add_game()` ve `illusion::pack`'i sağlayan CMake paketi ve kurulumu [Player SDK](modules.md#player-sdk) bölümünde anlatılır.
 
 Editor'ün bu oyunu sizin yerinize nasıl export ettiği [Oyunu Export Etmek](editor/export.md) sayfasında anlatılır.
+
+## Mağaza servisleri
+
+Oyun, satıldığı mağazaya `StoreService` (`illusion/store/StoreService.hpp`, `USES store`;
+[ADR 0056](https://github.com/oguzhanaknc/illusion/blob/main/docs/adr/0056-store-service-and-steamworks.md)) üzerinden ulaşır: başarımlar ve
+ilerlemeleri, tamsayı ve float istatistikler, bulut dosyaları, overlay ve gamepad glyph'leri. Aynı çağrılar her
+mağazayla ve mağaza olmadan çalışır; böylece oyun kodu Play modu, testler ve Steam arasında değişmez.
+
+```cpp
+void update(illusion::ModuleContext& context, illusion::f64)
+{
+    illusion::StoreService* store = context.service<illusion::StoreService>();
+    if (store == nullptr || store->overlayActive())
+    {
+        return; // no store service, or the overlay covers the game
+    }
+    if (won(context.world()))
+    {
+        static_cast<void>(store->unlockAchievement("FIRST_WIN"));
+        static_cast<void>(store->setStatInt("wins", wins(context.world())));
+        static_cast<void>(store->storeStats());
+        const std::array<std::byte, 4> save = saveGame(context.world());
+        if (const auto written = store->writeCloudFile("slot1.save", save); !written)
+        {
+            ILL_LOG_WARN("Game", "not saved: {}", illusion::storeErrorName(written.error()));
+        }
+    }
+}
+```
+
+- **Callback yok.** Her sonuç döndürülür ya da sorgulanır. `overlayActive()` oyunun her karede okuduğu bir
+  değerdir (oyunlar overlay açıkken genellikle durur); hiçbir şey bir modülü geri çağırmaz, bu yüzden hot reload
+  güvenli kalır.
+- **Hatalar** `Expected<T, StoreError>`'dır: `Unavailable`, `InvalidName`, `InvalidValue`, `NotFound`,
+  `TypeMismatch`, `TooLarge` veya `QuotaExceeded`, `IoError`. Başarım, istatistik ve bulut dosyası adları 1 ile
+  64 arası ASCII harf, rakam, `_`, `-` ve `.`'dır; `.` ile başlamaz ve bitmez. Bir bulut dosyası en çok 100 MiB
+  tutar.
+- **Container değil, span.** `readCloudFile()` oyunun bir tamponunu doldurur ve dosyanın boyutunu döner (boş
+  bir tampon yalnızca boyutu sorar); `listCloudFiles()` bir ad span'ini doldurur ve kaç tane olduğunu döner.
+
+Bir oyunun hangi mağazayı aldığı:
+
+| Nerede | Mağaza | Bulut dosyaları |
+| --- | --- | --- |
+| Editor'deki Play modu | Her oturum için yeni bir `NullStoreService` | Projenin `cache:/store/cloud`'u |
+| Mağazasız export edilmiş oyun | `NullStoreService` | `user:/cloud` |
+| `store.kind` değeri `steam` olan export edilmiş oyun | Steam çalışıyorsa `SteamStoreService`, yoksa `NullStoreService` | Steam Cloud ya da `user:/cloud` |
+
+`NullStoreService` `available()` için false, `storeName()` için "none" bildirir. Başarımları, ilerlemeyi ve
+istatistikleri oturum boyunca bellekte tutar, böylece oyun mantığı test edilebilir; bulut dosyalarını dosya
+olarak saklar (toplam 100 MiB), böylece kayıtlar mağaza olmadan da çalıştırmalar arasında kalır.
+`openOverlay()` false, `glyphPath()` hiçbir şey döner.
+
+`SteamStoreService` (`illusion::steam` kütüphanesi) yalnızca `ILLUSION_STEAMWORKS_SDK` CMake değişkeni bir
+Steamworks SDK'sını gösterdiğinde Build edilir; SDK'yı Valve'dan siz indirirsiniz, illusion onu hiçbir zaman
+dağıtmaz ya da indirmez. Başarımları, istatistikleri, Remote Storage'ı ve overlay'i eşler; henüz glyph
+döndürmez. Player onu pencere açılmadan önce başlatır, böylece overlay grafik cihazına bağlanabilir, ve her
+karede bir kez `update()`'ini çağırır. Bir Steam oyununu export etmek [Oyunu Export Etmek](editor/export.md#magaza)
+sayfasında anlatılır.
+
+!!! warning "Burada test edilmedi"
+    Steam mağazası SDK olmadan Build edilemez; bu yüzden ne CI ne de engine'in testleri onu Build eder ya da
+    çalıştırır. Yayınlamadan önce bir Steam export'unu SDK'lı ve Steam'li bir makinede test edin.

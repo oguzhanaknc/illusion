@@ -174,6 +174,13 @@ ExportSigning signingOf(const ExportBuildParams& params)
         .notaryProfile = signingValue(params.notaryProfile, "ILLUSION_NOTARY_PROFILE", kMacos)};
 }
 
+// The Steamworks SDK of a Steam export (ADR 0056): never a project setting, since every machine has its own.
+std::filesystem::path steamworksSdk()
+{
+    const std::string text = environmentVariable("ILLUSION_STEAMWORKS_SDK").value_or("");
+    return std::filesystem::path(std::u8string(text.begin(), text.end()));
+}
+
 class ExportBuildTask final : public CommandTask<ExportBuildResult>
 {
 public:
@@ -314,6 +321,7 @@ exportBuild(CommandContext& context, const ExportBuildParams& params)
                                            .package = *package,
                                            .signing = signingOf(params),
                                            .linuxRuntime = {},
+                                           .steamworksSdk = steamworksSdk(),
                                            .clean = params.clean.value_or(false)});
     if (!started)
     {

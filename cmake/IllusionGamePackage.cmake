@@ -4,8 +4,8 @@
 #
 # Installs the game made by illusion_add_game(<target> ...) and configures CPack for it (include(CPack) runs
 # here, so call it once per project, after the target's OUTPUT_NAME is final):
-#   - Windows and Linux: <executable> at the install prefix and DATA in data/; on Linux also
-#     <executable>.png and <executable>.desktop.
+#   - Windows and Linux: <executable> at the install prefix with the libraries of its ILLUSION_GAME_RUNTIME_FILES
+#     property, and DATA in data/; on Linux also <executable>.png and <executable>.desktop.
 #   - macOS: the bundle <OUTPUT_NAME>.app at the install prefix, DATA in its Contents/Resources/data.
 # Packages, by CPack generator: ZIP and TGZ hold <name>/ (<name>.app on macOS); NSIS installs into
 # Program Files\<name> with a Start menu shortcut, an uninstaller and the game's icon; DragNDrop makes a DMG
@@ -42,6 +42,11 @@ function(illusion_package_game target)
         install(TARGETS ${target} BUNDLE DESTINATION .)
     else()
         install(TARGETS ${target} RUNTIME DESTINATION .)
+        # Libraries the executable loads from its directory, such as Steam's (STORE steam).
+        get_target_property(runtime_files ${target} ILLUSION_GAME_RUNTIME_FILES)
+        if(runtime_files)
+            install(FILES ${runtime_files} DESTINATION .)
+        endif()
         if(arg_DATA)
             install(FILES ${arg_DATA} DESTINATION data)
         endif()

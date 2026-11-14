@@ -168,7 +168,7 @@ project's data next to the executable with `illusion_pack`. The showcase project
 ```cmake
 illusion_add_module(showcase_game_module STATIC ID showcase
     SOURCES showcase/modules/showcase/showcase.cpp
-    USES physics audio particles input render runtime)
+    USES physics audio particles input render runtime store)
 illusion_add_game(showcase_game
     MODULES showcase_game_module
     NAME "Showcase"
@@ -181,3 +181,63 @@ illusion_add_game(showcase_game
 The CMake package that provides `illusion_add_game()` and `illusion::pack`, and how to install it, is described in [Player SDK](modules.md#player-sdk).
 
 How the editor exports a game with it is described in [Exporting a game](editor/export.md).
+
+## Store services
+
+A game reaches the store it is sold in through `StoreService` (`illusion/store/StoreService.hpp`,
+`USES store`; [ADR 0056](https://github.com/oguzhanaknc/illusion/blob/main/docs/adr/0056-store-service-and-steamworks.md)): achievements and
+their progress, integer and float stats, cloud files, the overlay and gamepad glyphs. The same calls work
+with every store and with none, so the game code does not change between Play mode, tests and Steam.
+
+```cpp
+void update(illusion::ModuleContext& context, illusion::f64)
+{
+    illusion::StoreService* store = context.service<illusion::StoreService>();
+    if (store == nullptr || store->overlayActive())
+    {
+        return; // no store service, or the overlay covers the game
+    }
+    if (won(context.world()))
+    {
+        static_cast<void>(store->unlockAchievement("FIRST_WIN"));
+        static_cast<void>(store->setStatInt("wins", wins(context.world())));
+        static_cast<void>(store->storeStats());
+        const std::array<std::byte, 4> save = saveGame(context.world());
+        if (const auto written = store->writeCloudFile("slot1.save", save); !written)
+        {
+            ILL_LOG_WARN("Game", "not saved: {}", illusion::storeErrorName(written.error()));
+        }
+    }
+}
+```
+
+- **No callbacks.** Every result is returned or polled. `overlayActive()` is a value the game reads each frame
+  (games usually pause while the overlay is open); nothing calls back into a module, so hot reload stays safe.
+- **Errors** are `Expected<T, StoreError>`: `Unavailable`, `InvalidName`, `InvalidValue`, `NotFound`,
+  `TypeMismatch`, `TooLarge` or `QuotaExceeded`, `IoError`. Names of achievements, stats and cloud files are
+  1 to 64 ASCII letters, digits, `_`, `-` and `.`, neither starting nor ending with `.`; a cloud file holds at
+  most 100 MiB.
+- **Spans, not containers.** `readCloudFile()` fills a buffer of the game and returns the file's size (an empty
+  buffer asks for the size only); `listCloudFiles()` fills a span of names and returns how many there are.
+
+Which store a game gets:
+
+| Where | Store | Cloud files |
+| --- | --- | --- |
+| Play mode in the editor | `NullStoreService`, new for each session | `cache:/store/cloud` of the project |
+| Exported game without a store | `NullStoreService` | `user:/cloud` |
+| Exported game with `store.kind` `steam` | `SteamStoreService` when Steam runs, else `NullStoreService` | Steam Cloud, or `user:/cloud` |
+
+`NullStoreService` reports `available()` false and `storeName()` "none". It keeps achievements, progress and
+stats in memory for the session, so game logic can be tested, and stores cloud files as files (100 MiB in
+all), so saves persist across runs without a store. `openOverlay()` returns false and `glyphPath()` nothing.
+
+`SteamStoreService` (library `illusion::steam`) is built only when the CMake variable `ILLUSION_STEAMWORKS_SDK`
+names a Steamworks SDK, which you download from Valve; illusion never ships or downloads it. It maps
+achievements, stats, Remote Storage and the overlay; it returns no glyphs yet. The player starts it before the
+window opens, so that the overlay can hook the graphics device, and calls its `update()` once per frame. How to
+export a Steam game is described in [Exporting a game](editor/export.md#store).
+
+!!! warning "Not tested here"
+    The Steam store cannot be built without the SDK, so neither CI nor the engine's tests build or run it.
+    Test a Steam export on a machine with the SDK and Steam before you ship.

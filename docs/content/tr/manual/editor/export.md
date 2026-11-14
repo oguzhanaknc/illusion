@@ -30,6 +30,7 @@ oyunun parçası olmaz.
 | `copyright` | Oyunun telif satırı. |
 | `icon` | En az 256 piksellik kare bir PNG Asset'i. |
 | `exclude` | `assets:/` altında gönderilmeyen dosyalar. |
+| `store` | Oyunun çalıştığı mağaza: `kind` (`none` veya `steam`) ve `steamAppId`; bkz. [Mağaza](#magaza). |
 
 Oyunun sürümü projenin `version` değeridir. Bir sonraki bölüm, her platformun `identifier`, `copyright` ve
 `icon` ile ne yaptığını anlatır.
@@ -61,6 +62,28 @@ karakter dizisiyle eşleşir, `**` dizinler dahil her diziyle eşleşir, `**/` i
 Hariç tutulan dosya ne paketlenir ne de cook edilir. Ona ihtiyaç duyan bir Asset (örneğin hariç tutulan bir
 Texture'ı adlandıran bir Material) export'un cook adımını başarısız kılar; başlangıç sahnesini hariç tutmak da
 öyle. Rapor, dışarıda bırakılanları `skipped` içinde listeler.
+
+### Mağaza
+
+`store.kind` varsayılan olarak `none`'dır: oyun, başarımları ve istatistikleri bellekte, bulut dosyalarını
+`user:/cloud`'da tutan boş mağazayı alır ([Mağaza servisleri](../runtime.md#magaza-servisleri)). `steam` ile
+oyun Steam mağazasını bağlar ve onun app id'sine ihtiyaç duyar:
+
+```json
+{"productName": "Blocks", "store": {"kind": "steam", "steamAppId": 480}}
+```
+
+Steamworks SDK hiçbir zaman bir projenin ya da illusion'ın parçası değildir: onu Valve'dan indirin ve editörün
+`ILLUSION_STEAMWORKS_SDK` ortam değişkenini onun dizinine, yani `public/steam/steam_api.h`'yi içeren dizine
+ayarlayın. Export başlamadan önce bunu ve platformun yeniden dağıtılabilir kütüphanesini (`steam_api64.dll`,
+`libsteam_api.so` veya `libsteam_api.dylib`) denetler; eksik ya da yanlışsa değişkeni adlandıran bir mesajla
+başarısız olur. Üretilen Build ardından SDK paketinden `steam` bileşenini ister; bu bileşen `illusion::steam`'i
+o SDK'ya karşı derler ve yeniden dağıtılabilir kütüphaneyi executable'ın yanına koyar.
+
+Bir geliştirme yapılandırmasındaki export (`Release` ve `MinSizeRel` dışındaki her şey) ayrıca executable'ın
+yanına app id'yi içeren `steam_appid.txt`'yi yazar; böylece oyun test ederken Steam dışından başlar. Bu dosya
+install'dan sonra yazılır, bu yüzden arşivler ve installer'lar onu hiçbir zaman içermez. Export penceresi
+mağazayı henüz göstermez; onu `project.settings_set` ile ya da `settings:/export.json` içinde düzenleyin.
 
 ## Export penceresi
 

@@ -1,11 +1,12 @@
 // The parts of runPlayer() that need no window: the command line, the window it asks for and the mounts of
-// the packed data and the user directory.
+// the packed data and the user directory, and the store the game gets.
 
 #include "TestSupport.hpp"
 
 #include <illusion/platform/Archive.hpp>
 #include <illusion/platform/FileSystem.hpp>
 #include <illusion/runtime/ProjectSettings.hpp>
+#include <illusion/store/NullStoreService.hpp>
 
 #include <doctest/doctest.h>
 
@@ -231,6 +232,66 @@ TEST_CASE("the player creates the user directory and mounts it read-write")
     CHECK(std::filesystem::is_directory(user));
     REQUIRE(files.writeText("user:/player.log", "started") == FileError::None);
     CHECK(std::filesystem::exists(user / "player.log"));
+}
+
+namespace
+{
+
+u32 g_requestedAppId = 0;
+
+std::unique_ptr<StoreBackend> noStore(u32 appId)
+{
+    g_requestedAppId = appId;
+    return nullptr;
+}
+
+// A store that is not the null one, made of a NullStoreService on its own mount.
+std::unique_ptr<StoreBackend> fakeStore(u32 appId)
+{
+    g_requestedAppId = appId;
+    static VirtualFileSystem files;
+    return std::make_unique<NullStoreService>(files, NullStoreDesc{.cloudDirectory = "fake:/cloud"});
+}
+
+} // namespace
+
+TEST_CASE("a game without a store gets the null store with its cloud files in user:/cloud")
+{
+    test::TempDirectory directory;
+    VirtualFileSystem files;
+    REQUIRE(mountUserData(files, directory.path).hasValue());
+    const std::unique_ptr<StoreBackend> store = createPlayerStore(gameDesc(), files);
+    REQUIRE(store != nullptr);
+    CHECK(store->storeName() == "none");
+    CHECK_FALSE(store->available());
+    const std::array<std::byte, 2> save{std::byte{1}, std::byte{2}};
+    REQUIRE(store->writeCloudFile("slot1.save", save).hasValue());
+    CHECK(std::filesystem::file_size(directory.path / "cloud" / "slot1.save") == 2);
+}
+
+TEST_CASE("the player asks the game's store factory for its app id and falls back to the null store")
+{
+    test::TempDirectory directory;
+    VirtualFileSystem files;
+    REQUIRE(mountUserData(files, directory.path).hasValue());
+    PlayerDesc desc = gameDesc();
+    desc.storeAppId = 480;
+
+    g_requestedAppId = 0;
+    desc.store = &noStore;
+    const std::unique_ptr<StoreBackend> fallback = createPlayerStore(desc, files);
+    CHECK(g_requestedAppId == 480);
+    const auto* null = dynamic_cast<const NullStoreService*>(fallback.get());
+    REQUIRE(null != nullptr);
+    CHECK(null->cloudDirectory() == "user:/cloud");
+
+    g_requestedAppId = 0;
+    desc.store = &fakeStore;
+    const std::unique_ptr<StoreBackend> made = createPlayerStore(desc, files);
+    CHECK(g_requestedAppId == 480);
+    const auto* fake = dynamic_cast<const NullStoreService*>(made.get());
+    REQUIRE(fake != nullptr);
+    CHECK(fake->cloudDirectory() == "fake:/cloud");
 }
 
 TEST_CASE("every problem of the player has a localized message that names its detail")

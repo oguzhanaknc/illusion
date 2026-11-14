@@ -26,6 +26,7 @@
 #include <illusion/platform/Input.hpp>
 #include <illusion/runtime/GameSession.hpp>
 #include <illusion/runtime/SceneService.hpp>
+#include <illusion/store/NullStoreService.hpp>
 
 #include <doctest/doctest.h>
 
@@ -82,6 +83,7 @@ struct ModuleLog
     std::string events;
     i32 updates = 0;
     bool servicesFound = false;
+    std::string_view store;
     f64 lastDelta = 0.0;
     bool jumpDown = false;
 };
@@ -99,6 +101,8 @@ void startLogged(ModuleContext& context)
     g_log.servicesFound =
         context.service<PhysicsService>() != nullptr && context.service<AudioService>() != nullptr &&
         context.service<InputService>() != nullptr && context.service<SceneService>() != nullptr;
+    const StoreService* store = context.service<StoreService>();
+    g_log.store = store != nullptr ? store->storeName() : std::string_view("absent");
 }
 
 void updateLogged(ModuleContext& context, f64 deltaSeconds)
@@ -221,6 +225,22 @@ TEST_CASE("a game session starts, updates and stops its modules on its World")
     // The destructor stops a started session.
     CHECK(g_log.events == "start;stop;start;stop;");
     CHECK(modules.worldCount() == 0);
+}
+
+TEST_CASE("a game session hands its modules the store of its description, and none without one")
+{
+    Fixture f;
+    g_log = {};
+    ModuleHost modules(f.jobs);
+    REQUIRE_FALSE(modules.add(kSessionModule));
+    f.desc.modules = &modules;
+    f.create()->start();
+    CHECK(g_log.store == "absent");
+
+    NullStoreService store(f.files, NullStoreDesc{.cloudDirectory = "assets:/cloud"});
+    f.desc.store = &store;
+    f.create()->start();
+    CHECK(g_log.store == "none");
 }
 
 TEST_CASE("simulate mode moves bodies without running modules or input")

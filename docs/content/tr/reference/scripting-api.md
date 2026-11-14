@@ -2,7 +2,7 @@
 
 Oyun kodu, bir [oyun modülünde](../manual/modules.md) C++ olarak yazılır. Shared bir modül (editörün hot
 reload yapılabilen Build'i) `illusion::core`'un kendi kopyasını taşır, ama başka hiçbir engine
-kütüphanesini taşımaz: fiziğe, sese, parçacıklara, girdiye ve sahnelere beş **host servis arayüzü** üzerinden
+kütüphanesini taşımaz: fiziğe, sese, parçacıklara, girdiye, sahnelere ve mağazaya altı **host servis arayüzü** üzerinden
 ulaşır.
 Her biri veri üyesi olmayan soyut bir sınıftır; host onu kendi engine nesnesi üzerinde bir adaptörle
 uygular ve modüle verir, modül de onu `context.service<T>()` ile bulur. Tasarım ADR 0041'dedir;
@@ -15,6 +15,7 @@ uygular ve modüle verir, modül de onu `context.service<T>()` ile bulur. Tasar�
 | `ParticleService` | `particles` | `illusion/particles/ParticleService.hpp` | `ParticleWorld` üzerinde `ParticleWorldService` |
 | `InputService` | `input` | `illusion/input/InputService.hpp` | `InputActions` üzerinde `InputActionsService` |
 | `SceneService` | `runtime` | `illusion/runtime/SceneService.hpp` | `SceneLoaderService` (`illusion::runtime`) |
+| `StoreService` | `store` | `illusion/store/StoreService.hpp` | `NullStoreService` veya `SteamStoreService` (ADR 0056) |
 
 ```cmake
 illusion_add_module(tetris SOURCES game/Tetris.cpp USES physics audio input runtime)
@@ -62,7 +63,7 @@ void update(illusion::ModuleContext& context, illusion::f64)
 
 ## Kapsam
 
-"Scripting API" Doxygen grubu `ModuleContext`'i ve beş arayüzü içerir.
+"Scripting API" Doxygen grubu `ModuleContext`'i ve altı arayüzü içerir.
 [Showcase modülü](../manual/editor/showcase.md#showcase-modulu) grubun her public fonksiyonunu çağırır;
 biri orada çağrılmıyorsa ya da modül testlerinin bir sayaçlı proxy'sinin (`tests/modules/CountingServices.hpp`)
 sayaç sayısı yanlışsa `python tools/check_api_coverage.py` CI'da başarısız olur. Bu yüzden yeni bir
@@ -127,3 +128,19 @@ döner; ad başka bir türce alınmışsa nullopt döner.
 | `exists` | Sanal bir yolda dosya varsa true |
 | `instantiate` | Bir sahne dosyasını yeni EntityGuid'lerle World'e yükler; Entity sayısını veya nullopt döner |
 | `lastError` | Son `instantiate`'in neden başarısız olduğu |
+
+## StoreService
+
+Oyunun içinde çalıştığı mağaza ya da mağazasızlık; bkz. [Mağaza servisleri](../manual/runtime.md#magaza-servisleri).
+Hatalar `Expected<T, StoreError>`'dır; adları `isValidStoreName()` denetler.
+
+| Fonksiyon | Amaç |
+| --- | --- |
+| `available`, `storeName`, `userName`, `userId` | Oturum açmış bir kullanıcıyla bir mağazanın çalışıp çalışmadığı, hangi mağaza, kim |
+| `unlockAchievement`, `clearAchievement`, `isAchievementUnlocked` | API adına göre başarımlar |
+| `setAchievementProgress`, `achievementProgress` | current/max olarak ilerleme; max'a ulaşmak kilidi açar |
+| `setStatInt`, `statInt`, `setStatFloat`, `statFloat`, `storeStats` | İstatistikler; `storeStats` mağazaya gönderir |
+| `writeCloudFile`, `readCloudFile`, `removeCloudFile` | Ada göre bulut dosyaları; okuma çağıranın span'ini doldurur ve boyutu döner |
+| `listCloudFiles`, `cloudFileExists`, `cloudQuota` | Çağıranın span'ine adlar, varlık, boyut ve boş alan |
+| `overlayActive`, `openOverlay` | Her karede sorgulanan overlay durumu ve onu açma isteği |
+| `glyphPath` | Bir gamepad kontrolünün mağaza tarzındaki görselinin yolu ya da hiçbir şey |

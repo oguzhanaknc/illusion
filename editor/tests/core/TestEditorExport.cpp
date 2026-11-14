@@ -10,6 +10,7 @@
 #include <illusion/editor/core/ModuleBuild.hpp>
 #include <illusion/platform/Archive.hpp>
 
+#include <algorithm>
 #include <filesystem>
 #include <fstream>
 #include <memory>
@@ -439,6 +440,126 @@ TEST_CASE("validation rejects product names that make no directory and outputs i
     CHECK(startError(options).find("must not be inside the project's assets directory") != std::string::npos);
     options.outputDirectory = "relative/out";
     CHECK(startError(options).find("must be an absolute path") != std::string::npos);
+}
+
+namespace
+{
+
+// A directory that looks like a Steamworks SDK of this platform: the header and the redistributable library.
+std::filesystem::path fakeSteamworksSdk(const std::filesystem::path& root)
+{
+    const std::filesystem::path sdk = root / "steamworks sdk";
+    writeFile(sdk / "public" / "steam" / "steam_api.h", "// Steamworks\n");
+#if defined(_WIN32)
+    writeFile(sdk / "redistributable_bin" / "win64" / "steam_api64.dll", "dll");
+#elif defined(__APPLE__)
+    writeFile(sdk / "redistributable_bin" / "osx" / "libsteam_api.dylib", "dylib");
+#elif defined(__aarch64__)
+    writeFile(sdk / "redistributable_bin" / "linuxarm64" / "libsteam_api.so", "so");
+#else
+    writeFile(sdk / "redistributable_bin" / "linux64" / "libsteam_api.so", "so");
+#endif
+    return sdk;
+}
+
+constexpr std::string_view kSteamSettings =
+    R"({"productName":"Blocks","store":{"kind":"steam","steamAppId":480}})";
+
+// steam_appid.txt of an exported game, next to its executable.
+std::filesystem::path steamAppIdFile(const std::filesystem::path& output)
+{
+#if defined(__APPLE__)
+    return output / "Blocks.app" / "Contents" / "MacOS" / "steam_appid.txt";
+#else
+    return output / "Blocks" / "steam_appid.txt";
+#endif
+}
+
+} // namespace
+
+TEST_CASE("a Steam export builds against the Steamworks SDK and links the Steam store")
+{
+    const ExportProject project(kSteamSettings);
+    ExportOptions options = project.options();
+    options.steamworksSdk = fakeSteamworksSdk(project.directory.path);
+    const std::unique_ptr<ProjectExport> exported = start(options);
+    finish(*exported);
+    INFO(exported->outputTail());
+    REQUIRE(exported->succeeded());
+    const std::filesystem::path generated = project.root / ".illusion" / "export";
+    const std::filesystem::path platform = std::filesystem::directory_iterator(generated)->path();
+    const std::string text = readText(platform / "CMakeLists.txt");
+    const std::string sdk =
+        std::filesystem::absolute(options.steamworksSdk).lexically_normal().generic_string();
+    for (const std::string& line :
+         {"set(ILLUSION_STEAMWORKS_SDK [=[" + sdk + "]=])",
+          std::string("find_package(illusion REQUIRED CONFIG COMPONENTS player steam)"),
+          std::string("    STORE steam"), std::string("    STEAM_APP_ID 480)")})
+    {
+        CAPTURE(line);
+        CHECK(text.find(line + "\n") != std::string::npos);
+    }
+    // A Debug export is a development build: Steam finds the app id next to the executable.
+    CHECK(readText(steamAppIdFile(project.output)) == "480\n");
+    // Packages are made from the build tree, which never gets it.
+    CHECK_FALSE(std::filesystem::exists(platform / "build" / "game" / "steam_appid.txt"));
+    const std::vector<ExportedFile>& files = exported->report().files;
+    CHECK(std::any_of(files.begin(), files.end(),
+                      [](const ExportedFile& file) { return file.path.ends_with("/steam_appid.txt"); }));
+}
+
+TEST_CASE("a release export for Steam writes no steam_appid.txt")
+{
+    const ExportProject project(kSteamSettings);
+    ModuleToolchain toolchain = fakeToolchain();
+    toolchain.config = "Release";
+    ExportOptions options = project.options(toolchain);
+    options.steamworksSdk = fakeSteamworksSdk(project.directory.path);
+    const std::unique_ptr<ProjectExport> exported = start(options);
+    finish(*exported);
+    INFO(exported->outputTail());
+    REQUIRE(exported->succeeded());
+    CHECK_FALSE(std::filesystem::exists(steamAppIdFile(project.output)));
+}
+
+TEST_CASE("a Steam export without ILLUSION_STEAMWORKS_SDK or an app id fails validation naming them")
+{
+    const ExportProject missing(kSteamSettings);
+    const std::string noSdk = startError(missing.options());
+    CHECK(noSdk.find("set ILLUSION_STEAMWORKS_SDK to its directory") != std::string::npos);
+
+    ExportOptions wrong = missing.options();
+    wrong.steamworksSdk = missing.directory.path / "not an sdk";
+    std::filesystem::create_directories(wrong.steamworksSdk);
+    CHECK(startError(wrong).find("is not a Steamworks SDK: it has no public/steam/steam_api.h") !=
+          std::string::npos);
+
+    std::filesystem::path partial = fakeSteamworksSdk(missing.directory.path);
+    std::filesystem::remove_all(partial / "redistributable_bin");
+    wrong.steamworksSdk = partial;
+    CHECK(startError(wrong).find("for this platform") != std::string::npos);
+
+    const ExportProject noApp(R"({"store":{"kind":"steam"}})");
+    ExportOptions options = noApp.options();
+    options.steamworksSdk = fakeSteamworksSdk(noApp.directory.path);
+    CHECK(startError(options).find("needs the game's Steam app id (store.steamAppId)") != std::string::npos);
+
+    const ExportProject unknown(R"({"store":{"kind":"epic"}})");
+    CHECK(startError(unknown.options()).find("settings:/export.json") != std::string::npos);
+}
+
+TEST_CASE("an export without a store needs no Steamworks SDK and asks for no steam component")
+{
+    const ExportProject project(R"({"store":{"kind":"none","steamAppId":480}})");
+    const std::unique_ptr<ProjectExport> exported = start(project.options());
+    finish(*exported);
+    REQUIRE(exported->succeeded());
+    const std::filesystem::path platform =
+        std::filesystem::directory_iterator(project.root / ".illusion" / "export")->path();
+    const std::string text = readText(platform / "CMakeLists.txt");
+    CHECK(text.find("COMPONENTS player)\n") != std::string::npos);
+    CHECK(text.find("STORE") == std::string::npos);
+    CHECK_FALSE(std::filesystem::exists(project.output / "Blocks" / "steam_appid.txt"));
 }
 
 TEST_CASE("an export without export settings uses the project's name")

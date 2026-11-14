@@ -18,6 +18,7 @@
 #include <illusion/render/RenderAssets.hpp>
 #include <illusion/runtime/GameSession.hpp>
 #include <illusion/runtime/SceneLoaderService.hpp>
+#include <illusion/store/StoreService.hpp>
 
 #include <optional>
 #include <vector>
@@ -200,6 +201,10 @@ void GameSession::start()
         services.provide<ParticleService>(impl.particleService);
         services.provide<InputService>(impl.inputService);
         services.provide<SceneService>(impl.sceneService);
+        if (impl.desc.store != nullptr)
+        {
+            services.provide<StoreService>(*impl.desc.store);
+        }
         impl.desc.modules->attachWorld(impl.world, WorldRole::Simulation, services);
     }
 }

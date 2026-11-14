@@ -725,10 +725,21 @@ compatible). Design in ADR 0055; public API in `illusion/player/Player.hpp` and
   fixed an Asset Browser refresh every frame). Open: validation problems that `export.build` reports in one
   message (product name, identifier, organization, exclude patterns) appear in the result, not next to
   their field.
-- M8-6: Steamworks (own ADR): optional module built only when the user supplies the SDK path;
+- M8-6: Steamworks (ADR 0056): optional module built only when the user supplies the SDK path;
   achievements, cloud saves, Steam Input glyphs and the overlay behind a service interface with a null
   implementation that is always built and tested; `linuxRuntime: "sniper"` check and a CI job that exports
   inside the sniper SDK container and runs the game in the sniper platform container.
+  Done: `StoreService` (`USES store`) with `NullStoreService` in `engine/store` (achievements, progress and
+  stats in memory, cloud files in `user:/cloud` with a quota), unit tests, `GameSessionDesc::store`, the player's
+  `PlayerDesc::store` factory with the null fallback and `update()` per frame, Play mode on a null store in
+  `cache:/store/cloud`, `SteamStoreService` in the optional `engine/steam` (`ILLUSION_STEAMWORKS_SDK`, the
+  package's `steam` component builds it from shipped sources), `illusion_add_game(... STORE steam STEAM_APP_ID)`,
+  the export settings' `store` section with validation naming the variable and `steam_appid.txt` for
+  development exports only; the showcase module calls the whole API.
+  Open: `SteamStoreService` and the `steam` package component are unbuilt and untested (no SDK here or in CI;
+  needs a CI job with the SDK as a secret); Steam Input glyphs (`glyphPath()` returns nothing on Steam: Steam
+  Input next to SDL's gamepads is its own decision); `SteamAPI_RestartAppIfNecessary()`; the store fields in the
+  Export window; the sniper check (`linuxRuntime` is still rejected) and the CI job in the sniper containers.
 - M8-7: Engine releases. Install rules and CPack packages of the editor, tools, data and SDK; a `release`
   workflow on tags (three platforms, checksums, the Linux build in the sniper container) that exports the
   showcase from the installed package and runs it; semver and changelog rules. The installed SDK carries its

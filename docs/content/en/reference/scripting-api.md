@@ -2,7 +2,7 @@
 
 Game code is C++ in a [game module](../manual/modules.md). A shared module (the editor's hot-reloadable
 build) carries its own copy of `illusion::core` but no other engine library: it reaches physics, audio,
-particles, input and scenes through five **host service interfaces**. Each is an abstract class without data members;
+particles, input, scenes and the store through six **host service interfaces**. Each is an abstract class without data members;
 the host implements it with an adapter over its engine object and hands it to the module, which finds it
 with `context.service<T>()`. The design is in ADR 0041; the Doxygen group "Scripting API" of the
 [API reference](api.md) documents every function.
@@ -14,6 +14,7 @@ with `context.service<T>()`. The design is in ADR 0041; the Doxygen group "Scrip
 | `ParticleService` | `particles` | `illusion/particles/ParticleService.hpp` | `ParticleWorldService` over `ParticleWorld` |
 | `InputService` | `input` | `illusion/input/InputService.hpp` | `InputActionsService` over `InputActions` |
 | `SceneService` | `runtime` | `illusion/runtime/SceneService.hpp` | `SceneLoaderService` (`illusion::runtime`) |
+| `StoreService` | `store` | `illusion/store/StoreService.hpp` | `NullStoreService` or `SteamStoreService` (ADR 0056) |
 
 ```cmake
 illusion_add_module(tetris SOURCES game/Tetris.cpp USES physics audio input runtime)
@@ -59,7 +60,7 @@ void update(illusion::ModuleContext& context, illusion::f64)
 
 ## Coverage
 
-The Doxygen group "Scripting API" holds `ModuleContext` and the five interfaces. The
+The Doxygen group "Scripting API" holds `ModuleContext` and the six interfaces. The
 [showcase module](../manual/editor/showcase.md#the-showcase-module) calls every public function of the group,
 and `python tools/check_api_coverage.py` fails in CI when one is not called there, or when a counting proxy
 of the module tests (`tests/modules/CountingServices.hpp`) has the wrong number of counters. A new function
@@ -124,3 +125,19 @@ same name and type, and nullopt if the name is taken by another type.
 | `exists` | True if a file exists at a virtual path |
 | `instantiate` | Loads a scene file into the World with new EntityGuids; returns the number of entities, or nullopt |
 | `lastError` | Why the last `instantiate` failed |
+
+## StoreService
+
+The store the game runs in, or none; see [Store services](../manual/runtime.md#store-services). Failures are
+`Expected<T, StoreError>`; names are checked by `isValidStoreName()`.
+
+| Function | Purpose |
+| --- | --- |
+| `available`, `storeName`, `userName`, `userId` | Whether a store runs with a signed-in user, which store, who |
+| `unlockAchievement`, `clearAchievement`, `isAchievementUnlocked` | Achievements by API name |
+| `setAchievementProgress`, `achievementProgress` | Progress as current/max; reaching max unlocks |
+| `setStatInt`, `statInt`, `setStatFloat`, `statFloat`, `storeStats` | Stats, sent to the store by `storeStats` |
+| `writeCloudFile`, `readCloudFile`, `removeCloudFile` | Cloud files by name; a read fills a caller span and returns the size |
+| `listCloudFiles`, `cloudFileExists`, `cloudQuota` | Names into a caller span, existence, size and free space |
+| `overlayActive`, `openOverlay` | The overlay's state, polled each frame, and a request to open it |
+| `glyphPath` | Path of an image of a gamepad control in the store's style, or nothing |

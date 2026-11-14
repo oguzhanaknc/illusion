@@ -6,7 +6,9 @@
 #     illusion::<name>_api targets), illusion_add_module() and illusion_project_modules();
 #   - the component `player` (find_package(illusion CONFIG COMPONENTS player)): illusion::player with every
 #     engine and third-party static library it links, the imported executables illusion::pack and
-#     illusion::icon, illusion_add_game() and illusion_package_game().
+#     illusion::icon, illusion_add_game() and illusion_package_game();
+#   - the component `steam` (with `player`): illusion::steam, built in the game's project from the sources of
+#     engine/steam that the package carries, against the game's ILLUSION_STEAMWORKS_SDK (ADR 0056).
 #
 # Next to it, <build>/sdk/<Config>/illusion-sdk.json describes the toolchain of that configuration, which the
 # editor passes to CMake when it configures a project's modules, so they get the build key of the editor, and
@@ -200,7 +202,7 @@ function(illusion_write_sdk)
     set(package_dir "${CMAKE_INSTALL_LIBDIR}/cmake/illusion")
 
     set(module_targets illusion_core illusion_glm illusion_yyjson illusion_physics_api illusion_audio_api
-        illusion_particles_api illusion_input_api illusion_render_api illusion_runtime_api)
+        illusion_particles_api illusion_input_api illusion_render_api illusion_runtime_api illusion_store_api)
     _illusion_sdk_export(illusionTargets sdk ${module_targets})
     export(EXPORT illusionTargets NAMESPACE illusion:: FILE "${sdk}/illusionTargets.cmake")
     install(EXPORT illusionTargets NAMESPACE illusion:: DESTINATION "${package_dir}" COMPONENT sdk)
@@ -233,16 +235,20 @@ function(illusion_write_sdk)
         export(EXPORT illusionPlayerTargets NAMESPACE illusion:: FILE "${sdk}/illusionPlayerTargets.cmake")
         install(EXPORT illusionPlayerTargets NAMESPACE illusion:: DESTINATION "${package_dir}" COMPONENT player)
         install(FILES "${PROJECT_SOURCE_DIR}/cmake/IllusionGame.cmake" "${PROJECT_SOURCE_DIR}/cmake/IllusionGamePackage.cmake"
-            "${PROJECT_SOURCE_DIR}/cmake/PackGameData.cmake"
+            "${PROJECT_SOURCE_DIR}/cmake/PackGameData.cmake" "${PROJECT_SOURCE_DIR}/cmake/IllusionSteam.cmake"
             DESTINATION "${package_dir}" COMPONENT player)
+        install(DIRECTORY "${PROJECT_SOURCE_DIR}/engine/steam/src" "${PROJECT_SOURCE_DIR}/engine/steam/include"
+            DESTINATION "${package_dir}/steam" COMPONENT player)
         list(APPEND header_targets ${player_targets})
     endif()
     _illusion_sdk_install_headers(${header_targets})
 
     # The build tree's package uses the engine's CMake files in place; the installed one carries copies.
     set(ILLUSION_SDK_CMAKE_DIR "${PROJECT_SOURCE_DIR}/cmake")
+    set(ILLUSION_SDK_STEAM_DIR "${PROJECT_SOURCE_DIR}/engine/steam")
     configure_file("${PROJECT_SOURCE_DIR}/cmake/sdk/illusionConfig.cmake.in" "${sdk}/illusionConfig.cmake" @ONLY)
     set(ILLUSION_SDK_CMAKE_DIR "\${CMAKE_CURRENT_LIST_DIR}")
+    set(ILLUSION_SDK_STEAM_DIR "\${CMAKE_CURRENT_LIST_DIR}/steam")
     configure_file("${PROJECT_SOURCE_DIR}/cmake/sdk/illusionConfig.cmake.in" "${sdk}/install/illusionConfig.cmake"
         @ONLY)
     configure_file("${PROJECT_SOURCE_DIR}/cmake/sdk/illusionConfigVersion.cmake.in"
