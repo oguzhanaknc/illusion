@@ -105,6 +105,10 @@ jobs:
           sudo apt-get update && sudo apt-get install -y --no-install-recommends
           libwayland-dev libxkbcommon-dev libx11-dev libxrandr-dev libxinerama-dev libxcursor-dev
           libxi-dev libxext-dev
+      - name: Install the Vulkan loader and MoltenVK
+        if: runner.os == 'macOS'
+        # Exported macOS games carry both in their bundle (cmake/IllusionGame.cmake); exports fail without them.
+        run: brew install vulkan-loader molten-vk
       - name: Set up MSVC environment
         if: runner.os == 'Windows'
         uses: ilammy/msvc-dev-cmd@0b201ec74fa43914dc39ae48a89fd1d8cb592756 # v1.13.0

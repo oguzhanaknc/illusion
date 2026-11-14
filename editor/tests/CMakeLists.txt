@@ -82,9 +82,15 @@ add_dependencies(illusion_editor_tests illusion_tetris_module illusion_tetris_ag
 # The module build tests run a stand-in for CMake, and one real build with the module SDK of this build tree
 # (ADR 0043; profiling builds have no SDK).
 illusion_add_editor_executable(illusion_fake_cmake FakeCMake.cpp)
+# The same program as cpack next to it: exports run cpack from the directory of their cmake.
+illusion_add_editor_executable(illusion_fake_cpack FakeCMake.cpp)
+set_target_properties(illusion_fake_cmake illusion_fake_cpack PROPERTIES
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin/$<CONFIG>/fake-tools")
+set_target_properties(illusion_fake_cpack PROPERTIES OUTPUT_NAME cpack)
 illusion_configure_target(illusion_fake_cmake)
+illusion_configure_target(illusion_fake_cpack)
 target_compile_definitions(illusion_editor_tests PRIVATE ILLUSION_FAKE_CMAKE="$<TARGET_FILE:illusion_fake_cmake>")
-add_dependencies(illusion_editor_tests illusion_fake_cmake)
+add_dependencies(illusion_editor_tests illusion_fake_cmake illusion_fake_cpack)
 # Exports (export.build) cook and pack with illusion_pack, also with the stand-in for CMake.
 if(NOT TARGET illusion_pack)
     message(FATAL_ERROR "The editor tests need illusion_pack: configure with ILLUSION_BUILD_TOOLS=ON")
@@ -207,9 +213,14 @@ if(NOT ILLUSION_PROFILING)
     set_tests_properties(sdk.export.tetris PROPERTIES LABELS "unit;sdk" TIMEOUT 1800 FIXTURES_SETUP export_tetris)
     foreach(game showcase tetris)
         if(game STREQUAL "showcase")
-            set(executable ${export_work}/showcase-out/Showcase/showcase${CMAKE_EXECUTABLE_SUFFIX})
+            set(product Showcase)
         else()
-            set(executable ${export_work}/tetris-out/Tetris/tetris${CMAKE_EXECUTABLE_SUFFIX})
+            set(product Tetris)
+        endif()
+        if(APPLE)
+            set(executable ${export_work}/${game}-out/${product}.app/Contents/MacOS/${product})
+        else()
+            set(executable ${export_work}/${game}-out/${product}/${game}${CMAKE_EXECUTABLE_SUFFIX})
         endif()
         add_test(NAME sdk.export.${game}.run
             COMMAND ${CMAKE_COMMAND} -DMODE=run -DGAME=${executable} -DUSER=${export_work}/${game}-user
@@ -221,6 +232,90 @@ if(NOT ILLUSION_PROFILING)
         set_tests_properties(sdk.export.${game}.symbols PROPERTIES LABELS "unit;sdk"
             FIXTURES_REQUIRED export_${game})
     endforeach()
+
+    # Packages and signing (ADR 0055) on the showcase's build tree: Windows signs with a recording sign command
+    # (tests/sdk/RecordSign.cmake through ILLUSION_SIGN_COMMAND) and packages a ZIP, and an NSIS installer when
+    # makensis is installed (otherwise the export must fail naming it); macOS signs ad hoc and makes a DMG;
+    # Linux makes a .tar.gz.
+    set(package_output ${export_work}/showcase-package)
+    set(package_transcript ${PROJECT_SOURCE_DIR}/tests/sdk/export-package.jsonl)
+    set(package_vars --var "configuration=\"$<CONFIG>\"")
+    if(WIN32)
+        set(program_files_x86 "ProgramFiles(x86)")
+        find_program(ILLUSION_TEST_MAKENSIS makensis
+            PATHS "$ENV{${program_files_x86}}/NSIS" "$ENV{ProgramFiles}/NSIS")
+        set(package_kinds archive)
+        if(ILLUSION_TEST_MAKENSIS)
+            list(APPEND package_kinds installer)
+        else()
+            add_test(NAME sdk.export.showcase.installer
+                COMMAND illusion_ctl --launch $<TARGET_FILE:illusion_editor>
+                    --editor-arg --headless --editor-arg --no-gpu --editor-arg --project
+                    --editor-arg ${export_work}/showcase
+                    replay ${PROJECT_SOURCE_DIR}/tests/sdk/export-missing-tool.jsonl
+                    --var "output=\"${package_output}-installer\"" ${package_vars})
+            set_tests_properties(sdk.export.showcase.installer PROPERTIES LABELS "unit;sdk" TIMEOUT 600
+                FIXTURES_REQUIRED export_showcase)
+        endif()
+        foreach(kind IN LISTS package_kinds)
+            set(log ${package_output}-${kind}/signed.txt)
+            add_test(NAME sdk.export.showcase.${kind}
+                COMMAND illusion_ctl --launch $<TARGET_FILE:illusion_editor>
+                    --editor-arg --headless --editor-arg --no-gpu --editor-arg --project
+                    --editor-arg ${export_work}/showcase
+                    replay ${package_transcript} --var "output=\"${package_output}-${kind}\"" ${package_vars}
+                    --var "package=\"${kind}\"" --var "codesignIdentity=\"\"" --var "signed=true")
+            add_test(NAME sdk.export.showcase.${kind}.check
+                COMMAND ${CMAKE_COMMAND} -DMODE=windows-package -DOUTPUT=${package_output}-${kind} -DNAME=Showcase
+                    -DEXE=showcase -DVERSION=0.1.0 -DORGANIZATION=illusion -DKIND=${kind} -DLOG=${log}
+                    -DRESOURCES=${PROJECT_SOURCE_DIR}/tests/sdk/CheckWindowsResources.ps1 -P ${export_script})
+            # The sign log starts empty: every line is a signature of this export.
+            add_test(NAME sdk.export.showcase.${kind}.clean
+                COMMAND ${CMAKE_COMMAND} -E rm -rf ${package_output}-${kind})
+            set_tests_properties(sdk.export.showcase.${kind}.clean PROPERTIES LABELS "unit;sdk"
+                FIXTURES_SETUP export_package_${kind}_clean)
+            set_tests_properties(sdk.export.showcase.${kind} PROPERTIES LABELS "unit;sdk" TIMEOUT 1800
+                FIXTURES_REQUIRED "export_showcase;export_package_${kind}_clean"
+                FIXTURES_SETUP export_package_${kind}
+                ENVIRONMENT "ILLUSION_SIGN_COMMAND=\"${CMAKE_COMMAND}\" \"-DLOG=${log}\" \"-DFILE={file}\" -P \"${PROJECT_SOURCE_DIR}/tests/sdk/RecordSign.cmake\""
+                RESOURCE_LOCK export_showcase_build)
+            set_tests_properties(sdk.export.showcase.${kind}.check PROPERTIES LABELS "unit;sdk"
+                FIXTURES_REQUIRED export_package_${kind})
+        endforeach()
+    else()
+        if(APPLE)
+            set(kind installer)
+            set(identity "-")
+            set(signed true)
+            set(check_args -DMODE=macos-package -DNAME=Showcase -DVERSION=0.1.0)
+        else()
+            set(kind archive)
+            set(identity "")
+            set(signed false)
+            set(check_args -DMODE=linux-package -DNAME=Showcase -DEXE=showcase -DVERSION=0.1.0)
+        endif()
+        add_test(NAME sdk.export.showcase.${kind}
+            COMMAND illusion_ctl --launch $<TARGET_FILE:illusion_editor>
+                --editor-arg --headless --editor-arg --no-gpu --editor-arg --project --editor-arg ${export_work}/showcase
+                replay ${package_transcript} --var "output=\"${package_output}-${kind}\"" ${package_vars}
+                --var "package=\"${kind}\"" --var "codesignIdentity=\"${identity}\"" --var "signed=${signed}")
+        add_test(NAME sdk.export.showcase.${kind}.check
+            COMMAND ${CMAKE_COMMAND} ${check_args} -DOUTPUT=${package_output}-${kind} -P ${export_script})
+        set_tests_properties(sdk.export.showcase.${kind} PROPERTIES LABELS "unit;sdk" TIMEOUT 1800
+            FIXTURES_REQUIRED export_showcase FIXTURES_SETUP export_package_${kind}
+            RESOURCE_LOCK export_showcase_build)
+        set_tests_properties(sdk.export.showcase.${kind}.check PROPERTIES LABELS "unit;sdk"
+            FIXTURES_REQUIRED export_package_${kind})
+        if(APPLE)
+            # The signed bundle of the package runs (with a GPU).
+            add_test(NAME sdk.export.showcase.${kind}.run
+                COMMAND ${CMAKE_COMMAND} -DMODE=run
+                    -DGAME=${package_output}-${kind}/Showcase.app/Contents/MacOS/Showcase -DFRAMES=1
+                    -DUSER=${export_work}/showcase-package-user -P ${export_script})
+            set_tests_properties(sdk.export.showcase.${kind}.run PROPERTIES LABELS "gpu;sdk" TIMEOUT 600
+                FIXTURES_REQUIRED export_package_${kind})
+        endif()
+    endif()
 endif()
 
 # The screenshots of the editor manual (docs/screenshots/manual.jsonl): a headless editor with a GPU on a copy

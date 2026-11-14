@@ -5,6 +5,7 @@
 
 #include <illusion/core/Log.hpp>
 #include <illusion/editor/core/Export.hpp>
+#include <illusion/platform/Process.hpp>
 
 #include <algorithm>
 #include <filesystem>
@@ -20,7 +21,7 @@ namespace
 
 constexpr usize kMaxConfigurationName = 32;
 
-std::string_view platformDirectory() noexcept
+constexpr std::string_view platformDirectory() noexcept
 {
 #if defined(ILL_PLATFORM_WINDOWS)
     return "windows";
@@ -145,15 +146,32 @@ Expected<ExportPackage, CommandError> packageOf(const std::optional<std::string>
     {
         if (name.value_or("none") == exportPackageName(package))
         {
-            if (package != ExportPackage::None)
-            {
-                return unexpected(
-                    CommandError::invalid("/package", "packages are not supported yet; use \"none\""));
-            }
             return package;
         }
     }
     return unexpected(CommandError::invalid("/package", "must be \"none\", \"archive\" or \"installer\""));
+}
+
+// A signing setting: the param when it is given (even empty, which turns signing off), else the environment
+// variable of this platform.
+std::string signingValue(const std::optional<std::string>& param, std::string_view variable,
+                         bool thisPlatform)
+{
+    if (param)
+    {
+        return *param;
+    }
+    return thisPlatform ? environmentVariable(variable).value_or("") : std::string();
+}
+
+ExportSigning signingOf(const ExportBuildParams& params)
+{
+    constexpr bool kWindows = platformDirectory() == "windows";
+    constexpr bool kMacos = platformDirectory() == "macos";
+    return ExportSigning{
+        .signCommand = signingValue(params.signCommand, "ILLUSION_SIGN_COMMAND", kWindows),
+        .codesignIdentity = signingValue(params.codesignIdentity, "ILLUSION_CODESIGN_IDENTITY", kMacos),
+        .notaryProfile = signingValue(params.notaryProfile, "ILLUSION_NOTARY_PROFILE", kMacos)};
 }
 
 class ExportBuildTask final : public CommandTask<ExportBuildResult>
@@ -257,14 +275,18 @@ exportBuild(CommandContext& context, const ExportBuildParams& params)
     {
         return unexpected(std::move(package).error());
     }
-    for (const auto& [pointer, value] :
-         {std::pair{"/linuxRuntime", &params.linuxRuntime}, std::pair{"/signCommand", &params.signCommand},
-          std::pair{"/codesignIdentity", &params.codesignIdentity},
-          std::pair{"/notaryProfile", &params.notaryProfile}})
+    if (params.linuxRuntime.has_value() && !params.linuxRuntime->empty())
     {
-        if (value->has_value() && !(*value)->empty())
+        return unexpected(CommandError::invalid("/linuxRuntime", "is not supported yet; leave it empty"));
+    }
+    for (const auto& [pointer, value] : {std::pair{"/signCommand", &params.signCommand},
+                                         std::pair{"/codesignIdentity", &params.codesignIdentity},
+                                         std::pair{"/notaryProfile", &params.notaryProfile}})
+    {
+        if (value->has_value() && std::any_of((*value)->begin(), (*value)->end(),
+                                              [](char c) { return static_cast<unsigned char>(c) < 0x20; }))
         {
-            return unexpected(CommandError::invalid(pointer, "is not supported yet; leave it empty"));
+            return unexpected(CommandError::invalid(pointer, "must be one line of text"));
         }
     }
     const std::filesystem::path root = context.editor().project()->root();
@@ -290,6 +312,8 @@ exportBuild(CommandContext& context, const ExportBuildParams& params)
                                            .projectRoot = root,
                                            .outputDirectory = std::move(output),
                                            .package = *package,
+                                           .signing = signingOf(params),
+                                           .linuxRuntime = {},
                                            .clean = params.clean.value_or(false)});
     if (!started)
     {
@@ -313,15 +337,23 @@ void registerExportCommands(CommandRegistry& registry)
             "and "
             "files matching the exclude patterns of settings:/export.json), data/settings.illpak and "
             "data/cache.illpak, builds an executable from the project's modules and the SDK's player with "
-            "CMake, and installs <output>/<Product>/<product>[.exe] with its data/ directory. Validation "
-            "errors "
-            "(no startup scene, a module without sources, a bad product name) fail the command; a failed "
-            "cook "
-            "or compile does not: the result has succeeded: false, the failed stage and diagnostics with "
-            "file "
-            "and line, and no partial game is left in the output. The first export configures CMake and "
-            "takes "
-            "minutes. Example: {\"output\": \"C:/Games/out\", \"configuration\": \"Release\"}.",
+            "CMake "
+            "(with the icon, identifier and copyright of the export settings), and installs "
+            "<output>/<Product>/<product>[.exe] with its data/ directory (<output>/<Product>.app on macOS). "
+            "package \"archive\" also writes a ZIP (.tar.gz on Linux), \"installer\" an NSIS setup.exe on "
+            "Windows (needs makensis) or a DMG on macOS; the result's package is that file. Signing: "
+            "signCommand (Windows; default env ILLUSION_SIGN_COMMAND) is a command line with {file}, run on "
+            "the executable before installing and on the installer; codesignIdentity (macOS; default env "
+            "ILLUSION_CODESIGN_IDENTITY, \"-\" signs ad hoc) signs the bundle with the hardened runtime; "
+            "notaryProfile (default env ILLUSION_NOTARY_PROFILE) notarizes and staples the DMG. An empty "
+            "string turns a setting off. Validation errors (no startup scene, a module without sources, a "
+            "bad "
+            "product name or icon, a missing packaging tool) fail the command; a failed cook, compile or "
+            "signing does not: the result has succeeded: false, the failed stage and diagnostics with file "
+            "and "
+            "line, and no partial game is left in the output. The first export configures CMake and takes "
+            "minutes. Example: {\"output\": \"C:/Games/out\", \"configuration\": \"Release\", "
+            "\"package\": \"installer\"}.",
         .category = "Export",
         .icon = "rocket_launch",
         .permission = PermissionClass::Build,

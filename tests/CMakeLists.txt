@@ -48,6 +48,7 @@ add_executable(illusion_tests
     assets/TestAssetCooker.cpp
     assets/TestAssetDatabase.cpp
     assets/TestAssetFormat.cpp
+    assets/TestAppIcon.cpp
     assets/TestAssetStreamer.cpp
     assets/TestAtmosphere.cpp
     assets/TestEnvironment.cpp
@@ -212,9 +213,13 @@ if(ILLUSION_BUILD_TOOLS AND NOT ILLUSION_PROFILING)
         COMMAND "${CMAKE_COMMAND}" -DMODE=build
             "-DSDK=${sdk_installed}/${CMAKE_INSTALL_LIBDIR}/cmake/illusion/$<CONFIG>/illusion-sdk.json"
             "-DSOURCE=${CMAKE_CURRENT_SOURCE_DIR}/sdk/game" "-DWORK=${sdk_work}/installed_game" -P "${sdk_script}")
+    set(sdk_game_executable "sdk_game${CMAKE_EXECUTABLE_SUFFIX}")
+    if(APPLE)
+        set(sdk_game_executable "sdk_game.app/Contents/MacOS/sdk_game")
+    endif()
     foreach(variant build_tree installed)
         add_test(NAME sdk.player.${variant}.run
-            COMMAND "${sdk_work}/${variant}_game/build/sdk_game${CMAKE_EXECUTABLE_SUFFIX}" --frames 1 --no-dialogs
+            COMMAND "${sdk_work}/${variant}_game/build/${sdk_game_executable}" --frames 1 --no-dialogs
                 --user-data "${sdk_work}/${variant}_game/user")
         set_tests_properties(sdk.player.${variant}.run PROPERTIES LABELS "gpu;sdk" TIMEOUT 300
             FIXTURES_REQUIRED sdk_game_${variant})

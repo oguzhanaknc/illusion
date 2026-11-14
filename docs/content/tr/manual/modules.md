@@ -315,7 +315,8 @@ find_package(illusion REQUIRED CONFIG COMPONENTS player)
 ```
 
 `illusion::player` (player kütüphanesi ve bağladığı tüm motor ve üçüncü taraf statik kütüphaneleri),
-`illusion::pack` çalıştırılabilir dosyası ve `illusion_add_game()` fonksiyonunu içe aktarır. Component'i
+`illusion::pack` ve `illusion::icon` çalıştırılabilir dosyalarını (her platformun icon dosyalarını üretir) ve
+`illusion_add_game()` ile `illusion_package_game()` fonksiyonlarını içe aktarır. Component'i
 olmayan bir paket (profiling Build'i ya da player olmadan derlenen bir konfigürasyon) onu bulunamadı olarak
 bildirir. Paket hiçbir editör hedefi içermez; bu yüzden bir oyun editör kodunu bağlayamaz.
 
@@ -326,10 +327,19 @@ bölümünde anlatıldığı gibi üretir:
 | --- | --- |
 | `MODULES <targets...>` | `illusion_add_module(... STATIC)` ile üretilmiş statik modüller. |
 | `NAME`, `ORGANIZATION` | Zorunlu. Pencere başlığı ve kullanıcı veri dizini. |
-| `VERSION` | Log'a yazılır. |
+| `VERSION` | Log'a, Windows sürüm kaynağına ve macOS bundle'ına yazılır. |
 | `STARTUP_SCENE` | Zorunlu. İlk sahnenin sanal yolu, örneğin `assets:/scenes/main.scene`. |
 | `DATA_DIRECTORY` | Player'ın arşivlerini aradığı yer, çalıştırılabilir dosyaya göre (varsayılan `data`). |
 | `PROJECT <directory>` | `<directory>/assets` ve `<directory>/settings` dizinlerini `illusion::pack` ile çalıştırılabilir dosyanın yanında `assets.illpak`, `settings.illpak` ve `cache.illpak` olarak paketler. |
+| `ICON <png>` | `illusion::icon`'un platformun icon'una (bir `.ico`, bir `.icns` veya 512 piksellik bir PNG) çevirdiği, en az 256 piksellik kare bir PNG. Yoksa oyun motorun icon'unu alır. |
+| `IDENTIFIER` | macOS'ta ters DNS bundle identifier'ı (varsayılan `com.<organization>.<name>`). |
+| `COPYRIGHT` | Windows sürüm kaynağının ve macOS `Info.plist` dosyasının telif satırı. |
+
+Windows'ta hedef bir icon ve bir sürüm kaynağı alır, macOS'ta içinde Vulkan loader ve MoltenVK bulunan bir
+uygulama bundle'ına dönüşür, Linux'ta çalıştırılabilir dosyanın yanına bir PNG ve bir `.desktop` dosyası konur;
+bunları [export rehberi](editor/export.md#icon-identifier-ve-copyright) listeler. `illusion_package_game(<target> DATA
+<archives...>)` ardından oyunu kurar ve [`export.build`](editor/export.md#paketler) komutunun yazdığı paketler için
+CPack'i ayarlar; hedefin `OUTPUT_NAME` değeri kesinleştikten sonra bir kez çağırın.
 
 `<build>/sdk/<Config>/illusion-sdk.json` sürüm 2'dir: paket o konfigürasyon için component'e sahipse
 `"player": true`, değilse `"player": false` ekler. Editör bir oyunu dışa aktarmadan önce onu okur.
