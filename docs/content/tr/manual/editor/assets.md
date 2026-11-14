@@ -80,7 +80,7 @@ sidecar'ı varsayılandan farklı ayarları tutar; **Apply** onu yazar (bütün 
   üçgen oranı, modelin görüntülerinin sıkıştırılıp sıkıştırılmayacağı (**Compress textures**) ve
   **Texture quality**.
 
-- **Fonts** (`.ttf`, `.otf`, kind `Font`): signed distance field atlas'ının **Pixel size** ve **Spread**
+- **Fonts** (`.ttf`, `.otf`, kind `Font`): signed distance field atlas'ının **Pixel size** ve **Distance spread**
   değerleri; bkz. [font'lar](../assets.md#fontlar). Code point aralıkları `asset.set_import_settings` ile ya
   da sidecar'da ayarlanır.
 
