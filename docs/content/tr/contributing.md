@@ -113,3 +113,38 @@ formatları, thread modeli, public API kuralları):
 Üçüncü taraf kütüphaneler `cmake/Dependencies.cmake` içinde kesin bir sürüme sabitlenir, SHA-256 hash'i
 ile doğrulanır ve lisanslarıyla birlikte `THIRD_PARTY_NOTICES.md` dosyasında listelenir. Yalnızca ticari
 ve kapalı kaynak dağıtımla uyumlu lisanslara sahip bağımlılıklar ekleyin.
+
+## Sürümler ve yayınlar
+
+Engine'in tek bir sürümü vardır; bu sürüm kök `CMakeLists.txt` dosyasındaki `project()` çağrısında
+belirlenir ve [Semantic Versioning](https://semver.org/) kurallarına uyar: MAJOR.MINOR.PATCH. 1.0.0'dan
+önce bir MINOR sürüm uyumluluğu bozabilir; 1.0.0'dan itibaren aşağıdakilerden herhangi biri yeni bir MAJOR
+sürüm gerektirir:
+
+- **Scripting API**: önceki sürüm için build edilmiş modüllerin yüklenememesine veya farklı davranmasına
+  yol açan bir değişiklik; `ModuleApi`, `ModuleServices`, `ModuleContext` ya da bir host service
+  arayüzündeki her yerleşim değişikliği bu türdendir. Böyle bir değişiklik `kModuleApiVersion` değerini
+  (`illusion/core/Module.hpp`) artırır.
+- **Editor commands**: bir komutun parametrelerinde, sonucunda veya davranışında uyumsuz bir değişiklik;
+  bu, komutun katalogdaki `version` değerini de artırır. Yeni bir komut ya da isteğe bağlı bir parametre
+  eklemek MINOR bir değişikliktir.
+- **Dosya formatları**: engine'in önceki sürümün yazdığı sahneleri, proje ayarlarını, cook edilmiş Asset'leri
+  veya `.illpak` arşivlerini artık okuyamaması. Eski dosyaları okuyup yeni bir format sürümü yazmak
+  MINOR'dır.
+- **SDK paketi**: `illusion` paketinden bir hedefin, bileşenin veya CMake fonksiyonunun kaldırılması ya da
+  yeniden adlandırılması, veya `illusion-sdk.json` dosyasında uyumsuz bir değişiklik.
+
+PATCH sürümleri yalnızca hata düzeltir. Kullanıcıların gördüğü her değişiklik `CHANGELOG.md` dosyasının
+"Unreleased" bölümüne bir satır olarak eklenir ([Keep a Changelog](https://keepachangelog.com/)); bir yayın
+bu bölümü o sürümün bölümüne dönüştürür.
+
+Bir yayın, `CMakeLists.txt` dosyasındaki sürümle aynı olan bir `v<sürüm>` tag'idir. `release` workflow'u onu
+Windows, Linux ve macOS'ta build eder, test'leri çalıştırır, platform başına bir arşiv
+(`illusion-<version>-<platform>-<arch>`; editör, araçlar ve SDK ile) ve onun SHA-256 dosyasını oluşturur,
+showcase'i kurulu paketten export eder ve iki dosyayı taslak bir GitHub release'ine ekler. Aynı paket yerelde
+de oluşturulabilir:
+
+```bash
+cmake --build --preset ci-linux-clang-release
+cpack --config build/ci-linux-clang/CPackConfig.cmake -C Release -B build/packages
+```

@@ -1,9 +1,10 @@
 # Tests of the illusion package's component `player` (ADR 0055), in script mode:
 #
 #   -DMODE=build    -DSDK=<illusion-sdk.json> -DSOURCE=<game directory> -DWORK=<directory>
-#       copies the game to WORK/src, configures it with the toolchain of SDK and builds it in WORK/build.
-#   -DMODE=install  -DBUILD_DIR=<engine build> -DCONFIG=<config> -DWORK=<directory>
-#       installs the components sdk and player to WORK/staging and moves the result to WORK/sdk.
+#       copies the game to WORK/src, configures it with the toolchain of SDK and builds it in WORK/build; fails
+#       if the linker cannot find the debug information of a library (MSVC LNK4099).
+#   -DMODE=install  -DBUILD_DIR=<engine build> -DCONFIG=<config> -DWORK=<directory> [-DCOMPONENTS=<list>]
+#       installs COMPONENTS (default sdk;player) to WORK/staging and moves the result to WORK/sdk.
 #   -DMODE=contents -DPREFIX=<installed SDK> -DSOURCE_DIR=<engine source> -DBUILD_DIR=<engine build> -DSTAGING=<path>
 #       fails if the installed SDK holds editor libraries or Dear ImGui headers, or if its package files name
 #       the engine's source or build tree or the directory it was installed to.
@@ -18,13 +19,14 @@ function(require)
     endforeach()
 endfunction()
 
-# Runs a command and fails with its output when it fails.
+# Runs a command and fails with its output when it fails; sets run_output to its output.
 function(run what)
     execute_process(COMMAND ${ARGN} RESULT_VARIABLE result OUTPUT_VARIABLE output ERROR_VARIABLE output
         TIMEOUT 1500)
     if(NOT result EQUAL 0)
         message(FATAL_ERROR "${what} failed (${result}):\n${output}")
     endif()
+    set(run_output "${output}" PARENT_SCOPE)
 endfunction()
 
 # Outside a developer environment, takes the environment of the toolchain's vcvars script (MSVC, clang-cl).
@@ -80,6 +82,11 @@ if(MODE STREQUAL "build")
     run("configuring the game" "${cmake}" -S "${WORK}/src" -B "${WORK}/build" -G "${generator}" ${arguments}
         "-Dillusion_DIR=${package}")
     run("building the game" "${cmake}" --build "${WORK}/build")
+    string(REGEX MATCHALL "[^\r\n]*LNK4099[^\r\n]*" missing_pdbs "${run_output}")
+    if(missing_pdbs)
+        list(JOIN missing_pdbs "\n" missing_pdbs)
+        message(FATAL_ERROR "the game links libraries without their debug information:\n${missing_pdbs}")
+    endif()
     # A macOS game is a bundle with its data in Contents/Resources (cmake/IllusionGame.cmake).
     set(data "${WORK}/build/data")
     if(APPLE)
@@ -92,8 +99,11 @@ if(MODE STREQUAL "build")
     endforeach()
 elseif(MODE STREQUAL "install")
     require(BUILD_DIR CONFIG WORK)
+    if(NOT DEFINED COMPONENTS)
+        set(COMPONENTS sdk player)
+    endif()
     file(REMOVE_RECURSE "${WORK}")
-    foreach(component sdk player)
+    foreach(component IN LISTS COMPONENTS)
         run("installing the component ${component}" "${CMAKE_COMMAND}" --install "${BUILD_DIR}" --config "${CONFIG}"
             --component ${component} --prefix "${WORK}/staging")
     endforeach()

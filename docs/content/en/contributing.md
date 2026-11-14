@@ -106,3 +106,34 @@ threading, public API conventions):
 Third-party libraries are pinned to an exact version and verified with a SHA-256 hash in
 `cmake/Dependencies.cmake`, and listed with their licences in `THIRD_PARTY_NOTICES.md`. Only add
 dependencies with licences compatible with commercial, closed-source distribution.
+
+## Versions and releases
+
+The engine has one version, set in the `project()` call of the root `CMakeLists.txt`, and follows
+[Semantic Versioning](https://semver.org/): MAJOR.MINOR.PATCH. Before 1.0.0 a MINOR release may break
+compatibility; from 1.0.0 on, any of the following needs a new MAJOR version:
+
+- **Scripting API**: a change that makes modules built for the previous release fail to load or behave
+  differently, which is every layout change of `ModuleApi`, `ModuleServices`, `ModuleContext` or a host
+  service interface. Such a change raises `kModuleApiVersion` (`illusion/core/Module.hpp`).
+- **Editor commands**: an incompatible change of a command's params, result or behaviour, which also raises
+  that command's `version` in the catalogue. Adding a command or an optional param is a MINOR change.
+- **File formats**: when the engine can no longer read scenes, project settings, cooked assets or `.illpak`
+  archives written by the previous release. Reading old files and writing a new format version is MINOR.
+- **SDK package**: removing or renaming a target, component or CMake function of the `illusion` package,
+  or an incompatible change of `illusion-sdk.json`.
+
+PATCH releases only fix bugs. Every change that users see gets a line in the "Unreleased" section of
+`CHANGELOG.md` ([Keep a Changelog](https://keepachangelog.com/)); a release turns that section into the
+version's section.
+
+A release is a tag `v<version>` that equals the version of `CMakeLists.txt`. The `release` workflow builds
+it on Windows, Linux and macOS, runs the tests, makes one archive per platform
+(`illusion-<version>-<platform>-<arch>`, with the editor, the tools and the SDK) and its SHA-256 file,
+exports the showcase from the installed package and attaches both files to a draft GitHub release. The
+same package can be made locally:
+
+```bash
+cmake --build --preset ci-linux-clang-release
+cpack --config build/ci-linux-clang/CPackConfig.cmake -C Release -B build/packages
+```

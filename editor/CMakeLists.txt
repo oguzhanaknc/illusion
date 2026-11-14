@@ -38,6 +38,11 @@ add_custom_command(
     VERBATIM)
 add_custom_target(illusion_editor_data DEPENDS ${editor_data_stamp})
 illusion_mark_editor_only(illusion_editor_data)
+set(editor_data_install "${CMAKE_INSTALL_BINDIR}/$<CONFIG>/editor-data")
+install(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/data/ DESTINATION "${editor_data_install}" COMPONENT editor)
+install(FILES ${editor_font_files} DESTINATION "${editor_data_install}/fonts" COMPONENT editor)
+install(FILES ${editor_licence_files} ${PROJECT_SOURCE_DIR}/THIRD_PARTY_NOTICES.md
+    DESTINATION "${editor_data_install}/licenses" COMPONENT editor)
 
 add_subdirectory(tools/ui_gallery)
 add_subdirectory(tools/command_reference)

@@ -1,0 +1,172 @@
+name: Release
+
+# The engine package (cmake/IllusionRelease.cmake) per platform: built, tested, packaged with CPack and checked
+# by exporting the showcase from an installed copy. Tags `v<version>` also get a draft GitHub release.
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+defaults:
+  run:
+    # bash everywhere (Git Bash on Windows) so `| tee` + pipefail behave the same on all runners.
+    shell: bash
+
+env:
+  # Shared runners are noisy; benchmarks may take up to 3x their budget before failing.
+  ILLUSION_BENCH_TOLERANCE: "3.0"
+  CTEST_OUTPUT_ON_FAILURE: "1"
+
+jobs:
+  version:
+    name: Version
+    runs-on: ubuntu-24.04
+    outputs:
+      version: ${{ steps.read.outputs.version }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - id: read
+        # The version of the root CMakeLists.txt; a tag must name exactly that version.
+        env:
+          EVENT: ${{ github.event_name }}
+          REF_TYPE: ${{ github.ref_type }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          version=$(sed -n '/^project(illusion/,/)/s/^ *VERSION \([0-9][0-9.]*\).*/\1/p' CMakeLists.txt)
+          if [[ ! "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "::error::cannot read the project version from CMakeLists.txt (found '$version')"
+            exit 1
+          fi
+          if [[ "$REF_TYPE" == tag && "$TAG" != "v$version" ]]; then
+            echo "::error::the tag $TAG does not match the project version v$version"
+            exit 1
+          fi
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "version=$version"
+
+  package:
+    needs: version
+    name: ${{ matrix.name }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { name: Windows MSVC, os: windows-2025, preset: ci-windows-msvc }
+          - { name: Linux GCC, os: ubuntu-24.04, preset: ci-linux-gcc }
+          - { name: macOS AppleClang, os: macos-15, preset: ci-macos-clang }
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.12"
+      - name: Install Ninja
+        run: pip install ninja==1.13.2
+      - name: Install Linux build dependencies
+        if: runner.os == 'Linux'
+        # X11 and Wayland development files for GLFW.
+        run: >
+          sudo apt-get update && sudo apt-get install -y --no-install-recommends
+          libwayland-dev libxkbcommon-dev libx11-dev libxrandr-dev libxinerama-dev libxcursor-dev
+          libxi-dev libxext-dev
+      - name: Install the Vulkan loader and MoltenVK
+        if: runner.os == 'macOS'
+        # Exported macOS games carry both in their bundle (cmake/IllusionGame.cmake); exports fail without them.
+        run: brew install vulkan-loader molten-vk
+      - name: Set up MSVC environment
+        if: runner.os == 'Windows'
+        uses: ilammy/msvc-dev-cmd@0b201ec74fa43914dc39ae48a89fd1d8cb592756 # v1.13.0
+      - name: Restore the Slang compiler download
+        # Release downloads from GitHub fail during outages (HTTP 504); FetchContent skips a download whose
+        # file is already there with the pinned SHA-256, so a cached archive keeps configure working.
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: build/${{ matrix.preset }}/_deps/slang-subbuild/slang-populate-prefix/src/slang-*.tar.gz
+          key: slang-${{ matrix.preset }}-${{ hashFiles('cmake/Dependencies.cmake') }}
+          restore-keys: slang-${{ matrix.preset }}-
+      - name: Configure
+        run: cmake --preset ${{ matrix.preset }} 2>&1 | tee configure.log
+      - name: Build (Release)
+        run: cmake --build --preset ${{ matrix.preset }}-release -- -k 0 2>&1 | tee build-release.log
+      - name: Test + benchmarks (Release)
+        # The installed-package tests run after packaging.
+        run: ctest --preset ${{ matrix.preset }}-release -LE "gpu|display" -E "^sdk\.release\." 2>&1 | tee test-release.log
+      - name: Package
+        run: >
+          cpack --config build/${{ matrix.preset }}/CPackConfig.cmake -C Release -B packages 2>&1
+          | tee package.log
+      - name: Check the package
+        env:
+          VERSION: ${{ needs.version.outputs.version }}
+        run: |
+          shopt -s nullglob
+          packages=(packages/illusion-"$VERSION"-*.zip packages/illusion-"$VERSION"-*.tar.gz)
+          if [[ ${#packages[@]} -ne 1 ]]; then
+            echo "::error::expected one package for $VERSION, found: ${packages[*]}"
+            exit 1
+          fi
+          package=${packages[0]}
+          # CPack writes the checksum file with CRLF line ends on Windows; ship LF everywhere.
+          sed -i 's/\r$//' "$package.sha256"
+          (cd packages && sha256sum -c "$(basename "$package").sha256")
+          name=$(basename "$package"); name=${name%.zip}; name=${name%.tar.gz}
+          mkdir -p extracted
+          cmake -E chdir extracted cmake -E tar xf "../$package"
+          for file in THIRD_PARTY_NOTICES.md CHANGELOG.md lib/cmake/illusion/illusionConfig.cmake \
+              bin/Release/editor-data/themes; do
+            if [[ ! -e "extracted/$name/$file" ]]; then
+              echo "::error::$package has no $name/$file"
+              exit 1
+            fi
+          done
+      - name: Installed-package test (export the showcase from a moved installation)
+        run: ctest --preset ${{ matrix.preset }}-release -LE "gpu|display" -R "^sdk\.release\." 2>&1 | tee test-installed.log
+      - name: Upload the package
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: package-${{ matrix.preset }}
+          path: |
+            packages/illusion-*.zip
+            packages/illusion-*.tar.gz
+            packages/illusion-*.sha256
+          if-no-files-found: error
+      - name: Annotate failures
+        if: failure()
+        run: >
+          python tools/ci/annotate_log.py configure.log build-release.log test-release.log package.log
+          test-installed.log
+
+  release:
+    needs: [version, package]
+    if: github.ref_type == 'tag'
+    name: Draft release
+    runs-on: ubuntu-24.04
+    permissions:
+      # contents: write creates the release; actions: read downloads this run's packages.
+      contents: write
+      actions: read
+    steps:
+      - name: Download the packages
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          RUN: ${{ github.run_id }}
+        run: gh run download "$RUN" --repo "$REPO" --pattern "package-*" --dir packages
+      - name: Create the draft release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          TAG: ${{ github.ref_name }}
+          VERSION: ${{ needs.version.outputs.version }}
+        run: >
+          gh release create "$TAG" --repo "$REPO" --draft --verify-tag --title "illusion $VERSION"
+          --notes "See CHANGELOG.md for the changes in $VERSION. Each archive has its SHA-256 in the .sha256 file."
+          packages/*/illusion-*

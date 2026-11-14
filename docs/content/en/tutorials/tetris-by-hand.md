@@ -242,6 +242,12 @@ Change the code while the game runs, for example the score of a line clear, and 
 module is hot-reloaded, its Components keep their values and the game keeps running (see
 [Play Mode](../manual/editor/play-mode.md#game-modules)).
 
+## Export it
+
+The game runs without the editor once you export it: **File > Export…**, or the command `export.build`, writes
+the game's directory with the executable and its packed data. The [export manual](../manual/editor/export.md)
+has the settings, and [Releasing a game](../guides/release.md) the way to a store.
+
 ## Next steps
 
 - Compare your game with the checks of the acceptance contract (C3 to C5 in SPEC.md).
