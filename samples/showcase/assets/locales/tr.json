@@ -1,0 +1,12 @@
+{
+  "format": "illusion.locale",
+  "version": 1,
+  "locale": "tr",
+  "displayName": "Türkçe",
+  "plural": "tr",
+  "number": {"decimal": ",", "group": "."},
+  "fallback": "en",
+  "strings": {
+    "showcase.hud.title": "Vitrin Arayüzü"
+  }
+}

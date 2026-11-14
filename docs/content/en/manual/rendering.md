@@ -849,7 +849,9 @@ ui->render(commands, target, list.data());
 - `pushClip()`, `setTransform()` and `measureText()` clip, transform and measure; `canvasMetrics()` maps
   canvas units to the target's pixels.
 
-This is the low-level API. Elements, layout, widgets and `UiService` (saved UI) come in later work packages
+This is the low-level API. Games build their UI from Entities with `UiCanvas`, `UiElement`, `UiImage` and
+`UiText`, which `UiWorld` lays out and records into a list like this one: see [Game UI](ui.md). Widgets and
+`UiService` come in later work packages
 ([ADR 0057](https://github.com/oguzhanaknc/illusion/blob/main/docs/adr/0057-game-ui.md)).
 
 ## Coordinate conventions

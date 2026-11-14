@@ -14,8 +14,9 @@ menteşeli bir kapı, ucundan bir ip sarkan bir sarkaç ve inip çıkan bir plat
 yerleşik bir Mesh'i olmayan gövdeler, collider boyutunda bir çocuk Entity alır ("Door Mesh", "Pendulum Mesh",
 ...); böylece collider'lar tam boyutlarını korur ve joint anchor'ları ölçeklenmemiş gövde uzayında kalır.
 
-Asset'leri `tools/make_assets.py` tarafından sayılardan üretilir (iki mesh'li bir model ve beş ses: müzik,
-rüzgâr, bir lamba uğultusu, bir selamlama ve bir tık); bu yüzden proje hiçbir üçüncü taraf lisansı taşımaz. Sahne elle yazılmaz: `build.jsonl` onu bir ajanın yapacağı gibi
+Asset'leri `tools/make_assets.py` tarafından sayılardan üretilir (iki mesh'li bir model, beş ses: müzik,
+rüzgâr, bir lamba uğultusu, bir selamlama ve bir tık, ve bir nine-slice panel görüntüsü); bu yüzden proje, font dışında hiçbir üçüncü taraf lisansı taşımaz: `assets/fonts/Roboto-Regular.ttf`
+(Apache-2.0, lisansı `assets/fonts/LICENSE.txt` içinde). Sahne elle yazılmaz: `build.jsonl` onu bir ajanın yapacağı gibi
 Editor commands ile kurar ve kaydeder. Aynı dosya, duman sprite'ına `asset.set_import_settings` ile bir içe
 aktarma ayarları sidecar'ı (`"quality": "high"`) ve `project.settings_set` ile varsayılan olmayan bir pencere
 (1600x900, yeniden boyutlandırılamaz; `settings/window.json`) da verir. Yeniden kurmak için:
@@ -33,7 +34,10 @@ oynatılmayı bekleyen bir toz emitter'ı (`playOnStart` kapalı) ve GPU'da sim�
 alan. Bir `Wind` Entity'si tozu (`windFactor`) avlunun öbür ucuna savurur. Devre dışı `Dusk Sky`
 Entity'si gün batımında bir `SkyAtmosphere` tutar: gökyüzünü ve güneşi hareketli olanlarla değiştirmek için onu
 etkinleştirin; devre dışı `Film Look` ise derecelendirilmiş, vinyetli bir görüntü için `PostEffects`
-tutar. Devre dışı `Morning Mist`, alçakta süzülen bir sis için bir `VolumetricFog` tutar.
+tutar. Devre dışı `Morning Mist`, alçakta süzülen bir sis için bir `VolumetricFog` tutar. `HUD` Entity'si her UI
+Component'ini kullanan bir oyun UI'ıdır: nine-slice görüntülü bir durum paneli ve bir metin stack'i (biri düz,
+biri `assets/locales/en.json` ve `tr.json` içindeki bir anahtarla yerelleştirilmiş), renkli hücrelerden bir grid ve
+döndürülmüş, ölçeklenmiş, kırpılmış bir kadran; bkz. [Oyun UI'ı](../ui.md). Play sırasında Game görünümünde görünür.
 
 ## Showcase modülü
 

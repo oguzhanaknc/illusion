@@ -1,0 +1,11 @@
+{
+  "format": "illusion.locale",
+  "version": 1,
+  "locale": "en",
+  "displayName": "English",
+  "plural": "en",
+  "number": {"decimal": ".", "group": ","},
+  "strings": {
+    "showcase.hud.title": "Showcase HUD"
+  }
+}

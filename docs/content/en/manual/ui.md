@@ -1,0 +1,287 @@
+# Game UI
+
+The UI of a game is made of Entities. A **canvas** is an Entity with `UiCanvas`; the Entities below it with
+`UiElement` are its elements, placed by anchors and offsets, by a `UiStack` or by a `UiGrid`, and drawn as
+images (`UiImage`) and text (`UiText`). `UiWorld` lays the elements out and records one draw list per frame
+inside a `GameSession`; the exported player and the editor's Game view draw it over the scene with
+`UiRenderer` (ADR 0057). The UI Components have no `Transform`, and they are saved in scenes and prefabs like
+every other Component.
+
+Headers: `<illusion/ui/UiComponents.hpp>`, `<illusion/ui/UiGeometry.hpp>`, `<illusion/ui/UiWorld.hpp>`
+
+Library: `illusion::ui` (game modules take the headers with `USES ui`)
+
+All sizes are **canvas units**: the origin is the top left corner and y points down. A canvas maps its units
+to the pixels of the target, so a UI looks the same at every resolution (see below).
+
+## Canvases and scaling
+
+A canvas is the root of a UI. Its `scale` (`UiCanvasScale`) says how canvas units map to the target:
+
+| `UiScaleMode` | One canvas unit is |
+| --- | --- |
+| `Fit` (default) | The smaller of target width / `referenceSize.x` and target height / `referenceSize.y` pixels: the whole reference size always fits |
+| `MatchHeight` | Target height / `referenceSize.y` pixels: the canvas is always `referenceSize.y` units tall, its width follows the aspect ratio |
+| `MatchWidth` | Target width / `referenceSize.x` pixels: the canvas is always `referenceSize.x` units wide |
+| `Pixels` | One pixel |
+
+`referenceSize` is the size the UI was designed for (default 1920 x 1080). `userScale` is an extra factor the
+player can choose for accessibility, clamped to 0.5 to 3; it multiplies every mode, `Pixels` included.
+`canvasMetrics()` returns the result for a target: `pixelsPerUnit`, the canvas `size` in units and the
+`safeArea`.
+
+| Field of `UiCanvas` | Meaning |
+| --- | --- |
+| `scale` | The `UiCanvasScale` above |
+| `order` | Canvases with a higher `order` are drawn on top; equal orders keep the order of their Entities |
+| `useSafeArea` | On by default: the canvas is laid out inside the display's safe insets (a TV's overscan, a phone's notch) instead of the whole target |
+| `modal` | Meant for a pause menu: while shown, the game's other input actions see no input. It is saved but nothing reads it yet; the widgets of a later package will |
+
+The host passes the target size and the unsafe borders in pixels with `GameSession::setUiFrame()` (the
+player and the Game view do). Entities with the `Inactive` tag, and their descendants, are not laid out or
+drawn, so disabling a canvas hides the whole UI.
+
+## Placement
+
+`UiElement::placement` puts an element inside the rectangle of its parent (the canvas's area for a child of
+the canvas) with two anchors and two offsets:
+
+| Field | Meaning |
+| --- | --- |
+| `anchorMin` | Where the top left corner is anchored in the parent: (0, 0) is its top left, (1, 1) its bottom right |
+| `anchorMax` | The same for the bottom right corner |
+| `offsetMin` | The top left corner's distance from its anchor, in canvas units |
+| `offsetMax` | The bottom right corner's distance from its anchor |
+
+Each corner is `parent.min + anchor * parent.size + offset`. With equal anchors the element has a fixed size
+at a point of the parent; with different anchors it stretches with the parent. `resolvePlacement()` computes
+the rectangle; its `max` is never before its `min`.
+
+**Example 1: a score in the top right corner**, 296 x 64 units, 24 units from the top and the right edge:
+
+```cpp
+illusion::UiPlacement topRight;
+topRight.anchorMin = topRight.anchorMax = {1.0f, 0.0f};
+topRight.offsetMin = {-320.0f, 24.0f};
+topRight.offsetMax = {-24.0f, 88.0f};
+const illusion::UiRect rect = illusion::resolvePlacement(topRight, {{0.0f, 0.0f}, {1920.0f, 1080.0f}});
+// rect: min (1600, 24), max (1896, 88)
+```
+
+**Example 2: a bar along the bottom** that is 72 units tall, 24 units above the bottom edge, and 24 units
+from the left and right edges whatever the canvas width:
+
+```cpp
+illusion::UiPlacement bottomBar;
+bottomBar.anchorMin = {0.0f, 1.0f};
+bottomBar.anchorMax = {1.0f, 1.0f};
+bottomBar.offsetMin = {24.0f, -96.0f};
+bottomBar.offsetMax = {-24.0f, -24.0f};
+const illusion::UiRect rect = illusion::resolvePlacement(bottomBar, {{0.0f, 0.0f}, {1920.0f, 1080.0f}});
+// rect: min (24, 984), max (1896, 1056)
+```
+
+A child of a `UiStack` or `UiGrid` is placed by that parent and ignores `placement`; it uses only `size`.
+`size` is the element's size in canvas units there; a zero axis takes the size of the content (a `UiText` or
+an image) or stretches.
+
+## Images
+
+`UiImage` draws a Texture over the element's rectangle, or a solid colour when `image` is empty.
+
+| Field | Meaning |
+| --- | --- |
+| `image` | The Texture Asset (`assets:/textures/panel.png`); empty draws `tint` as a solid colour |
+| `tint` | Linear RGBA multiplied with the image; its alpha and the element's `opacity` fade it |
+| `border` | Nine-slice borders in image pixels (`left`, `top`, `right`, `bottom`); all zero stretches the whole image |
+| `borderScale` | Canvas units per image pixel of the borders: 2 draws an 8 pixel border 16 units wide |
+| `preserveAspect` | Fits the image inside the element keeping its aspect ratio; borders are ignored |
+
+A nine-slice panel keeps its corners and edges crisp at any size: the four corners are drawn at
+`border * borderScale` units, the edges are stretched along one axis and the centre along both.
+
+An image that is still loading draws nothing until it arrives.
+
+## Text
+
+`UiText` draws text in the element's rectangle with a [font Asset](assets.md#fonts), a `.ttf` or `.otf` file
+in the project's assets. The default character ranges cover Basic Latin, Latin-1 and Latin Extended-A, so
+Turkish and most European languages work.
+
+| Field | Meaning |
+| --- | --- |
+| `text` | The text, UTF-8, shown when `key` is empty |
+| `key` | A string table key of the game's Localization; its message is shown instead of `text` |
+| `font` | The font Asset (`assets:/fonts/Roboto-Regular.ttf`); without one nothing is drawn |
+| `size` | Em size in canvas units |
+| `color` | Linear RGBA |
+| `align` | Horizontal: `Start`, `Center` or `End` |
+| `verticalAlign` | Vertical in the element: `Top`, `Middle` or `Bottom` |
+| `wrap` | On by default: lines break at the element's width; off keeps one line |
+| `lineSpacing` | Multiplier of the font's line height (1 is the font's own) |
+| `letterSpacing` | Extra advance per glyph, in ems |
+
+New projects made from an editor template contain `assets/fonts/Roboto-Regular.ttf` (Apache-2.0, with its
+licence next to it), so `UiText` works at once; any other `.ttf` works the same way.
+
+### Literal and localized text
+
+A literal `text` is shown as written. A `key` is looked up in the game's Localization, and its message is
+drawn instead (`GameSession::localization()`; it follows the active language, and the layout updates when
+the language changes). The session reads the project's `assets:/locales/*.json` when it is created: the
+English text of `en.json` is the base, and every other file adds a language. A key the tables lack shows the
+key itself, which is counted in `UiWorldStatistics::missingKeys`.
+
+```json
+{
+  "format": "illusion.locale",
+  "version": 1,
+  "locale": "en",
+  "displayName": "English",
+  "plural": "en",
+  "number": {"decimal": ".", "group": ","},
+  "strings": {
+    "showcase.hud.title": "Showcase HUD"
+  }
+}
+```
+
+`assets/locales/tr.json` has the same keys with the translations (see [Localization](localization.md)):
+
+```json
+{
+  "format": "illusion.locale",
+  "version": 1,
+  "locale": "tr",
+  "displayName": "Türkçe",
+  "plural": "tr",
+  "number": {"decimal": ",", "group": "."},
+  "fallback": "en",
+  "strings": {
+    "showcase.hud.title": "Vitrin Arayüzü"
+  }
+}
+```
+
+A `UiText` with `key` `showcase.hud.title` then shows "Showcase HUD", or "Vitrin Arayüzü" when the active
+language is `tr`.
+
+## Stacks and grids
+
+`UiStack` on an element places its children one after another:
+
+| Field | Meaning |
+| --- | --- |
+| `axis` | `Vertical` (default, top to bottom) or `Horizontal` (left to right) |
+| `spacing` | Gap between children in canvas units |
+| `padding` | Space inside the element's edges (`left`, `top`, `right`, `bottom`) |
+| `crossAlign` | Placement across the direction: `Start`, `Center`, `End` or `Stretch` (default: fills the stack's inner size) |
+
+Along the axis a child takes its `size`, else its content's size (a text wraps at the stack's inner width),
+else it shares the space that is left with the other stretching children. Across the axis it follows
+`crossAlign`.
+
+`UiGrid` places the children in rows of equal cells, left to right and then down: `columns` cells per row
+(at least 1), `cellSize` for each cell, `spacing` between the columns and the rows, and `padding`. A child
+with a `size` is centred in its cell at that size, else it fills the cell. A stack or a grid can contain
+other elements with their own stacks and grids.
+
+## Rotation, scale, opacity and clipping
+
+These fields of `UiElement` change how an element and its descendants are drawn, not where the layout puts
+them:
+
+| Field | Meaning |
+| --- | --- |
+| `pivot` | Centre of rotation and scale in the element's rectangle: (0.5, 0.5) is the middle |
+| `rotation` | Clockwise rotation about the pivot, in radians (shown in degrees in the Inspector) |
+| `scale` | Visual scale about the pivot; the layout does not see it |
+| `opacity` | 0 to 1, multiplies the alpha of the element and every descendant |
+| `clipChildren` | The descendants are not drawn outside the element's rectangle |
+
+Rotation, scale and opacity accumulate down the hierarchy. A clip is a rectangle: use it for scrolling areas
+and bars that fill up, not for rounded shapes.
+
+## Draw order
+
+Canvases are drawn in ascending `order` (equal orders by Entity index). Inside a canvas the elements are
+drawn in hierarchy order: a parent first, then its children, and later siblings over earlier ones. To bring
+an element to the front, move it after its siblings with `reorder()` from `<illusion/ecs/Hierarchy.hpp>`.
+
+## Building a HUD in the editor
+
+1. Create an Entity named `HUD` and add the `UI canvas` Component in the Inspector.
+2. Create child Entities in the Outliner (drag them onto `HUD`) and add `UI element` to each, then `UI image`,
+   `UI text`, `UI stack` or `UI grid` (these four need `UI element`).
+3. Set the fields: the placement anchors and offsets, the font and texture Assets (drag them from the Asset
+   Browser onto the fields), the colours and sizes.
+4. Press **Play**: the UI is drawn in the Game view. The Scene view does not draw UI yet, so check the result
+   in the Game view; the `viewport.screenshot` command with `"viewport": "game"` takes a picture of it.
+
+The `samples/showcase` project contains a HUD with every UI Component and every field; the scene is built
+by `build.jsonl` (see [Showcase Project](editor/showcase.md)).
+
+## Building a HUD from a module
+
+A module creates the same Entities with the Components. Build it with `USES ui` to get the headers:
+
+```cmake
+illusion_add_module(hud SOURCES game/Hud.cpp USES ui)
+```
+
+```cpp
+#include <illusion/core/Module.hpp>
+#include <illusion/ecs/Hierarchy.hpp>
+#include <illusion/ecs/World.hpp>
+#include <illusion/ui/UiComponents.hpp>
+
+#include <string>
+#include <utility>
+
+namespace
+{
+
+illusion::Entity g_score;
+
+void start(illusion::ModuleContext& context)
+{
+    illusion::World& world = context.world();
+    const illusion::Entity canvas = world.create(illusion::UiCanvas{});
+
+    illusion::UiElement placement;
+    placement.placement.anchorMin = placement.placement.anchorMax = {1.0f, 0.0f};
+    placement.placement.offsetMin = {-320.0f, 24.0f};
+    placement.placement.offsetMax = {-24.0f, 88.0f};
+    illusion::UiText text;
+    text.text = "Score 0";
+    text.font = illusion::AssetRef{"assets:/fonts/Roboto-Regular.ttf"};
+    text.align = illusion::UiTextAlign::End;
+    g_score = world.create(placement, std::move(text));
+    illusion::setParent(world, g_score, canvas);
+}
+
+void showScore(illusion::World& world, int score)
+{
+    world.get<illusion::UiText>(g_score).text = "Score " + std::to_string(score);
+    world.markChanged<illusion::UiText>();
+}
+
+} // namespace
+```
+
+`UiWorld` recomputes the layout only when a UI Component, the hierarchy, the `Inactive` tags, the language
+or the target changed. Code that writes a UI Component through a reference calls `world.markChanged<T>()`
+afterwards, as it does for `Hierarchy`; creating an Entity or adding a Component announces itself.
+
+## What is not there yet
+
+This package draws UI; it does not react to input. Later packages add widgets (buttons, sliders, focus and
+navigation, input from the mouse and the gamepads, which `modal` will use), `UiService` for game modules,
+the canvas editor in the Scene view, and transitions and animation. The limits of the first version
+([ADR 0057](https://github.com/oguzhanaknc/illusion/blob/main/docs/adr/0057-game-ui.md)):
+
+- Text is drawn left to right without shaping: Arabic, Hebrew, Indic scripts and ligatures are
+  not supported, right-to-left text is not either, and CJK needs character ranges that are too large for the
+  font atlas.
+- Outlines, shadows and gradients on text are not there yet.
+- Canvases cover the screen; a UI placed in the world (a label above a character) is not covered.

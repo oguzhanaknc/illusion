@@ -25,6 +25,7 @@ desc.modules = &modules;           // null runs no game code
 desc.streamer = &streamer;         // background loads of clips and physics meshes
 desc.renderAssets = &renderAssets; // null when nothing renders (servers, tests)
 desc.gamepads = gamepads.get();
+desc.uiAssets = &uiAssets;         // fonts and images of the UI; null draws solid colours only
 auto session = illusion::GameSession::create(desc);
 if (!session)
 {
@@ -39,6 +40,7 @@ while (running)
     gamepads->update(window.isFocused());
     (*session)->keyboardMouse() = window.input();
     (*session)->setInputFocus(window.isFocused());
+    (*session)->setUiFrame({window.framebufferSize()});
     (*session)->update(frameSeconds);
     renderer.render((*session)->world());
 }
@@ -46,7 +48,7 @@ while (running)
 ```
 
 `create()` proje ayarlarından boş bir World ve System'lerini kurar ve `InputSettings::actions` ile
-belirtilen input action'larını yükler. Sahneyi `world()` içine yükleyin; ardından `start()` World'ü
+belirtilen input action'larını ve locale dosyalarını yükler. Sahneyi `world()` içine yükleyin; ardından `start()` World'ü
 `ModuleHost`'a beş servisle birlikte bir Simulation World olarak ekler. Modüller bu servislere
 `context.service<T>()` ile ulaşır: `PhysicsService`, `AudioService`, `ParticleService`, `InputService` ve
 `SceneService`
@@ -65,8 +67,13 @@ Her `update(deltaSeconds)` şunları çalıştırır:
 | 2. Modüller | World üzerinde `ModuleHost::update()`; ardından `EntityGuid`'siz oluşturulan Entity'ler bir tane alır |
 | 3. Fizik | `PhysicsWorld::update()`: gövdeler World ile eşitlenir, adım atar ve Transform'larını yazar |
 | 4. Hiyerarşi | `updateTransformHierarchy()`: çocuklar ebeveynlerini izler, `Disabled` `Inactive` olur |
-| 5. Ses | `AudioWorld::update()`: kaynaklar Entity'lerini izler, dinleyici hareket eder |
-| 6. Çözücüler | Asset referansları runtime Component'lerine dönüşür (`Collider` Mesh'leri, `MeshRenderer` → `RenderMesh`) |
+| 5. UI | `UiWorld`, `setUiFrame()`'in karesi için UI Entity'lerini yerleştirir ve çizim listesini kaydeder (`ui()`), bkz. [Oyun UI'ı](ui.md) |
+| 6. Parçacıklar ve ses | `ParticleWorld::update()` ve `AudioWorld::update()`: kaynaklar Entity'lerini izler, dinleyici hareket eder |
+| 7. Çözücüler | Asset referansları runtime Component'lerine dönüşür (`Collider` Mesh'leri, `MeshRenderer` → `RenderMesh`) |
+
+Oturumun `localization()` nesnesi, `create()`'in okuduğu projenin `assets:/locales/*.json` dosyalarındaki
+string tablolarını tutar: her dosyanın anahtarları ve `en.json`'un İngilizce metni. `UiText::key` orada aranır
+([Oyun UI'ı](ui.md#literal-and-localized-text)); `ui()`, hostun sahnenin üzerine çizdiği çizim listesini verir.
 
 Ardından `keyboardMouse()`'un basılma ve bırakılma kenarları temizlenir; böylece host bir sonraki karenin
 input'unu basılı tuşların üzerine yazar. `updateCount()` ve `time()` güncellemeleri ve oyun zamanını sayar.

@@ -74,6 +74,7 @@ plugins:
             Physics: Fizik
             Audio: Ses
             Particles: Parçacıklar
+            Game UI: Oyun UI'ı
             Game Modules: Oyun Modülleri
             Game Runtime: Oyun Runtime'ı
             Gamepads: Gamepad'ler
@@ -147,6 +148,7 @@ nav:
       - Physics: manual/physics.md
       - Audio: manual/audio.md
       - Particles: manual/particles.md
+      - Game UI: manual/ui.md
       - Game Modules: manual/modules.md
       - Game Runtime: manual/runtime.md
       - Profiling: manual/profiling.md

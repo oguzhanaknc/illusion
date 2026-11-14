@@ -1,5 +1,5 @@
 """Writes the generated assets of the showcase project: a glTF model with two submeshes, the
-sounds (music, wind, a lamp hum, a voice and a click) and a smoke sprite.
+sounds (music, wind, a lamp hum, a voice and a click), a smoke sprite and a nine-slice panel for the HUD.
 
 All of them are made here from numbers, so they carry no third-party licence. Run it from anywhere:
 
@@ -189,9 +189,48 @@ def write_smoke(path, size=64):
     path.write_bytes(png)
 
 
+def write_png(path, size, rows):
+    """Writes @p rows (filter byte included) as an RGBA PNG."""
+
+    def chunk(kind, data):
+        body = kind + data
+        return struct.pack(">I", len(data)) + body + struct.pack(">I", zlib.crc32(body) & 0xFFFFFFFF)
+
+    png = (PNG_SIGNATURE + chunk(b"IHDR", struct.pack(">IIBBBBB", size, size, 8, 6, 0, 0, 0))
+           + chunk(b"IDAT", zlib.compress(bytes(rows), 9)) + chunk(b"IEND", b""))
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_bytes(png)
+
+
+def write_panel(path, size=32, corner=8, edge=3):
+    """The HUD panel: a dark blue rounded rectangle with a light edge, to be drawn as a nine-slice with
+    borders of `corner` pixels."""
+    rows = bytearray()
+    for y in range(size):
+        rows.append(0)
+        for x in range(size):
+            px = min(x, size - 1 - x)
+            py = min(y, size - 1 - y)
+            distance = min(px, py)
+            if px < corner and py < corner:
+                radius = math.hypot(corner - px - 0.5, corner - py - 0.5)
+                if radius > corner:
+                    rows += bytes((0, 0, 0, 0))
+                elif radius > corner - edge:
+                    rows += bytes((200, 210, 230, 255))
+                else:
+                    rows += bytes((30, 40, 70, 230))
+            elif distance < edge:
+                rows += bytes((200, 210, 230, 255))
+            else:
+                rows += bytes((30, 40, 70, 230))
+    write_png(path, size, rows)
+
+
 if __name__ == "__main__":
     write_model(ROOT / "models" / "blocks.gltf")
     for name, samples in (("music", music()), ("wind", wind()), ("hum", hum()), ("voice", voice()),
                           ("click", click())):
         write_wav(ROOT / "audio" / f"{name}.wav", samples)
     write_smoke(ROOT / "textures" / "smoke.png")
+    write_panel(ROOT / "textures" / "panel.png")

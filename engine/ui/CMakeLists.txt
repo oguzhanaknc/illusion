@@ -1,9 +1,12 @@
 # illusion::ui — the game UI (ADR 0057): geometry of canvases and placements, the draw list of rectangles,
-# images, nine-slice panels and text, and the saved UI Components. No GPU code: UiRenderer draws the list.
+# images, nine-slice panels and text, the saved UI Components and the UI System (UiWorld: layout and the
+# frame's draw list). No GPU code: UiRenderer draws the list.
 
 add_library(illusion_ui STATIC
+    src/UiComponents.cpp
     src/UiDrawList.cpp
-    src/UiGeometry.cpp)
+    src/UiGeometry.cpp
+    src/UiWorld.cpp)
 add_library(illusion::ui ALIAS illusion_ui)
 
 target_include_directories(illusion_ui PUBLIC

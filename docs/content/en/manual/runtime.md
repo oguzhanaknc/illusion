@@ -24,6 +24,7 @@ desc.modules = &modules;           // null runs no game code
 desc.streamer = &streamer;         // background loads of clips and physics meshes
 desc.renderAssets = &renderAssets; // null when nothing renders (servers, tests)
 desc.gamepads = gamepads.get();
+desc.uiAssets = &uiAssets;         // fonts and images of the UI; null draws solid colours only
 auto session = illusion::GameSession::create(desc);
 if (!session)
 {
@@ -38,6 +39,7 @@ while (running)
     gamepads->update(window.isFocused());
     (*session)->keyboardMouse() = window.input();
     (*session)->setInputFocus(window.isFocused());
+    (*session)->setUiFrame({window.framebufferSize()});
     (*session)->update(frameSeconds);
     renderer.render((*session)->world());
 }
@@ -45,7 +47,7 @@ while (running)
 ```
 
 `create()` builds an empty World and its systems from the project settings and loads the input actions
-named by `InputSettings::actions`. Load the scene into `world()`, then `start()` attaches the World to the
+named by `InputSettings::actions` and the locale files. Load the scene into `world()`, then `start()` attaches the World to the
 `ModuleHost` as a Simulation World with five services, which modules reach with `context.service<T>()`:
 `PhysicsService`, `AudioService`, `ParticleService`, `InputService` and `SceneService` (see the
 [scripting API](../reference/scripting-api.md)).
@@ -63,8 +65,14 @@ Every `update(deltaSeconds)` runs:
 | 2. Modules | `ModuleHost::update()` on the World; then Entities created without an `EntityGuid` get one |
 | 3. Physics | `PhysicsWorld::update()`: bodies sync with the World, step and write their Transforms |
 | 4. Hierarchy | `updateTransformHierarchy()`: children follow their parents, `Disabled` becomes `Inactive` |
-| 5. Audio | `AudioWorld::update()`: sources follow their Entities, the listener moves |
-| 6. Resolvers | Asset references become runtime Components (`Collider` meshes, `MeshRenderer` → `RenderMesh`) |
+| 5. UI | `UiWorld` lays out the UI Entities for the frame of `setUiFrame()` and records the draw list (`ui()`), see [Game UI](ui.md) |
+| 6. Particles and audio | `ParticleWorld::update()` and `AudioWorld::update()`: sources follow their Entities, the listener moves |
+| 7. Resolvers | Asset references become runtime Components (`Collider` meshes, `MeshRenderer` → `RenderMesh`) |
+
+The session's `localization()` holds the string tables of the project's `assets:/locales/*.json`, which
+`create()` reads: the keys of every file, with the English text of `en.json`. `UiText::key` is looked up
+there ([Game UI](ui.md#literal-and-localized-text)); `ui()` gives the draw list that the host draws over the
+scene.
 
 Afterwards the pressed and released edges of `keyboardMouse()` are cleared, so the host writes the next
 frame's input on top of the held keys. `updateCount()` and `time()` count the updates and the game time.

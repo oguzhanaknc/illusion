@@ -67,6 +67,7 @@ enum class AssetKind : u8
     AudioClip,   ///< A WAV, FLAC, MP3 or Ogg Vorbis file.
     Model,       ///< A glTF model (`.gltf`, `.glb`).
     Scene,       ///< A scene file.
+    Font,        ///< A TrueType or OpenType font file (`.ttf`, `.otf`).
 };
 
 /// English name of @p kind ("Mesh", "AudioClip", ...), for tools and schemas.

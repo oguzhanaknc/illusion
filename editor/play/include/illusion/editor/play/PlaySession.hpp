@@ -73,9 +73,6 @@ public:
     /// Call it once per editor frame, before EditorContext::endFrame(). Does nothing when stopped or paused.
     void update(f64 deltaSeconds);
 
-    /// The running game, or nullptr when stopped.
-    [[nodiscard]] GameSession* game() noexcept;
-
     /// The editor's modules.
     [[nodiscard]] ModuleHost& moduleHost() noexcept;
 
@@ -97,6 +94,7 @@ public:
     [[nodiscard]] PlayDiagnostics diagnostics() const override;
     void setMasterVolume(f32 volume) override;
     void setBus(u32 bus, f32 volume, bool paused) override;
+    [[nodiscard]] GameSession* game() noexcept override;
 
 private:
     struct Impl;

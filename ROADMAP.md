@@ -817,6 +817,17 @@ distance field fonts, and a batched pass draws the UI after tonemapping. Public 
   a steady frame, benchmark `ui/layout` for 1,000 elements, the showcase scene has a HUD with every
   Component and non-default fields, the golden image of the showcase game is updated, a project template
   ships a font.
+  ✅ Done: `registerUiComponents()`, `UiWorld` (`illusion/ui/UiWorld.hpp`), `UiRenderAssets` in
+  `engine/render` (fonts through `AssetStreamer::loadFont()`, images uploaded as sRGB textures),
+  `GameSession::ui()`, `setUiFrame()` and `localization()`, the player and the Game view draw the UI;
+  `ui/layout` 544 ns per element (budget 5,000), `ui/layout-reused` 408 ns (budget 3,000).
+  Open: code that writes a UI Component through a reference must call `world.markChanged<T>()` (the
+  `UiService` of UI-3a does it for modules); a font or image that fails to load re-runs the layout every
+  frame; canvases with different scales share the draw list in the first canvas's units, and only that
+  canvas snaps glyphs to pixels; the player draws the UI into the view at the render scale, so a render
+  scale below 1 blurs it (it should be drawn after the upscale; M9); the session's locale stays English
+  until something calls `setLocale()` (a language setting comes with UI-3a); the Scene view does not draw
+  the UI (UI-3b).
 - UI-2b: Interaction and widgets. `UiInteractable` (hover, pressed, focus, disabled), `UiButton`,
   `UiToggle`, `UiSlider`, `UiTextField`, `UiScrollView` with virtualised lists, `UiGlyph`; pointer hit tests,
   focus and navigation through the actions `ui.navigate`, `ui.submit`, `ui.cancel` (default bindings added

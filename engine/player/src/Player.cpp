@@ -31,9 +31,12 @@
 #include <illusion/render/RenderResources.hpp>
 #include <illusion/render/SceneRenderer.hpp>
 #include <illusion/render/Swapchain.hpp>
+#include <illusion/render/UiRenderAssets.hpp>
+#include <illusion/render/UiRenderer.hpp>
 #include <illusion/runtime/GameSession.hpp>
 #include <illusion/runtime/ProjectSettings.hpp>
 #include <illusion/store/StoreBackend.hpp>
+#include <illusion/ui/UiWorld.hpp>
 
 #include <algorithm>
 #include <chrono>
@@ -149,6 +152,7 @@ void reflectEngineTypes()
     reflectAudioComponents();
     reflectParticleComponents();
     reflectRenderComponents();
+    registerUiComponents();
     reflectRuntimeStructs();
 }
 
@@ -353,6 +357,17 @@ int runGame(const PlayerDesc& desc, const PlayerOptions& options, VirtualFileSys
                                     {}},
                       desc.name, dialogs);
     }
+    UiRendererDesc uiRendererDesc;
+    uiRendererDesc.outputFormat = kViewFormat;
+    std::unique_ptr<UiRenderer> uiRenderer = UiRenderer::create(*device, resources, uiRendererDesc);
+    if (!uiRenderer)
+    {
+        return report(
+            PlayerFailure{
+                PlayerExit::StartFailed, "cannot create the UI renderer", PlayerProblem::GraphicsFailed, {}},
+            desc.name, dialogs);
+    }
+    UiRenderAssets uiAssets(streamer, resources, *uiRenderer);
 
     ModuleHost modules(jobs);
     for (const PlayerModuleEntry entry : desc.modules)
@@ -376,6 +391,7 @@ int runGame(const PlayerDesc& desc, const PlayerOptions& options, VirtualFileSys
     sessionDesc.renderAssets = &renderAssets;
     sessionDesc.gamepads = gamepads.get();
     sessionDesc.store = store.get();
+    sessionDesc.uiAssets = &uiAssets;
     sessionDesc.fixedStep = options.fixedStep;
     Expected<std::unique_ptr<GameSession>, std::string> created = GameSession::create(sessionDesc);
     if (!created)
@@ -429,6 +445,7 @@ int runGame(const PlayerDesc& desc, const PlayerOptions& options, VirtualFileSys
         }
         session.setInputFocus(focused);
         session.keyboardMouse() = window->input();
+        session.setUiFrame({scaledSize(swapchain->size(), settings.render.renderScale)});
         session.update(delta);
         if (options.fixedStep)
         {
@@ -465,6 +482,7 @@ int runGame(const PlayerDesc& desc, const PlayerOptions& options, VirtualFileSys
                 renderView.deltaSeconds =
                     static_cast<f32>(options.fixedStep ? settings.physics.stepSeconds : delta);
                 renderer->render(commands, view.texture, world, renderView, &jobs);
+                (void)uiRenderer->render(commands, view.texture, session.ui().drawData());
                 present->draw(commands, swapchain->currentFramebuffer(), view.texture);
                 rendered = true;
             }

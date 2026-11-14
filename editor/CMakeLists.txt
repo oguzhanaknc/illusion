@@ -24,21 +24,44 @@ list(FILTER editor_licence_files INCLUDE REGEX "LICENSE")
 file(GLOB_RECURSE editor_data_files CONFIGURE_DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/data/*)
 set(editor_data_dir ${CMAKE_BINARY_DIR}/bin/$<CONFIG>/editor-data)
 set(editor_data_stamp ${CMAKE_BINARY_DIR}/bin/$<CONFIG>/editor-data/.stamp)
+# Every project template ships Roboto Regular as assets/fonts/Roboto-Regular.ttf, the font of UiText.
+set(template_font ${ILLUSION_EDITOR_FONTS})
+list(FILTER template_font INCLUDE REGEX "/Roboto-Regular[.]ttf$")
+set(template_font_licence ${ILLUSION_EDITOR_FONTS})
+list(FILTER template_font_licence INCLUDE REGEX "/Roboto-LICENSE[.]txt$")
+file(GLOB template_dirs LIST_DIRECTORIES true RELATIVE ${CMAKE_CURRENT_SOURCE_DIR}/data/templates
+    CONFIGURE_DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/data/templates/*)
+set(editor_data_install "${CMAKE_INSTALL_BINDIR}/$<CONFIG>/editor-data")
+set(template_font_commands)
+foreach(template ${template_dirs})
+    set(template_fonts_dir ${editor_data_dir}/templates/${template}/assets/fonts)
+    list(APPEND template_font_commands
+        COMMAND ${CMAKE_COMMAND} -E make_directory ${template_fonts_dir}
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different ${template_font} ${template_fonts_dir}
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different ${template_font_licence} ${template_fonts_dir}/LICENSE.txt)
+    install(FILES ${template_font}
+        DESTINATION "${editor_data_install}/templates/${template}/assets/fonts" COMPONENT editor)
+    install(FILES ${template_font_licence}
+        DESTINATION "${editor_data_install}/templates/${template}/assets/fonts" COMPONENT editor
+        RENAME LICENSE.txt)
+endforeach()
 add_custom_command(
     OUTPUT ${editor_data_stamp}
     COMMAND ${CMAKE_COMMAND} -E copy_directory_if_different ${CMAKE_CURRENT_SOURCE_DIR}/data ${editor_data_dir}
     COMMAND ${CMAKE_COMMAND} -E make_directory ${editor_data_dir}/fonts ${editor_data_dir}/licenses
     COMMAND ${CMAKE_COMMAND} -E copy_if_different ${editor_font_files} ${editor_data_dir}/fonts
     COMMAND ${CMAKE_COMMAND} -E copy_if_different ${editor_licence_files} ${editor_data_dir}/licenses
+    ${template_font_commands}
     COMMAND ${CMAKE_COMMAND} -E copy_if_different ${PROJECT_SOURCE_DIR}/THIRD_PARTY_NOTICES.md
         ${editor_data_dir}/licenses/THIRD_PARTY_NOTICES.md
     COMMAND ${CMAKE_COMMAND} -E touch ${editor_data_stamp}
-    DEPENDS ${editor_data_files} ${editor_font_files} ${editor_licence_files} ${PROJECT_SOURCE_DIR}/THIRD_PARTY_NOTICES.md
+    DEPENDS ${editor_data_files} ${editor_font_files} ${editor_licence_files} ${template_font}
+        ${template_font_licence}
+        ${PROJECT_SOURCE_DIR}/THIRD_PARTY_NOTICES.md
     COMMENT "Copying editor-data"
     VERBATIM)
 add_custom_target(illusion_editor_data DEPENDS ${editor_data_stamp})
 illusion_mark_editor_only(illusion_editor_data)
-set(editor_data_install "${CMAKE_INSTALL_BINDIR}/$<CONFIG>/editor-data")
 install(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/data/ DESTINATION "${editor_data_install}" COMPONENT editor)
 install(FILES ${editor_font_files} DESTINATION "${editor_data_install}/fonts" COMPONENT editor)
 install(FILES ${editor_licence_files} ${PROJECT_SOURCE_DIR}/THIRD_PARTY_NOTICES.md

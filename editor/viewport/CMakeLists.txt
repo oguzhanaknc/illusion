@@ -15,7 +15,8 @@ add_library(illusion::editor_viewport ALIAS illusion_editor_viewport)
 target_include_directories(illusion_editor_viewport PUBLIC
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>)
 target_link_libraries(illusion_editor_viewport PUBLIC
-    illusion::editor_core illusion::editor_ui illusion::render illusion::assets illusion::physics illusion::audio)
+    illusion::editor_core illusion::editor_ui illusion::render illusion::assets illusion::physics illusion::audio
+    illusion::runtime)
 illusion_add_shaders(illusion_editor_viewport
     NAMESPACE illusion::editor::shaders
     HEADER illusion/editor/viewport/ViewportShaders.hpp
