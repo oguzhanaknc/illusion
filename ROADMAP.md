@@ -772,17 +772,56 @@ compatible). Design in ADR 0055; public API in `illusion/player/Player.hpp` and
 
 ## UI — Game interface
 
-Games have no way to draw a HUD or a menu: the editor's Dear ImGui is not shipped in games.
+Games have no way to draw a HUD or a menu: the editor's Dear ImGui is not shipped in games. Design in
+ADR 0057: UI elements are Entities with saved Components under a `UiCanvas`, text is drawn from signed
+distance field fonts, and a batched pass draws the UI after tonemapping. Public API in
+`illusion/ui/UiGeometry.hpp`, `illusion/ui/UiDrawList.hpp`, `illusion/ui/UiComponents.hpp`,
+`illusion/assets/Font.hpp` and `illusion/render/UiRenderer.hpp`.
 
-- UI-1: Rendering: signed-distance-field fonts (with the string tables and `MessageFormat` of
-  `engine/text`, right-to-left later), images, nine-slice panels, a batched UI pass after tonemapping,
-  resolution-independent scaling (anchors, safe areas)
-- UI-2: Layout and widgets: saved UI documents (a tree of elements with anchors, stacks and grids),
-  buttons, sliders, toggles, lists, text fields; focus and navigation with the keyboard and gamepads
-  through `InputActions`, glyphs per device
-- UI-3: Scripting and tools: a `UiService` for game modules (bind values, events), an editor for UI
-  documents with live preview, `ui.*` commands for agents, transitions and animations; the tech demo gets a
-  pause menu and a HUD
+- UI-1a: CPU foundation. `Font` in `engine/assets` (`bake()` with `stb_truetype`, `serializeFont()`); the new
+  library `engine/ui` (`illusion::ui`, `illusion::ui_api`) with `UiGeometry` (placement, canvas scale, safe
+  area, transforms) and `UiDrawList` (rectangles, images, nine-slice, text with wrapping, alignment and
+  kerning, clip stack, batching). Done: unit tests of baking (determinism, missing code points, a full
+  atlas, round trip of the cooked form), of the geometry at several aspect ratios and of every primitive
+  (vertex counts, batching, clipping, a full list drops whole primitives); allocation tests of recording and
+  measuring; benchmarks `ui/text-layout` and `ui/draw-list-quads` with budgets; `UiComponents.hpp` compiles
+  in the library.
+- UI-1b: The pass. `UiRenderer` in `engine/render` (`Ui.slang`, one pipeline for images and distance fields,
+  premultiplied blending, scissor per command), `AssetType::Font` with cooking and import settings
+  (ranges, pixel size, spread), drawn by the player after the scene. Done: GPU golden images of text at three
+  sizes, a nine-slice panel and clipping, at two target sizes with the same canvas; zero validation errors; a
+  steady frame of the pass allocates nothing; benchmark of `render()` for a HUD-sized list.
+- UI-2a: Elements and layout. The saved Components of `UiComponents.hpp` reflected as `illusion.Ui*` with
+  metadata and icons, the UI System in `GameSession` (layout only when something changed, draw list per
+  session), font and image resolution through `RenderAssetCache`, the session's `Localization` from
+  `assets:/locales` for `UiText::key`, the player and the editor's Game view draw the session's UI. Done:
+  layout tests (anchors, stacks, grids, nested transforms, `Inactive`, canvas order), an allocation test of
+  a steady frame, benchmark `ui/layout` for 1,000 elements, the showcase scene has a HUD with every
+  Component and non-default fields, the golden image of the showcase game is updated, a project template
+  ships a font.
+- UI-2b: Interaction and widgets. `UiInteractable` (hover, pressed, focus, disabled), `UiButton`,
+  `UiToggle`, `UiSlider`, `UiTextField`, `UiScrollView` with virtualised lists, `UiGlyph`; pointer hit tests,
+  focus and navigation through the actions `ui.navigate`, `ui.submit`, `ui.cancel` (default bindings added
+  to input assets), modal canvases, events queued per session. Done: tests drive menus with a virtual
+  gamepad, the keyboard and the mouse; glyphs change with the device used last; text fields edit UTF-8 from
+  `InputState::text()`; a headless session handles input without a renderer.
+- UI-3a: Scripting. `UiService` (`USES ui`) with its adapter: find elements, set text (literal or key with
+  arguments), values, visibility and focus, instantiate a UI prefab, poll events; a way for a module to end
+  the game (open from M8-1). Done: counting proxy and the showcase module call the whole API;
+  `check_api_coverage.py` passes; the Tetris acceptance game shows its score and a game-over menu.
+- UI-3b: Editor. A 2D canvas view with placement handles and anchor presets, Inspector drawers for
+  placement and text, Add menu entries, commands `gameui.create`, `gameui.layout`, `gameui.click` and
+  `gameui.focus` with reference and goldens; viewport picking and framing of UI Entities. Done: UiDriver
+  tests and a golden image; an agent transcript builds a menu and clicks it in Play mode.
+- UI-3c: Transitions and the demo. `UiTransition` (tweens of opacity, offset, scale and colour on state
+  changes, played by `UiService`), text outline and shadow from the distance field; the tech demo gets a
+  pause menu and a HUD. Done: deterministic transition tests with `fixedStep`; golden image of the demo's
+  pause menu.
+- UI-4: Documentation (EN/TR), in step with each pull request: manual page "Game UI", the scripting API
+  reference, a tutorial that adds a HUD and a pause menu, the architecture page.
+
+Open (recorded by ADR 0057): right-to-left text and shaping, CJK with dynamic atlas pages, multi-channel
+distance fields, world-space UI, HDR output of the UI pass (M9).
 
 ## SAVE — Saved games
 

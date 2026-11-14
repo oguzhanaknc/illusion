@@ -63,6 +63,7 @@ records rather than user documentation.
 | [0054](https://github.com/oguzhanaknc/illusion/blob/main/docs/adr/0054-texture-compression.md) | Texture compression: BC7, BC5, BC4 and BC6H made on import (bc7enc, rgbcx and an own BC6H encoder), chosen by material use with a sidecar override; mip streaming by resident range |
 | [0055](https://github.com/oguzhanaknc/illusion/blob/main/docs/adr/0055-exported-games.md) | Exported games: a player library linked with the project's static modules from the SDK, the game's description compiled in, packed data, CPack packages and signing hooks |
 | [0056](https://github.com/oguzhanaknc/illusion/blob/main/docs/adr/0056-store-service-and-steamworks.md) | Stores: a vendor-neutral StoreService with a null store that is always built, and an optional Steam library built only against a user-supplied Steamworks SDK |
+| [0057](https://github.com/oguzhanaknc/illusion/blob/main/docs/adr/0057-game-ui.md) | Game UI: elements are Entities with saved Components under a canvas, signed distance field fonts baked with stb_truetype, a batched draw list drawn after tonemapping, navigation through InputActions and a polled UiService |
 
 To propose a new decision, copy `docs/adr/0000-template.md` and follow the
 [contributing guide](../contributing.md#architecture-decision-records).

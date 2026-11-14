@@ -63,6 +63,7 @@ Record (ADR) olarak kaydedilir. Her kayıt bağlamı, kararı ve sonuçlarını 
 | [0054](https://github.com/oguzhanaknc/illusion/blob/main/docs/adr/0054-texture-compression.md) | Texture sıkıştırma: içe aktarırken üretilen BC7, BC5, BC4 ve BC6H (bc7enc, rgbcx ve kendi BC6H encoder'ımız), Material kullanımına göre seçilir, sidecar ile geçersiz kılınır; resident aralıkla mip streaming |
 | [0055](https://github.com/oguzhanaknc/illusion/blob/main/docs/adr/0055-exported-games.md) | Dışa aktarılan oyunlar: SDK'dan projenin statik modülleriyle bağlanan bir player kütüphanesi, derlemeye gömülü oyun tanımı, paketlenmiş veri, CPack paketleri ve imzalama kancaları |
 | [0056](https://github.com/oguzhanaknc/illusion/blob/main/docs/adr/0056-store-service-and-steamworks.md) | Mağazalar: her zaman Build edilen boş bir mağazayla satıcıdan bağımsız bir StoreService ve yalnızca kullanıcının sağladığı Steamworks SDK'sına karşı Build edilen isteğe bağlı bir Steam kütüphanesi |
+| [0057](https://github.com/oguzhanaknc/illusion/blob/main/docs/adr/0057-game-ui.md) | Oyun arayüzü: elemanlar bir canvas altında kayıtlı Component'leri olan Entity'lerdir, stb_truetype ile üretilen signed distance field fontlar, tonemapping'den sonra çizilen toplu bir draw list, InputActions üzerinden gezinme ve yoklanan bir UiService |
 
 Yeni bir karar önermek için `docs/adr/0000-template.md` dosyasını kopyalayın ve
 [katkıda bulunma rehberini](../contributing.md#architecture-decision-recordlar) izleyin.
