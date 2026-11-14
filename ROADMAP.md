@@ -736,6 +736,9 @@ compatible). Design in ADR 0055; public API in `illusion/player/Player.hpp` and
 - M8-8: Documentation (EN/TR): manual page "Exporting a game", the release and Steam guide (signing,
   notarization, depots, the sniper container), the runtime page's player section, tutorials end with an
   export; in step with each pull request.
+  Done so far: the manual page `manual/editor/export.md` (settings, the Export window, `export.build`,
+  packages, signing, limits) and the player section of `manual/runtime.md`, both EN/TR; the release and
+  Steam guide and the tutorial endings are open.
 
 ## UI — Game interface
 

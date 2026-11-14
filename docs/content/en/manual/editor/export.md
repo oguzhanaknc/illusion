@@ -61,6 +61,31 @@ An excluded file is neither packed nor cooked. An asset that needs it, for examp
 excluded texture, makes the export's cook fail, and so does excluding the startup scene. The report lists
 what was left out in `skipped`.
 
+## The Export window
+
+**File > Export…** (also in the command palette) opens the Export window. It edits the same
+`settings:/export.json` and calls the same `export.build`, so what it does an agent can do.
+
+- **Settings**: Product name, Organization, Identifier, Copyright, Icon (an asset path) and Excluded files (one
+  pattern per line), as in [Export settings](#export-settings). The hints show what an empty field means, for
+  example the project's name for the product name. Version is read-only: set it in `project.illusion`. An error
+  of `project.settings_set` appears under the field it belongs to.
+- **Target**: Platform is the one the editor runs on; export on each platform you ship. Package offers the kinds
+  of this platform: Folder only, Folder and ZIP archive, Folder and installer (NSIS) on Windows, Folder and disk
+  image (DMG) on macOS, Folder and .tar.gz archive on Linux. Output folder and Configuration are the `output` and
+  `configuration` params; Clean build is `clean`.
+- **Signing**: Sign command on Windows; Codesign identity and Notary profile on macOS. An empty field uses its
+  environment variable, which the hint names. Linux shows "Linux exports are not signed."
+- **Export** starts the command. While it runs the window shows the stage (for example "Cooking assets") with a
+  progress bar and **Cancel**, and the fields are disabled.
+- **Result** shows Exported or the failed stage, the duration, the Game folder, the Package file, the Size, the
+  files left out by the exclude patterns and the Signed and Notarized badges. Diagnostics list errors and
+  warnings; a click on one with a source file selects it in the Asset Browser. Tool output holds the last lines
+  of the build tools, and **Show in folder** opens the game's folder in the file manager.
+
+Problems that `export.build` reports in one message (product name, identifier, organization, exclude patterns)
+appear in the result, not next to their field.
+
 ## Running an export
 
 An agent calls the command; the output path is absolute or relative to the project:
@@ -250,3 +275,7 @@ until then.
 - The first export configures CMake and takes minutes.
 - Exclude patterns are the only way to leave files out, and an asset that depends on an excluded file fails
   the cook.
+- Image sources stay in `assets.illpak` next to their cooked form; only glTF sources are dropped.
+- Signing with a real certificate and notarization are not tested in CI, which has no certificate: check a
+  signed package by hand before every release (`codesign --verify`, `spctl`, a start on a clean machine).
+- A failed Package stage keeps the finished game directory.
