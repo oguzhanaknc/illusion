@@ -1,7 +1,7 @@
 # Game and plugin modules (see engine/core/include/illusion/core/Module.hpp,
 # docs/adr/0027-module-system-and-hot-reload.md and docs/adr/0041-module-api-v3.md).
 #
-# illusion_add_module(<target> [SHARED | STATIC] SOURCES <files...>
+# illusion_add_module(<target> [SHARED | STATIC] [ID <id>] SOURCES <files...>
 #                     [USES <physics | audio | particles | input | render | runtime>...] [LINK <libraries...>])
 #
 # Builds a module from sources that use ILL_MODULE(). SHARED builds a loadable library that a ModuleHost
@@ -11,12 +11,14 @@
 # Components of that engine library, without its code) and the LINK libraries, all privately: a shared
 # module carries its own copy of them and exports nothing but its entry point. A shared module must not
 # LINK an engine library other than illusion::core, because its copy would run on the host's objects;
-# that is a configure error.
+# that is a configure error. ID is the first argument of the module's ILL_MODULE() (default: <target>); it is
+# stored in the target property ILLUSION_MODULE_ID, from which illusion_add_game() names the entry point
+# illusionModuleEntry_<id> of a static module.
 
 include_guard(GLOBAL)
 
 function(illusion_add_module target)
-    cmake_parse_arguments(PARSE_ARGV 1 arg "SHARED;STATIC" "" "SOURCES;USES;LINK")
+    cmake_parse_arguments(PARSE_ARGV 1 arg "SHARED;STATIC" "ID" "SOURCES;USES;LINK")
     if(arg_SHARED AND arg_STATIC)
         message(FATAL_ERROR "illusion_add_module(${target}): use SHARED or STATIC, not both")
     endif()
@@ -67,5 +69,9 @@ function(illusion_add_module target)
         add_library(${target} STATIC ${arg_SOURCES})
     endif()
     target_link_libraries(${target} PRIVATE illusion::core ${api_targets} ${arg_LINK})
+    if(NOT arg_ID)
+        set(arg_ID ${target})
+    endif()
+    set_target_properties(${target} PROPERTIES ILLUSION_MODULE_ID ${arg_ID})
     illusion_configure_target(${target})
 endfunction()

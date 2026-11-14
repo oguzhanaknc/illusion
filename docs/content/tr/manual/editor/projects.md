@@ -111,7 +111,7 @@ kaydedilmemiş değişiklikleri atmayı reddeder. Çalışma alanı yoksa `unsup
 ### Project Settings paneli
 
 **Project Settings** (Window → Project Settings) her proje ayar türünü listeler:
-[runtime](../runtime.md#proje-ayarlar)'ın Physics, Audio, Input ve Render türlerini ve oyunun kendi
+[runtime](../runtime.md#proje-ayarlar)'ın Physics, Audio, Input, Render ve Window türlerini ve oyunun kendi
 türlerini. Bir sayfa bir türün alanlarını Inspector'ın widget'larıyla gösterir; her değişiklik bir
 `project.settings_set` ve bir undo adımıdır (bir sürükleme tek adımdır). **Reset to defaults** sayfanın
 dosyasını siler. Undo ve redo sayfayı günceller.

@@ -5,6 +5,7 @@
 
 #include <doctest/doctest.h>
 
+#include <optional>
 #include <span>
 #include <string>
 #include <string_view>
@@ -49,6 +50,40 @@ TEST_CASE("a headless platform creates windows with the requested properties")
 
     platform->pollEvents();
     platform->waitEvents(0.0);
+}
+
+TEST_CASE("borderless and fullscreen windows take the size of the primary monitor's video mode")
+{
+    auto platform = Platform::create(PlatformDesc{PlatformBackend::Headless});
+    REQUIRE(platform != nullptr);
+    const std::vector<MonitorInfo> monitors = platform->monitors();
+    REQUIRE_FALSE(monitors.empty());
+    const UVec2 monitor = monitors.front().size;
+
+    WindowDesc desc;
+    desc.width = 320;
+    desc.height = 200;
+    desc.scaleToMonitor = false;
+    desc.mode = WindowMode::Borderless;
+    auto borderless = Window::create(*platform, desc);
+    REQUIRE(borderless != nullptr);
+    CHECK(borderless->size() == monitor);
+    if (const std::optional<IVec2> position = borderless->position())
+    {
+        CHECK(*position == monitors.front().position);
+    }
+    borderless.reset();
+
+    desc.mode = WindowMode::Fullscreen;
+    auto fullscreen = Window::create(*platform, desc);
+    REQUIRE(fullscreen != nullptr);
+    CHECK(fullscreen->size().x > 0);
+    fullscreen.reset();
+
+    desc.mode = WindowMode::Windowed;
+    auto windowed = Window::create(*platform, desc);
+    REQUIRE(windowed != nullptr);
+    CHECK(windowed->size() == UVec2(320, 200));
 }
 
 TEST_CASE("windows get unique ids")

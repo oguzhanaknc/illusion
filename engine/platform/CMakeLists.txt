@@ -2,6 +2,7 @@
 
 add_library(illusion_platform STATIC
     src/Archive.cpp
+    src/Dialog.cpp
     src/FileSystem.cpp
     src/FileWatcher.cpp
     src/GlfwKeys.cpp
@@ -23,11 +24,12 @@ target_link_libraries(illusion_platform
 target_compile_definitions(illusion_platform PRIVATE GLFW_INCLUDE_NONE)
 
 if(WIN32)
-    # SHGetKnownFolderPath / CoTaskMemFree for userDataDirectory(); the input method API for setImeRect().
-    target_link_libraries(illusion_platform PRIVATE shell32 ole32 imm32)
+    # SHGetKnownFolderPath / CoTaskMemFree for userDataDirectory(); the input method API for setImeRect();
+    # MessageBoxW for showErrorDialog().
+    target_link_libraries(illusion_platform PRIVATE shell32 ole32 imm32 user32)
 elseif(APPLE)
-    # FSEvents for FileWatcher.
-    target_link_libraries(illusion_platform PRIVATE "-framework CoreServices")
+    # FSEvents for FileWatcher; CFUserNotification for showErrorDialog().
+    target_link_libraries(illusion_platform PRIVATE "-framework CoreServices" "-framework CoreFoundation")
 endif()
 
 illusion_configure_target(illusion_platform)

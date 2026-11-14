@@ -1,11 +1,15 @@
-// A GPU golden of the showcase project (samples/showcase): the everything scene through its main Camera, as
-// viewport.screenshot gives it to an agent.
+// GPU goldens of the showcase project (samples/showcase): the everything scene through its main Camera, as
+// viewport.screenshot gives it to an agent, before and after 300 fixed steps of Play mode with the showcase
+// module (the exported showcase_game must match the second, tests/gpu/TestShowcaseGame.cpp).
 
 #include "GoldenSupport.hpp"
 #include "core/EditorCoreTestSupport.hpp"
 
+#include <illusion/assets/AssetStreamer.hpp>
 #include <illusion/audio/AudioComponents.hpp>
+#include <illusion/core/JobSystem.hpp>
 #include <illusion/editor/core/EditorContext.hpp>
+#include <illusion/editor/play/PlaySession.hpp>
 #include <illusion/editor/ui/OffscreenUi.hpp>
 #include <illusion/editor/ui/UiContext.hpp>
 #include <illusion/editor/viewport/ViewportService.hpp>
@@ -151,4 +155,38 @@ TEST_CASE("the showcase scene through its main Camera matches the golden image")
     REQUIRE(image->width() == 480u);
     test::checkGolden("showcase-game", *image);
     CHECK(test::ok(*gpu.editor, "render.diagnostics").root().find("validationErrors").asU64() == 0u);
+}
+
+TEST_CASE("the showcase scene after 300 fixed steps of Play mode matches the golden image")
+{
+    ShowcaseGpu gpu;
+    JobSystem jobs{JobSystemDesc{2, 1024}};
+    AssetStreamer playAssets(gpu.editor->files(), jobs, AssetStreamerDesc{.cacheMount = ""});
+    PlaySession play(
+        *gpu.editor,
+        PlaySessionDesc{.jobs = &jobs, .streamer = &playAssets, .audioOutput = AudioOutput::Offline});
+    const Expected<std::string, CommandError> loaded = play.loadModule(SHOWCASE_MODULE);
+    REQUIRE_MESSAGE(loaded.hasValue(), (loaded ? std::string() : loaded.error().message));
+    test::ok(*gpu.editor, "viewport.set_aspect",
+             R"({"viewport":"game","aspect":"fixed","width":480,"height":270})");
+    test::ok(*gpu.editor, "play.start", R"({"fixedStep":true})");
+    test::ok(*gpu.editor, "play.pause", R"({"paused":true})");
+    // The Game view draws every step, as in Play mode: GPU particle emitters advance by the steps their
+    // renderer sees (a renderer that first sees an emitter after many steps starts it afresh).
+    JsonDocument shot;
+    for (int step = 0; step < 300; ++step)
+    {
+        test::ok(*gpu.editor, "play.step", R"({"steps":1})");
+        shot = gpu.run("viewport.screenshot", R"({"viewport":"game"})");
+    }
+    const std::optional<std::string_view> data = shot.root().find("_images")[0].find("data").asString();
+    REQUIRE(data.has_value());
+    const std::optional<Image> image = decodeImage(decodeBase64(*data), true);
+    REQUIRE(image.has_value());
+    REQUIRE(image->width() == 480u);
+    test::checkGolden("showcase-play-300", *image);
+    CHECK(test::ok(*gpu.editor, "render.diagnostics").root().find("validationErrors").asU64() == 0u);
+    test::ok(*gpu.editor, "play.stop");
+    gpu.service->render(false);
+    gpu.device->waitIdle();
 }

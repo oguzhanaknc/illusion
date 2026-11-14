@@ -110,8 +110,8 @@ written by `project.settings_set` (see [the editor core](index.md#settings)):
 
 ### The Project Settings panel
 
-**Project Settings** (Window → Project Settings) lists every project settings type: Physics, Audio, Input
-and Render of the [runtime](../runtime.md#project-settings) and the game's own types. A page shows the
+**Project Settings** (Window → Project Settings) lists every project settings type: Physics, Audio, Input,
+Render and Window of the [runtime](../runtime.md#project-settings) and the game's own types. A page shows the
 fields of one type with the Inspector's widgets; each change is one `project.settings_set` and one undo step
 (a drag is one step). **Reset to defaults** deletes the page's file. Undo and redo update the page.
 

@@ -17,7 +17,8 @@ colliders keep their exact sizes and the joint anchors stay in unscaled body spa
 Its assets are made from numbers by `tools/make_assets.py` (a model with two meshes and five sounds: music,
 wind, a lamp hum, a greeting and a click), so the project carries no third-party licence. The scene is not written by hand: `build.jsonl` builds it through Editor
 commands, the same way an agent would, and saves it. It also gives the smoke sprite an import settings sidecar
-(`"quality": "high"`) through `asset.set_import_settings`. To rebuild it:
+(`"quality": "high"`) through `asset.set_import_settings` and a non-default window (1600x900, not resizable;
+`settings/window.json`) through `project.settings_set`. To rebuild it:
 
 ```bash
 python samples/showcase/tools/make_assets.py
@@ -68,3 +69,8 @@ checks keep the showcase in step with the engine:
   with the same input and compares the hash of their saved state.
 - `TestShowcaseGpu.cpp` compares the scene through its main Camera with a golden image
   (`showcase-game.png`, rewritten with `ILLUSION_UPDATE_GOLDENS=1`).
+
+The project is also built as an exported game, the `showcase_game` target (`samples/CMakeLists.txt`): its module
+linked statically and its data packed next to the executable, run by the [player](../runtime.md#the-player).
+`TestShowcaseGame.cpp` runs it for 300 fixed steps and compares its screenshot with the golden image of the
+editor's Game view.

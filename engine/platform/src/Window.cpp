@@ -228,15 +228,46 @@ std::unique_ptr<Window> Window::create(Platform& platform, const WindowDesc& des
     glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
     glfwWindowHint(GLFW_RESIZABLE, desc.resizable ? GLFW_TRUE : GLFW_FALSE);
     glfwWindowHint(GLFW_VISIBLE, desc.visible ? GLFW_TRUE : GLFW_FALSE);
-    glfwWindowHint(GLFW_SCALE_TO_MONITOR, GLFW_TRUE);
+    glfwWindowHint(GLFW_SCALE_TO_MONITOR, desc.scaleToMonitor ? GLFW_TRUE : GLFW_FALSE);
     glfwWindowHint(GLFW_MAXIMIZED, desc.maximized ? GLFW_TRUE : GLFW_FALSE);
 
-    GLFWwindow* handle = glfwCreateWindow(static_cast<int>(desc.width), static_cast<int>(desc.height),
-                                          desc.title.c_str(), nullptr, nullptr);
+    int width = static_cast<int>(desc.width);
+    int height = static_cast<int>(desc.height);
+    GLFWmonitor* fullscreen = nullptr;
+    GLFWmonitor* const primary = desc.mode != WindowMode::Windowed ? glfwGetPrimaryMonitor() : nullptr;
+    const GLFWvidmode* const video = primary != nullptr ? glfwGetVideoMode(primary) : nullptr;
+    if (video != nullptr && desc.mode == WindowMode::Fullscreen)
+    {
+        fullscreen = primary;
+        glfwWindowHint(GLFW_REFRESH_RATE, video->refreshRate);
+    }
+    else if (video != nullptr && desc.mode == WindowMode::Borderless)
+    {
+        glfwWindowHint(GLFW_DECORATED, GLFW_FALSE);
+        glfwWindowHint(GLFW_RESIZABLE, GLFW_FALSE);
+        glfwWindowHint(GLFW_SCALE_TO_MONITOR, GLFW_FALSE);
+        glfwWindowHint(GLFW_MAXIMIZED, GLFW_FALSE);
+        width = video->width;
+        height = video->height;
+    }
+    else if (desc.mode != WindowMode::Windowed)
+    {
+        ILL_LOG_WARN("Platform", "no primary monitor: window '{}' opens windowed", desc.title);
+    }
+
+    GLFWwindow* handle = glfwCreateWindow(width, height, desc.title.c_str(), fullscreen, nullptr);
     if (handle == nullptr)
     {
         ILL_LOG_ERROR("Platform", "failed to create window '{}'", desc.title);
         return nullptr;
+    }
+
+    if (fullscreen == nullptr && video != nullptr && desc.mode == WindowMode::Borderless)
+    {
+        int x = 0;
+        int y = 0;
+        glfwGetMonitorPos(primary, &x, &y);
+        glfwSetWindowPos(handle, x, y);
     }
 
     std::unique_ptr<Window> window(new Window(platform, handle, desc.title, events));

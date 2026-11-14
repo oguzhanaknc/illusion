@@ -1,9 +1,9 @@
 #pragma once
 
 /// @file
-/// The project settings a game runs with: physics, audio, input and rendering, each a reflected struct saved
-/// in its own settings file (SettingsFile.hpp) on the project's `settings:` mount. A missing file keeps the
-/// defaults, so a new project needs none of them.
+/// The project settings a game runs with: physics, audio, input, rendering and the window, each a reflected
+/// struct saved in its own settings file (SettingsFile.hpp) on the project's `settings:` mount. A missing
+/// file keeps the defaults, so a new project needs none of them.
 ///
 /// @code
 /// illusion::reflectRuntimeStructs();
@@ -18,6 +18,8 @@
 #include <illusion/core/Base.hpp>
 #include <illusion/core/Expected.hpp>
 #include <illusion/core/Math.hpp>
+#include <illusion/ecs/Reflection.hpp>
+#include <illusion/platform/Window.hpp>
 
 #include <array>
 #include <string>
@@ -80,6 +82,16 @@ struct RenderSettings
     f32 renderScale = 1.0f;     ///< Resolution of the 3D view relative to the window, in [0.25, 2].
 };
 
+/// The game's window (`settings:/window.json`, type "illusion.WindowSettings"), applied by the player; the
+/// editor's Game view ignores it.
+struct WindowSettings
+{
+    u32 width = 1280;                       ///< Width of a Windowed or Fullscreen window, in pixels.
+    u32 height = 720;                       ///< Height of a Windowed or Fullscreen window, in pixels.
+    WindowMode mode = WindowMode::Windowed; ///< Windowed, Borderless or Fullscreen.
+    bool resizable = true;                  ///< The player can resize a Windowed window.
+};
+
 /// Every project settings struct.
 struct ProjectSettings
 {
@@ -87,6 +99,7 @@ struct ProjectSettings
     AudioSettings audio{};     ///< `settings:/audio.json`.
     InputSettings input{};     ///< `settings:/input.json`.
     RenderSettings render{};   ///< `settings:/render.json`.
+    WindowSettings window{};   ///< `settings:/window.json`.
 };
 
 /// File of PhysicsSettings.
@@ -97,10 +110,12 @@ inline constexpr std::string_view kAudioSettingsFile = "settings:/audio.json";
 inline constexpr std::string_view kInputSettingsFile = "settings:/input.json";
 /// File of RenderSettings.
 inline constexpr std::string_view kRenderSettingsFile = "settings:/render.json";
+/// File of WindowSettings.
+inline constexpr std::string_view kWindowSettingsFile = "settings:/window.json";
 
-/// Reflects PhysicsSettings, AudioSettings, InputSettings and RenderSettings as structs of @p registry (as
-/// "illusion.PhysicsSettings", ...), so that settings files and editors can read and write them. Call it at
-/// startup, before loadProjectSettings().
+/// Reflects PhysicsSettings, AudioSettings, InputSettings, RenderSettings and WindowSettings as structs of
+/// @p registry (as "illusion.PhysicsSettings", ...), so that settings files and editors can read and write
+/// them. Call it at startup, before loadProjectSettings().
 void reflectRuntimeStructs(ComponentRegistry& registry);
 
 /// reflectRuntimeStructs() on ComponentRegistry::instance().
@@ -114,3 +129,13 @@ void reflectRuntimeStructs();
                                                               ProjectSettings& settings);
 
 } // namespace illusion
+
+/// Names of WindowMode values in settings files.
+template <>
+struct illusion::EnumReflection<illusion::WindowMode>
+{
+    /// Value names.
+    static constexpr std::array kValues{illusion::EnumValue{"Windowed", 0},
+                                        illusion::EnumValue{"Borderless", 1},
+                                        illusion::EnumValue{"Fullscreen", 2}};
+};

@@ -52,8 +52,8 @@ struct PlaySessionDesc
 };
 
 /// Registers the project settings of the runtime (`illusion.PhysicsSettings` in `settings:/physics.json`,
-/// and the audio, input and render settings) in @p catalog, reflecting them first. Types it has already are
-/// kept.
+/// and the audio, input, render and window settings) in @p catalog, reflecting them first. Types it has
+/// already are kept.
 void registerRuntimeSettings(SettingsCatalog& catalog);
 
 /// The editor's game runtime. Registers itself with EditorContext::setPlay() and attaches the edit World to

@@ -3,11 +3,13 @@
 //   illusion_pack <directory> <archive.illpak>
 //       Packs every file under <directory>.
 //   illusion_pack --cook <mount> <directory> <archive.illpak>
-//       Imports every image, glTF model and material's textures under <directory>, mounted as <mount> (the name the game uses,
-//       e.g. "game"), and packs the resulting import cache. Mount the archive as the game's cache mount
-//       (with source verification off) to load the cooked assets without shipping the sources.
+//       Imports every image, glTF model and material's textures under <directory>, mounted as <mount> (the
+//       name the game uses, e.g. "game"), and packs the resulting import cache. Mount the archive as the
+//       game's cache mount (with source verification off) to load the cooked assets without shipping the
+//       sources.
 
 #include <illusion/assets/AssetCooker.hpp>
+#include <illusion/assets/AssetReflection.hpp>
 #include <illusion/core/Log.hpp>
 #include <illusion/platform/Archive.hpp>
 #include <illusion/platform/FileSystem.hpp>
@@ -17,6 +19,7 @@
 #include <random>
 #include <string>
 #include <string_view>
+#include <vector>
 
 using namespace illusion;
 
@@ -44,9 +47,10 @@ int pack(const std::filesystem::path& directory, const std::filesystem::path& ar
 int cook(std::string_view mount, const std::filesystem::path& directory, const std::filesystem::path& archive)
 {
     std::error_code code;
-    const std::filesystem::path cache =
-        std::filesystem::temp_directory_path(code) / ("illusion-cook-" + std::to_string(std::random_device{}()));
+    const std::filesystem::path cache = std::filesystem::temp_directory_path(code) /
+                                        ("illusion-cook-" + std::to_string(std::random_device{}()));
     std::filesystem::create_directories(cache, code);
+    reflectAssetStructs(); // material files are read through reflection
     VirtualFileSystem files;
     if (files.mount(mount, directory) != FileError::None ||
         files.mount("cookcache", cache, MountAccess::ReadWrite) != FileError::None)
@@ -66,18 +70,38 @@ int cook(std::string_view mount, const std::filesystem::path& directory, const s
     return status;
 }
 
-} // namespace
-
-int main(int argc, char** argv)
+int run(const std::vector<std::string>& arguments)
 {
     Logger::instance().setLevel(LogLevel::Warn);
-    if (argc == 3)
+    if (arguments.size() == 2)
     {
-        return pack(utf8Path(argv[1]), utf8Path(argv[2]));
+        return pack(utf8Path(arguments[0]), utf8Path(arguments[1]));
     }
-    if (argc == 5 && std::string_view(argv[1]) == "--cook")
+    if (arguments.size() == 4 && arguments[0] == "--cook")
     {
-        return cook(argv[2], utf8Path(argv[3]), utf8Path(argv[4]));
+        return cook(arguments[1], utf8Path(arguments[2]), utf8Path(arguments[3]));
     }
     return usage();
 }
+
+} // namespace
+
+#if defined(_WIN32)
+// Windows passes narrow arguments in the ANSI code page, which is not UTF-8 and cannot hold every path (a
+// non-ASCII directory made utf8Path() fail); take the UTF-16 arguments and convert them to UTF-8.
+int wmain(int argc, wchar_t** argv)
+{
+    std::vector<std::string> arguments;
+    for (int i = 1; i < argc; ++i)
+    {
+        const std::u8string text = std::filesystem::path(argv[i]).u8string();
+        arguments.emplace_back(reinterpret_cast<const char*>(text.data()), text.size());
+    }
+    return run(arguments);
+}
+#else
+int main(int argc, char** argv)
+{
+    return run(std::vector<std::string>(argv + 1, argv + argc));
+}
+#endif

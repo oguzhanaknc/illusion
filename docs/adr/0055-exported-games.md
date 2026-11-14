@@ -1,6 +1,6 @@
 # 0055. Export games by building a player from the SDK
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-11-14
 
 ## Context
