@@ -89,6 +89,12 @@ Add `--record session.jsonl` to the bridge's `args` in `.mcp.json` to keep every
 for a bug report or to compare two sessions. The [AI Agents manual](../manual/editor/ai-agents.md) lists the
 other bridge options.
 
+## Export it
+
+The game runs without the editor once you export it: **File > Export…**, or the command `export.build`, writes
+the game's directory with the executable and its packed data. The [export manual](../manual/editor/export.md)
+has the settings, and [Releasing a game](../guides/release.md) the way to a store.
+
 ## Next steps
 
 - [Tetris by Hand](tetris-by-hand.md) builds the same game in the editor window, step by step.

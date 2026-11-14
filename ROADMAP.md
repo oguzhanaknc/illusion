@@ -758,12 +758,17 @@ compatible). Design in ADR 0055; public API in `illusion/player/Player.hpp` and
   tested on Windows; macOS ships a plain directory (no `.app` for the editor, no installer, the Vulkan loader
   comes from the system) and no installer exists on any platform; the acceptance Tetris is not exported from
   the package; the editor binary still carries the build tree's SDK path as its fallback.
-- M8-8: Documentation (EN/TR): manual page "Exporting a game", the release and Steam guide (signing,
+- M8-8: ✅ Documentation (EN/TR): manual page "Exporting a game", the release and Steam guide (signing,
   notarization, depots, the sniper container), the runtime page's player section, tutorials end with an
   export; in step with each pull request.
-  Done so far: the manual page `manual/editor/export.md` (settings, the Export window, `export.build`,
-  packages, signing, limits) and the player section of `manual/runtime.md`, both EN/TR; the release and
-  Steam guide and the tutorial endings are open.
+  Done: the manual page `manual/editor/export.md` (settings, the Export window, `export.build`, packages,
+  signing, limits), the player section of `manual/runtime.md`, the guide `guides/release.md` (export settings,
+  signing on Windows, signing and notarizing on macOS, Linux and the sniper option, Steam: SDK, `store`
+  setting, depots, `StoreService` example, a "Before you ship" list and "Known limits") and an "Export it"
+  section in the two Tetris tutorials, all EN/TR.
+  Open: the guide states what is unverified (real-certificate signing and notarization, the Steam backend,
+  Steam Input glyphs, the sniper container check and job) and must be revised when M8-6 and M8-7 close those;
+  `first-agent-session.md` ends without a running game and has no export section.
 
 ## UI — Game interface
 

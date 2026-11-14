@@ -242,6 +242,12 @@ Oyun çalışırken kodu değiştirin, örneğin bir satır temizlemenin puanın
 hot reload edilir, Component'leri değerlerini korur ve oyun çalışmaya devam eder (bkz.
 [Play Modu](../manual/editor/play-mode.md#oyun-modulleri)).
 
+## Export edin
+
+Oyunu export ettiğinizde Editor olmadan çalışır: **File > Export…** veya `export.build` komutu, oyunun dizinini
+executable'ı ve paketlenmiş verisiyle birlikte yazar. Ayarlar [export kılavuzunda](../manual/editor/export.md),
+bir mağazaya giden yol [Oyunu yayınlamak](../guides/release.md) sayfasındadır.
+
 ## Sonraki adımlar
 
 - Oyununuzu kabul sözleşmesinin kontrolleriyle karşılaştırın (SPEC.md'deki C3 ile C5 arası).

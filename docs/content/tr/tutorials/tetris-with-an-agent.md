@@ -90,6 +90,12 @@ Bir oturumun her MCP mesajını bir hata raporu için ya da iki oturumu karşıl
 `.mcp.json` içinde köprünün `args` listesine `--record session.jsonl` ekleyin. Diğer köprü seçeneklerini
 [yapay zekâ ajanları kılavuzu](../manual/editor/ai-agents.md) listeler.
 
+## Export edin
+
+Oyunu export ettiğinizde Editor olmadan çalışır: **File > Export…** veya `export.build` komutu, oyunun dizinini
+executable'ı ve paketlenmiş verisiyle birlikte yazar. Ayarlar [export kılavuzunda](../manual/editor/export.md),
+bir mağazaya giden yol [Oyunu yayınlamak](../guides/release.md) sayfasındadır.
+
 ## Sonraki adımlar
 
 - [Elle Tetris](tetris-by-hand.md), aynı oyunu editör penceresinde adım adım kurar.
