@@ -11,6 +11,7 @@ illusion_add_editor_library(illusion_editor_core STATIC
     src/EditorContext.cpp
     src/EntityIndex.cpp
     src/Export.cpp
+    src/ExportTools.cpp
     src/ExternalTools.cpp
     src/Gizmo.cpp
     src/JsonSchema.cpp

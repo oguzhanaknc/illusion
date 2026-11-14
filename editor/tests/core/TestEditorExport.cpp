@@ -6,6 +6,7 @@
 
 #include <illusion/assets/AppIcon.hpp>
 #include <illusion/editor/core/Export.hpp>
+#include <illusion/editor/core/ExportTools.hpp>
 #include <illusion/editor/core/ModuleBuild.hpp>
 #include <illusion/platform/Archive.hpp>
 
@@ -31,9 +32,6 @@ constexpr std::string_view kPlatformName = "macos";
 #else
 constexpr std::string_view kPlatformName = "linux";
 #endif
-
-// What FakeCMake.cpp --sign appends to the file it signs.
-[[maybe_unused]] constexpr std::string_view kSignature = "ILLUSION-TEST-SIGNATURE";
 
 // The files an export of @p product installs with FakeCMake.cpp, relative to the output directory.
 std::vector<std::string> gameFiles(const std::string& product, const std::string& executable)
@@ -85,16 +83,6 @@ std::filesystem::path dataOf(const std::filesystem::path& game)
 #else
     return game / "data";
 #endif
-}
-
-[[maybe_unused]] usize count(std::string_view text, std::string_view part)
-{
-    usize found = 0;
-    for (usize at = text.find(part); at != std::string_view::npos; at = text.find(part, at + part.size()))
-    {
-        ++found;
-    }
-    return found;
 }
 
 // Sets an environment variable of this process for the lifetime of the object.
@@ -604,6 +592,20 @@ std::filesystem::path packageDirectory(const ExportProject& project)
     return project.root / ".illusion" / "export" / std::string(kPlatformName) / "package";
 }
 
+#if defined(_WIN32)
+// What FakeCMake.cpp --sign appends to the file it signs.
+constexpr std::string_view kSignature = "ILLUSION-TEST-SIGNATURE";
+
+usize count(std::string_view text, std::string_view part)
+{
+    usize found = 0;
+    for (usize at = text.find(part); at != std::string_view::npos; at = text.find(part, at + part.size()))
+    {
+        ++found;
+    }
+    return found;
+}
+
 std::vector<std::string> lines(const std::string& text)
 {
     std::vector<std::string> result;
@@ -615,12 +617,13 @@ std::vector<std::string> lines(const std::string& text)
     return result;
 }
 
-[[maybe_unused]] std::string fakeSignCommand(const std::filesystem::path& log,
-                                             std::string_view file = "{file}")
+// FakeCMake.cpp as a recording sign command.
+std::string fakeSignCommand(const std::filesystem::path& log, std::string_view file = "{file}")
 {
     return "\"" + std::string(ILLUSION_FAKE_CMAKE) + "\" --sign \"" + log.generic_string() + "\" " +
            std::string(file);
 }
+#endif
 
 } // namespace
 
@@ -679,6 +682,47 @@ TEST_CASE("a configure error, such as a macOS SDK machine without MoltenVK, fail
     CHECK(reported);
     CHECK_FALSE(std::filesystem::exists(project.output / utf8Path(gameDirectoryName("Space Blocks 2"))));
     CHECK_FALSE(std::filesystem::exists(project.output / "Space Blocks 2.partial"));
+}
+
+TEST_CASE(
+    "every platform's package formats, sign command and codesign arguments are built the same everywhere")
+{
+    using namespace illusion::editor::detail;
+    CHECK(exportPlatformName(ExportPlatform::MacOS) == "macos");
+    CHECK(exportPlatformName(kExportPlatform) == kPlatformName);
+    CHECK(exportPackageFormat(ExportPackage::Installer, ExportPlatform::Windows).generator == "NSIS");
+    CHECK(exportPackageFormat(ExportPackage::Installer, ExportPlatform::Windows).suffix == "-setup.exe");
+    CHECK(exportPackageFormat(ExportPackage::Archive, ExportPlatform::Windows).extension == ".zip");
+    CHECK(exportPackageFormat(ExportPackage::Installer, ExportPlatform::MacOS).generator == "DragNDrop");
+    CHECK(exportPackageFormat(ExportPackage::Archive, ExportPlatform::MacOS).generator == "ZIP");
+    CHECK(exportPackageFormat(ExportPackage::Installer, ExportPlatform::Linux).extension == ".tar.gz");
+    CHECK(exportPackageFormat(ExportPackage::Archive, ExportPlatform::Linux).generator == "TGZ");
+
+    const std::vector<std::string> parts =
+        splitCommandLine("\"C:\\Program Files\\signtool.exe\"  sign /p \"pass word\"\t{file} \"\"");
+    CHECK(parts == std::vector<std::string>{R"(C:\Program Files\signtool.exe)", "sign", "/p", "pass word",
+                                            "{file}", ""});
+    CHECK(splitCommandLine("  ").empty());
+    CHECK(substituteFile({"/f", "{file}", "x{file}y{file}"}, "C:\\a b.exe") ==
+          std::vector<std::string>{"/f", "C:\\a b.exe", "xC:\\a b.exey" + std::string("C:\\a b.exe")});
+
+    CHECK(codesignArguments("-", "/out/Game.app", "/e.plist") ==
+          std::vector<std::string>{"--force", "--sign", "-", "--options", "runtime", "--entitlements",
+                                   "/e.plist", "/out/Game.app"});
+    CHECK(codesignArguments("Developer ID Application: X", "/lib.dylib", "") ==
+          std::vector<std::string>{"--force", "--sign", "Developer ID Application: X", "--options", "runtime",
+                                   "--timestamp", "/lib.dylib"});
+    CHECK(notarizeArguments("/out/Game.dmg", "profile") ==
+          std::vector<std::string>{"notarytool", "submit", "/out/Game.dmg", "--wait", "--keychain-profile",
+                                   "profile"});
+    CHECK(stapleArguments("/out/Game.dmg") == std::vector<std::string>{"stapler", "staple", "/out/Game.dmg"});
+
+    const std::string adHoc = codesignEntitlements(true);
+    const std::string team = codesignEntitlements(false);
+    CHECK(adHoc.find("com.apple.security.cs.disable-library-validation") != std::string::npos);
+    CHECK(team.find("<key>") == std::string::npos);
+    CHECK(team.starts_with("<?xml"));
+    CHECK(team.ends_with("</dict>\n</plist>\n"));
 }
 
 TEST_CASE("validation checks the signing settings against the platform")

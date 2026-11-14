@@ -305,9 +305,10 @@ function(_illusion_game_linux_resources target name icon_input icon_depends)
     target_sources(${target} PRIVATE "${png}")
     string(REPLACE "\\" "\\\\" desktop_name "${name}")
     set(desktop "${directory}/${target}.desktop")
-    file(GENERATE OUTPUT "${desktop}" CONTENT
+    string(CONCAT desktop_text
         "[Desktop Entry]\nType=Application\nVersion=1.5\nName=${desktop_name}\nExec=$<TARGET_FILE_NAME:${target}>\n"
         "Icon=$<TARGET_FILE_BASE_NAME:${target}>\nTerminal=false\nCategories=Game;\n")
+    file(GENERATE OUTPUT "${desktop}" CONTENT "${desktop_text}")
     # Next to the executable under its name, as the install and the packages ship them.
     set(base "$<TARGET_FILE_DIR:${target}>/$<TARGET_FILE_BASE_NAME:${target}>")
     add_custom_command(TARGET ${target} POST_BUILD
