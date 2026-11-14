@@ -352,10 +352,7 @@ Expected<u64, StoreError> NullStoreService::readCloudFile(std::string_view name,
     {
         return unexpected(storeErrorOf(error));
     }
-    if (!bytes.empty())
-    {
-        std::memcpy(out.data(), bytes.data(), std::min(bytes.size(), out.size()));
-    }
+    std::copy_n(bytes.begin(), std::min(bytes.size(), out.size()), out.begin());
     return static_cast<u64>(bytes.size());
 }
 

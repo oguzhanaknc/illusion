@@ -11,8 +11,8 @@
 
 #include <array>
 #include <cmath>
-#include <cstring>
 #include <limits>
+#include <span>
 #include <string>
 #include <vector>
 
@@ -23,9 +23,8 @@ namespace
 
 std::vector<std::byte> bytesOf(std::string_view text)
 {
-    std::vector<std::byte> bytes(text.size());
-    std::memcpy(bytes.data(), text.data(), text.size());
-    return bytes;
+    const std::span<const std::byte> bytes = std::as_bytes(std::span{text});
+    return {bytes.begin(), bytes.end()};
 }
 
 std::string textOf(std::span<const std::byte> bytes)
