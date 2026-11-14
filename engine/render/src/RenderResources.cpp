@@ -17,6 +17,7 @@
 #include <cstddef>
 #include <cstring>
 #include <format>
+#include <optional>
 #include <utility>
 
 namespace illusion
@@ -62,17 +63,6 @@ ImageFormat uncompressedFormat(ImageFormat format) noexcept
     default:
         return ImageFormat::RGBA8;
     }
-}
-
-// Bytes of every level of @p image stored as @p format.
-u64 imageBytes(const Image& image, ImageFormat format) noexcept
-{
-    u64 bytes = 0;
-    for (const ImageMip& mip : image.mips)
-    {
-        bytes += imageLevelSize(format, mip.width, mip.height);
-    }
-    return bytes;
 }
 
 // Row pitch and size in bytes of a square level @p width pixels wide in @p format (rows of blocks for BC).
@@ -170,7 +160,11 @@ enum class ResourceKind : u8
     Texture,
     Material,
     Environment,
+    ReplacedTexture, // a texture a slot no longer binds (or never will), freed after the GPU used it
+    TextureSwap,     // a texture with new resident levels, bound to its slot once the GPU wrote it
 };
+
+constexpr u32 kNoSwap = ~0u;
 
 struct Release
 {
@@ -214,8 +208,45 @@ struct RenderResources::Impl
     {
         u64 gpu = 0;
         u64 uncompressed = 0;
+        u64 saved = 0; // of the levels left out
     };
     std::vector<TextureBytes> textureSizes{1}; // indexed like `textures`
+    // The image a texture was created from and its resident levels [firstMip, mipCount).
+    struct TextureInfo
+    {
+        ImageFormat format = ImageFormat::RGBA8; // as given to createTexture()
+        ImageFormat gpuFormat = ImageFormat::RGBA8;
+        u32 width = 0;
+        u32 height = 0;
+        u32 mipCount = 0;
+        u32 firstMip = 0;
+
+        [[nodiscard]] bool matches(const Image& image) const noexcept
+        {
+            return image.format == format && image.width() == width && image.height() == height &&
+                   image.mips.size() == mipCount;
+        }
+    };
+    std::vector<TextureInfo> textureInfos{1}; // indexed like `textures`
+    struct ReplacedTexture
+    {
+        nvrhi::TextureHandle texture;
+        TextureBytes bytes;
+    };
+    std::vector<ReplacedTexture> replacedTextures;
+    std::vector<u32> freeReplaced;
+    // setTextureMips() binds its texture when the GPU finished writing it: the swap of the slot's generation
+    // `generation`, the texture, and the record of the texture bound until then (retired at the swap).
+    struct TextureSwap
+    {
+        u32 slot = 0;
+        u32 generation = 0;
+        nvrhi::TextureHandle texture;
+        u32 retire = 0; // index in `replacedTextures`
+    };
+    std::vector<TextureSwap> textureSwaps;
+    std::vector<u32> freeSwaps;
+    std::vector<u32> pendingSwaps{kNoSwap}; // indexed like `textures`: the latest swap, or kNoSwap
     std::vector<GpuMaterial> materials{1};
     std::vector<GpuEnvironment> environments{1};
     SlotTable meshSlots;
@@ -251,6 +282,7 @@ struct RenderResources::Impl
     bool warnedDecode = false;
     u64 textureBytes = 0;
     u64 textureBytesUncompressed = 0;
+    u64 streamingSavedBytes = 0;
     u64 environmentBytes = 0;
     u64 environmentBytesUncompressed = 0;
 
@@ -389,9 +421,38 @@ struct RenderResources::Impl
             textures[release.index] = nullptr;
             textureBytes -= textureSizes[release.index].gpu;
             textureBytesUncompressed -= textureSizes[release.index].uncompressed;
+            streamingSavedBytes -= textureSizes[release.index].saved;
             textureSizes[release.index] = TextureBytes{};
+            textureInfos[release.index] = TextureInfo{};
+            pendingSwaps[release.index] = kNoSwap;
             textureSlots.recycle(release.index);
             break;
+        case ResourceKind::TextureSwap:
+        {
+            // Superseded and cancelled swaps (and swaps of released slots) only drop their texture. Swaps
+            // retire the texture bound until now through `releasing`, which collect() does not iterate.
+            TextureSwap& swap = textureSwaps[release.index];
+            if (textureSlots.valid(swap.slot, swap.generation) && pendingSwaps[swap.slot] == release.index)
+            {
+                const nvrhi::TextureHandle previous = std::exchange(textures[swap.slot], swap.texture);
+                bindTexture(swap.slot, swap.texture);
+                rebindMaterials(swap.slot, previous, swap.texture);
+                pendingSwaps[swap.slot] = kNoSwap;
+                releasing.push_back(Release{ResourceKind::ReplacedTexture, swap.retire});
+            }
+            swap = TextureSwap{};
+            freeSwaps.push_back(release.index);
+            break;
+        }
+        case ResourceKind::ReplacedTexture:
+        {
+            ReplacedTexture& replaced = replacedTextures[release.index];
+            textureBytes -= replaced.bytes.gpu;
+            textureBytesUncompressed -= replaced.bytes.uncompressed;
+            replaced = ReplacedTexture{};
+            freeReplaced.push_back(release.index);
+            break;
+        }
         case ResourceKind::Material:
             materials[release.index] = GpuMaterial{};
             materialSlots.recycle(release.index);
@@ -460,6 +521,131 @@ struct RenderResources::Impl
         }
         retiring.erase(retiring.begin(), retiring.begin() + static_cast<std::ptrdiff_t>(done));
         return freed;
+    }
+
+    // Keeps @p texture and its @p bytes counted until the record is released; returns the record.
+    u32 storeReplaced(nvrhi::ITexture* texture, const TextureBytes& bytes)
+    {
+        u32 index = 0;
+        if (!freeReplaced.empty())
+        {
+            index = freeReplaced.back();
+            freeReplaced.pop_back();
+        }
+        else
+        {
+            index = static_cast<u32>(replacedTextures.size());
+            replacedTextures.emplace_back();
+        }
+        replacedTextures[index] = ReplacedTexture{texture, TextureBytes{bytes.gpu, bytes.uncompressed, 0}};
+        return index;
+    }
+
+    u32 storeSwap(const TextureSwap& swap)
+    {
+        u32 index = 0;
+        if (!freeSwaps.empty())
+        {
+            index = freeSwaps.back();
+            freeSwaps.pop_back();
+        }
+        else
+        {
+            index = static_cast<u32>(textureSwaps.size());
+            textureSwaps.emplace_back();
+        }
+        textureSwaps[index] = swap;
+        return index;
+    }
+
+    // Bytes of the levels of @p info resident from @p firstMip on, and of those left out.
+    static TextureBytes textureBytesOf(const TextureInfo& info, u32 firstMip) noexcept
+    {
+        TextureBytes bytes;
+        const ImageFormat uncompressed = uncompressedFormat(info.format);
+        for (u32 level = 0; level < info.mipCount; ++level)
+        {
+            const u32 width = std::max(info.width >> level, 1u);
+            const u32 height = std::max(info.height >> level, 1u);
+            const u64 gpu = imageLevelSize(info.gpuFormat, width, height);
+            if (level < firstMip)
+            {
+                bytes.saved += gpu;
+                continue;
+            }
+            bytes.gpu += gpu;
+            bytes.uncompressed += imageLevelSize(uncompressed, width, height);
+        }
+        return bytes;
+    }
+
+    // A texture for the levels [firstMip, mipCount) of @p info, without data.
+    nvrhi::TextureHandle makeTexture(const TextureInfo& info, u32 firstMip, const char* debugName) const
+    {
+        nvrhi::TextureDesc desc;
+        desc.width = std::max(info.width >> firstMip, 1u);
+        desc.height = std::max(info.height >> firstMip, 1u);
+        desc.mipLevels = info.mipCount - firstMip;
+        desc.format = formatOf(info.gpuFormat);
+        desc.debugName = debugName;
+        desc.enableAutomaticStateTracking(nvrhi::ResourceStates::ShaderResource);
+        return device->createTexture(desc);
+    }
+
+    // Records the upload of levels [begin, end) of @p pixels into @p texture, whose first level is @p
+    // firstMip.
+    void writeLevels(nvrhi::ITexture* texture, const Image& pixels, u32 firstMip, u32 begin, u32 end)
+    {
+        for (u32 level = begin; level < end; ++level)
+        {
+            const ImageMip& mip = pixels.mips[level];
+            uploads->writeTexture(texture, 0, level - firstMip, pixels.data.data() + mip.offset,
+                                  imageRowPitch(pixels.format, mip.width));
+        }
+    }
+
+    // Points the bindless slot @p index at @p texture, growing the table when needed.
+    void bindTexture(u32 index, nvrhi::ITexture* texture)
+    {
+        if (!bindless)
+        {
+            return;
+        }
+        ILL_CHECK(index < kBindlessTextureCapacity, "too many textures for the bindless table");
+        if (bindlessTextures->getCapacity() <= index)
+        {
+            device->resizeDescriptorTable(
+                bindlessTextures,
+                std::min(std::max(index + 1, bindlessTextures->getCapacity() * 2), kBindlessTextureCapacity));
+        }
+        device->writeDescriptorTable(bindlessTextures, nvrhi::BindingSetItem::Texture_SRV(index, texture));
+    }
+
+    // Makes the binding sets of the live materials that use texture slot @p index bind @p texture instead of
+    // @p previous (the bindless path reads the slot from the material table, which does not change).
+    void rebindMaterials(u32 index, nvrhi::ITexture* previous, nvrhi::ITexture* texture)
+    {
+        for (u32 m = 1; m < materials.size() && m < records.size(); ++m)
+        {
+            const GpuMaterialRecord& record = records[m];
+            const bool uses = record.baseColorTexture == index || record.metallicRoughnessTexture == index ||
+                              record.normalTexture == index || record.occlusionTexture == index ||
+                              record.emissiveTexture == index;
+            GpuMaterial& material = materials[m];
+            if (!uses || !materialSlots.slots[m].live || material.bindingSet == nullptr)
+            {
+                continue;
+            }
+            nvrhi::BindingSetDesc set = *material.bindingSet->getDesc();
+            for (nvrhi::BindingSetItem& item : set.bindings)
+            {
+                if (item.resourceHandle == previous)
+                {
+                    item.resourceHandle = texture;
+                }
+            }
+            material.bindingSet = device->createBindingSet(set, materialLayout);
+        }
     }
 
     struct MaterialParts
@@ -605,58 +791,141 @@ MeshHandle RenderResources::createMesh(const MeshData& mesh, const char* debugNa
 
 TextureHandle RenderResources::createTexture(const Image& image, const char* debugName)
 {
+    return createTexture(image, u32{0}, debugName);
+}
+
+TextureHandle RenderResources::createTexture(const Image& image, u32 firstMip, const char* debugName)
+{
     ILL_PROFILE_SCOPE();
     ILL_CHECK(image.isValid(), "createTexture: invalid image");
     Impl& impl = *m_impl;
+    std::optional<Image> decoded;
+    const Image* pixels = &image;
     if (isBlockCompressed(image.format) && !impl.compressedTextures)
     {
         impl.warnDecode();
-        const std::optional<Image> pixels = decompressImage(image);
-        ILL_CHECK(pixels.has_value(), "createTexture: invalid compressed image");
-        return createTexture(*pixels, debugName);
+        decoded = decompressImage(image);
+        ILL_CHECK(decoded.has_value(), "createTexture: invalid compressed image");
+        pixels = &*decoded;
     }
     impl.collect();
 
-    nvrhi::TextureDesc desc;
-    desc.width = image.width();
-    desc.height = image.height();
-    desc.mipLevels = static_cast<u32>(image.mips.size());
-    desc.format = formatOf(image.format);
-    desc.debugName = debugName;
-    desc.enableAutomaticStateTracking(nvrhi::ResourceStates::ShaderResource);
-    nvrhi::TextureHandle texture = impl.device->createTexture(desc);
-
+    Impl::TextureInfo info;
+    info.format = image.format;
+    info.gpuFormat = pixels->format;
+    info.width = image.width();
+    info.height = image.height();
+    info.mipCount = static_cast<u32>(image.mips.size());
+    info.firstMip = std::min(firstMip, info.mipCount - 1);
+    nvrhi::TextureHandle texture = impl.makeTexture(info, info.firstMip, debugName);
     impl.uploads->open();
-    for (u32 level = 0; level < image.mips.size(); ++level)
-    {
-        const ImageMip& mip = image.mips[level];
-        impl.uploads->writeTexture(texture, 0, level, image.data.data() + mip.offset,
-                                   imageRowPitch(image.format, mip.width));
-    }
+    impl.writeLevels(texture, *pixels, info.firstMip, info.firstMip, info.mipCount);
     impl.uploads->close();
     impl.device->executeCommandList(impl.uploads);
 
     const u32 index = impl.textureSlots.acquire();
     Impl::ensureSlot(impl.textures, index);
     Impl::ensureSlot(impl.textureSizes, index);
+    Impl::ensureSlot(impl.textureInfos, index);
+    Impl::ensureSlot(impl.pendingSwaps, index);
+    impl.pendingSwaps[index] = kNoSwap;
     impl.textures[index] = texture;
-    impl.textureSizes[index] = {imageBytes(image, image.format),
-                                imageBytes(image, uncompressedFormat(image.format))};
+    impl.textureInfos[index] = info;
+    impl.textureSizes[index] = Impl::textureBytesOf(info, info.firstMip);
     impl.textureBytes += impl.textureSizes[index].gpu;
     impl.textureBytesUncompressed += impl.textureSizes[index].uncompressed;
-    if (impl.bindless)
-    {
-        ILL_CHECK(index < kBindlessTextureCapacity, "too many textures for the bindless table");
-        if (impl.bindlessTextures->getCapacity() <= index)
-        {
-            impl.device->resizeDescriptorTable(
-                impl.bindlessTextures, std::min(std::max(index + 1, impl.bindlessTextures->getCapacity() * 2),
-                                                kBindlessTextureCapacity));
-        }
-        impl.device->writeDescriptorTable(impl.bindlessTextures,
-                                          nvrhi::BindingSetItem::Texture_SRV(index, texture));
-    }
+    impl.streamingSavedBytes += impl.textureSizes[index].saved;
+    impl.bindTexture(index, texture);
     return TextureHandle{index, impl.textureSlots.slots[index].generation};
+}
+
+bool RenderResources::setTextureMips(TextureHandle handle, u32 firstMip, const Image* image)
+{
+    ILL_PROFILE_SCOPE();
+    Impl& impl = *m_impl;
+    if (!impl.textureSlots.valid(handle.index, handle.generation) || handle.index == impl.white.index ||
+        handle.index == impl.flatNormal.index)
+    {
+        return false;
+    }
+    Impl::TextureInfo& info = impl.textureInfos[handle.index];
+    if (image != nullptr && !info.matches(*image))
+    {
+        return false;
+    }
+    firstMip = std::min(firstMip, info.mipCount - 1);
+    if (firstMip == info.firstMip)
+    {
+        return true;
+    }
+    const bool raising = firstMip < info.firstMip;
+    if (raising && image == nullptr)
+    {
+        return false;
+    }
+    std::optional<Image> decoded;
+    const Image* pixels = image;
+    if (raising && info.gpuFormat != info.format)
+    {
+        decoded = decompressImage(*image);
+        if (!decoded)
+        {
+            return false;
+        }
+        pixels = &*decoded;
+    }
+
+    // The newest texture of the slot (a pending one, else the bound one) holds the current range: its writes
+    // were submitted before the copies recorded here.
+    const u32 pending = impl.pendingSwaps[handle.index];
+    const nvrhi::TextureHandle source =
+        pending != kNoSwap ? impl.textureSwaps[pending].texture : impl.textures[handle.index];
+    const nvrhi::TextureHandle texture =
+        impl.makeTexture(info, firstMip, source->getDesc().debugName.c_str());
+    impl.uploads->open();
+    for (u32 level = std::max(firstMip, info.firstMip); level < info.mipCount; ++level)
+    {
+        impl.uploads->copyTexture(texture, nvrhi::TextureSlice().setMipLevel(level - firstMip), source,
+                                  nvrhi::TextureSlice().setMipLevel(level - info.firstMip));
+    }
+    if (raising)
+    {
+        impl.writeLevels(texture, *pixels, firstMip, firstMip, info.firstMip);
+    }
+    impl.uploads->close();
+    impl.device->executeCommandList(impl.uploads);
+
+    // The source keeps counting until it is freed. A superseded pending texture was never bound, so it goes
+    // with the work submitted so far; the bound one goes after the swap, with the frames that still use it.
+    Impl::TextureBytes& bytes = impl.textureSizes[handle.index];
+    const u32 replaced = impl.storeReplaced(source, bytes);
+    u32 retire = replaced;
+    if (pending != kNoSwap)
+    {
+        impl.releasing.push_back(Release{ResourceKind::ReplacedTexture, replaced});
+        retire = impl.textureSwaps[pending].retire;
+    }
+    impl.streamingSavedBytes -= bytes.saved;
+    bytes = Impl::textureBytesOf(info, firstMip);
+    impl.textureBytes += bytes.gpu;
+    impl.textureBytesUncompressed += bytes.uncompressed;
+    impl.streamingSavedBytes += bytes.saved;
+    info.firstMip = firstMip;
+
+    const u32 swap = impl.storeSwap(Impl::TextureSwap{handle.index, handle.generation, texture, retire});
+    impl.pendingSwaps[handle.index] = swap;
+    impl.releasing.push_back(Release{ResourceKind::TextureSwap, swap});
+    return true;
+}
+
+u32 RenderResources::textureFirstMip(TextureHandle texture) const noexcept
+{
+    return isValid(texture) ? m_impl->textureInfos[texture.index].firstMip : 0;
+}
+
+u32 RenderResources::textureMipCount(TextureHandle texture) const noexcept
+{
+    return isValid(texture) ? m_impl->textureInfos[texture.index].mipCount : 0;
 }
 
 MaterialHandle RenderResources::createMaterial(const MaterialDesc& desc)
@@ -1066,6 +1335,13 @@ void RenderResources::releaseTexture(TextureHandle texture)
     ILL_ASSERT(!builtin, "releaseTexture: the default textures cannot be released");
     if (valid && !builtin)
     {
+        // A pending swap is cancelled: its texture goes with the slot, the bound one with its record.
+        if (const u32 pending = impl.pendingSwaps[texture.index]; pending != kNoSwap)
+        {
+            impl.releasing.push_back(
+                Release{ResourceKind::ReplacedTexture, impl.textureSwaps[pending].retire});
+            impl.pendingSwaps[texture.index] = kNoSwap;
+        }
         impl.retire(impl.textureSlots, ResourceKind::Texture, texture.index);
     }
 }
@@ -1203,6 +1479,7 @@ RenderResourceStatistics RenderResources::statistics() const noexcept
     statistics.textures = impl.textureSlots.live;
     statistics.textureBytes = impl.textureBytes;
     statistics.textureBytesUncompressed = impl.textureBytesUncompressed;
+    statistics.streamingSavedBytes = impl.streamingSavedBytes;
     statistics.environmentBytes = impl.environmentBytes;
     statistics.environmentBytesUncompressed = impl.environmentBytesUncompressed;
     return statistics;
@@ -1265,6 +1542,11 @@ nvrhi::ISampler* RenderResources::materialSampler(u32 index) const noexcept
 bool RenderResources::bindless() const noexcept
 {
     return m_impl->bindless;
+}
+
+bool RenderResources::compressedTextures() const noexcept
+{
+    return m_impl->compressedTextures;
 }
 
 nvrhi::IBindingLayout* RenderResources::bindlessLayout() const noexcept
