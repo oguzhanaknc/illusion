@@ -191,6 +191,42 @@ if(ILLUSION_BUILD_TOOLS)
     set_tests_properties(tools.pack_unicode_path PROPERTIES LABELS "unit" TIMEOUT 300)
 endif()
 
+# The package's component `player` (ADR 0055; cmake/IllusionSdk.cmake): a game outside the engine's build is
+# built against the build tree's package and against an installed copy that moved, and the installed copy
+# holds no editor code and no absolute path of this build. Building needs a compiler (label "sdk"); running
+# the games needs a GPU (label "gpu"). Profiling builds have no package; packing the data needs illusion_pack.
+if(ILLUSION_BUILD_TOOLS AND NOT ILLUSION_PROFILING)
+    set(sdk_script "${CMAKE_CURRENT_SOURCE_DIR}/sdk/PlayerSdk.cmake")
+    set(sdk_work "${CMAKE_CURRENT_BINARY_DIR}/sdk/$<CONFIG>")
+    set(sdk_installed "${sdk_work}/installed/sdk")
+    add_test(NAME sdk.player.build_tree
+        COMMAND "${CMAKE_COMMAND}" -DMODE=build "-DSDK=${PROJECT_BINARY_DIR}/sdk/$<CONFIG>/illusion-sdk.json"
+            "-DSOURCE=${CMAKE_CURRENT_SOURCE_DIR}/sdk/game" "-DWORK=${sdk_work}/build_tree_game" -P "${sdk_script}")
+    add_test(NAME sdk.install
+        COMMAND "${CMAKE_COMMAND}" -DMODE=install "-DBUILD_DIR=${PROJECT_BINARY_DIR}" -DCONFIG=$<CONFIG>
+            "-DWORK=${sdk_work}/installed" -P "${sdk_script}")
+    add_test(NAME sdk.install.contents
+        COMMAND "${CMAKE_COMMAND}" -DMODE=contents "-DPREFIX=${sdk_installed}" "-DSOURCE_DIR=${PROJECT_SOURCE_DIR}"
+            "-DBUILD_DIR=${PROJECT_BINARY_DIR}" "-DSTAGING=${sdk_work}/installed/staging" -P "${sdk_script}")
+    add_test(NAME sdk.player.installed
+        COMMAND "${CMAKE_COMMAND}" -DMODE=build
+            "-DSDK=${sdk_installed}/${CMAKE_INSTALL_LIBDIR}/cmake/illusion/$<CONFIG>/illusion-sdk.json"
+            "-DSOURCE=${CMAKE_CURRENT_SOURCE_DIR}/sdk/game" "-DWORK=${sdk_work}/installed_game" -P "${sdk_script}")
+    foreach(variant build_tree installed)
+        add_test(NAME sdk.player.${variant}.run
+            COMMAND "${sdk_work}/${variant}_game/build/sdk_game${CMAKE_EXECUTABLE_SUFFIX}" --frames 1 --no-dialogs
+                --user-data "${sdk_work}/${variant}_game/user")
+        set_tests_properties(sdk.player.${variant}.run PROPERTIES LABELS "gpu;sdk" TIMEOUT 300
+            FIXTURES_REQUIRED sdk_game_${variant})
+    endforeach()
+    set_tests_properties(sdk.player.build_tree PROPERTIES LABELS "unit;sdk" TIMEOUT 1800
+        FIXTURES_SETUP sdk_game_build_tree)
+    set_tests_properties(sdk.install PROPERTIES LABELS "unit;sdk" TIMEOUT 600 FIXTURES_SETUP sdk_installed)
+    set_tests_properties(sdk.install.contents PROPERTIES LABELS "unit;sdk" FIXTURES_REQUIRED sdk_installed)
+    set_tests_properties(sdk.player.installed PROPERTIES LABELS "unit;sdk" TIMEOUT 1800
+        FIXTURES_REQUIRED sdk_installed FIXTURES_SETUP sdk_game_installed)
+endif()
+
 include(${ILLUSION_DOCTEST_SOURCE_DIR}/scripts/cmake/doctest.cmake)
 doctest_discover_tests(illusion_tests
     PROPERTIES LABELS "unit"

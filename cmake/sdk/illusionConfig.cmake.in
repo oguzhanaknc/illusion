@@ -1,10 +1,13 @@
-# The illusion module SDK (docs/adr/0043-project-modules-built-by-the-editor.md), written by the engine's
-# build. A project's modules/CMakeLists.txt uses it:
+# The illusion package (docs/adr/0043-project-modules-built-by-the-editor.md, docs/adr/0055-exported-games.md),
+# written by the engine's build. A project's modules/CMakeLists.txt uses the module SDK:
 #
 #   find_package(illusion REQUIRED CONFIG)
 #   illusion_project_modules()
 #
-# and each modules/<name>/CMakeLists.txt calls illusion_add_module(<name> SHARED SOURCES ... USES ...).
+# and each modules/<name>/CMakeLists.txt calls illusion_add_module(<name> SHARED SOURCES ... USES ...). A game
+# asks for the component `player`, which adds illusion::player, illusion::pack and illusion_add_game():
+#
+#   find_package(illusion REQUIRED CONFIG COMPONENTS player)
 
 include(CMakeFindDependencyMacro)
 find_dependency(Threads)
@@ -19,8 +22,27 @@ set(ILLUSION_PROFILING OFF)
 set(ILLUSION_WARNINGS_AS_ERRORS OFF)
 set(ILLUSION_SANITIZER "@ILLUSION_SANITIZER@")
 
-include("@ILLUSION_SDK_SOURCE_DIR@/cmake/IllusionCompilerSettings.cmake")
-include("@ILLUSION_SDK_SOURCE_DIR@/cmake/IllusionModules.cmake")
+include("@ILLUSION_SDK_CMAKE_DIR@/IllusionCompilerSettings.cmake")
+include("@ILLUSION_SDK_CMAKE_DIR@/IllusionModules.cmake")
+
+foreach(_illusion_component IN LISTS illusion_FIND_COMPONENTS)
+    if(_illusion_component STREQUAL "player" AND EXISTS "${CMAKE_CURRENT_LIST_DIR}/illusionPlayerTargets.cmake")
+        if(NOT TARGET illusion::player)
+            include("${CMAKE_CURRENT_LIST_DIR}/illusionPlayerTargets.cmake")
+            include("${CMAKE_CURRENT_LIST_DIR}/illusionWrappedTargets.cmake")
+        endif()
+        include("@ILLUSION_SDK_CMAKE_DIR@/IllusionGame.cmake")
+        set(illusion_player_FOUND TRUE)
+    else()
+        set(illusion_${_illusion_component}_FOUND FALSE)
+        if(illusion_FIND_REQUIRED_${_illusion_component})
+            set(illusion_FOUND FALSE)
+            set(illusion_NOT_FOUND_MESSAGE
+                "the illusion package at ${CMAKE_CURRENT_LIST_DIR} has no component '${_illusion_component}'")
+        endif()
+    endif()
+endforeach()
+unset(_illusion_component)
 
 # Adds every subdirectory of the current source directory that has a CMakeLists.txt, in name order, with
 # the engine's language settings. Shared module libraries go to ILLUSION_MODULE_OUTPUT_DIRECTORY when it is

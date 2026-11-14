@@ -188,6 +188,54 @@ TEST_CASE("toolchain descriptions are validated")
     CHECK_FALSE(parseModuleToolchain(badScript).hasValue());
 }
 
+TEST_CASE("version 2 toolchain descriptions say whether the package has the player; version 1 never has it")
+{
+    constexpr std::string_view kVersion1 =
+        R"({"format":"illusion.sdk","version":1,"cmake":"/usr/bin/cmake","generator":"Ninja","config":"Debug",)"
+        R"("package":"/b/sdk","modulePrefix":"lib","moduleSuffix":".so","arguments":[]})";
+    const Expected<ModuleToolchain, std::string> old = parseModuleToolchain(kVersion1);
+    REQUIRE(old.hasValue());
+    CHECK_FALSE(old->player);
+
+    std::string version2(kVersion1);
+    version2.replace(version2.find("\"version\":1"), 11, "\"version\":2");
+    // Version 2 requires the field.
+    CHECK_FALSE(parseModuleToolchain(version2).hasValue());
+    std::string withPlayer = version2;
+    withPlayer.insert(withPlayer.size() - 1, R"(,"player":true)");
+    const Expected<ModuleToolchain, std::string> player = parseModuleToolchain(withPlayer);
+    REQUIRE(player.hasValue());
+    CHECK(player->player);
+    std::string withoutPlayer = version2;
+    withoutPlayer.insert(withoutPlayer.size() - 1, R"(,"player":false)");
+    REQUIRE(parseModuleToolchain(withoutPlayer).hasValue());
+    CHECK_FALSE(parseModuleToolchain(withoutPlayer)->player);
+    std::string badPlayer = version2;
+    badPlayer.insert(badPlayer.size() - 1, R"(,"player":"yes")");
+    CHECK_FALSE(parseModuleToolchain(badPlayer).hasValue());
+    std::string version3(withPlayer);
+    version3.replace(version3.find("\"version\":2"), 11, "\"version\":3");
+    CHECK_FALSE(parseModuleToolchain(version3).hasValue());
+}
+
+TEST_CASE("an installed toolchain description names its package relative to the file")
+{
+    TempDirectory directory;
+    const std::filesystem::path file =
+        directory.path / "lib" / "cmake" / "illusion" / "Debug" / "illusion-sdk.json";
+    std::filesystem::create_directories(file.parent_path());
+    {
+        std::ofstream out(file, std::ios::binary);
+        out << R"({"format":"illusion.sdk","version":2,"cmake":"/usr/bin/cmake","generator":"Ninja",)"
+               R"("config":"Debug","package":"..","player":true,"modulePrefix":"","moduleSuffix":".dll",)"
+               R"("arguments":[]})";
+    }
+    const Expected<ModuleToolchain, std::string> toolchain = readModuleToolchain(file);
+    REQUIRE(toolchain.hasValue());
+    CHECK(toolchain->package == (directory.path / "lib" / "cmake" / "illusion").lexically_normal());
+    CHECK(toolchain->player);
+}
+
 TEST_CASE("module.create writes a module from the template and undo removes it")
 {
     EditorFixture f;
@@ -238,7 +286,12 @@ TEST_CASE("module.build configures once, builds and loads new modules, then hot-
     // The configure step gets the SDK package, the output directory and the toolchain's arguments.
     const std::filesystem::path build = f.directory.path / "project" / ".illusion" / "build" / "modules";
     const std::string arguments = readText(build / "configure-args.txt");
-    CHECK(arguments.find("-Dillusion_DIR=sdk") != std::string::npos);
+    // The fixture's SDK names its package relative to the description, like an installed SDK.
+    const std::u8string packagePath = (f.directory.path / "sdk").lexically_normal().u8string();
+    const std::string package(packagePath.begin(), packagePath.end());
+    INFO(arguments);
+    CHECK(arguments.find("-Dillusion_DIR=") != std::string::npos);
+    CHECK(arguments.find("illusion_DIR=" + package) != std::string::npos);
     CHECK(arguments.find("-DILLUSION_MODULE_OUTPUT_DIRECTORY=") != std::string::npos);
     CHECK(arguments.find("-DCMAKE_BUILD_TYPE=Debug") != std::string::npos);
     CHECK(arguments.find("Ninja") != std::string::npos);

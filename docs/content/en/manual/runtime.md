@@ -177,3 +177,5 @@ illusion_add_game(showcase_game
     STARTUP_SCENE "assets:/scenes/everything.scene"
     PROJECT showcase)
 ```
+
+The CMake package that provides `illusion_add_game()` and `illusion::pack`, and how to install it, is described in [Player SDK](modules.md#player-sdk).

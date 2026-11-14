@@ -134,7 +134,7 @@ yolunu verin (örneğin `Code.exe`), çünkü `code.cmd` gibi batch dosyaları d
 Motorun Build'i `<build>/sdk` içine bir CMake paketi yazar: `illusionConfig.cmake`, `illusion::core` ile API
 hedeflerini (`illusion::physics_api`, `audio_api`, `input_api`, `render_api`, `runtime_api`) içe aktarır ve
 `illusion_add_module()` ile `illusion_project_modules()` fonksiyonlarını tanımlar.
-`<build>/sdk/<Config>/illusion-sdk.json` araç zincirini tanımlar; editör kendi Build'ininkini kullanır.
+`<build>/sdk/<Config>/illusion-sdk.json` araç zincirini tanımlar (sürüm 2 `player` ekler, bkz. [Player SDK](../modules.md#player-sdk)); editör kendi Build'ininkini kullanır.
 Profiling Build'leri modülleri statik bağladığı için SDK yazmaz.
 
 Editör derleyiciyi ortamı üzerinden bulur. Windows'ta onu bir geliştirici komut isteminden
