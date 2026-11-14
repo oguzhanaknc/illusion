@@ -87,7 +87,8 @@ public:
     Font() = default;
 
     /// Bakes @p fontFile (the first face of a TrueType or OpenType file). The same bytes and settings give
-    /// the same Font on every platform.
+    /// the same glyphs, metrics and atlas layout everywhere; distance values may differ by a step between
+    /// compilers (the field is computed in floating point).
     [[nodiscard]] static Expected<Font, FontError> bake(std::span<const std::byte> fontFile,
                                                         const FontBakeSettings& settings = {});
 

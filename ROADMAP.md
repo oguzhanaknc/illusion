@@ -786,6 +786,15 @@ distance field fonts, and a batched pass draws the UI after tonemapping. Public 
   (vertex counts, batching, clipping, a full list drops whole primitives); allocation tests of recording and
   measuring; benchmarks `ui/text-layout` and `ui/draw-list-quads` with budgets; `UiComponents.hpp` compiles
   in the library.
+  ✅ Done as described: `stb_truetype` is compiled privately in `illusion::assets` behind a bounds check of
+  the font's tables; `illusion::ui_api` (`USES ui`) is in the module SDK and carries no `Font`; the tests use
+  the Roboto file the build already downloads (`ILLUSION_TEST_FONT`); `ui/text-layout` 120 ns per glyph
+  (budget 1,000), `ui/draw-list-quads` 34 ns per quad (budget 250).
+  Open: built and tested only with MSVC and clang-cl on Windows before CI; a bake gives the same bytes within
+  one build, not across compilers (the field is computed in floating point), so golden images of text need a
+  tolerance; the bounds check covers the tables `stb_truetype` indexes, not composite glyph data, so fonts
+  are trusted project files, baked at cook time; a carriage return draws the fallback glyph; trailing spaces
+  count in a line's width.
 - UI-1b: The pass. `UiRenderer` in `engine/render` (`Ui.slang`, one pipeline for images and distance fields,
   premultiplied blending, scissor per command), `AssetType::Font` with cooking and import settings
   (ranges, pixel size, spread), drawn by the player after the scene. Done: GPU golden images of text at three

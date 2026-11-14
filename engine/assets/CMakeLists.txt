@@ -1,4 +1,4 @@
-# illusion::assets — CPU-side asset data and importers: images, meshes, materials, glTF models.
+# illusion::assets — CPU-side asset data and importers: images, meshes, materials, glTF models, fonts.
 
 add_library(illusion_assets STATIC
     src/AppIcon.cpp
@@ -11,6 +11,7 @@ add_library(illusion_assets STATIC
     src/Atmosphere.cpp
     src/Bc6hEncoder.cpp
     src/Environment.cpp
+    src/Font.cpp
     src/Gltf.cpp
     src/Image.cpp
     src/ImportSettings.cpp
