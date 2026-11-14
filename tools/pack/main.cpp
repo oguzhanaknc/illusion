@@ -105,7 +105,7 @@ int packList(const std::filesystem::path& directory, const std::filesystem::path
     std::vector<ArchiveInput> files;
     for (const std::string& name : names)
     {
-        ArchiveInput input{.path = name};
+        ArchiveInput input{.path = name, .data = {}};
         if (!readBytes(directory / utf8Path(name), input.data))
         {
             std::fprintf(stderr, "illusion_pack: cannot read %s\n", name.c_str());
