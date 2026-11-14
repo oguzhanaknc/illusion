@@ -254,10 +254,12 @@ struct RenderResources::Impl
     SlotTable materialSlots;
     SlotTable environmentSlots;
 
-    // Released resources: those of the current batch, then batches waiting for the GPU (oldest first).
+    // Released resources: those of the current batch, then batches waiting for the GPU. Completed batches are
+    // reused with their query and storage, so releasing and collecting do not allocate once warm.
     std::vector<Release> releasing;
-    std::vector<ReleaseBatch> retiring;
-    std::vector<nvrhi::EventQueryHandle> spareQueries;
+    std::vector<ReleaseBatch> batches;
+    std::vector<u32> retiring;     // indices in `batches`, oldest first
+    std::vector<u32> spareBatches; // indices in `batches`
 
     // Environment readbacks in flight (requestEnvironmentReadback()).
     struct EnvironmentReadback
@@ -491,32 +493,36 @@ struct RenderResources::Impl
     {
         if (!releasing.empty())
         {
-            ReleaseBatch batch;
-            if (!spareQueries.empty())
+            u32 index = 0;
+            if (!spareBatches.empty())
             {
-                batch.query = std::move(spareQueries.back());
-                spareQueries.pop_back();
-                device->resetEventQuery(batch.query);
+                index = spareBatches.back();
+                spareBatches.pop_back();
+                device->resetEventQuery(batches[index].query);
             }
             else
             {
-                batch.query = device->createEventQuery();
+                index = static_cast<u32>(batches.size());
+                batches.emplace_back().query = device->createEventQuery();
             }
+            ReleaseBatch& batch = batches[index];
             device->setEventQuery(batch.query, nvrhi::CommandQueue::Graphics);
-            batch.releases.swap(releasing);
-            retiring.push_back(std::move(batch));
+            batch.releases.swap(releasing); // `releasing` keeps the storage of a completed batch
+            retiring.push_back(index);
         }
         // Batches complete in order: stop at the first one the GPU has not reached.
         u32 freed = 0;
         usize done = 0;
-        while (done < retiring.size() && device->pollEventQuery(retiring[done].query))
+        while (done < retiring.size() && device->pollEventQuery(batches[retiring[done]].query))
         {
-            for (const Release& release : retiring[done].releases)
+            ReleaseBatch& batch = batches[retiring[done]];
+            for (const Release& release : batch.releases)
             {
                 free(release);
                 ++freed;
             }
-            spareQueries.push_back(std::move(retiring[done].query));
+            batch.releases.clear();
+            spareBatches.push_back(retiring[done]);
             ++done;
         }
         retiring.erase(retiring.begin(), retiring.begin() + static_cast<std::ptrdiff_t>(done));
@@ -1471,9 +1477,9 @@ RenderResourceStatistics RenderResources::statistics() const noexcept
         impl.indexPool ? static_cast<u32>(impl.indexPool->getDesc().byteSize / sizeof(u32)) : 0;
     statistics.freeRanges = impl.vertexRanges.freeRanges() + impl.indexRanges.freeRanges();
     statistics.retiring = static_cast<u32>(impl.releasing.size());
-    for (const ReleaseBatch& batch : impl.retiring)
+    for (const u32 batch : impl.retiring)
     {
-        statistics.retiring += static_cast<u32>(batch.releases.size());
+        statistics.retiring += static_cast<u32>(impl.batches[batch].releases.size());
     }
     statistics.materialCapacity = impl.materialCapacity;
     statistics.textures = impl.textureSlots.live;

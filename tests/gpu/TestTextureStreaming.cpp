@@ -607,11 +607,15 @@ TEST_CASE("the render asset cache streams material textures within its budget by
             CHECK(cache.statistics().textureDrops == 2);
             CHECK(cache.statistics().streamedTextures == 1);
 
-            // Nothing changes from here on, and an update that changes nothing does not allocate.
+            // Nothing changes from here on, and an update that changes nothing does not allocate. The drop of
+            // B completes when the GPU reaches it (binding its new texture, then freeing the old one), which
+            // on a slow GPU can be later than these frames: wait for it before counting.
             for (int i = 0; i < 2 * static_cast<int>(kCooldown); ++i)
             {
                 CHECK(frame() == savedBc7(2));
             }
+            settle(*device, resources);
+            REQUIRE(resources.statistics().retiring == 0);
             usize allocations = 0;
             {
                 const test::ScopedAllocationCounter counter;
