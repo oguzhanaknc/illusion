@@ -693,6 +693,7 @@ void reflectCoreCommandTypes(StructRegistry& structs)
             .field("images", &AssetCookResult::images)
             .field("models", &AssetCookResult::models)
             .field("materials", &AssetCookResult::materials)
+            .field("fonts", &AssetCookResult::fonts)
             .field("errors", &AssetCookResult::errors);
         reflectStruct<AssetPackParams>("editor.AssetPackParams", 1, structs)
             .field("path", &AssetPackParams::path);

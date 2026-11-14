@@ -30,6 +30,9 @@ struct CodePointRange
 {
     char32_t first = 0; ///< First code point.
     char32_t last = 0;  ///< Last code point, not below first.
+
+    /// Ranges are equal when both ends are.
+    friend bool operator==(const CodePointRange&, const CodePointRange&) noexcept = default;
 };
 
 /// The ranges baked by default: Basic Latin, Latin-1, Latin Extended-A (Turkish and most European

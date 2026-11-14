@@ -125,6 +125,17 @@ void cookDirectory(VirtualFileSystem& files, AssetDatabase& database, const std:
                 result.errors.push_back(error);
             }
         }
+        else if (extension == ".ttf" || extension == ".otf")
+        {
+            if (database.loadFont(path, &error))
+            {
+                ++result.fonts;
+            }
+            else
+            {
+                result.errors.push_back(error);
+            }
+        }
         else if (extension == kMaterialAssetExtension)
         {
             cookMaterial(files, database, path, result);

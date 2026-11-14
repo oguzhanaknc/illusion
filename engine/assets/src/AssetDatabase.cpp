@@ -139,4 +139,50 @@ std::optional<ModelData> AssetDatabase::loadModel(std::string_view virtualPath, 
     return model;
 }
 
+std::optional<Font> AssetDatabase::loadFont(std::string_view virtualPath, std::string* error)
+{
+    ILL_PROFILE_SCOPE();
+    const std::string cached = cachePath(virtualPath, detail::kFontImporter);
+    if (std::optional<AssetFile> file = readCache(cached, AssetType::Font, kFontFormatVersion))
+    {
+        if (std::optional<Font> font = deserializeFont(file->payload))
+        {
+            ++m_statistics.cacheHits;
+            return font;
+        }
+    }
+
+    ++m_statistics.imports;
+    const std::optional<std::string> path = VirtualFileSystem::normalizePath(virtualPath);
+    if (!path)
+    {
+        if (error != nullptr)
+        {
+            *error = std::format("{}: invalid path", virtualPath);
+        }
+        return std::nullopt;
+    }
+    std::vector<std::byte> bytes;
+    if (const FileError result = m_files->readFile(*path, bytes); result != FileError::None)
+    {
+        if (error != nullptr)
+        {
+            *error = std::format("{}: {}", *path, fileErrorName(result));
+        }
+        return std::nullopt;
+    }
+    std::vector<std::byte> sidecar;
+    if (!detail::readImportSettingsFile(*m_files, *path, sidecar, error))
+    {
+        return std::nullopt;
+    }
+    AssetFile cooked;
+    std::optional<Font> font = detail::importFont(bytes, sidecar, *path, cooked, error);
+    if (font)
+    {
+        writeCache(cached, cooked);
+    }
+    return font;
+}
+
 } // namespace illusion

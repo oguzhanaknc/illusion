@@ -79,6 +79,10 @@ default), **Revert** reloads what is on disk.
   triangles each level keeps, whether the model's images are compressed (**Compress textures**) and their
   **Texture quality**.
 
+- **Fonts** (`.ttf`, `.otf`, kind `Font`): the **Pixel size** and **Spread** of the signed distance field
+  atlas; see [fonts](../assets.md#fonts). The code point ranges are set with `asset.set_import_settings` or in
+  the sidecar.
+
 The import settings inspector also says how many files refer to the selected asset.
 
 ## Finding assets from the command palette

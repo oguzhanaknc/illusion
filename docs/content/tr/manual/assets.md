@@ -5,7 +5,7 @@ dönüştürür: görüntüler, Mesh'ler ve tüm glTF modelleri. GPU'ya dokunmaz
 yükler ([Rendering](rendering.md#bir-sahne-cizme) sayfasına bakın).
 
 Header'lar: `#include <illusion/assets/Model.hpp>`, `<illusion/assets/Mesh.hpp>`,
-`<illusion/assets/Image.hpp>`, `<illusion/assets/Environment.hpp>`
+`<illusion/assets/Image.hpp>`, `<illusion/assets/Environment.hpp>`, `<illusion/assets/Font.hpp>`
 
 ## Bir glTF modeli yükleme
 
@@ -109,6 +109,39 @@ const illusion::Vec3 fromAbove = irradiance.evaluate(illusion::Vec3(0.0f, 1.0f, 
   `RenderResources::createEnvironment()` bunu sizin için çağırır.
 - `makeSkyImage()` prototipler, test'ler ve yedek olarak prosedürel bir gökyüzü (zenitten ufka bir
   geçiş, zemin ve isteğe bağlı bir güneş diski) oluşturur.
+
+## Fontlar
+
+Header: `<illusion/assets/Font.hpp>`
+
+`Font::bake()` bir TrueType ya da OpenType dosyasını (`.ttf`, `.otf`) her boyutta keskin metin çizen tek bir
+8 bit signed distance field atlas'ına dönüştürür; yanında glyph'leri, dikey metrikleri ve çift kerning
+değerlerini üretir. Bütün uzunluklar em cinsindendir: metin boyutuyla çarpın. Aynı bayt'lar ve ayarlar her
+makinede aynı glyph'leri, metrikleri ve atlas düzenini verir.
+
+```cpp
+std::vector<std::byte> bytes;
+files.readFile("game:/fonts/ui.ttf", bytes);
+auto font = illusion::Font::bake(bytes);
+if (font)
+{
+    const illusion::FontGlyph& glyph = font->glyphOrFallback(U'A');
+    const illusion::f32 advancePixels = glyph.advance * 32.0f; // at a size of 32
+}
+
+const illusion::AssetHandle<illusion::Font> handle = streamer.loadFont("game:/fonts/ui.ttf");
+```
+
+- `FontBakeSettings` şunları belirler: `pixelSize` (atlas'ta em başına piksel, 16 ile 128 arası), `spread`
+  (2 ile 16 arası) ve code point `ranges`. Varsayılan aralıklar Basic Latin, Latin-1 ve Latin Extended-A'yı
+  kapsar; böylece Türkçe ve çoğu Avrupa dili çalışır. Ayrıca genel noktalama işaretleri ile euro ve ticari
+  marka işaretleri de vardır. Font'ta olmayan code point'ler dışarıda bırakılır; `glyphOrFallback()` U+FFFD,
+  o da yoksa `?` çizer.
+- `AssetDatabase::loadFont()` ve `AssetStreamer::loadFont()`, font'un [içe aktarma ayarları](#ice-aktarma-ayarlar)
+  sidecar'ının ayarlarıyla bake eder ve sonucu içe aktarma önbelleğinde tutar. `cookAssets()` font'ları da
+  hazırlar.
+- Sınırlar: metin shaping yoktur (glyph'ler kerning ile tek tek yerleştirilir), sağdan sola yazı yoktur ve
+  CJK boyutunda aralıklar henüz desteklenmez. Motor font göndermez; oyun kendi font'unu getirir.
 
 ## Asset referansları
 
@@ -232,7 +265,7 @@ Hazırlanmış dosyalar (`<illusion/assets/AssetFormat.hpp>` içindeki `AssetFil
 
 ## İçe aktarma ayarları
 
-Bir görüntü ya da glTF modeli bir içe aktarma ayarları sidecar dosyası taşıyabilir: yanında duran ve nasıl
+Bir görüntü, glTF modeli ya da font bir içe aktarma ayarları sidecar dosyası taşıyabilir: yanında duran ve nasıl
 içe aktarıldığını değiştiren bir `<file>.import.json` dosyası. Sidecar yalnızca bir ayar varsayılanından
 farklıyken vardır ve yalnızca o ayarları tutar:
 
@@ -256,8 +289,21 @@ farklıyken vardır ve yalnızca o ayarları tutar:
 | | `lodReduction` | `0.5` | Her seviyenin hedeflediği, önceki seviyenin üçgenlerinin oranı (0.1 ile 0.9 arası). |
 | | `compressTextures` | `true` | Modelin görüntülerini Material'lerindeki kullanımlarına göre sıkıştırır. |
 | | `textureQuality` | `"normal"` | Modelin görüntüleri için encoder eforu: `"fast"`, `"normal"` ya da `"high"`. |
+| Font (`.ttf`, `.otf`) | `pixelSize` | `48` | Atlas'ta em başına piksel (16 ile 128 arası). |
+| | `spread` | `6` | Alanın bir kenarın her iki yanında kapsadığı atlas pikseli mesafesi (2 ile 16 arası). |
+| | `ranges` | Latin | Bake edilecek code point'ler, `[first, last]` çiftleri olarak, 1 ile 64 aralık. |
 
-- `AssetDatabase`, `AssetStreamer` ve `cookAssets()` içe aktardıkları her görüntünün ve modelin
+Bir font sidecar'ı:
+
+```json
+{
+  "format": "illusion.import",
+  "version": 2,
+  "font": {"pixelSize": 64, "spread": 8, "ranges": [[32, 126], [160, 383], [1024, 1279]]}
+}
+```
+
+- `AssetDatabase`, `AssetStreamer` ve `cookAssets()` içe aktardıkları her görüntünün, modelin ve font'un
   sidecar'ını okur; böylece editör, oyun ve hazırlanmış Build aynı sonucu görür.
 - Sidecar, önbellek kaydının kaynaklarından biridir: onu düzenlemek, eklemek ya da silmek kaydı eskitir ve
   sonraki yükleme yeniden içe aktarır. Önbellek kayıtları çağıranın istediği ayarlara göre anahtarlanmaya
@@ -481,14 +527,14 @@ else
 
 ## Hazırlanmış Asset'leri dağıtma
 
-Dağıtılan bir oyunun kaynak görüntülerine ve modellerine ihtiyacı yoktur: bunları önceden hazırlayın
+Dağıtılan bir oyunun kaynak görüntülerine, modellerine ve font'larına ihtiyacı yoktur: bunları önceden hazırlayın
 (cook) ve içe aktarma önbelleğini bir arşiv olarak dağıtın.
 
 ```bash
 illusion_pack --cook game data/ build/cooked.illpak
 ```
 
-`--cook`, `game` olarak mount edilen `data/` altındaki her görüntüyü ve glTF modelini içe aktarır
+`--cook`, `game` olarak mount edilen `data/` altındaki her görüntüyü, glTF modelini ve font'u içe aktarır
 (oyununuzun kullandığı mount adını verin) ve oluşan önbelleği paketler. Oyunda arşivi önbellek olarak
 mount edin ve kaynak doğrulamayı kapatın:
 

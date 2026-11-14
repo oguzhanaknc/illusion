@@ -55,9 +55,11 @@ add_executable(illusion_gpu_benchmarks
     main.cpp
     Budget.cpp
     gpu/BenchRender.cpp
-    gpu/BenchRenderAssets.cpp)
+    gpu/BenchRenderAssets.cpp
+    gpu/BenchUiRenderer.cpp)
 target_include_directories(illusion_gpu_benchmarks PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
 target_link_libraries(illusion_gpu_benchmarks PRIVATE illusion::render illusion::nanobench)
+target_compile_definitions(illusion_gpu_benchmarks PRIVATE ILLUSION_TEST_FONT="${ILLUSION_TEST_FONT}")
 illusion_configure_target(illusion_gpu_benchmarks)
 add_test(NAME gpu_benchmarks COMMAND illusion_gpu_benchmarks CONFIGURATIONS Release RelWithDebInfo)
 set_tests_properties(gpu_benchmarks PROPERTIES LABELS "gpu;benchmark" RUN_SERIAL TRUE TIMEOUT 600)

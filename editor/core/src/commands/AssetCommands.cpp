@@ -249,7 +249,8 @@ Expected<AssetListResult, CommandError> assetList(CommandContext& context, const
     if (params.kind && std::find(kAssetKinds.begin(), kAssetKinds.end(), *params.kind) == kAssetKinds.end())
     {
         CommandError error = CommandError::invalid(
-            "/kind", "must be Folder, Scene, Material, Model, Texture, Environment, AudioClip or Other");
+            "/kind",
+            "must be Folder, Scene, Prefab, Material, Model, Texture, Environment, AudioClip, Font or Other");
         error.suggestions = closestMatches(
             *params.kind, std::vector<std::string_view>(kAssetKinds.begin(), kAssetKinds.end()));
         return unexpected(std::move(error));
@@ -768,6 +769,7 @@ Expected<AssetCookResult, CommandError> assetCook(CommandContext& context, const
     result.images = cooked.images;
     result.models = cooked.models;
     result.materials = cooked.materials;
+    result.fonts = cooked.fonts;
     result.errors = cooked.errors;
     for (const std::string& error : result.errors)
     {

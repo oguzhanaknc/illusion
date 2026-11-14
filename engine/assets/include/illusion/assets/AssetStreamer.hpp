@@ -138,7 +138,7 @@ struct AssetStreamerDesc
     bool verifySources = true;
 };
 
-/// Loads images and models in the background through the import cache (see AssetDatabase).
+/// Loads images, models and fonts in the background through the import cache (see AssetDatabase).
 ///
 /// File reads and cache writes run on one dedicated I/O thread, so Jobs never block on files. Cache
 /// verification, deserialization and image imports run on the Job System. glTF imports (only when a
@@ -159,6 +159,10 @@ public:
 
     /// Requests the glTF model at @p virtualPath. Requests for the same path share a handle.
     [[nodiscard]] AssetHandle<ModelData> loadModel(std::string_view virtualPath);
+
+    /// Requests the font at @p virtualPath (.ttf, .otf), baked with the settings of its import settings
+    /// sidecar on the Job System unless the import cache has it. Requests for the same path share a handle.
+    [[nodiscard]] AssetHandle<Font> loadFont(std::string_view virtualPath);
 
     /// Requests the file at @p virtualPath and turns it into a T with @p decode on the Job System, for
     /// asset types that other modules define (audio clips, for example). The import cache is not used.

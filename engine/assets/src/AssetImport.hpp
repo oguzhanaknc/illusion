@@ -28,6 +28,7 @@ namespace detail
 // levels of detail.
 inline constexpr std::string_view kImageImporter = "image:2";
 inline constexpr std::string_view kModelImporter = "gltf:3";
+inline constexpr std::string_view kFontImporter = "font:1";
 
 [[nodiscard]] std::string imageImportKey(const ImageImportSettings& settings);
 
@@ -80,6 +81,12 @@ inline constexpr std::string_view kModelImporter = "gltf:3";
 [[nodiscard]] std::optional<ModelData> importModel(const VirtualFileSystem& files, std::string_view path,
                                                    AssetFile& cooked, std::string* error,
                                                    JobSystem* jobs = nullptr);
+
+// Bakes `source` (the bytes of the font file `path`) with the settings of `sidecar` (the bytes of its import
+// settings sidecar, empty if none) and fills `cooked`.
+[[nodiscard]] std::optional<Font> importFont(std::span<const std::byte> source,
+                                             std::span<const std::byte> sidecar, const std::string& path,
+                                             AssetFile& cooked, std::string* error);
 
 } // namespace detail
 } // namespace illusion

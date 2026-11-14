@@ -1,11 +1,11 @@
 # Assets and Models
 
 The assets module turns files into CPU-side data that the renderer, tools and tests can use: images,
-Meshes and whole glTF models. It does not touch the GPU; `RenderResources` uploads the data (see
+Meshes, whole glTF models and fonts. It does not touch the GPU; `RenderResources` uploads the data (see
 [Rendering](rendering.md#drawing-a-scene)).
 
 Headers: `#include <illusion/assets/Model.hpp>`, `<illusion/assets/Mesh.hpp>`,
-`<illusion/assets/Image.hpp>`, `<illusion/assets/Environment.hpp>`
+`<illusion/assets/Image.hpp>`, `<illusion/assets/Environment.hpp>`, `<illusion/assets/Font.hpp>`
 
 ## Loading a glTF model
 
@@ -107,6 +107,38 @@ const illusion::Vec3 fromAbove = irradiance.evaluate(illusion::Vec3(0.0f, 1.0f, 
   `RenderResources::createEnvironment()` calls it for you.
 - `makeSkyImage()` creates a procedural sky (zenith-to-horizon gradient, ground and an optional sun
   disc) for prototypes, tests and as a fallback.
+
+## Fonts
+
+Header: `<illusion/assets/Font.hpp>`
+
+`Font::bake()` turns a TrueType or OpenType file (`.ttf`, `.otf`) into one 8-bit signed distance field atlas
+that draws crisp text at every size, plus the glyphs, the vertical metrics and the pair kerning. All lengths
+are in ems: multiply them by the text size. The same bytes and settings give the same glyphs, metrics and
+atlas layout on every machine.
+
+```cpp
+std::vector<std::byte> bytes;
+files.readFile("game:/fonts/ui.ttf", bytes);
+auto font = illusion::Font::bake(bytes);
+if (font)
+{
+    const illusion::FontGlyph& glyph = font->glyphOrFallback(U'A');
+    const illusion::f32 advancePixels = glyph.advance * 32.0f; // at a size of 32
+}
+
+const illusion::AssetHandle<illusion::Font> handle = streamer.loadFont("game:/fonts/ui.ttf");
+```
+
+- `FontBakeSettings` sets `pixelSize` (pixels per em in the atlas, 16 to 128), `spread` (2 to 16) and the
+  code point `ranges`. The default ranges cover Basic Latin, Latin-1 and Latin Extended-A, so Turkish and
+  most European languages work, plus general punctuation and the euro and trade mark signs.
+  Code points the font lacks are left out; `glyphOrFallback()` draws U+FFFD, else `?`.
+- `AssetDatabase::loadFont()` and `AssetStreamer::loadFont()` bake with the settings of the font's
+  [import settings](#import-settings) sidecar and keep the result in the import cache. `cookAssets()` cooks
+  fonts too.
+- Limits: there is no text shaping (glyphs are placed one by one with kerning), no right-to-left text and
+  no CJK-sized ranges yet. The engine ships no font; a game brings its own.
 
 ## Asset references
 
@@ -225,7 +257,7 @@ trusted.
 
 ## Import settings
 
-An image or glTF model can carry an import settings sidecar: a `<file>.import.json` file next to it that
+An image, glTF model or font can carry an import settings sidecar: a `<file>.import.json` file next to it that
 changes how it is imported. The sidecar exists only while a setting differs from its default, and holds
 only those settings:
 
@@ -249,8 +281,21 @@ only those settings:
 | | `lodReduction` | `0.5` | Fraction of the previous level's triangles each level aims for (0.1 to 0.9). |
 | | `compressTextures` | `true` | Compress the model's images by their use in its materials. |
 | | `textureQuality` | `"normal"` | Encoder effort for the model's images: `"fast"`, `"normal"` or `"high"`. |
+| Font (`.ttf`, `.otf`) | `pixelSize` | `48` | Pixels per em in the atlas (16 to 128). |
+| | `spread` | `6` | Distance in atlas pixels that the field covers on each side of an edge (2 to 16). |
+| | `ranges` | Latin | Code points to bake as `[first, last]` pairs, 1 to 64 ranges. |
 
-- `AssetDatabase`, `AssetStreamer` and `cookAssets()` read the sidecar of every image and model they
+A font sidecar:
+
+```json
+{
+  "format": "illusion.import",
+  "version": 2,
+  "font": {"pixelSize": 64, "spread": 8, "ranges": [[32, 126], [160, 383], [1024, 1279]]}
+}
+```
+
+- `AssetDatabase`, `AssetStreamer` and `cookAssets()` read the sidecar of every image, model and font they
   import, so the editor, the game and the cooked build all see the same result.
 - The sidecar is one of the sources of the cache entry: editing, adding or removing it makes the entry
   stale and the next load imports again. Cache entries stay keyed by the settings the caller asked for,
@@ -469,14 +514,14 @@ else
 
 ## Shipping cooked assets
 
-A shipped game does not need its source images and models: cook them ahead of time and ship the import
+A shipped game does not need its source images, models and fonts: cook them ahead of time and ship the import
 cache as an archive.
 
 ```bash
 illusion_pack --cook game data/ build/cooked.illpak
 ```
 
-`--cook` imports every image and glTF model under `data/`, mounted as `game` (use the mount name your
+`--cook` imports every image, glTF model and font under `data/`, mounted as `game` (use the mount name your
 game uses), and packs the resulting cache. In the game, mount the archive as the cache and turn source
 verification off:
 
