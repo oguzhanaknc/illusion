@@ -156,11 +156,13 @@ TEST_CASE("project settings live in their own files under settings:")
     EditorFixture fixture;
     EditorContext& editor = *fixture.editor;
 
+    // Every editor has the export settings (ADR 0055); the fixture adds test.Controls.
     const JsonDocument listed = ok(editor, "project.settings_get");
-    REQUIRE(listed.root().find("settings").size() == 1);
-    CHECK(listed.root().pointer("/settings/0/file").asString() == "settings:/controls.json");
-    CHECK(listed.root().pointer("/settings/0/present").asBool() == false);
-    CHECK(listed.root().pointer("/settings/0/value/invertY").asBool() == false);
+    REQUIRE(listed.root().find("settings").size() == 2);
+    CHECK(listed.root().pointer("/settings/0/file").asString() == "settings:/export.json");
+    CHECK(listed.root().pointer("/settings/1/file").asString() == "settings:/controls.json");
+    CHECK(listed.root().pointer("/settings/1/present").asBool() == false);
+    CHECK(listed.root().pointer("/settings/1/value/invertY").asBool() == false);
 
     CHECK(ok(editor, "project.settings_set", R"({"type":"test.Controls","value":{"invertY":true}})")
               .root()
@@ -192,7 +194,7 @@ TEST_CASE("project settings live in their own files under settings:")
         fails(editor, "project.settings_set", R"({"type":"test.Controls","value":{"invertY":true}})").kind ==
         ErrorKind::PreconditionFailed);
     ok(editor, "project.settings_set", R"({"type":"test.Controls","value":{"invertY":true},"replace":true})");
-    CHECK(ok(editor, "project.settings_get").root().pointer("/settings/0/value/invertY").asBool() == true);
+    CHECK(ok(editor, "project.settings_get").root().pointer("/settings/1/value/invertY").asBool() == true);
 
     CHECK(fails(editor, "project.settings_set", R"({"type":"test.Difficulty","value":{}})").kind ==
           ErrorKind::NotFound);

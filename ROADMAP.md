@@ -691,7 +691,7 @@ compatible). Design in ADR 0055; public API in `illusion/player/Player.hpp` and
   archives; a GPU test runs `showcase_game --fixed-step --frames 300 --screenshot` on packed data and
   matches the golden image of the editor's Play mode after the same 300 steps (`showcase-play-300.png`); the
   showcase sets non-default window settings; the failure dialog's text comes from the player's string table.
-  Open: a way for a module to end the game (with UI), an allocation test of a steady player frame (M8-3),
+  Open: a way for a module to end the game (with UI), an allocation test of a steady player frame,
   and GPU particle emitters whose state depends on which steps were rendered (a renderer that skips frames
   shows different particles; PFX follow-up).
 - M8-2: ✅ Player SDK. The `player` component of the CMake package (every engine and third-party static
@@ -699,12 +699,15 @@ compatible). Design in ADR 0055; public API in `illusion/player/Player.hpp` and
   SDK (headers, libraries per configuration, package). Done: a CTest configures and builds a game outside
   the engine tree against the build-tree SDK and against an installed copy moved to another directory, and
   runs it for one frame; the boundary check covers the package (no editor target reachable).
-- M8-3: Export. `ExportSettings`, `ProjectExport` and the async command `export.build` (with
+- M8-3: ✅ Export. `ExportSettings`, `ProjectExport` and the async command `export.build` (with
   `export.settings`/`export.set_settings` if the generic settings commands do not cover the file), headless
   and windowed; cooking into a fresh cache, the three archives, exclude patterns, the report. Done: tests of
   generation, exclusion and the report on a temporary project; the fuzz test covers the commands; a CTest
   exports the showcase and the acceptance Tetris project and runs each for 300 frames; a symbol scan of the
   exported executable finds no editor or Dear ImGui symbol; command reference and goldens updated.
+  Open: image sources still ship in `assets.illpak` next to their cooked form (the runtime loads some
+  images, such as environment maps, with settings the cook does not cover; only glTF sources are dropped);
+  the allocation test of a steady player frame needs a player that tests can drive without a window.
 - M8-4: Packaging and signing. Icon and version resources (Windows `.ico`/`.rc`, macOS `.icns` and
   `Info.plist`, Linux PNG and `.desktop`), the macOS bundle with MoltenVK, CPack packages (ZIP, NSIS, DMG,
   `.tar.gz`), the signing hooks and notarization. Done: per-platform CTests check the layout and that the

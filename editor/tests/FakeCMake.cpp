@@ -7,6 +7,9 @@
 //                             CMake does.
 //   --build <build> ...       build: prints Ninja progress, prints <src>/<module>/ERRORS of every module that
 //                             has one and fails, or writes a library file for every module (or --target).
+//   --install <build> ... --prefix <dir>
+//                             install of an exported game (export.build): copies <src>/data to <dir>/data and
+//                             writes <dir>/fake-game[.exe].
 //   --record <file> <args...> writes the arguments to <file>, one per line (the code editor of
 //                             editor.open_source in the tests).
 
@@ -24,9 +27,11 @@ namespace
 #if defined(_WIN32)
 constexpr const char* kPrefix = "";
 constexpr const char* kSuffix = ".dll";
+constexpr const char* kExecutableSuffix = ".exe";
 #else
 constexpr const char* kPrefix = "lib";
 constexpr const char* kSuffix = ".so";
+constexpr const char* kExecutableSuffix = "";
 #endif
 
 std::string readFile(const std::filesystem::path& path)
@@ -127,12 +132,44 @@ int build(const std::vector<std::string>& args)
         std::cout << "ninja: build stopped: subcommand failed.\n";
         return 1;
     }
-    std::filesystem::create_directories(output);
+    if (!output.empty())
+    {
+        std::filesystem::create_directories(output);
+    }
     for (const std::string& module : modules)
     {
         std::ofstream(output / (kPrefix + module + kSuffix), std::ios::binary) << "fake library\n";
     }
     std::cout << "[2/2] Linking CXX shared module\n";
+    return 0;
+}
+
+// The install of an exported game: <source>/data/* to <prefix>/data and a stand-in for the executable.
+int install(const std::vector<std::string>& args)
+{
+    const std::filesystem::path tree = args.at(1);
+    std::filesystem::path prefix;
+    for (std::size_t i = 2; i + 1 < args.size(); ++i)
+    {
+        if (args[i] == "--prefix")
+        {
+            prefix = args[i + 1];
+        }
+    }
+    const std::filesystem::path source = valueOf(readFile(tree / "CMakeCache.txt"), "SOURCE");
+    if (prefix.empty() || source.empty())
+    {
+        std::cerr << "CMake Error: not a build tree\n";
+        return 1;
+    }
+    std::filesystem::create_directories(prefix / "data");
+    for (const auto& entry : std::filesystem::directory_iterator(source / "data"))
+    {
+        std::filesystem::copy_file(entry.path(), prefix / "data" / entry.path().filename(),
+                                   std::filesystem::copy_options::overwrite_existing);
+    }
+    std::ofstream(prefix / (std::string("fake-game") + kExecutableSuffix), std::ios::binary) << "fake game\n";
+    std::cout << "-- Installing: " << (prefix / "data").generic_string() << "\n";
     return 0;
 }
 
@@ -153,6 +190,10 @@ int main(int argc, char** argv)
             out << args[i] << '\n';
         }
         return 0;
+    }
+    if (args.size() >= 2 && args[0] == "--install")
+    {
+        return install(args);
     }
     if (args.size() >= 2 && args[0] == "--build")
     {

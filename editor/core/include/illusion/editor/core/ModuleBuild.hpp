@@ -34,6 +34,7 @@ struct ModuleToolchain
     /// build started outside a developer environment runs it first and gives CMake its environment.
     std::filesystem::path environmentScript{};
     bool player = false; ///< The package has the component `player` for this configuration (version 2 only).
+    std::filesystem::path pack{}; ///< The package's `illusion_pack` for this configuration ("" without one).
 };
 
 /// Reads a toolchain description; the error says what is wrong.
@@ -94,16 +95,17 @@ struct ModuleBuildOptions
     ModuleToolchain toolchain{};             ///< The SDK's toolchain.
     std::filesystem::path sourceDirectory{}; ///< The project's `modules/` directory.
     std::filesystem::path buildDirectory{};  ///< The build tree (`.illusion/build/modules`).
-    std::filesystem::path outputDirectory{}; ///< Where module libraries are written.
-    std::vector<std::string> targets{};      ///< Modules to build (empty: all).
-    bool reconfigure = false;                ///< Configure even when the build tree has a cache.
+    std::filesystem::path
+        outputDirectory{};              ///< Where module libraries are written ("": not passed to CMake).
+    std::vector<std::string> targets{}; ///< Modules to build (empty: all).
+    bool reconfigure = false;           ///< Configure even when the build tree has a cache.
 };
 
 /// One build of a project's modules: a CMake configure (when the build tree was never configured with these
 /// toolchain arguments, when its last configure failed, or when asked) and then `cmake --build`, each a child
 /// process whose output is read line by line. A toolchain with an environment script that is started outside
-/// a developer environment runs the script first, once per editor process. Destroying a running build
-/// terminates its process.
+/// a developer environment runs the script first, once per editor process and script. Destroying a running
+/// build terminates its process.
 class ModuleBuild : NonCopyable
 {
 public:

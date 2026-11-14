@@ -7,6 +7,8 @@ An editor project whose scene uses every saved engine Component with every field
 by `build.jsonl` through `asset.set_import_settings`.
 `settings/window.json` (1600x900, not resizable) is written the same way by `project.settings_set` on
 `illusion.WindowSettings`.
+`settings/export.json` (product "Showcase", identifier `dev.illusion.showcase`, one exclude pattern) comes from
+`project.settings_set` on `illusion.ExportSettings`.
 
 The project is also built as an exported game, the CMake target `showcase_game` (`samples/CMakeLists.txt`,
 `illusion_add_game()`): its module linked statically and its data packed next to the executable.

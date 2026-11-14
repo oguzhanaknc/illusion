@@ -10,6 +10,7 @@ illusion_add_editor_library(illusion_editor_core STATIC
     src/CrashJournal.cpp
     src/EditorContext.cpp
     src/EntityIndex.cpp
+    src/Export.cpp
     src/ExternalTools.cpp
     src/Gizmo.cpp
     src/JsonSchema.cpp
@@ -22,6 +23,7 @@ illusion_add_editor_library(illusion_editor_core STATIC
     src/SettingsCatalog.cpp
     src/Snap.cpp
     src/ThumbnailCache.cpp
+    src/ToolProcess.cpp
     src/UiActions.cpp
     src/UndoStack.cpp
     src/ViewCube.cpp
@@ -34,6 +36,7 @@ illusion_add_editor_library(illusion_editor_core STATIC
     src/commands/CoreCommands.cpp
     src/commands/EditorCommands.cpp
     src/commands/EntityCommands.cpp
+    src/commands/ExportCommands.cpp
     src/commands/GamepadCommands.cpp
     src/commands/GizmoCommands.cpp
     src/commands/HierarchyCommands.cpp

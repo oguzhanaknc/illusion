@@ -1011,6 +1011,35 @@ void reflectCoreCommandTypes(StructRegistry& structs)
             .field("reloaded", &ModuleBuildResult::reloaded)
             .field("modules", &ModuleBuildResult::modules)
             .field("output", &ModuleBuildResult::output);
+        reflectStruct<ExportBuildParams>("editor.ExportBuildParams", 1, structs)
+            .field("output", &ExportBuildParams::output)
+            .field("configuration", &ExportBuildParams::configuration)
+            .field("package", &ExportBuildParams::package)
+            .field("clean", &ExportBuildParams::clean)
+            .field("linuxRuntime", &ExportBuildParams::linuxRuntime)
+            .field("signCommand", &ExportBuildParams::signCommand)
+            .field("codesignIdentity", &ExportBuildParams::codesignIdentity)
+            .field("notaryProfile", &ExportBuildParams::notaryProfile);
+        reflectStruct<ExportedFile>("editor.ExportedFile", 1, structs)
+            .field("path", &ExportedFile::path)
+            .field("bytes", &ExportedFile::bytes);
+        reflectStruct<ExportBuildResult>("editor.ExportBuildResult", 1, structs)
+            .field("succeeded", &ExportBuildResult::succeeded)
+            .field("stage", &ExportBuildResult::stage)
+            .field("error", &ExportBuildResult::error)
+            .field("platform", &ExportBuildResult::platform)
+            .field("configuration", &ExportBuildResult::configuration)
+            .field("directory", &ExportBuildResult::directory)
+            .field("package", &ExportBuildResult::package)
+            .field("files", &ExportBuildResult::files)
+            .field("totalBytes", &ExportBuildResult::totalBytes)
+            .field("signedBinaries", &ExportBuildResult::signedBinaries)
+            .field("notarized", &ExportBuildResult::notarized)
+            .field("skipped", &ExportBuildResult::skipped)
+            .field("errors", &ExportBuildResult::errors)
+            .field("warnings", &ExportBuildResult::warnings)
+            .field("diagnostics", &ExportBuildResult::diagnostics)
+            .field("output", &ExportBuildResult::output);
         reflectStruct<OpenSourceParams>("editor.OpenSourceParams", 1, structs)
             .field("path", &OpenSourceParams::path)
             .field("line", &OpenSourceParams::line)
@@ -1153,6 +1182,7 @@ void registerCoreCommands(CommandRegistry& registry)
     detail::registerInputCommands(registry);
     detail::registerGamepadCommands(registry);
     detail::registerModuleCommands(registry);
+    detail::registerExportCommands(registry);
     detail::registerToolCommands(registry);
 }
 

@@ -677,7 +677,8 @@ private:
     std::vector<editor::PlayModuleInfo> m_modules{{"fake", "1.0.0", "", false, 0, {}}};
 };
 
-/// Writes a module SDK description to @p file whose CMake is the stand-in of FakeCMake.cpp; returns @p file.
+/// Writes a module SDK description to @p file whose CMake is the stand-in of FakeCMake.cpp and whose player
+/// has this build's illusion_pack; returns @p file.
 inline std::filesystem::path writeFakeModuleSdk(const std::filesystem::path& file)
 {
 #if defined(_WIN32)
@@ -685,8 +686,10 @@ inline std::filesystem::path writeFakeModuleSdk(const std::filesystem::path& fil
 #else
     constexpr const char* kLibrary = R"("modulePrefix": "lib", "moduleSuffix": ".so")";
 #endif
-    std::ofstream(file) << R"({"format": "illusion.sdk", "version": 1, "cmake": ")" ILLUSION_FAKE_CMAKE
-                        << R"(", "generator": "Ninja", "config": "Debug", "package": "sdk", )" << kLibrary
+    // Exports (export.build) cook and pack with the real illusion_pack of this build.
+    std::ofstream(file) << R"({"format": "illusion.sdk", "version": 2, "cmake": ")" ILLUSION_FAKE_CMAKE
+                        << R"(", "generator": "Ninja", "config": "Debug", "package": "sdk", "player": true, )"
+                        << R"("pack": ")" ILLUSION_PACK_EXECUTABLE R"(", )" << kLibrary
                         << R"(, "arguments": ["-DCMAKE_BUILD_TYPE=Debug"]})";
     return file;
 }

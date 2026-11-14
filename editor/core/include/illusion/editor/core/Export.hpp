@@ -35,7 +35,8 @@ struct ExportSettings
     std::string identifier{};   ///< Reverse-DNS identifier, e.g. "com.example.tetris" (macOS bundle id).
     std::string copyright{};    ///< Copyright line of the version resource and the bundle.
     AssetRef icon{};            ///< Square PNG of at least 256 pixels; empty for the engine's icon.
-    /// Files under `assets:/` that are not shipped: paths relative to the mount, `*` and `**` wildcards.
+    /// Files under `assets:/` that are not shipped: paths relative to the mount, `*` and `**` wildcards. They
+    /// are not cooked either, so an asset that uses an excluded file fails the export's cook.
     std::vector<std::string> exclude{};
 };
 

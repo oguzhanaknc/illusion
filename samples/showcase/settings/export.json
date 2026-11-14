@@ -1,0 +1,14 @@
+{
+  "format": "illusion.settings",
+  "type": "illusion.ExportSettings",
+  "version": 1,
+  "value": {
+    "productName": "Showcase",
+    "organization": "illusion",
+    "identifier": "dev.illusion.showcase",
+    "copyright": "",
+    "icon": "",
+    "exclude": ["unused/**"]
+  }
+}
+

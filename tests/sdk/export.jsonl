@@ -1,0 +1,2 @@
+{"comment": "Exports the open project as a game with this build's SDK (ADR 0055; editor/tests/CMakeLists.txt sets output and configuration). Replayed after a project is open."}
+{"call": "export.build", "params": {"output": "${output}", "configuration": "${configuration}", "clean": true}, "expect": {"result": {"succeeded": true, "stage": "done", "errors": 0}}}

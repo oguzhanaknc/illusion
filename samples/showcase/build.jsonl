@@ -8,6 +8,7 @@
 {"call": "material.create", "params": {"path": "assets:/materials/ground.material", "value": {"material": {"name": "Ground", "baseColorFactor": [0.3, 0.34, 0.3, 1], "roughnessFactor": 0.9}}, "overwrite": true}}
 {"call": "asset.set_import_settings", "params": {"path": "assets:/textures/smoke.png", "value": {"texture": {"quality": "high"}}}}
 {"call": "project.settings_set", "params": {"type": "illusion.WindowSettings", "value": {"width": 1600, "height": 900, "resizable": false}}}
+{"call": "project.settings_set", "params": {"type": "illusion.ExportSettings", "value": {"productName": "Showcase", "organization": "illusion", "identifier": "dev.illusion.showcase", "exclude": ["unused/**"]}}}
 {"call": "entity.create", "params": {"name": "Camera", "components": {"illusion.Transform": {"position": [0, 5.5, 13], "rotation": [-0.1736482, 0, 0, 0.9848078], "scale": [1, 1, 1]}, "illusion.Camera": {"fovY": 0.9, "nearPlane": 0.05, "farPlane": 400, "exposure": 1.2}, "illusion.AudioListener": {}}}}
 {"call": "entity.create", "params": {"name": "Map Camera", "components": {"illusion.Transform": {"position": [0, 20, 0], "rotation": [-0.7071068, 0, 0, 0.7071068]}, "illusion.Camera": {"projection": "Orthographic", "orthoHeight": 24, "priority": -1}}}}
 {"call": "entity.create", "params": {"name": "Sun", "components": {"illusion.Transform": {"position": [0, 10, 0], "rotation": [-0.4226183, 0.2, 0, 0.8837]}, "illusion.DirectionalLight": {"color": [1, 0.95, 0.85], "intensity": 4, "angularDiameter": 0.02}}}}

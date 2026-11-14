@@ -101,6 +101,7 @@ plugins:
             Prefabs: Prefab'lar
             Profiler and Diagnostics: Profiler ve Diagnostics
             Project Modules: Proje Modülleri
+            Exporting a game: Oyunu Export Etmek
             Preferences: Tercihler
             Tutorials: Eğitimler
             First Agent Session: İlk Ajan Oturumu
@@ -158,6 +159,7 @@ nav:
           - Prefabs: manual/editor/prefabs.md
           - Profiler and Diagnostics: manual/editor/profiler.md
           - Project Modules: manual/editor/project-modules.md
+          - Exporting a game: manual/editor/export.md
           - Preferences: manual/editor/preferences.md
           - Projects: manual/editor/projects.md
           - Automation: manual/editor/automation.md
