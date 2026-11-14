@@ -123,6 +123,22 @@ TEST_CASE("the shell in play mode tints its panels, shows Stop and can maximize 
     }
 }
 
+TEST_CASE("the Export window matches its golden image")
+{
+    GpuShell gpu;
+    EditorContext& editor = *gpu.fixture.editor;
+    test::ok(
+        editor, "project.settings_set",
+        R"({"type":"illusion.ExportSettings","value":{"productName":"Space Blocks",)"
+        R"("organization":"Example Games","identifier":"com.example.blocks","exclude":["raw/**","*.psd"]}})");
+    test::ok(editor, "ui.show_panel", R"({"panel":"window.export"})");
+    (void)gpu.capture(10);
+    test::ok(editor, "log.clear");
+    const Image actual = gpu.capture(4);
+    test::checkGolden("shell-dark-100-export", actual);
+    CHECK(gpu.device->validationErrorCount() == 0);
+}
+
 TEST_CASE("the shell renders its windows and the palette without validation errors")
 {
     GpuShell gpu;

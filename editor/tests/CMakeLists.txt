@@ -50,6 +50,7 @@ illusion_add_editor_executable(illusion_editor_tests
     rpc/TestRpcServer.cpp
     rpc/TestRpcTransport.cpp
     shell/TestEditorShell.cpp
+    shell/TestExportWindow.cpp
     viewport/TestEditorCamera.cpp
     viewport/TestRenderQuality.cpp
     viewport/TestVisualisers.cpp)

@@ -526,6 +526,26 @@ private:
     std::unique_ptr<State> m_state;
 };
 
+/// The Export window: the export settings (`project.settings_set`), the target, and `export.build` with its
+/// progress, result and diagnostics.
+class ExportWindow
+{
+public:
+    ExportWindow();
+    ~ExportWindow();
+    ExportWindow(const ExportWindow&) = delete;
+    ExportWindow& operator=(const ExportWindow&) = delete;
+
+    /// Advances the running export (every frame, also while the window is closed).
+    void update(Impl& shell);
+    /// Draws the window's content.
+    void draw(Impl& shell);
+
+private:
+    struct State;
+    std::unique_ptr<State> m_state;
+};
+
 /// The Rendering panel: the render quality of the viewports (a preference), the GPU and each viewport's last
 /// frame.
 class RenderingPanel
