@@ -40,7 +40,9 @@ Development tools that are not linked: CMake, Ninja, clang-format, Doxygen, MkDo
 mkdocs-static-i18n.
 
 The Steamworks SDK is not distributed with illusion. Users supply it under Valve's Steamworks SDK
-Access Agreement.
+Access Agreement; it is the one proprietary, non-permissive dependency, optional and never committed or
+downloaded (ADR 0056). A game built with `ILLUSION_STEAMWORKS_SDK` ships Valve's redistributable
+`steam_api64.dll`, `libsteam_api.so` or `libsteam_api.dylib` under that agreement.
 
 ## Sample assets downloaded on demand
 

@@ -45,6 +45,7 @@ class ModuleHost;
 class ParticleWorld;
 class PhysicsWorld;
 class RenderAssetCache;
+class StoreService;
 class VirtualFileSystem;
 class World;
 
@@ -72,6 +73,8 @@ struct GameSessionDesc
     RenderAssetCache* renderAssets = nullptr;
     /// Gamepads that drive the input actions; the host calls its update(). Null for none.
     GamepadSystem* gamepads = nullptr;
+    /// The store the modules see as StoreService (ADR 0056); the host calls its update(). Null for none.
+    StoreService* store = nullptr;
     AudioOutput audioOutput = AudioOutput::Device; ///< Where the session's sound goes.
     /// Deterministic fixed steps: every update() advances exactly one physics step whatever the time
     /// passed, and Entities created while running get EntityGuids from a generator seeded with seed. The

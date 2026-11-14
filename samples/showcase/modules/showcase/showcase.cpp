@@ -1,7 +1,7 @@
 // The game module of the showcase project. It plays the everything scene through the whole scripting API:
-// every function of ModuleContext and of the five host services (PhysicsService, AudioService, InputService,
-// ParticleService and SceneService) is called from here, which tools/check_api_coverage.py checks and the
-// engine tests count at run time (tests/showcase/TestShowcaseModule.cpp).
+// every function of ModuleContext and of the six host services (PhysicsService, AudioService, InputService,
+// ParticleService, SceneService and StoreService) is called from here, which tools/check_api_coverage.py
+// checks and the engine tests count at run time (tests/showcase/TestShowcaseModule.cpp).
 //
 // What it does, decided only by the frame number and the input so that fixed-step runs repeat exactly:
 // - start: a floor and a gem from mesh geometry, the Jump and Move actions, a chime made from numbers, the
@@ -12,7 +12,8 @@
 //   slides the drawer, lifts the platform,
 //   grows the Ball, sweeps and casts rays, counts contacts and the Trigger's visitors, spawns a lantern
 //   prefab, chimes where something lands hard and raises dust the first time, bursts sparks when the Player
-//   steps on the pad, stops and restarts the spark fountain, and switches to moon gravity for a while;
+//   steps on the pad, stops and restarts the spark fountain, switches to moon gravity for a while, unlocks
+//   achievements, keeps stats and saves the number of runs as a cloud file of the store (or of no store);
 // - stop: unloads the clips.
 // Everything that hot reloads must keep lives in the Components showcase.Stats (saved) and showcase.Runtime.
 
@@ -33,10 +34,12 @@
 #include <illusion/physics/PhysicsService.hpp>
 #include <illusion/render/SceneComponents.hpp>
 #include <illusion/runtime/SceneService.hpp>
+#include <illusion/store/StoreService.hpp>
 
 #include <algorithm>
 #include <array>
 #include <cmath>
+#include <cstring>
 #include <numbers>
 #include <span>
 #include <string_view>
@@ -90,6 +93,14 @@ struct Runtime
     Entity sparks{};
     Entity dust{};
     u32 particlesAlive = 0;  ///< Live particles of every emitter at the last update.
+    u32 runs = 0;            ///< Sessions played, from the store's cloud save.
+    u32 walkerProgress = 0;  ///< Progress of the walker achievement at frame 100.
+    u32 cloudFiles = 0;      ///< Cloud files at frame 280.
+    u64 cloudFree = 0;       ///< Free cloud storage at frame 280, in bytes.
+    i32 frameStat = 0;       ///< The frames stat read back at frame 200.
+    f32 crateStat = 0.0f;    ///< The crate speed stat read back at frame 200.
+    bool overlay = false;    ///< The store's overlay covers the game.
+    bool started = false;    ///< The started achievement was unlocked at frame 100.
     bool dustRaised = false; ///< The first hard landing played the dust.
     InputDevice device{};
     GamepadType gamepad{};
@@ -129,6 +140,11 @@ constexpr f32 kPlatformLow = 0.2f;   // its height at the bottom
 constexpr u32 kDoorPeriod = 240;     // frames between the door opening and closing
 constexpr u32 kPadBurst = 40;        // sparks emitted when the Player steps on the pad
 constexpr std::string_view kLantern = "assets:/prefabs/lantern.prefab";
+constexpr std::string_view kSave = "showcase.save"; // cloud file with the number of runs
+constexpr std::string_view kScratch = "showcase.tmp";
+constexpr std::string_view kStartedAchievement = "SHOWCASE_STARTED";
+constexpr std::string_view kWalkerAchievement = "SHOWCASE_WALKER";
+constexpr u32 kWalkerSteps = 4; // the walker achievement unlocks after 4 x 60 frames
 
 Quat identity() noexcept
 {
@@ -277,6 +293,25 @@ void startScenes(SceneService& scenes)
     }
 }
 
+// Tells who plays in which store and counts this run in the cloud save.
+void startStore(StoreService& store, Runtime& runtime)
+{
+    ILL_LOG_INFO("Showcase", "store '{}' ({}), user '{}' ({})", store.storeName(),
+                 store.available() ? "signed in" : "offline", store.userName(), store.userId());
+    std::array<std::byte, sizeof(u32)> save{};
+    const Expected<u64, StoreError> read = store.readCloudFile(kSave, save);
+    if (read && *read == save.size())
+    {
+        std::memcpy(&runtime.runs, save.data(), save.size());
+    }
+    ++runtime.runs;
+    const GamepadOrigin jump{.type = runtime.gamepad, .button = GamepadButton::South};
+    if (const std::optional<std::string_view> glyph = store.glyphPath(jump))
+    {
+        ILL_LOG_INFO("Showcase", "Jump is drawn by {}", *glyph);
+    }
+}
+
 void startModule(ModuleContext& context)
 {
     if (!context.hasWorld() || context.worldRole() != WorldRole::Simulation)
@@ -314,6 +349,10 @@ void startModule(ModuleContext& context)
     if (SceneService* scenes = context.service<SceneService>())
     {
         startScenes(*scenes);
+    }
+    if (StoreService* store = context.service<StoreService>())
+    {
+        startStore(*store, runtime);
     }
     world.create(Name{"Showcase"}, Stats{}, runtime);
 }
@@ -588,6 +627,58 @@ void updateParticles(ParticleService& particles, Runtime& runtime, u32 frame)
     runtime.particlesAlive = static_cast<u32>(std::min<u64>(particles.totalAlive(), ~0u));
 }
 
+// Achievements on frames 10 and every 60th, stats at 200, the cloud save at 280; the overlay state every
+// frame.
+void updateStore(StoreService& store, Runtime& runtime, const Stats& stats, u32 frame)
+{
+    runtime.overlay = store.overlayActive();
+    if (frame == 10)
+    {
+        static_cast<void>(store.unlockAchievement(kStartedAchievement));
+    }
+    if (frame % 60 == 0 && frame / 60 <= kWalkerSteps)
+    {
+        static_cast<void>(store.setAchievementProgress(kWalkerAchievement, {frame / 60, kWalkerSteps}));
+    }
+    if (frame == 30 && !store.available())
+    {
+        // Only without a store: a showcase run on Steam must not cover the game with the overlay.
+        static_cast<void>(store.openOverlay(StoreOverlayPage::Achievements));
+    }
+    if (frame == 100)
+    {
+        runtime.started = store.isAchievementUnlocked(kStartedAchievement).valueOr(false);
+        runtime.walkerProgress =
+            store.achievementProgress(kWalkerAchievement).valueOr(AchievementProgress{}).current;
+    }
+    if (frame == 200)
+    {
+        static_cast<void>(store.setStatInt("showcase_frames", static_cast<i32>(stats.frames)));
+        static_cast<void>(store.setStatFloat("showcase_crate_speed", stats.crateSpeed));
+        runtime.frameStat = store.statInt("showcase_frames").valueOr(0);
+        runtime.crateStat = store.statFloat("showcase_crate_speed").valueOr(0.0f);
+        static_cast<void>(store.storeStats());
+    }
+    if (frame == 250)
+    {
+        static_cast<void>(store.clearAchievement(kStartedAchievement));
+    }
+    if (frame == 280)
+    {
+        std::array<std::byte, sizeof(u32)> save{};
+        std::memcpy(save.data(), &runtime.runs, save.size());
+        static_cast<void>(store.writeCloudFile(kSave, save));
+        static_cast<void>(store.writeCloudFile(kScratch, save));
+        if (store.cloudFileExists(kScratch))
+        {
+            static_cast<void>(store.removeCloudFile(kScratch));
+        }
+        std::array<std::string_view, 8> names{};
+        runtime.cloudFiles = store.listCloudFiles(names);
+        runtime.cloudFree = store.cloudQuota().valueOr(StoreQuota{}).availableBytes;
+    }
+}
+
 // Spawns what the frame calls for. These are structural changes, so they come before any reference into
 // the World is taken.
 u32 spawn(World& world, PhysicsService* physics, SceneService* scenes, const Runtime& runtime, u32 frame)
@@ -620,6 +711,7 @@ void updateModule(ModuleContext& context, f64 deltaSeconds)
     AudioService* audio = context.service<AudioService>();
     SceneService* scenes = context.service<SceneService>();
     ParticleService* particles = context.service<ParticleService>();
+    StoreService* store = context.service<StoreService>();
     Entity self{};
     world.query<const Stats>().each([&self](Entity entity, const Stats&) { self = entity; });
     if (!world.isAlive(self))
@@ -651,6 +743,10 @@ void updateModule(ModuleContext& context, f64 deltaSeconds)
     if (particles != nullptr)
     {
         updateParticles(*particles, runtime, stats.frames);
+    }
+    if (store != nullptr)
+    {
+        updateStore(*store, runtime, stats, stats.frames);
     }
     ++stats.frames;
 }

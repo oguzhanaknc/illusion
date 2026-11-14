@@ -8,6 +8,9 @@
 # asks for the component `player`, which adds illusion::player, illusion::pack and illusion_add_game():
 #
 #   find_package(illusion REQUIRED CONFIG COMPONENTS player)
+#
+# A Steam game adds the component `steam`, which builds illusion::steam against the Steamworks SDK that
+# ILLUSION_STEAMWORKS_SDK names (docs/adr/0056-store-service-and-steamworks.md).
 
 include(CMakeFindDependencyMacro)
 find_dependency(Threads)
@@ -33,6 +36,10 @@ foreach(_illusion_component IN LISTS illusion_FIND_COMPONENTS)
         endif()
         include("@ILLUSION_SDK_CMAKE_DIR@/IllusionGame.cmake")
         set(illusion_player_FOUND TRUE)
+    elseif(_illusion_component STREQUAL "steam" AND TARGET illusion::store)
+        include("@ILLUSION_SDK_CMAKE_DIR@/IllusionSteam.cmake")
+        illusion_add_steam_library("@ILLUSION_SDK_STEAM_DIR@")
+        set(illusion_steam_FOUND TRUE)
     else()
         set(illusion_${_illusion_component}_FOUND FALSE)
         if(illusion_FIND_REQUIRED_${_illusion_component})

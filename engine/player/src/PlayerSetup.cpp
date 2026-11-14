@@ -1,8 +1,10 @@
 #include "PlayerSetup.hpp"
 
+#include <illusion/core/Log.hpp>
 #include <illusion/platform/FileSystem.hpp>
 #include <illusion/player/PlayerStrings.hpp>
 #include <illusion/runtime/ProjectSettings.hpp>
+#include <illusion/store/NullStoreService.hpp>
 #include <illusion/text/Localization.hpp>
 #include <illusion/text/TextOutput.hpp>
 
@@ -264,6 +266,21 @@ WindowDesc playerWindowDesc(const PlayerDesc& desc, const WindowSettings& settin
     window.resizable = settings.resizable;
     window.scaleToMonitor = false;
     return window;
+}
+
+std::unique_ptr<StoreBackend> createPlayerStore(const PlayerDesc& desc, VirtualFileSystem& files)
+{
+    if (desc.store != nullptr)
+    {
+        if (std::unique_ptr<StoreBackend> store = desc.store(desc.storeAppId))
+        {
+            ILL_LOG_INFO("Player", "store: {}", store->storeName());
+            return store;
+        }
+        ILL_LOG_WARN("Player",
+                     "the store did not start; achievements, stats and cloud files stay on this machine");
+    }
+    return std::make_unique<NullStoreService>(files);
 }
 
 } // namespace illusion::detail

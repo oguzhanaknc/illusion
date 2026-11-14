@@ -77,6 +77,7 @@ add_executable(illusion_tests
     runtime/TestGameSession.cpp
     runtime/TestProjectSettings.cpp
     showcase/TestShowcaseModule.cpp
+    store/TestStoreService.cpp
     text/TestLocale.cpp
     text/TestLocalization.cpp
     text/TestMessageFormat.cpp
@@ -91,8 +92,8 @@ target_include_directories(illusion_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}
     ${PROJECT_SOURCE_DIR}/engine/render/src ${PROJECT_SOURCE_DIR}/engine/player/src)
 target_link_libraries(illusion_tests PRIVATE
     illusion::core illusion::platform illusion::input illusion::assets illusion::audio illusion::physics
-    illusion::particles illusion::render illusion::modules illusion::runtime illusion::player illusion::text
-    illusion_text_tools illusion::doctest)
+    illusion::particles illusion::render illusion::modules illusion::runtime illusion::player illusion::store
+    illusion::text illusion_text_tools illusion::doctest)
 target_compile_definitions(illusion_tests PRIVATE ILLUSION_TEST_DATA_DIR="${CMAKE_CURRENT_SOURCE_DIR}/data")
 illusion_configure_target(illusion_tests)
 
@@ -143,7 +144,7 @@ endforeach()
 # The showcase project's game module (samples/showcase/modules/showcase), loaded by tests/showcase.
 illusion_add_module(illusion_showcase_module SHARED
     SOURCES ${PROJECT_SOURCE_DIR}/samples/showcase/modules/showcase/showcase.cpp
-    USES physics audio particles input render runtime)
+    USES physics audio particles input render runtime store)
 target_compile_definitions(illusion_tests PRIVATE
     SHOWCASE_MODULE="$<TARGET_FILE:illusion_showcase_module>"
     ILLUSION_SAMPLES_DIR="${PROJECT_SOURCE_DIR}/samples")

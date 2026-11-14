@@ -33,6 +33,7 @@
 #include <illusion/render/Swapchain.hpp>
 #include <illusion/runtime/GameSession.hpp>
 #include <illusion/runtime/ProjectSettings.hpp>
+#include <illusion/store/StoreBackend.hpp>
 
 #include <algorithm>
 #include <chrono>
@@ -291,6 +292,9 @@ int runGame(const PlayerDesc& desc, const PlayerOptions& options, VirtualFileSys
             desc.name, dialogs);
     }
 
+    // Before the window and the device: a store's overlay hooks the graphics device when it is created.
+    const std::unique_ptr<StoreBackend> store = detail::createPlayerStore(desc, files);
+
     EventBus events;
     std::unique_ptr<Platform> platform = Platform::create();
     if (!platform)
@@ -371,6 +375,7 @@ int runGame(const PlayerDesc& desc, const PlayerOptions& options, VirtualFileSys
     sessionDesc.streamer = &streamer;
     sessionDesc.renderAssets = &renderAssets;
     sessionDesc.gamepads = gamepads.get();
+    sessionDesc.store = store.get();
     sessionDesc.fixedStep = options.fixedStep;
     Expected<std::unique_ptr<GameSession>, std::string> created = GameSession::create(sessionDesc);
     if (!created)
@@ -409,6 +414,7 @@ int runGame(const PlayerDesc& desc, const PlayerOptions& options, VirtualFileSys
         {
             gamepads->update(focused);
         }
+        store->update();
         const f64 delta = clock.tick(monotonicSeconds()).deltaSeconds;
 
         // As Play mode does: background loads are published before the game advances, and fixed steps wait

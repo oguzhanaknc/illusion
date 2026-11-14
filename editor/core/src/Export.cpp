@@ -44,6 +44,8 @@ namespace
 constexpr usize kMaxName = 64;
 constexpr usize kMaxModuleName = 48;
 constexpr std::string_view kExportSettingsName = "illusion.ExportSettings";
+constexpr std::string_view kExportStoreName = "illusion.ExportStore";
+constexpr std::string_view kSteamworksVariable = "ILLUSION_STEAMWORKS_SDK";
 constexpr std::array<std::string_view, 3> kArchives{"assets.illpak", "settings.illpak", "cache.illpak"};
 
 // Share of the whole export when each stage begins; Build is weighted by the build's own progress.
@@ -340,6 +342,8 @@ struct ExportPlan
     std::filesystem::path icon; // empty for the engine's icon
     std::vector<std::string> modules;
     std::vector<std::string> exclude;
+    ExportStore store;
+    std::filesystem::path steamworksSdk; // absolute, for a Steam export
     // Signing and packaging, resolved during validation.
     std::filesystem::path signProgram;
     std::vector<std::string> signArguments;
@@ -532,6 +536,66 @@ void checkOptions(const ExportOptions& options, std::vector<std::string>& errors
     }
 }
 
+// The redistributable library of the Steamworks SDK that a game of this platform ships
+// (cmake/IllusionSteam.cmake).
+std::string_view steamRedistributable() noexcept
+{
+    if constexpr (kExportPlatform == ExportPlatform::Windows)
+    {
+        return "redistributable_bin/win64/steam_api64.dll";
+    }
+    else if constexpr (kExportPlatform == ExportPlatform::MacOS)
+    {
+        return "redistributable_bin/osx/libsteam_api.dylib";
+    }
+    else
+    {
+#if defined(__aarch64__)
+        return "redistributable_bin/linuxarm64/libsteam_api.so";
+#else
+        return "redistributable_bin/linux64/libsteam_api.so";
+#endif
+    }
+}
+
+// The store of the export settings: Steam needs an app id and the Steamworks SDK (ADR 0056).
+void checkStore(const ExportOptions& options, const ExportStore& store, ExportPlan& plan,
+                std::vector<std::string>& errors)
+{
+    plan.store = store;
+    if (store.kind != ExportStoreKind::Steam)
+    {
+        return;
+    }
+    if (store.steamAppId == 0)
+    {
+        errors.emplace_back("the Steam store needs the game's Steam app id (store.steamAppId)");
+    }
+    const std::string variable(kSteamworksVariable);
+    if (options.steamworksSdk.empty())
+    {
+        errors.emplace_back("the Steam store needs the Steamworks SDK: set " + variable +
+                            " to its directory (the one with public/steam/steam_api.h)");
+        return;
+    }
+    std::error_code code;
+    const std::filesystem::path sdk =
+        std::filesystem::absolute(options.steamworksSdk, code).lexically_normal();
+    if (code || !std::filesystem::is_regular_file(sdk / "public" / "steam" / "steam_api.h", code))
+    {
+        errors.emplace_back(variable + " (" + pathText(options.steamworksSdk) +
+                            ") is not a Steamworks SDK: it has no public/steam/steam_api.h");
+        return;
+    }
+    if (!std::filesystem::is_regular_file(sdk / pathFromUtf8(steamRedistributable()), code))
+    {
+        errors.emplace_back(variable + " (" + pathText(options.steamworksSdk) + ") has no " +
+                            std::string(steamRedistributable()) + " for this platform");
+        return;
+    }
+    plan.steamworksSdk = sdk;
+}
+
 // The icon of the export settings: a square PNG of at least 256 pixels under assets:/.
 void checkIcon(const std::filesystem::path& root, const AssetRef& icon, ExportPlan& plan,
                std::vector<std::string>& errors)
@@ -655,6 +719,7 @@ Expected<ExportPlan, std::string> planExport(const ExportOptions& options)
         errors.emplace_back("the copyright must be one line of text");
     }
     checkIcon(root, settings->icon, plan, errors);
+    checkStore(options, settings->store, plan, errors);
     checkTools(options, plan, errors);
     plan.version = manifest->version;
     if (plan.version.empty() || hasControl(plan.version))
@@ -725,11 +790,23 @@ std::string generatedCMakeLists(const ExportPlan& plan, const std::filesystem::p
         "set(CMAKE_SKIP_INSTALL_ALL_DEPENDENCY ON)\n"
         "# A macOS bundle must carry the Vulkan loader and MoltenVK: without them configuring fails.\n"
         "set(ILLUSION_GAME_REQUIRE_VULKAN ON)\n"
-        "\n"
-        "find_package(illusion REQUIRED CONFIG COMPONENTS player)\n"
-        "\n"
-        "# The project's modules, built from their own CMakeLists as static libraries.\n"
-        "set(ILLUSION_STATIC_MODULES ON)\n";
+        "\n";
+    const bool steam = plan.store.kind == ExportStoreKind::Steam;
+    if (steam)
+    {
+        text += "# The Steam store (ADR 0056) builds illusion::steam against this Steamworks SDK.\n"
+                "set(ILLUSION_STEAMWORKS_SDK " +
+                bracket(pathText(plan.steamworksSdk.generic_u8string())) +
+                ")\n"
+                "find_package(illusion REQUIRED CONFIG COMPONENTS player steam)\n";
+    }
+    else
+    {
+        text += "find_package(illusion REQUIRED CONFIG COMPONENTS player)\n";
+    }
+    text += "\n"
+            "# The project's modules, built from their own CMakeLists as static libraries.\n"
+            "set(ILLUSION_STATIC_MODULES ON)\n";
     for (const std::string& module : plan.modules)
     {
         text += "add_subdirectory(" + bracket(pathText((root / "modules" / module).generic_u8string())) +
@@ -753,6 +830,10 @@ std::string generatedCMakeLists(const ExportPlan& plan, const std::filesystem::p
     if (!plan.copyright.empty())
     {
         text += "\n    COPYRIGHT " + bracket(plan.copyright);
+    }
+    if (steam)
+    {
+        text += "\n    STORE steam\n    STEAM_APP_ID " + std::to_string(plan.store.steamAppId);
     }
     // A macOS bundle is named after the product, with the executable of the same name inside.
     const std::string outputName = kExportPlatform == ExportPlatform::MacOS ? plan.product : plan.executable;
@@ -782,6 +863,13 @@ std::string fileNamePart(std::string_view text)
 
 void reflectExportSettings(ComponentRegistry& registry)
 {
+    if (registry.structs().findByStableName(kExportStoreName) == kInvalidStructId)
+    {
+        reflectStruct<ExportStore>(kExportStoreName, 1, registry.structs())
+            .meta({.displayName = "Store", .docsAnchor = "manual/editor/export.md#store"})
+            .field("kind", &ExportStore::kind, {.description = "The store the game runs in: none or steam."})
+            .field("steamAppId", &ExportStore::steamAppId, {.description = "The game's Steam app id."});
+    }
     reflectStruct<ExportSettings>(kExportSettingsName, 1, registry.structs())
         .meta({.displayName = "Export", .docsAnchor = "manual/editor/export.md#export-settings"})
         .field("productName", &ExportSettings::productName,
@@ -796,7 +884,9 @@ void reflectExportSettings(ComponentRegistry& registry)
                {.description = "Square PNG of at least 256 pixels (empty: the engine's icon).",
                 .assetKind = AssetKind::Texture})
         .field("exclude", &ExportSettings::exclude,
-               {.description = "Files under assets:/ that are not shipped, e.g. raw/** or *.psd."});
+               {.description = "Files under assets:/ that are not shipped, e.g. raw/** or *.psd."})
+        .field("store", &ExportSettings::store,
+               {.description = "The store the game runs in; steam needs ILLUSION_STEAMWORKS_SDK."});
 }
 
 std::string_view exportPackageName(ExportPackage package) noexcept
@@ -1192,10 +1282,33 @@ struct ProjectExport::Impl
               Stage::Install);
     }
 
+    // Steam reads the app id of a game started outside Steam from steam_appid.txt next to the executable.
+    // Only development exports get it: it is written after the install, so packages never hold it (ADR 0056).
+    [[nodiscard]] bool writeSteamAppId() const
+    {
+        const std::string& config = options.toolchain.config;
+        if (plan.store.kind != ExportStoreKind::Steam || config == "Release" || config == "MinSizeRel")
+        {
+            return true;
+        }
+        const std::filesystem::path directory =
+            kExportPlatform == ExportPlatform::MacOS
+                ? stagingDirectory() / pathFromUtf8(gameName()) / "Contents" / "MacOS"
+                : stagingDirectory();
+        std::ofstream file(directory / "steam_appid.txt", std::ios::binary | std::ios::trunc);
+        file << plan.store.steamAppId << "\n";
+        return static_cast<bool>(file);
+    }
+
     void finishInstall()
     {
         std::error_code code;
         const std::filesystem::path game = gameDirectory();
+        if (!writeSteamAppId())
+        {
+            fail("cannot write steam_appid.txt into " + pathText(stagingDirectory()));
+            return;
+        }
         std::filesystem::remove_all(game, code);
         if constexpr (kExportPlatform == ExportPlatform::MacOS)
         {

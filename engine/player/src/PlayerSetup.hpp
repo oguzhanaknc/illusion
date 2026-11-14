@@ -9,6 +9,7 @@
 #include <illusion/player/Player.hpp>
 
 #include <filesystem>
+#include <memory>
 #include <optional>
 #include <span>
 #include <string>
@@ -91,5 +92,10 @@ parsePlayerArguments(std::span<const std::string_view> arguments);
 // The window of @p settings with the command line's overrides, titled with the game's name, sized in pixels.
 [[nodiscard]] WindowDesc playerWindowDesc(const PlayerDesc& desc, const WindowSettings& settings,
                                           const PlayerOptions& options);
+
+// The store of the game: PlayerDesc::store for PlayerDesc::storeAppId when it starts, else a NullStoreService
+// with its cloud files in `user:/cloud` of @p files.
+[[nodiscard]] std::unique_ptr<StoreBackend> createPlayerStore(const PlayerDesc& desc,
+                                                              VirtualFileSystem& files);
 
 } // namespace illusion::detail

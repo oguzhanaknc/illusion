@@ -8,8 +8,10 @@
 #include <illusion/core/AssetRef.hpp>
 #include <illusion/core/Base.hpp>
 #include <illusion/core/Expected.hpp>
+#include <illusion/ecs/Reflection.hpp>
 #include <illusion/editor/core/ModuleBuild.hpp>
 
+#include <array>
 #include <filesystem>
 #include <memory>
 #include <string>
@@ -27,6 +29,20 @@ namespace illusion::editor
 /// File of ExportSettings; never part of an exported game.
 inline constexpr std::string_view kExportSettingsFile = "settings:/export.json";
 
+/// The store an exported game runs in (ADR 0056).
+enum class ExportStoreKind : u8
+{
+    None,  ///< No store: the game uses NullStoreService.
+    Steam, ///< Steam: the game links illusion::steam, which needs ILLUSION_STEAMWORKS_SDK.
+};
+
+/// The store section of ExportSettings.
+struct ExportStore
+{
+    ExportStoreKind kind = ExportStoreKind::None; ///< Which store.
+    u32 steamAppId = 0;                           ///< The game's Steam app id; required with Steam.
+};
+
 /// How a project is exported (`settings:/export.json`, type "illusion.ExportSettings").
 struct ExportSettings
 {
@@ -38,6 +54,7 @@ struct ExportSettings
     /// Files under `assets:/` that are not shipped: paths relative to the mount, `*` and `**` wildcards. They
     /// are not cooked either, so an asset that uses an excluded file fails the export's cook.
     std::vector<std::string> exclude{};
+    ExportStore store{}; ///< The store the game runs in.
 };
 
 /// Reflects ExportSettings as a struct of @p registry.
@@ -73,6 +90,8 @@ struct ExportOptions
     ExportSigning signing{};                     ///< Signing; empty fields leave the export unsigned.
     /// Linux: Steam Runtime the executable must run in ("" for no check, "sniper").
     std::string linuxRuntime{};
+    /// The Steamworks SDK directory (ILLUSION_STEAMWORKS_SDK) that a Steam export builds against.
+    std::filesystem::path steamworksSdk{};
     bool clean = false; ///< Discard the export's build tree first.
 };
 
@@ -157,3 +176,11 @@ private:
 [[nodiscard]] std::string_view exportStageName(ProjectExport::Stage stage) noexcept;
 
 } // namespace illusion::editor
+
+/// Names of ExportStoreKind values in settings files.
+template <>
+struct illusion::EnumReflection<illusion::editor::ExportStoreKind>
+{
+    /// Value names.
+    static constexpr std::array kValues{illusion::EnumValue{"none", 0}, illusion::EnumValue{"steam", 1}};
+};

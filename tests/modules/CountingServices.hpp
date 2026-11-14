@@ -1,6 +1,6 @@
 #pragma once
 
-// Counting proxies of the four service interfaces for the module tests. A class that implements a pure
+// Counting proxies of the service interfaces for the module tests. A class that implements a pure
 // interface does not compile until it implements all of it, so each proxy covers every function; each
 // function counts its calls in its own slot. A proxy made with a real service forwards every call to it;
 // one made without returns default values.
@@ -10,6 +10,7 @@
 #include <illusion/particles/ParticleService.hpp>
 #include <illusion/physics/PhysicsService.hpp>
 #include <illusion/runtime/SceneService.hpp>
+#include <illusion/store/StoreService.hpp>
 
 #include <algorithm>
 #include <array>
@@ -423,6 +424,116 @@ public:
     [[nodiscard]] std::string_view lastError() const override
     {
         return forward<std::string_view>(2, [&](SceneService& s) { return s.lastError(); });
+    }
+};
+
+// Counts the calls of every StoreService function.
+class CountingStore final : public CountingProxy<StoreService, 23>
+{
+public:
+    explicit CountingStore(StoreService* inner = nullptr) noexcept
+        : CountingProxy(inner)
+    {
+    }
+
+    using Void = Expected<void, StoreError>;
+
+    [[nodiscard]] bool available() const override
+    {
+        return forward<bool>(0, [&](StoreService& s) { return s.available(); });
+    }
+    [[nodiscard]] std::string_view storeName() const override
+    {
+        return forward<std::string_view>(1, [&](StoreService& s) { return s.storeName(); });
+    }
+    [[nodiscard]] std::string_view userName() const override
+    {
+        return forward<std::string_view>(2, [&](StoreService& s) { return s.userName(); });
+    }
+    [[nodiscard]] u64 userId() const override
+    {
+        return forward<u64>(3, [&](StoreService& s) { return s.userId(); });
+    }
+    Void unlockAchievement(std::string_view name) override
+    {
+        return forward<Void>(4, [&](StoreService& s) { return s.unlockAchievement(name); });
+    }
+    Void clearAchievement(std::string_view name) override
+    {
+        return forward<Void>(5, [&](StoreService& s) { return s.clearAchievement(name); });
+    }
+    [[nodiscard]] Expected<bool, StoreError> isAchievementUnlocked(std::string_view name) const override
+    {
+        return forward<Expected<bool, StoreError>>(
+            6, [&](StoreService& s) { return s.isAchievementUnlocked(name); });
+    }
+    Void setAchievementProgress(std::string_view name, AchievementProgress progress) override
+    {
+        return forward<Void>(7, [&](StoreService& s) { return s.setAchievementProgress(name, progress); });
+    }
+    [[nodiscard]] Expected<AchievementProgress, StoreError>
+    achievementProgress(std::string_view name) const override
+    {
+        return forward<Expected<AchievementProgress, StoreError>>(
+            8, [&](StoreService& s) { return s.achievementProgress(name); });
+    }
+    Void setStatInt(std::string_view name, i32 value) override
+    {
+        return forward<Void>(9, [&](StoreService& s) { return s.setStatInt(name, value); });
+    }
+    [[nodiscard]] Expected<i32, StoreError> statInt(std::string_view name) const override
+    {
+        return forward<Expected<i32, StoreError>>(10, [&](StoreService& s) { return s.statInt(name); });
+    }
+    Void setStatFloat(std::string_view name, f32 value) override
+    {
+        return forward<Void>(11, [&](StoreService& s) { return s.setStatFloat(name, value); });
+    }
+    [[nodiscard]] Expected<f32, StoreError> statFloat(std::string_view name) const override
+    {
+        return forward<Expected<f32, StoreError>>(12, [&](StoreService& s) { return s.statFloat(name); });
+    }
+    Void storeStats() override
+    {
+        return forward<Void>(13, [&](StoreService& s) { return s.storeStats(); });
+    }
+    Void writeCloudFile(std::string_view name, std::span<const std::byte> data) override
+    {
+        return forward<Void>(14, [&](StoreService& s) { return s.writeCloudFile(name, data); });
+    }
+    Expected<u64, StoreError> readCloudFile(std::string_view name, std::span<std::byte> out) override
+    {
+        return forward<Expected<u64, StoreError>>(
+            15, [&](StoreService& s) { return s.readCloudFile(name, out); });
+    }
+    Void removeCloudFile(std::string_view name) override
+    {
+        return forward<Void>(16, [&](StoreService& s) { return s.removeCloudFile(name); });
+    }
+    u32 listCloudFiles(std::span<std::string_view> out) override
+    {
+        return forward<u32>(17, [&](StoreService& s) { return s.listCloudFiles(out); });
+    }
+    [[nodiscard]] bool cloudFileExists(std::string_view name) const override
+    {
+        return forward<bool>(18, [&](StoreService& s) { return s.cloudFileExists(name); });
+    }
+    [[nodiscard]] Expected<StoreQuota, StoreError> cloudQuota() const override
+    {
+        return forward<Expected<StoreQuota, StoreError>>(19, [&](StoreService& s) { return s.cloudQuota(); });
+    }
+    [[nodiscard]] bool overlayActive() const override
+    {
+        return forward<bool>(20, [&](StoreService& s) { return s.overlayActive(); });
+    }
+    bool openOverlay(StoreOverlayPage page) override
+    {
+        return forward<bool>(21, [&](StoreService& s) { return s.openOverlay(page); });
+    }
+    [[nodiscard]] std::optional<std::string_view> glyphPath(GamepadOrigin origin) const override
+    {
+        return forward<std::optional<std::string_view>>(22,
+                                                        [&](StoreService& s) { return s.glyphPath(origin); });
     }
 };
 

@@ -3,7 +3,8 @@
 # illusion_add_game(<target> MODULES <module targets...>
 #                   NAME <product name> ORGANIZATION <organization> VERSION <version>
 #                   STARTUP_SCENE <virtual path> [DATA_DIRECTORY <directory>] [PROJECT <project directory>]
-#                   [ICON <square png>] [IDENTIFIER <reverse-DNS id>] [COPYRIGHT <line>])
+#                   [ICON <square png>] [IDENTIFIER <reverse-DNS id>] [COPYRIGHT <line>]
+#                   [STORE <none | steam> STEAM_APP_ID <app id>])
 #
 # Builds the executable <target> of a game: a generated main.cpp passes a PlayerDesc with the game's name,
 # organization, version, startup scene and static modules to illusion::runPlayer(), and links illusion::player
@@ -28,6 +29,11 @@
 #     (as in exports) and warns otherwise.
 #   - Linux: <executable>.png (512 pixels) and <executable>.desktop next to the executable.
 # illusion_package_game() (IllusionGamePackage.cmake) installs and packages them.
+#
+# STORE steam (docs/adr/0056-store-service-and-steamworks.md) links illusion::steam, which
+# find_package(illusion CONFIG COMPONENTS player steam) makes when ILLUSION_STEAMWORKS_SDK names the Steamworks SDK;
+# main.cpp passes createSteamStore and STEAM_APP_ID to the player, and the SDK's redistributable library is copied
+# next to the executable (into Contents/MacOS of a bundle) and installed with the game.
 
 include_guard(GLOBAL)
 
@@ -324,7 +330,8 @@ endfunction()
 
 function(illusion_add_game target)
     cmake_parse_arguments(PARSE_ARGV 1 arg ""
-        "NAME;ORGANIZATION;VERSION;STARTUP_SCENE;DATA_DIRECTORY;PROJECT;ICON;IDENTIFIER;COPYRIGHT" "MODULES")
+        "NAME;ORGANIZATION;VERSION;STARTUP_SCENE;DATA_DIRECTORY;PROJECT;ICON;IDENTIFIER;COPYRIGHT;STORE;STEAM_APP_ID"
+        "MODULES")
     foreach(required NAME ORGANIZATION STARTUP_SCENE)
         if(NOT arg_${required})
             message(FATAL_ERROR "illusion_add_game(${target}): ${required} is required")
@@ -355,6 +362,26 @@ function(illusion_add_game target)
     else()
         set(modules_code "")
     endif()
+    set(store_include "")
+    set(store_code "")
+    if(arg_STORE STREQUAL "steam")
+        if(NOT TARGET illusion::steam)
+            message(FATAL_ERROR "illusion_add_game(${target}): STORE steam needs illusion::steam: set "
+                "ILLUSION_STEAMWORKS_SDK to the Steamworks SDK and use find_package(illusion CONFIG COMPONENTS "
+                "player steam)")
+        endif()
+        if(NOT arg_STEAM_APP_ID MATCHES "^[1-9][0-9]*$" OR arg_STEAM_APP_ID GREATER 4294967295)
+            message(FATAL_ERROR "illusion_add_game(${target}): STORE steam needs STEAM_APP_ID, the game's Steam app "
+                "id (a positive number)")
+        endif()
+        set(store_include "#include <illusion/steam/SteamStoreService.hpp>
+")
+        set(store_code "    desc.store = &illusion::createSteamStore;
+    desc.storeAppId = ${arg_STEAM_APP_ID}u;
+")
+    elseif(arg_STORE AND NOT arg_STORE STREQUAL "none")
+        message(FATAL_ERROR "illusion_add_game(${target}): unknown STORE '${arg_STORE}' (none or steam)")
+    endif()
     _illusion_cpp_string(name "${arg_NAME}")
     _illusion_cpp_string(organization "${arg_ORGANIZATION}")
     _illusion_cpp_string(version "${arg_VERSION}")
@@ -367,7 +394,7 @@ function(illusion_add_game target)
 
 #include <illusion/core/Module.hpp>
 #include <illusion/player/Player.hpp>
-
+@store_include@
 @declarations@
 int main(int argc, char** argv)
 {
@@ -377,12 +404,29 @@ int main(int argc, char** argv)
     desc.version = "@version@";
     desc.startupScene = "@scene@";
     desc.dataDirectory = "@data@";
-@modules_code@    return illusion::runPlayer(desc, argc, argv);
+@modules_code@@store_code@    return illusion::runPlayer(desc, argc, argv);
 }
 ]] @ONLY)
 
     add_executable(${target} "${main}")
     target_link_libraries(${target} PRIVATE illusion::player ${arg_MODULES})
+    if(arg_STORE STREQUAL "steam")
+        target_link_libraries(${target} PRIVATE illusion::steam)
+        get_target_property(steam_runtime illusion::steam ILLUSION_STEAM_RUNTIME)
+        cmake_path(GET steam_runtime FILENAME steam_runtime_name)
+        if(APPLE)
+            set(steam_destination "$<TARGET_BUNDLE_CONTENT_DIR:${target}>/MacOS")
+        else()
+            set(steam_destination "$<TARGET_FILE_DIR:${target}>")
+            set_target_properties(${target} PROPERTIES ILLUSION_GAME_RUNTIME_FILES "${steam_runtime}")
+            if(NOT WIN32)
+                set_target_properties(${target} PROPERTIES BUILD_RPATH "$ORIGIN" INSTALL_RPATH "$ORIGIN")
+            endif()
+        endif()
+        add_custom_command(TARGET ${target} POST_BUILD
+            COMMAND "${CMAKE_COMMAND}" -E copy "${steam_runtime}" "${steam_destination}/${steam_runtime_name}"
+            VERBATIM)
+    endif()
     if(WIN32)
         # A game opens no console window; main() stays the entry point.
         set_target_properties(${target} PROPERTIES WIN32_EXECUTABLE ON)

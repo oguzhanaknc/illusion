@@ -30,6 +30,7 @@ An export targets the platform and architecture of the machine that builds it; t
 | `copyright` | Copyright line of the game. |
 | `icon` | Square PNG asset of at least 256 pixels. |
 | `exclude` | Files under `assets:/` that are not shipped. |
+| `store` | The store the game runs in: `kind` (`none` or `steam`) and `steamAppId`; see [Store](#store). |
 
 The version of the game is the project's `version`. The next section says what each platform makes of
 `identifier`, `copyright` and `icon`.
@@ -60,6 +61,28 @@ directory, `**` matches any run including directories, and `**/` also matches no
 An excluded file is neither packed nor cooked. An asset that needs it, for example a material that names an
 excluded texture, makes the export's cook fail, and so does excluding the startup scene. The report lists
 what was left out in `skipped`.
+
+### Store
+
+`store.kind` is `none` by default: the game gets the null store, which keeps achievements and stats in memory
+and cloud files in `user:/cloud` ([Store services](../runtime.md#store-services)). With `steam` the game links
+the Steam store and needs its app id:
+
+```json
+{"productName": "Blocks", "store": {"kind": "steam", "steamAppId": 480}}
+```
+
+The Steamworks SDK is never part of a project or of illusion: download it from Valve and set the environment
+variable `ILLUSION_STEAMWORKS_SDK` of the editor to its directory, the one with `public/steam/steam_api.h`. The
+export checks it and the platform's redistributable library (`steam_api64.dll`, `libsteam_api.so` or
+`libsteam_api.dylib`) before it starts, and fails with a message that names the variable when it is missing or
+wrong. The generated build then asks the SDK package for its `steam` component, which compiles
+`illusion::steam` against that SDK, and ships the redistributable library next to the executable.
+
+An export in a development configuration (anything but `Release` and `MinSizeRel`) also writes
+`steam_appid.txt` with the app id next to the executable, so that the game starts outside Steam while you test
+it. It is written after the install, so archives and installers never hold it. The Export window does not show
+the store yet; edit it with `project.settings_set` or in `settings:/export.json`.
 
 ## The Export window
 

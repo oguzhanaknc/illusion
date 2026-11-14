@@ -9,6 +9,7 @@
 #include <illusion/input/InputActionsAsset.hpp>
 #include <illusion/physics/PhysicsWorld.hpp>
 #include <illusion/runtime/GameSession.hpp>
+#include <illusion/store/NullStoreService.hpp>
 
 #include <algorithm>
 #include <array>
@@ -37,6 +38,10 @@ constexpr std::array<std::string_view, 4> kPhysicsTypes{"illusion.RigidBody", "i
                                                         "illusion.CharacterController", "illusion.Joint"};
 
 constexpr std::string_view kAudioSource = "illusion.AudioSource";
+
+// Play mode has no store (ADR 0056); the editor has no user mount, so the cloud files go to the project's
+// cache.
+constexpr std::string_view kPlayCloudDirectory = "cache:/store/cloud";
 
 // The "clip" member of an AudioSource value ("" when absent).
 std::string clipOf(const std::optional<std::string>& value)
@@ -79,6 +84,7 @@ struct PlaySession::Impl
     EditorContext& editor;
     PlaySessionDesc desc;
     ModuleHost modules;
+    std::unique_ptr<NullStoreService> store; // one per session, so achievements and stats start empty
     std::unique_ptr<GameSession> game;
     PlayStartOptions options;
     bool paused = false;
@@ -149,6 +155,9 @@ Expected<void, CommandError> PlaySession::start(const PlayStartOptions& options)
     desc.streamer = impl.desc.streamer;
     desc.renderAssets = impl.desc.renderAssets;
     desc.gamepads = impl.desc.gamepads;
+    auto store = std::make_unique<NullStoreService>(impl.editor.files(),
+                                                    NullStoreDesc{.cloudDirectory = kPlayCloudDirectory});
+    desc.store = store.get();
     desc.audioOutput = impl.desc.audioOutput;
     desc.fixedStep = options.fixedStep;
     desc.seed = options.seed;
@@ -168,6 +177,7 @@ Expected<void, CommandError> PlaySession::start(const PlayStartOptions& options)
     {
         return unexpected(CommandError::make(ErrorKind::Internal, "cannot copy the scene: " + loaded.error));
     }
+    impl.store = std::move(store);
     impl.game = std::move(game).value();
     impl.options = options;
     impl.paused = false;
@@ -187,6 +197,7 @@ void PlaySession::stop()
     }
     impl.editor.detachPlayWorld();
     impl.game.reset();
+    impl.store.reset();
     impl.paused = false;
     ILL_LOG_INFO("Play", "Play session stopped");
 }
@@ -211,6 +222,7 @@ u32 PlaySession::step(u32 steps)
     for (u32 i = 0; i < steps; ++i)
     {
         impl.pumpAssets(true);
+        impl.store->update();
         impl.game->update(stepSeconds);
     }
     impl.editor.playWorldAdvanced();
@@ -231,6 +243,7 @@ void PlaySession::update(f64 deltaSeconds)
         return;
     }
     impl.pumpAssets(impl.options.fixedStep);
+    impl.store->update();
     impl.game->update(deltaSeconds * impl.timeScale);
     impl.editor.playWorldAdvanced();
 }

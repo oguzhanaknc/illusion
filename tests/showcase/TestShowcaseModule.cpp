@@ -30,6 +30,7 @@
 #include <illusion/runtime/GameSession.hpp>
 #include <illusion/runtime/ProjectSettings.hpp>
 #include <illusion/runtime/SceneLoaderService.hpp>
+#include <illusion/store/NullStoreService.hpp>
 
 #include <doctest/doctest.h>
 
@@ -191,17 +192,21 @@ TEST_CASE("the showcase module calls every function of the scripting API on the 
     AudioWorldService audioService(audio);
     InputActionsService inputService(actions);
     SceneLoaderService sceneService(world, files);
+    REQUIRE(files.mount("user", directory.path, MountAccess::ReadWrite) == FileError::None);
+    NullStoreService storeService(files);
     test::CountingPhysics countingPhysics(&physicsService);
     test::CountingAudio countingAudio(&audioService);
     test::CountingInput countingInput(&inputService);
     test::CountingScenes countingScenes(&sceneService);
     test::CountingParticles countingParticles(&particleService);
+    test::CountingStore countingStore(&storeService);
     ServiceSet services;
     services.provide<PhysicsService>(countingPhysics);
     services.provide<AudioService>(countingAudio);
     services.provide<InputService>(countingInput);
     services.provide<SceneService>(countingScenes);
     services.provide<ParticleService>(countingParticles);
+    services.provide<StoreService>(countingStore);
 
     ModuleHostDesc hostDesc;
     hostDesc.shadowDirectory = directory.path / "shadow";
@@ -215,6 +220,7 @@ TEST_CASE("the showcase module calls every function of the scripting API on the 
         physics.update(kStep);
         particles.update(static_cast<f32>(kStep), &jobs);
         audio.update(kStep);
+        storeService.update();
     }
     CHECK(modules.detachWorld(world)); // runs stop(), which unloads the clips
 
@@ -234,17 +240,26 @@ TEST_CASE("the showcase module calls every function of the scripting API on the 
     INFO("uncalled input functions: " << uncalled(countingInput.calls));
     INFO("uncalled scene functions: " << uncalled(countingScenes.calls));
     INFO("uncalled particle functions: " << uncalled(countingParticles.calls));
+    INFO("uncalled store functions: " << uncalled(countingStore.calls));
     CHECK(countingPhysics.everyFunctionCalled());
     CHECK(countingAudio.everyFunctionCalled());
     CHECK(countingInput.everyFunctionCalled());
     CHECK(countingScenes.everyFunctionCalled());
     CHECK(countingParticles.everyFunctionCalled());
+    CHECK(countingStore.everyFunctionCalled());
 
     // The game ran on the real services: it counted its frames, met contacts and spawned a gem and a lantern.
     CHECK(statsField(world, "frames") == kFrames);
     CHECK(statsField(world, "contacts") > 0);
     CHECK(statsField(world, "groundedFrames") > 0);
     CHECK(statsField(world, "spawned") >= 2);
+
+    // Without a store the game kept its achievements and stats in memory and saved its run in user:/cloud.
+    CHECK(storeService.isAchievementUnlocked("SHOWCASE_WALKER").valueOr(false));
+    CHECK_FALSE(storeService.isAchievementUnlocked("SHOWCASE_STARTED").valueOr(true));
+    CHECK(storeService.statInt("showcase_frames").valueOr(0) == 200);
+    CHECK(files.exists("user:/cloud/showcase.save"));
+    CHECK_FALSE(files.exists("user:/cloud/showcase.tmp"));
 }
 
 TEST_CASE("fixed-step showcase sessions with the same input end in the same state after 300 frames")
