@@ -22,15 +22,27 @@ namespace illusion
 class EventBus;
 class Platform;
 
+/// How a window covers the screen.
+enum class WindowMode : u8
+{
+    Windowed,   ///< A decorated window of the requested size.
+    Borderless, ///< An undecorated window covering the primary monitor at its current video mode.
+    Fullscreen, ///< Exclusive fullscreen on the primary monitor, at the video mode closest to the size.
+};
+
 /// Creation parameters for Window.
 struct WindowDesc
 {
-    std::string title = "illusion"; ///< Title bar text (UTF-8).
-    u32 width = 1280;               ///< Client area width in window coordinates.
-    u32 height = 720;               ///< Client area height in window coordinates.
-    bool resizable = true;          ///< Whether the user can resize the window.
-    bool visible = true;            ///< Whether the window is shown immediately.
-    bool maximized = false;         ///< Whether the window starts maximized.
+    std::string title = "illusion";         ///< Title bar text (UTF-8).
+    u32 width = 1280;                       ///< Client area width in window coordinates.
+    u32 height = 720;                       ///< Client area height in window coordinates.
+    bool resizable = true;                  ///< Whether the user can resize the window.
+    bool visible = true;                    ///< Whether the window is shown immediately.
+    bool maximized = false;                 ///< Whether the window starts maximized.
+    WindowMode mode = WindowMode::Windowed; ///< How the window covers the screen.
+    /// Scale the size by the monitor's content scale (on Windows and X11), so that it is the same physical
+    /// size at every display scale. Games turn it off to get the size in pixels.
+    bool scaleToMonitor = true;
 };
 
 /// How the mouse cursor behaves over the window.

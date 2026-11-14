@@ -100,6 +100,7 @@ on a file that cannot be read or holds invalid values.
 | `settings:/audio.json` | `AudioSettings` | `masterVolume`, `busVolumes` (Sfx, Music, Ambience, Dialogue, Ui), `maxVoices`, `speedOfSound` |
 | `settings:/input.json` | `InputSettings` | `actions` (an [input actions asset](actions.md#input-actions-assets)), `gamepadsInBackground` |
 | `settings:/render.json` | `RenderSettings` | `vsync`, `maxFramesPerSecond`, `renderScale` |
+| `settings:/window.json` | `WindowSettings` | `width`, `height` (pixels), `mode` (`Windowed`, `Borderless` or `Fullscreen`), `resizable` |
 
 ```json
 {
@@ -113,7 +114,66 @@ on a file that cannot be read or holds invalid values.
 `collisionMatrix` holds one bit mask per layer: layers *a* and *b* collide only when bit *b* of entry *a*
 and bit *a* of entry *b* are both set, so clearing either side separates them. The session applies the
 settings when it is created; a change takes effect in the next session. `RenderSettings` belong to the host
-that presents the game.
+that presents the game. `WindowSettings` belong to the [player](#the-player): `width` and `height` size a
+`Windowed` or `Fullscreen` window, `Borderless` covers the primary monitor, and `resizable` lets the player resize
+a `Windowed` window. The editor's Game view ignores them.
 
 The settings file format is not tied to the runtime: `writeSettingsFile()` and `readSettingsFile()`
 (`illusion/ecs/SettingsFile.hpp`) save any reflected struct the same way.
+
+## The player
+
+`runPlayer()` (`illusion/player/Player.hpp`, library `illusion::player`) is the executable side of an exported
+game ([ADR 0055](https://github.com/oguzhanaknc/illusion/blob/main/docs/adr/0055-exported-games.md)). Call it once from `main()` with a `PlayerDesc`: the game's
+`name` (window title and user data directory), `organization`, `version` (written to the log), `startupScene`
+and its static `modules`. It then
+
+1. mounts `assets`, `settings` and `cache` from the archives `assets.illpak`, `settings.illpak` and
+   `cache.illpak` of the data directory, which is `PlayerDesc::dataDirectory` (default `data`) relative to the
+   executable (to `Contents/Resources` inside a macOS bundle), and mounts `user` read-write on the per-user
+   directory of the game, `userDataDirectory(organization, name)`;
+2. writes the log to `user:/player.log`;
+3. loads the [project settings](#project-settings), opens the window of `WindowSettings` and a Vulkan device,
+   adds the static modules and creates a `GameSession`;
+4. loads the startup scene and runs the game until the window closes.
+
+The process exit code is a `PlayerExit` value: `Ok` (0), `StartFailed` (1: no window, no Vulkan device, or a
+module or the startup scene failed to load), `DataMissing` (2: an archive of the data directory is missing or
+damaged) or `BadArguments` (3: the command line could not be read). When the game cannot start, the player
+logs the reason in English and shows a message box with a text from its string table, unless `--no-dialogs`
+is given.
+
+Command line:
+
+| Option | Effect |
+| --- | --- |
+| `--windowed`, `--borderless`, `--fullscreen` | Override `WindowSettings::mode`. |
+| `--size <width>x<height>` | Overrides the window's size. |
+| `--data <directory>` | Overrides `PlayerDesc::dataDirectory` (relative to the executable likewise). |
+| `--user-data <directory>` | Mounts `user` there instead of the user data directory, for tests and portable installs. |
+| `--fixed-step` | Runs the session deterministically. |
+| `--frames <count>` | Ends the game after that many frames. |
+| `--screenshot <file.png>` | Writes the last frame as a PNG when the game ends. |
+| `--no-dialogs` | Keeps failures to the log and stderr. |
+
+```bash
+showcase_game --windowed --size 1280x720
+showcase_game --fixed-step --frames 300 --screenshot shot.png --no-dialogs
+```
+
+`illusion_add_game()` (`cmake/IllusionGame.cmake`) builds the executable of a game: it generates the `main()`
+that fills the `PlayerDesc`, links `illusion::player` and the game's static modules, and with `PROJECT` packs the
+project's data next to the executable with `illusion_pack`. The showcase project is built this way:
+
+```cmake
+illusion_add_module(showcase_game_module STATIC ID showcase
+    SOURCES showcase/modules/showcase/showcase.cpp
+    USES physics audio particles input render runtime)
+illusion_add_game(showcase_game
+    MODULES showcase_game_module
+    NAME "Showcase"
+    ORGANIZATION "illusion"
+    VERSION "0.1.0"
+    STARTUP_SCENE "assets:/scenes/everything.scene"
+    PROJECT showcase)
+```

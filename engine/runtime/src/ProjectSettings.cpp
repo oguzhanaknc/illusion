@@ -79,6 +79,19 @@ void reflectRuntimeStructs(ComponentRegistry& registry)
         .field("maxFramesPerSecond", &RenderSettings::maxFramesPerSecond, {.description = "0 for no limit."})
         .field("renderScale", &RenderSettings::renderScale,
                {.min = 0.25, .max = 2.0, .hint = FieldHint::Slider});
+    reflectStruct<WindowSettings>("illusion.WindowSettings", 1, structs)
+        .meta({.displayName = "Window", .docsAnchor = "manual/runtime.md#project-settings"})
+        .field("width", &WindowSettings::width,
+               {.description = "Width of a Windowed or Fullscreen window in pixels.",
+                .min = 1.0,
+                .max = 16384.0})
+        .field("height", &WindowSettings::height,
+               {.description = "Height of a Windowed or Fullscreen window in pixels.",
+                .min = 1.0,
+                .max = 16384.0})
+        .field("mode", &WindowSettings::mode,
+               {.description = "Borderless covers the monitor; Fullscreen changes its video mode."})
+        .field("resizable", &WindowSettings::resizable, {.description = "The player can resize the window."});
 }
 
 void reflectRuntimeStructs()
@@ -101,7 +114,11 @@ Expected<void, std::string> loadProjectSettings(const VirtualFileSystem& files, 
     {
         return read;
     }
-    return loadFile(files, kRenderSettingsFile, settings.render, text);
+    if (auto read = loadFile(files, kRenderSettingsFile, settings.render, text); !read)
+    {
+        return read;
+    }
+    return loadFile(files, kWindowSettingsFile, settings.window, text);
 }
 
 } // namespace illusion

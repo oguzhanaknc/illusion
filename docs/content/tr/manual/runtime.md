@@ -104,6 +104,7 @@ adını vererek başarısız olur.
 | `settings:/audio.json` | `AudioSettings` | `masterVolume`, `busVolumes` (Sfx, Music, Ambience, Dialogue, Ui), `maxVoices`, `speedOfSound` |
 | `settings:/input.json` | `InputSettings` | `actions` (bir [input action Asset'i](actions.md#input-action-assetleri)), `gamepadsInBackground` |
 | `settings:/render.json` | `RenderSettings` | `vsync`, `maxFramesPerSecond`, `renderScale` |
+| `settings:/window.json` | `WindowSettings` | `width`, `height` (piksel), `mode` (`Windowed`, `Borderless` veya `Fullscreen`), `resizable` |
 
 ```json
 {
@@ -117,7 +118,67 @@ adını vererek başarısız olur.
 `collisionMatrix` her katman için bir bit maskesi tutar: *a* ve *b* katmanları yalnızca *a* girdisinin *b*
 biti ve *b* girdisinin *a* biti birlikte ayarlıysa çarpışır; herhangi bir tarafı temizlemek onları ayırır.
 Oturum ayarları oluşturulduğunda uygular; bir değişiklik bir sonraki oturumda etkili olur.
-`RenderSettings` oyunu gösteren host'a aittir.
+`RenderSettings` oyunu gösteren host'a aittir. `WindowSettings` [player](#oyuncu-player)'a aittir: `width` ve
+`height` bir `Windowed` ya da `Fullscreen` pencerenin boyutunu belirler, `Borderless` birincil monitörü kaplar ve
+`resizable` oyuncunun bir `Windowed` pencereyi yeniden boyutlandırmasına izin verir. Editörün Game görünümü
+bunları yok sayar.
 
 Ayar dosyası formatı runtime'a bağlı değildir: `writeSettingsFile()` ve `readSettingsFile()`
 (`illusion/ecs/SettingsFile.hpp`) reflection ile tanımlanmış her struct'ı aynı biçimde kaydeder.
+
+## Oyuncu (player)
+
+`runPlayer()` (`illusion/player/Player.hpp`, `illusion::player` kütüphanesi) dışa aktarılmış bir oyunun
+çalıştırılabilir tarafıdır ([ADR 0055](https://github.com/oguzhanaknc/illusion/blob/main/docs/adr/0055-exported-games.md)). `main()` içinden bir kez, bir
+`PlayerDesc` ile çağrılır: oyunun `name`'i (pencere başlığı ve kullanıcı veri dizini), `organization`,
+`version` (log'a yazılır), `startupScene` ve statik `modules`. Sonra şunları yapar:
+
+1. `assets`, `settings` ve `cache`'i veri dizinindeki `assets.illpak`, `settings.illpak` ve `cache.illpak`
+   arşivlerinden mount eder; veri dizini, çalıştırılabilir dosyaya göre `PlayerDesc::dataDirectory`'dir
+   (varsayılan `data`; bir macOS bundle'ında `Contents/Resources`). `user`'ı oyunun kullanıcıya özel dizinine,
+   `userDataDirectory(organization, name)`'e okuma-yazma olarak mount eder;
+2. log'u `user:/player.log` dosyasına yazar;
+3. [proje ayarlarını](#proje-ayarlar) yükler, `WindowSettings`'in penceresini ve bir Vulkan cihazını açar,
+   statik modülleri ekler ve bir `GameSession` oluşturur;
+4. başlangıç sahnesini yükler ve pencere kapanana kadar oyunu çalıştırır.
+
+Process'in çıkış kodu bir `PlayerExit` değeridir: `Ok` (0), `StartFailed` (1: pencere ya da Vulkan cihazı
+yok, ya da bir modül veya başlangıç sahnesi yüklenemedi), `DataMissing` (2: veri dizinindeki bir arşiv eksik
+veya bozuk) ya da `BadArguments` (3: komut satırı okunamadı). Oyun başlayamadığında player nedeni İngilizce
+olarak log'a yazar ve `--no-dialogs` verilmedikçe string table'ındaki bir metinle bir mesaj kutusu gösterir.
+
+Komut satırı:
+
+| Seçenek | Etki |
+| --- | --- |
+| `--windowed`, `--borderless`, `--fullscreen` | `WindowSettings::mode`'u geçersiz kılar. |
+| `--size <width>x<height>` | Pencerenin boyutunu geçersiz kılar. |
+| `--data <directory>` | `PlayerDesc::dataDirectory`'yi geçersiz kılar (aynı şekilde çalıştırılabilir dosyaya göre). |
+| `--user-data <directory>` | `user`'ı kullanıcı veri dizini yerine oraya mount eder; testler ve taşınabilir kurulumlar içindir. |
+| `--fixed-step` | Oturumu deterministik çalıştırır. |
+| `--frames <count>` | Oyunu o kadar frame sonra bitirir. |
+| `--screenshot <file.png>` | Oyun bittiğinde son frame'i PNG olarak yazar. |
+| `--no-dialogs` | Hataları log'da ve stderr'de bırakır. |
+
+```bash
+showcase_game --windowed --size 1280x720
+showcase_game --fixed-step --frames 300 --screenshot shot.png --no-dialogs
+```
+
+`illusion_add_game()` (`cmake/IllusionGame.cmake`) bir oyunun çalıştırılabilir dosyasını üretir: `PlayerDesc`'i
+dolduran `main()`'i oluşturur, `illusion::player` ile oyunun statik modüllerini bağlar ve `PROJECT` verilirse
+projenin verisini `illusion_pack` ile çalıştırılabilir dosyanın yanına paketler. Showcase projesi böyle
+derlenir:
+
+```cmake
+illusion_add_module(showcase_game_module STATIC ID showcase
+    SOURCES showcase/modules/showcase/showcase.cpp
+    USES physics audio particles input render runtime)
+illusion_add_game(showcase_game
+    MODULES showcase_game_module
+    NAME "Showcase"
+    ORGANIZATION "illusion"
+    VERSION "0.1.0"
+    STARTUP_SCENE "assets:/scenes/everything.scene"
+    PROJECT showcase)
+```

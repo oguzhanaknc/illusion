@@ -65,7 +65,9 @@ struct PlayerDesc
 /// message box unless `--no-dialogs` is given.
 ///
 /// Command line: `--windowed`, `--borderless`, `--fullscreen` and `--size <width>x<height>` override the
-/// window settings; `--data <directory>` overrides PlayerDesc::dataDirectory; `--fixed-step` runs the
+/// window settings; `--data <directory>` overrides PlayerDesc::dataDirectory (relative to the executable
+/// likewise); `--user-data <directory>` mounts `user` there instead of the user data directory (for tests
+/// and portable installs); `--fixed-step` runs the
 /// session deterministically; `--frames <count>` ends the game after that many frames and
 /// `--screenshot <file.png>` writes the last one; `--no-dialogs` keeps failures to the log and stderr.
 [[nodiscard]] int runPlayer(const PlayerDesc& desc, int argc, char** argv);

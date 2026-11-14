@@ -106,7 +106,7 @@ illusion_add_editor_executable(illusion_editor_gpu_tests
 target_include_directories(illusion_editor_gpu_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR} ${PROJECT_SOURCE_DIR}/tests)
 target_link_libraries(illusion_editor_gpu_tests PRIVATE
     illusion_ui_gallery_pages illusion::editor_shell illusion::editor_client illusion::editor_viewport
-    illusion::render
+    illusion::editor_play illusion::render
     illusion::physics illusion::audio illusion::particles illusion::doctest)
 target_compile_definitions(illusion_editor_gpu_tests PRIVATE
     ILLUSION_FAKE_CMAKE="$<TARGET_FILE:illusion_fake_cmake>"
@@ -117,6 +117,10 @@ target_compile_definitions(illusion_editor_gpu_tests PRIVATE
     ILLUSION_SAMPLES_DIR="${PROJECT_SOURCE_DIR}/samples"
     ILLUSION_EDITOR_EXECUTABLE="$<TARGET_FILE:illusion_editor>")
 add_dependencies(illusion_editor_gpu_tests illusion_editor_data illusion_editor)
+# The showcase module (tests/CMakeLists.txt) for the Play mode golden of tests/gpu/TestShowcaseGpu.cpp.
+target_compile_definitions(illusion_editor_gpu_tests PRIVATE
+    SHOWCASE_MODULE="$<TARGET_FILE:illusion_showcase_module>")
+add_dependencies(illusion_editor_gpu_tests illusion_showcase_module)
 illusion_configure_target(illusion_editor_gpu_tests)
 doctest_discover_tests(illusion_editor_gpu_tests
     PROPERTIES LABELS "gpu"

@@ -684,13 +684,16 @@ packages for Windows (signing-ready), macOS (`.app`, notarization-ready) and Lin
 compatible). Design in ADR 0055; public API in `illusion/player/Player.hpp` and
 `illusion/editor/core/Export.hpp`.
 
-- M8-1: Player. `engine/player` (`illusion::player`, `runPlayer()`), `WindowSettings`
+- M8-1: ✅ Player. `engine/player` (`illusion::player`, `runPlayer()`), `WindowSettings`
   (`settings:/window.json`) in the project settings and the Project Settings window, the `user:` mount, the
   log file and the failure dialog; `illusion_add_game()` in `cmake/IllusionGame.cmake`, used in-tree to build
   `showcase_game` from the showcase project. Done: unit tests of the command line and of the mounts from
   archives; a GPU test runs `showcase_game --fixed-step --frames 300 --screenshot` on packed data and
-  matches the golden image of the editor's Play mode; the showcase sets non-default window settings; no
-  allocation in a steady player frame beyond what `GameSession` and `SceneRenderer` already prove.
+  matches the golden image of the editor's Play mode after the same 300 steps (`showcase-play-300.png`); the
+  showcase sets non-default window settings; the failure dialog's text comes from the player's string table.
+  Open: a way for a module to end the game (with UI), an allocation test of a steady player frame (M8-3),
+  and GPU particle emitters whose state depends on which steps were rendered (a renderer that skips frames
+  shows different particles; PFX follow-up).
 - M8-2: Player SDK. The `player` component of the CMake package (every engine and third-party static
   library behind `illusion::player`), `illusion-sdk.json` version 2, install rules that write a relocatable
   SDK (headers, libraries per configuration, package). Done: a CTest configures and builds a game outside

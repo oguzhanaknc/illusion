@@ -66,6 +66,7 @@ add_executable(illusion_tests
     physics/TestPhysicsExtensions.cpp
     physics/TestPhysicsHierarchy.cpp
     physics/TestPhysicsWorld.cpp
+    player/TestPlayerSetup.cpp
     render/TestPostProcess.cpp
     render/TestRenderComponents.cpp
     render/TestShadows.cpp
@@ -83,12 +84,14 @@ add_executable(illusion_tests
     text/TestTextTools.cpp
     text/TestUtf8.cpp)
 
-# The render library's internal policies are tested directly (render/TestTextureStreamingPolicy.cpp).
+# The render library's internal policies are tested directly (render/TestTextureStreamingPolicy.cpp), as is
+# the player's setup (player/TestPlayerSetup.cpp).
 target_include_directories(illusion_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}
-    ${PROJECT_SOURCE_DIR}/engine/render/src)
+    ${PROJECT_SOURCE_DIR}/engine/render/src ${PROJECT_SOURCE_DIR}/engine/player/src)
 target_link_libraries(illusion_tests PRIVATE
     illusion::core illusion::platform illusion::input illusion::assets illusion::audio illusion::physics
-    illusion::particles illusion::render illusion::modules illusion::runtime illusion::text illusion_text_tools illusion::doctest)
+    illusion::particles illusion::render illusion::modules illusion::runtime illusion::player illusion::text
+    illusion_text_tools illusion::doctest)
 target_compile_definitions(illusion_tests PRIVATE ILLUSION_TEST_DATA_DIR="${CMAKE_CURRENT_SOURCE_DIR}/data")
 illusion_configure_target(illusion_tests)
 
@@ -179,6 +182,15 @@ set_tests_properties(modules.reject_engine_link PROPERTIES LABELS "unit"
 set_tests_properties(modules.reject_unknown_uses PROPERTIES LABELS "unit"
     PASS_REGULAR_EXPRESSION "unknown USES entry 'scripting'")
 
+if(ILLUSION_BUILD_TOOLS)
+    add_test(NAME tools.pack_unicode_path
+        COMMAND ${CMAKE_COMMAND} "-DPACK=$<TARGET_FILE:illusion_pack>"
+            "-DWORK=${CMAKE_CURRENT_BINARY_DIR}/pack_unicode_path"
+            "-DMATERIAL=${PROJECT_SOURCE_DIR}/samples/showcase/assets/materials/red.material"
+            -P ${CMAKE_CURRENT_SOURCE_DIR}/cmake/PackUnicodePath.cmake)
+    set_tests_properties(tools.pack_unicode_path PROPERTIES LABELS "unit" TIMEOUT 300)
+endif()
+
 include(${ILLUSION_DOCTEST_SOURCE_DIR}/scripts/cmake/doctest.cmake)
 doctest_discover_tests(illusion_tests
     PROPERTIES LABELS "unit"
@@ -214,6 +226,15 @@ target_include_directories(illusion_gpu_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR
 target_link_libraries(illusion_gpu_tests PRIVATE illusion::render illusion::doctest)
 target_compile_definitions(illusion_gpu_tests PRIVATE ILLUSION_TEST_DATA_DIR="${CMAKE_CURRENT_SOURCE_DIR}/data")
 illusion_configure_target(illusion_gpu_tests)
+# The exported showcase (samples/CMakeLists.txt) against the golden image of the editor's Play mode.
+if(ILLUSION_BUILD_SAMPLES AND ILLUSION_BUILD_TOOLS)
+    target_sources(illusion_gpu_tests PRIVATE gpu/TestShowcaseGame.cpp)
+    target_compile_definitions(illusion_gpu_tests PRIVATE
+        SHOWCASE_GAME="$<TARGET_FILE:showcase_game>"
+        SHOWCASE_GAME_CAPTURE="${CMAKE_CURRENT_BINARY_DIR}/captures/$<CONFIG>/showcase-game.png"
+        SHOWCASE_GAME_GOLDEN="${PROJECT_SOURCE_DIR}/editor/tests/data/golden/showcase-play-300.png")
+    add_dependencies(illusion_gpu_tests showcase_game)
+endif()
 doctest_discover_tests(illusion_gpu_tests
     PROPERTIES LABELS "gpu"
     ADD_LABELS 0)

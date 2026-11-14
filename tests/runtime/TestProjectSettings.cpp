@@ -57,6 +57,10 @@ TEST_CASE("project settings default to a game that needs no settings files")
     CHECK(settings.audio.busVolumes[4] == doctest::Approx(1.0f));
     CHECK(settings.input.actions.empty());
     CHECK(settings.render.vsync);
+    CHECK(settings.window.width == 1280);
+    CHECK(settings.window.height == 720);
+    CHECK(settings.window.mode == WindowMode::Windowed);
+    CHECK(settings.window.resizable);
 
     Fixture f;
     ProjectSettings loaded;
@@ -78,10 +82,16 @@ TEST_CASE("project settings round-trip through their settings files")
     input.gamepadsInBackground = true;
     RenderSettings render;
     render.renderScale = 0.5f;
+    WindowSettings window;
+    window.width = 800;
+    window.height = 600;
+    window.mode = WindowMode::Borderless;
+    window.resizable = false;
     REQUIRE(f.files.writeText(kPhysicsSettingsFile, settingsFile(physics)) == FileError::None);
     REQUIRE(f.files.writeText(kAudioSettingsFile, settingsFile(audio)) == FileError::None);
     REQUIRE(f.files.writeText(kInputSettingsFile, settingsFile(input)) == FileError::None);
     REQUIRE(f.files.writeText(kRenderSettingsFile, settingsFile(render)) == FileError::None);
+    REQUIRE(f.files.writeText(kWindowSettingsFile, settingsFile(window)) == FileError::None);
 
     ProjectSettings settings;
     REQUIRE(loadProjectSettings(f.files, settings).hasValue());
@@ -93,6 +103,26 @@ TEST_CASE("project settings round-trip through their settings files")
     CHECK(settings.input.actions.path() == "assets:/game.input");
     CHECK(settings.input.gamepadsInBackground);
     CHECK(settings.render.renderScale == doctest::Approx(0.5f));
+    CHECK(settings.window.width == 800);
+    CHECK(settings.window.height == 600);
+    CHECK(settings.window.mode == WindowMode::Borderless);
+    CHECK_FALSE(settings.window.resizable);
+}
+
+TEST_CASE("window settings name their mode and reject an unknown one")
+{
+    Fixture f;
+    WindowSettings window;
+    window.mode = WindowMode::Fullscreen;
+    CHECK(settingsFile(window).find(R"("Fullscreen")") != std::string::npos);
+    REQUIRE(f.files.writeText(kWindowSettingsFile,
+                              R"({"format": "illusion.settings", "type": "illusion.WindowSettings",
+                                                       "version": 1, "value": {"mode": "Maximized"}})") ==
+            FileError::None);
+    ProjectSettings settings;
+    const Expected<void, std::string> loaded = loadProjectSettings(f.files, settings);
+    REQUIRE_FALSE(loaded.hasValue());
+    CHECK(loaded.error().find("settings:/window.json") == 0);
 }
 
 TEST_CASE("a missing field keeps its default and an invalid file names itself")

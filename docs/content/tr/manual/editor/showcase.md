@@ -17,7 +17,8 @@ yerleşik bir Mesh'i olmayan gövdeler, collider boyutunda bir çocuk Entity al�
 Asset'leri `tools/make_assets.py` tarafından sayılardan üretilir (iki mesh'li bir model ve beş ses: müzik,
 rüzgâr, bir lamba uğultusu, bir selamlama ve bir tık); bu yüzden proje hiçbir üçüncü taraf lisansı taşımaz. Sahne elle yazılmaz: `build.jsonl` onu bir ajanın yapacağı gibi
 Editor commands ile kurar ve kaydeder. Aynı dosya, duman sprite'ına `asset.set_import_settings` ile bir içe
-aktarma ayarları sidecar'ı (`"quality": "high"`) da verir. Yeniden kurmak için:
+aktarma ayarları sidecar'ı (`"quality": "high"`) ve `project.settings_set` ile varsayılan olmayan bir pencere
+(1600x900, yeniden boyutlandırılamaz; `settings/window.json`) da verir. Yeniden kurmak için:
 
 ```bash
 python samples/showcase/tools/make_assets.py
@@ -68,3 +69,8 @@ tekrarlanır. Üç kontrol showcase'i motorla uyumlu tutar:
   sabit adımlı oturum çalıştırır ve kaydedilen durumlarının hash'ini karşılaştırır.
 - `TestShowcaseGpu.cpp` sahneyi ana Camera'sından bir golden görüntüyle karşılaştırır (`showcase-game.png`,
   `ILLUSION_UPDATE_GOLDENS=1` ile yeniden yazılır).
+
+Proje ayrıca dışa aktarılmış bir oyun olarak da derlenir, `showcase_game` target'ı (`samples/CMakeLists.txt`):
+modülü statik bağlanır, verisi çalıştırılabilir dosyanın yanına paketlenir ve [player](../runtime.md#oyuncu-player)
+çalıştırır. `TestShowcaseGame.cpp` onu 300 sabit adım çalıştırır ve ekran görüntüsünü editörün Game görünümünün
+golden görüntüsüyle karşılaştırır.

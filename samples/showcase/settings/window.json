@@ -1,0 +1,12 @@
+{
+  "format": "illusion.settings",
+  "type": "illusion.WindowSettings",
+  "version": 1,
+  "value": {
+    "width": 1600,
+    "height": 900,
+    "mode": "Windowed",
+    "resizable": false
+  }
+}
+

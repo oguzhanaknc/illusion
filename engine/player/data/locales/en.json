@@ -1,0 +1,20 @@
+{
+  "format": "illusion.locale",
+  "version": 1,
+  "locale": "en",
+  "displayName": "English",
+  "plural": "en",
+  "number": {"decimal": ".", "group": ","},
+  "strings": {
+    "player.failure.bad_arguments": {"text": "The game was started with options it does not understand.\n\n{detail}", "comment": "{detail} is an English description of the option"},
+    "player.failure.data_damaged": {"text": "The data of the game is damaged. Please reinstall the game.\n\n{detail}", "comment": "{detail} is the file that cannot be read"},
+    "player.failure.data_missing": {"text": "The data of the game is missing. Please reinstall the game.\n\n{detail}", "comment": "{detail} is the file that is missing"},
+    "player.failure.game_failed": {"text": "The game could not start.\n\n{detail}", "comment": "{detail} is an English description of the cause"},
+    "player.failure.graphics_failed": "The game could not set up its graphics. Please update your graphics driver.",
+    "player.failure.module_failed": {"text": "A part of the game could not be loaded. Please reinstall the game.\n\n{detail}", "comment": "{detail} is an English description of the cause"},
+    "player.failure.no_graphics": "No compatible graphics device was found. Please update your graphics driver.",
+    "player.failure.no_window_system": "No window system is available to show the game.",
+    "player.failure.user_data": {"text": "The game cannot use its folder for saved data.\n\n{detail}", "comment": "{detail} is the folder and the reason"},
+    "player.failure.window_failed": "The window of the game could not be opened."
+  }
+}

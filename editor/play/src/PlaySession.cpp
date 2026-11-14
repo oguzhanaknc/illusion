@@ -24,11 +24,12 @@ struct RuntimeSettingsFile
     std::string_view file;
 };
 
-constexpr std::array<RuntimeSettingsFile, 4> kRuntimeSettings{{
+constexpr std::array<RuntimeSettingsFile, 5> kRuntimeSettings{{
     {"illusion.PhysicsSettings", kPhysicsSettingsFile},
     {"illusion.AudioSettings", kAudioSettingsFile},
     {"illusion.InputSettings", kInputSettingsFile},
     {"illusion.RenderSettings", kRenderSettingsFile},
+    {"illusion.WindowSettings", kWindowSettingsFile},
 }};
 
 // Components whose changes need the physics body rebuilt.
