@@ -293,6 +293,7 @@ EditorShell::Impl::Impl(EditorShell& owner, EditorContext& editorContext, ui::Ui
     , renderingPanel(std::make_unique<detail::RenderingPanel>())
     , inputActions(std::make_unique<detail::InputActionsWindow>())
     , gamepadTester(std::make_unique<detail::GamepadTesterWindow>())
+    , exportWindow(std::make_unique<detail::ExportWindow>())
     , extraInspectors{std::make_unique<detail::Inspector>("inspector_2"),
                       std::make_unique<detail::Inspector>("inspector_3"),
                       std::make_unique<detail::Inspector>("inspector_4")}
@@ -704,6 +705,7 @@ void EditorShell::draw(f64 now, f64 deltaSeconds)
         }
         it = impl.running.erase(it);
     }
+    impl.exportWindow->update(impl);
     impl.console->update(impl);
     impl.agentsPanel->update(impl);
     detail::updateEyedropper(impl);
@@ -1081,6 +1083,7 @@ void EditorShell::draw(f64 now, f64 deltaSeconds)
         {
             const ImVec2 size = panel == Panel::Preferences     ? ImVec2(760.0f, 520.0f)
                                 : panel == Panel::Notifications ? ImVec2(380.0f, 420.0f)
+                                : panel == Panel::Export        ? ImVec2(900.0f, 600.0f)
                                                                 : ImVec2(640.0f, 460.0f);
             ImGui::SetNextWindowSize(ImVec2(size.x * kit.scale, size.y * kit.scale), ImGuiCond_FirstUseEver);
             ImGui::SetNextWindowPos(viewport->GetCenter(), ImGuiCond_FirstUseEver, ImVec2(0.5f, 0.5f));
@@ -1136,6 +1139,9 @@ void EditorShell::draw(f64 now, f64 deltaSeconds)
                 break;
             case Panel::GamepadTester:
                 impl.gamepadTester->draw(impl);
+                break;
+            case Panel::Export:
+                impl.exportWindow->draw(impl);
                 break;
             case Panel::Inspector2:
             case Panel::Inspector3:

@@ -24,6 +24,8 @@ constexpr UiAction kActions[] = {
     {.id = "file.save_as", .command = "scene.save_as", .menu = UiMenu::File},
     {.id = "file.projects", .command = "ui.show_panel", .params = R"({"panel":"window.welcome"})",
      .menu = UiMenu::File, .group = 1, .title = s::kActionFileProjects, .icon = "folder_open"},
+    {.id = "file.export", .command = "ui.show_panel", .params = R"({"panel":"window.export"})",
+     .menu = UiMenu::File, .group = 1, .title = s::kActionFileExport, .icon = "rocket_launch"},
     {.id = "file.preferences", .command = "ui.show_panel", .params = R"({"panel":"window.preferences"})",
      .menu = UiMenu::File, .group = 2, .title = s::kActionFilePreferences, .icon = "settings",
      .shortcut = "Ctrl+Comma"},

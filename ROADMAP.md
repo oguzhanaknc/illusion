@@ -715,8 +715,16 @@ compatible). Design in ADR 0055; public API in `illusion/player/Player.hpp` and
   (`codesign --verify`); a missing tool fails with its name. Open: signing with a real certificate and
   notarization are a manual check before a release (CI has no certificate); a failed Package stage keeps
   the finished game directory.
-- M8-5: Export window. The editor's Export window (settings, target, progress, diagnostics with source
-  links, "Show in folder"), string table entries, UiDriver tests and a golden image.
+- M8-5: ✅ Export window. The editor's Export window (settings, target, progress, diagnostics with source
+  links, "Show in folder"), string table entries, UiDriver tests and a golden image. Done: File > Export…
+  (also in the palette) opens the window, which edits `settings:/export.json` through `project.settings_*`
+  with the command's error under a field, offers the host's package kinds and signing fields, runs
+  `export.build` with its stage, progress and Cancel, and shows the report, diagnostics that select project
+  files in the Asset Browser, the tool output and "Show in folder" (`editor.reveal`); UiDriver tests export a
+  temporary project with the stand-in SDK, and an idle frame of the open window allocates nothing (which
+  fixed an Asset Browser refresh every frame). Open: validation problems that `export.build` reports in one
+  message (product name, identifier, organization, exclude patterns) appear in the result, not next to
+  their field.
 - M8-6: Steamworks (own ADR): optional module built only when the user supplies the SDK path;
   achievements, cloud saves, Steam Input glyphs and the overlay behind a service interface with a null
   implementation that is always built and tested; `linuxRuntime: "sniper"` check and a CI job that exports
@@ -728,6 +736,9 @@ compatible). Design in ADR 0055; public API in `illusion/player/Player.hpp` and
 - M8-8: Documentation (EN/TR): manual page "Exporting a game", the release and Steam guide (signing,
   notarization, depots, the sniper container), the runtime page's player section, tutorials end with an
   export; in step with each pull request.
+  Done so far: the manual page `manual/editor/export.md` (settings, the Export window, `export.build`,
+  packages, signing, limits) and the player section of `manual/runtime.md`, both EN/TR; the release and
+  Steam guide and the tutorial endings are open.
 
 ## UI — Game interface
 

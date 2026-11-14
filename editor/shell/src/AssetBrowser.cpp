@@ -520,6 +520,8 @@ void AssetBrowser::State::refreshInspector(Impl& shell)
     settingsKind = ImportSettingsKind::None;
     references = 0;
     hasInfo = false;
+    // Also without an inspected asset, or draw() would refresh (and allocate) every frame.
+    infoVersion = editor.assetCatalog().version();
     if (inspected.empty() || isModulesPath(inspected))
     {
         return;
@@ -544,7 +546,6 @@ void AssetBrowser::State::refreshInspector(Impl& shell)
             }
         }
     }
-    infoVersion = editor.assetCatalog().version();
 }
 
 void AssetBrowser::State::openEntry(Impl& shell, std::string_view path, bool isFolder)

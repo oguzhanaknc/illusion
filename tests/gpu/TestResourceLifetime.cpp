@@ -215,6 +215,40 @@ TEST_CASE("released resources are freed once the GPU is done, and 100 cycles kee
     CHECK(device->validationErrorCount() == 0);
 }
 
+TEST_CASE("releasing resources reuses the storage of completed release batches and does not allocate")
+{
+    auto device = RenderDevice::create(headless());
+    REQUIRE(device != nullptr);
+    {
+        RenderResources resources(*device);
+        const MeshData cube = makeCube();
+        const Image image = makeSolidImage(8, 8, Vec4(1.0f, 0.5f, 0.0f, 1.0f), ImageFormat::RGBA8);
+        for (int cycle = 0; cycle < 5; ++cycle)
+        {
+            const MeshHandle mesh = resources.createMesh(cube);
+            const TextureHandle texture = resources.createTexture(image);
+            MaterialDesc desc = colored(Vec4(1.0f));
+            desc.baseColor = texture;
+            const MaterialHandle material = resources.createMaterial(desc);
+            usize allocations = 0;
+            {
+                const test::ScopedAllocationCounter counter;
+                resources.releaseMaterial(material);
+                resources.releaseTexture(texture);
+                resources.releaseMesh(mesh);
+                allocations = counter.count();
+            }
+            // The first two cycles grow the storage of the pending releases and of one batch.
+            INFO("cycle " << cycle);
+            CHECK((cycle < 2 || allocations == 0));
+            CHECK(settle(*device, resources) == 3);
+            CHECK(resources.statistics().retiring == 0);
+        }
+    }
+    device->waitIdle();
+    CHECK(device->validationErrorCount() == 0);
+}
+
 #if ILL_ASSERTS_ENABLED
 TEST_CASE("stale and built-in handles assert when released or updated")
 {

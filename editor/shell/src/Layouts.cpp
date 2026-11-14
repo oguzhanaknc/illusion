@@ -33,6 +33,7 @@ constexpr PanelInfo kPanels[kPanelCount] = {
     {"window.audio_mixer", s::kWindowAudioMixer, "graphic_eq", false, ""},
     {"window.input_actions", s::kWindowInputActions, "sports_esports", false, ""},
     {"window.gamepad_tester", s::kWindowGamepadTester, "gamepad", false, ""},
+    {"window.export", s::kWindowExport, "rocket_launch", false, ""},
     {"window.inspector_2", s::kWindowInspector2, "tune", false, ""},
     {"window.inspector_3", s::kWindowInspector3, "tune", false, ""},
     {"window.inspector_4", s::kWindowInspector4, "tune", false, ""},

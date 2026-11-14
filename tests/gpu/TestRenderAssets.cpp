@@ -488,6 +488,12 @@ TEST_CASE("a resolved World is checked without allocating")
                      ProceduralSky{.resolution = 16});
         resolver.waitIdle(world, &jobs);
         resolver.update(world, &jobs); // warm up the Job System's queues
+        // Resources released while loading are freed when the GPU reaches them: wait for that before
+        // counting.
+        device->waitIdle();
+        static_cast<void>(resources.collect());
+        static_cast<void>(resources.collect());
+        REQUIRE(resources.statistics().retiring == 0);
         usize allocations = 0;
         {
             const test::ScopedAllocationCounter counter;
