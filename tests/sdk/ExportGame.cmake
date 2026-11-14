@@ -43,6 +43,8 @@ elseif(MODE STREQUAL "run")
         message(FATAL_ERROR "${GAME} failed (${result}):\n${output}\n${log}")
     endif()
     string(REGEX MATCHALL "[^\n]*\\[ERROR\\][^\n]*" errors "${log}")
+    # A machine without a sound device (CI) still runs the game; the audio backend reports the device.
+    list(FILTER errors EXCLUDE REGEX "\\[Audio\\].*device")
     if(errors)
         list(JOIN errors "\n" errors)
         message(FATAL_ERROR "${GAME} logged errors:\n${errors}")
