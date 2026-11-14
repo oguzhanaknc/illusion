@@ -218,46 +218,46 @@ bool fieldError(Impl& shell, const std::string& error, std::string_view id)
     return clicked;
 }
 
+struct Field
+{
+    std::array<char, kFieldCapacity> buffer{};
+    std::string error;
+};
+
+struct Diagnostic
+{
+    std::string file;
+    std::string location; // "file:line" as shown
+    std::string severity;
+    std::string message;
+};
+
+// The last export: its result, or why it could not run.
+struct Report
+{
+    bool succeeded = false;
+    bool cancelled = false;
+    std::string stage;
+    std::string error;
+    std::string configuration;
+    std::string directory;
+    std::string package;
+    std::string output;
+    u64 files = 0;
+    u64 totalBytes = 0;
+    u64 skipped = 0;
+    u32 errors = 0;
+    u32 warnings = 0;
+    bool signedBinaries = false;
+    bool notarized = false;
+    f64 seconds = 0.0;
+    std::vector<Diagnostic> diagnostics;
+};
+
 } // namespace
 
 struct ExportWindow::State
 {
-    struct Field
-    {
-        std::array<char, kFieldCapacity> buffer{};
-        std::string error;
-    };
-
-    struct Diagnostic
-    {
-        std::string file;
-        std::string location; // "file:line" as shown
-        std::string severity;
-        std::string message;
-    };
-
-    // The last export: its result, or why it could not run.
-    struct Report
-    {
-        bool succeeded = false;
-        bool cancelled = false;
-        std::string stage;
-        std::string error;
-        std::string configuration;
-        std::string directory;
-        std::string package;
-        std::string output;
-        u64 files = 0;
-        u64 totalBytes = 0;
-        u64 skipped = 0;
-        u32 errors = 0;
-        u32 warnings = 0;
-        bool signedBinaries = false;
-        bool notarized = false;
-        f64 seconds = 0.0;
-        std::vector<Diagnostic> diagnostics;
-    };
-
     std::array<Field, kSettingsFields.size()> settings;
     std::array<Field, BuildFieldCount> build;
     int package = 0;
