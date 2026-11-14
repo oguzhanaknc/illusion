@@ -38,6 +38,8 @@ struct ShellSetup
     /// How the catalog watches `assets/`. Native notifications arrive at a time of their own (late on macOS);
     /// Polling checks every frame, so a test that needs files written by commands to show up uses it.
     FileWatchBackend assetWatching = FileWatchBackend::Native;
+    /// Give the editor the stand-in SDK of the export tests (FakeCMake.cpp and this build's illusion_pack).
+    bool exportSdk = false;
 };
 
 /// The shell with everything it needs.
@@ -77,6 +79,10 @@ struct ShellFixture
         if (setup.assetWatching == FileWatchBackend::Polling)
         {
             options.assetPollInterval = 0.0;
+        }
+        if (setup.exportSdk)
+        {
+            options.moduleSdk = writeFakeModuleSdk(directory.path / "sdk.json");
         }
         editor = std::make_unique<editor::EditorContext>(options);
         if (setup.project)

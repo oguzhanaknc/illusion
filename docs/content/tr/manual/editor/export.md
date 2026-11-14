@@ -62,6 +62,31 @@ Hariç tutulan dosya ne paketlenir ne de cook edilir. Ona ihtiyaç duyan bir Ass
 Texture'ı adlandıran bir Material) export'un cook adımını başarısız kılar; başlangıç sahnesini hariç tutmak da
 öyle. Rapor, dışarıda bırakılanları `skipped` içinde listeler.
 
+## Export penceresi
+
+**File > Export…** (komut paletinde de) Export penceresini açar. Aynı `settings:/export.json` dosyasını düzenler ve
+aynı `export.build` komutunu çağırır; pencerenin yaptığını bir ajan da yapabilir.
+
+- **Settings**: Product name, Organization, Identifier, Copyright, Icon (bir Asset yolu) ve Excluded files (satır
+  başına bir desen); bkz. [Export ayarları](#export-ayarlar). İpuçları boş bir alanın ne anlama geldiğini gösterir,
+  örneğin Product name için projenin adı. Version salt okunurdur: `project.illusion` içinde ayarlanır.
+  `project.settings_set` hatası ait olduğu alanın altında görünür.
+- **Target**: Platform, editörün çalıştığı platformdur; gönderdiğiniz her platformda export edin. Package, bu
+  platformun türlerini sunar: Folder only, Windows'ta Folder and ZIP archive ile Folder and installer (NSIS),
+  macOS'ta Folder and disk image (DMG), Linux'ta Folder and .tar.gz archive. Output folder ve Configuration,
+  `output` ve `configuration` parametreleridir; Clean build `clean` demektir.
+- **Signing**: Windows'ta Sign command; macOS'ta Codesign identity ve Notary profile. Boş bir alan kendi ortam
+  değişkenini kullanır, ipucu onu adlandırır. Linux "Linux exports are not signed." gösterir.
+- **Export** komutu başlatır. Çalışırken pencere aşamayı (örneğin "Cooking assets") bir ilerleme çubuğu ve
+  **Cancel** ile gösterir; alanlar devre dışıdır.
+- **Result** Exported'ı ya da başarısız olan aşamayı, süreyi, Game folder'ı, Package file'ı, Size'ı, exclude
+  desenlerinin dışarıda bıraktığı dosyaları ve Signed ile Notarized rozetlerini gösterir. Diagnostics hata ve
+  uyarıları listeler; kaynak dosyası olana tıklamak onu Asset Browser'da seçer. Tool output build araçlarının son
+  satırlarını tutar, **Show in folder** oyunun klasörünü dosya yöneticisinde açar.
+
+`export.build` tek mesajda bildirdiği sorunlar (product name, identifier, organization, exclude desenleri) alanın
+yanında değil, sonuçta görünür.
+
 ## Export çalıştırmak
 
 Bir ajan komutu çağırır; `output` yolu mutlak ya da projeye göredir:
@@ -252,3 +277,7 @@ anlatır.
 - İlk export CMake'i configure eder ve dakikalar sürer.
 - Dosyaları dışarıda bırakmanın tek yolu exclude desenleridir; hariç tutulan bir dosyaya bağlı Asset cook'u
   başarısız kılar.
+- Image kaynakları, cook edilmiş hallerinin yanında `assets.illpak` içinde kalır; yalnızca glTF kaynakları atılır.
+- Gerçek sertifikayla imzalama ve notarization CI'da test edilmez, çünkü CI'da sertifika yoktur: imzalı bir
+  paketi her yayından önce elle denetleyin (`codesign --verify`, `spctl`, temiz bir makinede başlatma).
+- Package aşaması başarısız olursa bitmiş oyun dizini kalır.

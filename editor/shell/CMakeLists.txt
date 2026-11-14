@@ -7,6 +7,7 @@ illusion_add_editor_library(illusion_editor_shell STATIC
     src/AssetBrowser.cpp
     src/Console.cpp
     src/EditorShell.cpp
+    src/ExportWindow.cpp
     src/GameDebugWindows.cpp
     src/GamepadTesterWindow.cpp
     src/GameInput.cpp
