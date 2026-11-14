@@ -317,6 +317,47 @@ if(NOT ILLUSION_PROFILING)
                 FIXTURES_REQUIRED export_package_${kind})
         endif()
     endif()
+
+    # The engine package (cmake/IllusionRelease.cmake): every component is installed and the copy moved; its
+    # editor, headless, exports the showcase with the SDK installed beside it (label "sdk"), and the game runs a
+    # frame (labels "gpu" and "sdk").
+    set(release_work ${CMAKE_BINARY_DIR}/release/$<CONFIG>)
+    set(release_prefix ${release_work}/installed/sdk)
+    set(release_bin ${release_prefix}/${CMAKE_INSTALL_BINDIR}/$<CONFIG>)
+    add_test(NAME sdk.release.install
+        COMMAND ${CMAKE_COMMAND} -DMODE=install -DBUILD_DIR=${PROJECT_BINARY_DIR} -DCONFIG=$<CONFIG>
+            "-DCOMPONENTS=sdk$<SEMICOLON>player$<SEMICOLON>tools$<SEMICOLON>editor"
+            -DWORK=${release_work}/installed -P ${PROJECT_SOURCE_DIR}/tests/sdk/PlayerSdk.cmake)
+    add_test(NAME sdk.release.export.showcase.project
+        COMMAND ${CMAKE_COMMAND} -DMODE=copy -DSOURCE=${PROJECT_SOURCE_DIR}/samples/showcase
+            -DDESTINATION=${release_work}/showcase -P ${export_script})
+    add_test(NAME sdk.release.export.showcase
+        COMMAND ${release_bin}/illusion_ctl${CMAKE_EXECUTABLE_SUFFIX}
+            --launch ${release_bin}/illusion_editor${CMAKE_EXECUTABLE_SUFFIX}
+            --editor-arg --headless --editor-arg --no-gpu --editor-arg --project --editor-arg ${release_work}/showcase
+            replay ${export_transcript}
+            --var "output=\"${release_work}/showcase-out\"" --var "configuration=\"$<CONFIG>\"")
+    add_test(NAME sdk.release.export.showcase.sdk
+        COMMAND ${CMAKE_COMMAND} -DMODE=sdk -DPROJECT=${release_work}/showcase -DPREFIX=${release_prefix}
+            -P ${export_script})
+    if(APPLE)
+        set(release_game ${release_work}/showcase-out/Showcase.app/Contents/MacOS/Showcase)
+    else()
+        set(release_game ${release_work}/showcase-out/Showcase/showcase${CMAKE_EXECUTABLE_SUFFIX})
+    endif()
+    add_test(NAME sdk.release.export.showcase.run
+        COMMAND ${CMAKE_COMMAND} -DMODE=run -DGAME=${release_game} -DFRAMES=1 -DUSER=${release_work}/showcase-user
+            -P ${export_script})
+    set_tests_properties(sdk.release.install PROPERTIES LABELS "unit;sdk" TIMEOUT 600
+        FIXTURES_SETUP release_installed)
+    set_tests_properties(sdk.release.export.showcase.project PROPERTIES LABELS "unit;sdk"
+        FIXTURES_SETUP release_showcase_project)
+    set_tests_properties(sdk.release.export.showcase PROPERTIES LABELS "unit;sdk" TIMEOUT 1800
+        FIXTURES_REQUIRED "release_installed;release_showcase_project" FIXTURES_SETUP release_showcase)
+    set_tests_properties(sdk.release.export.showcase.sdk PROPERTIES LABELS "unit;sdk"
+        FIXTURES_REQUIRED release_showcase)
+    set_tests_properties(sdk.release.export.showcase.run PROPERTIES LABELS "gpu;sdk" TIMEOUT 600
+        FIXTURES_REQUIRED release_showcase)
 endif()
 
 # The screenshots of the editor manual (docs/screenshots/manual.jsonl): a headless editor with a GPU on a copy

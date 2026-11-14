@@ -15,9 +15,10 @@
 # names the illusion_pack that `export.build` cooks and packs a game's data with.
 #
 # Both target sets are export sets, so `cmake --install <build> --prefix <dir>` also writes a relocatable copy:
-# headers in include/, static libraries in lib/<Config>/, illusion_pack in bin/<Config>/ and the package with
-# its sdk.json files in lib/cmake/illusion/. Install components: `sdk` (headers, the module SDK, the package
-# files) and `player` (the libraries behind illusion::player, illusion_pack, illusion_add_game()).
+# headers in include/, static libraries in lib/<Config>/ (with MSVC, each with its compiler PDB), illusion_pack in
+# bin/<Config>/ and the package with its sdk.json files in lib/cmake/illusion/. Install components: `sdk`
+# (headers, the module SDK, the package files) and `player` (the libraries behind illusion::player, illusion_pack,
+# illusion_add_game()). The engine package (cmake/IllusionRelease.cmake) adds `editor` and `tools`.
 
 include_guard(GLOBAL)
 include(GNUInstallDirs)
@@ -159,6 +160,7 @@ function(_illusion_sdk_wrap sdk package_dir)
             "set_target_properties(${imported} PROPERTIES ${property}${nl}    \"\${CMAKE_CURRENT_LIST_DIR}/"
             "${to_prefix}/${CMAKE_INSTALL_LIBDIR}/$<CONFIG>/$<TARGET_FILE_NAME:${library}>\")${nl}")
         install(FILES "$<TARGET_FILE:${library}>" DESTINATION "${CMAKE_INSTALL_LIBDIR}/$<CONFIG>" COMPONENT player)
+        _illusion_sdk_install_compile_pdbs(player ${library})
     endforeach()
     string(APPEND definitions
         "file(GLOB _illusion_wrapped \"\${CMAKE_CURRENT_LIST_DIR}/illusionWrappedTargets-*.cmake\")${nl}"
@@ -172,6 +174,27 @@ function(_illusion_sdk_wrap sdk package_dir)
     file(GENERATE OUTPUT "${sdk}/install/illusionWrappedTargets-$<CONFIG>.cmake" CONTENT "${install_locations}")
     install(FILES "${sdk}/illusionWrappedTargets.cmake" "${sdk}/install/illusionWrappedTargets-$<CONFIG>.cmake"
         DESTINATION "${package_dir}" COMPONENT player)
+endfunction()
+
+# MSVC records the compiler's PDB in every object file of a static library by a path relative to the engine's
+# build; a linker that cannot find it there looks next to the library (LNK4099 otherwise). The PDB of each
+# static library in <targets> is written next to the library and installed next to it in <component>.
+function(_illusion_sdk_install_compile_pdbs component)
+    if(NOT MSVC OR CMAKE_CXX_COMPILER_ID STREQUAL "Clang")
+        return()
+    endif()
+    foreach(target IN LISTS ARGN)
+        get_target_property(type ${target} TYPE)
+        if(NOT type STREQUAL "STATIC_LIBRARY")
+            continue()
+        endif()
+        set_target_properties(${target} PROPERTIES
+            COMPILE_PDB_NAME ${target}
+            COMPILE_PDB_OUTPUT_DIRECTORY "$<TARGET_FILE_DIR:${target}>")
+        # Configurations compiled without debug information have no PDB.
+        install(FILES "$<TARGET_FILE_DIR:${target}>/${target}.pdb" DESTINATION "${CMAKE_INSTALL_LIBDIR}/$<CONFIG>"
+            COMPONENT ${component} OPTIONAL)
+    endforeach()
 endfunction()
 
 # Adds <targets> to the export set <set> with their install rules in <component>.
@@ -191,6 +214,7 @@ function(_illusion_sdk_export set component)
         RUNTIME DESTINATION "${CMAKE_INSTALL_BINDIR}/$<CONFIG>" COMPONENT ${component}
         OBJECTS DESTINATION "${CMAKE_INSTALL_LIBDIR}/$<CONFIG>/objects" COMPONENT ${component}
         INCLUDES DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}")
+    _illusion_sdk_install_compile_pdbs(${component} ${ARGN})
 endfunction()
 
 function(illusion_write_sdk)

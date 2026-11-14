@@ -5,6 +5,9 @@
 #   -DMODE=run     -DGAME=<executable> -DUSER=<directory> [-DFRAMES=<count>]
 #       runs the exported game for FRAMES frames (default 300) with a fixed step and its user data in USER, and
 #       fails if it fails or its player.log holds an error.
+#   -DMODE=sdk     -DPROJECT=<project> -DPREFIX=<installed engine>
+#       fails unless the exports of the project were configured with the CMake package under PREFIX, that is,
+#       unless an installed editor exported with the SDK installed beside it.
 #   -DMODE=symbols -DGAME=<executable>
 #       fails if the executable names Dear ImGui, ImPlot or the editor's namespace (ADR 0030): in symbols,
 #       RTTI names or strings, mangled the MSVC or the Itanium way.
@@ -127,6 +130,23 @@ elseif(MODE STREQUAL "run")
     if(NOT log MATCHES "ended after ${FRAMES} frames")
         message(FATAL_ERROR "${GAME} did not run ${FRAMES} frames:\n${log}")
     endif()
+elseif(MODE STREQUAL "sdk")
+    require(PROJECT PREFIX)
+    file(GLOB caches "${PROJECT}/.illusion/export/*/build/CMakeCache.txt")
+    if(NOT caches)
+        message(FATAL_ERROR "${PROJECT} has no configured export")
+    endif()
+    foreach(cache IN LISTS caches)
+        file(STRINGS "${cache}" entries REGEX "^illusion_DIR:")
+        if(NOT entries MATCHES "^illusion_DIR:[A-Z]+=(.+)$")
+            message(FATAL_ERROR "${cache} names no illusion_DIR")
+        endif()
+        file(TO_CMAKE_PATH "${CMAKE_MATCH_1}" package)
+        cmake_path(IS_PREFIX PREFIX "${package}" NORMALIZE inside)
+        if(NOT inside)
+            message(FATAL_ERROR "${cache} configured the export with ${package}, not with the SDK in ${PREFIX}")
+        endif()
+    endforeach()
 elseif(MODE STREQUAL "symbols")
     require(GAME)
     if(NOT EXISTS "${GAME}")

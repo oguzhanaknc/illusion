@@ -26,6 +26,7 @@ include(IllusionGame)
 include(IllusionText)
 include(IllusionEditor)
 include(IllusionSdk)
+include(IllusionRelease)
 
 add_subdirectory(engine)
 
@@ -56,3 +57,5 @@ endif()
 
 # The package that projects build their modules (ADR 0043) and games (ADR 0055) with, after every target exists.
 illusion_write_sdk()
+# The engine's release package: editor, tools and SDK in one archive (CPack).
+illusion_package_engine()

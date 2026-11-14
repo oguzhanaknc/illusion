@@ -740,10 +740,24 @@ compatible). Design in ADR 0055; public API in `illusion/player/Player.hpp` and
   needs a CI job with the SDK as a secret); Steam Input glyphs (`glyphPath()` returns nothing on Steam: Steam
   Input next to SDL's gamepads is its own decision); `SteamAPI_RestartAppIfNecessary()`; the store fields in the
   Export window; the sniper check (`linuxRuntime` is still rejected) and the CI job in the sniper containers.
-- M8-7: Engine releases. Install rules and CPack packages of the editor, tools, data and SDK; a `release`
+- M8-7: ✅ Engine releases. Install rules and CPack packages of the editor, tools, data and SDK; a `release`
   workflow on tags (three platforms, checksums, the Linux build in the sniper container) that exports the
   showcase from the installed package and runs it; semver and changelog rules. The installed SDK carries its
-  debug information (MSVC compile PDBs are not installed yet: LNK4099 against a moved SDK).
+  debug information (MSVC compile PDBs, without which a moved SDK links with LNK4099).
+  Done: install components `editor` (`illusion_editor` with `editor-data/`) and `tools` (`illusion_ctl`,
+  `illusion_mcp`, `illusion_textc`) next to `sdk` and `player`, all in `bin/<Config>/`; `illusion_package_engine()`
+  (`cmake/IllusionRelease.cmake`) makes one archive `illusion-<version>-<platform>-<arch>` (ZIP on Windows,
+  `.tar.gz` on Linux and macOS) with its `.sha256`; an installed editor uses the SDK installed beside it
+  (`ILLUSION_INSTALLED_MODULE_SDK`, relative to the executable); MSVC compile PDBs are written and installed
+  next to each static library, and the moved-SDK CTest fails on LNK4099; CTests `sdk.release.*` install every
+  component, move the copy, export the showcase from its headless editor with the installed SDK and run the
+  game for one frame (`gpu`); `.github/workflows/release.yml` (tag equals `v<project version>`, Release build
+  and tests, `cpack`, checksum and layout check, the installed-package tests, artifacts, a draft release on
+  tags); `CHANGELOG.md` and "Versions and releases" in the contributor guide (EN/TR).
+  Open: the workflow has never run; the Linux build in the sniper container; the package was only made and
+  tested on Windows; macOS ships a plain directory (no `.app` for the editor, no installer, the Vulkan loader
+  comes from the system) and no installer exists on any platform; the acceptance Tetris is not exported from
+  the package; the editor binary still carries the build tree's SDK path as its fallback.
 - M8-8: Documentation (EN/TR): manual page "Exporting a game", the release and Steam guide (signing,
   notarization, depots, the sniper container), the runtime page's player section, tutorials end with an
   export; in step with each pull request.
