@@ -8,8 +8,10 @@
 #include <illusion/editor/core/CoreCommands.hpp>
 #include <illusion/editor/core/EditorContext.hpp>
 
+#include <span>
 #include <string>
 #include <string_view>
+#include <vector>
 
 namespace illusion::editor::detail
 {
@@ -41,7 +43,16 @@ void registerParticleCommands(CommandRegistry& registry);
 void registerInputCommands(CommandRegistry& registry);
 void registerGamepadCommands(CommandRegistry& registry);
 void registerModuleCommands(CommandRegistry& registry);
+void registerExportCommands(CommandRegistry& registry);
 void registerToolCommands(CommandRegistry& registry);
+
+/// A virtual path for a file inside a project mount; other files keep the text the tool printed.
+std::string virtualFile(const std::string& printed, const Project& project);
+
+/// Logs @p diagnostics and adds the first ones (up to 200 in all) to @p out with virtual paths, counting
+/// errors and warnings.
+void reportDiagnostics(std::span<const BuildDiagnostic> diagnostics, const Project* project,
+                       std::vector<ModuleDiagnostic>& out, u32& errors, u32& warnings);
 
 /// The text of @p key in the current locale.
 std::string localized(text::Localization& localization, text::TextKey key);

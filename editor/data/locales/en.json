@@ -209,6 +209,8 @@
     "editor.command.entity.rename.title": {"text": "Rename entity", "comment": "Title of the command entity.rename"},
     "editor.command.entity.set_enabled.description": {"text": "Switches an entity and its children on or off.", "comment": "Tooltip of the command entity.set_enabled"},
     "editor.command.entity.set_enabled.title": {"text": "Enable or disable entity", "comment": "Title of the command entity.set_enabled"},
+    "editor.command.export.build.description": {"text": "Exports the project as a game that runs without the editor.", "comment": "Tooltip of the command export.build"},
+    "editor.command.export.build.title": {"text": "Export game", "comment": "Title of the command export.build"},
     "editor.command.gamepad.list.description": {"text": "Shows the connected gamepads and their state.", "comment": "Tooltip of the command gamepad.list"},
     "editor.command.gamepad.list.title": {"text": "List gamepads", "comment": "Title of the command gamepad.list"},
     "editor.command.gamepad.rumble.description": {"text": "Rumbles the motors of a gamepad.", "comment": "Tooltip of the command gamepad.rumble"},

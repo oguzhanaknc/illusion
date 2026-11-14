@@ -433,11 +433,15 @@ TEST_CASE("references in project settings files are found and moved")
     const JsonDocument moved =
         ok(editor, "asset.move", R"({"from":"assets:/textures","to":"assets:/images"})");
     CHECK(moved.root().find("references").asU64() == 2);
-    CHECK(ok(editor, "project.settings_get").root().pointer("/settings/0/value/cursor").asString() ==
-          "assets:/images/red.png");
+    CHECK(ok(editor, "project.settings_get", R"({"type":"test.Controls"})")
+              .root()
+              .pointer("/settings/0/value/cursor")
+              .asString() == "assets:/images/red.png");
     ok(editor, "history.undo");
-    CHECK(ok(editor, "project.settings_get").root().pointer("/settings/0/value/cursor").asString() ==
-          "assets:/textures/red.png");
+    CHECK(ok(editor, "project.settings_get", R"({"type":"test.Controls"})")
+              .root()
+              .pointer("/settings/0/value/cursor")
+              .asString() == "assets:/textures/red.png");
 }
 
 TEST_CASE("files are indexed whatever the case of their extension")

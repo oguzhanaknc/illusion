@@ -1,6 +1,7 @@
 // Builds of a project's game modules through CMake child processes (ADR 0043).
 
 #include "PathText.hpp"
+#include "ToolProcess.hpp"
 
 #include <illusion/core/Json.hpp>
 #include <illusion/editor/core/ModuleBuild.hpp>
@@ -10,7 +11,6 @@
 #include <array>
 #include <charconv>
 #include <chrono>
-#include <deque>
 #include <fstream>
 #include <mutex>
 #include <optional>
@@ -21,17 +21,17 @@
 namespace illusion::editor
 {
 
+using detail::commandText;
+using detail::drainLines;
+using detail::outputDrained;
+using detail::pathFromUtf8;
+using detail::ToolOutput;
+
 namespace
 {
 
-constexpr usize kTailLines = 64;
 // Longer lines are kept in the output but not parsed for diagnostics.
 constexpr usize kMaxParsedLine = 4096;
-
-std::filesystem::path pathFromUtf8(std::string_view text)
-{
-    return std::filesystem::path(std::u8string(text.begin(), text.end()));
-}
 
 std::optional<std::string> readField(JsonValue root, std::string_view name, std::string& error)
 {
@@ -282,9 +282,17 @@ std::optional<BuildDiagnostic> parseCMake(std::string_view line)
 
 using Environment = std::vector<std::pair<std::string, std::string>>;
 
-// The environment the toolchain's script set up, once per process: running vcvars takes a second or two.
+// The environment each toolchain script set up, once per process and script: running vcvars takes a second or
+// two.
 std::mutex g_environmentMutex;
-std::optional<Environment> g_environment;
+std::vector<std::pair<std::filesystem::path, Environment>> g_environments;
+
+const Environment* cachedEnvironment(const std::filesystem::path& script)
+{
+    const auto found = std::find_if(g_environments.begin(), g_environments.end(),
+                                    [&](const auto& entry) { return entry.first == script; });
+    return found == g_environments.end() ? nullptr : &found->second;
+}
 
 // True when this process already runs inside a Visual Studio developer environment.
 bool insideDeveloperEnvironment()
@@ -335,15 +343,20 @@ void addEnvironmentLine(std::string_view line, Environment& environment)
     environment.emplace_back(std::string(line.substr(0, equals)), std::string(line.substr(equals + 1)));
 }
 
-std::string quoteForLog(const std::vector<std::string>& arguments)
+// A path of an SDK file, relative to the directory of its description.
+std::filesystem::path sdkPath(const std::filesystem::path& file, const std::filesystem::path& path)
 {
-    std::string text;
-    for (const std::string& argument : arguments)
+    if (path.empty() || !path.is_relative())
     {
-        text += text.empty() ? "" : " ";
-        text += argument;
+        return path;
     }
-    return text;
+    std::filesystem::path resolved = (file.parent_path() / path).lexically_normal();
+    // "a/b/.." normalizes to "a/".
+    if (resolved.filename().empty() && resolved.has_relative_path())
+    {
+        resolved = resolved.parent_path();
+    }
+    return resolved;
 }
 
 } // namespace
@@ -395,6 +408,11 @@ Expected<ModuleToolchain, std::string> parseModuleToolchain(std::string_view jso
     {
         return unexpected(std::string("\"environmentScript\" must be a string"));
     }
+    const JsonValue pack = root.find("pack");
+    if (!pack.isAbsent() && !pack.isString())
+    {
+        return unexpected(std::string("\"pack\" must be a string"));
+    }
     ModuleToolchain toolchain{.cmake = pathFromUtf8(*cmake),
                               .generator = *generator,
                               .config = *config,
@@ -402,7 +420,8 @@ Expected<ModuleToolchain, std::string> parseModuleToolchain(std::string_view jso
                               .modulePrefix = *prefix,
                               .moduleSuffix = *suffix,
                               .environmentScript = pathFromUtf8(script.asString().value_or("")),
-                              .player = version == 2u && player.asBool() == true};
+                              .player = version == 2u && player.asBool() == true,
+                              .pack = pathFromUtf8(pack.asString().value_or(""))};
     const JsonValue arguments = root.find("arguments");
     if (!arguments.isArray())
     {
@@ -434,17 +453,9 @@ Expected<ModuleToolchain, std::string> readModuleToolchain(const std::filesystem
     {
         return unexpected(detail::pathText(file) + ": " + toolchain.error());
     }
-    // An installed SDK names its package relative to this file, so that it can move.
-    if (toolchain->package.is_relative())
-    {
-        std::filesystem::path package = (file.parent_path() / toolchain->package).lexically_normal();
-        // "a/b/.." normalizes to "a/".
-        if (package.filename().empty() && package.has_relative_path())
-        {
-            package = package.parent_path();
-        }
-        toolchain->package = std::move(package);
-    }
+    // An installed SDK names its files relative to this one, so that it can move.
+    toolchain->package = sdkPath(file, toolchain->package);
+    toolchain->pack = sdkPath(file, toolchain->pack);
     return toolchain;
 }
 
@@ -552,10 +563,8 @@ struct ModuleBuild::Impl
     bool succeeded = false;
     Environment environment;
     Process process;
-    BuildOutputParser parser;
-    std::vector<BuildDiagnostic> diagnostics;
+    ToolOutput output;
     BuildProgress progress;
-    std::deque<std::string> tail;
     std::string line;
 
     std::vector<std::string> configureArguments() const
@@ -566,8 +575,11 @@ struct ModuleBuild::Impl
         arguments.insert(arguments.end(), options.toolchain.arguments.begin(),
                          options.toolchain.arguments.end());
         arguments.push_back("-Dillusion_DIR=" + detail::pathText(options.toolchain.package));
-        arguments.push_back("-DILLUSION_MODULE_OUTPUT_DIRECTORY=" +
-                            detail::pathText(options.outputDirectory.generic_u8string()));
+        if (!options.outputDirectory.empty())
+        {
+            arguments.push_back("-DILLUSION_MODULE_OUTPUT_DIRECTORY=" +
+                                detail::pathText(options.outputDirectory.generic_u8string()));
+        }
         return arguments;
     }
 
@@ -630,7 +642,7 @@ struct ModuleBuild::Impl
 
     Expected<void, std::string> spawn(std::vector<std::string> arguments)
     {
-        addLine("> cmake " + quoteForLog(arguments));
+        addLine("> cmake " + commandText(arguments));
         ProcessOptions processOptions{.executable = options.toolchain.cmake,
                                       .arguments = std::move(arguments),
                                       .environment = environment};
@@ -659,30 +671,15 @@ struct ModuleBuild::Impl
                 progress = *reported;
             }
         }
-        parser.feed(text, diagnostics);
-        if (tail.size() == kTailLines)
-        {
-            tail.pop_front();
-        }
-        tail.push_back(std::move(text));
+        output.add(std::move(text));
     }
 
     void readLines()
     {
-        for (const ProcessStream stream : {ProcessStream::Output, ProcessStream::Error})
-        {
-            while (process.readLine(stream, line, std::chrono::milliseconds(0)))
-            {
-                addLine(std::move(line));
-                line.clear();
-            }
-        }
+        drainLines(process, line, [this](std::string text) { addLine(std::move(text)); });
     }
 
-    bool finished() const
-    {
-        return process.drained(ProcessStream::Output) && process.drained(ProcessStream::Error);
-    }
+    bool finished() const { return outputDrained(process); }
 };
 
 ModuleBuild::ModuleBuild()
@@ -709,7 +706,8 @@ Expected<std::unique_ptr<ModuleBuild>, std::string> ModuleBuild::start(ModuleBui
     if (!script.empty() && !insideDeveloperEnvironment())
     {
         std::lock_guard lock(g_environmentMutex);
-        if (!g_environment)
+        const Environment* cached = cachedEnvironment(script);
+        if (cached == nullptr)
         {
             Expected<ProcessOptions, std::string> command =
                 environmentCommand(script, impl.options.buildDirectory);
@@ -717,7 +715,7 @@ Expected<std::unique_ptr<ModuleBuild>, std::string> ModuleBuild::start(ModuleBui
             {
                 return unexpected(std::move(command).error());
             }
-            impl.tail.push_back("> " + detail::pathText(script));
+            impl.output.addUnparsed("> " + detail::pathText(script));
             Expected<Process, std::string> started = Process::spawn(*command);
             if (!started)
             {
@@ -727,7 +725,7 @@ Expected<std::unique_ptr<ModuleBuild>, std::string> ModuleBuild::start(ModuleBui
             impl.stage = Stage::Environment;
             return build;
         }
-        impl.environment = *g_environment;
+        impl.environment = *cached;
     }
     if (Expected<void, std::string> spawned = impl.begin(); !spawned)
     {
@@ -763,7 +761,10 @@ bool ModuleBuild::update()
     {
         {
             std::lock_guard lock(g_environmentMutex);
-            g_environment = impl.environment;
+            if (cachedEnvironment(impl.options.toolchain.environmentScript) == nullptr)
+            {
+                g_environments.emplace_back(impl.options.toolchain.environmentScript, impl.environment);
+            }
         }
         if (Expected<void, std::string> spawned = impl.begin(); !spawned)
         {
@@ -805,7 +806,7 @@ bool ModuleBuild::succeeded() const noexcept
 
 const std::vector<BuildDiagnostic>& ModuleBuild::diagnostics() const noexcept
 {
-    return m_impl->diagnostics;
+    return m_impl->output.diagnostics;
 }
 
 BuildProgress ModuleBuild::progress() const noexcept
@@ -815,13 +816,7 @@ BuildProgress ModuleBuild::progress() const noexcept
 
 std::string ModuleBuild::outputTail() const
 {
-    std::string text;
-    for (const std::string& line : m_impl->tail)
-    {
-        text += line;
-        text += '\n';
-    }
-    return text;
+    return m_impl->output.tail();
 }
 
 std::vector<std::filesystem::path> ModuleBuild::libraries() const

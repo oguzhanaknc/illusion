@@ -19,7 +19,6 @@ namespace
 {
 
 constexpr usize kMaxModuleName = 48;
-constexpr usize kMaxDiagnostics = 200;
 constexpr std::string_view kModulesRoot = "modules:/CMakeLists.txt";
 
 // Posts "module.migrated" for each module in @p names whose last reload migrated Components, with the
@@ -182,49 +181,6 @@ Expected<ModuleCreateResult, CommandError> moduleCreate(CommandContext& context,
     return result;
 }
 
-std::string pathFileText(const std::filesystem::path& path)
-{
-    return detail::pathText(path.lexically_normal().generic_u8string());
-}
-
-// A virtual path for files inside a project mount; other files keep the text the tool printed.
-std::string virtualFile(const std::string& printed, const Project& project)
-{
-    if (printed.empty())
-    {
-        return printed;
-    }
-    const std::filesystem::path file(std::u8string(printed.begin(), printed.end()));
-    if (!file.is_absolute())
-    {
-        return printed;
-    }
-    for (const ProjectMount& mount : projectMounts())
-    {
-        const std::filesystem::path root = (project.root() / std::string(mount.relative)).lexically_normal();
-        const std::filesystem::path relative = file.lexically_normal().lexically_relative(root);
-        if (!relative.empty() && *relative.begin() != "..")
-        {
-            return std::string(mount.name) + ":/" + pathFileText(relative);
-        }
-    }
-    return pathFileText(file);
-}
-
-LogLevel logLevelOf(DiagnosticSeverity severity) noexcept
-{
-    switch (severity)
-    {
-    case DiagnosticSeverity::Error:
-        return LogLevel::Error;
-    case DiagnosticSeverity::Warning:
-        return LogLevel::Warn;
-    case DiagnosticSeverity::Note:
-        return LogLevel::Info;
-    }
-    return LogLevel::Error;
-}
-
 void appendModules(PlayHost* play, std::vector<PlayModuleInfo>& out)
 {
     if (play != nullptr)
@@ -302,22 +258,8 @@ private:
         ModuleBuildResult result{.succeeded = m_build->succeeded(),
                                  .configured = m_build->configured(),
                                  .output = m_build->outputTail()};
-        for (const BuildDiagnostic& diagnostic : m_build->diagnostics())
-        {
-            const std::string file =
-                project != nullptr ? virtualFile(diagnostic.file, *project) : diagnostic.file;
-            result.errors += diagnostic.severity == DiagnosticSeverity::Error ? 1u : 0u;
-            result.warnings += diagnostic.severity == DiagnosticSeverity::Warning ? 1u : 0u;
-            Logger::instance().write(logLevelOf(diagnostic.severity), "Build", diagnostic.message,
-                                     file.empty() ? nullptr : file.c_str(), diagnostic.line);
-            if (result.diagnostics.size() < kMaxDiagnostics)
-            {
-                result.diagnostics.push_back(
-                    ModuleDiagnostic{file, diagnostic.line, diagnostic.column,
-                                     std::string(diagnosticSeverityName(diagnostic.severity)),
-                                     diagnostic.code, diagnostic.message});
-            }
-        }
+        reportDiagnostics(m_build->diagnostics(), project, result.diagnostics, result.errors,
+                          result.warnings);
         PlayHost* play = context.editor().play();
         if (result.succeeded)
         {
@@ -491,6 +433,75 @@ Expected<ModuleReloadResult, CommandError> moduleReload(CommandContext& context,
 }
 
 } // namespace
+
+namespace
+{
+
+constexpr usize kMaxDiagnostics = 200;
+
+std::string pathFileText(const std::filesystem::path& path)
+{
+    return detail::pathText(path.lexically_normal().generic_u8string());
+}
+
+LogLevel logLevelOf(DiagnosticSeverity severity) noexcept
+{
+    switch (severity)
+    {
+    case DiagnosticSeverity::Error:
+        return LogLevel::Error;
+    case DiagnosticSeverity::Warning:
+        return LogLevel::Warn;
+    case DiagnosticSeverity::Note:
+        return LogLevel::Info;
+    }
+    return LogLevel::Error;
+}
+
+} // namespace
+
+std::string virtualFile(const std::string& printed, const Project& project)
+{
+    if (printed.empty())
+    {
+        return printed;
+    }
+    const std::filesystem::path file(std::u8string(printed.begin(), printed.end()));
+    if (!file.is_absolute())
+    {
+        return printed;
+    }
+    for (const ProjectMount& mount : projectMounts())
+    {
+        const std::filesystem::path root = (project.root() / std::string(mount.relative)).lexically_normal();
+        const std::filesystem::path relative = file.lexically_normal().lexically_relative(root);
+        if (!relative.empty() && *relative.begin() != "..")
+        {
+            return std::string(mount.name) + ":/" + pathFileText(relative);
+        }
+    }
+    return pathFileText(file);
+}
+
+void reportDiagnostics(std::span<const BuildDiagnostic> diagnostics, const Project* project,
+                       std::vector<ModuleDiagnostic>& out, u32& errors, u32& warnings)
+{
+    for (const BuildDiagnostic& diagnostic : diagnostics)
+    {
+        const std::string file =
+            project != nullptr ? virtualFile(diagnostic.file, *project) : diagnostic.file;
+        errors += diagnostic.severity == DiagnosticSeverity::Error ? 1u : 0u;
+        warnings += diagnostic.severity == DiagnosticSeverity::Warning ? 1u : 0u;
+        Logger::instance().write(logLevelOf(diagnostic.severity), "Build", diagnostic.message,
+                                 file.empty() ? nullptr : file.c_str(), diagnostic.line);
+        if (out.size() < kMaxDiagnostics)
+        {
+            out.push_back(ModuleDiagnostic{file, diagnostic.line, diagnostic.column,
+                                           std::string(diagnosticSeverityName(diagnostic.severity)),
+                                           diagnostic.code, diagnostic.message});
+        }
+    }
+}
 
 void registerModuleCommands(CommandRegistry& registry)
 {

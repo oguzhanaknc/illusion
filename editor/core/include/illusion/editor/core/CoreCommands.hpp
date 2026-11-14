@@ -11,6 +11,7 @@
 #include <illusion/ecs/Reflection.hpp>
 #include <illusion/editor/core/Arrange.hpp>
 #include <illusion/editor/core/EntityIndex.hpp>
+#include <illusion/editor/core/Export.hpp>
 #include <illusion/editor/core/GamepadHost.hpp>
 #include <illusion/editor/core/Gizmo.hpp>
 #include <illusion/editor/core/PlayHost.hpp>
@@ -1909,6 +1910,45 @@ struct ModuleBuildResult
     std::vector<std::string> reloaded{};         ///< Modules hot-reloaded.
     std::vector<PlayModuleInfo> modules{};       ///< Loaded modules in load order.
     std::string output{};                        ///< The last lines of CMake's output.
+};
+
+/// Params of `export.build`.
+struct ExportBuildParams
+{
+    /// Directory that receives the game's directory: absolute, or relative to the project root (default
+    /// `.illusion/export/<platform>/out`).
+    std::optional<std::string> output{};
+    /// SDK configuration to build, e.g. "Release" (default: "Release" when the SDK has it, else the
+    /// editor's).
+    std::optional<std::string> configuration{};
+    std::optional<std::string>
+        package{};               ///< "none" (default); "archive" and "installer" are not supported yet.
+    std::optional<bool> clean{}; ///< Discard the export's build tree first (default false).
+    std::optional<std::string> linuxRuntime{}; ///< Steam Runtime to check against; not supported yet ("").
+    std::optional<std::string> signCommand{};  ///< Windows signing command line; not supported yet ("").
+    std::optional<std::string> codesignIdentity{}; ///< macOS codesign identity; not supported yet ("").
+    std::optional<std::string> notaryProfile{};    ///< macOS notarytool profile; not supported yet ("").
+};
+
+/// Result of `export.build`.
+struct ExportBuildResult
+{
+    bool succeeded = false;      ///< Every step succeeded.
+    std::string stage{};         ///< "done" after a success, otherwise the step that failed, e.g. "build".
+    std::string error{};         ///< Why it failed ("" after a success).
+    std::string platform{};      ///< "windows", "macos" or "linux".
+    std::string configuration{}; ///< Build configuration of the executable.
+    std::string directory{};     ///< The game's directory (file path).
+    std::string package{};       ///< The archive or installer ("" for none).
+    std::vector<ExportedFile> files{};           ///< Every file of the game's directory, sorted by path.
+    u64 totalBytes = 0;                          ///< Sum of the files' sizes.
+    bool signedBinaries = false;                 ///< The executable was signed.
+    bool notarized = false;                      ///< macOS: the package was notarized.
+    std::vector<std::string> skipped{};          ///< Asset files left out by the exclude patterns, sorted.
+    u32 errors = 0;                              ///< Diagnostics with severity "error".
+    u32 warnings = 0;                            ///< Diagnostics with severity "warning".
+    std::vector<ModuleDiagnostic> diagnostics{}; ///< Diagnostics in output order (at most 200).
+    std::string output{};                        ///< The last lines of the tools' output.
 };
 
 /// Params of `editor.open_source`.

@@ -13,7 +13,9 @@
 # LINK an engine library other than illusion::core, because its copy would run on the host's objects;
 # that is a configure error. ID is the first argument of the module's ILL_MODULE() (default: <target>); it is
 # stored in the target property ILLUSION_MODULE_ID, from which illusion_add_game() names the entry point
-# illusionModuleEntry_<id> of a static module.
+# illusionModuleEntry_<id> of a static module. ILLUSION_STATIC_MODULES makes every module static, also one
+# marked SHARED: the build of an exported game sets it to link a project's modules from their own CMakeLists
+# (ADR 0055).
 
 include_guard(GLOBAL)
 
@@ -26,7 +28,9 @@ function(illusion_add_module target)
         message(FATAL_ERROR "illusion_add_module(${target}): no SOURCES")
     endif()
     set(shared ${ILLUSION_SHARED_MODULES})
-    if(arg_SHARED)
+    if(ILLUSION_STATIC_MODULES)
+        set(shared OFF)
+    elseif(arg_SHARED)
         set(shared ON)
     elseif(arg_STATIC)
         set(shared OFF)

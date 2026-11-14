@@ -18,6 +18,7 @@ illusion_add_editor_executable(illusion_editor_tests
     core/TestEditorClipboard.cpp
     core/TestEditorCommands.cpp
     core/TestEditorCore.cpp
+    core/TestEditorExport.cpp
     core/TestEditorFuzz.cpp
     core/TestEditorGamepad.cpp
     core/TestEditorGizmo.cpp
@@ -84,6 +85,12 @@ illusion_add_editor_executable(illusion_fake_cmake FakeCMake.cpp)
 illusion_configure_target(illusion_fake_cmake)
 target_compile_definitions(illusion_editor_tests PRIVATE ILLUSION_FAKE_CMAKE="$<TARGET_FILE:illusion_fake_cmake>")
 add_dependencies(illusion_editor_tests illusion_fake_cmake)
+# Exports (export.build) cook and pack with illusion_pack, also with the stand-in for CMake.
+if(NOT TARGET illusion_pack)
+    message(FATAL_ERROR "The editor tests need illusion_pack: configure with ILLUSION_BUILD_TOOLS=ON")
+endif()
+target_compile_definitions(illusion_editor_tests PRIVATE ILLUSION_PACK_EXECUTABLE="$<TARGET_FILE:illusion_pack>")
+add_dependencies(illusion_editor_tests illusion_pack)
 if(NOT ILLUSION_PROFILING)
     target_compile_definitions(illusion_editor_tests PRIVATE
         ILLUSION_MODULE_SDK="${PROJECT_BINARY_DIR}/sdk/$<CONFIG>/illusion-sdk.json")
@@ -110,6 +117,7 @@ target_link_libraries(illusion_editor_gpu_tests PRIVATE
     illusion::physics illusion::audio illusion::particles illusion::doctest)
 target_compile_definitions(illusion_editor_gpu_tests PRIVATE
     ILLUSION_FAKE_CMAKE="$<TARGET_FILE:illusion_fake_cmake>"
+    ILLUSION_PACK_EXECUTABLE="$<TARGET_FILE:illusion_pack>"
     ILLUSION_GOLDEN_DIR="${CMAKE_CURRENT_SOURCE_DIR}/data/golden"
     ILLUSION_UI_CAPTURE_DIR="${CMAKE_BINARY_DIR}/ui-captures"
     ILLUSION_EDITOR_TEST_DATA="${CMAKE_CURRENT_SOURCE_DIR}/data"
@@ -172,6 +180,47 @@ if(NOT ILLUSION_PROFILING)
             --checks ${PROJECT_SOURCE_DIR}/tests/acceptance/tetris/checks.jsonl --temp-workspace
             --via-mcp $<TARGET_FILE:illusion_mcp> --era modern)
     set_tests_properties(acceptance.tetris.recorded.mcp PROPERTIES LABELS "acceptance" TIMEOUT 600)
+
+    # Exported games (ADR 0055): a headless editor exports the showcase and the Tetris of the recorded agent
+    # session with this build tree's SDK (label "sdk": it compiles), each game runs 300 frames (labels "gpu" and
+    # "sdk"), and neither executable holds editor or Dear ImGui code (ADR 0030).
+    set(export_script ${PROJECT_SOURCE_DIR}/tests/sdk/ExportGame.cmake)
+    set(export_transcript ${PROJECT_SOURCE_DIR}/tests/sdk/export.jsonl)
+    set(export_work ${CMAKE_BINARY_DIR}/export/$<CONFIG>)
+    add_test(NAME sdk.export.showcase.project
+        COMMAND ${CMAKE_COMMAND} -DMODE=copy -DSOURCE=${PROJECT_SOURCE_DIR}/samples/showcase
+            -DDESTINATION=${export_work}/showcase -P ${export_script})
+    add_test(NAME sdk.export.showcase
+        COMMAND illusion_ctl --launch $<TARGET_FILE:illusion_editor>
+            --editor-arg --headless --editor-arg --no-gpu --editor-arg --project --editor-arg ${export_work}/showcase
+            replay ${export_transcript}
+            --var "output=\"${export_work}/showcase-out\"" --var "configuration=\"$<CONFIG>\"")
+    add_test(NAME sdk.export.tetris
+        COMMAND illusion_ctl --launch $<TARGET_FILE:illusion_editor>
+            --editor-arg --deterministic --editor-arg --seed --editor-arg 1 --editor-arg --no-gpu
+            replay ${PROJECT_SOURCE_DIR}/tests/acceptance/tetris/recorded.jsonl --checks ${export_transcript}
+            --temp-workspace --var "output=\"${export_work}/tetris-out\"" --var "configuration=\"$<CONFIG>\"")
+    set_tests_properties(sdk.export.showcase.project PROPERTIES LABELS "unit;sdk"
+        FIXTURES_SETUP export_showcase_project)
+    set_tests_properties(sdk.export.showcase PROPERTIES LABELS "unit;sdk" TIMEOUT 1800
+        FIXTURES_REQUIRED export_showcase_project FIXTURES_SETUP export_showcase)
+    set_tests_properties(sdk.export.tetris PROPERTIES LABELS "unit;sdk" TIMEOUT 1800 FIXTURES_SETUP export_tetris)
+    foreach(game showcase tetris)
+        if(game STREQUAL "showcase")
+            set(executable ${export_work}/showcase-out/Showcase/showcase${CMAKE_EXECUTABLE_SUFFIX})
+        else()
+            set(executable ${export_work}/tetris-out/Tetris/tetris${CMAKE_EXECUTABLE_SUFFIX})
+        endif()
+        add_test(NAME sdk.export.${game}.run
+            COMMAND ${CMAKE_COMMAND} -DMODE=run -DGAME=${executable} -DUSER=${export_work}/${game}-user
+                -P ${export_script})
+        add_test(NAME sdk.export.${game}.symbols
+            COMMAND ${CMAKE_COMMAND} -DMODE=symbols -DGAME=${executable} -P ${export_script})
+        set_tests_properties(sdk.export.${game}.run PROPERTIES LABELS "gpu;sdk" TIMEOUT 600
+            FIXTURES_REQUIRED export_${game})
+        set_tests_properties(sdk.export.${game}.symbols PROPERTIES LABELS "unit;sdk"
+            FIXTURES_REQUIRED export_${game})
+    endforeach()
 endif()
 
 # The screenshots of the editor manual (docs/screenshots/manual.jsonl): a headless editor with a GPU on a copy

@@ -9,7 +9,8 @@
 #     illusion_add_game().
 #
 # Next to it, <build>/sdk/<Config>/illusion-sdk.json describes the toolchain of that configuration, which the
-# editor passes to CMake when it configures a project's modules, so they get the build key of the editor.
+# editor passes to CMake when it configures a project's modules, so they get the build key of the editor, and
+# names the illusion_pack that `export.build` cooks and packs a game's data with.
 #
 # Both target sets are export sets, so `cmake --install <build> --prefix <dir>` also writes a relocatable copy:
 # headers in include/, static libraries in lib/<Config>/, illusion_pack in bin/<Config>/ and the package with
@@ -327,24 +328,38 @@ function(illusion_write_sdk)
         list(GET fields 2 config_json)
         list(GET fields 3 prefix)
         list(GET fields 4 suffix)
-        # The build tree's file names the package by its absolute path; the installed one by the path relative
-        # to the file's directory, so that the installed SDK can move.
+        # The build tree's file names the package and illusion_pack (which exports run) by their absolute paths;
+        # the installed one by paths relative to the file's directory, so that the installed SDK can move. The
+        # files are written at generate time, when the location of illusion_pack is known.
+        file(RELATIVE_PATH pack_directory "${PROJECT_BINARY_DIR}/prefix/${package_dir}/${config}"
+            "${PROJECT_BINARY_DIR}/prefix/${CMAKE_INSTALL_BINDIR}/${config}")
         foreach(variant build install)
             set(package "")
+            set(pack "")
             if(variant STREQUAL "build")
                 illusion_sdk_json_string(package "${sdk}")
+                if(player AND TARGET illusion_pack)
+                    set(pack "\"$<TARGET_FILE:illusion_pack>\"")
+                endif()
                 set(file "${sdk}/${config}/illusion-sdk.json")
             else()
                 illusion_sdk_json_string(package "..")
+                if(player AND TARGET illusion_pack)
+                    set(pack "\"${pack_directory}/$<TARGET_FILE_NAME:illusion_pack>\"")
+                endif()
                 set(file "${sdk}/install/${config}/illusion-sdk.json")
             endif()
-            file(WRITE "${file}"
+            if(NOT pack)
+                set(pack "\"\"")
+            endif()
+            string(CONCAT json
                 "{\n  \"format\": \"illusion.sdk\",\n  \"version\": 2,\n  \"engineVersion\": \"${PROJECT_VERSION}\",\n"
                 "  \"cmake\": ${cmake},\n  \"generator\": ${generator_json},\n  \"config\": ${config_json},\n"
-                "  \"package\": ${package},\n  \"player\": ${player_json},\n"
+                "  \"package\": ${package},\n  \"player\": ${player_json},\n  \"pack\": ${pack},\n"
                 "  \"modulePrefix\": ${prefix},\n  \"moduleSuffix\": ${suffix},\n"
                 "  \"environmentScript\": ${environment_json},\n"
                 "  \"arguments\": [\n    ${arguments}\n  ]\n}\n")
+            file(GENERATE OUTPUT "${file}" CONTENT "${json}" CONDITION "$<CONFIG:${config}>")
         endforeach()
     endforeach()
     install(FILES "${sdk}/install/$<CONFIG>/illusion-sdk.json" DESTINATION "${package_dir}/$<CONFIG>" COMPONENT sdk)

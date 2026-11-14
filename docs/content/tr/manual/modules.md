@@ -382,3 +382,5 @@ Kurulmuş paket kendi dosyalarına konumuna göre göreli yollarla başvurur; bu
 !!! note "Bilinen sınır"
     Statik kütüphanelerin MSVC derleme PDB'leri kurulmaz; bu yüzden taşınmış bir SDK'ya bağlarken LNK4099
     uyarıları görülebilir.
+
+Editor'ün bu SDK ile bir oyunu nasıl export ettiği [Oyunu Export Etmek](editor/export.md) sayfasında anlatılır.

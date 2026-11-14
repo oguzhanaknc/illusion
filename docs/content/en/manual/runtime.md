@@ -179,3 +179,5 @@ illusion_add_game(showcase_game
 ```
 
 The CMake package that provides `illusion_add_game()` and `illusion::pack`, and how to install it, is described in [Player SDK](modules.md#player-sdk).
+
+How the editor exports a game with it is described in [Exporting a game](editor/export.md).

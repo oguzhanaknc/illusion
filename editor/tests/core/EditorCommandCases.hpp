@@ -64,6 +64,7 @@ inline constexpr CommandCase kCommandCases[] = {
     {"entity.get", R"({"entity":"/Game/Board"})"},
     {"entity.rename", R"({"entity":"/Game/Board","name":"Field"})"},
     {"entity.set_enabled", R"({"entity":"/Game/Board","enabled":false})"},
+    {"export.build", R"({"output":"@fixture/export","configuration":"Debug","clean":true})"},
     {"hierarchy.children", R"({"entity":"/Game"})"},
     {"hierarchy.reorder", R"({"entity":"/Game/Player","index":0})"},
     {"hierarchy.set_parent", R"({"entity":"/Game/Player","parent":"/Game/Board"})"},

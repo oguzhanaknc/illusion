@@ -50,6 +50,7 @@ void reflectOnce()
         reflectCoreComponents();
         reflectAssetStructs(ComponentRegistry::instance());
         reflectCoreCommandTypes(ComponentRegistry::instance().structs());
+        reflectExportSettings(ComponentRegistry::instance());
         return true;
     }();
     (void)reflected;
@@ -288,6 +289,7 @@ EditorContext::EditorContext(const EditorContextOptions& options)
     , m_history(options.undoBudget)
 {
     reflectOnce();
+    m_settings.add("illusion.ExportSettings", SettingsScope::Project, kExportSettingsFile);
     if (options.logCapacity > 0)
     {
         m_log = std::make_shared<LogRingSink>(options.logCapacity);

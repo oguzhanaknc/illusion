@@ -374,3 +374,5 @@ The installed package refers to its own files relative to its location, so you c
 !!! note "Known limit"
     The MSVC compile PDBs of the static libraries are not installed, so linking against a moved SDK can print
     LNK4099 warnings.
+
+The editor exports a project as a game with this SDK: see [Exporting a game](editor/export.md).
