@@ -1,6 +1,6 @@
 # 0057. Build the game UI from ECS elements drawn by a batched pass after tonemapping
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-11-14
 
 ## Context

@@ -226,7 +226,8 @@ function(illusion_write_sdk)
     set(package_dir "${CMAKE_INSTALL_LIBDIR}/cmake/illusion")
 
     set(module_targets illusion_core illusion_glm illusion_yyjson illusion_physics_api illusion_audio_api
-        illusion_particles_api illusion_input_api illusion_render_api illusion_runtime_api illusion_store_api)
+        illusion_particles_api illusion_ui_api illusion_input_api illusion_render_api illusion_runtime_api
+        illusion_store_api)
     _illusion_sdk_export(illusionTargets sdk ${module_targets})
     export(EXPORT illusionTargets NAMESPACE illusion:: FILE "${sdk}/illusionTargets.cmake")
     install(EXPORT illusionTargets NAMESPACE illusion:: DESTINATION "${package_dir}" COMPONENT sdk)
