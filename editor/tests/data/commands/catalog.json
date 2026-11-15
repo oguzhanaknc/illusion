@@ -5780,6 +5780,680 @@
       "additionalProperties": false
     }
   },
+  "gameui.click": {
+    "version": 1,
+    "permission": "edit",
+    "mode": "play",
+    "undoable": false,
+    "readOnly": false,
+    "params": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "type": "object",
+      "properties": {
+        "entity": {
+          "type": "string"
+        },
+        "dryRun": {
+          "type": "boolean"
+        },
+        "mergeKey": {
+          "type": "string"
+        },
+        "clientToken": {
+          "type": "string"
+        },
+        "expectRevision": {
+          "anyOf": [
+            {
+              "type": "string",
+              "pattern": "^[0-9]+$"
+            },
+            {
+              "type": "integer",
+              "minimum": 0
+            }
+          ]
+        }
+      },
+      "required": ["entity"],
+      "additionalProperties": false
+    },
+    "result": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "type": "object",
+      "properties": {
+        "entity": {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": "string"
+            },
+            "name": {
+              "type": "string"
+            },
+            "path": {
+              "type": "string"
+            }
+          },
+          "required": ["id", "name", "path"],
+          "additionalProperties": false
+        },
+        "pixels": {
+          "type": "array",
+          "items": {
+            "type": "number"
+          },
+          "minItems": 2,
+          "maxItems": 2
+        },
+        "updates": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 4294967295
+        },
+        "events": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "type": {
+                "type": "string"
+              },
+              "entity": {
+                "anyOf": [
+                  {
+                    "type": "object",
+                    "properties": {
+                      "id": {
+                        "type": "string"
+                      },
+                      "name": {
+                        "type": "string"
+                      },
+                      "path": {
+                        "type": "string"
+                      }
+                    },
+                    "required": ["id", "name", "path"],
+                    "additionalProperties": false
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "value": {
+                "type": "number"
+              }
+            },
+            "required": ["type", "value"],
+            "additionalProperties": false
+          }
+        },
+        "_editor": {
+          "type": "object",
+          "properties": {
+            "revision": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "transaction": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "dryRun": {
+              "type": "boolean"
+            },
+            "operations": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "warnings": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          },
+          "required": ["revision", "transaction", "dryRun", "operations", "warnings"],
+          "additionalProperties": false
+        }
+      },
+      "required": ["entity", "pixels", "updates", "events", "_editor"],
+      "additionalProperties": false
+    }
+  },
+  "gameui.create": {
+    "version": 1,
+    "permission": "edit",
+    "mode": "any",
+    "undoable": true,
+    "readOnly": false,
+    "params": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "type": "object",
+      "properties": {
+        "kind": {
+          "type": "string",
+          "enum": ["canvas", "panel", "text", "button", "toggle", "slider", "text_field", "scroll_view", "stack", "grid"]
+        },
+        "parent": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "name": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "text": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "dryRun": {
+          "type": "boolean"
+        },
+        "mergeKey": {
+          "type": "string"
+        },
+        "clientToken": {
+          "type": "string"
+        },
+        "expectRevision": {
+          "anyOf": [
+            {
+              "type": "string",
+              "pattern": "^[0-9]+$"
+            },
+            {
+              "type": "integer",
+              "minimum": 0
+            }
+          ]
+        },
+        "world": {
+          "type": "string",
+          "enum": ["edit", "play"]
+        }
+      },
+      "required": ["kind"],
+      "additionalProperties": false
+    },
+    "result": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "type": "object",
+      "properties": {
+        "entity": {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": "string"
+            },
+            "name": {
+              "type": "string"
+            },
+            "path": {
+              "type": "string"
+            }
+          },
+          "required": ["id", "name", "path"],
+          "additionalProperties": false
+        },
+        "parts": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "role": {
+                "type": "string"
+              },
+              "entity": {
+                "type": "object",
+                "properties": {
+                  "id": {
+                    "type": "string"
+                  },
+                  "name": {
+                    "type": "string"
+                  },
+                  "path": {
+                    "type": "string"
+                  }
+                },
+                "required": ["id", "name", "path"],
+                "additionalProperties": false
+              }
+            },
+            "required": ["role", "entity"],
+            "additionalProperties": false
+          }
+        },
+        "canvas": {
+          "anyOf": [
+            {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string"
+                },
+                "name": {
+                  "type": "string"
+                },
+                "path": {
+                  "type": "string"
+                }
+              },
+              "required": ["id", "name", "path"],
+              "additionalProperties": false
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "_editor": {
+          "type": "object",
+          "properties": {
+            "revision": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "transaction": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "dryRun": {
+              "type": "boolean"
+            },
+            "operations": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "warnings": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          },
+          "required": ["revision", "transaction", "dryRun", "operations", "warnings"],
+          "additionalProperties": false
+        }
+      },
+      "required": ["entity", "parts", "_editor"],
+      "additionalProperties": false
+    }
+  },
+  "gameui.focus": {
+    "version": 1,
+    "permission": "edit",
+    "mode": "play",
+    "undoable": false,
+    "readOnly": false,
+    "params": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "type": "object",
+      "properties": {
+        "entity": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "dryRun": {
+          "type": "boolean"
+        },
+        "mergeKey": {
+          "type": "string"
+        },
+        "clientToken": {
+          "type": "string"
+        },
+        "expectRevision": {
+          "anyOf": [
+            {
+              "type": "string",
+              "pattern": "^[0-9]+$"
+            },
+            {
+              "type": "integer",
+              "minimum": 0
+            }
+          ]
+        }
+      },
+      "additionalProperties": false
+    },
+    "result": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "type": "object",
+      "properties": {
+        "focused": {
+          "anyOf": [
+            {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string"
+                },
+                "name": {
+                  "type": "string"
+                },
+                "path": {
+                  "type": "string"
+                }
+              },
+              "required": ["id", "name", "path"],
+              "additionalProperties": false
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "_editor": {
+          "type": "object",
+          "properties": {
+            "revision": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "transaction": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "dryRun": {
+              "type": "boolean"
+            },
+            "operations": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "warnings": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          },
+          "required": ["revision", "transaction", "dryRun", "operations", "warnings"],
+          "additionalProperties": false
+        }
+      },
+      "additionalProperties": false,
+      "required": ["_editor"]
+    }
+  },
+  "gameui.layout": {
+    "version": 1,
+    "permission": "read",
+    "mode": "any",
+    "undoable": false,
+    "readOnly": true,
+    "params": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "type": "object",
+      "properties": {
+        "entity": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "width": {
+          "anyOf": [
+            {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 16384
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "height": {
+          "anyOf": [
+            {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 16384
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "world": {
+          "type": "string",
+          "enum": ["edit", "play"]
+        }
+      },
+      "additionalProperties": false
+    },
+    "result": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "type": "object",
+      "properties": {
+        "world": {
+          "type": "string"
+        },
+        "width": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 4294967295
+        },
+        "height": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 4294967295
+        },
+        "canvases": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "entity": {
+                "type": "object",
+                "properties": {
+                  "id": {
+                    "type": "string"
+                  },
+                  "name": {
+                    "type": "string"
+                  },
+                  "path": {
+                    "type": "string"
+                  }
+                },
+                "required": ["id", "name", "path"],
+                "additionalProperties": false
+              },
+              "order": {
+                "type": "integer",
+                "minimum": -2147483648,
+                "maximum": 2147483647
+              },
+              "modal": {
+                "type": "boolean"
+              },
+              "pixelsPerUnit": {
+                "type": "number"
+              },
+              "size": {
+                "type": "array",
+                "items": {
+                  "type": "number"
+                },
+                "minItems": 2,
+                "maxItems": 2
+              },
+              "areaMin": {
+                "type": "array",
+                "items": {
+                  "type": "number"
+                },
+                "minItems": 2,
+                "maxItems": 2
+              },
+              "areaMax": {
+                "type": "array",
+                "items": {
+                  "type": "number"
+                },
+                "minItems": 2,
+                "maxItems": 2
+              }
+            },
+            "required": ["entity", "order", "modal", "pixelsPerUnit", "size", "areaMin", "areaMax"],
+            "additionalProperties": false
+          }
+        },
+        "elements": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "entity": {
+                "type": "object",
+                "properties": {
+                  "id": {
+                    "type": "string"
+                  },
+                  "name": {
+                    "type": "string"
+                  },
+                  "path": {
+                    "type": "string"
+                  }
+                },
+                "required": ["id", "name", "path"],
+                "additionalProperties": false
+              },
+              "canvas": {
+                "type": "string"
+              },
+              "min": {
+                "type": "array",
+                "items": {
+                  "type": "number"
+                },
+                "minItems": 2,
+                "maxItems": 2
+              },
+              "max": {
+                "type": "array",
+                "items": {
+                  "type": "number"
+                },
+                "minItems": 2,
+                "maxItems": 2
+              },
+              "pixelMin": {
+                "type": "array",
+                "items": {
+                  "type": "number"
+                },
+                "minItems": 2,
+                "maxItems": 2
+              },
+              "pixelMax": {
+                "type": "array",
+                "items": {
+                  "type": "number"
+                },
+                "minItems": 2,
+                "maxItems": 2
+              },
+              "opacity": {
+                "type": "number"
+              },
+              "visible": {
+                "type": "boolean"
+              },
+              "interactable": {
+                "anyOf": [
+                  {
+                    "type": "boolean"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "focused": {
+                "anyOf": [
+                  {
+                    "type": "boolean"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              }
+            },
+            "required": ["entity", "canvas", "min", "max", "pixelMin", "pixelMax", "opacity", "visible"],
+            "additionalProperties": false
+          }
+        },
+        "_editor": {
+          "type": "object",
+          "properties": {
+            "revision": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "transaction": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "dryRun": {
+              "type": "boolean"
+            },
+            "operations": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "warnings": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          },
+          "required": ["revision", "transaction", "dryRun", "operations", "warnings"],
+          "additionalProperties": false
+        }
+      },
+      "required": ["world", "width", "height", "canvases", "elements", "_editor"],
+      "additionalProperties": false
+    }
+  },
   "gizmo.clear_ruler": {
     "version": 1,
     "permission": "read",

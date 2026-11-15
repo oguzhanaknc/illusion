@@ -8,8 +8,11 @@
 #include <illusion/editor/play/PlaySession.hpp>
 #include <illusion/input/InputActionsAsset.hpp>
 #include <illusion/physics/PhysicsWorld.hpp>
+#include <illusion/runtime/GameLocalization.hpp>
 #include <illusion/runtime/GameSession.hpp>
 #include <illusion/store/NullStoreService.hpp>
+#include <illusion/text/Localization.hpp>
+#include <illusion/ui/UiWorld.hpp>
 
 #include <algorithm>
 #include <array>
@@ -38,6 +41,12 @@ constexpr std::array<std::string_view, 4> kPhysicsTypes{"illusion.RigidBody", "i
                                                         "illusion.CharacterController", "illusion.Joint"};
 
 constexpr std::string_view kAudioSource = "illusion.AudioSource";
+
+// Paths of the game's locale files (loadGameLocalization()).
+constexpr std::string_view kLocalePrefix = "assets:/locales/";
+
+// The UI frame of a session until the Game view sets its own (a headless editor has none).
+constexpr UVec2 kDefaultUiFrame{1920, 1080};
 
 // Play mode has no store (ADR 0056); the editor has no user mount, so the cloud files go to the project's
 // cache.
@@ -89,6 +98,20 @@ struct PlaySession::Impl
     PlayStartOptions options;
     bool paused = false;
     f64 timeScale = 1.0;
+    // The project's string tables for the edit World's UI (projectLocalization()), read again when stale.
+    std::unique_ptr<GameStringTable> projectStrings;
+    std::unique_ptr<text::Localization> projectTexts;
+    bool projectTextsStale = true;
+    u32 assetSubscription = 0;
+    u32 sceneSubscription = 0;
+
+    // One update of a fixed physics step, with the background loads finished first (step() and clickUi()).
+    void stepOnce() const
+    {
+        pumpAssets(true);
+        store->update();
+        game->update(game->settings().physics.stepSeconds);
+    }
 
     // Publishes the background loads (audio clips, collision meshes) before the game advances; @p wait
     // finishes them first, so that steps and fixed-step sessions are the same on every run.
@@ -115,12 +138,24 @@ PlaySession::PlaySession(EditorContext& editor, const PlaySessionDesc& desc)
     m_impl = std::make_unique<Impl>(editor, desc);
     registerRuntimeSettings(editor.settings());
     m_impl->modules.attachWorld(editor.world(), WorldRole::Edit);
+    // Another project's scene, or changed locale files, make the project's string tables stale.
+    m_impl->assetSubscription =
+        editor.events().subscribe("asset.changed", [impl = m_impl.get()](const EditorEvent& event) {
+            if (event.payload.find(kLocalePrefix) != std::string::npos)
+            {
+                impl->projectTextsStale = true;
+            }
+        });
+    m_impl->sceneSubscription = editor.events().subscribe(
+        "scene.opened", [impl = m_impl.get()](const EditorEvent&) { impl->projectTextsStale = true; });
     editor.setPlay(this);
 }
 
 PlaySession::~PlaySession()
 {
     stop();
+    m_impl->editor.events().unsubscribe(m_impl->assetSubscription);
+    m_impl->editor.events().unsubscribe(m_impl->sceneSubscription);
     m_impl->editor.setPlay(nullptr);
     m_impl->modules.detachWorld(m_impl->editor.world());
 }
@@ -181,8 +216,11 @@ Expected<void, CommandError> PlaySession::start(const PlayStartOptions& options)
     impl.game = std::move(game).value();
     impl.options = options;
     impl.paused = false;
+    impl.game->setUiFrame({kDefaultUiFrame});
     impl.editor.attachPlayWorld(impl.game->world());
     impl.game->start();
+    // The gameui.* commands find the UI laid out before the first update (play.start then gameui.click).
+    impl.game->ui().update(impl.game->uiFrame());
     ILL_LOG_INFO("Play", "Play session started ({}, {} entities)", playModeName(options.mode),
                  loaded.entities.size());
     return {};
@@ -218,15 +256,65 @@ u32 PlaySession::step(u32 steps)
     {
         return 0;
     }
-    const f64 stepSeconds = impl.game->settings().physics.stepSeconds;
     u32 done = 0;
     while (done < steps && !impl.game->exitRequested())
     {
-        impl.pumpAssets(true);
-        impl.store->update();
-        impl.game->update(stepSeconds);
+        impl.stepOnce();
         ++done;
     }
+    impl.editor.playWorldAdvanced();
+    stopIfExitRequested();
+    return done;
+}
+
+UiWorld* PlaySession::gameUi() noexcept
+{
+    return m_impl->game ? &m_impl->game->ui() : nullptr;
+}
+
+const text::Localization* PlaySession::projectLocalization()
+{
+    Impl& impl = *m_impl;
+    if (impl.projectTextsStale)
+    {
+        // The old Localization goes before the table it views.
+        auto strings = std::make_unique<GameStringTable>();
+        auto texts = std::make_unique<text::Localization>();
+        loadGameLocalization(impl.editor.files(), *texts, *strings);
+        impl.projectTexts = std::move(texts);
+        impl.projectStrings = std::move(strings);
+        impl.projectTextsStale = false;
+    }
+    return impl.projectTexts.get();
+}
+
+UiFrame PlaySession::gameUiFrame() const
+{
+    return m_impl->game ? m_impl->game->uiFrame() : UiFrame{};
+}
+
+u32 PlaySession::clickUi(Vec2 pixels, std::vector<UiEvent>& events)
+{
+    ILL_PROFILE_SCOPE();
+    Impl& impl = *m_impl;
+    if (!impl.game)
+    {
+        return 0;
+    }
+    u32 done = 0;
+    for (const bool down : {true, false})
+    {
+        if (impl.game->exitRequested())
+        {
+            break;
+        }
+        impl.game->setUiPointer(GameUiPointer{.pixels = pixels, .down = down});
+        impl.stepOnce();
+        const std::span<const UiEvent> reported = impl.game->ui().events();
+        events.insert(events.end(), reported.begin(), reported.end());
+        ++done;
+    }
+    impl.game->setUiPointer(std::nullopt);
     impl.editor.playWorldAdvanced();
     stopIfExitRequested();
     return done;

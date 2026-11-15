@@ -74,6 +74,10 @@ inline constexpr CommandCase kCommandCases[] = {
     {"gamepad.set_motion", R"({"gamepad":7,"enabled":true})"},
     {"gamepad.set_trigger_effect",
      R"({"gamepad":7,"trigger":"right","mode":"weapon","start":0.3,"end":0.6,"strength":0.8})"},
+    {"gameui.click", R"({"entity":"/Canvas/Start"})"},
+    {"gameui.create", R"({"kind":"button","name":"Start","text":"Start"})"},
+    {"gameui.focus", R"({"entity":"/Canvas/Start"})"},
+    {"gameui.layout", R"({"entity":"/Canvas","width":1280,"height":720})"},
     {"gizmo.clear_ruler", R"({})"},
     {"gizmo.get", R"({})"},
     {"gizmo.measure", R"({"entities":["/Game/Board","/Game/Player"]})"},
@@ -218,6 +222,9 @@ inline constexpr CommandCase kCommandCases[] = {
 // Commands that need another one to run first on the fixture: "name" (with {} params) or "name {params}".
 inline constexpr CommandCase kCommandSetups[] = {
     {"camera.bookmark_go", "camera.bookmark_set"},
+    {"gameui.click", R"(gameui.create {"kind":"button","name":"Start"} ; play.start)"},
+    {"gameui.focus", R"(gameui.create {"kind":"button","name":"Start"} ; play.start)"},
+    {"gameui.layout", R"(gameui.create {"kind":"button","name":"Start"})"},
     {"input.inject", "play.start"},
     {"input.read", "play.start"},
     {"play.keep_changes", "play.start"},

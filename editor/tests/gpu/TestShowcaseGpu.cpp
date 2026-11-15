@@ -140,12 +140,14 @@ struct ShowcaseGpu
 
 } // namespace
 
-TEST_CASE("the showcase scene through its main Camera matches the golden image")
+TEST_CASE(
+    "the showcase scene through its main Camera, with the HUD outside Play mode, matches the golden image")
 {
     ShowcaseGpu gpu;
     test::ok(*gpu.editor, "viewport.set_aspect",
              R"({"viewport":"game","aspect":"fixed","width":480,"height":270})");
-    // The screenshot waits for the scene's assets; the second one sees the shadows and the sky settled.
+    // The screenshot waits for the scene's assets and the UI's fonts; the second one sees the shadows and the
+    // sky settled. The Game view draws the edit World's UI while no game runs.
     static_cast<void>(gpu.run("viewport.screenshot", R"({"viewport":"game"})"));
     const JsonDocument shot = gpu.run("viewport.screenshot", R"({"viewport":"game"})");
     CHECK(shot.root().find("width").asU64() == 480u);

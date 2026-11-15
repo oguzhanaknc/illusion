@@ -32,7 +32,9 @@
 #include <illusion/render/SceneRenderer.hpp>
 #include <illusion/render/UiRenderAssets.hpp>
 #include <illusion/render/UiRenderer.hpp>
+#include <illusion/runtime/GameLocalization.hpp>
 #include <illusion/runtime/GameSession.hpp>
+#include <illusion/text/Localization.hpp>
 #include <illusion/ui/UiWorld.hpp>
 
 #include <algorithm>
@@ -56,6 +58,8 @@ constexpr u32 kHoverRadius = 1;
 constexpr f32 kCycleDistance = 2.0f;
 constexpr std::string_view kSceneId = "scene";
 constexpr std::string_view kGameId = "game";
+// The game's locale files (loadGameLocalization()).
+constexpr std::string_view kLocalePrefix = "assets:/locales/";
 // Shadows of the secondary viewports.
 // Marks picks and readbacks of a closed viewport.
 constexpr usize kClosed = ~usize{0};
@@ -329,9 +333,29 @@ struct ViewportService::Impl
     {
         assetSubscription = editor.events().subscribe(
             "asset.changed", [this](const EditorEvent& event) { queueAssetChanges(event.payload); });
+        sceneSubscription = editor.events().subscribe(
+            "scene.opened", [this](const EditorEvent&) { editUiTextsStale = true; });
     }
 
-    ~Impl() { editor.events().unsubscribe(assetSubscription); }
+    ~Impl()
+    {
+        editor.events().unsubscribe(assetSubscription);
+        editor.events().unsubscribe(sceneSubscription);
+    }
+
+    // Reads the project's locale files into new string tables for the edit World's UI.
+    void reloadEditUiTexts()
+    {
+        auto strings = std::make_unique<GameStringTable>();
+        auto texts = std::make_unique<text::Localization>();
+        loadGameLocalization(editor.files(), *texts, *strings);
+        editUi->setLocalization(texts.get());
+        editUi->invalidateLayout();
+        // The old Localization goes before the table it views.
+        editUiTexts = std::move(texts);
+        editUiStrings = std::move(strings);
+        editUiTextsStale = false;
+    }
 
     Impl(const Impl&) = delete;
     Impl& operator=(const Impl&) = delete;
@@ -347,6 +371,13 @@ struct ViewportService::Impl
     // The game UI of the play session, drawn over the Game view.
     std::unique_ptr<illusion::UiRenderer> gameUi;
     std::unique_ptr<UiRenderAssets> gameUiAssets;
+    // The edit World's UI, drawn over the Game view while no game runs; it writes no saved Components.
+    std::unique_ptr<UiWorld> editUi;
+    // The project's string tables for editUi, read again after a locale file changed or a scene opened.
+    std::unique_ptr<GameStringTable> editUiStrings;
+    std::unique_ptr<text::Localization> editUiTexts;
+    bool editUiTextsStale = true;
+    u32 sceneSubscription = 0;
     std::unique_ptr<ThumbnailRenderer> thumbnails; // shares the asset cache
     // Images of the UI beyond its icons (thumbnail PNGs of the asset browser) by virtual path; a failed
     // path stays with uiTexture 0 until forgetImage().
@@ -508,6 +539,7 @@ struct ViewportService::Impl
                 if (const std::optional<std::string_view> text = path.asString())
                 {
                     changedAssets.emplace_back(*text);
+                    editUiTextsStale = editUiTextsStale || text->starts_with(kLocalePrefix);
                 }
             }
         }
@@ -525,6 +557,7 @@ struct ViewportService::Impl
                 if (const std::optional<std::string_view> text = rename.find(side).asString())
                 {
                     changedAssets.emplace_back(*text);
+                    editUiTextsStale = editUiTextsStale || text->starts_with(kLocalePrefix);
                 }
             }
         }
@@ -1239,11 +1272,28 @@ struct ViewportService::Impl
         (void)viewport.renderer->setWireframeOverlay(viewport.settings.wireframe);
         applyQuality(viewport, editor.preferences().viewportQuality);
 
+        // Outside Play mode the Game view shows the edit World's UI, laid out for its image. Fonts and images
+        // it asks for upload with command lists of their own, so this comes before ours opens.
+        if (viewport.kind == ViewportKind::Game && game() == nullptr)
+        {
+            if (editUiTextsStale)
+            {
+                reloadEditUiTexts();
+            }
+            editUi->update({viewport.colorSize});
+        }
         commands->open();
         viewport.renderer->render(commands, viewport.color, shown(), view, &jobs);
-        if (GameSession* session = viewport.kind == ViewportKind::Game ? game() : nullptr)
+        if (viewport.kind == ViewportKind::Game)
         {
-            (void)gameUi->render(commands, viewport.color, session->ui().drawData());
+            if (GameSession* session = game())
+            {
+                (void)gameUi->render(commands, viewport.color, session->ui().drawData());
+            }
+            else
+            {
+                (void)gameUi->render(commands, viewport.color, editUi->drawData());
+            }
         }
         const RenderViewTargets& targets = viewport.renderer->viewTargets();
         viewport.viewProjection = targets.unjitteredViewProjection;
@@ -1608,6 +1658,10 @@ std::unique_ptr<ViewportService> ViewportService::create(RenderDevice& device, E
     if (impl->gameUi)
     {
         impl->gameUiAssets = std::make_unique<UiRenderAssets>(impl->streamer, impl->resources, *impl->gameUi);
+        UiWorldDesc editUiDesc;
+        editUiDesc.preview = true;
+        impl->editUi = std::make_unique<UiWorld>(editor.world(), editUiDesc);
+        impl->editUi->setAssets(impl->gameUiAssets.get());
     }
     if (!impl->readbacks || !impl->commands || !impl->thumbnails || !impl->gameUi ||
         !impl->addViewport(std::string(kSceneId), ViewportKind::Scene, false) ||
@@ -1651,8 +1705,12 @@ void ViewportService::render(bool uiShown)
         if ((uiShown && viewport.drawn) || waiting)
         {
             const bool rendered = impl.renderViewport(viewport);
-            // Picks and readbacks wait until the image shows every asset (they render again next frame).
-            if (!loading)
+            // Picks and readbacks wait until the image shows every asset (they render again next frame); a
+            // Game view outside Play mode also waits for the edit World's UI, which it lays out every frame
+            // (a paused game's UI asks for its assets again only when the game updates).
+            const bool uiLoading = viewport.kind == ViewportKind::Game && impl.game() == nullptr &&
+                                   impl.gameUiAssets->statistics().loading != 0;
+            if (!loading && !uiLoading)
             {
                 if (rendered)
                 {

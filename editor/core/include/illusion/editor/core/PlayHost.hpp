@@ -22,6 +22,13 @@
 namespace illusion
 {
 class GameSession;
+class UiWorld;
+struct UiEvent;
+struct UiFrame;
+namespace text
+{
+class Localization;
+}
 } // namespace illusion
 
 namespace illusion::editor
@@ -212,6 +219,26 @@ public:
 
     /// The running game, or nullptr when stopped (the Game view draws its UI).
     [[nodiscard]] virtual GameSession* game() noexcept = 0;
+
+    /// The UI of the running game as its last update laid it out (the gameui.* commands), or nullptr when
+    /// stopped.
+    [[nodiscard]] virtual UiWorld* gameUi() noexcept = 0;
+
+    /// The target the running game lays its UI out for: the Game view's image, 1920x1080 until a view sets
+    /// one (a headless editor). Empty when stopped.
+    [[nodiscard]] virtual UiFrame gameUiFrame() const = 0;
+
+    /// Clicks the UI of the running game at @p pixels of gameUiFrame(), paused or not: one update in which
+    /// the UI's pointer is there with the primary button held, one in which it is released. The game's
+    /// keyboard and mouse are not changed (its input actions see no click), and from the next update on the
+    /// UI reads the real cursor again. Appends the UI's events of both updates to @p events and returns the
+    /// updates run: fewer when the game ended, 0 when stopped.
+    virtual u32 clickUi(Vec2 pixels, std::vector<UiEvent>& events) = 0;
+
+    /// The game's string tables of the open project (loadGameLocalization()), for gameui.layout on the edit
+    /// World: read on first use and again after a locale file changed or a scene was opened. Valid until
+    /// the next call.
+    [[nodiscard]] virtual const text::Localization* projectLocalization() = 0;
 };
 
 } // namespace illusion::editor

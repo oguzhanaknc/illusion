@@ -49,6 +49,9 @@ görünümleri kendi editör kameralarından. `viewport.pick`, `viewport.sample`
 Viewport komutları oyunun gösterdiğini okur ve bildirdikleri Entity'ler play World'ündür (oynarken
 `"world": "edit"` verilen bir Viewport komutu başarısız olur).
 
+Game görünümü, sahnenin oyun UI'sını Play modunun dışında da çizer; böylece bir UI'ı kurarken görürsünüz. Play
+modunda UI işaretçiyi ve klavyeyi alır ([Game UI](../ui.md) sayfasına bakın).
+
 Klavyeyi ve fareyi oyuna vermek için Game görünümüne tıklayın: imleç gizlenir ve sınırsız hareket eder, tuşlar
 ve düğmeler oyunun girdi eylemlerine ulaşır, editör kısayolları bekler. **Shift+F1** bunları geri alır (oyun
 basılı her tuşun bırakıldığını görür); Pause ve Stop da alır. Ajanlar, pencere girdiyi yakalamış olsun ya da

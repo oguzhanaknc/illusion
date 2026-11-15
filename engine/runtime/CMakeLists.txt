@@ -1,8 +1,9 @@
 # illusion::runtime — the game runtime around the engine libraries: GameSession (one running game, shared by
-# the editor's Play mode and the player; ADR 0042), the project settings and the host's SceneService
-# (SceneLoaderService).
+# the editor's Play mode and the player; ADR 0042), the game's string tables (loadGameLocalization), the
+# project settings and the host's SceneService (SceneLoaderService).
 
 add_library(illusion_runtime STATIC
+    src/GameLocalization.cpp
     src/GameSession.cpp
     src/ProjectSettings.cpp
     src/SceneLoaderService.cpp)

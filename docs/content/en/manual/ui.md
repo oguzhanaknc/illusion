@@ -211,16 +211,85 @@ an element to the front, move it after its siblings with `reorder()` from `<illu
 
 ## Building a HUD in the editor
 
-1. Create an Entity named `HUD` and add the `UI canvas` Component in the Inspector.
-2. Create child Entities in the Outliner (drag them onto `HUD`) and add `UI element` to each, then `UI image`,
-   `UI text`, `UI stack` or `UI grid` (these four need `UI element`).
-3. Set the fields: the placement anchors and offsets, the font and texture Assets (drag them from the Asset
-   Browser onto the fields), the colours and sizes.
-4. Press **Play**: the UI is drawn in the Game view. The Scene view does not draw UI yet, so check the result
-   in the Game view; the `viewport.screenshot` command with `"viewport": "game"` takes a picture of it.
+The **Entity > Game UI** menu (also in the command palette) creates a canvas or an element with sensible
+defaults as one undo step. Each kind creates an Entity with these Components, and the children it needs:
+
+| Kind | Entity and Components | Children |
+| --- | --- | --- |
+| Canvas | `UiCanvas` | none |
+| Panel | `UiElement` (400 x 300), `UiImage` (translucent dark) | none |
+| Text | `UiElement` (320 x 48), `UiText` (size 32) | none |
+| Button | `UiElement` (240 x 64), `UiImage`, `UiInteractable`, `UiButton` | `Label`: `UiElement` filling the button, `UiText` centred |
+| Toggle | `UiElement` (48 x 48), `UiImage`, `UiInteractable`, `UiToggle` | `Check`: `UiElement` inset by 10, `UiImage`; shown while the toggle is on |
+| Slider | `UiElement` (320 x 24), `UiImage`, `UiInteractable`, `UiSlider` | `Fill`: `UiElement` filling the slider, `UiImage`; `Handle`: `UiElement` (16 wide, 12 taller than the slider), `UiImage` |
+| Text Field | `UiElement` (320 x 48), `UiImage`, `UiInteractable`, `UiText`, `UiTextField` | none |
+| Scroll View | `UiElement` (400 x 300), `UiImage`, `UiScrollView` | `Content`: `UiElement`, `UiStack` (spacing 8, padding 8) |
+| Stack | `UiElement` (320 x 400), `UiStack` (spacing 8) | none |
+| Grid | `UiElement` (440 x 440), `UiGrid` | none |
+
+An element is placed 24 canvas units from the top left of its parent. Its parent is the selected canvas or UI
+element, else the first canvas of the scene; when the scene has no canvas, one named `Canvas` is created
+first. A text, a button's label and a text field's placeholder use the project's first font Asset.
+
+1. Choose **Entity > Game UI > Canvas**, or any element: it goes into a canvas that is created for you.
+2. Select a canvas or an element before you create the next one to put it inside.
+3. Set the fields in the Inspector: the placement anchors and offsets, the text, the font and texture Assets
+   (drag them from the Asset Browser onto the fields), the colours and sizes. The canvas has no placement
+   handles yet, so placement is edited in the Inspector for now.
+4. Look at the result in the **Game view**: it draws the scene's UI also while no game runs. The Scene view does
+   not draw UI. The `viewport.screenshot` command with `"viewport": "game"` takes a picture of it.
 
 The `samples/showcase` project contains a HUD with every UI Component and every field; the scene is built
 by `build.jsonl` (see [Showcase Project](editor/showcase.md)).
+
+## Building a UI with an agent {#building-a-ui-with-an-agent}
+
+An agent builds and checks a UI with four [Editor commands](../reference/editor-commands.md) of the category
+Game UI. The menu items above run `gameui.create`.
+
+**`gameui.create`** makes a canvas or an element with its children in one undo step. `kind` is `canvas`,
+`panel`, `text`, `button`, `toggle`, `slider`, `text_field`, `scroll_view`, `stack` or `grid`. `parent`
+defaults to the selected canvas or UI element, else the first canvas; `name` defaults to the kind's name; `text`
+is the text of a text, a button's label or a text field's placeholder. The result has the new `entity`, its
+`parts` (the children with their roles, such as `label`) and `canvas` when one had to be created.
+
+```json
+{"call": "gameui.create", "params": {"kind": "button", "parent": "/HUD", "name": "Start", "text": "Start"}}
+```
+
+**`gameui.layout`** returns where the UI places its elements, without changing the scene: per element its
+rectangle in canvas units (`min`, `max`) and in target pixels (`pixelMin`, `pixelMax`), `opacity`, `visible`,
+`interactable` and `focused`, and per canvas its `pixelsPerUnit` and `size`. The edit World is laid out for
+`width` x `height` pixels (default 1920 x 1080); while a game runs it reads the play World, unless `world` is
+`"edit"`. `entity` limits it to one canvas or element and its subtree.
+
+```json
+{"call": "gameui.layout", "params": {"entity": "/HUD", "width": 1280, "height": 720}}
+```
+
+**`gameui.click`** clicks an element of the running game at its centre, as the mouse would. It runs two updates
+of the game, paused or not (the pointer held there, then released), so buttons report `clicked`, toggles flip and
+sliders move, and it returns the UI `events` of those updates with the click's `pixels`. The game's own input
+actions do not see the click.
+
+```json
+{"call": "gameui.click", "params": {"entity": "/Menu/Start"}}
+```
+
+**`gameui.focus`** gives an element of the running game the focus of navigation (no event) and returns the
+focused element; `"entity": null` clears the focus. An element that cannot take the focus keeps the old one
+and the command warns.
+
+```json
+{"call": "gameui.focus", "params": {"entity": "/Menu/Start"}}
+```
+
+`gameui.click` and `gameui.focus` work only in Play mode: without a running game they fail with a wrong-mode
+error (start one with `play.start`). When the element cannot be clicked, `gameui.click` fails and says why: the
+element is hidden (opacity 0, or a toggle that is off), has no `UiInteractable`, is disabled, lies below a modal
+canvas or outside a clip, is covered at its centre by another element (the message names it), or is not laid
+out. A typical session creates the menu, checks it with `gameui.layout`, saves the scene, starts Play mode,
+clicks the button and reads the `clicked` event; `tests/acceptance/game-ui/menu.jsonl` is such a transcript.
 
 ## Building a HUD from a module
 
@@ -687,9 +756,11 @@ the `UiText` keeps its own text.
 
 ## What is not there yet
 
-This package draws UI, reacts to input and lets game modules script it. Later packages add the canvas editor
-in the Scene view, and transitions and animation. Text selection, glyph images (a button picture instead of a
-label) and recycled lists are not there either. The limits of the first version
+The UI is drawn, reacts to input, can be scripted by game modules and is built from the Entity menu or with
+`gameui.*` commands. Later packages add the canvas editor in the Scene view (placement handles, anchor presets
+and picking elements with the mouse), and transitions and animation. Until then placement is edited in the
+Inspector. Text selection, glyph images (a button picture instead of a label) and recycled lists are not there
+either. The limits of the first version
 ([ADR 0057](https://github.com/oguzhanaknc/illusion/blob/main/docs/adr/0057-game-ui.md)):
 
 - Text is drawn left to right without shaping: Arabic, Hebrew, Indic scripts and ligatures are

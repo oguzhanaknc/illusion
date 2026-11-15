@@ -40,7 +40,7 @@ void randomCommand(EditorContext& editor, std::mt19937& random)
     };
     std::string name;
     std::string params;
-    switch (random() % 19)
+    switch (random() % 20)
     {
     case 0:
     case 1:
@@ -197,6 +197,20 @@ void randomCommand(EditorContext& editor, std::mt19937& random)
             name = which == 1 ? "prefab.unpack" : which == 2 ? "prefab.revert" : "prefab.apply";
             params = R"({"entity":")" + entity + R"("})";
         }
+        break;
+    }
+    case 18:
+    {
+        constexpr std::string_view kinds[] = {"canvas", "panel",      "text",        "button", "toggle",
+                                              "slider", "text_field", "scroll_view", "stack",  "grid"};
+        name = "gameui.create";
+        const std::string_view kind = kinds[random() % 10];
+        params = R"({"kind":")" + std::string(kind) + "\"";
+        if (coin())
+        {
+            params += R"(,"parent":")" + pick() + "\"";
+        }
+        params += "}";
         break;
     }
     default:
