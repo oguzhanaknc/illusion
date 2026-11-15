@@ -627,13 +627,14 @@ struct RpcServer::Shared
             connection->authenticated.store(trusted);
             connection->client = sanitizeClient(client, connection->id);
             connection->origin = "rpc:" + connection->client;
+            // The threads are started before reap() can see the connection: it reads them under this mutex.
+            Connection* raw = connection.get();
+            raw->writer = std::thread([raw] { raw->writeLoop(); });
+            raw->reader = std::thread([this, connection] { readLoop(connection); });
             connections.push_back(connection);
             ++version;
         }
-        Connection* raw = connection.get();
-        raw->writer = std::thread([raw] { raw->writeLoop(); });
-        raw->reader = std::thread([this, connection] { readLoop(connection); });
-        return raw->id;
+        return connection->id;
     }
 
     void readLoop(const std::shared_ptr<Connection>& connection)
