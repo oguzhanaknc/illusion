@@ -30,6 +30,10 @@
 #include <illusion/render/RenderResources.hpp>
 #include <illusion/render/SceneComponents.hpp>
 #include <illusion/render/SceneRenderer.hpp>
+#include <illusion/render/UiRenderAssets.hpp>
+#include <illusion/render/UiRenderer.hpp>
+#include <illusion/runtime/GameSession.hpp>
+#include <illusion/ui/UiWorld.hpp>
 
 #include <algorithm>
 #include <cmath>
@@ -340,6 +344,9 @@ struct ViewportService::Impl
     RenderResources resources;
     RenderAssetCache cache;
     RenderAssetResolver resolver;
+    // The game UI of the play session, drawn over the Game view.
+    std::unique_ptr<illusion::UiRenderer> gameUi;
+    std::unique_ptr<UiRenderAssets> gameUiAssets;
     std::unique_ptr<ThumbnailRenderer> thumbnails; // shares the asset cache
     // Images of the UI beyond its icons (thumbnail PNGs of the asset browser) by virtual path; a failed
     // path stays with uiTexture 0 until forgetImage().
@@ -445,6 +452,13 @@ struct ViewportService::Impl
     {
         World* play = editor.playWorld();
         return play != nullptr ? *play : editor.world();
+    }
+
+    // The running play session, whose UI the Game view draws; null when stopped.
+    [[nodiscard]] GameSession* game() const noexcept
+    {
+        PlayHost* host = editor.play();
+        return host != nullptr ? host->game() : nullptr;
     }
 
     [[nodiscard]] EntityIndex& shownEntities()
@@ -1227,6 +1241,10 @@ struct ViewportService::Impl
 
         commands->open();
         viewport.renderer->render(commands, viewport.color, shown(), view, &jobs);
+        if (GameSession* session = viewport.kind == ViewportKind::Game ? game() : nullptr)
+        {
+            (void)gameUi->render(commands, viewport.color, session->ui().drawData());
+        }
         const RenderViewTargets& targets = viewport.renderer->viewTargets();
         viewport.viewProjection = targets.unjitteredViewProjection;
         if (viewport.settings.grid && viewport.kind == ViewportKind::Scene)
@@ -1584,7 +1602,14 @@ std::unique_ptr<ViewportService> ViewportService::create(RenderDevice& device, E
     impl->commands = device.device()->createCommandList();
     impl->thumbnails =
         ThumbnailRenderer::create(device, impl->resources, impl->cache, impl->streamer, impl->jobs);
-    if (!impl->readbacks || !impl->commands || !impl->thumbnails ||
+    UiRendererDesc gameUiDesc;
+    gameUiDesc.outputFormat = kColorFormat;
+    impl->gameUi = illusion::UiRenderer::create(device, impl->resources, gameUiDesc);
+    if (impl->gameUi)
+    {
+        impl->gameUiAssets = std::make_unique<UiRenderAssets>(impl->streamer, impl->resources, *impl->gameUi);
+    }
+    if (!impl->readbacks || !impl->commands || !impl->thumbnails || !impl->gameUi ||
         !impl->addViewport(std::string(kSceneId), ViewportKind::Scene, false) ||
         !impl->addViewport(std::string(kGameId), ViewportKind::Game, false))
     {
@@ -1600,6 +1625,15 @@ void ViewportService::render(bool uiShown)
     Impl& impl = *m_impl;
     impl.stats = {};
     impl.syncPlayWorld();
+    if (GameSession* game = impl.game())
+    {
+        // The next update lays the UI out for the Game view as it was last rendered.
+        game->ui().setAssets(impl.gameUiAssets.get());
+        if (const Impl::Viewport* view = impl.find(kGameId); view != nullptr && view->colorSize.x != 0)
+        {
+            game->setUiFrame({view->colorSize});
+        }
+    }
     World& world = impl.shown();
     impl.reloadChangedAssets();
     impl.streamer.update();

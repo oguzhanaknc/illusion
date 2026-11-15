@@ -17,6 +17,7 @@
 #include <illusion/physics/PhysicsComponents.hpp>
 #include <illusion/render/Components.hpp>
 #include <illusion/render/RenderDevice.hpp>
+#include <illusion/ui/UiWorld.hpp>
 
 #include <array>
 #include <filesystem>
@@ -77,6 +78,7 @@ struct ShowcaseGpu
         reflectPhysicsComponents();
         reflectAudioComponents();
         reflectParticleComponents();
+        registerUiComponents();
         const std::filesystem::path project = directory.path / "showcase";
         std::filesystem::copy(utf8Path(ILLUSION_SAMPLES_DIR) / "showcase", project,
                               std::filesystem::copy_options::recursive);

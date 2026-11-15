@@ -25,7 +25,9 @@
 {"call": "ui.show_panel", "params": {"panel": "panel.game"}}
 {"call": "play.start", "params": {"mode": "play", "fixedStep": true}}
 {"call": "play.pause", "params": {"paused": true}}
-{"call": "play.step", "params": {"steps": 90}}
+{"call": "play.step", "params": {"steps": 5}}
+{"call": "editor.wait", "params": {"frames": 120}}
+{"call": "play.step", "params": {"steps": 85}}
 {"call": "editor.wait", "params": {"frames": 30}}
 {"call": "editor.screenshot", "params": {"width": 1280, "height": 720}, "requires": "gpu", "image": {"golden": "../content/en/images/editor/play-mode.png", "channelTolerance": 8, "maxDifferent": 0.03, "notUniform": true}}
 {"call": "play.stop", "params": {}}

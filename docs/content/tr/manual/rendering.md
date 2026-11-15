@@ -881,8 +881,9 @@ ui->render(commands, target, list.data());
 - `pushClip()`, `setTransform()` ve `measureText()` kırpar, dönüştürür ve ölçer; `canvasMetrics()` canvas
   birimlerini hedefin piksellerine eşler.
 
-Bu, düşük seviyeli API'dir. Element'ler, layout, widget'lar ve `UiService` (kaydedilen UI) sonraki iş
-paketlerinde gelir ([ADR 0057](https://github.com/oguzhanaknc/illusion/blob/main/docs/adr/0057-game-ui.md)).
+Bu, düşük seviyeli API'dir. Oyunlar UI'larını `UiCanvas`, `UiElement`, `UiImage` ve `UiText` taşıyan
+Entity'lerden kurar; `UiWorld` bunları yerleştirir ve bunun gibi bir listeye kaydeder: bkz. [Oyun UI'ı](ui.md).
+Widget'lar ve `UiService` sonraki iş paketlerinde gelir ([ADR 0057](https://github.com/oguzhanaknc/illusion/blob/main/docs/adr/0057-game-ui.md)).
 
 ## Koordinat kuralları
 

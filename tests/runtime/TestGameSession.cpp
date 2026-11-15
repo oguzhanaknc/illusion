@@ -27,6 +27,11 @@
 #include <illusion/runtime/GameSession.hpp>
 #include <illusion/runtime/SceneService.hpp>
 #include <illusion/store/NullStoreService.hpp>
+#include <illusion/text/Localization.hpp>
+#include <illusion/text/MessageFormat.hpp>
+#include <illusion/text/TextOutput.hpp>
+#include <illusion/ui/UiComponents.hpp>
+#include <illusion/ui/UiWorld.hpp>
 
 #include <doctest/doctest.h>
 
@@ -483,4 +488,88 @@ TEST_CASE("a game session needs jobs and files")
     test::ScopedAssertCatcher asserts;
     GameSessionDesc desc;
     CHECK_THROWS_AS(static_cast<void>(GameSession::create(desc)), test::AssertionFailure);
+}
+
+TEST_CASE("a headless game session lays out its UI and records solid colours")
+{
+    Fixture f;
+    registerUiComponents();
+    auto session = f.create();
+    World& world = session->world();
+    UiCanvas canvas;
+    canvas.useSafeArea = false;
+    const Entity root = world.create(canvas);
+    UiElement fill;
+    fill.placement.anchorMax = {1.0f, 1.0f};
+    UiImage tint;
+    tint.tint = {1.0f, 0.0f, 0.0f, 1.0f};
+    const Entity panel = world.create(fill, tint);
+    REQUIRE(setParent(world, panel, root).hasValue());
+    UiText label;
+    label.text = "Hi";
+    label.font = AssetRef("assets:/fonts/game.ttf");
+    const Entity text = world.create(fill, label);
+    REQUIRE(setParent(world, text, panel).hasValue());
+
+    session->setUiFrame({{1280, 720}});
+    session->update(kStep);
+    const UiWorldStatistics& statistics = session->ui().statistics();
+    CHECK(statistics.canvases == 1);
+    CHECK(statistics.elements == 2);
+    CHECK(session->ui().drawData().vertices.size() == 4);
+    CHECK(static_cast<f64>(session->ui().drawData().canvas.pixelsPerUnit) ==
+          doctest::Approx(1280.0 / 1920.0));
+    CHECK(world.get<UiComputedRect>(text).rect.max == Vec2(1920.0f, 1080.0f));
+    session->update(kStep);
+    CHECK(session->ui().statistics().layoutReused);
+}
+
+TEST_CASE("a game session loads the project's locale files for UiText keys")
+{
+    Fixture f;
+    REQUIRE(f.files.writeText("assets:/locales/en.json", R"({"format": "illusion.locale", "version": 1,
+        "locale": "en", "displayName": "English", "plural": "en",
+        "strings": {"game.title": "Illusion", "game.score": "Score"}})") == FileError::None);
+    REQUIRE(f.files.writeText("assets:/locales/tr.json", R"({"format": "illusion.locale", "version": 1,
+        "locale": "tr", "displayName": "Turkce", "plural": "tr", "fallback": "en",
+        "strings": {"game.title": "Yanilsama", "game.extra": "Ekstra"}})") == FileError::None);
+    REQUIRE(f.files.writeText("assets:/locales/broken.json", "{") == FileError::None);
+    auto session = f.create();
+    text::Localization& localization = session->localization();
+    const auto formatted = [&](std::string_view key) {
+        const text::MessageFormat* message = localization.find(key);
+        REQUIRE(message != nullptr);
+        std::string out;
+        text::TextOutput output(out);
+        REQUIRE(message->format(std::span<const text::MessageArgument>(), localization.context(), output)
+                    .hasValue());
+        return out;
+    };
+    CHECK(formatted("game.title") == "Illusion");
+    CHECK(formatted("game.extra") == "Ekstra");
+    CHECK(localization.find("game.unknown") == nullptr);
+
+    World& world = session->world();
+    const Entity root = world.create(UiCanvas{});
+    UiText known;
+    known.key = "game.title";
+    UiText unknown;
+    unknown.key = "game.unknown";
+    REQUIRE(setParent(world, world.create(UiElement{}, known), root).hasValue());
+    REQUIRE(setParent(world, world.create(UiElement{}, unknown), root).hasValue());
+    session->update(kStep);
+    CHECK(session->ui().statistics().missingKeys == 1);
+
+    localization.setLocale(*text::LocaleId::parse("tr"));
+    session->update(kStep);
+    CHECK_FALSE(session->ui().statistics().layoutReused);
+    CHECK(formatted("game.title") == "Yanilsama");
+    CHECK(formatted("game.score") == "Score");
+}
+
+TEST_CASE("a game session without locale files has no game strings")
+{
+    Fixture f;
+    auto session = f.create();
+    CHECK(session->localization().find("game.title") == nullptr);
 }

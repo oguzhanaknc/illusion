@@ -4,13 +4,20 @@
 #include "FontTestSupport.hpp"
 #include "TestSupport.hpp"
 
+#include <illusion/assets/AssetStreamer.hpp>
 #include <illusion/assets/Image.hpp>
+#include <illusion/core/JobSystem.hpp>
+#include <illusion/ecs/Hierarchy.hpp>
+#include <illusion/ecs/World.hpp>
 #include <illusion/platform/FileSystem.hpp>
 #include <illusion/render/ReadbackRing.hpp>
 #include <illusion/render/RenderDevice.hpp>
 #include <illusion/render/RenderResources.hpp>
+#include <illusion/render/UiRenderAssets.hpp>
 #include <illusion/render/UiRenderer.hpp>
+#include <illusion/ui/UiComponents.hpp>
 #include <illusion/ui/UiDrawList.hpp>
+#include <illusion/ui/UiWorld.hpp>
 
 #include <doctest/doctest.h>
 
@@ -402,6 +409,129 @@ TEST_CASE("the UI pass skips unknown textures, reuses removed ids and rejects wh
             {
                 CHECK(std::abs(channel(srgb, size, 32, 32, c) - channel(encoded, size, 32, 32, c)) <= 1);
             }
+        }
+        device->waitIdle();
+    }
+    CHECK(device->validationErrorCount() == 0);
+}
+
+namespace
+{
+
+template <class... Ts>
+Entity uiChild(World& world, Entity parent, Ts&&... components)
+{
+    const Entity entity = world.create(std::forward<Ts>(components)...);
+    REQUIRE(setParent(world, entity, parent).hasValue());
+    return entity;
+}
+
+UiElement uiPlaced(Vec2 anchor, Vec2 offsetMin, Vec2 offsetMax)
+{
+    UiElement element;
+    element.placement = {anchor, anchor, offsetMin, offsetMax};
+    return element;
+}
+
+UiText uiText(const AssetRef& font, std::string_view literal, f32 size, Vec4 color = Vec4(1.0f))
+{
+    UiText text;
+    text.text = std::string(literal);
+    text.font = font;
+    text.size = size;
+    text.color = color;
+    return text;
+}
+
+// A HUD: a nine-slice panel stacking texts and a bar, and a label in the top right corner.
+void buildHud(World& world, const AssetRef& font, const AssetRef& panel)
+{
+    UiCanvas canvas;
+    canvas.useSafeArea = false;
+    const Entity root = world.create(canvas);
+    UiImage frame;
+    frame.image = panel;
+    frame.border = {4.0f, 4.0f, 4.0f, 4.0f};
+    frame.borderScale = 6.0f;
+    UiStack stack;
+    stack.spacing = 12.0f;
+    stack.padding = {36.0f, 32.0f, 36.0f, 32.0f};
+    stack.crossAlign = UiCrossAlign::Start;
+    const Entity box =
+        uiChild(world, root, uiPlaced({0.0f, 0.0f}, {40.0f, 40.0f}, {680.0f, 460.0f}), frame, stack);
+    (void)uiChild(world, box, UiElement{}, uiText(font, "Score 1200", 56.0f, Vec4(1.0f, 0.85f, 0.2f, 1.0f)));
+    (void)uiChild(world, box, UiElement{}, uiText(font, "Lives 3", 36.0f));
+    UiElement bar;
+    bar.size = {420.0f, 28.0f};
+    UiImage fill;
+    fill.tint = {0.2f, 0.8f, 0.3f, 1.0f};
+    (void)uiChild(world, box, bar, fill);
+    (void)uiChild(
+        world, box, UiElement{},
+        uiText(font, "A longer line of text wraps inside the panel.", 32.0f, Vec4(0.9f, 0.9f, 1.0f, 1.0f)));
+    UiText level = uiText(font, "Level 7", 48.0f);
+    level.align = UiTextAlign::End;
+    level.wrap = false;
+    (void)uiChild(world, root, uiPlaced({1.0f, 0.0f}, {-440.0f, 40.0f}, {-40.0f, 110.0f}), level);
+}
+
+} // namespace
+
+TEST_CASE("a HUD laid out by UiWorld draws through UiRenderAssets and the UI pass")
+{
+    auto device = RenderDevice::create(headless());
+    REQUIRE(device != nullptr);
+    {
+        const test::TempDirectory directory;
+        VirtualFileSystem files;
+        REQUIRE(files.mount("assets", directory.path, MountAccess::ReadWrite) == FileError::None);
+        REQUIRE(files.writeFile("assets:/fonts/test.ttf", test::readTestFontFile()) == FileError::None);
+        REQUIRE(files.writeFile("assets:/ui/panel.png", encodePng(panelImage())) == FileError::None);
+        JobSystem jobs(JobSystemDesc{2, 256});
+        AssetStreamer streamer(files, jobs, AssetStreamerDesc{.cacheMount = ""});
+        RenderResources resources(*device);
+        auto ring = ReadbackRing::create(*device);
+        REQUIRE(ring != nullptr);
+        auto renderer = UiRenderer::create(*device, resources, srgbDesc());
+        REQUIRE(renderer != nullptr);
+        UiRenderAssets assets(streamer, resources, *renderer);
+        {
+            World world;
+            const AssetRef font("assets:/fonts/test.ttf");
+            const AssetRef panel("assets:/ui/panel.png");
+            buildHud(world, font, panel);
+            HierarchyIndex index;
+            updateTransformHierarchy(world, index);
+            UiWorld ui(world);
+            ui.setAssets(&assets);
+            const UVec2 size = kSizes[0];
+            ui.update({size});
+            CHECK(assets.statistics().loading == 2);
+            streamer.waitIdle();
+            ui.update({size});
+            CHECK_FALSE(ui.statistics().layoutReused);
+            const UiRenderAssetsStatistics loaded = assets.statistics();
+            CHECK(loaded.fonts == 1);
+            CHECK(loaded.images == 1);
+            CHECK(loaded.failed == 0);
+            ui.update({size});
+            CHECK(ui.statistics().layoutReused);
+            CHECK(ui.statistics().droppedPrimitives == 0);
+            CHECK(ui.statistics().missingGlyphs == 0);
+
+            // Unknown and missing assets are counted once as failures and draw nothing.
+            CHECK(assets.font(AssetRef("assets:/fonts/missing.ttf")).font == nullptr);
+            CHECK(assets.image(AssetRef{}).texture.value == 0);
+            streamer.waitIdle();
+            CHECK(assets.font(AssetRef("assets:/fonts/missing.ttf")).font == nullptr);
+            CHECK(assets.statistics().failed == 1);
+
+            nvrhi::TextureHandle target = makeTarget(*device, size);
+            bool rendered = false;
+            const std::vector<std::byte> pixels =
+                draw(*device, *ring, *renderer, target, ui.drawData(), &rendered);
+            CHECK(rendered);
+            golden("ui-hud", size, pixels);
         }
         device->waitIdle();
     }

@@ -593,6 +593,8 @@ public:
         }
     }
 
+    GameSession* game() noexcept override { return nullptr; }
+
     editor::PlayDiagnostics mix{}; // the session's counters and mixer, while playing
 
     Expected<void, editor::CommandError> inject(const editor::PlayInputEvent& event) override
@@ -867,6 +869,8 @@ struct EditorFixture
         Expected<editor::Project, std::string> project = editor::Project::create(
             directory.path / "project", "Test", editorDataDirectory() / "templates" / "empty");
         REQUIRE_MESSAGE(project.hasValue(), (project ? std::string() : project.error()));
+        // The tests that list a fresh project's assets do not want the font that every template ships.
+        std::filesystem::remove_all(directory.path / "project" / "assets" / "fonts");
         // One project module, "game", for module.build (built by the stand-in for CMake).
         std::filesystem::create_directories(directory.path / "project" / "modules" / "game");
         std::ofstream(directory.path / "project" / "modules" / "CMakeLists.txt")

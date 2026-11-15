@@ -13,6 +13,7 @@
 #include <illusion/physics/PhysicsComponents.hpp>
 #include <illusion/platform/FileSystem.hpp>
 #include <illusion/render/Components.hpp>
+#include <illusion/ui/UiWorld.hpp>
 
 #include <doctest/doctest.h>
 
@@ -38,6 +39,7 @@ void reflectEngine()
     reflectAudioComponents();
     reflectParticleComponents();
     reflectAssetStructs();
+    registerUiComponents();
 }
 
 std::vector<const TypeReflection*> engineComponents()

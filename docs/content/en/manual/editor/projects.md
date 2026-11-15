@@ -66,6 +66,9 @@ New projects are copies of a template in `editor-data/templates/`:
 | `empty` | An empty startup scene |
 | `3d-starter` | A camera, a sun, a procedural sky, a ground plane and a cube |
 
+Both templates also contain `assets/fonts/Roboto-Regular.ttf` (Apache-2.0, with `LICENSE.txt` next to it), the
+font that a `UiText` needs, so the [Game UI](../ui.md) works in a new project.
+
 ```cpp
 auto project = illusion::editor::Project::create("C:/Games/Tetris", "Tetris",
                                                  illusion::executableDirectory() / "editor-data/templates/empty");

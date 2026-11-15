@@ -1,5 +1,6 @@
 #include <illusion/audio/AudioWorldService.hpp>
 #include <illusion/core/Assert.hpp>
+#include <illusion/core/Log.hpp>
 #include <illusion/core/Profiler.hpp>
 #include <illusion/ecs/EntityGuid.hpp>
 #include <illusion/ecs/Hierarchy.hpp>
@@ -14,13 +15,22 @@
 #include <illusion/physics/PhysicsAssetResolver.hpp>
 #include <illusion/physics/PhysicsWorld.hpp>
 #include <illusion/physics/PhysicsWorldService.hpp>
+#include <illusion/platform/FileSystem.hpp>
 #include <illusion/platform/Input.hpp>
 #include <illusion/render/RenderAssets.hpp>
 #include <illusion/runtime/GameSession.hpp>
 #include <illusion/runtime/SceneLoaderService.hpp>
 #include <illusion/store/StoreService.hpp>
+#include <illusion/text/LocaleFile.hpp>
+#include <illusion/text/Localization.hpp>
+#include <illusion/text/MessageFormat.hpp>
+#include <illusion/ui/UiWorld.hpp>
 
+#include <algorithm>
 #include <optional>
+#include <string>
+#include <string_view>
+#include <utility>
 #include <vector>
 
 namespace illusion
@@ -29,6 +39,100 @@ namespace
 {
 
 constexpr usize kReservedGamepads = 8;
+constexpr std::string_view kLocaleDirectory = "assets:/locales";
+
+// The game's string table, built from its locale files; the Localization views it.
+struct GameStrings
+{
+    std::vector<std::string> keys;
+    std::vector<std::string> english;
+    std::vector<std::string_view> keyViews;
+    std::vector<std::string_view> englishViews;
+    text::StringTableData table;
+};
+
+std::vector<text::LocaleFile> readLocaleFiles(const VirtualFileSystem& files)
+{
+    std::vector<text::LocaleFile> locales;
+    std::vector<DirectoryEntry> entries;
+    if (!files.exists(kLocaleDirectory) || files.list(kLocaleDirectory, entries) != FileError::None)
+    {
+        return locales;
+    }
+    for (const DirectoryEntry& entry : entries)
+    {
+        if (entry.isDirectory || !entry.name.ends_with(".json"))
+        {
+            continue;
+        }
+        const std::string path = std::string(kLocaleDirectory) + "/" + entry.name;
+        std::string json;
+        if (const FileError error = files.readText(path, json); error != FileError::None)
+        {
+            ILL_LOG_WARN("Game", "cannot read the locale file {} ({})", path, fileErrorName(error));
+            continue;
+        }
+        Expected<text::LocaleFile, text::LocaleError> parsed = text::LocaleFile::parse(json);
+        if (!parsed)
+        {
+            ILL_LOG_WARN("Game", "{}:{}:{}: {}", path, parsed.error().line, parsed.error().column,
+                         parsed.error().message);
+            continue;
+        }
+        locales.push_back(std::move(parsed).value());
+    }
+    // English first: its texts are the source of the game's table.
+    std::stable_partition(locales.begin(), locales.end(),
+                          [](const text::LocaleFile& file) { return file.locale.tag() == "en"; });
+    return locales;
+}
+
+// Registers the keys of @p locales as the game's table in @p localization, and their translations.
+void loadGameStrings(std::vector<text::LocaleFile> locales, GameStrings& strings,
+                     text::Localization& localization)
+{
+    if (locales.empty())
+    {
+        return;
+    }
+    std::vector<std::pair<std::string, std::string>> texts;
+    for (const text::LocaleFile& file : locales)
+    {
+        for (const text::LocaleEntry& entry : file.entries)
+        {
+            texts.emplace_back(entry.key, entry.text);
+        }
+    }
+    std::stable_sort(texts.begin(), texts.end(),
+                     [](const auto& a, const auto& b) { return a.first < b.first; });
+    texts.erase(std::unique(texts.begin(), texts.end(),
+                            [](const auto& a, const auto& b) { return a.first == b.first; }),
+                texts.end());
+    for (auto& [key, english] : texts)
+    {
+        if (Expected<text::MessageFormat, text::MessageError> compiled =
+                text::MessageFormat::compile(english);
+            !compiled)
+        {
+            ILL_LOG_WARN("Game", "the text of \"{}\" does not compile: {}", key, compiled.error().message);
+            continue;
+        }
+        strings.keys.push_back(std::move(key));
+        strings.english.push_back(std::move(english));
+    }
+    strings.keyViews.assign(strings.keys.begin(), strings.keys.end());
+    strings.englishViews.assign(strings.english.begin(), strings.english.end());
+    strings.table = text::StringTableData{"game", strings.keyViews, strings.englishViews};
+    localization.addTable(strings.table);
+    for (text::LocaleFile& file : locales)
+    {
+        if (file.locale.tag() != "en")
+        {
+            localization.addLocale(std::move(file));
+        }
+    }
+    localization.applyPendingLocale();
+}
 
 PhysicsWorldDesc physicsDesc(const PhysicsSettings& settings) noexcept
 {
@@ -69,6 +173,7 @@ struct GameSession::Impl
         , physics(world, *sessionDesc.jobs, physicsDesc(sessionDesc.settings.physics))
         , audio(world, *sessionDesc.files, audioDesc(sessionDesc))
         , particles(world)
+        , ui(world)
         , physicsService(physics)
         , audioService(audio)
         , particleService(particles)
@@ -76,6 +181,8 @@ struct GameSession::Impl
         , sceneService(world, *sessionDesc.files, &guids())
     {
         gamepads.reserve(kReservedGamepads);
+        ui.setAssets(sessionDesc.uiAssets);
+        ui.setLocalization(&localization);
     }
 
     [[nodiscard]] GuidGenerator& guids() noexcept
@@ -118,10 +225,14 @@ struct GameSession::Impl
 
     GameSessionDesc desc;
     std::optional<GuidGenerator> seededGuids; // fixedStep: ids of Entities created while running
+    GameStrings strings;                      // viewed by localization
+    text::Localization localization;
     World world;
     PhysicsWorld physics;
     AudioWorld audio;
     ParticleWorld particles;
+    UiWorld ui;
+    UiFrame uiFrame{};
     InputActions actions;
     InputState input;
     HierarchyIndex hierarchy;
@@ -154,6 +265,7 @@ Expected<std::unique_ptr<GameSession>, std::string> GameSession::create(const Ga
         }
     }
     impl->applySettings();
+    loadGameStrings(readLocaleFiles(*desc.files), impl->strings, impl->localization);
     if (desc.streamer != nullptr)
     {
         impl->physicsAssets = std::make_unique<PhysicsAssetResolver>(impl->physics, *desc.streamer);
@@ -244,6 +356,8 @@ void GameSession::update(f64 deltaSeconds)
     assignMissingGuids(impl.world, impl.guids());
     impl.physics.update(step);
     updateTransformHierarchy(impl.world, impl.hierarchy, impl.desc.jobs);
+    impl.localization.applyPendingLocale();
+    impl.ui.update(impl.uiFrame);
     // The wind blows before particles and the renderer read it.
     advanceWind(impl.world, static_cast<f32>(step));
     // Particles fall with the physics gravity, which game code may change.
@@ -296,6 +410,21 @@ ParticleWorld& GameSession::particles() noexcept
 AudioWorld& GameSession::audio() noexcept
 {
     return m_impl->audio;
+}
+
+void GameSession::setUiFrame(const UiFrame& frame) noexcept
+{
+    m_impl->uiFrame = frame;
+}
+
+UiWorld& GameSession::ui() noexcept
+{
+    return m_impl->ui;
+}
+
+text::Localization& GameSession::localization() noexcept
+{
+    return m_impl->localization;
 }
 
 GameSessionMode GameSession::mode() const noexcept

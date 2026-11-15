@@ -90,6 +90,8 @@ struct ShellFixture
             Expected<editor::Project, std::string> project = editor::Project::create(
                 directory.path / "project", "Test", editorDataDirectory() / "templates" / "empty");
             REQUIRE_MESSAGE(project.hasValue(), (project ? std::string() : project.error()));
+            // The tests that list a fresh project's assets do not want the font that every template ships.
+            std::filesystem::remove_all(directory.path / "project" / "assets" / "fonts");
             const Expected<void, editor::CommandError> opened =
                 editor->openProject(directory.path / "project");
             REQUIRE(opened.hasValue());

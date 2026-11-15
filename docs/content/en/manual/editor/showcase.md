@@ -14,8 +14,9 @@ a pendulum with a rope hanging from it, and a platform that rises and falls. Bod
 built-in mesh of its own get a child entity ("Door Mesh", "Pendulum Mesh", ...) sized like the collider, so the
 colliders keep their exact sizes and the joint anchors stay in unscaled body space.
 
-Its assets are made from numbers by `tools/make_assets.py` (a model with two meshes and five sounds: music,
-wind, a lamp hum, a greeting and a click), so the project carries no third-party licence. The scene is not written by hand: `build.jsonl` builds it through Editor
+Its assets are made from numbers by `tools/make_assets.py` (a model with two meshes, five sounds: music,
+wind, a lamp hum, a greeting and a click, and a nine-slice panel image), so the project carries no third-party licence except the font: `assets/fonts/Roboto-Regular.ttf` (Apache-2.0,
+licence in `assets/fonts/LICENSE.txt`). The scene is not written by hand: `build.jsonl` builds it through Editor
 commands, the same way an agent would, and saves it. It also gives the smoke sprite an import settings sidecar
 (`"quality": "high"`) through `asset.set_import_settings` and a non-default window (1600x900, not resizable;
 `settings/window.json`) through `project.settings_set`. To rebuild it:
@@ -32,7 +33,10 @@ A new Component or field therefore needs a value in `build.jsonl`. Three particl
 played (`playOnStart` off), and a field of 20,000 fireflies simulated on the GPU. A `Wind` entity blows the dust
 (`windFactor`) across the yard. The disabled `Dusk Sky` entity holds a `SkyAtmosphere` at sunset: enable it
 to replace the sky and the sun with a moving one, and the disabled `Film Look` holds `PostEffects` for a
-graded, vignetted image. The disabled `Morning Mist` holds a `VolumetricFog` of low, drifting mist.
+graded, vignetted image. The disabled `Morning Mist` holds a `VolumetricFog` of low, drifting mist. The `HUD` entity is a game UI
+with every UI Component: a status panel with a nine-slice image and a stack of texts (one literal, one
+localized by a key of `assets/locales/en.json` and `tr.json`), a grid of coloured cells and a rotated, scaled,
+clipped dial; see [Game UI](../ui.md). It shows in the Game view while playing.
 
 ## The showcase module
 

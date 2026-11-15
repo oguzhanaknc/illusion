@@ -67,6 +67,9 @@ Yeni projeler `editor-data/templates/` içindeki bir şablonun kopyasıdır:
 | `empty` | Boş bir başlangıç sahnesi |
 | `3d-starter` | Bir kamera, bir güneş, prosedürel bir gökyüzü, bir zemin düzlemi ve bir küp |
 
+Her iki şablon da `UiText`'in ihtiyaç duyduğu font olan `assets/fonts/Roboto-Regular.ttf` dosyasını
+(Apache-2.0, yanında `LICENSE.txt`) içerir; böylece [Oyun UI'ı](../ui.md) yeni bir projede çalışır.
+
 ```cpp
 auto project = illusion::editor::Project::create("C:/Games/Tetris", "Tetris",
                                                  illusion::executableDirectory() / "editor-data/templates/empty");

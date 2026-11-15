@@ -19,6 +19,11 @@
 #include <string_view>
 #include <vector>
 
+namespace illusion
+{
+class GameSession;
+} // namespace illusion
+
 namespace illusion::editor
 {
 
@@ -204,6 +209,9 @@ public:
     /// Sets the volume (linear gain, at least 0) of @p bus (< kPlayAudioBuses) and whether it is paused, for
     /// this session only. Does nothing when stopped.
     virtual void setBus(u32 bus, f32 volume, bool paused) = 0;
+
+    /// The running game, or nullptr when stopped (the Game view draws its UI).
+    [[nodiscard]] virtual GameSession* game() noexcept = 0;
 };
 
 } // namespace illusion::editor

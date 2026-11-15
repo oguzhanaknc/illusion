@@ -21,7 +21,9 @@
 /// while (running)
 /// {
 ///     copyWindowInput((*session)->keyboardMouse());
+///     (*session)->setUiFrame({viewSize});
 ///     (*session)->update(frameSeconds);
+///     // render the scene, then uiRenderer->render(commands, view, (*session)->ui().drawData())
 /// }
 /// @endcode
 
@@ -46,8 +48,16 @@ class ParticleWorld;
 class PhysicsWorld;
 class RenderAssetCache;
 class StoreService;
+class UiAssets;
+class UiWorld;
 class VirtualFileSystem;
 class World;
+struct UiFrame;
+
+namespace text
+{
+class Localization;
+}
 
 /// What a GameSession runs.
 enum class GameSessionMode : u8
@@ -75,6 +85,8 @@ struct GameSessionDesc
     GamepadSystem* gamepads = nullptr;
     /// The store the modules see as StoreService (ADR 0056); the host calls its update(). Null for none.
     StoreService* store = nullptr;
+    /// Fonts and images of the UI (UiRenderAssets); null (headless) lays the UI out with solid colours only.
+    UiAssets* uiAssets = nullptr;
     AudioOutput audioOutput = AudioOutput::Device; ///< Where the session's sound goes.
     /// Deterministic fixed steps: every update() advances exactly one physics step whatever the time
     /// passed, and Entities created while running get EntityGuids from a generator seeded with seed. The
@@ -83,15 +95,20 @@ struct GameSessionDesc
     u64 seed = 0; ///< Seed of the EntityGuids of Entities created while running (fixedStep).
 };
 
-/// One running game: a World with its PhysicsWorld, AudioWorld, InputActions, asset resolvers and game
-/// modules. Each update() runs, in this order:
+/// One running game: a World with its PhysicsWorld, AudioWorld, InputActions, UiWorld, asset resolvers and
+/// game modules. Each update() runs, in this order:
 /// 1. **Input:** the InputActions read keyboardMouse() and the gamepads (Play mode, with the focus).
 /// 2. **Modules:** ModuleHost::update() on the World (Play mode); then Entities created without an
 ///    EntityGuid get one.
 /// 3. **Physics:** PhysicsWorld::update().
 /// 4. **Hierarchy:** updateTransformHierarchy().
-/// 5. **Audio:** AudioWorld::update().
-/// 6. **Resolvers:** the physics and render asset resolvers turn asset references into runtime Components.
+/// 5. **UI:** the UiWorld lays out for the frame of setUiFrame() and records the draw list (ui()).
+/// 6. **Particles and audio:** ParticleWorld::update() and AudioWorld::update().
+/// 7. **Resolvers:** the physics and render asset resolvers turn asset references into runtime Components.
+///
+/// The session's Localization (localization()) holds the string tables of the project's locale files,
+/// `assets:/locales/*.json`, read by create(): the keys of every file, with the English text of `en.json`
+/// (or the first file that has the key); UiText::key is looked up there.
 ///
 /// Not thread-safe: create, update and destroy it on one thread.
 class GameSession : NonCopyable
@@ -148,6 +165,16 @@ public:
 
     /// The particle effects of the World, advanced after physics with its gravity.
     [[nodiscard]] ParticleWorld& particles() noexcept;
+
+    /// Sets the target the UI is laid out for from the next update() on (the host's view size and safe
+    /// insets). Starts empty.
+    void setUiFrame(const UiFrame& frame) noexcept;
+
+    /// The UI of the World; its drawData() is what the last update() recorded.
+    [[nodiscard]] UiWorld& ui() noexcept;
+
+    /// The game's string tables and active language.
+    [[nodiscard]] text::Localization& localization() noexcept;
 
     /// What the session runs.
     [[nodiscard]] GameSessionMode mode() const noexcept;
