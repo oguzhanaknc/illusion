@@ -1,7 +1,8 @@
 #pragma once
 
 /// @file
-/// The scene part of the scripting API: loading scene files into the World a module runs on.
+/// The scene part of the scripting API: loading scene files into the World a module runs on, and ending the
+/// game.
 ///
 /// @code
 /// if (illusion::SceneService* scenes = context.service<illusion::SceneService>())
@@ -23,17 +24,17 @@
 
 /// @defgroup scripting_api Scripting API
 /// What game modules call on their host (ADR 0041): the ModuleContext of every module callback, and the
-/// host service interfaces PhysicsService, AudioService, InputService and SceneService. Each service is an
-/// abstract class without data members that the host implements over an engine library; modules find them
-/// with `context.service<T>()`. The showcase module calls every function of the group
-/// (tools/check_api_coverage.py).
+/// host service interfaces PhysicsService, AudioService, InputService, ParticleService, SceneService,
+/// StoreService and UiService. Each service is an abstract class without data members that the host
+/// implements over an engine library; modules find them with `context.service<T>()`. The showcase module
+/// calls every function of the group (tools/check_api_coverage.py).
 
 namespace illusion
 {
 
-/// Scene files of one Simulation World, implemented by the host (SceneLoaderService over a World and a
-/// VirtualFileSystem) and found by modules with `context.service<SceneService>()`. The scene is read and
-/// its entities are created by host code. Adding a function changes the module API version.
+/// Scene files of one Simulation World and the end of the game, implemented by the host (SceneLoaderService
+/// over a World and a VirtualFileSystem) and found by modules with `context.service<SceneService>()`. The
+/// scene is read and its entities are created by host code. Adding a function changes the module API version.
 /// @ingroup scripting_api
 class SceneService : NonCopyable
 {
@@ -48,6 +49,8 @@ public:
     virtual std::optional<u32> instantiate(std::string_view virtualPath, std::span<Entity> created) = 0;
     /// Why the last instantiate() failed (empty after a success); valid until the next call.
     [[nodiscard]] virtual std::string_view lastError() const = 0;
+    /// Asks the host to end the game after this update: the player closes, the editor's Play mode stops.
+    virtual void requestExit() = 0;
 
 protected:
     SceneService() = default;

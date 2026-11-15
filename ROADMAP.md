@@ -852,6 +852,12 @@ distance field fonts, and a batched pass draws the UI after tonemapping. Public 
   arguments), values, visibility and focus, instantiate a UI prefab, poll events; a way for a module to end
   the game (open from M8-1). Done: counting proxy and the showcase module call the whole API;
   `check_api_coverage.py` passes; the Tetris acceptance game shows its score and a game-over menu.
+  ✅ Done: `UiService` (17 functions) with `UiWorldService`, keyed texts with arguments (`UiTextArguments`),
+  `setLanguage()`, `SceneService::requestExit()` (the player exits, Play mode stops), module API version 4,
+  the showcase module drives its HUD; `ui/set-text-key` 2.6 µs (budget 20 µs).
+  Open: the Tetris acceptance game still has no score display or game-over menu (its recorded transcripts
+  need a new agent session); UI prefabs are instantiated with `SceneService::instantiate()`, there is no
+  UI-specific function.
 - UI-3b: Editor. A 2D canvas view with placement handles and anchor presets, Inspector drawers for
   placement and text, Add menu entries, commands `gameui.create`, `gameui.layout`, `gameui.click` and
   `gameui.focus` with reference and goldens; viewport picking and framing of UI Entities. Done: UiDriver

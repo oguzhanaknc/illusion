@@ -1,6 +1,6 @@
 ---
 name: game-modules
-description: Write or change illusion game modules and the scripting API - ILL_MODULE entry points, load/start/update/stop/unload, illusion_add_module USES, host service interfaces (PhysicsService, AudioService, InputService, SceneService) and their adapters, hot reload rules and the module tests. Use whenever code under a module, engine/modules, a *Service.hpp interface or tests/modules changes.
+description: Write or change illusion game modules and the scripting API - ILL_MODULE entry points, load/start/update/stop/unload, illusion_add_module USES, host service interfaces (PhysicsService, AudioService, ParticleService, InputService, SceneService, StoreService, UiService) and their adapters, hot reload rules and the module tests. Use whenever code under a module, engine/modules, a *Service.hpp interface or tests/modules changes.
 ---
 
 # Game modules and the scripting API
@@ -37,21 +37,24 @@ Read first: `docs/adr/0027-module-system-and-hot-reload.md`, `docs/adr/0041-modu
    values. Never pass a standard container to be filled across the boundary; write into a caller span and
    return the total count.
 3. Add the function to the interface, its adapter (`PhysicsWorldService`, `AudioWorldService`,
-   `InputActionsService`, `SceneLoaderService`; out-of-line in the library's `src/`), the counting proxy in
+   `InputActionsService`, `SceneLoaderService`, `UiWorldService`; out-of-line in the library's `src/`), the counting proxy in
    `tests/modules/CountingServices.hpp` (one more counter in its `CountingProxy<..., N>`), the call in
    `callServices()` of `tests/modules/TestModule.cpp`, a forwarding check in `tests/modules/TestServices.cpp`,
    and a real use in the showcase module (`samples/showcase/modules/showcase/showcase.cpp`):
    `python tools/check_api_coverage.py` fails until every function of the `scripting_api` group is called
    there, and `tests/showcase/TestShowcaseModule.cpp` counts the calls at run time.
 4. Any change to an interface changes the module ABI: bump `kModuleApiVersion` in
-   `engine/core/include/illusion/core/Module.hpp` and say so in the commit.
+   `engine/core/include/illusion/core/Module.hpp` (4 since `UiService` and `SceneService::requestExit()`)
+   and say so in the commit.
 5. Update `reference/scripting-api.md` in English and Turkish.
 
 ## Hosting modules
 
 - Hosts run games through `GameSession` (`engine/runtime`, ADR 0042): it attaches its World as a Simulation
-  World with the four service adapters and updates modules in its fixed step order. Do not wire a second
-  game loop in a sample or the editor; create a session and feed it input.
+  World with its service adapters (physics, audio, particles, input, scenes, UI; the store when the host gives
+  one) and updates modules in its fixed step order. A module ends the game with `SceneService::requestExit()`;
+  the host reads `GameSession::exitRequested()` after the update. Do not wire a second game loop in a
+  sample or the editor; create a session and feed it input.
 - A new service is provided in `GameSession::start()` (`engine/runtime/src/GameSession.cpp`) as well as in
   the tests above.
 

@@ -48,9 +48,11 @@ while (running)
 
 `create()` builds an empty World and its systems from the project settings and loads the input actions
 named by `InputSettings::actions` and the locale files. Load the scene into `world()`, then `start()` attaches the World to the
-`ModuleHost` as a Simulation World with five services, which modules reach with `context.service<T>()`:
-`PhysicsService`, `AudioService`, `ParticleService`, `InputService` and `SceneService` (see the
-[scripting API](../reference/scripting-api.md)).
+`ModuleHost` as a Simulation World with six services, which modules reach with `context.service<T>()`:
+`PhysicsService`, `AudioService`, `ParticleService`, `InputService`, `SceneService` and `UiService` (see the
+[scripting API](../reference/scripting-api.md)); with `GameSessionDesc::store` it adds the seventh,
+`StoreService` ([Store services](#store-services)). A module that calls `SceneService::requestExit()` ends
+the game: `exitRequested()` of the session turns true, and the host stops after that update.
 
 The host keeps what it shares with other views: it updates the `AssetStreamer` and the `GamepadSystem`
 once per frame, and it renders the World.
@@ -153,7 +155,8 @@ and its static `modules`. It then
 2. writes the log to `user:/player.log`;
 3. loads the [project settings](#project-settings), opens the window of `WindowSettings` and a Vulkan device,
    adds the static modules and creates a `GameSession`;
-4. loads the startup scene and runs the game until the window closes.
+4. loads the startup scene and runs the game until the window closes or a module calls
+   `SceneService::requestExit()` (a Quit button of the game's own menu); the exit code is then `Ok`.
 
 The process exit code is a `PlayerExit` value: `Ok` (0), `StartFailed` (1: no window, no Vulkan device, or a
 module or the startup scene failed to load), `DataMissing` (2: an archive of the data directory is missing or
@@ -186,7 +189,7 @@ project's data next to the executable with `illusion_pack`. The showcase project
 ```cmake
 illusion_add_module(showcase_game_module STATIC ID showcase
     SOURCES showcase/modules/showcase/showcase.cpp
-    USES physics audio particles input render runtime store)
+    USES physics audio particles input render runtime store ui)
 illusion_add_game(showcase_game
     MODULES showcase_game_module
     NAME "Showcase"

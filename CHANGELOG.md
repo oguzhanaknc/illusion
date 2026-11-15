@@ -38,3 +38,13 @@ version changes are in the contributor guide ("Versions and releases"). The vers
 - Release pipeline (M8): the player (`illusion::player`), the player SDK, `export.build` with packages and
   signing hooks, the Export window, `StoreService` with an optional Steamworks backend, and the engine
   package (editor, tools and SDK in one archive per platform) with its release workflow.
+- Game UI (UI): fonts as an Asset kind with baked SDF glyphs, the saved UI Components (canvas, element,
+  image, text, stack, grid), anchored layout and canvas scaling, `UiRenderer`, string table keys for text,
+  interaction with the pointer, the keyboard and gamepads (buttons, toggles, sliders, focus, modal canvases),
+  `UiService` for game modules (find, text, visibility, values, focus, events, language) and
+  `SceneService::requestExit()`, with which a module ends the game in the player and in Play mode.
+
+### Changed
+
+- The module API version is 4 (`UiService` and `SceneService::requestExit()` are new interface functions):
+  game modules built for an earlier version must be rebuilt.

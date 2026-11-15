@@ -26,6 +26,7 @@
 #include <illusion/text/MessageFormat.hpp>
 #include <illusion/ui/UiWidgets.hpp>
 #include <illusion/ui/UiWorld.hpp>
+#include <illusion/ui/UiWorldService.hpp>
 
 #include <algorithm>
 #include <array>
@@ -211,6 +212,7 @@ struct GameSession::Impl
         , particleService(particles)
         , inputService(actions)
         , sceneService(world, *sessionDesc.files, &guids())
+        , uiService(world, ui, localization)
     {
         gamepads.reserve(kReservedGamepads);
         ui.setAssets(sessionDesc.uiAssets);
@@ -308,6 +310,7 @@ struct GameSession::Impl
     ParticleWorldService particleService;
     InputActionsService inputService;
     SceneLoaderService sceneService;
+    UiWorldService uiService;
     std::unique_ptr<PhysicsAssetResolver> physicsAssets;
     std::unique_ptr<RenderAssetResolver> renderAssets;
     std::vector<const GamepadState*> gamepads;
@@ -381,6 +384,7 @@ void GameSession::start()
         services.provide<ParticleService>(impl.particleService);
         services.provide<InputService>(impl.inputService);
         services.provide<SceneService>(impl.sceneService);
+        services.provide<UiService>(impl.uiService);
         if (impl.desc.store != nullptr)
         {
             services.provide<StoreService>(*impl.desc.store);
@@ -511,6 +515,11 @@ GameSessionMode GameSession::mode() const noexcept
 const ProjectSettings& GameSession::settings() const noexcept
 {
     return m_impl->desc.settings;
+}
+
+bool GameSession::exitRequested() const noexcept
+{
+    return m_impl->sceneService.exitRequested();
 }
 
 u64 GameSession::updateCount() const noexcept

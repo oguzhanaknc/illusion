@@ -6,6 +6,7 @@
   "plural": "en",
   "number": {"decimal": ".", "group": ","},
   "strings": {
-    "showcase.hud.title": "Showcase HUD"
+    "showcase.hud.title": "Showcase HUD",
+    "showcase.hud.frames": "{frames, plural, one {# frame} other {# frames}}"
   }
 }

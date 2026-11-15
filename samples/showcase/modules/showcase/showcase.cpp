@@ -1,7 +1,8 @@
 // The game module of the showcase project. It plays the everything scene through the whole scripting API:
-// every function of ModuleContext and of the six host services (PhysicsService, AudioService, InputService,
-// ParticleService, SceneService and StoreService) is called from here, which tools/check_api_coverage.py
-// checks and the engine tests count at run time (tests/showcase/TestShowcaseModule.cpp).
+// every function of ModuleContext and of the seven host services (PhysicsService, AudioService, InputService,
+// ParticleService, SceneService, StoreService and UiService) is called from here, which
+// tools/check_api_coverage.py checks and the engine tests count at run time
+// (tests/showcase/TestShowcaseModule.cpp).
 //
 // What it does, decided only by the frame number and the input so that fixed-step runs repeat exactly:
 // - start: a floor and a gem from mesh geometry, the Jump and Move actions, a chime made from numbers, the
@@ -14,6 +15,9 @@
 //   prefab, chimes where something lands hard and raises dust the first time, bursts sparks when the Player
 //   steps on the pad, stops and restarts the spark fountain, switches to moon gravity for a while, unlocks
 //   achievements, keeps stats and saves the number of runs as a cloud file of the store (or of no store);
+//   counts its first 120 frames on the HUD (a string table message with a plural), hides and shows the
+//   palette, focuses the Go button for a while, reads the toggle and the slider, counts clicks, and ends the
+//   game when `ui.cancel` (Escape, or East on a gamepad) is pressed;
 // - stop: unloads the clips.
 // Everything that hot reloads must keep lives in the Components showcase.Stats (saved) and showcase.Runtime.
 
@@ -35,6 +39,7 @@
 #include <illusion/render/SceneComponents.hpp>
 #include <illusion/runtime/SceneService.hpp>
 #include <illusion/store/StoreService.hpp>
+#include <illusion/ui/UiService.hpp>
 
 #include <algorithm>
 #include <array>
@@ -92,16 +97,30 @@ struct Runtime
     Entity platform{};
     Entity sparks{};
     Entity dust{};
-    u32 particlesAlive = 0;  ///< Live particles of every emitter at the last update.
-    u32 runs = 0;            ///< Sessions played, from the store's cloud save.
-    u32 walkerProgress = 0;  ///< Progress of the walker achievement at frame 100.
-    u32 cloudFiles = 0;      ///< Cloud files at frame 280.
-    u64 cloudFree = 0;       ///< Free cloud storage at frame 280, in bytes.
-    i32 frameStat = 0;       ///< The frames stat read back at frame 200.
-    f32 crateStat = 0.0f;    ///< The crate speed stat read back at frame 200.
-    bool overlay = false;    ///< The store's overlay covers the game.
-    bool started = false;    ///< The started achievement was unlocked at frame 100.
-    bool dustRaised = false; ///< The first hard landing played the dust.
+    Entity hud{};
+    Entity hudFrames{};
+    Entity hudScore{};
+    Entity hudPalette{};
+    Entity hudButton{};
+    Entity hudToggle{};
+    Entity hudSlider{};
+    u32 uiEvents = 0;           ///< UI events seen so far.
+    u32 uiClicks = 0;           ///< Clicks of the Go button.
+    f32 sliderValue = 0.0f;     ///< The HUD slider at the last update.
+    f32 buttonWidth = 0.0f;     ///< Width of the Go button at frame 100, in canvas units.
+    bool toggleOn = false;      ///< The HUD toggle at the last update.
+    bool paletteShown = true;   ///< The palette is visible.
+    bool buttonFocused = false; ///< The Go button had the focus at frame 200.
+    u32 particlesAlive = 0;     ///< Live particles of every emitter at the last update.
+    u32 runs = 0;               ///< Sessions played, from the store's cloud save.
+    u32 walkerProgress = 0;     ///< Progress of the walker achievement at frame 100.
+    u32 cloudFiles = 0;         ///< Cloud files at frame 280.
+    u64 cloudFree = 0;          ///< Free cloud storage at frame 280, in bytes.
+    i32 frameStat = 0;          ///< The frames stat read back at frame 200.
+    f32 crateStat = 0.0f;       ///< The crate speed stat read back at frame 200.
+    bool overlay = false;       ///< The store's overlay covers the game.
+    bool started = false;       ///< The started achievement was unlocked at frame 100.
+    bool dustRaised = false;    ///< The first hard landing played the dust.
     InputDevice device{};
     GamepadType gamepad{};
     u32 awakeFrames = 0;
@@ -144,7 +163,9 @@ constexpr std::string_view kSave = "showcase.save"; // cloud file with the numbe
 constexpr std::string_view kScratch = "showcase.tmp";
 constexpr std::string_view kStartedAchievement = "SHOWCASE_STARTED";
 constexpr std::string_view kWalkerAchievement = "SHOWCASE_WALKER";
-constexpr u32 kWalkerSteps = 4; // the walker achievement unlocks after 4 x 60 frames
+constexpr u32 kWalkerSteps = 4;     // the walker achievement unlocks after 4 x 60 frames
+constexpr u32 kCountedFrames = 120; // the HUD counts the frames up to this one
+constexpr std::string_view kFramesKey = "showcase.hud.frames";
 
 Quat identity() noexcept
 {
@@ -312,6 +333,27 @@ void startStore(StoreService& store, Runtime& runtime)
     }
 }
 
+// Finds the HUD's elements and sets their starting values (the ones the scene already has, so nothing jumps).
+void startUi(UiService& ui, Runtime& runtime)
+{
+    runtime.hud = ui.find({}, "HUD");
+    runtime.hudFrames = ui.find(runtime.hud, "Line");
+    runtime.hudScore = ui.find(runtime.hud, "Score");
+    runtime.hudPalette = ui.find(runtime.hud, "Palette");
+    runtime.hudButton = ui.find(runtime.hud, "Button");
+    runtime.hudToggle = ui.find(runtime.hud, "Toggle");
+    runtime.hudSlider = ui.find(runtime.hud, "Slider");
+    static_cast<void>(ui.setTextKey(ui.find(runtime.hud, "Title"), "showcase.hud.title"));
+    static_cast<void>(ui.setText(runtime.hudScore, "Score 0120"));
+    static_cast<void>(ui.setInteractable(ui.find(runtime.hud, "Locked"), false));
+    static_cast<void>(ui.setToggle(runtime.hudToggle, true));
+    static_cast<void>(ui.setSliderValue(runtime.hudSlider, 3.5f));
+    if (!ui.setLanguage("zz"))
+    {
+        ILL_LOG_INFO("Showcase", "no locale file for 'zz'; the HUD stays in '{}'", ui.language());
+    }
+}
+
 void startModule(ModuleContext& context)
 {
     if (!context.hasWorld() || context.worldRole() != WorldRole::Simulation)
@@ -353,6 +395,10 @@ void startModule(ModuleContext& context)
     if (StoreService* store = context.service<StoreService>())
     {
         startStore(*store, runtime);
+    }
+    if (UiService* ui = context.service<UiService>())
+    {
+        startUi(*ui, runtime);
     }
     world.create(Name{"Showcase"}, Stats{}, runtime);
 }
@@ -679,6 +725,50 @@ void updateStore(StoreService& store, Runtime& runtime, const Stats& stats, u32 
     }
 }
 
+// The HUD: the frame counter, the palette, the focus, the values and the events of the last UI update.
+void updateUi(UiService& ui, SceneService* scenes, Runtime& runtime, u32 frame)
+{
+    if (frame <= kCountedFrames)
+    {
+        const std::array<UiTextArgument, 1> frames{UiTextArgument::number("frames", static_cast<f64>(frame))};
+        static_cast<void>(ui.setTextKey(runtime.hudFrames, kFramesKey, frames));
+    }
+    if (frame == 100)
+    {
+        ui.invalidateLayout();
+        runtime.buttonWidth = ui.rect(runtime.hudButton).value_or(UiRect{}).size().x;
+    }
+    if (frame == 150 || frame == 160)
+    {
+        static_cast<void>(ui.setVisible(runtime.hudPalette, frame == 160));
+    }
+    if (frame == 200)
+    {
+        runtime.buttonFocused = ui.setFocus(runtime.hudButton) && ui.focused() == runtime.hudButton;
+    }
+    if (frame == 210)
+    {
+        static_cast<void>(ui.setFocus({}));
+    }
+    runtime.paletteShown = ui.isVisible(runtime.hudPalette);
+    runtime.toggleOn = ui.toggle(runtime.hudToggle).value_or(false);
+    runtime.sliderValue = ui.sliderValue(runtime.hudSlider).value_or(0.0f);
+    std::array<UiEvent, 16> events{};
+    const u32 count = std::min<u32>(ui.pollEvents(events), static_cast<u32>(events.size()));
+    runtime.uiEvents += count;
+    for (const UiEvent& event : std::span(events).first(count))
+    {
+        if (event.type == UiEventType::Clicked && event.entity == runtime.hudButton)
+        {
+            ++runtime.uiClicks;
+        }
+        if (event.type == UiEventType::Cancelled && scenes != nullptr)
+        {
+            scenes->requestExit();
+        }
+    }
+}
+
 // Spawns what the frame calls for. These are structural changes, so they come before any reference into
 // the World is taken.
 u32 spawn(World& world, PhysicsService* physics, SceneService* scenes, const Runtime& runtime, u32 frame)
@@ -712,6 +802,7 @@ void updateModule(ModuleContext& context, f64 deltaSeconds)
     SceneService* scenes = context.service<SceneService>();
     ParticleService* particles = context.service<ParticleService>();
     StoreService* store = context.service<StoreService>();
+    UiService* ui = context.service<UiService>();
     Entity self{};
     world.query<const Stats>().each([&self](Entity entity, const Stats&) { self = entity; });
     if (!world.isAlive(self))
@@ -747,6 +838,10 @@ void updateModule(ModuleContext& context, f64 deltaSeconds)
     if (store != nullptr)
     {
         updateStore(*store, runtime, stats, stats.frames);
+    }
+    if (ui != nullptr)
+    {
+        updateUi(*ui, scenes, runtime, stats.frames);
     }
     ++stats.frames;
 }

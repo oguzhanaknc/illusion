@@ -813,11 +813,13 @@ TEST_CASE("a shared module calls every function of the service interfaces throug
     test::CountingAudio audio;
     test::CountingInput input;
     test::CountingScenes scenes;
+    test::CountingUi ui;
     ServiceSet services;
     services.provide<PhysicsService>(physics);
     services.provide<AudioService>(audio);
     services.provide<InputService>(input);
     services.provide<SceneService>(scenes);
+    services.provide<UiService>(ui);
     f.host->attachWorld(f.secondWorld, WorldRole::Simulation, std::move(services));
     install(TEST_MODULE_V1, f.library);
     REQUIRE_FALSE(f.host->load(f.library));
@@ -829,6 +831,7 @@ TEST_CASE("a shared module calls every function of the service interfaces throug
     CHECK(audio.everyFunctionCalledOnce());
     CHECK(input.everyFunctionCalledOnce());
     CHECK(scenes.everyFunctionCalledOnce());
+    CHECK(ui.everyFunctionCalledOnce());
     CHECK(f.host->detachWorld(f.secondWorld));
 }
 

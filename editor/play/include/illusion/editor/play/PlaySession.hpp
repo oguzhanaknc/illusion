@@ -71,6 +71,8 @@ public:
 
     /// Advances a playing session by @p deltaSeconds times the time scale (one fixed step with fixedStep).
     /// Call it once per editor frame, before EditorContext::endFrame(). Does nothing when stopped or paused.
+    /// When a module asked to end the game (SceneService::requestExit()), stops the session afterwards as
+    /// `play.stop` does; step() does too, after the update that asked.
     void update(f64 deltaSeconds);
 
     /// The editor's modules.
@@ -97,6 +99,8 @@ public:
     [[nodiscard]] GameSession* game() noexcept override;
 
 private:
+    void stopIfExitRequested();
+
     struct Impl;
     std::unique_ptr<Impl> m_impl;
 };

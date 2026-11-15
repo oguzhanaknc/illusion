@@ -110,6 +110,9 @@ struct GameSessionDesc
 /// 6. **Particles and audio:** ParticleWorld::update() and AudioWorld::update().
 /// 7. **Resolvers:** the physics and render asset resolvers turn asset references into runtime Components.
 ///
+/// Modules find the services PhysicsService, AudioService, ParticleService, InputService, SceneService,
+/// UiService (over ui() and localization()) and, with GameSessionDesc::store, StoreService.
+///
 /// The session's Localization (localization()) holds the string tables of the project's locale files,
 /// `assets:/locales/*.json`, read by create(): the keys of every file, with the English text of `en.json`
 /// (or the first file that has the key); UiText::key is looked up there.
@@ -188,6 +191,10 @@ public:
 
     /// The settings it was created with.
     [[nodiscard]] const ProjectSettings& settings() const noexcept;
+
+    /// True once a module asked to end the game (SceneService::requestExit()); the host then ends it after
+    /// the update: the player closes, the editor's Play mode stops.
+    [[nodiscard]] bool exitRequested() const noexcept;
 
     /// Number of update() calls so far.
     [[nodiscard]] u64 updateCount() const noexcept;

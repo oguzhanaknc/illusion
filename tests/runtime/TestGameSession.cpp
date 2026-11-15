@@ -31,6 +31,7 @@
 #include <illusion/text/MessageFormat.hpp>
 #include <illusion/text/TextOutput.hpp>
 #include <illusion/ui/UiComponents.hpp>
+#include <illusion/ui/UiService.hpp>
 #include <illusion/ui/UiWidgets.hpp>
 #include <illusion/ui/UiWorld.hpp>
 
@@ -776,4 +777,112 @@ TEST_CASE("while a modal canvas is shown the game's other actions see no input")
     session->update(kStep);
     CHECK(session->actions().isDown(jump));
     CHECK(session->actions().wasPressed(jump));
+}
+
+namespace
+{
+
+// What the UI module saw: it finds Score and Start, shows the clicks on Score by key and asks to end the
+// game at update exitAt.
+struct UiModuleLog
+{
+    Entity score{};
+    Entity start{};
+    u32 clicks = 0;
+    i32 updates = 0;
+    i32 exitAt = -1;
+    bool textSet = false;
+};
+
+UiModuleLog g_uiLog;
+
+void updateUiModule(ModuleContext& context, f64)
+{
+    ++g_uiLog.updates;
+    if (UiService* ui = context.service<UiService>())
+    {
+        g_uiLog.score = ui->find({}, "Score");
+        g_uiLog.start = ui->find({}, "Start");
+        std::array<UiEvent, 8> events{};
+        const u32 count = std::min<u32>(ui->pollEvents(events), static_cast<u32>(events.size()));
+        for (const UiEvent& event : std::span(events).first(count))
+        {
+            g_uiLog.clicks += event.type == UiEventType::Clicked && event.entity == g_uiLog.start ? 1u : 0u;
+        }
+        const std::array points{UiTextArgument::number("points", 100.0 * g_uiLog.clicks)};
+        g_uiLog.textSet = ui->setTextKey(g_uiLog.score, "game.score", points);
+    }
+    if (g_uiLog.updates == g_uiLog.exitAt)
+    {
+        if (SceneService* scenes = context.service<SceneService>())
+        {
+            scenes->requestExit();
+        }
+    }
+}
+
+constexpr ModuleApi kUiModule =
+    makeModuleApi("session_ui", "1.0.0", {.load = &loadLogged, .update = &updateUiModule});
+
+} // namespace
+
+TEST_CASE("a module of a game session finds UI elements, reads a click and shows it in a keyed text")
+{
+    Fixture f;
+    REQUIRE(f.files.writeText("assets:/locales/en.json", R"({"format": "illusion.locale", "version": 1,
+        "locale": "en", "displayName": "English", "plural": "en",
+        "strings": {"game.score": "Score {points}"}})") == FileError::None);
+    g_uiLog = {};
+    ModuleHost modules(f.jobs);
+    REQUIRE_FALSE(modules.add(kUiModule));
+    f.desc.modules = &modules;
+    auto session = f.create();
+    SessionMenu menu(*session);
+    World& world = session->world();
+    world.emplace<Name>(menu.start, Name{"Start"});
+    UiText text;
+    text.key = "game.title";
+    const Entity score = world.create(UiElement{}, text, Name{"Score"});
+    REQUIRE(setParent(world, score, menu.canvas).hasValue());
+    session->start();
+
+    InputState& mouse = session->keyboardMouse();
+    mouse.setMousePosition({900.0f, 440.0f});
+    session->update(kStep);
+    CHECK(g_uiLog.score == score);
+    CHECK(g_uiLog.start == menu.start);
+    CHECK(g_uiLog.textSet);
+    CHECK(world.get<UiText>(score).key == "game.score");
+    mouse.setMouseButton(MouseButton::Left, true);
+    session->update(kStep);
+    mouse.setMouseButton(MouseButton::Left, false);
+    session->update(kStep); // the click happens in this UI update
+    CHECK(g_uiLog.clicks == 0);
+    session->update(kStep); // and the module sees it in the next update
+    CHECK(g_uiLog.clicks == 1);
+    REQUIRE(world.has<UiTextArguments>(score));
+    const UiTextArguments& arguments = world.get<UiTextArguments>(score);
+    REQUIRE(arguments.count == 1);
+    CHECK(arguments.arguments[0].value == 100.0);
+    CHECK(session->ui().statistics().missingKeys == 0);
+    CHECK_FALSE(session->exitRequested());
+}
+
+TEST_CASE("a game session reports that a module asked to end the game")
+{
+    Fixture f;
+    g_uiLog = {};
+    g_uiLog.exitAt = 3;
+    ModuleHost modules(f.jobs);
+    REQUIRE_FALSE(modules.add(kUiModule));
+    f.desc.modules = &modules;
+    auto session = f.create();
+    session->start();
+    session->update(kStep);
+    session->update(kStep);
+    CHECK_FALSE(session->exitRequested());
+    session->update(kStep);
+    CHECK(session->exitRequested());
+    session->update(kStep); // the host decides what happens; the request stays
+    CHECK(session->exitRequested());
 }

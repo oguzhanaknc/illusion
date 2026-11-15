@@ -275,6 +275,8 @@ void registerUiComponents()
                 .max = 1.0,
                 .hint = FieldHint::Slider});
     reflectRuntime<UiInteraction>("illusion.UiInteraction", {.displayName = "UI interaction"}, registry);
+    reflectRuntime<UiTextArguments>("illusion.UiTextArguments", {.displayName = "UI text arguments"},
+                                    registry);
 }
 
 } // namespace illusion

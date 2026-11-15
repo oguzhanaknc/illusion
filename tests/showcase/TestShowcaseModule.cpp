@@ -12,6 +12,8 @@
 #include <illusion/core/Module.hpp>
 #include <illusion/ecs/ComponentJson.hpp>
 #include <illusion/ecs/EntityGuid.hpp>
+#include <illusion/ecs/Hierarchy.hpp>
+#include <illusion/ecs/Name.hpp>
 #include <illusion/ecs/Reflection.hpp>
 #include <illusion/ecs/SceneSerializer.hpp>
 #include <illusion/ecs/World.hpp>
@@ -31,6 +33,10 @@
 #include <illusion/runtime/ProjectSettings.hpp>
 #include <illusion/runtime/SceneLoaderService.hpp>
 #include <illusion/store/NullStoreService.hpp>
+#include <illusion/text/Localization.hpp>
+#include <illusion/ui/UiComponents.hpp>
+#include <illusion/ui/UiWorld.hpp>
+#include <illusion/ui/UiWorldService.hpp>
 
 #include <doctest/doctest.h>
 
@@ -55,6 +61,7 @@ void reflectAll()
     reflectParticleComponents();
     reflectRenderComponents();
     reflectRuntimeStructs();
+    registerUiComponents();
 }
 
 // The showcase project's assets, mounted read-only.
@@ -74,6 +81,19 @@ void loadShowcaseScene(World& world, const VirtualFileSystem& files)
     INFO(scenes.lastError());
     REQUIRE(count.has_value());
     REQUIRE(*count > 30);
+}
+
+// The Entity named @p name in @p world, or null.
+Entity findNamed(World& world, std::string_view name)
+{
+    Entity found{};
+    world.query<const Name>().each([&](Entity entity, const Name& named) {
+        if (named.value == name)
+        {
+            found = entity;
+        }
+    });
+    return found;
 }
 
 // The u32 field @p field of the module's showcase.Stats in @p world, read through reflection.
@@ -150,6 +170,10 @@ SessionRun runSession(bool input)
     REQUIRE(created.hasValue());
     GameSession& session = **created;
     loadShowcaseScene(session.world(), files);
+    // The HUD is a modal canvas: while it shows, the game's own actions see no input.
+    const Entity hud = findNamed(session.world(), "HUD");
+    REQUIRE_FALSE(hud.isNull());
+    setEnabled(session.world(), hud, false);
     session.start();
     for (int frame = 0; frame < kFrames; ++frame)
     {
@@ -194,12 +218,16 @@ TEST_CASE("the showcase module calls every function of the scripting API on the 
     SceneLoaderService sceneService(world, files);
     REQUIRE(files.mount("user", directory.path, MountAccess::ReadWrite) == FileError::None);
     NullStoreService storeService(files);
+    UiWorld ui(world);
+    text::Localization localization;
+    UiWorldService uiService(world, ui, localization);
     test::CountingPhysics countingPhysics(&physicsService);
     test::CountingAudio countingAudio(&audioService);
     test::CountingInput countingInput(&inputService);
     test::CountingScenes countingScenes(&sceneService);
     test::CountingParticles countingParticles(&particleService);
     test::CountingStore countingStore(&storeService);
+    test::CountingUi countingUi(&uiService);
     ServiceSet services;
     services.provide<PhysicsService>(countingPhysics);
     services.provide<AudioService>(countingAudio);
@@ -207,6 +235,7 @@ TEST_CASE("the showcase module calls every function of the scripting API on the 
     services.provide<SceneService>(countingScenes);
     services.provide<ParticleService>(countingParticles);
     services.provide<StoreService>(countingStore);
+    services.provide<UiService>(countingUi);
 
     ModuleHostDesc hostDesc;
     hostDesc.shadowDirectory = directory.path / "shadow";
@@ -221,6 +250,10 @@ TEST_CASE("the showcase module calls every function of the scripting API on the 
         particles.update(static_cast<f32>(kStep), &jobs);
         audio.update(kStep);
         storeService.update();
+        // Escape near the end: the module asks to end the game, which this host ignores.
+        UiInput input;
+        input.cancelPressed = frame == kFrames - 2;
+        ui.update({{1280, 720}}, input);
     }
     CHECK(modules.detachWorld(world)); // runs stop(), which unloads the clips
 
@@ -241,12 +274,15 @@ TEST_CASE("the showcase module calls every function of the scripting API on the 
     INFO("uncalled scene functions: " << uncalled(countingScenes.calls));
     INFO("uncalled particle functions: " << uncalled(countingParticles.calls));
     INFO("uncalled store functions: " << uncalled(countingStore.calls));
+    INFO("uncalled UI functions: " << uncalled(countingUi.calls));
     CHECK(countingPhysics.everyFunctionCalled());
     CHECK(countingAudio.everyFunctionCalled());
     CHECK(countingInput.everyFunctionCalled());
     CHECK(countingScenes.everyFunctionCalled());
     CHECK(countingParticles.everyFunctionCalled());
     CHECK(countingStore.everyFunctionCalled());
+    CHECK(countingUi.everyFunctionCalled());
+    CHECK(sceneService.exitRequested());
 
     // The game ran on the real services: it counted its frames, met contacts and spawned a gem and a lantern.
     CHECK(statsField(world, "frames") == kFrames);

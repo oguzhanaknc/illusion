@@ -49,10 +49,12 @@ while (running)
 
 `create()` proje ayarlarından boş bir World ve System'lerini kurar ve `InputSettings::actions` ile
 belirtilen input action'larını ve locale dosyalarını yükler. Sahneyi `world()` içine yükleyin; ardından `start()` World'ü
-`ModuleHost`'a beş servisle birlikte bir Simulation World olarak ekler. Modüller bu servislere
-`context.service<T>()` ile ulaşır: `PhysicsService`, `AudioService`, `ParticleService`, `InputService` ve
-`SceneService`
-(bkz. [scripting API](../reference/scripting-api.md)).
+`ModuleHost`'a altı servisle birlikte bir Simulation World olarak ekler. Modüller bu servislere
+`context.service<T>()` ile ulaşır: `PhysicsService`, `AudioService`, `ParticleService`, `InputService`,
+`SceneService` ve `UiService`
+(bkz. [scripting API](../reference/scripting-api.md)); `GameSessionDesc::store` ile yedinci servis olan
+`StoreService` de eklenir ([Mağaza servisleri](#magaza-servisleri)). `SceneService::requestExit()` çağıran bir
+modül oyunu bitirir: session'ın `exitRequested()` değeri true olur ve host o update'ten sonra durur.
 
 Host, diğer görünümlerle paylaştıklarını kendisi tutar: `AssetStreamer`'ı ve `GamepadSystem`'i her karede
 bir kez günceller ve World'ü render eder.
@@ -157,7 +159,8 @@ Ayar dosyası formatı runtime'a bağlı değildir: `writeSettingsFile()` ve `re
 2. log'u `user:/player.log` dosyasına yazar;
 3. [proje ayarlarını](#proje-ayarlar) yükler, `WindowSettings`'in penceresini ve bir Vulkan cihazını açar,
    statik modülleri ekler ve bir `GameSession` oluşturur;
-4. başlangıç sahnesini yükler ve pencere kapanana kadar oyunu çalıştırır.
+4. başlangıç sahnesini yükler ve pencere kapanana ya da bir modül `SceneService::requestExit()` çağırana
+   (oyunun kendi menüsündeki bir Çıkış düğmesi) kadar oyunu çalıştırır; çıkış kodu bu durumda `Ok` olur.
 
 Process'in çıkış kodu bir `PlayerExit` değeridir: `Ok` (0), `StartFailed` (1: pencere ya da Vulkan cihazı
 yok, ya da bir modül veya başlangıç sahnesi yüklenemedi), `DataMissing` (2: veri dizinindeki bir arşiv eksik
@@ -190,7 +193,7 @@ derlenir:
 ```cmake
 illusion_add_module(showcase_game_module STATIC ID showcase
     SOURCES showcase/modules/showcase/showcase.cpp
-    USES physics audio particles input render runtime store)
+    USES physics audio particles input render runtime store ui)
 illusion_add_game(showcase_game
     MODULES showcase_game_module
     NAME "Showcase"

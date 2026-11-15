@@ -272,7 +272,8 @@ void showScore(illusion::World& world, int score)
 
 `UiWorld` recomputes the layout only when a UI Component, the hierarchy, the `Inactive` tags, the language
 or the target changed. Code that writes a UI Component through a reference calls `world.markChanged<T>()`
-afterwards, as it does for `Hierarchy`; creating an Entity or adding a Component announces itself.
+afterwards, as it does for `Hierarchy`; creating an Entity or adding a Component announces itself. To change
+the UI that the scene already has, a module uses `UiService` instead (see [Scripting the UI](#scripting-the-ui)).
 
 ## Buttons, toggles and sliders
 
@@ -430,10 +431,9 @@ for (const illusion::UiEvent& event : (*session)->ui().events())
 Events beyond `UiWorldDesc::maxEvents` in one update are dropped and counted in
 `UiWorldStatistics::droppedEvents`.
 
-Game modules do not get the events yet: a `UiService` for them comes in a later package. Until then a module
-reads the state from its World: `UiToggle::on` and `UiSlider::value` are written in place when they change,
-and the runtime Component `UiInteraction` says whether an element is hovered, pressed or focused. To react to
-a button in a module, read `UiInteraction::pressed` on its Entity.
+Game modules read the same list through `UiService::pollEvents()` (see [Scripting the UI](#scripting-the-ui)).
+They can also read the state from their World: `UiToggle::on` and `UiSlider::value` are written in place when
+they change, and the runtime Component `UiInteraction` says whether an element is hovered, pressed or focused.
 
 ```cpp
 const illusion::UiSlider& slider = world.get<illusion::UiSlider>(volumeSlider);
@@ -441,10 +441,170 @@ const bool musicOn = world.get<illusion::UiToggle>(musicToggle).on;
 const bool held = world.get<illusion::UiInteraction>(startButton).pressed;
 ```
 
+## Scripting the UI
+
+A game module changes and reads the UI through `UiService` (`illusion/ui/UiService.hpp`, `USES ui`; ADR 0057).
+The host implements it with `UiWorldService` over the session's `UiWorld`, and the module finds it like any
+other service, checking the pointer:
+
+```cpp
+illusion::UiService* ui = context.service<illusion::UiService>();
+```
+
+Every function takes the Entity of an element and returns false (or nothing) for an Entity that is dead or
+lacks the Component the function needs. Nothing calls into the module: it asks, and it polls events.
+
+| Function | Purpose |
+| --- | --- |
+| `find` | The first Entity with a given `Name` below a root (or on any canvas, in draw order) |
+| `setText`, `setTextKey` | The text of a `UiText`, literal or by string table key |
+| `setVisible`, `isVisible`, `setInteractable` | Show or hide an element and its descendants, ask whether it shows, enable or disable it |
+| `setToggle`, `toggle`, `setSliderValue`, `sliderValue` | The values of a `UiToggle` and a `UiSlider` |
+| `setFocus`, `focused` | The focused element |
+| `rect` | The rectangle of the last layout, in canvas units |
+| `invalidateLayout` | Tells the UI that Components were written directly |
+| `pollEvents` | The events of the last UI update |
+| `setLanguage`, `language` | The game's language |
+
+### Finding elements
+
+`find(root, name)` returns the first Entity whose `Name` Component is `name` among `root` and its
+descendants, in hierarchy order, hidden ones included. With a null `root` it searches every canvas, the one
+with the lowest `order` first. It returns a null Entity when nothing matches. Find the elements once, in
+`start()`, and keep the Entities in a Component, or find them again in each update: a name costs a walk of
+the hierarchy, an Entity costs nothing.
+
+### Setting text
+
+`setText(entity, "Score 120")` shows the literal text and clears the element's `key`. `setTextKey()` shows a
+message of the string table in the game's current language, formatted with named arguments, and keeps
+following the language when it changes. An argument is `UiTextArgument::number(name, value)`, to which the
+plural rules and number formats of the language apply, or `UiTextArgument::string(name, text)`. At most 8
+arguments are allowed, each text at most 255 bytes; `setTextKey()` returns false beyond that.
+
+```json
+"showcase.hud.frames": "{frames, plural, one {# frame} other {# frames}}"
+```
+
+```cpp
+const illusion::Entity counter = ui->find({}, "Counter");
+const illusion::UiTextArgument frames[] = {illusion::UiTextArgument::number("frames", 120.0)};
+ui->setTextKey(counter, "showcase.hud.frames", frames); // "120 frames"; 1 shows "1 frame"
+```
+
+The Turkish file `tr.json` has the same key with its own message, `{frames, plural, one {# kare} other {# kare}}`
+(see [Localization](localization.md) for the message syntax). The arguments are kept in the runtime Component
+`UiTextArguments` of the element.
+
+### Visibility, interaction and values
+
+`setVisible(entity, false)` hides an element and everything below it (it sets the `Inactive` tag, as
+`setEnabled()` of `Hierarchy.hpp` does); `isVisible()` is false when the element or an ancestor is hidden.
+`setInteractable()` writes `UiInteractable::enabled`. `setToggle()` and `setSliderValue()` set the value of a
+widget (a slider value is clamped and snapped like input) and report no event: the module that sets a value
+does not need to hear about it. `toggle()` and `sliderValue()` read the values back.
+
+### Focus and layout
+
+`setFocus(entity)` moves the focus, for example to the first button of a menu you just opened; it returns
+false when the element cannot be focused now, and `setFocus({})` clears the focus. `rect(entity)` is the
+rectangle the last layout gave the element, in canvas units.
+
+`UiService` makes its changes through the host, so they reach the layout without `world.markChanged()`. A
+module that writes UI Components directly through its `World` calls `world.markChanged<T>()` as described
+above, or `invalidateLayout()` once after a batch of writes.
+
+### Polling events
+
+`pollEvents(events)` copies the events of the UI's last update into a span you provide and returns how many
+there were. The UI runs after the modules in the session's step order, so these are the events of the previous
+frame. The returned total can be larger than the span: read at most `events.size()` of them, and size the
+span for the most you expect in one frame. The events are those of [Reading events](#reading-events), and
+`ui.cancel` arrives as `Cancelled`.
+
+### Language
+
+`setLanguage("tr")` switches the game to a locale for which the project has a file in `assets:/locales`; it
+returns false when there is none. Every `UiText` with a key follows. `language()` is the current BCP 47 tag,
+valid until the next `setLanguage()`.
+
+### Example: a pause menu
+
+The scene has a modal canvas named `PauseMenu`, hidden at the start, with two buttons, `Resume` and `Quit`.
+The module shows the menu when `ui.cancel` is pressed, hides it again with Resume, and ends the game with
+Quit by asking its host through `SceneService::requestExit()`: the player closes after that update, and the
+editor's Play mode stops.
+
+```cmake
+illusion_add_module(pause SOURCES game/Pause.cpp USES runtime ui)
+```
+
+```cpp
+#include <illusion/core/Module.hpp>
+#include <illusion/runtime/SceneService.hpp>
+#include <illusion/ui/UiService.hpp>
+
+#include <algorithm>
+#include <array>
+#include <span>
+
+namespace
+{
+
+bool loadModule(illusion::ModuleContext&)
+{
+    return true;
+}
+
+void updateModule(illusion::ModuleContext& context, illusion::f64)
+{
+    illusion::UiService* ui = context.service<illusion::UiService>();
+    illusion::SceneService* scenes = context.service<illusion::SceneService>();
+    if (ui == nullptr || scenes == nullptr)
+    {
+        return; // this World was attached without them
+    }
+    const illusion::Entity menu = ui->find({}, "PauseMenu");
+    const illusion::Entity resume = ui->find(menu, "Resume");
+    const illusion::Entity quit = ui->find(menu, "Quit");
+
+    std::array<illusion::UiEvent, 16> events{};
+    const illusion::u32 count =
+        std::min<illusion::u32>(ui->pollEvents(events), static_cast<illusion::u32>(events.size()));
+    for (const illusion::UiEvent& event : std::span(events).first(count))
+    {
+        if (event.type == illusion::UiEventType::Cancelled && !ui->isVisible(menu))
+        {
+            ui->setVisible(menu, true);
+            ui->setFocus(resume);
+        }
+        else if (event.type == illusion::UiEventType::Clicked && event.entity == resume)
+        {
+            ui->setVisible(menu, false);
+        }
+        else if (event.type == illusion::UiEventType::Clicked && event.entity == quit)
+        {
+            scenes->requestExit();
+        }
+    }
+}
+
+constexpr illusion::ModuleApi kPause =
+    illusion::makeModuleApi("pause", "1.0.0", {.load = &loadModule, .update = &updateModule});
+
+} // namespace
+
+ILL_MODULE(pause, kPause)
+```
+
+While the menu shows, its canvas is modal: the game's other actions read as released, so the module needs no
+check of its own for movement keys ([Modal canvases](#modal-canvases)).
+
 ## What is not there yet
 
-This package draws UI and reacts to input. Later packages add text fields, scrolling and button glyphs,
-`UiService` for game modules, the canvas editor in the Scene view, and transitions and animation. The limits of the first version
+This package draws UI, reacts to input and lets game modules script it. Later packages add text fields,
+scrolling and button glyphs, the canvas editor in the Scene view, and transitions and animation. The limits of
+the first version
 ([ADR 0057](https://github.com/oguzhanaknc/illusion/blob/main/docs/adr/0057-game-ui.md)):
 
 - Text is drawn left to right without shaping: Arabic, Hebrew, Indic scripts and ligatures are

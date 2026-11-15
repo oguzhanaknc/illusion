@@ -67,4 +67,9 @@ std::string_view SceneLoaderService::lastError() const
     return m_error;
 }
 
+void SceneLoaderService::requestExit()
+{
+    m_exitRequested = true;
+}
+
 } // namespace illusion

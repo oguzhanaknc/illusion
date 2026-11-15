@@ -2,7 +2,7 @@
 
 Game code is C++ in a [game module](../manual/modules.md). A shared module (the editor's hot-reloadable
 build) carries its own copy of `illusion::core` but no other engine library: it reaches physics, audio,
-particles, input, scenes and the store through six **host service interfaces**. Each is an abstract class without data members;
+particles, input, scenes, the store and the game UI through seven **host service interfaces**. Each is an abstract class without data members;
 the host implements it with an adapter over its engine object and hands it to the module, which finds it
 with `context.service<T>()`. The design is in ADR 0041; the Doxygen group "Scripting API" of the
 [API reference](api.md) documents every function.
@@ -15,6 +15,7 @@ with `context.service<T>()`. The design is in ADR 0041; the Doxygen group "Scrip
 | `InputService` | `input` | `illusion/input/InputService.hpp` | `InputActionsService` over `InputActions` |
 | `SceneService` | `runtime` | `illusion/runtime/SceneService.hpp` | `SceneLoaderService` (`illusion::runtime`) |
 | `StoreService` | `store` | `illusion/store/StoreService.hpp` | `NullStoreService` or `SteamStoreService` (ADR 0056) |
+| `UiService` | `ui` | `illusion/ui/UiService.hpp` | `UiWorldService` over `UiWorld` (`illusion::ui`; ADR 0057) |
 
 ```cmake
 illusion_add_module(tetris SOURCES game/Tetris.cpp USES physics audio input runtime)
@@ -56,11 +57,11 @@ void update(illusion::ModuleContext& context, illusion::f64)
   work there too.
 - **Cost.** A call is one indirect call; the `services/virtual-call` Benchmark keeps it under 10 ns.
 - **Compatibility.** The interfaces are part of the module ABI: adding or changing a function changes
-  `kModuleApiVersion`, and modules must be rebuilt.
+  `kModuleApiVersion` (4 since `UiService` and `SceneService::requestExit()`), and modules must be rebuilt.
 
 ## Coverage
 
-The Doxygen group "Scripting API" holds `ModuleContext` and the six interfaces. The
+The Doxygen group "Scripting API" holds `ModuleContext` and the seven interfaces. The
 [showcase module](../manual/editor/showcase.md#the-showcase-module) calls every public function of the group,
 and `python tools/check_api_coverage.py` fails in CI when one is not called there, or when a counting proxy
 of the module tests (`tests/modules/CountingServices.hpp`) has the wrong number of counters. A new function
@@ -125,6 +126,7 @@ same name and type, and nullopt if the name is taken by another type.
 | `exists` | True if a file exists at a virtual path |
 | `instantiate` | Loads a scene file into the World with new EntityGuids; returns the number of entities, or nullopt |
 | `lastError` | Why the last `instantiate` failed |
+| `requestExit` | Asks the host to end the game after this update: the player closes, the editor's Play mode stops |
 
 ## StoreService
 
@@ -141,3 +143,21 @@ The store the game runs in, or none; see [Store services](../manual/runtime.md#s
 | `listCloudFiles`, `cloudFileExists`, `cloudQuota` | Names into a caller span, existence, size and free space |
 | `overlayActive`, `openOverlay` | The overlay's state, polled each frame, and a request to open it |
 | `glyphPath` | Path of an image of a gamepad control in the store's style, or nothing |
+
+## UiService
+
+The game UI of the World; see [Scripting the UI](../manual/ui.md#scripting-the-ui). Functions that take an
+Entity return false (or nothing) for a dead Entity or one without the Component they need. Changes reach the
+layout without `World::markChanged()`.
+
+| Function | Purpose |
+| --- | --- |
+| `find` | The first Entity with a given `Name` below a root, or on any canvas in draw order |
+| `setText`, `setTextKey` | A literal text, or a string table message formatted with `UiTextArgument::number/string` |
+| `setVisible`, `isVisible`, `setInteractable` | Show or hide an element and its descendants, whether it shows, `UiInteractable::enabled` |
+| `setToggle`, `toggle`, `setSliderValue`, `sliderValue` | Widget values; setting one reports no event |
+| `setFocus`, `focused` | Move the focus (null clears it), the focused element |
+| `rect` | The rectangle of the last layout, in canvas units |
+| `invalidateLayout` | Tells the UI that Components of UI Entities were written directly |
+| `pollEvents` | Copies the events of the previous frame's UI update into a span; returns the total, which may be more than fit |
+| `setLanguage`, `language` | The game's language, a BCP 47 tag with a locale file in the project |

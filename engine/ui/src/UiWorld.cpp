@@ -4,6 +4,7 @@
 #include <illusion/ecs/Hierarchy.hpp>
 #include <illusion/ecs/World.hpp>
 #include <illusion/text/Localization.hpp>
+#include <illusion/text/MessageFormat.hpp>
 #include <illusion/text/TextOutput.hpp>
 #include <illusion/ui/UiComponents.hpp>
 #include <illusion/ui/UiWidgets.hpp>
@@ -14,6 +15,7 @@
 #include <cmath>
 #include <span>
 #include <string_view>
+#include <utility>
 #include <vector>
 
 namespace illusion
@@ -91,8 +93,11 @@ struct Content
     Vec2 size{0.0f};
 };
 
+// Integral numbers up to this magnitude are formatted as integers (exact in an f64).
+constexpr f64 kMaxExactInteger = 9007199254740992.0;
+
 // The Component versions a layout depends on.
-constexpr usize kVersionCount = 11;
+constexpr usize kVersionCount = 12;
 using Versions = std::array<u64, kVersionCount>;
 
 Versions versionsOf(const World& world) noexcept
@@ -102,7 +107,42 @@ Versions versionsOf(const World& world) noexcept
             world.componentVersion<UiStack>(),        world.componentVersion<UiGrid>(),
             world.componentVersion<Hierarchy>(),      world.componentVersion<Inactive>(),
             world.componentVersion<UiInteractable>(), world.componentVersion<UiToggle>(),
-            world.componentVersion<UiSlider>()};
+            world.componentVersion<UiSlider>(),       world.componentVersion<UiTextArguments>()};
+}
+
+template <usize... I>
+std::array<text::MessageArgument, sizeof...(I)> blankArguments(std::index_sequence<I...>) noexcept
+{
+    return {((void)I, text::MessageArgument(std::string_view(), i64{0}))...};
+}
+
+// The message arguments of @p stored; integral numbers become integers so that they print without decimals.
+std::array<text::MessageArgument, UiTextArguments::kMaxArguments>
+messageArguments(const UiTextArguments& stored) noexcept
+{
+    std::array<text::MessageArgument, UiTextArguments::kMaxArguments> arguments =
+        blankArguments(std::make_index_sequence<UiTextArguments::kMaxArguments>());
+    const u32 count = std::min(stored.count, UiTextArguments::kMaxArguments);
+    for (u32 i = 0; i < count; ++i)
+    {
+        const UiTextArgumentValue& value = stored.arguments[i];
+        const std::string_view name(value.name.data(), std::min<usize>(value.nameLength, value.name.size()));
+        if (!value.isNumber)
+        {
+            arguments[i] = text::MessageArgument(
+                name,
+                std::string_view(value.text.data(), std::min<usize>(value.textLength, value.text.size())));
+        }
+        else if (std::abs(value.value) <= kMaxExactInteger && std::trunc(value.value) == value.value)
+        {
+            arguments[i] = text::MessageArgument(name, static_cast<i64>(value.value));
+        }
+        else
+        {
+            arguments[i] = text::MessageArgument(name, value.value);
+        }
+    }
+    return arguments;
 }
 
 // @p point in the space of @p transform's input, or nothing when the transform collapses an axis.
@@ -128,22 +168,6 @@ f32 sliderFraction(const UiSlider& slider) noexcept
         return 0.0f;
     }
     return std::clamp((slider.value - slider.min) / range, 0.0f, 1.0f);
-}
-
-// @p value snapped to the step of @p slider from its min and kept between min and max.
-f32 sliderValue(const UiSlider& slider, f32 value) noexcept
-{
-    const f32 low = std::min(slider.min, slider.max);
-    const f32 high = std::max(slider.min, slider.max);
-    if (!std::isfinite(value))
-    {
-        return low;
-    }
-    if (slider.step > 0.0f && std::isfinite(slider.step))
-    {
-        value = slider.min + std::round((value - slider.min) / slider.step) * slider.step;
-    }
-    return std::clamp(value, low, high);
 }
 
 Vec4 stateTint(const UiInteractable& interactable, const UiInteraction& state) noexcept
@@ -263,6 +287,21 @@ UiRect fitted(const UiRect& rect, Vec2 imageSize) noexcept
 }
 
 } // namespace
+
+f32 snapSliderValue(const UiSlider& slider, f32 value) noexcept
+{
+    const f32 low = std::min(slider.min, slider.max);
+    const f32 high = std::max(slider.min, slider.max);
+    if (!std::isfinite(value))
+    {
+        return low;
+    }
+    if (slider.step > 0.0f && std::isfinite(slider.step))
+    {
+        value = slider.min + std::round((value - slider.min) / slider.step) * slider.step;
+    }
+    return std::clamp(value, low, high);
+}
 
 struct UiWorld::Impl
 {
@@ -412,7 +451,19 @@ struct UiWorld::Impl
             localization != nullptr ? localization->find(text->key) : nullptr;
         if (message != nullptr)
         {
-            (void)message->format(std::span<const text::MessageArgument>(), localization->context(), out);
+            const UiTextArguments* stored = world.tryGet<UiTextArguments>(node.entity);
+            if (stored != nullptr && stored->count > 0)
+            {
+                const std::array<text::MessageArgument, UiTextArguments::kMaxArguments> arguments =
+                    messageArguments(*stored);
+                (void)message->format(
+                    std::span(arguments).first(std::min(stored->count, UiTextArguments::kMaxArguments)),
+                    localization->context(), out);
+            }
+            else
+            {
+                (void)message->format(std::span<const text::MessageArgument>(), localization->context(), out);
+            }
         }
         else
         {
@@ -978,7 +1029,7 @@ struct UiWorld::Impl
         {
             return;
         }
-        const f32 next = sliderValue(*slider, value);
+        const f32 next = snapSliderValue(*slider, value);
         if (next == slider->value)
         {
             return;
@@ -1370,6 +1421,11 @@ void UiWorld::setAssets(UiAssets* assets) noexcept
 void UiWorld::setLocalization(const text::Localization* localization) noexcept
 {
     m_impl->localization = localization;
+}
+
+void UiWorld::invalidateLayout() noexcept
+{
+    m_impl->laidOut = false;
 }
 
 void UiWorld::update(const UiFrame& frame)

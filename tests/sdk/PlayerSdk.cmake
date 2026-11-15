@@ -8,6 +8,9 @@
 #   -DMODE=contents -DPREFIX=<installed SDK> -DSOURCE_DIR=<engine source> -DBUILD_DIR=<engine build> -DSTAGING=<path>
 #       fails if the installed SDK holds editor libraries or Dear ImGui headers, or if its package files name
 #       the engine's source or build tree or the directory it was installed to.
+#   -DMODE=run      -DGAME=<executable> -DUSER=<directory>
+#       runs the game for at most 100 frames; fails unless it exits with 0 after the 3 frames its module asks
+#       for (SceneService::requestExit()).
 
 cmake_minimum_required(VERSION 3.28)
 
@@ -135,6 +138,13 @@ elseif(MODE STREQUAL "contents")
     endforeach()
     if(problems)
         message(FATAL_ERROR "the installed SDK ${PREFIX} is not clean:${problems}")
+    endif()
+elseif(MODE STREQUAL "run")
+    require(GAME USER)
+    run("the game" "${GAME}" --frames 100 --no-dialogs --user-data "${USER}")
+    if(NOT run_output MATCHES "ended after 3 frames")
+        message(FATAL_ERROR "the game did not end when its module asked:
+${run_output}")
     endif()
 else()
     message(FATAL_ERROR "PlayerSdk.cmake: unknown MODE '${MODE}'")

@@ -421,7 +421,8 @@ int runGame(const PlayerDesc& desc, const PlayerOptions& options, VirtualFileSys
                                  ? 1.0 / static_cast<f64>(settings.render.maxFramesPerSecond)
                                  : 0.0;
     u64 frames = 0;
-    while (!window->shouldClose() && (options.frames == 0 || frames < options.frames))
+    while (!window->shouldClose() && !session.exitRequested() &&
+           (options.frames == 0 || frames < options.frames))
     {
         platform->pollEvents();
         events.dispatchQueued();

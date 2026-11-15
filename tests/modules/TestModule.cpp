@@ -6,7 +6,7 @@
 // 5: changes the layout of LayoutComponent (TEST_MODULE_LAYOUT_V2), which a hot reload migrates.
 // 6: widens the unreflected OpaqueComponent (TEST_MODULE_WIDE_OPAQUE), which a hot reload must reject.
 // Variants 1 to 4 and 6 start a session with two LayoutComponents and an OpaqueComponent.
-// Every variant is built with USES physics audio input render runtime: the API targets give it the headers
+// Every variant is built with USES physics audio input render runtime ui: the API targets give it the headers
 // of those libraries and their service interfaces without their code. update() can call every service
 // function (ModuleControl::callServices) and start() can build a mesh body (ModuleControl::createMesh).
 
@@ -28,6 +28,7 @@
 #include <illusion/physics/PhysicsService.hpp>
 #include <illusion/render/SceneComponents.hpp>
 #include <illusion/runtime/SceneService.hpp>
+#include <illusion/ui/UiService.hpp>
 
 #include <array>
 #include <type_traits>
@@ -142,6 +143,30 @@ void callServices(ModuleContext& context)
         static_cast<void>(scenes->exists("game:/level.scene"));
         static_cast<void>(scenes->instantiate("game:/level.scene", entities));
         static_cast<void>(scenes->lastError());
+        scenes->requestExit();
+    }
+    if (UiService* ui = context.service<UiService>())
+    {
+        const Entity label = ui->find(e, "Label");
+        static_cast<void>(ui->setText(label, "Hello"));
+        const std::array<UiTextArgument, 2> arguments{UiTextArgument::number("count", 3.0),
+                                                      UiTextArgument::string("name", "Ada")};
+        static_cast<void>(ui->setTextKey(label, "game.greeting", arguments));
+        static_cast<void>(ui->setVisible(label, true));
+        static_cast<void>(ui->isVisible(label));
+        static_cast<void>(ui->setInteractable(label, false));
+        static_cast<void>(ui->setToggle(label, true));
+        static_cast<void>(ui->toggle(label));
+        static_cast<void>(ui->setSliderValue(label, 0.5f));
+        static_cast<void>(ui->sliderValue(label));
+        static_cast<void>(ui->setFocus(label));
+        static_cast<void>(ui->focused());
+        static_cast<void>(ui->rect(label));
+        ui->invalidateLayout();
+        std::array<UiEvent, 4> events{};
+        static_cast<void>(ui->pollEvents(events));
+        static_cast<void>(ui->setLanguage("tr"));
+        static_cast<void>(ui->language());
     }
 }
 
