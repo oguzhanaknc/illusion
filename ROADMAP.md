@@ -911,6 +911,37 @@ distance fields, world-space UI, HDR output of the UI pass (M9).
 - `SaveService` for game modules; Steam Cloud through the Steamworks module when present (M8); the UI's
   pause menu gets Save and Load; tests for corruption, versions and interrupted writes
 
+Design: [ADR 0058](docs/adr/0058-saved-games.md). Work packages, one pull request each, in order:
+
+- SAVE-1 (`implementer`): The file and the delta, without threads. `SceneSaveOptions::externalReferences`,
+  `SceneLoadOptions::replace` and `resolveExternal` in `SceneSerializer`; `VirtualFileSystem::writeFileAtomic()`
+  (platform code behind one function); the library `engine/save` (`illusion::save`) with the `Saved` tag
+  (`SaveComponents.hpp`, `registerSaveComponents()`, a value in `samples/showcase/build.jsonl`), the
+  container (`encodeSaveFile()`, `decodeSaveFile()`, metadata) and `captureSave()` / `applySave()`.
+  Done: round trips of tagged subtrees with unsaved parents, spawned and destroyed entities and prefab
+  instances; a failed apply changes nothing; every flipped byte and every truncation of a file is `Corrupt`;
+  a newer container is `NewerVersion`; a type migration runs on apply; benchmarks `save/capture-1000` and
+  `save/apply-1000`.
+- SAVE-2 (`implementer`): The service. `SaveSystem` (save thread, queue, slot list, `.bak` fallback,
+  `waitIdle()`), `SaveService` with its adapter and `USES save` (module API version 6), the apply point in
+  `GameSession::update()`, `GameSessionDesc::saves`; the player uses `user:/saves`, Play mode `cache:/saves`;
+  the showcase module calls the whole API. Done: tests stop a write after each step (temporary file, flush,
+  backup, rename) through a failing file layer and find the previous save; requests keep their order; no
+  test sleeps; `slots()` and `pollEvents()` do not allocate.
+- SAVE-3 (`implementer`): Screenshots and cloud. `SaveSystemDesc::thumbnail` supplied by the player and by
+  `PlaySession`, the sidecar `<slot>.png` and `SaveSlotInfo::screenshot` shown by a `UiImage`;
+  `SaveSettings` (`settings:/save.json`) and the cloud mirror through `StoreService`. Done: a GPU test saves
+  a slot with its image; cloud tests with a test store cover newer-local, newer-cloud, a corrupt cloud file
+  and no quota.
+- SAVE-4 (`mechanic`): Editor and documentation. Commands `saves.list`, `saves.write`, `saves.load`,
+  `saves.remove` (reference, goldens, fuzz); Save and Load in the tech demo's pause menu; EN/TR manual page
+  "Saved games", the scripting API reference, a section in the HUD tutorial, the architecture page,
+  `CHANGELOG.md`.
+
+Open (recorded by ADR 0058): velocities of dynamic bodies, live particles and playing sounds are not saved;
+compression and a binary World section; several level deltas in one slot; the Steam cloud path is untested
+until a CI job has the SDK.
+
 ## ANIM — Skeletal animation
 
 After DEMO, independent of GFX. Characters, creatures and machines that move with bones, at AAA quality.
