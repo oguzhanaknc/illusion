@@ -89,9 +89,10 @@ and a static library otherwise. `SHARED` or `STATIC` forces one. A shared module
 everything it links and exports nothing but its entry point.
 
 `USES` names the engine libraries whose headers and plain-data Components the module needs: `physics`,
-`audio`, `input`, `render` (the saved, GPU-free Components of `SceneComponents.hpp`) and `runtime`. Each
-links the header-only target `illusion::<name>_api`: the library's headers, its Components and its service
-interface (`PhysicsService`, `AudioService`, `InputService`, `SceneService`), never the library's code.
+`audio`, `particles`, `input`, `render` (the saved, GPU-free Components of `SceneComponents.hpp`), `runtime`,
+`store` and `ui`. Each links the header-only target `illusion::<name>_api`: the library's headers, its
+Components and its service interface (`PhysicsService`, `AudioService`, `ParticleService`, `InputService`,
+`SceneService`, `StoreService`, `UiService`), never the library's code.
 
 !!! warning "Shared modules do not link engine libraries"
     A copy of an engine library inside a shared module would run on the host's objects with its own
@@ -148,14 +149,14 @@ modules.detachWorld(world);
 ```
 
 Games rarely wire this by hand: a [game session](runtime.md) attaches its World with the physics, audio,
-input and scene services and updates the modules in its step order, in the editor's Play mode and in the
+particle, input, scene and UI services (and the store) and updates the modules in its step order, in the editor's Play mode and in the
 player alike.
 
 `load()` copies the library to a shadow directory and loads the copy, so the build can overwrite the
 original. It then checks the module and returns an error message if anything is wrong:
 
-- the module API version (3; modules built for version 2 must move their World work to `start` and be
-  rebuilt), the engine version (shared modules must be built against exactly this engine) and the build
+- the module API version (4; modules built for an older version must be rebuilt, and those built for version
+  2 must also move their World work to `start`), the engine version (shared modules must be built against exactly this engine) and the build
   settings (compiler and its version, Debug or Release, asserts);
 - a valid, unique name and a semantic version;
 - its dependencies.

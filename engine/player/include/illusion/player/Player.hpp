@@ -72,7 +72,8 @@ struct PlayerDesc
 /// main(). Mounts `assets`, `settings` and `cache` from the data directory and `user` (read-write) on
 /// userDataDirectory(organization, name); logs to `user:/player.log`; shows a failed start in a native
 /// message box unless `--no-dialogs` is given. The game's modules get the store of PlayerDesc::store, or a
-/// NullStoreService with its cloud files in `user:/cloud`.
+/// NullStoreService with its cloud files in `user:/cloud`. The game ends when its window closes or a module
+/// calls SceneService::requestExit() (exit code PlayerExit::Ok).
 ///
 /// Command line: `--windowed`, `--borderless`, `--fullscreen` and `--size <width>x<height>` override the
 /// window settings; `--data <directory>` overrides PlayerDesc::dataDirectory (relative to the executable

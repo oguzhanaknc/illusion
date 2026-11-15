@@ -271,7 +271,8 @@ void showScore(illusion::World& world, int score)
 
 `UiWorld` yerleşimi yalnızca bir UI Component'i, hiyerarşi, `Inactive` tag'leri, dil ya da hedef değiştiğinde
 yeniden hesaplar. Bir UI Component'ini referansla yazan kod, `Hierarchy`'de olduğu gibi sonrasında
-`world.markChanged<T>()` çağırır; bir Entity oluşturmak ya da Component eklemek kendini duyurur.
+`world.markChanged<T>()` çağırır; bir Entity oluşturmak ya da Component eklemek kendini duyurur. Sahnenin zaten
+içerdiği UI'ı değiştirmek için modül bunun yerine `UiService` kullanır ([UI'ı script'lemek](#scripting-the-ui)).
 
 ## Düğmeler, anahtarlar ve kaydırıcılar {#buttons-toggles-and-sliders}
 
@@ -424,10 +425,10 @@ for (const illusion::UiEvent& event : (*session)->ui().events())
 
 Bir update'te `UiWorldDesc::maxEvents`'i aşan olaylar atılır ve `UiWorldStatistics::droppedEvents` içinde sayılır.
 
-Oyun modülleri olayları henüz almaz: onlar için bir `UiService` sonraki bir pakette gelir. O zamana kadar bir modül
-durumu kendi World'ünden okur: `UiToggle::on` ve `UiSlider::value` değiştiklerinde yerinde yazılır ve runtime
-Component'i `UiInteraction`, bir elemanın üzerine gelinip gelinmediğini, basılı ya da odakta olup olmadığını
-söyler. Bir modülde bir düğmeye tepki vermek için Entity'sindeki `UiInteraction::pressed` değerini okuyun.
+Oyun modülleri aynı listeyi `UiService::pollEvents()` ile okur ([UI'ı script'lemek](#scripting-the-ui)).
+Durumu kendi World'lerinden de okuyabilirler: `UiToggle::on` ve `UiSlider::value` değiştiklerinde yerinde
+yazılır ve runtime Component'i `UiInteraction`, bir elemanın üzerine gelinip gelinmediğini, basılı ya da odakta
+olup olmadığını söyler.
 
 ```cpp
 const illusion::UiSlider& slider = world.get<illusion::UiSlider>(volumeSlider);
@@ -435,11 +436,171 @@ const bool musicOn = world.get<illusion::UiToggle>(musicToggle).on;
 const bool held = world.get<illusion::UiInteraction>(startButton).pressed;
 ```
 
+## UI'ı script'lemek {#scripting-the-ui}
+
+Bir oyun modülü UI'ı `UiService` (`illusion/ui/UiService.hpp`, `USES ui`; ADR 0057) ile değiştirir ve okur.
+Host onu, session'ın `UiWorld`'ü üzerinde `UiWorldService` ile uygular; modül onu diğer servisler gibi bulur ve
+pointer'ı kontrol eder:
+
+```cpp
+illusion::UiService* ui = context.service<illusion::UiService>();
+```
+
+Her fonksiyon bir elemanın Entity'sini alır; ölü bir Entity için ya da fonksiyonun ihtiyaç duyduğu Component'e
+sahip olmayan bir Entity için false (ya da hiçbir şey) döndürür. Hiçbir şey modülü geri çağırmaz: modül ister ve
+olayları poll eder.
+
+| Fonksiyon | Amaç |
+| --- | --- |
+| `find` | Bir kökün altında (ya da çizim sırasıyla herhangi bir canvas'ta) verilen `Name`'e sahip ilk Entity |
+| `setText`, `setTextKey` | Bir `UiText`'in metni; düz ya da string table anahtarıyla |
+| `setVisible`, `isVisible`, `setInteractable` | Bir elemanı ve torunlarını göstermek ya da gizlemek, gösterilip gösterilmediğini sormak, etkinleştirmek ya da devre dışı bırakmak |
+| `setToggle`, `toggle`, `setSliderValue`, `sliderValue` | Bir `UiToggle` ile bir `UiSlider`'ın değerleri |
+| `setFocus`, `focused` | Odaktaki eleman |
+| `rect` | Son yerleşimin dikdörtgeni, canvas birimi cinsinden |
+| `invalidateLayout` | UI'a Component'lerin doğrudan yazıldığını bildirir |
+| `pollEvents` | UI'ın son update'indeki olaylar |
+| `setLanguage`, `language` | Oyunun dili |
+
+### Elemanları bulmak {#finding-elements}
+
+`find(root, name)`, `root` ve torunları arasında, hiyerarşi sırasıyla, `Name` Component'i `name` olan ilk
+Entity'yi verir; gizli olanlar da dahildir. `root` null ise her canvas'ı arar; en düşük `order`'a sahip canvas
+önce gelir. Hiçbir şey eşleşmezse null bir Entity döndürür. Elemanları bir kez, `start()` içinde bulun ve
+Entity'leri bir Component'te tutun ya da her update'te yeniden bulun: bir isim hiyerarşide bir gezinti
+maliyetindedir, bir Entity ise hiçbir şeye mal olmaz.
+
+### Metin ayarlamak {#setting-text}
+
+`setText(entity, "Score 120")` düz metni gösterir ve elemanın `key`'ini temizler. `setTextKey()`, string table'ın
+bir mesajını oyunun geçerli dilinde, adlandırılmış argümanlarla biçimlendirerek gösterir ve dil değiştiğinde onu
+izlemeyi sürdürür. Argüman, dilin çoğul kurallarının ve sayı biçimlerinin uygulandığı
+`UiTextArgument::number(name, value)` ya da `UiTextArgument::string(name, text)` biçimindedir. En fazla 8
+argüman olabilir, her metin en fazla 255 bayt; bunun ötesinde `setTextKey()` false döndürür.
+
+```json
+"showcase.hud.frames": "{frames, plural, one {# frame} other {# frames}}"
+```
+
+```cpp
+const illusion::Entity counter = ui->find({}, "Counter");
+const illusion::UiTextArgument frames[] = {illusion::UiTextArgument::number("frames", 120.0)};
+ui->setTextKey(counter, "showcase.hud.frames", frames); // "120 frames"; 1 shows "1 frame"
+```
+
+Türkçe dosya `tr.json` aynı anahtarı kendi mesajıyla taşır: `{frames, plural, one {# kare} other {# kare}}`
+(mesaj söz dizimi için [Yerelleştirme](localization.md) sayfasına bakın). Argümanlar, elemanın runtime Component'i
+`UiTextArguments` içinde tutulur.
+
+### Görünürlük, etkileşim ve değerler {#visibility-interaction-and-values}
+
+`setVisible(entity, false)` bir elemanı ve altındaki her şeyi gizler (`Hierarchy.hpp` içindeki `setEnabled()` gibi
+`Inactive` tag'ini koyar); `isVisible()`, eleman ya da bir atası gizliyse false verir. `setInteractable()`,
+`UiInteractable::enabled` değerini yazar. `setToggle()` ve `setSliderValue()` bir widget'ın değerini ayarlar
+(kaydırıcı değeri input'taki gibi sınırlanır ve oturtulur) ve olay bildirmez: değeri ayarlayan modülün bunu
+duyması gerekmez. `toggle()` ve `sliderValue()` değerleri geri okur.
+
+### Odak ve yerleşim {#focus-and-layout}
+
+`setFocus(entity)` odağı taşır; örneğin yeni açtığınız menünün ilk düğmesine. Eleman şu an odaklanamıyorsa false
+döndürür; `setFocus({})` odağı temizler. `rect(entity)`, son yerleşimin elemana verdiği dikdörtgendir, canvas
+birimi cinsinden.
+
+`UiService` değişikliklerini host üzerinden yapar; bu yüzden onlar `world.markChanged()` olmadan yerleşime
+ulaşır. UI Component'lerini `World`'ü üzerinden doğrudan yazan bir modül, yukarıda anlatıldığı gibi
+`world.markChanged<T>()` çağırır ya da bir yazma grubundan sonra bir kez `invalidateLayout()` çağırır.
+
+### Olayları poll etmek {#polling-events}
+
+`pollEvents(events)`, UI'ın son update'indeki olayları verdiğiniz bir span'e kopyalar ve kaç tane olduğunu
+döndürür. UI, session'ın adım sırasında modüllerden sonra çalışır; bu yüzden bunlar önceki karenin olaylarıdır.
+Döndürülen toplam span'den büyük olabilir: en fazla `events.size()` tanesini okuyun ve span'i bir karede
+beklediğiniz en çok olaya göre boyutlandırın. Olaylar [Olayları okumak](#reading-events) bölümündekilerdir ve
+`ui.cancel` `Cancelled` olarak gelir.
+
+### Dil {#language}
+
+`setLanguage("tr")`, oyunu projenin `assets:/locales` içinde dosyası bulunan bir locale'e geçirir; dosya yoksa
+false döndürür. Anahtarı olan her `UiText` onu izler. `language()` geçerli BCP 47 etiketidir ve bir sonraki
+`setLanguage()` çağrısına kadar geçerlidir.
+
+### Örnek: bir duraklatma menüsü {#example-a-pause-menu}
+
+Sahnede `PauseMenu` adlı, başlangıçta gizli, modal bir canvas ve iki düğme, `Resume` ile `Quit`, vardır. Modül,
+`ui.cancel` basılınca menüyü gösterir, Resume ile yeniden gizler ve Quit ile oyunu, host'undan
+`SceneService::requestExit()` ile isteyerek bitirir: player o update'ten sonra kapanır ve editörün Play modu
+durur.
+
+```cmake
+illusion_add_module(pause SOURCES game/Pause.cpp USES runtime ui)
+```
+
+```cpp
+#include <illusion/core/Module.hpp>
+#include <illusion/runtime/SceneService.hpp>
+#include <illusion/ui/UiService.hpp>
+
+#include <algorithm>
+#include <array>
+#include <span>
+
+namespace
+{
+
+bool loadModule(illusion::ModuleContext&)
+{
+    return true;
+}
+
+void updateModule(illusion::ModuleContext& context, illusion::f64)
+{
+    illusion::UiService* ui = context.service<illusion::UiService>();
+    illusion::SceneService* scenes = context.service<illusion::SceneService>();
+    if (ui == nullptr || scenes == nullptr)
+    {
+        return; // this World was attached without them
+    }
+    const illusion::Entity menu = ui->find({}, "PauseMenu");
+    const illusion::Entity resume = ui->find(menu, "Resume");
+    const illusion::Entity quit = ui->find(menu, "Quit");
+
+    std::array<illusion::UiEvent, 16> events{};
+    const illusion::u32 count =
+        std::min<illusion::u32>(ui->pollEvents(events), static_cast<illusion::u32>(events.size()));
+    for (const illusion::UiEvent& event : std::span(events).first(count))
+    {
+        if (event.type == illusion::UiEventType::Cancelled && !ui->isVisible(menu))
+        {
+            ui->setVisible(menu, true);
+            ui->setFocus(resume);
+        }
+        else if (event.type == illusion::UiEventType::Clicked && event.entity == resume)
+        {
+            ui->setVisible(menu, false);
+        }
+        else if (event.type == illusion::UiEventType::Clicked && event.entity == quit)
+        {
+            scenes->requestExit();
+        }
+    }
+}
+
+constexpr illusion::ModuleApi kPause =
+    illusion::makeModuleApi("pause", "1.0.0", {.load = &loadModule, .update = &updateModule});
+
+} // namespace
+
+ILL_MODULE(pause, kPause)
+```
+
+Menü görünürken canvas'ı modaldır: oyunun diğer action'ları bırakılmış okunur; bu yüzden modülün hareket
+tuşları için kendi kontrolüne ihtiyacı yoktur ([Modal canvas'lar](#modal-canvases)).
+
 ## Henüz olmayanlar {#what-is-not-there-yet}
 
-Bu paket UI çizer ve input'a tepki verir. Sonraki paketler metin alanlarını, kaydırmayı ve düğme glyph'lerini,
-oyun modülleri için `UiService`'i, Scene görünümünde canvas editörünü ve geçişleri ile animasyonu ekler.
-İlk sürümün sınırları
+Bu paket UI çizer, input'a tepki verir ve oyun modüllerinin onu script'lemesini sağlar. Sonraki paketler metin
+alanlarını, kaydırmayı ve düğme glyph'lerini, Scene görünümünde canvas editörünü ve geçişleri ile animasyonu
+ekler. İlk sürümün sınırları
 ([ADR 0057](https://github.com/oguzhanaknc/illusion/blob/main/docs/adr/0057-game-ui.md)):
 
 - Metin shaping olmadan soldan sağa çizilir: Arapça, İbranice, Hint yazı sistemleri ve ligatürler

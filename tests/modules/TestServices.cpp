@@ -174,6 +174,19 @@ TEST_CASE("SceneLoaderService instantiates scene files with new ids and reports 
     CHECK(world.aliveCount() == 4);
 }
 
+TEST_CASE("SceneLoaderService remembers that a module asked to end the game")
+{
+    VirtualFileSystem files;
+    World world;
+    SceneLoaderService service(world, files);
+    CHECK_FALSE(service.exitRequested());
+    SceneService& api = service;
+    api.requestExit();
+    CHECK(service.exitRequested());
+    api.requestExit();
+    CHECK(service.exitRequested());
+}
+
 TEST_CASE("SceneLoaderService instantiates prefab files as linked instances and expands scene records")
 {
     reflectCoreComponents();

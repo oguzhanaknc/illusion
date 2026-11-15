@@ -89,10 +89,11 @@ statik bir kütüphane üretir. `SHARED` veya `STATIC` birini zorlar. Shared bir
 kendi kopyasını taşır ve giriş noktası dışında hiçbir şeyi dışa aktarmaz.
 
 `USES`, modülün header'larına ve düz veri Component'lerine ihtiyaç duyduğu engine kütüphanelerini
-adlandırır: `physics`, `audio`, `input`, `render` (`SceneComponents.hpp`'nin kaydedilen, GPU'suz
-Component'leri) ve `runtime`. Her biri yalnızca header içeren `illusion::<name>_api` hedefini linkler:
-kütüphanenin header'ları, Component'leri ve servis arayüzü (`PhysicsService`, `AudioService`,
-`InputService`, `SceneService`); kütüphanenin kodu asla.
+adlandırır: `physics`, `audio`, `particles`, `input`, `render` (`SceneComponents.hpp`'nin kaydedilen,
+GPU'suz Component'leri), `runtime`, `store` ve `ui`. Her biri yalnızca header içeren `illusion::<name>_api`
+hedefini linkler: kütüphanenin header'ları, Component'leri ve servis arayüzü (`PhysicsService`,
+`AudioService`, `ParticleService`, `InputService`, `SceneService`, `StoreService`, `UiService`); kütüphanenin
+kodu asla.
 
 !!! warning "Shared modüller engine kütüphanelerini linklemez"
     Shared bir modülün içindeki bir engine kütüphanesi kopyası, host'un nesneleri üzerinde kendi
@@ -151,15 +152,15 @@ while (running)
 modules.detachWorld(world);
 ```
 
-Oyunlar bunu nadiren elle kurar: bir [oyun oturumu](runtime.md) World'ünü fizik, ses, input ve sahne
-servisleriyle ekler ve modülleri kendi adım sırasında günceller; editörün Play modunda da oyuncuda da
+Oyunlar bunu nadiren elle kurar: bir [oyun oturumu](runtime.md) World'ünü fizik, ses, parçacık, input, sahne
+ve UI servisleriyle (ve mağazayla) ekler ve modülleri kendi adım sırasında günceller; editörün Play modunda da oyuncuda da
 aynı şekilde.
 
 `load()` kütüphaneyi bir gölge dizine kopyalar ve kopyayı yükler; böylece build orijinalin üzerine
 yazabilir. Ardından modülü denetler ve bir sorun varsa bir hata mesajı döndürür:
 
-- modül API sürümü (3; sürüm 2 için derlenmiş modüller World işlerini `start`'a taşımalı ve yeniden
-  derlenmelidir), engine sürümü (shared modüller tam olarak bu engine'e karşı derlenmiş olmalıdır) ve
+- modül API sürümü (4; daha eski bir sürüm için derlenmiş modüller yeniden derlenmelidir, sürüm 2 için
+  derlenmiş olanlar ayrıca World işlerini `start`'a taşımalıdır), engine sürümü (shared modüller tam olarak bu engine'e karşı derlenmiş olmalıdır) ve
   build ayarları (derleyici ve sürümü, Debug veya Release, assert'ler);
 - geçerli ve benzersiz bir ad ile semantik bir sürüm;
 - bağımlılıkları.

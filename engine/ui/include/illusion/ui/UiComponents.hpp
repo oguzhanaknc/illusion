@@ -21,6 +21,7 @@
 #include <illusion/ui/UiDrawList.hpp>
 #include <illusion/ui/UiGeometry.hpp>
 
+#include <array>
 #include <string>
 
 namespace illusion
@@ -119,6 +120,29 @@ struct UiGrid
     Vec2 cellSize{100.0f}; ///< Size of each cell in canvas units.
     Vec2 spacing{0.0f};    ///< Gaps between columns and rows.
     UiEdges padding{};     ///< Space inside the element's edges.
+};
+
+/// One named argument of UiTextArguments, stored inline.
+struct UiTextArgumentValue
+{
+    std::array<char, 32> name{};  ///< The argument's name, not null-terminated.
+    std::array<char, 256> text{}; ///< Its text value, not null-terminated.
+    f64 value = 0.0;              ///< Its number value.
+    u8 nameLength = 0;            ///< Bytes of name used.
+    u8 textLength = 0;            ///< Bytes of text used.
+    bool isNumber = false;        ///< Which of the two values is used.
+};
+
+/// The arguments the UiText::key of an element is formatted with (runtime only, set by
+/// UiService::setTextKey()); write it with markChanged() so that the layout follows.
+struct UiTextArguments
+{
+    static constexpr u32 kMaxArguments = 8;   ///< Arguments per text.
+    static constexpr u32 kMaxNameBytes = 31;  ///< Longest argument name.
+    static constexpr u32 kMaxTextBytes = 255; ///< Longest text value.
+
+    std::array<UiTextArgumentValue, kMaxArguments> arguments{}; ///< The first count are used.
+    u32 count = 0;                                              ///< Arguments used.
 };
 
 /// Where the layout put an element this frame (runtime only, written by the UI System).

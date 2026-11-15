@@ -2,7 +2,7 @@
 
 Oyun kodu, bir [oyun modülünde](../manual/modules.md) C++ olarak yazılır. Shared bir modül (editörün hot
 reload yapılabilen Build'i) `illusion::core`'un kendi kopyasını taşır, ama başka hiçbir engine
-kütüphanesini taşımaz: fiziğe, sese, parçacıklara, girdiye, sahnelere ve mağazaya altı **host servis arayüzü** üzerinden
+kütüphanesini taşımaz: fiziğe, sese, parçacıklara, girdiye, sahnelere, mağazaya ve oyun UI'ına yedi **host servis arayüzü** üzerinden
 ulaşır.
 Her biri veri üyesi olmayan soyut bir sınıftır; host onu kendi engine nesnesi üzerinde bir adaptörle
 uygular ve modüle verir, modül de onu `context.service<T>()` ile bulur. Tasarım ADR 0041'dedir;
@@ -16,6 +16,7 @@ uygular ve modüle verir, modül de onu `context.service<T>()` ile bulur. Tasar�
 | `InputService` | `input` | `illusion/input/InputService.hpp` | `InputActions` üzerinde `InputActionsService` |
 | `SceneService` | `runtime` | `illusion/runtime/SceneService.hpp` | `SceneLoaderService` (`illusion::runtime`) |
 | `StoreService` | `store` | `illusion/store/StoreService.hpp` | `NullStoreService` veya `SteamStoreService` (ADR 0056) |
+| `UiService` | `ui` | `illusion/ui/UiService.hpp` | `UiWorld` üzerinde `UiWorldService` (`illusion::ui`; ADR 0057) |
 
 ```cmake
 illusion_add_module(tetris SOURCES game/Tetris.cpp USES physics audio input runtime)
@@ -59,11 +60,12 @@ void update(illusion::ModuleContext& context, illusion::f64)
 - **Maliyet.** Bir çağrı tek bir dolaylı çağrıdır; `services/virtual-call` Benchmark'ı onu 10 ns'nin
   altında tutar.
 - **Uyumluluk.** Arayüzler modül ABI'sinin parçasıdır: bir fonksiyon eklemek veya değiştirmek
-  `kModuleApiVersion`'ı değiştirir ve modüller yeniden Build edilmelidir.
+  `kModuleApiVersion`'ı değiştirir (`UiService` ve `SceneService::requestExit()` ile birlikte 4) ve modüller
+  yeniden Build edilmelidir.
 
 ## Kapsam
 
-"Scripting API" Doxygen grubu `ModuleContext`'i ve altı arayüzü içerir.
+"Scripting API" Doxygen grubu `ModuleContext`'i ve yedi arayüzü içerir.
 [Showcase modülü](../manual/editor/showcase.md#showcase-modulu) grubun her public fonksiyonunu çağırır;
 biri orada çağrılmıyorsa ya da modül testlerinin bir sayaçlı proxy'sinin (`tests/modules/CountingServices.hpp`)
 sayaç sayısı yanlışsa `python tools/check_api_coverage.py` CI'da başarısız olur. Bu yüzden yeni bir
@@ -128,6 +130,7 @@ döner; ad başka bir türce alınmışsa nullopt döner.
 | `exists` | Sanal bir yolda dosya varsa true |
 | `instantiate` | Bir sahne dosyasını yeni EntityGuid'lerle World'e yükler; Entity sayısını veya nullopt döner |
 | `lastError` | Son `instantiate`'in neden başarısız olduğu |
+| `requestExit` | Host'tan oyunu bu update'ten sonra bitirmesini ister: player kapanır, editörün Play modu durur |
 
 ## StoreService
 
@@ -144,3 +147,21 @@ Hatalar `Expected<T, StoreError>`'dır; adları `isValidStoreName()` denetler.
 | `listCloudFiles`, `cloudFileExists`, `cloudQuota` | Çağıranın span'ine adlar, varlık, boyut ve boş alan |
 | `overlayActive`, `openOverlay` | Her karede sorgulanan overlay durumu ve onu açma isteği |
 | `glyphPath` | Bir gamepad kontrolünün mağaza tarzındaki görselinin yolu ya da hiçbir şey |
+
+## UiService
+
+World'ün oyun UI'ı; bkz. [UI'ı script'lemek](../manual/ui.md#scripting-the-ui). Bir Entity alan fonksiyonlar, ölü
+bir Entity için ya da ihtiyaç duydukları Component'e sahip olmayan bir Entity için false (ya da hiçbir şey)
+döndürür. Değişiklikler `World::markChanged()` olmadan yerleşime ulaşır.
+
+| Fonksiyon | Amaç |
+| --- | --- |
+| `find` | Bir kökün altında ya da çizim sırasıyla herhangi bir canvas'ta verilen `Name`'e sahip ilk Entity |
+| `setText`, `setTextKey` | Düz bir metin ya da `UiTextArgument::number/string` ile biçimlendirilmiş bir string table mesajı |
+| `setVisible`, `isVisible`, `setInteractable` | Bir elemanı ve torunlarını göstermek ya da gizlemek, gösterilip gösterilmediği, `UiInteractable::enabled` |
+| `setToggle`, `toggle`, `setSliderValue`, `sliderValue` | Widget değerleri; birini ayarlamak olay bildirmez |
+| `setFocus`, `focused` | Odağı taşır (null temizler), odaktaki eleman |
+| `rect` | Son yerleşimin dikdörtgeni, canvas birimi cinsinden |
+| `invalidateLayout` | UI'a UI Entity'lerinin Component'lerinin doğrudan yazıldığını bildirir |
+| `pollEvents` | Önceki karenin UI update'indeki olayları bir span'e kopyalar; sığandan fazla olabilen toplamı döndürür |
+| `setLanguage`, `language` | Oyunun dili; projede locale dosyası olan bir BCP 47 etiketi |

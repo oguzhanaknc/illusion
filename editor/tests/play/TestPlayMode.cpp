@@ -5,11 +5,13 @@
 
 #include <illusion/audio/AudioComponents.hpp>
 #include <illusion/core/JobSystem.hpp>
+#include <illusion/core/Module.hpp>
 #include <illusion/ecs/Transform.hpp>
 #include <illusion/editor/play/PlaySession.hpp>
 #include <illusion/particles/ParticleComponents.hpp>
 #include <illusion/physics/PhysicsComponents.hpp>
 #include <illusion/runtime/GameSession.hpp>
+#include <illusion/runtime/SceneService.hpp>
 
 #include <fstream>
 #include <sstream>
@@ -57,7 +59,49 @@ struct PlayFixture
     std::unique_ptr<PlaySession> play;
 };
 
+// A static module that asks to end the game in its second update.
+i32 g_exitUpdates = 0;
+
+bool loadExitModule(ModuleContext&)
+{
+    return true;
+}
+
+void updateExitModule(ModuleContext& context, f64)
+{
+    if (++g_exitUpdates == 2)
+    {
+        if (SceneService* scenes = context.service<SceneService>())
+        {
+            scenes->requestExit();
+        }
+    }
+}
+
+constexpr ModuleApi kExitModule =
+    makeModuleApi("exit_test", "1.0.0", {.load = &loadExitModule, .update = &updateExitModule});
+
 } // namespace
+
+TEST_CASE("a module that asks to end the game stops Play mode after the update that asked")
+{
+    PlayFixture f;
+    g_exitUpdates = 0;
+    REQUIRE_FALSE(f.play->moduleHost().add(kExitModule));
+    ok(f.editor(), "play.start", R"({"fixedStep":true})");
+    f.play->update(1.0 / 60.0);
+    CHECK(f.editor().playing());
+    f.play->update(1.0 / 60.0);
+    CHECK_FALSE(f.editor().playing());
+    CHECK(g_exitUpdates == 2);
+
+    g_exitUpdates = 0;
+    ok(f.editor(), "play.start", R"({"fixedStep":true})");
+    const JsonDocument stepped = ok(f.editor(), "play.step", R"({"steps":10})");
+    CHECK(g_exitUpdates == 2);
+    CHECK(stepped.root().find("state").asString() == "stopped");
+    CHECK_FALSE(f.editor().playing());
+}
 
 TEST_CASE("stopping a play session leaves the edit scene exactly as it was")
 {

@@ -680,8 +680,9 @@ void registerPlayCommands(CommandRegistry& registry)
         .title = strings::kCommandPlayStepTitle,
         .description = strings::kCommandPlayStepDescription,
         .agentSummary =
-            "Advances the play session by fixed physics steps at once (default 1), paused or not. "
-            "Example: {\"steps\": 60}.",
+            "Advances the play session by fixed physics steps at once (default 1), paused or not. If the "
+            "game asks to exit (SceneService::requestExit()), the remaining steps are skipped and the "
+            "session stops: the result then has state \"stopped\". Example: {\"steps\": 60}.",
         .category = "Play",
         .icon = "skip_next",
         .mode = CommandMode::Play,

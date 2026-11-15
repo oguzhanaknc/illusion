@@ -34,9 +34,13 @@ class Localization;
 
 /// Reflects the saved UI Components ("illusion.UiCanvas", "illusion.UiElement", "illusion.UiImage",
 /// "illusion.UiText", "illusion.UiStack", "illusion.UiGrid", "illusion.UiInteractable", "illusion.UiButton",
-/// "illusion.UiToggle", "illusion.UiSlider") and the runtime UiComputedRect and UiInteraction. Safe to call
-/// more than once.
+/// "illusion.UiToggle", "illusion.UiSlider") and the runtime UiComputedRect, UiInteraction and
+/// UiTextArguments. Safe to call more than once.
 void registerUiComponents();
+
+/// What @p value becomes on @p slider: snapped to its step from min and kept between min and max, as input
+/// does; min (or the lower end) for a value that is not finite.
+[[nodiscard]] f32 snapSliderValue(const UiSlider& slider, f32 value) noexcept;
 
 /// An image the UI can draw.
 struct UiImageSource
@@ -113,8 +117,13 @@ public:
 
     /// Fonts and images; null (the default) draws no text and no images, only solid colours.
     void setAssets(UiAssets* assets) noexcept;
-    /// The string tables of UiText::key; null (the default) shows the key itself.
+    /// The string tables of UiText::key, formatted with the element's UiTextArguments when it has them;
+    /// null (the default) shows the key itself.
     void setLocalization(const text::Localization* localization) noexcept;
+
+    /// Lays out again at the next update even if no version changed: for code that wrote UI Components
+    /// through references without `world.markChanged<T>()`.
+    void invalidateLayout() noexcept;
 
     /// Lays out for @p frame and records the draw list. The layout is recomputed only when a UI Component,
     /// the hierarchy, the Inactive tags, the locale or the frame changed since the last update (code that

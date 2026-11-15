@@ -41,7 +41,11 @@ public:
     [[nodiscard]] bool exists(std::string_view virtualPath) const override;
     std::optional<u32> instantiate(std::string_view virtualPath, std::span<Entity> created) override;
     [[nodiscard]] std::string_view lastError() const override;
+    void requestExit() override;
     /// @}
+
+    /// True once requestExit() was called.
+    [[nodiscard]] bool exitRequested() const noexcept { return m_exitRequested; }
 
 private:
     World& m_world;
@@ -49,6 +53,7 @@ private:
     GuidGenerator* m_guids; // null: GuidGenerator::shared()
     std::string m_text;     // the last scene file read, kept for its capacity
     std::string m_error;    // why the last instantiate() failed
+    bool m_exitRequested = false;
 };
 
 } // namespace illusion

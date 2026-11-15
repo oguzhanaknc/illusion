@@ -55,8 +55,8 @@ class World;
 
 /// Layout version of ModuleApi, ModuleServices, ModuleContext and the host service interfaces. A host
 /// only loads modules built with the same value. Version 3 added start() and stop() and moved World work
-/// out of load() (ADR 0041).
-inline constexpr u32 kModuleApiVersion = 3;
+/// out of load() (ADR 0041); version 4 added UiService and SceneService::requestExit().
+inline constexpr u32 kModuleApiVersion = 4;
 
 /// What a World attached to a ModuleHost is for.
 enum class WorldRole : u8

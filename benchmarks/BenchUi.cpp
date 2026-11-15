@@ -4,11 +4,15 @@
 #include <illusion/ecs/Hierarchy.hpp>
 #include <illusion/ecs/World.hpp>
 #include <illusion/platform/FileSystem.hpp>
+#include <illusion/text/Localization.hpp>
+#include <illusion/text/StringTable.hpp>
 #include <illusion/ui/UiComponents.hpp>
 #include <illusion/ui/UiDrawList.hpp>
 #include <illusion/ui/UiWidgets.hpp>
 #include <illusion/ui/UiWorld.hpp>
+#include <illusion/ui/UiWorldService.hpp>
 
+#include <array>
 #include <fstream>
 #include <iterator>
 #include <span>
@@ -199,6 +203,47 @@ ILL_BENCHMARK("ui/layout-reused", 3000.0)
     ui.setAssets(&assets);
     ui.update({{1920, 1080}});
     bench.batch(kLayoutElements).unit("element").run("record 1,000 elements with the layout reused", [&] {
+        ui.update({{1920, 1080}});
+        ankerl::nanobench::doNotOptimizeAway(ui.drawData().vertices.size());
+    });
+}
+
+namespace
+{
+
+constexpr std::string_view kScoreKeys[] = {"hud.score"};
+constexpr std::string_view kScoreEnglish[] = {"Score {points, plural, one {# point} other {# points}}"};
+const text::StringTableData kScoreTable{"bench", kScoreKeys, kScoreEnglish};
+
+} // namespace
+
+// A module's HUD: each update sets a keyed text with a new number through UiService, and the UI formats it
+// (plural rule and number format) while it lays out and records. Measured about 2.6 us on a desktop.
+ILL_BENCHMARK("ui/set-text-key", 20000.0)
+{
+    World world;
+    UiCanvas canvas;
+    canvas.useSafeArea = false;
+    const Entity root = world.create(canvas);
+    UiElement placement;
+    placement.placement.offsetMax = {400.0f, 40.0f};
+    UiText text;
+    text.font = AssetRef("assets:/fonts/bench.ttf");
+    const Entity score = world.create(placement, text);
+    (void)setParent(world, score, root);
+    text::Localization localization;
+    localization.addTable(kScoreTable);
+    BenchAssets assets;
+    UiWorld ui(world);
+    ui.setAssets(&assets);
+    ui.setLocalization(&localization);
+    UiWorldService service(world, ui, localization);
+    ui.update({{1920, 1080}});
+    f64 points = 0.0;
+    bench.minEpochIterations(200).unit("update").run("set a keyed text with a number and update", [&] {
+        points += 1.0;
+        const std::array arguments{UiTextArgument::number("points", points)};
+        (void)service.setTextKey(score, "hud.score", arguments);
         ui.update({{1920, 1080}});
         ankerl::nanobench::doNotOptimizeAway(ui.drawData().vertices.size());
     });

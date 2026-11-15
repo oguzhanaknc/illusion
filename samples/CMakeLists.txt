@@ -22,7 +22,7 @@ illusion_configure_target(illusion_physics_playground)
 if(ILLUSION_BUILD_TOOLS)
     illusion_add_module(showcase_game_module STATIC ID showcase
         SOURCES showcase/modules/showcase/showcase.cpp
-        USES physics audio particles input render runtime store)
+        USES physics audio particles input render runtime store ui)
     illusion_add_game(showcase_game
         MODULES showcase_game_module
         NAME "Showcase"

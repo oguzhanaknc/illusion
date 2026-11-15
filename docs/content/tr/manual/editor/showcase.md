@@ -42,7 +42,7 @@ döndürülmüş, ölçeklenmiş, kırpılmış bir kadran; bkz. [Oyun UI'ı](..
 ## Showcase modülü
 
 Projenin oyun kodu olan `modules/showcase`, sahneyi [scripting API](../../reference/scripting-api.md)'nin
-tamamıyla oynatır: `ModuleContext`'in ve dört host servisinin her fonksiyonu `showcase.cpp`'den çağrılır.
+tamamıyla oynatır: `ModuleContext`'in ve yedi host servisinin her fonksiyonu `showcase.cpp`'den çağrılır.
 Oturum başlarken mesh geometrisinden bir zemin ve bir mücevher kurar, Jump (Space, gamepad South) ve Move
 (WASD, sol çubuk) eylemlerini ekler, sayılardan bir çan sesi üretir ve mikseri ayarlar. Bir tuşa basana ya da
 bir çubuğu oynatana kadar Player trigger pedinin üzerinden kendi kendine ileri geri yürür; sonra WASD ya da sol
@@ -54,7 +54,10 @@ girenleri sayar, bir şey sertçe düştüğü yerde çan çalar ve ilk seferind
 kıvılcım yağdırır, kıvılcım çeşmesini 270. karede durdurup 290. karede yeniden başlatır, 120. karede bir fener
 prefab'ı oluşturur, 200. kareden
 itibaren bir saniyeliğine Ay yerçekimine geçer ve 240. kareden sonra Player'ın Crate'in içinden geçmesine izin
-verir (katmanları artık çarpışmaz). Gördükleri, Showcase Entity'sinin `showcase.Stats` Component'inde tutulur.
+verir (katmanları artık çarpışmaz). HUD'ı `UiService` ile yönetir: kare sayacı çoğul içeren bir string table
+mesajıdır, modül paleti gizler ve gösterir, odağı taşır, widget'ları okur ve olayları poll eder;
+`ui.cancel` basılınca (Escape ya da gamepad'de East) oyunu `SceneService::requestExit()` ile bitirir.
+Gördükleri, Showcase Entity'sinin `showcase.Stats` Component'inde tutulur.
 
 **Modules → Build Modules** (`module.build`) ile Build edin ve **Play**'e basın:
 

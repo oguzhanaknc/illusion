@@ -219,14 +219,26 @@ u32 PlaySession::step(u32 steps)
         return 0;
     }
     const f64 stepSeconds = impl.game->settings().physics.stepSeconds;
-    for (u32 i = 0; i < steps; ++i)
+    u32 done = 0;
+    while (done < steps && !impl.game->exitRequested())
     {
         impl.pumpAssets(true);
         impl.store->update();
         impl.game->update(stepSeconds);
+        ++done;
     }
     impl.editor.playWorldAdvanced();
-    return steps;
+    stopIfExitRequested();
+    return done;
+}
+
+void PlaySession::stopIfExitRequested()
+{
+    if (m_impl->game && m_impl->game->exitRequested())
+    {
+        ILL_LOG_INFO("Play", "the game asked to end");
+        stop();
+    }
 }
 
 void PlaySession::setTimeScale(f64 scale)
@@ -246,6 +258,7 @@ void PlaySession::update(f64 deltaSeconds)
     impl.store->update();
     impl.game->update(deltaSeconds * impl.timeScale);
     impl.editor.playWorldAdvanced();
+    stopIfExitRequested();
 }
 
 PlayStatus PlaySession::status() const

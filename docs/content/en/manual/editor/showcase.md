@@ -41,7 +41,7 @@ clipped dial; see [Game UI](../ui.md). It shows in the Game view while playing.
 ## The showcase module
 
 The project's game code, `modules/showcase`, plays the scene through the whole
-[scripting API](../../reference/scripting-api.md): every function of `ModuleContext` and of the four host
+[scripting API](../../reference/scripting-api.md): every function of `ModuleContext` and of the seven host
 services is called from `showcase.cpp`. When the session starts, it builds a floor and a gem from mesh
 geometry, adds the Jump (Space, gamepad South) and Move (WASD, left stick) actions, makes a chime from numbers
 and sets up the mixer. Until you press a key or move a stick, the Player walks back and forth across the
@@ -54,7 +54,10 @@ Trigger's visitors, chimes where something lands hard and raises the dust the fi
 when the Player steps on the pad, stops the spark fountain at frame 270 and starts it again at 290, spawns a
 lantern prefab at frame 120, switches to moon
 gravity for a second from frame 200, and from frame 240 lets the Player walk through the Crate (their layers
-stop colliding). What it saw is kept in the `showcase.Stats` Component of the Showcase entity.
+stop colliding). It drives the HUD through `UiService`: the frame counter is a string table message with a
+plural, the module hides and shows the palette, moves the focus, reads the widgets and polls the events, and
+when `ui.cancel` is pressed (Escape, or East on a gamepad) it ends the game with `SceneService::requestExit()`.
+What it saw is kept in the `showcase.Stats` Component of the Showcase entity.
 
 Build it with **Modules → Build Modules** (`module.build`) and press **Play**:
 

@@ -11,6 +11,7 @@
 #include <illusion/physics/PhysicsService.hpp>
 #include <illusion/runtime/SceneService.hpp>
 #include <illusion/store/StoreService.hpp>
+#include <illusion/ui/UiService.hpp>
 
 #include <algorithm>
 #include <array>
@@ -405,7 +406,7 @@ public:
 };
 
 // Counts the calls of every SceneService function.
-class CountingScenes final : public CountingProxy<SceneService, 3>
+class CountingScenes final : public CountingProxy<SceneService, 4>
 {
 public:
     explicit CountingScenes(SceneService* inner = nullptr) noexcept
@@ -424,6 +425,10 @@ public:
     [[nodiscard]] std::string_view lastError() const override
     {
         return forward<std::string_view>(2, [&](SceneService& s) { return s.lastError(); });
+    }
+    void requestExit() override
+    {
+        forward<void>(3, [&](SceneService& s) { s.requestExit(); });
     }
 };
 
@@ -534,6 +539,85 @@ public:
     {
         return forward<std::optional<std::string_view>>(22,
                                                         [&](StoreService& s) { return s.glyphPath(origin); });
+    }
+};
+
+// Counts the calls of every UiService function.
+class CountingUi final : public CountingProxy<UiService, 17>
+{
+public:
+    explicit CountingUi(UiService* inner = nullptr) noexcept
+        : CountingProxy(inner)
+    {
+    }
+
+    [[nodiscard]] Entity find(Entity root, std::string_view name) const override
+    {
+        return forward<Entity>(0, [&](UiService& s) { return s.find(root, name); });
+    }
+    bool setText(Entity e, std::string_view utf8) override
+    {
+        return forward<bool>(1, [&](UiService& s) { return s.setText(e, utf8); });
+    }
+    bool setTextKey(Entity e, std::string_view key, std::span<const UiTextArgument> arguments) override
+    {
+        return forward<bool>(2, [&](UiService& s) { return s.setTextKey(e, key, arguments); });
+    }
+    bool setVisible(Entity e, bool visible) override
+    {
+        return forward<bool>(3, [&](UiService& s) { return s.setVisible(e, visible); });
+    }
+    [[nodiscard]] bool isVisible(Entity e) const override
+    {
+        return forward<bool>(4, [&](UiService& s) { return s.isVisible(e); });
+    }
+    bool setInteractable(Entity e, bool enabled) override
+    {
+        return forward<bool>(5, [&](UiService& s) { return s.setInteractable(e, enabled); });
+    }
+    bool setToggle(Entity e, bool on) override
+    {
+        return forward<bool>(6, [&](UiService& s) { return s.setToggle(e, on); });
+    }
+    [[nodiscard]] std::optional<bool> toggle(Entity e) const override
+    {
+        return forward<std::optional<bool>>(7, [&](UiService& s) { return s.toggle(e); });
+    }
+    bool setSliderValue(Entity e, f32 value) override
+    {
+        return forward<bool>(8, [&](UiService& s) { return s.setSliderValue(e, value); });
+    }
+    [[nodiscard]] std::optional<f32> sliderValue(Entity e) const override
+    {
+        return forward<std::optional<f32>>(9, [&](UiService& s) { return s.sliderValue(e); });
+    }
+    bool setFocus(Entity e) override
+    {
+        return forward<bool>(10, [&](UiService& s) { return s.setFocus(e); });
+    }
+    [[nodiscard]] Entity focused() const override
+    {
+        return forward<Entity>(11, [&](UiService& s) { return s.focused(); });
+    }
+    [[nodiscard]] std::optional<UiRect> rect(Entity e) const override
+    {
+        return forward<std::optional<UiRect>>(12, [&](UiService& s) { return s.rect(e); });
+    }
+    void invalidateLayout() override
+    {
+        forward<void>(13, [&](UiService& s) { s.invalidateLayout(); });
+    }
+    u32 pollEvents(std::span<UiEvent> events) const override
+    {
+        return forward<u32>(14, [&](UiService& s) { return s.pollEvents(events); });
+    }
+    bool setLanguage(std::string_view locale) override
+    {
+        return forward<bool>(15, [&](UiService& s) { return s.setLanguage(locale); });
+    }
+    [[nodiscard]] std::string_view language() const override
+    {
+        return forward<std::string_view>(16, [&](UiService& s) { return s.language(); });
     }
 };
 
