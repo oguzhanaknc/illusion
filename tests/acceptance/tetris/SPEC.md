@@ -4,11 +4,13 @@ This file is the contract of the agent acceptance test (ADR 0038). CI replays `s
 headless editor and runs `checks.jsonl`; in M7x a live agent receives this file as its prompt and must pass
 the same checks through the editor alone. The full plan is §9 of `docs/plans/m7-editor.md`.
 
-Run it locally (Release build; for the recorded session, replay `recorded.jsonl` without `--var`):
+Run it locally (Release build; for the recorded session, replay `recorded.jsonl` with `checks.jsonl` only and
+without `--var`):
 
 ```bash
 illusion_ctl --launch build/bin/Release/illusion_editor --editor-arg --deterministic --editor-arg --no-gpu \
-    replay tests/acceptance/tetris/scripted.jsonl --checks tests/acceptance/tetris/checks.jsonl --temp-workspace \
+    replay tests/acceptance/tetris/scripted.jsonl --checks tests/acceptance/tetris/checks.jsonl \
+    --checks tests/acceptance/tetris/checks-ui.jsonl --temp-workspace \
     --var 'tetrisModule="build/editor/tests/Release/illusion_tetris_module.dll"'
 ```
 
@@ -17,7 +19,7 @@ illusion_ctl --launch build/bin/Release/illusion_editor --editor-arg --determini
 1. Create the project with `project.create {"directory": "tetris", "name": "Tetris", "template": "empty"}`
    in the editor's workspace.
 2. Write a module `tetris` (version 1.x) in `modules:/tetris` using `illusion::core` with `USES input
-   render runtime`, and build it with `module.build`. Its reflected Components:
+   render runtime ui`, and build it with `module.build`. Its reflected Components:
 
    | Component | Fields |
    | --- | --- |
@@ -41,6 +43,15 @@ illusion_ctl --launch build/bin/Release/illusion_editor --editor-arg --determini
    (orthographic once cameras have a projection, M7n), a DirectionalLight, a SkyLight using
    `builtin:/sky/procedural`, walls and floor of `MeshRenderer {builtin:/mesh/cube, frame}` under `/Board`,
    and one Board, one PieceQueue and one Score. Locked cells are children of the Board.
+6. Game UI (UI-3e): the string table `assets:/locales/en.json` (keys `tetris.hud.points`, `tetris.hud.lines`,
+   `tetris.hud.level`, `tetris.gameover.title`, `tetris.gameover.restart`, `tetris.gameover.quit`); in the
+   startup scene a canvas `/HUD` whose element `Stats` holds the texts `Points`, `Lines` and `Level`, and a modal
+   canvas `/Game Over` (order 10) whose element `Panel` holds the buttons `Restart` and `Quit`. Both canvases are
+   saved disabled, so the edit-time Game view shows the board alone. Through `UiService`, the module shows `/HUD`
+   while a game runs and writes the score, the lines and the level as decimal numbers into the literal text of
+   `Points`, `Lines` and `Level`; when the game is over it shows `/Game Over`; `Restart` removes every Cell and the
+   falling piece, resets the Score and deals the queue from its start again, and `Quit` calls
+   `SceneService::requestExit()`.
 
 ## What the transcript covers today
 
@@ -63,6 +74,13 @@ in-tree (`illusion_tetris_agent_module`), where `TestTetris.cpp` checks every ru
 transcript loads the reference module after its restart and the recorded one builds its own, so the same
 checks, from C2 on, run against whichever module the session made.
 
+UI-3e adds the **game UI** (item 6) to the scripted session and the reference module, and the **game UI checks**
+(C9) in `checks-ui.jsonl`: they play in a paused game with `play.step`, read the HUD's texts with
+`component.get`, force a game over, click `Restart` and `Quit` with `gameui.click` and check that a new game
+starts and that Play mode ends. The recorded session predates item 6: its scene has no UI and its module no
+`UiService`, so it runs `checks.jsonl` only (C4 counts at least the seven entities of the board scene) until an
+agent session is recorded again against this contract.
+
 ## Checks
 
 | Check | Verifies | Since |
@@ -75,3 +93,4 @@ checks, from C2 on, run against whichever module the session made.
 | C6 Rendering | The 640x360 game view through the scene camera matches `golden/board.png`; `render.stats` sees the three board objects; `viewport.project` and `viewport.pick` find each wall and the floor; `viewport.sample` reads the grey frame; `render.diagnostics` reports no validation errors. Steps carry `"requires": "gpu"`: without a GPU they must fail with 1400. | M7o-2 |
 | C7 Hot reload | A Component layout change during play keeps the values. | M7t |
 | C8 Hygiene | No error log entries and no asserts; every transaction has an `rpc:` origin. | M7x |
+| C9 Game UI | The HUD and the game-over menu are saved disabled; in Play mode the HUD shows, its `Points`, `Lines` and `Level` follow a line clear, the game-over menu shows at the end, `Restart` starts a new game (no Cells, a fresh Score, one falling piece) and hides the menu, and `Quit` ends Play mode. Scripted session only (`checks-ui.jsonl`). | UI-3e |

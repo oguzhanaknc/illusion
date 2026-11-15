@@ -897,6 +897,15 @@ distance field fonts, and a batched pass draws the UI after tonemapping. Public 
 - UI-3e: The demo. The tech demo gets a HUD and a pause menu (Resume, a volume slider, Quit) driven by its
   module through `UiService`; the Tetris acceptance game shows its score and a game-over menu. Done: golden
   image of the demo's pause menu; the acceptance transcripts cover the menu.
+  ✅ Done: the tech demo's HUD and modal pause menu are `assets/scenes/ui.scene`, instantiated by its module
+  (Resume, master volume, language, Quit; frame-time readout by key); `TestTechDemo.cpp` and the golden
+  `techdemo-pause-menu.png` run from committed files only; the Tetris reference module shows points, lines
+  and level and a game-over menu, checked by `checks-ui.jsonl` (C9) on the scripted runs.
+  Open: the pause menu has not been played over the real forest scene in CI (its assets are external); the
+  recorded Tetris agent session predates the UI contract: it still passes `checks.jsonl` (whose entity
+  counts became minimums) but is not run against C9 until an agent session is recorded again; in the
+  headless editor without a GPU the edit World's Disabled Entities are not made Inactive, so
+  `gameui.layout` and `gameui.pick` report disabled canvases there.
 - UI-4: Documentation (EN/TR), in step with each pull request: manual page "Game UI", the scripting API
   reference, a tutorial that adds a HUD and a pause menu, the architecture page.
 

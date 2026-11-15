@@ -1,0 +1,960 @@
+{
+  "format": "illusion.scene",
+  "version": 2,
+  "types": {
+    "illusion.Disabled": 1,
+    "illusion.Hierarchy": 1,
+    "illusion.LocalTransform": 1,
+    "illusion.Name": 1,
+    "illusion.UiButton": 1,
+    "illusion.UiCanvas": 1,
+    "illusion.UiElement": 1,
+    "illusion.UiGlyph": 1,
+    "illusion.UiImage": 1,
+    "illusion.UiInteractable": 1,
+    "illusion.UiSlider": 1,
+    "illusion.UiStack": 1,
+    "illusion.UiText": 1,
+    "illusion.UiTransition": 1
+  },
+  "settings": {},
+  "entities": [
+    {
+      "id": "12772fabcb634dae",
+      "components": {
+        "illusion.Hierarchy": {
+          "parent": null,
+          "order": 0
+        },
+        "illusion.Name": {
+          "value": "HUD"
+        },
+        "illusion.UiCanvas": {
+          "scale": {
+            "mode": "Fit",
+            "referenceSize": [1920.0, 1080.0],
+            "userScale": 1.0
+          },
+          "order": 0,
+          "useSafeArea": true,
+          "modal": false
+        }
+      }
+    },
+    {
+      "id": "64f25a186500abc2",
+      "components": {
+        "illusion.Hierarchy": {
+          "parent": "12772fabcb634dae",
+          "order": 0
+        },
+        "illusion.LocalTransform": {
+          "position": [0.0, 0.0, 0.0],
+          "rotation": [0.0, 0.0, 0.0, 1.0],
+          "scale": [1.0, 1.0, 1.0]
+        },
+        "illusion.Name": {
+          "value": "Title"
+        },
+        "illusion.UiElement": {
+          "placement": {
+            "anchorMin": [0.0, 0.0],
+            "anchorMax": [0.0, 0.0],
+            "offsetMin": [48.0, 36.0],
+            "offsetMax": [960.0, 100.0]
+          },
+          "size": [0.0, 0.0],
+          "pivot": [0.5, 0.5],
+          "rotation": 0.0,
+          "scale": [1.0, 1.0],
+          "opacity": 1.0,
+          "clipChildren": false
+        },
+        "illusion.UiText": {
+          "text": "",
+          "key": "techdemo.hud.title",
+          "font": "assets:/fonts/Roboto-Regular.ttf",
+          "size": 48.0,
+          "color": [1.0, 0.9, 0.7, 1.0],
+          "align": "Start",
+          "verticalAlign": "Middle",
+          "wrap": false,
+          "lineSpacing": 1.0,
+          "letterSpacing": 0.0,
+          "outlineWidth": 2.5,
+          "outlineColor": [0.01, 0.012, 0.015, 1.0],
+          "shadowOffset": [0.0, 3.0],
+          "shadowColor": [0.0, 0.0, 0.0, 0.45]
+        }
+      }
+    },
+    {
+      "id": "ba587ce615c2e741",
+      "components": {
+        "illusion.Hierarchy": {
+          "parent": "12772fabcb634dae",
+          "order": 1
+        },
+        "illusion.LocalTransform": {
+          "position": [0.0, 0.0, 0.0],
+          "rotation": [0.0, 0.0, 0.0, 1.0],
+          "scale": [1.0, 1.0, 1.0]
+        },
+        "illusion.Name": {
+          "value": "Hint"
+        },
+        "illusion.UiElement": {
+          "placement": {
+            "anchorMin": [0.0, 0.0],
+            "anchorMax": [0.0, 0.0],
+            "offsetMin": [48.0, 104.0],
+            "offsetMax": [960.0, 148.0]
+          },
+          "size": [0.0, 0.0],
+          "pivot": [0.5, 0.5],
+          "rotation": 0.0,
+          "scale": [1.0, 1.0],
+          "opacity": 1.0,
+          "clipChildren": false
+        },
+        "illusion.UiStack": {
+          "axis": "Horizontal",
+          "spacing": 12.0,
+          "padding": {
+            "left": 0.0,
+            "top": 0.0,
+            "right": 0.0,
+            "bottom": 0.0
+          },
+          "crossAlign": "Center"
+        }
+      }
+    },
+    {
+      "id": "9996e86c555f28f4",
+      "components": {
+        "illusion.Hierarchy": {
+          "parent": "ba587ce615c2e741",
+          "order": 0
+        },
+        "illusion.LocalTransform": {
+          "position": [0.0, 0.0, 0.0],
+          "rotation": [0.0, 0.0, 0.0, 1.0],
+          "scale": [1.0, 1.0, 1.0]
+        },
+        "illusion.Name": {
+          "value": "Menu Glyph"
+        },
+        "illusion.UiElement": {
+          "placement": {
+            "anchorMin": [0.0, 0.0],
+            "anchorMax": [0.0, 0.0],
+            "offsetMin": [0.0, 0.0],
+            "offsetMax": [0.0, 0.0]
+          },
+          "size": [0.0, 44.0],
+          "pivot": [0.5, 0.5],
+          "rotation": 0.0,
+          "scale": [1.0, 1.0],
+          "opacity": 1.0,
+          "clipChildren": false
+        },
+        "illusion.UiGlyph": {
+          "action": "ui.cancel"
+        },
+        "illusion.UiText": {
+          "text": "Esc",
+          "key": "",
+          "font": "assets:/fonts/Roboto-Regular.ttf",
+          "size": 32.0,
+          "color": [1.0, 0.8, 0.3, 1.0],
+          "align": "Start",
+          "verticalAlign": "Middle",
+          "wrap": false,
+          "lineSpacing": 1.0,
+          "letterSpacing": 0.0,
+          "outlineWidth": 2.0,
+          "outlineColor": [0.01, 0.012, 0.015, 1.0],
+          "shadowOffset": [0.0, 3.0],
+          "shadowColor": [0.0, 0.0, 0.0, 0.45]
+        }
+      }
+    },
+    {
+      "id": "8a0af1efc96211f1",
+      "components": {
+        "illusion.Hierarchy": {
+          "parent": "ba587ce615c2e741",
+          "order": 1
+        },
+        "illusion.LocalTransform": {
+          "position": [0.0, 0.0, 0.0],
+          "rotation": [0.0, 0.0, 0.0, 1.0],
+          "scale": [1.0, 1.0, 1.0]
+        },
+        "illusion.Name": {
+          "value": "Menu Hint"
+        },
+        "illusion.UiElement": {
+          "placement": {
+            "anchorMin": [0.0, 0.0],
+            "anchorMax": [0.0, 0.0],
+            "offsetMin": [0.0, 0.0],
+            "offsetMax": [0.0, 0.0]
+          },
+          "size": [0.0, 44.0],
+          "pivot": [0.5, 0.5],
+          "rotation": 0.0,
+          "scale": [1.0, 1.0],
+          "opacity": 1.0,
+          "clipChildren": false
+        },
+        "illusion.UiText": {
+          "text": "",
+          "key": "techdemo.hud.menuHint",
+          "font": "assets:/fonts/Roboto-Regular.ttf",
+          "size": 32.0,
+          "color": [0.92, 0.94, 0.9, 1.0],
+          "align": "Start",
+          "verticalAlign": "Middle",
+          "wrap": false,
+          "lineSpacing": 1.0,
+          "letterSpacing": 0.0,
+          "outlineWidth": 2.0,
+          "outlineColor": [0.01, 0.012, 0.015, 1.0],
+          "shadowOffset": [0.0, 3.0],
+          "shadowColor": [0.0, 0.0, 0.0, 0.45]
+        }
+      }
+    },
+    {
+      "id": "14f098bc9c48a612",
+      "components": {
+        "illusion.Hierarchy": {
+          "parent": "12772fabcb634dae",
+          "order": 2
+        },
+        "illusion.LocalTransform": {
+          "position": [0.0, 0.0, 0.0],
+          "rotation": [0.0, 0.0, 0.0, 1.0],
+          "scale": [1.0, 1.0, 1.0]
+        },
+        "illusion.Name": {
+          "value": "Frame Time"
+        },
+        "illusion.UiElement": {
+          "placement": {
+            "anchorMin": [1.0, 0.0],
+            "anchorMax": [1.0, 0.0],
+            "offsetMin": [-640.0, 36.0],
+            "offsetMax": [-48.0, 84.0]
+          },
+          "size": [0.0, 0.0],
+          "pivot": [0.5, 0.5],
+          "rotation": 0.0,
+          "scale": [1.0, 1.0],
+          "opacity": 1.0,
+          "clipChildren": false
+        },
+        "illusion.UiText": {
+          "text": "",
+          "key": "techdemo.hud.frameTime",
+          "font": "assets:/fonts/Roboto-Regular.ttf",
+          "size": 32.0,
+          "color": [0.75, 0.95, 0.8, 1.0],
+          "align": "End",
+          "verticalAlign": "Middle",
+          "wrap": false,
+          "lineSpacing": 1.0,
+          "letterSpacing": 0.0,
+          "outlineWidth": 2.0,
+          "outlineColor": [0.01, 0.012, 0.015, 1.0],
+          "shadowOffset": [0.0, 3.0],
+          "shadowColor": [0.0, 0.0, 0.0, 0.45]
+        }
+      }
+    },
+    {
+      "id": "6c06234ea222f989",
+      "components": {
+        "illusion.Disabled": {},
+        "illusion.Hierarchy": {
+          "parent": null,
+          "order": 1
+        },
+        "illusion.Name": {
+          "value": "Pause Menu"
+        },
+        "illusion.UiCanvas": {
+          "scale": {
+            "mode": "Fit",
+            "referenceSize": [1920.0, 1080.0],
+            "userScale": 1.0
+          },
+          "order": 10,
+          "useSafeArea": true,
+          "modal": true
+        }
+      }
+    },
+    {
+      "id": "dcb346f3f2db9064",
+      "components": {
+        "illusion.Hierarchy": {
+          "parent": "6c06234ea222f989",
+          "order": 0
+        },
+        "illusion.LocalTransform": {
+          "position": [0.0, 0.0, 0.0],
+          "rotation": [0.0, 0.0, 0.0, 1.0],
+          "scale": [1.0, 1.0, 1.0]
+        },
+        "illusion.Name": {
+          "value": "Dim"
+        },
+        "illusion.UiElement": {
+          "placement": {
+            "anchorMin": [0.0, 0.0],
+            "anchorMax": [1.0, 1.0],
+            "offsetMin": [0.0, 0.0],
+            "offsetMax": [0.0, 0.0]
+          },
+          "size": [0.0, 0.0],
+          "pivot": [0.5, 0.5],
+          "rotation": 0.0,
+          "scale": [1.0, 1.0],
+          "opacity": 1.0,
+          "clipChildren": false
+        },
+        "illusion.UiImage": {
+          "image": "",
+          "tint": [0.0, 0.01, 0.02, 0.55],
+          "border": {
+            "left": 0.0,
+            "top": 0.0,
+            "right": 0.0,
+            "bottom": 0.0
+          },
+          "borderScale": 1.0,
+          "preserveAspect": false
+        }
+      }
+    },
+    {
+      "id": "09107816b944dea1",
+      "components": {
+        "illusion.Hierarchy": {
+          "parent": "6c06234ea222f989",
+          "order": 1
+        },
+        "illusion.LocalTransform": {
+          "position": [0.0, 0.0, 0.0],
+          "rotation": [0.0, 0.0, 0.0, 1.0],
+          "scale": [1.0, 1.0, 1.0]
+        },
+        "illusion.Name": {
+          "value": "Panel"
+        },
+        "illusion.UiElement": {
+          "placement": {
+            "anchorMin": [0.5, 0.5],
+            "anchorMax": [0.5, 0.5],
+            "offsetMin": [-320.0, -300.0],
+            "offsetMax": [320.0, 300.0]
+          },
+          "size": [0.0, 0.0],
+          "pivot": [0.5, 0.5],
+          "rotation": 0.0,
+          "scale": [1.0, 1.0],
+          "opacity": 1.0,
+          "clipChildren": false
+        },
+        "illusion.UiImage": {
+          "image": "",
+          "tint": [0.03, 0.045, 0.04, 0.92],
+          "border": {
+            "left": 0.0,
+            "top": 0.0,
+            "right": 0.0,
+            "bottom": 0.0
+          },
+          "borderScale": 1.0,
+          "preserveAspect": false
+        },
+        "illusion.UiStack": {
+          "axis": "Vertical",
+          "spacing": 24.0,
+          "padding": {
+            "left": 48.0,
+            "top": 40.0,
+            "right": 48.0,
+            "bottom": 40.0
+          },
+          "crossAlign": "Center"
+        },
+        "illusion.UiTransition": {
+          "trigger": "Shown",
+          "duration": 0.25,
+          "delay": 0.0,
+          "ease": "EaseOut",
+          "offset": [0.0, 48.0],
+          "scale": [0.96, 0.96],
+          "opacity": 0.0,
+          "tint": [1.0, 1.0, 1.0, 1.0]
+        }
+      }
+    },
+    {
+      "id": "0df379a6d1ccfcbd",
+      "components": {
+        "illusion.Hierarchy": {
+          "parent": "09107816b944dea1",
+          "order": 0
+        },
+        "illusion.LocalTransform": {
+          "position": [0.0, 0.0, 0.0],
+          "rotation": [0.0, 0.0, 0.0, 1.0],
+          "scale": [1.0, 1.0, 1.0]
+        },
+        "illusion.Name": {
+          "value": "Heading"
+        },
+        "illusion.UiElement": {
+          "placement": {
+            "anchorMin": [0.0, 0.0],
+            "anchorMax": [0.0, 0.0],
+            "offsetMin": [0.0, 0.0],
+            "offsetMax": [0.0, 0.0]
+          },
+          "size": [0.0, 80.0],
+          "pivot": [0.5, 0.5],
+          "rotation": 0.0,
+          "scale": [1.0, 1.0],
+          "opacity": 1.0,
+          "clipChildren": false
+        },
+        "illusion.UiText": {
+          "text": "",
+          "key": "techdemo.menu.title",
+          "font": "assets:/fonts/Roboto-Regular.ttf",
+          "size": 60.0,
+          "color": [1.0, 0.9, 0.7, 1.0],
+          "align": "Center",
+          "verticalAlign": "Middle",
+          "wrap": false,
+          "lineSpacing": 1.0,
+          "letterSpacing": 0.0,
+          "outlineWidth": 0.0,
+          "outlineColor": [0.01, 0.012, 0.015, 1.0],
+          "shadowOffset": [0.0, 3.0],
+          "shadowColor": [0.0, 0.0, 0.0, 0.45]
+        }
+      }
+    },
+    {
+      "id": "3f145ac9d6f5611e",
+      "components": {
+        "illusion.Hierarchy": {
+          "parent": "09107816b944dea1",
+          "order": 1
+        },
+        "illusion.LocalTransform": {
+          "position": [0.0, 0.0, 0.0],
+          "rotation": [0.0, 0.0, 0.0, 1.0],
+          "scale": [1.0, 1.0, 1.0]
+        },
+        "illusion.Name": {
+          "value": "Resume"
+        },
+        "illusion.UiButton": {},
+        "illusion.UiElement": {
+          "placement": {
+            "anchorMin": [0.0, 0.0],
+            "anchorMax": [0.0, 0.0],
+            "offsetMin": [24.0, 24.0],
+            "offsetMax": [264.0, 88.0]
+          },
+          "size": [440.0, 72.0],
+          "pivot": [0.5, 0.5],
+          "rotation": 0.0,
+          "scale": [1.0, 1.0],
+          "opacity": 1.0,
+          "clipChildren": false
+        },
+        "illusion.UiImage": {
+          "image": "",
+          "tint": [0.16, 0.2, 0.18, 0.95],
+          "border": {
+            "left": 0.0,
+            "top": 0.0,
+            "right": 0.0,
+            "bottom": 0.0
+          },
+          "borderScale": 1.0,
+          "preserveAspect": false
+        },
+        "illusion.UiInteractable": {
+          "enabled": true,
+          "focusable": true,
+          "hoveredTint": [1.35, 1.45, 1.3, 1.0],
+          "pressedTint": [0.75, 0.8, 0.75, 1.0],
+          "focusedTint": [1.6, 1.8, 1.45, 1.0],
+          "disabledTint": [0.5, 0.5, 0.5, 0.5],
+          "up": null,
+          "down": null,
+          "left": null,
+          "right": null
+        }
+      }
+    },
+    {
+      "id": "90d9bb41196b0f02",
+      "components": {
+        "illusion.Hierarchy": {
+          "parent": "3f145ac9d6f5611e",
+          "order": 0
+        },
+        "illusion.LocalTransform": {
+          "position": [0.0, 0.0, 0.0],
+          "rotation": [0.0, 0.0, 0.0, 1.0],
+          "scale": [1.0, 1.0, 1.0]
+        },
+        "illusion.Name": {
+          "value": "Label"
+        },
+        "illusion.UiElement": {
+          "placement": {
+            "anchorMin": [0.0, 0.0],
+            "anchorMax": [1.0, 1.0],
+            "offsetMin": [0.0, 0.0],
+            "offsetMax": [-0.0, -0.0]
+          },
+          "size": [0.0, 0.0],
+          "pivot": [0.5, 0.5],
+          "rotation": 0.0,
+          "scale": [1.0, 1.0],
+          "opacity": 1.0,
+          "clipChildren": false
+        },
+        "illusion.UiText": {
+          "text": "Button",
+          "key": "techdemo.menu.resume",
+          "font": "assets:/fonts/Roboto-Regular.ttf",
+          "size": 36.0,
+          "color": [0.94, 0.96, 0.9, 1.0],
+          "align": "Center",
+          "verticalAlign": "Middle",
+          "wrap": false,
+          "lineSpacing": 1.0,
+          "letterSpacing": 0.0,
+          "outlineWidth": 0.0,
+          "outlineColor": [0.01, 0.012, 0.015, 1.0],
+          "shadowOffset": [0.0, 3.0],
+          "shadowColor": [0.0, 0.0, 0.0, 0.45]
+        }
+      }
+    },
+    {
+      "id": "d056ce5a310a2e76",
+      "components": {
+        "illusion.Hierarchy": {
+          "parent": "09107816b944dea1",
+          "order": 2
+        },
+        "illusion.LocalTransform": {
+          "position": [0.0, 0.0, 0.0],
+          "rotation": [0.0, 0.0, 0.0, 1.0],
+          "scale": [1.0, 1.0, 1.0]
+        },
+        "illusion.Name": {
+          "value": "Volume Label"
+        },
+        "illusion.UiElement": {
+          "placement": {
+            "anchorMin": [0.0, 0.0],
+            "anchorMax": [0.0, 0.0],
+            "offsetMin": [0.0, 0.0],
+            "offsetMax": [0.0, 0.0]
+          },
+          "size": [440.0, 40.0],
+          "pivot": [0.5, 0.5],
+          "rotation": 0.0,
+          "scale": [1.0, 1.0],
+          "opacity": 1.0,
+          "clipChildren": false
+        },
+        "illusion.UiText": {
+          "text": "",
+          "key": "techdemo.menu.volume",
+          "font": "assets:/fonts/Roboto-Regular.ttf",
+          "size": 30.0,
+          "color": [0.85, 0.88, 0.82, 1.0],
+          "align": "Center",
+          "verticalAlign": "Middle",
+          "wrap": false,
+          "lineSpacing": 1.0,
+          "letterSpacing": 0.0,
+          "outlineWidth": 0.0,
+          "outlineColor": [0.01, 0.012, 0.015, 1.0],
+          "shadowOffset": [0.0, 3.0],
+          "shadowColor": [0.0, 0.0, 0.0, 0.45]
+        }
+      }
+    },
+    {
+      "id": "3dcf030efb58adaf",
+      "components": {
+        "illusion.Hierarchy": {
+          "parent": "09107816b944dea1",
+          "order": 3
+        },
+        "illusion.LocalTransform": {
+          "position": [0.0, 0.0, 0.0],
+          "rotation": [0.0, 0.0, 0.0, 1.0],
+          "scale": [1.0, 1.0, 1.0]
+        },
+        "illusion.Name": {
+          "value": "Volume"
+        },
+        "illusion.UiElement": {
+          "placement": {
+            "anchorMin": [0.0, 0.0],
+            "anchorMax": [0.0, 0.0],
+            "offsetMin": [24.0, 24.0],
+            "offsetMax": [344.0, 48.0]
+          },
+          "size": [440.0, 24.0],
+          "pivot": [0.5, 0.5],
+          "rotation": 0.0,
+          "scale": [1.0, 1.0],
+          "opacity": 1.0,
+          "clipChildren": false
+        },
+        "illusion.UiImage": {
+          "image": "",
+          "tint": [0.12, 0.14, 0.13, 1.0],
+          "border": {
+            "left": 0.0,
+            "top": 0.0,
+            "right": 0.0,
+            "bottom": 0.0
+          },
+          "borderScale": 1.0,
+          "preserveAspect": false
+        },
+        "illusion.UiInteractable": {
+          "enabled": true,
+          "focusable": true,
+          "hoveredTint": [1.15, 1.15, 1.15, 1.0],
+          "pressedTint": [0.8, 0.8, 0.8, 1.0],
+          "focusedTint": [1.15, 1.15, 1.15, 1.0],
+          "disabledTint": [0.5, 0.5, 0.5, 0.5],
+          "up": null,
+          "down": null,
+          "left": null,
+          "right": null
+        },
+        "illusion.UiSlider": {
+          "value": 1.0,
+          "min": 0.0,
+          "max": 1.0,
+          "step": 0.05,
+          "axis": "Horizontal",
+          "navigationStep": 0.1
+        }
+      }
+    },
+    {
+      "id": "833b943148fb3cab",
+      "components": {
+        "illusion.Hierarchy": {
+          "parent": "3dcf030efb58adaf",
+          "order": 0
+        },
+        "illusion.LocalTransform": {
+          "position": [0.0, 0.0, 0.0],
+          "rotation": [0.0, 0.0, 0.0, 1.0],
+          "scale": [1.0, 1.0, 1.0]
+        },
+        "illusion.Name": {
+          "value": "Fill"
+        },
+        "illusion.UiElement": {
+          "placement": {
+            "anchorMin": [0.0, 0.0],
+            "anchorMax": [1.0, 1.0],
+            "offsetMin": [0.0, 0.0],
+            "offsetMax": [-0.0, -0.0]
+          },
+          "size": [0.0, 0.0],
+          "pivot": [0.5, 0.5],
+          "rotation": 0.0,
+          "scale": [1.0, 1.0],
+          "opacity": 1.0,
+          "clipChildren": false
+        },
+        "illusion.UiImage": {
+          "image": "",
+          "tint": [0.45, 0.8, 0.5, 1.0],
+          "border": {
+            "left": 0.0,
+            "top": 0.0,
+            "right": 0.0,
+            "bottom": 0.0
+          },
+          "borderScale": 1.0,
+          "preserveAspect": false
+        }
+      }
+    },
+    {
+      "id": "b343707b4bb87455",
+      "components": {
+        "illusion.Hierarchy": {
+          "parent": "3dcf030efb58adaf",
+          "order": 1
+        },
+        "illusion.LocalTransform": {
+          "position": [0.0, 0.0, 0.0],
+          "rotation": [0.0, 0.0, 0.0, 1.0],
+          "scale": [1.0, 1.0, 1.0]
+        },
+        "illusion.Name": {
+          "value": "Handle"
+        },
+        "illusion.UiElement": {
+          "placement": {
+            "anchorMin": [0.0, 0.0],
+            "anchorMax": [0.0, 1.0],
+            "offsetMin": [-8.0, -6.0],
+            "offsetMax": [8.0, 6.0]
+          },
+          "size": [0.0, 0.0],
+          "pivot": [0.5, 0.5],
+          "rotation": 0.0,
+          "scale": [1.0, 1.0],
+          "opacity": 1.0,
+          "clipChildren": false
+        },
+        "illusion.UiImage": {
+          "image": "",
+          "tint": [0.95, 0.97, 0.92, 1.0],
+          "border": {
+            "left": 0.0,
+            "top": 0.0,
+            "right": 0.0,
+            "bottom": 0.0
+          },
+          "borderScale": 1.0,
+          "preserveAspect": false
+        }
+      }
+    },
+    {
+      "id": "0fa1423dc2fa560e",
+      "components": {
+        "illusion.Hierarchy": {
+          "parent": "09107816b944dea1",
+          "order": 4
+        },
+        "illusion.LocalTransform": {
+          "position": [0.0, 0.0, 0.0],
+          "rotation": [0.0, 0.0, 0.0, 1.0],
+          "scale": [1.0, 1.0, 1.0]
+        },
+        "illusion.Name": {
+          "value": "Language"
+        },
+        "illusion.UiButton": {},
+        "illusion.UiElement": {
+          "placement": {
+            "anchorMin": [0.0, 0.0],
+            "anchorMax": [0.0, 0.0],
+            "offsetMin": [24.0, 24.0],
+            "offsetMax": [264.0, 88.0]
+          },
+          "size": [440.0, 72.0],
+          "pivot": [0.5, 0.5],
+          "rotation": 0.0,
+          "scale": [1.0, 1.0],
+          "opacity": 1.0,
+          "clipChildren": false
+        },
+        "illusion.UiImage": {
+          "image": "",
+          "tint": [0.16, 0.2, 0.18, 0.95],
+          "border": {
+            "left": 0.0,
+            "top": 0.0,
+            "right": 0.0,
+            "bottom": 0.0
+          },
+          "borderScale": 1.0,
+          "preserveAspect": false
+        },
+        "illusion.UiInteractable": {
+          "enabled": true,
+          "focusable": true,
+          "hoveredTint": [1.35, 1.45, 1.3, 1.0],
+          "pressedTint": [0.75, 0.8, 0.75, 1.0],
+          "focusedTint": [1.6, 1.8, 1.45, 1.0],
+          "disabledTint": [0.5, 0.5, 0.5, 0.5],
+          "up": null,
+          "down": null,
+          "left": null,
+          "right": null
+        }
+      }
+    },
+    {
+      "id": "f9912dfce380ae2c",
+      "components": {
+        "illusion.Hierarchy": {
+          "parent": "0fa1423dc2fa560e",
+          "order": 0
+        },
+        "illusion.LocalTransform": {
+          "position": [0.0, 0.0, 0.0],
+          "rotation": [0.0, 0.0, 0.0, 1.0],
+          "scale": [1.0, 1.0, 1.0]
+        },
+        "illusion.Name": {
+          "value": "Label"
+        },
+        "illusion.UiElement": {
+          "placement": {
+            "anchorMin": [0.0, 0.0],
+            "anchorMax": [1.0, 1.0],
+            "offsetMin": [0.0, 0.0],
+            "offsetMax": [-0.0, -0.0]
+          },
+          "size": [0.0, 0.0],
+          "pivot": [0.5, 0.5],
+          "rotation": 0.0,
+          "scale": [1.0, 1.0],
+          "opacity": 1.0,
+          "clipChildren": false
+        },
+        "illusion.UiText": {
+          "text": "Button",
+          "key": "techdemo.menu.language",
+          "font": "assets:/fonts/Roboto-Regular.ttf",
+          "size": 36.0,
+          "color": [0.94, 0.96, 0.9, 1.0],
+          "align": "Center",
+          "verticalAlign": "Middle",
+          "wrap": false,
+          "lineSpacing": 1.0,
+          "letterSpacing": 0.0,
+          "outlineWidth": 0.0,
+          "outlineColor": [0.01, 0.012, 0.015, 1.0],
+          "shadowOffset": [0.0, 3.0],
+          "shadowColor": [0.0, 0.0, 0.0, 0.45]
+        }
+      }
+    },
+    {
+      "id": "26fff28951c654f4",
+      "components": {
+        "illusion.Hierarchy": {
+          "parent": "09107816b944dea1",
+          "order": 5
+        },
+        "illusion.LocalTransform": {
+          "position": [0.0, 0.0, 0.0],
+          "rotation": [0.0, 0.0, 0.0, 1.0],
+          "scale": [1.0, 1.0, 1.0]
+        },
+        "illusion.Name": {
+          "value": "Quit"
+        },
+        "illusion.UiButton": {},
+        "illusion.UiElement": {
+          "placement": {
+            "anchorMin": [0.0, 0.0],
+            "anchorMax": [0.0, 0.0],
+            "offsetMin": [24.0, 24.0],
+            "offsetMax": [264.0, 88.0]
+          },
+          "size": [440.0, 72.0],
+          "pivot": [0.5, 0.5],
+          "rotation": 0.0,
+          "scale": [1.0, 1.0],
+          "opacity": 1.0,
+          "clipChildren": false
+        },
+        "illusion.UiImage": {
+          "image": "",
+          "tint": [0.16, 0.2, 0.18, 0.95],
+          "border": {
+            "left": 0.0,
+            "top": 0.0,
+            "right": 0.0,
+            "bottom": 0.0
+          },
+          "borderScale": 1.0,
+          "preserveAspect": false
+        },
+        "illusion.UiInteractable": {
+          "enabled": true,
+          "focusable": true,
+          "hoveredTint": [1.35, 1.45, 1.3, 1.0],
+          "pressedTint": [0.75, 0.8, 0.75, 1.0],
+          "focusedTint": [1.6, 1.8, 1.45, 1.0],
+          "disabledTint": [0.5, 0.5, 0.5, 0.5],
+          "up": null,
+          "down": null,
+          "left": null,
+          "right": null
+        }
+      }
+    },
+    {
+      "id": "fd8b7bb88a9d71b4",
+      "components": {
+        "illusion.Hierarchy": {
+          "parent": "26fff28951c654f4",
+          "order": 0
+        },
+        "illusion.LocalTransform": {
+          "position": [0.0, 0.0, 0.0],
+          "rotation": [0.0, 0.0, 0.0, 1.0],
+          "scale": [1.0, 1.0, 1.0]
+        },
+        "illusion.Name": {
+          "value": "Label"
+        },
+        "illusion.UiElement": {
+          "placement": {
+            "anchorMin": [0.0, 0.0],
+            "anchorMax": [1.0, 1.0],
+            "offsetMin": [0.0, 0.0],
+            "offsetMax": [-0.0, -0.0]
+          },
+          "size": [0.0, 0.0],
+          "pivot": [0.5, 0.5],
+          "rotation": 0.0,
+          "scale": [1.0, 1.0],
+          "opacity": 1.0,
+          "clipChildren": false
+        },
+        "illusion.UiText": {
+          "text": "Button",
+          "key": "techdemo.menu.quit",
+          "font": "assets:/fonts/Roboto-Regular.ttf",
+          "size": 36.0,
+          "color": [0.94, 0.96, 0.9, 1.0],
+          "align": "Center",
+          "verticalAlign": "Middle",
+          "wrap": false,
+          "lineSpacing": 1.0,
+          "letterSpacing": 0.0,
+          "outlineWidth": 0.0,
+          "outlineColor": [0.01, 0.012, 0.015, 1.0],
+          "shadowOffset": [0.0, 3.0],
+          "shadowColor": [0.0, 0.0, 0.0, 0.45]
+        }
+      }
+    }
+  ]
+}

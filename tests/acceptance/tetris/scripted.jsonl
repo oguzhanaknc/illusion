@@ -1,4 +1,4 @@
-{"comment": "Board scenario (M7j): a project from the empty template, eight materials and the static board scene, saved; then a restart. checks.jsonl runs C1, C3 and C4 afterwards."}
+{"comment": "Board scenario (M7j): a project from the empty template, eight materials and the static board scene with its game UI, saved; then a restart. checks.jsonl runs C1, C3 and C4 afterwards."}
 {"call": "project.create", "params": {"directory": "tetris", "name": "Tetris", "template": "empty"}, "capture": {"root": "/root"}, "expect": {"result": {"name": "Tetris", "startupScene": "assets:/scenes/main.scene"}}}
 {"call": "material.create", "params": {"path": "assets:/materials/i.material", "value": {"material": {"name": "I", "baseColorFactor": [0, 1, 1, 1]}}}}
 {"call": "material.create", "params": {"path": "assets:/materials/o.material", "value": {"material": {"name": "O", "baseColorFactor": [1, 1, 0, 1]}}}}
@@ -21,8 +21,30 @@
 {"call": "input.action_define", "params": {"asset": "assets:/input/tetris.input", "name": "tetris.soft_drop", "type": "Button", "bindings": ["Key.Down", "Gamepad.DPadDown"]}}
 {"call": "input.action_define", "params": {"asset": "assets:/input/tetris.input", "name": "tetris.hard_drop", "type": "Button", "bindings": ["Key.Space", "Gamepad.North"]}}
 {"call": "project.settings_set", "params": {"type": "illusion.InputSettings", "value": {"actions": "assets:/input/tetris.input"}}}
-{"call": "scene.save", "expect": {"result": {"path": "assets:/scenes/main.scene", "entities": 7}}}
-{"call": "scene.info", "capture": {"hash": "/hash"}, "expect": {"result": {"dirty": false, "entities": 7, "roots": 4}}}
+{"comment": "Game UI (UI-3e, SPEC.md item 6): the string table, a HUD with the score, the lines and the level, and a modal game-over menu with Restart and Quit, both saved hidden: the module shows them in Play mode. checks-ui.jsonl plays them."}
+{"call": "project.file_write", "params": {"path": "assets:/locales/en.json", "text": "{\n  \"format\": \"illusion.locale\",\n  \"version\": 1,\n  \"locale\": \"en\",\n  \"displayName\": \"English\",\n  \"plural\": \"en\",\n  \"number\": {\n    \"decimal\": \".\",\n    \"group\": \",\"\n  },\n  \"strings\": {\n    \"tetris.hud.points\": \"Score\",\n    \"tetris.hud.lines\": \"Lines\",\n    \"tetris.hud.level\": \"Level\",\n    \"tetris.gameover.title\": \"Game over\",\n    \"tetris.gameover.restart\": \"Restart\",\n    \"tetris.gameover.quit\": \"Quit\"\n  }\n}\n"}}
+{"call": "gameui.create", "params": {"kind": "canvas", "name": "HUD"}, "expect": {"result": {"entity": {"path": "/HUD"}}}}
+{"call": "entity.create", "params": {"name": "Stats", "parent": "/HUD", "components": {"illusion.UiElement": {"placement": {"anchorMin": [1, 0], "anchorMax": [1, 0], "offsetMin": [-440, 48], "offsetMax": [-48, 560]}}, "illusion.UiImage": {"tint": [0, 0, 0, 0.55]}, "illusion.UiStack": {"spacing": 8, "padding": {"left": 24, "top": 24, "right": 24, "bottom": 24}}}}}
+{"call": "entity.create", "params": {"name": "Points Label", "parent": "/HUD/Stats", "components": {"illusion.UiElement": {"size": [0, 40]}, "illusion.UiText": {"font": "assets:/fonts/Roboto-Regular.ttf", "size": 32, "color": [0.7, 0.75, 0.8, 1], "align": "Start", "verticalAlign": "Middle", "wrap": false, "key": "tetris.hud.points"}}}}
+{"call": "entity.create", "params": {"name": "Points", "parent": "/HUD/Stats", "components": {"illusion.UiElement": {"size": [0, 72]}, "illusion.UiText": {"font": "assets:/fonts/Roboto-Regular.ttf", "size": 60, "color": [1, 1, 1, 1], "align": "End", "verticalAlign": "Middle", "wrap": false, "text": "0"}}}}
+{"call": "entity.create", "params": {"name": "Lines Label", "parent": "/HUD/Stats", "components": {"illusion.UiElement": {"size": [0, 40]}, "illusion.UiText": {"font": "assets:/fonts/Roboto-Regular.ttf", "size": 32, "color": [0.7, 0.75, 0.8, 1], "align": "Start", "verticalAlign": "Middle", "wrap": false, "key": "tetris.hud.lines"}}}}
+{"call": "entity.create", "params": {"name": "Lines", "parent": "/HUD/Stats", "components": {"illusion.UiElement": {"size": [0, 72]}, "illusion.UiText": {"font": "assets:/fonts/Roboto-Regular.ttf", "size": 60, "color": [1, 1, 1, 1], "align": "End", "verticalAlign": "Middle", "wrap": false, "text": "0"}}}}
+{"call": "entity.create", "params": {"name": "Level Label", "parent": "/HUD/Stats", "components": {"illusion.UiElement": {"size": [0, 40]}, "illusion.UiText": {"font": "assets:/fonts/Roboto-Regular.ttf", "size": 32, "color": [0.7, 0.75, 0.8, 1], "align": "Start", "verticalAlign": "Middle", "wrap": false, "key": "tetris.hud.level"}}}}
+{"call": "entity.create", "params": {"name": "Level", "parent": "/HUD/Stats", "components": {"illusion.UiElement": {"size": [0, 72]}, "illusion.UiText": {"font": "assets:/fonts/Roboto-Regular.ttf", "size": 60, "color": [1, 1, 1, 1], "align": "End", "verticalAlign": "Middle", "wrap": false, "text": "0"}}}}
+{"call": "gameui.create", "params": {"kind": "canvas", "name": "Game Over"}, "expect": {"result": {"entity": {"path": "/Game Over"}}}}
+{"call": "component.set", "params": {"entity": "/Game Over", "type": "illusion.UiCanvas", "value": {"order": 10, "modal": true}}}
+{"call": "entity.create", "params": {"name": "Panel", "parent": "/Game Over", "components": {"illusion.UiElement": {"placement": {"anchorMin": [0.5, 0.5], "anchorMax": [0.5, 0.5], "offsetMin": [-300, -220], "offsetMax": [300, 220]}}, "illusion.UiImage": {"tint": [0.05, 0.05, 0.08, 0.92]}, "illusion.UiStack": {"spacing": 24, "padding": {"left": 40, "top": 40, "right": 40, "bottom": 40}, "crossAlign": "Center"}}}}
+{"call": "entity.create", "params": {"name": "Title", "parent": "/Game Over/Panel", "components": {"illusion.UiElement": {"size": [0, 96]}, "illusion.UiText": {"font": "assets:/fonts/Roboto-Regular.ttf", "size": 72, "color": [1, 0.85, 0.3, 1], "align": "Center", "verticalAlign": "Middle", "wrap": false, "key": "tetris.gameover.title"}}}}
+{"call": "gameui.create", "params": {"kind": "button", "parent": "/Game Over/Panel", "name": "Restart"}, "expect": {"result": {"entity": {"path": "/Game Over/Panel/Restart"}, "parts": [{"role": "label"}]}}}
+{"call": "component.set", "params": {"entity": "/Game Over/Panel/Restart", "type": "illusion.UiElement", "value": {"size": [400, 80]}}}
+{"call": "component.set", "params": {"entity": "/Game Over/Panel/Restart/Label", "type": "illusion.UiText", "value": {"key": "tetris.gameover.restart", "size": 40}}}
+{"call": "gameui.create", "params": {"kind": "button", "parent": "/Game Over/Panel", "name": "Quit"}, "expect": {"result": {"entity": {"path": "/Game Over/Panel/Quit"}, "parts": [{"role": "label"}]}}}
+{"call": "component.set", "params": {"entity": "/Game Over/Panel/Quit", "type": "illusion.UiElement", "value": {"size": [400, 80]}}}
+{"call": "component.set", "params": {"entity": "/Game Over/Panel/Quit/Label", "type": "illusion.UiText", "value": {"key": "tetris.gameover.quit", "size": 40}}}
+{"call": "entity.set_enabled", "params": {"entity": "/HUD", "enabled": false}}
+{"call": "entity.set_enabled", "params": {"entity": "/Game Over", "enabled": false}}
+{"call": "scene.save", "expect": {"result": {"path": "assets:/scenes/main.scene", "entities": 22}}}
+{"call": "scene.info", "capture": {"hash": "/hash"}, "expect": {"result": {"dirty": false, "entities": 22, "roots": 6}}}
 {"call": "project.file_read", "params": {"path": "assets:/scenes/main.scene"}, "capture": {"sceneText": "/text"}}
 {"restart": {"arguments": ["--project", "${root}"]}}
 {"comment": "The scripted session has no module of its own: it loads the reference module (tests/acceptance/tetris/module), as the recorded session builds the agent's."}

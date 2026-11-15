@@ -1,0 +1,48 @@
+{"check": "C9", "title": "Game UI: the HUD follows the score, and Restart and Quit of the game-over menu work", "call": "component.get", "params": {"entity": "/HUD", "type": "illusion.Disabled"}, "expect": {"result": {}}}
+{"check": "C9", "call": "component.get", "params": {"entity": "/Game Over", "type": "illusion.Disabled"}, "expect": {"result": {}}}
+{"check": "C9", "call": "play.start", "params": {"fixedStep": true}}
+{"check": "C9", "call": "play.pause", "params": {"paused": true}, "expect": {"result": {"state": "paused"}}}
+{"check": "C9", "call": "component.add", "params": {"entity": "/Board", "type": "tetris.Board"}}
+{"check": "C9", "call": "entity.create", "params": {"name": "Queue", "components": {"tetris.PieceQueue": {"seed": 1, "forced": "IO"}}}}
+{"check": "C9", "call": "entity.create", "params": {"name": "Score", "components": {"tetris.Score": {}}}}
+{"check": "C9", "call": "play.step"}
+{"check": "C9", "call": "gameui.layout", "params": {"entity": "/HUD/Stats/Points"}, "expect": {"result": {"world": "play", "elements": [{"entity": {"path": "/HUD/Stats/Points"}, "visible": true}]}}}
+{"check": "C9", "call": "component.get", "params": {"entity": "/HUD/Stats/Points", "type": "illusion.UiText"}, "expect": {"result": {"value": {"text": "0"}}}}
+{"check": "C9", "call": "entity.create", "params": {"parent": "/Board", "components": {"tetris.Cell": {"x": 0, "y": 0, "kind": "O"}}}}
+{"check": "C9", "call": "entity.create", "params": {"parent": "/Board", "components": {"tetris.Cell": {"x": 1, "y": 0, "kind": "O"}}}}
+{"check": "C9", "call": "entity.create", "params": {"parent": "/Board", "components": {"tetris.Cell": {"x": 2, "y": 0, "kind": "O"}}}}
+{"check": "C9", "call": "entity.create", "params": {"parent": "/Board", "components": {"tetris.Cell": {"x": 7, "y": 0, "kind": "O"}}}}
+{"check": "C9", "call": "entity.create", "params": {"parent": "/Board", "components": {"tetris.Cell": {"x": 8, "y": 0, "kind": "O"}}}}
+{"check": "C9", "call": "entity.create", "params": {"parent": "/Board", "components": {"tetris.Cell": {"x": 9, "y": 0, "kind": "O"}}}}
+{"check": "C9", "call": "input.inject", "params": {"keys": [{"key": "Space", "down": true}]}}
+{"check": "C9", "call": "play.step"}
+{"check": "C9", "call": "input.inject", "params": {"keys": [{"key": "Space", "down": false}]}}
+{"check": "C9", "call": "play.step"}
+{"check": "C9", "call": "component.get", "params": {"entity": "/HUD/Stats/Points", "type": "illusion.UiText"}, "expect": {"result": {"value": {"text": "100"}}}}
+{"check": "C9", "call": "component.get", "params": {"entity": "/HUD/Stats/Lines", "type": "illusion.UiText"}, "expect": {"result": {"value": {"text": "1"}}}}
+{"check": "C9", "call": "component.get", "params": {"entity": "/HUD/Stats/Level", "type": "illusion.UiText"}, "expect": {"result": {"value": {"text": "1"}}}}
+{"check": "C9", "call": "component.get", "params": {"entity": "/Score", "type": "tetris.Score"}, "expect": {"result": {"value": {"points": 100, "lines": 1, "gameOver": false}}}}
+{"check": "C9", "call": "entity.create", "params": {"parent": "/Board", "components": {"tetris.Cell": {"x": 4, "y": 17, "kind": "O"}}}}
+{"check": "C9", "call": "entity.create", "params": {"parent": "/Board", "components": {"tetris.Cell": {"x": 5, "y": 17, "kind": "O"}}}}
+{"check": "C9", "call": "input.inject", "params": {"keys": [{"key": "Space", "down": true}]}}
+{"check": "C9", "call": "play.step"}
+{"check": "C9", "call": "input.inject", "params": {"keys": [{"key": "Space", "down": false}]}}
+{"check": "C9", "call": "play.step"}
+{"check": "C9", "call": "component.get", "params": {"entity": "/Score", "type": "tetris.Score"}, "expect": {"result": {"value": {"gameOver": true}}}}
+{"check": "C9", "call": "gameui.layout", "params": {"entity": "/Game Over/Panel/Restart"}, "expect": {"result": {"elements": [{"entity": {"path": "/Game Over/Panel/Restart"}, "visible": true, "interactable": true}, {"entity": {"path": "/Game Over/Panel/Restart/Label"}}]}}}
+{"check": "C9", "call": "gameui.click", "params": {"entity": "/Game Over/Panel/Restart"}, "expect": {"result": {"events": {"$contains": {"type": "clicked", "entity": {"path": "/Game Over/Panel/Restart"}}}}}}
+{"check": "C9", "call": "play.step"}
+{"check": "C9", "call": "component.get", "params": {"entity": "/Score", "type": "tetris.Score"}, "expect": {"result": {"value": {"points": 0, "lines": 0, "level": 1, "gameOver": false}}}}
+{"check": "C9", "call": "scene.query", "params": {"has": ["tetris.Cell"]}, "expect": {"result": {"total": 0}}}
+{"check": "C9", "call": "scene.query", "params": {"has": ["tetris.ActivePiece"]}, "expect": {"result": {"total": 1}}}
+{"check": "C9", "call": "gameui.layout", "params": {"entity": "/Game Over"}, "expect": {"result": {"elements": {"$length": 0}}}}
+{"check": "C9", "call": "component.get", "params": {"entity": "/HUD/Stats/Points", "type": "illusion.UiText"}, "expect": {"result": {"value": {"text": "0"}}}}
+{"check": "C9", "call": "entity.create", "params": {"parent": "/Board", "components": {"tetris.Cell": {"x": 4, "y": 17, "kind": "O"}}}}
+{"check": "C9", "call": "input.inject", "params": {"keys": [{"key": "Space", "down": true}]}}
+{"check": "C9", "call": "play.step"}
+{"check": "C9", "call": "input.inject", "params": {"keys": [{"key": "Space", "down": false}]}}
+{"check": "C9", "call": "play.step"}
+{"check": "C9", "call": "component.get", "params": {"entity": "/Score", "type": "tetris.Score"}, "expect": {"result": {"value": {"gameOver": true}}}}
+{"check": "C9", "call": "gameui.click", "params": {"entity": "/Game Over/Panel/Quit"}, "expect": {"result": {"events": {"$contains": {"type": "clicked", "entity": {"path": "/Game Over/Panel/Quit"}}}}}}
+{"check": "C9", "call": "play.step"}
+{"check": "C9", "call": "play.status", "expect": {"result": {"state": "stopped"}}}
