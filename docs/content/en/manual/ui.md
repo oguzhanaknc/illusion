@@ -244,8 +244,8 @@ first. A text, a button's label and a text field's placeholder use the project's
 1. Choose **Entity > Game UI > Canvas**, or any element: it goes into a canvas that is created for you.
 2. Select a canvas or an element before you create the next one to put it inside.
 3. Set the fields in the Inspector: the placement anchors and offsets, the text, the font and texture Assets
-   (drag them from the Asset Browser onto the fields), the colours and sizes. The canvas has no placement
-   handles yet, so placement is edited in the Inspector for now.
+   (drag them from the Asset Browser onto the fields), the colours and sizes. You can also place elements
+   in the Game view, see [Editing in the Game view](#editing-in-the-game-view).
 4. Look at the result in the **Game view**: it draws the scene's UI also while no game runs. The Scene view does
    not draw UI. The `viewport.screenshot` command with `"viewport": "game"` takes a picture of it.
 
@@ -820,13 +820,59 @@ else if (ui->transitionProgress(goButton).value_or(0.0f) >= 1.0f)
 }
 ```
 
+## Editing in the Game view
+
+While no game runs, the **Game view** is also the canvas editor: it draws the UI at the size the game will
+have, and you work on it with the mouse. The Scene view draws no UI.
+
+- **Select** by clicking: the topmost element under the pointer is selected (the one drawn last that is
+  visible and inside the clips of its parents). Hold Alt to skip the handles, so that a click only selects.
+- **Move** by dragging inside the selected element's rectangle.
+- **Resize** by dragging one of the eight handles on its outline.
+- **Anchors** are drawn as markers: the four corners of the parent's rectangle that the element's anchors
+  refer to, and the element's pivot. Anchors that coincide show one marker; stretching anchors show the
+  corners of the stretched area.
+- **Snapping**: drags snap to whole canvas units. Hold Ctrl to snap to 8 units, hold Alt for no snapping.
+- **Cancel** a drag with Esc or the right mouse button; the element returns to where it was. A finished drag
+  is one undo step.
+- A **child of a `UiStack` or `UiGrid`** is placed by its parent, so it has no move or anchor handles.
+  Resizing it writes `UiElement::size`.
+
+The colours of the outline, handles and markers come from the theme tokens `canvas.selection`,
+`canvas.handle` and `canvas.anchor`.
+
+The Inspector shows the same placement for the selected element. The **anchors** button opens a popup with
+16 presets in a 4 x 4 grid (corners, edges, centre and the stretching ones); it keeps the element's rectangle
+unless you hold Alt, which keeps the offsets so that the element moves with its anchors. Per axis, the fields
+are **Pos** and **Size** when the anchors coincide and the margins to the parent otherwise. A child of a stack
+or grid shows a note that its parent places it.
+
+Agents use three [Editor commands](../reference/editor-commands.md) of the category Game UI, which the Game
+view runs too. **`gameui.pick`** returns the topmost element at a pixel of the target size. **`gameui.place`**
+moves and resizes an element so that its rectangle at the target size is `min` to `max` in canvas units (y
+down from the top left). **`gameui.set_anchors`** sets a `preset` or `anchorMin` and `anchorMax`, and with
+`keepRect` (default true) keeps the rectangle. All three take `width` and `height` (default 1920 x 1080),
+because offsets depend on the parent's size unless the anchors coincide; with stretching anchors a placement
+is exact only at that size.
+
+```json
+{"call": "gameui.pick", "params": {"x": 960, "y": 540, "width": 1920, "height": 1080}}
+```
+
+```json
+{"call": "gameui.place", "params": {"entity": "/HUD/Start", "min": [100, 50], "max": [340, 114]}}
+```
+
+```json
+{"call": "gameui.set_anchors", "params": {"entity": "/HUD/Score", "preset": "top_right"}}
+```
+
 ## What is not there yet
 
-The UI is drawn, reacts to input, can be scripted by game modules, animates with transitions and is built
-from the Entity menu or with `gameui.*` commands. A later package adds the canvas editor in the Scene view
-(placement handles, anchor presets and picking elements with the mouse). Until then placement is edited in the
-Inspector. Text selection, glyph images (a button picture instead of a label) and recycled lists are not there
-either. The limits of the first version
+The UI is drawn, reacts to input, can be scripted by game modules, animates with transitions, is built
+from the Entity menu or with `gameui.*` commands and is edited in the Game view. Zooming and panning the Game
+view to frame a small element, and the UI in the Scene view, are not there yet. Text selection, glyph images
+(a button picture instead of a label) and recycled lists are not there either. The limits of the first version
 ([ADR 0057](https://github.com/oguzhanaknc/illusion/blob/main/docs/adr/0057-game-ui.md)):
 
 - Text is drawn left to right without shaping: Arabic, Hebrew, Indic scripts and ligatures are

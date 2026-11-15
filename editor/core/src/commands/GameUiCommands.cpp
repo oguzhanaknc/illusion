@@ -7,10 +7,12 @@
 #include <illusion/ecs/ComponentJson.hpp>
 #include <illusion/ecs/Hierarchy.hpp>
 #include <illusion/ecs/Name.hpp>
+#include <illusion/editor/core/UiPlacementEdit.hpp>
 #include <illusion/ui/UiWorld.hpp>
 
 #include <algorithm>
 #include <array>
+#include <cmath>
 #include <format>
 #include <map>
 
@@ -546,16 +548,71 @@ bool within(const UiLayout& layout, const UiLayoutElement& element, u32 ancestor
     return false;
 }
 
-Expected<GameUiLayoutResult, CommandError> gameUiLayout(CommandContext& context,
-                                                        const GameUiLayoutParams& params)
+Expected<void, CommandError> checkTarget(const std::optional<u32>& width, const std::optional<u32>& height)
 {
-    if (params.width && (*params.width == 0 || *params.width > kMaxTargetSide))
+    if (width && (*width == 0 || *width > kMaxTargetSide))
     {
         return unexpected(CommandError::invalid("/width", "must be between 1 and 16384"));
     }
-    if (params.height && (*params.height == 0 || *params.height > kMaxTargetSide))
+    if (height && (*height == 0 || *height > kMaxTargetSide))
     {
         return unexpected(CommandError::invalid("/height", "must be between 1 and 16384"));
+    }
+    return {};
+}
+
+// The layout of the World the command works on: the edit World laid out for width x height pixels, or the
+// play World as its last update laid it out.
+struct LaidOut
+{
+    UiLayout layout;
+    UVec2 target{0};
+    UiWorld* play = nullptr; // the running game's UI (null for the edit World)
+};
+
+Expected<LaidOut, CommandError> layOut(CommandContext& context, const std::optional<u32>& width,
+                                       const std::optional<u32>& height)
+{
+    LaidOut out;
+    if (context.onPlayWorld())
+    {
+        PlayHost* play = context.editor().play();
+        out.play = play != nullptr ? play->gameUi() : nullptr;
+        if (out.play == nullptr)
+        {
+            return unexpected(CommandError::make(ErrorKind::Unsupported, "the running game has no UI"));
+        }
+        out.target = play->gameUiFrame().targetPixels;
+        if (width || height)
+        {
+            context.warn(std::format("width and height apply to the edit World; the play World is laid out "
+                                     "for its UI target of {}x{} pixels",
+                                     out.target.x, out.target.y));
+        }
+        out.play->layout(out.layout);
+        return out;
+    }
+    out.target = {width.value_or(kDefaultWidth), height.value_or(kDefaultHeight)};
+    UiWorldDesc desc;
+    desc.preview = true;
+    UiWorld preview(context.world(), desc);
+    CpuUiAssets assets(context.editor().files(), context.editor().project() != nullptr);
+    preview.setAssets(&assets);
+    if (PlayHost* play = context.editor().play())
+    {
+        preview.setLocalization(play->projectLocalization());
+    }
+    preview.update(UiFrame{.targetPixels = out.target, .safeInsetPixels = {}});
+    preview.layout(out.layout);
+    return out;
+}
+
+Expected<GameUiLayoutResult, CommandError> gameUiLayout(CommandContext& context,
+                                                        const GameUiLayoutParams& params)
+{
+    if (Expected<void, CommandError> valid = checkTarget(params.width, params.height); !valid)
+    {
+        return unexpected(std::move(valid).error());
     }
     World& world = context.world();
     Entity scope;
@@ -574,49 +631,16 @@ Expected<GameUiLayoutResult, CommandError> gameUiLayout(CommandContext& context,
         scope = *entity;
     }
 
+    Expected<LaidOut, CommandError> laidOut = layOut(context, params.width, params.height);
+    if (!laidOut)
+    {
+        return unexpected(std::move(laidOut).error());
+    }
+    const UiLayout& layout = laidOut->layout;
     GameUiLayoutResult result;
-    UiLayout layout;
-    UiWorld* shown = nullptr;
-    std::unique_ptr<UiWorld> preview;
-    std::unique_ptr<CpuUiAssets> assets;
-    if (context.onPlayWorld())
-    {
-        PlayHost* play = context.editor().play();
-        shown = play != nullptr ? play->gameUi() : nullptr;
-        if (shown == nullptr)
-        {
-            return unexpected(CommandError::make(ErrorKind::Unsupported, "the running game has no UI"));
-        }
-        const UiFrame frame = play->gameUiFrame();
-        result.world = "play";
-        result.width = frame.targetPixels.x;
-        result.height = frame.targetPixels.y;
-        if (params.width || params.height)
-        {
-            context.warn(std::format("width and height apply to the edit World; the play World is laid out "
-                                     "for its UI target of {}x{} pixels",
-                                     result.width, result.height));
-        }
-    }
-    else
-    {
-        result.world = "edit";
-        result.width = params.width.value_or(kDefaultWidth);
-        result.height = params.height.value_or(kDefaultHeight);
-        UiWorldDesc desc;
-        desc.preview = true;
-        preview = std::make_unique<UiWorld>(world, desc);
-        assets =
-            std::make_unique<CpuUiAssets>(context.editor().files(), context.editor().project() != nullptr);
-        preview->setAssets(assets.get());
-        if (PlayHost* play = context.editor().play())
-        {
-            preview->setLocalization(play->projectLocalization());
-        }
-        preview->update(UiFrame{.targetPixels = {result.width, result.height}, .safeInsetPixels = {}});
-        shown = preview.get();
-    }
-    shown->layout(layout);
+    result.world = laidOut->play != nullptr ? "play" : "edit";
+    result.width = laidOut->target.x;
+    result.height = laidOut->target.y;
 
     // The scope as an element index (or canvas index for a canvas).
     std::optional<u32> scopeElement;
@@ -640,7 +664,7 @@ Expected<GameUiLayoutResult, CommandError> gameUiLayout(CommandContext& context,
                          "active canvas");
         }
     }
-    const Entity focus = context.onPlayWorld() ? shown->focused() : Entity{};
+    const Entity focus = laidOut->play != nullptr ? laidOut->play->focused() : Entity{};
     for (u32 c = 0; c < layout.canvases.size(); ++c)
     {
         const UiLayoutCanvas& canvas = layout.canvases[c];
@@ -904,6 +928,277 @@ Expected<GameUiFocusResult, CommandError> gameUiFocus(CommandContext& context,
     return result;
 }
 
+// The elements of canvas @p canvas of @p layout alone, with their parents renumbered.
+UiLayout canvasLayout(const UiLayout& layout, u32 canvas)
+{
+    UiLayout out;
+    out.canvases.push_back(layout.canvases[canvas]);
+    u32 first = UiLayoutElement::kNoParent;
+    for (u32 i = 0; i < layout.elements.size(); ++i)
+    {
+        UiLayoutElement element = layout.elements[i];
+        if (element.canvas != canvas)
+        {
+            continue;
+        }
+        first = std::min(first, i);
+        element.canvas = 0;
+        if (element.parent != UiLayoutElement::kNoParent)
+        {
+            element.parent -= first;
+        }
+        out.elements.push_back(element);
+    }
+    return out;
+}
+
+Expected<GameUiPickResult, CommandError> gameUiPick(CommandContext& context, const GameUiPickParams& params)
+{
+    if (!std::isfinite(params.x))
+    {
+        return unexpected(CommandError::invalid("/x", "must be a finite number"));
+    }
+    if (!std::isfinite(params.y))
+    {
+        return unexpected(CommandError::invalid("/y", "must be a finite number"));
+    }
+    if (Expected<void, CommandError> valid = checkTarget(params.width, params.height); !valid)
+    {
+        return unexpected(std::move(valid).error());
+    }
+    Expected<LaidOut, CommandError> laidOut = layOut(context, params.width, params.height);
+    if (!laidOut)
+    {
+        return unexpected(std::move(laidOut).error());
+    }
+    const UiLayout& layout = laidOut->layout;
+    GameUiPickResult result;
+    const Vec2 pixels(params.x, params.y);
+    for (u32 c = static_cast<u32>(layout.canvases.size()); c-- > 0;)
+    {
+        const f32 pixelsPerUnit = layout.canvases[c].metrics.pixelsPerUnit;
+        const Entity hit = pickUiElement(canvasLayout(layout, c), pixels / pixelsPerUnit);
+        if (hit.isNull())
+        {
+            continue;
+        }
+        result.entity = context.summary(hit);
+        for (const UiLayoutElement* at = elementOf(layout, hit); at != nullptr;
+             at = at->parent != UiLayoutElement::kNoParent ? &layout.elements[at->parent] : nullptr)
+        {
+            result.path.push_back(context.summary(at->entity));
+        }
+        result.path.push_back(context.summary(layout.canvases[c].entity));
+        std::reverse(result.path.begin(), result.path.end());
+        break;
+    }
+    return result;
+}
+
+// A UI element of the World the command works on, as the layout placed it.
+struct PlacedElement
+{
+    Entity entity{};
+    const UiLayoutElement* laidOut = nullptr; // null when the layout skipped it
+    UiRect parent{};                          // the rectangle it is placed in
+    bool byLayout = false;                    // a child of a UiStack or UiGrid
+};
+
+Expected<Entity, CommandError> uiElement(CommandContext& context, const std::string& reference)
+{
+    Expected<Entity, CommandError> entity = context.entity(reference, "/entity");
+    if (!entity)
+    {
+        return entity;
+    }
+    if (context.world().has<UiCanvas>(*entity) || !context.world().has<UiElement>(*entity))
+    {
+        return unexpected(blocked("the entity is not a UI element (it needs illusion.UiElement)"));
+    }
+    return entity;
+}
+
+PlacedElement placedElement(const World& world, const UiLayout& layout, Entity entity)
+{
+    PlacedElement out;
+    out.entity = entity;
+    const Entity parent = parentOf(world, entity);
+    out.byLayout = !parent.isNull() && (world.has<UiStack>(parent) || world.has<UiGrid>(parent));
+    out.laidOut = elementOf(layout, entity);
+    if (out.laidOut != nullptr)
+    {
+        out.parent = out.laidOut->parent != UiLayoutElement::kNoParent
+                         ? layout.elements[out.laidOut->parent].rect
+                         : layout.canvases[out.laidOut->canvas].area;
+    }
+    return out;
+}
+
+CommandError notLaidOut()
+{
+    return blocked("the element is not laid out: it or an ancestor is inactive, or it is not under an active "
+                   "canvas");
+}
+
+Expected<GameUiPlacementResult, CommandError> writeElement(CommandContext& context, Entity entity,
+                                                           const UiElement& element, bool byLayout)
+{
+    Expected<bool, CommandError> written =
+        context.edit().assignComponent(entity, componentId<UiElement>(), &element);
+    if (!written)
+    {
+        return unexpected(std::move(written).error());
+    }
+    return GameUiPlacementResult{.entity = context.summary(entity),
+                                 .anchorMin = element.placement.anchorMin,
+                                 .anchorMax = element.placement.anchorMax,
+                                 .offsetMin = element.placement.offsetMin,
+                                 .offsetMax = element.placement.offsetMax,
+                                 .size = element.size,
+                                 .placedByLayout = byLayout};
+}
+
+bool finite(Vec2 value) noexcept
+{
+    return std::isfinite(value.x) && std::isfinite(value.y);
+}
+
+Expected<GameUiPlacementResult, CommandError> gameUiPlace(CommandContext& context,
+                                                          const GameUiPlaceParams& params)
+{
+    if (!finite(params.min))
+    {
+        return unexpected(CommandError::invalid("/min", "must be finite numbers"));
+    }
+    if (!finite(params.max))
+    {
+        return unexpected(CommandError::invalid("/max", "must be finite numbers"));
+    }
+    if (params.max.x < params.min.x || params.max.y < params.min.y)
+    {
+        return unexpected(CommandError::invalid("/max", "must not be below min on either axis"));
+    }
+    if (Expected<void, CommandError> valid = checkTarget(params.width, params.height); !valid)
+    {
+        return unexpected(std::move(valid).error());
+    }
+    Expected<Entity, CommandError> entity = uiElement(context, params.entity);
+    if (!entity)
+    {
+        return unexpected(std::move(entity).error());
+    }
+    Expected<LaidOut, CommandError> laidOut = layOut(context, params.width, params.height);
+    if (!laidOut)
+    {
+        return unexpected(std::move(laidOut).error());
+    }
+    World& world = context.world();
+    const PlacedElement placed = placedElement(world, laidOut->layout, *entity);
+    if (placed.laidOut == nullptr)
+    {
+        return unexpected(notLaidOut());
+    }
+    UiElement element = world.get<UiElement>(*entity);
+    if (placed.byLayout)
+    {
+        element.size = params.max - params.min;
+    }
+    else
+    {
+        element.placement = placementFor(element.placement, placed.parent, UiRect{params.min, params.max});
+    }
+    return writeElement(context, *entity, element, placed.byLayout);
+}
+
+Expected<GameUiPlacementResult, CommandError> gameUiSetAnchors(CommandContext& context,
+                                                               const GameUiSetAnchorsParams& params)
+{
+    UiAnchors anchors;
+    if (params.preset)
+    {
+        if (params.anchorMin || params.anchorMax)
+        {
+            return unexpected(
+                CommandError::invalid("/preset", "give either preset or anchorMin and anchorMax"));
+        }
+        if (Expected<void, CommandError> valid =
+                checkEnum(*params.preset, UiAnchorPreset::Stretch, "/preset");
+            !valid)
+        {
+            return unexpected(std::move(valid).error());
+        }
+        anchors = anchorsOf(*params.preset);
+    }
+    else
+    {
+        if (!params.anchorMin && !params.anchorMax)
+        {
+            return unexpected(CommandError::invalid("/preset", "give a preset or anchorMin and anchorMax"));
+        }
+        if (!params.anchorMin)
+        {
+            return unexpected(CommandError::invalid("/anchorMin", "is required with anchorMax"));
+        }
+        if (!params.anchorMax)
+        {
+            return unexpected(CommandError::invalid("/anchorMax", "is required with anchorMin"));
+        }
+        const auto inUnitRange = [](Vec2 value) {
+            return finite(value) && value.x >= 0.0f && value.y >= 0.0f && value.x <= 1.0f && value.y <= 1.0f;
+        };
+        if (!inUnitRange(*params.anchorMin))
+        {
+            return unexpected(CommandError::invalid("/anchorMin", "must be between 0 and 1 on each axis"));
+        }
+        if (!inUnitRange(*params.anchorMax))
+        {
+            return unexpected(CommandError::invalid("/anchorMax", "must be between 0 and 1 on each axis"));
+        }
+        if (params.anchorMax->x < params.anchorMin->x || params.anchorMax->y < params.anchorMin->y)
+        {
+            return unexpected(
+                CommandError::invalid("/anchorMax", "must not be below anchorMin on either axis"));
+        }
+        anchors = {.min = *params.anchorMin, .max = *params.anchorMax};
+    }
+    if (Expected<void, CommandError> valid = checkTarget(params.width, params.height); !valid)
+    {
+        return unexpected(std::move(valid).error());
+    }
+    Expected<Entity, CommandError> entity = uiElement(context, params.entity);
+    if (!entity)
+    {
+        return unexpected(std::move(entity).error());
+    }
+    World& world = context.world();
+    const bool keepRect = params.keepRect.value_or(true);
+    const Entity parent = parentOf(world, *entity);
+    if (!parent.isNull() && (world.has<UiStack>(parent) || world.has<UiGrid>(parent)))
+    {
+        return unexpected(
+            blocked("the element is a child of a stack or grid, which places it; anchors do not "
+                    "apply"));
+    }
+    UiElement element = world.get<UiElement>(*entity);
+    UiRect parentRect;
+    if (keepRect)
+    {
+        Expected<LaidOut, CommandError> laidOut = layOut(context, params.width, params.height);
+        if (!laidOut)
+        {
+            return unexpected(std::move(laidOut).error());
+        }
+        const PlacedElement placed = placedElement(world, laidOut->layout, *entity);
+        if (placed.laidOut == nullptr)
+        {
+            return unexpected(notLaidOut());
+        }
+        parentRect = placed.parent;
+    }
+    element.placement = withAnchors(element.placement, parentRect, anchors, keepRect);
+    return writeElement(context, *entity, element, false);
+}
+
 } // namespace
 
 void registerGameUiCommands(CommandRegistry& registry)
@@ -980,6 +1275,73 @@ void registerGameUiCommands(CommandRegistry& registry)
         .icon = "center_focus_weak",
         .flags = {.idempotent = true},
         .mode = CommandMode::Play,
+        .permission = PermissionClass::Edit,
+    });
+    registry.add<&gameUiPick>({
+        .name = "gameui.pick",
+        .title = strings::kCommandGameuiPickTitle,
+        .description = strings::kCommandGameuiPickDescription,
+        .agentSummary =
+            "Returns the topmost game UI element at a pixel of the UI target (x, y from the top left), "
+            "interactable or not: the last one in draw order that is visible and contains the pixel after "
+            "its "
+            "rotation and scale, inside the clips of its ancestors; canvases higher in order come first. "
+            "path "
+            "lists its canvas, then its ancestors down to it. The edit World is laid out for width x height "
+            "pixels (default 1920x1080); while playing it reads the play World as its last update laid it "
+            "out. "
+            "entity is absent when nothing is there. Example: {\"x\": 960, \"y\": 540, \"width\": 1920, "
+            "\"height\": 1080}.",
+        .category = "Game UI",
+        .icon = "arrow_selector_tool",
+        .flags = {.readOnly = true, .idempotent = true},
+        .mode = CommandMode::Any,
+        .permission = PermissionClass::Read,
+    });
+    registry.add<&gameUiPlace>({
+        .name = "gameui.place",
+        .title = strings::kCommandGameuiPlaceTitle,
+        .description = strings::kCommandGameuiPlaceDescription,
+        .agentSummary =
+            "Moves and resizes a game UI element so that its rectangle at a target size is [min, max] in "
+            "canvas "
+            "units (y down from the top left of the canvas, as gameui.layout reports it), as one undo step. "
+            "It "
+            "writes the offsets of illusion.UiElement placement and keeps the anchors, so with anchors that "
+            "stretch the rectangle is exact only at that size (default 1920x1080 pixels); set coinciding "
+            "anchors first (gameui.set_anchors) for a fixed size. A child of a UiStack or UiGrid is placed "
+            "by "
+            "its parent: only its size (max - min) is written and placedByLayout is true. Fails for an "
+            "element "
+            "that is not laid out (inactive, or not under an active canvas). Example: {\"entity\": "
+            "\"/HUD/Start\", \"min\": [100, 50], \"max\": [340, 114]}.",
+        .category = "Game UI",
+        .icon = "open_with",
+        .flags = {.undoable = true},
+        .mode = CommandMode::Any,
+        .permission = PermissionClass::Edit,
+    });
+    registry.add<&gameUiSetAnchors>({
+        .name = "gameui.set_anchors",
+        .title = strings::kCommandGameuiSetAnchorsTitle,
+        .description = strings::kCommandGameuiSetAnchorsDescription,
+        .agentSummary =
+            "Sets the anchors of a game UI element (illusion.UiElement placement), as one undo step: either "
+            "a "
+            "preset (top_left, top, top_right, left, center, right, bottom_left, bottom, bottom_right, "
+            "stretch_top, stretch_middle, stretch_bottom, stretch_left, stretch_center, stretch_right, "
+            "stretch) "
+            "or anchorMin and anchorMax, normalised to the parent (0 = left/top, 1 = right/bottom). With "
+            "keepRect (default true) the offsets change so that the element keeps its rectangle at the "
+            "target "
+            "size (width x height, default 1920x1080); without it the offsets stay and the element moves "
+            "with "
+            "its anchors. Refused for a child of a UiStack or UiGrid, which its parent places. Example: "
+            "{\"entity\": \"/HUD/Score\", \"preset\": \"top_right\"}.",
+        .category = "Game UI",
+        .icon = "anchor",
+        .flags = {.undoable = true},
+        .mode = CommandMode::Any,
         .permission = PermissionClass::Edit,
     });
 }

@@ -40,7 +40,7 @@ void randomCommand(EditorContext& editor, std::mt19937& random)
     };
     std::string name;
     std::string params;
-    switch (random() % 20)
+    switch (random() % 21)
     {
     case 0:
     case 1:
@@ -211,6 +211,32 @@ void randomCommand(EditorContext& editor, std::mt19937& random)
             params += R"(,"parent":")" + pick() + "\"";
         }
         params += "}";
+        break;
+    }
+    case 19:
+    {
+        const std::string entity = pick();
+        if (coin())
+        {
+            name = "gameui.place";
+            const int x = static_cast<int>(random() % 1000);
+            const int y = static_cast<int>(random() % 600);
+            const int width = static_cast<int>(random() % 300);
+            const int height = static_cast<int>(random() % 300);
+            params = R"({"entity":")" + entity + R"(","min":[)" + std::to_string(x) + "," +
+                     std::to_string(y) + R"(],"max":[)" + std::to_string(x + width) + "," +
+                     std::to_string(y + height) + "]}";
+        }
+        else
+        {
+            constexpr std::string_view presets[] = {"top_left", "center", "bottom_right", "stretch_top",
+                                                    "stretch"};
+            name = "gameui.set_anchors";
+            const std::string_view preset = presets[random() % 5];
+            const bool keepRect = coin();
+            params = R"({"entity":")" + entity + R"(","preset":")" + std::string(preset) +
+                     R"(","keepRect":)" + (keepRect ? "true" : "false") + "}";
+        }
         break;
     }
     default:

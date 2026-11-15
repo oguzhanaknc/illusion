@@ -103,7 +103,7 @@ Id'ler küçük harfli ve noktayla ayrılmıştır, panelden aşağı doğru gid
 
 ## Tema
 
-Bir tema 28 renk token'ı içeren bir JSON dosyasıdır; her tema her token'ı tanımlar:
+Bir tema 31 renk token'ı içeren bir JSON dosyasıdır; her tema her token'ı tanımlar:
 
 ```json
 {"format": "illusion.theme", "version": 1, "name": "illusion Dark", "highContrast": false,
@@ -116,7 +116,7 @@ Bir tema 28 renk token'ı içeren bir JSON dosyasıdır; her tema her token'ı t
 | Metin | `text.primary`, `text.secondary`, `text.disabled` |
 | Vurgu | `accent`, `accent.fill`, `accent.text`, `accent.subtle` |
 | Durum | `success`, `warning`, `error`, `info`, `play.tint` |
-| Viewport | `viewport.selection`, `viewport.hover`, `axis.x`, `axis.y`, `axis.z`, `axis.cb.x`, `axis.cb.y`, `axis.cb.z` |
+| Viewport | `viewport.selection`, `viewport.hover`, `axis.x`, `axis.y`, `axis.z`, `axis.cb.x`, `axis.cb.y`, `axis.cb.z`, `canvas.selection`, `canvas.handle`, `canvas.anchor` |
 
 Editör **illusion Dark** (varsayılan), **illusion Light** ve **High Contrast** temalarıyla gelir. Testler
 WCAG kontrast oranlarını zorunlu kılar: metin her yüzeyde en az 4.5:1 (High Contrast'ta 7:1), grafikler en
@@ -248,6 +248,10 @@ başarısız olurlar. `ViewportHost::meshBounds()` yerleştirme komutlarına (`t
 GPU'suzdur (`Arrange.hpp`) ve host yokken her Entity konumu olarak sayılır. Collider'lara bırakan
 `transform.drop_to_ground`, `PhysicsQueryHost`'a (`editor_play` içinde `EditorPhysicsQueries`) sorar; o da
 Collider'ları, o komut için edit World'den kurulan geçici bir Jolt dünyasında aşağı süpürür.
+Game görünümünde game UI Entity'lerinin yerleşimi de aynı ayrımı izler: matematik çekirdekte GPU'suzdur
+(`UiPlacementEdit.hpp`: anchor ön ayarları, bir `UiLayout` içinde seçme, tutamaç isabet testleri ve sürüklemeler;
+`gameui.pick`, `gameui.place` ve `gameui.set_anchors` komutlarıyla paylaşılır), shell ise onu
+`ViewportHost::gameUiLayout()`'un bildirdiği layout üzerinde çizer ve sürer (`CanvasEdit.cpp`).
 `ViewportHost::requestSnap()` ve `snap()`, `viewport.snap` komutunu ve gizmo'nun yakalamasını bir iki frame
 sonra yanıtlar: bir piksele en yakın vertex, her Mesh için bir `VertexSnapGrid` içinde CPU'da aranır
 (`Snap.hpp`; Mesh'in kendi uzayında, imleç ışını boyunca hücreleri dilim dilim gezilen düzgün bir grid), ya da

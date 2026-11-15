@@ -13,6 +13,7 @@
 #include <illusion/editor/core/ReferenceIndex.hpp>
 #include <illusion/editor/core/Snap.hpp>
 #include <illusion/editor/core/ThumbnailCache.hpp>
+#include <illusion/editor/core/UiPlacementEdit.hpp>
 #include <illusion/platform/FileSystem.hpp>
 
 #include <cmath>
@@ -401,6 +402,56 @@ ILL_BENCHMARK("gizmo/hit-test", 2'000.0)
         const GizmoShape shape = gizmoShape(GizmoTool::Universal, camera, pose);
         ankerl::nanobench::doNotOptimizeAway(gizmoHitTest(shape, cursor));
         cursor.x += 0.001f;
+    });
+}
+
+// One frame of hover in the Game view's canvas editing: picking in a layout of 1,000 elements (50 clipping
+// panels of 19 children, every third one rotated) at a point that misses every element, so that all of them
+// are tested, then the handle hit test of the selected element. Budget about 6x the 3.2 us measured on a
+// desktop (Release, MSVC).
+ILL_BENCHMARK("gameui/pick-and-handles", 20'000.0)
+{
+    UiLayout layout;
+    UiLayoutCanvas canvas;
+    canvas.area = {{0.0f, 0.0f}, {1920.0f, 1080.0f}};
+    layout.canvases.push_back(canvas);
+    for (u32 panel = 0; panel < 50; ++panel)
+    {
+        const Vec2 origin(static_cast<f32>(panel % 10) * 190.0f, static_cast<f32>(panel / 10) * 200.0f);
+        const u32 parent = static_cast<u32>(layout.elements.size());
+        UiLayoutElement root;
+        root.entity = Entity{parent, 1};
+        root.rect = {origin, origin + Vec2(180.0f, 190.0f)};
+        root.clipsChildren = true;
+        layout.elements.push_back(root);
+        for (u32 child = 0; child < 19; ++child)
+        {
+            UiLayoutElement element;
+            element.entity = Entity{static_cast<u32>(layout.elements.size()), 1};
+            element.parent = parent;
+            const Vec2 min = origin + Vec2(10.0f, 10.0f + static_cast<f32>(child) * 9.0f);
+            element.rect = {min, min + Vec2(160.0f, 8.0f)};
+            if (child % 3 == 0)
+            {
+                element.transform = makeUiTransform(min + Vec2(80.0f, 4.0f), 0.1f, Vec2(1.0f));
+            }
+            layout.elements.push_back(element);
+        }
+    }
+    ILL_CHECK(layout.elements.size() == 1000, "the benchmark layout has the wrong size");
+    Vec2 point(1905.0f, 1070.0f);
+    ILL_CHECK(pickUiElement(layout, point).isNull(), "the point must miss every element");
+    const std::optional<UiHandleFrame> frame = handleFrameOf(layout, 7,
+                                                             UiPlacement{.anchorMin = Vec2(0.0f),
+                                                                         .anchorMax = Vec2(1.0f, 0.0f),
+                                                                         .offsetMin = Vec2(10.0f, 73.0f),
+                                                                         .offsetMax = Vec2(-10.0f, 81.0f)},
+                                                             Vec2(0.0f), true);
+    ILL_CHECK(frame.has_value(), "the selected element is missing");
+    bench.run("pick in 1000 elements and hit test handles", [&] {
+        ankerl::nanobench::doNotOptimizeAway(pickUiElement(layout, point));
+        ankerl::nanobench::doNotOptimizeAway(uiHandleHitTest(*frame, point, 6.0f));
+        point.y += 0.00001f;
     });
 }
 

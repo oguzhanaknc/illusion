@@ -31,6 +31,9 @@
     "axis.z": "#0969DA",
     "axis.cb.x": "#D55E00",
     "axis.cb.y": "#009E73",
-    "axis.cb.z": "#0072B2"
+    "axis.cb.z": "#0072B2",
+    "canvas.selection": "#0A84D6",
+    "canvas.handle": "#FFFFFF",
+    "canvas.anchor": "#D6339F"
   }
 }

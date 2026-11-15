@@ -8,6 +8,7 @@
 #include <illusion/editor/core/Gizmo.hpp>
 #include <illusion/editor/core/PlayHost.hpp>
 #include <illusion/editor/core/Snap.hpp>
+#include <illusion/editor/core/UiPlacementEdit.hpp>
 #include <illusion/editor/rpc/RpcServer.hpp>
 #include <illusion/editor/ui/FontManager.hpp>
 
@@ -292,6 +293,79 @@ private:
     Vec2 m_measurePress{0.0f};
 };
 
+/// Canvas editing in the Game view while the game does not run (ADR 0057, UI-3d): picks game UI elements,
+/// draws the outlines, handles and anchor markers of the selection over the image, and runs handle drags as
+/// `gameui.place` and `gameui.set_anchors` calls inside one transaction (Esc or the right button cancels).
+class CanvasEditor
+{
+public:
+    /// What the Game view tells the editor each frame.
+    struct Frame
+    {
+        std::string_view id;    ///< The viewport id.
+        bool active = false;    ///< Canvas editing applies: a Game view with an image, the game not running.
+        Vec2 imageOrigin{0.0f}; ///< Top left of the image in the window.
+        Vec2 display{0.0f};     ///< Size of the image in the window.
+        f32 toPanel = 1.0f;     ///< Window points per image pixel.
+        UVec2 size{0};          ///< The image in pixels: the UI target.
+        Vec2 cursor{0.0f};      ///< Cursor in image pixels.
+        bool hovered = false;   ///< The cursor is over the image.
+    };
+
+    /// Handles a press on the image: true when it grabbed a handle of the primary selection (the view then
+    /// draws no selection box; a release without a drag still picks).
+    bool press(Impl& shell, const Frame& frame);
+
+    /// Refreshes the layout when needed, applies the running drag (it starts once the pressed handle moves
+    /// past the drag threshold, commits on release) and draws the overlays.
+    void update(Impl& shell, const Frame& frame, ImDrawList& draw);
+
+    /// The game UI element under the cursor of the last update() (null for none).
+    [[nodiscard]] Entity hovered() const noexcept { return m_hovered; }
+
+    /// A handle is pressed or dragged.
+    [[nodiscard]] bool pressed() const noexcept { return m_pressed != UiHandle::None; }
+
+    /// A drag is running.
+    [[nodiscard]] bool dragging() const noexcept { return m_drag.handle() != UiHandle::None; }
+
+    /// The last press became a drag (or was cancelled): its release does not pick.
+    [[nodiscard]] bool consumed() const noexcept { return m_consumed; }
+
+private:
+    // The primary selection's frame and its canvas's pixels per unit, from the cached layout.
+    struct Primary
+    {
+        UiHandleFrame frame{};
+        f32 pixelsPerUnit = 1.0f;
+        EntityGuid guid{};
+        bool valid = false;
+    };
+
+    bool refresh(Impl& shell, const Frame& frame);
+    void updatePrimary(Impl& shell);
+    Entity pick(Vec2 cursor);
+    [[nodiscard]] UiHandle handleAt(const Frame& frame, Vec2 cursor, f32 scale) const;
+    void begin(Impl& shell, const Frame& frame);
+    void apply(Impl& shell, const UiHandleEdit& edit);
+    void end(Impl& shell, bool commit);
+    void drawOverlays(Impl& shell, const Frame& frame, ImDrawList& draw, UiHandle hot);
+
+    UiLayout m_layout;  // what the Game view drew last
+    UiLayout m_scratch; // one canvas of m_layout, for picking
+    bool m_hasLayout = false;
+    Primary m_primary;
+    Entity m_hovered{};
+    UiHandle m_pressed = UiHandle::None; // the handle under the press, until release
+    Vec2 m_pressCursor{0.0f};            // the press in image pixels
+    UiHandleDrag m_drag;
+    Primary m_dragged;        // the primary selection when the drag started
+    UiHandleEdit m_applied{}; // the edit the last command wrote
+    UVec2 m_target{0};        // the UI target of the running drag
+    bool m_consumed = false;
+    std::string m_params;
+};
+
 /// Draws @p ruler over the image of @p frame with its length, offsets and elevation.
 void drawRuler(Impl& shell, const ViewportGizmo::Frame& frame, ImDrawList& draw, const GizmoRuler& ruler);
 
@@ -325,6 +399,7 @@ private:
     bool m_cubeDrag = false;     // a left drag that started on the view cube orbits
     bool m_gizmoPressed = false; // the left press went to the gizmo (no pick or box on release)
     ViewportGizmo m_gizmo;
+    CanvasEditor m_canvas; // game UI editing (Game views only)
 };
 
 /// Assigns @p valueJson to the field @p path of the Component @p type of @p entities (one step; a batch for

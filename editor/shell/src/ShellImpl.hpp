@@ -194,6 +194,7 @@ struct EditorShell::Impl
     std::optional<GizmoModalOperation> pendingModal;
     std::string hoveredSceneView;     // the Scene view under the cursor this frame ("" for none)
     std::string lastHoveredSceneView; // ... and last frame
+    UVec2 gameViewSize{0};            // the Game view's last image in pixels: the target of game UI edits
 
     // The Inspector's entity eyedropper: the next click in a viewport assigns the entity under it to a field
     // of the inspected entities.

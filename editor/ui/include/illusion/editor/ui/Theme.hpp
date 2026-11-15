@@ -56,10 +56,13 @@ enum class ThemeToken : u8
     AxisCbX,           ///< `axis.cb.x`: colour-blind preset (Okabe-Ito).
     AxisCbY,           ///< `axis.cb.y`
     AxisCbZ,           ///< `axis.cb.z`
+    CanvasSelection,   ///< `canvas.selection`: outlines of selected game UI elements in the Game view.
+    CanvasHandle,      ///< `canvas.handle`: fill of their resize handles.
+    CanvasAnchor,      ///< `canvas.anchor`: their anchor markers.
 };
 
 /// Number of theme tokens.
-inline constexpr usize kThemeTokenCount = 28;
+inline constexpr usize kThemeTokenCount = 31;
 
 /// The JSON name of @p token, e.g. "bg.base".
 [[nodiscard]] std::string_view themeTokenName(ThemeToken token) noexcept;

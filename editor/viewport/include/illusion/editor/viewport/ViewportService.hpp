@@ -118,6 +118,7 @@ public:
                                                           const ViewportSnapRequest& request) override;
     [[nodiscard]] std::optional<Expected<std::optional<ViewportSnap>, CommandError>>
     snap(u64 ticket) override;
+    [[nodiscard]] bool gameUiLayout(std::string_view id, UiLayout& out) override;
 
     /// The service's state, defined in its sources.
     struct Impl;

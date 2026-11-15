@@ -53,6 +53,9 @@ eksenlerdir. Eksenler temanın eksen renklerini kullanır.
 grid, outline ve yalnızca editöre ait Entity'ler olmadan. Sahnede kamera yoksa panel bunu söyler. Editör
 kamerası komutları ve görünüm menüsü yalnızca Scene görünümlerinde çalışır.
 
+Bir oyun çalışmıyorken Game görünümü game UI'ı da düzenler: UI elemanlarını fareyle seçer, taşır ve
+boyutlandırır, anchor'larını ayarlarsınız. Bkz. [Game görünümünde düzenleme](../ui.md#editing-in-the-game-view).
+
 Her viewport'un **Aspect** menüsü görüntünün biçimini belirler: **Free** paneli doldurur, ön ayarlar (16:9,
 16:10, 4:3, 21:9, 1:1) o biçimdeki en büyük görüntüyü panele sığdırır, sabit çözünürlükler (640 × 360,
 1280 × 720, 1920 × 1080) ise panel boyutu ne olursa olsun tam o kadar piksel çizer. Görüntü ortalanır ve

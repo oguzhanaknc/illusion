@@ -26,6 +26,7 @@ illusion_add_editor_library(illusion_editor_core STATIC
     src/ThumbnailCache.cpp
     src/ToolProcess.cpp
     src/UiActions.cpp
+    src/UiPlacementEdit.cpp
     src/UndoStack.cpp
     src/ViewCube.cpp
     src/ViewState.cpp

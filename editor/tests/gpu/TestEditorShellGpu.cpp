@@ -3,6 +3,7 @@
 
 #include <illusion/editor/client/RpcClient.hpp>
 #include <illusion/editor/ui/OffscreenUi.hpp>
+#include <illusion/ui/UiWorld.hpp>
 
 #include <imgui.h>
 
@@ -121,6 +122,51 @@ TEST_CASE("the shell in play mode tints its panels, shows Stop and can maximize 
         play.stop();
         editor.setPlay(nullptr);
     }
+}
+
+TEST_CASE("the canvas editing overlays of the Game view and the Inspector's placement drawer (golden)")
+{
+    GpuShell gpu;
+    test::FakeViewports viewports;
+    viewports.frames = true;
+    EditorContext& editor = *gpu.fixture.editor;
+    editor.setViewports(&viewports);
+    test::ok(editor, "gameui.create", R"({"kind":"canvas","name":"HUD"})");
+    test::ok(editor, "gameui.create", R"({"kind":"panel","name":"Box","parent":"/HUD"})");
+    test::ok(editor, "ui.show_panel", R"({"panel":"panel.game"})");
+    UiWorldDesc desc;
+    desc.preview = true;
+    UiWorld preview(editor.world(), desc);
+    // The layout the Game view would draw: a preview of the edit World at the size of its image.
+    const auto capture = [&](int frames) {
+        std::optional<Image> image;
+        for (int i = 0; i < frames; ++i)
+        {
+            if (viewports.gamePanel.x != 0)
+            {
+                preview.update(UiFrame{.targetPixels = viewports.gamePanel, .safeInsetPixels = {}});
+                UiLayout layout;
+                preview.layout(layout);
+                viewports.gameLayout = std::move(layout);
+            }
+            image = gpu.capture(1);
+        }
+        return std::move(*image);
+    };
+    (void)capture(4);
+    REQUIRE(viewports.gamePanel.x != 0);
+    const std::string target = ",\"width\":" + std::to_string(viewports.gamePanel.x) +
+                               ",\"height\":" + std::to_string(viewports.gamePanel.y) + "}";
+    test::ok(editor, "gameui.place", R"({"entity":"/HUD/Box","min":[300,250],"max":[800,600])" + target);
+    test::ok(editor, "gameui.set_anchors",
+             R"({"entity":"/HUD/Box","anchorMin":[0.1,0.15],"anchorMax":[0.5,0.15])" + target);
+    test::ok(editor, "selection.set", R"({"entities":["/HUD/Box"]})");
+    (void)capture(10);
+    test::ok(editor, "log.clear");
+    const Image actual = capture(4);
+    test::checkGolden("shell-dark-100-canvas-edit", actual);
+    CHECK(gpu.device->validationErrorCount() == 0);
+    editor.setViewports(nullptr);
 }
 
 TEST_CASE("the Export window matches its golden image")

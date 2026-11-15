@@ -18,6 +18,7 @@
 #include <illusion/editor/core/ReferenceIndex.hpp>
 #include <illusion/editor/core/Snap.hpp>
 #include <illusion/editor/core/UiHost.hpp>
+#include <illusion/editor/core/UiPlacementEdit.hpp>
 #include <illusion/editor/core/ViewportHost.hpp>
 
 #include <array>
@@ -1968,6 +1969,56 @@ struct GameUiFocusResult
     std::optional<EntitySummary> focused{}; ///< The element with the focus after the call.
 };
 
+/// Params of `gameui.pick`.
+struct GameUiPickParams
+{
+    f32 x = 0.0f;                ///< Target pixel from the left.
+    f32 y = 0.0f;                ///< Target pixel from the top.
+    std::optional<u32> width{};  ///< Target width in pixels for the edit World, 1 to 16384 (1920).
+    std::optional<u32> height{}; ///< Target height in pixels for the edit World, 1 to 16384 (1080).
+};
+
+/// Result of `gameui.pick`.
+struct GameUiPickResult
+{
+    std::optional<EntitySummary> entity{}; ///< The topmost element at the pixel (absent for none).
+    std::vector<EntitySummary> path{};     ///< Its canvas, then its ancestors down to it (empty for none).
+};
+
+/// Params of `gameui.place`.
+struct GameUiPlaceParams
+{
+    std::string entity{};        ///< The UI element.
+    Vec2 min{0.0f};              ///< Top left of its rectangle in canvas units.
+    Vec2 max{0.0f};              ///< Bottom right of its rectangle in canvas units.
+    std::optional<u32> width{};  ///< Target width in pixels for the edit World, 1 to 16384 (1920).
+    std::optional<u32> height{}; ///< Target height in pixels for the edit World, 1 to 16384 (1080).
+};
+
+/// Params of `gameui.set_anchors`.
+struct GameUiSetAnchorsParams
+{
+    std::string entity{};                   ///< The UI element.
+    std::optional<UiAnchorPreset> preset{}; ///< A preset (or anchorMin and anchorMax).
+    std::optional<Vec2> anchorMin{};        ///< Anchor of the top left corner, each axis 0 to 1.
+    std::optional<Vec2> anchorMax{};        ///< Anchor of the bottom right corner, not below anchorMin.
+    std::optional<bool> keepRect{};         ///< Change the offsets so the rectangle stays (default true).
+    std::optional<u32> width{};             ///< Target width in pixels for the edit World, 1 to 16384 (1920).
+    std::optional<u32> height{}; ///< Target height in pixels for the edit World, 1 to 16384 (1080).
+};
+
+/// Result of `gameui.place` and `gameui.set_anchors`: the element's UiElement afterwards.
+struct GameUiPlacementResult
+{
+    EntitySummary entity{};      ///< The element.
+    Vec2 anchorMin{0.0f};        ///< UiElement placement anchorMin.
+    Vec2 anchorMax{0.0f};        ///< UiElement placement anchorMax.
+    Vec2 offsetMin{0.0f};        ///< UiElement placement offsetMin, canvas units.
+    Vec2 offsetMax{0.0f};        ///< UiElement placement offsetMax, canvas units.
+    Vec2 size{0.0f};             ///< UiElement size, canvas units.
+    bool placedByLayout = false; ///< Its parent's UiStack or UiGrid places it: only size was written.
+};
+
 // --- module ------------------------------------------------------------------------------------------------
 
 /// Params of `module.load`.
@@ -2305,6 +2356,22 @@ struct illusion::EnumReflection<illusion::editor::GameUiKind>
         illusion::EnumValue{"toggle", 4},     illusion::EnumValue{"slider", 5},
         illusion::EnumValue{"text_field", 6}, illusion::EnumValue{"scroll_view", 7},
         illusion::EnumValue{"stack", 8},      illusion::EnumValue{"grid", 9}};
+};
+
+/// Names of UiAnchorPreset values in JSON.
+template <>
+struct illusion::EnumReflection<illusion::editor::UiAnchorPreset>
+{
+    /// The values.
+    static constexpr std::array kValues{
+        illusion::EnumValue{"top_left", 0},        illusion::EnumValue{"top", 1},
+        illusion::EnumValue{"top_right", 2},       illusion::EnumValue{"left", 3},
+        illusion::EnumValue{"center", 4},          illusion::EnumValue{"right", 5},
+        illusion::EnumValue{"bottom_left", 6},     illusion::EnumValue{"bottom", 7},
+        illusion::EnumValue{"bottom_right", 8},    illusion::EnumValue{"stretch_top", 9},
+        illusion::EnumValue{"stretch_middle", 10}, illusion::EnumValue{"stretch_bottom", 11},
+        illusion::EnumValue{"stretch_left", 12},   illusion::EnumValue{"stretch_center", 13},
+        illusion::EnumValue{"stretch_right", 14},  illusion::EnumValue{"stretch", 15}};
 };
 
 /// Names of TransformSpace values in JSON.

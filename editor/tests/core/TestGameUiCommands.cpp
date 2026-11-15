@@ -4,6 +4,7 @@
 #include "EditorCoreTestSupport.hpp"
 
 #include <illusion/assets/AssetDatabase.hpp>
+#include <illusion/ecs/Hierarchy.hpp>
 #include <illusion/ui/UiWorld.hpp>
 
 #include <fstream>
@@ -369,4 +370,178 @@ TEST_CASE("gameui.layout measures a keyed text with the formatted message of the
     REQUIRE_FALSE(element.empty());
     CHECK(number(layout, element + "/max/0") - number(layout, element + "/min/0") ==
           doctest::Approx(formatted).epsilon(0.001));
+}
+
+TEST_CASE("gameui.place puts an element at a rectangle that the layout reports at any target size")
+{
+    EditorFixture f;
+    EditorContext& editor = *f.editor;
+    ok(editor, "gameui.create", R"({"kind":"canvas","name":"HUD"})");
+    ok(editor, "gameui.create", R"({"kind":"panel","name":"Box","parent":"/HUD"})");
+    const std::string before = f.scene();
+    const usize steps = editor.history().position();
+
+    const JsonDocument placed =
+        ok(editor, "gameui.place", R"({"entity":"/HUD/Box","min":[100,50],"max":[340,114]})");
+    CHECK(stringAt(placed, "/entity/path") == "/HUD/Box");
+    CHECK(number(placed, "/offsetMin/0") == doctest::Approx(100.0));
+    CHECK(number(placed, "/offsetMax/1") == doctest::Approx(114.0));
+    CHECK(placed.root().find("placedByLayout").asBool() == false);
+    CHECK(editor.history().position() == steps + 1);
+
+    // The anchors coincide at the top left, so the rectangle is the same on every target.
+    for (const std::string_view target :
+         {R"({"width":1280,"height":720})", R"({"width":1000,"height":1000})"})
+    {
+        CAPTURE(target);
+        const JsonDocument layout = ok(editor, "gameui.layout", target);
+        const std::string box = elementPointer(layout, "/HUD/Box");
+        REQUIRE_FALSE(box.empty());
+        CHECK(number(layout, box + "/min/0") == doctest::Approx(100.0));
+        CHECK(number(layout, box + "/min/1") == doctest::Approx(50.0));
+        CHECK(number(layout, box + "/max/0") == doctest::Approx(340.0));
+        CHECK(number(layout, box + "/max/1") == doctest::Approx(114.0));
+    }
+
+    // Stretched anchors reach the rectangle at the given target size.
+    ok(editor, "gameui.set_anchors", R"({"entity":"/HUD/Box","preset":"stretch","keepRect":false})");
+    ok(editor, "gameui.place",
+       R"({"entity":"/HUD/Box","min":[10,20],"max":[30,40],"width":1000,"height":1000})");
+    const JsonDocument square = ok(editor, "gameui.layout", R"({"width":1000,"height":1000})");
+    const std::string box = elementPointer(square, "/HUD/Box");
+    CHECK(number(square, box + "/min/0") == doctest::Approx(10.0));
+    CHECK(number(square, box + "/max/1") == doctest::Approx(40.0));
+
+    ok(editor, "history.undo", R"({"steps":3})");
+    CHECK(f.scene() == before);
+}
+
+TEST_CASE("gameui.set_anchors keeps the element's rectangle, or moves it with the anchors without keepRect")
+{
+    EditorFixture f;
+    EditorContext& editor = *f.editor;
+    ok(editor, "gameui.create", R"({"kind":"canvas","name":"HUD"})");
+    ok(editor, "gameui.create", R"({"kind":"panel","name":"Box","parent":"/HUD"})");
+    const std::string before = f.scene();
+
+    const JsonDocument anchored =
+        ok(editor, "gameui.set_anchors", R"({"entity":"/HUD/Box","preset":"bottom_right"})");
+    CHECK(number(anchored, "/anchorMin/0") == 1.0);
+    CHECK(number(anchored, "/anchorMax/1") == 1.0);
+    CHECK(number(anchored, "/offsetMin/0") == doctest::Approx(24.0 - 1920.0));
+    const JsonDocument layout = ok(editor, "gameui.layout");
+    const std::string box = elementPointer(layout, "/HUD/Box");
+    CHECK(number(layout, box + "/min/0") == doctest::Approx(24.0));
+    CHECK(number(layout, box + "/max/1") == doctest::Approx(324.0));
+
+    const JsonDocument stretched = ok(editor, "gameui.set_anchors",
+                                      R"({"entity":"/HUD/Box","anchorMin":[0.25,0],"anchorMax":[0.75,1]})");
+    CHECK(number(stretched, "/anchorMin/0") == 0.25);
+    const JsonDocument again = ok(editor, "gameui.layout");
+    CHECK(number(again, box + "/min/0") == doctest::Approx(24.0));
+    CHECK(number(again, box + "/max/0") == doctest::Approx(424.0));
+
+    ok(editor, "gameui.set_anchors", R"({"entity":"/HUD/Box","preset":"center","keepRect":false})");
+    const JsonDocument moved = ok(editor, "gameui.layout");
+    CHECK(number(moved, box + "/min/0") == doctest::Approx(960.0 + 24.0 - 480.0));
+
+    ok(editor, "history.undo", R"({"steps":3})");
+    CHECK(f.scene() == before);
+}
+
+TEST_CASE("a child of a stack is sized by gameui.place and refused by gameui.set_anchors")
+{
+    EditorFixture f;
+    EditorContext& editor = *f.editor;
+    ok(editor, "gameui.create", R"({"kind":"canvas","name":"HUD"})");
+    ok(editor, "gameui.create", R"({"kind":"stack","name":"List","parent":"/HUD"})");
+    ok(editor, "gameui.create", R"({"kind":"panel","name":"Row","parent":"/HUD/List"})");
+    const JsonDocument row = ok(editor, "entity.get", R"({"entity":"/HUD/List/Row"})");
+    const JsonDocument placed =
+        ok(editor, "gameui.place", R"({"entity":"/HUD/List/Row","min":[0,0],"max":[200,60]})");
+    CHECK(placed.root().find("placedByLayout").asBool() == true);
+    CHECK(number(placed, "/size/0") == doctest::Approx(200.0));
+    CHECK(number(placed, "/size/1") == doctest::Approx(60.0));
+    const JsonDocument after = ok(editor, "entity.get", R"({"entity":"/HUD/List/Row"})");
+    CHECK(number(after, "/components/illusion.UiElement/placement/offsetMin/0") ==
+          number(row, "/components/illusion.UiElement/placement/offsetMin/0"));
+    CHECK(number(after, "/components/illusion.UiElement/size/1") == doctest::Approx(60.0));
+    CHECK(fails(editor, "gameui.set_anchors", R"({"entity":"/HUD/List/Row","preset":"center"})").kind ==
+          ErrorKind::PreconditionFailed);
+}
+
+TEST_CASE("gameui.place and gameui.set_anchors reject what they cannot place")
+{
+    EditorFixture f;
+    EditorContext& editor = *f.editor;
+    ok(editor, "gameui.create", R"({"kind":"canvas","name":"HUD"})");
+    ok(editor, "gameui.create", R"({"kind":"panel","name":"Box","parent":"/HUD"})");
+    ok(editor, "entity.create", R"({"name":"Prop"})");
+    const std::string before = f.scene();
+    CHECK(fails(editor, "gameui.place", R"({"entity":"/Prop","min":[0,0],"max":[1,1]})").kind ==
+          ErrorKind::PreconditionFailed);
+    CHECK(fails(editor, "gameui.place", R"({"entity":"/HUD","min":[0,0],"max":[1,1]})").kind ==
+          ErrorKind::PreconditionFailed);
+    CHECK(fails(editor, "gameui.place", R"({"entity":"/HUD/Box","min":[10,0],"max":[5,1]})")
+              .errors.at(0)
+              .pointer == "/max");
+    CHECK(fails(editor, "gameui.place", R"({"entity":"/HUD/Box","min":[0,0],"max":[1,1],"width":0})")
+              .errors.at(0)
+              .pointer == "/width");
+    CHECK(fails(editor, "gameui.set_anchors", R"({"entity":"/HUD/Box"})").errors.at(0).pointer == "/preset");
+    CHECK(fails(editor, "gameui.set_anchors", R"({"entity":"/HUD/Box","preset":"top","anchorMin":[0,0]})")
+              .errors.at(0)
+              .pointer == "/preset");
+    CHECK(fails(editor, "gameui.set_anchors", R"({"entity":"/HUD/Box","anchorMin":[0,0]})")
+              .errors.at(0)
+              .pointer == "/anchorMax");
+    CHECK(fails(editor, "gameui.set_anchors",
+                R"({"entity":"/HUD/Box","anchorMin":[0.5,0],"anchorMax":[0.2,1]})")
+              .errors.at(0)
+              .pointer == "/anchorMax");
+    CHECK(fails(editor, "gameui.set_anchors", R"({"entity":"/HUD/Box","preset":"sideways"})")
+              .errors.at(0)
+              .pointer == "/preset");
+    CHECK(f.scene() == before);
+
+    ok(editor, "entity.set_enabled", R"({"entity":"/HUD","enabled":false})");
+    // The viewports derive the Inactive tags in the editor; here the test does.
+    HierarchyIndex hierarchy;
+    updateTransformHierarchy(editor.world(), hierarchy);
+    CHECK(fails(editor, "gameui.place", R"({"entity":"/HUD/Box","min":[0,0],"max":[1,1]})")
+              .message.find("not laid out") != std::string::npos);
+    // Without keepRect no layout is needed.
+    ok(editor, "gameui.set_anchors", R"({"entity":"/HUD/Box","preset":"top","keepRect":false})");
+    ok(editor, "history.undo", R"({"steps":2})");
+    CHECK(f.scene() == before);
+}
+
+TEST_CASE("gameui.pick finds the topmost element at a pixel, interactable or not")
+{
+    EditorFixture f;
+    EditorContext& editor = *f.editor;
+    ok(editor, "gameui.create", R"({"kind":"canvas","name":"HUD"})");
+    ok(editor, "gameui.create", R"({"kind":"button","name":"Start","parent":"/HUD"})");
+    ok(editor, "gameui.create", R"({"kind":"panel","name":"Under","parent":"/HUD"})");
+    ok(editor, "gameui.place", R"({"entity":"/HUD/Under","min":[500,500],"max":[700,700]})");
+    ok(editor, "gameui.create", R"({"kind":"panel","name":"Over","parent":"/HUD"})");
+    ok(editor, "gameui.place", R"({"entity":"/HUD/Over","min":[600,600],"max":[800,800]})");
+    const usize steps = editor.history().position();
+
+    // The button's label is a text without UiInteractable, drawn over the button. At 1280x720 a unit is
+    // 2/3 of a pixel: the button's centre (144, 56) is at pixel (96, 37.3).
+    const JsonDocument label = ok(editor, "gameui.pick", R"({"x":96,"y":37,"width":1280,"height":720})");
+    CHECK(stringAt(label, "/entity/path") == "/HUD/Start/Label");
+    const JsonValue path = label.root().find("path");
+    REQUIRE(path.size() == 3);
+    CHECK(path[0].find("path").asString() == "/HUD");
+    CHECK(path[1].find("path").asString() == "/HUD/Start");
+    CHECK(path[2].find("path").asString() == "/HUD/Start/Label");
+
+    CHECK(stringAt(ok(editor, "gameui.pick", R"({"x":650,"y":650})"), "/entity/path") == "/HUD/Over");
+    CHECK(stringAt(ok(editor, "gameui.pick", R"({"x":550,"y":550})"), "/entity/path") == "/HUD/Under");
+    const JsonDocument nothing = ok(editor, "gameui.pick", R"({"x":1900,"y":1000})");
+    CHECK(nothing.root().find("entity").isNull());
+    CHECK(nothing.root().find("path").size() == 0);
+    CHECK(editor.history().position() == steps);
 }

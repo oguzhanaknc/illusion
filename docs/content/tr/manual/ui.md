@@ -244,8 +244,8 @@ metin, bir düğmenin etiketi ve bir text field'ın placeholder'ı projenin ilk 
    canvas'ın içine girer.
 2. Bir sonrakini içine koymak için onu oluşturmadan önce bir canvas ya da eleman seçin.
 3. Alanları Inspector'da ayarlayın: yerleşim anchor'ları ve offset'leri, metin, font ve Texture Asset'leri (Asset
-   Browser'dan alanların üzerine sürükleyin), renkler ve boyutlar. Canvas'ta henüz yerleşim tutamaçları yoktur;
-   şimdilik yerleşim Inspector'da düzenlenir.
+   Browser'dan alanların üzerine sürükleyin), renkler ve boyutlar. Elemanları Game görünümünde de
+   yerleştirebilirsiniz, bkz. [Game görünümünde düzenleme](#editing-in-the-game-view).
 4. Sonucu **Game görünümünde** kontrol edin: görünüm, sahnenin UI'sını oyun çalışmıyorken de çizer. Scene
    görünümü UI çizmez. `"viewport": "game"` ile `viewport.screenshot` komutu onun resmini alır.
 
@@ -818,12 +818,60 @@ else if (ui->transitionProgress(goButton).value_or(0.0f) >= 1.0f)
 }
 ```
 
+## Game görünümünde düzenleme {#editing-in-the-game-view}
+
+Bir oyun çalışmıyorken **Game görünümü** aynı zamanda canvas editörüdür: UI'ı oyunun sahip olacağı boyutta
+çizer ve fareyle üzerinde çalışırsınız. Scene görünümü UI çizmez.
+
+- **Seçmek** için tıklayın: imlecin altındaki en üstteki eleman seçilir (en son çizilen, görünür ve üst
+  elemanlarının clip'leri içinde kalan). Tutamaçları atlayıp yalnızca seçmek için Alt'a basılı tutun.
+- **Taşımak** için seçili elemanın dikdörtgeninin içinden sürükleyin.
+- **Yeniden boyutlandırmak** için outline üzerindeki sekiz tutamaçtan birini sürükleyin.
+- **Anchor'lar** işaretçilerle çizilir: elemanın anchor'larının başvurduğu, üst elemanın dikdörtgeninin dört
+  köşesi ve elemanın pivot'u. Çakışan anchor'lar tek işaretçi gösterir; esneyen anchor'lar esneyen alanın
+  köşelerini gösterir.
+- **Snapping**: sürüklemeler tam canvas birimlerine yapışır. 8 birime yapışmak için Ctrl'e, snapping'i
+  kapatmak için Alt'a basılı tutun.
+- Bir sürüklemeyi Esc ya da sağ fare tuşuyla **iptal edin**; eleman eski yerine döner. Biten bir sürükleme tek
+  bir undo adımıdır.
+- Bir **`UiStack` ya da `UiGrid` çocuğunu** üst elemanı yerleştirir; bu yüzden taşıma ya da anchor
+  tutamaçları yoktur. Yeniden boyutlandırma `UiElement::size` alanına yazar.
+
+Outline, tutamaç ve işaretçi renkleri `canvas.selection`, `canvas.handle` ve `canvas.anchor` tema token'larından
+gelir.
+
+Inspector, seçili eleman için aynı yerleşimi gösterir. **anchors** düğmesi 4 x 4 ızgarada 16 ön ayarlı bir
+popup açar (köşeler, kenarlar, merkez ve esneyenler); Alt'a basmadıkça elemanın dikdörtgenini korur, Alt ile
+offset'ler korunur ve eleman anchor'larıyla birlikte hareket eder. Eksen başına alanlar, anchor'lar
+çakışıyorsa **Pos** ve **Size**, değilse üst elemana olan kenar boşluklarıdır. Bir stack ya da grid çocuğu,
+üst elemanının onu yerleştirdiğini söyleyen bir not gösterir.
+
+Ajanlar, Game görünümünün de çalıştırdığı Game UI kategorisindeki üç [Editor commands](../reference/editor-commands.md)
+kullanır. **`gameui.pick`** hedef boyuttaki bir pikseldeki en üstteki elemanı döndürür. **`gameui.place`** bir
+elemanı, hedef boyuttaki dikdörtgeni canvas birimlerinde `min` ile `max` arasında olacak şekilde taşır ve
+boyutlandırır (y, sol üstten aşağı doğru). **`gameui.set_anchors`** bir `preset` ya da `anchorMin` ve
+`anchorMax` ayarlar, `keepRect` (varsayılan true) ile dikdörtgeni korur. Üçü de `width` ve `height` alır
+(varsayılan 1920 x 1080), çünkü anchor'lar çakışmıyorsa offset'ler üst elemanın boyutuna bağlıdır; esneyen
+anchor'larda yerleşim yalnızca o boyutta kesindir.
+
+```json
+{"call": "gameui.pick", "params": {"x": 960, "y": 540, "width": 1920, "height": 1080}}
+```
+
+```json
+{"call": "gameui.place", "params": {"entity": "/HUD/Start", "min": [100, 50], "max": [340, 114]}}
+```
+
+```json
+{"call": "gameui.set_anchors", "params": {"entity": "/HUD/Score", "preset": "top_right"}}
+```
+
 ## Henüz olmayanlar {#what-is-not-there-yet}
 
-UI çizilir, input'a tepki verir, oyun modülleri tarafından script'lenebilir, geçişlerle canlanır ve Entity
-menüsünden ya da `gameui.*` komutlarıyla kurulur. Sonraki bir paket Scene görünümünde canvas editörünü (yerleşim
-tutamaçları, anchor ön ayarları ve elemanları fareyle seçme) ekler. O zamana kadar yerleşim Inspector'da düzenlenir. Metin
-seçimi, glyph görselleri (etiket yerine düğme resmi) ve geri dönüştürülen listeler de yoktur. İlk sürümün sınırları
+UI çizilir, input'a tepki verir, oyun modülleri tarafından script'lenebilir, geçişlerle canlanır, Entity
+menüsünden ya da `gameui.*` komutlarıyla kurulur ve Game görünümünde düzenlenir. Küçük bir elemanı çerçevelemek
+için Game görünümünü yakınlaştırmak ve kaydırmak ile Scene görünümünde UI henüz yoktur. Metin seçimi, glyph
+görselleri (etiket yerine düğme resmi) ve geri dönüştürülen listeler de yoktur. İlk sürümün sınırları
 ([ADR 0057](https://github.com/oguzhanaknc/illusion/blob/main/docs/adr/0057-game-ui.md)):
 
 - Metin shaping olmadan soldan sağa çizilir: Arapça, İbranice, Hint yazı sistemleri ve ligatürler

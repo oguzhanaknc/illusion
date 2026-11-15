@@ -376,6 +376,7 @@ public:
             editor::ViewportFrame out;
             out.kind = editor::ViewportKind::Game;
             out.size = panel;
+            gamePanel = panel;
             out.settings = gameSettings;
             return out;
         }
@@ -472,6 +473,16 @@ public:
         return Expected<std::optional<editor::ViewportSnap>, editor::CommandError>(snapped);
     }
 
+    bool gameUiLayout(std::string_view id, UiLayout& out) override
+    {
+        if (id != "game" || !gameLayout)
+        {
+            return false;
+        }
+        out = *gameLayout;
+        return true;
+    }
+
     Secondary& find(std::string_view id)
     {
         const auto found = std::find_if(secondary.begin(), secondary.end(),
@@ -498,7 +509,9 @@ public:
     editor::ViewportSnapRequest snapRequest;     ///< The last requestSnap() (without its exclusions).
     std::vector<Entity> snapExcluded;            ///< Its exclusions.
     editor::ViewportRenderStats stats;
-    u32 validationErrors = 0; // reported by gpuInfo()
+    std::optional<UiLayout> gameLayout; ///< What gameUiLayout() reports for "game" (none: no UI drawn).
+    UVec2 gamePanel{0};                 ///< The size the last frame() of "game" was asked for.
+    u32 validationErrors = 0;           // reported by gpuInfo()
     editor::ViewportChannel readChannel = editor::ViewportChannel::Color;
     UVec2 readOrigin{0};
     UVec2 readExtent{0};

@@ -52,6 +52,9 @@ The **Game** panel shows the scene through its main camera (the first active ent
 way the player will see it: without the grid, the outline and editor-only entities. When the scene has no
 camera, the panel says so. The editor camera commands and the view menu work only in Scene views.
 
+While no game runs, the Game view also edits the game UI: you select, move and resize UI elements and set
+their anchors with the mouse. See [Editing in the Game view](../ui.md#editing-in-the-game-view).
+
 The **Aspect** menu of every viewport sets the shape of its image: **Free** fills the panel, the presets
 (16:9, 16:10, 4:3, 21:9, 1:1) fit the largest image of that shape into the panel, and the fixed resolutions
 (640 × 360, 1280 × 720, 1920 × 1080) render exactly that many pixels whatever the panel size. The image is

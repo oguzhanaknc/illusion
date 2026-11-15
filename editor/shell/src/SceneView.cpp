@@ -820,6 +820,17 @@ void SceneView::draw(Impl& shell)
         shell.pendingModal.reset();
     }
     const GizmoHandle gizmoHovered = m_gizmo.hoveredHandle(shell, gizmoFrame);
+    // Game UI elements are edited in the Game view while the game does not run.
+    CanvasEditor::Frame canvasFrame;
+    canvasFrame.id = m_id;
+    canvasFrame.active = m_last.kind == ViewportKind::Game && m_last.size.x != 0 && m_last.size.y != 0 &&
+                         !shell.editor.playing() && !shell.eyedropper.active;
+    canvasFrame.imageOrigin = imageOrigin;
+    canvasFrame.display = display;
+    canvasFrame.toPanel = toPanel;
+    canvasFrame.size = m_last.size;
+    canvasFrame.cursor = (mouse - imageOrigin) * toImage;
+    canvasFrame.hovered = hovered && !overOverlay;
     if (ImGui::IsItemActivated() && ImGui::IsMouseClicked(ImGuiMouseButton_Left) && m_gizmo.modal())
     {
         // The click confirms the modal transform: its release neither picks nor selects.
@@ -830,13 +841,18 @@ void SceneView::draw(Impl& shell)
     {
         m_gizmoPressed = m_gizmo.begin(shell, gizmoFrame, gizmoHovered);
     }
+    else if (ImGui::IsItemActivated() && ImGui::IsMouseClicked(ImGuiMouseButton_Left) && canvasFrame.active)
+    {
+        // A press on a handle of the selected UI element drags it once it moves; a click still picks.
+        (void)m_canvas.press(shell, canvasFrame);
+    }
     else if (ImGui::IsItemActivated() && ImGui::IsMouseClicked(ImGuiMouseButton_Left) && gizmoFrame.hovered &&
              !io.KeyAlt && !m_cubeDrag)
     {
         // The Measure tool draws a ruler with left drags (its release neither picks nor selects).
         m_gizmoPressed = m_gizmo.beginMeasure(shell, gizmoFrame);
     }
-    const bool gizmoDragging = m_gizmo.dragging() || m_gizmo.measuring();
+    const bool gizmoDragging = m_gizmo.dragging() || m_gizmo.measuring() || m_canvas.pressed();
 
     ViewportInput input;
     input.cursor = (mouse - imageOrigin) * toImage;
@@ -897,11 +913,21 @@ void SceneView::draw(Impl& shell)
         // A drag cannot go on without an image: update() cancels it.
         gizmoFrame.viewport = nullptr;
         m_gizmo.update(shell, gizmoFrame, draw, GizmoHandle::None);
+        canvasFrame.active = false;
+        m_canvas.update(shell, canvasFrame, draw);
         return;
     }
     const ViewportSettings& settings = m_last.settings;
     gizmoFrame.viewport = scene ? &m_last : nullptr;
     m_gizmo.update(shell, gizmoFrame, draw, gizmoHovered);
+    if (!scene)
+    {
+        shell.gameViewSize = m_last.size;
+        canvasFrame.active =
+            canvasFrame.active && m_last.kind == ViewportKind::Game && !shell.editor.playing();
+        canvasFrame.size = m_last.size;
+        m_canvas.update(shell, canvasFrame, draw);
+    }
     if (!m_last.icons.empty())
     {
         drawIcons(shell, draw, m_last.icons, imageOrigin, toPanel, iconRadius, iconHovered);
@@ -950,7 +976,8 @@ void SceneView::draw(Impl& shell)
     const bool dragged = io.MouseDragMaxDistanceSqr[ImGuiMouseButton_Left] >= threshold;
     // A left drag without Alt draws a selection box (not while the eyedropper picks one entity).
     if (ImGui::IsItemActive() && ImGui::IsMouseDown(ImGuiMouseButton_Left) && !io.KeyAlt && dragged &&
-        !m_last.navigating && !m_cubeDrag && !eyedropper.active && !m_gizmoPressed)
+        !m_last.navigating && !m_cubeDrag && !eyedropper.active && !m_gizmoPressed && !m_canvas.pressed() &&
+        !m_canvas.consumed())
     {
         m_boxing = true;
     }
@@ -963,7 +990,8 @@ void SceneView::draw(Impl& shell)
     }
     const char* select = io.KeyCtrl ? "toggle" : io.KeyShift ? "add" : "replace";
     // A press that went to the gizmo neither picks nor selects when it is released.
-    if (ImGui::IsItemDeactivated() && ImGui::IsMouseReleased(ImGuiMouseButton_Left) && !m_gizmoPressed)
+    if (ImGui::IsItemDeactivated() && ImGui::IsMouseReleased(ImGuiMouseButton_Left) && !m_gizmoPressed &&
+        !m_canvas.consumed())
     {
         if (m_cubeDrag)
         {
@@ -1029,6 +1057,11 @@ void SceneView::draw(Impl& shell)
                     eyedropper.ticket = *ticket;
                     eyedropper.viewport = m_id;
                 }
+            }
+            else if (canvasFrame.active && !m_canvas.hovered().isNull())
+            {
+                // The game UI element under the cursor, as the Scene view selects (Ctrl toggles, Shift adds).
+                selectFromViewport(shell, shell.editor.entities().guidOf(m_canvas.hovered()));
             }
             else
             {

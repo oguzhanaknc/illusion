@@ -880,6 +880,12 @@ distance field fonts, and a batched pass draws the UI after tonemapping. Public 
 - UI-3d: Canvas editing. Selection outlines and placement handles for UI Entities in the Game view (move,
   resize, anchors), anchor presets and placement drawers in the Inspector, picking and framing of UI
   Entities. Done: UiDriver tests drag an element and change its anchors; a golden image.
+  ✅ Done: 193 commands (`gameui.pick`, `gameui.place`, `gameui.set_anchors`); `UiPlacementEdit.hpp` (anchor
+  presets, picking, handle hit tests and drags, GPU-free); the Game view selects the topmost element, draws
+  the outline, eight resize handles and anchor markers and drags as one transaction (snap 1 unit, 8 with Ctrl,
+  none with Alt; Esc or right click cancels; children of a stack or grid only resize); the Inspector has anchor
+  presets and placement fields; theme tokens `canvas.*`; `gameui/pick-and-handles` 3.3 µs (budget 20 µs).
+  Open: zoom and pan and framing of UI Entities in the Game view; the Scene view draws no UI.
 - UI-3c: Transitions and text effects. `UiTransition` (offset, scale, opacity and tint eased between rest
   and a changed state on show, hover, press, focus or by `UiService::playTransition()`), text outline and
   drop shadow from the distance field (`UiText::outlineWidth`, `shadowOffset`). Done: deterministic

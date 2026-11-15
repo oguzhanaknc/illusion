@@ -110,6 +110,7 @@ TEST_CASE("every token has a unique dotted name")
     }
     CHECK(ui::themeTokenName(ThemeToken::BgBase) == "bg.base");
     CHECK(ui::themeTokenName(ThemeToken::AxisCbZ) == "axis.cb.z");
+    CHECK(ui::themeTokenName(ThemeToken::CanvasAnchor) == "canvas.anchor");
 }
 
 TEST_CASE("a theme file needs every token and only known tokens")
