@@ -6,6 +6,7 @@
 #include <illusion/platform/FileSystem.hpp>
 #include <illusion/ui/UiComponents.hpp>
 #include <illusion/ui/UiDrawList.hpp>
+#include <illusion/ui/UiWidgets.hpp>
 #include <illusion/ui/UiWorld.hpp>
 
 #include <fstream>
@@ -153,6 +154,40 @@ ILL_BENCHMARK("ui/layout", 5000.0)
             ui.update({{1920, 1080}});
             ankerl::nanobench::doNotOptimizeAway(ui.drawData().vertices.size());
         });
+}
+
+ILL_BENCHMARK("ui/hit-test", 400000.0)
+{
+    // 1,000 buttons in a 40x25 grid; the pointer moves over a different one every update.
+    World world;
+    UiCanvas canvas;
+    canvas.useSafeArea = false;
+    const Entity root = world.create(canvas);
+    constexpr u32 kColumns = 40;
+    for (u32 i = 0; i < kLayoutElements; ++i)
+    {
+        UiElement element;
+        const Vec2 min(static_cast<f32>(i % kColumns) * 48.0f, static_cast<f32>(i / kColumns) * 43.0f);
+        element.placement.offsetMin = min;
+        element.placement.offsetMax = min + Vec2(44.0f, 40.0f);
+        const Entity button = world.create(element, UiImage{}, UiInteractable{}, UiButton{});
+        (void)setParent(world, button, root);
+    }
+    HierarchyIndex index;
+    updateTransformHierarchy(world, index);
+    UiWorld ui(world);
+    ui.update({{1920, 1080}});
+    UiInput input;
+    input.pointerPresent = true;
+    input.deltaSeconds = 1.0 / 60.0;
+    u32 frame = 0;
+    bench.minEpochIterations(50).unit("update").run("hit-test and record 1,000 buttons", [&] {
+        const u32 cell = (frame++ * 37u) % kLayoutElements;
+        input.pointerPixels = {static_cast<f32>(cell % kColumns) * 48.0f + 20.0f,
+                               static_cast<f32>(cell / kColumns) * 43.0f + 20.0f};
+        ui.update({{1920, 1080}}, input);
+        ankerl::nanobench::doNotOptimizeAway(ui.drawData().vertices.size());
+    });
 }
 
 ILL_BENCHMARK("ui/layout-reused", 3000.0)

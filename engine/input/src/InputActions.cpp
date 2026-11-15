@@ -502,6 +502,22 @@ text::TextKey triggerLabel(bool left, GamepadFamily family) noexcept
     return left ? strings::kGlyphGamepadLeftTrigger : strings::kGlyphGamepadRightTrigger;
 }
 
+text::TextKey dpadLabel(GamepadFamily family) noexcept
+{
+    switch (family)
+    {
+    case GamepadFamily::Xbox:
+        return strings::kGlyphXboxDpad;
+    case GamepadFamily::PlayStation:
+        return strings::kGlyphPsDpad;
+    case GamepadFamily::Nintendo:
+        return strings::kGlyphSwitchDpad;
+    case GamepadFamily::Generic:
+        break;
+    }
+    return strings::kGlyphGamepadDpad;
+}
+
 text::TextKey stickLabel(bool left, GamepadFamily family) noexcept
 {
     switch (family)
@@ -538,7 +554,16 @@ std::string bindingToString(const InputBinding& binding)
         return std::format("Axis.{}{}", gamepadAxisName(static_cast<GamepadAxis>(binding.code)),
                            scaleSuffix(binding.scale));
     case BindingSource::GamepadStick:
-        return binding.code == static_cast<u16>(GamepadStick::Left) ? "Stick.Left" : "Stick.Right";
+        switch (static_cast<GamepadStick>(binding.code))
+        {
+        case GamepadStick::Left:
+            return "Stick.Left";
+        case GamepadStick::Right:
+            return "Stick.Right";
+        case GamepadStick::DPad:
+            return "Stick.DPad";
+        }
+        return {};
     case BindingSource::KeyVector:
         return std::format("Keys.{}.{}.{}.{}", keyName(binding.keys[0]), keyName(binding.keys[1]),
                            keyName(binding.keys[2]), keyName(binding.keys[3]));
@@ -639,6 +664,10 @@ std::optional<InputBinding> bindingFromString(std::string_view text)
         {
             return InputBinding::gamepadStick(GamepadStick::Right);
         }
+        if (name == "DPad")
+        {
+            return InputBinding::gamepadStick(GamepadStick::DPad);
+        }
     }
     return std::nullopt;
 }
@@ -696,7 +725,9 @@ std::string glyphId(const InputBinding& binding, GamepadFamily family)
     }
     case BindingSource::GamepadStick:
         return std::string(familyPrefix(family)) +
-               (binding.code == static_cast<u16>(GamepadStick::Left) ? "left_stick" : "right_stick");
+               (binding.code == static_cast<u16>(GamepadStick::Left)    ? "left_stick"
+                : binding.code == static_cast<u16>(GamepadStick::Right) ? "right_stick"
+                                                                        : "dpad");
     case BindingSource::MouseMotion:
         return binding.code == 0 ? "mouse_motion" : "mouse_scroll";
     }
@@ -767,7 +798,9 @@ std::string glyphLabel(const InputBinding& binding, GamepadFamily family)
         return left ? "Left Stick" : "Right Stick";
     }
     case BindingSource::GamepadStick:
-        return binding.code == static_cast<u16>(GamepadStick::Left) ? "Left Stick" : "Right Stick";
+        return binding.code == static_cast<u16>(GamepadStick::Left)    ? "Left Stick"
+               : binding.code == static_cast<u16>(GamepadStick::Right) ? "Right Stick"
+                                                                       : "D-Pad";
     case BindingSource::MouseMotion:
         return binding.code == 0 ? "Mouse" : "Wheel";
     }
@@ -816,7 +849,9 @@ text::TextKey glyphLabelKey(const InputBinding& binding, GamepadFamily family) n
         return stickLabel(axis == GamepadAxis::LeftX || axis == GamepadAxis::LeftY, family);
     }
     case BindingSource::GamepadStick:
-        return stickLabel(binding.code == static_cast<u16>(GamepadStick::Left), family);
+        return binding.code == static_cast<u16>(GamepadStick::DPad)
+                   ? dpadLabel(family)
+                   : stickLabel(binding.code == static_cast<u16>(GamepadStick::Left), family);
     case BindingSource::MouseMotion:
         return binding.code == 0 ? strings::kGlyphMouseMotion : strings::kGlyphMouseScroll;
     }
@@ -1009,7 +1044,9 @@ void InputActions::update(const InputState* keyboardMouse, std::span<const Gamep
     {
         Vec2 value(0.0f);
         bool tapped = false;
-        for (const InputBinding& binding : action.bindings)
+        const bool reached = m_exclusivePrefix.empty() || action.name.starts_with(m_exclusivePrefix);
+        for (const InputBinding& binding :
+             reached ? std::span<const InputBinding>(action.bindings) : std::span<const InputBinding>())
         {
             const Contribution contribution = evaluate(binding, keyboardMouse, gamepads);
             // Movements add up (the mouse and a second mouse binding); levels take the strongest.
@@ -1047,6 +1084,11 @@ void InputActions::update(const InputState* keyboardMouse, std::span<const Gamep
         action.down = down;
         action.value = value;
     }
+}
+
+void InputActions::setExclusivePrefix(std::string_view prefix)
+{
+    m_exclusivePrefix = prefix;
 }
 
 bool InputActions::isDown(ActionId action) const noexcept

@@ -1,0 +1,10 @@
+{
+  "format": "illusion.settings",
+  "type": "illusion.InputSettings",
+  "version": 1,
+  "value": {
+    "actions": "assets:/input/showcase.input",
+    "gamepadsInBackground": false
+  }
+}
+

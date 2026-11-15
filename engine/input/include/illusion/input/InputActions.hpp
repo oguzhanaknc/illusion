@@ -251,6 +251,14 @@ public:
     /// (any number; for split-screen give each player their own InputActions and gamepad).
     void update(const InputState* keyboardMouse, std::span<const GamepadState* const> gamepads);
 
+    /// While @p prefix is not empty, update() gives input only to the actions whose names start with it;
+    /// the others read as released (a modal menu sets "ui." so that the game sees nothing). Empty (the
+    /// default) gives input to every action.
+    void setExclusivePrefix(std::string_view prefix);
+
+    /// The prefix of setExclusivePrefix(); empty when every action gets input.
+    [[nodiscard]] std::string_view exclusivePrefix() const noexcept { return m_exclusivePrefix; }
+
     /// Returns true while a Button action is held (Axis, Vector2, Delta: while non-zero).
     [[nodiscard]] bool isDown(ActionId action) const noexcept;
     /// Returns true in the frame a Button action went down.
@@ -290,6 +298,7 @@ private:
     const Action& at(ActionId action) const noexcept;
 
     std::vector<Action> m_actions;
+    std::string m_exclusivePrefix;
     InputDevice m_lastDevice = InputDevice::KeyboardMouse;
     GamepadType m_lastGamepadType = GamepadType::Generic;
 };

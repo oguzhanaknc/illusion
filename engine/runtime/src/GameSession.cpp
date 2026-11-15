@@ -24,9 +24,11 @@
 #include <illusion/text/LocaleFile.hpp>
 #include <illusion/text/Localization.hpp>
 #include <illusion/text/MessageFormat.hpp>
+#include <illusion/ui/UiWidgets.hpp>
 #include <illusion/ui/UiWorld.hpp>
 
 #include <algorithm>
+#include <array>
 #include <optional>
 #include <string>
 #include <string_view>
@@ -40,6 +42,8 @@ namespace
 
 constexpr usize kReservedGamepads = 8;
 constexpr std::string_view kLocaleDirectory = "assets:/locales";
+// While a modal canvas is shown, only the actions with this prefix get input.
+constexpr std::string_view kUiActionPrefix = "ui.";
 
 // The game's string table, built from its locale files; the Localization views it.
 struct GameStrings
@@ -134,6 +138,34 @@ void loadGameStrings(std::vector<text::LocaleFile> locales, GameStrings& strings
     localization.applyPendingLocale();
 }
 
+// Adds the actions the UI reads, with their default bindings, when @p actions lacks them.
+void addMissingUiActions(InputActions& actions)
+{
+    if (!actions.findAction(kUiNavigateAction))
+    {
+        const ActionId navigate = actions.addAction(kUiNavigateAction, ActionType::Vector2);
+        const std::array bindings{InputBinding::keyVector(Key::Up, Key::Down, Key::Left, Key::Right),
+                                  InputBinding::keyVector(Key::W, Key::S, Key::A, Key::D),
+                                  InputBinding::gamepadStick(GamepadStick::Left),
+                                  InputBinding::gamepadStick(GamepadStick::DPad)};
+        actions.setBindings(navigate, bindings);
+    }
+    if (!actions.findAction(kUiSubmitAction))
+    {
+        const ActionId submit = actions.addAction(kUiSubmitAction, ActionType::Button);
+        const std::array bindings{InputBinding::key(Key::Enter), InputBinding::key(Key::Space),
+                                  InputBinding::gamepadButton(GamepadButton::South)};
+        actions.setBindings(submit, bindings);
+    }
+    if (!actions.findAction(kUiCancelAction))
+    {
+        const ActionId cancel = actions.addAction(kUiCancelAction, ActionType::Button);
+        const std::array bindings{InputBinding::key(Key::Escape),
+                                  InputBinding::gamepadButton(GamepadButton::East)};
+        actions.setBindings(cancel, bindings);
+    }
+}
+
 PhysicsWorldDesc physicsDesc(const PhysicsSettings& settings) noexcept
 {
     PhysicsWorldDesc desc;
@@ -220,7 +252,41 @@ struct GameSession::Impl
                 gamepads.push_back(&gamepad->state());
             }
         }
+        // The modal state of the last UI update holds for the modules of this one.
+        const std::string_view prefix = ui.modalActive() ? kUiActionPrefix : std::string_view();
+        if (actions.exclusivePrefix() != prefix)
+        {
+            actions.setExclusivePrefix(prefix);
+        }
         actions.update(focus ? &input : nullptr, gamepads);
+    }
+
+    // What the UI reads this update: the cursor and primary button with the focus, and the ui.* actions.
+    [[nodiscard]] UiInput uiInput(f64 deltaSeconds) const noexcept
+    {
+        UiInput result;
+        result.deltaSeconds = deltaSeconds;
+        if (focus)
+        {
+            result.pointerPixels = input.mousePosition() * pointerScale;
+            const Vec2 size(uiFrame.targetPixels);
+            result.pointerPresent = result.pointerPixels.x >= 0.0f && result.pointerPixels.y >= 0.0f &&
+                                    result.pointerPixels.x < size.x && result.pointerPixels.y < size.y;
+            result.pointerDown = input.isDown(MouseButton::Left);
+        }
+        if (const std::optional<ActionId> navigate = actions.findAction(kUiNavigateAction))
+        {
+            result.navigate = actions.vector(*navigate);
+        }
+        if (const std::optional<ActionId> submit = actions.findAction(kUiSubmitAction))
+        {
+            result.submitDown = actions.isDown(*submit);
+        }
+        if (const std::optional<ActionId> cancel = actions.findAction(kUiCancelAction))
+        {
+            result.cancelPressed = actions.wasPressed(*cancel);
+        }
+        return result;
     }
 
     GameSessionDesc desc;
@@ -233,6 +299,7 @@ struct GameSession::Impl
     ParticleWorld particles;
     UiWorld ui;
     UiFrame uiFrame{};
+    Vec2 pointerScale{1.0f};
     InputActions actions;
     InputState input;
     HierarchyIndex hierarchy;
@@ -264,6 +331,7 @@ Expected<std::unique_ptr<GameSession>, std::string> GameSession::create(const Ga
             return unexpected(std::move(loaded.error()));
         }
     }
+    addMissingUiActions(impl->actions);
     impl->applySettings();
     loadGameStrings(readLocaleFiles(*desc.files), impl->strings, impl->localization);
     if (desc.streamer != nullptr)
@@ -357,7 +425,14 @@ void GameSession::update(f64 deltaSeconds)
     impl.physics.update(step);
     updateTransformHierarchy(impl.world, impl.hierarchy, impl.desc.jobs);
     impl.localization.applyPendingLocale();
-    impl.ui.update(impl.uiFrame);
+    if (impl.desc.mode == GameSessionMode::Play)
+    {
+        impl.ui.update(impl.uiFrame, impl.uiInput(step));
+    }
+    else
+    {
+        impl.ui.update(impl.uiFrame);
+    }
     // The wind blows before particles and the renderer read it.
     advanceWind(impl.world, static_cast<f32>(step));
     // Particles fall with the physics gravity, which game code may change.
@@ -412,9 +487,10 @@ AudioWorld& GameSession::audio() noexcept
     return m_impl->audio;
 }
 
-void GameSession::setUiFrame(const UiFrame& frame) noexcept
+void GameSession::setUiFrame(const UiFrame& frame, Vec2 pointerScale) noexcept
 {
     m_impl->uiFrame = frame;
+    m_impl->pointerScale = pointerScale;
 }
 
 UiWorld& GameSession::ui() noexcept

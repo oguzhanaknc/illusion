@@ -135,6 +135,15 @@ std::optional<GamepadAxis> gamepadAxisFromName(std::string_view name) noexcept
 
 Vec2 GamepadState::stick(GamepadStick stick) const noexcept
 {
+    if (stick == GamepadStick::DPad)
+    {
+        const auto held = [this](GamepadButton button) {
+            return isDown(button) ? 1.0f : 0.0f;
+        };
+        const Vec2 pad(held(GamepadButton::DPadRight) - held(GamepadButton::DPadLeft),
+                       held(GamepadButton::DPadUp) - held(GamepadButton::DPadDown));
+        return pad.x != 0.0f && pad.y != 0.0f ? glm::normalize(pad) : pad;
+    }
     const bool left = stick == GamepadStick::Left;
     const Vec2 raw(axis(left ? GamepadAxis::LeftX : GamepadAxis::RightX),
                    axis(left ? GamepadAxis::LeftY : GamepadAxis::RightY));

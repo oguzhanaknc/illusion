@@ -1,0 +1,22 @@
+{
+  "format": "illusion.input",
+  "version": 1,
+  "actions": [
+    {
+      "name": "ui.navigate",
+      "type": "Vector2",
+      "bindings": ["Keys.Up.Down.Left.Right", "Keys.W.S.A.D", "Stick.Left", "Stick.DPad"]
+    },
+    {
+      "name": "ui.submit",
+      "type": "Button",
+      "bindings": ["Key.Enter", "Key.Space", "Gamepad.South"]
+    },
+    {
+      "name": "ui.cancel",
+      "type": "Button",
+      "bindings": ["Key.Escape", "Gamepad.East"]
+    }
+  ]
+}
+

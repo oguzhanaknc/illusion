@@ -6,10 +6,12 @@
 #include <illusion/text/Localization.hpp>
 #include <illusion/text/TextOutput.hpp>
 #include <illusion/ui/UiComponents.hpp>
+#include <illusion/ui/UiWidgets.hpp>
 #include <illusion/ui/UiWorld.hpp>
 
 #include <algorithm>
 #include <array>
+#include <cmath>
 #include <span>
 #include <string_view>
 #include <vector>
@@ -25,6 +27,23 @@ constexpr u32 kReservedCanvases = 64;
 constexpr usize kTextArenaBytes = usize{256} * 1024;
 // Marks a main-axis size of a UiStack child that stretches.
 constexpr f32 kStretch = -1.0f;
+// Navigation: deflection that counts as a direction, and the repeat while it is held, in seconds.
+constexpr f32 kNavigateThreshold = 0.5f;
+constexpr f64 kRepeatDelay = 0.4;
+constexpr f64 kRepeatInterval = 0.12;
+// Navigation scores a candidate by its distance along the direction plus this times its offset across it.
+constexpr f32 kCrossPenalty = 2.0f;
+// Candidates closer than this along the direction, in pixels, are not in that direction.
+constexpr f32 kMinAdvancePixels = 0.5f;
+
+enum class Direction : u8
+{
+    None,
+    Up,
+    Down,
+    Left,
+    Right,
+};
 
 struct Node
 {
@@ -42,6 +61,10 @@ struct Node
     bool keyed = false;
     bool element = false; // has UiElement
     bool clip = false;
+    bool interactable = false; // has UiInteractable
+    bool toggle = false;       // has UiToggle
+    bool slider = false;       // has UiSlider
+    bool indicator = false;    // first child element of a UiToggle, hidden while it is off
 };
 
 struct CanvasEntry
@@ -51,6 +74,14 @@ struct CanvasEntry
     u32 firstNode = 0;
     u32 endNode = 0;
     UiCanvasMetrics metrics{};
+    bool modal = false;
+};
+
+// A clip on the path to the node a hit test visits.
+struct HitClip
+{
+    u32 end = 0; // subtreeEnd of the node that clips
+    bool inside = false;
 };
 
 // What a UiStack child measures: its text or image size, when it has either.
@@ -61,15 +92,133 @@ struct Content
 };
 
 // The Component versions a layout depends on.
-constexpr usize kVersionCount = 8;
+constexpr usize kVersionCount = 11;
 using Versions = std::array<u64, kVersionCount>;
 
 Versions versionsOf(const World& world) noexcept
 {
-    return {world.componentVersion<UiCanvas>(),  world.componentVersion<UiElement>(),
-            world.componentVersion<UiImage>(),   world.componentVersion<UiText>(),
-            world.componentVersion<UiStack>(),   world.componentVersion<UiGrid>(),
-            world.componentVersion<Hierarchy>(), world.componentVersion<Inactive>()};
+    return {world.componentVersion<UiCanvas>(),       world.componentVersion<UiElement>(),
+            world.componentVersion<UiImage>(),        world.componentVersion<UiText>(),
+            world.componentVersion<UiStack>(),        world.componentVersion<UiGrid>(),
+            world.componentVersion<Hierarchy>(),      world.componentVersion<Inactive>(),
+            world.componentVersion<UiInteractable>(), world.componentVersion<UiToggle>(),
+            world.componentVersion<UiSlider>()};
+}
+
+// @p point in the space of @p transform's input, or nothing when the transform collapses an axis.
+bool untransform(const UiTransform2D& transform, Vec2 point, Vec2& local) noexcept
+{
+    const f32 det = transform.x.x * transform.y.y - transform.y.x * transform.x.y;
+    if (!(std::abs(det) > 1e-12f))
+    {
+        return false;
+    }
+    const Vec2 d = point - transform.translation;
+    local = Vec2((d.x * transform.y.y - d.y * transform.y.x) / det,
+                 (d.y * transform.x.x - d.x * transform.x.y) / det);
+    return true;
+}
+
+// Where the value of @p slider is between min and max, 0 to 1.
+f32 sliderFraction(const UiSlider& slider) noexcept
+{
+    const f32 range = slider.max - slider.min;
+    if (!std::isfinite(range) || range == 0.0f || !std::isfinite(slider.value))
+    {
+        return 0.0f;
+    }
+    return std::clamp((slider.value - slider.min) / range, 0.0f, 1.0f);
+}
+
+// @p value snapped to the step of @p slider from its min and kept between min and max.
+f32 sliderValue(const UiSlider& slider, f32 value) noexcept
+{
+    const f32 low = std::min(slider.min, slider.max);
+    const f32 high = std::max(slider.min, slider.max);
+    if (!std::isfinite(value))
+    {
+        return low;
+    }
+    if (slider.step > 0.0f && std::isfinite(slider.step))
+    {
+        value = slider.min + std::round((value - slider.min) / slider.step) * slider.step;
+    }
+    return std::clamp(value, low, high);
+}
+
+Vec4 stateTint(const UiInteractable& interactable, const UiInteraction& state) noexcept
+{
+    if (!interactable.enabled)
+    {
+        return interactable.disabledTint;
+    }
+    if (state.pressed)
+    {
+        return interactable.pressedTint;
+    }
+    if (state.focused)
+    {
+        return interactable.focusedTint;
+    }
+    return state.hovered ? interactable.hoveredTint : Vec4(1.0f);
+}
+
+bool sameState(const UiInteraction& a, const UiInteraction& b) noexcept
+{
+    return a.hovered == b.hovered && a.pressed == b.pressed && a.focused == b.focused;
+}
+
+// The direction of @p navigate beyond the threshold, the larger axis winning.
+Direction directionOf(Vec2 navigate) noexcept
+{
+    const f32 x = std::isfinite(navigate.x) ? navigate.x : 0.0f;
+    const f32 y = std::isfinite(navigate.y) ? navigate.y : 0.0f;
+    if (std::max(std::abs(x), std::abs(y)) <= kNavigateThreshold)
+    {
+        return Direction::None;
+    }
+    if (std::abs(x) >= std::abs(y))
+    {
+        return x > 0.0f ? Direction::Right : Direction::Left;
+    }
+    return y > 0.0f ? Direction::Up : Direction::Down;
+}
+
+// The direction on the canvas, y down.
+Vec2 canvasDirection(Direction direction) noexcept
+{
+    switch (direction)
+    {
+    case Direction::Up:
+        return {0.0f, -1.0f};
+    case Direction::Down:
+        return {0.0f, 1.0f};
+    case Direction::Left:
+        return {-1.0f, 0.0f};
+    case Direction::Right:
+        return {1.0f, 0.0f};
+    case Direction::None:
+        break;
+    }
+    return {0.0f, 0.0f};
+}
+
+Entity neighbourOf(const UiInteractable& interactable, Direction direction) noexcept
+{
+    switch (direction)
+    {
+    case Direction::Up:
+        return interactable.up;
+    case Direction::Down:
+        return interactable.down;
+    case Direction::Left:
+        return interactable.left;
+    case Direction::Right:
+        return interactable.right;
+    case Direction::None:
+        break;
+    }
+    return {};
 }
 
 UiTextStyle textStyle(const UiText& text, f32 wrapWidth) noexcept
@@ -127,6 +276,8 @@ struct UiWorld::Impl
         canvases.reserve(kReservedCanvases);
         depthStack.resize(usize{desc.maxDepth} + 1);
         clipStack.reserve(usize{desc.drawList.maxClipDepth} + 1);
+        hitClips.reserve(usize{desc.maxDepth} + 1);
+        events.reserve(desc.maxEvents);
     }
 
     [[nodiscard]] std::string_view textOf(const Node& node, const UiText& text) const noexcept
@@ -145,7 +296,7 @@ struct UiWorld::Impl
         return localization != nullptr && !(localization->locale() == lastLocale);
     }
 
-    void update(const UiFrame& frame)
+    void update(const UiFrame& frame, const UiInput& input)
     {
         const bool rebuilt = hierarchy.update(world);
         const Versions now = versionsOf(world);
@@ -153,14 +304,17 @@ struct UiWorld::Impl
         if (!statistics.layoutReused)
         {
             layout(frame);
-            versions = versionsOf(world);
             lastFrame = frame;
             lastAssets = assets;
             lastLocalization = localization;
             lastLocale = localization != nullptr ? localization->locale() : text::LocaleId{};
             laidOut = true;
         }
+        interact(input);
+        // The layout now matches the Components, including the values interact() wrote.
+        versions = versionsOf(world);
         record(frame);
+        statistics.droppedEvents = droppedEvents;
     }
 
     void layout(const UiFrame& frame)
@@ -173,13 +327,22 @@ struct UiWorld::Impl
         elements = 0;
         skipped = 0;
         missingKeys = 0;
-        world.query<const UiCanvas>().without<Inactive>().each(
-            [this](Entity entity, const UiCanvas& canvas) { canvases.push_back({entity, canvas.order}); });
+        world.query<const UiCanvas>().without<Inactive>().each([this](Entity entity, const UiCanvas& canvas) {
+            canvases.push_back({.entity = entity,
+                                .order = canvas.order,
+                                .firstNode = 0,
+                                .endNode = 0,
+                                .metrics = {},
+                                .modal = canvas.modal});
+        });
         std::sort(canvases.begin(), canvases.end(), [](const CanvasEntry& a, const CanvasEntry& b) {
             return a.order != b.order ? a.order < b.order : a.entity.index < b.entity.index;
         });
-        for (CanvasEntry& canvas : canvases)
+        firstEligible = 0;
+        modal = false;
+        for (u32 c = 0; c < canvases.size(); ++c)
         {
+            CanvasEntry& canvas = canvases[c];
             const UiCanvas& settings = world.get<UiCanvas>(canvas.entity);
             canvas.metrics = canvasMetrics(settings.scale, frame.targetPixels, frame.safeInsetPixels);
             const UiRect area =
@@ -192,8 +355,16 @@ struct UiWorld::Impl
                 finishNode(n);
                 layoutChildren(n);
             }
+            if (canvas.modal && canvas.endNode > canvas.firstNode + 1)
+            {
+                firstEligible = c;
+                modal = true;
+            }
         }
-        writeComputedRects();
+        // Elements that are no longer laid out keep no state; the laid-out ones get theirs in interact().
+        world.query<UiInteraction>().each([](Entity, UiInteraction& state) { state = {}; });
+        world.markChanged<UiInteraction>();
+        writeComputedRects(0, static_cast<u32>(nodes.size()));
     }
 
     u32 addNode(Entity entity, u32 parent)
@@ -203,12 +374,19 @@ struct UiWorld::Impl
         node.entity = entity;
         node.parent = parent;
         node.element = world.has<UiElement>(entity);
+        if (node.element)
+        {
+            node.interactable = world.has<UiInteractable>(entity);
+            node.toggle = world.has<UiToggle>(entity);
+            node.slider = world.has<UiSlider>(entity);
+        }
         if (parent != kNoNode)
         {
             Node& parentNode = nodes[parent];
             if (parentNode.lastChild == kNoNode)
             {
                 parentNode.firstChild = id;
+                node.indicator = parentNode.toggle;
             }
             else
             {
@@ -371,6 +549,48 @@ struct UiWorld::Impl
                 nodes[c].rect = resolvePlacement(world.get<UiElement>(nodes[c].entity).placement, parent);
             }
         }
+        if (nodes[n].slider)
+        {
+            placeSliderParts(n);
+        }
+    }
+
+    // The fill from the slider's start to its value, and the handle centred on the value along its axis.
+    void placeSliderParts(u32 n)
+    {
+        const Node& node = nodes[n];
+        const UiSlider& slider = world.get<UiSlider>(node.entity);
+        const int along = slider.axis == UiAxis::Vertical ? 1 : 0;
+        const f32 at = node.rect.min[along] + sliderFraction(slider) * node.rect.size()[along];
+        const u32 fill = node.firstChild;
+        if (fill == kNoNode)
+        {
+            return;
+        }
+        nodes[fill].rect = node.rect;
+        nodes[fill].rect.max[along] = at;
+        const u32 handle = nodes[fill].nextSibling;
+        if (handle == kNoNode)
+        {
+            return;
+        }
+        UiRect& rect = nodes[handle].rect;
+        const f32 half = rect.size()[along] * 0.5f;
+        rect.min[along] = at - half;
+        rect.max[along] = at + half;
+    }
+
+    // Lays out the subtree of slider node @p n again after its value changed.
+    void relayoutSlider(u32 n)
+    {
+        layoutChildren(n);
+        const u32 end = nodes[n].subtreeEnd;
+        for (u32 m = n + 1; m < end; ++m)
+        {
+            finishNode(m);
+            layoutChildren(m);
+        }
+        writeComputedRects(n + 1, end);
     }
 
     void layoutStack(u32 n, const UiStack& stack)
@@ -461,11 +681,14 @@ struct UiWorld::Impl
         }
     }
 
-    void writeComputedRects()
+    // Writes UiComputedRect to the elements of nodes [first, end), and gives the interactable ones a
+    // UiInteraction.
+    void writeComputedRects(u32 first, u32 end)
     {
         bool written = false;
-        for (const Node& node : nodes)
+        for (u32 n = first; n < end; ++n)
         {
+            const Node& node = nodes[n];
             if (!node.element)
             {
                 continue;
@@ -478,6 +701,10 @@ struct UiWorld::Impl
             else
             {
                 world.emplace<UiComputedRect>(node.entity, computed);
+            }
+            if (node.interactable && !world.has<UiInteraction>(node.entity))
+            {
+                world.emplace<UiInteraction>(node.entity);
             }
             written = true;
         }
@@ -509,6 +736,11 @@ struct UiWorld::Impl
         if (const UiImage* image = world.tryGet<UiImage>(node.entity))
         {
             Vec4 tint = image->tint;
+            if (const UiInteractable* interactable =
+                    node.interactable ? world.tryGet<UiInteractable>(node.entity) : nullptr)
+            {
+                tint *= stateTint(*interactable, stateOf(node.entity));
+            }
             tint.a *= node.opacity;
             if (image->image.empty())
             {
@@ -568,6 +800,475 @@ struct UiWorld::Impl
         (void)drawList.text(face, position, utf8, style);
     }
 
+    [[nodiscard]] bool hiddenByToggle(const Node& node) const
+    {
+        if (!node.indicator)
+        {
+            return false;
+        }
+        const Entity parent = nodes[node.parent].entity;
+        const UiToggle* toggle = world.isAlive(parent) ? world.tryGet<UiToggle>(parent) : nullptr;
+        return toggle != nullptr && !toggle->on;
+    }
+
+    // True when node @p n or one of its ancestors is hidden by a toggle.
+    [[nodiscard]] bool hidden(u32 n) const
+    {
+        for (u32 m = n; m != kNoNode; m = nodes[m].parent)
+        {
+            if (hiddenByToggle(nodes[m]))
+            {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    // First node of the canvases that can be hit and focused: the topmost modal one and those above it.
+    [[nodiscard]] u32 eligibleBegin() const noexcept
+    {
+        return canvases.empty() ? 0 : canvases[firstEligible].firstNode;
+    }
+
+    [[nodiscard]] u32 canvasOf(u32 n) const noexcept
+    {
+        for (u32 c = 0; c < canvases.size(); ++c)
+        {
+            if (n < canvases[c].endNode)
+            {
+                return c;
+            }
+        }
+        return 0;
+    }
+
+    // The node of @p entity on the canvases that can be focused, or kNoNode; @p hint is tried first.
+    [[nodiscard]] u32 findNode(Entity entity, u32 hint) const noexcept
+    {
+        if (entity.isNull() || !world.isAlive(entity))
+        {
+            return kNoNode;
+        }
+        const u32 begin = eligibleBegin();
+        if (hint != kNoNode && hint >= begin && hint < nodes.size() && nodes[hint].entity == entity)
+        {
+            return hint;
+        }
+        for (u32 n = begin; n < nodes.size(); ++n)
+        {
+            if (nodes[n].entity == entity)
+            {
+                return n;
+            }
+        }
+        return kNoNode;
+    }
+
+    [[nodiscard]] const UiInteractable* enabledInteractable(u32 n) const
+    {
+        if (!nodes[n].interactable)
+        {
+            return nullptr;
+        }
+        const UiInteractable* interactable = world.tryGet<UiInteractable>(nodes[n].entity);
+        return interactable != nullptr && interactable->enabled ? interactable : nullptr;
+    }
+
+    [[nodiscard]] bool focusable(u32 n) const
+    {
+        const UiInteractable* interactable = enabledInteractable(n);
+        return interactable != nullptr && interactable->focusable && !hidden(n);
+    }
+
+    // The node of @p entity when it can have the focus, or kNoNode.
+    [[nodiscard]] u32 focusableNode(Entity entity, u32 hint) const
+    {
+        const u32 n = findNode(entity, hint);
+        return n != kNoNode && focusable(n) ? n : kNoNode;
+    }
+
+    // Centre of node @p n after its transform, in target pixels.
+    [[nodiscard]] Vec2 centreOf(u32 n) const noexcept
+    {
+        const Node& node = nodes[n];
+        return node.transform.apply((node.rect.min + node.rect.max) * 0.5f) *
+               canvases[canvasOf(n)].metrics.pixelsPerUnit;
+    }
+
+    [[nodiscard]] UiInteraction stateOf(Entity entity) const noexcept
+    {
+        UiInteraction state;
+        state.hovered = entity == hovered;
+        state.focused = entity == focus;
+        const bool capturedSlider = capturedHint != kNoNode && nodes[capturedHint].slider;
+        state.pressed = (entity == captured && (entity == hovered || capturedSlider)) ||
+                        (entity == submitted && entity == focus);
+        return state;
+    }
+
+    void push(UiEventType type, Entity entity, f32 value)
+    {
+        if (events.size() < desc.maxEvents)
+        {
+            events.push_back({type, entity, value});
+        }
+        else
+        {
+            ++droppedEvents;
+        }
+    }
+
+    void focusNode(u32 n, f32 byNavigation)
+    {
+        focusHint = n;
+        if (focus == nodes[n].entity)
+        {
+            return;
+        }
+        focus = nodes[n].entity;
+        push(UiEventType::FocusChanged, focus, byNavigation);
+    }
+
+    // The topmost enabled interactable node under @p pixels, or kNoNode.
+    [[nodiscard]] u32 hitTest(Vec2 pixels)
+    {
+        u32 hit = kNoNode;
+        for (u32 c = firstEligible; c < canvases.size(); ++c)
+        {
+            const CanvasEntry& canvas = canvases[c];
+            const Vec2 point = pixels / canvas.metrics.pixelsPerUnit;
+            hitClips.clear();
+            u32 outside = 0;
+            u32 hiddenEnd = 0;
+            for (u32 n = canvas.firstNode; n < canvas.endNode; ++n)
+            {
+                while (!hitClips.empty() && hitClips.back().end <= n)
+                {
+                    outside -= hitClips.back().inside ? 0u : 1u;
+                    hitClips.pop_back();
+                }
+                const Node& node = nodes[n];
+                if (n < hiddenEnd || hiddenByToggle(node))
+                {
+                    hiddenEnd = std::max(hiddenEnd, node.subtreeEnd);
+                    continue;
+                }
+                Vec2 local(0.0f);
+                if (outside == 0 && node.opacity > 0.0f && enabledInteractable(n) != nullptr &&
+                    untransform(node.transform, point, local) && node.rect.contains(local))
+                {
+                    hit = n;
+                }
+                if (node.clip && node.subtreeEnd > n + 1)
+                {
+                    const bool inside = clipOf(node, 1.0f).contains(point);
+                    hitClips.push_back({node.subtreeEnd, inside});
+                    outside += inside ? 0u : 1u;
+                }
+            }
+        }
+        return hit;
+    }
+
+    void setSliderValue(u32 n, f32 value)
+    {
+        const Entity entity = nodes[n].entity;
+        UiSlider* slider = world.tryGet<UiSlider>(entity);
+        if (slider == nullptr)
+        {
+            return;
+        }
+        const f32 next = sliderValue(*slider, value);
+        if (next == slider->value)
+        {
+            return;
+        }
+        slider->value = next;
+        world.markChanged<UiSlider>();
+        push(UiEventType::ValueChanged, entity, next);
+        relayoutSlider(n);
+    }
+
+    void dragSlider(u32 n, Vec2 pixels)
+    {
+        const Node& node = nodes[n];
+        const UiSlider* slider = world.tryGet<UiSlider>(node.entity);
+        Vec2 local(0.0f);
+        if (slider == nullptr ||
+            !untransform(node.transform, pixels / canvases[canvasOf(n)].metrics.pixelsPerUnit, local))
+        {
+            return;
+        }
+        const int along = slider->axis == UiAxis::Vertical ? 1 : 0;
+        const f32 length = node.rect.size()[along];
+        const f32 t =
+            length > 0.0f ? std::clamp((local[along] - node.rect.min[along]) / length, 0.0f, 1.0f) : 0.0f;
+        setSliderValue(n, slider->min + t * (slider->max - slider->min));
+    }
+
+    // A button clicks, a toggle flips.
+    void activate(u32 n)
+    {
+        const Entity entity = nodes[n].entity;
+        if (world.has<UiButton>(entity))
+        {
+            push(UiEventType::Clicked, entity, 0.0f);
+        }
+        if (UiToggle* toggle = world.tryGet<UiToggle>(entity))
+        {
+            toggle->on = !toggle->on;
+            world.markChanged<UiToggle>();
+            push(UiEventType::ValueChanged, entity, toggle->on ? 1.0f : 0.0f);
+        }
+    }
+
+    void pointer(const UiInput& input, u32 hit)
+    {
+        const bool pressedNow = input.pointerDown && !pointerWasDown;
+        const bool releasedNow = !input.pointerDown && pointerWasDown;
+        pointerWasDown = input.pointerDown;
+        if (pressedNow && hit != kNoNode)
+        {
+            captured = nodes[hit].entity;
+            capturedHint = hit;
+            if (focusable(hit))
+            {
+                focusNode(hit, 0.0f);
+            }
+        }
+        if (captured.isNull())
+        {
+            return;
+        }
+        if (input.pointerDown)
+        {
+            if (nodes[capturedHint].slider && input.pointerPresent)
+            {
+                dragSlider(capturedHint, input.pointerPixels);
+            }
+            return;
+        }
+        if (releasedNow && hit == capturedHint)
+        {
+            activate(capturedHint);
+        }
+        captured = {};
+        capturedHint = kNoNode;
+    }
+
+    void focusFirst()
+    {
+        for (u32 c = static_cast<u32>(canvases.size()); c-- > firstEligible;)
+        {
+            for (u32 n = canvases[c].firstNode; n < canvases[c].endNode; ++n)
+            {
+                if (focusable(n))
+                {
+                    focusNode(n, 1.0f);
+                    return;
+                }
+            }
+        }
+    }
+
+    // The focusable node nearest to node @p from in @p direction, or kNoNode.
+    [[nodiscard]] u32 nearestNode(u32 from, Direction direction) const
+    {
+        const Vec2 along = canvasDirection(direction);
+        const Vec2 origin = centreOf(from);
+        u32 best = kNoNode;
+        f32 bestScore = 0.0f;
+        for (u32 n = eligibleBegin(); n < nodes.size(); ++n)
+        {
+            if (n == from || !focusable(n))
+            {
+                continue;
+            }
+            const Vec2 offset = centreOf(n) - origin;
+            const f32 advance = glm::dot(offset, along);
+            if (advance < kMinAdvancePixels)
+            {
+                continue;
+            }
+            const f32 score = advance + kCrossPenalty * std::abs(offset.x * along.y - offset.y * along.x);
+            if (best == kNoNode || score < bestScore)
+            {
+                best = n;
+                bestScore = score;
+            }
+        }
+        return best;
+    }
+
+    void moveFocus(Direction direction)
+    {
+        if (focus.isNull())
+        {
+            focusFirst();
+            return;
+        }
+        const u32 n = focusHint;
+        if (const UiSlider* slider = nodes[n].slider ? world.tryGet<UiSlider>(focus) : nullptr)
+        {
+            const bool vertical = slider->axis == UiAxis::Vertical;
+            const f32 sign = vertical ? (direction == Direction::Down ? 1.0f
+                                         : direction == Direction::Up ? -1.0f
+                                                                      : 0.0f)
+                                      : (direction == Direction::Right  ? 1.0f
+                                         : direction == Direction::Left ? -1.0f
+                                                                        : 0.0f);
+            if (sign != 0.0f)
+            {
+                const f32 delta =
+                    slider->step > 0.0f ? slider->step : slider->navigationStep * (slider->max - slider->min);
+                setSliderValue(n, slider->value + sign * delta);
+                return;
+            }
+        }
+        if (const UiInteractable* interactable = world.tryGet<UiInteractable>(focus))
+        {
+            if (const u32 target = focusableNode(neighbourOf(*interactable, direction), kNoNode);
+                target != kNoNode)
+            {
+                focusNode(target, 1.0f);
+                return;
+            }
+        }
+        if (const u32 nearest = nearestNode(n, direction); nearest != kNoNode)
+        {
+            focusNode(nearest, 1.0f);
+        }
+    }
+
+    void navigate(const UiInput& input)
+    {
+        const Direction direction = directionOf(input.navigate);
+        bool move = false;
+        if (direction != Direction::None && direction != heldDirection)
+        {
+            move = true;
+            repeatTimer = kRepeatDelay;
+        }
+        else if (direction != Direction::None)
+        {
+            repeatTimer -= std::isfinite(input.deltaSeconds) ? std::max(input.deltaSeconds, 0.0) : 0.0;
+            if (repeatTimer <= 0.0)
+            {
+                move = true;
+                repeatTimer = std::max(repeatTimer + kRepeatInterval, 0.0);
+            }
+        }
+        heldDirection = direction;
+        if (move)
+        {
+            moveFocus(direction);
+        }
+    }
+
+    void submit(const UiInput& input)
+    {
+        const bool pressedNow = input.submitDown && !submitWasDown;
+        const bool releasedNow = !input.submitDown && submitWasDown;
+        submitWasDown = input.submitDown;
+        if (pressedNow)
+        {
+            if (focus.isNull())
+            {
+                focusFirst();
+            }
+            else
+            {
+                submitted = focus;
+            }
+        }
+        if (input.submitDown)
+        {
+            return;
+        }
+        if (releasedNow && !submitted.isNull() && submitted == focus)
+        {
+            activate(focusHint);
+        }
+        submitted = {};
+    }
+
+    [[nodiscard]] Entity cancelTarget() const noexcept
+    {
+        if (!focus.isNull())
+        {
+            return canvases[canvasOf(focusHint)].entity;
+        }
+        return modal ? canvases[firstEligible].entity : Entity{};
+    }
+
+    void writeInteractions()
+    {
+        bool written = false;
+        for (const Node& node : nodes)
+        {
+            if (!node.interactable)
+            {
+                continue;
+            }
+            UiInteraction* state = world.tryGet<UiInteraction>(node.entity);
+            const UiInteraction now = stateOf(node.entity);
+            if (state != nullptr && !sameState(*state, now))
+            {
+                *state = now;
+                written = true;
+            }
+        }
+        if (written)
+        {
+            world.markChanged<UiInteraction>();
+        }
+    }
+
+    // Hover, press, focus and navigation against the rectangles of this layout; values are written to the
+    // Components and the parts of the layout that depend on them are updated.
+    void interact(const UiInput& input)
+    {
+        ILL_PROFILE_SCOPE_N("UiWorld::interact");
+        events.clear();
+        droppedEvents = 0;
+        focusHint = focusableNode(focus, focusHint);
+        if (focusHint == kNoNode)
+        {
+            focus = {};
+        }
+        capturedHint = findNode(captured, capturedHint);
+        if (capturedHint == kNoNode || enabledInteractable(capturedHint) == nullptr || hidden(capturedHint))
+        {
+            captured = {};
+            capturedHint = kNoNode;
+        }
+        const u32 hit = input.pointerPresent ? hitTest(input.pointerPixels) : kNoNode;
+        hovered = hit != kNoNode ? nodes[hit].entity : Entity{};
+        pointer(input, hit);
+        navigate(input);
+        submit(input);
+        if (input.cancelPressed)
+        {
+            push(UiEventType::Cancelled, cancelTarget(), 0.0f);
+        }
+        writeInteractions();
+    }
+
+    void setFocus(Entity entity)
+    {
+        if (entity.isNull())
+        {
+            focus = {};
+            focusHint = kNoNode;
+            return;
+        }
+        if (const u32 n = focusableNode(entity, kNoNode); n != kNoNode)
+        {
+            focus = entity;
+            focusHint = n;
+        }
+    }
+
     void record(const UiFrame& frame)
     {
         ILL_PROFILE_SCOPE_N("UiWorld::record");
@@ -580,6 +1281,7 @@ struct UiWorld::Impl
             // Every canvas is drawn in the units of the first one.
             const f32 factor = canvas.metrics.pixelsPerUnit / base.pixelsPerUnit;
             clipStack.clear();
+            u32 hiddenEnd = 0;
             for (u32 n = canvas.firstNode; n < canvas.endNode; ++n)
             {
                 while (!clipStack.empty() && clipStack.back() <= n)
@@ -588,6 +1290,11 @@ struct UiWorld::Impl
                     clipStack.pop_back();
                 }
                 const Node& node = nodes[n];
+                if (n < hiddenEnd || hiddenByToggle(node))
+                {
+                    hiddenEnd = std::max(hiddenEnd, node.subtreeEnd);
+                    continue;
+                }
                 drawList.setTransform(factor == 1.0f ? node.transform : scaled(node.transform, factor));
                 drawNode(node);
                 if (node.clip && node.subtreeEnd > n + 1 && drawList.pushClip(clipOf(node, factor)))
@@ -620,6 +1327,21 @@ struct UiWorld::Impl
     std::vector<CanvasEntry> canvases;
     std::vector<u32> depthStack; // node of each depth on the path to the current Entity
     std::vector<u32> clipStack;  // subtreeEnd of each node that pushed a clip
+    std::vector<HitClip> hitClips;
+    std::vector<UiEvent> events;
+    u32 droppedEvents = 0;
+    u32 firstEligible = 0; // canvas index: the topmost modal canvas, or 0
+    bool modal = false;
+    Entity focus{};
+    Entity hovered{};
+    Entity captured{};  // pressed by the pointer until it is released
+    Entity submitted{}; // pressed by submit until it is released
+    u32 focusHint = kNoNode;
+    u32 capturedHint = kNoNode;
+    bool pointerWasDown = false;
+    bool submitWasDown = false;
+    Direction heldDirection = Direction::None;
+    f64 repeatTimer = 0.0; // until the next repeat of the held direction
     Versions versions{};
     UiFrame lastFrame{};
     UiAssets* lastAssets = nullptr;
@@ -653,7 +1375,33 @@ void UiWorld::setLocalization(const text::Localization* localization) noexcept
 void UiWorld::update(const UiFrame& frame)
 {
     ILL_PROFILE_SCOPE();
-    m_impl->update(frame);
+    m_impl->update(frame, UiInput{});
+}
+
+void UiWorld::update(const UiFrame& frame, const UiInput& input)
+{
+    ILL_PROFILE_SCOPE();
+    m_impl->update(frame, input);
+}
+
+std::span<const UiEvent> UiWorld::events() const noexcept
+{
+    return m_impl->events;
+}
+
+Entity UiWorld::focused() const noexcept
+{
+    return m_impl->focus;
+}
+
+void UiWorld::setFocus(Entity entity)
+{
+    m_impl->setFocus(entity);
+}
+
+bool UiWorld::modalActive() const noexcept
+{
+    return m_impl->modal;
 }
 
 UiDrawData UiWorld::drawData() const noexcept

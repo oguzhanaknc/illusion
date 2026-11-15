@@ -69,6 +69,10 @@ if (actions.wasPressed(jump))
 player.move(actions.vector(move));
 ```
 
+`setExclusivePrefix(prefix)`, input'u adı `prefix` ile başlayan action'larla sınırlar: diğerleri, boş bir string'e
+(varsayılan) geri ayarlanana kadar bırakılmış okunur. Modal bir menü bunu `"ui."` ile kullanır; böylece menü
+açıkken oyun hiçbir şey görmez; `GameSession` bunu modal UI canvas'ları için yapar.
+
 Birden fazla binding etkin olduğunda en güçlü değer kazanır (bir `Delta` action'ı onları toplar). Bir kare içinde başlayıp biten bir
 dokunuş da `wasPressed` ve `wasReleased` bildirir. Yerel çok oyunculu oyunlarda her oyuncuya kendi
 `InputActions` nesnesini verin ve yalnızca o oyuncunun gamepad'ini geçirin.

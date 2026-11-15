@@ -7,7 +7,8 @@ inside a `GameSession`; the exported player and the editor's Game view draw it o
 `UiRenderer` (ADR 0057). The UI Components have no `Transform`, and they are saved in scenes and prefabs like
 every other Component.
 
-Headers: `<illusion/ui/UiComponents.hpp>`, `<illusion/ui/UiGeometry.hpp>`, `<illusion/ui/UiWorld.hpp>`
+Headers: `<illusion/ui/UiComponents.hpp>`, `<illusion/ui/UiGeometry.hpp>`, `<illusion/ui/UiWorld.hpp>`,
+`<illusion/ui/UiWidgets.hpp>`
 
 Library: `illusion::ui` (game modules take the headers with `USES ui`)
 
@@ -35,7 +36,7 @@ player can choose for accessibility, clamped to 0.5 to 3; it multiplies every mo
 | `scale` | The `UiCanvasScale` above |
 | `order` | Canvases with a higher `order` are drawn on top; equal orders keep the order of their Entities |
 | `useSafeArea` | On by default: the canvas is laid out inside the display's safe insets (a TV's overscan, a phone's notch) instead of the whole target |
-| `modal` | Meant for a pause menu: while shown, the game's other input actions see no input. It is saved but nothing reads it yet; the widgets of a later package will |
+| `modal` | For a pause menu: while it shows an element, only it and the canvases above it take input and the game's other input actions see none (see [Modal canvases](#modal-canvases)) |
 
 The host passes the target size and the unsafe borders in pixels with `GameSession::setUiFrame()` (the
 player and the Game view do). Entities with the `Inactive` tag, and their descendants, are not laid out or
@@ -273,11 +274,177 @@ void showScore(illusion::World& world, int score)
 or the target changed. Code that writes a UI Component through a reference calls `world.markChanged<T>()`
 afterwards, as it does for `Hierarchy`; creating an Entity or adding a Component announces itself.
 
+## Buttons, toggles and sliders
+
+`UiInteractable` with `UiButton`, `UiToggle` or `UiSlider` (`illusion/ui/UiWidgets.hpp`) makes an element
+react to the mouse, the keyboard and gamepads through the actions `ui.navigate`, `ui.submit` and `ui.cancel`
+(see [Input and focus](#input-and-focus)). A widget is an element with a `UiImage` (its look), a
+`UiInteractable` and one of the three widget Components; every one of them needs `UiElement`, and the widget
+Components need `UiInteractable`.
+
+### UiInteractable
+
+It makes an element hoverable, pressable and focusable. The tint of its current state is multiplied with the
+tint of the element's `UiImage`:
+
+| Field | Meaning |
+| --- | --- |
+| `enabled` | On by default. A disabled element ignores input, cannot be focused and shows `disabledTint` |
+| `focusable` | On by default. Reachable by navigation with the keyboard and gamepads; the pointer can still press it |
+| `hoveredTint` | Under the pointer (default 1.15, 1.15, 1.15, 1) |
+| `pressedTint` | Held by the pointer or by submit (default 0.8, 0.8, 0.8, 1) |
+| `focusedTint` | Focused by navigation (default 1.15, 1.15, 1.15, 1) |
+| `disabledTint` | Not enabled (default 0.5, 0.5, 0.5, 0.5) |
+| `up`, `down`, `left`, `right` | Explicit neighbours for navigation: the Entity that gets the focus in that direction |
+
+The states have a priority: disabled, then pressed, then focused, then hovered; an element in none of them
+is not tinted. A neighbour that is empty, or that cannot take the focus, falls back to the nearest focusable
+element in that direction (see [Input and focus](#input-and-focus)). The runtime Component `UiInteraction`
+(`hovered`, `pressed`, `focused`) is added to every interactable element and written by the UI each frame.
+
+### UiButton
+
+A tag. A button reports a `Clicked` event when it is activated: the pointer is pressed and released over it,
+or `ui.submit` is pressed and released while it has the focus.
+
+### UiToggle
+
+A value, `on`, that activation switches. The toggle's **first child** is shown only while the toggle is on:
+make it the check mark. While it is hidden it is also not hit by the pointer. Changing the value reports a
+`ValueChanged` event with 1 (on) or 0 (off).
+
+### UiSlider
+
+A value in a range, changed by dragging or by navigation along its axis:
+
+| Field | Meaning |
+| --- | --- |
+| `value` | The value, kept between `min` and `max` |
+| `min` | The value at the left (or top) |
+| `max` | The value at the right (or bottom) |
+| `step` | Values snap to multiples of it from `min`; 0 (default) is continuous |
+| `axis` | `Horizontal` (default) or `Vertical` |
+| `navigationStep` | The change of one navigation press as a fraction of the range, used when `step` is 0 (default 0.1) |
+
+The slider places two children. Its **first child** is the fill: it is stretched from the start of the
+slider to the value. Its **second child** is the handle: it is centred on the value along the axis, and keeps
+the size and the cross-axis position of its own placement. Children after the second are ordinary elements.
+Dragging sets the value from the pointer's position along the slider, also when the pointer leaves it while
+the button is held.
+
+## Input and focus
+
+The UI reads the pointer and three input actions. `GameSession` fills them every update in Play mode
+(`UiInput` in `UiWidgets.hpp`; tests fill it by hand and call `UiWorld::update(frame, input)`).
+
+**The pointer.** The pointer hits the topmost enabled interactable element under it:
+
+- Later canvases (higher `order`), later nodes in the hierarchy and later siblings are on top.
+- The hit test follows each element's rotation and scale, and a point outside the rectangle of an ancestor
+  with `clipChildren` does not hit anything below it.
+- Elements with `opacity` 0, elements under a hidden toggle child and disabled elements are not hit; a
+  disabled button lets the pointer reach the element behind it. Elements without `UiInteractable` (a plain
+  image) never block the pointer.
+- The pointer is absent when the window has no focus or the cursor is outside the target or captured; nothing
+  is then hovered.
+
+Pressing the primary button on an element presses it, and gives it the focus if it is focusable
+(a `FocusChanged` event with the value 0). Releasing over the same element activates it. A pressed slider
+follows the pointer until the button is released.
+
+**The actions.** `GameSession::create` adds these actions with default bindings when the project's input
+asset does not have them:
+
+| Action | Type | Default bindings |
+| --- | --- | --- |
+| `ui.navigate` | `Vector2` | `Keys.Up.Down.Left.Right`, `Keys.W.S.A.D`, `Stick.Left`, `Stick.DPad` |
+| `ui.submit` | `Button` | `Key.Enter`, `Key.Space`, `Gamepad.South` |
+| `ui.cancel` | `Button` | `Key.Escape`, `Gamepad.East` |
+
+They are ordinary actions: rebind them like any other (see [Input actions](actions.md#rebinding)), or define
+them in your project's input asset with other bindings; an action the asset already has is not replaced.
+The showcase project's `assets/input/showcase.input` is an example.
+
+**Navigation.** A deflection of `ui.navigate` beyond 0.5 counts as a direction, the larger axis winning.
+The focus moves once when the direction starts, then repeats after 0.4 seconds every 0.12 seconds while it
+is held. With nothing focused, the first move (or the first `ui.submit`) focuses the first focusable element
+in hierarchy order on the topmost canvas that can be focused. Otherwise the focus goes to the explicit
+neighbour of the focused element in that direction; with none (or one that cannot take the focus) it goes to
+the focusable element whose centre is nearest in that direction. A focused slider takes the directions along
+its axis itself: they change its value by `step`, or by `navigationStep` of the range when `step` is 0
+(right and down increase it), and the other directions move the focus away.
+
+**Submit and cancel.** `ui.submit` presses the focused element while it is held and activates it when it is
+released with the focus still on that element. `ui.cancel` reports a `Cancelled` event on the frame it is
+pressed; its Entity is the canvas of the focused element, or the modal canvas when nothing is focused. The
+UI does nothing else with it: closing the menu is the game's decision.
+
+`UiWorld::focused()` gives the focused element and `setFocus()` sets it (for example, to focus the first
+button of a menu you just opened); a focus on an element that is removed, disabled, hidden or no longer
+focusable is dropped.
+
+## Modal canvases
+
+`UiCanvas::modal` is for a pause menu or a dialog. While a modal canvas shows at least one element (it is
+active and an element is laid out on it):
+
+- Only that canvas and the canvases above it (a higher `order`) can be hit by the pointer or take the focus;
+  the game's own HUD below it is inert.
+- The session masks the input actions of the game: it calls `InputActions::setExclusivePrefix("ui.")`, so
+  that only the actions whose names start with `ui.` get input and all others read as released. Modules read
+  no movement, no jump and no fire while the menu is open.
+
+`UiWorld::modalActive()` tells whether the last update laid out such an element. The mask follows the last
+UI update, so it starts one update after the canvas appears and ends one update after it is hidden or
+disabled. A modal canvas with no element does nothing.
+
+## Reading events
+
+`events()` of the `UiWorld` lists what happened in the last update, in order:
+
+| `UiEventType` | When | `value` |
+| --- | --- | --- |
+| `Clicked` | A `UiButton` was activated | 0 |
+| `ValueChanged` | A `UiToggle` or `UiSlider` changed | The new value (0 or 1 for a toggle) |
+| `FocusChanged` | An element got the focus | 1 when navigation moved it, 0 for the pointer |
+| `Cancelled` | `ui.cancel` was pressed | 0 (`entity` is a canvas, or null) |
+
+Poll them from host code after the session's update. The list is replaced by the next update, so read it
+once per update:
+
+```cpp
+(*session)->update(frameSeconds);
+for (const illusion::UiEvent& event : (*session)->ui().events())
+{
+    if (event.type == illusion::UiEventType::Clicked && event.entity == startButton)
+    {
+        startGame();
+    }
+    else if (event.type == illusion::UiEventType::ValueChanged && event.entity == volumeSlider)
+    {
+        setVolume(event.value);
+    }
+}
+```
+
+Events beyond `UiWorldDesc::maxEvents` in one update are dropped and counted in
+`UiWorldStatistics::droppedEvents`.
+
+Game modules do not get the events yet: a `UiService` for them comes in a later package. Until then a module
+reads the state from its World: `UiToggle::on` and `UiSlider::value` are written in place when they change,
+and the runtime Component `UiInteraction` says whether an element is hovered, pressed or focused. To react to
+a button in a module, read `UiInteraction::pressed` on its Entity.
+
+```cpp
+const illusion::UiSlider& slider = world.get<illusion::UiSlider>(volumeSlider);
+const bool musicOn = world.get<illusion::UiToggle>(musicToggle).on;
+const bool held = world.get<illusion::UiInteraction>(startButton).pressed;
+```
+
 ## What is not there yet
 
-This package draws UI; it does not react to input. Later packages add widgets (buttons, sliders, focus and
-navigation, input from the mouse and the gamepads, which `modal` will use), `UiService` for game modules,
-the canvas editor in the Scene view, and transitions and animation. The limits of the first version
+This package draws UI and reacts to input. Later packages add text fields, scrolling and button glyphs,
+`UiService` for game modules, the canvas editor in the Scene view, and transitions and animation. The limits of the first version
 ([ADR 0057](https://github.com/oguzhanaknc/illusion/blob/main/docs/adr/0057-game-ui.md)):
 
 - Text is drawn left to right without shaping: Arabic, Hebrew, Indic scripts and ligatures are

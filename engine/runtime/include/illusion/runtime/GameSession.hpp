@@ -30,6 +30,7 @@
 #include <illusion/audio/AudioWorld.hpp>
 #include <illusion/core/Base.hpp>
 #include <illusion/core/Expected.hpp>
+#include <illusion/core/Math.hpp>
 #include <illusion/runtime/ProjectSettings.hpp>
 
 #include <memory>
@@ -97,12 +98,15 @@ struct GameSessionDesc
 
 /// One running game: a World with its PhysicsWorld, AudioWorld, InputActions, UiWorld, asset resolvers and
 /// game modules. Each update() runs, in this order:
-/// 1. **Input:** the InputActions read keyboardMouse() and the gamepads (Play mode, with the focus).
+/// 1. **Input:** the InputActions read keyboardMouse() and the gamepads (Play mode, with the focus). While
+///    the last update showed a modal canvas (UiWorld::modalActive()), only the `ui.*` actions get input.
 /// 2. **Modules:** ModuleHost::update() on the World (Play mode); then Entities created without an
 ///    EntityGuid get one.
 /// 3. **Physics:** PhysicsWorld::update().
 /// 4. **Hierarchy:** updateTransformHierarchy().
-/// 5. **UI:** the UiWorld lays out for the frame of setUiFrame() and records the draw list (ui()).
+/// 5. **UI:** the UiWorld lays out for the frame of setUiFrame(), handles the pointer of keyboardMouse()
+///    and the actions `ui.navigate`, `ui.submit` and `ui.cancel` (Play mode), and records the draw list
+///    (ui()).
 /// 6. **Particles and audio:** ParticleWorld::update() and AudioWorld::update().
 /// 7. **Resolvers:** the physics and render asset resolvers turn asset references into runtime Components.
 ///
@@ -115,7 +119,8 @@ class GameSession : NonCopyable
 {
 public:
     /// Creates a session with an empty World: its systems take their parameters from desc.settings, and the
-    /// actions come from desc.settings.input.actions. Fails, saying why, if that asset cannot be loaded.
+    /// actions come from desc.settings.input.actions, plus `ui.navigate`, `ui.submit` and `ui.cancel` with
+    /// their default bindings when the asset lacks them. Fails, saying why, if that asset cannot be loaded.
     [[nodiscard]] static Expected<std::unique_ptr<GameSession>, std::string>
     create(const GameSessionDesc& desc);
 
@@ -167,8 +172,10 @@ public:
     [[nodiscard]] ParticleWorld& particles() noexcept;
 
     /// Sets the target the UI is laid out for from the next update() on (the host's view size and safe
-    /// insets). Starts empty.
-    void setUiFrame(const UiFrame& frame) noexcept;
+    /// insets). Starts empty. The cursor of keyboardMouse() times @p pointerScale is the pointer in the
+    /// pixels of @p frame: the player passes the frame's size over the window's, the editor's Game view
+    /// writes the cursor in the pixels of its image and passes 1.
+    void setUiFrame(const UiFrame& frame, Vec2 pointerScale = Vec2(1.0f)) noexcept;
 
     /// The UI of the World; its drawData() is what the last update() recorded.
     [[nodiscard]] UiWorld& ui() noexcept;
