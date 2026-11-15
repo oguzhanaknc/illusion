@@ -235,6 +235,13 @@ struct ViewportService::Impl
         Vec2 lastPickPixel{-1000.0f};
         Entity lastPick{};
         Entity sceneCamera{}; // the Camera a Game viewport looked through last
+        // Whose game UI a Game viewport drew last: none, the edit World's preview, or the running game's.
+        enum class DrawnUi : u8
+        {
+            None,
+            Edit,
+            Play,
+        } drawnUi = DrawnUi::None;
         u32 frames = 0;
         RenderStats renderStats;
         RenderGpuTimings gpuTimings;            // the newest frame the GPU has finished
@@ -1289,10 +1296,12 @@ struct ViewportService::Impl
             if (GameSession* session = game())
             {
                 (void)gameUi->render(commands, viewport.color, session->ui().drawData());
+                viewport.drawnUi = Viewport::DrawnUi::Play;
             }
             else
             {
                 (void)gameUi->render(commands, viewport.color, editUi->drawData());
+                viewport.drawnUi = Viewport::DrawnUi::Edit;
             }
         }
         const RenderViewTargets& targets = viewport.renderer->viewTargets();
@@ -2300,6 +2309,36 @@ std::optional<Expected<std::optional<ViewportSnap>, CommandError>> ViewportServi
     found->result.reset();
     found->ticket = 0;
     return result;
+}
+
+bool ViewportService::gameUiLayout(std::string_view id, UiLayout& out)
+{
+    Impl& impl = *m_impl;
+    const Impl::Viewport* viewport = impl.find(id);
+    if (viewport == nullptr || viewport->kind != ViewportKind::Game)
+    {
+        return false;
+    }
+    switch (viewport->drawnUi)
+    {
+    case Impl::Viewport::DrawnUi::Edit:
+        if (impl.editUi == nullptr)
+        {
+            return false;
+        }
+        impl.editUi->layout(out);
+        return true;
+    case Impl::Viewport::DrawnUi::Play:
+        if (GameSession* session = impl.game())
+        {
+            session->ui().layout(out);
+            return true;
+        }
+        return false;
+    case Impl::Viewport::DrawnUi::None:
+        break;
+    }
+    return false;
 }
 
 } // namespace illusion::editor::viewport

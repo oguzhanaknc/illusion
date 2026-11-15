@@ -16,6 +16,7 @@
 #include <illusion/ecs/World.hpp>
 #include <illusion/editor/ui/Icons.hpp>
 #include <illusion/text/FuzzyMatcher.hpp>
+#include <illusion/ui/UiComponents.hpp>
 
 #include <algorithm>
 #include <charconv>
@@ -722,6 +723,14 @@ struct Inspector::State
                          std::string_view fieldId, std::span<const void* const> values, bool mixed,
                          bool readOnly);
     void drawAddComponent(Impl& shell, ui::UiKit& kit);
+    // The anchors button and the margins or position and size of illusion.UiElement's placement.
+    void drawUiPlacement(Impl& shell, ui::UiKit& kit, const FieldInfo& field, std::string_view fieldId,
+                         bool readOnly);
+    void drawAnchorPresets(Impl& shell, ui::UiKit& kit, const FieldInfo& field, std::string_view id);
+    // Writes the placement that @p change makes of each inspected element's own (children of a stack or
+    // grid are left out), merging drags with @p row.
+    template <typename Change>
+    void writePlacements(Impl& shell, const FieldInfo& field, std::string_view row, Change&& change);
 };
 
 void Inspector::State::refreshPrefab(Impl& shell)
@@ -2443,12 +2452,346 @@ void Inspector::State::drawComponentCard(Impl& shell, ui::UiKit& kit, ComponentI
                 continue;
             }
             const char* fieldId = text.concat(cardId, text.concat(".", field.name));
+            if (reflection.name == "illusion.UiElement" && field.name == "placement" &&
+                field.type == FieldType::Struct)
+            {
+                drawUiPlacement(shell, kit, field, fieldId, reflection.meta.transient || field.meta.readOnly);
+                continue;
+            }
             drawFieldRow(shell, kit, reflection, field, field.name, fieldId, 0, reflection.meta.transient);
         }
         ui::endPropertyTable();
     }
 
     ui::endComponentCard();
+}
+
+namespace
+{
+
+struct AnchorPresetItem
+{
+    UiAnchorPreset preset;
+    std::string_view name; // the value of gameui.set_anchors' preset, and the id suffix
+    text::TextKey title;
+};
+
+// The presets as the popup shows them: rows top, middle, bottom and stretched vertically; columns left,
+// centre, right and stretched horizontally.
+constexpr std::array<AnchorPresetItem, kUiAnchorPresetCount> kAnchorPresetGrid = {{
+    {UiAnchorPreset::TopLeft, "top_left", s::kInspectorUiPresetTopLeft},
+    {UiAnchorPreset::Top, "top", s::kInspectorUiPresetTop},
+    {UiAnchorPreset::TopRight, "top_right", s::kInspectorUiPresetTopRight},
+    {UiAnchorPreset::StretchTop, "stretch_top", s::kInspectorUiPresetStretchTop},
+    {UiAnchorPreset::Left, "left", s::kInspectorUiPresetLeft},
+    {UiAnchorPreset::Center, "center", s::kInspectorUiPresetCenter},
+    {UiAnchorPreset::Right, "right", s::kInspectorUiPresetRight},
+    {UiAnchorPreset::StretchMiddle, "stretch_middle", s::kInspectorUiPresetStretchMiddle},
+    {UiAnchorPreset::BottomLeft, "bottom_left", s::kInspectorUiPresetBottomLeft},
+    {UiAnchorPreset::Bottom, "bottom", s::kInspectorUiPresetBottom},
+    {UiAnchorPreset::BottomRight, "bottom_right", s::kInspectorUiPresetBottomRight},
+    {UiAnchorPreset::StretchBottom, "stretch_bottom", s::kInspectorUiPresetStretchBottom},
+    {UiAnchorPreset::StretchLeft, "stretch_left", s::kInspectorUiPresetStretchLeft},
+    {UiAnchorPreset::StretchCenter, "stretch_center", s::kInspectorUiPresetStretchCenter},
+    {UiAnchorPreset::StretchRight, "stretch_right", s::kInspectorUiPresetStretchRight},
+    {UiAnchorPreset::Stretch, "stretch", s::kInspectorUiPresetStretch},
+}};
+
+const AnchorPresetItem& anchorPresetItem(UiAnchorPreset preset) noexcept
+{
+    for (const AnchorPresetItem& item : kAnchorPresetGrid)
+    {
+        if (item.preset == preset)
+        {
+            return item;
+        }
+    }
+    return kAnchorPresetGrid[0];
+}
+
+// A child of a UiStack or UiGrid: its parent places it.
+bool placedByLayout(const World& world, Entity entity)
+{
+    const Entity parent = parentOf(world, entity);
+    return !parent.isNull() && (world.has<UiStack>(parent) || world.has<UiGrid>(parent));
+}
+
+// The anchors of @p anchors drawn in the box [@p min, @p max]: a dot where they coincide, a bar along a
+// stretched axis, a filled rectangle when both stretch.
+void drawAnchorDiagram(ImDrawList& draw, const ui::UiKit& kit, Vec2 min, Vec2 max, UiAnchors anchors,
+                       bool lit)
+{
+    const f32 points = kit.scale;
+    const ImU32 frame = ImGui::GetColorU32(imvec(kit.theme.color(ui::ThemeToken::TextSecondary)));
+    const ImU32 mark = ImGui::GetColorU32(
+        imvec(kit.theme.color(lit ? ui::ThemeToken::Accent : ui::ThemeToken::TextPrimary)));
+    draw.AddRect(ImVec2(min.x, min.y), ImVec2(max.x, max.y), frame, 0.0f, points);
+    const Vec2 size = max - min;
+    const Vec2 a = min + anchors.min * size;
+    const Vec2 b = min + anchors.max * size;
+    if (anchors.min == anchors.max)
+    {
+        draw.AddCircleFilled(ImVec2(a.x, a.y), 2.5f * points, mark);
+    }
+    else if (anchors.min.x != anchors.max.x && anchors.min.y != anchors.max.y)
+    {
+        const Vec2 inset(2.0f * points);
+        draw.AddRectFilled(ImVec2(a.x + inset.x, a.y + inset.y), ImVec2(b.x - inset.x, b.y - inset.y), mark);
+    }
+    else
+    {
+        draw.AddLine(ImVec2(a.x, a.y), ImVec2(b.x, b.y), mark, 3.0f * points);
+    }
+}
+
+void appendPair(std::string& out, Vec2 value)
+{
+    out += '[';
+    out += formatFloatJson(value.x);
+    out += ',';
+    out += formatFloatJson(value.y);
+    out += ']';
+}
+
+std::string placementJson(const UiPlacement& placement)
+{
+    std::string out = R"({"anchorMin":)";
+    appendPair(out, placement.anchorMin);
+    out += R"(,"anchorMax":)";
+    appendPair(out, placement.anchorMax);
+    out += R"(,"offsetMin":)";
+    appendPair(out, placement.offsetMin);
+    out += R"(,"offsetMax":)";
+    appendPair(out, placement.offsetMax);
+    out += '}';
+    return out;
+}
+
+} // namespace
+
+template <typename Change>
+void Inspector::State::writePlacements(Impl& shell, const FieldInfo& field, std::string_view row,
+                                       Change&& change)
+{
+    const World& world = shell.editor.world();
+    std::string steps = "{\"steps\":[";
+    usize count = 0;
+    std::string single;
+    for (usize i = 0; i < inspected.size() && i < componentPtrs.size(); ++i)
+    {
+        if (placedByLayout(world, inspected[i].entity))
+        {
+            continue;
+        }
+        UiPlacement placement = *static_cast<const UiPlacement*>(fieldData(componentPtrs[i], field));
+        change(placement);
+        const auto hex = formatGuid(inspected[i].guid);
+        single = "{\"entity\":" + jsonQuote(std::string_view(hex.data(), hex.size())) +
+                 R"(,"type":"illusion.UiElement","path":"placement","value":)" + placementJson(placement) +
+                 "}";
+        steps += count++ > 0 ? "," : "";
+        steps += R"({"method":"component.set_field","params":)" + single + "}";
+    }
+    if (count == 0)
+    {
+        return;
+    }
+    const char* key = mergeKey(shell.text, "illusion.UiElement", shell.text.concat("placement/", row));
+    if (count == 1)
+    {
+        (void)shell.run("component.set_field", single, "inspector", {}, key);
+        return;
+    }
+    steps += "]}";
+    (void)shell.run("editor.batch", steps, "inspector", {}, key);
+}
+
+void Inspector::State::drawAnchorPresets(Impl& shell, ui::UiKit& kit, const FieldInfo& field,
+                                         std::string_view id)
+{
+    ui::FrameText& text = shell.text;
+    const char* popup = text.concat("###", text.concat(id, ".menu"));
+    const UiPlacement& primary = *static_cast<const UiPlacement*>(fieldData(componentPtrs[0], field));
+    bool mixed = false;
+    for (usize i = 1; i < componentPtrs.size(); ++i)
+    {
+        const UiPlacement& other = *static_cast<const UiPlacement*>(fieldData(componentPtrs[i], field));
+        mixed = mixed || other.anchorMin != primary.anchorMin || other.anchorMax != primary.anchorMax;
+    }
+    const std::optional<UiAnchorPreset> current = mixed ? std::nullopt : anchorPresetOf(primary);
+    const text::TextKey title = mixed     ? s::kInspectorMixed
+                                : current ? anchorPresetItem(*current).title
+                                          : s::kInspectorUiAnchorsCustom;
+    // The button shows the anchors' diagram on its left.
+    const f32 diagram = ImGui::GetFrameHeight();
+    ImGui::PushStyleVarX(ImGuiStyleVar_ButtonTextAlign, 0.0f);
+    ImGui::PushStyleVarX(ImGuiStyleVar_FramePadding, ImGui::GetStyle().FramePadding.x + diagram);
+    if (ImGui::Button(text.label(title, id), ImVec2(-FLT_MIN, 0.0f)))
+    {
+        ImGui::OpenPopup(popup);
+    }
+    ImGui::PopStyleVar(2);
+    const ImVec2 low = ImGui::GetItemRectMin();
+    const Vec2 inset(4.0f * kit.scale);
+    drawAnchorDiagram(*ImGui::GetWindowDrawList(), kit, Vec2(low.x, low.y) + inset * Vec2(1.5f, 1.0f),
+                      Vec2(low.x + diagram, low.y + diagram) - inset * Vec2(0.5f, 1.0f),
+                      UiAnchors{primary.anchorMin, primary.anchorMax}, false);
+    if (!ImGui::BeginPopup(popup))
+    {
+        return;
+    }
+    const ImGuiIO& io = ImGui::GetIO();
+    const f32 side = 30.0f * kit.scale;
+    ImDrawList& draw = *ImGui::GetWindowDrawList();
+    for (usize i = 0; i < kAnchorPresetGrid.size(); ++i)
+    {
+        const AnchorPresetItem& item = kAnchorPresetGrid[i];
+        if (i % 4 != 0)
+        {
+            ImGui::SameLine();
+        }
+        const bool chosen = current == item.preset;
+        const bool clicked = ImGui::InvisibleButton(text.hidden(text.concat(id, text.concat(".", item.name))),
+                                                    ImVec2(side, side));
+        const bool hoveredItem = ImGui::IsItemHovered();
+        const ImVec2 min = ImGui::GetItemRectMin();
+        const ImVec2 max = ImGui::GetItemRectMax();
+        const ui::ThemeToken background = hoveredItem ? ui::ThemeToken::BgHover
+                                          : chosen    ? ui::ThemeToken::AccentSubtle
+                                                      : ui::ThemeToken::BgRaised;
+        draw.AddRectFilled(min, max, ImGui::GetColorU32(imvec(kit.theme.color(background))),
+                           3.0f * kit.scale);
+        const Vec2 pad(7.0f * kit.scale);
+        drawAnchorDiagram(draw, kit, Vec2(min.x, min.y) + pad, Vec2(max.x, max.y) - pad,
+                          anchorsOf(item.preset), chosen || hoveredItem);
+        if (hoveredItem)
+        {
+            ImGui::SetTooltip("%s", text.format(item.title));
+        }
+        if (!clicked)
+        {
+            continue;
+        }
+        // Each inspected element keeps its rectangle on the Game view's target unless Alt is held.
+        std::string steps = "{\"steps\":[";
+        usize count = 0;
+        for (const InspectedEntity& entity : inspected)
+        {
+            if (placedByLayout(shell.editor.world(), entity.entity))
+            {
+                continue;
+            }
+            const auto hex = formatGuid(entity.guid);
+            std::array<char, 160> params{};
+            const int written =
+                shell.gameViewSize.x != 0 && shell.gameViewSize.y != 0
+                    ? std::snprintf(
+                          params.data(), params.size(),
+                          R"({"entity":"%.*s","preset":"%.*s","keepRect":%s,"width":%u,"height":%u})",
+                          static_cast<int>(hex.size()), hex.data(), static_cast<int>(item.name.size()),
+                          item.name.data(), io.KeyAlt ? "false" : "true", shell.gameViewSize.x,
+                          shell.gameViewSize.y)
+                    : std::snprintf(
+                          params.data(), params.size(), R"({"entity":"%.*s","preset":"%.*s","keepRect":%s})",
+                          static_cast<int>(hex.size()), hex.data(), static_cast<int>(item.name.size()),
+                          item.name.data(), io.KeyAlt ? "false" : "true");
+            if (written <= 0 || static_cast<usize>(written) >= params.size())
+            {
+                continue;
+            }
+            steps += count++ > 0 ? "," : "";
+            steps += R"({"method":"gameui.set_anchors","params":)";
+            steps += params.data();
+            steps += '}';
+        }
+        steps += "]}";
+        if (count > 0)
+        {
+            (void)shell.run("editor.batch", steps, "inspector");
+        }
+        ImGui::CloseCurrentPopup();
+    }
+    ImGui::EndPopup();
+}
+
+void Inspector::State::drawUiPlacement(Impl& shell, ui::UiKit& kit, const FieldInfo& field,
+                                       std::string_view fieldId, bool readOnly)
+{
+    ui::FrameText& text = shell.text;
+    if (inspected.empty() || componentPtrs.empty() || componentPtrs[0] == nullptr)
+    {
+        return;
+    }
+    if (placedByLayout(shell.editor.world(), inspected[0].entity))
+    {
+        ui::propertyLabel(kit, displayLabel(text, field.meta.displayName, field.name));
+        ImGui::PushStyleColor(ImGuiCol_Text, imvec(kit.theme.color(ui::ThemeToken::TextSecondary)));
+        ImGui::TextWrapped("%s", text.format(s::kInspectorUiPlacedByLayout));
+        ImGui::PopStyleColor();
+        return;
+    }
+    ImGui::BeginDisabled(readOnly);
+    ui::propertyLabel(kit, text.format(s::kInspectorUiAnchors), text.format(s::kInspectorUiAnchorsHint));
+    drawAnchorPresets(shell, kit, field, text.concat(fieldId, ".preset"));
+
+    // Per axis: position and size where the anchors coincide, the margins to the anchors where they stretch.
+    const UiPlacement& primary = *static_cast<const UiPlacement*>(fieldData(componentPtrs[0], field));
+    struct Row
+    {
+        f32 (*read)(const UiPlacement&, int axis);
+        void (*write)(UiPlacement&, int axis, f32 value);
+    };
+    static constexpr Row kPosition{[](const UiPlacement& p, int axis) { return p.offsetMin[axis]; },
+                                   [](UiPlacement& p, int axis, f32 value) {
+                                       const f32 extent = p.offsetMax[axis] - p.offsetMin[axis];
+                                       p.offsetMin[axis] = value;
+                                       p.offsetMax[axis] = value + extent;
+                                   }};
+    static constexpr Row kSize{
+        [](const UiPlacement& p, int axis) { return p.offsetMax[axis] - p.offsetMin[axis]; },
+        [](UiPlacement& p, int axis, f32 value) {
+            p.offsetMax[axis] = p.offsetMin[axis] + std::max(value, 0.0f);
+        }};
+    static constexpr Row kNear{[](const UiPlacement& p, int axis) { return p.offsetMin[axis]; },
+                               [](UiPlacement& p, int axis, f32 value) { p.offsetMin[axis] = value; }};
+    static constexpr Row kFar{[](const UiPlacement& p, int axis) { return -p.offsetMax[axis]; },
+                              [](UiPlacement& p, int axis, f32 value) { p.offsetMax[axis] = -value; }};
+    constexpr std::array<std::array<text::TextKey, 4>, 2> kTitles = {
+        {{s::kInspectorUiPosX, s::kInspectorUiWidth, s::kInspectorUiLeft, s::kInspectorUiRight},
+         {s::kInspectorUiPosY, s::kInspectorUiHeight, s::kInspectorUiTop, s::kInspectorUiBottom}}};
+    constexpr std::array<std::array<std::string_view, 4>, 2> kIds = {
+        {{"pos_x", "width", "left", "right"}, {"pos_y", "height", "top", "bottom"}}};
+    for (int axis = 0; axis < 2; ++axis)
+    {
+        const bool point = primary.anchorMin[axis] == primary.anchorMax[axis];
+        const std::array<const Row*, 2> rows = {point ? &kPosition : &kNear, point ? &kSize : &kFar};
+        for (usize r = 0; r < rows.size(); ++r)
+        {
+            const Row& row = *rows[r];
+            const usize column = (point ? 0 : 2) + r;
+            const std::string_view rowId = kIds[static_cast<usize>(axis)][column];
+            f32 value = row.read(primary, axis);
+            bool mixed = false;
+            for (usize i = 1; i < componentPtrs.size(); ++i)
+            {
+                mixed =
+                    mixed || row.read(*static_cast<const UiPlacement*>(fieldData(componentPtrs[i], field)),
+                                      axis) != value;
+            }
+            ui::propertyLabel(kit, text.format(kTitles[static_cast<usize>(axis)][column]));
+            ImGui::SetNextItemWidth(-FLT_MIN);
+            const char* format = mixed ? text.format(s::kInspectorMixed) : "%.2f";
+            if (ImGui::DragFloat(text.hidden(text.concat(fieldId, text.concat(".", rowId))), &value, 0.5f,
+                                 0.0f, 0.0f, format) &&
+                std::isfinite(value))
+            {
+                writePlacements(shell, field, rowId,
+                                [&](UiPlacement& placement) { row.write(placement, axis, value); });
+            }
+            ui::requestInfiniteDrag();
+        }
+    }
+    ImGui::EndDisabled();
 }
 
 void Inspector::State::drawAddComponent(Impl& shell, ui::UiKit& kit)

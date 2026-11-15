@@ -102,7 +102,7 @@ Ids are lowercase and dot-separated, from the panel down: `outliner.search`, `in
 
 ## Theme
 
-A theme is a JSON file with 28 colour tokens; every theme defines every token:
+A theme is a JSON file with 31 colour tokens; every theme defines every token:
 
 ```json
 {"format": "illusion.theme", "version": 1, "name": "illusion Dark", "highContrast": false,
@@ -115,7 +115,7 @@ A theme is a JSON file with 28 colour tokens; every theme defines every token:
 | Text | `text.primary`, `text.secondary`, `text.disabled` |
 | Accent | `accent`, `accent.fill`, `accent.text`, `accent.subtle` |
 | Status | `success`, `warning`, `error`, `info`, `play.tint` |
-| Viewport | `viewport.selection`, `viewport.hover`, `axis.x`, `axis.y`, `axis.z`, `axis.cb.x`, `axis.cb.y`, `axis.cb.z` |
+| Viewport | `viewport.selection`, `viewport.hover`, `axis.x`, `axis.y`, `axis.z`, `axis.cb.x`, `axis.cb.y`, `axis.cb.z`, `canvas.selection`, `canvas.handle`, `canvas.anchor` |
 
 The editor ships **illusion Dark** (default), **illusion Light** and **High Contrast**. Tests enforce the
 WCAG contrast ratios: text at least 4.5:1 on every surface (7:1 in High Contrast) and graphics at least 3:1.
@@ -244,6 +244,10 @@ this interface, so they are tested with a fake host and fail with `unsupported` 
 without a host every entity counts as its position. `transform.drop_to_ground` onto colliders asks the
 `PhysicsQueryHost` (`EditorPhysicsQueries` in `editor_play`), which sweeps the Colliders down in a scratch Jolt
 world built from the edit World for that command.
+The placement of game UI Entities in the Game view follows the same split: the math is GPU-free in the core
+(`UiPlacementEdit.hpp`: anchor presets, picking in a `UiLayout`, handle hit tests and drags, shared by the
+`gameui.pick`, `gameui.place` and `gameui.set_anchors` commands), and the shell draws and drives it
+(`CanvasEdit.cpp`) over the layout that `ViewportHost::gameUiLayout()` reports.
 `ViewportHost::requestSnap()` and `snap()` answer `viewport.snap` and the snapping of the gizmo a frame or two
 later: the vertex nearest to a pixel, searched on the CPU in a `VertexSnapGrid` per Mesh (`Snap.hpp`; a
 uniform grid in the Mesh's own space whose cells along the cursor ray are visited slice by slice), or the

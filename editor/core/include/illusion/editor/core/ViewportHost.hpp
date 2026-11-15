@@ -19,6 +19,11 @@
 #include <string_view>
 #include <vector>
 
+namespace illusion
+{
+struct UiLayout;
+}
+
 namespace illusion::editor
 {
 
@@ -451,6 +456,11 @@ public:
     /// vertex is within the tolerance and no surface is under the pixel. Each ticket is answered once.
     [[nodiscard]] virtual std::optional<Expected<std::optional<ViewportSnap>, CommandError>>
     snap(u64 ticket) = 0;
+
+    /// Replaces @p out with the game UI layout the Game viewport @p id last drew (the edit World's preview
+    /// when not playing, the running game's UI otherwise); false when the viewport is unknown, is not a Game
+    /// view, or has drawn no UI yet.
+    [[nodiscard]] virtual bool gameUiLayout(std::string_view id, UiLayout& out) = 0;
 };
 
 } // namespace illusion::editor

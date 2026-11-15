@@ -998,6 +998,36 @@ void reflectCoreCommandTypes(StructRegistry& structs)
             .field("entity", &GameUiFocusParams::entity);
         reflectStruct<GameUiFocusResult>("editor.GameUiFocusResult", 1, structs)
             .field("focused", &GameUiFocusResult::focused);
+        reflectStruct<GameUiPickParams>("editor.GameUiPickParams", 1, structs)
+            .field("x", &GameUiPickParams::x)
+            .field("y", &GameUiPickParams::y)
+            .field("width", &GameUiPickParams::width, {.min = 1.0, .max = 16384.0})
+            .field("height", &GameUiPickParams::height, {.min = 1.0, .max = 16384.0});
+        reflectStruct<GameUiPickResult>("editor.GameUiPickResult", 1, structs)
+            .field("entity", &GameUiPickResult::entity)
+            .field("path", &GameUiPickResult::path);
+        reflectStruct<GameUiPlaceParams>("editor.GameUiPlaceParams", 1, structs)
+            .field("entity", &GameUiPlaceParams::entity)
+            .field("min", &GameUiPlaceParams::min)
+            .field("max", &GameUiPlaceParams::max)
+            .field("width", &GameUiPlaceParams::width, {.min = 1.0, .max = 16384.0})
+            .field("height", &GameUiPlaceParams::height, {.min = 1.0, .max = 16384.0});
+        reflectStruct<GameUiSetAnchorsParams>("editor.GameUiSetAnchorsParams", 1, structs)
+            .field("entity", &GameUiSetAnchorsParams::entity)
+            .field("preset", &GameUiSetAnchorsParams::preset)
+            .field("anchorMin", &GameUiSetAnchorsParams::anchorMin, {.min = 0.0, .max = 1.0})
+            .field("anchorMax", &GameUiSetAnchorsParams::anchorMax, {.min = 0.0, .max = 1.0})
+            .field("keepRect", &GameUiSetAnchorsParams::keepRect)
+            .field("width", &GameUiSetAnchorsParams::width, {.min = 1.0, .max = 16384.0})
+            .field("height", &GameUiSetAnchorsParams::height, {.min = 1.0, .max = 16384.0});
+        reflectStruct<GameUiPlacementResult>("editor.GameUiPlacementResult", 1, structs)
+            .field("entity", &GameUiPlacementResult::entity)
+            .field("anchorMin", &GameUiPlacementResult::anchorMin)
+            .field("anchorMax", &GameUiPlacementResult::anchorMax)
+            .field("offsetMin", &GameUiPlacementResult::offsetMin)
+            .field("offsetMax", &GameUiPlacementResult::offsetMax)
+            .field("size", &GameUiPlacementResult::size)
+            .field("placedByLayout", &GameUiPlacementResult::placedByLayout);
         reflectStruct<PlayPauseParams>("editor.PlayPauseParams", 1, structs)
             .field("paused", &PlayPauseParams::paused);
         reflectStruct<PlayStepParams>("editor.PlayStepParams", 1, structs)

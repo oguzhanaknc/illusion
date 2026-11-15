@@ -13,11 +13,17 @@ namespace
 {
 
 constexpr std::array<std::string_view, kThemeTokenCount> kTokenNames = {
-    "bg.base",     "bg.panel",    "bg.raised",          "bg.input",       "bg.hover",      "bg.active",
-    "border",      "separator",   "text.primary",       "text.secondary", "text.disabled", "accent",
-    "accent.fill", "accent.text", "accent.subtle",      "success",        "warning",       "error",
-    "info",        "play.tint",   "viewport.selection", "viewport.hover", "axis.x",        "axis.y",
-    "axis.z",      "axis.cb.x",   "axis.cb.y",          "axis.cb.z",
+    "bg.base",        "bg.panel",         "bg.raised",
+    "bg.input",       "bg.hover",         "bg.active",
+    "border",         "separator",        "text.primary",
+    "text.secondary", "text.disabled",    "accent",
+    "accent.fill",    "accent.text",      "accent.subtle",
+    "success",        "warning",          "error",
+    "info",           "play.tint",        "viewport.selection",
+    "viewport.hover", "axis.x",           "axis.y",
+    "axis.z",         "axis.cb.x",        "axis.cb.y",
+    "axis.cb.z",      "canvas.selection", "canvas.handle",
+    "canvas.anchor",
 };
 
 int hexDigit(char c) noexcept

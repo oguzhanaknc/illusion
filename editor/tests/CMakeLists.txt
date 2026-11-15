@@ -26,6 +26,7 @@ illusion_add_editor_executable(illusion_editor_tests
     core/TestEditorLog.cpp
     core/TestEditorModules.cpp
     core/TestGameUiCommands.cpp
+    core/TestUiPlacementEdit.cpp
     core/TestParticleCommands.cpp
     core/TestEditorPrefabs.cpp
     core/TestEditorProfiler.cpp
@@ -50,6 +51,7 @@ illusion_add_editor_executable(illusion_editor_tests
     rpc/TestRpcProtocol.cpp
     rpc/TestRpcServer.cpp
     rpc/TestRpcTransport.cpp
+    shell/TestCanvasEdit.cpp
     shell/TestEditorShell.cpp
     shell/TestExportWindow.cpp
     viewport/TestEditorCamera.cpp

@@ -131,3 +131,21 @@ Options considered for text:
   that it stays inside the glyph quads. No new assets are needed.
 - A shadow is a second draw of the same text, offset and drawn first; the shadow of outlined text includes
   its outline.
+
+## Addendum: UI-3d, canvas editing
+
+- UI Entities are edited in the Game view, where the UI is drawn at the size the game will have, not in the
+  Scene view: a placement only means something for a target size, and the Game view already lays the edit
+  World out for its image. The handles are drawn by the editor's own UI over that image; the game UI's draw
+  list never contains editor graphics.
+- The math is GPU-free in `editor/core` (`UiPlacementEdit.hpp`): anchor presets, placements that keep or
+  reach a rectangle, picking in a `UiLayout`, handle hit tests and drags. The shell and the commands share it.
+- The Game view and agents use the same commands: `gameui.pick`, `gameui.place` and `gameui.set_anchors`.
+  They take the target size, as `gameui.layout` does, because offsets depend on the parent's size unless
+  the anchors coincide. A drag is one transaction of `gameui.place` steps, as a gizmo drag is.
+- The viewport host reports the layout its Game view last drew (`ViewportHost::gameUiLayout()`), so the
+  shell does not lay the World out a second time.
+- A child of a `UiStack` or `UiGrid` is placed by its parent: it has no move or anchor handles, and
+  resizing writes `UiElement::size`.
+- Not in this package: zooming and panning the Game view to frame a small element (the UI would have to be
+  drawn at another scale than the game's), and drawing the UI in the Scene view.
