@@ -68,7 +68,10 @@ Yeni projeler `editor-data/templates/` içindeki bir şablonun kopyasıdır:
 | `3d-starter` | Bir kamera, bir güneş, prosedürel bir gökyüzü, bir zemin düzlemi ve bir küp |
 
 Her iki şablon da `UiText`'in ihtiyaç duyduğu font olan `assets/fonts/Roboto-Regular.ttf` dosyasını
-(Apache-2.0, yanında `LICENSE.txt`) içerir; böylece [Oyun UI'ı](../ui.md) yeni bir projede çalışır.
+(Apache-2.0, yanında `LICENSE.txt`) içerir; böylece [Oyun UI'ı](../ui.md) yeni bir projede çalışır. Ayrıca
+UI'ın okuduğu action'ları (`ui.navigate`, `ui.submit` ve `ui.cancel`, varsayılan atamalarıyla) içeren input
+action Asset'i `assets/input/game.input` ile onu oyunun Asset'i yapan `settings/input.json` dosyasını da
+içerirler: Input Actions penceresi bu üç action'ı listeler ve oyuncular onları yeniden atayabilir.
 
 ```cpp
 auto project = illusion::editor::Project::create("C:/Games/Tetris", "Tetris",

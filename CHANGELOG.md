@@ -55,3 +55,12 @@ version changes are in the contributor guide ("Versions and releases"). The vers
 - The module API version is 5 (`UiService` and `SceneService::requestExit()` are new interface functions, and
   `UiService` gained `playTransition()` and `transitionProgress()`): game modules built for an earlier version
   must be rebuilt.
+- New projects ship the input actions asset `assets/input/game.input` with the actions `ui.navigate`,
+  `ui.submit` and `ui.cancel` and their default bindings, named by `settings/input.json`; older projects still
+  get the actions at run time.
+
+### Fixed
+
+- The editor without a GPU (`--headless --no-gpu`) now makes disabled Entities and their descendants Inactive
+  after every change, so `gameui.layout`, `gameui.pick` and the physics queries no longer report disabled
+  canvases, elements and bodies there.

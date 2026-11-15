@@ -435,8 +435,9 @@ Pressing the primary button on an element presses it, and gives it the focus if 
 (a `FocusChanged` event with the value 0). Releasing over the same element activates it. A pressed slider
 follows the pointer until the button is released.
 
-**The actions.** `GameSession::create` adds these actions with default bindings when the project's input
-asset does not have them:
+**The actions.** New projects ship these actions with their default bindings in `assets/input/game.input`
+(see [Templates](editor/projects.md#templates)). For older projects, `GameSession::create` adds them at run
+time when the project's input asset does not have them:
 
 | Action | Type | Default bindings |
 | --- | --- | --- |

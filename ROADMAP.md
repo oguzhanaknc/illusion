@@ -839,10 +839,10 @@ distance field fonts, and a batched pass draws the UI after tonemapping. Public 
   ✅ Done as described, with `InputActions::setExclusivePrefix()` for the modal mask, the 2D gamepad input
   `Stick.DPad` (`ui.navigate` needs the D-pad as a vector) and `GameSession::setUiFrame(frame, pointerScale)`;
   `ui/hit-test` 58 µs for 1,000 buttons (budget 400 µs).
-  Open: `GameSession::create()` adds the three `ui.*` actions at run time when the input asset lacks them;
-  the project templates do not ship an input asset with them yet (seven editor tests assume a new project
-  has none), so they do not appear in the Input Actions window of a new project; the Game view's pointer
-  mapping is untested in the running editor (only through `GameSession` in tests).
+  The project templates ship `assets/input/game.input` with the three `ui.*` actions (UI follow-up; a test
+  keeps them equal to the defaults `GameSession::create()` still adds to older projects at run time).
+  Open: the Game view's pointer mapping is untested in the running editor (only through `GameSession` in
+  tests).
 - UI-2c: Text fields, scrolling and glyphs. `UiTextField` (UTF-8 editing from `InputState::text()`, caret,
   selection by keyboard, maximum length), `UiScrollView` (wheel, drag, navigation keeps the focus in view;
   virtualised lists for long content), `UiGlyph` (the current binding of an action for the device used
@@ -903,9 +903,9 @@ distance field fonts, and a batched pass draws the UI after tonemapping. Public 
   and level and a game-over menu, checked by `checks-ui.jsonl` (C9) on the scripted runs.
   Open: the pause menu has not been played over the real forest scene in CI (its assets are external); the
   recorded Tetris agent session predates the UI contract: it still passes `checks.jsonl` (whose entity
-  counts became minimums) but is not run against C9 until an agent session is recorded again; in the
-  headless editor without a GPU the edit World's Disabled Entities are not made Inactive, so
-  `gameui.layout` and `gameui.pick` report disabled canvases there.
+  counts became minimums) but is not run against C9 until an agent session is recorded again. The headless
+  editor without a GPU now derives the edit World's Inactive tags after every change (UI follow-up), so
+  `gameui.layout` and `gameui.pick` skip disabled canvases there too.
 - UI-4: Documentation (EN/TR), in step with each pull request: manual page "Game UI", the scripting API
   reference, a tutorial that adds a HUD and a pause menu, the architecture page.
   ✅ Done: manual page `manual/ui.md`, the tutorial `tutorials/hud-and-pause-menu.md` (its module code is

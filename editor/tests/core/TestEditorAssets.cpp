@@ -300,7 +300,8 @@ TEST_CASE("the reference index follows file changes and reports files it cannot 
     fixture.buildScene();
     fixture.addAssets();
     EditorContext& editor = *fixture.editor;
-    CHECK(editor.references().size() == 3); // two scenes and one material
+    CHECK(editor.references().size() == 4); // two scenes, one material and settings:/input.json
+    CHECK(editor.references().referencesIn("settings:/input.json") != nullptr);
     CHECK(editor.references().problems().empty());
 
     ok(editor, "project.file_write", R"({"path":"assets:/scenes/bad.scene","text":"{"})");

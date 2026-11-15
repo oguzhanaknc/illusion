@@ -107,6 +107,7 @@ const HierarchyIndex& EntityIndex::hierarchy()
 void EntityIndex::updateTransforms(bool addMissing)
 {
     ILL_PROFILE_SCOPE();
+    updateInactiveTags(*m_world, m_hierarchy);
     const auto versions = [this] {
         return std::array<u64, 3>{m_world->componentVersion<Transform>(),
                                   m_world->componentVersion<LocalTransform>(),
