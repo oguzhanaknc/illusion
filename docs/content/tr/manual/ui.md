@@ -120,6 +120,16 @@ Latin Extended-A'yı kapsar; yani Türkçe ve çoğu Avrupa dili çalışır.
 | `wrap` | Varsayılan olarak açık: satırlar elemanın genişliğinde kırılır; kapalıysa tek satır kalır |
 | `lineSpacing` | Fontun satır yüksekliğinin çarpanı (1, fontun kendi değeridir) |
 | `letterSpacing` | Glyph başına ek ilerleme, em cinsinden |
+| `outlineWidth` | Glyph'lerin etrafındaki dış çizginin canvas birimi cinsinden kalınlığı; 0 (varsayılan) dış çizgi yok demektir |
+| `outlineColor` | Dış çizginin doğrusal RGBA değeri (varsayılan opak siyah) |
+| `shadowOffset` | Gölgenin canvas birimi cinsinden kayması; sıfır (varsayılan) gölge yok demektir |
+| `shadowColor` | Gölgenin doğrusal RGBA değeri (varsayılan yarı opak siyah) |
+
+Dış çizgi ve gölge fontun distance field'ından gelir; ek Asset gerektirmez. Dış çizginin kalınlığı canvas
+biriminde verilir ve fontun spread değeriyle (atlasta her glyph'in etrafındaki pay) sınırlıdır: daha büyük bir
+değer, fontun taşıyabildiği en geniş değerle çizilir. İkisi de yerleşimi değiştirmez: dış çizgi elemanın
+dikdörtgeninin dışına taşabilir, gölge metnin yanında durur. Gölge önce çizilir ve dış çizgili metnin gölgesi
+dış çizgiyi de içerir. Metin alanları da ikisini çizer.
 
 Editör şablonlarından oluşturulan yeni projeler `assets/fonts/Roboto-Regular.ttf` dosyasını içerir
 (Apache-2.0; lisansı yanındadır); böylece `UiText` hemen çalışır. Başka herhangi bir `.ttf` de aynı şekilde
@@ -752,16 +762,72 @@ bağladığında ya da klavye ile gamepad arasında geçtiğinde etiket onu izle
 anahtarlarını çevirmediği sürece etiketler İngilizcedir. Bilinmeyen bir action için, ya da o cihazda binding'i
 olmayan biri için `UiText` kendi metnini korur.
 
+## Geçişler {#transitions}
+
+Bir `UiTransition`, bir elemanın çizimini dinlenme durumu ile değişmiş bir durum arasında canlandırır. Elemanı
+kaydırır, pivot'u etrafında ölçekler, soldurur ve renklendirir; bunu elemana, torunlarına ve hit test'e uygular;
+yani işaretçinin altında büyüyen bir düğme çizildiği yerde vurulur. Yalnızca çizer: yerleşimi ya da
+`UiComputedRect`'i asla değiştirmez ve komşular yerinden oynamaz. Entity'nin `UiElement`'e ihtiyacı vardır.
+
+| Alan | Anlamı |
+| --- | --- |
+| `trigger` | Neyin başlattığı: `Shown`, `Hovered`, `Pressed`, `Focused` veya `Manual` (varsayılan `Shown`) |
+| `duration` | Bir durumdan ötekine saniye; 0 anında geçer (varsayılan 0,2) |
+| `delay` | Hareket başlamadan önceki saniye (varsayılan 0) |
+| `ease` | `Linear`, `EaseIn`, `EaseOut`, `EaseInOut` veya `BackOut` (varsayılan `EaseOut`) |
+| `offset` | Değişmiş durum: canvas birimi cinsinden bu kadar kaydırılır, üst elemanın uzayında |
+| `scale` | Değişmiş durum: elemanın pivot'u etrafında ölçeklenir (varsayılan 1, 1) |
+| `opacity` | Değişmiş durum: opaklık çarpanı (varsayılan 1) |
+| `tint` | Değişmiş durum: görüntü tint'lerinin ve metin renklerinin çarpanı (varsayılan beyaz) |
+
+Alanlar değişmiş durumu tanımlar; dinlenme durumu, yerleşimin koyduğu haliyle elemandır.
+
+**Trigger'lar.**
+
+- `Shown`, eleman daha önce yerleşmemişken yerleştirildiğinde (ilk gösterildiğinde ya da artık `Inactive`
+  olmadığında) değişmiş durumda başlar ve dinlenmeye oynar. İçeri kayan ya da beliren paneller için kullanın.
+- `Hovered`, `Pressed` ve `Focused` elemanın `UiInteractable` durumunu izler: eleman üzerine gelindiğinde,
+  basıldığında ya da odaklandığında değişmiş duruma, sonrasında yeniden dinlenmeye yumuşakça geçer.
+- `Manual` yalnızca bir modül `UiService::playTransition()` çağırdığında hareket eder. Bu çağrı diğer
+  trigger'lar için de çalışır.
+
+**Delay ve ease.** Delay, değişmiş duruma doğru hareket başlamadan önce geçer (`Shown` için dinlenmeye doğru
+başlamadan önce); eleman bu sürede bulunduğu durumu korur. Ease, değişmiş duruma doğru hareketi biçimlendirir;
+`Shown` geçişi eğriyi tersten oynatır, bu yüzden `EaseOut` dinlenmede, yani oyuncunun gördüğü uçta yavaşça
+biter. `BackOut` yerleşmeden önce biraz aşar.
+
+**Zaman.** Bir geçiş, input'lu her update'te `UiInput::deltaSeconds` kadar ilerler; bu yüzden sabit adımlarla
+çalışan bir oturum onu her seferinde aynı oynatır. Editörün Game görünümünün önizleme için kullandığı input'suz
+update hiçbir geçişi ilerletmez ve hiçbir `Shown` geçişini başlatmaz: önizleme her elemanı dinlenmede gösterir.
+Varmış bir geçişin maliyeti yoktur; yalnızca hareket edenlere uğranır.
+
+Bir modül bir geçişi okuyabilir ve sürebilir. `playTransition()` onu değişmiş duruma (`true`) ya da dinlenmeye
+(`false`) doğru hareket ettirir ve elemanın bir `UiTransition`'ı olup olmadığını döndürür;
+`transitionProgress()` dinlenmede 0, değişmiş durumda 1'dir ve bir `UiTransition`'ı olmayan eleman için değer
+taşımaz:
+
+```cpp
+// In update(): pulse the Go button once when the counter changes.
+if (counterChanged)
+{
+    static_cast<void>(ui->playTransition(goButton, true));
+}
+else if (ui->transitionProgress(goButton).value_or(0.0f) >= 1.0f)
+{
+    static_cast<void>(ui->playTransition(goButton, false));
+}
+```
+
 ## Henüz olmayanlar {#what-is-not-there-yet}
 
-UI çizilir, input'a tepki verir, oyun modülleri tarafından script'lenebilir ve Entity menüsünden ya da `gameui.*`
-komutlarıyla kurulur. Sonraki paketler Scene görünümünde canvas editörünü (yerleşim tutamaçları, anchor ön ayarları ve
-elemanları fareyle seçme) ve geçişleri ile animasyonu ekler. O zamana kadar yerleşim Inspector'da düzenlenir. Metin
+UI çizilir, input'a tepki verir, oyun modülleri tarafından script'lenebilir, geçişlerle canlanır ve Entity
+menüsünden ya da `gameui.*` komutlarıyla kurulur. Sonraki bir paket Scene görünümünde canvas editörünü (yerleşim
+tutamaçları, anchor ön ayarları ve elemanları fareyle seçme) ekler. O zamana kadar yerleşim Inspector'da düzenlenir. Metin
 seçimi, glyph görselleri (etiket yerine düğme resmi) ve geri dönüştürülen listeler de yoktur. İlk sürümün sınırları
 ([ADR 0057](https://github.com/oguzhanaknc/illusion/blob/main/docs/adr/0057-game-ui.md)):
 
 - Metin shaping olmadan soldan sağa çizilir: Arapça, İbranice, Hint yazı sistemleri ve ligatürler
   desteklenmez, sağdan sola metin de desteklenmez ve CJK, font atlası için fazla büyük karakter aralıkları
   gerektirir.
-- Metinde dış çizgi, gölge ve gradyan henüz yoktur.
+- Metinde gradyan henüz yoktur.
 - Canvas'lar ekranı kaplar; dünyaya yerleştirilen bir UI (bir karakterin üzerindeki etiket) kapsanmaz.

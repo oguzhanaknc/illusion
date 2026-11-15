@@ -35,6 +35,7 @@
     "illusion.UiText": 1,
     "illusion.UiTextField": 1,
     "illusion.UiToggle": 1,
+    "illusion.UiTransition": 1,
     "illusion.VolumetricFog": 1,
     "illusion.Wind": 1
   },
@@ -1037,7 +1038,11 @@
           "verticalAlign": "Top",
           "wrap": true,
           "lineSpacing": 1.0,
-          "letterSpacing": 0.04
+          "letterSpacing": 0.04,
+          "outlineWidth": 1.5,
+          "outlineColor": [0.1, 0.05, 0.0, 1.0],
+          "shadowOffset": [1.0, 2.0],
+          "shadowColor": [0.0, 0.0, 0.0, 0.6]
         }
       }
     },
@@ -1080,7 +1085,11 @@
           "verticalAlign": "Middle",
           "wrap": false,
           "lineSpacing": 1.25,
-          "letterSpacing": 0.0
+          "letterSpacing": 0.0,
+          "outlineWidth": 0.0,
+          "outlineColor": [0.0, 0.0, 0.0, 1.0],
+          "shadowOffset": [0.0, 0.0],
+          "shadowColor": [0.0, 0.0, 0.0, 0.5]
         }
       }
     },
@@ -1208,7 +1217,11 @@
           "verticalAlign": "Bottom",
           "wrap": true,
           "lineSpacing": 1.0,
-          "letterSpacing": 0.0
+          "letterSpacing": 0.0,
+          "outlineWidth": 0.0,
+          "outlineColor": [0.0, 0.0, 0.0, 1.0],
+          "shadowOffset": [0.0, 0.0],
+          "shadowColor": [0.0, 0.0, 0.0, 0.5]
         }
       }
     },
@@ -1749,6 +1762,16 @@
           "down": "7878834768668743",
           "left": null,
           "right": "f902155aa328d575"
+        },
+        "illusion.UiTransition": {
+          "trigger": "Manual",
+          "duration": 0.1,
+          "delay": 0.05,
+          "ease": "EaseInOut",
+          "offset": [0.0, -6.0],
+          "scale": [1.1, 1.1],
+          "opacity": 0.8,
+          "tint": [1.2, 0.9, 0.7, 1.0]
         }
       }
     },
@@ -1791,7 +1814,11 @@
           "verticalAlign": "Middle",
           "wrap": true,
           "lineSpacing": 1.0,
-          "letterSpacing": 0.0
+          "letterSpacing": 0.0,
+          "outlineWidth": 0.0,
+          "outlineColor": [0.0, 0.0, 0.0, 1.0],
+          "shadowOffset": [0.0, 0.0],
+          "shadowColor": [0.0, 0.0, 0.0, 0.5]
         }
       }
     },
@@ -2313,7 +2340,11 @@
           "verticalAlign": "Middle",
           "wrap": false,
           "lineSpacing": 1.0,
-          "letterSpacing": 0.0
+          "letterSpacing": 0.0,
+          "outlineWidth": 0.0,
+          "outlineColor": [0.0, 0.0, 0.0, 1.0],
+          "shadowOffset": [0.0, 0.0],
+          "shadowColor": [0.0, 0.0, 0.0, 0.5]
         },
         "illusion.UiTextField": {
           "text": "Player One",
@@ -2387,7 +2418,11 @@
           "verticalAlign": "Middle",
           "wrap": false,
           "lineSpacing": 1.0,
-          "letterSpacing": 0.0
+          "letterSpacing": 0.0,
+          "outlineWidth": 0.0,
+          "outlineColor": [0.0, 0.0, 0.0, 1.0],
+          "shadowOffset": [0.0, 0.0],
+          "shadowColor": [0.0, 0.0, 0.0, 0.5]
         },
         "illusion.UiTextField": {
           "text": "hunter2",
@@ -2528,7 +2563,11 @@
           "verticalAlign": "Middle",
           "wrap": false,
           "lineSpacing": 1.0,
-          "letterSpacing": 0.0
+          "letterSpacing": 0.0,
+          "outlineWidth": 0.0,
+          "outlineColor": [0.0, 0.0, 0.0, 1.0],
+          "shadowOffset": [0.0, 0.0],
+          "shadowColor": [0.0, 0.0, 0.0, 0.5]
         }
       }
     },
@@ -2571,7 +2610,11 @@
           "verticalAlign": "Middle",
           "wrap": false,
           "lineSpacing": 1.0,
-          "letterSpacing": 0.0
+          "letterSpacing": 0.0,
+          "outlineWidth": 0.0,
+          "outlineColor": [0.0, 0.0, 0.0, 1.0],
+          "shadowOffset": [0.0, 0.0],
+          "shadowColor": [0.0, 0.0, 0.0, 0.5]
         }
       }
     },
@@ -2614,7 +2657,11 @@
           "verticalAlign": "Middle",
           "wrap": false,
           "lineSpacing": 1.0,
-          "letterSpacing": 0.0
+          "letterSpacing": 0.0,
+          "outlineWidth": 0.0,
+          "outlineColor": [0.0, 0.0, 0.0, 1.0],
+          "shadowOffset": [0.0, 0.0],
+          "shadowColor": [0.0, 0.0, 0.0, 0.5]
         }
       }
     },
@@ -2657,7 +2704,11 @@
           "verticalAlign": "Middle",
           "wrap": false,
           "lineSpacing": 1.0,
-          "letterSpacing": 0.0
+          "letterSpacing": 0.0,
+          "outlineWidth": 0.0,
+          "outlineColor": [0.0, 0.0, 0.0, 1.0],
+          "shadowOffset": [0.0, 0.0],
+          "shadowColor": [0.0, 0.0, 0.0, 0.5]
         }
       }
     },
@@ -2703,7 +2754,11 @@
           "verticalAlign": "Middle",
           "wrap": false,
           "lineSpacing": 1.0,
-          "letterSpacing": 0.0
+          "letterSpacing": 0.0,
+          "outlineWidth": 0.0,
+          "outlineColor": [0.0, 0.0, 0.0, 1.0],
+          "shadowOffset": [0.0, 0.0],
+          "shadowColor": [0.0, 0.0, 0.0, 0.5]
         }
       }
     },

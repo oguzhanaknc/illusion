@@ -57,7 +57,8 @@ void update(illusion::ModuleContext& context, illusion::f64)
   work there too.
 - **Cost.** A call is one indirect call; the `services/virtual-call` Benchmark keeps it under 10 ns.
 - **Compatibility.** The interfaces are part of the module ABI: adding or changing a function changes
-  `kModuleApiVersion` (4 since `UiService` and `SceneService::requestExit()`), and modules must be rebuilt.
+  `kModuleApiVersion` (5 since `UiService::playTransition()` and `transitionProgress()`), and modules must be
+  rebuilt.
 
 ## Coverage
 
@@ -159,5 +160,7 @@ layout without `World::markChanged()`.
 | `setFocus`, `focused` | Move the focus (null clears it), the focused element |
 | `rect` | The rectangle of the last layout, in canvas units |
 | `invalidateLayout` | Tells the UI that Components of UI Entities were written directly |
+| `playTransition` | Moves an element's `UiTransition` towards its changed state or back to rest, whatever its trigger |
+| `transitionProgress` | Progress of an element's `UiTransition`: 0 at rest, 1 in the changed state |
 | `pollEvents` | Copies the events of the previous frame's UI update into a span; returns the total, which may be more than fit |
 | `setLanguage`, `language` | The game's language, a BCP 47 tag with a locale file in the project |

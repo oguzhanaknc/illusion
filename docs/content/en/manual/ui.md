@@ -121,6 +121,16 @@ Turkish and most European languages work.
 | `wrap` | On by default: lines break at the element's width; off keeps one line |
 | `lineSpacing` | Multiplier of the font's line height (1 is the font's own) |
 | `letterSpacing` | Extra advance per glyph, in ems |
+| `outlineWidth` | Width of an outline around the glyphs in canvas units; 0 (default) for none |
+| `outlineColor` | Linear RGBA of the outline (default opaque black) |
+| `shadowOffset` | Offset of a drop shadow in canvas units; zero (default) for none |
+| `shadowColor` | Linear RGBA of the shadow (default black at half opacity) |
+
+The outline and the shadow come from the font's distance field, so they need no extra assets. The outline
+width is in canvas units and is limited by the font's spread (the margin around each glyph in the atlas): a
+wider value is drawn as the widest one the font can hold. Neither changes the layout: the outline can reach
+outside the element's rectangle and the shadow lies beside the text. The shadow is drawn first, and the shadow
+of outlined text includes its outline. Text fields draw both as well.
 
 New projects made from an editor template contain `assets/fonts/Roboto-Regular.ttf` (Apache-2.0, with its
 licence next to it), so `UiText` works at once; any other `.ttf` works the same way.
@@ -754,11 +764,67 @@ rebind the action or switch between the keyboard and a gamepad. The labels are E
 locale files translate the `input.*` keys. For an unknown action, or one without a binding for that device,
 the `UiText` keeps its own text.
 
+## Transitions
+
+A `UiTransition` animates how an element is drawn between its rest state and a changed state. It moves the
+element, scales it about its pivot, fades it and tints it, and applies that to the element and its
+descendants and to hit testing, so a button that grows under the pointer is also hit where it is drawn. It
+only draws: it never changes the layout or `UiComputedRect`, and neighbours do not move. The Entity needs
+`UiElement`.
+
+| Field | Meaning |
+| --- | --- |
+| `trigger` | What starts it: `Shown`, `Hovered`, `Pressed`, `Focused` or `Manual` (default `Shown`) |
+| `duration` | Seconds from one state to the other; 0 switches at once (default 0.2) |
+| `delay` | Seconds before it starts moving (default 0) |
+| `ease` | `Linear`, `EaseIn`, `EaseOut`, `EaseInOut` or `BackOut` (default `EaseOut`) |
+| `offset` | Changed state: moved by this many canvas units, in the parent's space |
+| `scale` | Changed state: scaled about the element's pivot (default 1, 1) |
+| `opacity` | Changed state: multiplier of the opacity (default 1) |
+| `tint` | Changed state: multiplier of image tints and text colours (default white) |
+
+The fields describe the changed state; the rest state is the element as laid out.
+
+**Triggers.**
+
+- `Shown` starts in the changed state when the element is laid out after it was not (the first time it is
+  shown, or when it is no longer `Inactive`) and plays to rest. Use it for panels that slide or fade in.
+- `Hovered`, `Pressed` and `Focused` follow the element's `UiInteractable` state: they ease to the changed
+  state while it is hovered, pressed or focused, and back to rest afterwards.
+- `Manual` moves only when a module calls `UiService::playTransition()`. That call also works for the other
+  triggers.
+
+**Delay and ease.** The delay passes before the motion starts towards the changed state (for `Shown`, before it
+starts towards rest); the element keeps the state it is in meanwhile. The ease shapes the motion towards the
+changed state; a `Shown` transition runs the curve backwards, so `EaseOut` ends slowly at rest, which is the
+end the player sees. `BackOut` overshoots a little before it settles.
+
+**Time.** A transition moves by `UiInput::deltaSeconds` in every update with input, so a session that runs
+with fixed steps plays it identically each time. The update without input, which the editor's Game view uses
+for its preview, advances no transition and starts no `Shown` transition: the preview shows every element at
+rest. A transition that has arrived costs nothing; only moving ones are visited.
+
+A module can read and drive a transition. `playTransition()` moves it towards the changed state (`true`) or
+back to rest (`false`) and returns whether the element has a `UiTransition`; `transitionProgress()` is 0 at
+rest and 1 in the changed state, and has no value for an element without one:
+
+```cpp
+// In update(): pulse the Go button once when the counter changes.
+if (counterChanged)
+{
+    static_cast<void>(ui->playTransition(goButton, true));
+}
+else if (ui->transitionProgress(goButton).value_or(0.0f) >= 1.0f)
+{
+    static_cast<void>(ui->playTransition(goButton, false));
+}
+```
+
 ## What is not there yet
 
-The UI is drawn, reacts to input, can be scripted by game modules and is built from the Entity menu or with
-`gameui.*` commands. Later packages add the canvas editor in the Scene view (placement handles, anchor presets
-and picking elements with the mouse), and transitions and animation. Until then placement is edited in the
+The UI is drawn, reacts to input, can be scripted by game modules, animates with transitions and is built
+from the Entity menu or with `gameui.*` commands. A later package adds the canvas editor in the Scene view
+(placement handles, anchor presets and picking elements with the mouse). Until then placement is edited in the
 Inspector. Text selection, glyph images (a button picture instead of a label) and recycled lists are not there
 either. The limits of the first version
 ([ADR 0057](https://github.com/oguzhanaknc/illusion/blob/main/docs/adr/0057-game-ui.md)):
@@ -766,5 +832,5 @@ either. The limits of the first version
 - Text is drawn left to right without shaping: Arabic, Hebrew, Indic scripts and ligatures are
   not supported, right-to-left text is not either, and CJK needs character ranges that are too large for the
   font atlas.
-- Outlines, shadows and gradients on text are not there yet.
+- Gradients on text are not there yet.
 - Canvases cover the screen; a UI placed in the world (a label above a character) is not covered.

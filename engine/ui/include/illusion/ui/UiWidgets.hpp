@@ -136,7 +136,7 @@ struct UiInput
     bool caretEnd = false;       ///< End was pressed.
     bool backspace = false;      ///< Backspace was pressed (with repeat).
     bool deleteForward = false;  ///< Delete was pressed (with repeat).
-    f64 deltaSeconds = 0.0;      ///< Time since the last update, for the repeat of held navigation.
+    f64 deltaSeconds = 0.0;      ///< Time since the last update: navigation repeat, caret blink, transitions.
 };
 
 /// What happened to an element.

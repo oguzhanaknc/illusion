@@ -108,6 +108,15 @@ Quad makeQuad(const UiRect& rect, const UiRect& uv) noexcept
     return quad;
 }
 
+// What a command draws with, besides its clip.
+struct Batch
+{
+    UiTextureId texture{};
+    f32 spread = 0.0f;
+    f32 outline = 0.0f;
+    u32 outlineColor = 0;
+};
+
 // Writes quads into a list's buffers, which are reserved: nothing here allocates.
 struct QuadSink
 {
@@ -148,9 +157,9 @@ struct QuadSink
         return max.x > clip.min.x && max.y > clip.min.y && min.x < clip.max.x && min.y < clip.max.y;
     }
 
-    // Makes room for @p quads in a command with @p texture and @p spread; false (with nothing changed) when
-    // the list is full.
-    [[nodiscard]] bool reserve(u32 quads, UiTextureId texture, f32 spread) const noexcept
+    // Makes room for @p quads in a command drawn with @p batch; false (with nothing changed) when the list is
+    // full.
+    [[nodiscard]] bool reserve(u32 quads, const Batch& batch) const noexcept
     {
         if (quads == 0)
         {
@@ -161,19 +170,25 @@ struct QuadSink
         {
             return false;
         }
-        const bool batched = !commands.empty() && commands.back().texture == texture &&
-                             commands.back().sdfSpread == spread && commands.back().clip == clip;
-        if (batched)
+        if (!commands.empty())
         {
-            return true;
+            const UiDrawCommand& last = commands.back();
+            if (last.texture == batch.texture && last.sdfSpread == batch.spread &&
+                last.sdfOutline == batch.outline && last.outlineColor == batch.outlineColor &&
+                last.clip == clip)
+            {
+                return true;
+            }
         }
         if (commands.size() >= desc.maxCommands)
         {
             return false;
         }
         UiDrawCommand command;
-        command.texture = texture;
-        command.sdfSpread = spread;
+        command.texture = batch.texture;
+        command.sdfSpread = batch.spread;
+        command.sdfOutline = batch.outline;
+        command.outlineColor = batch.outlineColor;
         command.clip = clip;
         command.firstIndex = static_cast<u32>(indices.size());
         commands.push_back(command);
@@ -193,8 +208,7 @@ struct QuadSink
     }
 
     // Places, reserves and adds @p quads as one primitive: all of them or none.
-    [[nodiscard]] bool record(std::span<Quad> quads, UiTextureId texture, f32 spread,
-                              u32 color) const noexcept
+    [[nodiscard]] bool record(std::span<Quad> quads, UiTextureId texture, u32 color) const noexcept
     {
         for (Quad& quad : quads)
         {
@@ -203,7 +217,8 @@ struct QuadSink
                 return false;
             }
         }
-        if (!reserve(static_cast<u32>(quads.size()), texture, spread))
+        if (!reserve(static_cast<u32>(quads.size()),
+                     Batch{.texture = texture, .spread = 0.0f, .outline = 0.0f, .outlineColor = 0}))
         {
             return false;
         }
@@ -215,10 +230,17 @@ struct QuadSink
     }
 };
 
-bool validStyle(const UiTextStyle& style) noexcept
+// The style without its outline, which does not change the layout.
+bool validLayout(const UiTextStyle& style) noexcept
 {
     return finite(style.size) && style.size > 0.0f && finite(style.lineSpacing) &&
            finite(style.letterSpacing) && finite(style.wrapWidth) && finite(style.color);
+}
+
+bool validStyle(const UiTextStyle& style) noexcept
+{
+    const bool outlined = finite(style.outlineWidth) && style.outlineWidth > 0.0f;
+    return validLayout(style) && (!outlined || finite(style.outlineColor));
 }
 
 struct LineSpan
@@ -366,7 +388,7 @@ UiTextExtent layoutText(const Font& font, std::string_view utf8, const UiTextSty
 
 UiTextExtent measureText(const Font& font, std::string_view utf8, const UiTextStyle& style) noexcept
 {
-    if (!validStyle(style))
+    if (!validLayout(style))
     {
         return {};
     }
@@ -443,7 +465,7 @@ bool UiDrawList::image(const UiRect& rect, UiTextureId texture, Vec4 tint, const
     }
     const QuadSink sink{m_vertices, m_indices, m_commands, m_desc, m_transform, m_identity, m_clips.back()};
     std::array<Quad, 1> quad{makeQuad(rect, uv)};
-    if (!sink.record(quad, texture, 0.0f, packColor(tint)))
+    if (!sink.record(quad, texture, packColor(tint)))
     {
         ++m_dropped;
         return false;
@@ -498,7 +520,7 @@ bool UiDrawList::nineSlice(const UiRect& rect, UiTextureId texture, Vec2 texture
         }
     }
     const QuadSink sink{m_vertices, m_indices, m_commands, m_desc, m_transform, m_identity, m_clips.back()};
-    if (!sink.record(std::span(quads.data(), count), texture, 0.0f, packColor(tint)))
+    if (!sink.record(std::span(quads.data(), count), texture, packColor(tint)))
     {
         ++m_dropped;
         return false;
@@ -553,7 +575,16 @@ bool UiDrawList::text(const UiFontFace& face, Vec2 position, std::string_view ut
         }
     });
     const f32 spread = static_cast<f32>(font.spread());
-    if (!valid || !sink.reserve(quads, face.atlas, spread))
+    Batch batch{.texture = face.atlas, .spread = spread, .outline = 0.0f, .outlineColor = 0};
+    if (finite(style.outlineWidth) && style.outlineWidth > 0.0f)
+    {
+        // The glyph quads reach `spread` texels beyond the ink (at least 2), so the outline must stay inside
+        // them.
+        batch.outline =
+            std::min(style.outlineWidth / style.size * static_cast<f32>(font.pixelSize()), spread - 1.0f);
+        batch.outlineColor = packColor(style.outlineColor);
+    }
+    if (!valid || !sink.reserve(quads, batch))
     {
         ++m_dropped;
         return false;

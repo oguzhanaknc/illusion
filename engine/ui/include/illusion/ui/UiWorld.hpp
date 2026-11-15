@@ -37,8 +37,8 @@ class Localization;
 /// Reflects the saved UI Components ("illusion.UiCanvas", "illusion.UiElement", "illusion.UiImage",
 /// "illusion.UiText", "illusion.UiStack", "illusion.UiGrid", "illusion.UiInteractable", "illusion.UiButton",
 /// "illusion.UiToggle", "illusion.UiSlider", "illusion.UiTextField", "illusion.UiScrollView",
-/// "illusion.UiGlyph") and the runtime UiComputedRect, UiInteraction and UiTextArguments. Safe to call more
-/// than once.
+/// "illusion.UiGlyph", "illusion.UiTransition") and the runtime UiComputedRect, UiInteraction,
+/// UiTextArguments and UiTransitionState. Safe to call more than once.
 void registerUiComponents();
 
 /// What @p value becomes on @p slider: snapped to its step from min and kept between min and max, as input
@@ -180,6 +180,15 @@ struct UiWorldStatistics
 /// recycling of rows).
 ///
 /// A UiGlyph replaces the text its UiText shows with the label from setGlyphs(), without writing UiText.
+///
+/// A UiTransition moves by UiInput::deltaSeconds in each update with input (the update without input moves
+/// none, and starts no Shown transition). Its element gets a UiTransitionState. Shown starts in the changed
+/// state on the update that lays the element out after it was not (first shown, or no longer Inactive);
+/// Hovered, Pressed and Focused take their direction from the element's UiInteraction when it changes;
+/// UiService::playTransition() sets it for any trigger. The eased progress blends the changed offset (in the
+/// parent's space), scale (about the pivot), opacity and tint into what the element and its descendants draw
+/// and where they are hit; UiComputedRect and the layout stay as they are. While every transition has
+/// arrived, transitions cost nothing.
 class UiWorld : NonCopyable
 {
 public:

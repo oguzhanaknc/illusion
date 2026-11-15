@@ -880,10 +880,17 @@ distance field fonts, and a batched pass draws the UI after tonemapping. Public 
 - UI-3d: Canvas editing. Selection outlines and placement handles for UI Entities in the Game view (move,
   resize, anchors), anchor presets and placement drawers in the Inspector, picking and framing of UI
   Entities. Done: UiDriver tests drag an element and change its anchors; a golden image.
-- UI-3c: Transitions and the demo. `UiTransition` (tweens of opacity, offset, scale and colour on state
-  changes, played by `UiService`), text outline and shadow from the distance field; the tech demo gets a
-  pause menu and a HUD. Done: deterministic transition tests with `fixedStep`; golden image of the demo's
-  pause menu.
+- UI-3c: Transitions and text effects. `UiTransition` (offset, scale, opacity and tint eased between rest
+  and a changed state on show, hover, press, focus or by `UiService::playTransition()`), text outline and
+  drop shadow from the distance field (`UiText::outlineWidth`, `shadowOffset`). Done: deterministic
+  transition tests with fixed steps; GPU golden of outlined and shadowed text; the showcase HUD uses both;
+  module API version 5.
+  ✅ Done: `UiTransition` with the runtime `UiTransitionState`, `UiService::playTransition()` and
+  `transitionProgress()`, outlines as push constants of a draw command and the shadow as a second text draw
+  (ADR 0057 addendum); `ui/transitions-1000` measures 81 µs for 1,000 running transitions (budget 500 µs).
+- UI-3e: The demo. The tech demo gets a HUD and a pause menu (Resume, a volume slider, Quit) driven by its
+  module through `UiService`; the Tetris acceptance game shows its score and a game-over menu. Done: golden
+  image of the demo's pause menu; the acceptance transcripts cover the menu.
 - UI-4: Documentation (EN/TR), in step with each pull request: manual page "Game UI", the scripting API
   reference, a tutorial that adds a HUD and a pause menu, the architecture page.
 

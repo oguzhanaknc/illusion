@@ -59,6 +59,8 @@ public:
     [[nodiscard]] Entity focused() const override;
     [[nodiscard]] std::optional<UiRect> rect(Entity entity) const override;
     void invalidateLayout() override;
+    bool playTransition(Entity entity, bool towardsChanged) override;
+    [[nodiscard]] std::optional<f32> transitionProgress(Entity entity) const override;
     u32 pollEvents(std::span<UiEvent> events) const override;
     bool setLanguage(std::string_view locale) override;
     [[nodiscard]] std::string_view language() const override;

@@ -92,6 +92,7 @@ add_executable(illusion_tests
     ui/TestUiGeometry.cpp
     ui/TestUiInteraction.cpp
     ui/TestUiService.cpp
+    ui/TestUiTransitions.cpp
     ui/TestUiWorld.cpp)
 
 # The render library's internal policies are tested directly (render/TestTextureStreamingPolicy.cpp), as is

@@ -356,3 +356,36 @@ TEST_CASE("UiService::pollEvents copies the events of the last update and return
     REQUIRE(f.service.pollEvents(events) == 1);
     CHECK(events[0].type == UiEventType::Clicked);
 }
+
+TEST_CASE("UiService::playTransition moves a transition either way and transitionProgress reports it")
+{
+    Fixture f;
+    UiTransition hover;
+    hover.trigger = UiTransitionTrigger::Hovered;
+    hover.duration = 0.5f;
+    hover.ease = UiEase::Linear;
+    f.world.emplace<UiTransition>(f.button, hover);
+    CHECK_FALSE(f.service.playTransition(f.label, true)); // no UiTransition
+    CHECK_FALSE(f.service.transitionProgress(f.label).has_value());
+    CHECK(f.service.transitionProgress(f.button) == 0.0f); // before the UI ran
+    f.step();
+    UiInput input;
+    input.deltaSeconds = 0.25;
+    CHECK(f.service.playTransition(f.button, true)); // a Hovered transition, not hovered
+    f.step(input);
+    REQUIRE(f.service.transitionProgress(f.button).has_value());
+    CHECK(static_cast<f64>(*f.service.transitionProgress(f.button)) == doctest::Approx(0.5));
+    f.step(input);
+    CHECK(static_cast<f64>(*f.service.transitionProgress(f.button)) == doctest::Approx(1.0));
+    f.step(input); // it stays until the trigger's state changes
+    CHECK(static_cast<f64>(*f.service.transitionProgress(f.button)) == doctest::Approx(1.0));
+    CHECK(f.service.playTransition(f.button, false));
+    f.step(input);
+    CHECK(static_cast<f64>(*f.service.transitionProgress(f.button)) == doctest::Approx(0.5));
+
+    const Entity gone = f.world.create(UiElement{}, UiTransition{});
+    f.world.destroy(gone);
+    CHECK_FALSE(f.service.playTransition(gone, true));
+    CHECK_FALSE(f.service.transitionProgress(gone).has_value());
+    CHECK_FALSE(f.service.playTransition({}, true));
+}

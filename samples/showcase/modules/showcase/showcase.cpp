@@ -104,23 +104,24 @@ struct Runtime
     Entity hudButton{};
     Entity hudToggle{};
     Entity hudSlider{};
-    u32 uiEvents = 0;           ///< UI events seen so far.
-    u32 uiClicks = 0;           ///< Clicks of the Go button.
-    f32 sliderValue = 0.0f;     ///< The HUD slider at the last update.
-    f32 buttonWidth = 0.0f;     ///< Width of the Go button at frame 100, in canvas units.
-    bool toggleOn = false;      ///< The HUD toggle at the last update.
-    bool paletteShown = true;   ///< The palette is visible.
-    bool buttonFocused = false; ///< The Go button had the focus at frame 200.
-    u32 particlesAlive = 0;     ///< Live particles of every emitter at the last update.
-    u32 runs = 0;               ///< Sessions played, from the store's cloud save.
-    u32 walkerProgress = 0;     ///< Progress of the walker achievement at frame 100.
-    u32 cloudFiles = 0;         ///< Cloud files at frame 280.
-    u64 cloudFree = 0;          ///< Free cloud storage at frame 280, in bytes.
-    i32 frameStat = 0;          ///< The frames stat read back at frame 200.
-    f32 crateStat = 0.0f;       ///< The crate speed stat read back at frame 200.
-    bool overlay = false;       ///< The store's overlay covers the game.
-    bool started = false;       ///< The started achievement was unlocked at frame 100.
-    bool dustRaised = false;    ///< The first hard landing played the dust.
+    u32 uiEvents = 0;            ///< UI events seen so far.
+    u32 uiClicks = 0;            ///< Clicks of the Go button.
+    f32 sliderValue = 0.0f;      ///< The HUD slider at the last update.
+    f32 buttonWidth = 0.0f;      ///< Width of the Go button at frame 100, in canvas units.
+    f32 buttonTransition = 0.0f; ///< Progress of the Go button's transition at frame 225.
+    bool toggleOn = false;       ///< The HUD toggle at the last update.
+    bool paletteShown = true;    ///< The palette is visible.
+    bool buttonFocused = false;  ///< The Go button had the focus at frame 200.
+    u32 particlesAlive = 0;      ///< Live particles of every emitter at the last update.
+    u32 runs = 0;                ///< Sessions played, from the store's cloud save.
+    u32 walkerProgress = 0;      ///< Progress of the walker achievement at frame 100.
+    u32 cloudFiles = 0;          ///< Cloud files at frame 280.
+    u64 cloudFree = 0;           ///< Free cloud storage at frame 280, in bytes.
+    i32 frameStat = 0;           ///< The frames stat read back at frame 200.
+    f32 crateStat = 0.0f;        ///< The crate speed stat read back at frame 200.
+    bool overlay = false;        ///< The store's overlay covers the game.
+    bool started = false;        ///< The started achievement was unlocked at frame 100.
+    bool dustRaised = false;     ///< The first hard landing played the dust.
     InputDevice device{};
     GamepadType gamepad{};
     u32 awakeFrames = 0;
@@ -749,6 +750,12 @@ void updateUi(UiService& ui, SceneService* scenes, Runtime& runtime, u32 frame)
     if (frame == 210)
     {
         static_cast<void>(ui.setFocus({}));
+    }
+    // The Go button's transition plays to its changed state and back, at rest again before frame 300.
+    if (frame == 215 || frame == 225)
+    {
+        runtime.buttonTransition = ui.transitionProgress(runtime.hudButton).value_or(0.0f);
+        static_cast<void>(ui.playTransition(runtime.hudButton, frame == 215));
     }
     runtime.paletteShown = ui.isVisible(runtime.hudPalette);
     runtime.toggleOn = ui.toggle(runtime.hudToggle).value_or(false);

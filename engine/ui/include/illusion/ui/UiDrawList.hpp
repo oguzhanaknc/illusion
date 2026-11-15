@@ -50,9 +50,12 @@ struct UiDrawCommand
     UiTextureId texture{}; ///< Texture sampled; none for solid colour.
     /// Spread of the signed distance field in texels; 0 when the texture is a colour image.
     f32 sdfSpread = 0.0f;
-    UiRect clip{};      ///< Pixels outside it are not drawn; canvas units.
-    u32 firstIndex = 0; ///< First index in UiDrawData::indices.
-    u32 indexCount = 0; ///< Number of indices, a multiple of 3.
+    /// Width of the glyphs' outline in atlas texels, below sdfSpread; 0 for none.
+    f32 sdfOutline = 0.0f;
+    u32 outlineColor = 0; ///< Colour of the outline, packed like UiVertex::color (opacity included).
+    UiRect clip{};        ///< Pixels outside it are not drawn; canvas units.
+    u32 firstIndex = 0;   ///< First index in UiDrawData::indices.
+    u32 indexCount = 0;   ///< Number of indices, a multiple of 3.
 };
 
 /// What a UiDrawList recorded, borrowed: valid until the list's next begin().
@@ -90,6 +93,10 @@ struct UiTextStyle
     /// Width in canvas units at which lines wrap (at spaces; a word longer than a line is split); 0 wraps
     /// only at line breaks.
     f32 wrapWidth = 0.0f;
+    /// Width of an outline around the glyphs in canvas units, at most the font's spread; 0 (or a value that
+    /// is not positive and finite) for none. It does not change the layout.
+    f32 outlineWidth = 0.0f;
+    Vec4 outlineColor{0.0f, 0.0f, 0.0f, 1.0f}; ///< Linear RGBA of the outline, straight alpha.
 };
 
 /// Size of a laid-out text.
@@ -115,7 +122,7 @@ struct UiDrawListDesc
 
 /// Single-threaded, pre-reserved list of UI quads. Recording never allocates; a primitive that does not fit
 /// (or has a non-finite coordinate) is dropped whole, returns false and is counted. Consecutive primitives
-/// with the same texture and clip share a command.
+/// with the same texture, outline and clip share a command.
 class UiDrawList
 {
 public:
