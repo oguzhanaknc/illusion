@@ -7,6 +7,9 @@ inside a `GameSession`; the exported player and the editor's Game view draw it o
 `UiRenderer` (ADR 0057). The UI Components have no `Transform`, and they are saved in scenes and prefabs like
 every other Component.
 
+The tutorial [A HUD and a pause menu](../tutorials/hud-and-pause-menu.md) builds one step by step, and
+[Game UI Architecture](../architecture/game-ui.md) describes how it works inside.
+
 Headers: `<illusion/ui/UiComponents.hpp>`, `<illusion/ui/UiGeometry.hpp>`, `<illusion/ui/UiWorld.hpp>`,
 `<illusion/ui/UiWidgets.hpp>`
 

@@ -6,8 +6,9 @@ Steam ve benzeri mağazalarda ticari oyunlar yayımlamak için tasarlanmıştır
 !!! warning "Erken geliştirme aşaması"
     Core kütüphanesi (logging, bellek, Job System, ECS, reflection ve sahne dosyaları), pencereler,
     action eşlemeli klavye, fare ve gamepad input'u, paketlenmiş arşivli sanal dosya sistemi, asset hattı,
-    Vulkan 1.3 üzerinde forward PBR renderer, katı cisim fiziği ve 3D ses tamamlanmış ve test edilmiştir.
-    Hot reload'lu oyun modülleri, editör ve export hattı planlanmıştır; bkz.
+    Vulkan 1.3 üzerinde forward PBR renderer, katı cisim fiziği, 3D ses, parçacıklar, bir oyun UI'ı (HUD'lar ve
+    menüler), hot reload'lu oyun modülleri, komut API'li editör ve oyun export'u tamamlanmış ve test edilmiştir.
+    Bkz.
     [yol haritası](https://github.com/oguzhanaknc/illusion/blob/main/ROADMAP.md).
 
 ## Tasarım hedefleri

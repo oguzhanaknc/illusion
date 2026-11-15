@@ -65,6 +65,10 @@ designed to ship commercial games on Steam and similar stores.
   fix-its, Add Component with required dependencies), a command palette with forms generated from command
   schemas, console, history, an AI Activity panel with approval prompts for agents, and preferences with
   keymap presets (illusion, Unity, Unreal, Blender); every action is a command.
+- Game UI built from Entities: canvases scaled to any resolution, anchored placement, stacks and grids, images
+  with nine-slice borders, localized distance field text with outlines and shadows, buttons, toggles, sliders,
+  text fields, scroll views, transitions, input glyphs and modal menus that work with the mouse, the keyboard
+  and gamepads; built in the editor's Game view or by agents, and scripted from game modules.
 - No per-frame heap allocations: arenas, pools and an inline type-erased callable.
 - Tracy profiler integration and benchmark tests with performance budgets in CI.
 - CI on Windows (MSVC, clang-cl), Linux (GCC, Clang, ASan/UBSan, TSan) and macOS (Apple Clang).
@@ -98,7 +102,8 @@ world.query<Position, const Velocity>().each([](Position& p, const Velocity& v) 
 
 - English: [docs/content/en](docs/content/en/index.md) · Türkçe: [docs/content/tr](docs/content/tr/index.md)
 - Tutorials: [Tetris with an agent](docs/content/en/tutorials/tetris-with-an-agent.md) ·
-  [Tetris by hand](docs/content/en/tutorials/tetris-by-hand.md)
+  [Tetris by hand](docs/content/en/tutorials/tetris-by-hand.md) ·
+  [A HUD and a pause menu](docs/content/en/tutorials/hud-and-pause-menu.md)
 - Build the site locally: `pip install -r docs/requirements.txt && mkdocs serve`
 - API reference: `doxygen docs/Doxyfile`
 - Design decisions: [docs/adr](docs/adr)

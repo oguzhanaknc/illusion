@@ -252,3 +252,4 @@ bir mağazaya giden yol [Oyunu yayınlamak](../guides/release.md) sayfasındadı
 
 - Oyununuzu kabul sözleşmesinin kontrolleriyle karşılaştırın (SPEC.md'deki C3 ile C5 arası).
 - Buradan sonrasını bir ajana bırakın: [Ajanla Tetris](tetris-with-an-agent.md).
+- Sıradaki: [HUD ve duraklatma menüsü](hud-and-pause-menu.md) bir oyuna puan göstergesi ve bir menü kazandırır.

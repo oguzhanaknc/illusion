@@ -174,6 +174,19 @@ illusion_add_module(illusion_tutorial_tetris_module SHARED SOURCES ${tutorial_so
 target_compile_definitions(illusion_tests PRIVATE
     TUTORIAL_TETRIS_MODULE="$<TARGET_FILE:illusion_tutorial_tetris_module>")
 add_dependencies(illusion_tests illusion_tutorial_tetris_module)
+# The same for "A HUD and a pause menu".
+set(tutorial_hud_page ${PROJECT_SOURCE_DIR}/docs/content/en/tutorials/hud-and-pause-menu.md)
+set(tutorial_hud_source ${CMAKE_CURRENT_BINARY_DIR}/generated/tutorials/hud_and_pause_menu.cpp)
+add_custom_command(OUTPUT ${tutorial_hud_source}
+    COMMAND ${CMAKE_COMMAND} -D SOURCE=${tutorial_hud_page} -D OUTPUT=${tutorial_hud_source}
+        -P ${PROJECT_SOURCE_DIR}/cmake/ExtractCppBlocks.cmake
+    DEPENDS ${tutorial_hud_page} ${PROJECT_SOURCE_DIR}/cmake/ExtractCppBlocks.cmake
+    COMMENT "Extracting the code of the HUD and pause menu tutorial"
+    VERBATIM)
+illusion_add_module(illusion_tutorial_hud_module SHARED SOURCES ${tutorial_hud_source} USES audio runtime ui)
+target_compile_definitions(illusion_tests PRIVATE
+    TUTORIAL_HUD_MODULE="$<TARGET_FILE:illusion_tutorial_hud_module>")
+add_dependencies(illusion_tests illusion_tutorial_hud_module)
 target_compile_definitions(illusion_test_module_v3 PRIVATE TEST_MODULE_WIDE_COUNTER=1)
 target_compile_definitions(illusion_test_module_v5 PRIVATE TEST_MODULE_LAYOUT_V2=1)
 target_compile_definitions(illusion_test_module_v6 PRIVATE TEST_MODULE_WIDE_OPAQUE=1)

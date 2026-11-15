@@ -6,8 +6,9 @@ designed to ship commercial games on Steam and similar stores.
 !!! warning "Early development"
     The core library (logging, memory, Job System, ECS, reflection and scene files), windows, keyboard,
     mouse and gamepad input with action mapping, a virtual file system with packed archives, the asset
-    pipeline, a forward PBR renderer on Vulkan 1.3, rigid-body physics and 3D audio are implemented and
-    tested. Game modules with hot reload, the editor and the export pipeline are planned; see the
+    pipeline, a forward PBR renderer on Vulkan 1.3, rigid-body physics, 3D audio, particles, a game UI
+    (HUDs and menus), game modules with hot reload, the editor with its command API and game export are
+    implemented and tested. See the
     [roadmap](https://github.com/oguzhanaknc/illusion/blob/main/ROADMAP.md).
 
 ## Design goals

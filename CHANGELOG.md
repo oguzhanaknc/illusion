@@ -45,9 +45,13 @@ version changes are in the contributor guide ("Versions and releases"). The vers
   `SceneService::requestExit()`, with which a module ends the game in the player and in Play mode; text
   fields, scroll views and input glyphs (`UiTextField`, `UiScrollView`, `UiGlyph`); the Editor commands
   `gameui.create`, `gameui.layout`, `gameui.click` and `gameui.focus` with the Entity > Game UI menu, and the
-  Game view showing the scene's UI also outside Play mode.
+  Game view showing the scene's UI also outside Play mode; transitions (`UiTransition`), text outlines and
+  shadows, canvas editing in the Game view (`gameui.pick`, `gameui.place`, `gameui.set_anchors`), a HUD and a
+  pause menu in the tech demo and the Tetris acceptance game, the manual page, the architecture page and the
+  tutorial "A HUD and a pause menu".
 
 ### Changed
 
-- The module API version is 4 (`UiService` and `SceneService::requestExit()` are new interface functions):
-  game modules built for an earlier version must be rebuilt.
+- The module API version is 5 (`UiService` and `SceneService::requestExit()` are new interface functions, and
+  `UiService` gained `playTransition()` and `transitionProgress()`): game modules built for an earlier version
+  must be rebuilt.

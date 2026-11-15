@@ -101,3 +101,4 @@ bir mağazaya giden yol [Oyunu yayınlamak](../guides/release.md) sayfasındadı
 - [Elle Tetris](tetris-by-hand.md), aynı oyunu editör penceresinde adım adım kurar.
 - [Otomasyon kılavuzu](../manual/editor/automation.md), senaryolu kabul transcript'inin aynı komutları bir
   ajan olmadan nasıl çalıştırdığını gösterir.
+- Sıradaki: [HUD ve duraklatma menüsü](hud-and-pause-menu.md) bir oyuna puan göstergesi ve bir menü kazandırır.
