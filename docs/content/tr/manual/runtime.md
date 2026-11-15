@@ -63,11 +63,11 @@ Her `update(deltaSeconds)` şunları çalıştırır:
 
 | Adım | Ne olur |
 | --- | --- |
-| 1. Input | `InputActions`, `keyboardMouse()`'u ve gamepad'leri okur |
+| 1. Input | `InputActions`, `keyboardMouse()`'u ve gamepad'leri okur; son update modal bir canvas gösterdiyse yalnızca `ui.*` action'ları input alır |
 | 2. Modüller | World üzerinde `ModuleHost::update()`; ardından `EntityGuid`'siz oluşturulan Entity'ler bir tane alır |
 | 3. Fizik | `PhysicsWorld::update()`: gövdeler World ile eşitlenir, adım atar ve Transform'larını yazar |
 | 4. Hiyerarşi | `updateTransformHierarchy()`: çocuklar ebeveynlerini izler, `Disabled` `Inactive` olur |
-| 5. UI | `UiWorld`, `setUiFrame()`'in karesi için UI Entity'lerini yerleştirir ve çizim listesini kaydeder (`ui()`), bkz. [Oyun UI'ı](ui.md) |
+| 5. UI | `UiWorld`, `setUiFrame()`'in karesi için UI Entity'lerini yerleştirir, işaretçiyi ve `ui.navigate`, `ui.submit` ile `ui.cancel` action'larını işler (Play modu) ve çizim listesini kaydeder (`ui()`), bkz. [Oyun UI'ı](ui.md) |
 | 6. Parçacıklar ve ses | `ParticleWorld::update()` ve `AudioWorld::update()`: kaynaklar Entity'lerini izler, dinleyici hareket eder |
 | 7. Çözücüler | Asset referansları runtime Component'lerine dönüşür (`Collider` Mesh'leri, `MeshRenderer` → `RenderMesh`) |
 
@@ -97,6 +97,16 @@ Oyun, host'un `keyboardMouse()` içine yazdığı klavye ve fareyi görür: oyun
 editörün Game görünümünde viewport'a göre bir kopya, bir testte ise enjekte edilen tuşlar.
 `setInputFocus(false)` hem klavyeyi hem gamepad'leri action'lardan gizler; böylece basılı action'lar
 bırakılır. `InputSettings::gamepadsInBackground` ile gamepad'ler odak olmadan da oyuna ulaşır.
+
+UI aynı input'u okur ([Input ve odak](ui.md#input-and-focus)). Projenin input Asset'inde yoksa `create()`,
+`ui.navigate`, `ui.submit` ve `ui.cancel` action'larını varsayılan atamalarla ekler. Son update modal bir
+canvas'ta ([Modal canvas'lar](ui.md#modal-canvases)) bir eleman gösterdiği sürece session
+`InputActions::setExclusivePrefix("ui.")` çağırır; böylece diğer tüm action'lar bırakılmış okunur, canvas
+gidince de bunu temizler.
+
+İşaretçi, `keyboardMouse()` imlecinin `setUiFrame(frame, pointerScale)` içindeki `pointerScale` ile çarpımıdır
+ve karenin piksellerindedir. Player, karenin boyutunun pencerenin boyutuna oranını verir; editörün Game görünümü
+imleci kendi görüntüsünün pikselleriyle yazar ve 1 verir. Input odağı yoksa UI işaretçi görmez.
 
 ## Proje ayarları
 

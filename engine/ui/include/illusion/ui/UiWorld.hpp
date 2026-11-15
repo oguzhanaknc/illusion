@@ -17,8 +17,10 @@
 #include <illusion/core/Math.hpp>
 #include <illusion/ui/UiDrawList.hpp>
 #include <illusion/ui/UiGeometry.hpp>
+#include <illusion/ui/UiWidgets.hpp>
 
 #include <memory>
+#include <span>
 
 namespace illusion
 {
@@ -31,7 +33,8 @@ class Localization;
 }
 
 /// Reflects the saved UI Components ("illusion.UiCanvas", "illusion.UiElement", "illusion.UiImage",
-/// "illusion.UiText", "illusion.UiStack", "illusion.UiGrid") and the runtime UiComputedRect. Safe to call
+/// "illusion.UiText", "illusion.UiStack", "illusion.UiGrid", "illusion.UiInteractable", "illusion.UiButton",
+/// "illusion.UiToggle", "illusion.UiSlider") and the runtime UiComputedRect and UiInteraction. Safe to call
 /// more than once.
 void registerUiComponents();
 
@@ -71,6 +74,7 @@ struct UiWorldDesc
     UiDrawListDesc drawList{}; ///< Capacities of the frame's draw list.
     u32 maxElements = 16384;   ///< UI Entities laid out per frame; the rest are skipped and counted.
     u32 maxDepth = 64;         ///< Nesting below a canvas; deeper Entities are skipped and counted.
+    u32 maxEvents = 256;       ///< Events kept per update; the rest are dropped and counted.
 };
 
 /// Counters of the last UiWorld::update().
@@ -82,6 +86,7 @@ struct UiWorldStatistics
     u32 droppedPrimitives = 0; ///< Primitives that did not fit the draw list.
     u32 missingGlyphs = 0;     ///< Code points drawn with a fallback glyph.
     u32 missingKeys = 0;       ///< UiText keys the Localization does not have (the key is shown).
+    u32 droppedEvents = 0;     ///< Events beyond UiWorldDesc::maxEvents.
     bool layoutReused = false; ///< Nothing changed since the last update: the rectangles were kept.
 };
 
@@ -91,6 +96,14 @@ struct UiWorldStatistics
 /// each; then images and texts are recorded into the draw list, children over parents, later siblings over
 /// earlier ones. Entities with the Inactive tag, and their subtrees, are skipped. A steady update does not
 /// allocate. Not thread-safe; use on the thread that owns the World.
+///
+/// With UiInput, elements with UiInteractable react (UiWidgets.hpp): the pointer hits the topmost enabled
+/// interactable element under it (later canvases and later nodes on top, through each element's transform
+/// and inside the clips of its ancestors; elements with no opacity are not hit), navigation moves the focus,
+/// and the frame's UiEvents are in events(). While a canvas with UiCanvas::modal shows an element, only it
+/// and the canvases above it can be hit or focused. A UiToggle that is off hides its first child; a UiSlider
+/// places its first child from its start to the value (the fill) and centres its second child on the value
+/// along its axis (the handle keeps the size and cross-axis position of its placement).
 class UiWorld : NonCopyable
 {
 public:
@@ -108,6 +121,24 @@ public:
     /// writes a UI Component through a reference calls `world.markChanged<T>()`, as for Hierarchy); the draw
     /// list is recorded every time (assets may have finished loading).
     void update(const UiFrame& frame);
+
+    /// update(frame) that also handles @p input against the rectangles of this layout before it records:
+    /// hover, press and click, focus and navigation (repeating while held), toggle and slider values, which
+    /// it writes to the Components (marked changed) and shows in the same update.
+    void update(const UiFrame& frame, const UiInput& input);
+
+    /// Events of the last update, in the order they happened.
+    [[nodiscard]] std::span<const UiEvent> events() const noexcept;
+
+    /// The element with the focus of navigation, or null.
+    [[nodiscard]] Entity focused() const noexcept;
+
+    /// Gives @p entity the focus (no event); null clears it. Ignored for an element that the last update did
+    /// not lay out on a canvas that can be focused, or that is not enabled and focusable.
+    void setFocus(Entity entity);
+
+    /// True when the last update laid out at least one element on an active canvas with UiCanvas::modal.
+    [[nodiscard]] bool modalActive() const noexcept;
 
     /// What the last update() recorded; valid until the next one.
     [[nodiscard]] UiDrawData drawData() const noexcept;

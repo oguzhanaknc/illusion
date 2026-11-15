@@ -54,6 +54,9 @@ controllers. Use [glyphs](actions.md#glyphs) to show the right symbol.
 | `trigger(GamepadTrigger::Right)` | 0-1 | dead zone 0.05 |
 | `axis(GamepadAxis::LeftX)` | -1-1 | raw value without dead zone |
 
+`stick(GamepadStick::DPad)` reads the four D-pad buttons as a stick: digital, +y up, with length 1 when any
+is held and the diagonals normalised. Bind it as `Stick.DPad` to a `Vector2` action.
+
 `isDown`, `wasPressed` and `wasReleased` work like keyboard keys. Change dead zones per gamepad with
 `state().setStickDeadZone()` and `setTriggerDeadZone()`.
 

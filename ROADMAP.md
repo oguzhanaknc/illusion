@@ -828,12 +828,26 @@ distance field fonts, and a batched pass draws the UI after tonemapping. Public 
   scale below 1 blurs it (it should be drawn after the upscale; M9); the session's locale stays English
   until something calls `setLocale()` (a language setting comes with UI-3a); the Scene view does not draw
   the UI (UI-3b).
-- UI-2b: Interaction and widgets. `UiInteractable` (hover, pressed, focus, disabled), `UiButton`,
-  `UiToggle`, `UiSlider`, `UiTextField`, `UiScrollView` with virtualised lists, `UiGlyph`; pointer hit tests,
-  focus and navigation through the actions `ui.navigate`, `ui.submit`, `ui.cancel` (default bindings added
-  to input assets), modal canvases, events queued per session. Done: tests drive menus with a virtual
-  gamepad, the keyboard and the mouse; glyphs change with the device used last; text fields edit UTF-8 from
-  `InputState::text()`; a headless session handles input without a renderer.
+- UI-2b: Interaction. `UiWidgets.hpp`: `UiInteractable` (hover, pressed, focus, disabled, state tints,
+  explicit neighbours), `UiButton`, `UiToggle`, `UiSlider`, the runtime `UiInteraction`; `UiInput` and
+  `UiWorld::update(frame, input)`, pointer hit tests (topmost element, transforms and clips respected), focus
+  and navigation through the actions `ui.navigate`, `ui.submit`, `ui.cancel` (default bindings added to input
+  assets, repeat while held), modal canvases (the game's other actions see no input), `UiWorld::events()`.
+  Done: tests drive a menu with a virtual gamepad, the keyboard and the mouse through a `GameSession`; a
+  headless session handles input without a renderer; the showcase HUD has a button, a toggle and a slider;
+  allocation test of a steady frame with input; benchmark `ui/hit-test`.
+  ✅ Done as described, with `InputActions::setExclusivePrefix()` for the modal mask, the 2D gamepad input
+  `Stick.DPad` (`ui.navigate` needs the D-pad as a vector) and `GameSession::setUiFrame(frame, pointerScale)`;
+  `ui/hit-test` 58 µs for 1,000 buttons (budget 400 µs).
+  Open: `GameSession::create()` adds the three `ui.*` actions at run time when the input asset lacks them;
+  the project templates do not ship an input asset with them yet (seven editor tests assume a new project
+  has none), so they do not appear in the Input Actions window of a new project; the Game view's pointer
+  mapping is untested in the running editor (only through `GameSession` in tests).
+- UI-2c: Text fields, scrolling and glyphs. `UiTextField` (UTF-8 editing from `InputState::text()`, caret,
+  selection by keyboard, maximum length), `UiScrollView` (wheel, drag, navigation keeps the focus in view;
+  virtualised lists for long content), `UiGlyph` (the current binding of an action for the device used
+  last, as its label until glyph images exist). Done: tests of editing with multi-byte text, scrolling
+  with clipping, and glyph labels that change with the device.
 - UI-3a: Scripting. `UiService` (`USES ui`) with its adapter: find elements, set text (literal or key with
   arguments), values, visibility and focus, instantiate a UI prefab, poll events; a way for a module to end
   the game (open from M8-1). Done: counting proxy and the showcase module call the whole API;

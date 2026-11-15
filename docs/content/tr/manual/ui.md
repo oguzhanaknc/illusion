@@ -7,7 +7,8 @@ elemanları yerleştirir ve her karede bir çizim listesi kaydeder; dışa aktar
 görünümü bunu `UiRenderer` ile sahnenin üzerine çizer (ADR 0057). UI Component'lerinin `Transform`'u yoktur
 ve diğer tüm Component'ler gibi sahnelerde ve prefab'lerde saklanırlar.
 
-Header'lar: `<illusion/ui/UiComponents.hpp>`, `<illusion/ui/UiGeometry.hpp>`, `<illusion/ui/UiWorld.hpp>`
+Header'lar: `<illusion/ui/UiComponents.hpp>`, `<illusion/ui/UiGeometry.hpp>`, `<illusion/ui/UiWorld.hpp>`,
+`<illusion/ui/UiWidgets.hpp>`
 
 Kütüphane: `illusion::ui` (oyun modülleri header'ları `USES ui` ile alır)
 
@@ -34,7 +35,7 @@ için seçebildiği ek bir çarpandır; 0,5 ile 3 arasına sıkıştırılır ve
 | `scale` | Yukarıdaki `UiCanvasScale` |
 | `order` | Daha yüksek `order`'lı canvas'lar üstte çizilir; eşit değerlerde Entity sırası korunur |
 | `useSafeArea` | Varsayılan olarak açık: canvas, hedefin tamamı yerine ekranın güvenli kenar boşlukları içine yerleşir (TV overscan'i, telefon çentiği) |
-| `modal` | Duraklatma menüsü içindir: gösterilirken oyunun diğer input action'ları girdi görmez. Saklanır ama henüz hiçbir şey onu okumaz; sonraki bir paketin widget'ları okuyacak |
+| `modal` | Duraklatma menüsü içindir: bir eleman gösterdiği sürece yalnızca o ve üstündeki canvas'lar input alır, oyunun diğer input action'ları hiçbir şey görmez ([Modal canvas'lar](#modal-canvases)) |
 
 Host, hedef boyutunu ve güvenli olmayan kenarları piksel olarak `GameSession::setUiFrame()` ile verir
 (player ve Game görünümü verir). `Inactive` tag'li Entity'ler ve torunları yerleştirilmez ve çizilmez; yani
@@ -272,11 +273,173 @@ void showScore(illusion::World& world, int score)
 yeniden hesaplar. Bir UI Component'ini referansla yazan kod, `Hierarchy`'de olduğu gibi sonrasında
 `world.markChanged<T>()` çağırır; bir Entity oluşturmak ya da Component eklemek kendini duyurur.
 
+## Düğmeler, anahtarlar ve kaydırıcılar {#buttons-toggles-and-sliders}
+
+`UiButton`, `UiToggle` veya `UiSlider` ile birlikte `UiInteractable` (`illusion/ui/UiWidgets.hpp`), bir öğenin
+`ui.navigate`, `ui.submit` ve `ui.cancel` action'ları üzerinden fareye, klavyeye ve gamepad'lere tepki vermesini sağlar
+([Input ve odak](#input-and-focus)). Bir widget; görünümünü veren bir `UiImage`, bir `UiInteractable` ve üç widget
+Component'inden biriyle donatılmış bir elemandır; hepsi `UiElement` ister, widget Component'leri ise
+`UiInteractable` ister.
+
+### UiInteractable
+
+Bir elemanı üzerine gelinebilir, basılabilir ve odaklanabilir yapar. Geçerli durumunun tint'i, elemanın
+`UiImage` tint'iyle çarpılır:
+
+| Alan | Anlamı |
+| --- | --- |
+| `enabled` | Varsayılan olarak açık. Devre dışı bir eleman input'u yok sayar, odaklanamaz ve `disabledTint` gösterir |
+| `focusable` | Varsayılan olarak açık. Klavye ve gamepad'lerle gezinerek erişilebilir; işaretçi yine de ona basabilir |
+| `hoveredTint` | İşaretçinin altında (varsayılan 1,15, 1,15, 1,15, 1) |
+| `pressedTint` | İşaretçi ya da submit tarafından basılı tutulurken (varsayılan 0,8, 0,8, 0,8, 1) |
+| `focusedTint` | Gezinmeyle odaklanmışken (varsayılan 1,15, 1,15, 1,15, 1) |
+| `disabledTint` | `enabled` kapalıyken (varsayılan 0,5, 0,5, 0,5, 0,5) |
+| `up`, `down`, `left`, `right` | Gezinme için açık komşular: o yönde odağı alacak Entity |
+
+Durumların bir önceliği vardır: önce devre dışı, sonra basılı, sonra odaklı, sonra üzerine gelinmiş; hiçbirinde
+olmayan eleman boyanmaz. Boş olan ya da odağı alamayan bir komşu, o yöndeki en yakın odaklanabilir elemana
+düşer ([Input ve odak](#input-and-focus)). Runtime Component'i `UiInteraction` (`hovered`, `pressed`,
+`focused`) her etkileşimli elemana eklenir ve UI tarafından her karede yazılır.
+
+### UiButton
+
+Bir tag'dir. Düğme etkinleştirildiğinde `Clicked` olayını bildirir: işaretçi üzerinde basılıp bırakılır ya da
+odaktayken `ui.submit` basılıp bırakılır.
+
+### UiToggle
+
+Etkinleştirmenin değiştirdiği bir değer, `on`. Anahtarın **ilk çocuğu** yalnızca anahtar açıkken gösterilir:
+onu onay işareti yapın. Gizliyken işaretçi tarafından da vurulmaz. Değerin değişmesi, 1 (açık) ya da 0 (kapalı)
+değeriyle bir `ValueChanged` olayı bildirir.
+
+### UiSlider
+
+Bir aralıkta, sürükleyerek ya da ekseni boyunca gezinerek değişen bir değer:
+
+| Alan | Anlamı |
+| --- | --- |
+| `value` | Değer; `min` ile `max` arasında tutulur |
+| `min` | Solda (ya da üstte) değer |
+| `max` | Sağda (ya da altta) değer |
+| `step` | Değerler `min`'den başlayarak bunun katlarına oturur; 0 (varsayılan) sürekli demektir |
+| `axis` | `Horizontal` (varsayılan) veya `Vertical` |
+| `navigationStep` | Bir gezinme basışının aralığa oranı olarak değişimi; `step` 0 iken kullanılır (varsayılan 0,1) |
+
+Kaydırıcı iki çocuğu yerleştirir. **İlk çocuğu** dolgudur: kaydırıcının başından değere kadar uzatılır.
+**İkinci çocuğu** tutamaçtır: eksen boyunca değerin üzerine ortalanır ve kendi placement'ının boyutunu ve çapraz
+eksendeki konumunu korur. İkiden sonraki çocuklar sıradan elemanlardır. Sürükleme, değeri işaretçinin kaydırıcı
+boyunca konumundan belirler; düğme basılıyken işaretçi kaydırıcıdan çıksa da sürer.
+
+## Input ve odak {#input-and-focus}
+
+UI, işaretçiyi ve üç input action'ını okur. `GameSession` bunları Play modunda her update'te doldurur
+(`UiWidgets.hpp` içindeki `UiInput`; testler elle doldurup `UiWorld::update(frame, input)` çağırır).
+
+**İşaretçi.** İşaretçi, altındaki en üstteki etkin etkileşimli elemana vurur:
+
+- Sonraki canvas'lar (daha yüksek `order`), hiyerarşide sonraki düğümler ve sonraki kardeşler üsttedir.
+- Vurma testi her elemanın dönmesini ve ölçeğini izler; `clipChildren` taşıyan bir atanın dikdörtgeninin dışındaki
+  nokta, onun altındaki hiçbir şeye vurmaz.
+- `opacity` değeri 0 olan elemanlara, gizli bir anahtar çocuğunun altındakilere ve devre dışı elemanlara vurulmaz;
+  devre dışı bir düğme işaretçinin arkasındaki elemana ulaşmasına izin verir. `UiInteractable`'sız elemanlar
+  (düz bir görüntü) işaretçiyi asla engellemez.
+- Pencerenin odağı yoksa ya da imleç hedefin dışındaysa veya yakalanmışsa işaretçi yoktur; o zaman hiçbir şeyin
+  üzerine gelinmez.
+
+Birincil düğmeyi bir elemanın üzerinde basmak ona basar ve odaklanabiliyorsa odağı verir (değeri 0 olan bir
+`FocusChanged` olayı). Aynı elemanın üzerinde bırakmak onu etkinleştirir. Basılan bir kaydırıcı, düğme
+bırakılana kadar işaretçiyi izler.
+
+**Action'lar.** Projenin input Asset'inde yoksa `GameSession::create` bu action'ları varsayılan atamalarla ekler:
+
+| Action | Tür | Varsayılan atamalar |
+| --- | --- | --- |
+| `ui.navigate` | `Vector2` | `Keys.Up.Down.Left.Right`, `Keys.W.S.A.D`, `Stick.Left`, `Stick.DPad` |
+| `ui.submit` | `Button` | `Key.Enter`, `Key.Space`, `Gamepad.South` |
+| `ui.cancel` | `Button` | `Key.Escape`, `Gamepad.East` |
+
+Bunlar sıradan action'lardır: diğerleri gibi yeniden atayın ([Input action'ları](actions.md#yeniden-atama)) ya da
+projenizin input Asset'inde başka atamalarla tanımlayın; Asset'te zaten bulunan bir action değiştirilmez.
+Showcase projesinin `assets/input/showcase.input` dosyası bir örnektir.
+
+**Gezinme.** `ui.navigate` değerinin 0,5'i aşan sapması bir yön sayılır; büyük eksen kazanır. Odak, yön başladığında
+bir kez hareket eder; yön basılı tutuldukça 0,4 saniye sonra başlayarak her 0,12 saniyede tekrarlar. Hiçbir şey
+odakta değilken ilk hareket (ya da ilk `ui.submit`), odaklanabilen en üstteki canvas'ta hiyerarşi sırasındaki
+ilk odaklanabilir elemanı odaklar. Aksi halde odak, odaktaki elemanın o yöndeki açık komşusuna gider; yoksa (ya da
+odağı alamayan bir komşu varsa) merkezi o yönde en yakın olan odaklanabilir elemana gider. Odaktaki bir kaydırıcı,
+ekseni boyunca olan yönleri kendisi alır: değerini `step` kadar, `step` 0 ise aralığın `navigationStep` oranı kadar
+değiştirir (sağ ve aşağı artırır); diğer yönler odağı ondan uzaklaştırır.
+
+**Submit ve cancel.** `ui.submit` basılı tutulduğu sürece odaktaki elemana basar ve odak hâlâ o elemandayken
+bırakılınca onu etkinleştirir. `ui.cancel`, basıldığı karede bir `Cancelled` olayı bildirir; Entity'si odaktaki
+elemanın canvas'ıdır, hiçbir şey odakta değilse modal canvas'tır. UI bunun dışında bir şey yapmaz: menüyü
+kapatmak oyunun kararıdır.
+
+`UiWorld::focused()` odaktaki elemanı verir, `setFocus()` onu ayarlar (örneğin yeni açtığınız menünün ilk düğmesine
+odaklanmak için); kaldırılan, devre dışı bırakılan, gizlenen ya da artık odaklanamayan bir elemandaki odak bırakılır.
+
+## Modal canvas'lar {#modal-canvases}
+
+`UiCanvas::modal`, bir duraklatma menüsü ya da diyalog içindir. Modal bir canvas en az bir eleman gösterdiği sürece
+(etkindir ve üzerinde bir eleman yerleştirilmiştir):
+
+- İşaretçi yalnızca bu canvas'a ve üstündeki canvas'lara (daha yüksek `order`) vurabilir ve odak yalnızca onlara
+  gelebilir; altındaki oyunun kendi HUD'ı etkisizdir.
+- Session oyunun input action'larını maskeler: `InputActions::setExclusivePrefix("ui.")` çağırır; böylece yalnızca
+  adı `ui.` ile başlayan action'lar input alır, diğerleri bırakılmış okunur. Menü açıkken modüller hareket,
+  zıplama ya da ateş okumaz.
+
+`UiWorld::modalActive()`, son update'in böyle bir eleman yerleştirip yerleştirmediğini söyler. Maske son UI
+update'ini izler; yani canvas göründükten bir update sonra başlar ve gizlendikten ya da devre dışı bırakıldıktan
+bir update sonra biter. Elemanı olmayan modal bir canvas hiçbir şey yapmaz.
+
+## Olayları okumak {#reading-events}
+
+`UiWorld`'ün `events()` listesi, son update'te olanları sırasıyla verir:
+
+| `UiEventType` | Ne zaman | `value` |
+| --- | --- | --- |
+| `Clicked` | Bir `UiButton` etkinleştirildi | 0 |
+| `ValueChanged` | Bir `UiToggle` ya da `UiSlider` değişti | Yeni değer (anahtar için 0 ya da 1) |
+| `FocusChanged` | Bir eleman odağı aldı | Gezinme taşıdıysa 1, işaretçi taşıdıysa 0 |
+| `Cancelled` | `ui.cancel` basıldı | 0 (`entity` bir canvas ya da null) |
+
+Bunları host kodundan, session'ın update'inden sonra okuyun. Liste bir sonraki update'te değiştirilir; bu yüzden
+her update'te bir kez okuyun:
+
+```cpp
+(*session)->update(frameSeconds);
+for (const illusion::UiEvent& event : (*session)->ui().events())
+{
+    if (event.type == illusion::UiEventType::Clicked && event.entity == startButton)
+    {
+        startGame();
+    }
+    else if (event.type == illusion::UiEventType::ValueChanged && event.entity == volumeSlider)
+    {
+        setVolume(event.value);
+    }
+}
+```
+
+Bir update'te `UiWorldDesc::maxEvents`'i aşan olaylar atılır ve `UiWorldStatistics::droppedEvents` içinde sayılır.
+
+Oyun modülleri olayları henüz almaz: onlar için bir `UiService` sonraki bir pakette gelir. O zamana kadar bir modül
+durumu kendi World'ünden okur: `UiToggle::on` ve `UiSlider::value` değiştiklerinde yerinde yazılır ve runtime
+Component'i `UiInteraction`, bir elemanın üzerine gelinip gelinmediğini, basılı ya da odakta olup olmadığını
+söyler. Bir modülde bir düğmeye tepki vermek için Entity'sindeki `UiInteraction::pressed` değerini okuyun.
+
+```cpp
+const illusion::UiSlider& slider = world.get<illusion::UiSlider>(volumeSlider);
+const bool musicOn = world.get<illusion::UiToggle>(musicToggle).on;
+const bool held = world.get<illusion::UiInteraction>(startButton).pressed;
+```
+
 ## Henüz olmayanlar {#what-is-not-there-yet}
 
-Bu paket UI çizer; input'a tepki vermez. Sonraki paketler widget'ları (düğmeler, kaydırıcılar, odak ve gezinme,
-fare ve gamepad'lerden input; `modal` bunu kullanacak), oyun modülleri için `UiService`'i, Scene görünümünde
-canvas editörünü ve geçişleri ile animasyonu ekler. İlk sürümün sınırları
+Bu paket UI çizer ve input'a tepki verir. Sonraki paketler metin alanlarını, kaydırmayı ve düğme glyph'lerini,
+oyun modülleri için `UiService`'i, Scene görünümünde canvas editörünü ve geçişleri ile animasyonu ekler.
+İlk sürümün sınırları
 ([ADR 0057](https://github.com/oguzhanaknc/illusion/blob/main/docs/adr/0057-game-ui.md)):
 
 - Metin shaping olmadan soldan sağa çizilir: Arapça, İbranice, Hint yazı sistemleri ve ligatürler

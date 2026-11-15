@@ -445,7 +445,8 @@ int runGame(const PlayerDesc& desc, const PlayerOptions& options, VirtualFileSys
         }
         session.setInputFocus(focused);
         session.keyboardMouse() = window->input();
-        session.setUiFrame({scaledSize(swapchain->size(), settings.render.renderScale)});
+        const UVec2 uiSize = scaledSize(swapchain->size(), settings.render.renderScale);
+        session.setUiFrame({uiSize}, Vec2(uiSize) / glm::max(Vec2(window->size()), Vec2(1.0f)));
         session.update(delta);
         if (options.fixedStep)
         {

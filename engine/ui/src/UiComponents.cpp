@@ -1,6 +1,7 @@
 #include <illusion/ecs/Reflection.hpp>
 #include <illusion/ecs/StructRegistry.hpp>
 #include <illusion/ui/UiComponents.hpp>
+#include <illusion/ui/UiWidgets.hpp>
 #include <illusion/ui/UiWorld.hpp>
 
 #include <array>
@@ -48,6 +49,8 @@ namespace
 {
 
 constexpr std::string_view kRequiresElement[] = {"illusion.UiElement"};
+constexpr std::string_view kRequiresInteractable[] = {"illusion.UiInteractable"};
+constexpr std::string_view kDocsInteraction = "manual/ui.md#buttons-toggles-and-sliders";
 constexpr std::string_view kDocsCanvas = "manual/ui.md#canvases-and-scaling";
 constexpr std::string_view kDocsPlacement = "manual/ui.md#placement";
 constexpr std::string_view kDocsImage = "manual/ui.md#images";
@@ -198,6 +201,80 @@ void registerUiComponents()
         .field("padding", &UiGrid::padding);
     reflectRuntime<UiComputedRect>("illusion.UiComputedRect", {.displayName = "UI computed rectangle"},
                                    registry);
+
+    reflect<UiInteractable>("illusion.UiInteractable", 1, registry)
+        .meta({.displayName = "UI interactable",
+               .category = "UI",
+               .icon = "touch_app",
+               .description = "Makes an element react to the pointer, the keyboard and gamepads.",
+               .docsAnchor = kDocsInteraction,
+               .requiredComponents = kRequiresElement})
+        .field("enabled", &UiInteractable::enabled,
+               {.description = "A disabled element ignores input and cannot be focused."})
+        .field("focusable", &UiInteractable::focusable,
+               {.description = "Reachable by navigation with the keyboard and gamepads."})
+        .field("hoveredTint", &UiInteractable::hoveredTint,
+               {.description = "Multiplies the image's tint under the pointer.",
+                .min = 0.0,
+                .softMax = 2.0,
+                .hint = FieldHint::Color})
+        .field("pressedTint", &UiInteractable::pressedTint,
+               {.description = "Multiplies the image's tint while pressed.",
+                .min = 0.0,
+                .softMax = 2.0,
+                .hint = FieldHint::Color})
+        .field("focusedTint", &UiInteractable::focusedTint,
+               {.description = "Multiplies the image's tint while focused.",
+                .min = 0.0,
+                .softMax = 2.0,
+                .hint = FieldHint::Color})
+        .field("disabledTint", &UiInteractable::disabledTint,
+               {.description = "Multiplies the image's tint while disabled.",
+                .min = 0.0,
+                .softMax = 2.0,
+                .hint = FieldHint::Color})
+        .field("up", &UiInteractable::up,
+               {.description = "Focused by navigating up; none picks the nearest element above."})
+        .field("down", &UiInteractable::down,
+               {.description = "Focused by navigating down; none picks the nearest element below."})
+        .field("left", &UiInteractable::left,
+               {.description = "Focused by navigating left; none picks the nearest element there."})
+        .field("right", &UiInteractable::right,
+               {.description = "Focused by navigating right; none picks the nearest element there."});
+    reflect<UiButton>("illusion.UiButton", 1, registry)
+        .meta({.displayName = "UI button",
+               .category = "UI",
+               .icon = "smart_button",
+               .description = "Reports a click when the element is activated.",
+               .docsAnchor = kDocsInteraction,
+               .requiredComponents = kRequiresInteractable});
+    reflect<UiToggle>("illusion.UiToggle", 1, registry)
+        .meta({.displayName = "UI toggle",
+               .category = "UI",
+               .icon = "toggle_on",
+               .description = "A value that activation switches; the first child shows while it is on.",
+               .docsAnchor = kDocsInteraction,
+               .requiredComponents = kRequiresInteractable})
+        .field("on", &UiToggle::on, {.description = "The value."});
+    reflect<UiSlider>("illusion.UiSlider", 1, registry)
+        .meta({.displayName = "UI slider",
+               .category = "UI",
+               .icon = "linear_scale",
+               .description = "A value in a range; the first child is the fill, the second the handle.",
+               .docsAnchor = kDocsInteraction,
+               .requiredComponents = kRequiresInteractable})
+        .field("value", &UiSlider::value, {.description = "The value, kept between min and max."})
+        .field("min", &UiSlider::min, {.description = "Value at the left or top."})
+        .field("max", &UiSlider::max, {.description = "Value at the right or bottom."})
+        .field("step", &UiSlider::step,
+               {.description = "Values snap to multiples of it from min; 0 is continuous.", .min = 0.0})
+        .field("axis", &UiSlider::axis)
+        .field("navigationStep", &UiSlider::navigationStep,
+               {.description = "Change per navigation press as a fraction of the range, when step is 0.",
+                .min = 0.0,
+                .max = 1.0,
+                .hint = FieldHint::Slider});
+    reflectRuntime<UiInteraction>("illusion.UiInteraction", {.displayName = "UI interaction"}, registry);
 }
 
 } // namespace illusion

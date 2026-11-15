@@ -187,6 +187,7 @@ TEST_CASE("bindings round-trip through text")
         InputBinding::gamepadAxis(GamepadAxis::LeftY, -1.0f),
         InputBinding::gamepadAxis(GamepadAxis::RightTrigger, 0.5f),
         InputBinding::gamepadStick(GamepadStick::Right),
+        InputBinding::gamepadStick(GamepadStick::DPad),
         InputBinding::keyVector(Key::Up, Key::Down, Key::Left, Key::Right),
         InputBinding::mouseMotion(),
         InputBinding::mouseMotion(0.0025f),
@@ -203,6 +204,7 @@ TEST_CASE("bindings round-trip through text")
     CHECK(bindingToString(InputBinding::gamepadAxis(GamepadAxis::LeftY, -1.0f)) == "Axis.LeftY*-1");
     CHECK(bindingToString(InputBinding::mouseMotion(0.5f)) == "Mouse.Motion*0.5");
     CHECK(bindingToString(InputBinding::mouseScroll()) == "Mouse.Scroll");
+    CHECK(bindingToString(InputBinding::gamepadStick(GamepadStick::DPad)) == "Stick.DPad");
     for (const char* bad : {"", "Key", "Key.NotAKey", "Gamepad.Jump", "Axis.LeftX*abc", "Axis.LeftX*0",
                             "Keys.W.S.A", "Stick.Middle", "Key.Unknown", "Mouse.Wheel"})
     {
@@ -283,6 +285,61 @@ TEST_CASE("glyphs follow the controller family")
     CHECK(glyphId(InputBinding::mouseButton(MouseButton::Left), GamepadFamily::Xbox) == "mouse_left");
     CHECK(glyphId(InputBinding::gamepadStick(GamepadStick::Right), GamepadFamily::PlayStation) ==
           "ps_right_stick");
+    const InputBinding dpad = InputBinding::gamepadStick(GamepadStick::DPad);
+    CHECK(glyphId(dpad, GamepadFamily::Xbox) == "xbox_dpad");
+    CHECK(glyphId(dpad, GamepadFamily::Generic) == "gamepad_dpad");
+    CHECK(glyphLabel(dpad, GamepadFamily::Nintendo) == "D-Pad");
+    CHECK(glyphLabelKey(dpad, GamepadFamily::PlayStation).english() == "D-Pad");
+    CHECK(glyphLabelKey(dpad, GamepadFamily::PlayStation).name() == "input.glyph.ps_dpad");
+}
+
+TEST_CASE("the D-pad drives vector actions as a stick")
+{
+    Fixture f;
+    const ActionId navigate = f.actions.addAction("Navigate", ActionType::Vector2);
+    f.actions.addBinding(navigate, InputBinding::gamepadStick(GamepadStick::DPad));
+    f.pad.setButton(GamepadButton::DPadUp, true);
+    f.frame();
+    CHECK(f.actions.vector(navigate) == Vec2(0.0f, 1.0f));
+    CHECK(f.actions.wasPressed(navigate));
+    f.pad.setButton(GamepadButton::DPadLeft, true);
+    f.frame();
+    CHECK(f.actions.vector(navigate).x < 0.0f);
+    CHECK(glm::length(f.actions.vector(navigate)) == doctest::Approx(1.0));
+    f.pad.setButton(GamepadButton::DPadUp, false);
+    f.pad.setButton(GamepadButton::DPadLeft, false);
+    f.pad.setButton(GamepadButton::DPadDown, true);
+    f.pad.setButton(GamepadButton::DPadRight, true);
+    f.frame();
+    CHECK(f.actions.vector(navigate).x > 0.0f);
+    CHECK(f.actions.vector(navigate).y < 0.0f);
+}
+
+TEST_CASE("an exclusive prefix gives input only to the actions whose names start with it")
+{
+    Fixture f;
+    const ActionId jump = f.actions.addAction("Jump", ActionType::Button);
+    const ActionId submit = f.actions.addAction("ui.submit", ActionType::Button);
+    f.actions.addBinding(jump, InputBinding::key(Key::Space));
+    f.actions.addBinding(submit, InputBinding::key(Key::Space));
+    f.keyboard.setKey(Key::Space, true);
+    f.frame();
+    CHECK(f.actions.isDown(jump));
+    CHECK(f.actions.isDown(submit));
+    CHECK(f.actions.exclusivePrefix().empty());
+
+    f.actions.setExclusivePrefix("ui.");
+    CHECK(f.actions.exclusivePrefix() == "ui.");
+    f.frame();
+    CHECK_FALSE(f.actions.isDown(jump));
+    CHECK(f.actions.wasReleased(jump)); // the game sees its key let go
+    CHECK(f.actions.isDown(submit));
+    CHECK_FALSE(f.actions.wasPressed(submit));
+
+    f.actions.setExclusivePrefix({});
+    f.frame();
+    CHECK(f.actions.isDown(jump));
+    CHECK(f.actions.wasPressed(jump));
 }
 
 TEST_CASE("BindingCapture ignores inputs held when it starts and returns the next one")

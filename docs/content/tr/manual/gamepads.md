@@ -54,6 +54,9 @@ kontrolcülerinde B'dir. Doğru sembolü göstermek için [glyph'leri](actions.m
 | `trigger(GamepadTrigger::Right)` | 0-1 | ölü bölge 0.05 |
 | `axis(GamepadAxis::LeftX)` | -1-1 | ölü bölge uygulanmamış ham değer |
 
+`stick(GamepadStick::DPad)`, dört D-pad düğmesini bir stick olarak okur: dijitaldir, +y yukarı; herhangi biri
+basılıyken uzunluk 1'dir ve çaprazlar normalize edilir. Onu `Stick.DPad` olarak bir `Vector2` action'ına atayın.
+
 `isDown`, `wasPressed` ve `wasReleased` klavye tuşları gibi çalışır. Ölü bölgeleri her gamepad için
 `state().setStickDeadZone()` ve `setTriggerDeadZone()` ile değiştirin.
 

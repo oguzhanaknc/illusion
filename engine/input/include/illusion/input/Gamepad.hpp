@@ -102,6 +102,7 @@ enum class GamepadStick : u8
 {
     Left,  ///< Left stick.
     Right, ///< Right stick.
+    DPad,  ///< The four D-pad buttons as a stick: digital, normalised on the diagonals.
 };
 
 /// One of the two triggers.
@@ -159,7 +160,8 @@ public:
     [[nodiscard]] f32 axis(GamepadAxis axis) const noexcept { return m_axes[static_cast<usize>(axis)]; }
 
     /// Stick position with a radial dead zone applied and the remaining range rescaled to [0, 1]
-    /// magnitude, so small drift reads as exactly zero and full deflection as length 1.
+    /// magnitude, so small drift reads as exactly zero and full deflection as length 1. GamepadStick::DPad
+    /// reads the held D-pad buttons (+y up), length 1 when any is held.
     [[nodiscard]] Vec2 stick(GamepadStick stick) const noexcept;
 
     /// Trigger value in [0, 1] with the trigger dead zone applied and rescaled.

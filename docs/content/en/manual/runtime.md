@@ -61,11 +61,11 @@ Every `update(deltaSeconds)` runs:
 
 | Step | What happens |
 | --- | --- |
-| 1. Input | The `InputActions` read `keyboardMouse()` and the gamepads |
+| 1. Input | The `InputActions` read `keyboardMouse()` and the gamepads; while the last update showed a modal canvas, only the `ui.*` actions get input |
 | 2. Modules | `ModuleHost::update()` on the World; then Entities created without an `EntityGuid` get one |
 | 3. Physics | `PhysicsWorld::update()`: bodies sync with the World, step and write their Transforms |
 | 4. Hierarchy | `updateTransformHierarchy()`: children follow their parents, `Disabled` becomes `Inactive` |
-| 5. UI | `UiWorld` lays out the UI Entities for the frame of `setUiFrame()` and records the draw list (`ui()`), see [Game UI](ui.md) |
+| 5. UI | `UiWorld` lays out the UI Entities for the frame of `setUiFrame()`, handles the pointer and the actions `ui.navigate`, `ui.submit` and `ui.cancel` (Play mode), and records the draw list (`ui()`), see [Game UI](ui.md) |
 | 6. Particles and audio | `ParticleWorld::update()` and `AudioWorld::update()`: sources follow their Entities, the listener moves |
 | 7. Resolvers | Asset references become runtime Components (`Collider` meshes, `MeshRenderer` → `RenderMesh`) |
 
@@ -95,6 +95,16 @@ The game sees the keyboard and mouse that the host writes into `keyboardMouse()`
 player, a viewport-local copy in the editor's Game view, or injected keys in a test. `setInputFocus(false)`
 hides both the keyboard and the gamepads from the actions, so held actions are released; with
 `InputSettings::gamepadsInBackground` gamepads still reach the game without the focus.
+
+The UI reads the same input ([Input and focus](ui.md#input-and-focus)). `create()` adds the actions `ui.navigate`,
+`ui.submit` and `ui.cancel` with default bindings when the project's input asset lacks them. While the last
+update showed an element on a modal canvas ([Modal canvases](ui.md#modal-canvases)), the session calls
+`InputActions::setExclusivePrefix("ui.")` so that every other action reads as released, and clears it when
+the canvas is gone.
+
+The pointer is the cursor of `keyboardMouse()` times the `pointerScale` of `setUiFrame(frame, pointerScale)`,
+in the pixels of the frame. The player passes the frame's size over the window's size; the editor's Game view
+writes the cursor in the pixels of its image and passes 1. Without the input focus the UI sees no pointer.
 
 ## Project settings
 

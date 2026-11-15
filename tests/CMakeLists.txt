@@ -89,6 +89,7 @@ add_executable(illusion_tests
     text/TestUtf8.cpp
     ui/TestUiDrawList.cpp
     ui/TestUiGeometry.cpp
+    ui/TestUiInteraction.cpp
     ui/TestUiWorld.cpp)
 
 # The render library's internal policies are tested directly (render/TestTextureStreamingPolicy.cpp), as is

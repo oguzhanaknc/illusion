@@ -31,10 +31,12 @@
 #include <illusion/text/MessageFormat.hpp>
 #include <illusion/text/TextOutput.hpp>
 #include <illusion/ui/UiComponents.hpp>
+#include <illusion/ui/UiWidgets.hpp>
 #include <illusion/ui/UiWorld.hpp>
 
 #include <doctest/doctest.h>
 
+#include <algorithm>
 #include <array>
 #include <span>
 #include <string>
@@ -152,6 +154,50 @@ void writeActions(VirtualFileSystem& files, std::string_view path)
     actions.addBinding(move, InputBinding::keyVector(Key::W, Key::S, Key::A, Key::D));
     REQUIRE(files.writeText(path, writeInputActions(actions)) == FileError::None);
 }
+
+// A menu of two buttons, one above the other, on a full-screen canvas of the session's World.
+struct SessionMenu
+{
+    explicit SessionMenu(GameSession& game, bool modal = false)
+        : session(game)
+    {
+        registerUiComponents();
+        UiCanvas settings;
+        settings.useSafeArea = false;
+        settings.modal = modal;
+        canvas = session.world().create(settings);
+        start = button({800.0f, 400.0f}, {1100.0f, 480.0f});
+        quit = button({800.0f, 500.0f}, {1100.0f, 580.0f});
+        session.setUiFrame({{1920, 1080}});
+    }
+
+    Entity button(Vec2 min, Vec2 max)
+    {
+        UiElement element;
+        element.placement.offsetMin = min;
+        element.placement.offsetMax = max;
+        const Entity entity = session.world().create(element, UiImage{}, UiInteractable{}, UiButton{});
+        REQUIRE(setParent(session.world(), entity, canvas).hasValue());
+        return entity;
+    }
+
+    [[nodiscard]] bool clicked(Entity entity) const
+    {
+        for (const UiEvent& event : session.ui().events())
+        {
+            if (event.type == UiEventType::Clicked && event.entity == entity)
+            {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    GameSession& session;
+    Entity canvas{};
+    Entity start{};
+    Entity quit{};
+};
 
 } // namespace
 
@@ -382,7 +428,7 @@ TEST_CASE("injected keys drive the actions of the project's input asset while th
     auto session = f.create();
     session->start();
     InputActions& actions = session->actions();
-    REQUIRE(actions.actionCount() == 2);
+    REQUIRE(actions.actionCount() == 5); // and the three ui.* actions
     const ActionId jump = *actions.findAction("Jump");
     const ActionId move = *actions.findAction("Move");
 
@@ -572,4 +618,162 @@ TEST_CASE("a game session without locale files has no game strings")
     Fixture f;
     auto session = f.create();
     CHECK(session->localization().find("game.title") == nullptr);
+}
+
+TEST_CASE("a game session adds the ui actions with default bindings when its input asset lacks them")
+{
+    Fixture f;
+    InputActions own;
+    const ActionId submit = own.addAction(kUiSubmitAction, ActionType::Button);
+    own.addBinding(submit, InputBinding::key(Key::F));
+    REQUIRE(f.files.writeText("assets:/game.input", writeInputActions(own)) == FileError::None);
+    f.desc.settings.input.actions = AssetRef("assets:/game.input");
+    auto session = f.create();
+    InputActions& actions = session->actions();
+    REQUIRE(actions.actionCount() == 3);
+    const std::span<const InputBinding> kept = actions.bindings(*actions.findAction(kUiSubmitAction));
+    REQUIRE(kept.size() == 1); // the project's own bindings stay
+    CHECK(kept[0] == InputBinding::key(Key::F));
+
+    const ActionId navigate = *actions.findAction(kUiNavigateAction);
+    CHECK(actions.actionType(navigate) == ActionType::Vector2);
+    const std::span<const InputBinding> moves = actions.bindings(navigate);
+    CHECK(std::ranges::find(moves, InputBinding::keyVector(Key::Up, Key::Down, Key::Left, Key::Right)) !=
+          moves.end());
+    CHECK(std::ranges::find(moves, InputBinding::keyVector(Key::W, Key::S, Key::A, Key::D)) != moves.end());
+    CHECK(std::ranges::find(moves, InputBinding::gamepadStick(GamepadStick::Left)) != moves.end());
+    CHECK(std::ranges::find(moves, InputBinding::gamepadStick(GamepadStick::DPad)) != moves.end());
+    const std::span<const InputBinding> cancels = actions.bindings(*actions.findAction(kUiCancelAction));
+    CHECK(std::ranges::find(cancels, InputBinding::key(Key::Escape)) != cancels.end());
+    CHECK(std::ranges::find(cancels, InputBinding::gamepadButton(GamepadButton::East)) != cancels.end());
+
+    Fixture empty;
+    auto bare = empty.create();
+    const ActionId defaultSubmit = *bare->actions().findAction(kUiSubmitAction);
+    CHECK(bare->actions().bindings(defaultSubmit).size() == 3);
+}
+
+TEST_CASE("a headless game session drives a menu with the keyboard")
+{
+    Fixture f;
+    auto session = f.create();
+    SessionMenu menu(*session);
+    InputState& keys = session->keyboardMouse();
+    session->update(kStep);
+    CHECK(session->ui().focused().isNull());
+
+    keys.setKey(Key::Down, true);
+    session->update(kStep);
+    CHECK(session->ui().focused() == menu.start); // the first navigation focuses the first button
+    keys.setKey(Key::Down, false);
+    session->update(kStep);
+    keys.setKey(Key::S, true);
+    session->update(kStep);
+    CHECK(session->ui().focused() == menu.quit);
+    keys.setKey(Key::S, false);
+    session->update(kStep);
+
+    keys.setKey(Key::Enter, true);
+    session->update(kStep);
+    CHECK(session->world().get<UiInteraction>(menu.quit).pressed);
+    keys.setKey(Key::Enter, false);
+    session->update(kStep);
+    CHECK(menu.clicked(menu.quit));
+
+    keys.setKey(Key::Escape, true);
+    session->update(kStep);
+    REQUIRE(session->ui().events().size() == 1);
+    CHECK(session->ui().events()[0].type == UiEventType::Cancelled);
+    CHECK(session->ui().events()[0].entity == menu.canvas);
+}
+
+TEST_CASE("a headless game session drives a menu with the mouse")
+{
+    Fixture f;
+    auto session = f.create();
+    SessionMenu menu(*session);
+    InputState& mouse = session->keyboardMouse();
+    mouse.setMousePosition({900.0f, 540.0f});
+    session->update(kStep);
+    CHECK(session->world().get<UiInteraction>(menu.quit).hovered);
+    mouse.setMouseButton(MouseButton::Left, true);
+    session->update(kStep);
+    mouse.setMouseButton(MouseButton::Left, false);
+    session->update(kStep);
+    CHECK(menu.clicked(menu.quit));
+
+    // A host whose window is twice the size of the UI frame scales the cursor.
+    session->setUiFrame({{1920, 1080}}, Vec2(0.5f));
+    mouse.setMousePosition({1800.0f, 880.0f});
+    session->update(kStep);
+    CHECK(session->world().get<UiInteraction>(menu.start).hovered);
+
+    // Without the focus the pointer is not there.
+    session->setInputFocus(false);
+    session->update(kStep);
+    CHECK_FALSE(session->world().get<UiInteraction>(menu.start).hovered);
+}
+
+TEST_CASE("a headless game session drives a menu with a virtual gamepad")
+{
+    Fixture f;
+    auto gamepads = GamepadSystem::create();
+    REQUIRE(gamepads != nullptr);
+    f.desc.gamepads = gamepads.get();
+    auto pad = gamepads->attachVirtualGamepad();
+    REQUIRE(pad != nullptr);
+    const auto updateUntil = [&](auto predicate) {
+        for (int i = 0; i < 10 && !predicate(); ++i)
+        {
+            gamepads->update();
+        }
+        return predicate();
+    };
+    REQUIRE(updateUntil([&] { return gamepads->find(pad->id()) != nullptr; }));
+    const auto hold = [&](GamepadButton button, bool down) {
+        pad->setButton(button, down);
+        REQUIRE(updateUntil([&] { return gamepads->find(pad->id())->state().isDown(button) == down; }));
+    };
+    auto session = f.create();
+    SessionMenu menu(*session);
+
+    hold(GamepadButton::DPadDown, true);
+    session->update(kStep);
+    CHECK(session->ui().focused() == menu.start);
+    hold(GamepadButton::DPadDown, false);
+    session->update(kStep);
+    hold(GamepadButton::DPadDown, true);
+    session->update(kStep);
+    CHECK(session->ui().focused() == menu.quit);
+    hold(GamepadButton::DPadDown, false);
+    hold(GamepadButton::South, true);
+    session->update(kStep);
+    hold(GamepadButton::South, false);
+    session->update(kStep);
+    CHECK(menu.clicked(menu.quit));
+}
+
+TEST_CASE("while a modal canvas is shown the game's other actions see no input")
+{
+    Fixture f;
+    writeActions(f.files, "assets:/game.input");
+    f.desc.settings.input.actions = AssetRef("assets:/game.input");
+    auto session = f.create();
+    SessionMenu menu(*session, true);
+    const ActionId jump = *session->actions().findAction("Jump");
+    const ActionId submit = *session->actions().findAction(kUiSubmitAction);
+    session->keyboardMouse().setKey(Key::Space, true);
+    session->update(kStep); // the first UI update shows the modal canvas
+    CHECK(session->ui().modalActive());
+    CHECK(session->actions().isDown(jump));
+    session->update(kStep);
+    CHECK_FALSE(session->actions().isDown(jump));
+    CHECK(session->actions().isDown(submit));
+
+    setEnabled(session->world(), menu.canvas, false);
+    session->update(kStep); // the canvas goes away in this UI update
+    CHECK_FALSE(session->ui().modalActive());
+    session->update(kStep);
+    CHECK(session->actions().isDown(jump));
+    CHECK(session->actions().wasPressed(jump));
 }
