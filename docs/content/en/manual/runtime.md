@@ -104,6 +104,11 @@ update showed an element on a modal canvas ([Modal canvases](ui.md#modal-canvase
 `InputActions::setExclusivePrefix("ui.")` so that every other action reads as released, and clears it when
 the canvas is gone.
 
+While the last update left a `UiTextField` with the focus ([Text fields](ui.md#text-fields-scrolling-and-glyphs)),
+the keyboard edits it: the keyboard bindings of `ui.navigate` and `ui.submit` are ignored so that the letters
+bound to them are typed, only their gamepad bindings count, `ui.cancel` keeps all of its bindings, and every
+other action reads as released.
+
 The pointer is the cursor of `keyboardMouse()` times the `pointerScale` of `setUiFrame(frame, pointerScale)`,
 in the pixels of the frame. The player passes the frame's size over the window's size; the editor's Game view
 writes the cursor in the pixels of its image and passes 1. Without the input focus the UI sees no pointer.

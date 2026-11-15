@@ -1,3 +1,4 @@
+#include "FontTestSupport.hpp"
 #include "TestSupport.hpp"
 #include "physics/PhysicsTestSupport.hpp"
 
@@ -31,6 +32,7 @@
 #include <illusion/text/MessageFormat.hpp>
 #include <illusion/text/TextOutput.hpp>
 #include <illusion/ui/UiComponents.hpp>
+#include <illusion/ui/UiDrawList.hpp>
 #include <illusion/ui/UiService.hpp>
 #include <illusion/ui/UiWidgets.hpp>
 #include <illusion/ui/UiWorld.hpp>
@@ -41,6 +43,8 @@
 #include <array>
 #include <span>
 #include <string>
+#include <string_view>
+#include <utility>
 
 using namespace illusion;
 using test::at;
@@ -885,4 +889,207 @@ TEST_CASE("a game session reports that a module asked to end the game")
     CHECK(session->exitRequested());
     session->update(kStep); // the host decides what happens; the request stays
     CHECK(session->exitRequested());
+}
+
+namespace
+{
+
+// A line of text on the left of a full-screen canvas: a text field, a glyph, or a button below it.
+struct SessionForm
+{
+    explicit SessionForm(GameSession& game)
+        : session(game)
+    {
+        registerUiComponents();
+        UiCanvas settings;
+        settings.useSafeArea = false;
+        canvas = session.world().create(settings);
+        session.setUiFrame({{1920, 1080}});
+    }
+
+    template <class... Ts>
+    Entity line(f32 top, Ts&&... components)
+    {
+        UiElement element;
+        element.placement.offsetMin = {100.0f, top};
+        element.placement.offsetMax = {900.0f, top + 50.0f};
+        const Entity entity = session.world().create(element, std::forward<Ts>(components)...);
+        REQUIRE(setParent(session.world(), entity, canvas).hasValue());
+        return entity;
+    }
+
+    [[nodiscard]] u32 count(UiEventType type) const
+    {
+        u32 found = 0;
+        for (const UiEvent& event : session.ui().events())
+        {
+            found += event.type == type ? 1u : 0u;
+        }
+        return found;
+    }
+
+    GameSession& session;
+    Entity canvas{};
+};
+
+// The test font for every font reference.
+class SessionUiAssets final : public UiAssets
+{
+public:
+    UiFontFace font(const AssetRef&) override { return {&test::testFont(), UiTextureId{1}}; }
+    UiImageSource image(const AssetRef&) override { return {}; }
+};
+
+} // namespace
+
+TEST_CASE("a game session types the keyboard into a focused text field and masks the game's actions")
+{
+    Fixture f;
+    writeActions(f.files, "assets:/game.input");
+    f.desc.settings.input.actions = AssetRef("assets:/game.input");
+    auto session = f.create();
+    SessionForm form(*session);
+    const Entity field = form.line(100.0f, UiText{}, UiInteractable{}, UiTextField{});
+    const Entity below = form.line(200.0f, UiImage{}, UiInteractable{}, UiButton{});
+    const ActionId jump = *session->actions().findAction("Jump");
+    InputState& keys = session->keyboardMouse();
+    session->update(kStep);
+    session->ui().setFocus(field);
+    const auto type = [&](Key key, char32_t character) {
+        keys.setKey(key, true);
+        keys.addText(character);
+        session->update(kStep);
+        keys.setKey(key, false);
+        session->update(kStep);
+    };
+    const auto press = [&](Key key) {
+        keys.setKey(key, true);
+        session->update(kStep);
+        keys.setKey(key, false);
+        session->update(kStep);
+    };
+
+    // A and S are ui.navigate and Move, Space is ui.submit and Jump: while the field has the focus they type.
+    type(Key::A, U'a');
+    keys.setKey(Key::Space, true);
+    keys.addText(U' ');
+    session->update(kStep);
+    CHECK_FALSE(session->actions().isDown(jump));
+    CHECK(form.count(UiEventType::Submitted) == 0);
+    keys.setKey(Key::Space, false);
+    session->update(kStep);
+    type(Key::S, U's');
+    CHECK(session->world().get<UiTextField>(field).text == "a s");
+    CHECK(session->ui().focused() == field);
+
+    // Left moves the caret, Backspace deletes before it and repeats while held.
+    press(Key::Left);
+    type(Key::X, U'x');
+    CHECK(session->world().get<UiTextField>(field).text == "a xs");
+    press(Key::End);
+    for (const char32_t c : std::u32string_view(U"abcdefghij"))
+    {
+        keys.addText(c);
+    }
+    session->update(kStep);
+    REQUIRE(session->world().get<UiTextField>(field).text == "a xsabcdefghij");
+    keys.setKey(Key::Backspace, true);
+    for (int i = 0; i < 36; ++i) // 0.6 s: the press, then repeats after 0.4 s every 0.05 s
+    {
+        session->update(kStep);
+    }
+    keys.setKey(Key::Backspace, false);
+    session->update(kStep);
+    const usize left = session->world().get<UiTextField>(field).text.size();
+    CHECK(left < 14 - 2);
+    CHECK(left > 14 - 8);
+
+    keys.setKey(Key::Enter, true);
+    session->update(kStep);
+    CHECK(form.count(UiEventType::Submitted) == 1);
+    keys.setKey(Key::Enter, false);
+    session->update(kStep);
+    CHECK(session->ui().focused() == field);
+
+    // Down moves the focus to the button; then Space is Jump again.
+    keys.setKey(Key::Down, true);
+    session->update(kStep);
+    keys.setKey(Key::Down, false);
+    CHECK(session->ui().focused() == below);
+    session->update(kStep);
+    keys.setKey(Key::Space, true);
+    session->update(kStep);
+    CHECK(session->actions().isDown(jump));
+}
+
+TEST_CASE("a glyph in a game session shows the binding for the keyboard, then for a gamepad used after it")
+{
+    Fixture f;
+    auto gamepads = GamepadSystem::create();
+    REQUIRE(gamepads != nullptr);
+    f.desc.gamepads = gamepads.get();
+    SessionUiAssets assets;
+    f.desc.uiAssets = &assets;
+    VirtualGamepadDesc padDesc;
+    padDesc.type = GamepadType::PS5;
+    auto pad = gamepads->attachVirtualGamepad(padDesc);
+    REQUIRE(pad != nullptr);
+    const auto updateUntil = [&](auto predicate) {
+        for (int i = 0; i < 10 && !predicate(); ++i)
+        {
+            gamepads->update();
+        }
+        return predicate();
+    };
+    REQUIRE(updateUntil([&] { return gamepads->find(pad->id()) != nullptr; }));
+    auto session = f.create();
+    SessionForm form(*session);
+    UiText label;
+    label.text = "?";
+    label.font = AssetRef("assets:/fonts/test.ttf");
+    UiGlyph glyph;
+    glyph.action = std::string(kUiSubmitAction);
+    const Entity shown = form.line(100.0f, label, glyph);
+
+    // The quads of @p text drawn as the glyph's UiText draws it.
+    const auto drawn = [&](std::string_view text) {
+        UiDrawList list;
+        list.begin(session->ui().drawData().canvas);
+        UiTextStyle style;
+        style.size = label.size;
+        (void)list.text({&test::testFont(), UiTextureId{1}}, {100.0f, 100.0f}, text, style);
+        const UiDrawData expected = list.data();
+        const UiDrawData actual = session->ui().drawData();
+        if (expected.vertices.size() != actual.vertices.size())
+        {
+            return false;
+        }
+        for (usize v = 0; v < expected.vertices.size(); ++v)
+        {
+            if (expected.vertices[v].position != actual.vertices[v].position ||
+                expected.vertices[v].uv != actual.vertices[v].uv)
+            {
+                return false;
+            }
+        }
+        return true;
+    };
+
+    session->keyboardMouse().setKey(Key::Enter, true);
+    session->update(kStep);
+    const std::string keyboard =
+        glyphLabel(InputBinding::key(Key::Enter), GamepadFamily::Generic, session->localization());
+    CHECK(drawn(keyboard));
+    session->keyboardMouse().setKey(Key::Enter, false);
+    session->update(kStep);
+
+    pad->setButton(GamepadButton::South, true);
+    REQUIRE(updateUntil([&] { return gamepads->find(pad->id())->state().isDown(GamepadButton::South); }));
+    session->update(kStep);
+    REQUIRE(session->actions().lastDevice() == InputDevice::Gamepad);
+    const std::string gamepad = glyphLabel(InputBinding::gamepadButton(GamepadButton::South),
+                                           gamepadFamily(GamepadType::PS5), session->localization());
+    CHECK(gamepad != keyboard);
+    CHECK(drawn(gamepad));
+    CHECK(session->world().get<UiText>(shown).text == "?");
 }

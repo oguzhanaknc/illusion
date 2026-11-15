@@ -56,6 +56,9 @@ constexpr std::string_view kDocsPlacement = "manual/ui.md#placement";
 constexpr std::string_view kDocsImage = "manual/ui.md#images";
 constexpr std::string_view kDocsText = "manual/ui.md#text";
 constexpr std::string_view kDocsLayout = "manual/ui.md#stacks-and-grids";
+constexpr std::string_view kDocsFields = "manual/ui.md#text-fields-scrolling-and-glyphs";
+constexpr std::string_view kRequiresText[] = {"illusion.UiText"};
+constexpr std::string_view kRequiresFieldParts[] = {"illusion.UiInteractable", "illusion.UiText"};
 
 } // namespace
 
@@ -274,6 +277,40 @@ void registerUiComponents()
                 .min = 0.0,
                 .max = 1.0,
                 .hint = FieldHint::Slider});
+    reflect<UiTextField>("illusion.UiTextField", 1, registry)
+        .meta({.displayName = "UI text field",
+               .category = "UI",
+               .icon = "edit_note",
+               .description = "A line of text the player edits; its UiText shows it.",
+               .docsAnchor = kDocsFields,
+               .requiredComponents = kRequiresFieldParts})
+        .field("text", &UiTextField::text, {.description = "The value."})
+        .field("placeholder", &UiTextField::placeholder, {.description = "Shown dimmed while text is empty."})
+        .field("maxLength", &UiTextField::maxLength,
+               {.description = "Most characters the player can enter.", .min = 1.0, .max = 1024.0})
+        .field("password", &UiTextField::password, {.description = "Show a bullet for every character."})
+        .field("caretColor", &UiTextField::caretColor, {.min = 0.0, .max = 1.0, .hint = FieldHint::Color});
+    reflect<UiScrollView>("illusion.UiScrollView", 1, registry)
+        .meta({.displayName = "UI scroll view",
+               .category = "UI",
+               .icon = "swap_vert",
+               .description = "Clips its children and scrolls its first child, the content.",
+               .docsAnchor = kDocsFields,
+               .requiredComponents = kRequiresElement})
+        .field("offset", &UiScrollView::offset,
+               {.description = "Distance scrolled in canvas units, kept within the content.", .min = 0.0})
+        .field("horizontal", &UiScrollView::horizontal, {.description = "May scroll horizontally."})
+        .field("vertical", &UiScrollView::vertical, {.description = "May scroll vertically."})
+        .field("wheelStep", &UiScrollView::wheelStep,
+               {.description = "Canvas units per wheel notch.", .min = 0.0, .softMax = 240.0});
+    reflect<UiGlyph>("illusion.UiGlyph", 1, registry)
+        .meta({.displayName = "UI glyph",
+               .category = "UI",
+               .icon = "sports_esports",
+               .description = "Shows how an input action is bound on the device used last.",
+               .docsAnchor = kDocsFields,
+               .requiredComponents = kRequiresText})
+        .field("action", &UiGlyph::action, {.description = "Name of the input action, such as ui.submit."});
     reflectRuntime<UiInteraction>("illusion.UiInteraction", {.displayName = "UI interaction"}, registry);
     reflectRuntime<UiTextArguments>("illusion.UiTextArguments", {.displayName = "UI text arguments"},
                                     registry);

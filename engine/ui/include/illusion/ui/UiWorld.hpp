@@ -21,6 +21,7 @@
 
 #include <memory>
 #include <span>
+#include <string_view>
 
 namespace illusion
 {
@@ -34,8 +35,9 @@ class Localization;
 
 /// Reflects the saved UI Components ("illusion.UiCanvas", "illusion.UiElement", "illusion.UiImage",
 /// "illusion.UiText", "illusion.UiStack", "illusion.UiGrid", "illusion.UiInteractable", "illusion.UiButton",
-/// "illusion.UiToggle", "illusion.UiSlider") and the runtime UiComputedRect, UiInteraction and
-/// UiTextArguments. Safe to call more than once.
+/// "illusion.UiToggle", "illusion.UiSlider", "illusion.UiTextField", "illusion.UiScrollView",
+/// "illusion.UiGlyph") and the runtime UiComputedRect, UiInteraction and UiTextArguments. Safe to call more
+/// than once.
 void registerUiComponents();
 
 /// What @p value becomes on @p slider: snapped to its step from min and kept between min and max, as input
@@ -63,6 +65,23 @@ public:
 protected:
     UiAssets() = default;
     virtual ~UiAssets() = default;
+};
+
+/// Where a UiWorld gets the labels of UiGlyph from, implemented over the input actions by the session or by
+/// a test.
+class UiGlyphSource : NonCopyable
+{
+public:
+    /// The label of the first binding of @p action for the device used last, in the active language; empty
+    /// for an unknown action or one without a binding for that device. Valid until the next call.
+    [[nodiscard]] virtual std::string_view actionLabel(std::string_view action) = 0;
+    /// Changes whenever a label may have changed (the device used last, the bindings, the language); the
+    /// UiWorld asks for labels again only then.
+    [[nodiscard]] virtual u64 version() const noexcept = 0;
+
+protected:
+    UiGlyphSource() = default;
+    virtual ~UiGlyphSource() = default;
 };
 
 /// The target a UiWorld lays out for.
@@ -108,6 +127,18 @@ struct UiWorldStatistics
 /// and the canvases above it can be hit or focused. A UiToggle that is off hides its first child; a UiSlider
 /// places its first child from its start to the value (the fill) and centres its second child on the value
 /// along its axis (the handle keeps the size and cross-axis position of its placement).
+///
+/// A focused UiTextField takes UiInput::text and the caret keys; navigation left and right moves its caret,
+/// up and down move the focus. The caret is run-time state of the UiWorld: it goes to the end when the field
+/// gets the focus or its text is set from outside. A text wider than the field scrolls so that the caret
+/// stays visible, clipped to the element.
+///
+/// A UiScrollView clips its children and moves its first child by its offset. Its descendants that lie
+/// wholly outside the view are neither hit nor recorded, so the draw cost of a long list is bounded by what
+/// is visible; their Entities still exist and are laid out every time the layout runs (there is no
+/// recycling of rows).
+///
+/// A UiGlyph replaces the text its UiText shows with the label from setGlyphs(), without writing UiText.
 class UiWorld : NonCopyable
 {
 public:
@@ -120,6 +151,8 @@ public:
     /// The string tables of UiText::key, formatted with the element's UiTextArguments when it has them;
     /// null (the default) shows the key itself.
     void setLocalization(const text::Localization* localization) noexcept;
+    /// The labels of UiGlyph; null (the default) leaves their UiText as it is.
+    void setGlyphs(UiGlyphSource* glyphs) noexcept;
 
     /// Lays out again at the next update even if no version changed: for code that wrote UI Components
     /// through references without `world.markChanged<T>()`.

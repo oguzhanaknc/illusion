@@ -73,6 +73,11 @@ player.move(actions.vector(move));
 (varsayılan) geri ayarlanana kadar bırakılmış okunur. Modal bir menü bunu `"ui."` ile kullanır; böylece menü
 açıkken oyun hiçbir şey görmez; `GameSession` bunu modal UI canvas'ları için yapar.
 
+`gamepadVector(action)`, yalnızca gamepad binding'lerinden hesaplanan `vector(action)`'dır (`Button` action'ı için
+onlar basılıyken (1, 0)); UI, bir metin alanı klavyeyi alırken bunu kullanır. `bindingsVersion()`, bir action ya da
+binding eklendiğinde, kaldırıldığında veya yeniden adlandırıldığında artar: binding etiketlerini önbelleğe alın ve
+yalnızca değiştiğinde yenileyin.
+
 Birden fazla binding etkin olduğunda en güçlü değer kazanır (bir `Delta` action'ı onları toplar). Bir kare içinde başlayıp biten bir
 dokunuş da `wasPressed` ve `wasReleased` bildirir. Yerel çok oyunculu oyunlarda her oyuncuya kendi
 `InputActions` nesnesini verin ve yalnızca o oyuncunun gamepad'ini geçirin.

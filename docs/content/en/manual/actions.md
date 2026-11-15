@@ -72,6 +72,11 @@ player.move(actions.vector(move));
 released until it is set back to an empty string (the default). A modal menu uses it with `"ui."` so that the
 game sees nothing while the menu is open; the `GameSession` does this for modal UI canvases.
 
+`gamepadVector(action)` is `vector(action)` from the gamepad bindings alone (for a `Button` action it is (1, 0)
+while they hold it); the UI uses it while a text field has the keyboard. `bindingsVersion()` grows whenever an
+action or a binding is added, removed or renamed: cache labels of bindings and refresh them only when it
+changes.
+
 When several bindings are active, the strongest value wins (a `Delta` action adds them up). A tap that starts and ends within one frame
 still reports `wasPressed` and `wasReleased`. For local multiplayer, give each player their own
 `InputActions` and pass only that player's gamepad.

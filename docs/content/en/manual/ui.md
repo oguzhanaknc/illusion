@@ -409,6 +409,8 @@ disabled. A modal canvas with no element does nothing.
 | `ValueChanged` | A `UiToggle` or `UiSlider` changed | The new value (0 or 1 for a toggle) |
 | `FocusChanged` | An element got the focus | 1 when navigation moved it, 0 for the pointer |
 | `Cancelled` | `ui.cancel` was pressed | 0 (`entity` is a canvas, or null) |
+| `TextChanged` | The player edited a `UiTextField` | 0 |
+| `Submitted` | `ui.submit` on a focused `UiTextField` | 0 |
 
 Poll them from host code after the session's update. The list is replaced by the next update, so read it
 once per update:
@@ -600,11 +602,94 @@ ILL_MODULE(pause, kPause)
 While the menu shows, its canvas is modal: the game's other actions read as released, so the module needs no
 check of its own for movement keys ([Modal canvases](#modal-canvases)).
 
+## Text fields, scrolling and glyphs
+
+`UiTextField`, `UiScrollView` and `UiGlyph` (`illusion/ui/UiWidgets.hpp`) are saved Components like the other
+widgets: each needs `UiElement`.
+
+### UiTextField
+
+A line of text the player edits. The Entity needs `UiElement`, `UiInteractable` and a `UiText`, which shows
+`text`, or `placeholder` (dimmed) while `text` is empty; an `UiImage` gives it a background.
+
+| Field | Meaning |
+| --- | --- |
+| `text` | The value, UTF-8 |
+| `placeholder` | Shown while `text` is empty; a literal, not a string table key |
+| `maxLength` | Most code points the player can enter, 1 to 1024 (default 64) |
+| `password` | Shows a bullet for every character (default off) |
+| `caretColor` | Linear RGBA of the caret (default white) |
+
+While the field has the focus, it takes the characters typed that frame. Left, Right, Home and End move the
+caret, Backspace and Delete remove a character, and `ui.submit` reports a `Submitted` event. Navigation left
+and right (the gamepad stick or D-pad) moves the caret instead of the focus; up and down move the focus. The
+caret goes to the end of the text when the field gets the focus or its text is set from outside. A text wider
+than the element scrolls so that the caret stays visible, clipped to the element.
+
+An edit writes `UiTextField::text` and reports a `TextChanged` event with the field's Entity. A module reads
+the value from the Component field and writes it the same way, then calls `UiService::invalidateLayout()`:
+
+```cpp
+// In update(): read the value on Submitted, then clear the field.
+std::array<illusion::UiEvent, 16> events{};
+const illusion::u32 count = std::min<illusion::u32>(ui->pollEvents(events), static_cast<illusion::u32>(events.size()));
+for (const illusion::UiEvent& event : std::span(events).first(count))
+{
+    if (event.type == illusion::UiEventType::Submitted)
+    {
+        illusion::UiTextField& field = context.world().get<illusion::UiTextField>(event.entity);
+        const std::string submitted = field.text;
+        field.text.clear();
+        ui->invalidateLayout();
+    }
+}
+```
+
+**Keys while a field has the focus.** The keyboard edits the field, so the game's other actions do not see
+it:
+
+- Typed characters, Left, Right, Backspace and Delete (repeating after 0.4 s, then every 0.05 s while held),
+  Home and End go to the field.
+- The keyboard bindings of `ui.navigate` and `ui.submit` are ignored, so letters bound to them (W, A, S, D,
+  Space) are typed. Up and Down still move the focus and Enter submits.
+- Only the gamepad bindings of `ui.navigate` and `ui.submit` count: gamepad left and right move the caret.
+- `ui.cancel` keeps all its bindings.
+- The game's other actions read as released, as under a modal canvas, until the field loses the focus.
+
+### UiScrollView
+
+It clips its children and scrolls its content: the first child, placed at the top left with its own size
+(`UiElement::size`, or the content of its `UiStack`) and moved by `offset`.
+
+| Field | Meaning |
+| --- | --- |
+| `offset` | Distance scrolled in canvas units, kept within the content |
+| `horizontal` | May scroll horizontally (default off) |
+| `vertical` | May scroll vertically (default on) |
+| `wheelStep` | Canvas units per wheel notch (default 60) |
+
+The wheel scrolls the topmost view under the pointer, vertically when it may. Pressing inside a view and
+moving the pointer more than 8 pixels drags the content; that takes the press from an interactable element
+under the pointer. Moving the focus to an element inside the view scrolls it into view.
+
+A view with a long list keeps the draw cost bounded: descendants that lie wholly outside the view are neither
+hit nor drawn. Their Entities still exist and are laid out whenever the layout runs, so there is no recycling
+of rows; a list of many thousands of rows is not a good fit.
+
+### UiGlyph
+
+It shows how an input action is bound on the device used last. The Entity needs a `UiText`; `action` names the
+input action (`ui.submit`, `jump`). The `UiText` shows the label of the first binding of that action for the
+device used last (`Enter`, `A`, `Cross`) without being written, and the label follows the player when they
+rebind the action or switch between the keyboard and a gamepad. The labels are English unless the project's
+locale files translate the `input.*` keys. For an unknown action, or one without a binding for that device,
+the `UiText` keeps its own text.
+
 ## What is not there yet
 
-This package draws UI, reacts to input and lets game modules script it. Later packages add text fields,
-scrolling and button glyphs, the canvas editor in the Scene view, and transitions and animation. The limits of
-the first version
+This package draws UI, reacts to input and lets game modules script it. Later packages add the canvas editor
+in the Scene view, and transitions and animation. Text selection, glyph images (a button picture instead of a
+label) and recycled lists are not there either. The limits of the first version
 ([ADR 0057](https://github.com/oguzhanaknc/illusion/blob/main/docs/adr/0057-game-ui.md)):
 
 - Text is drawn left to right without shaping: Arabic, Hebrew, Indic scripts and ligatures are

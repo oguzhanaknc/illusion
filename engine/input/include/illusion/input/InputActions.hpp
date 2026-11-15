@@ -269,11 +269,16 @@ public:
     [[nodiscard]] f32 value(ActionId action) const noexcept;
     /// Value of a Vector2 action, length at most 1, or of a Delta action, unbounded (Axis: (value, 0)).
     [[nodiscard]] Vec2 vector(ActionId action) const noexcept;
+    /// vector() from the gamepad bindings of @p action alone (Button: (1, 0) while they hold it).
+    [[nodiscard]] Vec2 gamepadVector(ActionId action) const noexcept;
 
     /// Device kind used most recently (a key, button or axis beyond the threshold).
     [[nodiscard]] InputDevice lastDevice() const noexcept { return m_lastDevice; }
     /// Model of the gamepad used most recently.
     [[nodiscard]] GamepadType lastGamepadType() const noexcept { return m_lastGamepadType; }
+
+    /// Grows whenever an action or a binding is added, removed or renamed (for caches of labels).
+    [[nodiscard]] u64 bindingsVersion() const noexcept { return m_bindingsVersion; }
 
     /// Bindings as text, one action per line: `Jump = Key.Space, Gamepad.South`.
     [[nodiscard]] std::string serialize() const;
@@ -290,6 +295,7 @@ private:
         ActionType type;
         std::vector<InputBinding> bindings;
         Vec2 value{0.0f};
+        Vec2 gamepadValue{0.0f}; // from the gamepad bindings alone
         bool down = false;
         bool pressed = false;
         bool released = false;
@@ -299,6 +305,7 @@ private:
 
     std::vector<Action> m_actions;
     std::string m_exclusivePrefix;
+    u64 m_bindingsVersion = 0;
     InputDevice m_lastDevice = InputDevice::KeyboardMouse;
     GamepadType m_lastGamepadType = GamepadType::Generic;
 };

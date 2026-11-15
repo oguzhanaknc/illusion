@@ -895,7 +895,8 @@ ActionId InputActions::addAction(std::string_view name, ActionType type)
 {
     ILL_ASSERT(!findAction(name).has_value(), "action '{}' already exists", name);
     ILL_ASSERT(isValidActionName(name), "invalid action name '{}'", name);
-    m_actions.push_back(Action{std::string(name), type, {}, Vec2(0.0f), false, false, false});
+    m_actions.push_back(Action{std::string(name), type, {}, Vec2(0.0f), Vec2(0.0f), false, false, false});
+    ++m_bindingsVersion;
     return static_cast<ActionId>(m_actions.size() - 1);
 }
 
@@ -903,6 +904,7 @@ void InputActions::removeAction(ActionId action)
 {
     ILL_ASSERT(action < m_actions.size(), "invalid action id {}", action);
     m_actions.erase(m_actions.begin() + static_cast<std::ptrdiff_t>(action));
+    ++m_bindingsVersion;
 }
 
 bool InputActions::renameAction(ActionId action, std::string_view name)
@@ -917,12 +919,14 @@ bool InputActions::renameAction(ActionId action, std::string_view name)
         return *other == action;
     }
     m_actions[action].name = name;
+    ++m_bindingsVersion;
     return true;
 }
 
 void InputActions::clear() noexcept
 {
     m_actions.clear();
+    ++m_bindingsVersion;
 }
 
 std::optional<ActionId> InputActions::findAction(std::string_view name) const noexcept
@@ -960,6 +964,7 @@ void InputActions::addBinding(ActionId action, const InputBinding& binding)
     if (std::find(bindings.begin(), bindings.end(), binding) == bindings.end())
     {
         bindings.push_back(binding);
+        ++m_bindingsVersion;
     }
 }
 
@@ -967,6 +972,7 @@ void InputActions::setBindings(ActionId action, std::span<const InputBinding> bi
 {
     ILL_ASSERT(action < m_actions.size(), "invalid action id {}", action);
     m_actions[action].bindings.clear();
+    ++m_bindingsVersion;
     for (const InputBinding& binding : bindings)
     {
         addBinding(action, binding);
@@ -976,7 +982,12 @@ void InputActions::setBindings(ActionId action, std::span<const InputBinding> bi
 bool InputActions::removeBinding(ActionId action, const InputBinding& binding)
 {
     ILL_ASSERT(action < m_actions.size(), "invalid action id {}", action);
-    return std::erase(m_actions[action].bindings, binding) > 0;
+    if (std::erase(m_actions[action].bindings, binding) == 0)
+    {
+        return false;
+    }
+    ++m_bindingsVersion;
+    return true;
 }
 
 std::span<const InputBinding> InputActions::bindings(ActionId action) const noexcept
@@ -1040,9 +1051,35 @@ void InputActions::update(const InputState* keyboardMouse, std::span<const Gamep
         m_lastDevice = InputDevice::KeyboardMouse;
     }
 
+    // The value of an action of @p type from the combined @p value of its bindings; @p down when it is held.
+    const auto finish = [](ActionType type, Vec2 value, bool& down) {
+        switch (type)
+        {
+        case ActionType::Button:
+            down = std::max(std::abs(value.x), glm::length(value)) >= kPressThreshold;
+            return Vec2(down ? 1.0f : 0.0f, 0.0f);
+        case ActionType::Axis:
+            value = Vec2(std::clamp(value.x, -1.0f, 1.0f), 0.0f);
+            down = value.x != 0.0f;
+            return value;
+        case ActionType::Vector2:
+            if (glm::dot(value, value) > 1.0f)
+            {
+                value = glm::normalize(value);
+            }
+            down = value != Vec2(0.0f);
+            return value;
+        case ActionType::Delta:
+            break;
+        }
+        down = value != Vec2(0.0f);
+        return value;
+    };
+
     for (Action& action : m_actions)
     {
         Vec2 value(0.0f);
+        Vec2 gamepadValue(0.0f);
         bool tapped = false;
         const bool reached = m_exclusivePrefix.empty() || action.name.starts_with(m_exclusivePrefix);
         for (const InputBinding& binding :
@@ -1050,33 +1087,22 @@ void InputActions::update(const InputState* keyboardMouse, std::span<const Gamep
         {
             const Contribution contribution = evaluate(binding, keyboardMouse, gamepads);
             // Movements add up (the mouse and a second mouse binding); levels take the strongest.
-            value = action.type == ActionType::Delta ? value + contribution.value
-                                                     : strongest(value, contribution.value);
+            const auto combine = [&](Vec2 total) {
+                return action.type == ActionType::Delta ? total + contribution.value
+                                                        : strongest(total, contribution.value);
+            };
+            value = combine(value);
+            if (binding.isGamepad())
+            {
+                gamepadValue = combine(gamepadValue);
+            }
             tapped = tapped || contribution.tapped;
         }
 
         bool down = false;
-        switch (action.type)
-        {
-        case ActionType::Button:
-            down = std::max(std::abs(value.x), glm::length(value)) >= kPressThreshold;
-            value = Vec2(down ? 1.0f : 0.0f, 0.0f);
-            break;
-        case ActionType::Axis:
-            value = Vec2(std::clamp(value.x, -1.0f, 1.0f), 0.0f);
-            down = value.x != 0.0f;
-            break;
-        case ActionType::Vector2:
-            if (glm::dot(value, value) > 1.0f)
-            {
-                value = glm::normalize(value);
-            }
-            down = value != Vec2(0.0f);
-            break;
-        case ActionType::Delta:
-            down = value != Vec2(0.0f);
-            break;
-        }
+        value = finish(action.type, value, down);
+        bool gamepadDown = false;
+        action.gamepadValue = finish(action.type, gamepadValue, gamepadDown);
 
         const bool wasDown = action.down;
         action.pressed = !wasDown && (down || tapped);
@@ -1114,6 +1140,11 @@ f32 InputActions::value(ActionId action) const noexcept
 Vec2 InputActions::vector(ActionId action) const noexcept
 {
     return at(action).value;
+}
+
+Vec2 InputActions::gamepadVector(ActionId action) const noexcept
+{
+    return at(action).gamepadValue;
 }
 
 std::string InputActions::serialize() const

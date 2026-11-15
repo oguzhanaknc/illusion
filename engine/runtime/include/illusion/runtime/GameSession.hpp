@@ -99,14 +99,16 @@ struct GameSessionDesc
 /// One running game: a World with its PhysicsWorld, AudioWorld, InputActions, UiWorld, asset resolvers and
 /// game modules. Each update() runs, in this order:
 /// 1. **Input:** the InputActions read keyboardMouse() and the gamepads (Play mode, with the focus). While
-///    the last update showed a modal canvas (UiWorld::modalActive()), only the `ui.*` actions get input.
+///    the last update showed a modal canvas (UiWorld::modalActive()) or left a UiTextField with the focus,
+///    only the `ui.*` actions get input.
 /// 2. **Modules:** ModuleHost::update() on the World (Play mode); then Entities created without an
 ///    EntityGuid get one.
 /// 3. **Physics:** PhysicsWorld::update().
 /// 4. **Hierarchy:** updateTransformHierarchy().
-/// 5. **UI:** the UiWorld lays out for the frame of setUiFrame(), handles the pointer of keyboardMouse()
-///    and the actions `ui.navigate`, `ui.submit` and `ui.cancel` (Play mode), and records the draw list
-///    (ui()).
+/// 5. **UI:** the UiWorld lays out for the frame of setUiFrame(), handles the pointer and wheel of
+///    keyboardMouse() and the actions `ui.navigate`, `ui.submit` and `ui.cancel` (Play mode), and records
+///    the draw list (ui()). UiGlyph labels come from the actions: the first binding for the device used
+///    last, through localization().
 /// 6. **Particles and audio:** ParticleWorld::update() and AudioWorld::update().
 /// 7. **Resolvers:** the physics and render asset resolvers turn asset references into runtime Components.
 ///
@@ -115,7 +117,15 @@ struct GameSessionDesc
 ///
 /// The session's Localization (localization()) holds the string tables of the project's locale files,
 /// `assets:/locales/*.json`, read by create(): the keys of every file, with the English text of `en.json`
-/// (or the first file that has the key); UiText::key is looked up there.
+/// (or the first file that has the key); UiText::key is looked up there. It also holds the input table of key
+/// and gamepad labels (illusion::input::strings::kTable), which UiGlyph shows.
+///
+/// While the last update left a UiTextField with the focus, the keyboard edits it: the UI gets the typed
+/// characters of keyboardMouse(), Left, Right, Backspace and Delete (repeating after 0.4 s every 0.05 s
+/// while held), Home and End. The keyboard bindings of `ui.navigate` and `ui.submit` are then ignored, so
+/// that letters bound to them (W, A, S, D, Space) are typed: Up and Down move the focus, Enter submits,
+/// and only the gamepad bindings of both actions still count (gamepad left and right move the caret).
+/// `ui.cancel` keeps all its bindings.
 ///
 /// Not thread-safe: create, update and destroy it on one thread.
 class GameSession : NonCopyable

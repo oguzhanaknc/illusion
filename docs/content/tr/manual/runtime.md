@@ -106,6 +106,11 @@ canvas'ta ([Modal canvas'lar](ui.md#modal-canvases)) bir eleman gösterdiği sü
 `InputActions::setExclusivePrefix("ui.")` çağırır; böylece diğer tüm action'lar bırakılmış okunur, canvas
 gidince de bunu temizler.
 
+Son update odakta bir `UiTextField` bıraktığı sürece ([Metin alanları](ui.md#text-fields-scrolling-and-glyphs))
+klavye onu düzenler: `ui.navigate` ve `ui.submit`'in klavye binding'leri yok sayılır, böylece onlara bağlı
+harfler yazılır; yalnızca gamepad binding'leri sayılır, `ui.cancel` tüm binding'lerini korur ve diğer tüm
+action'lar bırakılmış okunur.
+
 İşaretçi, `keyboardMouse()` imlecinin `setUiFrame(frame, pointerScale)` içindeki `pointerScale` ile çarpımıdır
 ve karenin piksellerindedir. Player, karenin boyutunun pencerenin boyutuna oranını verir; editörün Game görünümü
 imleci kendi görüntüsünün pikselleriyle yazar ve 1 verir. Input odağı yoksa UI işaretçi görmez.

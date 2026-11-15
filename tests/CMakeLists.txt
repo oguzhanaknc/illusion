@@ -88,6 +88,7 @@ add_executable(illusion_tests
     text/TestTextTools.cpp
     text/TestUtf8.cpp
     ui/TestUiDrawList.cpp
+    ui/TestUiFields.cpp
     ui/TestUiGeometry.cpp
     ui/TestUiInteraction.cpp
     ui/TestUiService.cpp
