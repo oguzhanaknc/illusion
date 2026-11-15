@@ -17,6 +17,7 @@ add_executable(illusion_benchmarks
     BenchPhysics.cpp
     BenchReflection.cpp
     BenchRuntime.cpp
+    BenchSave.cpp
     BenchText.cpp
     BenchTextureCompression.cpp
     BenchTextureStreaming.cpp
@@ -27,7 +28,7 @@ target_include_directories(illusion_benchmarks PRIVATE ${CMAKE_CURRENT_SOURCE_DI
     ${PROJECT_SOURCE_DIR}/engine/render/src)
 target_link_libraries(illusion_benchmarks PRIVATE
     illusion::core illusion::input illusion::assets illusion::audio illusion::physics illusion::particles illusion::modules
-    illusion::runtime illusion::text illusion::render illusion::ui illusion::nanobench)
+    illusion::runtime illusion::text illusion::render illusion::ui illusion::save illusion::nanobench)
 illusion_require_dependency(test_font)
 target_compile_definitions(illusion_benchmarks PRIVATE ILLUSION_TEST_FONT="${ILLUSION_TEST_FONT}")
 illusion_configure_target(illusion_benchmarks)

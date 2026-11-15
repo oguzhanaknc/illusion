@@ -6,6 +6,7 @@
 
 #include <algorithm>
 #include <atomic>
+#include <cerrno>
 #include <chrono>
 #include <cstdlib>
 #include <fstream>
@@ -16,10 +17,12 @@
 #include <shlobj.h>
 #include <windows.h>
 #elif defined(ILL_PLATFORM_MACOS)
+#include <fcntl.h>
 #include <mach-o/dyld.h>
 #include <pwd.h>
 #include <unistd.h>
 #else
+#include <fcntl.h>
 #include <pwd.h>
 #include <unistd.h>
 #endif
@@ -140,6 +143,116 @@ u64 processToken()
         return (static_cast<u64>(device()) << 32) ^ static_cast<u64>(device());
     }();
     return token;
+}
+
+// A name next to @p path for a temporary file that no other writer uses.
+std::filesystem::path temporaryPathFor(const std::filesystem::path& path)
+{
+    std::filesystem::path temporary = path;
+    temporary += ".tmp-" + std::to_string(processToken()) + "-" +
+                 std::to_string(g_tempCounter.fetch_add(1, std::memory_order_relaxed));
+    return temporary;
+}
+
+// Writes @p data to the new file @p temporary, flushes it to the device, renames it over @p target and
+// flushes the rename. Removes @p temporary on failure.
+FileError writeDurably(const std::filesystem::path& temporary, const std::filesystem::path& target,
+                       std::span<const std::byte> data)
+{
+#if defined(ILL_PLATFORM_WINDOWS)
+    const HANDLE file =
+        CreateFileW(temporary.c_str(), GENERIC_WRITE, 0, nullptr, CREATE_NEW, FILE_ATTRIBUTE_NORMAL, nullptr);
+    if (file == INVALID_HANDLE_VALUE)
+    {
+        return errorFromCode(std::error_code(static_cast<int>(GetLastError()), std::system_category()));
+    }
+    DWORD error = ERROR_SUCCESS;
+    usize offset = 0;
+    while (error == ERROR_SUCCESS && offset < data.size())
+    {
+        const auto chunk = static_cast<DWORD>(std::min<usize>(data.size() - offset, usize{1} << 30));
+        DWORD written = 0;
+        if (WriteFile(file, data.data() + offset, chunk, &written, nullptr) == 0)
+        {
+            error = GetLastError();
+        }
+        else if (written == 0)
+        {
+            error = ERROR_WRITE_FAULT;
+        }
+        offset += written;
+    }
+    if (error == ERROR_SUCCESS && FlushFileBuffers(file) == 0)
+    {
+        error = GetLastError();
+    }
+    CloseHandle(file);
+    if (error == ERROR_SUCCESS && MoveFileExW(temporary.c_str(), target.c_str(),
+                                              MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH) == 0)
+    {
+        error = GetLastError();
+    }
+    if (error != ERROR_SUCCESS)
+    {
+        DeleteFileW(temporary.c_str());
+        return errorFromCode(std::error_code(static_cast<int>(error), std::system_category()));
+    }
+    return FileError::None;
+#else
+    const int file = ::open(temporary.c_str(), O_WRONLY | O_CREAT | O_EXCL | O_CLOEXEC, 0644);
+    if (file < 0)
+    {
+        return errorFromCode(std::error_code(errno, std::generic_category()));
+    }
+    int error = 0;
+    usize offset = 0;
+    while (error == 0 && offset < data.size())
+    {
+        const ssize_t written = ::write(file, data.data() + offset, data.size() - offset);
+        if (written < 0)
+        {
+            error = errno == EINTR ? 0 : errno;
+        }
+        else if (written == 0)
+        {
+            error = EIO;
+        }
+        else
+        {
+            offset += static_cast<usize>(written);
+        }
+    }
+#if defined(ILL_PLATFORM_MACOS)
+    // fsync() on macOS leaves the data in the drive's cache; F_FULLFSYNC flushes it, where supported.
+    if (error == 0 && ::fcntl(file, F_FULLFSYNC) != 0 && ::fsync(file) != 0)
+#else
+    if (error == 0 && ::fsync(file) != 0)
+#endif
+    {
+        error = errno;
+    }
+    if (::close(file) != 0 && error == 0)
+    {
+        error = errno;
+    }
+    if (error == 0 && ::rename(temporary.c_str(), target.c_str()) != 0)
+    {
+        error = errno;
+    }
+    if (error != 0)
+    {
+        ::unlink(temporary.c_str());
+        return errorFromCode(std::error_code(error, std::generic_category()));
+    }
+    // The rename lasts once its directory is flushed; file systems that cannot flush directories are fine.
+    const int directory = ::open(target.parent_path().c_str(), O_RDONLY | O_CLOEXEC | O_DIRECTORY);
+    if (directory >= 0)
+    {
+        static_cast<void>(::fsync(directory));
+        ::close(directory);
+    }
+    return FileError::None;
+#endif
 }
 
 } // namespace
@@ -343,9 +456,7 @@ FileError VirtualFileSystem::writeFile(std::string_view virtualPath, std::span<c
         return errorFromCode(code);
     }
 
-    std::filesystem::path temporary = path;
-    temporary += ".tmp-" + std::to_string(processToken()) + "-" +
-                 std::to_string(g_tempCounter.fetch_add(1, std::memory_order_relaxed));
+    const std::filesystem::path temporary = temporaryPathFor(path);
     {
         std::ofstream file(temporary, std::ios::binary | std::ios::trunc);
         if (!file)
@@ -377,6 +488,26 @@ FileError VirtualFileSystem::writeFile(std::string_view virtualPath, std::span<c
 FileError VirtualFileSystem::writeText(std::string_view virtualPath, std::string_view text)
 {
     return writeFile(virtualPath, std::as_bytes(std::span<const char>(text.data(), text.size())));
+}
+
+FileError VirtualFileSystem::writeFileAtomic(std::string_view virtualPath, std::span<const std::byte> data)
+{
+    std::filesystem::path path;
+    if (const FileError error = writablePath(virtualPath, path); error != FileError::None)
+    {
+        return error;
+    }
+    std::error_code code;
+    std::filesystem::create_directories(path.parent_path(), code);
+    if (code)
+    {
+        return errorFromCode(code);
+    }
+    if (std::filesystem::is_directory(path, code))
+    {
+        return FileError::AlreadyExists;
+    }
+    return writeDurably(temporaryPathFor(path), path, data);
 }
 
 bool VirtualFileSystem::exists(std::string_view virtualPath) const

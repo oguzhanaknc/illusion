@@ -889,3 +889,111 @@ TEST_CASE("the JSON writer rewrites scene documents byte for byte")
     REQUIRE(saved.ok());
     CHECK(rewritten(saved.json) == saved.json);
 }
+
+TEST_CASE("externalReferences writes references outside the saved entities as their ids")
+{
+    reflectAll();
+    World world;
+    const Entity leader = world.create(Transform{});
+    const Entity follower = world.create(Follow{leader, 1.0f});
+    world.emplace<EntityGuid>(leader, EntityGuid{0x11});
+    world.emplace<EntityGuid>(follower, EntityGuid{0x22});
+    const Entity unnamed = world.create(Transform{});
+    const Entity second = world.create(Follow{unnamed, 3.0f}, EntityGuid{0x33});
+
+    const Entity list[] = {follower, second};
+    const SceneSaveResult external = saveScene(world, {.subset = list, .externalReferences = true});
+    REQUIRE(external.ok());
+    CHECK(external.json.find("\"leader\": \"0000000000000011\"") != std::string::npos);
+    CHECK(external.json.find("\"leader\": null") != std::string::npos); // the unnamed entity has no id
+
+    const SceneSaveResult plain = saveScene(world, {.subset = list});
+    REQUIRE(plain.ok());
+    CHECK(plain.json.find("0000000000000011") == std::string::npos);
+}
+
+TEST_CASE("resolveExternal looks up ids the file does not define among the world's entities")
+{
+    reflectAll();
+    World world;
+    const Entity leader = world.create(Transform{}, EntityGuid{0x11});
+    const std::string json = sceneV2(
+        R"([{"id": "00000000000000a1", "components": {"test.Follow": {"leader": "0000000000000011"}}},
+            {"id": "00000000000000a2", "components": {"test.Follow": {"leader": "00000000000000ff"}}}])");
+
+    const SceneLoadResult strict = loadScene(world, json);
+    CHECK_FALSE(strict.ok());
+    CHECK(strict.error.find("must be null or the id of an entity in this scene") != std::string::npos);
+    CHECK(world.aliveCount() == 1);
+
+    const SceneLoadResult loaded = loadScene(world, json, {.resolveExternal = true});
+    REQUIRE(loaded.ok());
+    REQUIRE(loaded.entities.size() == 2);
+    CHECK(world.get<Follow>(loaded.entities[0]).leader == leader);
+    CHECK(world.get<Follow>(loaded.entities[1]).leader.isNull());
+}
+
+TEST_CASE("replace destroys entities after the file loaded so that the file can take their ids")
+{
+    reflectAll();
+    World world;
+    const Entity kept = world.create(Transform{}, EntityGuid{0x11});
+    const Entity old = world.create(Follow{kept, 1.0f}, EntityGuid{0x22});
+    const Entity list[] = {old};
+    const SceneSaveResult saved = saveScene(world, {.subset = list, .externalReferences = true});
+    REQUIRE(saved.ok());
+    world.get<Follow>(old).distance = 5.0f;
+
+    CHECK_FALSE(loadScene(world, saved.json, {.resolveExternal = true}).ok()); // id 22 exists
+    CHECK(world.aliveCount() == 2);
+
+    const SceneLoadResult loaded = loadScene(world, saved.json, {.resolveExternal = true, .replace = list});
+    REQUIRE(loaded.ok());
+    CHECK_FALSE(world.isAlive(old));
+    CHECK(world.isAlive(kept));
+    CHECK(world.aliveCount() == 2);
+    REQUIRE(loaded.entities.size() == 1);
+    CHECK(world.get<EntityGuid>(loaded.entities[0]) == EntityGuid{0x22});
+    CHECK(world.get<Follow>(loaded.entities[0]).distance == 1.0f);
+    CHECK(world.get<Follow>(loaded.entities[0]).leader == kept);
+}
+
+TEST_CASE("a file that fails to load leaves the entities it would replace untouched")
+{
+    reflectAll();
+    World world;
+    const Entity old = world.create(Follow{Entity{}, 4.0f}, EntityGuid{0x22});
+    const Entity other = world.create(Transform{}, EntityGuid{0x33});
+    const Entity list[] = {old};
+    const std::string invalid =
+        sceneV2(R"([{"id": "0000000000000022", "components": {"test.Follow": {"distance": "far"}}}])");
+    const SceneLoadResult failed = loadScene(world, invalid, {.replace = list});
+    CHECK_FALSE(failed.ok());
+    CHECK(world.isAlive(old));
+    CHECK(world.get<Follow>(old).distance == 4.0f);
+    CHECK(world.aliveCount() == 2);
+
+    // An id that an entity outside replace has is still a clash.
+    const std::string clash = sceneV2(R"([{"id": "0000000000000022"}, {"id": "0000000000000033"}])");
+    const SceneLoadResult clashed = loadScene(world, clash, {.replace = list});
+    CHECK_FALSE(clashed.ok());
+    CHECK(clashed.error.find("0000000000000033 already exists") != std::string::npos);
+    CHECK(world.isAlive(old));
+    CHECK(world.isAlive(other));
+    CHECK(world.aliveCount() == 2);
+}
+
+TEST_CASE("an external reference never resolves to an entity that the load replaces")
+{
+    reflectAll();
+    World world;
+    const Entity replaced = world.create(Transform{}, EntityGuid{0x22});
+    const Entity list[] = {replaced};
+    const std::string json = sceneV2(
+        R"([{"id": "00000000000000a1", "components": {"test.Follow": {"leader": "0000000000000022"}}}])");
+    const SceneLoadResult loaded = loadScene(world, json, {.resolveExternal = true, .replace = list});
+    REQUIRE(loaded.ok());
+    CHECK_FALSE(world.isAlive(replaced));
+    REQUIRE(loaded.entities.size() == 1);
+    CHECK(world.get<Follow>(loaded.entities[0]).leader.isNull());
+}

@@ -32,20 +32,34 @@ std::string_view textOf(const std::array<char, kGuidTextLength>& text) noexcept
     return {text.data(), text.size()};
 }
 
-// Entity fields of a saved scene are the ids of saved entities.
+// Entity fields of a saved scene are the ids of saved entities. With @p external, fields that refer to
+// other live entities of that World are their ids too (SceneSaveOptions::externalReferences).
 class SceneGuidWriter final : public EntityResolver
 {
 public:
-    explicit SceneGuidWriter(const std::unordered_map<Entity, u64>& ids) noexcept
+    explicit SceneGuidWriter(const std::unordered_map<Entity, u64>& ids,
+                             const World* external = nullptr) noexcept
         : m_ids(ids)
+        , m_external(external)
     {
     }
 
     JsonMutValue writeEntity(JsonMutDocument& doc, Entity entity) const override
     {
         const auto it = m_ids.find(entity);
-        return it != m_ids.end() ? doc.makeString(textOf(formatGuid(EntityGuid{it->second})))
-                                 : doc.makeNull();
+        if (it != m_ids.end())
+        {
+            return doc.makeString(textOf(formatGuid(EntityGuid{it->second})));
+        }
+        if (m_external != nullptr && !entity.isNull() && m_external->isAlive(entity))
+        {
+            const EntityGuid* guid = m_external->tryGet<EntityGuid>(entity);
+            if (guid != nullptr && !guid->isNull())
+            {
+                return doc.makeString(textOf(formatGuid(*guid)));
+            }
+        }
+        return doc.makeNull();
     }
 
     Expected<Entity, std::string> readEntity(JsonValue) const override
@@ -55,15 +69,20 @@ public:
 
 private:
     const std::unordered_map<Entity, u64>& m_ids;
+    const World* m_external;
 };
 
-// Version 2: Entity fields are ids of entities in the file. A lenient reader (for files with unresolved
-// prefab instances, whose entities are not created) reads unknown ids as null and counts them.
+// Version 2: Entity fields are ids of entities in the file. With @p external, ids the file does not define
+// are looked up there and read as null if absent (SceneLoadOptions::resolveExternal). A lenient reader (for
+// files with unresolved prefab instances, whose entities are not created) reads unknown ids as null and
+// counts them.
 class SceneGuidReader final : public EntityResolver
 {
 public:
-    explicit SceneGuidReader(const std::unordered_map<u64, Entity>& entities, bool lenient = false) noexcept
+    explicit SceneGuidReader(const std::unordered_map<u64, Entity>& entities, bool lenient = false,
+                             const std::unordered_map<u64, Entity>* external = nullptr) noexcept
         : m_entities(entities)
+        , m_external(external)
         , m_lenient(lenient)
     {
     }
@@ -84,6 +103,11 @@ public:
         const auto it = guid ? m_entities.find(guid->value) : m_entities.end();
         if (it == m_entities.end())
         {
+            if (m_external != nullptr && guid)
+            {
+                const auto found = m_external->find(guid->value);
+                return found != m_external->end() ? found->second : kNullEntity;
+            }
             if (m_lenient && guid)
             {
                 ++m_cleared;
@@ -96,6 +120,7 @@ public:
 
 private:
     const std::unordered_map<u64, Entity>& m_entities;
+    const std::unordered_map<u64, Entity>* m_external;
     bool m_lenient;
     mutable usize m_cleared = 0;
 };
@@ -269,7 +294,7 @@ public:
         : m_world(world)
         , m_options(options)
         , m_result(result)
-        , m_resolver(m_ids)
+        , m_resolver(m_ids, options.externalReferences ? &world : nullptr)
     {
     }
 
@@ -1107,6 +1132,10 @@ public:
         {
             return readVersion1(entities);
         }
+        if (m_options.resolveExternal)
+        {
+            collectExternal();
+        }
         return createEntities(entities) && readComponents() && applyRecords() && checkClaims() &&
                readSettings(root.find("settings"));
     }
@@ -1225,6 +1254,31 @@ private:
         {
             m_result.warnings.push_back(std::move(message));
         }
+    }
+
+    // The ids of the World's entities before the load, except those it replaces, for resolveExternal.
+    void collectExternal()
+    {
+        const std::unordered_set<Entity> replaced(m_options.replace.begin(), m_options.replace.end());
+        ComponentMask all;
+        all.set(componentId<EntityGuid>());
+        m_world.forEachMatching(all, {}, [&](const RawChunk& chunk) {
+            const auto* guids = static_cast<const EntityGuid*>(chunk.column(componentId<EntityGuid>()));
+            const std::span<const Entity> entities = chunk.entities();
+            for (u32 i = 0; i < chunk.size(); ++i)
+            {
+                if (!guids[i].isNull() && !replaced.contains(entities[i]))
+                {
+                    m_external.emplace(guids[i].value, entities[i]);
+                }
+            }
+        });
+    }
+
+    // Where ids that the file does not define are looked up (SceneLoadOptions::resolveExternal).
+    [[nodiscard]] const std::unordered_map<u64, Entity>* external() const noexcept
+    {
+        return m_scope == nullptr && m_options.resolveExternal ? &m_external : nullptr;
     }
 
     bool readTypes(JsonValue types)
@@ -1424,6 +1478,17 @@ private:
                 }
             }
         });
+        // The entities that the load replaces give their ids up.
+        const std::unordered_set<Entity> replaced(m_options.replace.begin(), m_options.replace.end());
+        for (const Entity entity : replaced)
+        {
+            const EntityGuid* guid = m_world.tryGet<EntityGuid>(entity);
+            const auto it = guid != nullptr ? m_claims.find(guid->value) : m_claims.end();
+            if (it != m_claims.end())
+            {
+                --it->second.holders;
+            }
+        }
         const IdClaims::value_type* first = nullptr;
         for (const IdClaims::value_type& entry : m_claims)
         {
@@ -1636,7 +1701,7 @@ private:
 
     bool readComponents()
     {
-        const SceneGuidReader resolver(m_fileEntities, m_lenient);
+        const SceneGuidReader resolver(m_fileEntities, m_lenient, external());
         for (const PlainEntity& plain : m_plain)
         {
             if (!plain.components.isAbsent() &&
@@ -1661,7 +1726,7 @@ private:
     // Applies the overrides of the expanded records, then removes the entities they remove.
     bool applyRecords()
     {
-        const SceneGuidReader resolver(m_fileEntities, m_lenient);
+        const SceneGuidReader resolver(m_fileEntities, m_lenient, external());
         std::vector<Entity> removed;
         for (const PendingRecord& record : m_records)
         {
@@ -1858,7 +1923,7 @@ private:
             return fail("\"settings\" must be an object");
         }
         const StructRegistry& structs = m_world.registry().structs();
-        const SceneGuidReader resolver(m_fileEntities);
+        const SceneGuidReader resolver(m_fileEntities, false, external());
         std::unordered_set<std::string_view> seen;
         for (const JsonMember member : settings.members())
         {
@@ -1950,8 +2015,9 @@ private:
     GuidGenerator& m_guids;
     const PrefabScope* m_scope;
     std::unordered_map<u64, Entity> m_fileEntities;
-    std::unordered_set<u64> m_recordIds; // ids of every entry of the file, to find duplicates
-    IdClaims m_claims;                   // ids assigned by this load (top-level reader with IdPolicy::Keep)
+    std::unordered_map<u64, Entity> m_external; // ids of the World's other entities (resolveExternal)
+    std::unordered_set<u64> m_recordIds;        // ids of every entry of the file, to find duplicates
+    IdClaims m_claims; // ids assigned by this load (top-level reader with IdPolicy::Keep)
     std::vector<PlainEntity> m_plain;
     std::vector<PendingRecord> m_records;
     Entity m_root;
@@ -1976,6 +2042,10 @@ SceneSaveResult saveScene(const World& world, const SceneSaveOptions& options)
 SceneLoadResult loadScene(World& world, std::string_view json, const SceneLoadOptions& options)
 {
     ILL_PROFILE_SCOPE();
+    for (const Entity entity : options.replace)
+    {
+        ILL_ASSERT(world.isAlive(entity), "loadScene() replaces a dead entity");
+    }
     SceneLoadResult result;
     JsonReadOptions readOptions;
     readOptions.maxBytes = std::numeric_limits<usize>::max();
@@ -1992,6 +2062,13 @@ SceneLoadResult loadScene(World& world, std::string_view json, const SceneLoadOp
     {
         reader.commitSettings();
         reader.findMissingAssets();
+        for (const Entity entity : options.replace)
+        {
+            if (world.isAlive(entity)) // listed twice
+            {
+                world.destroy(entity);
+            }
+        }
         return result;
     }
     for (const Entity entity : result.entities)

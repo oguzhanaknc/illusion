@@ -87,7 +87,7 @@ for (const std::string& warning : loaded.warnings)
 
 - `saveScene(world)` canlı her Entity'yi kaydeder. `SceneSaveOptions::subset` bunun yerine bir listeyi
   kaydeder (örneğin bir seçimi veya bir prefab'ı); listenin dışını gösteren Entity alanları `null` olarak
-  kaydedilir.
+  (ya da id olarak, bkz. [Sahne farkları](#sahne-farklar)) kaydedilir.
 - Kaydedilen her Entity'nin bir `EntityGuid`'i olmalıdır (bkz. [Entity id'leri](#entity-idleri));
   birinde yoksa veya ikisi aynı id'yi paylaşıyorsa kaydetme başarısız olur. Entity'ler
   [Transform hiyerarşisinin](ecs.md#transform-hiyerarsisi) derinlik öncelikli ön sırasıyla (pre-order)
@@ -162,6 +162,35 @@ const illusion::SceneLoadResult pasted =
 ```
 
 Tek bir dosyadaki yinelenen id'ler yükleme hatasıdır.
+
+## Sahne farkları
+
+Birkaç Entity'lik bir dosya, kayıtlı oyunların yaptığı gibi yüklü bir sahnenin üzerine uygulanabilir
+([ADR 0058](https://github.com/oguzhanaknc/illusion/blob/main/docs/adr/0058-saved-games.md)). `Saved` tag'i
+(`illusion.Saved`, `engine/save` kütüphanesi) bir kayıtlı oyunun içerdiği Entity'leri ve alt ağaçları
+işaretler. Serializer'ın üç seçeneği böyle bir farkı oluşturur:
+
+- `SceneSaveOptions::externalReferences`, kaydedilenlerin dışındaki canlı Entity'leri gösteren Entity
+  alanlarını `null` yerine onların id'leri olarak yazar; böylece kaydedilen bir çocuk, kaydedilmeyen
+  ebeveynini korur. `EntityGuid`'i olmayan bir hedef yine `null` olarak yazılır.
+- `SceneLoadOptions::resolveExternal`, dosyanın tanımlamadığı id'leri World'ün zaten sahip olduğu
+  Entity'ler arasında arar; hiçbir Entity'nin sahip olmadığı bir id'ye sahip alan `null` olur.
+- `SceneLoadOptions::replace`, dosyanın yerine geçtiği canlı Entity'leri listeler. Bunlar ancak dosyanın
+  tamamı yüklendikten sonra yok edilir; böylece `IdPolicy::Keep` ile dosya kendi Entity'lerine onların
+  id'lerini verebilir. Listenin dışındaki bir Entity'nin sahip olduğu id yine bir yükleme hatasıdır. Dosya
+  yüklenemezse listelenen Entity'ler olduğu gibi kalır. Dışarıya yapılan bir başvuru, dosyanın yeniden
+  tanımlamadığı, yerine geçilen bir Entity'ye asla çözümlenmez.
+
+```cpp
+// Save the player's subtree; its parent, the level's "Spawn" entity, is written as its id.
+const illusion::Entity saved[] = {player, weapon};
+const illusion::SceneSaveResult delta =
+    illusion::saveScene(world, {.subset = saved, .externalReferences = true});
+
+// Later, on the same level: swap the live entities for the saved ones in one step.
+const illusion::SceneLoadResult applied = illusion::loadScene(
+    world, delta.json, {.resolveExternal = true, .replace = currentSaved});
+```
 
 ## Adlar
 

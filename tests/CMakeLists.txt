@@ -78,6 +78,8 @@ add_executable(illusion_tests
     render/TestRendererExtensions.cpp
     runtime/TestGameSession.cpp
     runtime/TestProjectSettings.cpp
+    save/TestSaveCapture.cpp
+    save/TestSaveFile.cpp
     showcase/TestShowcaseModule.cpp
     store/TestStoreService.cpp
     text/TestLocale.cpp
@@ -102,7 +104,7 @@ target_include_directories(illusion_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}
 target_link_libraries(illusion_tests PRIVATE
     illusion::core illusion::platform illusion::input illusion::assets illusion::audio illusion::physics
     illusion::particles illusion::render illusion::modules illusion::runtime illusion::player illusion::store
-    illusion::text illusion_text_tools illusion::ui illusion::doctest)
+    illusion::save illusion::text illusion_text_tools illusion::ui illusion::doctest)
 illusion_require_dependency(test_font)
 target_compile_definitions(illusion_tests PRIVATE ILLUSION_TEST_DATA_DIR="${CMAKE_CURRENT_SOURCE_DIR}/data"
     ILLUSION_TEST_FONT="${ILLUSION_TEST_FONT}")

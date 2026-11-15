@@ -14,7 +14,7 @@ target_include_directories(illusion_player PUBLIC
 target_link_libraries(illusion_player
     PUBLIC illusion::core illusion::runtime
     PRIVATE illusion::platform illusion::input illusion::assets illusion::physics illusion::audio
-        illusion::particles illusion::render illusion::modules illusion::store)
+        illusion::particles illusion::render illusion::modules illusion::store illusion::save)
 
 if(WIN32)
     # CommandLineToArgvW() for the UTF-16 command line.

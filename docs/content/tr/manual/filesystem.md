@@ -50,6 +50,7 @@ vfs.mount("mods", illusion::utf8Path(modDirectoryFromConfig));
 | --- | --- |
 | `readFile()`, `readText()` | Bir dosyanın tamamını byte vektörüne veya string'e okur. |
 | `writeFile()`, `writeText()` | Bir dosyanın tamamını yazar; yalnızca `ReadWrite` mount'larda. |
+| `writeFileAtomic()` | Bir dosyanın tamamını kalıcı olarak yazar; kayıtlı oyunlar için (aşağıya bakın). |
 | `exists()` | Bir dosya veya dizinin var olup olmadığını kontrol eder. |
 | `list()` | Bir dizini isme göre sıralı listeler. |
 | `listRecursive()` | Bir dizinin altındaki her şeyi listeler; isimler `sub/a.png` gibi göreli yollardır. |
@@ -76,9 +77,13 @@ if (vfs.stat("user:/saves/slot1", stat) == illusion::FileError::None && stat.isD
 }
 ```
 
-Yazma işlemleri atomiktir: veri önce geçici bir dosyaya yazılır, ardından bu dosya hedefin yerine geçer;
-böylece bir çökme veya elektrik kesintisi asla yarım yazılmış bir kayıt dosyası bırakmaz. Üst dizinler
-otomatik olarak oluşturulur.
+Yazma işlemleri atomiktir: veri önce aynı dizindeki geçici bir dosyaya yazılır, ardından bu dosya hedefin
+yerine geçer; böylece ne bir okuyucu ne de programın çökmesi yarım yazılmış bir dosya görür. Üst dizinler
+otomatik olarak oluşturulur. `writeFileAtomic()` ayrıca geçici dosyayı hedefin yerine koymadan önce cihaza
+yazdırır ve yer değiştirmeyi de yazdırır (Windows'ta `MOVEFILE_WRITE_THROUGH` ile `MoveFileExW`, diğer
+sistemlerde dosyanın ve dizininin `fsync()`'i); böylece bir elektrik kesintisinden sonra bile dosya ya eski
+ya da yeni içeriğini taşır. Daha yavaştır; kayıtlı oyunlar gibi korunması gereken veriler için kullanın.
+Başarısız olursa hedef değişmez ve geride geçici dosya kalmaz.
 
 ## Arşivler
 

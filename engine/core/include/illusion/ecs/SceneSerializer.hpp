@@ -126,7 +126,7 @@ enum class PrefabSaveMode : u8
 struct SceneSaveOptions
 {
     /// Entities to save (they must be alive). nullopt saves every live entity. Entity fields that refer to
-    /// entities outside the saved ones are written as null.
+    /// entities outside the saved ones are written as null, or as their ids with externalReferences.
     std::optional<std::span<const Entity>> subset{};
     SceneOrder order = SceneOrder::Hierarchy;  ///< Order of the entities.
     std::span<const SceneSettings> settings{}; ///< Settings to save.
@@ -139,6 +139,9 @@ struct SceneSaveOptions
     /// Write a prefab file ("format": "illusion.prefab"): fails unless the saved entities have exactly one
     /// root (one entity or instance whose parent is not saved).
     bool prefabFile = false;
+    /// Write Entity fields that refer to live entities outside the saved ones as their EntityGuid (null if
+    /// they have none), for a file that loadScene() applies with SceneLoadOptions::resolveExternal.
+    bool externalReferences = false;
 };
 
 /// Result of saveScene().
@@ -180,6 +183,13 @@ struct SceneLoadOptions
     /// nest deeper than kMaxPrefabDepth, or contain themselves) are kept as one UnresolvedPrefab entity, with
     /// a warning; entity fields that referred to their entities become null.
     PrefabSource prefabs{};
+    /// Look up the ids that the file does not define among the entities the World already has (except
+    /// those of replace): an Entity field with such an id refers to that entity, or is null if no entity
+    /// has the id. Without it such an id is a load error.
+    bool resolveExternal = false;
+    /// Live entities that the file replaces: destroyed once the whole file has loaded, so that with
+    /// IdPolicy::Keep the file may give its entities their ids. Untouched if loading fails.
+    std::span<const Entity> replace{};
 };
 
 /// Result of loadScene().
@@ -215,9 +225,9 @@ struct SceneLoadResult
 /// not finite (JSON cannot store it), or if the prefab of a saved instance cannot be read or loaded.
 [[nodiscard]] SceneSaveResult saveScene(const World& world, const SceneSaveOptions& options = {});
 
-/// Creates the entities of the scene @p json in @p world, which keeps its existing entities. Entity
-/// fields are remapped to the new entities. On failure, nothing is added to the world and no settings
-/// target changes.
+/// Creates the entities of the scene @p json in @p world, which keeps its existing entities (except
+/// SceneLoadOptions::replace). Entity fields are remapped to the new entities. On failure, nothing is added
+/// to or removed from the world and no settings target changes.
 [[nodiscard]] SceneLoadResult loadScene(World& world, std::string_view json,
                                         const SceneLoadOptions& options = {});
 

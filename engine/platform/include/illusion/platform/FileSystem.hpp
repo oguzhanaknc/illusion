@@ -110,6 +110,12 @@ public:
     /// Writes @p text to a file. See writeFile().
     FileError writeText(std::string_view virtualPath, std::string_view text);
 
+    /// Writes @p data to a file like writeFile(), but durably: the temporary file is flushed to the device
+    /// before it replaces the target, and the replacement is flushed too, so after a crash or a power cut the
+    /// file holds either its old or its new contents. On failure the target is unchanged and no temporary
+    /// file is left. Slower than writeFile(); for saved games and similar data.
+    FileError writeFileAtomic(std::string_view virtualPath, std::span<const std::byte> data);
+
     /// Returns true if the virtual path names an existing file or directory.
     [[nodiscard]] bool exists(std::string_view virtualPath) const;
 
