@@ -32,6 +32,7 @@
 #include <illusion/runtime/GameSession.hpp>
 #include <illusion/runtime/ProjectSettings.hpp>
 #include <illusion/runtime/SceneLoaderService.hpp>
+#include <illusion/save/SaveComponents.hpp>
 #include <illusion/store/NullStoreService.hpp>
 #include <illusion/text/Localization.hpp>
 #include <illusion/ui/UiComponents.hpp>
@@ -62,6 +63,7 @@ void reflectAll()
     reflectRenderComponents();
     reflectRuntimeStructs();
     registerUiComponents();
+    registerSaveComponents();
 }
 
 // The showcase project's assets, mounted read-only.

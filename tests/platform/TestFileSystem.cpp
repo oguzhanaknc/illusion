@@ -5,7 +5,11 @@
 
 #include <doctest/doctest.h>
 
+#include <algorithm>
+#include <filesystem>
+#include <span>
 #include <string>
+#include <string_view>
 #include <vector>
 
 using namespace illusion;
@@ -305,4 +309,83 @@ TEST_CASE("file management refuses read-only mounts and archives")
     CHECK(entries[1].name == "dir/one.txt");
     CHECK(fileErrorName(FileError::AlreadyExists) == "AlreadyExists");
     CHECK(fileErrorName(FileError::NotEmpty) == "NotEmpty");
+}
+
+namespace
+{
+
+std::vector<std::byte> bytesOf(std::string_view text)
+{
+    const auto bytes = std::as_bytes(std::span<const char>(text.data(), text.size()));
+    return {bytes.begin(), bytes.end()};
+}
+
+// Names of the files in @p directory.
+std::vector<std::string> filesIn(const std::filesystem::path& directory)
+{
+    std::vector<std::string> names;
+    for (const std::filesystem::directory_entry& entry : std::filesystem::directory_iterator(directory))
+    {
+        const std::u8string name = entry.path().filename().u8string();
+        names.emplace_back(reinterpret_cast<const char*>(name.data()), name.size());
+    }
+    return names;
+}
+
+} // namespace
+
+TEST_CASE("writeFileAtomic creates and replaces files and leaves no temporary file")
+{
+    TempDirectory dir;
+    VirtualFileSystem vfs;
+    REQUIRE(vfs.mount("user", dir.path, MountAccess::ReadWrite) == FileError::None);
+
+    CHECK(vfs.writeFileAtomic("user:/saves/slot1.save", bytesOf("first contents")) == FileError::None);
+    std::string text;
+    CHECK(vfs.readText("user:/saves/slot1.save", text) == FileError::None);
+    CHECK(text == "first contents");
+
+    CHECK(vfs.writeFileAtomic("user:/saves/slot1.save", bytesOf("second")) == FileError::None);
+    CHECK(vfs.readText("user:/saves/slot1.save", text) == FileError::None);
+    CHECK(text == "second");
+
+    CHECK(vfs.writeFileAtomic("user:/saves/empty.save", {}) == FileError::None);
+    FileStat stat;
+    CHECK(vfs.stat("user:/saves/empty.save", stat) == FileError::None);
+    CHECK(stat.size == 0);
+
+    std::vector<std::string> names = filesIn(dir.path / "saves");
+    std::sort(names.begin(), names.end());
+    CHECK(names == std::vector<std::string>{"empty.save", "slot1.save"});
+}
+
+TEST_CASE("writeFileAtomic fails cleanly and leaves the target unchanged")
+{
+    TempDirectory dir;
+    std::filesystem::create_directories(dir.path / "game");
+    std::filesystem::create_directories(dir.path / "user");
+    VirtualFileSystem vfs;
+    REQUIRE(vfs.mount("game", dir.path / "game", MountAccess::ReadOnly) == FileError::None);
+    REQUIRE(vfs.mount("user", dir.path / "user", MountAccess::ReadWrite) == FileError::None);
+    REQUIRE(vfs.writeText("user:/slot.save", "kept") == FileError::None);
+    REQUIRE(vfs.createDirectory("user:/folder") == FileError::None);
+
+    CHECK(vfs.writeFileAtomic("game:/slot.save", bytesOf("x")) == FileError::ReadOnly);
+    CHECK_FALSE(vfs.exists("game:/slot.save"));
+    CHECK(vfs.writeFileAtomic("user:/", bytesOf("x")) == FileError::InvalidPath);
+    CHECK(vfs.writeFileAtomic("other:/slot.save", bytesOf("x")) == FileError::UnknownMount);
+    CHECK(vfs.writeFileAtomic("user:/../slot.save", bytesOf("x")) == FileError::InvalidPath);
+    CHECK(vfs.writeFileAtomic("user:/folder", bytesOf("x")) == FileError::AlreadyExists);
+    CHECK(std::filesystem::is_directory(dir.path / "user" / "folder"));
+    // A file where a parent directory would have to be.
+    CHECK(vfs.writeFileAtomic("user:/slot.save/inner.save", bytesOf("x")) != FileError::None);
+
+    std::string text;
+    CHECK(vfs.readText("user:/slot.save", text) == FileError::None);
+    CHECK(text == "kept");
+    std::vector<std::string> names = filesIn(dir.path / "user");
+    std::sort(names.begin(), names.end());
+    CHECK(names == std::vector<std::string>{"folder", "slot.save"});
+    CHECK(filesIn(dir.path / "user" / "folder").empty());
+    CHECK(filesIn(dir.path / "game").empty());
 }

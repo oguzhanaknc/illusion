@@ -40,6 +40,7 @@
 #include <illusion/render/Components.hpp>
 #include <illusion/render/RenderDevice.hpp>
 #include <illusion/render/Swapchain.hpp>
+#include <illusion/save/SaveComponents.hpp>
 #include <illusion/ui/UiWorld.hpp>
 
 #include <charconv>
@@ -538,6 +539,7 @@ int run(const std::vector<std::string>& args)
     reflectAudioComponents();
     reflectParticleComponents();
     registerUiComponents();
+    registerSaveComponents();
 
     // The window needs the windowing system before the editor starts (the server wakes its event loop).
     EventBus events;

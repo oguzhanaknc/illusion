@@ -19,6 +19,7 @@
     "illusion.PostEffects": 1,
     "illusion.ProceduralSky": 1,
     "illusion.RigidBody": 1,
+    "illusion.Saved": 1,
     "illusion.SkyAtmosphere": 1,
     "illusion.SkyLight": 1,
     "illusion.Transform": 1,
@@ -403,6 +404,7 @@
         "illusion.Name": {
           "value": "Player"
         },
+        "illusion.Saved": {},
         "illusion.Transform": {
           "position": [0.0, 0.1, 6.0],
           "rotation": [0.0, 0.0, 0.0, 1.0],

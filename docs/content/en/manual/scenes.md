@@ -86,7 +86,8 @@ for (const std::string& warning : loaded.warnings)
 ```
 
 - `saveScene(world)` saves every live Entity. `SceneSaveOptions::subset` saves a list instead (for example
-  a selection or a prefab); Entity fields that point outside the list are saved as `null`.
+  a selection or a prefab); Entity fields that point outside the list are saved as `null` (or as ids, see
+  [Scene deltas](#scene-deltas)).
 - Every saved Entity needs an `EntityGuid` (see [Entity ids](#entity-ids)); saving fails if one has none
   or two share one. Entities are saved in the depth-first pre-order of the
   [transform hierarchy](ecs.md#transform-hierarchy): every parent before its children, siblings by
@@ -159,6 +160,34 @@ const illusion::SceneLoadResult pasted =
 ```
 
 Duplicate ids in one file are a load error.
+
+## Scene deltas
+
+A file of a few entities can be applied on top of a loaded scene, as saved games do
+([ADR 0058](https://github.com/oguzhanaknc/illusion/blob/main/docs/adr/0058-saved-games.md)). The `Saved`
+tag (`illusion.Saved`, library `engine/save`) marks the entities and subtrees that a saved game contains.
+Three options of the serializer make such a delta:
+
+- `SceneSaveOptions::externalReferences` writes Entity fields that point to live entities outside the
+  saved ones as their ids instead of `null`, so a saved child keeps its unsaved parent. A target without an
+  `EntityGuid` is still written as `null`.
+- `SceneLoadOptions::resolveExternal` looks up the ids that the file does not define among the entities
+  the World already has; a field with an id that no entity has becomes `null`.
+- `SceneLoadOptions::replace` lists live entities that the file replaces. They are destroyed only after the
+  whole file has loaded, so with `IdPolicy::Keep` the file may give its entities their ids; an id that an
+  entity outside the list has is still a load error. If the file fails to load, the listed entities stay as
+  they were. An outside reference never resolves to a replaced entity that the file does not define again.
+
+```cpp
+// Save the player's subtree; its parent, the level's "Spawn" entity, is written as its id.
+const illusion::Entity saved[] = {player, weapon};
+const illusion::SceneSaveResult delta =
+    illusion::saveScene(world, {.subset = saved, .externalReferences = true});
+
+// Later, on the same level: swap the live entities for the saved ones in one step.
+const illusion::SceneLoadResult applied = illusion::loadScene(
+    world, delta.json, {.resolveExternal = true, .replace = currentSaved});
+```
 
 ## Names
 

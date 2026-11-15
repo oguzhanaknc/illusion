@@ -1,6 +1,6 @@
 # 0058. Save games as checksummed slot files of tagged entities, through SaveService
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-11-15
 
 ## Context

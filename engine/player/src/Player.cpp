@@ -35,6 +35,7 @@
 #include <illusion/render/UiRenderer.hpp>
 #include <illusion/runtime/GameSession.hpp>
 #include <illusion/runtime/ProjectSettings.hpp>
+#include <illusion/save/SaveComponents.hpp>
 #include <illusion/store/StoreBackend.hpp>
 #include <illusion/ui/UiWorld.hpp>
 
@@ -153,6 +154,7 @@ void reflectEngineTypes()
     reflectParticleComponents();
     reflectRenderComponents();
     registerUiComponents();
+    registerSaveComponents();
     reflectRuntimeStructs();
 }
 

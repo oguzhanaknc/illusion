@@ -50,6 +50,7 @@ vfs.mount("mods", illusion::utf8Path(modDirectoryFromConfig));
 | --- | --- |
 | `readFile()`, `readText()` | Read a whole file into a byte vector or string. |
 | `writeFile()`, `writeText()` | Write a whole file; only on `ReadWrite` mounts. |
+| `writeFileAtomic()` | Write a whole file durably, for saved games (see below). |
 | `exists()` | Check whether a file or directory exists. |
 | `list()` | List a directory, sorted by name. |
 | `listRecursive()` | List everything below a directory; names are relative paths such as `sub/a.png`. |
@@ -77,8 +78,13 @@ if (vfs.stat("user:/saves/slot1", stat) == illusion::FileError::None && stat.isD
 }
 ```
 
-Writes are atomic: the data is written to a temporary file that then replaces the target, so a crash
-or power loss never leaves a half-written save file. Parent directories are created automatically.
+Writes are atomic: the data is written to a temporary file in the same directory that then replaces the
+target, so a reader or a crash of the program never sees a half-written file. Parent directories are
+created automatically. `writeFileAtomic()` also flushes the temporary file to the device before it replaces
+the target, and flushes the replacement (`MoveFileExW` with `MOVEFILE_WRITE_THROUGH` on Windows, `fsync()`
+of the file and its directory elsewhere), so even after a power cut the file holds either its old or its
+new contents. It is slower, so use it for data that must survive, such as saved games. If it fails, the
+target is unchanged and no temporary file is left.
 
 ## Archives
 

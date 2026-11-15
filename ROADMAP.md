@@ -922,6 +922,19 @@ Design: [ADR 0058](docs/adr/0058-saved-games.md). Work packages, one pull reques
   instances; a failed apply changes nothing; every flipped byte and every truncation of a file is `Corrupt`;
   a newer container is `NewerVersion`; a type migration runs on apply; benchmarks `save/capture-1000` and
   `save/apply-1000`.
+  ✅ Done: the three serializer options (defaults keep every existing file byte for byte); `writeFileAtomic()`
+  (`CreateFileW` + `FlushFileBuffers` + `MoveFileExW(MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH)` on
+  Windows, `fsync` (`F_FULLFSYNC` on macOS) + `rename` + `fsync` of the directory elsewhere); `engine/save`
+  with `SaveFile.hpp` (24-byte header, payload = u32 metadata size, metadata JSON, World JSON;
+  `isValidSaveMetadata()`, `decodeSaveMetadata()`) and `SaveCapture.hpp` (`collectSavedEntities()`,
+  `captureSave()`, `applySave()` returning `Expected<..., SaveFailure>` with the serializer's message); the
+  showcase Player is `Saved`. A flipped byte of the version field reads as `NewerVersion` (or `Corrupt` when
+  it becomes 0), since a newer header cannot be checked; every other flipped byte and every truncation is
+  `Corrupt`. `save/capture-1000` 1.9 ms and `save/apply-1000` 1.8 ms for 1,000 saved entities in a World of
+  2,000 (budgets 15 ms each).
+  Open: the `Saved` tag's manual anchor points at "Scene deltas" in `manual/scenes.md` until SAVE-4 writes
+  the "Saved games" page; `writeFileAtomic()` was run on Windows only (the POSIX path is built by CI); a
+  non-saved entity whose Entity field points at a saved one keeps a dead handle after `applySave()`.
 - SAVE-2 (`implementer`): The service. `SaveSystem` (save thread, queue, slot list, `.bak` fallback,
   `waitIdle()`), `SaveService` with its adapter and `USES save` (module API version 6), the apply point in
   `GameSession::update()`, `GameSessionDesc::saves`; the player uses `user:/saves`, Play mode `cache:/saves`;
