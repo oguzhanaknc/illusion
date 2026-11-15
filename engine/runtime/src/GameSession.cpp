@@ -24,6 +24,8 @@
 #include <illusion/runtime/GameLocalization.hpp>
 #include <illusion/runtime/GameSession.hpp>
 #include <illusion/runtime/SceneLoaderService.hpp>
+#include <illusion/save/SaveService.hpp>
+#include <illusion/save/SaveSystemService.hpp>
 #include <illusion/store/StoreService.hpp>
 #include <illusion/text/LocaleFile.hpp>
 #include <illusion/text/Localization.hpp>
@@ -213,6 +215,7 @@ struct GameSession::Impl
         , inputService(actions)
         , sceneService(world, *sessionDesc.files, &guids())
         , uiService(world, ui, localization)
+        , saveService(sessionDesc.saves)
     {
         gamepads.reserve(kReservedGamepads);
         ui.setAssets(sessionDesc.uiAssets);
@@ -346,6 +349,7 @@ struct GameSession::Impl
     InputActionsService inputService;
     SceneLoaderService sceneService;
     UiWorldService uiService;
+    SaveSystemService saveService;
     std::unique_ptr<PhysicsAssetResolver> physicsAssets;
     std::unique_ptr<RenderAssetResolver> renderAssets;
     std::vector<const GamepadState*> gamepads;
@@ -424,6 +428,10 @@ void GameSession::start()
         {
             services.provide<StoreService>(*impl.desc.store);
         }
+        if (impl.desc.saves != nullptr)
+        {
+            services.provide<SaveService>(impl.saveService);
+        }
         impl.desc.modules->attachWorld(impl.world, WorldRole::Simulation, services);
     }
 }
@@ -440,6 +448,7 @@ void GameSession::stop()
     {
         impl.desc.modules->detachWorld(impl.world);
     }
+    impl.saveService.cancel();
 }
 
 bool GameSession::isStarted() const noexcept
@@ -461,6 +470,10 @@ void GameSession::update(f64 deltaSeconds)
         }
     }
     assignMissingGuids(impl.world, impl.guids());
+    if (impl.desc.mode == GameSessionMode::Play && impl.started && impl.desc.saves != nullptr)
+    {
+        impl.saveService.update(impl.world, &impl.guids(), impl.desc.fixedStep);
+    }
     impl.physics.update(step);
     updateTransformHierarchy(impl.world, impl.hierarchy, impl.desc.jobs);
     impl.localization.applyPendingLocale();
@@ -546,6 +559,11 @@ void GameSession::setUiPointer(const std::optional<GameUiPointer>& pointer) noex
 UiWorld& GameSession::ui() noexcept
 {
     return m_impl->ui;
+}
+
+SaveService* GameSession::saves() noexcept
+{
+    return m_impl->desc.saves != nullptr ? &m_impl->saveService : nullptr;
 }
 
 text::Localization& GameSession::localization() noexcept

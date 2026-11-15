@@ -10,6 +10,7 @@
 #include <illusion/physics/PhysicsWorld.hpp>
 #include <illusion/runtime/GameLocalization.hpp>
 #include <illusion/runtime/GameSession.hpp>
+#include <illusion/save/SaveSystem.hpp>
 #include <illusion/store/NullStoreService.hpp>
 #include <illusion/text/Localization.hpp>
 #include <illusion/ui/UiWorld.hpp>
@@ -51,6 +52,8 @@ constexpr UVec2 kDefaultUiFrame{1920, 1080};
 // Play mode has no store (ADR 0056); the editor has no user mount, so the cloud files go to the project's
 // cache.
 constexpr std::string_view kPlayCloudDirectory = "cache:/store/cloud";
+// Saved games of Play mode stay in the project's cache too (ADR 0058).
+constexpr std::string_view kPlaySaveDirectory = "cache:/saves";
 
 // The "clip" member of an AudioSource value ("" when absent).
 std::string clipOf(const std::optional<std::string>& value)
@@ -94,6 +97,7 @@ struct PlaySession::Impl
     PlaySessionDesc desc;
     ModuleHost modules;
     std::unique_ptr<NullStoreService> store; // one per session, so achievements and stats start empty
+    std::unique_ptr<SaveSystem> saves;       // one per session; its destructor finishes the writes
     std::unique_ptr<GameSession> game;
     PlayStartOptions options;
     bool paused = false;
@@ -193,6 +197,11 @@ Expected<void, CommandError> PlaySession::start(const PlayStartOptions& options)
     auto store = std::make_unique<NullStoreService>(impl.editor.files(),
                                                     NullStoreDesc{.cloudDirectory = kPlayCloudDirectory});
     desc.store = store.get();
+    SaveSystemDesc savesDesc;
+    savesDesc.files = &impl.editor.files();
+    savesDesc.directory = kPlaySaveDirectory;
+    auto saves = std::make_unique<SaveSystem>(savesDesc);
+    desc.saves = saves.get();
     desc.audioOutput = impl.desc.audioOutput;
     desc.fixedStep = options.fixedStep;
     desc.seed = options.seed;
@@ -213,6 +222,7 @@ Expected<void, CommandError> PlaySession::start(const PlayStartOptions& options)
         return unexpected(CommandError::make(ErrorKind::Internal, "cannot copy the scene: " + loaded.error));
     }
     impl.store = std::move(store);
+    impl.saves = std::move(saves);
     impl.game = std::move(game).value();
     impl.options = options;
     impl.paused = false;
@@ -236,6 +246,7 @@ void PlaySession::stop()
     impl.editor.detachPlayWorld();
     impl.game.reset();
     impl.store.reset();
+    impl.saves.reset();
     impl.paused = false;
     ILL_LOG_INFO("Play", "Play session stopped");
 }

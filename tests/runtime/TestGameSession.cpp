@@ -28,6 +28,9 @@
 #include <illusion/runtime/GameLocalization.hpp>
 #include <illusion/runtime/GameSession.hpp>
 #include <illusion/runtime/SceneService.hpp>
+#include <illusion/save/SaveComponents.hpp>
+#include <illusion/save/SaveService.hpp>
+#include <illusion/save/SaveSystem.hpp>
 #include <illusion/store/NullStoreService.hpp>
 #include <illusion/text/Localization.hpp>
 #include <illusion/text/MessageFormat.hpp>
@@ -42,6 +45,7 @@
 
 #include <algorithm>
 #include <array>
+#include <format>
 #include <span>
 #include <string>
 #include <string_view>
@@ -1185,4 +1189,159 @@ TEST_CASE("a glyph in a game session shows the binding for the keyboard, then fo
     CHECK(gamepad != keyboard);
     CHECK(drawn(gamepad));
     CHECK(session->world().get<UiText>(shown).text == "?");
+}
+
+namespace
+{
+
+// What the saving module of the tests below saw: "<update>:<event>:<slot>;" for every SaveEvent.
+struct SaveLog
+{
+    u32 updates = 0;
+    std::string events;
+    bool found = false;
+};
+
+SaveLog g_saveLog;
+
+void setHeroX(World& world, f32 x)
+{
+    world.query<const Name, Transform>().each([x](const Name& name, Transform& transform) {
+        if (name.value == "Hero")
+        {
+            transform.position.x = x;
+        }
+    });
+}
+
+f32 heroX(World& world)
+{
+    f32 x = -1.0f;
+    world.query<const Name, const Transform>().each([&x](const Name& name, const Transform& transform) {
+        if (name.value == "Hero")
+        {
+            x = transform.position.x;
+        }
+    });
+    return x;
+}
+
+// Saves on its first update and changes the Hero afterwards; loads on its second after another change.
+void updateSaving(ModuleContext& context, f64)
+{
+    SaveService* saves = context.service<SaveService>();
+    g_saveLog.found = saves != nullptr;
+    if (saves == nullptr)
+    {
+        return;
+    }
+    std::array<SaveEvent, 4> events{};
+    const u32 count = saves->pollEvents(events);
+    for (u32 i = 0; i < count && i < events.size(); ++i)
+    {
+        g_saveLog.events +=
+            std::format("{}:{}:{};", g_saveLog.updates, saveEventTypeName(events[i].type), events[i].slot);
+    }
+    if (g_saveLog.updates == 0)
+    {
+        REQUIRE(saves->save("slot1", SaveMetadata{"First", 1.0, 1, {}}).hasValue());
+        setHeroX(context.world(), 5.0f); // captured after the Modules step: the save holds 5
+    }
+    if (g_saveLog.updates == 1)
+    {
+        setHeroX(context.world(), 9.0f);
+        REQUIRE(saves->load("slot1").hasValue());
+    }
+    ++g_saveLog.updates;
+}
+
+constexpr ModuleApi kSavingModule =
+    makeModuleApi("session_saves", "1.0.0", {.load = &loadLogged, .update = &updateSaving});
+
+struct SaveFixture : Fixture
+{
+    SaveFixture()
+    {
+        registerSaveComponents();
+        SaveSystemDesc savesDesc;
+        savesDesc.files = &files;
+        savesDesc.directory = "assets:/saves";
+        saves = std::make_unique<SaveSystem>(savesDesc);
+        desc.saves = saves.get();
+        desc.fixedStep = true;
+    }
+
+    std::unique_ptr<SaveSystem> saves;
+};
+
+} // namespace
+
+TEST_CASE("a game session captures saves after its modules and applies a load in the next update")
+{
+    SaveFixture f;
+    g_saveLog = {};
+    ModuleHost modules(f.jobs);
+    REQUIRE_FALSE(modules.add(kSavingModule));
+    f.desc.modules = &modules;
+    auto session = f.create();
+    Transform at;
+    at.position.x = 1.0f;
+    session->world().create(Name{"Hero"}, at, Saved{});
+    session->start();
+    session->update(kStep); // save requested and captured
+    session->update(kStep); // load requested and sent
+    CHECK(heroX(session->world()) == 9.0f);
+    session->update(kStep); // the load is applied
+    CHECK(heroX(session->world()) == 5.0f);
+    session->update(kStep);
+    CHECK(g_saveLog.found);
+    CHECK(g_saveLog.events == "2:Saved:slot1;3:Loaded:slot1;");
+    session->stop();
+}
+
+TEST_CASE("a game session provides SaveService only with a save system, and drops its requests on stop")
+{
+    Fixture plain;
+    CHECK(plain.create()->saves() == nullptr);
+    g_saveLog = {};
+    ModuleHost modules(plain.jobs);
+    REQUIRE_FALSE(modules.add(kSavingModule));
+    plain.desc.modules = &modules;
+    {
+        auto session = plain.create();
+        session->start();
+        session->update(kStep);
+    }
+    CHECK_FALSE(g_saveLog.found);
+
+    SaveFixture f;
+    auto session = f.create();
+    Transform at;
+    at.position.x = 1.0f;
+    session->world().create(Name{"Hero"}, at, Saved{});
+    SaveService* saves = session->saves();
+    REQUIRE(saves != nullptr);
+    session->start();
+    REQUIRE(saves->save("slot1", SaveMetadata{}).hasValue());
+    session->update(kStep);
+    session->update(kStep);
+    std::array<SaveEvent, 4> events{};
+    REQUIRE(saves->pollEvents(events) == 1);
+    CHECK(events[0].type == SaveEventType::Saved);
+
+    setHeroX(session->world(), 3.0f);
+    REQUIRE(saves->load("slot1").hasValue());
+    session->update(kStep); // sent
+    REQUIRE(saves->save("slot2", SaveMetadata{}).hasValue());
+    session->stop();
+    CHECK_FALSE(saves->busy());
+    session->update(kStep);
+    session->update(kStep);
+    CHECK(heroX(session->world()) == 3.0f); // no load after stop()
+    session->start();
+    session->update(kStep);
+    CHECK(saves->pollEvents(events) == 0);
+    CHECK(heroX(session->world()) == 3.0f);
+    f.saves->waitIdle();
+    CHECK_FALSE(f.files.exists("assets:/saves/slot2.save"));
 }

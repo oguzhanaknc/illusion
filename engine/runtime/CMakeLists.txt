@@ -1,6 +1,6 @@
 # illusion::runtime — the game runtime around the engine libraries: GameSession (one running game, shared by
 # the editor's Play mode and the player; ADR 0042), the game's string tables (loadGameLocalization), the
-# project settings and the host's SceneService (SceneLoaderService).
+# project settings and the host's SceneService (SceneLoaderService). Saved games come from illusion::save.
 
 add_library(illusion_runtime STATIC
     src/GameLocalization.cpp
@@ -15,7 +15,7 @@ target_include_directories(illusion_runtime PUBLIC
 target_link_libraries(illusion_runtime
     PUBLIC illusion::core illusion::platform illusion::input illusion::physics illusion::audio illusion::particles
         illusion::render illusion::ui illusion::text
-        illusion::modules illusion::store_api)
+        illusion::modules illusion::store_api illusion::save)
 
 illusion_configure_target(illusion_runtime)
 

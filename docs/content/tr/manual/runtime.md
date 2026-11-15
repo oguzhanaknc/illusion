@@ -52,8 +52,10 @@ belirtilen input action'larını ve locale dosyalarını yükler. Sahneyi `world
 `ModuleHost`'a altı servisle birlikte bir Simulation World olarak ekler. Modüller bu servislere
 `context.service<T>()` ile ulaşır: `PhysicsService`, `AudioService`, `ParticleService`, `InputService`,
 `SceneService` ve `UiService`
-(bkz. [scripting API](../reference/scripting-api.md)); `GameSessionDesc::store` ile yedinci servis olan
-`StoreService` de eklenir ([Mağaza servisleri](#magaza-servisleri)). `SceneService::requestExit()` çağıran bir
+(bkz. [scripting API](../reference/scripting-api.md)); `GameSessionDesc::store` ile `StoreService`
+([Mağaza servisleri](#magaza-servisleri)), bir `SaveSystem` olan `GameSessionDesc::saves` ile de `SaveService`
+eklenir (kayıtlı oyunlar, ADR 0058; player onları `user:/saves`'te, Play modu `cache:/saves`'te tutar).
+`SceneService::requestExit()` çağıran bir
 modül oyunu bitirir: session'ın `exitRequested()` değeri true olur ve host o update'ten sonra durur.
 
 Host, diğer görünümlerle paylaştıklarını kendisi tutar: `AssetStreamer`'ı ve `GamepadSystem`'i her karede
@@ -67,11 +69,12 @@ Her `update(deltaSeconds)` şunları çalıştırır:
 | --- | --- |
 | 1. Input | `InputActions`, `keyboardMouse()`'u ve gamepad'leri okur; son update modal bir canvas gösterdiyse yalnızca `ui.*` action'ları input alır |
 | 2. Modüller | World üzerinde `ModuleHost::update()`; ardından `EntityGuid`'siz oluşturulan Entity'ler bir tane alır |
-| 3. Fizik | `PhysicsWorld::update()`: gövdeler World ile eşitlenir, adım atar ve Transform'larını yazar |
-| 4. Hiyerarşi | `updateTransformHierarchy()`: çocuklar ebeveynlerini izler, `Disabled` `Inactive` olur |
-| 5. UI | `UiWorld`, `setUiFrame()`'in karesi için UI Entity'lerini yerleştirir, işaretçiyi ve `ui.navigate`, `ui.submit` ile `ui.cancel` action'larını işler (Play modu) ve çizim listesini kaydeder (`ui()`), bkz. [Oyun UI'ı](ui.md) |
-| 6. Parçacıklar ve ses | `ParticleWorld::update()` ve `AudioWorld::update()`: kaynaklar Entity'lerini izler, dinleyici hareket eder |
-| 7. Çözücüler | Asset referansları runtime Component'lerine dönüşür (`Collider` Mesh'leri, `MeshRenderer` → `RenderMesh`) |
+| 3. Kayıtlar | `GameSessionDesc::saves` ile: kayıt thread'inin bitirdiği yüklemeler kayıtlı Entity'lerin yerini alır ve biten istekler bir sonraki update'in `SaveService` olayları olur; ardından 2. adımdaki `save`, `load` ve `remove` çağrıları çağrı sırasıyla gönderilir, her `save` World'ü o anda yakalar. `fixedStep` ile önce kayıt thread'ini bekler, böylece sonuçlar her zaman bir sonraki update'te gelir |
+| 4. Fizik | `PhysicsWorld::update()`: gövdeler World ile eşitlenir, adım atar ve Transform'larını yazar |
+| 5. Hiyerarşi | `updateTransformHierarchy()`: çocuklar ebeveynlerini izler, `Disabled` `Inactive` olur |
+| 6. UI | `UiWorld`, `setUiFrame()`'in karesi için UI Entity'lerini yerleştirir, işaretçiyi ve `ui.navigate`, `ui.submit` ile `ui.cancel` action'larını işler (Play modu) ve çizim listesini kaydeder (`ui()`), bkz. [Oyun UI'ı](ui.md) |
+| 7. Parçacıklar ve ses | `ParticleWorld::update()` ve `AudioWorld::update()`: kaynaklar Entity'lerini izler, dinleyici hareket eder |
+| 8. Çözücüler | Asset referansları runtime Component'lerine dönüşür (`Collider` Mesh'leri, `MeshRenderer` → `RenderMesh`) |
 
 Oturumun `localization()` nesnesi, `create()`'in okuduğu projenin `assets:/locales/*.json` dosyalarındaki
 string tablolarını tutar: her dosyanın anahtarları ve `en.json`'un İngilizce metni. `UiText::key` orada aranır
@@ -198,7 +201,7 @@ derlenir:
 ```cmake
 illusion_add_module(showcase_game_module STATIC ID showcase
     SOURCES showcase/modules/showcase/showcase.cpp
-    USES physics audio particles input render runtime store ui)
+    USES physics audio particles input render runtime store ui save)
 illusion_add_game(showcase_game
     MODULES showcase_game_module
     NAME "Showcase"

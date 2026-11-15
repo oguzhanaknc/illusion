@@ -25,8 +25,8 @@
 /// @defgroup scripting_api Scripting API
 /// What game modules call on their host (ADR 0041): the ModuleContext of every module callback, and the
 /// host service interfaces PhysicsService, AudioService, InputService, ParticleService, SceneService,
-/// StoreService and UiService. Each service is an abstract class without data members that the host
-/// implements over an engine library; modules find them with `context.service<T>()`. The showcase module
+/// StoreService, UiService and SaveService. Each service is an abstract class without data members that the
+/// host implements over an engine library; modules find them with `context.service<T>()`. The showcase module
 /// calls every function of the group (tools/check_api_coverage.py).
 
 namespace illusion
