@@ -100,3 +100,4 @@ has the settings, and [Releasing a game](../guides/release.md) the way to a stor
 - [Tetris by Hand](tetris-by-hand.md) builds the same game in the editor window, step by step.
 - The [Automation manual](../manual/editor/automation.md) shows how the scripted acceptance transcript drives
   the same commands without an agent.
+- Next: [A HUD and a pause menu](hud-and-pause-menu.md) gives a game a score display and a menu.

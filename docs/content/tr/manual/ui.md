@@ -7,6 +7,9 @@ elemanları yerleştirir ve her karede bir çizim listesi kaydeder; dışa aktar
 görünümü bunu `UiRenderer` ile sahnenin üzerine çizer (ADR 0057). UI Component'lerinin `Transform`'u yoktur
 ve diğer tüm Component'ler gibi sahnelerde ve prefab'lerde saklanırlar.
 
+[HUD ve duraklatma menüsü](../tutorials/hud-and-pause-menu.md) eğitimi bir UI'ı adım adım kurar,
+[Oyun UI'ı Mimarisi](../architecture/game-ui.md) ise iç işleyişini anlatır.
+
 Header'lar: `<illusion/ui/UiComponents.hpp>`, `<illusion/ui/UiGeometry.hpp>`, `<illusion/ui/UiWorld.hpp>`,
 `<illusion/ui/UiWidgets.hpp>`
 

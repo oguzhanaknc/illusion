@@ -110,6 +110,7 @@ plugins:
             First Agent Session: İlk Ajan Oturumu
             Tetris with an Agent: Ajanla Tetris
             Tetris by Hand: Elle Tetris
+            A HUD and a pause menu: HUD ve Duraklatma Menüsü
             Contributing: Katkıda Bulunma
 
 markdown_extensions:
@@ -176,9 +177,11 @@ nav:
       - First Agent Session: tutorials/first-agent-session.md
       - Tetris with an Agent: tutorials/tetris-with-an-agent.md
       - Tetris by Hand: tutorials/tetris-by-hand.md
+      - A HUD and a pause menu: tutorials/hud-and-pause-menu.md
   - Architecture:
       - Overview: architecture/overview.md
       - Editor: architecture/editor.md
+      - Game UI: architecture/game-ui.md
       - Decisions: architecture/decisions.md
   - Reference:
       - API Reference: reference/api.md

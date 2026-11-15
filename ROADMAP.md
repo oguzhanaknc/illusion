@@ -770,7 +770,7 @@ compatible). Design in ADR 0055; public API in `illusion/player/Player.hpp` and
   Steam Input glyphs, the sniper container check and job) and must be revised when M8-6 and M8-7 close those;
   `first-agent-session.md` ends without a running game and has no export section.
 
-## UI — Game interface
+## UI — Game interface ✅
 
 Games have no way to draw a HUD or a menu: the editor's Dear ImGui is not shipped in games. Design in
 ADR 0057: UI elements are Entities with saved Components under a `UiCanvas`, text is drawn from signed
@@ -908,6 +908,11 @@ distance field fonts, and a batched pass draws the UI after tonemapping. Public 
   `gameui.layout` and `gameui.pick` report disabled canvases there.
 - UI-4: Documentation (EN/TR), in step with each pull request: manual page "Game UI", the scripting API
   reference, a tutorial that adds a HUD and a pause menu, the architecture page.
+  ✅ Done: manual page `manual/ui.md`, the tutorial `tutorials/hud-and-pause-menu.md` (its module code is
+  built and loaded by the tests), the architecture page `architecture/game-ui.md`, the scripting API
+  reference, the manual's Play mode screenshot with the showcase HUD.
+  Open: the tutorial's editor steps and its agent commands were checked against the code, not replayed; the
+  tutorial module's UI logic is compiled and loaded but runs without a `UiService` in its test.
 
 Open (recorded by ADR 0057): right-to-left text and shaping, CJK with dynamic atlas pages, multi-channel
 distance fields, world-space UI, HDR output of the UI pass (M9).

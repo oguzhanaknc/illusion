@@ -16,6 +16,7 @@ illusion katmanlar halinde inşa edilir. Bir katman yalnızca altındaki katmanl
 | Fizik | Job System üzerinde Jolt Physics ile katı cisimler, primitif, convex hull ve Mesh collider'ları, karakterler, joint'ler, raycast'ler, shape cast'ler ve temaslar | Tamamlandı |
 | Parçacıklar | Şekilli, ömürlü, yerçekimli ve sürtünmeli, ömür boyunca renk ve boyutu değişen emitter'lar; Job System üzerinde deterministik olarak simüle edilir (çizim: PFX-2) | Tamamlandı |
 | Ses | miniaudio ile konili 3D ses, streaming, arka planda yükleme ve bus'lı, filtreli, reverb'lü mikser; kendi thread'inde miksajlanır | Tamamlandı |
+| Oyun UI'ı | Entity olarak canvas'lar, metin (distance field fontlar, yerelleştirilmiş), görüntüler, stack ve grid'ler, düğmeler, kaydırıcılar, text field'lar, scroll view'lar, geçişler, input glyph'leri ve modal menüler; tonemapping'den sonra toplu bir pass ile çizilir ([Oyun UI'ı Mimarisi](game-ui.md)) | Tamamlandı |
 | Renderer: temel | NVRHI üzerinden Vulkan 1.3 cihazı, swapchain'ler, Slang shader hattı | Tamamlandı |
 | Renderer: sahne | Mesh'ler, PBR Material'ler, doğrudan ve görüntü tabanlı aydınlatma, yumuşak gölgeler, GTAO, HDR post-processing (TAA, bloom, tonemapping), frustum culling, indirect draw'lı GPU occlusion culling, instancing, bindless multi-draw | Tamamlandı |
 | Editör | Denetlenen bir export sınırına sahip ayrı ağaç; UI temeli (Dear ImGui backend'leri, tema, fontlar, ikonlar, widget kiti, galeri) tamamlandı; sahne düzenleme, gizmo'lar ve AI komut API'si sürüyor ([Editör Mimarisi](editor.md)) | Sürüyor |
@@ -70,6 +71,7 @@ modülleri kendisine eklenmiş her World üzerinde çalıştırır (ADR 0041).
 | `engine/physics` | Fizik kütüphanesi: `include/illusion/physics` ve `src/` |
 | `engine/audio` | Ses kütüphanesi: `include/illusion/audio` ve `src/` |
 | `engine/particles` | Parçacık kütüphanesi: `include/illusion/particles` ve `src/` |
+| `engine/ui` | Oyun UI'ı kütüphanesi: `include/illusion/ui` ve `src/` (onu çizen pass `engine/render` içindedir) |
 | `engine/modules` | Modül host'u: `include/illusion/modules` ve `src/` |
 | `engine/runtime` | Oyun runtime'ı: `GameSession`, proje ayarları, `SceneLoaderService` (ADR 0042) |
 | `engine/render` | Render kütüphanesi: `include/illusion/render`, `src/` ve `shaders/` |

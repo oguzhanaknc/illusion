@@ -1,5 +1,6 @@
 // The code of the tutorials: tests/CMakeLists.txt builds the C++ blocks of "Tetris by Hand"
-// (docs/content/en/tutorials/tetris-by-hand.md) as the module illusion_tutorial_tetris_module.
+// (docs/content/en/tutorials/tetris-by-hand.md) as the module illusion_tutorial_tetris_module and those of
+// "A HUD and a pause menu" (hud-and-pause-menu.md) as illusion_tutorial_hud_module.
 
 #include "TestSupport.hpp"
 
@@ -35,6 +36,26 @@ TEST_CASE("the module of the Tetris by Hand tutorial loads, reflects its Compone
         CHECK(world.registry().findByStableName(name) != kInvalidComponentId);
     }
     // Without an input service the tutorial's update returns at once; it must not fail either way.
+    for (int frame = 0; frame < 3; ++frame)
+    {
+        modules.update(world, 1.0 / 60.0);
+    }
+    CHECK(modules.detachWorld(world));
+}
+
+TEST_CASE("the module of the HUD and pause menu tutorial loads and updates a World without a UI")
+{
+    test::TempDirectory directory;
+    JobSystem jobs{JobSystemDesc{2, 256}};
+    ModuleHostDesc desc;
+    desc.shadowDirectory = directory.path / "shadow";
+    ModuleHost modules(jobs, desc);
+    const std::optional<std::string> loadError = modules.load(utf8Path(TUTORIAL_HUD_MODULE));
+    REQUIRE_MESSAGE(!loadError, loadError.value_or(""));
+
+    World world;
+    modules.attachWorld(world, WorldRole::Simulation);
+    // Without a UiService the module creates nothing and its update returns at once.
     for (int frame = 0; frame < 3; ++frame)
     {
         modules.update(world, 1.0 / 60.0);

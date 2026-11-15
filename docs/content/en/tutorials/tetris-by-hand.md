@@ -252,3 +252,4 @@ has the settings, and [Releasing a game](../guides/release.md) the way to a stor
 
 - Compare your game with the checks of the acceptance contract (C3 to C5 in SPEC.md).
 - Let an agent continue from here: [Tetris with an Agent](tetris-with-an-agent.md).
+- Next: [A HUD and a pause menu](hud-and-pause-menu.md) gives a game a score display and a menu.

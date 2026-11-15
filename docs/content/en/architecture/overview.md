@@ -16,6 +16,7 @@ illusion is built in layers. A layer may depend only on layers below it.
 | Physics | Rigid bodies, primitive, convex hull and mesh colliders, characters, joints, raycasts, shape casts and contacts with Jolt Physics on the Job System | Implemented |
 | Particles | Emitters with shapes, lifetimes, gravity and drag, colour and size over life, simulated deterministically on the Job System (drawing: PFX-2) | Implemented |
 | Audio | 3D sound with cones, streaming, background loading and a mixer with buses, filters and reverb with miniaudio, mixed on its own thread | Implemented |
+| Game UI | Canvases, text (distance field fonts, localized), images, stacks and grids, buttons, sliders, text fields, scroll views, transitions, input glyphs and modal menus as Entities, drawn by a batched pass after tonemapping ([Game UI Architecture](game-ui.md)) | Implemented |
 | Renderer: foundation | Vulkan 1.3 device through NVRHI, swapchains, Slang shader pipeline | Implemented |
 | Renderer: scene | Meshes, PBR Materials, direct and image-based lighting, soft shadows, GTAO, HDR post-processing (TAA, bloom, tonemapping), frustum culling, GPU occlusion culling with indirect draws, instancing, bindless multi-draw | Implemented |
 | Editor | Separate tree with a checked export boundary; UI foundation (Dear ImGui backends, theme, fonts, icons, widget kit, gallery) done; scene editing, gizmos and the AI command API in progress ([Editor Architecture](editor.md)) | In progress |
@@ -69,6 +70,7 @@ Only the core library may exist twice: a shared module links the other engine li
 | `engine/physics` | Physics library: `include/illusion/physics` and `src/` |
 | `engine/audio` | Audio library: `include/illusion/audio` and `src/` |
 | `engine/particles` | Particle library: `include/illusion/particles` and `src/` |
+| `engine/ui` | Game UI library: `include/illusion/ui` and `src/` (the pass that draws it is in `engine/render`) |
 | `engine/modules` | Module host: `include/illusion/modules` and `src/` |
 | `engine/runtime` | Game runtime: `GameSession`, project settings, `SceneLoaderService` (ADR 0042) |
 | `engine/render` | Render library: `include/illusion/render`, `src/` and `shaders/` |
