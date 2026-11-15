@@ -7,7 +7,7 @@ shafts at dusk, fireflies, a campfire, neon lights and things to push. See the m
 ```bash
 python samples/techdemo/tools/fetch_assets.py   # CC0 models and textures from Poly Haven (about 900 MB)
 python samples/techdemo/tools/make_assets.py    # regenerate the procedural assets (committed)
-python samples/techdemo/tools/make_scene.py     # regenerate build.jsonl, then replay it:
+python samples/techdemo/tools/make_scene.py     # regenerate build.jsonl, then replay it (both scenes):
 illusion_ctl --launch illusion_editor --editor-arg --headless --editor-arg --no-gpu --editor-arg --deterministic --editor-arg --project --editor-arg samples/techdemo replay samples/techdemo/build.jsonl
 ```
 
@@ -22,4 +22,12 @@ illusion_ctl --launch illusion_editor --editor-arg --headless --editor-arg --no-
 - `assets/models`, `assets/textures`, `assets/audio`: made by `make_assets.py` from numbers with fixed seeds:
   the terrain (with `terrain_height()` for placing things), neon rings and bars, a log, flame and smoke
   sprites, and looping wind, cricket and fire sounds.
+- `assets/scenes/ui.scene`: the game UI, built by the same `build.jsonl` after the forest: a HUD (title, the
+  binding of the pause action, a frame-time readout, outlined so that it reads over the scene) and a modal pause
+  menu, hidden at the start (Resume, the master volume, English or Turkish, Quit). The module instantiates it
+  when the game starts and drives it through `UiService`; Escape or the gamepad's East button opens and closes
+  the menu, and while it shows the clock stops and the walker reads no input. Its text comes from
+  `assets/locales/en.json` and `tr.json`, in `assets/fonts/Roboto-Regular.ttf` (Apache-2.0, licence beside it).
+  The UI needs none of the downloaded assets: `editor/tests/play/TestTechDemo.cpp` and the golden image
+  `techdemo-pause-menu` (`editor/tests/gpu/TestTechDemoGpu.cpp`) run the module on it alone in CI.
 - `tools/test_tools.py` tests both scripts (CI runs it).

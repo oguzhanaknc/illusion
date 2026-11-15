@@ -1,9 +1,11 @@
-"""Writes build.jsonl: the editor commands that build the tech demo's scene, assets:/scenes/forest.scene.
+"""Writes build.jsonl: the editor commands that build the tech demo's scene, assets:/scenes/forest.scene, and its
+game UI, assets:/scenes/ui.scene.
 
 A fir forest around a clearing with a campfire, made of Poly Haven models (downloaded by fetch_assets.py) and
 the procedural terrain, logs and neon of make_assets.py. Everything is scattered with a fixed seed and set on
-the ground with terrain_height(), so the scene matches the terrain mesh. Replay the file against a headless
-editor on this project (see the README) to build the scene:
+the ground with terrain_height(), so the scene matches the terrain mesh. The UI (a HUD and a pause menu) is a
+scene of its own that the module instantiates, so that it can be built and tested without the downloaded
+assets. Replay the file against a headless editor on this project (see the README) to build both:
 
     python samples/techdemo/tools/make_scene.py
 """
@@ -642,10 +644,95 @@ def build():
     call("scene.save_as", {"path": "assets:/scenes/forest.scene", "overwrite": True})
 
 
+FONT = "assets:/fonts/Roboto-Regular.ttf"
+UI_SCENE = "assets:/scenes/ui.scene"
+
+
+def placement(anchor_min, anchor_max, offset_min, offset_max):
+    return {"anchorMin": anchor_min, "anchorMax": anchor_max, "offsetMin": offset_min, "offsetMax": offset_max}
+
+
+def text(key, size, colour, align="Start", outline=2.0, wrap=False):
+    """A UiText shown by string table key (assets/locales), outlined and shadowed so that it reads over the
+    forest at any time of day."""
+    return {"key": key, "font": FONT, "size": size, "color": colour, "align": align, "verticalAlign": "Middle",
+            "wrap": wrap, "outlineWidth": outline, "outlineColor": [0.01, 0.012, 0.015, 1.0],
+            "shadowOffset": [0.0, 3.0], "shadowColor": [0.0, 0.0, 0.0, 0.45]}
+
+
+def button(name, parent, key):
+    call("gameui.create", {"kind": "button", "parent": parent, "name": name})
+    path = f"{parent}/{name}"
+    call("component.set", {"entity": path, "type": "illusion.UiElement", "value": {"size": [440, 72]}})
+    call("component.set", {"entity": path, "type": "illusion.UiImage", "value": {"tint": [0.16, 0.2, 0.18, 0.95]}})
+    call("component.set", {"entity": path, "type": "illusion.UiInteractable",
+                           "value": {"hoveredTint": [1.35, 1.45, 1.3, 1.0], "focusedTint": [1.6, 1.8, 1.45, 1.0],
+                                     "pressedTint": [0.75, 0.8, 0.75, 1.0]}})
+    call("component.set", {"entity": f"{path}/Label", "type": "illusion.UiText",
+                           "value": text(key, 36, [0.94, 0.96, 0.9, 1.0], "Center", outline=0.0)})
+
+
+def build_ui():
+    """The game UI, assets:/scenes/ui.scene, which the module instantiates when the game starts: a HUD and a
+    modal pause menu, hidden until ui.cancel opens it. Every text comes from assets/locales/{en,tr}.json."""
+    call("scene.new", {"discardChanges": True})
+
+    call("gameui.create", {"kind": "canvas", "name": "HUD"})
+    entity("Title", {"illusion.UiElement": {"placement": placement([0, 0], [0, 0], [48, 36], [960, 100])},
+                     "illusion.UiText": text("techdemo.hud.title", 48, [1.0, 0.9, 0.7, 1.0], outline=2.5)}, "/HUD")
+    entity("Hint", {"illusion.UiElement": {"placement": placement([0, 0], [0, 0], [48, 104], [960, 148])},
+                    "illusion.UiStack": {"axis": "Horizontal", "spacing": 12, "crossAlign": "Center"}}, "/HUD")
+    # The label of ui.cancel's binding on the device used last: Esc, B or Circle.
+    entity("Menu Glyph", {"illusion.UiElement": {"size": [0, 44]},
+                          "illusion.UiText": dict(text("", 32, [1.0, 0.8, 0.3, 1.0]), text="Esc"),
+                          "illusion.UiGlyph": {"action": "ui.cancel"}}, "/HUD/Hint")
+    entity("Menu Hint", {"illusion.UiElement": {"size": [0, 44]},
+                         "illusion.UiText": text("techdemo.hud.menuHint", 32, [0.92, 0.94, 0.9, 1.0])}, "/HUD/Hint")
+    entity("Frame Time", {"illusion.UiElement": {"placement": placement([1, 0], [1, 0], [-640, 36], [-48, 84])},
+                          "illusion.UiText": text("techdemo.hud.frameTime", 32, [0.75, 0.95, 0.8, 1.0], "End")},
+           "/HUD")
+
+    call("gameui.create", {"kind": "canvas", "name": "Pause Menu"})
+    call("component.set", {"entity": "/Pause Menu", "type": "illusion.UiCanvas", "value": {"order": 10, "modal": True}})
+    entity("Dim", {"illusion.UiElement": {"placement": placement([0, 0], [1, 1], [0, 0], [0, 0])},
+                   "illusion.UiImage": {"tint": [0.0, 0.01, 0.02, 0.55]}}, "/Pause Menu")
+    entity("Panel", {"illusion.UiElement": {"placement": placement([0.5, 0.5], [0.5, 0.5], [-320, -300], [320, 300])},
+                     "illusion.UiImage": {"tint": [0.03, 0.045, 0.04, 0.92]},
+                     "illusion.UiStack": {"spacing": 24, "padding": {"left": 48, "top": 40, "right": 48, "bottom": 40},
+                                          "crossAlign": "Center"},
+                     "illusion.UiTransition": {"trigger": "Shown", "duration": 0.25, "ease": "EaseOut",
+                                               "offset": [0, 48], "scale": [0.96, 0.96], "opacity": 0.0}},
+           "/Pause Menu")
+    entity("Heading", {"illusion.UiElement": {"size": [0, 80]},
+                       "illusion.UiText": text("techdemo.menu.title", 60, [1.0, 0.9, 0.7, 1.0], "Center", outline=0.0)},
+           "/Pause Menu/Panel")
+    button("Resume", "/Pause Menu/Panel", "techdemo.menu.resume")
+    entity("Volume Label", {"illusion.UiElement": {"size": [440, 40]},
+                            "illusion.UiText": text("techdemo.menu.volume", 30, [0.85, 0.88, 0.82, 1.0], "Center",
+                                                    outline=0.0)}, "/Pause Menu/Panel")
+    call("gameui.create", {"kind": "slider", "parent": "/Pause Menu/Panel", "name": "Volume"})
+    call("component.set", {"entity": "/Pause Menu/Panel/Volume", "type": "illusion.UiElement", "value": {"size": [440, 24]}})
+    call("component.set", {"entity": "/Pause Menu/Panel/Volume", "type": "illusion.UiImage",
+                           "value": {"tint": [0.12, 0.14, 0.13, 1.0]}})
+    call("component.set", {"entity": "/Pause Menu/Panel/Volume", "type": "illusion.UiSlider",
+                           "value": {"value": 1.0, "min": 0.0, "max": 1.0, "step": 0.05}})
+    call("component.set", {"entity": "/Pause Menu/Panel/Volume/Fill", "type": "illusion.UiImage",
+                           "value": {"tint": [0.45, 0.8, 0.5, 1.0]}})
+    call("component.set", {"entity": "/Pause Menu/Panel/Volume/Handle", "type": "illusion.UiImage",
+                           "value": {"tint": [0.95, 0.97, 0.92, 1.0]}})
+    button("Language", "/Pause Menu/Panel", "techdemo.menu.language")
+    button("Quit", "/Pause Menu/Panel", "techdemo.menu.quit")
+    call("entity.set_enabled", {"entity": "/Pause Menu", "enabled": False})
+
+    call("scene.save_as", {"path": UI_SCENE, "overwrite": True})
+
+
 def main():
     build()
-    header = {"comment": "Builds assets:/scenes/forest.scene of the tech demo through editor commands. Generated by "
-                         "tools/make_scene.py: edit that and run it again instead of editing this file."}
+    build_ui()
+    header = {"comment": "Builds assets:/scenes/forest.scene and the game UI assets:/scenes/ui.scene of the tech demo "
+                         "through editor commands. Generated by tools/make_scene.py: edit that and run it again "
+                         "instead of editing this file."}
     lines = [json.dumps(header)] + [json.dumps(command, separators=(", ", ": ")) for command in commands]
     with open(PROJECT / "build.jsonl", "w", encoding="utf-8", newline="\n") as file:
         file.write("\n".join(lines) + "\n")

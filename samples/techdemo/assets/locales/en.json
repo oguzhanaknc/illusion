@@ -1,0 +1,18 @@
+{
+  "format": "illusion.locale",
+  "version": 1,
+  "locale": "en",
+  "displayName": "English",
+  "plural": "en",
+  "number": {"decimal": ".", "group": ","},
+  "strings": {
+    "techdemo.hud.title": "Forest Clearing",
+    "techdemo.hud.menuHint": "Menu",
+    "techdemo.hud.frameTime": "{fps} FPS   {ms} ms",
+    "techdemo.menu.title": "Paused",
+    "techdemo.menu.resume": "Resume",
+    "techdemo.menu.volume": "Master volume {percent}%",
+    "techdemo.menu.language": "Language: English",
+    "techdemo.menu.quit": "Quit"
+  }
+}

@@ -10,10 +10,10 @@
 {"check": "C3", "call": "scene.query", "params": {"has": ["illusion.MeshRenderer"], "under": "/Board"}, "expect": {"result": {"total": 3}}}
 {"check": "C3", "call": "asset.dependencies", "params": {"path": "assets:/scenes/main.scene"}, "expect": {"result": {"dependencies": {"$contains": "assets:/materials/frame.material"}}}}
 {"check": "C3", "call": "asset.info", "params": {"path": "assets:/materials/frame.material"}, "expect": {"result": {"kind": "Material", "references": {"$oneOf": [3, 4]}}}}
-{"check": "C4", "title": "Persistence: after the restart the scene is unchanged and saves byte-identically", "call": "scene.info", "expect": {"result": {"path": "assets:/scenes/main.scene", "hash": "${hash}", "dirty": false, "entities": 7}}}
+{"check": "C4", "title": "Persistence: after the restart the scene is unchanged and saves byte-identically", "call": "scene.info", "expect": {"result": {"path": "assets:/scenes/main.scene", "hash": "${hash}", "dirty": false, "entities": {"$min": 7}}}}
 {"check": "C4", "call": "entity.get", "params": {"entity": "${board}"}, "expect": {"result": {"entity": {"id": "${board}", "path": "/Board"}, "children": 3}}}
 {"check": "C4", "call": "component.get", "params": {"entity": "/Board/Floor", "type": "illusion.MeshRenderer"}, "expect": {"result": {"value": {"mesh": "builtin:/mesh/cube", "material": "assets:/materials/frame.material"}}}}
-{"check": "C4", "call": "scene.save", "expect": {"result": {"entities": 7}}}
+{"check": "C4", "call": "scene.save", "expect": {"result": {"entities": {"$min": 7}}}}
 {"check": "C4", "call": "project.file_read", "params": {"path": "assets:/scenes/main.scene"}, "expect": {"result": {"text": "${sceneText}"}}}
 {"check": "C6", "title": "Rendering: the 640x360 game view draws the board, picks it back and matches the golden image", "call": "viewport.set_aspect", "params": {"viewport": "game", "aspect": "fixed", "width": 640, "height": 360}, "requires": "gpu", "expect": {"result": {"settings": {"aspect": "fixed", "width": 640, "height": 360}}}}
 {"check": "C6", "call": "viewport.screenshot", "params": {"viewport": "game"}, "requires": "gpu", "expect": {"result": {"width": 640, "height": 360}}, "image": {"golden": "golden/board.png", "channelTolerance": 8, "maxDifferent": 0.02, "notUniform": true}}

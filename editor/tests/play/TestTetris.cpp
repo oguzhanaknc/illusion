@@ -17,10 +17,46 @@ using namespace illusion::test;
 namespace
 {
 
-// A project with the Tetris actions and module, a Board, a PieceQueue and a Score.
+// The game UI of SPEC.md (item 6), saved hidden as in the scripted transcript: a HUD with the score, the
+// lines and the level, and a modal game-over menu with Restart and Quit. Without fonts: the module only needs
+// the elements.
+void addGameUi(EditorContext& editor)
+{
+    ok(editor, "entity.create", R"({"name":"HUD","components":{"illusion.UiCanvas":{}}})");
+    ok(editor, "entity.create",
+       R"({"name":"Stats","parent":"/HUD","components":{"illusion.UiElement":{"size":[400,480]},)"
+       R"("illusion.UiStack":{"spacing":8}}})");
+    for (const std::string_view name : {"Points", "Lines", "Level"})
+    {
+        ok(editor, "entity.create",
+           std::format(
+               R"({{"name":"{}","parent":"/HUD/Stats","components":{{"illusion.UiElement":{{"size":[0,72]}},)"
+               R"("illusion.UiText":{{"text":"0"}}}}}})",
+               name));
+    }
+    ok(editor, "entity.create",
+       R"({"name":"Game Over","components":{"illusion.UiCanvas":{"order":10,"modal":true}}})");
+    ok(editor, "entity.create",
+       R"({"name":"Panel","parent":"/Game Over","components":{"illusion.UiElement":{"placement":{"anchorMin":[0.5,0.5],)"
+       R"("anchorMax":[0.5,0.5],"offsetMin":[-300,-200],"offsetMax":[300,200]}},"illusion.UiStack":{"spacing":24}}})");
+    for (const std::string_view name : {"Restart", "Quit"})
+    {
+        ok(editor, "entity.create",
+           std::format(R"({{"name":"{}","parent":"/Game Over/Panel","components":{{"illusion.UiElement":)"
+                       R"({{"size":[400,80]}},"illusion.UiImage":{{}},"illusion.UiInteractable":{{}},)"
+                       R"("illusion.UiButton":{{}}}}}})",
+                       name));
+    }
+    ok(editor, "entity.set_enabled", R"({"entity":"/HUD","enabled":false})");
+    ok(editor, "entity.set_enabled", R"({"entity":"/Game Over","enabled":false})");
+}
+
+// A project with the Tetris actions and module, a Board, a PieceQueue and a Score (and the game UI when
+// asked).
 struct TetrisFixture
 {
-    explicit TetrisFixture(std::string_view library, std::string_view forced = "", u32 seed = 1)
+    explicit TetrisFixture(std::string_view library, std::string_view forced = "", u32 seed = 1,
+                           bool gameUi = false)
     {
         play = std::make_unique<PlaySession>(
             *base.editor, PlaySessionDesc{.jobs = &jobs, .audioOutput = AudioOutput::Offline});
@@ -49,6 +85,10 @@ struct TetrisFixture
                R"({{"name":"Queue","components":{{"tetris.PieceQueue":{{"seed":{},"forced":"{}"}}}}}})", seed,
                forced));
         ok(editor(), "entity.create", R"({"name":"Score","components":{"tetris.Score":{}}})");
+        if (gameUi)
+        {
+            addGameUi(editor());
+        }
         ok(editor(), "play.start", R"({"fixedStep":true})");
     }
 
@@ -126,6 +166,21 @@ struct TetrisFixture
         ok(editor(), "entity.create",
            std::format(R"({{"parent":"/Board","components":{{"tetris.Cell":{{"x":{},"y":{},"kind":"O"}}}}}})",
                        x, y));
+    }
+
+    // The literal text of the UiText at @p path.
+    std::string text(std::string_view path)
+    {
+        return std::string(
+            value(path, "illusion.UiText").root().pointer("/value/text").asString().value_or(""));
+    }
+
+    // Whether the element at @p path is laid out and drawn.
+    bool shown(std::string_view path)
+    {
+        const JsonDocument layout = ok(editor(), "gameui.layout", std::format(R"({{"entity":"{}"}})", path));
+        const JsonValue elements = layout.root().find("elements");
+        return elements.size() > 0 && elements[0].find("visible").asBool().value_or(false);
     }
 
     EditorFixture base;
@@ -274,4 +329,59 @@ TEST_CASE_TEMPLATE("Tetris deals the forced pieces, then 7-bags that repeat for 
     const std::vector<std::string> first = deal(7);
     CHECK(std::set<std::string>(first.begin(), first.end()).size() == 7);
     CHECK(deal(7) == first);
+}
+
+TEST_CASE(
+    "the reference Tetris shows its hidden HUD in Play mode and the score, lines and level follow the game")
+{
+    TetrisFixture f(ReferenceModule::kLibrary, "I", 1, true);
+    f.step();
+    CHECK(f.shown("/HUD/Stats/Points"));
+    CHECK_FALSE(f.shown("/Game Over/Panel/Restart"));
+    CHECK(f.text("/HUD/Stats/Points") == "0");
+    CHECK(f.text("/HUD/Stats/Level") == "1");
+    for (const i32 x : {0, 1, 2, 7, 8, 9})
+    {
+        f.addCell(x, 0);
+    }
+    f.press("Space");
+    CHECK(f.text("/HUD/Stats/Points") == "100");
+    CHECK(f.text("/HUD/Stats/Lines") == "1");
+    CHECK(f.text("/HUD/Stats/Level") == "1");
+}
+
+TEST_CASE("the reference Tetris shows its game-over menu at the end, and Restart starts a new game")
+{
+    TetrisFixture f(ReferenceModule::kLibrary, "O", 1, true);
+    f.addCell(4, 19);
+    f.step();
+    CHECK(f.score("gameOver") == 1);
+    f.step();
+    REQUIRE(f.shown("/Game Over/Panel/Restart"));
+    // The modal menu keeps the game's actions from the input.
+    ok(f.editor(), "input.inject", R"({"keys":[{"key":"Left","down":true}]})");
+    f.step();
+    const JsonDocument actions = ok(f.editor(), "input.read", R"({"actions":["tetris.move_left"]})");
+    CHECK_FALSE(actions.root().pointer("/actions/0/down").asBool().value_or(true));
+    ok(f.editor(), "input.inject", R"({"keys":[{"key":"Left","down":false}]})");
+
+    const JsonDocument clicked = ok(f.editor(), "gameui.click", R"({"entity":"/Game Over/Panel/Restart"})");
+    CHECK(clicked.root().pointer("/events/0/type").asString() == "clicked");
+    f.step();
+    CHECK(f.score("gameOver") == 0);
+    CHECK(f.score("points") == 0);
+    CHECK(f.ids("tetris.Cell").empty());
+    CHECK(f.active().kind == "O");
+    CHECK_FALSE(f.shown("/Game Over/Panel/Restart"));
+}
+
+TEST_CASE("Quit in the reference Tetris's game-over menu ends Play mode")
+{
+    TetrisFixture f(ReferenceModule::kLibrary, "O", 1, true);
+    f.addCell(4, 19);
+    f.step(2);
+    REQUIRE(f.shown("/Game Over/Panel/Quit"));
+    static_cast<void>(ok(f.editor(), "gameui.click", R"({"entity":"/Game Over/Panel/Quit"})"));
+    f.step();
+    CHECK(ok(f.editor(), "play.status").root().find("state").asString() == "stopped");
 }

@@ -304,5 +304,44 @@ class MakeSceneTest(unittest.TestCase):
                 seen.add(command["params"]["name"])
 
 
+class MakeUiTest(unittest.TestCase):
+    def setUp(self):
+        make_scene.commands.clear()
+        make_scene.build_ui()
+
+    def test_the_ui_scene_starts_empty_saves_once_and_hides_the_pause_menu(self):
+        calls = [c["call"] for c in make_scene.commands]
+        self.assertEqual(calls[0], "scene.new")
+        self.assertEqual(calls.count("scene.save_as"), 1)
+        self.assertEqual(make_scene.commands[-1]["params"]["path"], make_scene.UI_SCENE)
+        self.assertIn({"call": "entity.set_enabled", "params": {"entity": "/Pause Menu", "enabled": False}},
+                      make_scene.commands)
+
+    def test_every_text_key_is_in_both_locale_files_and_the_font_exists(self):
+        locales = make_scene.PROJECT / "assets" / "locales"
+        tables = {name: json.loads((locales / f"{name}.json").read_text(encoding="utf-8"))["strings"]
+                  for name in ("en", "tr")}
+        self.assertEqual(set(tables["en"]), set(tables["tr"]))
+        keys = set(re.findall(r'"key": "([^"]+)"', json.dumps(make_scene.commands)))
+        self.assertTrue(keys)
+        self.assertLessEqual(keys, set(tables["en"]))
+        self.assertTrue((make_scene.PROJECT / "assets" / "fonts" / "Roboto-Regular.ttf").is_file())
+
+    def test_elements_are_created_below_parents_that_exist(self):
+        seen = set()
+        for command in make_scene.commands:
+            params = command["params"]
+            if command["call"] in ("entity.create", "gameui.create"):
+                parent = params.get("parent")
+                if parent:
+                    self.assertIn(parent, seen)
+                path = f"{parent or ''}/{params['name']}"
+                self.assertNotIn(path, seen)
+                seen.add(path)
+            elif "entity" in params:
+                self.assertTrue(params["entity"] in seen or params["entity"].rsplit("/", 1)[0] in seen,
+                                params["entity"])
+
+
 if __name__ == "__main__":
     unittest.main()

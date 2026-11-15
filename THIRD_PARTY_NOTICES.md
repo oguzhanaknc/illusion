@@ -27,7 +27,7 @@ must be included with distributed games (the export pipeline will collect them a
 | [Slang](https://github.com/shader-slang/slang) | 2026.19 | Apache-2.0 WITH LLVM-exception | Shader compiler, run at build time only | No |
 | [Dear ImGui](https://github.com/ocornut/imgui) | 1.93.0 (docking) | MIT | Editor UI | No (editor only) |
 | [ImPlot](https://github.com/epezent/implot) | commit `851cdbd` | MIT | Editor plots | No (editor only) |
-| [Roboto](https://github.com/googlefonts/roboto) | v2.138 (commit `ab4876f`) | Apache-2.0 | Editor text font; the font of the showcase sample and of the project templates (`UiText`) | Yes (the showcase sample and projects created from a template, as a font Asset) |
+| [Roboto](https://github.com/googlefonts/roboto) | v2.138 (commit `ab4876f`) | Apache-2.0 | Editor text font; the font of the showcase and tech demo samples and of the project templates (`UiText`) | Yes (the showcase and tech demo samples and projects created from a template, as a font Asset) |
 | [Roboto Mono](https://github.com/googlefonts/RobotoMono) | commit `30867cc` | Apache-2.0 | Editor monospace font | No (editor only) |
 | [Material Symbols](https://github.com/google/material-design-icons) | commit `49d4db3` (Rounded, variable) | Apache-2.0 | Editor icons | No (editor only) |
 

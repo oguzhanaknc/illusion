@@ -7,6 +7,9 @@
 //   times faster.
 // - Night: fireflies come out over the clearing, the lanterns brighten, the crickets sing. The campfire's
 //   light flickers and the neon hums all the time.
+// - UI: the HUD and the pause menu are the scene assets:/scenes/ui.scene, instantiated at the start. Escape
+//   (or East) opens and closes the menu: Resume, the master volume, the language (English or Turkish) and
+//   Quit. While it shows, the clock stops and the modal canvas keeps the walker's actions from the input.
 // Hot reload keeps the state in the techdemo.Player Component.
 
 #include <illusion/audio/AudioService.hpp>
@@ -22,11 +25,14 @@
 #include <illusion/physics/PhysicsComponents.hpp>
 #include <illusion/physics/PhysicsService.hpp>
 #include <illusion/render/SceneComponents.hpp>
+#include <illusion/runtime/SceneService.hpp>
+#include <illusion/ui/UiService.hpp>
 
 #include <algorithm>
 #include <array>
 #include <cmath>
 #include <numbers>
+#include <span>
 #include <string_view>
 
 namespace techdemo
@@ -61,14 +67,32 @@ struct Player
     ActionId fastTime = 0;
 };
 
+/// The elements of the game UI the module drives, and the frame-time readout; runtime state.
+struct Hud
+{
+    Entity frameTime{};
+    Entity menu{};
+    Entity resume{};
+    Entity volume{};
+    Entity volumeLabel{};
+    Entity language{};
+    Entity quit{};
+    f64 sampleSeconds = 0.0; ///< Since the readout was last written.
+    u32 sampleFrames = 0;    ///< Updates since then.
+    bool readoutShown = false;
+};
+
 } // namespace techdemo
 
 namespace
 {
 
 using namespace illusion;
+using techdemo::Hud;
 using techdemo::Player;
 
+constexpr std::string_view kUiScene = "assets:/scenes/ui.scene";
+constexpr f64 kReadoutSeconds = 0.5; // how often the frame-time readout changes
 constexpr f32 kEyeHeight = 1.65f;
 constexpr f32 kWalkSpeed = 3.2f;
 constexpr f32 kRunSpeed = 6.5f;
@@ -80,6 +104,13 @@ constexpr f32 kFireIntensity = 40.0f;
 constexpr f32 kLanternDay = 1.5f;
 constexpr f32 kLanternNight = 7.0f;
 constexpr f32 kNeonIntensity = 26.0f;
+
+// The Component of an entity that the scene may lack: the module also runs on the UI scene alone.
+template <typename T>
+T* component(World& world, Entity entity) noexcept
+{
+    return world.isAlive(entity) ? world.tryGet<T>(entity) : nullptr;
+}
 
 Entity findNamed(World& world, std::string_view name)
 {
@@ -107,9 +138,36 @@ ActionId action(InputService& input, std::string_view name, ActionType type,
 bool loadModule(ModuleContext& context)
 {
     reflectRuntime<Player>("techdemo.Player", {.displayName = "Tech demo player"});
+    reflectRuntime<Hud>("techdemo.Hud", {.displayName = "Tech demo HUD"});
     ILL_LOG_INFO("TechDemo", "module '{}' {}", context.moduleName(),
                  context.isReloading() ? "reloaded" : "loaded");
     return true;
+}
+
+// Instantiates the HUD and the pause menu (unless the scene already has them) and finds what the module
+// drives; a World without UI gets an empty Hud.
+Hud startUi(ModuleContext& context)
+{
+    Hud hud;
+    UiService* ui = context.service<UiService>();
+    if (ui == nullptr)
+    {
+        return hud;
+    }
+    SceneService* scenes = context.service<SceneService>();
+    if (scenes != nullptr && ui->find({}, "Pause Menu").isNull() &&
+        !scenes->instantiate(kUiScene, std::span<Entity>{}).has_value())
+    {
+        ILL_LOG_WARN("TechDemo", "no game UI: {}", scenes->lastError());
+    }
+    hud.frameTime = ui->find({}, "Frame Time");
+    hud.menu = ui->find({}, "Pause Menu");
+    hud.resume = ui->find(hud.menu, "Resume");
+    hud.volume = ui->find(hud.menu, "Volume");
+    hud.volumeLabel = ui->find(hud.menu, "Volume Label");
+    hud.language = ui->find(hud.menu, "Language");
+    hud.quit = ui->find(hud.menu, "Quit");
+    return hud;
 }
 
 void startModule(ModuleContext& context)
@@ -124,7 +182,7 @@ void startModule(ModuleContext& context)
     player.eye = findNamed(world, "Eye");
     player.sky = findNamed(world, "Sky");
     player.fireLight = findNamed(world, "Fire Light");
-    if (const Transform* fire = world.tryGet<Transform>(player.fireLight))
+    if (const Transform* fire = component<Transform>(world, player.fireLight))
     {
         player.fireBase = fire->position;
     }
@@ -161,7 +219,7 @@ void startModule(ModuleContext& context)
         player.sprint = action(*input, "Sprint", ActionType::Button, sprint);
         player.fastTime = action(*input, "Fast Time", ActionType::Button, fastTime);
     }
-    world.create(Name{"Tech Demo"}, player);
+    world.create(Name{"Tech Demo"}, player, startUi(context));
 }
 
 void updateWalk(PhysicsService& physics, const InputService& input, Player& player, f32 dt)
@@ -219,8 +277,8 @@ void releaseProps(World& world, PhysicsService& physics, const Vec3& position, P
 
 void updateEye(World& world, Player& player)
 {
-    const Transform* body = world.tryGet<Transform>(player.body);
-    Transform* eye = world.tryGet<Transform>(player.eye);
+    const Transform* body = component<Transform>(world, player.body);
+    Transform* eye = component<Transform>(world, player.eye);
     if (body == nullptr || eye == nullptr)
     {
         return;
@@ -235,7 +293,7 @@ void updateEye(World& world, Player& player)
 void updateTime(World& world, const InputService* input, ParticleService* particles, AudioService* audio,
                 Player& player, f32 dt)
 {
-    SkyAtmosphere* sky = world.tryGet<SkyAtmosphere>(player.sky);
+    SkyAtmosphere* sky = component<SkyAtmosphere>(world, player.sky);
     if (sky == nullptr)
     {
         return;
@@ -275,7 +333,7 @@ void updateTime(World& world, const InputService* input, ParticleService* partic
     const f32 dusk = glm::smoothstep(0.15f, -0.1f, sunHeight);
     for (const Entity lantern : player.lanterns)
     {
-        if (PointLight* light = world.tryGet<PointLight>(lantern))
+        if (PointLight* light = component<PointLight>(world, lantern))
         {
             light->intensity = kLanternDay + (kLanternNight - kLanternDay) * dusk;
         }
@@ -288,11 +346,11 @@ void updateLights(World& world, Player& player)
     const f32 t = player.seconds;
     const f32 flicker = 0.82f + 0.1f * std::sin(t * 11.0f) + 0.05f * std::sin(t * 23.0f + 1.7f) +
                         0.03f * std::sin(t * 41.0f + 0.4f);
-    if (PointLight* fire = world.tryGet<PointLight>(player.fireLight))
+    if (PointLight* fire = component<PointLight>(world, player.fireLight))
     {
         fire->intensity = kFireIntensity * flicker;
     }
-    if (Transform* fire = world.tryGet<Transform>(player.fireLight))
+    if (Transform* fire = component<Transform>(world, player.fireLight))
     {
         fire->position =
             player.fireBase + Vec3(0.05f * std::sin(t * 7.3f) + 0.03f * std::sin(t * 17.0f + 0.6f),
@@ -301,12 +359,94 @@ void updateLights(World& world, Player& player)
     }
     for (u32 i = 0; i < player.neonLights.size(); ++i)
     {
-        if (PointLight* neon = world.tryGet<PointLight>(player.neonLights[i]))
+        if (PointLight* neon = component<PointLight>(world, player.neonLights[i]))
         {
             neon->intensity =
                 kNeonIntensity * (0.9f + 0.1f * std::sin(t * 2.0f + static_cast<f32>(i) * 1.3f));
         }
     }
+}
+
+void showVolume(UiService& ui, const Hud& hud, f32 volume)
+{
+    const std::array percent{UiTextArgument::number("percent", std::round(static_cast<f64>(volume) * 100.0))};
+    static_cast<void>(ui.setTextKey(hud.volumeLabel, "techdemo.menu.volume", percent));
+}
+
+void showMenu(UiService& ui, const AudioService* audio, const Hud& hud, bool show)
+{
+    static_cast<void>(ui.setVisible(hud.menu, show));
+    if (show)
+    {
+        const f32 volume = audio != nullptr ? audio->masterVolume() : 1.0f;
+        static_cast<void>(ui.setSliderValue(hud.volume, volume));
+        showVolume(ui, hud, volume);
+        static_cast<void>(ui.setFocus(hud.resume));
+    }
+}
+
+// The events of the pause menu, and the frame-time readout. Returns whether the menu shows.
+bool updateUi(ModuleContext& context, Hud& hud, f64 deltaSeconds)
+{
+    UiService* ui = context.service<UiService>();
+    if (ui == nullptr || hud.menu.isNull())
+    {
+        return false;
+    }
+    AudioService* audio = context.service<AudioService>();
+    std::array<UiEvent, 16> events{};
+    const u32 count = std::min<u32>(ui->pollEvents(events), static_cast<u32>(events.size()));
+    for (const UiEvent& event : std::span(events).first(count))
+    {
+        if (event.type == UiEventType::Cancelled)
+        {
+            showMenu(*ui, audio, hud, !ui->isVisible(hud.menu));
+        }
+        else if (event.type == UiEventType::Clicked && event.entity == hud.resume)
+        {
+            showMenu(*ui, audio, hud, false);
+        }
+        else if (event.type == UiEventType::Clicked && event.entity == hud.language)
+        {
+            static_cast<void>(ui->setLanguage(ui->language() == "tr" ? "en" : "tr"));
+        }
+        else if (event.type == UiEventType::Clicked && event.entity == hud.quit)
+        {
+            if (SceneService* scenes = context.service<SceneService>())
+            {
+                scenes->requestExit();
+            }
+        }
+        else if (event.type == UiEventType::ValueChanged && event.entity == hud.volume)
+        {
+            if (audio != nullptr)
+            {
+                audio->setMasterVolume(event.value);
+            }
+            showVolume(*ui, hud, event.value);
+        }
+    }
+    const bool open = ui->isVisible(hud.menu);
+    // A menu shown in this update is laid out at its end; the focus can go to Resume only afterwards.
+    if (open && ui->focused().isNull())
+    {
+        static_cast<void>(ui->setFocus(hud.resume));
+    }
+
+    hud.sampleSeconds += std::max(deltaSeconds, 0.0);
+    ++hud.sampleFrames;
+    if (hud.sampleSeconds >= kReadoutSeconds || !hud.readoutShown)
+    {
+        const f64 frameSeconds = hud.sampleSeconds / static_cast<f64>(hud.sampleFrames);
+        const std::array readout{
+            UiTextArgument::number("fps", frameSeconds > 0.0 ? std::round(1.0 / frameSeconds) : 0.0),
+            UiTextArgument::number("ms", std::round(frameSeconds * 10000.0) / 10.0)};
+        static_cast<void>(ui->setTextKey(hud.frameTime, "techdemo.hud.frameTime", readout));
+        hud.sampleSeconds = 0.0;
+        hud.sampleFrames = 0;
+        hud.readoutShown = true;
+    }
+    return open;
 }
 
 void updateModule(ModuleContext& context, f64 deltaSeconds)
@@ -318,12 +458,23 @@ void updateModule(ModuleContext& context, f64 deltaSeconds)
     {
         return;
     }
+    // A copy: the UI may add Components to its elements.
+    const Hud* stored = component<Hud>(world, self);
+    Hud hud = stored != nullptr ? *stored : Hud{};
+    const bool paused = updateUi(context, hud, deltaSeconds);
+    if (Hud* written = component<Hud>(world, self))
+    {
+        *written = hud;
+    }
+
     Player& player = world.get<Player>(self);
     const f32 dt = static_cast<f32>(std::min(deltaSeconds, 0.1));
-    player.seconds += dt;
+    // The pause menu stops the clock; the walker reads no input meanwhile, so it stands still.
+    const f32 clock = paused ? 0.0f : dt;
+    player.seconds += clock;
     PhysicsService* physics = context.service<PhysicsService>();
     const InputService* input = context.service<InputService>();
-    const Transform* body = world.tryGet<Transform>(player.body);
+    const Transform* body = component<Transform>(world, player.body);
     if (physics != nullptr && body != nullptr)
     {
         // A copy: rebuilding bodies may change the World's structure.
@@ -337,7 +488,7 @@ void updateModule(ModuleContext& context, f64 deltaSeconds)
     Player& current = world.get<Player>(self);
     updateEye(world, current);
     updateTime(world, input, context.service<ParticleService>(), context.service<AudioService>(), current,
-               dt);
+               clock);
     updateLights(world, current);
 }
 

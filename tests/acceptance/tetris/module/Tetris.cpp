@@ -4,6 +4,9 @@
 // speeds up with the level, soft and hard drops, line clears and their score, a forced sequence then a
 // seeded 7-bag, and game over when a new piece overlaps a Cell. The board is derived from the tetris.Cell
 // entities on every update, so commands that add or remove Cells change the game at once.
+//
+// The game UI of the scene (SPEC.md, item 6) is driven through UiService: the HUD shows the score, the lines
+// and the level while a game runs, and the game-over menu offers Restart and Quit.
 
 #include <illusion/core/AssetRef.hpp>
 #include <illusion/core/Module.hpp>
@@ -14,11 +17,16 @@
 #include <illusion/ecs/World.hpp>
 #include <illusion/input/InputService.hpp>
 #include <illusion/render/SceneComponents.hpp>
+#include <illusion/runtime/SceneService.hpp>
+#include <illusion/ui/UiService.hpp>
 
 #include <algorithm>
 #include <array>
+#include <charconv>
 #include <cmath>
+#include <span>
 #include <string>
+#include <string_view>
 #include <vector>
 
 namespace tetris
@@ -411,9 +419,8 @@ bool loadTetris(ModuleContext&)
     return true;
 }
 
-void updateTetris(ModuleContext& context, f64 deltaSeconds)
+void updateGame(ModuleContext& context, World& world, f64 deltaSeconds)
 {
-    World& world = context.world();
     Game game = findGame(world);
     if (game.board.isNull() || game.queue.isNull() || game.score.isNull() ||
         world.get<Score>(game.score).gameOver)
@@ -536,6 +543,128 @@ void updateTetris(ModuleContext& context, f64 deltaSeconds)
     }
     world.get<Score>(game.score) = score;
     world.get<State>(game.queue) = state;
+}
+
+// The elements of the scene's game UI, by name; null where the scene has none.
+struct Hud
+{
+    Entity hud;
+    Entity points;
+    Entity lines;
+    Entity level;
+    Entity menu;
+    Entity restart;
+    Entity quit;
+};
+
+Hud findHud(const UiService& ui)
+{
+    Hud found;
+    found.hud = ui.find({}, "HUD");
+    found.menu = ui.find({}, "Game Over");
+    if (!found.hud.isNull())
+    {
+        found.points = ui.find(found.hud, "Points");
+        found.lines = ui.find(found.hud, "Lines");
+        found.level = ui.find(found.hud, "Level");
+    }
+    if (!found.menu.isNull())
+    {
+        found.restart = ui.find(found.menu, "Restart");
+        found.quit = ui.find(found.menu, "Quit");
+    }
+    return found;
+}
+
+// A new game: no Cells and no falling piece, a fresh Score, and the queue dealt again from its start.
+void restart(World& world)
+{
+    std::vector<Entity> removed;
+    world.query<Cell>().each([&](Entity entity, const Cell&) { removed.push_back(entity); });
+    world.query<ActivePiece>().each([&](Entity entity, const ActivePiece&) { removed.push_back(entity); });
+    for (const Entity entity : removed)
+    {
+        (void)destroyRecursive(world, entity);
+    }
+    world.query<Score>().each([](Score& score) { score = Score{}; });
+    world.query<State>().each([](State& state) { state = State{}; });
+}
+
+// Restart and Quit of the game-over menu, clicked in the last update.
+void pollMenu(ModuleContext& context, UiService& ui, const Hud& hud, World& world)
+{
+    std::array<UiEvent, 16> events{};
+    const u32 count = std::min<u32>(ui.pollEvents(events), static_cast<u32>(events.size()));
+    for (const UiEvent& event : std::span(events).first(count))
+    {
+        if (event.type != UiEventType::Clicked || !ui.isVisible(hud.menu))
+        {
+            continue;
+        }
+        if (event.entity == hud.restart)
+        {
+            restart(world);
+            static_cast<void>(ui.setVisible(hud.menu, false));
+        }
+        else if (event.entity == hud.quit)
+        {
+            if (SceneService* scenes = context.service<SceneService>())
+            {
+                scenes->requestExit();
+            }
+        }
+    }
+}
+
+void showNumber(UiService& ui, Entity entity, u32 value)
+{
+    std::array<char, 16> digits{};
+    const std::to_chars_result written = std::to_chars(digits.data(), digits.data() + digits.size(), value);
+    static_cast<void>(
+        ui.setText(entity, std::string_view(digits.data(), static_cast<usize>(written.ptr - digits.data()))));
+}
+
+// The HUD shows while a game runs; the game-over menu shows when it ends.
+void showHud(UiService& ui, const Hud& hud, World& world)
+{
+    const Game game = findGame(world);
+    if (game.score.isNull())
+    {
+        return;
+    }
+    const Score score = world.get<Score>(game.score);
+    if (!hud.hud.isNull() && !ui.isVisible(hud.hud))
+    {
+        static_cast<void>(ui.setVisible(hud.hud, true));
+    }
+    showNumber(ui, hud.points, score.points);
+    showNumber(ui, hud.lines, score.lines);
+    showNumber(ui, hud.level, score.level);
+    if (!hud.menu.isNull() && score.gameOver != ui.isVisible(hud.menu))
+    {
+        static_cast<void>(ui.setVisible(hud.menu, score.gameOver));
+    }
+    // Shown in this update, the menu is laid out at its end: Restart can take the focus from the next one.
+    if (score.gameOver && ui.focused().isNull())
+    {
+        static_cast<void>(ui.setFocus(hud.restart));
+    }
+}
+
+void updateTetris(ModuleContext& context, f64 deltaSeconds)
+{
+    World& world = context.world();
+    UiService* ui = context.service<UiService>();
+    const Hud hud = ui != nullptr ? findHud(*ui) : Hud{};
+    if (ui != nullptr)
+    {
+        pollMenu(context, *ui, hud, world);
+    }
+    updateGame(context, world, deltaSeconds);
+    if (ui != nullptr)
+    {
+        showHud(*ui, hud, world);
+    }
 }
 
 constexpr ModuleApi kTetris =
