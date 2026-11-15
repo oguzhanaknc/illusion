@@ -942,6 +942,62 @@ void reflectCoreCommandTypes(StructRegistry& structs)
             .field("emitters", &ParticlesStatsResult::emitters)
             .field("playing", &ParticlesStatsResult::playing)
             .field("alive", &ParticlesStatsResult::alive);
+        reflectStruct<GameUiCreateParams>("editor.GameUiCreateParams", 1, structs)
+            .field("kind", &GameUiCreateParams::kind)
+            .field("parent", &GameUiCreateParams::parent)
+            .field("name", &GameUiCreateParams::name)
+            .field("text", &GameUiCreateParams::text);
+        reflectStruct<GameUiPart>("editor.GameUiPart", 1, structs)
+            .field("role", &GameUiPart::role)
+            .field("entity", &GameUiPart::entity);
+        reflectStruct<GameUiCreateResult>("editor.GameUiCreateResult", 1, structs)
+            .field("entity", &GameUiCreateResult::entity)
+            .field("parts", &GameUiCreateResult::parts)
+            .field("canvas", &GameUiCreateResult::canvas);
+        reflectStruct<GameUiLayoutParams>("editor.GameUiLayoutParams", 1, structs)
+            .field("entity", &GameUiLayoutParams::entity)
+            .field("width", &GameUiLayoutParams::width, {.min = 1.0, .max = 16384.0})
+            .field("height", &GameUiLayoutParams::height, {.min = 1.0, .max = 16384.0});
+        reflectStruct<GameUiCanvasInfo>("editor.GameUiCanvasInfo", 1, structs)
+            .field("entity", &GameUiCanvasInfo::entity)
+            .field("order", &GameUiCanvasInfo::order)
+            .field("modal", &GameUiCanvasInfo::modal)
+            .field("pixelsPerUnit", &GameUiCanvasInfo::pixelsPerUnit)
+            .field("size", &GameUiCanvasInfo::size)
+            .field("areaMin", &GameUiCanvasInfo::areaMin)
+            .field("areaMax", &GameUiCanvasInfo::areaMax);
+        reflectStruct<GameUiElementInfo>("editor.GameUiElementInfo", 1, structs)
+            .field("entity", &GameUiElementInfo::entity)
+            .field("canvas", &GameUiElementInfo::canvas)
+            .field("min", &GameUiElementInfo::min)
+            .field("max", &GameUiElementInfo::max)
+            .field("pixelMin", &GameUiElementInfo::pixelMin)
+            .field("pixelMax", &GameUiElementInfo::pixelMax)
+            .field("opacity", &GameUiElementInfo::opacity)
+            .field("visible", &GameUiElementInfo::visible)
+            .field("interactable", &GameUiElementInfo::interactable)
+            .field("focused", &GameUiElementInfo::focused);
+        reflectStruct<GameUiLayoutResult>("editor.GameUiLayoutResult", 1, structs)
+            .field("world", &GameUiLayoutResult::world)
+            .field("width", &GameUiLayoutResult::width)
+            .field("height", &GameUiLayoutResult::height)
+            .field("canvases", &GameUiLayoutResult::canvases)
+            .field("elements", &GameUiLayoutResult::elements);
+        reflectStruct<GameUiClickParams>("editor.GameUiClickParams", 1, structs)
+            .field("entity", &GameUiClickParams::entity);
+        reflectStruct<GameUiEventInfo>("editor.GameUiEventInfo", 1, structs)
+            .field("type", &GameUiEventInfo::type)
+            .field("entity", &GameUiEventInfo::entity)
+            .field("value", &GameUiEventInfo::value);
+        reflectStruct<GameUiClickResult>("editor.GameUiClickResult", 1, structs)
+            .field("entity", &GameUiClickResult::entity)
+            .field("pixels", &GameUiClickResult::pixels)
+            .field("updates", &GameUiClickResult::updates)
+            .field("events", &GameUiClickResult::events);
+        reflectStruct<GameUiFocusParams>("editor.GameUiFocusParams", 1, structs)
+            .field("entity", &GameUiFocusParams::entity);
+        reflectStruct<GameUiFocusResult>("editor.GameUiFocusResult", 1, structs)
+            .field("focused", &GameUiFocusResult::focused);
         reflectStruct<PlayPauseParams>("editor.PlayPauseParams", 1, structs)
             .field("paused", &PlayPauseParams::paused);
         reflectStruct<PlayStepParams>("editor.PlayStepParams", 1, structs)
@@ -1180,6 +1236,7 @@ void registerCoreCommands(CommandRegistry& registry)
     detail::registerUiCommands(registry);
     detail::registerPlayCommands(registry);
     detail::registerParticleCommands(registry);
+    detail::registerGameUiCommands(registry);
     detail::registerInputCommands(registry);
     detail::registerGamepadCommands(registry);
     detail::registerModuleCommands(registry);

@@ -22,6 +22,7 @@
 #include <memory>
 #include <span>
 #include <string_view>
+#include <vector>
 
 namespace illusion
 {
@@ -98,6 +99,46 @@ struct UiWorldDesc
     u32 maxElements = 16384;   ///< UI Entities laid out per frame; the rest are skipped and counted.
     u32 maxDepth = 64;         ///< Nesting below a canvas; deeper Entities are skipped and counted.
     u32 maxEvents = 256;       ///< Events kept per update; the rest are dropped and counted.
+    /// Never write saved Components (the editor's preview of the World it edits): a scroll view's offset
+    /// beyond its content is clamped for the layout only instead of in its UiScrollView. Runtime Components
+    /// (UiComputedRect, UiInteraction) are still written.
+    bool preview = false;
+};
+
+/// A canvas of the last layout (UiWorld::layout()).
+struct UiLayoutCanvas
+{
+    Entity entity{};             ///< The Entity with UiCanvas.
+    i32 order = 0;               ///< UiCanvas::order.
+    UiCanvasMetrics metrics{};   ///< Its scale and size on the frame's target.
+    UiRect area{};               ///< The rectangle its children are placed in (the safe area or all of it).
+    bool modal = false;          ///< UiCanvas::modal.
+    bool pointerEligible = true; ///< The pointer and the focus can reach it (no modal canvas above it).
+};
+
+/// An element of the last layout (UiWorld::layout()).
+struct UiLayoutElement
+{
+    static constexpr u32 kNoParent = ~0u; ///< parent of a child of the canvas.
+
+    Entity entity{};           ///< The Entity with UiElement.
+    u32 canvas = 0;            ///< Index of its canvas in UiLayout::canvases.
+    u32 parent = kNoParent;    ///< Index of its parent element in UiLayout::elements.
+    UiRect rect{};             ///< Its rectangle in canvas units, before its transform.
+    UiTransform2D transform{}; ///< Accumulated rotation and scale.
+    f32 opacity = 1.0f;        ///< Accumulated opacity.
+    bool visible = true;       ///< Drawn: some opacity, and no toggle that is off hides it or an ancestor.
+    bool clipsChildren =
+        false;                 ///< Its descendants are clipped to it (UiElement::clipChildren, scroll views).
+    bool interactable = false; ///< Has UiInteractable.
+};
+
+/// The last layout of a UiWorld: canvases in draw order and their elements in draw order (each after its
+/// parent, later siblings after earlier ones).
+struct UiLayout
+{
+    std::vector<UiLayoutCanvas> canvases{};  ///< Active canvases, bottom first.
+    std::vector<UiLayoutElement> elements{}; ///< Laid-out elements.
 };
 
 /// Counters of the last UiWorld::update().
@@ -181,6 +222,14 @@ public:
 
     /// True when the last update laid out at least one element on an active canvas with UiCanvas::modal.
     [[nodiscard]] bool modalActive() const noexcept;
+
+    /// Replaces @p out with the canvases and elements of the last update (allocates; for tools).
+    void layout(UiLayout& out) const;
+
+    /// The topmost element the pointer would hit at @p pixels of the last update's target: enabled,
+    /// interactable, visible, inside its ancestors' clips and on a canvas the pointer can reach; null for
+    /// none.
+    [[nodiscard]] Entity hitTest(Vec2 pixels);
 
     /// What the last update() recorded; valid until the next one.
     [[nodiscard]] UiDrawData drawData() const noexcept;

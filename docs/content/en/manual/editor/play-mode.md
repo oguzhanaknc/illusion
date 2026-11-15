@@ -49,6 +49,9 @@ Scene views through their editor cameras. `viewport.pick`, `viewport.sample`, `v
 other viewport commands read what the game shows, and the entities they report are the play World's (a
 viewport command with `"world": "edit"` fails while playing).
 
+The Game view also draws the scene's game UI outside Play mode, so you see a UI while you build it; in Play
+mode the UI takes the pointer and the keyboard (see [Game UI](../ui.md)).
+
 Click the Game view to give the game the keyboard and mouse: the cursor hides and moves without bounds, keys
 and buttons reach the game's input actions, and editor shortcuts wait. **Shift+F1** takes them back (the game
 sees every held key released); Pause and Stop do too. Agents send input with `input.inject` whether or not

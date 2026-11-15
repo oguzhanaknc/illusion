@@ -25,6 +25,7 @@
 #include <illusion/physics/PhysicsWorld.hpp>
 #include <illusion/platform/FileSystem.hpp>
 #include <illusion/platform/Input.hpp>
+#include <illusion/runtime/GameLocalization.hpp>
 #include <illusion/runtime/GameSession.hpp>
 #include <illusion/runtime/SceneService.hpp>
 #include <illusion/store/NullStoreService.hpp>
@@ -618,6 +619,36 @@ TEST_CASE("a game session loads the project's locale files for UiText keys")
     CHECK(formatted("game.score") == "Score");
 }
 
+TEST_CASE("loadGameLocalization builds the game table from every locale file, English first")
+{
+    test::TempDirectory directory;
+    VirtualFileSystem files;
+    REQUIRE(files.mount("assets", directory.path, MountAccess::ReadWrite) == FileError::None);
+    text::Localization empty;
+    GameStringTable none;
+    loadGameLocalization(files, empty, none);
+    CHECK(none.keys.empty());
+    CHECK(empty.find("input.glyph.gamepad_back") != nullptr);
+
+    REQUIRE(files.writeText("assets:/locales/de.json", R"({"format": "illusion.locale", "version": 1,
+        "locale": "de", "displayName": "Deutsch", "plural": "de", "fallback": "en",
+        "strings": {"game.title": "Illusion DE", "game.only": "Nur", "game.bad": "{broken"}})") ==
+            FileError::None);
+    REQUIRE(files.writeText("assets:/locales/en.json", R"({"format": "illusion.locale", "version": 1,
+        "locale": "en", "displayName": "English", "plural": "en",
+        "strings": {"game.title": "Illusion {count}"}})") == FileError::None);
+    text::Localization localization;
+    GameStringTable table;
+    loadGameLocalization(files, localization, table);
+    CHECK(table.table.name == "game");
+    CHECK(table.keys == std::vector<std::string>{"game.only", "game.title"});
+    CHECK(table.english == std::vector<std::string>{"Nur", "Illusion {count}"});
+    CHECK(localization.find("game.bad") == nullptr);
+    CHECK(localization.find("game.title") != nullptr);
+    CHECK(localization.find("input.glyph.gamepad_back") != nullptr);
+    CHECK(localization.availableLocales().size() == 3); // en, en-XA and de
+}
+
 TEST_CASE("a game session without locale files has no game strings")
 {
     Fixture f;
@@ -717,6 +748,29 @@ TEST_CASE("a headless game session drives a menu with the mouse")
     session->setInputFocus(false);
     session->update(kStep);
     CHECK_FALSE(session->world().get<UiInteraction>(menu.start).hovered);
+}
+
+TEST_CASE("a pointer set on a game session reaches its UI without the focus and leaves the mouse alone")
+{
+    Fixture f;
+    auto session = f.create();
+    SessionMenu menu(*session);
+    InputState& mouse = session->keyboardMouse();
+    mouse.setMousePosition({5.0f, 5.0f});
+    session->setInputFocus(false);
+    CHECK(session->uiFrame().targetPixels == UVec2(1920, 1080));
+    session->setUiPointer(GameUiPointer{.pixels = {900.0f, 540.0f}, .down = true});
+    session->update(kStep);
+    CHECK(session->world().get<UiInteraction>(menu.quit).pressed);
+    session->setUiPointer(GameUiPointer{.pixels = {900.0f, 540.0f}, .down = false});
+    session->update(kStep);
+    CHECK(menu.clicked(menu.quit));
+    CHECK(mouse.mousePosition() == Vec2(5.0f, 5.0f));
+    CHECK_FALSE(mouse.isDown(MouseButton::Left));
+    // Back to the cursor, which the UI does not see without the focus.
+    session->setUiPointer(std::nullopt);
+    session->update(kStep);
+    CHECK_FALSE(session->world().get<UiInteraction>(menu.quit).hovered);
 }
 
 TEST_CASE("a headless game session drives a menu with a virtual gamepad")

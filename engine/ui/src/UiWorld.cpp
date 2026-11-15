@@ -806,7 +806,7 @@ struct UiWorld::Impl
         nodes[n].scrollMax = range;
         const Vec2 offset = glm::clamp(Vec2(finiteOr(scroll.offset.x, 0.0f), finiteOr(scroll.offset.y, 0.0f)),
                                        Vec2(0.0f), range);
-        if (offset != scroll.offset)
+        if (offset != scroll.offset && !desc.preview)
         {
             scroll.offset = offset;
             world.markChanged<UiScrollView>();
@@ -2202,6 +2202,55 @@ void UiWorld::setFocus(Entity entity)
 bool UiWorld::modalActive() const noexcept
 {
     return m_impl->modal;
+}
+
+void UiWorld::layout(UiLayout& out) const
+{
+    const Impl& impl = *m_impl;
+    out.canvases.clear();
+    out.elements.clear();
+    std::vector<u32> elementOf(impl.nodes.size(), UiLayoutElement::kNoParent);
+    for (u32 c = 0; c < impl.canvases.size(); ++c)
+    {
+        const CanvasEntry& canvas = impl.canvases[c];
+        out.canvases.push_back(
+            {.entity = canvas.entity,
+             .order = canvas.order,
+             .metrics = canvas.metrics,
+             .area = canvas.endNode > canvas.firstNode ? impl.nodes[canvas.firstNode].rect : UiRect{},
+             .modal = canvas.modal,
+             .pointerEligible = c >= impl.firstEligible});
+        for (u32 n = canvas.firstNode + 1; n < canvas.endNode; ++n)
+        {
+            const Node& node = impl.nodes[n];
+            // Entities destroyed since the update are left out.
+            if (!impl.world.isAlive(node.entity))
+            {
+                continue;
+            }
+            elementOf[n] = static_cast<u32>(out.elements.size());
+            out.elements.push_back(
+                {.entity = node.entity,
+                 .canvas = c,
+                 .parent = node.parent != kNoNode ? elementOf[node.parent] : UiLayoutElement::kNoParent,
+                 .rect = node.rect,
+                 .transform = node.transform,
+                 .opacity = node.opacity,
+                 .visible = node.opacity > 0.0f && !impl.hidden(n),
+                 .clipsChildren = node.clip,
+                 .interactable = node.interactable});
+        }
+    }
+}
+
+Entity UiWorld::hitTest(Vec2 pixels)
+{
+    Impl& impl = *m_impl;
+    // Unlike the update's own hit test, the World may have changed since the layout.
+    const u32 hit = impl.topmostAt(pixels, [&impl](u32 n) {
+        return impl.world.isAlive(impl.nodes[n].entity) && impl.enabledInteractable(n) != nullptr;
+    });
+    return hit != kNoNode ? impl.nodes[hit].entity : Entity{};
 }
 
 UiDrawData UiWorld::drawData() const noexcept

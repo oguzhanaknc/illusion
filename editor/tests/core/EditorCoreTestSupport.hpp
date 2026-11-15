@@ -19,6 +19,9 @@
 #include <illusion/editor/core/ViewportHost.hpp>
 #include <illusion/particles/ParticleComponents.hpp>
 #include <illusion/platform/FileSystem.hpp>
+#include <illusion/runtime/GameLocalization.hpp>
+#include <illusion/text/Localization.hpp>
+#include <illusion/ui/UiWorld.hpp>
 
 #include <doctest/doctest.h>
 
@@ -78,6 +81,7 @@ inline void reflectEditorTestComponents()
     static const bool reflected = [] {
         reflectCoreComponents();
         reflectParticleComponents();
+        registerUiComponents();
         reflect<editortest::Link>("test.Link")
             .meta({.displayName = "Link", .category = "Test"})
             .field("target", &editortest::Link::target)
@@ -529,6 +533,8 @@ public:
         m_world = std::make_unique<World>();
         const SceneLoadResult loaded = loadScene(*m_world, *scene);
         REQUIRE_MESSAGE(loaded.ok(), loaded.error);
+        m_ui = std::make_unique<UiWorld>(*m_world);
+        m_ui->update(gameUiFrame());
         m_status = editor::PlayStatus{
             editor::PlayState::Playing, options.mode, options.fixedStep, m_status.timeScale, 0, 0.0};
         m_editor->attachPlayWorld(*m_world);
@@ -540,6 +546,7 @@ public:
         if (m_world)
         {
             m_editor->detachPlayWorld();
+            m_ui.reset();
             m_world.reset();
             m_status = editor::PlayStatus{.timeScale = m_status.timeScale};
         }
@@ -561,6 +568,7 @@ public:
         }
         m_status.steps += steps;
         m_status.time += steps / 60.0;
+        m_ui->update(gameUiFrame());
         m_editor->playWorldAdvanced();
         return steps;
     }
@@ -594,6 +602,42 @@ public:
     }
 
     GameSession* game() noexcept override { return nullptr; }
+
+    UiWorld* gameUi() noexcept override { return m_ui.get(); }
+
+    UiFrame gameUiFrame() const override { return m_world ? UiFrame{{1920, 1080}, {}} : UiFrame{}; }
+
+    /// The project's string tables, read anew on every call.
+    const text::Localization* projectLocalization() override
+    {
+        auto strings = std::make_unique<GameStringTable>();
+        auto texts = std::make_unique<text::Localization>();
+        loadGameLocalization(m_editor->files(), *texts, *strings);
+        m_texts = std::move(texts);
+        m_strings = std::move(strings);
+        return m_texts.get();
+    }
+
+    /// Two UI updates with the pointer at @p pixels, held and then released, as PlaySession does.
+    u32 clickUi(Vec2 pixels, std::vector<UiEvent>& reported) override
+    {
+        if (!m_world)
+        {
+            return 0;
+        }
+        for (const bool down : {true, false})
+        {
+            UiInput input;
+            input.pointerPixels = pixels;
+            input.pointerPresent = true;
+            input.pointerDown = down;
+            m_ui->update(gameUiFrame(), input);
+            reported.insert(reported.end(), m_ui->events().begin(), m_ui->events().end());
+        }
+        m_status.steps += 2;
+        m_editor->playWorldAdvanced();
+        return 2;
+    }
 
     editor::PlayDiagnostics mix{}; // the session's counters and mixer, while playing
 
@@ -675,6 +719,9 @@ public:
 private:
     editor::EditorContext*& m_editor;
     std::unique_ptr<World> m_world;
+    std::unique_ptr<UiWorld> m_ui;
+    std::unique_ptr<GameStringTable> m_strings;
+    std::unique_ptr<text::Localization> m_texts;
     editor::PlayStatus m_status;
     std::vector<editor::PlayModuleInfo> m_modules{{"fake", "1.0.0", "", false, 0, {}}};
 };

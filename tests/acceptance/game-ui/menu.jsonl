@@ -1,0 +1,21 @@
+{"comment": "Game UI (UI-3b): an agent builds a menu with gameui.create, checks its layout, enters Play mode, clicks the button and reads the event."}
+{"call": "project.create", "params": {"directory": "menu", "name": "Menu", "template": "empty"}, "expect": {"result": {"name": "Menu"}}}
+{"call": "gameui.create", "params": {"kind": "canvas", "name": "Menu"}, "expect": {"result": {"entity": {"path": "/Menu"}, "parts": [], "canvas": null}}}
+{"call": "gameui.create", "params": {"kind": "text", "name": "Title", "parent": "/Menu", "text": "Main menu"}, "expect": {"result": {"entity": {"path": "/Menu/Title"}}}}
+{"call": "gameui.create", "params": {"kind": "button", "name": "Start", "text": "Start"}, "expect": {"result": {"entity": {"path": "/Menu/Start"}, "parts": [{"role": "label", "entity": {"path": "/Menu/Start/Label"}}]}}}
+{"call": "component.set_field", "params": {"entity": "/Menu/Start", "type": "illusion.UiElement", "path": "placement", "value": {"offsetMin": [24, 120], "offsetMax": [264, 184]}}}
+{"call": "entity.get", "params": {"entity": "/Menu/Title", "components": ["illusion.UiText"]}, "expect": {"result": {"components": {"illusion.UiText": {"text": "Main menu", "font": "assets:/fonts/Roboto-Regular.ttf"}}}}}
+{"call": "gameui.layout", "params": {"entity": "/Menu", "width": 1280, "height": 720}, "expect": {"result": {"world": "edit", "width": 1280, "height": 720, "canvases": [{"entity": {"path": "/Menu"}, "pixelsPerUnit": {"$approx": 0.6666667}, "size": [{"$approx": 1920}, {"$approx": 1080}]}], "elements": [{"entity": {"path": "/Menu/Title"}, "min": [24, 24], "max": [344, 72], "visible": true, "interactable": null}, {"entity": {"path": "/Menu/Start"}, "min": [24, 120], "max": [264, 184], "pixelMin": [{"$approx": 16}, {"$approx": 80}], "pixelMax": [{"$approx": 176}, {"$approx": 122.6667}], "interactable": true, "focused": null}, {"entity": {"path": "/Menu/Start/Label"}, "min": [24, 120], "max": [264, 184]}]}}}
+{"call": "scene.save", "params": {}}
+{"call": "scene.info", "params": {}, "capture": {"hash": "/hash"}, "expect": {"result": {"dirty": false}}}
+{"call": "gameui.layout", "params": {}, "expect": {"result": {"world": "edit", "width": 1920, "height": 1080}}}
+{"call": "scene.info", "params": {}, "expect": {"result": {"dirty": false, "hash": "${hash}"}}}
+{"call": "play.start", "params": {"fixedStep": true}, "expect": {"result": {"state": "playing"}}}
+{"call": "play.pause", "params": {"paused": true}, "expect": {"result": {"state": "paused"}}}
+{"call": "gameui.layout", "params": {"entity": "/Menu/Start"}, "expect": {"result": {"world": "play", "width": 1920, "height": 1080, "elements": [{"entity": {"path": "/Menu/Start"}, "pixelMin": [24, 120], "pixelMax": [264, 184], "focused": false}, {"entity": {"path": "/Menu/Start/Label"}}]}}}
+{"call": "gameui.click", "params": {"entity": "/Menu/Title"}, "expect": {"error": {"message": {"$regex": ".*UiInteractable.*"}}}}
+{"call": "gameui.click", "params": {"entity": "/Menu/Start"}, "expect": {"result": {"entity": {"path": "/Menu/Start"}, "pixels": [144, 152], "updates": 2, "events": {"$contains": {"type": "clicked", "entity": {"path": "/Menu/Start"}}}}}}
+{"call": "gameui.focus", "params": {"entity": "/Menu/Start"}, "expect": {"result": {"focused": {"path": "/Menu/Start"}}}}
+{"call": "play.stop", "params": {}, "expect": {"result": {"state": "stopped"}}}
+{"call": "gameui.click", "params": {"entity": "/Menu/Start"}, "expect": {"error": {"code": 1100}}}
+{"call": "scene.info", "params": {}, "expect": {"result": {"dirty": false, "hash": "${hash}"}}}

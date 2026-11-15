@@ -97,6 +97,10 @@ public:
     void setMasterVolume(f32 volume) override;
     void setBus(u32 bus, f32 volume, bool paused) override;
     [[nodiscard]] GameSession* game() noexcept override;
+    [[nodiscard]] UiWorld* gameUi() noexcept override;
+    [[nodiscard]] UiFrame gameUiFrame() const override;
+    u32 clickUi(Vec2 pixels, std::vector<UiEvent>& events) override;
+    [[nodiscard]] const text::Localization* projectLocalization() override;
 
 private:
     void stopIfExitRequested();

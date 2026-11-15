@@ -1843,6 +1843,131 @@ struct PlayKeepChangesResult
     u32 components = 0; ///< Component values copied in all.
 };
 
+// --- gameui ------------------------------------------------------------------------------------------------
+
+/// What `gameui.create` makes.
+enum class GameUiKind : u8
+{
+    Canvas,     ///< A root that lays out its descendants on the screen (UiCanvas).
+    Panel,      ///< A translucent rectangle (UiImage).
+    Text,       ///< A line of text (UiText).
+    Button,     ///< A background that reports Clicked, with a centred label child.
+    Toggle,     ///< A box that switches on and off, with a check mark child.
+    Slider,     ///< A bar with a value, with fill and handle children.
+    TextField,  ///< A line of text the player edits.
+    ScrollView, ///< A clipped area that scrolls a stack content child.
+    Stack,      ///< Places its children one after another (UiStack).
+    Grid,       ///< Places its children in rows of cells (UiGrid).
+};
+
+/// Params of `gameui.create`.
+struct GameUiCreateParams
+{
+    GameUiKind kind = GameUiKind::Canvas; ///< What to create.
+    /// Parent (default: the scene root for a canvas; otherwise the selected canvas or UI element, else the
+    /// first canvas, created when there is none).
+    std::optional<std::string> parent{};
+    std::optional<std::string> name{}; ///< Name (default: after the kind, e.g. "Button").
+    /// Text of a text or the label of a button, placeholder of a text field (default: after the kind).
+    std::optional<std::string> text{};
+};
+
+/// A child that `gameui.create` made for its element.
+struct GameUiPart
+{
+    std::string role{};     ///< "label", "check", "fill", "handle" or "content".
+    EntitySummary entity{}; ///< The child.
+};
+
+/// Result of `gameui.create`.
+struct GameUiCreateResult
+{
+    EntitySummary entity{};                ///< The created canvas or element.
+    std::vector<GameUiPart> parts{};       ///< Its children, by role.
+    std::optional<EntitySummary> canvas{}; ///< The canvas created for it because the scene had none.
+};
+
+/// Params of `gameui.layout`.
+struct GameUiLayoutParams
+{
+    std::optional<std::string> entity{}; ///< A canvas or element: only it and its subtree (default: all).
+    std::optional<u32> width{};          ///< Target width in pixels for the edit World, 1 to 16384 (1920).
+    std::optional<u32> height{};         ///< Target height in pixels for the edit World, 1 to 16384 (1080).
+};
+
+/// A canvas in the result of `gameui.layout`.
+struct GameUiCanvasInfo
+{
+    EntitySummary entity{};   ///< The canvas.
+    i32 order = 0;            ///< Draw order: higher on top.
+    bool modal = false;       ///< UiCanvas::modal.
+    f32 pixelsPerUnit = 1.0f; ///< Target pixels per canvas unit.
+    Vec2 size{0.0f};          ///< The whole target in canvas units.
+    Vec2 areaMin{0.0f};       ///< Top left of the area its children are placed in, canvas units.
+    Vec2 areaMax{0.0f};       ///< Bottom right of that area, canvas units.
+};
+
+/// An element in the result of `gameui.layout`.
+struct GameUiElementInfo
+{
+    EntitySummary entity{};             ///< The element.
+    std::string canvas{};               ///< Id of its canvas.
+    Vec2 min{0.0f};                     ///< Top left in canvas units, before rotation and scale.
+    Vec2 max{0.0f};                     ///< Bottom right in canvas units, before rotation and scale.
+    Vec2 pixelMin{0.0f};                ///< Top left of its bounds on the target, in pixels.
+    Vec2 pixelMax{0.0f};                ///< Bottom right of its bounds on the target, in pixels.
+    f32 opacity = 1.0f;                 ///< Accumulated opacity.
+    bool visible = true;                ///< Drawn: some opacity and not under a toggle that is off.
+    std::optional<bool> interactable{}; ///< Has UiInteractable: whether it is enabled (absent otherwise).
+    std::optional<bool> focused{};      ///< Play World: has the focus (absent for the edit World).
+};
+
+/// Result of `gameui.layout`.
+struct GameUiLayoutResult
+{
+    std::string world{};                       ///< "edit" or "play".
+    u32 width = 0;                             ///< Target width in pixels.
+    u32 height = 0;                            ///< Target height in pixels.
+    std::vector<GameUiCanvasInfo> canvases{};  ///< Canvases, bottom first.
+    std::vector<GameUiElementInfo> elements{}; ///< Elements in draw order.
+};
+
+/// Params of `gameui.click`.
+struct GameUiClickParams
+{
+    std::string entity{}; ///< The element to click.
+};
+
+/// One event of the game UI.
+struct GameUiEventInfo
+{
+    /// "clicked", "value_changed", "focus_changed", "cancelled", "text_changed" or "submitted".
+    std::string type{};
+    std::optional<EntitySummary> entity{}; ///< The element (absent for a cancel without a canvas).
+    f32 value = 0.0f;                      ///< New value of a toggle (0 or 1) or slider.
+};
+
+/// Result of `gameui.click`.
+struct GameUiClickResult
+{
+    EntitySummary entity{};                ///< The element clicked.
+    Vec2 pixels{0.0f};                     ///< Where, in pixels of the game's UI target.
+    u32 updates = 0;                       ///< Updates the game ran (2, fewer when it ended).
+    std::vector<GameUiEventInfo> events{}; ///< What the UI reported in those updates.
+};
+
+/// Params of `gameui.focus`.
+struct GameUiFocusParams
+{
+    std::optional<std::string> entity{}; ///< The element to focus (null: clear the focus).
+};
+
+/// Result of `gameui.focus`.
+struct GameUiFocusResult
+{
+    std::optional<EntitySummary> focused{}; ///< The element with the focus after the call.
+};
+
 // --- module ------------------------------------------------------------------------------------------------
 
 /// Params of `module.load`.
@@ -2168,6 +2293,19 @@ struct GamepadMotionParams
 };
 
 } // namespace illusion::editor
+
+/// Names of GameUiKind values in JSON.
+template <>
+struct illusion::EnumReflection<illusion::editor::GameUiKind>
+{
+    /// The values.
+    static constexpr std::array kValues{
+        illusion::EnumValue{"canvas", 0},     illusion::EnumValue{"panel", 1},
+        illusion::EnumValue{"text", 2},       illusion::EnumValue{"button", 3},
+        illusion::EnumValue{"toggle", 4},     illusion::EnumValue{"slider", 5},
+        illusion::EnumValue{"text_field", 6}, illusion::EnumValue{"scroll_view", 7},
+        illusion::EnumValue{"stack", 8},      illusion::EnumValue{"grid", 9}};
+};
 
 /// Names of TransformSpace values in JSON.
 template <>

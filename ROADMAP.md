@@ -864,10 +864,22 @@ distance field fonts, and a batched pass draws the UI after tonemapping. Public 
   Open: the Tetris acceptance game still has no score display or game-over menu (its recorded transcripts
   need a new agent session); UI prefabs are instantiated with `SceneService::instantiate()`, there is no
   UI-specific function.
-- UI-3b: Editor. A 2D canvas view with placement handles and anchor presets, Inspector drawers for
-  placement and text, Add menu entries, commands `gameui.create`, `gameui.layout`, `gameui.click` and
-  `gameui.focus` with reference and goldens; viewport picking and framing of UI Entities. Done: UiDriver
-  tests and a golden image; an agent transcript builds a menu and clicks it in Play mode.
+- UI-3b: Editor commands and preview. Commands `gameui.create` (a canvas or an element of a kind with
+  sensible defaults: panel, text, button, toggle, slider, text field, scroll view, stack, grid; undoable),
+  `gameui.layout` (computed rectangles of the edit World or the play World at a target size), `gameui.click`
+  and `gameui.focus` (Play mode: act on an element as the pointer or navigation would), with reference and
+  goldens; the Game view draws the edit World's UI while not playing; Add menu entries. Done: command cases
+  and the fuzz test cover the commands; a GPU golden of the Game view showing the showcase HUD outside Play
+  mode; an agent transcript builds a menu, enters Play mode, clicks a button and reads the result.
+  ✅ Done: 190 commands; `gameui.click` steps the session twice (press, release) and returns the UI's
+  events; the edit World is laid out by a preview `UiWorld` that writes no saved Component
+  (`UiWorldDesc::preview`, `UiWorld::layout()`, `hitTest()`); `GameSession::setUiPointer()`;
+  `loadGameLocalization()` shared by the session and the editor's preview; transcript
+  `tests/acceptance/game-ui/menu.jsonl` (CTest `acceptance.game_ui.menu`).
+  Open: `gameui.create` does not select what it creates (as `entity.create`); the Scene view draws no UI.
+- UI-3d: Canvas editing. Selection outlines and placement handles for UI Entities in the Game view (move,
+  resize, anchors), anchor presets and placement drawers in the Inspector, picking and framing of UI
+  Entities. Done: UiDriver tests drag an element and change its anchors; a golden image.
 - UI-3c: Transitions and the demo. `UiTransition` (tweens of opacity, offset, scale and colour on state
   changes, played by `UiService`), text outline and shadow from the distance field; the tech demo gets a
   pause menu and a HUD. Done: deterministic transition tests with `fixedStep`; golden image of the demo's

@@ -43,7 +43,9 @@ version changes are in the contributor guide ("Versions and releases"). The vers
   interaction with the pointer, the keyboard and gamepads (buttons, toggles, sliders, focus, modal canvases),
   `UiService` for game modules (find, text, visibility, values, focus, events, language) and
   `SceneService::requestExit()`, with which a module ends the game in the player and in Play mode; text
-  fields, scroll views and input glyphs (`UiTextField`, `UiScrollView`, `UiGlyph`).
+  fields, scroll views and input glyphs (`UiTextField`, `UiScrollView`, `UiGlyph`); the Editor commands
+  `gameui.create`, `gameui.layout`, `gameui.click` and `gameui.focus` with the Entity > Game UI menu, and the
+  Game view showing the scene's UI also outside Play mode.
 
 ### Changed
 

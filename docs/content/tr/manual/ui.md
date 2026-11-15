@@ -210,16 +210,87 @@ hiyerarşi sırasıyla çizilir: önce ebeveyn, sonra çocukları ve sonraki kar
 
 ## Editörde HUD kurmak {#building-a-hud-in-the-editor}
 
-1. `HUD` adlı bir Entity oluşturun ve Inspector'da `UI canvas` Component'ini ekleyin.
-2. Outliner'da çocuk Entity'ler oluşturun (`HUD`'un üzerine sürükleyin) ve her birine `UI element`, ardından
-   `UI image`, `UI text`, `UI stack` veya `UI grid` ekleyin (bu dördü `UI element` gerektirir).
-3. Alanları ayarlayın: yerleşim anchor'ları ve offset'leri, font ve Texture Asset'leri (Asset Browser'dan alanların
-   üzerine sürükleyin), renkler ve boyutlar.
-4. **Play**'e basın: UI, Game görünümünde çizilir. Scene görünümü henüz UI çizmez; sonucu Game görünümünde
-   kontrol edin; `"viewport": "game"` ile `viewport.screenshot` komutu onun resmini alır.
+**Entity > Game UI** menüsü (komut paletinde de var) bir canvas'ı ya da bir elemanı makul varsayılanlarla ve tek
+bir geri alma adımı olarak oluşturur. Her tür, şu Component'lere sahip bir Entity ve gereken çocuklarını oluşturur:
+
+| Tür | Entity ve Component'ler | Çocuklar |
+| --- | --- | --- |
+| Canvas | `UiCanvas` | yok |
+| Panel | `UiElement` (400 x 300), `UiImage` (yarı saydam koyu) | yok |
+| Text | `UiElement` (320 x 48), `UiText` (size 32) | yok |
+| Button | `UiElement` (240 x 64), `UiImage`, `UiInteractable`, `UiButton` | `Label`: düğmeyi dolduran `UiElement`, ortalanmış `UiText` |
+| Toggle | `UiElement` (48 x 48), `UiImage`, `UiInteractable`, `UiToggle` | `Check`: 10 içeri alınmış `UiElement`, `UiImage`; toggle açıkken görünür |
+| Slider | `UiElement` (320 x 24), `UiImage`, `UiInteractable`, `UiSlider` | `Fill`: slider'ı dolduran `UiElement`, `UiImage`; `Handle`: `UiElement` (16 genişlik, slider'dan 12 uzun), `UiImage` |
+| Text Field | `UiElement` (320 x 48), `UiImage`, `UiInteractable`, `UiText`, `UiTextField` | yok |
+| Scroll View | `UiElement` (400 x 300), `UiImage`, `UiScrollView` | `Content`: `UiElement`, `UiStack` (spacing 8, padding 8) |
+| Stack | `UiElement` (320 x 400), `UiStack` (spacing 8) | yok |
+| Grid | `UiElement` (440 x 440), `UiGrid` | yok |
+
+Bir eleman, ebeveyninin sol üst köşesinden 24 canvas birimi uzağa yerleştirilir. Ebeveyni, seçili canvas ya da UI
+elemanıdır; yoksa sahnenin ilk canvas'ıdır; sahnede canvas yoksa önce `Canvas` adlı bir canvas oluşturulur. Bir
+metin, bir düğmenin etiketi ve bir text field'ın placeholder'ı projenin ilk font Asset'ini kullanır.
+
+1. **Entity > Game UI > Canvas**'ı seçin ya da herhangi bir eleman seçin: eleman, sizin için oluşturulan bir
+   canvas'ın içine girer.
+2. Bir sonrakini içine koymak için onu oluşturmadan önce bir canvas ya da eleman seçin.
+3. Alanları Inspector'da ayarlayın: yerleşim anchor'ları ve offset'leri, metin, font ve Texture Asset'leri (Asset
+   Browser'dan alanların üzerine sürükleyin), renkler ve boyutlar. Canvas'ta henüz yerleşim tutamaçları yoktur;
+   şimdilik yerleşim Inspector'da düzenlenir.
+4. Sonucu **Game görünümünde** kontrol edin: görünüm, sahnenin UI'sını oyun çalışmıyorken de çizer. Scene
+   görünümü UI çizmez. `"viewport": "game"` ile `viewport.screenshot` komutu onun resmini alır.
 
 `samples/showcase` projesi, her UI Component'ini ve her alanı kullanan bir HUD içerir; sahne `build.jsonl` ile
 kurulur ([Showcase Projesi](editor/showcase.md) sayfasına bakın).
+
+## Bir ajanla UI kurmak {#building-a-ui-with-an-agent}
+
+Bir ajan, Game UI kategorisindeki dört [Editor commands](../reference/editor-commands.md) ile UI kurar ve
+kontrol eder. Yukarıdaki menü öğeleri `gameui.create` komutunu çalıştırır.
+
+**`gameui.create`** bir canvas'ı ya da bir elemanı çocuklarıyla birlikte tek bir geri alma adımında oluşturur.
+`kind` değeri `canvas`, `panel`, `text`, `button`, `toggle`, `slider`, `text_field`, `scroll_view`, `stack` veya
+`grid`'dir. `parent` varsayılan olarak seçili canvas ya da UI elemanıdır, yoksa ilk canvas; `name` varsayılan
+olarak türün adıdır; `text`, bir metnin metni, bir düğmenin etiketi ya da bir text field'ın placeholder'ıdır.
+Sonuçta yeni `entity`, onun `parts` listesi (`label` gibi rolleriyle çocukları) ve bir canvas oluşturulmak
+zorunda kalındıysa `canvas` bulunur.
+
+```json
+{"call": "gameui.create", "params": {"kind": "button", "parent": "/HUD", "name": "Start", "text": "Start"}}
+```
+
+**`gameui.layout`** UI'ın elemanlarını nereye yerleştirdiğini, sahneyi değiştirmeden döndürür: her eleman için
+canvas birimlerinde (`min`, `max`) ve hedef piksellerinde (`pixelMin`, `pixelMax`) dikdörtgenini, `opacity`,
+`visible`, `interactable` ve `focused` değerlerini, her canvas için `pixelsPerUnit` ve `size` değerlerini. Edit
+World'ü `width` x `height` piksel için yerleştirilir (varsayılan 1920 x 1080); bir oyun çalışırken, `world`
+`"edit"` değilse play World'ünü okur. `entity`, sonucu tek bir canvas'a ya da elemana ve alt ağacına sınırlar.
+
+```json
+{"call": "gameui.layout", "params": {"entity": "/HUD", "width": 1280, "height": 720}}
+```
+
+**`gameui.click`** çalışan oyunun bir elemanına, fare gibi, merkezinden tıklar. Oyunun iki güncellemesini çalıştırır,
+duraklatılmış olsa da olmasa da (işaretçi orada basılı tutulur, sonra bırakılır); böylece düğmeler `clicked`
+bildirir, toggle'lar döner, slider'lar hareket eder ve bu güncellemelerin UI `events` listesini, tıklamanın
+`pixels` değeriyle birlikte döndürür. Oyunun kendi girdi eylemleri tıklamayı görmez.
+
+```json
+{"call": "gameui.click", "params": {"entity": "/Menu/Start"}}
+```
+
+**`gameui.focus`** çalışan oyunun bir elemanına gezinme odağını verir (olay yok) ve odaktaki elemanı döndürür;
+`"entity": null` odağı temizler. Odağı alamayan bir eleman eski odağı korur ve komut uyarı verir.
+
+```json
+{"call": "gameui.focus", "params": {"entity": "/Menu/Start"}}
+```
+
+`gameui.click` ve `gameui.focus` yalnızca Play modunda çalışır: çalışan oyun yokken yanlış mod hatasıyla başarısız
+olurlar (`play.start` ile bir tane başlatın). Eleman tıklanamıyorsa `gameui.click` başarısız olur ve nedenini söyler:
+eleman gizlidir (opacity 0 ya da kapalı bir toggle), `UiInteractable`'ı yoktur, devre dışıdır, bir modal canvas'ın
+altında ya da bir kırpmanın dışındadır, merkezinde başka bir eleman tarafından örtülüdür (mesaj onu adıyla söyler) ya
+da yerleştirilmemiştir. Tipik bir oturum menüyü oluşturur, `gameui.layout` ile kontrol eder, sahneyi kaydeder, Play
+modunu başlatır, düğmeye tıklar ve `clicked` olayını okur; `tests/acceptance/game-ui/menu.jsonl` böyle bir
+transkripttir.
 
 ## Bir modülden HUD kurmak {#building-a-hud-from-a-module}
 
@@ -683,9 +754,10 @@ olmayan biri için `UiText` kendi metnini korur.
 
 ## Henüz olmayanlar {#what-is-not-there-yet}
 
-Bu paket UI çizer, input'a tepki verir ve oyun modüllerinin onu script'lemesini sağlar. Sonraki paketler Scene
-görünümünde canvas editörünü ve geçişleri ile animasyonu ekler. Metin seçimi, glyph görselleri (etiket yerine düğme
-resmi) ve geri dönüştürülen listeler de yoktur. İlk sürümün sınırları
+UI çizilir, input'a tepki verir, oyun modülleri tarafından script'lenebilir ve Entity menüsünden ya da `gameui.*`
+komutlarıyla kurulur. Sonraki paketler Scene görünümünde canvas editörünü (yerleşim tutamaçları, anchor ön ayarları ve
+elemanları fareyle seçme) ve geçişleri ile animasyonu ekler. O zamana kadar yerleşim Inspector'da düzenlenir. Metin
+seçimi, glyph görselleri (etiket yerine düğme resmi) ve geri dönüştürülen listeler de yoktur. İlk sürümün sınırları
 ([ADR 0057](https://github.com/oguzhanaknc/illusion/blob/main/docs/adr/0057-game-ui.md)):
 
 - Metin shaping olmadan soldan sağa çizilir: Arapça, İbranice, Hint yazı sistemleri ve ligatürler

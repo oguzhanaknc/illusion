@@ -34,6 +34,7 @@
 #include <illusion/runtime/ProjectSettings.hpp>
 
 #include <memory>
+#include <optional>
 #include <string>
 
 namespace illusion
@@ -59,6 +60,13 @@ namespace text
 {
 class Localization;
 }
+
+/// A pointer that the UI of a GameSession sees instead of the cursor (GameSession::setUiPointer()).
+struct GameUiPointer
+{
+    Vec2 pixels{0.0f}; ///< Position in the pixels of the UI frame.
+    bool down = false; ///< The primary button is held.
+};
 
 /// What a GameSession runs.
 enum class GameSessionMode : u8
@@ -189,6 +197,15 @@ public:
     /// pixels of @p frame: the player passes the frame's size over the window's, the editor's Game view
     /// writes the cursor in the pixels of its image and passes 1.
     void setUiFrame(const UiFrame& frame, Vec2 pointerScale = Vec2(1.0f)) noexcept;
+
+    /// The target of setUiFrame().
+    [[nodiscard]] UiFrame uiFrame() const noexcept;
+
+    /// Replaces the cursor and primary button of keyboardMouse() as the UI's pointer from the next update()
+    /// on, until std::nullopt (the default) gives them back; keyboardMouse() itself is not changed, so the
+    /// game's input actions do not see it. For tools that act on the UI as a click would (the editor's
+    /// `gameui.click`).
+    void setUiPointer(const std::optional<GameUiPointer>& pointer) noexcept;
 
     /// The UI of the World; its drawData() is what the last update() recorded.
     [[nodiscard]] UiWorld& ui() noexcept;

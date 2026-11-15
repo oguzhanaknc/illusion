@@ -779,9 +779,9 @@ void EditorShell::draw(f64 now, f64 deltaSeconds)
                     group.reset();
                     if (!submenu.empty())
                     {
-                        submenuOpen = ImGui::BeginMenu(
-                            text.label(s::kMenuLayouts,
-                                       text.concat("menu.", text.concat(uiMenuName(menu), ".layouts"))));
+                        submenuOpen = ImGui::BeginMenu(text.label(
+                            submenu == "game_ui" ? s::kMenuGameUi : s::kMenuLayouts,
+                            text.concat("menu.", text.concat(uiMenuName(menu), text.concat(".", submenu)))));
                     }
                 }
                 if (!submenu.empty() && !submenuOpen)

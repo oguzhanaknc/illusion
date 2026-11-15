@@ -804,3 +804,93 @@ TEST_CASE("a steady UiWorld update allocates nothing")
     CHECK_FALSE(ui.statistics().layoutReused);
     CHECK(quadCount(ui.drawData()) > 9);
 }
+
+TEST_CASE("layout() lists the canvases and elements of the last update in draw order")
+{
+    World world;
+    HierarchyIndex index;
+    UiWorld ui(world);
+    UiLayout layout;
+    ui.layout(layout);
+    CHECK(layout.canvases.empty());
+
+    const Entity top = world.create(fullCanvas(1));
+    const Entity bottom = world.create(fullCanvas(0));
+    const Entity panel =
+        child(world, bottom, placed({0.0f, 0.0f}, {0.0f, 0.0f}, {10.0f, 20.0f}, {110.0f, 70.0f}));
+    UiElement faded = placed({0.0f, 0.0f}, {1.0f, 1.0f}, {}, {});
+    faded.opacity = 0.0f;
+    faded.clipChildren = true;
+    const Entity hidden = child(world, panel, faded);
+    const Entity label = child(world, top, placed({0.0f, 0.0f}, {0.0f, 0.0f}, {0.0f, 0.0f}, {50.0f, 50.0f}));
+    step(world, index, ui, {{960, 540}});
+
+    ui.layout(layout);
+    REQUIRE(layout.canvases.size() == 2);
+    CHECK(layout.canvases[0].entity == bottom);
+    CHECK(layout.canvases[1].entity == top);
+    CHECK(close(layout.canvases[0].metrics.pixelsPerUnit, 0.5f));
+    CHECK(close(layout.canvases[0].area, {{0.0f, 0.0f}, {1920.0f, 1080.0f}}));
+    CHECK(layout.canvases[0].pointerEligible);
+    REQUIRE(layout.elements.size() == 3);
+    CHECK(layout.elements[0].entity == panel);
+    CHECK(layout.elements[0].canvas == 0);
+    CHECK(layout.elements[0].parent == UiLayoutElement::kNoParent);
+    CHECK(close(layout.elements[0].rect, {{10.0f, 20.0f}, {110.0f, 70.0f}}));
+    CHECK(layout.elements[0].visible);
+    CHECK(layout.elements[1].entity == hidden);
+    CHECK(layout.elements[1].parent == 0);
+    CHECK_FALSE(layout.elements[1].visible);
+    CHECK(layout.elements[1].clipsChildren);
+    CHECK(layout.elements[2].entity == label);
+    CHECK(layout.elements[2].canvas == 1);
+
+    // Entities destroyed after the update are left out.
+    REQUIRE(destroyRecursive(world, hidden) == 1);
+    ui.layout(layout);
+    CHECK(layout.elements.size() == 2);
+}
+
+TEST_CASE("hitTest() finds the topmost enabled interactable element of the last layout")
+{
+    World world;
+    HierarchyIndex index;
+    UiWorld ui(world);
+    const Entity canvas = world.create(fullCanvas());
+    const Entity under =
+        child(world, canvas, placed({0.0f, 0.0f}, {0.0f, 0.0f}, {0.0f, 0.0f}, {200.0f, 100.0f}),
+              UiInteractable{}, UiButton{});
+    const Entity over =
+        child(world, canvas, placed({0.0f, 0.0f}, {0.0f, 0.0f}, {100.0f, 0.0f}, {300.0f, 100.0f}),
+              UiInteractable{}, UiButton{});
+    step(world, index, ui);
+    CHECK(ui.hitTest({50.0f, 50.0f}) == under);
+    CHECK(ui.hitTest({150.0f, 50.0f}) == over);
+    CHECK(ui.hitTest({500.0f, 500.0f}).isNull());
+    // A destroyed element is not hit before the next update lays the UI out again.
+    REQUIRE(destroyRecursive(world, over) == 1);
+    CHECK(ui.hitTest({150.0f, 50.0f}) == under);
+}
+
+TEST_CASE("a preview UiWorld clamps a scroll view's offset for its layout without writing it")
+{
+    World world;
+    HierarchyIndex index;
+    UiWorldDesc desc;
+    desc.preview = true;
+    UiWorld preview(world, desc);
+    const Entity canvas = world.create(fullCanvas());
+    UiScrollView scroll;
+    scroll.offset = {0.0f, 5000.0f};
+    const Entity view =
+        child(world, canvas, placed({0.0f, 0.0f}, {0.0f, 0.0f}, {0.0f, 0.0f}, {100.0f, 100.0f}), scroll);
+    const Entity content = child(world, view, sized({100.0f, 300.0f}));
+    step(world, index, preview);
+    CHECK(world.get<UiScrollView>(view).offset.y == 5000.0f);
+    // The content is scrolled by the largest offset its size allows.
+    CHECK(close(rectOf(world, content), {{0.0f, -200.0f}, {100.0f, 100.0f}}));
+
+    UiWorld game(world);
+    step(world, index, game);
+    CHECK(world.get<UiScrollView>(view).offset.y == 200.0f);
+}

@@ -522,3 +522,52 @@ TEST_CASE("play.set_mix changes the running session's mixer, not the project set
     ok(f.editor(), "play.start");
     CHECK(ok(f.editor(), "play.diagnostics").root().find("masterVolume").asF64() == doctest::Approx(1.0));
 }
+
+TEST_CASE("gameui.click drives the UI of the running game through two updates without touching its mouse")
+{
+    PlayFixture f;
+    ok(f.editor(), "gameui.create", R"({"kind":"button","name":"Start"})");
+    ok(f.editor(), "gameui.create", R"({"kind":"toggle","name":"Music","parent":"/Canvas"})");
+    ok(f.editor(), "component.set_field",
+       R"({"entity":"/Canvas/Music","type":"illusion.UiElement","path":"placement",)"
+       R"("value":{"offsetMin":[24,200],"offsetMax":[72,248]}})");
+    ok(f.editor(), "play.start", R"({"fixedStep":true})");
+    ok(f.editor(), "play.pause", R"({"paused":true})");
+    GameSession& game = *f.play->game();
+    game.keyboardMouse().setMousePosition({5.0f, 7.0f});
+    // The headless session lays its UI out at 1920x1080 until a Game view sets its size.
+    CHECK(f.play->gameUiFrame().targetPixels == UVec2(1920, 1080));
+    const u64 updates = game.updateCount();
+
+    const JsonDocument clicked = ok(f.editor(), "gameui.click", R"({"entity":"/Canvas/Start"})");
+    CHECK(game.updateCount() == updates + 2);
+    CHECK(clicked.root().find("updates").asU64() == 2);
+    const JsonValue events = clicked.root().find("events");
+    bool sawClick = false;
+    for (usize i = 0; i < events.size(); ++i)
+    {
+        sawClick = sawClick || (events[i].find("type").asString() == "clicked" &&
+                                events[i].pointer("/entity/path").asString() == "/Canvas/Start");
+    }
+    CHECK(sawClick);
+    CHECK(game.keyboardMouse().mousePosition() == Vec2(5.0f, 7.0f));
+    CHECK_FALSE(game.keyboardMouse().isDown(MouseButton::Left));
+
+    const JsonDocument toggled = ok(f.editor(), "gameui.click", R"({"entity":"/Canvas/Music"})");
+    const JsonValue changes = toggled.root().find("events");
+    bool sawValue = false;
+    for (usize i = 0; i < changes.size(); ++i)
+    {
+        sawValue = sawValue || (changes[i].find("type").asString() == "value_changed" &&
+                                changes[i].find("value").asF64() == 1.0);
+    }
+    CHECK(sawValue);
+    CHECK(ok(f.editor(), "entity.get", R"({"entity":"/Canvas/Music"})")
+              .root()
+              .pointer("/components/illusion.UiToggle/on")
+              .asBool() == true);
+    // Afterwards the UI follows the real cursor again: nothing is pressed.
+    ok(f.editor(), "play.step");
+    CHECK(f.play->gameUi()->events().empty());
+    ok(f.editor(), "play.stop");
+}
