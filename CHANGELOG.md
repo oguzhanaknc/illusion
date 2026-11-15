@@ -42,7 +42,8 @@ version changes are in the contributor guide ("Versions and releases"). The vers
   image, text, stack, grid), anchored layout and canvas scaling, `UiRenderer`, string table keys for text,
   interaction with the pointer, the keyboard and gamepads (buttons, toggles, sliders, focus, modal canvases),
   `UiService` for game modules (find, text, visibility, values, focus, events, language) and
-  `SceneService::requestExit()`, with which a module ends the game in the player and in Play mode.
+  `SceneService::requestExit()`, with which a module ends the game in the player and in Play mode; text
+  fields, scroll views and input glyphs (`UiTextField`, `UiScrollView`, `UiGlyph`).
 
 ### Changed
 

@@ -6,9 +6,12 @@
 #include <illusion/ecs/Hierarchy.hpp>
 #include <illusion/ecs/Wind.hpp>
 #include <illusion/ecs/World.hpp>
+#include <illusion/input/Gamepad.hpp>
 #include <illusion/input/GamepadSystem.hpp>
+#include <illusion/input/InputActions.hpp>
 #include <illusion/input/InputActionsAsset.hpp>
 #include <illusion/input/InputActionsService.hpp>
+#include <illusion/input/InputStrings.hpp>
 #include <illusion/modules/ModuleHost.hpp>
 #include <illusion/particles/ParticleWorld.hpp>
 #include <illusion/particles/ParticleWorldService.hpp>
@@ -30,6 +33,7 @@
 
 #include <algorithm>
 #include <array>
+#include <cmath>
 #include <optional>
 #include <string>
 #include <string_view>
@@ -43,8 +47,97 @@ namespace
 
 constexpr usize kReservedGamepads = 8;
 constexpr std::string_view kLocaleDirectory = "assets:/locales";
-// While a modal canvas is shown, only the actions with this prefix get input.
+// While a modal canvas is shown or a text field has the focus, only the actions with this prefix get input.
 constexpr std::string_view kUiActionPrefix = "ui.";
+// Repeat of the held editing keys of a text field, in seconds: first after the delay, then at the interval.
+constexpr f64 kKeyRepeatDelay = 0.4;
+constexpr f64 kKeyRepeatInterval = 0.05;
+
+// Presses of a key with repeat while it is held.
+struct KeyRepeat
+{
+    f64 wait = 0.0;
+
+    [[nodiscard]] bool update(const InputState& input, Key key, f64 deltaSeconds) noexcept
+    {
+        if (input.wasPressed(key))
+        {
+            wait = kKeyRepeatDelay;
+            return true;
+        }
+        if (!input.isDown(key))
+        {
+            return false;
+        }
+        wait -= deltaSeconds;
+        if (wait > 0.0)
+        {
+            return false;
+        }
+        wait = std::max(wait + kKeyRepeatInterval, 0.0);
+        return true;
+    }
+};
+
+// The labels of UiGlyph: the first binding of the action for the device used last, in the session's language.
+class ActionGlyphs final : public UiGlyphSource
+{
+public:
+    ActionGlyphs(const InputActions& actions, const text::Localization& localization) noexcept
+        : m_actions(actions)
+        , m_localization(localization)
+    {
+    }
+
+    [[nodiscard]] std::string_view actionLabel(std::string_view action) override
+    {
+        m_label.clear();
+        const std::optional<ActionId> id = m_actions.findAction(action);
+        if (!id)
+        {
+            return {};
+        }
+        const bool gamepad = m_actions.lastDevice() == InputDevice::Gamepad;
+        for (const InputBinding& binding : m_actions.bindings(*id))
+        {
+            if (binding.isGamepad() == gamepad)
+            {
+                m_label = glyphLabel(binding, gamepadFamily(m_actions.lastGamepadType()), m_localization);
+                break;
+            }
+        }
+        return m_label;
+    }
+
+    [[nodiscard]] u64 version() const noexcept override { return m_version; }
+
+    // Counts a change of the device used last, the gamepad family, the bindings or the language.
+    void refresh() noexcept
+    {
+        const InputDevice device = m_actions.lastDevice();
+        const GamepadFamily family = gamepadFamily(m_actions.lastGamepadType());
+        const u64 bindings = m_actions.bindingsVersion();
+        if (device != m_device || family != m_family || bindings != m_bindings ||
+            !(m_localization.locale() == m_locale))
+        {
+            m_device = device;
+            m_family = family;
+            m_bindings = bindings;
+            m_locale = m_localization.locale();
+            ++m_version;
+        }
+    }
+
+private:
+    const InputActions& m_actions;
+    const text::Localization& m_localization;
+    std::string m_label;
+    u64 m_version = 0;
+    InputDevice m_device = InputDevice::KeyboardMouse;
+    GamepadFamily m_family = GamepadFamily::Generic;
+    u64 m_bindings = 0;
+    text::LocaleId m_locale{};
+};
 
 // The game's string table, built from its locale files; the Localization views it.
 struct GameStrings
@@ -215,8 +308,10 @@ struct GameSession::Impl
         , uiService(world, ui, localization)
     {
         gamepads.reserve(kReservedGamepads);
+        localization.addTable(input::strings::kTable);
         ui.setAssets(sessionDesc.uiAssets);
         ui.setLocalization(&localization);
+        ui.setGlyphs(&glyphs);
     }
 
     [[nodiscard]] GuidGenerator& guids() noexcept
@@ -254,8 +349,8 @@ struct GameSession::Impl
                 gamepads.push_back(&gamepad->state());
             }
         }
-        // The modal state of the last UI update holds for the modules of this one.
-        const std::string_view prefix = ui.modalActive() ? kUiActionPrefix : std::string_view();
+        // The modal state and the focus of the last UI update hold for the modules of this one.
+        const std::string_view prefix = ui.modalActive() || typing() ? kUiActionPrefix : std::string_view();
         if (actions.exclusivePrefix() != prefix)
         {
             actions.setExclusivePrefix(prefix);
@@ -263,8 +358,17 @@ struct GameSession::Impl
         actions.update(focus ? &input : nullptr, gamepads);
     }
 
-    // What the UI reads this update: the cursor and primary button with the focus, and the ui.* actions.
-    [[nodiscard]] UiInput uiInput(f64 deltaSeconds) const noexcept
+    // True when the last UI update left a UiTextField with the focus.
+    [[nodiscard]] bool typing() const noexcept
+    {
+        const Entity focused = ui.focused();
+        return !focused.isNull() && world.isAlive(focused) && world.has<UiTextField>(focused);
+    }
+
+    // What the UI reads this update: the cursor, primary button and wheel with the focus, and the ui.*
+    // actions; while a text field has the focus, the typed text and editing keys instead of the keyboard's
+    // part of ui.navigate and ui.submit (see GameSession).
+    [[nodiscard]] UiInput uiInput(f64 deltaSeconds) noexcept
     {
         UiInput result;
         result.deltaSeconds = deltaSeconds;
@@ -275,14 +379,35 @@ struct GameSession::Impl
             result.pointerPresent = result.pointerPixels.x >= 0.0f && result.pointerPixels.y >= 0.0f &&
                                     result.pointerPixels.x < size.x && result.pointerPixels.y < size.y;
             result.pointerDown = input.isDown(MouseButton::Left);
+            result.wheel = input.scrollDelta().y;
         }
+        const bool editing = typing();
+        const bool keys = editing && focus;
         if (const std::optional<ActionId> navigate = actions.findAction(kUiNavigateAction))
         {
-            result.navigate = actions.vector(*navigate);
+            result.navigate = editing ? actions.gamepadVector(*navigate) : actions.vector(*navigate);
+            if (keys && input.isDown(Key::Up) != input.isDown(Key::Down))
+            {
+                result.navigate.y = input.isDown(Key::Up) ? 1.0f : -1.0f;
+            }
         }
         if (const std::optional<ActionId> submit = actions.findAction(kUiSubmitAction))
         {
-            result.submitDown = actions.isDown(*submit);
+            result.submitDown =
+                editing ? actions.gamepadVector(*submit).x > 0.0f ||
+                              (keys && (input.isDown(Key::Enter) || input.isDown(Key::KeypadEnter)))
+                        : actions.isDown(*submit);
+        }
+        const f64 elapsed = std::isfinite(deltaSeconds) ? std::max(deltaSeconds, 0.0) : 0.0;
+        if (keys)
+        {
+            result.text = input.text();
+            result.caretLeft = repeats[0].update(input, Key::Left, elapsed);
+            result.caretRight = repeats[1].update(input, Key::Right, elapsed);
+            result.backspace = repeats[2].update(input, Key::Backspace, elapsed);
+            result.deleteForward = repeats[3].update(input, Key::Delete, elapsed);
+            result.caretHome = input.wasPressed(Key::Home);
+            result.caretEnd = input.wasPressed(Key::End);
         }
         if (const std::optional<ActionId> cancel = actions.findAction(kUiCancelAction))
         {
@@ -304,6 +429,8 @@ struct GameSession::Impl
     Vec2 pointerScale{1.0f};
     InputActions actions;
     InputState input;
+    ActionGlyphs glyphs{actions, localization};
+    std::array<KeyRepeat, 4> repeats{}; // Left, Right, Backspace, Delete of a focused text field
     HierarchyIndex hierarchy;
     PhysicsWorldService physicsService;
     AudioWorldService audioService;
@@ -429,6 +556,7 @@ void GameSession::update(f64 deltaSeconds)
     impl.physics.update(step);
     updateTransformHierarchy(impl.world, impl.hierarchy, impl.desc.jobs);
     impl.localization.applyPendingLocale();
+    impl.glyphs.refresh();
     if (impl.desc.mode == GameSessionMode::Play)
     {
         impl.ui.update(impl.uiFrame, impl.uiInput(step));

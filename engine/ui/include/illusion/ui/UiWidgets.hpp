@@ -25,6 +25,7 @@
 #include <illusion/ecs/Entity.hpp>
 #include <illusion/ui/UiComponents.hpp>
 
+#include <string>
 #include <string_view>
 
 namespace illusion
@@ -75,6 +76,40 @@ struct UiSlider
     f32 navigationStep = 0.1f;
 };
 
+/// A line of text the player edits (reflected as "illusion.UiTextField"). Needs UiInteractable and a UiText
+/// on the same Entity, which shows `text`, or `placeholder` (dimmed) while it is empty. While focused it
+/// takes the typed characters; Left, Right, Home, End move the caret, Backspace and Delete remove a
+/// character, `ui.submit` reports UiEventType::Submitted. Navigation left and right moves the caret, not the
+/// focus.
+struct UiTextField
+{
+    std::string text;        ///< The value, UTF-8.
+    std::string placeholder; ///< Shown while text is empty; a literal.
+    u32 maxLength = 64;      ///< Most code points the player can enter, 1 to 1024.
+    bool password = false;   ///< Show a bullet for every character.
+    Vec4 caretColor{1.0f};   ///< Linear RGBA of the caret.
+};
+
+/// Scrolls its content (reflected as "illusion.UiScrollView"): the element clips its children, and its
+/// first child is the content, placed at the top left with its own size (UiElement::size, or its stack's
+/// content) and moved by `offset`. The wheel and dragging scroll it; moving the focus to a descendant
+/// scrolls it into view.
+struct UiScrollView
+{
+    Vec2 offset{0.0f};       ///< Distance scrolled in canvas units, kept within the content.
+    bool horizontal = false; ///< May scroll horizontally.
+    bool vertical = true;    ///< May scroll vertically.
+    f32 wheelStep = 60.0f;   ///< Canvas units per wheel notch.
+};
+
+/// Shows how an input action is bound on the device used last (reflected as "illusion.UiGlyph"). Needs a
+/// UiText on the same Entity, whose text becomes the label of the action's first binding for that device
+/// ("Enter", "A", "Cross"); it changes when the player switches between keyboard and gamepad or rebinds.
+struct UiGlyph
+{
+    std::string action; ///< Name of the input action, such as "ui.submit" or "jump".
+};
+
 /// State of an interactable element this frame (runtime only, written by the UI System).
 struct UiInteraction
 {
@@ -93,6 +128,14 @@ struct UiInput
     Vec2 navigate{0.0f};         ///< Direction of `ui.navigate`, x right, y up, each in [-1, 1].
     bool submitDown = false;     ///< `ui.submit` is held.
     bool cancelPressed = false;  ///< `ui.cancel` was pressed this frame.
+    f32 wheel = 0.0f;            ///< Wheel notches this frame, positive away from the player.
+    std::u32string_view text{};  ///< Characters typed this frame (InputState::text()).
+    bool caretLeft = false;      ///< Left was pressed (with repeat).
+    bool caretRight = false;     ///< Right was pressed (with repeat).
+    bool caretHome = false;      ///< Home was pressed.
+    bool caretEnd = false;       ///< End was pressed.
+    bool backspace = false;      ///< Backspace was pressed (with repeat).
+    bool deleteForward = false;  ///< Delete was pressed (with repeat).
     f64 deltaSeconds = 0.0;      ///< Time since the last update, for the repeat of held navigation.
 };
 
@@ -103,6 +146,8 @@ enum class UiEventType : u8
     ValueChanged, ///< A UiToggle or UiSlider changed; `value` is the new value (0 or 1 for a toggle).
     FocusChanged, ///< The element got the focus; `value` is 1 when navigation moved it, 0 for the pointer.
     Cancelled,    ///< `ui.cancel` was pressed; `entity` is the focused element's canvas, or null.
+    TextChanged,  ///< The player edited a UiTextField.
+    Submitted,    ///< `ui.submit` on a focused UiTextField.
 };
 
 /// One event of a frame.

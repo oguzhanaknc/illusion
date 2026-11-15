@@ -437,3 +437,68 @@ TEST_CASE("BindingCapture catches a tap on the frame it arms")
     REQUIRE(binding.has_value());
     CHECK(*binding == InputBinding::key(Key::Q));
 }
+
+TEST_CASE("gamepadVector gives the value of the gamepad bindings alone")
+{
+    Fixture f;
+    const ActionId move = f.actions.addAction("Move", ActionType::Vector2);
+    f.actions.addBinding(move, InputBinding::keyVector(Key::W, Key::S, Key::A, Key::D));
+    f.actions.addBinding(move, InputBinding::gamepadStick(GamepadStick::Left));
+    const ActionId jump = f.actions.addAction("Jump", ActionType::Button);
+    f.actions.addBinding(jump, InputBinding::key(Key::Space));
+    f.actions.addBinding(jump, InputBinding::gamepadButton(GamepadButton::South));
+
+    f.keyboard.setKey(Key::D, true);
+    f.keyboard.setKey(Key::Space, true);
+    f.frame();
+    CHECK(f.actions.vector(move).x == doctest::Approx(1.0));
+    CHECK(f.actions.gamepadVector(move) == Vec2(0.0f));
+    CHECK(f.actions.isDown(jump));
+    CHECK(f.actions.gamepadVector(jump) == Vec2(0.0f));
+
+    f.pad.setAxis(GamepadAxis::LeftX, -1.0f);
+    f.pad.setButton(GamepadButton::South, true);
+    f.frame();
+    CHECK(f.actions.gamepadVector(move).x == doctest::Approx(-1.0));
+    CHECK(f.actions.gamepadVector(jump) == Vec2(1.0f, 0.0f));
+
+    f.actions.setExclusivePrefix("ui.");
+    f.frame();
+    CHECK(f.actions.gamepadVector(move) == Vec2(0.0f));
+}
+
+TEST_CASE("bindingsVersion grows with every change of actions and bindings, not with input")
+{
+    InputActions actions;
+    u64 version = actions.bindingsVersion();
+    const auto changed = [&] {
+        const bool grew = actions.bindingsVersion() > version;
+        version = actions.bindingsVersion();
+        return grew;
+    };
+    const ActionId jump = actions.addAction("Jump", ActionType::Button);
+    CHECK(changed());
+    actions.addBinding(jump, InputBinding::key(Key::Space));
+    CHECK(changed());
+    actions.addBinding(jump, InputBinding::key(Key::Space)); // a duplicate
+    CHECK_FALSE(changed());
+    CHECK(actions.removeBinding(jump, InputBinding::key(Key::Space)));
+    CHECK(changed());
+    CHECK_FALSE(actions.removeBinding(jump, InputBinding::key(Key::Space)));
+    CHECK_FALSE(changed());
+    const std::array bindings{InputBinding::key(Key::Enter)};
+    actions.setBindings(jump, bindings);
+    CHECK(changed());
+    CHECK(actions.renameAction(jump, "Leap"));
+    CHECK(changed());
+    CHECK(actions.deserialize("Leap = Key.Space"));
+    CHECK(changed());
+    InputState keyboard;
+    keyboard.setKey(Key::Space, true);
+    actions.update(&keyboard, {});
+    CHECK_FALSE(changed());
+    actions.removeAction(jump);
+    CHECK(changed());
+    actions.clear();
+    CHECK(changed());
+}

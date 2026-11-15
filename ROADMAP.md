@@ -848,6 +848,12 @@ distance field fonts, and a batched pass draws the UI after tonemapping. Public 
   virtualised lists for long content), `UiGlyph` (the current binding of an action for the device used
   last, as its label until glyph images exist). Done: tests of editing with multi-byte text, scrolling
   with clipping, and glyph labels that change with the device.
+  ✅ Done: `UiTextField`, `UiScrollView`, `UiGlyph` (`UiGlyphSource` over the session's `InputActions`),
+  `InputActions::gamepadVector()` and `bindingsVersion()`; while a field has the focus the game's actions
+  are masked and typed keys go to the field; `ui/scroll-1000` 43 µs (budget 300 µs).
+  Open: no text selection or clipboard; lists are not recycled (rows outside a scroll view are skipped for
+  hit tests and drawing but exist and are laid out); glyphs are labels, not images, and English unless the
+  project translates the `input.*` keys; no IME composition display.
 - UI-3a: Scripting. `UiService` (`USES ui`) with its adapter: find elements, set text (literal or key with
   arguments), values, visibility and focus, instantiate a UI prefab, poll events; a way for a module to end
   the game (open from M8-1). Done: counting proxy and the showcase module call the whole API;

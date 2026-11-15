@@ -6,6 +6,7 @@
 #include <illusion/text/Localization.hpp>
 #include <illusion/text/MessageFormat.hpp>
 #include <illusion/text/TextOutput.hpp>
+#include <illusion/text/Utf8.hpp>
 #include <illusion/ui/UiComponents.hpp>
 #include <illusion/ui/UiWidgets.hpp>
 #include <illusion/ui/UiWorld.hpp>
@@ -14,6 +15,7 @@
 #include <array>
 #include <cmath>
 #include <span>
+#include <string>
 #include <string_view>
 #include <utility>
 #include <vector>
@@ -37,6 +39,16 @@ constexpr f64 kRepeatInterval = 0.12;
 constexpr f32 kCrossPenalty = 2.0f;
 // Candidates closer than this along the direction, in pixels, are not in that direction.
 constexpr f32 kMinAdvancePixels = 0.5f;
+// Text fields: most code points, width of the caret in canvas units, half-period of its blink in seconds.
+constexpr u32 kMaxFieldLength = 1024;
+constexpr usize kMaxFieldBytes = usize{kMaxFieldLength} * 4;
+constexpr f32 kCaretWidth = 2.0f;
+constexpr f64 kBlinkSeconds = 0.5;
+constexpr f32 kPlaceholderAlpha = 0.5f;
+// A press inside a scroll view that moves farther than this, in pixels, drags the content.
+constexpr f32 kDragThresholdPixels = 8.0f;
+constexpr std::string_view kBullet = "\xE2\x80\xA2"; // U+2022
+constexpr char32_t kBulletCodePoint = 0x2022;
 
 enum class Direction : u8
 {
@@ -67,6 +79,25 @@ struct Node
     bool toggle = false;       // has UiToggle
     bool slider = false;       // has UiSlider
     bool indicator = false;    // first child element of a UiToggle, hidden while it is off
+    bool field = false;        // has UiTextField and UiText
+    bool scroll = false;       // has UiScrollView
+    Vec2 scrollMax{0.0f};      // largest offset of a scroll view on each axis
+    UiRect bounds{};           // the node and its descendants after their transforms, canvas units
+};
+
+// A clip the recording pushed: subtreeEnd of its node, and whether it is a scroll view.
+struct RecordClip
+{
+    u32 end = 0;
+    bool scroll = false;
+};
+
+// What a UiTextField shows: its text, bullets for a password, or its placeholder; @p caret in its bytes.
+struct FieldText
+{
+    std::string_view shown{};
+    usize caret = 0;
+    bool placeholder = false;
 };
 
 struct CanvasEntry
@@ -97,7 +128,7 @@ struct Content
 constexpr f64 kMaxExactInteger = 9007199254740992.0;
 
 // The Component versions a layout depends on.
-constexpr usize kVersionCount = 12;
+constexpr usize kVersionCount = 15;
 using Versions = std::array<u64, kVersionCount>;
 
 Versions versionsOf(const World& world) noexcept
@@ -107,7 +138,9 @@ Versions versionsOf(const World& world) noexcept
             world.componentVersion<UiStack>(),        world.componentVersion<UiGrid>(),
             world.componentVersion<Hierarchy>(),      world.componentVersion<Inactive>(),
             world.componentVersion<UiInteractable>(), world.componentVersion<UiToggle>(),
-            world.componentVersion<UiSlider>(),       world.componentVersion<UiTextArguments>()};
+            world.componentVersion<UiSlider>(),       world.componentVersion<UiTextArguments>(),
+            world.componentVersion<UiTextField>(),    world.componentVersion<UiScrollView>(),
+            world.componentVersion<UiGlyph>()};
 }
 
 template <usize... I>
@@ -286,6 +319,80 @@ UiRect fitted(const UiRect& rect, Vec2 imageSize) noexcept
     return {min, min + shown};
 }
 
+bool overlaps(const UiRect& a, const UiRect& b) noexcept
+{
+    return a.max.x > b.min.x && a.max.y > b.min.y && a.min.x < b.max.x && a.min.y < b.max.y;
+}
+
+UiRect transformedBounds(const UiTransform2D& transform, const UiRect& rect) noexcept
+{
+    const std::array corners{transform.apply(rect.min), transform.apply(Vec2(rect.max.x, rect.min.y)),
+                             transform.apply(rect.max), transform.apply(Vec2(rect.min.x, rect.max.y))};
+    UiRect bounds{corners[0], corners[0]};
+    for (const Vec2 corner : corners)
+    {
+        bounds.min = glm::min(bounds.min, corner);
+        bounds.max = glm::max(bounds.max, corner);
+    }
+    return bounds;
+}
+
+// Characters a text field accepts: no control characters, surrogates or values beyond Unicode.
+bool typable(char32_t c) noexcept
+{
+    return c >= 0x20 && !(c >= 0x7F && c <= 0x9F) && !(c >= 0xD800 && c <= 0xDFFF) && c <= 0x10FFFF;
+}
+
+// The byte offset of the code point before @p offset, which is a code point boundary greater than 0.
+usize previousBoundary(std::string_view utf8, usize offset) noexcept
+{
+    usize at = 0;
+    while (true)
+    {
+        const usize next = at + text::decodeUtf8(utf8, at).length;
+        if (next >= offset)
+        {
+            return at;
+        }
+        at = next;
+    }
+}
+
+// The byte offset after the first @p count code points of @p utf8.
+usize codePointOffset(std::string_view utf8, usize count) noexcept
+{
+    usize at = 0;
+    for (usize i = 0; i < count && at < utf8.size(); ++i)
+    {
+        at += text::decodeUtf8(utf8, at).length;
+    }
+    return at;
+}
+
+u32 fieldLength(const UiTextField& field) noexcept
+{
+    return std::clamp(field.maxLength, 1u, kMaxFieldLength);
+}
+
+// A text field draws one line from its left edge; it aligns and scrolls the line itself.
+UiTextStyle fieldStyle(const UiText& text) noexcept
+{
+    UiTextStyle style = textStyle(text, 0.0f);
+    style.align = UiTextAlign::Start;
+    style.wrapWidth = 0.0f;
+    return style;
+}
+
+f32 lineHeightOf(const Font& font, const UiTextStyle& style) noexcept
+{
+    return font.metrics().lineHeight() * style.size * style.lineSpacing;
+}
+
+f32 finiteOr(f32 value, f32 fallback) noexcept
+{
+    return std::isfinite(value) ? value : fallback;
+}
+
 } // namespace
 
 f32 snapSliderValue(const UiSlider& slider, f32 value) noexcept
@@ -317,6 +424,8 @@ struct UiWorld::Impl
         clipStack.reserve(usize{desc.drawList.maxClipDepth} + 1);
         hitClips.reserve(usize{desc.maxDepth} + 1);
         events.reserve(desc.maxEvents);
+        fieldShadow.reserve(kMaxFieldBytes);
+        shownScratch.reserve(kMaxFieldBytes);
     }
 
     [[nodiscard]] std::string_view textOf(const Node& node, const UiText& text) const noexcept
@@ -326,9 +435,11 @@ struct UiWorld::Impl
 
     [[nodiscard]] bool changed(const UiFrame& frame, const Versions& now) const noexcept
     {
-        if (!laidOut || pendingContent || now != versions || frame.targetPixels != lastFrame.targetPixels ||
+        if (!laidOut || pendingContent || textEdited || now != versions ||
+            frame.targetPixels != lastFrame.targetPixels ||
             !(frame.safeInsetPixels == lastFrame.safeInsetPixels) || assets != lastAssets ||
-            localization != lastLocalization)
+            localization != lastLocalization || glyphs != lastGlyphs ||
+            (glyphs != nullptr && glyphs->version() != lastGlyphVersion))
         {
             return true;
         }
@@ -347,6 +458,8 @@ struct UiWorld::Impl
             lastAssets = assets;
             lastLocalization = localization;
             lastLocale = localization != nullptr ? localization->locale() : text::LocaleId{};
+            lastGlyphs = glyphs;
+            lastGlyphVersion = glyphs != nullptr ? glyphs->version() : 0;
             laidOut = true;
         }
         interact(input);
@@ -363,6 +476,7 @@ struct UiWorld::Impl
         canvases.clear();
         textArena.reset();
         pendingContent = false;
+        textEdited = false;
         elements = 0;
         skipped = 0;
         missingKeys = 0;
@@ -404,6 +518,7 @@ struct UiWorld::Impl
         world.query<UiInteraction>().each([](Entity, UiInteraction& state) { state = {}; });
         world.markChanged<UiInteraction>();
         writeComputedRects(0, static_cast<u32>(nodes.size()));
+        boundsDirty = true;
     }
 
     u32 addNode(Entity entity, u32 parent)
@@ -418,6 +533,8 @@ struct UiWorld::Impl
             node.interactable = world.has<UiInteractable>(entity);
             node.toggle = world.has<UiToggle>(entity);
             node.slider = world.has<UiSlider>(entity);
+            node.field = world.has<UiTextField>(entity) && world.has<UiText>(entity);
+            node.scroll = world.has<UiScrollView>(entity);
         }
         if (parent != kNoNode)
         {
@@ -441,7 +558,22 @@ struct UiWorld::Impl
     void resolveKey(Node& node)
     {
         const UiText* text = world.tryGet<UiText>(node.entity);
-        if (text == nullptr || text->key.empty())
+        if (text == nullptr)
+        {
+            return;
+        }
+        if (const UiGlyph* glyph = glyphs != nullptr ? world.tryGet<UiGlyph>(node.entity) : nullptr)
+        {
+            if (const std::string_view label = glyphs->actionLabel(glyph->action); !label.empty())
+            {
+                text::TextOutput out(textArena);
+                out.append(label);
+                node.keyed = true;
+                node.keyText = out.view();
+                return;
+            }
+        }
+        if (text->key.empty())
         {
             return;
         }
@@ -547,7 +679,7 @@ struct UiWorld::Impl
                     combine(parentTransform, makeUiTransform(pivot, element->rotation, element->scale));
             }
             node.opacity = parentOpacity * std::clamp(element->opacity, 0.0f, 1.0f);
-            node.clip = element->clipChildren;
+            node.clip = element->clipChildren || node.scroll;
         }
     }
 
@@ -560,6 +692,11 @@ struct UiWorld::Impl
             {
                 pendingContent = pendingContent || (assets != nullptr && !text->font.empty());
                 return {true, Vec2(0.0f)};
+            }
+            if (node.field)
+            {
+                const FieldText shown = fieldText(world.get<UiTextField>(node.entity), *face.font, 0);
+                return {true, measureText(*face.font, shown.shown, fieldStyle(*text)).size};
             }
             return {true, measureText(*face.font, textOf(node, *text), textStyle(*text, wrapWidth)).size};
         }
@@ -584,7 +721,11 @@ struct UiWorld::Impl
         {
             return;
         }
-        if (const UiStack* stack = world.tryGet<UiStack>(node.entity))
+        if (node.scroll)
+        {
+            layoutScroll(n);
+        }
+        else if (const UiStack* stack = world.tryGet<UiStack>(node.entity))
         {
             layoutStack(n, *stack);
         }
@@ -631,8 +772,9 @@ struct UiWorld::Impl
         rect.max[along] = at + half;
     }
 
-    // Lays out the subtree of slider node @p n again after its value changed.
-    void relayoutSlider(u32 n)
+    // Lays out the subtree of node @p n again after a value it depends on changed (a slider's value, a
+    // scroll view's offset).
+    void relayoutSubtree(u32 n)
     {
         layoutChildren(n);
         const u32 end = nodes[n].subtreeEnd;
@@ -642,6 +784,93 @@ struct UiWorld::Impl
             layoutChildren(m);
         }
         writeComputedRects(n + 1, end);
+        boundsDirty = true;
+    }
+
+    // The first child is the content: at the view's top left with its own size, moved by the offset, which
+    // is kept within the content; the other children are placed as usual.
+    void layoutScroll(u32 n)
+    {
+        const UiRect view = nodes[n].rect;
+        const u32 content = nodes[n].firstChild;
+        for (u32 c = content != kNoNode ? nodes[content].nextSibling : kNoNode; c != kNoNode;
+             c = nodes[c].nextSibling)
+        {
+            nodes[c].rect = resolvePlacement(world.get<UiElement>(nodes[c].entity).placement, view);
+        }
+        UiScrollView& scroll = world.get<UiScrollView>(nodes[n].entity);
+        const Vec2 size = content != kNoNode ? contentSize(content, view.size()) : view.size();
+        Vec2 range = glm::max(size - view.size(), Vec2(0.0f));
+        range.x = scroll.horizontal ? range.x : 0.0f;
+        range.y = scroll.vertical ? range.y : 0.0f;
+        nodes[n].scrollMax = range;
+        const Vec2 offset = glm::clamp(Vec2(finiteOr(scroll.offset.x, 0.0f), finiteOr(scroll.offset.y, 0.0f)),
+                                       Vec2(0.0f), range);
+        if (offset != scroll.offset)
+        {
+            scroll.offset = offset;
+            world.markChanged<UiScrollView>();
+        }
+        if (content != kNoNode)
+        {
+            const Vec2 min = view.min - offset;
+            nodes[content].rect = {min, min + size};
+        }
+    }
+
+    // Size of the content of a scroll view of @p viewSize: UiElement::size, else for a stack its length
+    // along its axis, else the view's size.
+    [[nodiscard]] Vec2 contentSize(u32 content, Vec2 viewSize)
+    {
+        const Vec2 fixed = glm::max(world.get<UiElement>(nodes[content].entity).size, Vec2(0.0f));
+        Vec2 size(fixed.x > 0.0f ? fixed.x : viewSize.x, fixed.y > 0.0f ? fixed.y : viewSize.y);
+        if (const UiStack* stack = world.tryGet<UiStack>(nodes[content].entity))
+        {
+            const int along = stack->axis == UiAxis::Vertical ? 1 : 0;
+            if (fixed[along] <= 0.0f)
+            {
+                size[along] = stackLength(content, *stack, size);
+            }
+        }
+        return size;
+    }
+
+    // What child @p c of a stack with inner size @p innerSize measures along and across it; kStretch along
+    // when it shares the rest.
+    [[nodiscard]] Vec2 stackChildSize(u32 c, const UiStack& stack, Vec2 innerSize)
+    {
+        const bool vertical = stack.axis == UiAxis::Vertical;
+        const int along = vertical ? 1 : 0;
+        const int across = 1 - along;
+        const Vec2 fixed = glm::max(world.get<UiElement>(nodes[c].entity).size, Vec2(0.0f));
+        const f32 wrapAt =
+            vertical ? (stack.crossAlign != UiCrossAlign::Stretch && fixed.x > 0.0f ? fixed.x : innerSize.x)
+                     : (fixed.x > 0.0f ? fixed.x : innerSize.x);
+        const Content content = contentOf(nodes[c], wrapAt);
+        Vec2 size(0.0f);
+        size[along] = fixed[along] > 0.0f ? fixed[along] : content.known ? content.size[along] : kStretch;
+        size[across] = stack.crossAlign == UiCrossAlign::Stretch ? innerSize[across]
+                       : fixed[across] > 0.0f                    ? fixed[across]
+                       : content.known                           ? content.size[across]
+                                                                 : innerSize[across];
+        return size;
+    }
+
+    // Length of stack node @p n of @p size along its axis: padding, children that do not stretch, gaps.
+    [[nodiscard]] f32 stackLength(u32 n, const UiStack& stack, Vec2 size)
+    {
+        const int along = stack.axis == UiAxis::Vertical ? 1 : 0;
+        const Vec2 inner = inset({Vec2(0.0f), size}, stack.padding).size();
+        f32 length = size[along] - inner[along];
+        for (u32 c = nodes[n].firstChild; c != kNoNode; c = nodes[c].nextSibling)
+        {
+            length += std::max(stackChildSize(c, stack, inner)[along], 0.0f);
+        }
+        if (nodes[n].childCount > 1)
+        {
+            length += std::max(stack.spacing, 0.0f) * static_cast<f32>(nodes[n].childCount - 1);
+        }
+        return length;
     }
 
     void layoutStack(u32 n, const UiStack& stack)
@@ -658,18 +887,7 @@ struct UiWorld::Impl
         // rect.min.
         for (u32 c = nodes[n].firstChild; c != kNoNode; c = nodes[c].nextSibling)
         {
-            const Vec2 fixed = glm::max(world.get<UiElement>(nodes[c].entity).size, Vec2(0.0f));
-            const f32 wrapAt =
-                vertical
-                    ? (stack.crossAlign != UiCrossAlign::Stretch && fixed.x > 0.0f ? fixed.x : innerSize.x)
-                    : (fixed.x > 0.0f ? fixed.x : innerSize.x);
-            const Content content = contentOf(nodes[c], wrapAt);
-            Vec2 size(0.0f);
-            size[along] = fixed[along] > 0.0f ? fixed[along] : content.known ? content.size[along] : kStretch;
-            size[across] = stack.crossAlign == UiCrossAlign::Stretch ? innerSize[across]
-                           : fixed[across] > 0.0f                    ? fixed[across]
-                           : content.known                           ? content.size[across]
-                                                                     : innerSize[across];
+            const Vec2 size = stackChildSize(c, stack, innerSize);
             if (size[along] == kStretch)
             {
                 ++stretched;
@@ -765,6 +983,160 @@ struct UiWorld::Impl
         }
     }
 
+    // The bounds of nodes [0, size): each node's rectangle after its transform, joined with its descendants'.
+    void computeBounds()
+    {
+        for (Node& node : nodes)
+        {
+            node.bounds =
+                axisAligned(node.transform) && node.transform.x.x > 0.0f && node.transform.y.y > 0.0f
+                    ? UiRect{node.transform.apply(node.rect.min), node.transform.apply(node.rect.max)}
+                    : transformedBounds(node.transform, node.rect);
+        }
+        for (u32 n = static_cast<u32>(nodes.size()); n-- > 0;)
+        {
+            if (const u32 parent = nodes[n].parent; parent != kNoNode)
+            {
+                nodes[parent].bounds = {glm::min(nodes[parent].bounds.min, nodes[n].bounds.min),
+                                        glm::max(nodes[parent].bounds.max, nodes[n].bounds.max)};
+            }
+        }
+        boundsDirty = false;
+    }
+
+    // What text field @p field shows with its caret at byte @p caretAt; a password's bullets are written to
+    // shownScratch, which the next call overwrites.
+    [[nodiscard]] FieldText fieldText(const UiTextField& field, const Font& font, usize caretAt)
+    {
+        if (field.text.empty())
+        {
+            return {field.placeholder, 0, true};
+        }
+        if (!field.password)
+        {
+            return {field.text, std::min(caretAt, field.text.size()), false};
+        }
+        const std::string_view bullet =
+            font.find(kBulletCodePoint) != nullptr ? kBullet : std::string_view("*");
+        shownScratch.clear();
+        usize caret = 0;
+        for (usize at = 0; at < field.text.size(); at += text::decodeUtf8(field.text, at).length)
+        {
+            if (at == caretAt)
+            {
+                caret = shownScratch.size();
+            }
+            shownScratch.append(bullet);
+        }
+        if (caretAt >= field.text.size())
+        {
+            caret = shownScratch.size();
+        }
+        return {shownScratch, caret, false};
+    }
+
+    // Left edge of the line of field node @p node that is @p width wide: aligned in the element when it fits,
+    // else scrolled by @p scroll from the element's left edge.
+    [[nodiscard]] static f32 fieldOrigin(const Node& node, const UiText& text, f32 width, f32 scroll) noexcept
+    {
+        const f32 room = node.rect.size().x;
+        if (width > room)
+        {
+            return node.rect.min.x - scroll;
+        }
+        switch (text.align)
+        {
+        case UiTextAlign::Center:
+            return node.rect.min.x + (room - width) * 0.5f;
+        case UiTextAlign::End:
+            return node.rect.max.x - width;
+        case UiTextAlign::Start:
+        default:
+            return node.rect.min.x;
+        }
+    }
+
+    // The scroll of the focused field: unchanged while the caret is visible, else just enough to show it.
+    void updateFieldScroll()
+    {
+        if (caretField.isNull() || assets == nullptr)
+        {
+            return;
+        }
+        const Node& node = nodes[focusHint];
+        const UiText& text = world.get<UiText>(node.entity);
+        const UiFontFace face = assets->font(text.font);
+        if (face.font == nullptr)
+        {
+            return;
+        }
+        const FieldText shown = fieldText(world.get<UiTextField>(node.entity), *face.font, caretByte);
+        const UiTextStyle style = fieldStyle(text);
+        const f32 width = measureText(*face.font, shown.shown, style).size.x;
+        const f32 room = node.rect.size().x;
+        if (width <= room)
+        {
+            fieldScroll = 0.0f;
+            return;
+        }
+        const f32 caretX = measureText(*face.font, shown.shown.substr(0, shown.caret), style).size.x;
+        const f32 visible = std::max(room - kCaretWidth, 0.0f);
+        if (caretX - fieldScroll > visible)
+        {
+            fieldScroll = caretX - visible;
+        }
+        if (caretX < fieldScroll)
+        {
+            fieldScroll = caretX;
+        }
+        fieldScroll = std::clamp(fieldScroll, 0.0f, width - room + kCaretWidth);
+    }
+
+    [[nodiscard]] bool caretVisible() const noexcept
+    {
+        return std::fmod(blinkSeconds, 2.0 * kBlinkSeconds) < kBlinkSeconds;
+    }
+
+    // A text field: its line clipped to the element, aligned or scrolled, and the caret while it is focused.
+    void drawField(const Node& node, const UiText& text, f32 factor)
+    {
+        const UiFontFace face = assets->font(text.font);
+        if (face.font == nullptr)
+        {
+            return;
+        }
+        const bool focused = node.entity == caretField;
+        const FieldText shown =
+            fieldText(world.get<UiTextField>(node.entity), *face.font, focused ? caretByte : 0);
+        UiTextStyle style = fieldStyle(text);
+        style.color.a *= node.opacity * (shown.placeholder ? kPlaceholderAlpha : 1.0f);
+        const f32 width = measureText(*face.font, shown.shown, style).size.x;
+        const f32 lineHeight = lineHeightOf(*face.font, style);
+        Vec2 position(fieldOrigin(node, text, width, focused ? fieldScroll : 0.0f), node.rect.min.y);
+        if (text.verticalAlign == UiVerticalAlign::Middle)
+        {
+            position.y += (node.rect.size().y - lineHeight) * 0.5f;
+        }
+        else if (text.verticalAlign == UiVerticalAlign::Bottom)
+        {
+            position.y = node.rect.max.y - lineHeight;
+        }
+        const bool clipped = drawList.pushClip(clipOf(node, factor));
+        (void)drawList.text(face, position, shown.shown, style);
+        if (focused && caretVisible())
+        {
+            const f32 x =
+                position.x + measureText(*face.font, shown.shown.substr(0, shown.caret), style).size.x;
+            Vec4 color = world.get<UiTextField>(node.entity).caretColor;
+            color.a *= node.opacity;
+            (void)drawList.rect({{x, position.y}, {x + kCaretWidth, position.y + lineHeight}}, color);
+        }
+        if (clipped)
+        {
+            drawList.popClip();
+        }
+    }
+
     // The clip rectangle node @p node pushes for its descendants, in the units of the draw list.
     [[nodiscard]] static UiRect clipOf(const Node& node, f32 factor) noexcept
     {
@@ -778,7 +1150,7 @@ struct UiWorld::Impl
         return {rect.min * factor, rect.max * factor};
     }
 
-    void drawNode(const Node& node)
+    void drawNode(const Node& node, f32 factor)
     {
         if (node.opacity <= 0.0f)
         {
@@ -819,6 +1191,11 @@ struct UiWorld::Impl
         const UiText* text = world.tryGet<UiText>(node.entity);
         if (text == nullptr || assets == nullptr)
         {
+            return;
+        }
+        if (node.field)
+        {
+            drawField(node, *text, factor);
             return;
         }
         const UiFontFace face = assets->font(text->font);
@@ -978,10 +1355,27 @@ struct UiWorld::Impl
         }
         focus = nodes[n].entity;
         push(UiEventType::FocusChanged, focus, byNavigation);
+        if (byNavigation > 0.0f)
+        {
+            scrollIntoView(n);
+        }
     }
 
     // The topmost enabled interactable node under @p pixels, or kNoNode.
     [[nodiscard]] u32 hitTest(Vec2 pixels)
+    {
+        return topmostAt(pixels, [this](u32 n) { return enabledInteractable(n) != nullptr; });
+    }
+
+    // The topmost scroll view under @p pixels, or kNoNode.
+    [[nodiscard]] u32 scrollViewAt(Vec2 pixels)
+    {
+        return topmostAt(pixels, [this](u32 n) { return nodes[n].scroll; });
+    }
+
+    // The topmost node under @p pixels for which @p accepts holds, inside the clips of its ancestors.
+    template <class Accepts>
+    [[nodiscard]] u32 topmostAt(Vec2 pixels, const Accepts& accepts)
     {
         u32 hit = kNoNode;
         for (u32 c = firstEligible; c < canvases.size(); ++c)
@@ -1005,7 +1399,7 @@ struct UiWorld::Impl
                     continue;
                 }
                 Vec2 local(0.0f);
-                if (outside == 0 && node.opacity > 0.0f && enabledInteractable(n) != nullptr &&
+                if (outside == 0 && node.opacity > 0.0f && accepts(n) &&
                     untransform(node.transform, point, local) && node.rect.contains(local))
                 {
                     hit = n;
@@ -1037,7 +1431,7 @@ struct UiWorld::Impl
         slider->value = next;
         world.markChanged<UiSlider>();
         push(UiEventType::ValueChanged, entity, next);
-        relayoutSlider(n);
+        relayoutSubtree(n);
     }
 
     void dragSlider(u32 n, Vec2 pixels)
@@ -1073,6 +1467,144 @@ struct UiWorld::Impl
         }
     }
 
+    // Moves scroll view node @p n by @p delta canvas units within its range. Its content only moves, so its
+    // subtree is translated where a new layout would place it instead of being laid out again.
+    void scrollBy(u32 n, Vec2 delta)
+    {
+        UiScrollView* view = world.tryGet<UiScrollView>(nodes[n].entity);
+        const u32 content = nodes[n].firstChild;
+        if (view == nullptr || content == kNoNode || !std::isfinite(delta.x) || !std::isfinite(delta.y))
+        {
+            return;
+        }
+        const Vec2 next = glm::clamp(view->offset + delta, Vec2(0.0f), nodes[n].scrollMax);
+        if (next == view->offset)
+        {
+            return;
+        }
+        const Vec2 shift = view->offset - next;
+        view->offset = next;
+        world.markChanged<UiScrollView>();
+        // A descendant's transform T becomes p -> T(p - shift) + shift in the view's space, whose linear part
+        // is the view's.
+        const UiTransform2D& outer = nodes[n].transform;
+        const Vec2 moved = outer.x * shift.x + outer.y * shift.y;
+        const u32 end = nodes[content].subtreeEnd;
+        for (u32 m = content; m < end; ++m)
+        {
+            Node& node = nodes[m];
+            node.rect = {node.rect.min + shift, node.rect.max + shift};
+            node.transform.translation += moved - (node.transform.x * shift.x + node.transform.y * shift.y);
+        }
+        writeComputedRects(content, end);
+        boundsDirty = true;
+    }
+
+    // Scrolls the views around node @p n, innermost first, until it is inside each of them.
+    void scrollIntoView(u32 n)
+    {
+        for (u32 view = nodes[n].parent; view != kNoNode; view = nodes[view].parent)
+        {
+            if (!nodes[view].scroll)
+            {
+                continue;
+            }
+            const UiRect& shown = nodes[view].rect;
+            const UiRect& target = nodes[n].rect;
+            Vec2 delta(0.0f);
+            for (glm::length_t axis = 0; axis < 2; ++axis)
+            {
+                if (target.min[axis] < shown.min[axis])
+                {
+                    delta[axis] = target.min[axis] - shown.min[axis];
+                }
+                else if (target.max[axis] > shown.max[axis])
+                {
+                    delta[axis] =
+                        std::min(target.max[axis] - shown.max[axis], target.min[axis] - shown.min[axis]);
+                }
+            }
+            scrollBy(view, delta);
+        }
+    }
+
+    // The wheel scrolls the topmost view under the pointer, vertically when it may.
+    void wheel(const UiInput& input)
+    {
+        if (!input.pointerPresent || !std::isfinite(input.wheel) || input.wheel == 0.0f)
+        {
+            return;
+        }
+        const u32 view = scrollViewAt(input.pointerPixels);
+        if (view == kNoNode)
+        {
+            return;
+        }
+        const UiScrollView& settings = world.get<UiScrollView>(nodes[view].entity);
+        const f32 distance = -input.wheel * finiteOr(settings.wheelStep, 0.0f);
+        if (settings.vertical)
+        {
+            scrollBy(view, {0.0f, distance});
+        }
+        else if (settings.horizontal)
+        {
+            scrollBy(view, {distance, 0.0f});
+        }
+    }
+
+    [[nodiscard]] bool inSubtree(u32 root, u32 n) const noexcept
+    {
+        return n > root && n < nodes[root].subtreeEnd;
+    }
+
+    // A press on a scroll view outside any interactable element drags its content at once; a press on one
+    // inside it once the pointer moved beyond the threshold, which takes the press from that element.
+    void drag(const UiInput& input, u32 hit, bool pressedNow)
+    {
+        if (pressedNow && input.pointerPresent)
+        {
+            const u32 view = scrollViewAt(input.pointerPixels);
+            const bool overWidget = hit != kNoNode && hit != view;
+            if (view != kNoNode && (!overWidget || (inSubtree(view, hit) && !nodes[hit].slider)))
+            {
+                dragView = nodes[view].entity;
+                dragHint = view;
+                dragStart = input.pointerPixels;
+                dragOffset = world.get<UiScrollView>(dragView).offset;
+                dragging = !overWidget;
+            }
+        }
+        if (dragView.isNull())
+        {
+            return;
+        }
+        dragHint = findNode(dragView, dragHint);
+        if (!input.pointerDown || dragHint == kNoNode)
+        {
+            dragView = {};
+            dragHint = kNoNode;
+            dragging = false;
+            return;
+        }
+        if (!input.pointerPresent)
+        {
+            return;
+        }
+        const Vec2 moved = input.pointerPixels - dragStart;
+        if (!dragging && glm::dot(moved, moved) > kDragThresholdPixels * kDragThresholdPixels)
+        {
+            dragging = true;
+            captured = {};
+            capturedHint = kNoNode;
+        }
+        if (dragging)
+        {
+            const UiScrollView& view = world.get<UiScrollView>(dragView);
+            const Vec2 target = dragOffset - moved / canvases[canvasOf(dragHint)].metrics.pixelsPerUnit;
+            scrollBy(dragHint, target - view.offset);
+        }
+    }
+
     void pointer(const UiInput& input, u32 hit)
     {
         const bool pressedNow = input.pointerDown && !pointerWasDown;
@@ -1085,8 +1617,13 @@ struct UiWorld::Impl
             if (focusable(hit))
             {
                 focusNode(hit, 0.0f);
+                if (nodes[hit].field && syncField() != nullptr)
+                {
+                    placeCaret(hit, input.pointerPixels);
+                }
             }
         }
+        drag(input, hit, pressedNow);
         if (captured.isNull())
         {
             return;
@@ -1159,6 +1696,14 @@ struct UiWorld::Impl
             return;
         }
         const u32 n = focusHint;
+        if (nodes[n].field && (direction == Direction::Left || direction == Direction::Right))
+        {
+            if (UiTextField* field = syncField())
+            {
+                moveCaret(*field, direction == Direction::Right);
+            }
+            return;
+        }
         if (const UiSlider* slider = nodes[n].slider ? world.tryGet<UiSlider>(focus) : nullptr)
         {
             const bool vertical = slider->axis == UiAxis::Vertical;
@@ -1227,6 +1772,10 @@ struct UiWorld::Impl
             {
                 focusFirst();
             }
+            else if (nodes[focusHint].field)
+            {
+                push(UiEventType::Submitted, focus, 0.0f);
+            }
             else
             {
                 submitted = focus;
@@ -1250,6 +1799,156 @@ struct UiWorld::Impl
             return canvases[canvasOf(focusHint)].entity;
         }
         return modal ? canvases[firstEligible].entity : Entity{};
+    }
+
+    // The UiTextField of the focused element, with the caret state made to match it: at the end when the
+    // field got the focus or its text was set from outside. Null when no field has the focus.
+    [[nodiscard]] UiTextField* syncField()
+    {
+        UiTextField* field = !focus.isNull() && focusHint != kNoNode && nodes[focusHint].field
+                                 ? world.tryGet<UiTextField>(focus)
+                                 : nullptr;
+        if (field == nullptr)
+        {
+            caretField = {};
+            return nullptr;
+        }
+        if (caretField != focus)
+        {
+            caretField = focus;
+            field->text.reserve(usize{fieldLength(*field)} * 4);
+            fieldScroll = 0.0f;
+        }
+        else if (fieldShadow == field->text)
+        {
+            return field;
+        }
+        fieldShadow = field->text;
+        caretByte = field->text.size();
+        caretTouched = true;
+        return field;
+    }
+
+    void moveCaret(const UiTextField& field, bool forward)
+    {
+        if (forward && caretByte < field.text.size())
+        {
+            caretByte += text::decodeUtf8(field.text, caretByte).length;
+        }
+        else if (!forward && caretByte > 0)
+        {
+            caretByte = previousBoundary(field.text, caretByte);
+        }
+        caretTouched = true;
+    }
+
+    // Puts the caret of field node @p n at the glyph boundary nearest to @p pixels, measured as it is drawn.
+    void placeCaret(u32 n, Vec2 pixels)
+    {
+        const Node& node = nodes[n];
+        const UiText& text = world.get<UiText>(node.entity);
+        const UiFontFace face = assets != nullptr ? assets->font(text.font) : UiFontFace{};
+        Vec2 local(0.0f);
+        if (face.font == nullptr ||
+            !untransform(node.transform, pixels / canvases[canvasOf(n)].metrics.pixelsPerUnit, local))
+        {
+            return;
+        }
+        const UiTextField& field = world.get<UiTextField>(node.entity);
+        const FieldText shown = fieldText(field, *face.font, caretByte);
+        if (shown.placeholder)
+        {
+            caretByte = 0;
+            return;
+        }
+        const UiTextStyle style = fieldStyle(text);
+        const f32 width = measureText(*face.font, shown.shown, style).size.x;
+        const f32 x = local.x - fieldOrigin(node, text, width, fieldScroll);
+        const auto widthBefore = [&](usize count) {
+            return measureText(*face.font, shown.shown.substr(0, codePointOffset(shown.shown, count)), style)
+                .size.x;
+        };
+        // Prefix widths grow with the count: the first boundary at or right of x, or the one before it.
+        usize low = 0;
+        usize high = text::utf8Length(shown.shown);
+        while (low < high)
+        {
+            const usize middle = low + (high - low) / 2;
+            if (widthBefore(middle) < x)
+            {
+                low = middle + 1;
+            }
+            else
+            {
+                high = middle;
+            }
+        }
+        if (low > 0 && x - widthBefore(low - 1) < widthBefore(low) - x)
+        {
+            --low;
+        }
+        caretByte = codePointOffset(field.text, low);
+        caretTouched = true;
+    }
+
+    // Typed characters, Backspace, Delete and the caret keys on the focused text field.
+    void editField(const UiInput& input)
+    {
+        UiTextField* field = syncField();
+        if (field == nullptr)
+        {
+            return;
+        }
+        bool edited = false;
+        std::string& value = field->text;
+        usize length = text::utf8Length(value);
+        for (const char32_t c : input.text)
+        {
+            char bytes[4];
+            const u32 size = typable(c) && length < fieldLength(*field) ? text::encodeUtf8(c, bytes) : 0;
+            if (size == 0)
+            {
+                continue;
+            }
+            value.insert(caretByte, bytes, size);
+            caretByte += size;
+            ++length;
+            edited = true;
+        }
+        if (input.backspace && caretByte > 0)
+        {
+            const usize start = previousBoundary(value, caretByte);
+            value.erase(start, caretByte - start);
+            caretByte = start;
+            edited = true;
+        }
+        if (input.deleteForward && caretByte < value.size())
+        {
+            value.erase(caretByte, text::decodeUtf8(value, caretByte).length);
+            edited = true;
+        }
+        if (input.caretLeft != input.caretRight)
+        {
+            moveCaret(*field, input.caretRight);
+        }
+        if (input.caretHome)
+        {
+            caretByte = 0;
+            caretTouched = true;
+        }
+        if (input.caretEnd)
+        {
+            caretByte = value.size();
+            caretTouched = true;
+        }
+        if (edited)
+        {
+            fieldShadow = value;
+            caretTouched = true;
+            textEdited = true;
+            world.markChanged<UiTextField>();
+            push(UiEventType::TextChanged, focus, 0.0f);
+        }
     }
 
     void writeInteractions()
@@ -1293,16 +1992,23 @@ struct UiWorld::Impl
             captured = {};
             capturedHint = kNoNode;
         }
+        caretTouched = false;
+        (void)syncField();
         const u32 hit = input.pointerPresent ? hitTest(input.pointerPixels) : kNoNode;
         hovered = hit != kNoNode ? nodes[hit].entity : Entity{};
         pointer(input, hit);
+        wheel(input);
         navigate(input);
         submit(input);
+        editField(input);
         if (input.cancelPressed)
         {
             push(UiEventType::Cancelled, cancelTarget(), 0.0f);
         }
         writeInteractions();
+        updateFieldScroll();
+        const f64 elapsed = std::isfinite(input.deltaSeconds) ? std::max(input.deltaSeconds, 0.0) : 0.0;
+        blinkSeconds = caretTouched ? 0.0 : blinkSeconds + elapsed;
     }
 
     void setFocus(Entity entity)
@@ -1327,17 +2033,23 @@ struct UiWorld::Impl
                                          ? canvasMetrics({}, frame.targetPixels, frame.safeInsetPixels)
                                          : canvases.front().metrics;
         drawList.begin(base);
+        if (boundsDirty)
+        {
+            computeBounds();
+        }
         for (const CanvasEntry& canvas : canvases)
         {
             // Every canvas is drawn in the units of the first one.
             const f32 factor = canvas.metrics.pixelsPerUnit / base.pixelsPerUnit;
             clipStack.clear();
+            u32 scrollClips = 0;
             u32 hiddenEnd = 0;
             for (u32 n = canvas.firstNode; n < canvas.endNode; ++n)
             {
-                while (!clipStack.empty() && clipStack.back() <= n)
+                while (!clipStack.empty() && clipStack.back().end <= n)
                 {
                     drawList.popClip();
+                    scrollClips -= clipStack.back().scroll ? 1u : 0u;
                     clipStack.pop_back();
                 }
                 const Node& node = nodes[n];
@@ -1346,11 +2058,19 @@ struct UiWorld::Impl
                     hiddenEnd = std::max(hiddenEnd, node.subtreeEnd);
                     continue;
                 }
+                // Inside a scroll view, subtrees wholly outside the clip are skipped.
+                if (scrollClips > 0 &&
+                    !overlaps({node.bounds.min * factor, node.bounds.max * factor}, drawList.clip()))
+                {
+                    n = node.subtreeEnd - 1;
+                    continue;
+                }
                 drawList.setTransform(factor == 1.0f ? node.transform : scaled(node.transform, factor));
-                drawNode(node);
+                drawNode(node, factor);
                 if (node.clip && node.subtreeEnd > n + 1 && drawList.pushClip(clipOf(node, factor)))
                 {
-                    clipStack.push_back(node.subtreeEnd);
+                    clipStack.push_back({node.subtreeEnd, node.scroll});
+                    scrollClips += node.scroll ? 1u : 0u;
                 }
             }
             for (; !clipStack.empty(); clipStack.pop_back())
@@ -1374,10 +2094,13 @@ struct UiWorld::Impl
     LinearAllocator textArena;
     UiAssets* assets = nullptr;
     const text::Localization* localization = nullptr;
+    UiGlyphSource* glyphs = nullptr;
+    UiGlyphSource* lastGlyphs = nullptr;
+    u64 lastGlyphVersion = 0;
     std::vector<Node> nodes;
     std::vector<CanvasEntry> canvases;
     std::vector<u32> depthStack; // node of each depth on the path to the current Entity
-    std::vector<u32> clipStack;  // subtreeEnd of each node that pushed a clip
+    std::vector<RecordClip> clipStack;
     std::vector<HitClip> hitClips;
     std::vector<UiEvent> events;
     u32 droppedEvents = 0;
@@ -1400,6 +2123,22 @@ struct UiWorld::Impl
     text::LocaleId lastLocale{};
     bool laidOut = false;
     bool pendingContent = false; // a measured text or image was still loading
+    bool textEdited = false;     // a text field changed: its measured size may have too
+    bool boundsDirty = true;
+    // The caret of the focused text field.
+    Entity caretField{};
+    usize caretByte = 0;
+    f32 fieldScroll = 0.0f; // canvas units the field's line is scrolled left
+    f64 blinkSeconds = 0.0; // since the caret last moved
+    bool caretTouched = false;
+    std::string fieldShadow; // the text the caret was placed in, to notice texts set from outside
+    std::string shownScratch;
+    // A drag of a scroll view's content.
+    Entity dragView{};
+    u32 dragHint = kNoNode;
+    Vec2 dragStart{0.0f};
+    Vec2 dragOffset{0.0f};
+    bool dragging = false;
     u32 elements = 0;
     u32 skipped = 0;
     u32 missingKeys = 0;
@@ -1421,6 +2160,11 @@ void UiWorld::setAssets(UiAssets* assets) noexcept
 void UiWorld::setLocalization(const text::Localization* localization) noexcept
 {
     m_impl->localization = localization;
+}
+
+void UiWorld::setGlyphs(UiGlyphSource* glyphs) noexcept
+{
+    m_impl->glyphs = glyphs;
 }
 
 void UiWorld::invalidateLayout() noexcept

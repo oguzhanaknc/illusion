@@ -404,6 +404,8 @@ bir update sonra biter. Elemanı olmayan modal bir canvas hiçbir şey yapmaz.
 | `ValueChanged` | Bir `UiToggle` ya da `UiSlider` değişti | Yeni değer (anahtar için 0 ya da 1) |
 | `FocusChanged` | Bir eleman odağı aldı | Gezinme taşıdıysa 1, işaretçi taşıdıysa 0 |
 | `Cancelled` | `ui.cancel` basıldı | 0 (`entity` bir canvas ya da null) |
+| `TextChanged` | Oyuncu bir `UiTextField`'ı düzenledi | 0 |
+| `Submitted` | Odaktaki bir `UiTextField`'da `ui.submit` | 0 |
 
 Bunları host kodundan, session'ın update'inden sonra okuyun. Liste bir sonraki update'te değiştirilir; bu yüzden
 her update'te bir kez okuyun:
@@ -596,11 +598,94 @@ ILL_MODULE(pause, kPause)
 Menü görünürken canvas'ı modaldır: oyunun diğer action'ları bırakılmış okunur; bu yüzden modülün hareket
 tuşları için kendi kontrolüne ihtiyacı yoktur ([Modal canvas'lar](#modal-canvases)).
 
+## Metin alanları, kaydırma ve glyph'ler {#text-fields-scrolling-and-glyphs}
+
+`UiTextField`, `UiScrollView` ve `UiGlyph` (`illusion/ui/UiWidgets.hpp`) diğer widget'lar gibi kaydedilen
+Component'lerdir: her biri `UiElement` ister.
+
+### UiTextField
+
+Oyuncunun düzenlediği tek satırlık metin. Entity'nin `UiElement`, `UiInteractable` ve bir `UiText`'e ihtiyacı
+vardır; `UiText`, `text`'i gösterir, `text` boşken `placeholder`'ı (soluk) gösterir; bir `UiImage` ona arka plan
+verir.
+
+| Alan | Anlamı |
+| --- | --- |
+| `text` | Değer, UTF-8 |
+| `placeholder` | `text` boşken gösterilir; bir string table anahtarı değil, düz metin |
+| `maxLength` | Oyuncunun girebileceği en fazla code point, 1 ile 1024 arası (varsayılan 64) |
+| `password` | Her karakter için bir madde işareti gösterir (varsayılan kapalı) |
+| `caretColor` | Caret'in doğrusal RGBA rengi (varsayılan beyaz) |
+
+Alan odaktayken o karede yazılan karakterleri alır. Sol, Sağ, Home ve End caret'i taşır, Backspace ve Delete bir
+karakteri siler, `ui.submit` bir `Submitted` olayı bildirir. Sola ve sağa gezinme (gamepad çubuğu ya da D-pad)
+odağı değil caret'i taşır; yukarı ve aşağı odağı taşır. Alan odağı aldığında ya da metni dışarıdan
+ayarlandığında caret metnin sonuna gider. Elemandan geniş bir metin, caret görünür kalacak şekilde kayar ve
+elemana kırpılır.
+
+Bir düzenleme `UiTextField::text`'i yazar ve alanın Entity'siyle bir `TextChanged` olayı bildirir. Bir modül
+değeri Component alanından okur, aynı yoldan yazar, sonra `UiService::invalidateLayout()` çağırır:
+
+```cpp
+// In update(): read the value on Submitted, then clear the field.
+std::array<illusion::UiEvent, 16> events{};
+const illusion::u32 count = std::min<illusion::u32>(ui->pollEvents(events), static_cast<illusion::u32>(events.size()));
+for (const illusion::UiEvent& event : std::span(events).first(count))
+{
+    if (event.type == illusion::UiEventType::Submitted)
+    {
+        illusion::UiTextField& field = context.world().get<illusion::UiTextField>(event.entity);
+        const std::string submitted = field.text;
+        field.text.clear();
+        ui->invalidateLayout();
+    }
+}
+```
+
+**Bir alan odaktayken tuşlar.** Klavye alanı düzenler; bu yüzden oyunun diğer action'ları onu görmez:
+
+- Yazılan karakterler, Sol, Sağ, Backspace ve Delete (0,4 sn sonra tekrarlar, basılı tutulurken her 0,05 sn'de
+  bir), Home ve End alana gider.
+- `ui.navigate` ve `ui.submit`'in klavye binding'leri yok sayılır; bu yüzden onlara bağlı harfler (W, A, S, D,
+  Space) yazılır. Yukarı ve Aşağı yine odağı taşır, Enter gönderir.
+- Yalnızca `ui.navigate` ve `ui.submit`'in gamepad binding'leri sayılır: gamepad sol ve sağ caret'i taşır.
+- `ui.cancel` tüm binding'lerini korur.
+- Oyunun diğer action'ları, alan odağı bırakana kadar modal canvas'taki gibi bırakılmış okunur.
+
+### UiScrollView
+
+Çocuklarını kırpar ve içeriğini kaydırır: içerik ilk çocuktur; sol üste, kendi boyutuyla (`UiElement::size` ya da
+`UiStack`'inin içeriği) yerleştirilir ve `offset` kadar taşınır.
+
+| Alan | Anlamı |
+| --- | --- |
+| `offset` | Canvas birimiyle kaydırılan mesafe, içerik sınırları içinde tutulur |
+| `horizontal` | Yatay kayabilir (varsayılan kapalı) |
+| `vertical` | Dikey kayabilir (varsayılan açık) |
+| `wheelStep` | Tekerlek çentiği başına canvas birimi (varsayılan 60) |
+
+Tekerlek, işaretçinin altındaki en üstteki görünümü, kayabiliyorsa dikey olarak kaydırır. Görünümün içine basıp
+işaretçiyi 8 pikselden fazla hareket ettirmek içeriği sürükler; bu, işaretçinin altındaki etkileşimli elemanın
+basışını ondan alır. Odağı görünümün içindeki bir elemana taşımak onu görünür alana kaydırır.
+
+Uzun bir liste çizim maliyetini sınırlı tutar: tamamen görünümün dışında kalan alt elemanlar ne hit test'e girer
+ne çizilir. Entity'leri yine de vardır ve layout her çalıştığında yerleştirilir; yani satır geri dönüşümü yoktur
+ve binlerce satırlık bir liste iyi bir seçim değildir.
+
+### UiGlyph
+
+Bir input action'ının en son kullanılan cihazda nasıl bağlandığını gösterir. Entity'nin bir `UiText`'e ihtiyacı
+vardır; `action` input action'ının adını verir (`ui.submit`, `jump`). `UiText`, o action'ın en son kullanılan
+cihazdaki ilk binding'inin etiketini (`Enter`, `A`, `Cross`) kendisi yazılmadan gösterir; oyuncu action'ı yeniden
+bağladığında ya da klavye ile gamepad arasında geçtiğinde etiket onu izler. Projenin locale dosyaları `input.*`
+anahtarlarını çevirmediği sürece etiketler İngilizcedir. Bilinmeyen bir action için, ya da o cihazda binding'i
+olmayan biri için `UiText` kendi metnini korur.
+
 ## Henüz olmayanlar {#what-is-not-there-yet}
 
-Bu paket UI çizer, input'a tepki verir ve oyun modüllerinin onu script'lemesini sağlar. Sonraki paketler metin
-alanlarını, kaydırmayı ve düğme glyph'lerini, Scene görünümünde canvas editörünü ve geçişleri ile animasyonu
-ekler. İlk sürümün sınırları
+Bu paket UI çizer, input'a tepki verir ve oyun modüllerinin onu script'lemesini sağlar. Sonraki paketler Scene
+görünümünde canvas editörünü ve geçişleri ile animasyonu ekler. Metin seçimi, glyph görselleri (etiket yerine düğme
+resmi) ve geri dönüştürülen listeler de yoktur. İlk sürümün sınırları
 ([ADR 0057](https://github.com/oguzhanaknc/illusion/blob/main/docs/adr/0057-game-ui.md)):
 
 - Metin shaping olmadan soldan sağa çizilir: Arapça, İbranice, Hint yazı sistemleri ve ligatürler
