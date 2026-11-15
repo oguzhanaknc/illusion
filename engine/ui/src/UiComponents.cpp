@@ -43,6 +43,22 @@ struct illusion::EnumReflection<illusion::UiCrossAlign>
                                         illusion::EnumValue{"End", 2}, illusion::EnumValue{"Stretch", 3}};
 };
 
+template <>
+struct illusion::EnumReflection<illusion::UiTransitionTrigger>
+{
+    static constexpr std::array kValues{illusion::EnumValue{"Shown", 0}, illusion::EnumValue{"Hovered", 1},
+                                        illusion::EnumValue{"Pressed", 2}, illusion::EnumValue{"Focused", 3},
+                                        illusion::EnumValue{"Manual", 4}};
+};
+
+template <>
+struct illusion::EnumReflection<illusion::UiEase>
+{
+    static constexpr std::array kValues{
+        illusion::EnumValue{"Linear", 0}, illusion::EnumValue{"EaseIn", 1}, illusion::EnumValue{"EaseOut", 2},
+        illusion::EnumValue{"EaseInOut", 3}, illusion::EnumValue{"BackOut", 4}};
+};
+
 namespace illusion
 {
 namespace
@@ -57,6 +73,7 @@ constexpr std::string_view kDocsImage = "manual/ui.md#images";
 constexpr std::string_view kDocsText = "manual/ui.md#text";
 constexpr std::string_view kDocsLayout = "manual/ui.md#stacks-and-grids";
 constexpr std::string_view kDocsFields = "manual/ui.md#text-fields-scrolling-and-glyphs";
+constexpr std::string_view kDocsTransitions = "manual/ui.md#transitions";
 constexpr std::string_view kRequiresText[] = {"illusion.UiText"};
 constexpr std::string_view kRequiresFieldParts[] = {"illusion.UiInteractable", "illusion.UiText"};
 
@@ -176,7 +193,17 @@ void registerUiComponents()
         .field("lineSpacing", &UiText::lineSpacing,
                {.description = "Multiplier of the font's line height.", .min = 0.0, .softMax = 3.0})
         .field("letterSpacing", &UiText::letterSpacing,
-               {.description = "Extra advance per glyph in ems.", .softMin = -0.2, .softMax = 1.0});
+               {.description = "Extra advance per glyph in ems.", .softMin = -0.2, .softMax = 1.0})
+        .field("outlineWidth", &UiText::outlineWidth,
+               {.description = "Width of an outline around the glyphs in canvas units; 0 for none.",
+                .min = 0.0,
+                .softMax = 8.0})
+        .field("outlineColor", &UiText::outlineColor, {.min = 0.0, .max = 1.0, .hint = FieldHint::Color})
+        .field("shadowOffset", &UiText::shadowOffset,
+               {.description = "Offset of a drop shadow in canvas units; zero for none.",
+                .softMin = -16.0,
+                .softMax = 16.0})
+        .field("shadowColor", &UiText::shadowColor, {.min = 0.0, .max = 1.0, .hint = FieldHint::Color});
     reflect<UiStack>("illusion.UiStack", 1, registry)
         .meta({.displayName = "UI stack",
                .category = "UI",
@@ -314,6 +341,42 @@ void registerUiComponents()
     reflectRuntime<UiInteraction>("illusion.UiInteraction", {.displayName = "UI interaction"}, registry);
     reflectRuntime<UiTextArguments>("illusion.UiTextArguments", {.displayName = "UI text arguments"},
                                     registry);
+    reflect<UiTransition>("illusion.UiTransition", 1, registry)
+        .meta({.displayName = "UI transition",
+               .category = "UI",
+               .icon = "animation",
+               .description = "Eases how an element is drawn between rest and a changed state.",
+               .docsAnchor = kDocsTransitions,
+               .requiredComponents = kRequiresElement})
+        .field("trigger", &UiTransition::trigger)
+        .field("duration", &UiTransition::duration,
+               {.description = "Seconds from one state to the other; 0 switches at once.",
+                .unit = Unit::Seconds,
+                .min = 0.0,
+                .softMax = 2.0})
+        .field("delay", &UiTransition::delay,
+               {.description = "Seconds before it moves towards the changed state (for Shown, to rest).",
+                .unit = Unit::Seconds,
+                .min = 0.0,
+                .softMax = 2.0})
+        .field("ease", &UiTransition::ease)
+        .field("offset", &UiTransition::offset,
+               {.description = "Changed state: moved by this many canvas units."})
+        .field(
+            "scale", &UiTransition::scale,
+            {.description = "Changed state: scaled about the element's pivot.", .min = 0.0, .softMax = 4.0})
+        .field("opacity", &UiTransition::opacity,
+               {.description = "Changed state: opacity multiplier.",
+                .min = 0.0,
+                .max = 1.0,
+                .hint = FieldHint::Slider})
+        .field("tint", &UiTransition::tint,
+               {.description = "Changed state: multiplier of image tints and text colours.",
+                .min = 0.0,
+                .softMax = 2.0,
+                .hint = FieldHint::Color});
+    reflectRuntime<UiTransitionState>("illusion.UiTransitionState", {.displayName = "UI transition state"},
+                                      registry);
 }
 
 } // namespace illusion

@@ -117,3 +117,17 @@ Options considered for text:
   until the canvas view of UI-3.
 - World-space UI (a label above a character) is not covered; it needs a canvas placed by a `Transform` and
   depth, and is its own decision.
+
+## Addendum: UI-3c, transitions and text effects
+
+- A `UiTransition` changes drawing and hit testing only (offset, scale about the pivot, opacity, tint, applied
+  to the element and its descendants). Layout and `UiComputedRect` never see it, so a transition cannot
+  trigger a layout pass.
+- Its progress lives in a runtime Component, `UiTransitionState`, and only the update with input advances it
+  by `UiInput::deltaSeconds`. The update without input (the editor's preview) moves nothing, and fixed-step
+  runs stay deterministic. Settled transitions cost nothing.
+- Outlines use the distance field of the font with per-draw-command push constants (width and colour), so
+  text with a different outline splits a batch; the width is limited to the font's spread minus one texel so
+  that it stays inside the glyph quads. No new assets are needed.
+- A shadow is a second draw of the same text, offset and drawn first; the shadow of outlined text includes
+  its outline.

@@ -538,6 +538,98 @@ TEST_CASE("a HUD laid out by UiWorld draws through UiRenderAssets and the UI pas
     CHECK(device->validationErrorCount() == 0);
 }
 
+namespace
+{
+
+// The test font, registered with the renderer, for every font reference.
+class EffectAssets final : public UiAssets
+{
+public:
+    explicit EffectAssets(UiFontFace face)
+        : m_face(face)
+    {
+    }
+
+    UiFontFace font(const AssetRef&) override { return m_face; }
+    UiImageSource image(const AssetRef&) override { return {}; }
+
+private:
+    UiFontFace m_face;
+};
+
+// The same outlined, shadowed, and outlined and shadowed texts over a bright and over a dark half.
+void buildTextEffects(World& world)
+{
+    UiCanvas canvas;
+    canvas.useSafeArea = false;
+    const Entity root = world.create(canvas);
+    UiImage bright;
+    bright.tint = Vec4(0.8f, 0.8f, 0.75f, 1.0f);
+    UiImage dark;
+    dark.tint = Vec4(0.01f, 0.01f, 0.02f, 1.0f);
+    const AssetRef font("assets:/fonts/test.ttf");
+    for (const f32 left : {0.0f, 960.0f})
+    {
+        const Entity half =
+            uiChild(world, root, uiPlaced({0.0f, 0.0f}, {left, 0.0f}, {left + 960.0f, 1080.0f}),
+                    left == 0.0f ? bright : dark);
+        UiText small = uiText(font, "Outlined text at 24 units", 24.0f);
+        small.outlineWidth = 3.5f;
+        (void)uiChild(world, half, uiPlaced({0.0f, 0.0f}, {60.0f, 60.0f}, {900.0f, 120.0f}), small);
+        UiText title = uiText(font, "Ag 96", 96.0f, Vec4(1.0f, 0.8f, 0.1f, 1.0f));
+        title.outlineWidth = 6.0f;
+        title.outlineColor = Vec4(0.05f, 0.05f, 0.4f, 1.0f);
+        (void)uiChild(world, half, uiPlaced({0.0f, 0.0f}, {60.0f, 160.0f}, {900.0f, 300.0f}), title);
+        UiText shadowed = uiText(font, "Shadow 48", 48.0f);
+        shadowed.shadowOffset = {6.0f, 6.0f};
+        shadowed.shadowColor = Vec4(0.0f, 0.0f, 0.0f, 0.7f);
+        (void)uiChild(world, half, uiPlaced({0.0f, 0.0f}, {60.0f, 360.0f}, {900.0f, 440.0f}), shadowed);
+        UiText both = uiText(font, "Both 64", 64.0f, Vec4(0.6f, 1.0f, 0.7f, 1.0f));
+        both.outlineWidth = 4.0f;
+        both.outlineColor = Vec4(0.0f, 0.15f, 0.05f, 1.0f);
+        both.shadowOffset = {9.0f, 9.0f};
+        both.shadowColor = Vec4(0.0f, 0.0f, 0.0f, 0.6f);
+        (void)uiChild(world, half, uiPlaced({0.0f, 0.0f}, {60.0f, 500.0f}, {900.0f, 620.0f}), both);
+    }
+}
+
+} // namespace
+
+TEST_CASE("text outlines and drop shadows from the distance field draw over bright and dark backgrounds")
+{
+    auto device = RenderDevice::create(headless());
+    REQUIRE(device != nullptr);
+    {
+        RenderResources resources(*device);
+        auto ring = ReadbackRing::create(*device);
+        REQUIRE(ring != nullptr);
+        auto renderer = UiRenderer::create(*device, resources, srgbDesc());
+        REQUIRE(renderer != nullptr);
+        const UiTextureId atlas = renderer->addFont(test::testFont());
+        REQUIRE(atlas.value != 0);
+        EffectAssets assets(UiFontFace{&test::testFont(), atlas});
+        World world;
+        buildTextEffects(world);
+        HierarchyIndex index;
+        updateTransformHierarchy(world, index);
+        UiWorld ui(world);
+        ui.setAssets(&assets);
+        const UVec2 size = kSizes[0];
+        ui.update({size});
+        CHECK(ui.statistics().droppedPrimitives == 0);
+        CHECK(ui.statistics().missingGlyphs == 0);
+        nvrhi::TextureHandle target = makeTarget(*device, size);
+        bool rendered = false;
+        const std::vector<std::byte> pixels =
+            draw(*device, *ring, *renderer, target, ui.drawData(), &rendered);
+        CHECK(rendered);
+        golden("ui-text-effects", size, pixels);
+        renderer->remove(atlas);
+        device->waitIdle();
+    }
+    CHECK(device->validationErrorCount() == 0);
+}
+
 TEST_CASE("a steady frame of the UI pass allocates only what NVRHI allocates for its barriers")
 {
     // NVRHI allocates the state tracking of each resource a command list touches first, its validation layer

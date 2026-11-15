@@ -69,8 +69,15 @@ struct Node
     u32 childCount = 0;
     u32 subtreeEnd = 0; // one past the last descendant's node
     UiRect rect{};
-    UiTransform2D transform{};
-    f32 opacity = 1.0f;
+    UiTransform2D transform{};       // accumulated with the transitions: what is drawn and hit
+    f32 opacity = 1.0f;              // likewise
+    Vec4 tint{1.0f};                 // accumulated tint of the transitions
+    UiTransform2D layoutTransform{}; // accumulated without the transitions (UiComputedRect)
+    f32 layoutOpacity = 1.0f;
+    UiTransform2D local{}; // the element's own rotation and scale about its pivot
+    f32 ownOpacity = 1.0f;
+    bool hasLocal = false;
+    bool transition = false;    // has UiTransition and UiTransitionState
     std::string_view keyText{}; // the formatted UiText::key, in the text arena
     bool keyed = false;
     bool element = false; // has UiElement
@@ -83,6 +90,13 @@ struct Node
     bool scroll = false;       // has UiScrollView
     Vec2 scrollMax{0.0f};      // largest offset of a scroll view on each axis
     UiRect bounds{};           // the node and its descendants after their transforms, canvas units
+};
+
+// A node with a UiTransition, and whether the state its trigger follows held at the last advance.
+struct TransitionSlot
+{
+    u32 node = 0;
+    bool held = false;
 };
 
 // A clip the recording pushed: subtreeEnd of its node, and whether it is a scroll view.
@@ -128,7 +142,7 @@ struct Content
 constexpr f64 kMaxExactInteger = 9007199254740992.0;
 
 // The Component versions a layout depends on.
-constexpr usize kVersionCount = 15;
+constexpr usize kVersionCount = 16;
 using Versions = std::array<u64, kVersionCount>;
 
 Versions versionsOf(const World& world) noexcept
@@ -140,7 +154,7 @@ Versions versionsOf(const World& world) noexcept
             world.componentVersion<UiInteractable>(), world.componentVersion<UiToggle>(),
             world.componentVersion<UiSlider>(),       world.componentVersion<UiTextArguments>(),
             world.componentVersion<UiTextField>(),    world.componentVersion<UiScrollView>(),
-            world.componentVersion<UiGlyph>()};
+            world.componentVersion<UiGlyph>(),        world.componentVersion<UiTransition>()};
 }
 
 template <usize... I>
@@ -393,6 +407,122 @@ f32 finiteOr(f32 value, f32 fallback) noexcept
     return std::isfinite(value) ? value : fallback;
 }
 
+f32 nonNegative(f32 value) noexcept
+{
+    return std::isfinite(value) && value > 0.0f ? value : 0.0f;
+}
+
+// Overshoot of UiEase::BackOut (the usual constant of "back" easing, about 10%).
+constexpr f32 kBackOvershoot = 1.70158f;
+
+f32 ease(UiEase curve, f32 t) noexcept
+{
+    switch (curve)
+    {
+    case UiEase::EaseIn:
+        return t * t * t;
+    case UiEase::EaseOut:
+    {
+        const f32 u = 1.0f - t;
+        return 1.0f - u * u * u;
+    }
+    case UiEase::EaseInOut:
+    {
+        if (t < 0.5f)
+        {
+            return 4.0f * t * t * t;
+        }
+        const f32 u = 2.0f - 2.0f * t;
+        return 1.0f - u * u * u * 0.5f;
+    }
+    case UiEase::BackOut:
+    {
+        const f32 u = t - 1.0f;
+        return 1.0f + (kBackOvershoot + 1.0f) * u * u * u + kBackOvershoot * u * u;
+    }
+    case UiEase::Linear:
+        break;
+    }
+    return t;
+}
+
+// The blend towards the changed state. Shown plays from the changed state to rest, so its curve runs
+// backwards: an EaseOut ends slowly at rest and a BackOut overshoots rest.
+f32 easedProgress(const UiTransition& transition, f32 progress) noexcept
+{
+    const f32 p = std::isfinite(progress) ? std::clamp(progress, 0.0f, 1.0f) : 0.0f;
+    return transition.trigger == UiTransitionTrigger::Shown ? 1.0f - ease(transition.ease, 1.0f - p)
+                                                            : ease(transition.ease, p);
+}
+
+// The changed state, with values that are not finite as identity and negative ones as 0.
+Vec2 changedOffset(const UiTransition& transition) noexcept
+{
+    return {finiteOr(transition.offset.x, 0.0f), finiteOr(transition.offset.y, 0.0f)};
+}
+
+Vec2 changedScale(const UiTransition& transition) noexcept
+{
+    return {std::max(finiteOr(transition.scale.x, 1.0f), 0.0f),
+            std::max(finiteOr(transition.scale.y, 1.0f), 0.0f)};
+}
+
+f32 changedOpacity(const UiTransition& transition) noexcept
+{
+    return std::clamp(finiteOr(transition.opacity, 1.0f), 0.0f, 1.0f);
+}
+
+Vec4 changedTint(const UiTransition& transition) noexcept
+{
+    const Vec4& tint = transition.tint;
+    return {std::max(finiteOr(tint.r, 1.0f), 0.0f), std::max(finiteOr(tint.g, 1.0f), 0.0f),
+            std::max(finiteOr(tint.b, 1.0f), 0.0f), std::max(finiteOr(tint.a, 1.0f), 0.0f)};
+}
+
+// Moves @p state by @p seconds in its direction; false once it has arrived. The delay is spent before a
+// move towards the changed state, or for Shown towards rest.
+bool stepTransition(const UiTransition& transition, UiTransitionState& state, f32 seconds) noexcept
+{
+    state.progress = std::isfinite(state.progress) ? std::clamp(state.progress, 0.0f, 1.0f) : 0.0f;
+    const f32 target = state.towardsChanged ? 1.0f : 0.0f;
+    if (state.progress == target)
+    {
+        return false;
+    }
+    const bool delayed =
+        transition.trigger == UiTransitionTrigger::Shown ? !state.towardsChanged : state.towardsChanged;
+    const f32 delay = nonNegative(transition.delay);
+    f32 time = seconds;
+    if (delayed && !(state.waited >= delay))
+    {
+        state.waited = nonNegative(state.waited) + time;
+        if (state.waited < delay)
+        {
+            return true;
+        }
+        time = state.waited - delay;
+        state.waited = delay;
+    }
+    const f32 duration = nonNegative(transition.duration);
+    if (duration == 0.0f)
+    {
+        state.progress = target;
+    }
+    else
+    {
+        const f32 change = time / duration;
+        state.progress = state.towardsChanged ? std::min(state.progress + change, 1.0f)
+                                              : std::max(state.progress - change, 0.0f);
+    }
+    return state.progress != target;
+}
+
+bool sameTransitionState(const UiTransitionState& a, const UiTransitionState& b) noexcept
+{
+    return a.progress == b.progress && a.waited == b.waited && a.towardsChanged == b.towardsChanged &&
+           a.started == b.started;
+}
+
 } // namespace
 
 f32 snapSliderValue(const UiSlider& slider, f32 value) noexcept
@@ -424,6 +554,8 @@ struct UiWorld::Impl
         clipStack.reserve(usize{desc.drawList.maxClipDepth} + 1);
         hitClips.reserve(usize{desc.maxDepth} + 1);
         events.reserve(desc.maxEvents);
+        transitionSlots.reserve(desc.maxElements);
+        startedScratch.reserve(desc.maxElements);
         fieldShadow.reserve(kMaxFieldBytes);
         shownScratch.reserve(kMaxFieldBytes);
     }
@@ -446,7 +578,7 @@ struct UiWorld::Impl
         return localization != nullptr && !(localization->locale() == lastLocale);
     }
 
-    void update(const UiFrame& frame, const UiInput& input)
+    void update(const UiFrame& frame, const UiInput& input, bool advance)
     {
         const bool rebuilt = hierarchy.update(world);
         const Versions now = versionsOf(world);
@@ -465,6 +597,14 @@ struct UiWorld::Impl
         interact(input);
         // The layout now matches the Components, including the values interact() wrote.
         versions = versionsOf(world);
+        if (advance)
+        {
+            advanceTransitions(input.deltaSeconds);
+        }
+        if (effectsDirty)
+        {
+            applyEffects();
+        }
         record(frame);
         statistics.droppedEvents = droppedEvents;
     }
@@ -474,6 +614,7 @@ struct UiWorld::Impl
         ILL_PROFILE_SCOPE_N("UiWorld::layout");
         nodes.clear();
         canvases.clear();
+        transitionSlots.clear();
         textArena.reset();
         pendingContent = false;
         textEdited = false;
@@ -517,7 +658,122 @@ struct UiWorld::Impl
         // Elements that are no longer laid out keep no state; the laid-out ones get theirs in interact().
         world.query<UiInteraction>().each([](Entity, UiInteraction& state) { state = {}; });
         world.markChanged<UiInteraction>();
+        resetHiddenTransitions();
         writeComputedRects(0, static_cast<u32>(nodes.size()));
+        boundsDirty = true;
+        effectsDirty = false;
+    }
+
+    // A Shown transition plays again when its element is laid out again after it was not (Inactive).
+    void resetHiddenTransitions()
+    {
+        startedScratch.clear();
+        for (const TransitionSlot& slot : transitionSlots)
+        {
+            startedScratch.push_back(world.get<UiTransitionState>(nodes[slot.node].entity).started ? 1 : 0);
+        }
+        world.query<UiTransitionState>().each(
+            [](Entity, UiTransitionState& state) { state.started = false; });
+        for (usize i = 0; i < transitionSlots.size(); ++i)
+        {
+            world.get<UiTransitionState>(nodes[transitionSlots[i].node].entity).started =
+                startedScratch[i] != 0;
+        }
+        transitionsAwake = !transitionSlots.empty();
+    }
+
+    // Whether the state that @p trigger follows holds for @p node after this update's input.
+    [[nodiscard]] bool triggerHeld(UiTransitionTrigger trigger, const Node& node) const noexcept
+    {
+        const UiInteraction state = node.interactable ? stateOf(node.entity) : UiInteraction{};
+        switch (trigger)
+        {
+        case UiTransitionTrigger::Hovered:
+            return state.hovered;
+        case UiTransitionTrigger::Pressed:
+            return state.pressed;
+        case UiTransitionTrigger::Focused:
+            return state.focused;
+        case UiTransitionTrigger::Shown:
+        case UiTransitionTrigger::Manual:
+            break;
+        }
+        return false;
+    }
+
+    // Moves the transitions by @p deltaSeconds. Nothing runs while every transition has arrived, no
+    // interaction state changed and nothing else wrote a UiTransitionState.
+    void advanceTransitions(f64 deltaSeconds)
+    {
+        if (transitionSlots.empty() ||
+            (!transitionsAwake && world.componentVersion<UiTransitionState>() == transitionVersion))
+        {
+            return;
+        }
+        ILL_PROFILE_SCOPE_N("UiWorld::transitions");
+        const f32 seconds =
+            std::isfinite(deltaSeconds) && deltaSeconds > 0.0 ? static_cast<f32>(deltaSeconds) : 0.0f;
+        bool written = false;
+        bool moving = false;
+        for (TransitionSlot& slot : transitionSlots)
+        {
+            const Node& node = nodes[slot.node];
+            const UiTransition* transition = world.tryGet<UiTransition>(node.entity);
+            UiTransitionState* state = world.tryGet<UiTransitionState>(node.entity);
+            if (transition == nullptr || state == nullptr)
+            {
+                continue;
+            }
+            const UiTransitionState before = *state;
+            if (transition->trigger == UiTransitionTrigger::Shown && !state->started)
+            {
+                // Drawn in the changed state by the update that shows it; time counts from the next one.
+                *state = {.progress = 1.0f, .waited = 0.0f, .towardsChanged = false, .started = true};
+                moving = true;
+            }
+            else
+            {
+                if (transition->trigger != UiTransitionTrigger::Shown &&
+                    transition->trigger != UiTransitionTrigger::Manual)
+                {
+                    // The trigger sets the direction when its state changes, so that playTransition() holds
+                    // until then.
+                    const bool held = triggerHeld(transition->trigger, node);
+                    if (held != slot.held)
+                    {
+                        slot.held = held;
+                        if (state->towardsChanged != held)
+                        {
+                            state->towardsChanged = held;
+                            state->waited = 0.0f;
+                        }
+                    }
+                }
+                moving = stepTransition(*transition, *state, seconds) || moving;
+            }
+            if (!sameTransitionState(before, *state))
+            {
+                written = true;
+                effectsDirty = effectsDirty || before.progress != state->progress;
+            }
+        }
+        if (written)
+        {
+            world.markChanged<UiTransitionState>();
+        }
+        transitionVersion = world.componentVersion<UiTransitionState>();
+        transitionsAwake = moving;
+    }
+
+    // Accumulates the transforms, opacities and tints of every node again after a transition moved.
+    void applyEffects()
+    {
+        ILL_PROFILE_SCOPE_N("UiWorld::applyEffects");
+        for (u32 n = 0; n < nodes.size(); ++n)
+        {
+            accumulate(n);
+        }
+        effectsDirty = false;
         boundsDirty = true;
     }
 
@@ -530,6 +786,15 @@ struct UiWorld::Impl
         node.element = world.has<UiElement>(entity);
         if (node.element)
         {
+            if (world.has<UiTransition>(entity))
+            {
+                if (!world.has<UiTransitionState>(entity))
+                {
+                    world.emplace<UiTransitionState>(entity);
+                }
+                node.transition = true;
+                transitionSlots.push_back({.node = id, .held = false});
+            }
             node.interactable = world.has<UiInteractable>(entity);
             node.toggle = world.has<UiToggle>(entity);
             node.slider = world.has<UiSlider>(entity);
@@ -661,26 +926,73 @@ struct UiWorld::Impl
         }
     }
 
-    // Accumulates the transform and opacity of node @p n, whose rectangle is placed.
+    // Takes the element's own transform and opacity of node @p n, whose rectangle is placed, and accumulates
+    // them.
     void finishNode(u32 n)
     {
         Node& node = nodes[n];
-        const UiTransform2D parentTransform =
-            node.parent != kNoNode ? nodes[node.parent].transform : UiTransform2D{};
-        const f32 parentOpacity = node.parent != kNoNode ? nodes[node.parent].opacity : 1.0f;
-        node.transform = parentTransform;
-        node.opacity = parentOpacity;
+        node.local = {};
+        node.hasLocal = false;
+        node.ownOpacity = 1.0f;
         if (const UiElement* element = node.element ? world.tryGet<UiElement>(node.entity) : nullptr)
         {
             if (element->rotation != 0.0f || element->scale != Vec2(1.0f))
             {
                 const Vec2 pivot = node.rect.min + element->pivot * node.rect.size();
-                node.transform =
-                    combine(parentTransform, makeUiTransform(pivot, element->rotation, element->scale));
+                node.local = makeUiTransform(pivot, element->rotation, element->scale);
+                node.hasLocal = true;
             }
-            node.opacity = parentOpacity * std::clamp(element->opacity, 0.0f, 1.0f);
+            node.ownOpacity = std::clamp(element->opacity, 0.0f, 1.0f);
             node.clip = element->clipChildren || node.scroll;
         }
+        accumulate(n);
+    }
+
+    // The transform, opacity and tint of node @p n from its parent's, its own and its transition's, and the
+    // same without the transitions.
+    void accumulate(u32 n)
+    {
+        Node& node = nodes[n];
+        UiTransform2D parentTransform{};
+        UiTransform2D parentLayout{};
+        f32 parentOpacity = 1.0f;
+        f32 parentLayoutOpacity = 1.0f;
+        Vec4 parentTint(1.0f);
+        if (node.parent != kNoNode)
+        {
+            const Node& parent = nodes[node.parent];
+            parentTransform = parent.transform;
+            parentLayout = parent.layoutTransform;
+            parentOpacity = parent.opacity;
+            parentLayoutOpacity = parent.layoutOpacity;
+            parentTint = parent.tint;
+        }
+        node.layoutTransform = node.hasLocal ? combine(parentLayout, node.local) : parentLayout;
+        node.layoutOpacity = parentLayoutOpacity * node.ownOpacity;
+        node.transform = node.hasLocal ? combine(parentTransform, node.local) : parentTransform;
+        node.opacity = parentOpacity * node.ownOpacity;
+        node.tint = parentTint;
+        if (!node.transition)
+        {
+            return;
+        }
+        const UiTransition* transition = world.tryGet<UiTransition>(node.entity);
+        const UiTransitionState* state = world.tryGet<UiTransitionState>(node.entity);
+        const f32 e =
+            transition != nullptr && state != nullptr ? easedProgress(*transition, state->progress) : 0.0f;
+        if (e == 0.0f)
+        {
+            return;
+        }
+        // Moved in the parent's space, scaled about the pivot on top of the element's own scale.
+        const UiElement& element = world.get<UiElement>(node.entity);
+        const Vec2 pivot = node.rect.min + element.pivot * node.rect.size();
+        const Vec2 scale = element.scale * glm::mix(Vec2(1.0f), changedScale(*transition), e);
+        UiTransform2D own = makeUiTransform(pivot, element.rotation, scale);
+        own.translation += changedOffset(*transition) * e;
+        node.transform = combine(parentTransform, own);
+        node.opacity = std::clamp(node.opacity * glm::mix(1.0f, changedOpacity(*transition), e), 0.0f, 1.0f);
+        node.tint = parentTint * glm::mix(Vec4(1.0f), changedTint(*transition), e);
     }
 
     [[nodiscard]] Content contentOf(const Node& node, f32 wrapWidth)
@@ -962,7 +1274,7 @@ struct UiWorld::Impl
             {
                 continue;
             }
-            const UiComputedRect computed{node.rect, node.transform, node.opacity};
+            const UiComputedRect computed{node.rect, node.layoutTransform, node.layoutOpacity};
             if (UiComputedRect* existing = world.tryGet<UiComputedRect>(node.entity))
             {
                 *existing = computed;
@@ -1109,6 +1421,7 @@ struct UiWorld::Impl
         const FieldText shown =
             fieldText(world.get<UiTextField>(node.entity), *face.font, focused ? caretByte : 0);
         UiTextStyle style = fieldStyle(text);
+        style.color *= node.tint;
         style.color.a *= node.opacity * (shown.placeholder ? kPlaceholderAlpha : 1.0f);
         const f32 width = measureText(*face.font, shown.shown, style).size.x;
         const f32 lineHeight = lineHeightOf(*face.font, style);
@@ -1122,12 +1435,12 @@ struct UiWorld::Impl
             position.y = node.rect.max.y - lineHeight;
         }
         const bool clipped = drawList.pushClip(clipOf(node, factor));
-        (void)drawList.text(face, position, shown.shown, style);
+        drawText(face, position, shown.shown, style, node, text);
         if (focused && caretVisible())
         {
             const f32 x =
                 position.x + measureText(*face.font, shown.shown.substr(0, shown.caret), style).size.x;
-            Vec4 color = world.get<UiTextField>(node.entity).caretColor;
+            Vec4 color = world.get<UiTextField>(node.entity).caretColor * node.tint;
             color.a *= node.opacity;
             (void)drawList.rect({{x, position.y}, {x + kCaretWidth, position.y + lineHeight}}, color);
         }
@@ -1164,6 +1477,7 @@ struct UiWorld::Impl
             {
                 tint *= stateTint(*interactable, stateOf(node.entity));
             }
+            tint *= node.tint;
             tint.a *= node.opacity;
             if (image->image.empty())
             {
@@ -1204,6 +1518,7 @@ struct UiWorld::Impl
             return;
         }
         UiTextStyle style = textStyle(*text, node.rect.size().x);
+        style.color *= node.tint;
         style.color.a *= node.opacity;
         const std::string_view utf8 = textOf(node, *text);
         Vec2 position = node.rect.min;
@@ -1225,6 +1540,28 @@ struct UiWorld::Impl
                              ? node.rect.min.y + (node.rect.size().y - height) * 0.5f
                              : node.rect.max.y - height;
         }
+        drawText(face, position, utf8, style, node, *text);
+    }
+
+    // @p utf8 with @p style (its colour already tinted and faded), the outline of @p text, and before them
+    // its drop shadow, all with the opacity and tint of @p node. The shadow of an outlined text is the text
+    // and its outline in one colour: the outline alone, which covers the glyphs too, with a transparent fill.
+    void drawText(const UiFontFace& face, Vec2 position, std::string_view utf8, UiTextStyle style,
+                  const Node& node, const UiText& text)
+    {
+        style.outlineWidth = nonNegative(text.outlineWidth);
+        const Vec2 offset = text.shadowOffset;
+        if (std::isfinite(offset.x) && std::isfinite(offset.y) && offset != Vec2(0.0f))
+        {
+            Vec4 color = text.shadowColor * node.tint;
+            color.a *= node.opacity;
+            UiTextStyle shadow = style;
+            shadow.color = style.outlineWidth > 0.0f ? Vec4(Vec3(color), 0.0f) : color;
+            shadow.outlineColor = color;
+            (void)drawList.text(face, position + offset, utf8, shadow);
+        }
+        style.outlineColor = text.outlineColor * node.tint;
+        style.outlineColor.a *= node.opacity;
         (void)drawList.text(face, position, utf8, style);
     }
 
@@ -1486,15 +1823,21 @@ struct UiWorld::Impl
         view->offset = next;
         world.markChanged<UiScrollView>();
         // A descendant's transform T becomes p -> T(p - shift) + shift in the view's space, whose linear part
-        // is the view's.
-        const UiTransform2D& outer = nodes[n].transform;
-        const Vec2 moved = outer.x * shift.x + outer.y * shift.y;
+        // is the view's; its own transform L, about a pivot that moves with it, becomes
+        // p -> L(p - shift) + shift.
+        const auto linear = [](const UiTransform2D& transform, Vec2 v) {
+            return transform.x * v.x + transform.y * v.y;
+        };
+        const Vec2 moved = linear(nodes[n].transform, shift);
+        const Vec2 movedLayout = linear(nodes[n].layoutTransform, shift);
         const u32 end = nodes[content].subtreeEnd;
         for (u32 m = content; m < end; ++m)
         {
             Node& node = nodes[m];
             node.rect = {node.rect.min + shift, node.rect.max + shift};
-            node.transform.translation += moved - (node.transform.x * shift.x + node.transform.y * shift.y);
+            node.transform.translation += moved - linear(node.transform, shift);
+            node.layoutTransform.translation += movedLayout - linear(node.layoutTransform, shift);
+            node.local.translation += shift - linear(node.local, shift);
         }
         writeComputedRects(content, end);
         boundsDirty = true;
@@ -1971,6 +2314,7 @@ struct UiWorld::Impl
         if (written)
         {
             world.markChanged<UiInteraction>();
+            transitionsAwake = true;
         }
     }
 
@@ -2103,6 +2447,11 @@ struct UiWorld::Impl
     std::vector<RecordClip> clipStack;
     std::vector<HitClip> hitClips;
     std::vector<UiEvent> events;
+    std::vector<TransitionSlot> transitionSlots;
+    std::vector<u8> startedScratch; // UiTransitionState::started of the slots while the layout resets it
+    bool transitionsAwake = false;  // a transition may move at the next advance
+    bool effectsDirty = false;      // a transition moved: the nodes' transforms are accumulated again
+    u64 transitionVersion = 0;      // of UiTransitionState after the last advance
     u32 droppedEvents = 0;
     u32 firstEligible = 0; // canvas index: the topmost modal canvas, or 0
     bool modal = false;
@@ -2175,13 +2524,13 @@ void UiWorld::invalidateLayout() noexcept
 void UiWorld::update(const UiFrame& frame)
 {
     ILL_PROFILE_SCOPE();
-    m_impl->update(frame, UiInput{});
+    m_impl->update(frame, UiInput{}, false);
 }
 
 void UiWorld::update(const UiFrame& frame, const UiInput& input)
 {
     ILL_PROFILE_SCOPE();
-    m_impl->update(frame, input);
+    m_impl->update(frame, input, true);
 }
 
 std::span<const UiEvent> UiWorld::events() const noexcept

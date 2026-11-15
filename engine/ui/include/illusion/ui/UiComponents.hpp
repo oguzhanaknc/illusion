@@ -86,6 +86,10 @@ struct UiText
     bool wrap = true;                                     ///< Wrap lines at the element's width.
     f32 lineSpacing = 1.0f;                               ///< Multiplier of the font's line height.
     f32 letterSpacing = 0.0f;                             ///< Extra advance per glyph in ems.
+    f32 outlineWidth = 0.0f; ///< Width of an outline around the glyphs in canvas units; 0 for none.
+    Vec4 outlineColor{0.0f, 0.0f, 0.0f, 1.0f}; ///< Linear RGBA of the outline.
+    Vec2 shadowOffset{0.0f};                   ///< Offset of a drop shadow in canvas units; zero for none.
+    Vec4 shadowColor{0.0f, 0.0f, 0.0f, 0.5f};  ///< Linear RGBA of the shadow.
 };
 
 /// Direction of a UiStack.
@@ -143,6 +147,51 @@ struct UiTextArguments
 
     std::array<UiTextArgumentValue, kMaxArguments> arguments{}; ///< The first count are used.
     u32 count = 0;                                              ///< Arguments used.
+};
+
+/// What starts a UiTransition.
+enum class UiTransitionTrigger : u8
+{
+    Shown,   ///< Plays from the changed state to rest when the element becomes visible.
+    Hovered, ///< Eases to the changed state while the element is hovered, and back afterwards.
+    Pressed, ///< Likewise while it is pressed.
+    Focused, ///< Likewise while it has the focus.
+    Manual,  ///< Only UiService::playTransition() moves it.
+};
+
+/// Shape of a transition over its duration.
+enum class UiEase : u8
+{
+    Linear,    ///< Constant speed.
+    EaseIn,    ///< Starts slowly (cubic).
+    EaseOut,   ///< Ends slowly (cubic).
+    EaseInOut, ///< Starts and ends slowly (cubic).
+    BackOut,   ///< Overshoots a little, then settles.
+};
+
+/// Animates how an element is drawn between its rest state and a changed state (reflected as
+/// "illusion.UiTransition"): an offset, a scale, an opacity and a tint, applied on top of the UiElement's own
+/// values to the element and its descendants. It never changes the layout. Time comes from the session's
+/// update, so fixed-step runs are deterministic.
+struct UiTransition
+{
+    UiTransitionTrigger trigger = UiTransitionTrigger::Shown; ///< What starts it.
+    f32 duration = 0.2f; ///< Seconds from one state to the other; 0 switches at once.
+    f32 delay = 0.0f; ///< Seconds before it starts moving towards the changed state or, for Shown, to rest.
+    UiEase ease = UiEase::EaseOut; ///< Shape of the motion.
+    Vec2 offset{0.0f};             ///< Changed state: moved by this many canvas units.
+    Vec2 scale{1.0f};              ///< Changed state: scaled about the element's pivot.
+    f32 opacity = 1.0f;            ///< Changed state: opacity multiplier.
+    Vec4 tint{1.0f};               ///< Changed state: multiplier of image tints and text colours.
+};
+
+/// Progress of a UiTransition (runtime only, written by the UI System).
+struct UiTransitionState
+{
+    f32 progress = 0.0f;         ///< 0 at rest, 1 in the changed state (before easing).
+    f32 waited = 0.0f;           ///< Seconds of the delay already spent.
+    bool towardsChanged = false; ///< Direction it is moving in.
+    bool started = false;        ///< A Shown transition has begun for the current visibility.
 };
 
 /// Where the layout put an element this frame (runtime only, written by the UI System).

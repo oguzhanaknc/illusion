@@ -163,6 +163,8 @@ void callServices(ModuleContext& context)
         static_cast<void>(ui->focused());
         static_cast<void>(ui->rect(label));
         ui->invalidateLayout();
+        static_cast<void>(ui->playTransition(label, true));
+        static_cast<void>(ui->transitionProgress(label));
         std::array<UiEvent, 4> events{};
         static_cast<void>(ui->pollEvents(events));
         static_cast<void>(ui->setLanguage("tr"));

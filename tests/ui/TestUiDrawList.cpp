@@ -682,3 +682,49 @@ TEST_CASE("recording a frame does not allocate")
     CHECK(list.data().commands.size() >= 3);
     CHECK(list.missingGlyphs() == 1);
 }
+
+TEST_CASE(
+    "an outline sets the command's width in atlas texels, clamped inside the spread, and splits batches")
+{
+    const Font& font = test::testFont();
+    const f32 spread = static_cast<f32>(font.spread());
+    UiDrawList list;
+    list.begin(hdCanvas());
+    UiTextStyle style;
+    style.size = 64.0f;
+    REQUIRE(list.text(face(), {100.0f, 100.0f}, "Hi", style));
+    style.outlineWidth = 4.0f;
+    style.outlineColor = {1.0f, 0.0f, 0.0f, 1.0f};
+    REQUIRE(list.text(face(), {100.0f, 200.0f}, "Hi", style));
+    REQUIRE(list.text(face(), {100.0f, 300.0f}, "Hi", style)); // the same outline shares the command
+    style.outlineColor = {0.0f, 0.0f, 1.0f, 1.0f};
+    REQUIRE(list.text(face(), {100.0f, 400.0f}, "Hi", style));
+    style.outlineWidth = 100.0f;
+    REQUIRE(list.text(face(), {100.0f, 500.0f}, "Hi", style));
+    style.outlineWidth = -1.0f;
+    REQUIRE(list.text(face(), {100.0f, 600.0f}, "Hi", style));
+    const UiDrawData data = list.data();
+    REQUIRE(data.commands.size() == 5);
+    CHECK(data.commands[0].sdfOutline == 0.0f);
+    CHECK(data.commands[0].outlineColor == 0u);
+    // 4 units at 64 per em are 1/16 em, 2 of the font's 32 texels per em.
+    CHECK(near(data.commands[1].sdfOutline, 4.0f / 64.0f * static_cast<f32>(font.pixelSize())));
+    CHECK(data.commands[1].outlineColor == 0xFF0000FFu);
+    CHECK(data.commands[1].indexCount == 2 * 2 * 6);
+    CHECK(data.commands[2].outlineColor == 0xFFFF0000u);
+    CHECK(data.commands[3].sdfOutline == spread - 1.0f);
+    CHECK(data.commands[4].sdfOutline == 0.0f);
+    // The quads, like the measured size, are those of the text without an outline.
+    CHECK(quadAt(data, 2).max - quadAt(data, 2).min == quadAt(data, 0).max - quadAt(data, 0).min);
+    UiTextStyle bare;
+    bare.size = 64.0f;
+    CHECK(measureText(font, "Hi", style).size == measureText(font, "Hi", bare).size);
+
+    // A colour that is not finite drops an outlined text, but not one without an outline.
+    list.begin(hdCanvas());
+    style.outlineWidth = 2.0f;
+    style.outlineColor = {kNaN, 0.0f, 0.0f, 1.0f};
+    CHECK_FALSE(list.text(face(), {100.0f, 100.0f}, "Hi", style));
+    style.outlineWidth = 0.0f;
+    CHECK(list.text(face(), {100.0f, 100.0f}, "Hi", style));
+}

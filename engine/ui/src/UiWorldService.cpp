@@ -299,6 +299,38 @@ void UiWorldService::invalidateLayout()
     m_ui.invalidateLayout();
 }
 
+bool UiWorldService::playTransition(Entity entity, bool towardsChanged)
+{
+    if (componentOf<UiTransition>(m_world, entity) == nullptr)
+    {
+        return false;
+    }
+    if (!m_world.has<UiTransitionState>(entity))
+    {
+        m_world.emplace<UiTransitionState>(entity);
+    }
+    UiTransitionState& state = m_world.get<UiTransitionState>(entity);
+    // A Shown transition that has not started yet would otherwise start over this direction.
+    state.started = true;
+    if (state.towardsChanged != towardsChanged)
+    {
+        state.towardsChanged = towardsChanged;
+        state.waited = 0.0f;
+    }
+    m_world.markChanged<UiTransitionState>();
+    return true;
+}
+
+std::optional<f32> UiWorldService::transitionProgress(Entity entity) const
+{
+    if (componentOf<UiTransition>(std::as_const(m_world), entity) == nullptr)
+    {
+        return std::nullopt;
+    }
+    const UiTransitionState* state = m_world.tryGet<UiTransitionState>(entity);
+    return state != nullptr ? state->progress : 0.0f;
+}
+
 u32 UiWorldService::pollEvents(std::span<UiEvent> events) const
 {
     const std::span<const UiEvent> happened = m_ui.events();

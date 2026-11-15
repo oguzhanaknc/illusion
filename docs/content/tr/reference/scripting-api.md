@@ -60,8 +60,8 @@ void update(illusion::ModuleContext& context, illusion::f64)
 - **Maliyet.** Bir çağrı tek bir dolaylı çağrıdır; `services/virtual-call` Benchmark'ı onu 10 ns'nin
   altında tutar.
 - **Uyumluluk.** Arayüzler modül ABI'sinin parçasıdır: bir fonksiyon eklemek veya değiştirmek
-  `kModuleApiVersion`'ı değiştirir (`UiService` ve `SceneService::requestExit()` ile birlikte 4) ve modüller
-  yeniden Build edilmelidir.
+  `kModuleApiVersion`'ı değiştirir (`UiService::playTransition()` ve `transitionProgress()` ile birlikte 5) ve
+  modüller yeniden Build edilmelidir.
 
 ## Kapsam
 
@@ -163,5 +163,7 @@ döndürür. Değişiklikler `World::markChanged()` olmadan yerleşime ulaşır.
 | `setFocus`, `focused` | Odağı taşır (null temizler), odaktaki eleman |
 | `rect` | Son yerleşimin dikdörtgeni, canvas birimi cinsinden |
 | `invalidateLayout` | UI'a UI Entity'lerinin Component'lerinin doğrudan yazıldığını bildirir |
+| `playTransition` | Bir elemanın `UiTransition`'ını, tetikleyicisi ne olursa olsun, değişmiş durumuna ya da dinlenme durumuna doğru götürür |
+| `transitionProgress` | Bir elemanın `UiTransition` ilerlemesi: dinlenmede 0, değişmiş durumda 1 |
 | `pollEvents` | Önceki karenin UI update'indeki olayları bir span'e kopyalar; sığandan fazla olabilen toplamı döndürür |
 | `setLanguage`, `language` | Oyunun dili; projede locale dosyası olan bir BCP 47 etiketi |

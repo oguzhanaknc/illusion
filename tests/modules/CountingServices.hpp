@@ -543,7 +543,7 @@ public:
 };
 
 // Counts the calls of every UiService function.
-class CountingUi final : public CountingProxy<UiService, 17>
+class CountingUi final : public CountingProxy<UiService, 19>
 {
 public:
     explicit CountingUi(UiService* inner = nullptr) noexcept
@@ -607,17 +607,25 @@ public:
     {
         forward<void>(13, [&](UiService& s) { s.invalidateLayout(); });
     }
+    bool playTransition(Entity e, bool towardsChanged) override
+    {
+        return forward<bool>(14, [&](UiService& s) { return s.playTransition(e, towardsChanged); });
+    }
+    [[nodiscard]] std::optional<f32> transitionProgress(Entity e) const override
+    {
+        return forward<std::optional<f32>>(15, [&](UiService& s) { return s.transitionProgress(e); });
+    }
     u32 pollEvents(std::span<UiEvent> events) const override
     {
-        return forward<u32>(14, [&](UiService& s) { return s.pollEvents(events); });
+        return forward<u32>(16, [&](UiService& s) { return s.pollEvents(events); });
     }
     bool setLanguage(std::string_view locale) override
     {
-        return forward<bool>(15, [&](UiService& s) { return s.setLanguage(locale); });
+        return forward<bool>(17, [&](UiService& s) { return s.setLanguage(locale); });
     }
     [[nodiscard]] std::string_view language() const override
     {
-        return forward<std::string_view>(16, [&](UiService& s) { return s.language(); });
+        return forward<std::string_view>(18, [&](UiService& s) { return s.language(); });
     }
 };
 

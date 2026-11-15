@@ -16,12 +16,16 @@ namespace illusion
 namespace
 {
 
+// Matches `Push` in Ui.slang.
 struct Push
 {
     Vec2 scale{0.0f};
     f32 sdfSpread = 0.0f;
     u32 flags = 0;
+    f32 sdfOutline = 0.0f;
+    u32 outlineColor = 0;
 };
+static_assert(sizeof(Push) == 24);
 
 constexpr u32 kEncodeSrgb = 1;
 
@@ -391,6 +395,11 @@ bool UiRenderer::render(nvrhi::ICommandList* commands, nvrhi::ITexture* target, 
         state.viewport.addViewport(viewport).addScissorRect(scissor);
         commands->setGraphicsState(state);
         push.sdfSpread = std::isfinite(command.sdfSpread) ? std::max(command.sdfSpread, 0.0f) : 0.0f;
+        // An outline reaches at most to the edge of the field.
+        push.sdfOutline = std::isfinite(command.sdfOutline) && push.sdfSpread > 0.0f
+                              ? std::clamp(command.sdfOutline, 0.0f, push.sdfSpread)
+                              : 0.0f;
+        push.outlineColor = command.outlineColor;
         commands->setPushConstants(&push, sizeof(push));
         commands->drawIndexed(nvrhi::DrawArguments()
                                   .setVertexCount(command.indexCount)

@@ -100,6 +100,11 @@ public:
     [[nodiscard]] virtual std::optional<UiRect> rect(Entity entity) const = 0;
     /// Tells the UI that Components of UI Entities were written directly through the World.
     virtual void invalidateLayout() = 0;
+    /// Moves the UiTransition of @p entity towards its changed state or back to rest, whatever its trigger;
+    /// false without one.
+    virtual bool playTransition(Entity entity, bool towardsChanged) = 0;
+    /// Progress of the UiTransition of @p entity: 0 at rest, 1 in the changed state.
+    [[nodiscard]] virtual std::optional<f32> transitionProgress(Entity entity) const = 0;
 
     /// Copies the events of the UI's last update (the previous frame, as the UI runs after the modules) into
     /// @p events and returns how many there were, which may be more than fit.

@@ -46,6 +46,7 @@
 #include <string>
 #include <string_view>
 #include <utility>
+#include <vector>
 
 using namespace illusion;
 using test::at;
@@ -721,6 +722,44 @@ TEST_CASE("a headless game session drives a menu with the keyboard")
     REQUIRE(session->ui().events().size() == 1);
     CHECK(session->ui().events()[0].type == UiEventType::Cancelled);
     CHECK(session->ui().events()[0].entity == menu.canvas);
+}
+
+TEST_CASE("in fixed steps the same scripted input gives the same transition progress on every run")
+{
+    const auto run = [](f64 deltaSeconds) {
+        Fixture f;
+        f.desc.fixedStep = true;
+        auto session = f.create();
+        SessionMenu menu(*session);
+        UiTransition hover;
+        hover.trigger = UiTransitionTrigger::Hovered;
+        hover.duration = 0.1f;
+        hover.delay = 0.05f;
+        hover.ease = UiEase::BackOut;
+        hover.scale = Vec2(1.25f);
+        session->world().emplace<UiTransition>(menu.start, hover);
+        UiTransition shown;
+        shown.offset = {0.0f, 40.0f};
+        session->world().emplace<UiTransition>(menu.quit, shown);
+        std::vector<f32> progress;
+        InputState& mouse = session->keyboardMouse();
+        for (int frame = 0; frame < 40; ++frame)
+        {
+            // Over the start button for frames 5 to 19, then away.
+            mouse.setMousePosition(frame >= 5 && frame < 20 ? Vec2(900.0f, 440.0f) : Vec2(10.0f, 10.0f));
+            session->update(deltaSeconds);
+            progress.push_back(session->world().get<UiTransitionState>(menu.start).progress);
+            progress.push_back(session->world().get<UiTransitionState>(menu.quit).progress);
+        }
+        return progress;
+    };
+    const std::vector<f32> first = run(1.0 / 60.0);
+    CHECK(first == run(0.25)); // fixed steps ignore the time passed
+    CHECK(std::ranges::any_of(first, [](f32 p) { return p > 0.0f && p < 1.0f; }));
+    CHECK(first[2 * 19] == 1.0f);     // hovered long enough
+    CHECK(first[2 * 39] == 0.0f);     // and back at rest
+    CHECK(first[1] == 1.0f);          // Shown starts in the changed state
+    CHECK(first[2 * 39 + 1] == 0.0f); // and comes to rest
 }
 
 TEST_CASE("a headless game session drives a menu with the mouse")
