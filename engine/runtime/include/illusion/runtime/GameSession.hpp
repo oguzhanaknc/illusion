@@ -224,7 +224,7 @@ public:
     /// The UI of the World; its drawData() is what the last update() recorded.
     [[nodiscard]] UiWorld& ui() noexcept;
 
-    /// The SaveService the modules see, for host tools (the editor's `saves.*` commands); requests made
+    /// The SaveService the modules see, for host tools (the saves commands of the editor); requests made
     /// through it between updates are sent at the Saves step of the next update. Null without
     /// GameSessionDesc::saves.
     [[nodiscard]] SaveService* saves() noexcept;
