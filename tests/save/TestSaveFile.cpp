@@ -4,7 +4,9 @@
 
 #include <doctest/doctest.h>
 
+#include <array>
 #include <limits>
+#include <span>
 #include <string>
 #include <vector>
 
@@ -27,24 +29,21 @@ std::vector<std::byte> smallFile()
 // A slot file with a valid header around @p payload.
 std::vector<std::byte> fileWithPayload(std::string_view payload)
 {
-    std::vector<std::byte> file(kSaveHeaderBytes + payload.size());
+    const std::span<const std::byte> body =
+        std::as_bytes(std::span<const char>(payload.data(), payload.size()));
+    std::array<std::byte, kSaveHeaderBytes> header{std::byte{'I'}, std::byte{'L'}, std::byte{'S'},
+                                                   std::byte{'V'}};
     const auto put = [&](usize offset, u64 value, usize bytes) {
         for (usize i = 0; i < bytes; ++i)
         {
-            file[offset + i] = static_cast<std::byte>((value >> (8 * i)) & 0xFF);
+            header.at(offset + i) = static_cast<std::byte>((value >> (8 * i)) & 0xFF);
         }
     };
-    file[0] = std::byte{'I'};
-    file[1] = std::byte{'L'};
-    file[2] = std::byte{'S'};
-    file[3] = std::byte{'V'};
     put(4, kSaveFormatVersion, 4);
     put(8, payload.size(), 8);
-    for (usize i = 0; i < payload.size(); ++i)
-    {
-        file[kSaveHeaderBytes + i] = static_cast<std::byte>(payload[i]);
-    }
-    put(16, xxhash64(std::span<const std::byte>(file).subspan(kSaveHeaderBytes)), 8);
+    put(16, xxhash64(body), 8);
+    std::vector<std::byte> file(header.begin(), header.end());
+    file.insert(file.end(), body.begin(), body.end());
     return file;
 }
 
