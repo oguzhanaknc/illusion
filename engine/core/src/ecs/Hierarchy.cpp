@@ -619,15 +619,20 @@ void updateActivity(World& world, const HierarchyIndex& index, std::vector<Entit
 
 } // namespace
 
-void updateTransformHierarchy(World& world, HierarchyIndex& index, JobSystem* jobs)
+void updateInactiveTags(World& world, HierarchyIndex& index)
 {
-    ILL_PROFILE_SCOPE();
     index.update(world);
     if (index.m_activityVersion != activityVersion(world))
     {
         updateActivity(world, index, index.m_scratch);
         index.m_activityVersion = activityVersion(world);
     }
+}
+
+void updateTransformHierarchy(World& world, HierarchyIndex& index, JobSystem* jobs)
+{
+    ILL_PROFILE_SCOPE();
+    updateInactiveTags(world, index);
     const u32 levels = index.levelCount();
     if (levels == 0)
     {

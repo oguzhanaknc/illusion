@@ -505,15 +505,63 @@ TEST_CASE("gameui.place and gameui.set_anchors reject what they cannot place")
     CHECK(f.scene() == before);
 
     ok(editor, "entity.set_enabled", R"({"entity":"/HUD","enabled":false})");
-    // The viewports derive the Inactive tags in the editor; here the test does.
-    HierarchyIndex hierarchy;
-    updateTransformHierarchy(editor.world(), hierarchy);
     CHECK(fails(editor, "gameui.place", R"({"entity":"/HUD/Box","min":[0,0],"max":[1,1]})")
               .message.find("not laid out") != std::string::npos);
     // Without keepRect no layout is needed.
     ok(editor, "gameui.set_anchors", R"({"entity":"/HUD/Box","preset":"top","keepRect":false})");
     ok(editor, "history.undo", R"({"steps":2})");
     CHECK(f.scene() == before);
+}
+
+TEST_CASE("disabled canvases and elements of the edit World are neither laid out nor picked without a GPU")
+{
+    EditorFixture f;
+    EditorContext& editor = *f.editor;
+    ok(editor, "gameui.create", R"({"kind":"canvas","name":"HUD"})");
+    ok(editor, "gameui.create", R"({"kind":"panel","name":"Box","parent":"/HUD"})");
+    ok(editor, "gameui.place", R"({"entity":"/HUD/Box","min":[500,500],"max":[700,700]})");
+    ok(editor, "gameui.create", R"({"kind":"canvas","name":"Menu"})");
+    ok(editor, "gameui.create", R"({"kind":"panel","name":"Back","parent":"/Menu"})");
+    ok(editor, "gameui.place", R"({"entity":"/Menu/Back","min":[1000,500],"max":[1200,700]})");
+    ok(editor, "entity.set_enabled", R"({"entity":"/Menu","enabled":false})");
+    ok(editor, "entity.set_enabled", R"({"entity":"/HUD/Box","enabled":false})");
+    ok(editor, "scene.save");
+    const std::string hash = sceneHash(editor);
+    const usize position = editor.history().position();
+    const u64 revision = editor.revision();
+
+    const auto laidOut = [&](std::string_view path) {
+        return !elementPointer(ok(editor, "gameui.layout"), path).empty();
+    };
+    const auto picked = [&](std::string_view at) {
+        return stringAt(ok(editor, "gameui.pick", at), "/entity/path");
+    };
+    const JsonDocument disabled = ok(editor, "gameui.layout");
+    REQUIRE(disabled.root().find("canvases").size() == 1);
+    CHECK(stringAt(disabled, "/canvases/0/entity/path") == "/HUD");
+    CHECK_FALSE(laidOut("/HUD/Box"));
+    CHECK_FALSE(laidOut("/Menu/Back"));
+    CHECK(picked(R"({"x":600,"y":600})").empty());
+    CHECK(picked(R"({"x":1100,"y":600})").empty());
+    CHECK(sceneHash(editor) == hash);
+    CHECK_FALSE(editor.dirty());
+    CHECK(editor.history().position() == position);
+    CHECK(editor.revision() == revision);
+
+    ok(editor, "entity.set_enabled", R"({"entity":"/Menu","enabled":true})");
+    ok(editor, "entity.set_enabled", R"({"entity":"/HUD/Box","enabled":true})");
+    CHECK(ok(editor, "gameui.layout").root().find("canvases").size() == 2);
+    CHECK(laidOut("/HUD/Box"));
+    CHECK(laidOut("/Menu/Back"));
+    CHECK(picked(R"({"x":600,"y":600})") == "/HUD/Box");
+    CHECK(picked(R"({"x":1100,"y":600})") == "/Menu/Back");
+
+    // Undo disables them again.
+    ok(editor, "history.undo", R"({"steps":2})");
+    CHECK(ok(editor, "gameui.layout").root().find("canvases").size() == 1);
+    CHECK_FALSE(laidOut("/Menu/Back"));
+    CHECK(picked(R"({"x":600,"y":600})").empty());
+    CHECK(sceneHash(editor) == hash);
 }
 
 TEST_CASE("gameui.pick finds the topmost element at a pixel, interactable or not")

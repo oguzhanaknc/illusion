@@ -743,9 +743,9 @@ TEST_CASE("the asset browser lists a fresh project's assets and fits its toolbar
     ui::UiDriver driver(fixture.context, [&] { fixture.frame(); });
     driver.runFrames(3);
     CHECK(editor.assetCatalog().scanned());
-    // The root holds one folder (scenes) and nothing else: one tile in a row of many columns.
-    CHECK(driver.find("asset_browser.tile.0").has_value());
-    CHECK_FALSE(driver.find("asset_browser.tile.1").has_value());
+    // The root holds two folders (input, scenes) and nothing else: two tiles in a row of many columns.
+    CHECK(driver.find("asset_browser.tile.1").has_value());
+    CHECK_FALSE(driver.find("asset_browser.tile.2").has_value());
 
     // Every toolbar control after the search field is on screen, inside the panel.
     const std::optional<ui::UiItem> panel = driver.find("panel.assets");
@@ -925,13 +925,13 @@ TEST_CASE("the asset browser shows the texture compression setting only for mode
     ui::UiDriver driver(fixture.context, [&] { fixture.frame(); });
     driver.runFrames(4);
 
-    // Tile 0 is the scenes folder, then rock.png and ship.glb.
-    REQUIRE(driver.click("asset_browser.tile.1"));
+    // Tiles 0 and 1 are the input and scenes folders, then rock.png and ship.glb.
+    REQUIRE(driver.click("asset_browser.tile.2"));
     driver.runFrames(3);
     CHECK(driver.find("asset_browser.import.generate_mips").has_value());
     CHECK_FALSE(driver.find("asset_browser.import.compress_textures").has_value());
 
-    REQUIRE(driver.click("asset_browser.tile.2"));
+    REQUIRE(driver.click("asset_browser.tile.3"));
     driver.runFrames(3);
     CHECK_FALSE(driver.find("asset_browser.import.generate_mips").has_value());
     CHECK(driver.find("asset_browser.import.compress_textures").has_value());
@@ -941,7 +941,7 @@ TEST_CASE("dragging an asset from the browser into an Inspector asset field sets
 {
     ShellFixture fixture;
     EditorContext& editor = *fixture.editor;
-    // The empty template's assets:/ has the scenes folder and the open scene; add a material at the root.
+    // The empty template's assets:/ has the input and scenes folders; add a material at the root.
     test::ok(editor, "project.file_write", R"({"path":"assets:/red.material","text":"x"})");
     test::ok(editor, "entity.create", R"({"name":"Crate","components":{"test.Look":{}}})");
     test::ok(editor, "selection.set", R"({"entities":["/Crate"]})");
@@ -951,12 +951,12 @@ TEST_CASE("dragging an asset from the browser into an Inspector asset field sets
     ui::UiDriver driver(fixture.context, [&] { fixture.frame(); });
     driver.runFrames(4); // let the catalog pick up red.material
 
-    // The root lists folders first, then files: tile 0 is the scenes folder, tile 1 is red.material.
-    const std::optional<ui::UiItem> tile = driver.find("asset_browser.tile.1");
+    // The root lists folders first, then files: tiles 0 and 1 are the folders, tile 2 is red.material.
+    const std::optional<ui::UiItem> tile = driver.find("asset_browser.tile.2");
     REQUIRE(tile.has_value());
     const std::optional<ui::UiItem> field = driver.find("inspector.card.test.Look.material");
     REQUIRE(field.has_value());
-    dragBetween(driver, "asset_browser.tile.1", field->center());
+    dragBetween(driver, "asset_browser.tile.2", field->center());
     driver.runFrames(2);
     CHECK(test::ok(editor, "component.get", R"({"entity":"/Crate","type":"test.Look","path":"material"})")
               .root()
@@ -1396,11 +1396,11 @@ TEST_CASE(
                                                .value_or(""));
     CHECK(editor.world().has<PrefabInstance>(editor.entities().find(*parseGuid(barrel))));
 
-    // The prefab's tile (the root lists folders first: scenes, then Barrel.prefab) onto the Shelf row.
+    // The prefab's tile (the root lists folders first: input, scenes, then Barrel.prefab) onto the Shelf row.
     driver.runFrames(4);
     const std::optional<ui::UiItem> shelf = driver.find("outliner.row.1");
     REQUIRE(shelf.has_value());
-    dragBetween(driver, "asset_browser.tile.1", shelf->center());
+    dragBetween(driver, "asset_browser.tile.2", shelf->center());
     driver.runFrames(3);
     test::ok(editor, "entity.get", R"({"entity":"/Shelf/Barrel"})");
 }
@@ -1574,28 +1574,32 @@ TEST_CASE("the Input Actions window adds an action, binds the next key press, un
         return test::ok(editor, "input.actions", R"({"asset":"assets:/input/game.input"})");
     };
 
+    // A new project's asset has the three ui actions; the window lists them.
+    CHECK(actions().root().find("actions").size() == 3);
+    CHECK(driver.find("input_actions.action.ui.submit.remove").has_value());
+
     REQUIRE(driver.click("input_actions.new.name"));
     driver.typeText("Jump");
     driver.runFrames(1);
     REQUIRE(driver.click("input_actions.new.add"));
     driver.runFrames(3);
-    CHECK(actions().root().pointer("/actions/0/name").asString() == "Jump");
-    CHECK(actions().root().pointer("/actions/0/type").asString() == "Button");
+    CHECK(actions().root().pointer("/actions/3/name").asString() == "Jump");
+    CHECK(actions().root().pointer("/actions/3/type").asString() == "Button");
 
     // The next key press after "Add binding" becomes the binding.
     REQUIRE(driver.click("input_actions.action.Jump.bind"));
     driver.runFrames(1);
     driver.pressKey(ImGuiKey_Space);
     driver.runFrames(3);
-    CHECK(actions().root().pointer("/actions/0/bindings/0").asString() == "Key.Space");
+    CHECK(actions().root().pointer("/actions/3/bindings/0").asString() == "Key.Space");
 
     REQUIRE(driver.click("input_actions.action.Jump.binding.0"));
     driver.runFrames(3);
-    CHECK(actions().root().pointer("/actions/0/bindings").size() == 0);
+    CHECK(actions().root().pointer("/actions/3/bindings").size() == 0);
 
     REQUIRE(driver.click("input_actions.action.Jump.remove"));
     driver.runFrames(3);
-    CHECK(actions().root().find("actions").size() == 0);
+    CHECK(actions().root().find("actions").size() == 3);
 }
 
 TEST_CASE("the Gamepad Tester window rumbles, turns on motion and applies trigger effects through commands")

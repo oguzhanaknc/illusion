@@ -67,7 +67,10 @@ New projects are copies of a template in `editor-data/templates/`:
 | `3d-starter` | A camera, a sun, a procedural sky, a ground plane and a cube |
 
 Both templates also contain `assets/fonts/Roboto-Regular.ttf` (Apache-2.0, with `LICENSE.txt` next to it), the
-font that a `UiText` needs, so the [Game UI](../ui.md) works in a new project.
+font that a `UiText` needs, so the [Game UI](../ui.md) works in a new project. They also contain the input
+actions asset `assets/input/game.input` with the actions the UI reads (`ui.navigate`, `ui.submit` and
+`ui.cancel`, with their default bindings), and `settings/input.json`, which makes it the game's asset: the
+Input Actions window lists the three actions, and players can rebind them.
 
 ```cpp
 auto project = illusion::editor::Project::create("C:/Games/Tetris", "Tetris",

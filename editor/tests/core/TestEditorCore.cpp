@@ -113,6 +113,8 @@ TEST_CASE("projects are created from templates and open with their mounts")
     CHECK(std::filesystem::file_size(directory.path / "game" / "assets" / "fonts" / "Roboto-Regular.ttf") >
           0);
     CHECK(std::filesystem::exists(directory.path / "game" / "assets" / "fonts" / "LICENSE.txt"));
+    CHECK(std::filesystem::file_size(directory.path / "game" / "assets" / "input" / "game.input") > 0);
+    CHECK(std::filesystem::file_size(directory.path / "game" / "settings" / "input.json") > 0);
 
     EditorContext editor(EditorContextOptions{.seed = 3});
     REQUIRE(editor.openProject(directory.path / "game").hasValue());

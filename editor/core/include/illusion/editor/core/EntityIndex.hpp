@@ -79,8 +79,10 @@ public:
     /// illusion::updateTransformHierarchy() does for children; with @p addMissing, children without a
     /// Transform get one (a scene was loaded: saved scenes leave out derived Transforms). Saved values (root
     /// Transforms, LocalTransforms) are never written, so undo and the crash journal stay exact. Costs
-    /// nothing when no Transform, LocalTransform or Hierarchy changed since the last call. EditorContext
-    /// calls it after every change, so that world placements are current when the next command reads them.
+    /// nothing when no Transform, LocalTransform or Hierarchy changed since the last call. Also brings the
+    /// Inactive tags up to date (illusion::updateInactiveTags()), a derived state that no undo record,
+    /// journal or saved scene contains. EditorContext calls it after every change, so that world placements
+    /// and activity are current when the next command reads them, with or without a viewport.
     void updateTransforms(bool addMissing = false);
 
     /// Appends the children of @p parent to @p out in order; for the null entity, the roots: entities with

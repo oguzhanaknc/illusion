@@ -8,10 +8,13 @@
 #include <illusion/core/Module.hpp>
 #include <illusion/ecs/Transform.hpp>
 #include <illusion/editor/play/PlaySession.hpp>
+#include <illusion/input/InputActions.hpp>
+#include <illusion/input/InputActionsAsset.hpp>
 #include <illusion/particles/ParticleComponents.hpp>
 #include <illusion/physics/PhysicsComponents.hpp>
 #include <illusion/runtime/GameSession.hpp>
 #include <illusion/runtime/SceneService.hpp>
+#include <illusion/ui/UiWidgets.hpp>
 
 #include <fstream>
 #include <sstream>
@@ -251,28 +254,29 @@ TEST_CASE("play.run_until steps until the condition holds or maxSteps pass")
 TEST_CASE("input asset commands edit the .input file and undo")
 {
     PlayFixture f;
+    // A new project's asset starts with the three ui actions; new actions follow them.
     constexpr std::string_view asset = R"("asset":"assets:/input/game.input")";
     const JsonDocument defined =
         ok(f.editor(), "input.action_define",
            "{" + std::string(asset) + R"(,"name":"Jump","type":"Button","bindings":["Key.Space"]})");
-    CHECK(defined.root().pointer("/actions/0/bindings/0").asString() == "Key.Space");
+    CHECK(defined.root().pointer("/actions/3/bindings/0").asString() == "Key.Space");
     ok(f.editor(), "input.action_define",
        "{" + std::string(asset) + R"(,"name":"Move","type":"Vector2","bindings":["Keys.W.S.A.D"]})");
     ok(f.editor(), "input.bind", "{" + std::string(asset) + R"(,"action":"Jump","binding":"Gamepad.South"})");
     ok(f.editor(), "input.action_rename", "{" + std::string(asset) + R"(,"name":"Jump","newName":"Hop"})");
     const JsonDocument listed = ok(f.editor(), "input.actions", "{" + std::string(asset) + "}");
-    CHECK(listed.root().find("actions").size() == 2);
-    CHECK(listed.root().pointer("/actions/0/name").asString() == "Hop");
-    CHECK(listed.root().pointer("/actions/0/bindings").size() == 2);
+    CHECK(listed.root().find("actions").size() == 5);
+    CHECK(listed.root().pointer("/actions/3/name").asString() == "Hop");
+    CHECK(listed.root().pointer("/actions/3/bindings").size() == 2);
     ok(f.editor(), "input.unbind", "{" + std::string(asset) + R"(,"action":"Hop","binding":"Key.Space"})");
     ok(f.editor(), "input.action_remove", "{" + std::string(asset) + R"(,"name":"Move"})");
-    CHECK(ok(f.editor(), "input.actions", "{" + std::string(asset) + "}").root().find("actions").size() == 1);
+    CHECK(ok(f.editor(), "input.actions", "{" + std::string(asset) + "}").root().find("actions").size() == 4);
     ok(f.editor(), "history.undo");
     ok(f.editor(), "history.undo");
     ok(f.editor(), "history.undo");
     CHECK(ok(f.editor(), "input.actions", "{" + std::string(asset) + "}")
               .root()
-              .pointer("/actions/0/name")
+              .pointer("/actions/3/name")
               .asString() == "Jump");
 
     CHECK(fails(f.editor(), "input.bind",
@@ -287,6 +291,53 @@ TEST_CASE("input asset commands edit the .input file and undo")
           ErrorKind::ValidationFailed);
     CHECK(fails(f.editor(), "input.actions", R"({"asset":"assets:/input/none.input"})").kind ==
           ErrorKind::NotFound);
+}
+
+TEST_CASE("a new project ships the ui actions with the bindings a game session would add")
+{
+    PlayFixture f;
+    const JsonDocument shipped = ok(f.editor(), "input.actions", R"({"asset":"assets:/input/game.input"})");
+    const JsonValue listed = shipped.root().find("actions");
+    REQUIRE(listed.size() == 3);
+    CHECK(listed[0].find("name").asString() == kUiNavigateAction);
+    CHECK(listed[1].find("name").asString() == kUiSubmitAction);
+    CHECK(listed[2].find("name").asString() == kUiCancelAction);
+
+    // The session reads the asset that settings:/input.json names, so it adds none of its own.
+    ok(f.editor(), "play.start", R"({"fixedStep":true})");
+    REQUIRE(f.play->game() != nullptr);
+    const std::string loaded = writeInputActions(f.play->game()->actions());
+
+    test::TempDirectory directory;
+    VirtualFileSystem files;
+    REQUIRE(files.mount("assets", directory.path, MountAccess::ReadWrite) == FileError::None);
+    GameSessionDesc desc;
+    desc.jobs = &f.jobs;
+    desc.files = &files;
+    desc.audioOutput = AudioOutput::Offline;
+    Expected<std::unique_ptr<GameSession>, std::string> bare = GameSession::create(desc);
+    REQUIRE(bare.hasValue());
+    CHECK(loaded == writeInputActions((*bare)->actions()));
+
+    // Every template ships the same asset and settings.
+    const auto text = [](const std::filesystem::path& path) {
+        std::ifstream file(path, std::ios::binary);
+        std::ostringstream out;
+        out << file.rdbuf();
+        return out.str();
+    };
+    const std::filesystem::path templates = editorDataDirectory() / "templates";
+    for (const auto& entry : std::filesystem::directory_iterator(templates))
+    {
+        CAPTURE(entry.path().filename().string());
+        for (const std::filesystem::path& file :
+             {std::filesystem::path("assets/input/game.input"), std::filesystem::path("settings/input.json")})
+        {
+            const std::string content = text(entry.path() / file);
+            CHECK_FALSE(content.empty());
+            CHECK(content == text(templates / "empty" / file));
+        }
+    }
 }
 
 TEST_CASE("input.inject reaches the actions of the running game")

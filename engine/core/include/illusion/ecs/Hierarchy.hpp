@@ -226,6 +226,7 @@ public:
     }
 
 private:
+    friend void updateInactiveTags(World& world, HierarchyIndex& index);
     friend void updateTransformHierarchy(World& world, HierarchyIndex& index, JobSystem* jobs);
 
     static constexpr u32 kNoNode = ~0u;
@@ -280,6 +281,11 @@ private:
     std::vector<Entity> m_scratch;
     u64 m_activityVersion = ~0ull; // sum of the Hierarchy, Disabled and Inactive versions at the last pass
 };
+
+/// Updates @p index and adds or removes the Inactive tag where Disabled says so, writing no other Component:
+/// the first steps of updateTransformHierarchy(), for tools that must not touch saved Transforms. Costs O(1)
+/// after no change to Hierarchy, Disabled or Inactive Components; a structural change otherwise.
+void updateInactiveTags(World& world, HierarchyIndex& index);
 
 /// Brings the hierarchy of @p world up to date; call it once per frame after game code and physics moved
 /// entities and before rendering:

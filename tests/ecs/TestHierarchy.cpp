@@ -473,6 +473,38 @@ TEST_CASE("Disabled makes a subtree Inactive until it is enabled again")
     CHECK_FALSE(world.has<Disabled>(child));
 }
 
+TEST_CASE("updateInactiveTags derives Inactive without writing Transforms")
+{
+    World world;
+    HierarchyIndex index;
+    const Entity root = world.create(Transform{}, LocalTransform{});
+    const Entity child = world.create(Transform{}, LocalTransform{});
+    REQUIRE(setParent(world, child, root));
+    world.get<Transform>(root).position = Vec3(1.0f, 2.0f, 3.0f);
+    world.get<LocalTransform>(child).position = Vec3(5.0f, 0.0f, 0.0f);
+    world.markChanged<Transform>();
+    world.markChanged<LocalTransform>();
+    setEnabled(world, root, false);
+    const u64 transforms = world.componentVersion<Transform>();
+    const u64 locals = world.componentVersion<LocalTransform>();
+
+    updateInactiveTags(world, index);
+    CHECK(world.has<Inactive>(root));
+    CHECK(world.has<Inactive>(child));
+    CHECK(world.componentVersion<Transform>() == transforms);
+    CHECK(world.componentVersion<LocalTransform>() == locals);
+    CHECK(world.get<LocalTransform>(root).position == Vec3(0.0f));
+
+    const u64 version = world.structuralVersion();
+    updateInactiveTags(world, index);
+    CHECK(world.structuralVersion() == version);
+
+    setEnabled(world, root, true);
+    updateInactiveTags(world, index);
+    CHECK_FALSE(world.has<Inactive>(root));
+    CHECK_FALSE(world.has<Inactive>(child));
+}
+
 TEST_CASE("makeValidEntityName replaces reserved characters and keeps whole characters")
 {
     CHECK(makeValidEntityName("Arm/Left\tHand") == "Arm_Left_Hand");

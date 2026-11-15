@@ -435,7 +435,9 @@ Birincil düğmeyi bir elemanın üzerinde basmak ona basar ve odaklanabiliyorsa
 `FocusChanged` olayı). Aynı elemanın üzerinde bırakmak onu etkinleştirir. Basılan bir kaydırıcı, düğme
 bırakılana kadar işaretçiyi izler.
 
-**Action'lar.** Projenin input Asset'inde yoksa `GameSession::create` bu action'ları varsayılan atamalarla ekler:
+**Action'lar.** Yeni projeler bu action'ları varsayılan atamalarıyla `assets/input/game.input` içinde getirir
+(bkz. [Şablonlar](editor/projects.md#sablonlar)). Daha eski projelerde, projenin input Asset'inde yoksa
+`GameSession::create` bunları çalışma zamanında varsayılan atamalarla ekler:
 
 | Action | Tür | Varsayılan atamalar |
 | --- | --- | --- |

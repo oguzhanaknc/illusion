@@ -254,7 +254,8 @@ struct RecoveryResult
 /// open scene and its settings, the EntityIndex, the Selection, the UndoStack, the journals, the clipboard,
 /// the settings types, the asset reference index and a ring of recent log messages. Commands run on the
 /// thread that owns the context, at the command point of the frame, never while a Query iterates. After
-/// every change the world-space Transforms of children are derived again (EntityIndex::updateTransforms()).
+/// every change the world-space Transforms of children and the Inactive tags are derived again
+/// (EntityIndex::updateTransforms()).
 class EditorContext : NonCopyable
 {
 public:
