@@ -60,13 +60,14 @@ TEST_CASE("store names are 1 to 64 portable characters that neither start nor en
     CHECK(storeErrorName(StoreError::Unavailable) == "Unavailable");
 }
 
-TEST_CASE("the null store is no store: no user, no overlay and no glyphs")
+TEST_CASE("the null store is no store: no user, no overlay, no glyphs and no remote cloud")
 {
     UserFiles user;
     NullStoreService store(user.files);
     store.update();
     CHECK_FALSE(store.available());
     CHECK(store.storeName() == "none");
+    CHECK_FALSE(store.cloudIsRemote()); // its cloud files are local files already
     CHECK(store.userName().empty());
     CHECK(store.userId() == 0);
     CHECK_FALSE(store.overlayActive());

@@ -198,6 +198,14 @@ std::optional<GuidGenerator> seededGenerator(const GameSessionDesc& session) noe
     return std::nullopt;
 }
 
+// The store that saved games are mirrored to (ADR 0058), or null.
+StoreService* saveCloud(const GameSessionDesc& session)
+{
+    const bool mirrored = session.store != nullptr && session.storeCloudIsRemote &&
+                          session.settings.save.cloud && session.store->available();
+    return mirrored ? session.store : nullptr;
+}
+
 } // namespace
 
 struct GameSession::Impl
@@ -215,7 +223,7 @@ struct GameSession::Impl
         , inputService(actions)
         , sceneService(world, *sessionDesc.files, &guids())
         , uiService(world, ui, localization)
-        , saveService(sessionDesc.saves)
+        , saveService(sessionDesc.saves, saveCloud(sessionDesc))
     {
         gamepads.reserve(kReservedGamepads);
         ui.setAssets(sessionDesc.uiAssets);

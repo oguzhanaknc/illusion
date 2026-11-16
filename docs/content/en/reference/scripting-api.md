@@ -178,5 +178,10 @@ handles change: find them again after `Loaded` or `LoadedBackup`.
 | `available` | Whether the host has a save directory |
 | `save`, `load`, `remove` | Queue writing, applying or removing a slot (1 to 32 letters, digits, `_`, `-`) |
 | `busy` | Whether a request has not delivered its event yet |
-| `slots`, `slot` | The slot list (name, `SaveMetadata`, `savedAt`, `SaveSlotState`) into a caller span, or one slot; no file is read |
+| `slots`, `slot` | The slot list (name, `SaveMetadata`, `savedAt`, `SaveSlotState`, `screenshot`) into a caller span, or one slot; no file is read |
 | `pollEvents` | Copies the events of the last update (`Saved`, `Loaded`, `LoadedBackup`, `Removed`, `Failed` with a `SaveError`) into a span; returns the total |
+
+`SaveSlotInfo::screenshot` is the virtual path of the slot's 320 x 180 PNG (`user:/saves/<slot>.png` in the
+player), or empty when the slot has none. With a store whose cloud is remote, slot files are also mirrored to the
+cloud and a newer cloud file replaces the local slot when the session starts; this produces no event
+([Saved games in the cloud](../manual/runtime.md#saved-games-in-the-cloud)).

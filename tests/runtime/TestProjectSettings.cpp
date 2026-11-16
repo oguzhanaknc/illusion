@@ -61,6 +61,7 @@ TEST_CASE("project settings default to a game that needs no settings files")
     CHECK(settings.window.height == 720);
     CHECK(settings.window.mode == WindowMode::Windowed);
     CHECK(settings.window.resizable);
+    CHECK(settings.save.cloud);
 
     Fixture f;
     ProjectSettings loaded;
@@ -87,6 +88,9 @@ TEST_CASE("project settings round-trip through their settings files")
     window.height = 600;
     window.mode = WindowMode::Borderless;
     window.resizable = false;
+    SaveSettings save;
+    save.cloud = false;
+    REQUIRE(f.files.writeText(kSaveSettingsFile, settingsFile(save)) == FileError::None);
     REQUIRE(f.files.writeText(kPhysicsSettingsFile, settingsFile(physics)) == FileError::None);
     REQUIRE(f.files.writeText(kAudioSettingsFile, settingsFile(audio)) == FileError::None);
     REQUIRE(f.files.writeText(kInputSettingsFile, settingsFile(input)) == FileError::None);
@@ -107,6 +111,7 @@ TEST_CASE("project settings round-trip through their settings files")
     CHECK(settings.window.height == 600);
     CHECK(settings.window.mode == WindowMode::Borderless);
     CHECK_FALSE(settings.window.resizable);
+    CHECK_FALSE(settings.save.cloud);
 }
 
 TEST_CASE("window settings name their mode and reject an unknown one")

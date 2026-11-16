@@ -982,6 +982,33 @@ Design: [ADR 0058](docs/adr/0058-saved-games.md). Work packages, one pull reques
   `SaveSettings` (`settings:/save.json`) and the cloud mirror through `StoreService`. Done: a GPU test saves
   a slot with its image; cloud tests with a test store cover newer-local, newer-cloud, a corrupt cloud file
   and no quota.
+  ✅ Done: `SaveSystem::write()` calls `SaveSystemDesc::thumbnail` on the calling thread (its buffer reused,
+  nothing without a function) and the save thread writes the PNG sidecar `<slot>.png` after the slot file
+  (`encodePng`, `illusion::assets` linked privately); a failed image is logged, drops the previous save's image
+  and never fails the save; the scan and every request keep `SaveSlotRecord::screenshot` current, `remove()`
+  and `importFile()` delete the image. `FrameCapture` (`illusion/render/FrameCapture.hpp`: a blocking
+  `ReadbackRing` read and `downscaleRgba8Srgb()`, centre crop to 16:9 and a box filter in linear light) is
+  shared by the player's `--screenshot` and its slot images, and by Play mode
+  (`PlaySession::setSaveThumbnail()`, which the editor sets to the Game view's target, windowed and headless
+  with a GPU); only a save reads the frame back. `SaveSettings` (`settings:/save.json`, `cloud`, default on) is
+  reflected and loaded with the other project settings and registered in the editor's settings catalogue; the
+  showcase turns it off. `StoreBackend::cloudIsRemote()` (null store false, Steam true) and
+  `GameSessionDesc::storeCloudIsRemote` gate the cloud mirror in `SaveSystemService`: the first update imports
+  each valid `<slot>.save` cloud file (`SaveSystem::importFile()`: newer `savedAt` wins, the local file becomes
+  the backup, equal or older changes nothing, a local `NewerVersion` file is kept), saved writes (with
+  `keepFile`) go to `writeCloudFile()` and removals to `removeCloudFile()`; imports make no events and do not
+  count for `busy()`, cloud failures are only logged. `SaveCompletion` says which call made it
+  (`SaveRequestType`). Tests: the image sidecar (written, listed after a restart, dropped by a save without
+  one, removed, a failing image step, a wrong size), a write stopped after each of nine steps (six of the slot,
+  three of the image), cloud newer/older/equal/corrupt/only in the cloud, a full cloud, mirrored removals,
+  `cancel()` during imports, the session's gating (remote, setting, availability, null store), the CPU scaling,
+  and a GPU test that saves a slot from a rendered frame and decodes a 320 x 180 PNG.
+  Open: a local slot that is newer than its cloud file or absent from the cloud is not uploaded at start; stale
+  `*.tmp-*` files are still never deleted; `UiRenderAssets` caches an image by its path for good, so a `UiImage`
+  showing `SaveSlotInfo::screenshot` keeps the first image of a slot after the slot is saved again (it needs a
+  reload of the file through `AssetStreamer::reload()` and a cache that drops reloaded images); the player's
+  streamer trusts its packed cache (`verifySources` off), which `user:` images are not part of, untested; the
+  Game view image in Play mode is the last one the editor rendered, stale while the Game panel is hidden.
 - SAVE-4 (`mechanic`): Editor and documentation. Commands `saves.list`, `saves.write`, `saves.load`,
   `saves.remove` (reference, goldens, fuzz); Save and Load in the tech demo's pause menu; EN/TR manual page
   "Saved games", the scripting API reference, a section in the HUD tutorial, the architecture page,

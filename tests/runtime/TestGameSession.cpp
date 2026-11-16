@@ -1,6 +1,7 @@
 #include "FontTestSupport.hpp"
 #include "TestSupport.hpp"
 #include "physics/PhysicsTestSupport.hpp"
+#include "save/CloudTestStore.hpp"
 
 #include <illusion/audio/AudioComponents.hpp>
 #include <illusion/audio/AudioService.hpp>
@@ -1344,4 +1345,50 @@ TEST_CASE("a game session provides SaveService only with a save system, and drop
     CHECK(heroX(session->world()) == 3.0f);
     f.saves->waitIdle();
     CHECK_FALSE(f.files.exists("assets:/saves/slot2.save"));
+}
+
+TEST_CASE("a game session mirrors slot files only to an available remote cloud with SaveSettings::cloud on")
+{
+    struct Case
+    {
+        bool remote = true;
+        bool cloudSetting = true;
+        bool available = true;
+        bool mirrored = true;
+    };
+    for (const Case c : {Case{true, true, true, true}, Case{false, true, true, false},
+                         Case{true, false, true, false}, Case{true, true, false, false}})
+    {
+        CAPTURE(c.remote);
+        CAPTURE(c.cloudSetting);
+        CAPTURE(c.available);
+        SaveFixture f;
+        test::CloudTestStore cloud;
+        cloud.isAvailable = c.available;
+        f.desc.store = &cloud;
+        f.desc.storeCloudIsRemote = c.remote;
+        f.desc.settings.save.cloud = c.cloudSetting;
+        auto session = f.create();
+        session->world().create(Name{"Hero"}, Transform{}, Saved{});
+        session->start();
+        REQUIRE(session->saves()->save("slot1", SaveMetadata{}).hasValue());
+        session->update(kStep);
+        session->update(kStep);
+        CHECK(cloud.files.contains("slot1.save") == c.mirrored);
+        session->stop();
+    }
+
+    // The null store keeps its cloud files locally: nothing is mirrored to it.
+    SaveFixture f;
+    NullStoreService store(f.files, NullStoreDesc{.cloudDirectory = "assets:/cloud"});
+    f.desc.store = &store;
+    f.desc.storeCloudIsRemote = store.cloudIsRemote();
+    auto session = f.create();
+    session->world().create(Name{"Hero"}, Transform{}, Saved{});
+    session->start();
+    REQUIRE(session->saves()->save("slot1", SaveMetadata{}).hasValue());
+    session->update(kStep);
+    session->update(kStep);
+    CHECK_FALSE(store.cloudIsRemote());
+    CHECK_FALSE(store.cloudFileExists("slot1.save"));
 }

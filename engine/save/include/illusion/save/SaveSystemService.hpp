@@ -19,6 +19,7 @@ namespace illusion
 
 class GuidGenerator;
 class SaveSystem;
+class StoreService;
 class World;
 
 /// SaveService over a SaveSystem; the SaveSystem must outlive it. GameSession owns one and calls update()
@@ -27,8 +28,12 @@ class World;
 class SaveSystemService final : public SaveService
 {
 public:
-    /// Serves @p system; null makes a service that is not available().
-    explicit SaveSystemService(SaveSystem* system);
+    /// Serves @p system; null makes a service that is not available(). With @p cloud (a store whose cloud
+    /// files are not local files) slot files are mirrored there: the first update() takes every
+    /// `<slot>.save` cloud file that is newer than the local slot (SaveSystem::importFile()), each written
+    /// slot is copied with writeCloudFile() and each removed one removed with removeCloudFile(), on the
+    /// calling thread. Cloud failures (no quota, a corrupt cloud file) are logged and never become events.
+    explicit SaveSystemService(SaveSystem* system, StoreService* cloud = nullptr);
     ~SaveSystemService() override;
 
     /// @name SaveService

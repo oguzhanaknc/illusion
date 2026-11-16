@@ -136,6 +136,19 @@ struct Fixture
         return result;
     }
 
+    // desc() with a grey slot image.
+    [[nodiscard]] SaveSystemDesc withImage(SaveStorage* storage = nullptr)
+    {
+        SaveSystemDesc result = desc(storage);
+        result.thumbnail = [](SaveThumbnail& thumbnail) {
+            thumbnail.width = kSaveThumbnailWidth;
+            thumbnail.height = kSaveThumbnailHeight;
+            thumbnail.rgba.assign(static_cast<usize>(thumbnail.width) * thumbnail.height * 4, std::byte{128});
+            return true;
+        };
+        return result;
+    }
+
     // The x position of the saved Hero (found again, since a load recreates it).
     [[nodiscard]] f32 heroX()
     {
@@ -458,21 +471,22 @@ TEST_CASE(
 TEST_CASE("a write stopped after each step leaves the previous save loadable")
 {
     // Steps of replacing a slot: the backup's temporary file is written, flushed and renamed, then the slot
-    // file's temporary file is written, flushed and renamed.
-    constexpr u32 kSteps = 6;
+    // file's temporary file is written, flushed and renamed; then the same three steps of its image.
+    constexpr u32 kSlotSteps = 6;
+    constexpr u32 kSteps = kSlotSteps + 3;
     for (u32 stopAfter = 0; stopAfter <= kSteps; ++stopAfter)
     {
         CAPTURE(stopAfter);
         Fixture f;
         {
-            SaveSystem system(f.desc());
+            SaveSystem system(f.withImage());
             SaveSystemService service(&system);
             f.saveNow(service, "slot1", "previous");
         }
         f.setHeroX(4.0f);
         {
             StoppingStorage stopping(f.files, stopAfter);
-            SaveSystem system(f.desc(&stopping));
+            SaveSystem system(f.withImage(&stopping));
             REQUIRE(system.available());
             SaveSystemService service(&system);
             REQUIRE(service.save("slot1", SaveMetadata{"next", 0.0, 0, {}}).hasValue());
@@ -480,18 +494,21 @@ TEST_CASE("a write stopped after each step leaves the previous save loadable")
             f.update(service);
             const std::vector<Seen> seen = Fixture::events(service);
             REQUIRE(seen.size() == 1);
-            CHECK(seen[0].type == (stopAfter == kSteps ? SaveEventType::Saved : SaveEventType::Failed));
+            // A failure at the image step does not fail the save.
+            CHECK(seen[0].type == (stopAfter >= kSlotSteps ? SaveEventType::Saved : SaveEventType::Failed));
         }
 
         // The game starts again: the slot is listed and loads, with the new state only once the last
-        // rename happened.
+        // rename of the slot file happened. An image is listed in every case: the new one, or the previous
+        // save's, which the crash left (ADR 0058).
         SaveSystem system(f.desc());
         SaveSystemService service(&system);
         f.update(service);
         std::array<SaveSlotInfo, 4> slots{};
         REQUIRE(service.slots(slots) == 1);
         CHECK(slots[0].state == SaveSlotState::Ok);
-        CHECK(slots[0].metadata.title == (stopAfter == kSteps ? "next" : "previous"));
+        CHECK(slots[0].metadata.title == (stopAfter >= kSlotSteps ? "next" : "previous"));
+        CHECK(slots[0].screenshot == "user:/saves/slot1.png");
         f.setHeroX(8.0f);
         const Seen loaded = f.loadFresh("slot1");
         CHECK(loaded.type == SaveEventType::Loaded);

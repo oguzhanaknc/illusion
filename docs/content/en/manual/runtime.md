@@ -128,6 +128,7 @@ on a file that cannot be read or holds invalid values.
 | `settings:/input.json` | `InputSettings` | `actions` (an [input actions asset](actions.md#input-actions-assets)), `gamepadsInBackground` |
 | `settings:/render.json` | `RenderSettings` | `vsync`, `maxFramesPerSecond`, `renderScale` |
 | `settings:/window.json` | `WindowSettings` | `width`, `height` (pixels), `mode` (`Windowed`, `Borderless` or `Fullscreen`), `resizable` |
+| `settings:/save.json` | `SaveSettings` | `cloud` (mirror slot files to the store's cloud, on by default; see [Saved games in the cloud](#saved-games-in-the-cloud)) |
 
 ```json
 {
@@ -259,6 +260,25 @@ Which store a game gets:
 `NullStoreService` reports `available()` false and `storeName()` "none". It keeps achievements, progress and
 stats in memory for the session, so game logic can be tested, and stores cloud files as files (100 MiB in
 all), so saves persist across runs without a store. `openOverlay()` returns false and `glyphPath()` nothing.
+
+### Saved games in the cloud
+
+When the store keeps its cloud files remotely (`StoreBackend::cloudIsRemote()`: Steam yes, `NullStoreService`
+no), it is `available()` and `SaveSettings::cloud` is on, `SaveService` mirrors the slot files: each written slot
+is copied with `writeCloudFile("<slot>.save")` and each removed one removed with `removeCloudFile()`. When the
+session starts, a `<slot>.save` cloud file whose `savedAt` is newer than the local slot's replaces it, and the
+local file becomes the slot's backup; an older or equally old cloud file changes nothing. The host sets
+`GameSessionDesc::storeCloudIsRemote` from its store. Cloud failures (no room, a corrupt cloud file) are only
+logged: the save itself still succeeds, and the game sees no event for them. The null store's cloud files are
+local files already, so nothing is mirrored there.
+
+### Slot images
+
+A saved slot gets an image: the last presented frame, cropped to 16:9 and scaled to 320 x 180, written as
+`<slot>.png` next to the slot file (`SaveSlotInfo::screenshot` holds its virtual path, or is empty). The player
+reads its view back, Play mode the Game view (the windowed or headless editor with a GPU); only a save reads the
+frame back. A slot imported from the cloud has no image until it is saved again. The image is not part of the
+atomic write: after a crash a slot can show the image of its previous save.
 
 `SteamStoreService` (library `illusion::steam`) is built only when the CMake variable `ILLUSION_STEAMWORKS_SDK`
 names a Steamworks SDK, which you download from Valve; illusion never ships or downloads it. It maps

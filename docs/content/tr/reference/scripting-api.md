@@ -182,5 +182,10 @@ yeniden bulun.
 | `available` | Host'un bir kayıt klasörü olup olmadığı |
 | `save`, `load`, `remove` | Bir slotu yazma, uygulama ya da silme isteğini kuyruğa ekler (1 ile 32 arası harf, rakam, `_`, `-`) |
 | `busy` | Bir isteğin olayını henüz vermemiş olup olmadığı |
-| `slots`, `slot` | Slot listesi (ad, `SaveMetadata`, `savedAt`, `SaveSlotState`) çağıranın span'ine, ya da tek bir slot; hiçbir dosya okunmaz |
+| `slots`, `slot` | Slot listesi (ad, `SaveMetadata`, `savedAt`, `SaveSlotState`, `screenshot`) çağıranın span'ine, ya da tek bir slot; hiçbir dosya okunmaz |
 | `pollEvents` | Son update'in olaylarını (`Saved`, `Loaded`, `LoadedBackup`, `Removed`, bir `SaveError` ile `Failed`) bir span'e kopyalar; toplamı döndürür |
+
+`SaveSlotInfo::screenshot`, slotun 320 x 180 PNG'sinin sanal yoludur (player'da `user:/saves/<slot>.png`) ya da
+slotun görüntüsü yoksa boştur. Bulutu uzakta olan bir mağazayla slot dosyaları buluta da yansıtılır ve oturum
+başladığında daha yeni bir bulut dosyası yerel slotun yerini alır; bu hiçbir olay üretmez
+([Buluttaki kayıtlı oyunlar](../manual/runtime.md#buluttaki-kayitli-oyunlar)).

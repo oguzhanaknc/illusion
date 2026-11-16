@@ -3,6 +3,7 @@
 #include <illusion/save/SaveCapture.hpp>
 #include <illusion/save/SaveSystem.hpp>
 #include <illusion/save/SaveSystemService.hpp>
+#include <illusion/store/StoreService.hpp>
 
 #include <algorithm>
 #include <limits>
@@ -42,13 +43,15 @@ struct OwnedEvent
 };
 
 constexpr usize kReservedRequests = 16;
+constexpr std::string_view kCloudSuffix = ".save";
 
 } // namespace
 
 struct SaveSystemService::Impl
 {
-    explicit Impl(SaveSystem* saveSystem)
+    Impl(SaveSystem* saveSystem, StoreService* store)
         : system(saveSystem)
+        , cloud(saveSystem != nullptr ? store : nullptr)
         , acceptFrom(saveSystem != nullptr ? saveSystem->nextTicket() : 0)
     {
         pending.reserve(kReservedRequests);
@@ -93,7 +96,8 @@ struct SaveSystemService::Impl
             }
             const SaveMetadata metadata{request.title, request.playSeconds, request.gameVersion,
                                         request.custom};
-            sent = system->write(request.slot, metadata, system->now(), std::move(captured->world));
+            sent = system->write(request.slot, metadata, system->now(), std::move(captured->world),
+                                 cloud != nullptr);
             break;
         }
         case PendingType::Load:
@@ -113,11 +117,98 @@ struct SaveSystemService::Impl
         }
     }
 
+    // Queues every `<slot>.save` cloud file for SaveSystem::importFile(), which keeps the newer one.
+    void importCloudFiles()
+    {
+        const u32 count = cloud->listCloudFiles({});
+        std::vector<std::string_view> names(count);
+        const u32 listed = std::min(cloud->listCloudFiles(names), count);
+        for (u32 i = 0; i < listed; ++i)
+        {
+            const std::string_view name = names.at(i);
+            if (!name.ends_with(kCloudSuffix) ||
+                !isValidSaveSlotName(name.substr(0, name.size() - kCloudSuffix.size())))
+            {
+                continue;
+            }
+            const std::string slot(name.substr(0, name.size() - kCloudSuffix.size()));
+            const Expected<u64, StoreError> size = cloud->readCloudFile(name, {});
+            if (!size)
+            {
+                ILL_LOG_WARN("Save", "cannot read the cloud file '{}' ({})", name,
+                             storeErrorName(size.error()));
+                continue;
+            }
+            if (*size > kSaveHeaderBytes + kMaxSavePayloadBytes)
+            {
+                ILL_LOG_WARN("Save", "ignoring the cloud file '{}': {} bytes is larger than a slot file",
+                             name, *size);
+                continue;
+            }
+            std::vector<std::byte> bytes(static_cast<usize>(*size));
+            const Expected<u64, StoreError> read = cloud->readCloudFile(name, bytes);
+            if (!read || *read != bytes.size())
+            {
+                ILL_LOG_WARN("Save", "cannot read the cloud file '{}' ({})", name,
+                             read ? std::string_view("its size changed") : storeErrorName(read.error()));
+                continue;
+            }
+            if (const Expected<u64, SaveError> queued = system->importFile(slot, std::move(bytes)); !queued)
+            {
+                ILL_LOG_WARN("Save", "cannot take the cloud file '{}' ({})", name,
+                             saveErrorName(queued.error()));
+            }
+        }
+    }
+
+    // Mirrors a finished write or removal to the cloud; failures are only logged.
+    void mirror(const SaveCompletion& done)
+    {
+        if (cloud == nullptr)
+        {
+            return;
+        }
+        std::string name = done.slot;
+        name += kCloudSuffix;
+        if (done.request == SaveRequestType::Write && done.type == SaveEventType::Saved && !done.file.empty())
+        {
+            if (Expected<void, StoreError> written = cloud->writeCloudFile(name, done.file); !written)
+            {
+                ILL_LOG_WARN("Save", "cannot copy slot '{}' to the cloud ({})", done.slot,
+                             storeErrorName(written.error()));
+            }
+        }
+        else if (done.request == SaveRequestType::Remove && done.type == SaveEventType::Removed)
+        {
+            if (Expected<void, StoreError> removed = cloud->removeCloudFile(name);
+                !removed && removed.error() != StoreError::NotFound)
+            {
+                ILL_LOG_WARN("Save", "cannot remove slot '{}' from the cloud ({})", done.slot,
+                             storeErrorName(removed.error()));
+            }
+        }
+    }
+
     // Turns a finished request into an event, applying a load to @p world.
     void finish(SaveCompletion& done, World& world)
     {
+        // Writes and removals happen even after cancel(), so the cloud follows them too.
+        mirror(done);
         if (done.ticket < acceptFrom)
         {
+            return;
+        }
+        if (done.request == SaveRequestType::Import)
+        {
+            if (done.type == SaveEventType::Failed)
+            {
+                ILL_LOG_WARN("Save", "ignoring the cloud file of slot '{}' ({})", done.slot,
+                             saveErrorName(done.error));
+            }
+            else if (done.imported)
+            {
+                ILL_LOG_INFO("Save", "slot '{}' was replaced by its newer cloud file", done.slot);
+            }
             return;
         }
         --inFlight;
@@ -150,8 +241,10 @@ struct SaveSystemService::Impl
     }
 
     SaveSystem* system = nullptr;
-    u64 acceptFrom = 0; // results of earlier tickets are ignored (cancel())
-    u32 inFlight = 0;   // requests sent whose results were not taken yet
+    StoreService* cloud = nullptr;
+    bool cloudImported = false; // the first update queued the cloud's slot files
+    u64 acceptFrom = 0;         // results of earlier tickets are ignored (cancel())
+    u32 inFlight = 0;           // requests sent whose results were not taken yet
     u64 slotsVersion = std::numeric_limits<u64>::max();
     std::vector<Pending> pending;
     std::vector<SaveCompletion> completed;
@@ -161,8 +254,8 @@ struct SaveSystemService::Impl
     std::vector<SaveSlotInfo> infos;
 };
 
-SaveSystemService::SaveSystemService(SaveSystem* system)
-    : m_impl(std::make_unique<Impl>(system))
+SaveSystemService::SaveSystemService(SaveSystem* system, StoreService* cloud)
+    : m_impl(std::make_unique<Impl>(system, cloud))
 {
 }
 
@@ -261,6 +354,11 @@ void SaveSystemService::update(World& world, GuidGenerator* guids, bool wait)
     for (SaveCompletion& done : impl.completed)
     {
         impl.finish(done, world);
+    }
+    if (impl.cloud != nullptr && !impl.cloudImported && impl.system->available())
+    {
+        impl.cloudImported = true;
+        impl.importCloudFiles();
     }
     for (Pending& request : impl.pending)
     {

@@ -6,6 +6,7 @@ add_library(illusion_render STATIC
     src/DebugDraw.cpp
     src/DebugTriangle.cpp
     src/EnvironmentBaker.cpp
+    src/FrameCapture.cpp
     src/GpuCulling.cpp
     src/ParticleRenderer.cpp
     src/PostProcessor.cpp

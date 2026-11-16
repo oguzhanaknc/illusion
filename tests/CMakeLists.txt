@@ -70,6 +70,7 @@ add_executable(illusion_tests
     physics/TestPhysicsHierarchy.cpp
     physics/TestPhysicsWorld.cpp
     player/TestPlayerSetup.cpp
+    render/TestFrameCapture.cpp
     render/TestPostProcess.cpp
     render/TestRenderComponents.cpp
     render/TestShadows.cpp
@@ -79,6 +80,7 @@ add_executable(illusion_tests
     runtime/TestGameSession.cpp
     runtime/TestProjectSettings.cpp
     save/TestSaveCapture.cpp
+    save/TestSaveCloud.cpp
     save/TestSaveFile.cpp
     save/TestSaveSystem.cpp
     showcase/TestShowcaseModule.cpp
@@ -287,13 +289,14 @@ add_executable(illusion_gpu_tests
     gpu/TestSceneRenderer.cpp
     gpu/TestRendererExtensions.cpp
     gpu/TestResourceLifetime.cpp
+    gpu/TestSaveThumbnail.cpp
     gpu/TestSwapchain.cpp
     gpu/TestTextureStreaming.cpp
     gpu/TestTextureUpload.cpp
     gpu/TestUiRenderer.cpp
     gpu/TestUploadQueue.cpp)
 target_include_directories(illusion_gpu_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
-target_link_libraries(illusion_gpu_tests PRIVATE illusion::render illusion::doctest)
+target_link_libraries(illusion_gpu_tests PRIVATE illusion::render illusion::save illusion::doctest)
 target_compile_definitions(illusion_gpu_tests PRIVATE ILLUSION_TEST_DATA_DIR="${CMAKE_CURRENT_SOURCE_DIR}/data"
     ILLUSION_TEST_FONT="${ILLUSION_TEST_FONT}")
 illusion_configure_target(illusion_gpu_tests)

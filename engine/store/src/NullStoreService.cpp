@@ -80,6 +80,11 @@ void NullStoreService::update()
     ILL_PROFILE_SCOPE();
 }
 
+bool NullStoreService::cloudIsRemote() const noexcept
+{
+    return false;
+}
+
 bool NullStoreService::available() const
 {
     return false;

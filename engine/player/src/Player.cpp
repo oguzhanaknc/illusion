@@ -26,6 +26,7 @@
 #include <illusion/platform/Window.hpp>
 #include <illusion/player/Player.hpp>
 #include <illusion/render/Components.hpp>
+#include <illusion/render/FrameCapture.hpp>
 #include <illusion/render/RenderAssets.hpp>
 #include <illusion/render/RenderDevice.hpp>
 #include <illusion/render/RenderResources.hpp>
@@ -44,7 +45,6 @@
 #include <chrono>
 #include <cmath>
 #include <cstdio>
-#include <cstring>
 #include <format>
 #include <fstream>
 #include <memory>
@@ -218,41 +218,16 @@ UVec2 scaledSize(UVec2 size, f32 renderScale) noexcept
 }
 
 // Reads @p texture back and writes it to @p path as PNG; fails saying why.
-Expected<void, std::string> writeScreenshot(RenderDevice& device, nvrhi::ITexture* texture, UVec2 size,
+Expected<void, std::string> writeScreenshot(FrameCapture& capture, nvrhi::ITexture* texture, UVec2 size,
                                             const std::filesystem::path& path)
 {
-    nvrhi::IDevice* gpu = device.device();
-    nvrhi::TextureDesc readbackDesc = texture->getDesc();
-    readbackDesc.isRenderTarget = false;
-    readbackDesc.debugName = "Player screenshot";
-    readbackDesc.initialState = nvrhi::ResourceStates::CopyDest;
-    nvrhi::StagingTextureHandle readback =
-        gpu->createStagingTexture(readbackDesc, nvrhi::CpuAccessMode::Read);
-    if (!readback)
+    Image image;
+    image.format = ImageFormat::RGBA8Srgb;
+    if (!capture.read(texture, image.data))
     {
-        return unexpected(std::string("cannot create the readback texture"));
+        return unexpected(std::string("cannot read the frame back"));
     }
-    nvrhi::CommandListHandle commands = gpu->createCommandList();
-    commands->open();
-    commands->copyTexture(readback, nvrhi::TextureSlice(), texture, nvrhi::TextureSlice());
-    commands->close();
-    gpu->executeCommandList(commands);
-    gpu->waitForIdle();
-
-    Image image = makeSolidImage(size.x, size.y, Vec4(0.0f), ImageFormat::RGBA8Srgb);
-    usize rowPitch = 0;
-    const auto* bytes = static_cast<const std::byte*>(
-        gpu->mapStagingTexture(readback, nvrhi::TextureSlice(), nvrhi::CpuAccessMode::Read, &rowPitch));
-    if (bytes == nullptr)
-    {
-        return unexpected(std::string("cannot map the readback texture"));
-    }
-    const usize row = static_cast<usize>(size.x) * 4;
-    for (u32 y = 0; y < size.y; ++y)
-    {
-        std::memcpy(image.data.data() + y * row, bytes + y * rowPitch, row);
-    }
-    gpu->unmapStagingTexture(readback);
+    image.mips.push_back(ImageMip{size.x, size.y, 0, image.data.size()});
 
     const std::vector<std::byte> png = encodePng(image);
     if (png.empty())
@@ -387,9 +362,28 @@ int runGame(const PlayerDesc& desc, const PlayerOptions& options, VirtualFileSys
         }
     }
 
+    const std::unique_ptr<FrameCapture> capture = FrameCapture::create(*device);
+    if (!capture)
+    {
+        return report(PlayerFailure{PlayerExit::StartFailed,
+                                    "cannot create the frame readback",
+                                    PlayerProblem::GraphicsFailed,
+                                    {}},
+                      desc.name, dialogs);
+    }
+    ViewTarget view;
+    bool rendered = false;
+
     SaveSystemDesc savesDesc;
     savesDesc.files = &files;
     savesDesc.directory = kPlayerSaveDirectory;
+    // A save shows the frame presented last, read back only when a save asks for it.
+    savesDesc.thumbnail = [&capture, &view, &rendered](SaveThumbnail& thumbnail) {
+        thumbnail.width = kSaveThumbnailWidth;
+        thumbnail.height = kSaveThumbnailHeight;
+        return rendered &&
+               capture->readScaled(view.texture, {kSaveThumbnailWidth, kSaveThumbnailHeight}, thumbnail.rgba);
+    };
     SaveSystem saves(savesDesc);
     GameSessionDesc sessionDesc;
     sessionDesc.jobs = &jobs;
@@ -400,6 +394,7 @@ int runGame(const PlayerDesc& desc, const PlayerOptions& options, VirtualFileSys
     sessionDesc.renderAssets = &renderAssets;
     sessionDesc.gamepads = gamepads.get();
     sessionDesc.store = store.get();
+    sessionDesc.storeCloudIsRemote = store->cloudIsRemote();
     sessionDesc.saves = &saves;
     sessionDesc.uiAssets = &uiAssets;
     sessionDesc.fixedStep = options.fixedStep;
@@ -423,8 +418,6 @@ int runGame(const PlayerDesc& desc, const PlayerOptions& options, VirtualFileSys
     nvrhi::IDevice* gpu = device->device();
     nvrhi::CommandListHandle commands = gpu->createCommandList();
     std::unique_ptr<detail::PresentPass> present;
-    ViewTarget view;
-    bool rendered = false;
     FrameClock clock;
     f64 nextFrame = monotonicSeconds();
     const f64 frameSeconds = settings.render.maxFramesPerSecond > 0
@@ -531,7 +524,7 @@ int runGame(const PlayerDesc& desc, const PlayerOptions& options, VirtualFileSys
     {
         const Expected<void, std::string> written =
             rendered
-                ? writeScreenshot(*device, view.texture, view.size, options.screenshot)
+                ? writeScreenshot(*capture, view.texture, view.size, options.screenshot)
                 : Expected<void, std::string>(unexpected(std::string("no frame was rendered (no Camera)")));
         if (written)
         {

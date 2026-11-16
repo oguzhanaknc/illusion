@@ -38,9 +38,11 @@
 #include <illusion/platform/Process.hpp>
 #include <illusion/platform/Window.hpp>
 #include <illusion/render/Components.hpp>
+#include <illusion/render/FrameCapture.hpp>
 #include <illusion/render/RenderDevice.hpp>
 #include <illusion/render/Swapchain.hpp>
 #include <illusion/save/SaveComponents.hpp>
+#include <illusion/save/SaveSystem.hpp>
 #include <illusion/ui/UiWorld.hpp>
 
 #include <charconv>
@@ -255,6 +257,32 @@ struct EditorUi
     }
 };
 
+// Gives the slots that Play mode saves the Game view's last image (ADR 0058) while it lives.
+class GameViewThumbnails : NonCopyable
+{
+public:
+    GameViewThumbnails(PlaySession& play, RenderDevice& device, viewport::ViewportService& viewports)
+        : m_play(play)
+        , m_capture(FrameCapture::create(device))
+    {
+        if (m_capture)
+        {
+            play.setSaveThumbnail([capture = m_capture.get(), &viewports](SaveThumbnail& thumbnail) {
+                thumbnail.width = kSaveThumbnailWidth;
+                thumbnail.height = kSaveThumbnailHeight;
+                return capture->readScaled(viewports.target("game"),
+                                           {kSaveThumbnailWidth, kSaveThumbnailHeight}, thumbnail.rgba);
+            });
+        }
+    }
+
+    ~GameViewThumbnails() { m_play.setSaveThumbnail({}); }
+
+private:
+    PlaySession& m_play;
+    std::unique_ptr<FrameCapture> m_capture;
+};
+
 UiScreenshot screenshotOf(const Image& image)
 {
     const std::vector<std::byte> png = encodePng(image);
@@ -300,6 +328,11 @@ int runHeadless(const Arguments& arguments, EditorContext& editor, PlaySession& 
     else
     {
         ILL_LOG_INFO("editor", "running without a GPU");
+    }
+    std::optional<GameViewThumbnails> thumbnails;
+    if (viewports)
+    {
+        thumbnails.emplace(play, *device, *viewports);
     }
     if (arguments.permissions)
     {
@@ -406,6 +439,7 @@ int runWindowed(const Arguments& arguments, EditorContext& editor, PlaySession& 
     {
         return 1;
     }
+    const GameViewThumbnails thumbnails(play, *device, *viewports);
     ui.shell->setAgents(&server);
     if (arguments.permissions)
     {

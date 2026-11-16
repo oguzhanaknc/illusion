@@ -99,6 +99,9 @@ struct GameSessionDesc
     /// The saved games the modules see as SaveService (ADR 0058); null provides no SaveService. One session
     /// at a time may use it.
     SaveSystem* saves = nullptr;
+    /// True when store keeps its cloud files remotely (StoreBackend::cloudIsRemote()); slot files are then
+    /// mirrored to it unless SaveSettings::cloud is off.
+    bool storeCloudIsRemote = false;
     /// Fonts and images of the UI (UiRenderAssets); null (headless) lays the UI out with solid colours only.
     UiAssets* uiAssets = nullptr;
     AudioOutput audioOutput = AudioOutput::Device; ///< Where the session's sound goes.

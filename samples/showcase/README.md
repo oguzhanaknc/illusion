@@ -6,7 +6,7 @@ An editor project whose scene uses every saved engine Component with every field
 `assets/textures/smoke.png.import.json` is a non-default import settings sidecar (`"quality": "high"`), written
 by `build.jsonl` through `asset.set_import_settings`.
 `settings/window.json` (1600x900, not resizable) is written the same way by `project.settings_set` on
-`illusion.WindowSettings`.
+`illusion.WindowSettings`; `settings/save.json` (`cloud` off) on `illusion.SaveSettings`.
 `assets/input/showcase.input` holds the default bindings of the UI actions `ui.navigate`, `ui.submit` and
 `ui.cancel` (`input.action_define`); `settings/input.json` names it (`project.settings_set` on
 `illusion.InputSettings`).

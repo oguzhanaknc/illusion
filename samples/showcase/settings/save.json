@@ -1,0 +1,9 @@
+{
+  "format": "illusion.settings",
+  "type": "illusion.SaveSettings",
+  "version": 1,
+  "value": {
+    "cloud": false
+  }
+}
+

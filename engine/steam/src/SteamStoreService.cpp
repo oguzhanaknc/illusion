@@ -121,6 +121,11 @@ void SteamStoreService::update()
     SteamAPI_RunCallbacks();
 }
 
+bool SteamStoreService::cloudIsRemote() const noexcept
+{
+    return true;
+}
+
 bool SteamStoreService::available() const
 {
     return SteamUser() != nullptr && SteamUser()->BLoggedOn();

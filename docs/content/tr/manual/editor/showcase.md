@@ -19,7 +19,8 @@ rüzgâr, bir lamba uğultusu, bir selamlama ve bir tık, ve bir nine-slice pane
 (Apache-2.0, lisansı `assets/fonts/LICENSE.txt` içinde). Sahne elle yazılmaz: `build.jsonl` onu bir ajanın yapacağı gibi
 Editor commands ile kurar ve kaydeder. Aynı dosya, duman sprite'ına `asset.set_import_settings` ile bir içe
 aktarma ayarları sidecar'ı (`"quality": "high"`) ve `project.settings_set` ile varsayılan olmayan bir pencere
-(1600x900, yeniden boyutlandırılamaz; `settings/window.json`) da verir. Yeniden kurmak için:
+(1600x900, yeniden boyutlandırılamaz; `settings/window.json`) ile bulut yansıtması kapalı kayıtlı oyunlar
+(`settings/save.json`) da verir. Yeniden kurmak için:
 
 ```bash
 python samples/showcase/tools/make_assets.py

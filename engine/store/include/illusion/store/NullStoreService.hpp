@@ -64,6 +64,7 @@ public:
     /// @name StoreBackend
     /// @{
     void update() override;
+    [[nodiscard]] bool cloudIsRemote() const noexcept override;
     [[nodiscard]] bool available() const override;
     [[nodiscard]] std::string_view storeName() const override;
     [[nodiscard]] std::string_view userName() const override;

@@ -8,6 +8,7 @@
 {"call": "material.create", "params": {"path": "assets:/materials/ground.material", "value": {"material": {"name": "Ground", "baseColorFactor": [0.3, 0.34, 0.3, 1], "roughnessFactor": 0.9}}, "overwrite": true}}
 {"call": "asset.set_import_settings", "params": {"path": "assets:/textures/smoke.png", "value": {"texture": {"quality": "high"}}}}
 {"call": "project.settings_set", "params": {"type": "illusion.WindowSettings", "value": {"width": 1600, "height": 900, "resizable": false}}}
+{"call": "project.settings_set", "params": {"type": "illusion.SaveSettings", "value": {"cloud": false}}}
 {"call": "project.settings_set", "params": {"type": "illusion.ExportSettings", "value": {"productName": "Showcase", "organization": "illusion", "identifier": "dev.illusion.showcase", "copyright": "Copyright 2026 the illusion contributors", "icon": "assets:/icons/showcase.png", "exclude": ["unused/**"]}}}
 {"call": "input.action_define", "params": {"asset": "assets:/input/showcase.input", "name": "ui.navigate", "type": "Vector2", "bindings": ["Keys.Up.Down.Left.Right", "Keys.W.S.A.D", "Stick.Left", "Stick.DPad"]}}
 {"call": "input.action_define", "params": {"asset": "assets:/input/showcase.input", "name": "ui.submit", "type": "Button", "bindings": ["Key.Enter", "Key.Space", "Gamepad.South"]}}

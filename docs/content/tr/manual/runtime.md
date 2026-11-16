@@ -132,6 +132,7 @@ adını vererek başarısız olur.
 | `settings:/input.json` | `InputSettings` | `actions` (bir [input action Asset'i](actions.md#input-action-assetleri)), `gamepadsInBackground` |
 | `settings:/render.json` | `RenderSettings` | `vsync`, `maxFramesPerSecond`, `renderScale` |
 | `settings:/window.json` | `WindowSettings` | `width`, `height` (piksel), `mode` (`Windowed`, `Borderless` veya `Fullscreen`), `resizable` |
+| `settings:/save.json` | `SaveSettings` | `cloud` (slot dosyalarını mağazanın bulutuna yansıtır, varsayılan olarak açık; bkz. [Buluttaki kayıtlı oyunlar](#buluttaki-kayitli-oyunlar)) |
 
 ```json
 {
@@ -266,6 +267,25 @@ Bir oyunun hangi mağazayı aldığı:
 istatistikleri oturum boyunca bellekte tutar, böylece oyun mantığı test edilebilir; bulut dosyalarını dosya
 olarak saklar (toplam 100 MiB), böylece kayıtlar mağaza olmadan da çalıştırmalar arasında kalır.
 `openOverlay()` false, `glyphPath()` hiçbir şey döner.
+
+### Buluttaki kayıtlı oyunlar
+
+Mağaza bulut dosyalarını uzakta tuttuğunda (`StoreBackend::cloudIsRemote()`: Steam evet, `NullStoreService`
+hayır), `available()` olduğunda ve `SaveSettings::cloud` açıkken `SaveService` slot dosyalarını yansıtır: yazılan
+her slot `writeCloudFile("<slot>.save")` ile kopyalanır, silinen her slot `removeCloudFile()` ile silinir. Oturum
+başladığında `savedAt` değeri yerel slotunkinden yeni olan bir `<slot>.save` bulut dosyası onun yerini alır ve
+yerel dosya slotun yedeği olur; daha eski ya da aynı yaştaki bir bulut dosyası hiçbir şeyi değiştirmez. Host,
+`GameSessionDesc::storeCloudIsRemote` değerini mağazasından ayarlar. Bulut hataları (yer kalmaması, bozuk bir bulut
+dosyası) yalnızca loglanır: kaydın kendisi yine başarılı olur ve oyun bunlar için bir olay görmez. Null mağazanın
+bulut dosyaları zaten yerel dosyalardır, bu yüzden oraya hiçbir şey yansıtılmaz.
+
+### Slot görüntüleri
+
+Kaydedilen bir slot bir görüntü alır: son gösterilen kare, 16:9'a kırpılıp 320 x 180'e ölçeklenir ve slot
+dosyasının yanına `<slot>.png` olarak yazılır (`SaveSlotInfo::screenshot` onun sanal yolunu tutar ya da boştur).
+Player kendi görünümünü, Play modu Game görünümünü (GPU'lu pencereli ya da headless editör) geri okur; kareyi
+yalnızca bir kayıt geri okur. Buluttan alınan bir slotun, yeniden kaydedilene kadar görüntüsü yoktur. Görüntü
+atomik yazmanın parçası değildir: bir çökmeden sonra bir slot önceki kaydının görüntüsünü gösterebilir.
 
 `SteamStoreService` (`illusion::steam` kütüphanesi) yalnızca `ILLUSION_STEAMWORKS_SDK` CMake değişkeni bir
 Steamworks SDK'sını gösterdiğinde Build edilir; SDK'yı Valve'dan siz indirirsiniz, illusion onu hiçbir zaman
