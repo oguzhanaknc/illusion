@@ -1081,11 +1081,3 @@ Correct indirect light indoors and in shadow until ray tracing (M10) is availabl
 - Ray-traced global illumination, denoised (DLSS Ray Reconstruction where the module is present)
 - Verify ray query support of Mesa lavapipe for CI GPU tests; ADRs for the acceleration structure and
   denoising design
-
-## Test debt
-
-- `TestExportWindow.cpp`, "the open Export window with a result does not allocate in idle frames", is skipped
-  on macOS (owner: architect, before SAVE closes). FSEvents delivers the file events of the failed export
-  late, sometimes inside the counted frames, where the asset poll allocates; "an idle shell frame does not
-  allocate after warming up" failed the same way once (#124). Fix: the tests wait until the `FileWatcher`
-  has no pending events instead of a fixed number of frames, then the skip goes.

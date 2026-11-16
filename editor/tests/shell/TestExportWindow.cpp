@@ -297,21 +297,7 @@ TEST_CASE(
     CHECK(labelOf(driver, "asset_browser.tile.0").find("main.scene") != std::string::npos);
 }
 
-namespace
-{
-
-// FSEvents reports the files of the failed export late, sometimes inside the counted frames, where the asset
-// poll then allocates. Skipped on macOS until the test waits for the watcher (ROADMAP, "Test debt").
-#if defined(ILL_PLATFORM_MACOS)
-constexpr bool kFileEventsArriveLate = true;
-#else
-constexpr bool kFileEventsArriveLate = false;
-#endif
-
-} // namespace
-
-TEST_CASE("the open Export window with a result does not allocate in idle frames" *
-          doctest::skip(kFileEventsArriveLate))
+TEST_CASE("the open Export window with a result does not allocate in idle frames")
 {
     // Without an SDK the export fails at once, and the window shows why.
     ShellFixture fixture;
@@ -324,6 +310,7 @@ TEST_CASE("the open Export window with a result does not allocate in idle frames
         driver.runFrames(2);
         REQUIRE_FALSE(driver.find("export.cancel").has_value());
     }
+    fixture.settleAssetEvents();
     for (int i = 0; i < 120; ++i)
     {
         fixture.frame();

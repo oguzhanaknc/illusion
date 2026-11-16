@@ -18,6 +18,8 @@
 
 #include <doctest/doctest.h>
 
+#include <chrono>
+#include <fstream>
 #include <imgui.h>
 #include <memory>
 
@@ -137,6 +139,24 @@ struct ShellFixture
         headless->endFrame();
         editor->endFrame(1.0 / 60.0);
         time += 1.0 / 60.0;
+    }
+
+    /// Runs frames until the watcher has delivered everything written so far: events of one watcher arrive in
+    /// order, so a marker file written now shows in the catalog after the earlier events (FSEvents is late).
+    void settleAssetEvents()
+    {
+        const std::filesystem::path marker = directory.path / "project" / "assets" / "settled.marker";
+        {
+            std::ofstream out(marker, std::ios::binary);
+            out << "settled";
+        }
+        const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(60);
+        while (editor->assets().find("assets:/settled.marker") == nullptr &&
+               std::chrono::steady_clock::now() < deadline)
+        {
+            frame();
+        }
+        REQUIRE(editor->assets().find("assets:/settled.marker") != nullptr);
     }
 };
 
