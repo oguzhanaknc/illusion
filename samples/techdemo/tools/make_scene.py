@@ -249,7 +249,8 @@ def build():
                        "illusion.MeshRenderer": {"mesh": "assets:/models/terrain.gltf#mesh/0", "material": m["ground"]},
                        "illusion.RigidBody": {"motionType": "Static"},
                        "illusion.Collider": {"shape": "Mesh", "mesh": "assets:/models/terrain.gltf#mesh/0"}})
-    entity("Sky", {"illusion.SkyAtmosphere": {"timeOfDay": 17.2, "sunAzimuth": -1.3, "sunTilt": 0.75,
+    entity("Sky", {"illusion.Saved": {},
+                   "illusion.SkyAtmosphere": {"timeOfDay": 17.2, "sunAzimuth": -1.3, "sunTilt": 0.75,
                                               "moonOffset": 1.5, "turbidity": 2.5, "sunIntensity": 4.5,
                                               "moonIntensity": 0.8, "starIntensity": 1.5,
                                               "groundAlbedo": [0.08, 0.1, 0.06]}})
@@ -263,7 +264,8 @@ def build():
                                               "noiseAmount": 0.7, "noiseSize": 9.0, "windFactor": 0.6}})
     entity("Wind", {"illusion.Wind": {"direction": [0.8, 0.0, 0.45], "speed": 3.0, "gustStrength": 0.6,
                                       "gustFrequency": 0.12}})
-    entity("Player", {"illusion.Transform": {"position": ground(PLAYER_START[0], PLAYER_START[1], -0.05)},
+    entity("Player", {"illusion.Saved": {},
+                      "illusion.Transform": {"position": ground(PLAYER_START[0], PLAYER_START[1], -0.05)},
                       "illusion.CharacterController": {"radius": 0.35, "height": 1.8, "stepHeight": 0.4,
                                                        "mass": 75, "maxPushForce": 400, "gravityFactor": 1.4}})
     entity("Eye", {"illusion.Transform": {"position": [PLAYER_START[0], 1.7, PLAYER_START[1]]},
@@ -361,7 +363,8 @@ def build():
     for index, (x, z) in enumerate(((-1.1, -2.55), (2.0, 0.6))):
         top = terrain_height(x, z) + 0.45
         name = f"Lantern {index}"
-        entity(name, {"illusion.Transform": {"position": [x, round(top, 3), z], "scale": [1.6, 1.6, 1.6]},
+        entity(name, {"illusion.Saved": {},
+                      "illusion.Transform": {"position": [x, round(top, 3), z], "scale": [1.6, 1.6, 1.6]},
                       "illusion.MeshRenderer": {"mesh": f"{brass}#mesh/0", "material": m["brass"]},
                       "illusion.RigidBody": {"motionType": "Kinematic", "mass": 2.0},
                       "illusion.Collider": {"halfExtents": [0.1, 0.24, 0.08], "offset": [0.0, 0.24, 0.0]}})
@@ -376,7 +379,8 @@ def build():
                parent=f"/{name}")
     wooden = f"{EXTERNAL}/wooden_lantern_01/wooden_lantern_01_1k.gltf"
     seat_top = terrain_height(-2.5, 2.2) - 0.06 + 0.38 * 0.9
-    entity("Lantern 2", {"illusion.Transform": {"position": [-2.5, round(seat_top, 3), 2.2], "rotation": r3(yaw_quaternion(0.4)),
+    entity("Lantern 2", {"illusion.Saved": {},
+                         "illusion.Transform": {"position": [-2.5, round(seat_top, 3), 2.2], "rotation": r3(yaw_quaternion(0.4)),
                                                 "scale": [1.3, 1.3, 1.3]},
                          "illusion.MeshRenderer": {"mesh": f"{wooden}#mesh/0", "material": m["wood_lantern"]},
                          "illusion.RigidBody": {"motionType": "Kinematic", "mass": 2.0},
@@ -628,7 +632,8 @@ def build():
     # --- Things to push: glowing orbs ---------------------------------------------------------------------------
     for index, (x, z) in enumerate(((3.8, 2.6), (-5.2, 3.2), (5.0, -2.0), (-3.2, -4.6), (4.6, -4.8))):
         size = 0.55 if index % 2 else 0.75
-        entity(f"Orb {index}", {"illusion.Transform": {"position": ground(x, z, -size / 2 - 0.3), "scale": [size, size, size]},
+        entity(f"Orb {index}", {"illusion.Saved": {},
+                                "illusion.Transform": {"position": ground(x, z, -size / 2 - 0.3), "scale": [size, size, size]},
                                 "illusion.MeshRenderer": {"mesh": "builtin:/mesh/sphere",
                                                           "material": m["orb_cyan"] if index % 2 else m["orb_magenta"]},
                                 "illusion.RigidBody": {"motionType": "Kinematic", "mass": 4.0, "friction": 0.6, "restitution": 0.4},
@@ -674,7 +679,7 @@ def button(name, parent, key):
 
 def build_ui():
     """The game UI, assets:/scenes/ui.scene, which the module instantiates when the game starts: a HUD and a
-    modal pause menu, hidden until ui.cancel opens it. Every text comes from assets/locales/{en,tr}.json."""
+    modal pause menu (with Save and Load), hidden until ui.cancel opens it. Every text comes from assets/locales/{en,tr}.json."""
     call("scene.new", {"discardChanges": True})
 
     call("gameui.create", {"kind": "canvas", "name": "HUD"})
@@ -696,7 +701,7 @@ def build_ui():
     call("component.set", {"entity": "/Pause Menu", "type": "illusion.UiCanvas", "value": {"order": 10, "modal": True}})
     entity("Dim", {"illusion.UiElement": {"placement": placement([0, 0], [1, 1], [0, 0], [0, 0])},
                    "illusion.UiImage": {"tint": [0.0, 0.01, 0.02, 0.55]}}, "/Pause Menu")
-    entity("Panel", {"illusion.UiElement": {"placement": placement([0.5, 0.5], [0.5, 0.5], [-320, -300], [320, 300])},
+    entity("Panel", {"illusion.UiElement": {"placement": placement([0.5, 0.5], [0.5, 0.5], [-320, -410], [320, 410])},
                      "illusion.UiImage": {"tint": [0.03, 0.045, 0.04, 0.92]},
                      "illusion.UiStack": {"spacing": 24, "padding": {"left": 48, "top": 40, "right": 48, "bottom": 40},
                                           "crossAlign": "Center"},
@@ -707,6 +712,12 @@ def build_ui():
                        "illusion.UiText": text("techdemo.menu.title", 60, [1.0, 0.9, 0.7, 1.0], "Center", outline=0.0)},
            "/Pause Menu/Panel")
     button("Resume", "/Pause Menu/Panel", "techdemo.menu.resume")
+    button("Save", "/Pause Menu/Panel", "techdemo.menu.save")
+    button("Load", "/Pause Menu/Panel", "techdemo.menu.load")
+    # What the last save or load did; the module sets its text.
+    entity("Status", {"illusion.UiElement": {"size": [440, 36]},
+                      "illusion.UiText": text("", 28, [0.7, 0.9, 0.75, 1.0], "Center", outline=0.0)},
+           "/Pause Menu/Panel")
     entity("Volume Label", {"illusion.UiElement": {"size": [440, 40]},
                             "illusion.UiText": text("techdemo.menu.volume", 30, [0.85, 0.88, 0.82, 1.0], "Center",
                                                     outline=0.0)}, "/Pause Menu/Panel")

@@ -11,6 +11,13 @@
     "techdemo.hud.frameTime": "{fps} FPS   {ms} ms",
     "techdemo.menu.title": "Paused",
     "techdemo.menu.resume": "Resume",
+    "techdemo.menu.save": "Save game",
+    "techdemo.menu.load": "Load game",
+    "techdemo.menu.saved": "Game saved",
+    "techdemo.menu.saveFailed": "Could not save the game",
+    "techdemo.menu.loaded": "Game loaded",
+    "techdemo.menu.loadedBackup": "Game loaded from its backup",
+    "techdemo.menu.loadFailed": "Could not load the game",
     "techdemo.menu.volume": "Master volume {percent}%",
     "techdemo.menu.language": "Language: English",
     "techdemo.menu.quit": "Quit"

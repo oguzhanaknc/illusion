@@ -17,6 +17,7 @@
 
 #include <algorithm>
 #include <array>
+#include <deque>
 
 namespace illusion::editor
 {
@@ -55,6 +56,8 @@ constexpr UVec2 kDefaultUiFrame{1920, 1080};
 constexpr std::string_view kPlayCloudDirectory = "cache:/store/cloud";
 // Saved games of Play mode stay in the project's cache too (ADR 0058).
 constexpr std::string_view kPlaySaveDirectory = "cache:/saves";
+// Saved-game events PlaySession keeps for the saves.* commands.
+constexpr usize kSaveLogEvents = 256;
 
 // The "clip" member of an AudioSource value ("" when absent).
 std::string clipOf(const std::optional<std::string>& value)
@@ -110,13 +113,44 @@ struct PlaySession::Impl
     bool projectTextsStale = true;
     u32 assetSubscription = 0;
     u32 sceneSubscription = 0;
+    std::deque<PlaySaveEvent> saveLog; // the last kSaveLogEvents events, the newest at the back
+    std::vector<SaveEvent> saveScratch;
+    u64 saveEventsSeen = 0;
 
     // One update of a fixed physics step, with the background loads finished first (step() and clickUi()).
-    void stepOnce() const
+    void stepOnce()
     {
         pumpAssets(true);
         store->update();
         game->update(game->settings().physics.stepSeconds);
+        collectSaveEvents();
+    }
+
+    // Keeps the saved-game events of the update that just ran (SaveService::pollEvents() has only the last
+    // one's), so that saves.* commands see them whatever the number of updates per editor frame.
+    void collectSaveEvents()
+    {
+        SaveService* service = game->saves();
+        if (service == nullptr)
+        {
+            return;
+        }
+        const u32 count = service->pollEvents({});
+        if (count == 0)
+        {
+            return;
+        }
+        saveScratch.resize(count);
+        service->pollEvents(saveScratch);
+        for (const SaveEvent& event : saveScratch)
+        {
+            if (saveLog.size() == kSaveLogEvents)
+            {
+                saveLog.pop_front();
+            }
+            saveLog.push_back(PlaySaveEvent{event.type, event.error, std::string(event.slot)});
+            ++saveEventsSeen;
+        }
     }
 
     // Publishes the background loads (audio clips, collision meshes) before the game advances; @p wait
@@ -256,6 +290,7 @@ void PlaySession::stop()
     impl.game.reset();
     impl.store.reset();
     impl.saves.reset();
+    impl.saveLog.clear();
     impl.paused = false;
     ILL_LOG_INFO("Play", "Play session stopped");
 }
@@ -349,6 +384,26 @@ void PlaySession::stopIfExitRequested()
     }
 }
 
+SaveService* PlaySession::saves() noexcept
+{
+    return m_impl->game ? m_impl->game->saves() : nullptr;
+}
+
+u64 PlaySession::saveEventCount() const
+{
+    return m_impl->saveEventsSeen;
+}
+
+void PlaySession::saveEvents(u64 first, std::vector<PlaySaveEvent>& out) const
+{
+    const Impl& impl = *m_impl;
+    const u64 oldest = impl.saveEventsSeen - impl.saveLog.size();
+    for (u64 index = std::max(first, oldest); index < impl.saveEventsSeen; ++index)
+    {
+        out.push_back(impl.saveLog[static_cast<usize>(index - oldest)]);
+    }
+}
+
 void PlaySession::setTimeScale(f64 scale)
 {
     m_impl->timeScale = scale;
@@ -365,6 +420,7 @@ void PlaySession::update(f64 deltaSeconds)
     impl.pumpAssets(impl.options.fixedStep);
     impl.store->update();
     impl.game->update(deltaSeconds * impl.timeScale);
+    impl.collectSaveEvents();
     impl.editor.playWorldAdvanced();
     stopIfExitRequested();
 }

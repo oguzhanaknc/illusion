@@ -29,6 +29,7 @@
 #include <array>
 #include <filesystem>
 #include <fstream>
+#include <map>
 #include <memory>
 #include <optional>
 #include <string>
@@ -521,6 +522,96 @@ public:
     editor::ViewportInput lastInput{}; ///< The input of the last frame() call.
 };
 
+/// SaveService without a game for the core tests: a request changes the slots and makes its event at once
+/// (load and remove of a missing slot fail with NotFound).
+class FakeSaves final : public SaveService
+{
+public:
+    bool available() const override { return true; }
+
+    Expected<void, SaveError> save(std::string_view slot, const SaveMetadata& metadata) override
+    {
+        if (!isValidSaveSlotName(slot))
+        {
+            return unexpected(SaveError::InvalidName);
+        }
+        if (!isValidSaveMetadata(metadata))
+        {
+            return unexpected(SaveError::InvalidValue);
+        }
+        m_slots[std::string(slot)] = Slot{std::string(metadata.title), std::string(metadata.custom),
+                                          metadata.playSeconds, metadata.gameVersion};
+        log.push_back(editor::PlaySaveEvent{SaveEventType::Saved, SaveError::IoError, std::string(slot)});
+        return {};
+    }
+
+    Expected<void, SaveError> load(std::string_view slot) override
+    {
+        if (!isValidSaveSlotName(slot))
+        {
+            return unexpected(SaveError::InvalidName);
+        }
+        const bool found = m_slots.contains(std::string(slot));
+        log.push_back(editor::PlaySaveEvent{found ? SaveEventType::Loaded : SaveEventType::Failed,
+                                            SaveError::NotFound, std::string(slot)});
+        return {};
+    }
+
+    Expected<void, SaveError> remove(std::string_view slot) override
+    {
+        if (!isValidSaveSlotName(slot))
+        {
+            return unexpected(SaveError::InvalidName);
+        }
+        const bool found = m_slots.erase(std::string(slot)) > 0;
+        log.push_back(editor::PlaySaveEvent{found ? SaveEventType::Removed : SaveEventType::Failed,
+                                            SaveError::NotFound, std::string(slot)});
+        return {};
+    }
+
+    bool busy() const override { return false; }
+
+    u32 slots(std::span<SaveSlotInfo> out) override
+    {
+        m_infos.clear();
+        for (const auto& [name, slot] : m_slots)
+        {
+            m_infos.push_back(
+                SaveSlotInfo{name,
+                             SaveMetadata{slot.title, slot.playSeconds, slot.gameVersion, slot.custom},
+                             1700000000,
+                             SaveSlotState::Ok,
+                             {}});
+        }
+        std::copy_n(m_infos.begin(), std::min(out.size(), m_infos.size()), out.begin());
+        return static_cast<u32>(m_infos.size());
+    }
+
+    std::optional<SaveSlotInfo> slot(std::string_view) const override { return std::nullopt; }
+
+    u32 pollEvents(std::span<SaveEvent>) override { return 0; }
+
+    /// Forgets the slots and events.
+    void reset()
+    {
+        m_slots.clear();
+        log.clear();
+    }
+
+    std::vector<editor::PlaySaveEvent> log; ///< Every event so far.
+
+private:
+    struct Slot
+    {
+        std::string title;
+        std::string custom;
+        f64 playSeconds = 0.0;
+        u32 gameVersion = 0;
+    };
+    std::map<std::string, Slot> m_slots;
+    std::vector<SaveSlotInfo> m_infos;
+};
+
 /// A game runtime without a game for the core tests: start() copies the edit World into a World of its own
 /// and attaches it, steps only count, input events are recorded, the game has one Button action "Jump", and
 /// a static module "fake" is loaded (module.load accepts any path ending in ".dll").
@@ -548,6 +639,7 @@ public:
         REQUIRE_MESSAGE(loaded.ok(), loaded.error);
         m_ui = std::make_unique<UiWorld>(*m_world);
         m_ui->update(gameUiFrame());
+        m_saves.reset();
         m_status = editor::PlayStatus{
             editor::PlayState::Playing, options.mode, options.fixedStep, m_status.timeScale, 0, 0.0};
         m_editor->attachPlayWorld(*m_world);
@@ -615,6 +707,18 @@ public:
     }
 
     GameSession* game() noexcept override { return nullptr; }
+
+    SaveService* saves() noexcept override { return m_world ? &m_saves : nullptr; }
+
+    u64 saveEventCount() const override { return m_saves.log.size(); }
+
+    void saveEvents(u64 first, std::vector<editor::PlaySaveEvent>& out) const override
+    {
+        for (usize i = static_cast<usize>(first); i < m_saves.log.size(); ++i)
+        {
+            out.push_back(m_saves.log[i]);
+        }
+    }
 
     UiWorld* gameUi() noexcept override { return m_ui.get(); }
 
@@ -736,6 +840,7 @@ private:
     std::unique_ptr<GameStringTable> m_strings;
     std::unique_ptr<text::Localization> m_texts;
     editor::PlayStatus m_status;
+    FakeSaves m_saves;
     std::vector<editor::PlayModuleInfo> m_modules{{"fake", "1.0.0", "", false, 0, {}}};
 };
 

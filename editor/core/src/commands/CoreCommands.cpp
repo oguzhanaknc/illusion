@@ -1236,6 +1236,29 @@ void reflectCoreCommandTypes(StructRegistry& structs)
         reflectStruct<GamepadMotionParams>("editor.GamepadMotionParams", 1, structs)
             .field("gamepad", &GamepadMotionParams::gamepad)
             .field("enabled", &GamepadMotionParams::enabled);
+        reflectStruct<SavesSlotEntry>("editor.SavesSlotEntry", 1, structs)
+            .field("name", &SavesSlotEntry::name)
+            .field("title", &SavesSlotEntry::title)
+            .field("playSeconds", &SavesSlotEntry::playSeconds)
+            .field("gameVersion", &SavesSlotEntry::gameVersion)
+            .field("custom", &SavesSlotEntry::custom)
+            .field("savedAt", &SavesSlotEntry::savedAt)
+            .field("state", &SavesSlotEntry::state)
+            .field("screenshot", &SavesSlotEntry::screenshot);
+        reflectStruct<SavesListResult>("editor.SavesListResult", 1, structs)
+            .field("slots", &SavesListResult::slots)
+            .field("busy", &SavesListResult::busy);
+        reflectStruct<SavesWriteParams>("editor.SavesWriteParams", 1, structs)
+            .field("slot", &SavesWriteParams::slot)
+            .field("title", &SavesWriteParams::title)
+            .field("playSeconds", &SavesWriteParams::playSeconds, {.min = 0.0})
+            .field("gameVersion", &SavesWriteParams::gameVersion)
+            .field("custom", &SavesWriteParams::custom);
+        reflectStruct<SavesSlotParams>("editor.SavesSlotParams", 1, structs)
+            .field("slot", &SavesSlotParams::slot);
+        reflectStruct<SavesRequestResult>("editor.SavesRequestResult", 1, structs)
+            .field("slot", &SavesRequestResult::slot)
+            .field("event", &SavesRequestResult::event);
         reflectPreferences(structs);
     });
 }
@@ -1269,6 +1292,7 @@ void registerCoreCommands(CommandRegistry& registry)
     detail::registerGameUiCommands(registry);
     detail::registerInputCommands(registry);
     detail::registerGamepadCommands(registry);
+    detail::registerSavesCommands(registry);
     detail::registerModuleCommands(registry);
     detail::registerExportCommands(registry);
     detail::registerToolCommands(registry);
