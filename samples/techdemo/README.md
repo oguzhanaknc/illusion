@@ -24,7 +24,7 @@ illusion_ctl --launch illusion_editor --editor-arg --headless --editor-arg --no-
   sprites, and looping wind, cricket and fire sounds.
 - `assets/scenes/ui.scene`: the game UI, built by the same `build.jsonl` after the forest: a HUD (title, the
   binding of the pause action, a frame-time readout, outlined so that it reads over the scene) and a modal pause
-  menu, hidden at the start (Resume, the master volume, English or Turkish, Quit). The module instantiates it
+  menu, hidden at the start (Resume, Save game, Load game, the master volume, English or Turkish, Quit). The module instantiates it
   when the game starts and drives it through `UiService`; Escape or the gamepad's East button opens and closes
   the menu, and while it shows the clock stops and the walker reads no input. Its text comes from
   `assets/locales/en.json` and `tr.json`, in `assets/fonts/Roboto-Regular.ttf` (Apache-2.0, licence beside it).

@@ -35,6 +35,12 @@ mouse (Shift+F1 frees it).
 
 A full day lasts six minutes.
 
+Escape (or East) opens the pause menu: Resume, Save game, Load game, the master volume, the language and Quit.
+The clock stops while it shows. The player, the sky's clock, the orbs and the lanterns carry the
+[`Saved` tag](../saved-games.md), so **Save game** keeps where you stand, the time of day and where you pushed
+things, in one slot; **Load game** is dimmed until a slot exists. Velocities, fireflies and sounds start over
+after a load.
+
 ## What is in it
 
 - **Terrain**: a flat clearing in a bowl of hills, with a triangle-mesh collider, covered with the Poly Haven

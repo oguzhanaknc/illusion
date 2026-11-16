@@ -165,8 +165,8 @@ Duplicate ids in one file are a load error.
 
 A file of a few entities can be applied on top of a loaded scene, as saved games do
 ([ADR 0058](https://github.com/oguzhanaknc/illusion/blob/main/docs/adr/0058-saved-games.md)). The `Saved`
-tag (`illusion.Saved`, library `engine/save`) marks the entities and subtrees that a saved game contains.
-Three options of the serializer make such a delta:
+tag (`illusion.Saved`, library `engine/save`) marks the entities and subtrees that a saved game contains
+([Saved games](saved-games.md)). Three options of the serializer make such a delta:
 
 - `SceneSaveOptions::externalReferences` writes Entity fields that point to live entities outside the
   saved ones as their ids instead of `null`, so a saved child keeps its unsaved parent. A target without an

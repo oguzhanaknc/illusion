@@ -1014,6 +1014,25 @@ Design: [ADR 0058](docs/adr/0058-saved-games.md). Work packages, one pull reques
   `saves.remove` (reference, goldens, fuzz); Save and Load in the tech demo's pause menu; EN/TR manual page
   "Saved games", the scripting API reference, a section in the HUD tutorial, the architecture page,
   `CHANGELOG.md`.
+  ✅ Done: `saves.list` (Play mode, sync) and the async `saves.write`, `saves.load`, `saves.remove`
+  (`SavesCommands.cpp`; `CommandMode::Play`, so they fail with `wrong_mode` without a session and with
+  `precondition_failed` in `simulate` or without a save directory). A task queues its request in its first
+  update and finishes with the event of that slot; `PlayHost` gained `saves()`, `saveEventCount()` and
+  `saveEvents()`, which `PlaySession` fills after every update it runs (a log of the last 256 events), so steps
+  and several updates per frame lose no event. Validation per field (slot name, title, custom, playSeconds);
+  the fake play host of the core tests has an in-memory `SaveService`; `TestSavesCommands.cpp` covers write and
+  list, load restoring a changed Saved entity, remove, the mode errors, an ended session and invalid values.
+  Tech demo: Save game and Load game in the pause menu (Load dimmed while no slot exists) and a status line,
+  one slot `slot1`; the Player, the Sky, the orbs and the lanterns are `Saved` in `tools/make_scene.py` (scenes
+  rebuilt), the module finds them again after `Loaded` and `LoadedBackup`, strings in both locales, a play test
+  that saves, moves, loads and checks; the golden `techdemo-pause-menu` was regenerated because the menu has
+  three more rows. Docs: the manual page "Saved games" (EN/TR, nav, the `Saved` tag's `docsAnchor` now
+  `manual/saved-games.md#the-saved-tag`), a section in the Play mode and Tech Demo pages and the architecture
+  overview, "Save and load" in the HUD tutorial (its module now saves a `Progress` Component), `CHANGELOG.md`.
+  Open: no acceptance transcript for the `saves.*` commands (the editor tests cover them); `saves.write` and the
+  others wait for the game to update, so a paused game needs `play.step`; the tech demo does not save the
+  walker's yaw and pitch (runtime `techdemo.Player`) and the golden image was made on a desktop GPU, not on
+  lavapipe.
 
 Open (recorded by ADR 0058): velocities of dynamic bodies, live particles and playing sounds are not saved;
 compression and a binary World section; several level deltas in one slot; the Steam cloud path is untested

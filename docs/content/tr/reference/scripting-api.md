@@ -188,4 +188,5 @@ yeniden bulun.
 `SaveSlotInfo::screenshot`, slotun 320 x 180 PNG'sinin sanal yoludur (player'da `user:/saves/<slot>.png`) ya da
 slotun görüntüsü yoksa boştur. Bulutu uzakta olan bir mağazayla slot dosyaları buluta da yansıtılır ve oturum
 başladığında daha yeni bir bulut dosyası yerel slotun yerini alır; bu hiçbir olay üretmez
-([Buluttaki kayıtlı oyunlar](../manual/runtime.md#buluttaki-kayitli-oyunlar)).
+([Buluttaki kayıtlı oyunlar](../manual/runtime.md#buluttaki-kaytl-oyunlar)). [Kayıtlı oyunlar](../manual/saved-games.md)
+kılavuz sayfası `Saved` tag'ini, metadata'yı, olayları ve dosyaları anlatır.

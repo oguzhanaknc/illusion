@@ -1,8 +1,8 @@
 # A HUD and a pause menu
 
 This tutorial gives a game a score in the corner, a hint that shows the key (or button) that opens the menu,
-and a pause menu with Resume, a volume slider and Quit. You build the UI in the editor, once by hand and once
-as the commands an agent would send, and write a small C++ game module that counts points and drives the menu.
+and a pause menu with Resume, Save, Load, a volume slider and Quit. You build the UI in the editor, once by hand
+and once as the commands an agent would send, and write a small C++ game module that counts points and drives the menu.
 The tutorial follows `samples/techdemo`, whose HUD and pause menu are the full version of this one.
 
 You need a Release build of illusion and the C++ compiler the editor was built with. The
@@ -14,10 +14,11 @@ You need a Release build of illusion and the C++ compiler the editor was built w
   (**Esc** Menu) in the top left. The key label is a `UiGlyph`: it shows the first binding of `ui.cancel` for
   the device the player used last, and follows a rebinding.
 - A canvas **Pause Menu**, hidden at the start and **modal**: while it shows, the game's other input actions read
-  as released. Its panel slides in with a `Shown` transition. It holds a **Resume** button, a **Volume** slider
-  with its label and a **Quit** button, and works with the mouse, the keyboard and a gamepad.
+  as released. Its panel slides in with a `Shown` transition. It holds a **Resume** button, **Save** and **Load**
+  buttons, a **Volume** slider with its label and a **Quit** button, and works with the mouse, the keyboard and a
+  gamepad.
 - English and Turkish texts, found by string table keys, and a module that counts points, opens the menu on
-  Escape (`ui.cancel`), sets the master volume and ends the game.
+  Escape (`ui.cancel`), saves and loads the score, sets the master volume and ends the game.
 
 ## 2. Create the project, a font and the texts
 
@@ -48,6 +49,8 @@ English file is the base:
     "hud.menuHint": "Menu",
     "hud.menu.title": "Paused",
     "hud.menu.resume": "Resume",
+    "hud.menu.save": "Save game",
+    "hud.menu.load": "Load game",
     "hud.menu.volume": "Volume {percent}%",
     "hud.menu.quit": "Quit"
   }
@@ -70,6 +73,8 @@ and `assets/locales/tr.json` with the same keys:
     "hud.menuHint": "Menü",
     "hud.menu.title": "Duraklatıldı",
     "hud.menu.resume": "Devam et",
+    "hud.menu.save": "Oyunu kaydet",
+    "hud.menu.load": "Oyunu yükle",
     "hud.menu.volume": "Ses %{percent}",
     "hud.menu.quit": "Çık"
   }
@@ -138,18 +143,20 @@ where the list says so.
 
 1. **Dim**: a **Panel** inside the canvas, anchored with the stretch preset so that it fills the canvas, with
    all four offsets 0 and the colour of its `UiImage` a dark translucent one.
-2. **Panel**: a **Stack** inside the canvas, anchored in the middle, with offset min (-320, -300) and offset max
-   (320, 300). Give it a `UiImage` (a dark colour) and set the stack's **Spacing** to 24, its **Padding** to
+2. **Panel**: a **Stack** inside the canvas, anchored in the middle, with offset min (-320, -340) and offset max
+   (320, 340). Give it a `UiImage` (a dark colour) and set the stack's **Spacing** to 24, its **Padding** to
    (48, 40, 48, 40) and **Cross Align** to `Center`. Add the Component **UI transition** with the trigger
    `Shown`, **Duration** 0.25, **Offset** (0, 48), **Scale** (0.96, 0.96) and **Opacity** 0: when the menu shows,
    the panel starts moved, smaller and transparent, and eases to rest.
 3. **Heading**: a **Text** inside **Panel**, size (0, 80), `UiText` key `hud.menu.title`, size 60, centred.
 4. **Resume**: a **Button** inside **Panel**, size (440, 72), with the label's key `hud.menu.resume`, centred.
    A button's label is its child **Label**.
-5. **Volume Label**: a **Text**, size (440, 40), key `hud.menu.volume`, centred.
-6. **Volume**: a **Slider** inside **Panel**, size (440, 24), **Value** 1, **Min** 0, **Max** 1 and **Step** 0.05.
+5. **Save** and 6. **Load**: two **Buttons** inside **Panel**, size (440, 72), the labels' keys `hud.menu.save` and
+   `hud.menu.load`. The module turns **Load** off while there is no slot to load.
+7. **Volume Label**: a **Text**, size (440, 40), key `hud.menu.volume`, centred.
+8. **Volume**: a **Slider** inside **Panel**, size (440, 24), **Value** 1, **Min** 0, **Max** 1 and **Step** 0.05.
    Its first child **Fill** is stretched to the value and its second child **Handle** sits on it.
-7. **Quit**: a **Button**, size (440, 72), the label's key `hud.menu.quit`.
+9. **Quit**: a **Button**, size (440, 72), the label's key `hud.menu.quit`.
 
 Finally select **Pause Menu** and turn its **enabled** check box off (`entity.set_enabled`): the menu is hidden
 at the start. Save the scene with **Ctrl+S**. The elements inside the panel have no placement of their own: the
@@ -166,11 +173,17 @@ element at rest, because only a running game advances a transition.
     {"call": "gameui.create", "params": {"kind": "canvas", "name": "Pause Menu"}}
     {"call": "component.set", "params": {"entity": "/Pause Menu", "type": "illusion.UiCanvas", "value": {"order": 10, "modal": true}}}
     {"call": "entity.create", "params": {"name": "Dim", "parent": "/Pause Menu", "components": {"illusion.UiElement": {"placement": {"anchorMin": [0, 0], "anchorMax": [1, 1], "offsetMin": [0, 0], "offsetMax": [0, 0]}}, "illusion.UiImage": {"tint": [0.0, 0.01, 0.02, 0.55]}}}}
-    {"call": "entity.create", "params": {"name": "Panel", "parent": "/Pause Menu", "components": {"illusion.UiElement": {"placement": {"anchorMin": [0.5, 0.5], "anchorMax": [0.5, 0.5], "offsetMin": [-320, -300], "offsetMax": [320, 300]}}, "illusion.UiImage": {"tint": [0.03, 0.045, 0.04, 0.92]}, "illusion.UiStack": {"spacing": 24, "padding": {"left": 48, "top": 40, "right": 48, "bottom": 40}, "crossAlign": "Center"}, "illusion.UiTransition": {"trigger": "Shown", "duration": 0.25, "ease": "EaseOut", "offset": [0, 48], "scale": [0.96, 0.96], "opacity": 0.0}}}}
+    {"call": "entity.create", "params": {"name": "Panel", "parent": "/Pause Menu", "components": {"illusion.UiElement": {"placement": {"anchorMin": [0.5, 0.5], "anchorMax": [0.5, 0.5], "offsetMin": [-320, -340], "offsetMax": [320, 340]}}, "illusion.UiImage": {"tint": [0.03, 0.045, 0.04, 0.92]}, "illusion.UiStack": {"spacing": 24, "padding": {"left": 48, "top": 40, "right": 48, "bottom": 40}, "crossAlign": "Center"}, "illusion.UiTransition": {"trigger": "Shown", "duration": 0.25, "ease": "EaseOut", "offset": [0, 48], "scale": [0.96, 0.96], "opacity": 0.0}}}}
     {"call": "entity.create", "params": {"name": "Heading", "parent": "/Pause Menu/Panel", "components": {"illusion.UiElement": {"size": [0, 80]}, "illusion.UiText": {"font": "assets:/fonts/Roboto-Regular.ttf", "key": "hud.menu.title", "size": 60, "align": "Center", "wrap": false}}}}
     {"call": "gameui.create", "params": {"kind": "button", "parent": "/Pause Menu/Panel", "name": "Resume"}}
     {"call": "component.set", "params": {"entity": "/Pause Menu/Panel/Resume", "type": "illusion.UiElement", "value": {"size": [440, 72]}}}
     {"call": "component.set", "params": {"entity": "/Pause Menu/Panel/Resume/Label", "type": "illusion.UiText", "value": {"key": "hud.menu.resume", "size": 36, "wrap": false}}}
+    {"call": "gameui.create", "params": {"kind": "button", "parent": "/Pause Menu/Panel", "name": "Save"}}
+    {"call": "component.set", "params": {"entity": "/Pause Menu/Panel/Save", "type": "illusion.UiElement", "value": {"size": [440, 72]}}}
+    {"call": "component.set", "params": {"entity": "/Pause Menu/Panel/Save/Label", "type": "illusion.UiText", "value": {"key": "hud.menu.save", "size": 36, "wrap": false}}}
+    {"call": "gameui.create", "params": {"kind": "button", "parent": "/Pause Menu/Panel", "name": "Load"}}
+    {"call": "component.set", "params": {"entity": "/Pause Menu/Panel/Load", "type": "illusion.UiElement", "value": {"size": [440, 72]}}}
+    {"call": "component.set", "params": {"entity": "/Pause Menu/Panel/Load/Label", "type": "illusion.UiText", "value": {"key": "hud.menu.load", "size": 36, "wrap": false}}}
     {"call": "entity.create", "params": {"name": "Volume Label", "parent": "/Pause Menu/Panel", "components": {"illusion.UiElement": {"size": [440, 40]}, "illusion.UiText": {"font": "assets:/fonts/Roboto-Regular.ttf", "key": "hud.menu.volume", "size": 30, "align": "Center", "wrap": false}}}}
     {"call": "gameui.create", "params": {"kind": "slider", "parent": "/Pause Menu/Panel", "name": "Volume"}}
     {"call": "component.set", "params": {"entity": "/Pause Menu/Panel/Volume", "type": "illusion.UiElement", "value": {"size": [440, 24]}}}
@@ -188,11 +201,11 @@ element at rest, because only a running game advances a transition.
 ## 5. The game module
 
 Run **New module** from the command palette with the name `hud`. The module reads the UI through `UiService`,
-sets the master volume through `AudioService` and ends the game through `SceneService`, so it uses `ui`,
-`audio` and `runtime`:
+sets the master volume through `AudioService`, writes and reads saved games through `SaveService` and ends the
+game through `SceneService`, so it uses `ui`, `audio`, `save` and `runtime`:
 
 ```cmake
-illusion_add_module(hud SHARED SOURCES hud.cpp USES audio runtime ui)
+illusion_add_module(hud SHARED SOURCES hud.cpp USES audio runtime save ui)
 ```
 
 Open `modules/hud/hud.cpp`. The state of the module is one runtime Component with the elements it drives. It is
@@ -205,12 +218,15 @@ not saved in the scene, and it survives a hot reload:
 #include <illusion/ecs/Reflection.hpp>
 #include <illusion/ecs/World.hpp>
 #include <illusion/runtime/SceneService.hpp>
+#include <illusion/save/SaveComponents.hpp>
+#include <illusion/save/SaveService.hpp>
 #include <illusion/ui/UiService.hpp>
 
 #include <algorithm>
 #include <array>
 #include <cmath>
 #include <span>
+#include <string_view>
 
 namespace hud
 {
@@ -222,12 +238,19 @@ struct State
     Entity score{};
     Entity menu{};
     Entity resume{};
+    Entity save{};
+    Entity load{};
     Entity volume{};
     Entity volumeLabel{};
     Entity quit{};
     f64 seconds = 0.0;
-    u32 points = 0;
     bool scoreShown = false;
+};
+
+/// The score. A reflected Component of an Entity with the Saved tag, so that saved games keep it.
+struct Progress
+{
+    u32 points = 0;
 };
 
 } // namespace hud
@@ -242,14 +265,17 @@ namespace
 {
 
 using namespace illusion;
+using hud::Progress;
 using hud::State;
 
+constexpr std::string_view kSlot = "slot1";
 constexpr f64 kPointSeconds = 1.0;
 constexpr u32 kPointsPerStep = 10;
 
 bool loadHud(ModuleContext&)
 {
     reflectRuntime<State>("hud.State", {.displayName = "HUD state"});
+    reflect<Progress>("hud.Progress").field("points", &Progress::points);
     return true;
 }
 
@@ -264,10 +290,13 @@ void startHud(ModuleContext& context)
     state.score = ui->find({}, "Score");
     state.menu = ui->find({}, "Pause Menu");
     state.resume = ui->find(state.menu, "Resume");
+    state.save = ui->find(state.menu, "Save");
+    state.load = ui->find(state.menu, "Load");
     state.volume = ui->find(state.menu, "Volume");
     state.volumeLabel = ui->find(state.menu, "Volume Label");
     state.quit = ui->find(state.menu, "Quit");
     context.world().create(Name{"HUD State"}, state);
+    context.world().create(Name{"Progress"}, Progress{}, Saved{});
 }
 ```
 
@@ -276,10 +305,10 @@ menu shows with the current master volume and moves the focus to Resume, so that
 use it at once:
 
 ```cpp
-void showScore(UiService& ui, const State& state)
+void showScore(UiService& ui, const State& state, u32 points)
 {
-    const std::array points{UiTextArgument::number("points", static_cast<f64>(state.points))};
-    static_cast<void>(ui.setTextKey(state.score, "hud.score", points));
+    const std::array arguments{UiTextArgument::number("points", static_cast<f64>(points))};
+    static_cast<void>(ui.setTextKey(state.score, "hud.score", arguments));
 }
 
 void showVolume(UiService& ui, const State& state, f32 volume)
@@ -288,11 +317,20 @@ void showVolume(UiService& ui, const State& state, f32 volume)
     static_cast<void>(ui.setTextKey(state.volumeLabel, "hud.menu.volume", percent));
 }
 
-void showMenu(UiService& ui, const AudioService* audio, const State& state, bool show)
+// Save needs a save directory; Load also a slot that was saved.
+void updateSaveItems(UiService& ui, const SaveService* saves, const State& state)
+{
+    const bool available = saves != nullptr && saves->available();
+    static_cast<void>(ui.setInteractable(state.save, available));
+    static_cast<void>(ui.setInteractable(state.load, available && saves->slot(kSlot).has_value()));
+}
+
+void showMenu(UiService& ui, const AudioService* audio, const SaveService* saves, const State& state, bool show)
 {
     static_cast<void>(ui.setVisible(state.menu, show));
     if (show)
     {
+        updateSaveItems(ui, saves, state);
         const f32 volume = audio != nullptr ? audio->masterVolume() : 1.0f;
         static_cast<void>(ui.setSliderValue(state.volume, volume));
         showVolume(ui, state, volume);
@@ -322,7 +360,12 @@ void updateHud(ModuleContext& context, f64 deltaSeconds)
     }
     // A copy: the UI changes the structure of the World, which would invalidate a reference.
     State state = world.get<State>(self);
+    // Saved games replace the Entities they contain, so the score's Entity is found again in every update.
+    Entity progress{};
+    world.query<const Progress>().each([&progress](Entity entity, const Progress&) { progress = entity; });
+    u32 points = world.isAlive(progress) ? world.get<Progress>(progress).points : 0;
     AudioService* audio = context.service<AudioService>();
+    SaveService* saves = context.service<SaveService>();
     SceneService* scenes = context.service<SceneService>();
 
     std::array<UiEvent, 16> events{};
@@ -331,11 +374,19 @@ void updateHud(ModuleContext& context, f64 deltaSeconds)
     {
         if (event.type == UiEventType::Cancelled)
         {
-            showMenu(*ui, audio, state, !ui->isVisible(state.menu));
+            showMenu(*ui, audio, saves, state, !ui->isVisible(state.menu));
         }
         else if (event.type == UiEventType::Clicked && event.entity == state.resume)
         {
-            showMenu(*ui, audio, state, false);
+            showMenu(*ui, audio, saves, state, false);
+        }
+        else if (event.type == UiEventType::Clicked && event.entity == state.save && saves != nullptr)
+        {
+            static_cast<void>(saves->save(kSlot, {.title = "HUD tutorial", .gameVersion = 1}));
+        }
+        else if (event.type == UiEventType::Clicked && event.entity == state.load && saves != nullptr)
+        {
+            static_cast<void>(saves->load(kSlot));
         }
         else if (event.type == UiEventType::Clicked && event.entity == state.quit && scenes != nullptr)
         {
@@ -348,6 +399,23 @@ void updateHud(ModuleContext& context, f64 deltaSeconds)
                 audio->setMasterVolume(event.value);
             }
             showVolume(*ui, state, event.value);
+        }
+    }
+
+    if (saves != nullptr)
+    {
+        std::array<SaveEvent, 8> results{};
+        const u32 resultCount = std::min<u32>(saves->pollEvents(results), static_cast<u32>(results.size()));
+        for (const SaveEvent& result : std::span(results).first(resultCount))
+        {
+            if (result.type == SaveEventType::Loaded || result.type == SaveEventType::LoadedBackup)
+            {
+                state.scoreShown = false; // the loaded score has to be shown
+            }
+        }
+        if (resultCount > 0)
+        {
+            updateSaveItems(*ui, saves, state);
         }
     }
 
@@ -364,16 +432,20 @@ void updateHud(ModuleContext& context, f64 deltaSeconds)
         while (state.seconds >= kPointSeconds)
         {
             state.seconds -= kPointSeconds;
-            state.points += kPointsPerStep;
+            points += kPointsPerStep;
             changed = true;
         }
     }
     if (changed)
     {
-        showScore(*ui, state);
+        showScore(*ui, state, points);
         state.scoreShown = true;
     }
     world.get<State>(self) = state;
+    if (world.isAlive(progress))
+    {
+        world.get<Progress>(progress).points = points;
+    }
 }
 
 constexpr ModuleApi kHud =
@@ -391,7 +463,39 @@ sees them released, so the game stands still without a check of its own. The mod
 
 Press **Ctrl+B** (**Modules → Build Modules**). When the build succeeds the module is loaded.
 
-## 6. Try it
+## 6. Save and load
+
+The score is the game state of this module, and it is saved because it lives in a reflected Component,
+`Progress`, on an Entity with the `Saved` tag (`illusion.Saved`): a save contains every Entity with the tag and
+its descendants, with their reflected Components, and nothing else. `State` is a runtime Component, so it is not
+saved, and the module keeps working after a load. In the editor you add the tag to an Entity in the Inspector;
+the module here adds it in code. The [Saved games manual](../manual/saved-games.md) lists what a save contains.
+
+- **Save** calls `save("slot1", ...)`. The request is queued and the file is written on a save thread, so the game
+  never waits for the disk; the title and the `gameVersion` are the metadata that `slots()` shows without loading
+  the slot. **Load** calls `load("slot1")`, which applies the slot in a later update.
+- `updateSaveItems()` turns **Save** off when the game has no save directory and **Load** off while
+  `slot("slot1")` finds nothing; it runs when the menu shows and after every event.
+- A load destroys the saved Entities and creates them again, so their `Entity` handles change. That is why
+  `updateHud` finds the `Progress` Entity again by a query in every update, and why `State`, which is not
+  saved, holds the handles of UI elements only. After the `Loaded` (or `LoadedBackup`) event the module shows the
+  loaded score.
+
+Slots are files: `cache:/saves` of the project in Play mode, `user:/saves` in the exported player.
+
+!!! note "With an agent"
+    The commands `saves.write`, `saves.load`, `saves.list` and `saves.remove` reach the same service while Play
+    mode runs; all but `saves.list` answer with the event that finished the request. The game sends a request
+    when it updates, so a paused game answers after `play.step`:
+
+    ```json
+    {"call": "saves.write", "params": {"slot": "slot1", "title": "HUD tutorial", "gameVersion": 1}}
+    {"call": "play.step", "params": {"steps": 120}}
+    {"call": "saves.load", "params": {"slot": "slot1"}}
+    {"call": "saves.list", "params": {}}
+    ```
+
+## 7. Try it
 
 Press **Play**:
 
@@ -399,6 +503,8 @@ Press **Play**:
 - Press **Escape**: the menu slides in, Resume has the focus, and the score stops. Move the focus with the arrow
   keys, W and S or the D-pad, and activate a button with Enter, Space or the South button. Click the buttons
   and drag the slider with the mouse.
+- Let the score grow, open the menu and click **Save**, wait for more points, then open the menu and click
+  **Load**: the score goes back to the saved one. **Load** is dimmed until you have saved.
 - Touch a gamepad: the hint changes to the label of its binding of `ui.cancel`.
 - Change the language: add a button that calls `ui->setLanguage("tr")` in its `Clicked` branch (the tech demo
   has one), and every text that has a key follows; the volume label keeps its `{percent}` argument.
@@ -408,7 +514,7 @@ An agent tries the same with `play.start`, `gameui.focus` and `gameui.click` on 
 the `events` the click returns. Change the module while the game runs and press **Ctrl+B**: it is hot-reloaded
 with its state.
 
-## 7. The limits
+## 8. The limits
 
 - Text is drawn left to right, one glyph per code point, with no shaping and no right-to-left text: Arabic,
   Hebrew and Indic scripts do not work, and CJK needs character ranges that are too large for the font atlas.

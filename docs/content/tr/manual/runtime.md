@@ -132,7 +132,7 @@ adını vererek başarısız olur.
 | `settings:/input.json` | `InputSettings` | `actions` (bir [input action Asset'i](actions.md#input-action-assetleri)), `gamepadsInBackground` |
 | `settings:/render.json` | `RenderSettings` | `vsync`, `maxFramesPerSecond`, `renderScale` |
 | `settings:/window.json` | `WindowSettings` | `width`, `height` (piksel), `mode` (`Windowed`, `Borderless` veya `Fullscreen`), `resizable` |
-| `settings:/save.json` | `SaveSettings` | `cloud` (slot dosyalarını mağazanın bulutuna yansıtır, varsayılan olarak açık; bkz. [Buluttaki kayıtlı oyunlar](#buluttaki-kayitli-oyunlar)) |
+| `settings:/save.json` | `SaveSettings` | `cloud` (slot dosyalarını mağazanın bulutuna yansıtır, varsayılan olarak açık; bkz. [Buluttaki kayıtlı oyunlar](#buluttaki-kaytl-oyunlar)) |
 
 ```json
 {
