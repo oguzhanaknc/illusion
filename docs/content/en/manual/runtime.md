@@ -50,8 +50,9 @@ while (running)
 named by `InputSettings::actions` and the locale files. Load the scene into `world()`, then `start()` attaches the World to the
 `ModuleHost` as a Simulation World with six services, which modules reach with `context.service<T>()`:
 `PhysicsService`, `AudioService`, `ParticleService`, `InputService`, `SceneService` and `UiService` (see the
-[scripting API](../reference/scripting-api.md)); with `GameSessionDesc::store` it adds the seventh,
-`StoreService` ([Store services](#store-services)). A module that calls `SceneService::requestExit()` ends
+[scripting API](../reference/scripting-api.md)); with `GameSessionDesc::store` it adds `StoreService`
+([Store services](#store-services)), and with `GameSessionDesc::saves`, a `SaveSystem`, `SaveService` (saved
+games, ADR 0058; the player keeps them in `user:/saves`, Play mode in `cache:/saves`). A module that calls `SceneService::requestExit()` ends
 the game: `exitRequested()` of the session turns true, and the host stops after that update.
 
 The host keeps what it shares with other views: it updates the `AssetStreamer` and the `GamepadSystem`
@@ -65,11 +66,12 @@ Every `update(deltaSeconds)` runs:
 | --- | --- |
 | 1. Input | The `InputActions` read `keyboardMouse()` and the gamepads; while the last update showed a modal canvas, only the `ui.*` actions get input |
 | 2. Modules | `ModuleHost::update()` on the World; then Entities created without an `EntityGuid` get one |
-| 3. Physics | `PhysicsWorld::update()`: bodies sync with the World, step and write their Transforms |
-| 4. Hierarchy | `updateTransformHierarchy()`: children follow their parents, `Disabled` becomes `Inactive` |
-| 5. UI | `UiWorld` lays out the UI Entities for the frame of `setUiFrame()`, handles the pointer and the actions `ui.navigate`, `ui.submit` and `ui.cancel` (Play mode), and records the draw list (`ui()`), see [Game UI](ui.md) |
-| 6. Particles and audio | `ParticleWorld::update()` and `AudioWorld::update()`: sources follow their Entities, the listener moves |
-| 7. Resolvers | Asset references become runtime Components (`Collider` meshes, `MeshRenderer` → `RenderMesh`) |
+| 3. Saves | With `GameSessionDesc::saves`: loads the save thread finished replace the saved Entities and finished requests become the next update's `SaveService` events; then the `save`, `load` and `remove` calls of step 2 are sent in call order, each `save` capturing the World now. With `fixedStep` it first waits for the save thread, so results always arrive in the next update |
+| 4. Physics | `PhysicsWorld::update()`: bodies sync with the World, step and write their Transforms |
+| 5. Hierarchy | `updateTransformHierarchy()`: children follow their parents, `Disabled` becomes `Inactive` |
+| 6. UI | `UiWorld` lays out the UI Entities for the frame of `setUiFrame()`, handles the pointer and the actions `ui.navigate`, `ui.submit` and `ui.cancel` (Play mode), and records the draw list (`ui()`), see [Game UI](ui.md) |
+| 7. Particles and audio | `ParticleWorld::update()` and `AudioWorld::update()`: sources follow their Entities, the listener moves |
+| 8. Resolvers | Asset references become runtime Components (`Collider` meshes, `MeshRenderer` → `RenderMesh`) |
 
 The session's `localization()` holds the string tables of the project's `assets:/locales/*.json`, which
 `create()` reads: the keys of every file, with the English text of `en.json`. `UiText::key` is looked up
@@ -194,7 +196,7 @@ project's data next to the executable with `illusion_pack`. The showcase project
 ```cmake
 illusion_add_module(showcase_game_module STATIC ID showcase
     SOURCES showcase/modules/showcase/showcase.cpp
-    USES physics audio particles input render runtime store ui)
+    USES physics audio particles input render runtime store ui save)
 illusion_add_game(showcase_game
     MODULES showcase_game_module
     NAME "Showcase"

@@ -1,6 +1,6 @@
 // The game module of the showcase project. It plays the everything scene through the whole scripting API:
-// every function of ModuleContext and of the seven host services (PhysicsService, AudioService, InputService,
-// ParticleService, SceneService, StoreService and UiService) is called from here, which
+// every function of ModuleContext and of the eight host services (PhysicsService, AudioService, InputService,
+// ParticleService, SceneService, StoreService, UiService and SaveService) is called from here, which
 // tools/check_api_coverage.py checks and the engine tests count at run time
 // (tests/showcase/TestShowcaseModule.cpp).
 //
@@ -15,6 +15,8 @@
 //   prefab, chimes where something lands hard and raises dust the first time, bursts sparks when the Player
 //   steps on the pad, stops and restarts the spark fountain, switches to moon gravity for a while, unlocks
 //   achievements, keeps stats and saves the number of runs as a cloud file of the store (or of no store);
+//   writes, removes and then loads a saved-game slot, so the load always fails and the World stays as it is
+//   (the events and the slot list may differ between runs, so they only go into showcase.Runtime);
 //   counts its first 120 frames on the HUD (a string table message with a plural), hides and shows the
 //   palette, focuses the Go button for a while, reads the toggle and the slider, counts clicks, and ends the
 //   game when `ui.cancel` (Escape, or East on a gamepad) is pressed;
@@ -38,6 +40,7 @@
 #include <illusion/physics/PhysicsService.hpp>
 #include <illusion/render/SceneComponents.hpp>
 #include <illusion/runtime/SceneService.hpp>
+#include <illusion/save/SaveService.hpp>
 #include <illusion/store/StoreService.hpp>
 #include <illusion/ui/UiService.hpp>
 
@@ -120,6 +123,10 @@ struct Runtime
     i32 frameStat = 0;           ///< The frames stat read back at frame 200.
     f32 crateStat = 0.0f;        ///< The crate speed stat read back at frame 200.
     bool overlay = false;        ///< The store's overlay covers the game.
+    u32 saveEvents = 0;          ///< Saved-game events seen so far.
+    u32 saveFailures = 0;        ///< Failed saved-game requests seen so far.
+    u32 saveSlots = 0;           ///< Saved-game slots at frame 290.
+    bool savesBusy = false;      ///< A saved-game request was pending at frame 290.
     bool started = false;        ///< The started achievement was unlocked at frame 100.
     bool dustRaised = false;     ///< The first hard landing played the dust.
     InputDevice device{};
@@ -162,6 +169,7 @@ constexpr u32 kPadBurst = 40;        // sparks emitted when the Player steps on 
 constexpr std::string_view kLantern = "assets:/prefabs/lantern.prefab";
 constexpr std::string_view kSave = "showcase.save"; // cloud file with the number of runs
 constexpr std::string_view kScratch = "showcase.tmp";
+constexpr std::string_view kSaveSlot = "showcase"; // saved-game slot, removed again in the same frame
 constexpr std::string_view kStartedAchievement = "SHOWCASE_STARTED";
 constexpr std::string_view kWalkerAchievement = "SHOWCASE_WALKER";
 constexpr u32 kWalkerSteps = 4;     // the walker achievement unlocks after 4 x 60 frames
@@ -726,6 +734,45 @@ void updateStore(StoreService& store, Runtime& runtime, const Stats& stats, u32 
     }
 }
 
+// Writes the slot at frame 240, then removes it and loads it: requests run in call order, so the load finds
+// nothing and fails with NotFound whatever the save directory held, and the World is never replaced. The
+// events and the slot list depend on the files and on the save thread's timing, so they are only counted.
+void updateSaves(SaveService& saves, Runtime& runtime, const Stats& stats, u32 frame)
+{
+    std::array<SaveEvent, 8> events{};
+    const u32 count = saves.pollEvents(events);
+    for (u32 i = 0; i < count && i < events.size(); ++i)
+    {
+        ++runtime.saveEvents;
+        if (events[i].type == SaveEventType::Failed)
+        {
+            ++runtime.saveFailures;
+            ILL_LOG_INFO("Showcase", "slot '{}': {}", events[i].slot, saveErrorName(events[i].error));
+        }
+    }
+    if (frame == 240 && saves.available())
+    {
+        const SaveMetadata metadata{.title = "Showcase",
+                                    .playSeconds = static_cast<f64>(stats.frames) / 60.0,
+                                    .gameVersion = 1,
+                                    .custom = "assets:/scenes/everything.scene"};
+        static_cast<void>(saves.save(kSaveSlot, metadata));
+        static_cast<void>(saves.remove(kSaveSlot));
+        static_cast<void>(saves.load(kSaveSlot));
+    }
+    if (frame == 290)
+    {
+        runtime.savesBusy = saves.busy();
+        std::array<SaveSlotInfo, 8> slots{};
+        runtime.saveSlots = saves.slots(slots);
+        if (const std::optional<SaveSlotInfo> slot = saves.slot(kSaveSlot))
+        {
+            ILL_LOG_INFO("Showcase", "slot '{}' is still listed ({})", slot->name,
+                         saveSlotStateName(slot->state));
+        }
+    }
+}
+
 // The HUD: the frame counter, the palette, the focus, the values and the events of the last UI update.
 void updateUi(UiService& ui, SceneService* scenes, Runtime& runtime, u32 frame)
 {
@@ -810,6 +857,7 @@ void updateModule(ModuleContext& context, f64 deltaSeconds)
     ParticleService* particles = context.service<ParticleService>();
     StoreService* store = context.service<StoreService>();
     UiService* ui = context.service<UiService>();
+    SaveService* saves = context.service<SaveService>();
     Entity self{};
     world.query<const Stats>().each([&self](Entity entity, const Stats&) { self = entity; });
     if (!world.isAlive(self))
@@ -845,6 +893,10 @@ void updateModule(ModuleContext& context, f64 deltaSeconds)
     if (store != nullptr)
     {
         updateStore(*store, runtime, stats, stats.frames);
+    }
+    if (saves != nullptr)
+    {
+        updateSaves(*saves, runtime, stats, stats.frames);
     }
     if (ui != nullptr)
     {

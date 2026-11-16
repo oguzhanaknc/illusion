@@ -2,7 +2,7 @@
 
 Game code is C++ in a [game module](../manual/modules.md). A shared module (the editor's hot-reloadable
 build) carries its own copy of `illusion::core` but no other engine library: it reaches physics, audio,
-particles, input, scenes, the store and the game UI through seven **host service interfaces**. Each is an abstract class without data members;
+particles, input, scenes, the store, the game UI and saved games through eight **host service interfaces**. Each is an abstract class without data members;
 the host implements it with an adapter over its engine object and hands it to the module, which finds it
 with `context.service<T>()`. The design is in ADR 0041; the Doxygen group "Scripting API" of the
 [API reference](api.md) documents every function.
@@ -16,6 +16,7 @@ with `context.service<T>()`. The design is in ADR 0041; the Doxygen group "Scrip
 | `SceneService` | `runtime` | `illusion/runtime/SceneService.hpp` | `SceneLoaderService` (`illusion::runtime`) |
 | `StoreService` | `store` | `illusion/store/StoreService.hpp` | `NullStoreService` or `SteamStoreService` (ADR 0056) |
 | `UiService` | `ui` | `illusion/ui/UiService.hpp` | `UiWorldService` over `UiWorld` (`illusion::ui`; ADR 0057) |
+| `SaveService` | `save` | `illusion/save/SaveService.hpp` | `SaveSystemService` over `SaveSystem` (`illusion::save`; ADR 0058) |
 
 ```cmake
 illusion_add_module(tetris SOURCES game/Tetris.cpp USES physics audio input runtime)
@@ -57,12 +58,11 @@ void update(illusion::ModuleContext& context, illusion::f64)
   work there too.
 - **Cost.** A call is one indirect call; the `services/virtual-call` Benchmark keeps it under 10 ns.
 - **Compatibility.** The interfaces are part of the module ABI: adding or changing a function changes
-  `kModuleApiVersion` (5 since `UiService::playTransition()` and `transitionProgress()`), and modules must be
-  rebuilt.
+  `kModuleApiVersion` (6 since `SaveService`), and modules must be rebuilt.
 
 ## Coverage
 
-The Doxygen group "Scripting API" holds `ModuleContext` and the seven interfaces. The
+The Doxygen group "Scripting API" holds `ModuleContext` and the eight interfaces. The
 [showcase module](../manual/editor/showcase.md#the-showcase-module) calls every public function of the group,
 and `python tools/check_api_coverage.py` fails in CI when one is not called there, or when a counting proxy
 of the module tests (`tests/modules/CountingServices.hpp`) has the wrong number of counters. A new function
@@ -164,3 +164,19 @@ layout without `World::markChanged()`.
 | `transitionProgress` | Progress of an element's `UiTransition`: 0 at rest, 1 in the changed state |
 | `pollEvents` | Copies the events of the previous frame's UI update into a span; returns the total, which may be more than fit |
 | `setLanguage`, `language` | The game's language, a BCP 47 tag with a locale file in the project |
+
+## SaveService
+
+Saved games of the Entities with the `Saved` tag and their descendants (ADR 0058). Requests are queued in call
+order and run on the host's save thread; `save`, `load` and `remove` fail at once only with `InvalidName`,
+`InvalidValue` or `Unavailable`, everything later is a `SaveEvent`. A save captures the World after the
+Modules step of the same update; a load replaces the saved Entities in a later update, so their `Entity`
+handles change: find them again after `Loaded` or `LoadedBackup`.
+
+| Function | Purpose |
+| --- | --- |
+| `available` | Whether the host has a save directory |
+| `save`, `load`, `remove` | Queue writing, applying or removing a slot (1 to 32 letters, digits, `_`, `-`) |
+| `busy` | Whether a request has not delivered its event yet |
+| `slots`, `slot` | The slot list (name, `SaveMetadata`, `savedAt`, `SaveSlotState`) into a caller span, or one slot; no file is read |
+| `pollEvents` | Copies the events of the last update (`Saved`, `Loaded`, `LoadedBackup`, `Removed`, `Failed` with a `SaveError`) into a span; returns the total |

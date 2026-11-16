@@ -33,6 +33,8 @@
 #include <illusion/runtime/ProjectSettings.hpp>
 #include <illusion/runtime/SceneLoaderService.hpp>
 #include <illusion/save/SaveComponents.hpp>
+#include <illusion/save/SaveSystem.hpp>
+#include <illusion/save/SaveSystemService.hpp>
 #include <illusion/store/NullStoreService.hpp>
 #include <illusion/text/Localization.hpp>
 #include <illusion/ui/UiComponents.hpp>
@@ -154,18 +156,23 @@ SessionRun runSession(bool input)
     test::TempDirectory directory;
     VirtualFileSystem files;
     mountShowcase(files);
+    REQUIRE(files.mount("user", directory.path, MountAccess::ReadWrite) == FileError::None);
     JobSystem jobs{JobSystemDesc{2, 1024}};
     ModuleHostDesc hostDesc;
     hostDesc.shadowDirectory = directory.path / "shadow";
     ModuleHost modules(jobs, hostDesc);
     const std::optional<std::string> loadError = modules.load(utf8Path(SHOWCASE_MODULE));
     REQUIRE_MESSAGE(!loadError, loadError.value_or(""));
+    SaveSystemDesc savesDesc;
+    savesDesc.files = &files;
+    SaveSystem saves(savesDesc);
 
     GameSessionDesc desc;
     desc.jobs = &jobs;
     desc.files = &files;
     desc.modules = &modules;
     desc.audioOutput = AudioOutput::Offline;
+    desc.saves = &saves;
     desc.fixedStep = true;
     desc.seed = 7;
     Expected<std::unique_ptr<GameSession>, std::string> created = GameSession::create(desc);
@@ -223,6 +230,11 @@ TEST_CASE("the showcase module calls every function of the scripting API on the 
     UiWorld ui(world);
     text::Localization localization;
     UiWorldService uiService(world, ui, localization);
+    SaveSystemDesc savesDesc;
+    savesDesc.files = &files;
+    SaveSystem saves(savesDesc);
+    SaveSystemService saveService(&saves);
+    GuidGenerator guids(3);
     test::CountingPhysics countingPhysics(&physicsService);
     test::CountingAudio countingAudio(&audioService);
     test::CountingInput countingInput(&inputService);
@@ -230,6 +242,7 @@ TEST_CASE("the showcase module calls every function of the scripting API on the 
     test::CountingParticles countingParticles(&particleService);
     test::CountingStore countingStore(&storeService);
     test::CountingUi countingUi(&uiService);
+    test::CountingSave countingSave(&saveService);
     ServiceSet services;
     services.provide<PhysicsService>(countingPhysics);
     services.provide<AudioService>(countingAudio);
@@ -238,6 +251,7 @@ TEST_CASE("the showcase module calls every function of the scripting API on the 
     services.provide<ParticleService>(countingParticles);
     services.provide<StoreService>(countingStore);
     services.provide<UiService>(countingUi);
+    services.provide<SaveService>(countingSave);
 
     ModuleHostDesc hostDesc;
     hostDesc.shadowDirectory = directory.path / "shadow";
@@ -248,6 +262,7 @@ TEST_CASE("the showcase module calls every function of the scripting API on the 
     for (int frame = 0; frame < kFrames; ++frame)
     {
         modules.update(world, kStep);
+        saveService.update(world, &guids, true);
         physics.update(kStep);
         particles.update(static_cast<f32>(kStep), &jobs);
         audio.update(kStep);
@@ -277,6 +292,7 @@ TEST_CASE("the showcase module calls every function of the scripting API on the 
     INFO("uncalled particle functions: " << uncalled(countingParticles.calls));
     INFO("uncalled store functions: " << uncalled(countingStore.calls));
     INFO("uncalled UI functions: " << uncalled(countingUi.calls));
+    INFO("uncalled save functions: " << uncalled(countingSave.calls));
     CHECK(countingPhysics.everyFunctionCalled());
     CHECK(countingAudio.everyFunctionCalled());
     CHECK(countingInput.everyFunctionCalled());
@@ -284,6 +300,7 @@ TEST_CASE("the showcase module calls every function of the scripting API on the 
     CHECK(countingParticles.everyFunctionCalled());
     CHECK(countingStore.everyFunctionCalled());
     CHECK(countingUi.everyFunctionCalled());
+    CHECK(countingSave.everyFunctionCalled());
     CHECK(sceneService.exitRequested());
 
     // The game ran on the real services: it counted its frames, met contacts and spawned a gem and a lantern.
@@ -298,6 +315,12 @@ TEST_CASE("the showcase module calls every function of the scripting API on the 
     CHECK(storeService.statInt("showcase_frames").valueOr(0) == 200);
     CHECK(files.exists("user:/cloud/showcase.save"));
     CHECK_FALSE(files.exists("user:/cloud/showcase.tmp"));
+
+    // The game wrote its slot, removed it and failed to load it: no slot is left and the World was kept.
+    saves.waitIdle();
+    CHECK_FALSE(files.exists("user:/saves/showcase.save"));
+    CHECK_FALSE(files.exists("user:/saves/showcase.save.bak"));
+    CHECK_FALSE(saveService.slot("showcase").has_value());
 }
 
 TEST_CASE("fixed-step showcase sessions with the same input end in the same state after 300 frames")

@@ -2,8 +2,8 @@
 
 Oyun kodu, bir [oyun modülünde](../manual/modules.md) C++ olarak yazılır. Shared bir modül (editörün hot
 reload yapılabilen Build'i) `illusion::core`'un kendi kopyasını taşır, ama başka hiçbir engine
-kütüphanesini taşımaz: fiziğe, sese, parçacıklara, girdiye, sahnelere, mağazaya ve oyun UI'ına yedi **host servis arayüzü** üzerinden
-ulaşır.
+kütüphanesini taşımaz: fiziğe, sese, parçacıklara, girdiye, sahnelere, mağazaya, oyun UI'ına ve kayıtlı oyunlara sekiz
+**host servis arayüzü** üzerinden ulaşır.
 Her biri veri üyesi olmayan soyut bir sınıftır; host onu kendi engine nesnesi üzerinde bir adaptörle
 uygular ve modüle verir, modül de onu `context.service<T>()` ile bulur. Tasarım ADR 0041'dedir;
 [API referansının](api.md) "Scripting API" Doxygen grubu her fonksiyonu belgeler.
@@ -17,6 +17,7 @@ uygular ve modüle verir, modül de onu `context.service<T>()` ile bulur. Tasar�
 | `SceneService` | `runtime` | `illusion/runtime/SceneService.hpp` | `SceneLoaderService` (`illusion::runtime`) |
 | `StoreService` | `store` | `illusion/store/StoreService.hpp` | `NullStoreService` veya `SteamStoreService` (ADR 0056) |
 | `UiService` | `ui` | `illusion/ui/UiService.hpp` | `UiWorld` üzerinde `UiWorldService` (`illusion::ui`; ADR 0057) |
+| `SaveService` | `save` | `illusion/save/SaveService.hpp` | `SaveSystem` üzerinde `SaveSystemService` (`illusion::save`; ADR 0058) |
 
 ```cmake
 illusion_add_module(tetris SOURCES game/Tetris.cpp USES physics audio input runtime)
@@ -60,12 +61,11 @@ void update(illusion::ModuleContext& context, illusion::f64)
 - **Maliyet.** Bir çağrı tek bir dolaylı çağrıdır; `services/virtual-call` Benchmark'ı onu 10 ns'nin
   altında tutar.
 - **Uyumluluk.** Arayüzler modül ABI'sinin parçasıdır: bir fonksiyon eklemek veya değiştirmek
-  `kModuleApiVersion`'ı değiştirir (`UiService::playTransition()` ve `transitionProgress()` ile birlikte 5) ve
-  modüller yeniden Build edilmelidir.
+  `kModuleApiVersion`'ı değiştirir (`SaveService` ile birlikte 6) ve modüller yeniden Build edilmelidir.
 
 ## Kapsam
 
-"Scripting API" Doxygen grubu `ModuleContext`'i ve yedi arayüzü içerir.
+"Scripting API" Doxygen grubu `ModuleContext`'i ve sekiz arayüzü içerir.
 [Showcase modülü](../manual/editor/showcase.md#showcase-modulu) grubun her public fonksiyonunu çağırır;
 biri orada çağrılmıyorsa ya da modül testlerinin bir sayaçlı proxy'sinin (`tests/modules/CountingServices.hpp`)
 sayaç sayısı yanlışsa `python tools/check_api_coverage.py` CI'da başarısız olur. Bu yüzden yeni bir
@@ -167,3 +167,20 @@ döndürür. Değişiklikler `World::markChanged()` olmadan yerleşime ulaşır.
 | `transitionProgress` | Bir elemanın `UiTransition` ilerlemesi: dinlenmede 0, değişmiş durumda 1 |
 | `pollEvents` | Önceki karenin UI update'indeki olayları bir span'e kopyalar; sığandan fazla olabilen toplamı döndürür |
 | `setLanguage`, `language` | Oyunun dili; projede locale dosyası olan bir BCP 47 etiketi |
+
+## SaveService
+
+`Saved` etiketli Entity'lerin ve torunlarının kayıtlı oyunları (ADR 0058). İstekler çağrı sırasıyla kuyruğa
+girer ve host'un kayıt thread'inde çalışır; `save`, `load` ve `remove` hemen yalnızca `InvalidName`,
+`InvalidValue` ya da `Unavailable` ile başarısız olur, sonrasındaki her şey bir `SaveEvent`'tir. Bir kayıt,
+World'ü aynı update'in Modules adımından sonra yakalar; bir yükleme kayıtlı Entity'leri daha sonraki bir
+update'te değiştirir, bu yüzden `Entity` Handle'ları değişir: onları `Loaded` ya da `LoadedBackup`'tan sonra
+yeniden bulun.
+
+| Fonksiyon | Amaç |
+| --- | --- |
+| `available` | Host'un bir kayıt klasörü olup olmadığı |
+| `save`, `load`, `remove` | Bir slotu yazma, uygulama ya da silme isteğini kuyruğa ekler (1 ile 32 arası harf, rakam, `_`, `-`) |
+| `busy` | Bir isteğin olayını henüz vermemiş olup olmadığı |
+| `slots`, `slot` | Slot listesi (ad, `SaveMetadata`, `savedAt`, `SaveSlotState`) çağıranın span'ine, ya da tek bir slot; hiçbir dosya okunmaz |
+| `pollEvents` | Son update'in olaylarını (`Saved`, `Loaded`, `LoadedBackup`, `Removed`, bir `SaveError` ile `Failed`) bir span'e kopyalar; toplamı döndürür |

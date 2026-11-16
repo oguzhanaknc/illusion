@@ -955,6 +955,28 @@ Design: [ADR 0058](docs/adr/0058-saved-games.md). Work packages, one pull reques
   the showcase module calls the whole API. Done: tests stop a write after each step (temporary file, flush,
   backup, rename) through a failing file layer and find the previous save; requests keep their order; no
   test sleeps; `slots()` and `pollEvents()` do not allocate.
+  ✅ Done: `SaveService` (`USES save`, header-only `illusion::save_api`, module API version 6) with
+  `SaveEvent`, `SaveSlotInfo`, `SaveSlotState`; `SaveSystem` (`SaveSystem.hpp`): one save thread started on
+  first use, FIFO queue with tickets, slot list scanned once and updated by every request (`copySlots()`,
+  `slotsVersion()`), `<slot>.save.bak` written atomically before a valid file is replaced, fallback to it for a
+  missing or corrupt file (never for `NewerVersion`), `waitIdle()`, a destructor that finishes queued writes
+  and removals and drops queued loads; file operations behind `SaveStorage` (default `VfsSaveStorage`), the
+  clock in `SaveSystemDesc::clock`. `SaveSystemService` is the adapter: requests are kept until the Saves step
+  of `GameSession::update()` (after Modules, before Physics), which applies finished loads, turns finished
+  requests into the next update's events, then captures and sends this update's requests in call order; with
+  `fixedStep` it waits for the thread first, so results always arrive one update later and fixed-step runs
+  repeat. `GameSession::stop()` drops unsent requests and ignores the results of sent ones (writes still
+  finish, no load is applied); `GameSession::saves()` gives host tools the service. The player saves in
+  `user:/saves` and waits for the thread before it exits; Play mode uses `cache:/saves` (one `SaveSystem` per
+  session). The showcase writes, removes and then loads a slot at frame 240 (the load always fails with
+  `NotFound`, so the World is never replaced; events and the slot list only go into `showcase.Runtime`); the
+  showcase determinism test now runs with a `SaveSystem`. Tests stop a replacing write after each of six steps
+  (backup temporary file, flush, rename; slot temporary file, flush, rename) and load the previous save after
+  a restart.
+  Open: `SaveEvent` does not say which request failed (save, load or remove) beyond the slot; stale
+  `*.tmp-*` files of a write interrupted by a crash are ignored but never deleted; `SaveSystem` creates its
+  directory on the constructing thread; the save thread was run on Windows only (TSan runs in CI); no
+  benchmark of the thread hand-off (the SAVE-1 benchmarks measure capture and apply, the rest is file I/O).
 - SAVE-3 (`implementer`): Screenshots and cloud. `SaveSystemDesc::thumbnail` supplied by the player and by
   `PlaySession`, the sidecar `<slot>.png` and `SaveSlotInfo::screenshot` shown by a `UiImage`;
   `SaveSettings` (`settings:/save.json`) and the cloud mirror through `StoreService`. Done: a GPU test saves

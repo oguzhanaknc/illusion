@@ -41,7 +41,7 @@ clipped dial; see [Game UI](../ui.md). It shows in the Game view while playing.
 ## The showcase module
 
 The project's game code, `modules/showcase`, plays the scene through the whole
-[scripting API](../../reference/scripting-api.md): every function of `ModuleContext` and of the seven host
+[scripting API](../../reference/scripting-api.md): every function of `ModuleContext` and of the eight host
 services is called from `showcase.cpp`. When the session starts, it builds a floor and a gem from mesh
 geometry, adds the Jump (Space, gamepad South) and Move (WASD, left stick) actions, makes a chime from numbers
 and sets up the mixer. Until you press a key or move a stick, the Player walks back and forth across the

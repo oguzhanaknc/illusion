@@ -2,7 +2,7 @@
 # copy of the edit World, owns the editor's ModuleHost and implements the PlayHost of the play.*, input.inject,
 # input.read and module.* commands; EditorGamepads implements the GamepadHost of the gamepad.* commands over
 # the GamepadSystem that Play mode reads, and EditorPhysicsQueries the physics queries of drop to ground. Play
-# mode's games get a NullStoreService (ADR 0056).
+# mode's games get a NullStoreService (ADR 0056) and saved games in `cache:/saves` (ADR 0058).
 # GPU-free: the Game view renders the play World through editor_viewport.
 
 illusion_add_editor_library(illusion_editor_play STATIC
@@ -14,5 +14,5 @@ target_include_directories(illusion_editor_play PUBLIC
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>)
 target_link_libraries(illusion_editor_play PUBLIC
     illusion::editor_core illusion::runtime illusion::modules illusion::audio
-    PRIVATE illusion::assets illusion::input illusion::physics illusion::store)
+    PRIVATE illusion::assets illusion::input illusion::physics illusion::store illusion::save)
 illusion_configure_target(illusion_editor_play)

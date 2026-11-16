@@ -49,6 +49,8 @@ class ModuleHost;
 class ParticleWorld;
 class PhysicsWorld;
 class RenderAssetCache;
+class SaveService;
+class SaveSystem;
 class StoreService;
 class UiAssets;
 class UiWorld;
@@ -94,6 +96,9 @@ struct GameSessionDesc
     GamepadSystem* gamepads = nullptr;
     /// The store the modules see as StoreService (ADR 0056); the host calls its update(). Null for none.
     StoreService* store = nullptr;
+    /// The saved games the modules see as SaveService (ADR 0058); null provides no SaveService. One session
+    /// at a time may use it.
+    SaveSystem* saves = nullptr;
     /// Fonts and images of the UI (UiRenderAssets); null (headless) lays the UI out with solid colours only.
     UiAssets* uiAssets = nullptr;
     AudioOutput audioOutput = AudioOutput::Device; ///< Where the session's sound goes.
@@ -111,17 +116,24 @@ struct GameSessionDesc
 ///    only the `ui.*` actions get input.
 /// 2. **Modules:** ModuleHost::update() on the World (Play mode); then Entities created without an
 ///    EntityGuid get one.
-/// 3. **Physics:** PhysicsWorld::update().
-/// 4. **Hierarchy:** updateTransformHierarchy().
-/// 5. **UI:** the UiWorld lays out for the frame of setUiFrame(), handles the pointer and wheel of
+/// 3. **Saves:** (Play mode, with GameSessionDesc::saves, while started) the loads that the save thread
+///    finished are applied to the World (applySave()) and the finished requests become the events of
+///    SaveService::pollEvents() for the next update; then the save(), load() and remove() calls of the
+///    Modules step are sent in call order, each save() capturing the World now (captureSave()). A load is
+///    therefore applied in a later update than its request; with fixedStep the step first waits for the save
+///    thread, so it is always the next one and fixed-step runs repeat.
+/// 4. **Physics:** PhysicsWorld::update().
+/// 5. **Hierarchy:** updateTransformHierarchy().
+/// 6. **UI:** the UiWorld lays out for the frame of setUiFrame(), handles the pointer and wheel of
 ///    keyboardMouse() and the actions `ui.navigate`, `ui.submit` and `ui.cancel` (Play mode), and records
 ///    the draw list (ui()). UiGlyph labels come from the actions: the first binding for the device used
 ///    last, through localization().
-/// 6. **Particles and audio:** ParticleWorld::update() and AudioWorld::update().
-/// 7. **Resolvers:** the physics and render asset resolvers turn asset references into runtime Components.
+/// 7. **Particles and audio:** ParticleWorld::update() and AudioWorld::update().
+/// 8. **Resolvers:** the physics and render asset resolvers turn asset references into runtime Components.
 ///
 /// Modules find the services PhysicsService, AudioService, ParticleService, InputService, SceneService,
-/// UiService (over ui() and localization()) and, with GameSessionDesc::store, StoreService.
+/// UiService (over ui() and localization()), with GameSessionDesc::store StoreService and with
+/// GameSessionDesc::saves SaveService.
 ///
 /// The session's Localization (localization()) holds the string tables of the project's locale files,
 /// `assets:/locales/*.json`, read by create(): the keys of every file, with the English text of `en.json`
@@ -159,7 +171,9 @@ public:
     void start();
 
     /// Detaches the World from the ModuleHost, which runs each module's stop(). Does nothing when not
-    /// started; update() still runs the other steps afterwards.
+    /// started; update() still runs the other steps afterwards. Save requests not sent yet are dropped; the
+    /// writes and removals already sent finish on the save thread, but no event of them is reported and no
+    /// load is applied after stop().
     void stop();
 
     /// True between start() and stop().
@@ -209,6 +223,11 @@ public:
 
     /// The UI of the World; its drawData() is what the last update() recorded.
     [[nodiscard]] UiWorld& ui() noexcept;
+
+    /// The SaveService the modules see, for host tools (the saves commands of the editor); requests made
+    /// through it between updates are sent at the Saves step of the next update. Null without
+    /// GameSessionDesc::saves.
+    [[nodiscard]] SaveService* saves() noexcept;
 
     /// The game's string tables and active language.
     [[nodiscard]] text::Localization& localization() noexcept;

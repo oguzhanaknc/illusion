@@ -42,7 +42,7 @@ döndürülmüş, ölçeklenmiş, kırpılmış bir kadran; bkz. [Oyun UI'ı](..
 ## Showcase modülü
 
 Projenin oyun kodu olan `modules/showcase`, sahneyi [scripting API](../../reference/scripting-api.md)'nin
-tamamıyla oynatır: `ModuleContext`'in ve yedi host servisinin her fonksiyonu `showcase.cpp`'den çağrılır.
+tamamıyla oynatır: `ModuleContext`'in ve sekiz host servisinin her fonksiyonu `showcase.cpp`'den çağrılır.
 Oturum başlarken mesh geometrisinden bir zemin ve bir mücevher kurar, Jump (Space, gamepad South) ve Move
 (WASD, sol çubuk) eylemlerini ekler, sayılardan bir çan sesi üretir ve mikseri ayarlar. Bir tuşa basana ya da
 bir çubuğu oynatana kadar Player trigger pedinin üzerinden kendi kendine ileri geri yürür; sonra WASD ya da sol

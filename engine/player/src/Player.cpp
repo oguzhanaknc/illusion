@@ -36,6 +36,7 @@
 #include <illusion/runtime/GameSession.hpp>
 #include <illusion/runtime/ProjectSettings.hpp>
 #include <illusion/save/SaveComponents.hpp>
+#include <illusion/save/SaveSystem.hpp>
 #include <illusion/store/StoreBackend.hpp>
 #include <illusion/ui/UiWorld.hpp>
 
@@ -68,6 +69,8 @@ using detail::PlayerProblem;
 
 // The 3D view is rendered into this format, as the editor's views are, then presented (PresentPass).
 constexpr nvrhi::Format kViewFormat = nvrhi::Format::RGBA8_UNORM;
+// The slot files of the game's saved games (ADR 0058).
+constexpr std::string_view kPlayerSaveDirectory = "user:/saves";
 
 std::FILE* openForWriting(const std::filesystem::path& path)
 {
@@ -384,6 +387,10 @@ int runGame(const PlayerDesc& desc, const PlayerOptions& options, VirtualFileSys
         }
     }
 
+    SaveSystemDesc savesDesc;
+    savesDesc.files = &files;
+    savesDesc.directory = kPlayerSaveDirectory;
+    SaveSystem saves(savesDesc);
     GameSessionDesc sessionDesc;
     sessionDesc.jobs = &jobs;
     sessionDesc.files = &files;
@@ -393,6 +400,7 @@ int runGame(const PlayerDesc& desc, const PlayerOptions& options, VirtualFileSys
     sessionDesc.renderAssets = &renderAssets;
     sessionDesc.gamepads = gamepads.get();
     sessionDesc.store = store.get();
+    sessionDesc.saves = &saves;
     sessionDesc.uiAssets = &uiAssets;
     sessionDesc.fixedStep = options.fixedStep;
     Expected<std::unique_ptr<GameSession>, std::string> created = GameSession::create(sessionDesc);
@@ -514,6 +522,8 @@ int runGame(const PlayerDesc& desc, const PlayerOptions& options, VirtualFileSys
         }
     }
     session.stop();
+    // A save requested in the last frame is written before the player exits.
+    saves.waitIdle();
     device->waitIdle();
 
     int exit = static_cast<int>(PlayerExit::Ok);

@@ -28,6 +28,7 @@
 #include <illusion/physics/PhysicsService.hpp>
 #include <illusion/render/SceneComponents.hpp>
 #include <illusion/runtime/SceneService.hpp>
+#include <illusion/save/SaveService.hpp>
 #include <illusion/ui/UiService.hpp>
 
 #include <array>
@@ -169,6 +170,19 @@ void callServices(ModuleContext& context)
         static_cast<void>(ui->pollEvents(events));
         static_cast<void>(ui->setLanguage("tr"));
         static_cast<void>(ui->language());
+    }
+    if (SaveService* saves = context.service<SaveService>())
+    {
+        static_cast<void>(saves->available());
+        static_cast<void>(saves->save("slot1", SaveMetadata{"Title", 1.0, 2, "custom"}));
+        static_cast<void>(saves->load("slot1"));
+        static_cast<void>(saves->remove("slot1"));
+        static_cast<void>(saves->busy());
+        std::array<SaveSlotInfo, 2> slots{};
+        static_cast<void>(saves->slots(slots));
+        static_cast<void>(saves->slot("slot1"));
+        std::array<SaveEvent, 2> events{};
+        static_cast<void>(saves->pollEvents(events));
     }
 }
 

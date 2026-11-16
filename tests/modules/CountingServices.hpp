@@ -10,6 +10,7 @@
 #include <illusion/particles/ParticleService.hpp>
 #include <illusion/physics/PhysicsService.hpp>
 #include <illusion/runtime/SceneService.hpp>
+#include <illusion/save/SaveService.hpp>
 #include <illusion/store/StoreService.hpp>
 #include <illusion/ui/UiService.hpp>
 
@@ -626,6 +627,51 @@ public:
     [[nodiscard]] std::string_view language() const override
     {
         return forward<std::string_view>(18, [&](UiService& s) { return s.language(); });
+    }
+};
+
+// Counts the calls of every SaveService function.
+class CountingSave final : public CountingProxy<SaveService, 8>
+{
+public:
+    explicit CountingSave(SaveService* inner = nullptr) noexcept
+        : CountingProxy(inner)
+    {
+    }
+
+    using Void = Expected<void, SaveError>;
+
+    [[nodiscard]] bool available() const override
+    {
+        return forward<bool>(0, [&](SaveService& s) { return s.available(); });
+    }
+    Void save(std::string_view slot, const SaveMetadata& metadata) override
+    {
+        return forward<Void>(1, [&](SaveService& s) { return s.save(slot, metadata); });
+    }
+    Void load(std::string_view slot) override
+    {
+        return forward<Void>(2, [&](SaveService& s) { return s.load(slot); });
+    }
+    Void remove(std::string_view slot) override
+    {
+        return forward<Void>(3, [&](SaveService& s) { return s.remove(slot); });
+    }
+    [[nodiscard]] bool busy() const override
+    {
+        return forward<bool>(4, [&](SaveService& s) { return s.busy(); });
+    }
+    u32 slots(std::span<SaveSlotInfo> out) override
+    {
+        return forward<u32>(5, [&](SaveService& s) { return s.slots(out); });
+    }
+    [[nodiscard]] std::optional<SaveSlotInfo> slot(std::string_view slot) const override
+    {
+        return forward<std::optional<SaveSlotInfo>>(6, [&](SaveService& s) { return s.slot(slot); });
+    }
+    u32 pollEvents(std::span<SaveEvent> out) override
+    {
+        return forward<u32>(7, [&](SaveService& s) { return s.pollEvents(out); });
     }
 };
 
