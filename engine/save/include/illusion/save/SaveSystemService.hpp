@@ -32,7 +32,8 @@ public:
     /// files are not local files) slot files are mirrored there: the first update() takes every
     /// `<slot>.save` cloud file that is newer than the local slot (SaveSystem::importFile()), each written
     /// slot is copied with writeCloudFile() and each removed one removed with removeCloudFile(), on the
-    /// calling thread. Cloud failures (no quota, a corrupt cloud file) are logged and never become events.
+    /// calling thread, also those that cancel() waits for. Cloud failures (no quota, a corrupt cloud file)
+    /// are logged and never become events.
     explicit SaveSystemService(SaveSystem* system, StoreService* cloud = nullptr);
     ~SaveSystemService() override;
 
@@ -56,7 +57,9 @@ public:
     void update(World& world, GuidGenerator* guids, bool wait);
 
     /// Drops the requests not sent yet and ignores the results of those already sent: their writes and
-    /// removals still happen, their events and loads do not. Called by GameSession::stop().
+    /// removals still happen, their events and loads do not. With a cloud it first waits for the save thread
+    /// and mirrors the finished writes and removals; without one it does not block. Called by
+    /// GameSession::stop().
     void cancel();
 
 private:

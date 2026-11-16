@@ -1392,3 +1392,21 @@ TEST_CASE("a game session mirrors slot files only to an available remote cloud w
     CHECK_FALSE(store.cloudIsRemote());
     CHECK_FALSE(store.cloudFileExists("slot1.save"));
 }
+
+TEST_CASE("a session destroyed right after an update that saved leaves the slot in the cloud")
+{
+    SaveFixture f;
+    f.desc.fixedStep = false; // the update does not wait for the save thread
+    test::CloudTestStore cloud;
+    f.desc.store = &cloud;
+    f.desc.storeCloudIsRemote = true;
+    {
+        auto session = f.create();
+        session->world().create(Name{"Hero"}, Transform{}, Saved{});
+        session->start();
+        session->update(kStep);
+        REQUIRE(session->saves()->save("quit", SaveMetadata{}).hasValue());
+        session->update(kStep); // sends the save; no later update takes its result
+    }
+    CHECK(cloud.files.contains("quit.save"));
+}

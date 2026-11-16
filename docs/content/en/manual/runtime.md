@@ -270,7 +270,9 @@ session starts, a `<slot>.save` cloud file whose `savedAt` is newer than the loc
 local file becomes the slot's backup; an older or equally old cloud file changes nothing. The host sets
 `GameSessionDesc::storeCloudIsRemote` from its store. Cloud failures (no room, a corrupt cloud file) are only
 logged: the save itself still succeeds, and the game sees no event for them. The null store's cloud files are
-local files already, so nothing is mirrored there.
+local files already, so nothing is mirrored there. With a mirror, stopping the session waits for the save
+thread and mirrors the writes and removals it finished, so a save made just before the game quits reaches the
+cloud.
 
 ### Slot images
 

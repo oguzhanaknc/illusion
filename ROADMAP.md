@@ -997,7 +997,8 @@ Design: [ADR 0058](docs/adr/0058-saved-games.md). Work packages, one pull reques
   each valid `<slot>.save` cloud file (`SaveSystem::importFile()`: newer `savedAt` wins, the local file becomes
   the backup, equal or older changes nothing, a local `NewerVersion` file is kept), saved writes (with
   `keepFile`) go to `writeCloudFile()` and removals to `removeCloudFile()`; imports make no events and do not
-  count for `busy()`, cloud failures are only logged. `SaveCompletion` says which call made it
+  count for `busy()`, cloud failures are only logged; with a cloud, `GameSession::stop()` (`cancel()`) waits for
+  the save thread and mirrors the last writes and removals, so "save and quit" reaches the cloud. `SaveCompletion` says which call made it
   (`SaveRequestType`). Tests: the image sidecar (written, listed after a restart, dropped by a save without
   one, removed, a failing image step, a wrong size), a write stopped after each of nine steps (six of the slot,
   three of the image), cloud newer/older/equal/corrupt/only in the cloud, a full cloud, mirrored removals,

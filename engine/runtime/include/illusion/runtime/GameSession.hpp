@@ -175,8 +175,8 @@ public:
 
     /// Detaches the World from the ModuleHost, which runs each module's stop(). Does nothing when not
     /// started; update() still runs the other steps afterwards. Save requests not sent yet are dropped; the
-    /// writes and removals already sent finish on the save thread, but no event of them is reported and no
-    /// load is applied after stop().
+    /// writes and removals already sent finish on the save thread (with a cloud mirror, stop() waits for them
+    /// and mirrors them), but no event of them is reported and no load is applied after stop().
     void stop();
 
     /// True between start() and stop().

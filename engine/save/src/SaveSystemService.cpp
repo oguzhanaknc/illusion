@@ -379,10 +379,23 @@ void SaveSystemService::cancel()
     impl.events.clear();
     impl.owned.clear();
     impl.inFlight = 0;
-    if (impl.system != nullptr)
+    if (impl.system == nullptr)
     {
-        impl.acceptFrom = impl.system->nextTicket();
+        return;
     }
+    if (impl.cloud != nullptr)
+    {
+        // The last save before the session stops ("save and quit") reaches the cloud too.
+        impl.system->waitIdle();
+        impl.completed.clear();
+        impl.system->takeCompleted(impl.completed);
+        for (const SaveCompletion& done : impl.completed)
+        {
+            impl.mirror(done);
+        }
+        impl.completed.clear();
+    }
+    impl.acceptFrom = impl.system->nextTicket();
 }
 
 } // namespace illusion

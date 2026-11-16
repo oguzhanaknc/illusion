@@ -392,3 +392,34 @@ TEST_CASE("an idle update of a mirrored service does not allocate")
     CHECK(allocations == 0);
     CHECK(total == 1);
 }
+
+TEST_CASE("cancel() mirrors the writes and removals that were sent, without events or loads")
+{
+    Fixture f;
+    test::CloudTestStore cloud;
+    SaveSystem system(f.desc());
+    SaveSystemService service(&system, &cloud);
+    f.update(service);
+    REQUIRE(service.save("slot1", SaveMetadata{"last", 0.0, 0, {}}).hasValue());
+    f.update(service); // sent; its result would arrive in the next update
+    service.cancel();
+    CHECK(cloud.files.contains("slot1.save"));
+    CHECK(Fixture::events(service).empty());
+
+    REQUIRE(service.remove("slot1").hasValue());
+    f.update(service);
+    service.cancel();
+    CHECK_FALSE(cloud.files.contains("slot1.save"));
+
+    f.saveNow(service, "slot2", "kept");
+    f.world.query<const Name, Transform>().each(
+        [](const Name&, Transform& transform) { transform.position.x = 6.0f; });
+    REQUIRE(service.load("slot2").hasValue());
+    f.update(service);
+    service.cancel();
+    f.update(service);
+    f.update(service);
+    CHECK(Fixture::events(service).empty());
+    f.world.query<const Name, const Transform>().each(
+        [](const Name&, const Transform& transform) { CHECK(transform.position.x == 6.0f); });
+}

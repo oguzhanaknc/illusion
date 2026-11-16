@@ -277,7 +277,9 @@ başladığında `savedAt` değeri yerel slotunkinden yeni olan bir `<slot>.save
 yerel dosya slotun yedeği olur; daha eski ya da aynı yaştaki bir bulut dosyası hiçbir şeyi değiştirmez. Host,
 `GameSessionDesc::storeCloudIsRemote` değerini mağazasından ayarlar. Bulut hataları (yer kalmaması, bozuk bir bulut
 dosyası) yalnızca loglanır: kaydın kendisi yine başarılı olur ve oyun bunlar için bir olay görmez. Null mağazanın
-bulut dosyaları zaten yerel dosyalardır, bu yüzden oraya hiçbir şey yansıtılmaz.
+bulut dosyaları zaten yerel dosyalardır, bu yüzden oraya hiçbir şey yansıtılmaz. Yansıtma varken oturumu
+durdurmak kayıt thread'ini bekler ve bitirdiği yazma ve silmeleri yansıtır; böylece oyun kapanmadan hemen önce
+yapılan bir kayıt da buluta ulaşır.
 
 ### Slot görüntüleri
 
