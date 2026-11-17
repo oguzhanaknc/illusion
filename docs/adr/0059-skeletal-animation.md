@@ -1,6 +1,6 @@
 # 0059. Skeletal animation: skins and clips in the cooked model, poses outside the ECS, skinning in a compute pass
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-11-17
 
 ## Context
