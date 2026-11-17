@@ -2,6 +2,7 @@
 #include <illusion/core/Hash.hpp>
 #include <illusion/core/Serialization.hpp>
 
+#include <cmath>
 #include <format>
 #include <utility>
 
@@ -71,6 +72,142 @@ bool readImage(BinaryReader& reader, Image& image)
         {
             reader.fail();
             return false;
+        }
+    }
+    return true;
+}
+
+void writeSkeleton(BinaryWriter& writer, const Skeleton& skeleton)
+{
+    writer.writeString(skeleton.name);
+    writer.write(skeleton.rootTransform);
+    writer.write(static_cast<u32>(skeleton.joints.size()));
+    for (const SkeletonJoint& joint : skeleton.joints)
+    {
+        writer.writeString(joint.name);
+        writer.write(joint.parent);
+        writer.write(joint.translation);
+        writer.write(joint.rotation);
+        writer.write(joint.scale);
+        writer.write(joint.inverseBind);
+    }
+}
+
+bool readSkeleton(BinaryReader& reader, Skeleton& skeleton)
+{
+    u32 count = 0;
+    constexpr usize kMinJointSize = 4 + 4 + 12 + 16 + 12 + 64;
+    if (!reader.readString(skeleton.name) || !reader.read(skeleton.rootTransform) || !reader.read(count) ||
+        count > kMaxJoints || usize{count} * kMinJointSize > reader.remaining())
+    {
+        return false;
+    }
+    skeleton.joints.resize(count);
+    for (usize i = 0; i < skeleton.joints.size(); ++i)
+    {
+        SkeletonJoint& joint = skeleton.joints[i];
+        reader.readString(joint.name);
+        reader.read(joint.parent);
+        reader.read(joint.translation);
+        reader.read(joint.rotation);
+        reader.read(joint.scale);
+        reader.read(joint.inverseBind);
+        // Parents precede children (localToModel() relies on it).
+        if (!reader.ok() || joint.parent < -1 || joint.parent >= static_cast<i32>(i))
+        {
+            return false;
+        }
+    }
+    return true;
+}
+
+// A rigid mesh has no skin data; a skinned one has a SkinVertex per vertex whose joints exist in its
+// skeleton and whose weights sum to 1, and a box per joint.
+bool isValidSkin(const MeshData& mesh, std::span<const Skeleton> skins)
+{
+    if (mesh.skeleton < 0)
+    {
+        return mesh.skeleton == -1 && mesh.skin.empty() && mesh.jointBounds.empty();
+    }
+    if (static_cast<usize>(mesh.skeleton) >= skins.size())
+    {
+        return false;
+    }
+    const usize joints = skins[static_cast<usize>(mesh.skeleton)].joints.size();
+    if (mesh.skin.size() != mesh.vertices.size() || mesh.jointBounds.size() != joints)
+    {
+        return false;
+    }
+    for (const SkinVertex& vertex : mesh.skin)
+    {
+        u32 sum = 0;
+        for (u32 i = 0; i < kMaxJointInfluences; ++i)
+        {
+            sum += vertex.weights[i];
+            if (vertex.joints[i] >= joints)
+            {
+                return false;
+            }
+        }
+        if (sum != 65535)
+        {
+            return false;
+        }
+    }
+    return true;
+}
+
+void writeClip(BinaryWriter& writer, const AnimationClip& clip)
+{
+    writer.writeString(clip.name);
+    writer.write(clip.duration);
+    writer.write(static_cast<u32>(clip.channels.size()));
+    for (const AnimationChannel& channel : clip.channels)
+    {
+        writer.writeString(channel.joint);
+        writer.write(static_cast<u8>(channel.path));
+        writer.write(static_cast<u8>(channel.interpolation));
+        writer.writeVector(std::span<const f32>(channel.times));
+        writer.writeVector(std::span<const Vec4>(channel.values));
+    }
+}
+
+bool readClip(BinaryReader& reader, AnimationClip& clip)
+{
+    u32 count = 0;
+    constexpr usize kMinChannelSize = 4 + 1 + 1 + 8 + 8;
+    if (!reader.readString(clip.name) || !reader.read(clip.duration) || !reader.read(count) ||
+        usize{count} * kMinChannelSize > reader.remaining() || !std::isfinite(clip.duration) ||
+        clip.duration < 0.0f)
+    {
+        return false;
+    }
+    clip.channels.resize(count);
+    for (AnimationChannel& channel : clip.channels)
+    {
+        u8 path = 0;
+        u8 interpolation = 0;
+        if (!reader.readString(channel.joint) || !reader.read(path) || !reader.read(interpolation) ||
+            !reader.readVector(channel.times) || !reader.readVector(channel.values) ||
+            path > static_cast<u8>(AnimationPath::Scale) ||
+            interpolation > static_cast<u8>(AnimationInterpolation::CubicSpline) || channel.times.empty())
+        {
+            return false;
+        }
+        channel.path = static_cast<AnimationPath>(path);
+        channel.interpolation = static_cast<AnimationInterpolation>(interpolation);
+        const usize perKey = channel.interpolation == AnimationInterpolation::CubicSpline ? 3 : 1;
+        if (channel.values.size() != channel.times.size() * perKey || !std::isfinite(channel.times.front()) ||
+            !(channel.times.back() <= clip.duration))
+        {
+            return false;
+        }
+        for (usize i = 1; i < channel.times.size(); ++i)
+        {
+            if (!(channel.times[i] > channel.times[i - 1]) || !std::isfinite(channel.times[i]))
+            {
+                return false;
+            }
         }
     }
     return true;
@@ -181,6 +318,9 @@ std::vector<std::byte> serializeModel(const ModelData& model)
         writer.writeVector(std::span<const u32>(mesh.indices));
         writer.writeVector(std::span<const Submesh>(mesh.submeshes));
         writer.write(mesh.bounds);
+        writer.writeVector(std::span<const SkinVertex>(mesh.skin));
+        writer.writeVector(std::span<const Aabb>(mesh.jointBounds));
+        writer.write(mesh.skeleton);
     }
     writer.write(static_cast<u32>(model.images.size()));
     for (const Image& image : model.images)
@@ -218,6 +358,16 @@ std::vector<std::byte> serializeModel(const ModelData& model)
         writer.write(node.parent);
         writer.write(node.mesh);
     }
+    writer.write(static_cast<u32>(model.skins.size()));
+    for (const Skeleton& skeleton : model.skins)
+    {
+        writeSkeleton(writer, skeleton);
+    }
+    writer.write(static_cast<u32>(model.animations.size()));
+    for (const AnimationClip& clip : model.animations)
+    {
+        writeClip(writer, clip);
+    }
     return bytes;
 }
 
@@ -239,7 +389,9 @@ std::optional<ModelData> deserializeModel(std::span<const std::byte> bytes)
     for (MeshData& mesh : model.meshes)
     {
         if (!reader.readVector(mesh.vertices) || !reader.readVector(mesh.indices) ||
-            !reader.readVector(mesh.submeshes) || !reader.read(mesh.bounds))
+            !reader.readVector(mesh.submeshes) || !reader.read(mesh.bounds) ||
+            !reader.readVector(mesh.skin) || !reader.readVector(mesh.jointBounds) ||
+            !reader.read(mesh.skeleton))
         {
             return std::nullopt;
         }
@@ -343,6 +495,37 @@ std::optional<ModelData> deserializeModel(std::span<const std::byte> bytes)
         // Parents precede children (ModelData::worldMatrices() relies on it).
         if (!reader.ok() || node.parent < -1 || node.parent >= static_cast<i32>(i) || node.mesh < -1 ||
             (node.mesh >= 0 && static_cast<usize>(node.mesh) >= model.meshes.size()))
+        {
+            return std::nullopt;
+        }
+    }
+    if (!readCount(4 + 4 + 64))
+    {
+        return std::nullopt;
+    }
+    model.skins.resize(count);
+    for (Skeleton& skeleton : model.skins)
+    {
+        if (!readSkeleton(reader, skeleton))
+        {
+            return std::nullopt;
+        }
+    }
+    for (const MeshData& mesh : model.meshes)
+    {
+        if (!isValidSkin(mesh, model.skins))
+        {
+            return std::nullopt;
+        }
+    }
+    if (!readCount(4 + 4 + 4))
+    {
+        return std::nullopt;
+    }
+    model.animations.resize(count);
+    for (AnimationClip& clip : model.animations)
+    {
+        if (!readClip(reader, clip))
         {
             return std::nullopt;
         }

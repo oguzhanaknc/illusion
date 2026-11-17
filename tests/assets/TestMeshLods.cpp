@@ -294,6 +294,26 @@ TEST_CASE("clearLods removes the levels and their indices")
     CHECK(mesh.indices == original);
 }
 
+TEST_CASE("skinned meshes keep their skin stream parallel to the vertices through levels of detail")
+{
+    MeshData foliage = cardFoliage(2000);
+    foliage.skin.assign(foliage.vertices.size(), SkinVertex{{0, 0, 0, 0}, {65535, 0, 0, 0}});
+    foliage.jointBounds = {foliage.bounds};
+    foliage.skeleton = 0;
+    const usize vertices = foliage.vertices.size();
+    generateLods(foliage);
+    CHECK(foliage.vertices.size() == vertices); // skinned cards are not thinned
+    CHECK(foliage.skin.size() == vertices);
+
+    MeshData sphere = makeSphere(1.0f, 64, 32);
+    sphere.skin.assign(sphere.vertices.size(), SkinVertex{{0, 0, 0, 0}, {65535, 0, 0, 0}});
+    generateLods(sphere);
+    REQUIRE(sphere.submeshes[0].lodCount > 0);
+    CHECK(sphere.skin.size() == sphere.vertices.size());
+    clearLods(sphere);
+    CHECK(sphere.skin.size() == sphere.vertices.size());
+}
+
 TEST_CASE("fullDetailIndices leaves out the levels of detail")
 {
     MeshData mesh = makeSphere(1.0f, 64, 32);

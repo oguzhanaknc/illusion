@@ -19,6 +19,8 @@ constexpr std::array<std::string_view, 7> kBuiltinAssets = {
 constexpr std::string_view kMeshPrefix = "mesh/";
 constexpr std::string_view kMaterialPrefix = "material/";
 constexpr std::string_view kNodePrefix = "node/";
+constexpr std::string_view kSkinPrefix = "skin/";
+constexpr std::string_view kAnimationPrefix = "animation/";
 
 // Parses a decimal index; @p canonical is false if it has leading zeros.
 bool parseIndex(std::string_view text, u32& index, bool& canonical) noexcept
@@ -59,6 +61,17 @@ bool parseFragment(std::string_view fragment, AssetPathParts& parts, bool& canon
         parts.node = fragment.substr(kNodePrefix.size());
         return isValidNodeName(parts.node);
     }
+    if (fragment.starts_with(kSkinPrefix))
+    {
+        parts.fragment = AssetFragment::Skin;
+        return parseIndex(fragment.substr(kSkinPrefix.size()), parts.index, canonical);
+    }
+    if (fragment.starts_with(kAnimationPrefix))
+    {
+        parts.fragment = AssetFragment::Animation;
+        parts.node = fragment.substr(kAnimationPrefix.size());
+        return isValidNodeName(parts.node);
+    }
     return false;
 }
 
@@ -97,7 +110,11 @@ std::optional<std::string> normalizeAssetPath(std::string_view path)
     case AssetFragment::Material:
         file->append(kMaterialPrefix).append(std::to_string(parts.index));
         break;
+    case AssetFragment::Skin:
+        file->append(kSkinPrefix).append(std::to_string(parts.index));
+        break;
     case AssetFragment::Node:
+    case AssetFragment::Animation:
     case AssetFragment::None:
         file->append(path.substr(hash + 1));
         break;

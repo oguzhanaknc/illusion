@@ -40,6 +40,11 @@ const std::vector<illusion::Entity> entities = illusion::spawnModel(world, *mode
   `<node> (<submesh>)`. It returns every created Entity, parents first. A `RenderAssetResolver` loads the
   model when the World is drawn; `spawnModel()` with `ModelHandles` instead writes `RenderMesh` Components
   for a model uploaded by code (they are drawn at once but not saved).
+- Skins become `ModelData::skins` (a `Skeleton` per skin: joints ordered parents first, rest pose, inverse
+  bind matrices) and a skinned mesh gets `MeshData::skin`, four joints and weights per vertex (the four
+  largest when a vertex has more). Animations whose channels move joints become `ModelData::animations`
+  (`AnimationClip`: Step, Linear and CubicSpline keyframes per joint name); morph target weights are
+  skipped. `engine/animation` samples and poses them (ADR 0059).
 - Required extensions the engine does not support (Draco, meshopt, KTX2 Textures) make loading fail
   with a clear error instead of rendering garbage. `KHR_mesh_quantization` is supported.
 
@@ -179,6 +184,8 @@ A fragment after `#` selects part of a model:
 | `game:/ship.glb#mesh/2` | mesh 2 |
 | `game:/ship.glb#material/0` | material 0 |
 | `game:/ship.glb#node/Hull` | the mesh of the node named `Hull` |
+| `game:/hero.glb#skin/0` | skeleton 0 (`ModelData::skins`) |
+| `game:/hero.glb#animation/Walk` | the animation clip named `Walk` |
 
 The reserved mount `builtin:` provides assets that need no files; `VirtualFileSystem` refuses to mount it:
 

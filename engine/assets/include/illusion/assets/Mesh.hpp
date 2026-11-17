@@ -3,6 +3,7 @@
 /// @file
 /// CPU-side meshes: vertex format, submeshes, bounds and procedural shapes.
 
+#include <illusion/assets/Animation.hpp>
 #include <illusion/core/Base.hpp>
 #include <illusion/core/Math.hpp>
 
@@ -69,6 +70,13 @@ struct MeshData
     std::vector<u32> indices;       ///< Triangle list indices.
     std::vector<Submesh> submeshes; ///< At least one submesh for a valid mesh.
     Aabb bounds;                    ///< Bounds of all vertices.
+    /// Joints and weights per vertex (parallel to vertices) of a skinned mesh; empty for a rigid one.
+    std::vector<SkinVertex> skin;
+    /// Bind-space bounds of the vertices each joint moves, indexed like the skeleton's joints; empty for a
+    /// rigid mesh. A joint that moves no vertex has an empty box.
+    std::vector<Aabb> jointBounds;
+    /// Index into ModelData::skins of the skeleton that skin refers to, or -1 for a rigid mesh.
+    i32 skeleton = -1;
 
     /// Recomputes bounds of the mesh and of every submesh from the vertices.
     void computeBounds();
@@ -93,12 +101,12 @@ struct MeshLodSettings
 /// none.
 ///
 /// Foliage made of cards (at least 16 parts that share no vertices, of at most 64 triangles on average)
-/// cannot be simplified that way, so once the simplifier makes no progress its levels thin the cards: each
-/// keeps an evenly spread MeshLodSettings::reduction of the previous level's cards and enlarges them about
-/// their centres to make up for the leaf area of the others. The enlarged cards are new vertices appended to
-/// MeshData::vertices (the bounds grow to include them). The error of a thinned level is the mean card size
-/// times (1 / sqrt(fraction of the cards kept) - 1), the growth of the gaps between cards. Deterministic: the
-/// same mesh and settings always give the same vertices and indices.
+/// (and not skinned) cannot be simplified that way, so once the simplifier makes no progress its levels thin
+/// the cards: each keeps an evenly spread MeshLodSettings::reduction of the previous level's cards and
+/// enlarges them about their centres to make up for the leaf area of the others. The enlarged cards are new
+/// vertices appended to MeshData::vertices (the bounds grow to include them). The error of a thinned level is
+/// the mean card size times (1 / sqrt(fraction of the cards kept) - 1), the growth of the gaps between cards.
+/// Deterministic: the same mesh and settings always give the same vertices and indices.
 void generateLods(MeshData& mesh, const MeshLodSettings& settings = {});
 
 /// The coarsest level of @p submesh (0 to Submesh::lodCount) whose error stays at or below @p maxPixelError

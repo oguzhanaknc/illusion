@@ -496,9 +496,10 @@ struct RenderAssetCache::Impl
                 entry.status = Status::Ready;
             }
         }
-        else if (parts->fragment == AssetFragment::Material)
+        else if (parts->fragment != AssetFragment::None && parts->fragment != AssetFragment::Mesh &&
+                 parts->fragment != AssetFragment::Node)
         {
-            fail(entry.status, id, "refers to a material, not a mesh");
+            fail(entry.status, id, "refers to a material, skin or animation, not a mesh");
         }
         else
         {

@@ -1053,6 +1053,29 @@ Nothing of it exists yet: glTF skins and animations are skipped on import and th
   asset needed), sampling tests for every interpolation and for clip ends and loops, the round trip through
   the cooked format, benchmark `animation/evaluate-300x60` (sample + compose + skin matrices, budget from the
   measurement as AGENTS.md says).
+  ✅ Done: `loadGltf()` imports every skin of up to `kMaxJoints` joints as a `Skeleton` (joints sorted by depth so
+  parents come first, parents remapped to the nearest joint ancestor, rest TRS from the node or its matrix,
+  inverse bind matrices or identity, `rootTransform` from the world matrix of the root joints' common
+  ancestor), JOINTS_0/1 and WEIGHTS_0/1 (u8/u16, float/unorm) into `MeshData::skin` for the skin of the first
+  node that draws the mesh with one (the four largest influences, renormalized and quantized to sum to 65535;
+  invalid data leaves the mesh rigid with a warning), `jointBounds` and `skeleton`; animations keep their
+  translation, rotation and scale channels on joints (other nodes and morph weights are skipped with a log
+  line, channels with mismatched or non-increasing keys with a warning), sorted by joint name then path, with
+  unique names (`<name>.2` for repeats, `animation<N>` for none). `scaleModel()` scales joint translations,
+  inverse binds, `rootTransform`, `jointBounds` and translation keys; skinned meshes are never card-thinned
+  and `clearLods()` keeps `skin` parallel. Model format 6 rejects joint indices out of range, weights that do
+  not sum to 65535, parents at or after their joint, more than `kMaxJoints` joints, empty or non-increasing
+  times, value counts that do not match and clips shorter than their keys. `AssetFragment::Skin` and
+  `Animation`, `AssetKind::Skeleton` and `AnimationClip`; mesh resolvers (render, physics, viewport snapping)
+  reject the new fragments. `engine/animation` (`illusion::animation`): `bindClip()` (by name; inconsistent
+  channels stay unbound), `clipTime()`, `restPose()`, `sampleClip()` (binary search, Step, Linear with
+  shortest-arc slerp, glTF CubicSpline), `localToModel()`, `skinMatrices()`, `skinnedBounds()`; none allocates.
+  Test data `tests/data/gltf/rigged.gltf` (from `generate.py`). `animation/evaluate-300x60`: 1.5 ms on one
+  thread (budget 10 ms).
+  Open: the physics Joint Component already owns `illusion::Joint`, so a skeleton's joint is `SkeletonJoint`;
+  a mesh drawn by nodes with different skins is skinned for the first only; nodes between two joints are
+  ignored with a warning; no `_api` target or SDK export for `engine/animation` until a module API needs it
+  (ANIM-2), and the player links it with ANIM-1b.
 - ANIM-1b (`implementer`): Runtime. Saved `Animator` (`illusion.Animator`) and runtime `AnimationPose`, the
   resolver, `AnimationWorld` (pose slots, cached clip bindings, double-buffered skin matrices, world bounds)
   with its step in `GameSession::update()` after Saves; the editor evaluates the saved `time` without

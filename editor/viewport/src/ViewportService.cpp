@@ -771,7 +771,8 @@ struct ViewportService::Impl
         if (inserted)
         {
             const std::optional<AssetPathParts> parts = splitAssetPath(AssetPathTable::instance().path(id));
-            if (!parts || parts->fragment == AssetFragment::Material)
+            if (!parts || (parts->fragment != AssetFragment::None && parts->fragment != AssetFragment::Mesh &&
+                           parts->fragment != AssetFragment::Node))
             {
                 entry.status = SnapMesh::Status::Failed;
             }

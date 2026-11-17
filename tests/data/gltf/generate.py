@@ -11,6 +11,7 @@ The outputs are committed; rerun only when changing the test data.
 - unsupported.gltf: requires KHR_draco_mesh_compression (must be rejected).
 - translucent.gltf: the triangle with a leaf material that requires KHR_materials_diffuse_transmission.
 - scene/bad_image_uri.gltf: the quad with a malformed base64 image data URI (must be rejected).
+- rigged.gltf: a skinned strip with two skins and three animations (see rigged_document()).
 - textures/checker.png: 2x2 RGBA checker (red, green / blue, white).
 """
 
@@ -161,6 +162,115 @@ def main():
 
     doc = quad_document("two_nodes.bin", len(buffer), {"uri": "data:image/png;base64,===="})
     write("scene/bad_image_uri.gltf", (json.dumps(doc, indent=2) + "\n").encode())
+
+    write("rigged.gltf", (json.dumps(rigged_document(), indent=2) + "\n").encode())
+
+
+class BufferBuilder:
+    """Packs accessors into one embedded buffer, each in its own 4-byte aligned buffer view."""
+
+    def __init__(self):
+        self.data = b""
+        self.views = []
+        self.accessors = []
+
+    def add(self, fmt, rows, component_type, accessor_type, normalized=False, minmax=False):
+        while len(self.data) % 4:
+            self.data += b"\x00"
+        offset = len(self.data)
+        for row in rows:
+            self.data += struct.pack("<" + fmt, *(row if isinstance(row, (list, tuple)) else [row]))
+        self.views.append({"buffer": 0, "byteOffset": offset, "byteLength": len(self.data) - offset})
+        accessor = {"bufferView": len(self.views) - 1, "componentType": component_type, "count": len(rows),
+                    "type": accessor_type}
+        if normalized:
+            accessor["normalized"] = True
+        if minmax:
+            columns = list(zip(*[row if isinstance(row, (list, tuple)) else [row] for row in rows]))
+            accessor["min"] = [min(c) for c in columns]
+            accessor["max"] = [max(c) for c in columns]
+        self.accessors.append(accessor)
+        return len(self.accessors) - 1
+
+
+def rigged_document():
+    """rigged.gltf: a skinned strip on five joints listed children first, a second skin without inverse bind
+    matrices, one morph target, and the animations "step" (Step), "linear" (Linear, with a channel on a
+    non-joint node and a morph weights channel, both skipped on import) and "cubic" (CubicSpline)."""
+    b = BufferBuilder()
+    positions = [(-0.5, 0, 2), (0.5, 0, 2), (-0.5, 1, 2), (0.5, 1, 2), (-0.5, 2, 2), (0.5, 2, 2), (1.5, 0, 2),
+                 (1.0, 1.0, 2)]
+    # Skin joint order: tip 0, mid 1, root 2, extra 3, side 4. Vertex 7 has five influences.
+    joints0 = [(2, 0, 0, 0), (2, 0, 0, 0), (2, 1, 0, 0), (2, 1, 0, 0), (1, 0, 0, 0), (0, 0, 0, 0), (4, 3, 0, 0),
+               (0, 1, 2, 3)]
+    weights0 = [(1, 0, 0, 0), (1, 0, 0, 0), (0.5, 0.5, 0, 0), (0.5, 0.5, 0, 0), (0.25, 0.75, 0, 0), (1, 0, 0, 0),
+                (0.6, 0.4, 0, 0), (0.1, 0.15, 0.3, 0.05)]
+    joints1 = [(0, 0, 0, 0)] * 7 + [(4, 0, 0, 0)]
+    weights1 = [(0, 0, 0, 0)] * 7 + [(26214, 0, 0, 0)]  # unorm16 0.4
+    position = b.add("3f", positions, 5126, "VEC3", minmax=True)
+    joint0 = b.add("4B", joints0, 5121, "VEC4")
+    weight0 = b.add("4f", weights0, 5126, "VEC4")
+    joint1 = b.add("4H", joints1, 5123, "VEC4")
+    weight1 = b.add("4H", weights1, 5123, "VEC4", normalized=True)
+    morph = b.add("3f", [(0, 0, 0)] * len(positions), 5126, "VEC3", minmax=True)
+    indices = b.add("H", [0, 1, 3, 0, 3, 2, 2, 3, 5, 2, 5, 4, 1, 6, 7, 1, 7, 3], 5123, "SCALAR")
+    bind = {"tip": (0, 2, 2), "mid": (0, 1, 2), "root": (0, 0, 2), "extra": (2, 0, 2), "side": (1, 0, 2)}
+    inverse_binds = []
+    for name in ["tip", "mid", "root", "extra", "side"]:
+        x, y, z = bind[name]
+        inverse_binds.append((1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, -x, -y, -z, 1))
+    inverse_bind = b.add("16f", inverse_binds, 5126, "MAT4")
+
+    def sampler(times, values, fmt, accessor_type, interpolation):
+        times_accessor = b.add("f", times, 5126, "SCALAR", minmax=True)
+        return {"input": times_accessor, "output": b.add(fmt, values, 5126, accessor_type),
+                "interpolation": interpolation}
+
+    step = {"name": "step", "samplers": [sampler([0, 1, 2], [(0, 1, 0), (0, 2, 0), (0, 3, 0)], "3f", "VEC3", "STEP")],
+            "channels": [{"sampler": 0, "target": {"node": 2, "path": "translation"}}]}
+    linear = {"name": "linear", "samplers": [
+        sampler([0, 1], [(0, 0, 0, 1), (0, 0, 0.70710678, 0.70710678)], "4f", "VEC4", "LINEAR"),
+        sampler([0.5, 1.5], [(0, 1, 0), (0, 3, 0)], "3f", "VEC3", "LINEAR"),
+        sampler([0, 1], [(0, 0, 2), (0, 0, 4)], "3f", "VEC3", "LINEAR"),
+        sampler([0, 1], [0, 1], "f", "SCALAR", "LINEAR"),
+    ], "channels": [
+        {"sampler": 0, "target": {"node": 1, "path": "rotation"}},
+        {"sampler": 1, "target": {"node": 3, "path": "translation"}},
+        {"sampler": 2, "target": {"node": 0, "path": "translation"}},
+        {"sampler": 3, "target": {"node": 6, "path": "weights"}},
+    ]}
+    cubic = {"name": "cubic", "samplers": [sampler(
+        [0, 2], [(0, 0, 0), (1, 1, 1), (1, 0, 0), (0, 1, 0), (2, 2, 2), (0, 0, 0)], "3f", "VEC3", "CUBICSPLINE")],
+        "channels": [{"sampler": 0, "target": {"node": 4, "path": "scale"}}]}
+
+    return {
+        "asset": {"version": "2.0", "generator": "illusion tests"},
+        "scene": 0,
+        "scenes": [{"nodes": [0]}],
+        "nodes": [
+            {"name": "Armature", "translation": [0, 0, 2], "children": [1, 6]},
+            {"name": "root", "children": [2, 4]},
+            {"name": "mid", "translation": [0, 1, 0], "children": [3]},
+            {"name": "tip", "translation": [0, 1, 0]},
+            {"name": "side", "translation": [1, 0, 0], "children": [5]},
+            {"name": "extra", "translation": [1, 0, 0]},
+            {"name": "body", "mesh": 0, "skin": 0},
+        ],
+        "meshes": [{"name": "strip", "weights": [0], "primitives": [{
+            "attributes": {"POSITION": position, "JOINTS_0": joint0, "WEIGHTS_0": weight0, "JOINTS_1": joint1,
+                           "WEIGHTS_1": weight1},
+            "targets": [{"POSITION": morph}],
+            "indices": indices}]}],
+        "skins": [
+            {"name": "body", "joints": [3, 2, 1, 5, 4], "inverseBindMatrices": inverse_bind},
+            {"name": "arm", "joints": [4]},
+        ],
+        "animations": [step, linear, cubic],
+        "buffers": [{"uri": "data:application/octet-stream;base64," + base64.b64encode(b.data).decode(),
+                     "byteLength": len(b.data)}],
+        "bufferViews": b.views,
+        "accessors": b.accessors,
+    }
 
 
 if __name__ == "__main__":
