@@ -65,6 +65,7 @@ Record (ADR) olarak kaydedilir. Her kayıt bağlamı, kararı ve sonuçlarını 
 | [0056](https://github.com/oguzhanaknc/illusion/blob/main/docs/adr/0056-store-service-and-steamworks.md) | Mağazalar: her zaman Build edilen boş bir mağazayla satıcıdan bağımsız bir StoreService ve yalnızca kullanıcının sağladığı Steamworks SDK'sına karşı Build edilen isteğe bağlı bir Steam kütüphanesi |
 | [0057](https://github.com/oguzhanaknc/illusion/blob/main/docs/adr/0057-game-ui.md) | Oyun arayüzü: elemanlar bir canvas altında kayıtlı Component'leri olan Entity'lerdir, stb_truetype ile üretilen signed distance field fontlar, tonemapping'den sonra çizilen toplu bir draw list, InputActions üzerinden gezinme ve yoklanan bir UiService |
 | [0058](https://github.com/oguzhanaknc/illusion/blob/main/docs/adr/0058-saved-games.md) | Kayıtlı oyunlar: Saved etiketli Entity'lerin slot dosyaları, sağlama toplamlı bir kapsayıcı içinde scene JSON olarak, tek yedekle atomik biçimde bir kayıt thread'inde yazılır; yoklanan bir SaveService üzerinden |
+| [0059](https://github.com/oguzhanaknc/illusion/blob/main/docs/adr/0059-skeletal-animation.md) | İskelet animasyonu: skin'ler ve clip'ler model içine cook edilir, pose'lar ECS dışındaki bir AnimationWorld'de tutulur, skinning kare başına bir kez bir compute pass'te yapılır |
 
 Yeni bir karar önermek için `docs/adr/0000-template.md` dosyasını kopyalayın ve
 [katkıda bulunma rehberini](../contributing.md#architecture-decision-recordlar) izleyin.
