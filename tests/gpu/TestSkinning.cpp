@@ -567,6 +567,107 @@ TEST_CASE("shadows of a skinned mesh show its posed shape")
     CHECK(device->validationErrorCount() == 0);
 }
 
+TEST_CASE("skinning binds windows of buffers larger than the storage buffer range and draws the same image")
+{
+    // 256 KiB: the vertex pool and the skinned buffers span many windows, and a 10,240-vertex instance is
+    // skinned in several dispatches.
+    constexpr u64 kRange = 256 * 1024;
+    struct Result
+    {
+        std::vector<std::byte> color;
+        std::vector<std::byte> motion;
+    };
+    const auto run = [](u64 maxStorageBufferRange) {
+        Result result;
+        auto device = RenderDevice::create({.validation = ValidationMode::Enabled,
+                                            .headless = true,
+                                            .maxStorageBufferRange = maxStorageBufferRange});
+        REQUIRE(device);
+        {
+            Rig rig(*device);
+            writeCrowdModel(rig.project.files);
+            auto ring = ReadbackRing::create(*device);
+            REQUIRE(ring);
+            auto target = targetFor(*device, kGoldenSize);
+            std::vector<Entity> characters;
+            for (u32 i = 0; i < 6; ++i)
+            {
+                Transform transform;
+                transform.position =
+                    Vec3(static_cast<f32>(i % 3) * 2.5f - 2.5f, static_cast<f32>(i / 3) * 3.0f - 1.5f, 0);
+                transform.scale = Vec3(0.8f);
+                characters.push_back(rig.character(kCrowd, "bend", static_cast<f32>(i) * 0.1f, transform));
+            }
+            rig.load();
+            const RenderView view = orthographicView(Vec2(0), 8);
+            for (int frame = 0; frame < 3; ++frame)
+            {
+                rig.frame(target, view, 0.1f, true);
+            }
+            CHECK(rig.renderer->stats().skinnedInstances == 6);
+            result.color = pixels(*ring, target);
+            result.motion = pixels(*ring, rig.renderer->motionVectors());
+
+            const std::optional<ModelData> model = loadGltf(rig.project.files, std::string(kCrowd));
+            REQUIRE(model.has_value());
+            const MeshData& mesh = model->meshes.at(0);
+            for (const Entity character : characters)
+            {
+                const SkinnedVertexRange range = rig.renderer->skinnedVertices(character);
+                REQUIRE(range.vertices != nullptr);
+                REQUIRE(range.vertexCount == mesh.vertices.size());
+                if (maxStorageBufferRange != 0)
+                {
+                    CHECK(device->gpu().maxStorageBufferRange == maxStorageBufferRange);
+                    CHECK(range.vertices->getDesc().byteSize > 4 * maxStorageBufferRange);
+                }
+                const std::vector<std::byte> vertexBytes =
+                    readBuffer(*device, range.vertices, static_cast<u64>(range.firstVertex) * sizeof(Vertex),
+                               range.vertexCount * sizeof(Vertex));
+                const std::vector<std::byte> previousBytes = readBuffer(
+                    *device, range.previousPositions, static_cast<u64>(range.firstVertex) * sizeof(Vec4),
+                    range.vertexCount * sizeof(Vec4));
+                std::vector<Vertex> gpu(range.vertexCount);
+                std::vector<Vec4> previous(range.vertexCount);
+                std::memcpy(gpu.data(), vertexBytes.data(), vertexBytes.size());
+                std::memcpy(previous.data(), previousBytes.data(), previousBytes.size());
+                const AnimationPose& pose = rig.world.get<AnimationPose>(character);
+                const std::span<const SkinMatrix> current = rig.animation.skinMatrices(pose.slot);
+                const std::span<const SkinMatrix> before = rig.animation.previousSkinMatrices(pose.slot);
+                usize wrong = 0;
+                for (usize i = 0; i < mesh.vertices.size(); ++i)
+                {
+                    const Vec3 position = skinned(current, mesh.skin[i], mesh.vertices[i].position, 1.0f);
+                    const Vec3 previousPosition =
+                        skinned(before, mesh.skin[i], mesh.vertices[i].position, 1.0f);
+                    wrong += glm::length(gpu[i].position - position) < 1e-4f &&
+                                     glm::length(Vec3(previous[i]) - previousPosition) < 1e-4f
+                                 ? 0u
+                                 : 1u;
+                }
+                CHECK(wrong == 0);
+            }
+        }
+        device->waitIdle();
+        CHECK(device->validationErrorCount() == 0);
+        return result;
+    };
+    const Result whole = run(0);
+    const Result windowed = run(kRange);
+    CHECK(windowed.color == whole.color);
+    CHECK(windowed.motion == whole.motion);
+    bool moving = false;
+    for (usize i = 0; i < whole.motion.size(); i += 4)
+    {
+        moving |= glm::unpackHalf2x16(static_cast<u32>(std::to_integer<u32>(whole.motion[i]) |
+                                                       (std::to_integer<u32>(whole.motion[i + 1]) << 8) |
+                                                       (std::to_integer<u32>(whole.motion[i + 2]) << 16) |
+                                                       (std::to_integer<u32>(whole.motion[i + 3]) << 24))) !=
+                  Vec2(0.0f);
+    }
+    CHECK(moving);
+}
+
 TEST_CASE("the skinning pass allocates nothing in the steady state")
 {
     auto device = RenderDevice::create({.validation = ValidationMode::Disabled, .headless = true});

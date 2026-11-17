@@ -26,6 +26,7 @@
 #include <bit>
 #include <cmath>
 #include <cstddef>
+#include <numeric>
 #include <unordered_map>
 #include <vector>
 
@@ -187,6 +188,41 @@ struct SkinningPush
     u32 padding;
 };
 
+// A buffer bound as a storage buffer through windows, because one binding may cover at most
+// GpuInfo::maxStorageBufferRange bytes: window k starts at element k * stride (an offset aligned for storage
+// buffers) and covers up to `size` elements. Windows overlap, so a range of up to span() elements that starts
+// at element `first` lies within window(first).
+struct StorageWindows
+{
+    u64 size = 0;   // elements
+    u64 stride = 1; // elements
+
+    // The smallest number of elements of @p elementBytes whose byte size is a multiple of @p alignment.
+    [[nodiscard]] static u64 alignedElements(u64 elementBytes, u64 alignment) noexcept
+    {
+        return alignment / std::gcd(elementBytes, alignment);
+    }
+
+    StorageWindows() = default;
+    // @p unit: window starts are multiples of it (see alignedElements()).
+    StorageWindows(u64 elementBytes, u64 unit, u64 maxRange) noexcept
+        : size(maxRange / elementBytes)
+        , stride(std::max(unit, size / 4 / unit * unit))
+    {
+    }
+
+    [[nodiscard]] u64 span() const noexcept { return size > stride ? size - stride : 0; }
+    [[nodiscard]] u32 window(u64 first) const noexcept { return static_cast<u32>(first / stride); }
+    // The first element of window @p index.
+    [[nodiscard]] u64 start(u32 index) const noexcept { return index * stride; }
+    // The bytes window @p index binds of a buffer of @p bufferBytes holding elements of @p elementBytes.
+    [[nodiscard]] nvrhi::BufferRange range(u32 index, u64 elementBytes, u64 bufferBytes) const noexcept
+    {
+        const u64 offset = start(index) * elementBytes;
+        return {offset, std::min(size * elementBytes, bufferBytes - offset)};
+    }
+};
+
 constexpr u32 kSkinningGroupSize = 64;
 static_assert(offsetof(Vertex, normal) == 12 && offsetof(Vertex, tangent) == 24 && offsetof(Vertex, uv) == 40,
               "Skinning.slang reads and writes this layout");
@@ -285,9 +321,10 @@ struct SceneRenderer::Impl
     nvrhi::BufferHandle viewConstants;
     nvrhi::BufferHandle instanceBuffer;
     u32 instanceCapacity = 0;
-    // View binding sets by environment index (0 = no sky); rebuilt when the instance buffer or the
-    // shadow map changes.
-    std::unordered_map<u32, nvrhi::BindingSetHandle> viewSets;
+    // View binding sets by environment index (0 = no sky) in the low 32 bits and the window of the
+    // previous positions they bind (previousWindows) in the high ones; rebuilt when the instance buffer or
+    // the shadow map changes.
+    std::unordered_map<u64, nvrhi::BindingSetHandle> viewSets;
     nvrhi::BindingSetHandle shadowSet;
     // [blend][doubleSided]
     std::array<std::array<nvrhi::GraphicsPipelineHandle, 2>, 2> pipelines{};
@@ -396,7 +433,21 @@ struct SceneRenderer::Impl
     // skinned vertex buffers, kept while its pose lasts; the pass writes the posed vertices there.
     nvrhi::BindingLayoutHandle skinningLayout;
     nvrhi::ComputePipelineHandle skinningPipeline;
-    nvrhi::BindingSetHandle skinningSet; // rebuilt when a buffer it binds changes
+    // Binding sets by the windows they bind of the vertex pool, skin pool, skin matrices and skinned
+    // buffers (SkinningWindows); dropped when a buffer they bind changes.
+    using SkinningWindows = std::array<u32, 4>;
+    struct SkinningSet
+    {
+        SkinningWindows windows{};
+        nvrhi::BindingSetHandle set;
+    };
+    std::vector<SkinningSet> skinningSets;
+    StorageWindows sourceWindows;   // vertex pool, Vertex
+    StorageWindows skinWindows;     // skin pool, SkinVertex
+    StorageWindows matrixWindows;   // skin matrices, rows (Vec4)
+    StorageWindows targetWindows;   // skinned vertices (Vertex) and previous positions (Vec4) alike
+    StorageWindows previousWindows; // previous positions read by the vertex shaders, Vec4
+    u32 skinningChunk = 0;          // most vertices of one dispatch, so that each binding stays in a window
     bool skinningSetDirty = true;
     u32 skinningGeneration = ~0u;          // RenderResources::generation() the set was made for
     nvrhi::BufferHandle skinnedVertices;   // Vertex layout: a vertex buffer and a raw UAV
@@ -420,6 +471,13 @@ struct SceneRenderer::Impl
     u32 acquireSkinned(Entity entity, u32 vertexCount);
     void releaseUnposed();
     void ensureSkinnedCapacity(u32 vertices);
+    void setStorageLimits(const GpuInfo& gpu);
+    // Whether an instance of @p vertices and @p joints can be skinned and drawn within the storage windows.
+    [[nodiscard]] bool canSkin(u32 vertices, u32 joints) const noexcept
+    {
+        return vertices <= previousWindows.span() && static_cast<u64>(joints) * 6 <= matrixWindows.span();
+    }
+    nvrhi::IBindingSet* skinningSetFor(const SkinningWindows& windows);
     void skin(nvrhi::ICommandList* commandList);
     [[nodiscard]] nvrhi::VertexBufferBinding vertexBinding(const DrawItem& item) const noexcept
     {
@@ -456,7 +514,8 @@ struct SceneRenderer::Impl
             resources->releaseEnvironment(atmosphereEnvironment);
         }
     }
-    nvrhi::IBindingSet* viewSetFor(EnvironmentHandle environment);
+    // @p previousWindow: the window of previousWindows the set binds.
+    nvrhi::IBindingSet* viewSetFor(EnvironmentHandle environment, u32 previousWindow = 0);
     [[nodiscard]] const RenderResources::GpuMaterial* shadowMaterial(const DrawItem& item) const noexcept;
     void selectPointShadows(const RenderView& view, GpuViewConstants& constants);
     [[nodiscard]] bool shadowViewActive(u32 shadowView) const noexcept
@@ -1006,16 +1065,7 @@ void SceneRenderer::Impl::skin(nvrhi::ICommandList* commandList)
     }
     if (skinningSetDirty || skinningGeneration != resources->generation())
     {
-        nvrhi::BindingSetDesc setDesc;
-        setDesc.bindings = {
-            nvrhi::BindingSetItem::RawBuffer_SRV(0, resources->vertexPool()),
-            nvrhi::BindingSetItem::RawBuffer_SRV(1, resources->skinPool()),
-            nvrhi::BindingSetItem::StructuredBuffer_SRV(2, skinMatrixBuffer),
-            nvrhi::BindingSetItem::RawBuffer_UAV(0, skinnedVertices),
-            nvrhi::BindingSetItem::StructuredBuffer_UAV(1, previousPositions),
-            nvrhi::BindingSetItem::PushConstants(0, sizeof(SkinningPush)),
-        };
-        skinningSet = device->createBindingSet(setDesc, skinningLayout);
+        skinningSets.clear();
         skinningSetDirty = false;
         skinningGeneration = resources->generation();
     }
@@ -1026,21 +1076,96 @@ void SceneRenderer::Impl::skin(nvrhi::ICommandList* commandList)
     commandList->setEnableUavBarriersForBuffer(previousPositions, false);
     nvrhi::ComputeState state;
     state.pipeline = skinningPipeline;
-    state.bindings = {skinningSet};
-    commandList->setComputeState(state);
+    SkinningWindows bound{~0u, ~0u, ~0u, ~0u};
     for (const SkinningPush& dispatch : skinningDispatches)
     {
-        commandList->setPushConstants(&dispatch, sizeof(dispatch));
-        commandList->dispatch((dispatch.vertexCount + kSkinningGroupSize - 1) / kSkinningGroupSize);
+        const u32 matrixWindow = matrixWindows.window(dispatch.matrices);
+        const auto matrixStart = static_cast<u32>(matrixWindows.start(matrixWindow));
+        // A dispatch is split into chunks so that each chunk's vertices lie within one window of every
+        // buffer.
+        for (u32 done = 0; done < dispatch.vertexCount; done += skinningChunk)
+        {
+            SkinningPush push = dispatch;
+            push.vertexCount = std::min(skinningChunk, dispatch.vertexCount - done);
+            const SkinningWindows windows{sourceWindows.window(dispatch.sourceVertex + done),
+                                          skinWindows.window(dispatch.skinVertex + done), matrixWindow,
+                                          targetWindows.window(dispatch.targetVertex + done)};
+            push.sourceVertex += done - static_cast<u32>(sourceWindows.start(windows[0]));
+            push.skinVertex += done - static_cast<u32>(skinWindows.start(windows[1]));
+            push.matrices -= matrixStart;
+            push.previousMatrices -= matrixStart;
+            push.targetVertex += done - static_cast<u32>(targetWindows.start(windows[3]));
+            if (windows != bound)
+            {
+                state.bindings = {skinningSetFor(windows)};
+                commandList->setComputeState(state);
+                bound = windows;
+            }
+            commandList->setPushConstants(&push, sizeof(push));
+            commandList->dispatch((push.vertexCount + kSkinningGroupSize - 1) / kSkinningGroupSize);
+        }
     }
     commandList->setEnableUavBarriersForBuffer(skinnedVertices, true);
     commandList->setEnableUavBarriersForBuffer(previousPositions, true);
     commandList->endMarker();
 }
 
-nvrhi::IBindingSet* SceneRenderer::Impl::viewSetFor(EnvironmentHandle environment)
+void SceneRenderer::Impl::setStorageLimits(const GpuInfo& gpu)
 {
-    nvrhi::BindingSetHandle& set = viewSets[environment.index];
+    const u64 alignment = gpu.storageBufferOffsetAlignment;
+    const u64 maxRange = gpu.maxStorageBufferRange;
+    const u64 rowUnit = StorageWindows::alignedElements(sizeof(Vec4), alignment);
+    sourceWindows =
+        StorageWindows(sizeof(Vertex), StorageWindows::alignedElements(sizeof(Vertex), alignment), maxRange);
+    skinWindows = StorageWindows(sizeof(SkinVertex),
+                                 StorageWindows::alignedElements(sizeof(SkinVertex), alignment), maxRange);
+    matrixWindows = StorageWindows(sizeof(Vec4), rowUnit, maxRange);
+    targetWindows = StorageWindows(
+        sizeof(Vertex), std::lcm(StorageWindows::alignedElements(sizeof(Vertex), alignment), rowUnit),
+        maxRange);
+    previousWindows = StorageWindows(sizeof(Vec4), rowUnit, maxRange);
+    skinningChunk = static_cast<u32>(
+        std::clamp<u64>(std::min({sourceWindows.span(), skinWindows.span(), targetWindows.span()}), 1, ~0u));
+}
+
+nvrhi::IBindingSet* SceneRenderer::Impl::skinningSetFor(const SkinningWindows& windows)
+{
+    for (const SkinningSet& cached : skinningSets)
+    {
+        if (cached.windows == windows)
+        {
+            return cached.set;
+        }
+    }
+    const auto bufferBytes = [](nvrhi::IBuffer* buffer) {
+        return buffer->getDesc().byteSize;
+    };
+    nvrhi::IBuffer* vertexPool = resources->vertexPool();
+    nvrhi::IBuffer* skinPool = resources->skinPool();
+    nvrhi::BindingSetDesc setDesc;
+    setDesc.bindings = {
+        nvrhi::BindingSetItem::RawBuffer_SRV(
+            0, vertexPool, sourceWindows.range(windows[0], sizeof(Vertex), bufferBytes(vertexPool))),
+        nvrhi::BindingSetItem::RawBuffer_SRV(
+            1, skinPool, skinWindows.range(windows[1], sizeof(SkinVertex), bufferBytes(skinPool))),
+        nvrhi::BindingSetItem::StructuredBuffer_SRV(
+            2, skinMatrixBuffer, nvrhi::Format::UNKNOWN,
+            matrixWindows.range(windows[2], sizeof(Vec4), bufferBytes(skinMatrixBuffer))),
+        nvrhi::BindingSetItem::RawBuffer_UAV(
+            0, skinnedVertices,
+            targetWindows.range(windows[3], sizeof(Vertex), bufferBytes(skinnedVertices))),
+        nvrhi::BindingSetItem::StructuredBuffer_UAV(
+            1, previousPositions, nvrhi::Format::UNKNOWN,
+            targetWindows.range(windows[3], sizeof(Vec4), bufferBytes(previousPositions))),
+        nvrhi::BindingSetItem::PushConstants(0, sizeof(SkinningPush)),
+    };
+    skinningSets.push_back({windows, device->createBindingSet(setDesc, skinningLayout)});
+    return skinningSets.back().set;
+}
+
+nvrhi::IBindingSet* SceneRenderer::Impl::viewSetFor(EnvironmentHandle environment, u32 previousWindow)
+{
+    nvrhi::BindingSetHandle& set = viewSets[environment.index | (static_cast<u64>(previousWindow) << 32)];
     if (!set)
     {
         const RenderResources::GpuEnvironment& gpu = resources->environment(environment);
@@ -1057,7 +1182,9 @@ nvrhi::IBindingSet* SceneRenderer::Impl::viewSetFor(EnvironmentHandle environmen
             nvrhi::BindingSetItem::StructuredBuffer_SRV(7, resources->materialTable()),
             nvrhi::BindingSetItem::Texture_SRV(8, fog.volume()),
             nvrhi::BindingSetItem::Texture_SRV(9, pointShadowMap),
-            nvrhi::BindingSetItem::StructuredBuffer_SRV(10, previousPositions),
+            nvrhi::BindingSetItem::StructuredBuffer_SRV(
+                10, previousPositions, nvrhi::Format::UNKNOWN,
+                previousWindows.range(previousWindow, sizeof(Vec4), previousPositions->getDesc().byteSize)),
             nvrhi::BindingSetItem::Sampler(0, clampSampler),
             nvrhi::BindingSetItem::Sampler(1, shadowSampler),
             nvrhi::BindingSetItem::PushConstants(1, sizeof(ForwardPush)),
@@ -1326,7 +1453,8 @@ void SceneRenderer::Impl::cull(World& world, const RenderView& view, f32 viewpor
                                pose.jointCount != 0 && pose.frame == animation->frame() &&
                                pose.bounds.isValid() &&
                                animation->skinMatrices(pose.slot).size() == pose.jointCount &&
-                               animation->previousSkinMatrices(pose.slot).size() == pose.jointCount;
+                               animation->previousSkinMatrices(pose.slot).size() == pose.jointCount &&
+                               canSkin(mesh->vertexCount, pose.jointCount);
             const u32 slot = drawEntity(entity, transform, renderer, posed ? &pose.bounds : nullptr);
             if (!posed)
             {
@@ -1662,6 +1790,7 @@ std::unique_ptr<SceneRenderer> SceneRenderer::create(RenderDevice& device, Rende
     impl.multiDrawIndirect = device.gpu().multiDrawIndirect;
     impl.wireframeSupported = device.gpu().wireframe;
     impl.timings.available = desc.gpuTimers && device.gpu().timestamps;
+    impl.setStorageLimits(device.gpu());
     if (impl.timings.available)
     {
         for (auto& frame : impl.timerRing)
@@ -2093,15 +2222,17 @@ void SceneRenderer::render(nvrhi::ICommandList* commandList, nvrhi::ITexture* co
         nvrhi::GraphicsState state;
         state.pipeline = pipeline;
         state.framebuffer = target;
+        const bool skinned = !indirect && first.isSkinned();
+        const u32 previousWindow = skinned ? impl.previousWindows.window(first.skinned) : 0u;
+        nvrhi::IBindingSet* itemViewSet = skinned ? impl.viewSetFor(environment, previousWindow) : viewSet;
         if (bindless && indirect)
         {
-            state.bindings = {viewSet, impl.resources->bindlessTextures()};
+            state.bindings = {itemViewSet, impl.resources->bindlessTextures()};
         }
         else
         {
-            state.bindings = {viewSet, first.material->bindingSet};
+            state.bindings = {itemViewSet, first.material->bindingSet};
         }
-        const bool skinned = !indirect && first.isSkinned();
         state.vertexBuffers = {impl.vertexBinding(first)};
         state.indexBuffer = nvrhi::IndexBufferBinding()
                                 .setBuffer(impl.resources->indexPool())
@@ -2112,8 +2243,9 @@ void SceneRenderer::render(nvrhi::ICommandList* commandList, nvrhi::ITexture* co
             state.indirectParams = impl.culling.arguments();
         }
         commandList->setGraphicsState(state);
-        const ForwardPush push{slot, flags | (skinned ? kForwardSkinned : 0u), skinned ? first.skinned : 0u,
-                               0};
+        const u32 previousVertex =
+            skinned ? first.skinned - static_cast<u32>(impl.previousWindows.start(previousWindow)) : 0u;
+        const ForwardPush push{slot, flags | (skinned ? kForwardSkinned : 0u), previousVertex, 0};
         commandList->setPushConstants(&push, sizeof(push));
     };
     // One item drawn by the CPU (camera order index `index`, at or after culledCount) with its own vertices.

@@ -53,6 +53,9 @@ struct RenderDeviceDesc
     /// Enables block-compressed (BC) textures when the GPU supports them. When off or unsupported,
     /// RenderResources decodes compressed images on the CPU and uploads them uncompressed.
     bool compressedTextures = true;
+
+    /// Caps GpuInfo::maxStorageBufferRange below the device's limit (0: no cap), to exercise smaller GPUs.
+    u64 maxStorageBufferRange = 0;
 };
 
 /// Description of the selected GPU.
@@ -73,6 +76,10 @@ struct GpuInfo
     bool multiDrawIndirect = false;
     /// BC1-BC7 textures can be sampled (enabled by RenderDeviceDesc::compressedTextures).
     bool textureCompressionBC = false;
+    /// Largest byte range of one storage buffer binding (at least 2^27 on Vulkan devices).
+    u64 maxStorageBufferRange = 0;
+    /// Required alignment of the byte offset of a storage buffer binding.
+    u64 storageBufferOffsetAlignment = 1;
 };
 
 /// Number of textures a bindless texture table can hold; GpuInfo::bindless requires the device to allow it.

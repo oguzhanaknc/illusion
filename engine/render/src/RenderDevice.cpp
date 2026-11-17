@@ -464,6 +464,13 @@ bool RenderDevice::Impl::createLogicalDevice()
     gpu.multiDrawIndirect =
         supported.core.features.multiDrawIndirect && supported.core.features.drawIndirectFirstInstance;
     gpu.textureCompressionBC = enabled.core.features.textureCompressionBC != VK_FALSE;
+    gpu.maxStorageBufferRange = properties.properties.limits.maxStorageBufferRange;
+    if (maxStorageBufferRange != 0)
+    {
+        gpu.maxStorageBufferRange = std::min(gpu.maxStorageBufferRange, maxStorageBufferRange);
+    }
+    gpu.storageBufferOffsetAlignment =
+        std::max<u64>(properties.properties.limits.minStorageBufferOffsetAlignment, 1);
 
     const std::vector<std::string> available = availableDeviceExtensions(physicalDevice);
     if (!headless)
@@ -564,6 +571,7 @@ std::unique_ptr<RenderDevice> RenderDevice::create(const RenderDeviceDesc& desc)
     Impl& impl = *renderDevice->m_impl;
     impl.headless = desc.headless;
     impl.compressedTextures = desc.compressedTextures;
+    impl.maxStorageBufferRange = desc.maxStorageBufferRange;
     if (!impl.createInstance(desc) || !impl.selectPhysicalDevice(desc) || !impl.createLogicalDevice() ||
         !impl.createNvrhiDevice())
     {

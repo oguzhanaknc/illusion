@@ -46,6 +46,7 @@ struct RenderDevice::Impl
     bool nvrhiValidationOnly = false; // validation requested, but only NVRHI's layer is available
     bool bufferDeviceAddress = false;
     bool compressedTextures = true; // RenderDeviceDesc::compressedTextures
+    u64 maxStorageBufferRange = 0;  // RenderDeviceDesc::maxStorageBufferRange
 
     std::vector<std::string> instanceExtensions;
     std::vector<std::string> deviceExtensions;
