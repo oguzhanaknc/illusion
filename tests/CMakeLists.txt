@@ -61,6 +61,7 @@ add_executable(illusion_tests
     assets/TestMaterialAsset.cpp
     assets/TestMeshLods.cpp
     assets/TestTextureCompression.cpp
+    animation/TestAnimationWorld.cpp
     animation/TestPose.cpp
     audio/TestAudioEffects.cpp
     audio/TestAudioWorld.cpp

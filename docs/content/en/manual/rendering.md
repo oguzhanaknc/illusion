@@ -180,6 +180,46 @@ resolver.update(world, &jobs);
   resolver uses (and of the models and Textures only they used). Both walk everything: call them when
   assets may have gone, such as after loading another scene, not every frame.
 
+### Skeletal animation
+
+A skinned mesh moves with the saved Component `Animator`, on the Entity of its `MeshRenderer`
+(ADR 0059). An `AnimationWorld` per World keeps the poses outside the ECS and adds the runtime Component
+`AnimationPose` (the pose's slot, its joint count and its world bounds):
+
+Headers: `<illusion/animation/AnimationComponents.hpp>`, `<illusion/animation/AnimationWorld.hpp>`
+
+```cpp
+illusion::AnimationWorld animation(world, streamer);
+const illusion::Entity hero = world.create(
+    illusion::Transform{}, illusion::MeshRenderer{.mesh = illusion::AssetRef("game:/hero.glb#mesh/0")},
+    illusion::Animator{.skeleton = illusion::AssetRef("game:/hero.glb#skin/0"),
+                       .clip = illusion::AssetRef("game:/hero.glb#animation/Walk")});
+
+// Every frame, after game code and before physics:
+animation.update(deltaSeconds, &jobs, true);
+const illusion::AnimationPose& pose = world.get<illusion::AnimationPose>(hero);
+const std::span<const illusion::SkinMatrix> skin = animation.skinMatrices(pose.slot);
+```
+
+- `Animator` holds `skeleton` (`model.glb#skin/N`), `clip` (`model.glb#animation/<name>`; none shows the
+  rest pose), `speed` (negative plays backwards), `time` in seconds, `loop` and `playing`. Every field is
+  saved, so scenes and [saved games](saved-games.md) keep where a clip was.
+- With `advance` true (Play mode and the player; `GameSession` passes it while started), `update()` adds
+  `speed` times the seconds to `time`, wrapped into the clip when `loop` is on; otherwise `time` stops at
+  the clip's end (or its start when playing backwards) and `playing` turns false. Without `advance` the
+  pose shows the saved `time`: the editor does this outside Play mode, so editing `time` in the Inspector
+  scrubs the clip.
+- Each model file loads once through the `AssetStreamer`; its skeletons, clips and the joint bounds of its
+  meshes are shared by every Animator, and a clip is bound to a skeleton once. The poses are sampled and
+  composed in parallel on the Job System into one contiguous buffer of skin matrices;
+  `previousSkinMatrices()` holds the update before (equal to the current ones on a pose's first update),
+  for motion vectors. `AnimationPose::bounds` is the skinned mesh's bounds in world space.
+- The pose waits while its model loads (`jointCount` is 0). A skeleton that does not fit the mesh (another
+  skin, another joint count, or a rigid mesh) is reported once and gets no pose; the mesh is drawn in its
+  bind pose. Entities with the `Inactive` tag keep their pose and `time`.
+- Reloading a model file (`AssetStreamer::reload()`) binds its Animators again; a reload that fails keeps
+  the previous data. A steady update allocates nothing.
+
 ### Resource lifetime
 
 `RenderResources` frees what it is told to release. Handles carry the generation of their slot, so a

@@ -31,7 +31,9 @@ A test (`TestShowcase.cpp`) opens a copy of the project and fails when a saved C
 is missing from the scene or left at its default, or when the project has missing assets or unresolved prefabs.
 A new Component or field therefore needs a value in `build.jsonl`. Three particle emitters cover
 `ParticleEmitter`: a spark fountain over the trigger pad, a dust emitter by the blocks, which waits to be
-played (`playOnStart` off), and a field of 20,000 fireflies simulated on the GPU. A `Wind` entity blows the dust
+played (`playOnStart` off), and a field of 20,000 fireflies simulated on the GPU. The hidden `Column` covers
+`Animator`: a skinned column (`assets/models/column.gltf`, from `tools/make_assets.py`) held 0.4 seconds into
+its clip `sway`, see [Skeletal animation](../rendering.md#skeletal-animation). A `Wind` entity blows the dust
 (`windFactor`) across the yard. The disabled `Dusk Sky` entity holds a `SkyAtmosphere` at sunset: enable it
 to replace the sky and the sun with a moving one, and the disabled `Film Look` holds `PostEffects` for a
 graded, vignetted image. The disabled `Morning Mist` holds a `VolumetricFog` of low, drifting mist. The `HUD` entity is a game UI

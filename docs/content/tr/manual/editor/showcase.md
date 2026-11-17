@@ -32,7 +32,9 @@ sahnede yoksa veya varsayılanında bırakılmışsa ya da projede eksik Asset'l
 varsa başarısız olur. Bu yüzden yeni bir Component ya da alan `build.jsonl`'da bir değer ister. Üç parçacık
 emitter'ı `ParticleEmitter`'ı kapsar: trigger pedinin üzerinde bir kıvılcım çeşmesi, blokların yanında
 oynatılmayı bekleyen bir toz emitter'ı (`playOnStart` kapalı) ve GPU'da simüle edilen 20.000 ateş böceklik bir
-alan. Bir `Wind` Entity'si tozu (`windFactor`) avlunun öbür ucuna savurur. Devre dışı `Dusk Sky`
+alan. Gizli `Column`, `Animator`'ı kapsar: `sway` klibinin 0,4 saniyesinde tutulan skinned bir sütun
+(`assets/models/column.gltf`, `tools/make_assets.py` yazar), bkz. [İskelet animasyonu](../rendering.md#iskelet-animasyonu).
+Bir `Wind` Entity'si tozu (`windFactor`) avlunun öbür ucuna savurur. Devre dışı `Dusk Sky`
 Entity'si gün batımında bir `SkyAtmosphere` tutar: gökyüzünü ve güneşi hareketli olanlarla değiştirmek için onu
 etkinleştirin; devre dışı `Film Look` ise derecelendirilmiş, vinyetli bir görüntü için `PostEffects`
 tutar. Devre dışı `Morning Mist`, alçakta süzülen bir sis için bir `VolumetricFog` tutar. `HUD` Entity'si her UI

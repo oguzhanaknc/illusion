@@ -3,6 +3,7 @@
 
 #include "core/EditorCoreTestSupport.hpp"
 
+#include <illusion/animation/AnimationComponents.hpp>
 #include <illusion/audio/AudioComponents.hpp>
 #include <illusion/ecs/ComponentJson.hpp>
 #include <illusion/particles/ParticleComponents.hpp>
@@ -37,6 +38,7 @@ struct ShowcaseFixture
         reflectPhysicsComponents();
         reflectAudioComponents();
         reflectParticleComponents();
+        registerAnimationComponents(ComponentRegistry::instance());
         registerUiComponents();
         registerSaveComponents();
         const std::filesystem::path project = directory.path / "showcase";

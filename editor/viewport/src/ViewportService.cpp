@@ -1,5 +1,6 @@
 #include "ViewportOverlays.hpp"
 
+#include <illusion/animation/AnimationWorld.hpp>
 #include <illusion/assets/AssetStreamer.hpp>
 #include <illusion/assets/Image.hpp>
 #include <illusion/assets/Mesh.hpp>
@@ -337,6 +338,7 @@ struct ViewportService::Impl
         , resources(renderDevice)
         , cache(resources, streamer)
         , resolver(cache)
+        , editAnimation(editorContext.world(), streamer)
     {
         assetSubscription = editor.events().subscribe(
             "asset.changed", [this](const EditorEvent& event) { queueAssetChanges(event.payload); });
@@ -375,6 +377,8 @@ struct ViewportService::Impl
     RenderResources resources;
     RenderAssetCache cache;
     RenderAssetResolver resolver;
+    // Poses the edit World's Animators at their saved time, so that the Inspector scrubs (ADR 0059).
+    AnimationWorld editAnimation;
     // The game UI of the play session, drawn over the Game view.
     std::unique_ptr<illusion::UiRenderer> gameUi;
     std::unique_ptr<UiRenderAssets> gameUiAssets;
@@ -1704,6 +1708,10 @@ void ViewportService::render(bool uiShown)
     impl.cache.update();
     impl.shownResolver().update(world, &impl.jobs);
     updateTransformHierarchy(world, impl.shownHierarchy(), &impl.jobs);
+    if (&world == &impl.editor.world())
+    {
+        impl.editAnimation.update(0.0f, &impl.jobs, false);
+    }
     impl.buildHidden();
     impl.buildSelection();
     const bool loading = impl.shownResolver().statistics().pending != 0 || impl.cache.loading() != 0;

@@ -3,6 +3,7 @@
 #include "physics/PhysicsTestSupport.hpp"
 #include "save/CloudTestStore.hpp"
 
+#include <illusion/animation/AnimationComponents.hpp>
 #include <illusion/audio/AudioComponents.hpp>
 #include <illusion/audio/AudioService.hpp>
 #include <illusion/core/Hash.hpp>
@@ -69,6 +70,7 @@ void reflectAll()
     reflectPhysicsComponents();
     reflectAudioComponents();
     reflectParticleComponents();
+    registerAnimationComponents(ComponentRegistry::instance());
     reflectRuntimeStructs();
 }
 

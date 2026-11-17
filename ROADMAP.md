@@ -1081,6 +1081,26 @@ Nothing of it exists yet: glTF skins and animations are skipped on import and th
   with its step in `GameSession::update()` after Saves; the editor evaluates the saved `time` without
   advancing it; a value in the showcase's `build.jsonl`. Done: determinism with `fixedStep`, a saved game
   restores `time`, a mismatched skeleton draws the bind pose, no allocation per update.
+  ✅ Done: saved `Animator` (`illusion.Animator`: `skeleton`, `clip`, `speed`, `time`, `loop`, `playing`; asset kinds
+  Skeleton and AnimationClip, `time` in seconds) and runtime `AnimationPose` (`registerAnimationComponents()`,
+  registered by the player and the editor). `AnimationWorld` (`illusion/animation/AnimationWorld.hpp`) loads each
+  model file once through the `AssetStreamer` and keeps copies of its skeletons, clips and the `jointBounds` of
+  its meshes, binds each (skeleton, clip) pair once, gives each Animator a slot (reused through a free list, with
+  a joint range in contiguous local, model and double-buffered skin matrix arrays), advances `time` when asked
+  (wrapped or clamped; a clip that ends stops `playing`), poses every slot with `parallelFor` and writes world
+  bounds from `skinnedBounds()` and the Entity's `Transform` (the joints' box without a mesh). The mesh is
+  `MeshRenderer::mesh`, read through reflection so that `engine/render` can link `engine/animation`. Missing
+  assets are counted and logged once; a skeleton that does not fit the mesh (another skin, joint count or a
+  rigid mesh) is logged once and gets no pose; Inactive entities keep pose and time; a reloaded model binds its
+  Animators again (a failed reload keeps the data). `GameSession` owns one with a streamer (`animation()`), steps
+  it after Saves and before Physics with `advance` while started; the editor's viewport poses the edit World at
+  the saved `time`. `engine/runtime` and the player link `illusion::animation`. Showcase: a hidden skinned
+  `Column` with an `Animator` (`assets/models/column.gltf` from `make_assets.py`). Tests in
+  `tests/animation/TestAnimationWorld.cpp`; benchmark `animation/world-update-300x60`.
+  Open: an Animator's pose is withdrawn (bind pose) while a changed clip or skeleton loads; time does not
+  advance until the model is loaded, so a fixed-step run waits for its models (`waitIdle()`) to repeat; the
+  edit World is posed only by the GPU viewport (not by a headless editor); the showcase `Column` is hidden until
+  ANIM-1c draws skinned meshes (its golden images are unchanged).
 - ANIM-1c (`implementer`): GPU skinning. The compute pass, pooled per-instance vertex buffers in the
   `Vertex` layout with previous positions, every pass (prepass, shadows, forward, motion vectors) drawing
   skinned instances, culling by the skinned bounds. Done: GPU golden test of a posed character (lavapipe),

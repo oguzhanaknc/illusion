@@ -4,6 +4,7 @@
 #include "TestSupport.hpp"
 #include "modules/CountingServices.hpp"
 
+#include <illusion/animation/AnimationComponents.hpp>
 #include <illusion/audio/AudioComponents.hpp>
 #include <illusion/audio/AudioWorld.hpp>
 #include <illusion/audio/AudioWorldService.hpp>
@@ -62,6 +63,7 @@ void reflectAll()
     reflectPhysicsComponents();
     reflectAudioComponents();
     reflectParticleComponents();
+    registerAnimationComponents(ComponentRegistry::instance());
     reflectRenderComponents();
     reflectRuntimeStructs();
     registerUiComponents();
