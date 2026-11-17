@@ -29,12 +29,13 @@ struct RuntimeSettingsFile
     std::string_view file;
 };
 
-constexpr std::array<RuntimeSettingsFile, 5> kRuntimeSettings{{
+constexpr std::array<RuntimeSettingsFile, 6> kRuntimeSettings{{
     {"illusion.PhysicsSettings", kPhysicsSettingsFile},
     {"illusion.AudioSettings", kAudioSettingsFile},
     {"illusion.InputSettings", kInputSettingsFile},
     {"illusion.RenderSettings", kRenderSettingsFile},
     {"illusion.WindowSettings", kWindowSettingsFile},
+    {"illusion.SaveSettings", kSaveSettingsFile},
 }};
 
 // Components whose changes need the physics body rebuilt.
@@ -98,6 +99,7 @@ struct PlaySession::Impl
     ModuleHost modules;
     std::unique_ptr<NullStoreService> store; // one per session, so achievements and stats start empty
     std::unique_ptr<SaveSystem> saves;       // one per session; its destructor finishes the writes
+    std::function<bool(SaveThumbnail&)> thumbnail;
     std::unique_ptr<GameSession> game;
     PlayStartOptions options;
     bool paused = false;
@@ -174,6 +176,11 @@ ModuleHost& PlaySession::moduleHost() noexcept
     return m_impl->modules;
 }
 
+void PlaySession::setSaveThumbnail(std::function<bool(SaveThumbnail&)> thumbnail)
+{
+    m_impl->thumbnail = std::move(thumbnail);
+}
+
 Expected<void, CommandError> PlaySession::start(const PlayStartOptions& options)
 {
     ILL_PROFILE_SCOPE();
@@ -197,9 +204,11 @@ Expected<void, CommandError> PlaySession::start(const PlayStartOptions& options)
     auto store = std::make_unique<NullStoreService>(impl.editor.files(),
                                                     NullStoreDesc{.cloudDirectory = kPlayCloudDirectory});
     desc.store = store.get();
+    desc.storeCloudIsRemote = store->cloudIsRemote();
     SaveSystemDesc savesDesc;
     savesDesc.files = &impl.editor.files();
     savesDesc.directory = kPlaySaveDirectory;
+    savesDesc.thumbnail = impl.thumbnail;
     auto saves = std::make_unique<SaveSystem>(savesDesc);
     desc.saves = saves.get();
     desc.audioOutput = impl.desc.audioOutput;

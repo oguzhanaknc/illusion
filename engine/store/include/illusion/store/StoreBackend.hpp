@@ -17,6 +17,10 @@ public:
     /// Runs the store's work of one frame (Steam's callbacks). Does not allocate.
     virtual void update() = 0;
 
+    /// True when cloud files live outside this machine's `user:` data (Steam); false when they are local
+    /// files already (NullStoreService), which saved games then do not mirror.
+    [[nodiscard]] virtual bool cloudIsRemote() const noexcept = 0;
+
 protected:
     StoreBackend() = default;
 };

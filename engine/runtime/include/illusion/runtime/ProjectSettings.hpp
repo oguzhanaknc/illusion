@@ -92,6 +92,12 @@ struct WindowSettings
     bool resizable = true;                  ///< The player can resize a Windowed window.
 };
 
+/// Saved games of the game (`settings:/save.json`, type "illusion.SaveSettings"; ADR 0058).
+struct SaveSettings
+{
+    bool cloud = true; ///< Mirror slot files to the store's cloud when the store has one.
+};
+
 /// Every project settings struct.
 struct ProjectSettings
 {
@@ -100,6 +106,7 @@ struct ProjectSettings
     InputSettings input{};     ///< `settings:/input.json`.
     RenderSettings render{};   ///< `settings:/render.json`.
     WindowSettings window{};   ///< `settings:/window.json`.
+    SaveSettings save{};       ///< `settings:/save.json`.
 };
 
 /// File of PhysicsSettings.
@@ -112,10 +119,12 @@ inline constexpr std::string_view kInputSettingsFile = "settings:/input.json";
 inline constexpr std::string_view kRenderSettingsFile = "settings:/render.json";
 /// File of WindowSettings.
 inline constexpr std::string_view kWindowSettingsFile = "settings:/window.json";
+/// Virtual path of the SaveSettings file.
+inline constexpr std::string_view kSaveSettingsFile = "settings:/save.json";
 
-/// Reflects PhysicsSettings, AudioSettings, InputSettings, RenderSettings and WindowSettings as structs of
-/// @p registry (as "illusion.PhysicsSettings", ...), so that settings files and editors can read and write
-/// them. Call it at startup, before loadProjectSettings().
+/// Reflects PhysicsSettings, AudioSettings, InputSettings, RenderSettings, WindowSettings and SaveSettings
+/// as structs of @p registry (as "illusion.PhysicsSettings", ...), so that settings files and editors can
+/// read and write them. Call it at startup, before loadProjectSettings().
 void reflectRuntimeStructs(ComponentRegistry& registry);
 
 /// reflectRuntimeStructs() on ComponentRegistry::instance().

@@ -1,3 +1,4 @@
+#include <illusion/assets/Image.hpp>
 #include <illusion/core/Assert.hpp>
 #include <illusion/core/Log.hpp>
 #include <illusion/core/Profiler.hpp>
@@ -20,18 +21,12 @@ namespace
 
 constexpr std::string_view kSlotSuffix = ".save";
 constexpr std::string_view kBackupSuffix = ".save.bak";
-
-enum class RequestType : u8
-{
-    Scan,
-    Write,
-    Load,
-    Remove,
-};
+constexpr std::string_view kImageSuffix = ".png";
 
 struct Request
 {
-    RequestType type = RequestType::Scan;
+    bool scan = false; // the first job: list the directory
+    SaveRequestType type = SaveRequestType::Write;
     u64 ticket = 0;
     std::string slot;
     std::string title;
@@ -40,6 +35,9 @@ struct Request
     u32 gameVersion = 0;
     i64 savedAt = 0;
     std::string world;
+    bool keepFile = false;
+    SaveThumbnail thumbnail;     // Write: the image, empty without one
+    std::vector<std::byte> file; // Import: the slot file
 };
 
 // A slot file read and checked; world views the bytes it was read from.
@@ -58,6 +56,7 @@ struct Outcome
     std::optional<SaveCompletion> completion;
     std::optional<std::vector<SaveSlotRecord>> slots; // the scan: the whole list
     std::optional<SaveSlotRecord> record;             // a slot that exists now
+    std::optional<bool> image;                        // record has an image; empty keeps what the list says
     std::string erased;                               // a slot that no longer exists
 };
 
@@ -80,6 +79,24 @@ std::string_view slotOfEntry(std::string_view name) noexcept
         }
     }
     return {};
+}
+
+// The slot name of the image @p name, or empty when it is no slot image.
+std::string_view slotOfImage(std::string_view name) noexcept
+{
+    if (name.size() > kImageSuffix.size() && name.ends_with(kImageSuffix))
+    {
+        const std::string_view slot = name.substr(0, name.size() - kImageSuffix.size());
+        return isValidSaveSlotName(slot) ? slot : std::string_view();
+    }
+    return {};
+}
+
+[[nodiscard]] bool isValidThumbnail(const SaveThumbnail& thumbnail) noexcept
+{
+    return thumbnail.width > 0 && thumbnail.height > 0 && thumbnail.width <= 4096 &&
+           thumbnail.height <= 4096 &&
+           thumbnail.rgba.size() == static_cast<usize>(thumbnail.width) * thumbnail.height * 4;
 }
 
 SaveError readError(FileError error) noexcept
@@ -158,7 +175,7 @@ struct SaveSystem::Impl
             return;
         }
         Request scan;
-        scan.type = RequestType::Scan;
+        scan.scan = true;
         queue.push_front(std::move(scan));
         thread = std::thread([this] { run(); });
     }
@@ -196,7 +213,7 @@ struct SaveSystem::Impl
                 queue.pop_front();
                 running = true;
                 // Nobody applies a load once the system shuts down.
-                skip = stopping && request.type == RequestType::Load;
+                skip = stopping && !request.scan && request.type == SaveRequestType::Load;
             }
             Outcome outcome;
             if (!skip)
@@ -232,14 +249,24 @@ struct SaveSystem::Impl
         }
         if (outcome.record)
         {
-            const auto at = std::ranges::lower_bound(slots, outcome.record->name, {}, &SaveSlotRecord::name);
-            if (at != slots.end() && at->name == outcome.record->name)
+            SaveSlotRecord& record = *outcome.record;
+            const auto at = std::ranges::lower_bound(slots, record.name, {}, &SaveSlotRecord::name);
+            const bool listed = at != slots.end() && at->name == record.name;
+            if (outcome.image)
             {
-                *at = std::move(*outcome.record);
+                record.screenshot = *outcome.image ? pathOf(record.name, kImageSuffix) : std::string();
+            }
+            else if (listed)
+            {
+                record.screenshot = std::move(at->screenshot);
+            }
+            if (listed)
+            {
+                *at = std::move(record);
             }
             else
             {
-                slots.insert(at, std::move(*outcome.record));
+                slots.insert(at, std::move(record));
             }
             changed = true;
         }
@@ -258,16 +285,20 @@ struct SaveSystem::Impl
     [[nodiscard]] Outcome process(Request& request)
     {
         ILL_PROFILE_SCOPE();
+        if (request.scan)
+        {
+            return scan();
+        }
         switch (request.type)
         {
-        case RequestType::Scan:
-            return scan();
-        case RequestType::Write:
+        case SaveRequestType::Write:
             return write(request);
-        case RequestType::Load:
+        case SaveRequestType::Load:
             return load(request);
-        case RequestType::Remove:
+        case SaveRequestType::Remove:
             return remove(request);
+        case SaveRequestType::Import:
+            return importFile(request);
         }
         return {};
     }
@@ -350,6 +381,7 @@ struct SaveSystem::Impl
     {
         SaveCompletion done;
         done.ticket = request.ticket;
+        done.request = request.type;
         done.type = type;
         done.error = error;
         done.slot = request.slot;
@@ -361,21 +393,30 @@ struct SaveSystem::Impl
         Outcome outcome;
         std::vector<DirectoryEntry> entries;
         std::vector<std::string> names;
+        std::vector<std::string> images;
         if (const FileError listed = storage->list(desc.directory, entries); listed != FileError::None)
         {
             ILL_LOG_WARN("Save", "cannot list '{}' ({})", desc.directory, fileErrorName(listed));
         }
         for (const DirectoryEntry& entry : entries)
         {
-            const std::string_view slot = entry.isDirectory ? std::string_view() : slotOfEntry(entry.name);
-            if (!slot.empty())
+            if (entry.isDirectory)
+            {
+                continue;
+            }
+            if (const std::string_view slot = slotOfEntry(entry.name); !slot.empty())
             {
                 names.emplace_back(slot);
+            }
+            else if (const std::string_view imaged = slotOfImage(entry.name); !imaged.empty())
+            {
+                images.emplace_back(imaged);
             }
         }
         std::ranges::sort(names);
         const auto [first, last] = std::ranges::unique(names);
         names.erase(first, last);
+        std::ranges::sort(images);
         std::vector<SaveSlotRecord> list;
         list.reserve(names.size());
         for (const std::string& name : names)
@@ -384,6 +425,10 @@ struct SaveSystem::Impl
             if (file.exists)
             {
                 list.push_back(recordOf(name, file));
+                if (std::ranges::binary_search(images, name))
+                {
+                    list.back().screenshot = pathOf(name, kImageSuffix);
+                }
             }
         }
         outcome.slots = std::move(list);
@@ -429,7 +474,103 @@ struct SaveSystem::Impl
         record.name = request.slot;
         record.metadata = std::move(decoded->metadata);
         outcome.record = std::move(record);
-        outcome.completion = completion(request, SaveEventType::Saved);
+        outcome.image = writeImage(request);
+        SaveCompletion done = completion(request, SaveEventType::Saved);
+        if (request.keepFile)
+        {
+            done.file = encodedBytes;
+        }
+        outcome.completion = std::move(done);
+        return outcome;
+    }
+
+    // Writes the image of a written slot, or removes the previous slot's one when there is none or it
+    // cannot be written; returns whether the slot has an image now.
+    [[nodiscard]] bool writeImage(const Request& request)
+    {
+        const std::string imagePath = pathOf(request.slot, kImageSuffix);
+        if (!request.thumbnail.rgba.empty())
+        {
+            Image image;
+            image.format = ImageFormat::RGBA8Srgb;
+            image.mips.push_back(ImageMip{request.thumbnail.width, request.thumbnail.height, 0,
+                                          request.thumbnail.rgba.size()});
+            image.data = request.thumbnail.rgba;
+            const std::vector<std::byte> png = encodePng(image);
+            const FileError written = png.empty() ? FileError::IoError : storage->writeAtomic(imagePath, png);
+            if (written == FileError::None)
+            {
+                return true;
+            }
+            ILL_LOG_WARN("Save", "cannot write the image of slot '{}' ({})", request.slot,
+                         fileErrorName(written));
+        }
+        return !removeImage(request.slot);
+    }
+
+    // Removes the image of @p slot; false when it is still there.
+    bool removeImage(std::string_view slot)
+    {
+        const FileError removed = storage->remove(pathOf(slot, kImageSuffix));
+        if (removed != FileError::None && removed != FileError::NotFound)
+        {
+            ILL_LOG_WARN("Save", "cannot remove the image of slot '{}' ({})", slot, fileErrorName(removed));
+            return false;
+        }
+        return true;
+    }
+
+    [[nodiscard]] Outcome importFile(const Request& request)
+    {
+        Outcome outcome;
+        if (request.file.size() > kSaveHeaderBytes + kMaxSavePayloadBytes)
+        {
+            outcome.completion = completion(request, SaveEventType::Failed, SaveError::TooLarge);
+            return outcome;
+        }
+        Expected<DecodedSave, SaveError> imported = decodeSaveFile(request.file);
+        if (!imported)
+        {
+            outcome.completion = completion(request, SaveEventType::Failed, imported.error());
+            return outcome;
+        }
+        const std::string slotPath = pathOf(request.slot, kSlotSuffix);
+        const Expected<DecodedSave, SaveError> local = readFile(slotPath, slotBytes);
+        // A local file of a newer container version is kept: this program cannot tell which one is newer.
+        const bool keepLocal = local ? local->metadata.savedAt >= imported->metadata.savedAt
+                                     : local.error() == SaveError::NewerVersion;
+        if (keepLocal)
+        {
+            outcome.completion = completion(request, SaveEventType::Saved);
+            return outcome;
+        }
+        if (local)
+        {
+            if (const FileError backedUp =
+                    storage->writeAtomic(pathOf(request.slot, kBackupSuffix), slotBytes);
+                backedUp != FileError::None)
+            {
+                ILL_LOG_WARN("Save", "cannot back up slot '{}' ({})", request.slot, fileErrorName(backedUp));
+                outcome.completion = completion(request, SaveEventType::Failed, SaveError::IoError);
+                return outcome;
+            }
+        }
+        if (const FileError written = storage->writeAtomic(slotPath, request.file);
+            written != FileError::None)
+        {
+            ILL_LOG_WARN("Save", "cannot write slot '{}' ({})", request.slot, fileErrorName(written));
+            outcome.completion = completion(request, SaveEventType::Failed, SaveError::IoError);
+            reclassify(request.slot, outcome);
+            return outcome;
+        }
+        SaveSlotRecord record;
+        record.name = request.slot;
+        record.metadata = std::move(imported->metadata);
+        outcome.record = std::move(record);
+        outcome.image = !removeImage(request.slot);
+        SaveCompletion done = completion(request, SaveEventType::Saved);
+        done.imported = true;
+        outcome.completion = std::move(done);
         return outcome;
     }
 
@@ -476,6 +617,7 @@ struct SaveSystem::Impl
             reclassify(request.slot, outcome);
             return outcome;
         }
+        static_cast<void>(removeImage(request.slot));
         const bool found = slotRemoved == FileError::None || backupRemoved == FileError::None;
         outcome.completion = found ? completion(request, SaveEventType::Removed)
                                    : completion(request, SaveEventType::Failed, SaveError::NotFound);
@@ -504,6 +646,8 @@ struct SaveSystem::Impl
     std::vector<std::byte> slotBytes;
     std::vector<std::byte> backupBytes;
     std::vector<std::byte> encodedBytes;
+
+    SaveThumbnail thumbnail; // filled by desc.thumbnail on the requesting thread
 };
 
 SaveSystem::SaveSystem(const SaveSystemDesc& desc)
@@ -540,7 +684,7 @@ i64 SaveSystem::now() const
 }
 
 Expected<u64, SaveError> SaveSystem::write(std::string_view slot, const SaveMetadata& metadata, i64 savedAt,
-                                           std::string world)
+                                           std::string world, bool keepFile)
 {
     if (!isValidSaveSlotName(slot))
     {
@@ -555,7 +699,7 @@ Expected<u64, SaveError> SaveSystem::write(std::string_view slot, const SaveMeta
         return unexpected(SaveError::Unavailable);
     }
     Request request;
-    request.type = RequestType::Write;
+    request.type = SaveRequestType::Write;
     request.slot = std::string(slot);
     request.title = std::string(metadata.title);
     request.custom = std::string(metadata.custom);
@@ -563,6 +707,44 @@ Expected<u64, SaveError> SaveSystem::write(std::string_view slot, const SaveMeta
     request.gameVersion = metadata.gameVersion;
     request.savedAt = savedAt;
     request.world = std::move(world);
+    request.keepFile = keepFile;
+    if (m_impl->desc.thumbnail)
+    {
+        SaveThumbnail& thumbnail = m_impl->thumbnail;
+        if (m_impl->desc.thumbnail(thumbnail))
+        {
+            if (isValidThumbnail(thumbnail))
+            {
+                request.thumbnail.width = thumbnail.width;
+                request.thumbnail.height = thumbnail.height;
+                request.thumbnail.rgba.assign(thumbnail.rgba.begin(), thumbnail.rgba.end());
+            }
+            else
+            {
+                ILL_LOG_WARN("Save",
+                             "slot '{}' gets no image: the thumbnail function returned {}x{} pixels in {} "
+                             "bytes",
+                             slot, thumbnail.width, thumbnail.height, thumbnail.rgba.size());
+            }
+        }
+    }
+    return m_impl->enqueue(std::move(request));
+}
+
+Expected<u64, SaveError> SaveSystem::importFile(std::string_view slot, std::vector<std::byte> file)
+{
+    if (!isValidSaveSlotName(slot))
+    {
+        return unexpected(SaveError::InvalidName);
+    }
+    if (!m_impl->isAvailable)
+    {
+        return unexpected(SaveError::Unavailable);
+    }
+    Request request;
+    request.type = SaveRequestType::Import;
+    request.slot = std::string(slot);
+    request.file = std::move(file);
     return m_impl->enqueue(std::move(request));
 }
 
@@ -577,7 +759,7 @@ Expected<u64, SaveError> SaveSystem::load(std::string_view slot)
         return unexpected(SaveError::Unavailable);
     }
     Request request;
-    request.type = RequestType::Load;
+    request.type = SaveRequestType::Load;
     request.slot = std::string(slot);
     return m_impl->enqueue(std::move(request));
 }
@@ -593,7 +775,7 @@ Expected<u64, SaveError> SaveSystem::remove(std::string_view slot)
         return unexpected(SaveError::Unavailable);
     }
     Request request;
-    request.type = RequestType::Remove;
+    request.type = SaveRequestType::Remove;
     request.slot = std::string(slot);
     return m_impl->enqueue(std::move(request));
 }

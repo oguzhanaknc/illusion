@@ -99,6 +99,9 @@ struct GameSessionDesc
     /// The saved games the modules see as SaveService (ADR 0058); null provides no SaveService. One session
     /// at a time may use it.
     SaveSystem* saves = nullptr;
+    /// True when store keeps its cloud files remotely (StoreBackend::cloudIsRemote()); slot files are then
+    /// mirrored to it unless SaveSettings::cloud is off.
+    bool storeCloudIsRemote = false;
     /// Fonts and images of the UI (UiRenderAssets); null (headless) lays the UI out with solid colours only.
     UiAssets* uiAssets = nullptr;
     AudioOutput audioOutput = AudioOutput::Device; ///< Where the session's sound goes.
@@ -172,8 +175,8 @@ public:
 
     /// Detaches the World from the ModuleHost, which runs each module's stop(). Does nothing when not
     /// started; update() still runs the other steps afterwards. Save requests not sent yet are dropped; the
-    /// writes and removals already sent finish on the save thread, but no event of them is reported and no
-    /// load is applied after stop().
+    /// writes and removals already sent finish on the save thread (with a cloud mirror, stop() waits for them
+    /// and mirrors them), but no event of them is reported and no load is applied after stop().
     void stop();
 
     /// True between start() and stop().

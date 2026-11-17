@@ -79,6 +79,19 @@ private:
     VirtualFileSystem& m_files;
 };
 
+/// The image of a slot: tightly packed RGBA8 sRGB pixels, rows top to bottom.
+struct SaveThumbnail
+{
+    u32 width = 0;                 ///< Width in pixels.
+    u32 height = 0;                ///< Height in pixels.
+    std::vector<std::byte> rgba{}; ///< `width * height * 4` bytes.
+};
+
+/// Width of the image that a host gives a slot, in pixels.
+inline constexpr u32 kSaveThumbnailWidth = 320;
+/// Height of the image that a host gives a slot, in pixels.
+inline constexpr u32 kSaveThumbnailHeight = 180;
+
 /// Creation parameters of a SaveSystem.
 struct SaveSystemDesc
 {
@@ -91,16 +104,34 @@ struct SaveSystemDesc
     SaveStorage* storage = nullptr;
     /// Seconds since the Unix epoch (UTC) written as savedAt; empty uses the system clock.
     std::function<i64()> clock{};
+    /// Copies the last presented frame, scaled to kSaveThumbnailWidth x kSaveThumbnailHeight, into its
+    /// argument (whose buffer is reused) and returns false when there is none. Called by write() on the
+    /// calling thread; empty gives slots no image.
+    std::function<bool(SaveThumbnail&)> thumbnail{};
+};
+
+/// What a request of a SaveSystem does.
+enum class SaveRequestType : u8
+{
+    Write,  ///< write()
+    Load,   ///< load()
+    Remove, ///< remove()
+    Import, ///< importFile()
 };
 
 /// A request that the save thread finished, read with SaveSystem::takeCompleted().
 struct SaveCompletion
 {
-    u64 ticket = 0;                             ///< What the request call returned.
-    SaveEventType type = SaveEventType::Failed; ///< Saved, Loaded, LoadedBackup, Removed or Failed.
-    SaveError error = SaveError::IoError;       ///< Why, when type is Failed.
-    std::string slot;                           ///< The slot.
-    std::string world;                          ///< Loaded and LoadedBackup: the World section to apply.
+    u64 ticket = 0;                                   ///< What the request call returned.
+    SaveRequestType request = SaveRequestType::Write; ///< The call that made the request.
+    SaveEventType type = SaveEventType::Failed;       ///< Saved, Loaded, LoadedBackup, Removed or Failed.
+    SaveError error = SaveError::IoError;             ///< Why, when type is Failed.
+    std::string slot;                                 ///< The slot.
+    std::string world; ///< Loaded and LoadedBackup: the World section to apply.
+    /// The slot file that was written, when write() asked for it (keepFile); empty otherwise.
+    std::vector<std::byte> file;
+    /// Import: true when the imported file replaced the local slot.
+    bool imported = false;
 };
 
 /// One slot of the slot list kept by the save thread (see SaveSlotInfo).
@@ -144,15 +175,27 @@ public:
     [[nodiscard]] i64 now() const;
 
     /// Queues writing @p world (scene JSON from captureSave()) with @p metadata (copied) and @p savedAt as
-    /// the slot @p slot. Returns the request's ticket, or InvalidName, InvalidValue or Unavailable.
+    /// the slot @p slot. With SaveSystemDesc::thumbnail the image it returns now is encoded on the save
+    /// thread and written as the sidecar `<slot>.png` after the slot file; a failure there is logged and
+    /// leaves the slot without image, it does not fail the request. With @p keepFile the completion carries
+    /// the slot file's bytes (for a cloud mirror). Returns the request's ticket, or InvalidName, InvalidValue
+    /// or Unavailable.
     Expected<u64, SaveError> write(std::string_view slot, const SaveMetadata& metadata, i64 savedAt,
-                                   std::string world);
+                                   std::string world, bool keepFile = false);
+
+    /// Queues taking @p file, a slot file from elsewhere (the cloud), as the slot @p slot: when it is valid
+    /// and its savedAt is newer than the local slot's (or there is no valid local slot), it replaces the
+    /// slot file as a write does, the local file becoming the backup, and the slot's image is removed.
+    /// Otherwise nothing changes. The completion is Saved with SaveCompletion::imported, or Failed with
+    /// Corrupt, NewerVersion, TooLarge or IoError. Returns the ticket, or InvalidName or Unavailable.
+    Expected<u64, SaveError> importFile(std::string_view slot, std::vector<std::byte> file);
 
     /// Queues reading the slot @p slot; its completion carries the World section. Returns the ticket, or
     /// InvalidName or Unavailable.
     Expected<u64, SaveError> load(std::string_view slot);
 
-    /// Queues removing the slot @p slot and its backup. Returns the ticket, or InvalidName or Unavailable.
+    /// Queues removing the slot @p slot, its backup and its image. Returns the ticket, or InvalidName or
+    /// Unavailable.
     Expected<u64, SaveError> remove(std::string_view slot);
 
     /// The ticket that the next request gets.

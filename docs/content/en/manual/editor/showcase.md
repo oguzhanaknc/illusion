@@ -19,7 +19,8 @@ wind, a lamp hum, a greeting and a click, and a nine-slice panel image), so the 
 licence in `assets/fonts/LICENSE.txt`). The scene is not written by hand: `build.jsonl` builds it through Editor
 commands, the same way an agent would, and saves it. It also gives the smoke sprite an import settings sidecar
 (`"quality": "high"`) through `asset.set_import_settings` and a non-default window (1600x900, not resizable;
-`settings/window.json`) through `project.settings_set`. To rebuild it:
+`settings/window.json`) and saved games without the cloud mirror (`settings/save.json`) through
+`project.settings_set`. To rebuild it:
 
 ```bash
 python samples/showcase/tools/make_assets.py

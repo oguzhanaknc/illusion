@@ -20,6 +20,7 @@
 #include <illusion/editor/core/PlayHost.hpp>
 #include <illusion/modules/ModuleHost.hpp>
 
+#include <functional>
 #include <memory>
 
 namespace illusion
@@ -29,6 +30,7 @@ class GameSession;
 class GamepadSystem;
 class JobSystem;
 class RenderAssetCache;
+struct SaveThumbnail;
 } // namespace illusion
 
 namespace illusion::editor
@@ -52,7 +54,7 @@ struct PlaySessionDesc
 };
 
 /// Registers the project settings of the runtime (`illusion.PhysicsSettings` in `settings:/physics.json`,
-/// and the audio, input, render and window settings) in @p catalog, reflecting them first. Types it has
+/// and the audio, input, render, window and save settings) in @p catalog, reflecting them first. Types it has
 /// already are kept.
 void registerRuntimeSettings(SettingsCatalog& catalog);
 
@@ -77,6 +79,10 @@ public:
 
     /// The editor's modules.
     [[nodiscard]] ModuleHost& moduleHost() noexcept;
+
+    /// Sets what gives the slots saved by later sessions their image (SaveSystemDesc::thumbnail): the
+    /// windowed editor reads the Game view back; empty (the default) saves slots without an image.
+    void setSaveThumbnail(std::function<bool(SaveThumbnail&)> thumbnail);
 
     // PlayHost
     [[nodiscard]] Expected<void, CommandError> start(const PlayStartOptions& options) override;

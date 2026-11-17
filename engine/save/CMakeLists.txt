@@ -11,7 +11,8 @@ add_library(illusion::save ALIAS illusion_save)
 
 target_include_directories(illusion_save PUBLIC
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>)
-target_link_libraries(illusion_save PUBLIC illusion::core illusion::platform)
+target_link_libraries(illusion_save PUBLIC illusion::core illusion::platform
+    PRIVATE illusion::assets illusion::store_api)
 
 illusion_configure_target(illusion_save)
 

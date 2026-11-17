@@ -92,6 +92,10 @@ void reflectRuntimeStructs(ComponentRegistry& registry)
         .field("mode", &WindowSettings::mode,
                {.description = "Borderless covers the monitor; Fullscreen changes its video mode."})
         .field("resizable", &WindowSettings::resizable, {.description = "The player can resize the window."});
+    reflectStruct<SaveSettings>("illusion.SaveSettings", 1, structs)
+        .meta({.displayName = "Saved games", .docsAnchor = "manual/runtime.md#project-settings"})
+        .field("cloud", &SaveSettings::cloud,
+               {.description = "Mirror slot files to the store's cloud (Steam Cloud) when it has one."});
 }
 
 void reflectRuntimeStructs()
@@ -118,7 +122,11 @@ Expected<void, std::string> loadProjectSettings(const VirtualFileSystem& files, 
     {
         return read;
     }
-    return loadFile(files, kWindowSettingsFile, settings.window, text);
+    if (auto read = loadFile(files, kWindowSettingsFile, settings.window, text); !read)
+    {
+        return read;
+    }
+    return loadFile(files, kSaveSettingsFile, settings.save, text);
 }
 
 } // namespace illusion
