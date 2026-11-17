@@ -169,14 +169,15 @@ struct ShellFixture
         int longest = 0;
         for (int i = 0; i < limit && current < run; ++i)
         {
-            const u64 imguiBefore = ui::UiContext::allocationCount();
+            const u64 imguiBefore = editor::ui::UiContext::allocationCount();
             usize allocated = 0;
             {
                 const ScopedAllocationCounter allocations;
                 frame();
                 allocated = allocations.count();
             }
-            current = allocated == 0 && ui::UiContext::allocationCount() == imguiBefore ? current + 1 : 0;
+            current =
+                allocated == 0 && editor::ui::UiContext::allocationCount() == imguiBefore ? current + 1 : 0;
             longest = std::max(longest, current);
         }
         return longest;
