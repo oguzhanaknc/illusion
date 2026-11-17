@@ -18,6 +18,7 @@
 
 #include <doctest/doctest.h>
 
+#include <algorithm>
 #include <chrono>
 #include <fstream>
 #include <imgui.h>
@@ -157,6 +158,28 @@ struct ShellFixture
             frame();
         }
         REQUIRE(editor->assets().find("assets:/settled.marker") != nullptr);
+    }
+
+    /// Runs frames until @p run consecutive ones allocate nothing (heap or ImGui), at most @p limit frames,
+    /// and returns the longest such run. A frame that handles a file event the OS delivered late may
+    /// allocate (FSEvents on macOS); a frame that always allocates keeps every run at 0.
+    int longestIdleRun(int run, int limit)
+    {
+        int current = 0;
+        int longest = 0;
+        for (int i = 0; i < limit && current < run; ++i)
+        {
+            const u64 imguiBefore = ui::UiContext::allocationCount();
+            usize allocated = 0;
+            {
+                const ScopedAllocationCounter allocations;
+                frame();
+                allocated = allocations.count();
+            }
+            current = allocated == 0 && ui::UiContext::allocationCount() == imguiBefore ? current + 1 : 0;
+            longest = std::max(longest, current);
+        }
+        return longest;
     }
 };
 
