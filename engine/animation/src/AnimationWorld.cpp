@@ -645,7 +645,9 @@ struct AnimationWorld::Impl
             [this](Entity entity, const Animator&) { scratch.push_back(entity); });
         for (const Entity entity : scratch)
         {
-            world->emplace<AnimationPose>(entity, AnimationPose{.slot = acquireSlot(entity)});
+            AnimationPose pose;
+            pose.slot = acquireSlot(entity);
+            world->emplace<AnimationPose>(entity, pose);
         }
         scratch.clear();
         world->query<const AnimationPose>().without<Animator>().each(
