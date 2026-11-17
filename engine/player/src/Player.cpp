@@ -1,6 +1,7 @@
 #include "PlayerSetup.hpp"
 #include "PresentPass.hpp"
 
+#include <illusion/animation/AnimationComponents.hpp>
 #include <illusion/assets/AssetReflection.hpp>
 #include <illusion/assets/AssetStreamer.hpp>
 #include <illusion/assets/Image.hpp>
@@ -155,6 +156,7 @@ void reflectEngineTypes()
     reflectPhysicsComponents();
     reflectAudioComponents();
     reflectParticleComponents();
+    registerAnimationComponents(ComponentRegistry::instance());
     reflectRenderComponents();
     registerUiComponents();
     registerSaveComponents();

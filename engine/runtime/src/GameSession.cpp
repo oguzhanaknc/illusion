@@ -1,3 +1,4 @@
+#include <illusion/animation/AnimationWorld.hpp>
 #include <illusion/audio/AudioWorldService.hpp>
 #include <illusion/core/Assert.hpp>
 #include <illusion/core/Log.hpp>
@@ -358,6 +359,7 @@ struct GameSession::Impl
     SceneLoaderService sceneService;
     UiWorldService uiService;
     SaveSystemService saveService;
+    std::unique_ptr<AnimationWorld> animation;
     std::unique_ptr<PhysicsAssetResolver> physicsAssets;
     std::unique_ptr<RenderAssetResolver> renderAssets;
     std::vector<const GamepadState*> gamepads;
@@ -387,6 +389,7 @@ Expected<std::unique_ptr<GameSession>, std::string> GameSession::create(const Ga
     if (desc.streamer != nullptr)
     {
         impl->physicsAssets = std::make_unique<PhysicsAssetResolver>(impl->physics, *desc.streamer);
+        impl->animation = std::make_unique<AnimationWorld>(impl->world, *desc.streamer);
     }
     if (desc.renderAssets != nullptr)
     {
@@ -482,6 +485,10 @@ void GameSession::update(f64 deltaSeconds)
     {
         impl.saveService.update(impl.world, &impl.guids(), impl.desc.fixedStep);
     }
+    if (impl.animation)
+    {
+        impl.animation->update(static_cast<f32>(step), impl.desc.jobs, impl.started);
+    }
     impl.physics.update(step);
     updateTransformHierarchy(impl.world, impl.hierarchy, impl.desc.jobs);
     impl.localization.applyPendingLocale();
@@ -541,6 +548,11 @@ PhysicsWorld& GameSession::physics() noexcept
 ParticleWorld& GameSession::particles() noexcept
 {
     return m_impl->particles;
+}
+
+AnimationWorld* GameSession::animation() noexcept
+{
+    return m_impl->animation.get();
 }
 
 AudioWorld& GameSession::audio() noexcept

@@ -67,11 +67,12 @@ Every `update(deltaSeconds)` runs:
 | 1. Input | The `InputActions` read `keyboardMouse()` and the gamepads; while the last update showed a modal canvas, only the `ui.*` actions get input |
 | 2. Modules | `ModuleHost::update()` on the World; then Entities created without an `EntityGuid` get one |
 | 3. Saves | With `GameSessionDesc::saves`: loads the save thread finished replace the saved Entities and finished requests become the next update's `SaveService` events; then the `save`, `load` and `remove` calls of step 2 are sent in call order, each `save` capturing the World now. With `fixedStep` it first waits for the save thread, so results always arrive in the next update |
-| 4. Physics | `PhysicsWorld::update()`: bodies sync with the World, step and write their Transforms |
-| 5. Hierarchy | `updateTransformHierarchy()`: children follow their parents, `Disabled` becomes `Inactive` |
-| 6. UI | `UiWorld` lays out the UI Entities for the frame of `setUiFrame()`, handles the pointer and the actions `ui.navigate`, `ui.submit` and `ui.cancel` (Play mode), and records the draw list (`ui()`), see [Game UI](ui.md) |
-| 7. Particles and audio | `ParticleWorld::update()` and `AudioWorld::update()`: sources follow their Entities, the listener moves |
-| 8. Resolvers | Asset references become runtime Components (`Collider` meshes, `MeshRenderer` → `RenderMesh`) |
+| 4. Animation | With `GameSessionDesc::streamer`: `AnimationWorld::update()` poses the Animators (see [Skeletal animation](rendering.md#skeletal-animation)); their `time` advances while the session is started. `animation()` gives the poses to the renderer and host tools |
+| 5. Physics | `PhysicsWorld::update()`: bodies sync with the World, step and write their Transforms |
+| 6. Hierarchy | `updateTransformHierarchy()`: children follow their parents, `Disabled` becomes `Inactive` |
+| 7. UI | `UiWorld` lays out the UI Entities for the frame of `setUiFrame()`, handles the pointer and the actions `ui.navigate`, `ui.submit` and `ui.cancel` (Play mode), and records the draw list (`ui()`), see [Game UI](ui.md) |
+| 8. Particles and audio | `ParticleWorld::update()` and `AudioWorld::update()`: sources follow their Entities, the listener moves |
+| 9. Resolvers | Asset references become runtime Components (`Collider` meshes, `MeshRenderer` → `RenderMesh`) |
 
 The session's `localization()` holds the string tables of the project's `assets:/locales/*.json`, which
 `create()` reads: the keys of every file, with the English text of `en.json`. `UiText::key` is looked up

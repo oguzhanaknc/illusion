@@ -1,5 +1,6 @@
-"""Writes the generated assets of the showcase project: a glTF model with two submeshes, the
-sounds (music, wind, a lamp hum, a voice and a click), a smoke sprite and a nine-slice panel for the HUD.
+"""Writes the generated assets of the showcase project: a glTF model with two submeshes, a skinned column
+with a clip, the sounds (music, wind, a lamp hum, a voice and a click), a smoke sprite and a nine-slice panel
+for the HUD.
 
 All of them are made here from numbers, so they carry no third-party licence. Run it from anywhere:
 
@@ -71,6 +72,75 @@ def write_model(path):
         "scenes": [{"nodes": [0, 1]}],
         "nodes": [{"name": "blocks", "mesh": 0}, {"name": "step", "mesh": 1, "translation": [0, 0, 3]}],
         "meshes": [{"name": "blocks", "primitives": primitives[:2]}, {"name": "step", "primitives": primitives[2:]}],
+        "buffers": [{"byteLength": len(data),
+                     "uri": "data:application/octet-stream;base64," + base64.b64encode(bytes(data)).decode()}],
+        "bufferViews": views,
+        "accessors": accessors,
+    }
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(gltf, indent=1) + "\n", encoding="utf-8", newline="\n")
+
+
+def write_rigged(path):
+    """A square column on two joints, "base" and "top" (one metre up), with the clip "sway" bending the top
+    joint 0.5 radians around z and back over two seconds. The middle ring is shared by both joints."""
+    half = 0.2
+    corners = [(-half, -half), (half, -half), (half, half), (-half, half)]
+    positions, normals, joints, weights = [], [], [], []
+    for ring, (low, high) in enumerate(((0, 0), (0, 1), (1, 1))):
+        for x, z in corners:
+            positions.append((x, float(ring), z))
+            length = math.hypot(x, z)
+            normals.append((x / length, 0.0, z / length))
+            joints.append((low, high, 0, 0))
+            weights.append((0.5, 0.5, 0, 0) if low != high else (1, 0, 0, 0))
+    indices = []
+    for ring in range(2):
+        for side in range(4):
+            a, b = ring * 4 + side, ring * 4 + (side + 1) % 4
+            indices += [a, b, b + 4, a, b + 4, a + 4]
+    times = [0.0, 1.0, 2.0]
+    angles = [0.0, 0.5, 0.0]
+    rotations = [(0.0, 0.0, math.sin(angle / 2), math.cos(angle / 2)) for angle in angles]
+    inverse_binds = [(1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1), (1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, -1, 0, 1)]
+
+    data = bytearray()
+    views, accessors = [], []
+
+    def add(fmt, rows, component_type, accessor_type, minmax=False):
+        while len(data) % 4:
+            data.extend(b"\0")
+        offset = len(data)
+        for row in rows:
+            data.extend(struct.pack("<" + fmt, *(row if isinstance(row, tuple) else (row,))))
+        views.append({"buffer": 0, "byteOffset": offset, "byteLength": len(data) - offset})
+        accessor = {"bufferView": len(views) - 1, "componentType": component_type, "count": len(rows),
+                    "type": accessor_type}
+        if minmax:
+            columns = list(zip(*[row if isinstance(row, tuple) else (row,) for row in rows]))
+            accessor["min"] = [min(c) for c in columns]
+            accessor["max"] = [max(c) for c in columns]
+        accessors.append(accessor)
+        return len(accessors) - 1
+
+    attributes = {"POSITION": add("3f", positions, 5126, "VEC3", minmax=True),
+                  "NORMAL": add("3f", normals, 5126, "VEC3"),
+                  "JOINTS_0": add("4B", joints, 5121, "VEC4"),
+                  "WEIGHTS_0": add("4f", weights, 5126, "VEC4")}
+    index_accessor = add("H", indices, 5123, "SCALAR")
+    inverse_bind = add("16f", inverse_binds, 5126, "MAT4")
+    sampler = {"input": add("f", times, 5126, "SCALAR", minmax=True),
+               "output": add("4f", rotations, 5126, "VEC4"), "interpolation": "LINEAR"}
+    gltf = {
+        "asset": {"version": "2.0", "generator": "illusion showcase make_assets.py"},
+        "scene": 0,
+        "scenes": [{"nodes": [0, 2]}],
+        "nodes": [{"name": "base", "children": [1]}, {"name": "top", "translation": [0, 1, 0]},
+                  {"name": "column", "mesh": 0, "skin": 0}],
+        "meshes": [{"name": "column", "primitives": [{"attributes": attributes, "indices": index_accessor}]}],
+        "skins": [{"name": "column", "joints": [0, 1], "inverseBindMatrices": inverse_bind}],
+        "animations": [{"name": "sway", "samplers": [sampler],
+                        "channels": [{"sampler": 0, "target": {"node": 1, "path": "rotation"}}]}],
         "buffers": [{"byteLength": len(data),
                      "uri": "data:application/octet-stream;base64," + base64.b64encode(bytes(data)).decode()}],
         "bufferViews": views,
@@ -229,6 +299,7 @@ def write_panel(path, size=32, corner=8, edge=3):
 
 if __name__ == "__main__":
     write_model(ROOT / "models" / "blocks.gltf")
+    write_rigged(ROOT / "models" / "column.gltf")
     for name, samples in (("music", music()), ("wind", wind()), ("hum", hum()), ("voice", voice()),
                           ("click", click())):
         write_wav(ROOT / "audio" / f"{name}.wav", samples)

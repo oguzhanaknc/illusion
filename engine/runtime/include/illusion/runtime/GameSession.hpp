@@ -40,6 +40,7 @@
 namespace illusion
 {
 
+class AnimationWorld;
 class AssetStreamer;
 class GamepadSystem;
 class InputActions;
@@ -87,8 +88,9 @@ struct GameSessionDesc
     /// Game modules, attached to the session's World with WorldRole::Simulation in Play mode (start() and
     /// stop() run their start and stop). Null runs no game code.
     ModuleHost* modules = nullptr;
-    /// Loads audio clips and physics meshes in the background; the host calls its update() once per frame.
-    /// Null loads clips on the calling thread and leaves mesh colliders without a shape.
+    /// Loads audio clips, physics meshes and animated models in the background; the host calls its update()
+    /// once per frame. Null loads clips on the calling thread, leaves mesh colliders without a shape and
+    /// animates nothing (animation() is null).
     AssetStreamer* streamer = nullptr;
     /// GPU meshes and materials for rendering the World; null (headless) resolves no render Components.
     RenderAssetCache* renderAssets = nullptr;
@@ -125,14 +127,16 @@ struct GameSessionDesc
 ///    Modules step are sent in call order, each save() capturing the World now (captureSave()). A load is
 ///    therefore applied in a later update than its request; with fixedStep the step first waits for the save
 ///    thread, so it is always the next one and fixed-step runs repeat.
-/// 4. **Physics:** PhysicsWorld::update().
-/// 5. **Hierarchy:** updateTransformHierarchy().
-/// 6. **UI:** the UiWorld lays out for the frame of setUiFrame(), handles the pointer and wheel of
+/// 4. **Animation:** (with GameSessionDesc::streamer) AnimationWorld::update() poses the Animators; their
+///    time advances while the session is started.
+/// 5. **Physics:** PhysicsWorld::update().
+/// 6. **Hierarchy:** updateTransformHierarchy().
+/// 7. **UI:** the UiWorld lays out for the frame of setUiFrame(), handles the pointer and wheel of
 ///    keyboardMouse() and the actions `ui.navigate`, `ui.submit` and `ui.cancel` (Play mode), and records
 ///    the draw list (ui()). UiGlyph labels come from the actions: the first binding for the device used
 ///    last, through localization().
-/// 7. **Particles and audio:** ParticleWorld::update() and AudioWorld::update().
-/// 8. **Resolvers:** the physics and render asset resolvers turn asset references into runtime Components.
+/// 8. **Particles and audio:** ParticleWorld::update() and AudioWorld::update().
+/// 9. **Resolvers:** the physics and render asset resolvers turn asset references into runtime Components.
 ///
 /// Modules find the services PhysicsService, AudioService, ParticleService, InputService, SceneService,
 /// UiService (over ui() and localization()), with GameSessionDesc::store StoreService and with
@@ -208,6 +212,10 @@ public:
 
     /// The particle effects of the World, advanced after physics with its gravity.
     [[nodiscard]] ParticleWorld& particles() noexcept;
+
+    /// The poses of the World's Animators, for the renderer and host tools; null without
+    /// GameSessionDesc::streamer.
+    [[nodiscard]] AnimationWorld* animation() noexcept;
 
     /// Sets the target the UI is laid out for from the next update() on (the host's view size and safe
     /// insets). Starts empty. The cursor of keyboardMouse() times @p pointerScale is the pointer in the

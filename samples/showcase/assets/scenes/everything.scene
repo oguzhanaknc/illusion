@@ -2,6 +2,7 @@
   "format": "illusion.scene",
   "version": 2,
   "types": {
+    "illusion.Animator": 1,
     "illusion.AudioListener": 1,
     "illusion.AudioSource": 1,
     "illusion.Camera": 2,
@@ -3359,6 +3360,36 @@
           "groundAlbedo": [0.3, 0.25, 0.2],
           "castShadows": false,
           "lightingResolution": 32
+        }
+      }
+    },
+    {
+      "id": "c7c9572ddea951a8",
+      "components": {
+        "illusion.Animator": {
+          "skeleton": "assets:/models/column.gltf#skin/0",
+          "clip": "assets:/models/column.gltf#animation/sway",
+          "speed": 0.8,
+          "time": 0.4,
+          "loop": false,
+          "playing": false
+        },
+        "illusion.MeshRenderer": {
+          "mesh": "assets:/models/column.gltf#mesh/0",
+          "submesh": 0,
+          "material": "",
+          "layers": 1,
+          "castShadows": true,
+          "visible": false,
+          "lodBias": 1.0
+        },
+        "illusion.Name": {
+          "value": "Column"
+        },
+        "illusion.Transform": {
+          "position": [-6.0, 0.0, 3.0],
+          "rotation": [0.0, 0.0, 0.0, 1.0],
+          "scale": [1.0, 1.0, 1.0]
         }
       }
     },
