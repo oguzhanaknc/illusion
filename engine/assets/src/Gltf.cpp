@@ -484,10 +484,20 @@ private:
                 }
             }
             // Largest first; equal weights by joint index, so the result does not depend on attribute order.
-            std::sort(influences.begin(), influences.begin() + static_cast<std::ptrdiff_t>(used),
-                      [](const Influence& a, const Influence& b) {
-                          return a.weight != b.weight ? a.weight > b.weight : a.joint < b.joint;
-                      });
+            // An insertion sort: std::sort over this small array trips GCC's -Warray-bounds at -O3.
+            for (usize i = 1; i < used; ++i)
+            {
+                const Influence key = influences.at(i);
+                usize j = i;
+                while (j > 0 &&
+                       (key.weight != influences.at(j - 1).weight ? key.weight > influences.at(j - 1).weight
+                                                                  : key.joint < influences.at(j - 1).joint))
+                {
+                    influences.at(j) = influences.at(j - 1);
+                    --j;
+                }
+                influences.at(j) = key;
+            }
             out.push_back(
                 quantizeInfluences(std::span(influences).first(std::min<usize>(used, kMaxJointInfluences))));
         }
