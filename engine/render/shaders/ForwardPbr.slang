@@ -10,8 +10,14 @@
 struct PushConstants
 {
     uint instanceOffset;
-    uint flags; // bit 0: apply screen-space ambient occlusion (off for blended surfaces); bit 1: apply the fog
+    // bit 0: apply screen-space ambient occlusion (off for blended surfaces); bit 1: apply the fog; bit 2: a
+    // skinned instance, whose previous positions start at previousVertex in g_previousPositions
+    uint flags;
+    uint previousVertex;
+    uint padding;
 };
+
+static const uint kForwardSkinned = 4u;
 
 struct MaterialConstants
 {
@@ -35,6 +41,8 @@ Texture2D<float> g_ambientOcclusion : register(t5, space0);
 SamplerState g_clampSampler : register(s0, space0);
 // Integrated volumetric fog; opaque surfaces get it in VolumetricFog.slang, blended ones here.
 Texture3D<float4> g_fogVolume : register(t8, space0);
+// Model-space positions of skinned vertices under the previous frame's pose (Skinning.slang).
+StructuredBuffer<float4> g_previousPositions : register(t10, space0);
 [[vk::push_constant]] ConstantBuffer<PushConstants> g_push;
 
 #include "FogSample.slang"
@@ -124,14 +132,20 @@ struct VertexOutput
 };
 
 [shader("vertex")]
-VertexOutput vertexMain(VertexInput input, uint instanceId: SV_InstanceID, uint firstInstance: SV_StartInstanceLocation)
+VertexOutput vertexMain(VertexInput input, uint vertexId: SV_VertexID, uint instanceId: SV_InstanceID,
+                        uint firstInstance: SV_StartInstanceLocation)
 {
     // Multi-draw indirect passes each draw's draw-list offset as its first instance; single draws pass
     // it as a push constant.
     const InstanceData instance = g_instances[g_drawList[g_push.instanceOffset + firstInstance + instanceId]];
     const float2 response = materialConstants(instance.extra.x).wind.xy;
     float4 world = mul(instance.world, float4(input.position, 1.0));
-    float4 previousWorld = mul(instance.previousWorld, float4(input.position, 1.0));
+    // Skinned draws bind their vertices at an offset and start at vertex 0, so the vertex ID is the vertex's
+    // index in the instance's range.
+    const float3 previousPosition = (g_push.flags & kForwardSkinned) != 0u
+                                        ? g_previousPositions[g_push.previousVertex + vertexId].xyz
+                                        : input.position;
+    float4 previousWorld = mul(instance.previousWorld, float4(previousPosition, 1.0));
     // The prepass runs this shader too, so depth, IDs and motion vectors move with the wind.
     const float3 origin = mul(instance.world, float4(0.0, 0.0, 0.0, 1.0)).xyz;
     const float3 previousOrigin = mul(instance.previousWorld, float4(0.0, 0.0, 0.0, 1.0)).xyz;

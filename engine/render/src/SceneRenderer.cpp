@@ -4,8 +4,11 @@
 #include "RenderResourcesImpl.hpp"
 #include "VolumetricFogRenderer.hpp"
 
+#include <illusion/animation/AnimationComponents.hpp>
+#include <illusion/animation/AnimationWorld.hpp>
 #include <illusion/core/JobSystem.hpp>
 #include <illusion/core/Log.hpp>
+#include <illusion/core/Memory.hpp>
 #include <illusion/core/Profiler.hpp>
 #include <illusion/ecs/Hierarchy.hpp>
 #include <illusion/ecs/Wind.hpp>
@@ -136,6 +139,9 @@ u32 lodFadeCode(u32 lod, f32 fade, bool fading, bool outgoing) noexcept
 constexpr u32 kCameraPass = 1;
 static_assert(kShadowViews + 1 <= 32);
 
+// DrawItem::skinned of an instance drawn from the shared vertex pool.
+constexpr u32 kRigid = ~0u;
+
 struct DrawItem
 {
     GpuInstance instance; // computed by the (parallel) culling jobs
@@ -148,6 +154,9 @@ struct DrawItem
     [[nodiscard]] bool fading() const noexcept { return (instance.extra[3] & kLodFadeActive) != 0; }
     f32 distanceSquared;
     Sphere bounds; // world space
+    // First vertex of its range in the skinned vertex buffers (ADR 0059), or kRigid.
+    u32 skinned = kRigid;
+    [[nodiscard]] bool isSkinned() const noexcept { return skinned != kRigid; }
 
     // The index range this item draws.
     [[nodiscard]] SubmeshLod range() const noexcept { return mesh->submeshes[submesh].level(lod); }
@@ -156,11 +165,31 @@ struct DrawItem
 struct ForwardPush
 {
     u32 instanceOffset;
-    u32 flags; // bit 0: apply screen-space ambient occlusion; bit 1: apply the volumetric fog
+    u32 flags;          // kForward*
+    u32 previousVertex; // kForwardSkinned: first vertex of the instance in the previous-position buffer
+    u32 padding;
 };
 
 constexpr u32 kForwardAmbientOcclusion = 1;
 constexpr u32 kForwardFog = 2;
+constexpr u32 kForwardSkinned = 4;
+
+// Must match SkinningPush in Skinning.slang.
+struct SkinningPush
+{
+    u32 sourceVertex;
+    u32 skinVertex;
+    u32 vertexCount;
+    u32 targetVertex;
+    u32 matrices; // in rows (Vec4), three per joint
+    u32 previousMatrices;
+    u32 jointCount;
+    u32 padding;
+};
+
+constexpr u32 kSkinningGroupSize = 64;
+static_assert(offsetof(Vertex, normal) == 12 && offsetof(Vertex, tangent) == 24 && offsetof(Vertex, uv) == 40,
+              "Skinning.slang reads and writes this layout");
 
 struct ShadowPush
 {
@@ -354,7 +383,7 @@ struct SceneRenderer::Impl
     RenderStats stats;
     struct Timers
     {
-        std::array<nvrhi::TimerQueryHandle, 5> passes;
+        std::array<nvrhi::TimerQueryHandle, 6> passes;
         u64 sequence = 0;
     };
     std::array<Timers, 3> timerRing{};
@@ -362,6 +391,49 @@ struct SceneRenderer::Impl
     u64 timerSequence = 0;
     u64 resolvedTimer = 0;
     void pollTimers();
+
+    // GPU skinning (ADR 0059): every skinned instance drawn this frame gets a range of vertices in the
+    // skinned vertex buffers, kept while its pose lasts; the pass writes the posed vertices there.
+    nvrhi::BindingLayoutHandle skinningLayout;
+    nvrhi::ComputePipelineHandle skinningPipeline;
+    nvrhi::BindingSetHandle skinningSet; // rebuilt when a buffer it binds changes
+    bool skinningSetDirty = true;
+    u32 skinningGeneration = ~0u;          // RenderResources::generation() the set was made for
+    nvrhi::BufferHandle skinnedVertices;   // Vertex layout: a vertex buffer and a raw UAV
+    nvrhi::BufferHandle previousPositions; // Vec4 per skinned vertex, under the previous frame's pose
+    nvrhi::BufferHandle skinMatrixBuffer;  // this frame's skin matrices, current then previous per instance
+    u32 skinnedCapacity = 0;               // vertices
+    u32 skinMatrixCapacity = 0;            // SkinMatrix entries
+    RangeAllocator skinnedRanges;
+    struct SkinnedEntry
+    {
+        u32 generation = 0;
+        u32 offset = 0;
+        u32 count = 0; // 0: no range
+        u64 seen = 0;  // skinningFrame of the last cull that found its pose
+    };
+    std::vector<SkinnedEntry> skinnedEntries; // by Entity index
+    std::vector<u32> skinnedActive;           // Entity indices with a range
+    std::vector<SkinningPush> skinningDispatches;
+    std::vector<SkinMatrix> skinMatrices;
+    u64 skinningFrame = 0;
+    u32 acquireSkinned(Entity entity, u32 vertexCount);
+    void releaseUnposed();
+    void ensureSkinnedCapacity(u32 vertices);
+    void skin(nvrhi::ICommandList* commandList);
+    [[nodiscard]] nvrhi::VertexBufferBinding vertexBinding(const DrawItem& item) const noexcept
+    {
+        return item.isSkinned() ? nvrhi::VertexBufferBinding()
+                                      .setBuffer(skinnedVertices)
+                                      .setSlot(0)
+                                      .setOffset(static_cast<u64>(item.skinned) * sizeof(Vertex))
+                                : nvrhi::VertexBufferBinding().setBuffer(resources->vertexPool()).setSlot(0);
+    }
+    // The vertex offset of an item's draw: skinned ranges are bound at their offset (see vertexBinding()).
+    [[nodiscard]] static u32 baseVertex(const DrawItem& item) noexcept
+    {
+        return item.isSkinned() ? 0u : item.mesh->vertexOffset;
+    }
 
     bool initialize();
     bool updateShadowResources();
@@ -426,6 +498,7 @@ void SceneRenderer::Impl::pollTimers()
             timings.ambientOcclusion = device->getTimerQueryTime(frame.passes[2]) * 1000.0f;
             timings.shading = device->getTimerQueryTime(frame.passes[3]) * 1000.0f;
             timings.post = device->getTimerQueryTime(frame.passes[4]) * 1000.0f;
+            timings.skinning = device->getTimerQueryTime(frame.passes[5]) * 1000.0f;
             resolvedTimer = frame.sequence;
         }
         for (auto& query : frame.passes)
@@ -498,16 +571,17 @@ bool SceneRenderer::Impl::initialize()
     layout.bindings = {
         nvrhi::BindingLayoutItem::VolatileConstantBuffer(0),
         nvrhi::BindingLayoutItem::StructuredBuffer_SRV(0),
-        nvrhi::BindingLayoutItem::Texture_SRV(1),          // specular cube map
-        nvrhi::BindingLayoutItem::Texture_SRV(2),          // BRDF table
-        nvrhi::BindingLayoutItem::Texture_SRV(3),          // background cube map
-        nvrhi::BindingLayoutItem::Texture_SRV(4),          // shadow map
-        nvrhi::BindingLayoutItem::Texture_SRV(5),          // screen-space ambient occlusion
-        nvrhi::BindingLayoutItem::StructuredBuffer_SRV(6), // draw list
-        nvrhi::BindingLayoutItem::StructuredBuffer_SRV(7), // material table
-        nvrhi::BindingLayoutItem::Texture_SRV(8),          // volumetric fog
-        nvrhi::BindingLayoutItem::Texture_SRV(9),          // point light shadow maps
-        nvrhi::BindingLayoutItem::Sampler(2).setSize(9),   // material samplers
+        nvrhi::BindingLayoutItem::Texture_SRV(1),           // specular cube map
+        nvrhi::BindingLayoutItem::Texture_SRV(2),           // BRDF table
+        nvrhi::BindingLayoutItem::Texture_SRV(3),           // background cube map
+        nvrhi::BindingLayoutItem::Texture_SRV(4),           // shadow map
+        nvrhi::BindingLayoutItem::Texture_SRV(5),           // screen-space ambient occlusion
+        nvrhi::BindingLayoutItem::StructuredBuffer_SRV(6),  // draw list
+        nvrhi::BindingLayoutItem::StructuredBuffer_SRV(7),  // material table
+        nvrhi::BindingLayoutItem::Texture_SRV(8),           // volumetric fog
+        nvrhi::BindingLayoutItem::Texture_SRV(9),           // point light shadow maps
+        nvrhi::BindingLayoutItem::StructuredBuffer_SRV(10), // previous positions of skinned vertices
+        nvrhi::BindingLayoutItem::Sampler(2).setSize(9),    // material samplers
         nvrhi::BindingLayoutItem::Sampler(0),
         nvrhi::BindingLayoutItem::Sampler(1), // shadow comparison
         // Push constants take a constant-buffer slot in NVRHI, so they cannot share b0 with the view.
@@ -718,7 +792,28 @@ bool SceneRenderer::Impl::initialize()
         }
     }
     ensureInstanceCapacity(1024);
-    if (!post.initialize(device, desc.colorFormat) || !culling.initialize(device) ||
+
+    nvrhi::BindingLayoutDesc skinning;
+    skinning.visibility = nvrhi::ShaderType::Compute;
+    skinning.bindings = {
+        nvrhi::BindingLayoutItem::RawBuffer_SRV(0),        // vertex pool
+        nvrhi::BindingLayoutItem::RawBuffer_SRV(1),        // skin pool
+        nvrhi::BindingLayoutItem::StructuredBuffer_SRV(2), // skin matrices
+        nvrhi::BindingLayoutItem::RawBuffer_UAV(0),        // skinned vertices
+        nvrhi::BindingLayoutItem::StructuredBuffer_UAV(1), // previous positions
+        nvrhi::BindingLayoutItem::PushConstants(0, sizeof(SkinningPush)),
+    };
+    skinningLayout = device->createBindingLayout(skinning);
+    const nvrhi::ShaderHandle skinningShader =
+        createShader(device, nvrhi::ShaderType::Compute, shaders::skinning(), "Skinning CS");
+    if (!skinningLayout || !skinningShader)
+    {
+        return false;
+    }
+    skinningPipeline = device->createComputePipeline(
+        nvrhi::ComputePipelineDesc().setComputeShader(skinningShader).addBindingLayout(skinningLayout));
+    ensureSkinnedCapacity(1024);
+    if (!skinningPipeline || !post.initialize(device, desc.colorFormat) || !culling.initialize(device) ||
         !particles.initialize(device, *resources, kHdrFormat) || !fog.initialize(device))
     {
         return false;
@@ -820,6 +915,129 @@ void SceneRenderer::Impl::ensureInstanceCapacity(u32 count)
     shadowSet = device->createBindingSet(shadowSetDesc, shadowLayout);
 }
 
+void SceneRenderer::Impl::ensureSkinnedCapacity(u32 vertices)
+{
+    if (vertices <= skinnedCapacity && skinnedVertices)
+    {
+        return;
+    }
+    // The contents need not survive: every range drawn in a frame is skinned again in that frame.
+    skinnedCapacity = std::max({vertices, skinnedCapacity * 2, 1024u});
+    nvrhi::BufferDesc vertexDesc;
+    vertexDesc.byteSize = static_cast<u64>(skinnedCapacity) * sizeof(Vertex);
+    vertexDesc.isVertexBuffer = true;
+    vertexDesc.canHaveUAVs = true;
+    vertexDesc.canHaveRawViews = true;
+    vertexDesc.debugName = "Skinned vertices";
+    vertexDesc.enableAutomaticStateTracking(nvrhi::ResourceStates::VertexBuffer);
+    skinnedVertices = device->createBuffer(vertexDesc);
+    nvrhi::BufferDesc previousDesc;
+    previousDesc.byteSize = static_cast<u64>(skinnedCapacity) * sizeof(Vec4);
+    previousDesc.structStride = sizeof(Vec4);
+    previousDesc.canHaveUAVs = true;
+    previousDesc.debugName = "Skinned previous positions";
+    previousDesc.enableAutomaticStateTracking(nvrhi::ResourceStates::ShaderResource);
+    previousPositions = device->createBuffer(previousDesc);
+    skinningSetDirty = true;
+    viewSets.clear();
+}
+
+u32 SceneRenderer::Impl::acquireSkinned(Entity entity, u32 vertexCount)
+{
+    if (skinnedEntries.size() <= entity.index)
+    {
+        skinnedEntries.resize(static_cast<usize>(entity.index) + 1);
+    }
+    SkinnedEntry& entry = skinnedEntries[entity.index];
+    const bool listed = entry.count != 0;
+    if (listed && (entry.generation != entity.generation || entry.count != vertexCount))
+    {
+        skinnedRanges.free(entry.offset, entry.count);
+        entry.count = 0;
+    }
+    if (entry.count == 0)
+    {
+        entry.offset = skinnedRanges.allocate(vertexCount);
+        entry.count = vertexCount;
+        entry.generation = entity.generation;
+        if (!listed)
+        {
+            skinnedActive.push_back(entity.index);
+        }
+    }
+    entry.seen = skinningFrame;
+    return entry.offset;
+}
+
+void SceneRenderer::Impl::releaseUnposed()
+{
+    for (usize i = 0; i < skinnedActive.size();)
+    {
+        SkinnedEntry& entry = skinnedEntries[skinnedActive[i]];
+        if (entry.seen == skinningFrame)
+        {
+            ++i;
+            continue;
+        }
+        skinnedRanges.free(entry.offset, entry.count);
+        entry.count = 0;
+        skinnedActive[i] = skinnedActive.back();
+        skinnedActive.pop_back();
+    }
+}
+
+void SceneRenderer::Impl::skin(nvrhi::ICommandList* commandList)
+{
+    ILL_PROFILE_SCOPE_N("SceneRenderer::skin");
+    if (skinningDispatches.empty())
+    {
+        return;
+    }
+    if (skinMatrices.size() > skinMatrixCapacity || !skinMatrixBuffer)
+    {
+        skinMatrixCapacity = std::max({static_cast<u32>(skinMatrices.size()), skinMatrixCapacity * 2, 256u});
+        nvrhi::BufferDesc matrixDesc;
+        matrixDesc.byteSize = static_cast<u64>(skinMatrixCapacity) * sizeof(SkinMatrix);
+        matrixDesc.structStride = sizeof(Vec4);
+        matrixDesc.debugName = "Skin matrices";
+        matrixDesc.enableAutomaticStateTracking(nvrhi::ResourceStates::ShaderResource);
+        skinMatrixBuffer = device->createBuffer(matrixDesc);
+        skinningSetDirty = true;
+    }
+    if (skinningSetDirty || skinningGeneration != resources->generation())
+    {
+        nvrhi::BindingSetDesc setDesc;
+        setDesc.bindings = {
+            nvrhi::BindingSetItem::RawBuffer_SRV(0, resources->vertexPool()),
+            nvrhi::BindingSetItem::RawBuffer_SRV(1, resources->skinPool()),
+            nvrhi::BindingSetItem::StructuredBuffer_SRV(2, skinMatrixBuffer),
+            nvrhi::BindingSetItem::RawBuffer_UAV(0, skinnedVertices),
+            nvrhi::BindingSetItem::StructuredBuffer_UAV(1, previousPositions),
+            nvrhi::BindingSetItem::PushConstants(0, sizeof(SkinningPush)),
+        };
+        skinningSet = device->createBindingSet(setDesc, skinningLayout);
+        skinningSetDirty = false;
+        skinningGeneration = resources->generation();
+    }
+    commandList->beginMarker("Skinning");
+    commandList->writeBuffer(skinMatrixBuffer, skinMatrices.data(), skinMatrices.size() * sizeof(SkinMatrix));
+    // Instances write disjoint ranges, so the dispatches need no barriers between them.
+    commandList->setEnableUavBarriersForBuffer(skinnedVertices, false);
+    commandList->setEnableUavBarriersForBuffer(previousPositions, false);
+    nvrhi::ComputeState state;
+    state.pipeline = skinningPipeline;
+    state.bindings = {skinningSet};
+    commandList->setComputeState(state);
+    for (const SkinningPush& dispatch : skinningDispatches)
+    {
+        commandList->setPushConstants(&dispatch, sizeof(dispatch));
+        commandList->dispatch((dispatch.vertexCount + kSkinningGroupSize - 1) / kSkinningGroupSize);
+    }
+    commandList->setEnableUavBarriersForBuffer(skinnedVertices, true);
+    commandList->setEnableUavBarriersForBuffer(previousPositions, true);
+    commandList->endMarker();
+}
+
 nvrhi::IBindingSet* SceneRenderer::Impl::viewSetFor(EnvironmentHandle environment)
 {
     nvrhi::BindingSetHandle& set = viewSets[environment.index];
@@ -839,6 +1057,7 @@ nvrhi::IBindingSet* SceneRenderer::Impl::viewSetFor(EnvironmentHandle environmen
             nvrhi::BindingSetItem::StructuredBuffer_SRV(7, resources->materialTable()),
             nvrhi::BindingSetItem::Texture_SRV(8, fog.volume()),
             nvrhi::BindingSetItem::Texture_SRV(9, pointShadowMap),
+            nvrhi::BindingSetItem::StructuredBuffer_SRV(10, previousPositions),
             nvrhi::BindingSetItem::Sampler(0, clampSampler),
             nvrhi::BindingSetItem::Sampler(1, shadowSampler),
             nvrhi::BindingSetItem::PushConstants(1, sizeof(ForwardPush)),
@@ -952,31 +1171,35 @@ void SceneRenderer::Impl::cull(World& world, const RenderView& view, f32 viewpor
     const f32 fadeStep =
         view.lodFadeSeconds > 0.0f ? std::max(view.deltaSeconds, 0.0f) / view.lodFadeSeconds : 1.0f;
     std::atomic<u32> count{0};
-    auto query = world.query<const Transform, const RenderMesh>().without<Inactive>();
     usize historySize = 0;
-    query.each([&](Entity entity, const Transform&, const RenderMesh&) {
-        historySize = std::max(historySize, static_cast<usize>(entity.index) + 1);
-    });
+    world.query<const Transform, const RenderMesh>().without<Inactive>().each(
+        [&](Entity entity, const Transform&, const RenderMesh&) {
+            historySize = std::max(historySize, static_cast<usize>(entity.index) + 1);
+        });
     if (motionHistory.size() < historySize)
     {
         motionHistory.resize(historySize);
     }
     // Tests one entity; `previous` is its world matrix from the last frame (equal to `matrix` when new).
     // `state` holds its level of detail from the last frame (`known`: it was drawn then) and is updated.
+    // A posed skinned instance is culled by the world bounds of its pose (`posed`). Returns the slot of its
+    // first item, or kNoItem when it is not drawn.
+    constexpr u32 kNoItem = ~0u;
     const auto test = [&](Entity entity, const Mat4& matrix, const Mat4& previous, const RenderMesh& renderer,
-                          MotionEntry& state, bool known) {
+                          MotionEntry& state, bool known, const Aabb* posed) -> u32 {
         const RenderResources::GpuMesh* mesh = resources->mesh(renderer.mesh);
         if (mesh == nullptr || renderer.submesh >= mesh->submeshes.size() ||
             (renderer.flags & RenderMesh::kVisible) == 0 || (renderer.layers & view.layerMask) == 0 ||
             (entity.index / 64u < view.hiddenEntities.size() &&
              (view.hiddenEntities[entity.index / 64u] & (u64{1} << (entity.index % 64u))) != 0))
         {
-            return;
+            return kNoItem;
         }
         const RenderResources::GpuMaterial* material = resources->material(renderer.material);
         const Submesh& submesh = mesh->submeshes[renderer.submesh];
         const Sphere local = Sphere::fromAabb(submesh.bounds);
-        const Sphere bounds = local.transformed(matrix);
+        const Sphere placed = local.transformed(matrix);
+        const Sphere bounds = posed != nullptr ? Sphere::fromAabb(*posed) : placed;
         u32 passes = frustum.intersects(bounds) ? kCameraPass : 0u;
         if (material->alphaMode != AlphaMode::Blend && (renderer.flags & RenderMesh::kCastShadows) != 0)
         {
@@ -1006,7 +1229,7 @@ void SceneRenderer::Impl::cull(World& world, const RenderView& view, f32 viewpor
         u32 lod = 0;
         if (submesh.lodCount != 0 && lodPixelError > 0.0f && renderer.lodBias > 0.0f)
         {
-            const f32 scale = local.radius > 0.0f ? bounds.radius / local.radius : 1.0f;
+            const f32 scale = local.radius > 0.0f ? placed.radius / local.radius : 1.0f;
             const f32 distance = std::max(glm::length(offset) - bounds.radius, kLodMinDistance);
             lod = selectLod(submesh, scale * (orthographic ? pixelsPerUnit : pixelsPerUnit / distance),
                             lodPixelError * renderer.lodBias);
@@ -1017,7 +1240,7 @@ void SceneRenderer::Impl::cull(World& world, const RenderView& view, f32 viewpor
             state.lod = lod;
             state.previousLod = lod;
             state.fade = 1.0f;
-            return;
+            return kNoItem;
         }
         if (!known)
         {
@@ -1052,8 +1275,8 @@ void SceneRenderer::Impl::cull(World& world, const RenderView& view, f32 viewpor
                                     lodFadeCode(state.lod, state.fade, fading, false)}};
         const f32 distanceSquared = glm::dot(offset, offset);
         const u32 slot = count.fetch_add(fading ? 2u : 1u, std::memory_order_relaxed);
-        items[slot] =
-            DrawItem{instance, mesh, material, renderer.submesh, state.lod, passes, distanceSquared, bounds};
+        items[slot] = DrawItem{instance,        mesh,   material, renderer.submesh, state.lod, passes,
+                               distanceSquared, bounds, kRigid};
         if (fading)
         {
             DrawItem& outgoing = items[slot + 1];
@@ -1061,26 +1284,83 @@ void SceneRenderer::Impl::cull(World& world, const RenderView& view, f32 viewpor
             outgoing.lod = state.previousLod;
             outgoing.instance.extra[3] = lodFadeCode(state.previousLod, state.fade, true, true);
         }
+        return slot;
     };
-    const auto drawEntity = [&](Entity entity, const Transform& transform, const RenderMesh& renderer) {
+    // Returns the item slot as test() does and updates the entity's motion history.
+    const auto drawEntity = [&](Entity entity, const Transform& transform, const RenderMesh& renderer,
+                                const Aabb* posed) {
         const Mat4 matrix = transform.matrix();
         MotionEntry& entry = motionHistory[entity.index];
         const bool known =
             entry.frame == motionFrame && motionFrame != 0 && entry.generation == entity.generation;
         const Mat4 previous = known ? entry.matrix : matrix;
-        test(entity, matrix, previous, renderer, entry, known);
+        const u32 slot = test(entity, matrix, previous, renderer, entry, known, posed);
         entry.matrix = matrix;
         entry.frame = motionFrame + 1;
         entry.generation = entity.generation;
+        return slot;
     };
+    const auto drawRigid = [&](Entity entity, const Transform& transform, const RenderMesh& renderer) {
+        static_cast<void>(drawEntity(entity, transform, renderer, nullptr));
+    };
+    auto rigid = world.query<const Transform, const RenderMesh>().without<Inactive, AnimationPose>();
     if (jobs != nullptr)
     {
-        query.parallelEach(*jobs, drawEntity);
+        rigid.parallelEach(*jobs, drawRigid);
     }
     else
     {
-        query.each(drawEntity);
+        rigid.each(drawRigid);
     }
+    // Entities with a pose, on this thread: they take ranges of the skinned vertex buffers. A skinned mesh
+    // whose pose is not fresh (no AnimationWorld, still loading, not updated this frame) draws its bind pose.
+    ++skinningFrame;
+    skinningDispatches.clear();
+    skinMatrices.clear();
+    const AnimationWorld* animation = view.animation;
+    world.query<const Transform, const RenderMesh, const AnimationPose>().without<Inactive>().each(
+        [&](Entity entity, const Transform& transform, const RenderMesh& renderer,
+            const AnimationPose& pose) {
+            const RenderResources::GpuMesh* mesh = resources->mesh(renderer.mesh);
+            const bool posed = animation != nullptr && mesh != nullptr && mesh->skinCount != 0 &&
+                               pose.jointCount != 0 && pose.frame == animation->frame() &&
+                               pose.bounds.isValid() &&
+                               animation->skinMatrices(pose.slot).size() == pose.jointCount &&
+                               animation->previousSkinMatrices(pose.slot).size() == pose.jointCount;
+            const u32 slot = drawEntity(entity, transform, renderer, posed ? &pose.bounds : nullptr);
+            if (!posed)
+            {
+                return;
+            }
+            if (slot == kNoItem)
+            {
+                // Keeps its range while its pose lasts.
+                if (entity.index < skinnedEntries.size() && skinnedEntries[entity.index].count != 0 &&
+                    skinnedEntries[entity.index].generation == entity.generation)
+                {
+                    skinnedEntries[entity.index].seen = skinningFrame;
+                }
+                return;
+            }
+            const u32 target = acquireSkinned(entity, mesh->vertexCount);
+            items[slot].skinned = target;
+            if (items[slot].fading())
+            {
+                items[slot + 1].skinned = target;
+            }
+            const auto matrices = static_cast<u32>(skinMatrices.size());
+            const std::span<const SkinMatrix> current = animation->skinMatrices(pose.slot);
+            const std::span<const SkinMatrix> previous = animation->previousSkinMatrices(pose.slot);
+            skinMatrices.insert(skinMatrices.end(), current.begin(), current.end());
+            skinMatrices.insert(skinMatrices.end(), previous.begin(), previous.end());
+            skinningDispatches.push_back(SkinningPush{mesh->vertexOffset, mesh->skinOffset, mesh->vertexCount,
+                                                      target, matrices * 3, (matrices + pose.jointCount) * 3,
+                                                      pose.jointCount, 0});
+            stats.skinnedVertices += mesh->vertexCount;
+        });
+    releaseUnposed();
+    ensureSkinnedCapacity(skinnedRanges.end());
+    stats.skinnedInstances = static_cast<u32>(skinningDispatches.size());
     ++motionFrame;
     const u32 itemCount = count.load();
 
@@ -1328,11 +1608,12 @@ void SceneRenderer::Impl::drawShadows(nvrhi::ICommandList* commandList, u32 shad
         const DrawItem& first = items[order[begin]];
         const RenderResources::GpuMaterial* own = shadowMaterial(first); // nullptr: any material will do
         u32 end = begin + 1;
-        while (end < count)
+        // A skinned caster draws alone, from its own vertices.
+        while (end < count && !first.isSkinned())
         {
             const DrawItem& next = items[order[end]];
             if (shadowMaterial(next) != own || next.mesh != first.mesh || next.submesh != first.submesh ||
-                next.lod != first.lod || next.fading() != first.fading())
+                next.lod != first.lod || next.fading() != first.fading() || next.isSkinned())
             {
                 break;
             }
@@ -1345,8 +1626,7 @@ void SceneRenderer::Impl::drawShadows(nvrhi::ICommandList* commandList, u32 shad
         state.framebuffer = framebuffer;
         // The material set is bound for opaque casters too: the pipeline layout includes it.
         state.bindings = {shadowSet, own != nullptr ? own->bindingSet : first.material->bindingSet};
-        state.vertexBuffers = {
-            nvrhi::VertexBufferBinding().setBuffer(resources->vertexPool()).setSlot(0).setOffset(0)};
+        state.vertexBuffers = {vertexBinding(first)};
         state.indexBuffer =
             nvrhi::IndexBufferBinding().setBuffer(resources->indexPool()).setFormat(nvrhi::Format::R32_UINT);
         state.viewport.addViewportAndScissorRect(viewport);
@@ -1358,7 +1638,7 @@ void SceneRenderer::Impl::drawShadows(nvrhi::ICommandList* commandList, u32 shad
                                      .setVertexCount(range.indexCount)
                                      .setInstanceCount(end - begin)
                                      .setStartIndexLocation(first.mesh->indexOffset + range.indexOffset)
-                                     .setStartVertexLocation(first.mesh->vertexOffset));
+                                     .setStartVertexLocation(baseVertex(first)));
         ++(point ? stats.pointShadowDrawCalls : stats.shadowDrawCalls);
         begin = end;
     }
@@ -1538,17 +1818,19 @@ void SceneRenderer::render(nvrhi::ICommandList* commandList, nvrhi::ITexture* co
         return (item.material->alphaMode == AlphaMode::Mask || item.fading() ? 2u : 0u) +
                (item.material->doubleSided ? 1u : 0u);
     };
-    // Opaque and masked first, grouped by material (or pipeline) and mesh; then blended back to front.
+    // Rigid opaque and masked items first, grouped by material (or pipeline) and mesh; then skinned opaque
+    // ones, drawn one by one from their own vertices; then blended items back to front.
+    const auto region = [](const DrawItem& item) {
+        return item.material->alphaMode == AlphaMode::Blend ? 2u : (item.isSkinned() ? 1u : 0u);
+    };
     std::sort(impl.cameraOrder.begin(), impl.cameraOrder.end(), [&](u32 a, u32 b) {
         const DrawItem& x = impl.items[a];
         const DrawItem& y = impl.items[b];
-        const bool xBlend = x.material->alphaMode == AlphaMode::Blend;
-        const bool yBlend = y.material->alphaMode == AlphaMode::Blend;
-        if (xBlend != yBlend)
+        if (region(x) != region(y))
         {
-            return !xBlend;
+            return region(x) < region(y);
         }
-        if (xBlend)
+        if (region(x) == 2)
         {
             return x.distanceSquared > y.distanceSquared;
         }
@@ -1650,22 +1932,27 @@ void SceneRenderer::render(nvrhi::ICommandList* commandList, nvrhi::ITexture* co
     constants.sky = Vec4(skyIntensity, static_cast<f32>(gpuEnvironment.specularMips - 1), skyIntensity, 0.0f);
     const bool drawBackground = atmosphere != nullptr || (skyLight != nullptr && skyLight->background);
 
-    // Opaque and masked items come first in the camera order; they form batches of identical
-    // (mesh, submesh, material) that the GPU culls and draws indirectly.
-    u32 opaqueCount = 0;
-    while (opaqueCount < visibleCount &&
-           impl.items[impl.cameraOrder[opaqueCount]].material->alphaMode != AlphaMode::Blend)
+    // Rigid opaque and masked items come first in the camera order; they form batches of identical
+    // (mesh, submesh, material) that the GPU culls and draws indirectly. The items from culledCount on are
+    // drawn by the CPU: skinned opaque ones up to opaqueCount, then the blended ones.
+    u32 culledCount = 0;
+    while (culledCount < visibleCount && region(impl.items[impl.cameraOrder[culledCount]]) == 0)
+    {
+        ++culledCount;
+    }
+    u32 opaqueCount = culledCount;
+    while (opaqueCount < visibleCount && region(impl.items[impl.cameraOrder[opaqueCount]]) == 1)
     {
         ++opaqueCount;
     }
-    impl.cullCandidates.resize(opaqueCount);
+    impl.cullCandidates.resize(culledCount);
     impl.cullBatches.clear();
     impl.batchStarts.clear();
-    for (u32 begin = 0; begin < opaqueCount;)
+    for (u32 begin = 0; begin < culledCount;)
     {
         const DrawItem& first = impl.items[impl.cameraOrder[begin]];
         u32 end = begin + 1;
-        while (end < opaqueCount)
+        while (end < culledCount)
         {
             const DrawItem& next = impl.items[impl.cameraOrder[end]];
             const bool sameState =
@@ -1690,20 +1977,20 @@ void SceneRenderer::render(nvrhi::ICommandList* commandList, nvrhi::ITexture* co
         }
         begin = end;
     }
-    // Blended items are drawn by the CPU; their draw-list slots follow both culling regions.
-    impl.blendedSlots.resize(visibleCount - opaqueCount);
-    for (u32 i = opaqueCount; i < visibleCount; ++i)
+    // Items drawn by the CPU take the draw-list slots after both culling regions.
+    impl.blendedSlots.resize(visibleCount - culledCount);
+    for (u32 i = culledCount; i < visibleCount; ++i)
     {
-        impl.blendedSlots[i - opaqueCount] = i;
+        impl.blendedSlots[i - culledCount] = i;
     }
     GpuCulling::Frame cullFrame;
     cullFrame.viewProjection = constants.unjitteredViewProjection;
     cullFrame.previousViewProjection = constants.previousViewProjection;
     cullFrame.occlusion = impl.desc.occlusionCulling;
     cullFrame.firstInstanceOffsets = bindless;
-    impl.culling.begin(commandList, impl.cullCandidates, impl.cullBatches, visibleCount - opaqueCount,
+    impl.culling.begin(commandList, impl.cullCandidates, impl.cullBatches, visibleCount - culledCount,
                        cullFrame);
-    const u32 blendedSlotBase = 2 * opaqueCount;
+    const u32 blendedSlotBase = 2 * culledCount;
     impl.culling.writeDrawList(commandList, blendedSlotBase, impl.blendedSlots);
     if (impl.culling.takeBuffersChanged() || impl.resourceGeneration != impl.resources->generation())
     {
@@ -1738,6 +2025,9 @@ void SceneRenderer::render(nvrhi::ICommandList* commandList, nvrhi::ITexture* co
         }
     };
     commandList->beginMarker("SceneRenderer");
+    beginPass(5);
+    impl.skin(commandList);
+    endPass(5);
     commandList->writeBuffer(impl.viewConstants, &constants, sizeof(constants));
     if (instanceCount > 0)
     {
@@ -1797,6 +2087,7 @@ void SceneRenderer::render(nvrhi::ICommandList* commandList, nvrhi::ITexture* co
 
     endPass(0);
     const nvrhi::Viewport viewport = framebuffer->getFramebufferInfo().getViewport();
+    // `first` is the item drawn by a single draw, or the first item of the indirect draws.
     const auto setDrawState = [&](nvrhi::IGraphicsPipeline* pipeline, nvrhi::IFramebuffer* target,
                                   const DrawItem& first, bool indirect, u32 slot, u32 flags) {
         nvrhi::GraphicsState state;
@@ -1810,8 +2101,8 @@ void SceneRenderer::render(nvrhi::ICommandList* commandList, nvrhi::ITexture* co
         {
             state.bindings = {viewSet, first.material->bindingSet};
         }
-        state.vertexBuffers = {
-            nvrhi::VertexBufferBinding().setBuffer(impl.resources->vertexPool()).setSlot(0).setOffset(0)};
+        const bool skinned = !indirect && first.isSkinned();
+        state.vertexBuffers = {impl.vertexBinding(first)};
         state.indexBuffer = nvrhi::IndexBufferBinding()
                                 .setBuffer(impl.resources->indexPool())
                                 .setFormat(nvrhi::Format::R32_UINT);
@@ -1821,8 +2112,22 @@ void SceneRenderer::render(nvrhi::ICommandList* commandList, nvrhi::ITexture* co
             state.indirectParams = impl.culling.arguments();
         }
         commandList->setGraphicsState(state);
-        const ForwardPush push{slot, flags};
+        const ForwardPush push{slot, flags | (skinned ? kForwardSkinned : 0u), skinned ? first.skinned : 0u,
+                               0};
         commandList->setPushConstants(&push, sizeof(push));
+    };
+    // One item drawn by the CPU (camera order index `index`, at or after culledCount) with its own vertices.
+    const auto drawItem = [&](nvrhi::IGraphicsPipeline* pipeline, nvrhi::IFramebuffer* target, u32 index,
+                              u32 flags) {
+        const DrawItem& item = impl.items[impl.cameraOrder[index]];
+        setDrawState(pipeline, target, item, false, blendedSlotBase + (index - culledCount), flags);
+        const SubmeshLod range = item.range();
+        commandList->drawIndexed(nvrhi::DrawArguments()
+                                     .setVertexCount(range.indexCount)
+                                     .setStartIndexLocation(item.mesh->indexOffset + range.indexOffset)
+                                     .setStartVertexLocation(Impl::baseVertex(item)));
+        ++impl.stats.drawCalls;
+        return range.indexCount / 3;
     };
     // Opaque batches are drawn in groups: with bindless rendering a group is every consecutive batch with
     // the same pipeline, drawn by one multi-draw indirect call; otherwise each batch is its own group.
@@ -1853,16 +2158,21 @@ void SceneRenderer::render(nvrhi::ICommandList* commandList, nvrhi::ITexture* co
         commandList->drawIndexedIndirect(impl.culling.argumentOffset(firstBatch, phase), count);
         ++impl.stats.drawCalls;
     };
-    const auto prepassPipeline = [&](const DrawItem& first) {
+    // Skinned items always take the pipelines with material binding sets (`single`).
+    const auto prepassPipeline = [&](const DrawItem& first, bool single = false) {
         // Cross-fading instances dither in the alpha-tested prepass.
         const u32 masked = first.material->alphaMode == AlphaMode::Mask || first.fading() ? 1 : 0;
         const u32 doubleSided = first.material->doubleSided ? 1 : 0;
-        return bindless ? impl.bindlessPrepassPipelines[masked][doubleSided].Get()
-                        : impl.prepassPipelines[masked][doubleSided].Get();
+        return bindless && !single ? impl.bindlessPrepassPipelines[masked][doubleSided].Get()
+                                   : impl.prepassPipelines[masked][doubleSided].Get();
     };
-    const auto shadingPipeline = [&](const DrawItem& first) {
+    const auto shadingPipeline = [&](const DrawItem& first, bool single = false) {
         const u32 doubleSided = first.material->doubleSided ? 1 : 0;
-        return bindless ? impl.bindlessPipelines[doubleSided].Get() : impl.pipelines[0][doubleSided].Get();
+        return bindless && !single ? impl.bindlessPipelines[doubleSided].Get()
+                                   : impl.pipelines[0][doubleSided].Get();
+    };
+    const auto itemAt = [&](u32 index) -> const DrawItem& {
+        return impl.items[impl.cameraOrder[index]];
     };
 
     // Depth prepass in two culling phases: draw what last frame's depth does not hide, build a Hi-Z of
@@ -1879,6 +2189,11 @@ void SceneRenderer::render(nvrhi::ICommandList* commandList, nvrhi::ITexture* co
     forEachGroup([&](u32 first, u32 count, const DrawItem& item) {
         drawGroup(prepassPipeline(item), impl.prepassFramebuffer, first, count, 1, 0);
     });
+    // Skinned instances are not occlusion culled; drawn here, they hide what is behind them in phase 2.
+    for (u32 i = culledCount; i < opaqueCount; ++i)
+    {
+        static_cast<void>(drawItem(prepassPipeline(itemAt(i), true), impl.prepassFramebuffer, i, 0));
+    }
     if (impl.desc.occlusionCulling)
     {
         impl.culling.buildHiZ(commandList);
@@ -1913,8 +2228,13 @@ void SceneRenderer::render(nvrhi::ICommandList* commandList, nvrhi::ITexture* co
     for (u32 batch = 0; batch < batchCount; ++batch)
     {
         const u32 instances =
-            (batch + 1 < batchCount ? impl.batchStarts[batch + 1] : opaqueCount) - impl.batchStarts[batch];
+            (batch + 1 < batchCount ? impl.batchStarts[batch + 1] : culledCount) - impl.batchStarts[batch];
         impl.stats.triangles += static_cast<u64>(impl.cullBatches[batch].indexCount / 3) * instances;
+    }
+    for (u32 i = culledCount; i < opaqueCount; ++i)
+    {
+        impl.stats.triangles +=
+            drawItem(shadingPipeline(itemAt(i), true), framebuffer, i, kForwardAmbientOcclusion);
     }
     // The sky after opaque geometry (covered pixels fail the depth test) and before blended geometry.
     if (drawBackground)
@@ -1925,7 +2245,7 @@ void SceneRenderer::render(nvrhi::ICommandList* commandList, nvrhi::ITexture* co
         state.bindings = {viewSet};
         state.viewport.addViewportAndScissorRect(viewport);
         commandList->setGraphicsState(state);
-        const ForwardPush unused{0, 0};
+        const ForwardPush unused{0, 0, 0, 0};
         commandList->setPushConstants(&unused, sizeof(unused));
         commandList->draw(nvrhi::DrawArguments().setVertexCount(3));
         ++impl.stats.drawCalls;
@@ -1935,16 +2255,8 @@ void SceneRenderer::render(nvrhi::ICommandList* commandList, nvrhi::ITexture* co
     // Blended items one by one, back to front.
     for (u32 i = opaqueCount; i < visibleCount; ++i)
     {
-        const DrawItem& item = impl.items[impl.cameraOrder[i]];
-        setDrawState(impl.pipelines[1][item.material->doubleSided ? 1 : 0], framebuffer, item, false,
-                     blendedSlotBase + (i - opaqueCount), kForwardFog);
-        const SubmeshLod range = item.range();
-        commandList->drawIndexed(nvrhi::DrawArguments()
-                                     .setVertexCount(range.indexCount)
-                                     .setStartIndexLocation(item.mesh->indexOffset + range.indexOffset)
-                                     .setStartVertexLocation(item.mesh->vertexOffset));
-        ++impl.stats.drawCalls;
-        impl.stats.triangles += range.indexCount / 3;
+        impl.stats.triangles +=
+            drawItem(impl.pipelines[1][itemAt(i).material->doubleSided ? 1 : 0], framebuffer, i, kForwardFog);
     }
     // Particles after the blended geometry, into the HDR colour so bright ones feed bloom.
     impl.particles.draw(commandList, impl.hdr, impl.depth, viewport, particleView);
@@ -1961,6 +2273,11 @@ void SceneRenderer::render(nvrhi::ICommandList* commandList, nvrhi::ITexture* co
                 drawGroup(pipeline, framebuffer, first, count, 2, 0);
             }
         });
+        for (u32 i = culledCount; i < opaqueCount; ++i)
+        {
+            static_cast<void>(drawItem(impl.wireframePipelines[itemAt(i).material->doubleSided ? 1 : 0],
+                                       framebuffer, i, 0));
+        }
     }
     if (impl.ids && visibleCount > opaqueCount)
     {
@@ -1969,15 +2286,8 @@ void SceneRenderer::render(nvrhi::ICommandList* commandList, nvrhi::ITexture* co
         commandList->copyTexture(impl.idDepth, nvrhi::TextureSlice(), impl.depth, nvrhi::TextureSlice());
         for (u32 i = opaqueCount; i < visibleCount; ++i)
         {
-            const DrawItem& item = impl.items[impl.cameraOrder[i]];
-            setDrawState(impl.entityIdPipelines[item.material->doubleSided ? 1 : 0], impl.idFramebuffer, item,
-                         false, blendedSlotBase + i - opaqueCount, 0);
-            const SubmeshLod range = item.range();
-            commandList->drawIndexed(nvrhi::DrawArguments()
-                                         .setVertexCount(range.indexCount)
-                                         .setStartIndexLocation(item.mesh->indexOffset + range.indexOffset)
-                                         .setStartVertexLocation(item.mesh->vertexOffset));
-            ++impl.stats.drawCalls;
+            static_cast<void>(drawItem(impl.entityIdPipelines[itemAt(i).material->doubleSided ? 1 : 0],
+                                       impl.idFramebuffer, i, 0));
         }
     }
     commandList->endMarker();
@@ -2020,6 +2330,21 @@ nvrhi::ITexture* SceneRenderer::motionVectors() const noexcept
 const ShadowCascades& SceneRenderer::shadowCascades() const noexcept
 {
     return m_impl->cascades;
+}
+
+SkinnedVertexRange SceneRenderer::skinnedVertices(Entity entity) const noexcept
+{
+    const Impl& impl = *m_impl;
+    if (entity.index >= impl.skinnedEntries.size())
+    {
+        return {};
+    }
+    const Impl::SkinnedEntry& entry = impl.skinnedEntries[entity.index];
+    if (entry.count == 0 || entry.generation != entity.generation)
+    {
+        return {};
+    }
+    return {impl.skinnedVertices, impl.previousPositions, entry.offset, entry.count};
 }
 
 const ShadowSettings& SceneRenderer::shadowSettings() const noexcept

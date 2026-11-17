@@ -45,6 +45,9 @@ struct RenderResources::GpuMesh
     u32 indexOffset = 0;
     u32 vertexCount = 0; // size of the ranges in the pools
     u32 indexCount = 0;
+    // Skinned meshes (ADR 0059): their SkinVertex stream in the skin pool, parallel to the vertices.
+    u32 skinOffset = 0;
+    u32 skinCount = 0; // 0 for a rigid mesh, else vertexCount
     std::vector<Submesh> submeshes;
 };
 

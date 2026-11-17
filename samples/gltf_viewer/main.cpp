@@ -7,11 +7,13 @@
 //   --environment lights the scene with an equirectangular HDR image (for example from polyhaven.com);
 //   without it, the built-in procedural sky (builtin:/sky/procedural) is used. The model and the image are
 //   loaded through asset references (MeshRenderer, SkyLight) by a RenderAssetResolver. --taa turns on
-//   temporal anti-aliasing.
+//   temporal anti-aliasing. Skinned meshes play the model's first animation in a loop (AnimationWorld).
 //   --screenshot renders the final view offscreen at 1280x720 and saves it as PNG.
 
 #include "common/Screenshot.hpp"
 
+#include <illusion/animation/AnimationComponents.hpp>
+#include <illusion/animation/AnimationWorld.hpp>
 #include <illusion/assets/AssetStreamer.hpp>
 #include <illusion/assets/Model.hpp>
 #include <illusion/core/AssetRef.hpp>
@@ -26,6 +28,7 @@
 #include <illusion/platform/FileSystem.hpp>
 #include <illusion/platform/Platform.hpp>
 #include <illusion/platform/Window.hpp>
+#include <illusion/render/Components.hpp>
 #include <illusion/render/RenderAssets.hpp>
 #include <illusion/render/RenderDevice.hpp>
 #include <illusion/render/RenderResources.hpp>
@@ -38,6 +41,7 @@
 #include <filesystem>
 #include <format>
 #include <optional>
+#include <span>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -90,6 +94,34 @@ void buildTestScene(World& world, RenderResources& resources)
     Transform blueLight;
     blueLight.position = Vec3(-3.0f, 2.0f, 2.0f);
     world.create(blueLight, PointLight{Vec3(0.3f, 0.5f, 1.0f), 20.0f, 8.0f});
+}
+
+// Gives every spawned renderer of a skinned mesh an Animator that loops the model's first animation.
+void addAnimators(World& world, std::span<const Entity> entities, const ModelData& model,
+                  std::string_view path)
+{
+    constexpr std::string_view kMeshFragment = "#mesh/";
+    for (const Entity entity : entities)
+    {
+        const MeshRenderer* renderer = world.tryGet<MeshRenderer>(entity);
+        const std::string_view mesh = renderer != nullptr ? renderer->mesh.path() : std::string_view();
+        const usize fragment = mesh.rfind(kMeshFragment);
+        u32 index = 0;
+        if (fragment == std::string_view::npos ||
+            std::from_chars(mesh.data() + fragment + kMeshFragment.size(), mesh.data() + mesh.size(), index)
+                    .ec != std::errc() ||
+            index >= model.meshes.size() || model.meshes[index].skeleton < 0)
+        {
+            continue;
+        }
+        Animator animator;
+        animator.skeleton = AssetRef(std::format("{}#skin/{}", path, model.meshes[index].skeleton));
+        if (!model.animations.empty())
+        {
+            animator.clip = AssetRef(std::format("{}#animation/{}", path, model.animations.front().name));
+        }
+        world.emplace<Animator>(entity, animator);
+    }
 }
 
 } // namespace
@@ -164,7 +196,11 @@ int main(int argc, char** argv)
     RenderAssetCache assetCache(resources, streamer);
     RenderAssetResolver assets(assetCache);
 
+    // AnimationWorld finds MeshRenderer through reflection.
+    reflectRenderComponents();
+    registerAnimationComponents(ComponentRegistry::instance());
     World world;
+    AnimationWorld animation(world, streamer);
     Vec3 target(0.0f, 2.0f, 0.0f);
     f32 distance = 7.0f;
     if (modelPath.empty())
@@ -194,6 +230,7 @@ int main(int argc, char** argv)
             glm::scale(Mat4(1.0f), Vec3(scale)) *
             glm::translate(Mat4(1.0f), -Vec3(bounds.center().x, bounds.min.y, bounds.center().z));
         const auto entities = spawnModel(world, *model, *virtualPath, root);
+        addAnimators(world, entities, *model, *virtualPath);
         target = Vec3(0.0f, (bounds.max.y - bounds.min.y) * scale * 0.5f, 0.0f);
         ILL_LOG_INFO("Sample", "loaded {} ({} entities)", modelPath, entities.size());
     }
@@ -286,11 +323,13 @@ int main(int argc, char** argv)
         if (swapchain->beginFrame())
         {
             const UVec2 size = swapchain->size();
-            const RenderView view =
-                RenderView::fromCamera(camera, Camera{}, static_cast<f32>(size.x) / static_cast<f32>(size.y));
             streamer.update();
             assetCache.update();
             assets.update(world, &jobs);
+            animation.update(dt, &jobs, true);
+            RenderView view =
+                RenderView::fromCamera(camera, Camera{}, static_cast<f32>(size.x) / static_cast<f32>(size.y));
+            view.animation = &animation;
             commands->open();
             renderer->render(commands, swapchain->currentBackBuffer(), world, view, &jobs);
             commands->close();
@@ -313,7 +352,7 @@ int main(int argc, char** argv)
     }
     device->waitIdle();
     if (!screenshotPath.empty() &&
-        !sample::saveScreenshot(*device, resources, world, camera, jobs, screenshotPath))
+        !sample::saveScreenshot(*device, resources, world, camera, jobs, screenshotPath, &animation))
     {
         ILL_LOG_ERROR("Sample", "cannot save {}", screenshotPath);
         return 1;

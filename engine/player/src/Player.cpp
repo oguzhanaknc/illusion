@@ -488,6 +488,7 @@ int runGame(const PlayerDesc& desc, const PlayerOptions& options, VirtualFileSys
                                            static_cast<f32>(view.size.x) / static_cast<f32>(view.size.y));
                 renderView.deltaSeconds =
                     static_cast<f32>(options.fixedStep ? settings.physics.stepSeconds : delta);
+                renderView.animation = session.animation();
                 renderer->render(commands, view.texture, world, renderView, &jobs);
                 (void)uiRenderer->render(commands, view.texture, session.ui().drawData());
                 present->draw(commands, swapchain->currentFramebuffer(), view.texture);

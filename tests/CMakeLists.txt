@@ -293,6 +293,7 @@ add_executable(illusion_gpu_tests
     gpu/TestRendererExtensions.cpp
     gpu/TestResourceLifetime.cpp
     gpu/TestSaveThumbnail.cpp
+    gpu/TestSkinning.cpp
     gpu/TestSwapchain.cpp
     gpu/TestTextureStreaming.cpp
     gpu/TestTextureUpload.cpp

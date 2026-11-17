@@ -22,8 +22,10 @@ namespace sample
 
 using namespace illusion;
 
+// @p animation poses the World's skinned meshes (null: bind poses).
 inline bool saveScreenshot(RenderDevice& device, RenderResources& resources, World& world,
-                           const Transform& camera, JobSystem& jobs, const std::string& path)
+                           const Transform& camera, JobSystem& jobs, const std::string& path,
+                           const AnimationWorld* animation = nullptr)
 {
     constexpr u32 kWidth = 1280;
     constexpr u32 kHeight = 720;
@@ -50,8 +52,9 @@ inline bool saveScreenshot(RenderDevice& device, RenderResources& resources, Wor
 
     nvrhi::CommandListHandle commands = gpu->createCommandList();
     commands->open();
-    renderer->render(commands, target, world, RenderView::fromCamera(camera, Camera{}, 1280.0f / 720.0f),
-                     &jobs);
+    RenderView view = RenderView::fromCamera(camera, Camera{}, 1280.0f / 720.0f);
+    view.animation = animation;
+    renderer->render(commands, target, world, view, &jobs);
     commands->copyTexture(readback, nvrhi::TextureSlice(), target, nvrhi::TextureSlice());
     commands->close();
     gpu->executeCommandList(commands);

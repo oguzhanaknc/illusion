@@ -503,6 +503,17 @@ struct ViewportService::Impl
         return host != nullptr ? host->game() : nullptr;
     }
 
+    // The poses of the shown World: the play session's, or the edit World's (posed at the saved times).
+    [[nodiscard]] const AnimationWorld* shownAnimation() noexcept
+    {
+        if (editor.playWorld() == nullptr)
+        {
+            return &editAnimation;
+        }
+        GameSession* session = game();
+        return session != nullptr ? session->animation() : nullptr;
+    }
+
     [[nodiscard]] EntityIndex& shownEntities()
     {
         EntityIndex* play = editor.playEntities();
@@ -938,6 +949,7 @@ struct ViewportService::Impl
         RenderView probe = view;
         probe.projection = probeProjection(view.projection, size, snap.pixel);
         probe.hiddenEntities = snapBits;
+        probe.animation = shownAnimation();
         probeRenderer->resetTemporalHistory();
         commands->open();
         probeRenderer->render(commands, probeColor, shown(), probe, &jobs);
@@ -1101,8 +1113,9 @@ struct ViewportService::Impl
             previewTexture = ui.registerTexture(color);
         }
         World& world = shown();
-        const RenderView view = RenderView::fromCamera(world.get<Transform>(previewCamera),
-                                                       world.get<Camera>(previewCamera), aspect);
+        RenderView view = RenderView::fromCamera(world.get<Transform>(previewCamera),
+                                                 world.get<Camera>(previewCamera), aspect);
+        view.animation = shownAnimation();
         commands->open();
         previewRenderer->render(commands, previewColor, world, view, &jobs);
         commands->close();
@@ -1275,6 +1288,7 @@ struct ViewportService::Impl
             return false;
         }
         RenderView& view = *found;
+        view.animation = shownAnimation();
         // The user's hidden entities are a Scene view setting; the game view shows what the game shows.
         if (viewport.kind == ViewportKind::Scene)
         {

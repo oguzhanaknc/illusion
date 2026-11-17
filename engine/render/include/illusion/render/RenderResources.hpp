@@ -123,7 +123,7 @@ public:
     explicit RenderResources(RenderDevice& device);
     ~RenderResources();
 
-    /// Uploads a mesh.
+    /// Uploads a mesh, and the MeshData::skin stream of a skinned one for the skinning pass.
     [[nodiscard]] MeshHandle createMesh(const MeshData& mesh, const char* debugName = "Mesh");
 
     /// Uploads an image with all its mips. Block-compressed images are uploaded as they are when the device
@@ -274,6 +274,8 @@ public:
     [[nodiscard]] nvrhi::ITexture* brdfLut() const noexcept;
     [[nodiscard]] nvrhi::IBuffer* vertexPool() const noexcept;
     [[nodiscard]] nvrhi::IBuffer* indexPool() const noexcept;
+    // The SkinVertex streams of skinned meshes (null until one is uploaded).
+    [[nodiscard]] nvrhi::IBuffer* skinPool() const noexcept;
     [[nodiscard]] nvrhi::IBuffer* materialTable() const noexcept;
     [[nodiscard]] nvrhi::ISampler* materialSampler(u32 index) const noexcept;
     [[nodiscard]] bool bindless() const noexcept;

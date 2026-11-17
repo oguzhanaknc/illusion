@@ -31,7 +31,7 @@ target_include_directories(illusion_render PUBLIC
 illusion_require_dependency(nvrhi)
 illusion_require_dependency(glfw)
 target_link_libraries(illusion_render
-    PUBLIC illusion::core illusion::platform illusion::assets illusion::particles illusion::ui nvrhi
+    PUBLIC illusion::core illusion::platform illusion::assets illusion::animation illusion::particles illusion::ui nvrhi
     PRIVATE nvrhi_vk Vulkan::Headers glfw)
 
 if(UNIX AND NOT APPLE)
@@ -63,6 +63,7 @@ illusion_add_shaders(illusion_render
         wireframeBindlessFragment shaders/ForwardPbrBindless.slang wireframeMain fragment
         occlusionCull shaders/OcclusionCull.slang cullMain compute
         hizReduce shaders/HiZ.slang hizReduceMain compute
+        skinning shaders/Skinning.slang skinMain compute
         gtao shaders/Gtao.slang gtaoMain compute
         gtaoBlur shaders/GtaoBlur.slang gtaoBlurMain compute
         taa shaders/Taa.slang taaMain compute
