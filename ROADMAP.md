@@ -1043,12 +1043,26 @@ until a CI job has the SDK.
 After DEMO, independent of GFX. Characters, creatures and machines that move with bones, at AAA quality.
 Nothing of it exists yet: glTF skins and animations are skipped on import and the vertex has no bone data.
 
-- ANIM-1: Import and playback: glTF skins, joints and animation channels (translation, rotation, scale,
-  morph weights later) into cooked `Skeleton` and `AnimationClip` assets; bone indices and weights as a
-  separate vertex stream for skinned meshes; a saved `Animator` Component (clip, speed, loop, time) evaluated
-  on the Job System; GPU skinning in a compute pass feeding the existing forward, prepass, shadow and
-  motion-vector paths (previous pose for TAA); skinned bounds for culling; GPU tests and benchmarks
-  (hundreds of skinned characters)
+- ANIM-1: Import and playback, designed in ADR 0059 (skins and clips in the cooked model, poses in an
+  `AnimationWorld` outside the ECS, skinning once per frame in a compute pass). Three work packages:
+- ANIM-1a (`implementer`): Assets and pose math. `loadGltf()` imports skins (`Skeleton`), animations
+  (`AnimationClip`, channels by joint name, Step/Linear/CubicSpline) and the `SkinVertex` stream with
+  `jointBounds` (`illusion/assets/Animation.hpp`); model format 6; fragments `#skin/N`, `#animation/<name>`
+  and `AssetKind::Skeleton`/`AnimationClip`; library `engine/animation` with the pure functions of
+  `illusion/animation/Pose.hpp`. Done: import tests on a small rigged glTF in `tests/data` (no third-party
+  asset needed), sampling tests for every interpolation and for clip ends and loops, the round trip through
+  the cooked format, benchmark `animation/evaluate-300x60` (sample + compose + skin matrices, budget from the
+  measurement as AGENTS.md says).
+- ANIM-1b (`implementer`): Runtime. Saved `Animator` (`illusion.Animator`) and runtime `AnimationPose`, the
+  resolver, `AnimationWorld` (pose slots, cached clip bindings, double-buffered skin matrices, world bounds)
+  with its step in `GameSession::update()` after Saves; the editor evaluates the saved `time` without
+  advancing it; a value in the showcase's `build.jsonl`. Done: determinism with `fixedStep`, a saved game
+  restores `time`, a mismatched skeleton draws the bind pose, no allocation per update.
+- ANIM-1c (`implementer`): GPU skinning. The compute pass, pooled per-instance vertex buffers in the
+  `Vertex` layout with previous positions, every pass (prepass, shadows, forward, motion vectors) drawing
+  skinned instances, culling by the skinned bounds. Done: GPU golden test of a posed character (lavapipe),
+  motion vectors of a moving joint, validation errors zero, a GPU benchmark of 300 skinned instances, the
+  manual page "Animation" (EN/TR) and the architecture page.
 - ANIM-2: Blending and control: cross-fades, additive and masked (per-bone) layers, 1D/2D blend spaces,
   a data-driven state machine with parameters and transitions, animation events (footsteps, effects),
   root motion into the CharacterController; `AnimationService` for game modules
@@ -1056,7 +1070,7 @@ Nothing of it exists yet: glTF skins and animations are skipped on import and th
   two-bone IK (feet on uneven ground), ragdolls on Jolt from the skeleton, physics-driven secondary motion
 - ANIM-4: Editor and agents: clip and state-machine preview in the Inspector, a timeline scrubber,
   `animation.*` commands (MCP tools), skeleton debug drawing; the tech demo gets an animated creature;
-  documentation (EN/TR) and an ADR for the runtime and GPU skinning design
+  documentation (EN/TR)
 
 ## NAV — Navigation and AI
 
