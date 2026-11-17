@@ -351,6 +351,7 @@ TEST_CASE("an idle shell frame does not allocate after warming up")
     // Scan the asset catalog, as any asset command or the Asset Browser does: from then on endFrame() polls
     // it.
     (void)fixture.editor->assets();
+    fixture.settleAssetEvents();
     for (int i = 0; i < 120; ++i)
     {
         fixture.frame();
