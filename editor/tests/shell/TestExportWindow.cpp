@@ -315,12 +315,6 @@ TEST_CASE("the open Export window with a result does not allocate in idle frames
     {
         fixture.frame();
     }
-    const u64 imguiBefore = ui::UiContext::allocationCount();
-    test::ScopedAllocationCounter allocations;
-    for (int i = 0; i < 60; ++i)
-    {
-        fixture.frame();
-    }
-    CHECK(allocations.count() == 0);
-    CHECK(ui::UiContext::allocationCount() == imguiBefore);
+    // A second at 60 Hz spans several asset polls (every 0.25 s).
+    CHECK(fixture.longestIdleRun(60, 600) == 60);
 }

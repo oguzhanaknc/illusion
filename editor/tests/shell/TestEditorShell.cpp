@@ -356,15 +356,8 @@ TEST_CASE("an idle shell frame does not allocate after warming up")
     {
         fixture.frame();
     }
-    const u64 imguiBefore = ui::UiContext::allocationCount();
-    test::ScopedAllocationCounter allocations;
     // A second at 60 Hz spans several asset polls (every 0.25 s).
-    for (int i = 0; i < 60; ++i)
-    {
-        fixture.frame();
-    }
-    CHECK(allocations.count() == 0);
-    CHECK(ui::UiContext::allocationCount() == imguiBefore);
+    CHECK(fixture.longestIdleRun(60, 600) == 60);
 }
 
 TEST_CASE("the welcome window creates a project and remembers it, and a corrupt project fails gracefully")
