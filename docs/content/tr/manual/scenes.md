@@ -168,7 +168,7 @@ Tek bir dosyadaki yinelenen id'ler yükleme hatasıdır.
 Birkaç Entity'lik bir dosya, kayıtlı oyunların yaptığı gibi yüklü bir sahnenin üzerine uygulanabilir
 ([ADR 0058](https://github.com/oguzhanaknc/illusion/blob/main/docs/adr/0058-saved-games.md)). `Saved` tag'i
 (`illusion.Saved`, `engine/save` kütüphanesi) bir kayıtlı oyunun içerdiği Entity'leri ve alt ağaçları
-işaretler. Serializer'ın üç seçeneği böyle bir farkı oluşturur:
+işaretler ([Kayıtlı oyunlar](saved-games.md)). Serializer'ın üç seçeneği böyle bir farkı oluşturur:
 
 - `SceneSaveOptions::externalReferences`, kaydedilenlerin dışındaki canlı Entity'leri gösteren Entity
   alanlarını `null` yerine onların id'leri olarak yazar; böylece kaydedilen bir çocuk, kaydedilmeyen

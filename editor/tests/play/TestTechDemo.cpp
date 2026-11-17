@@ -8,6 +8,7 @@
 #include <illusion/ecs/Name.hpp>
 #include <illusion/editor/play/PlaySession.hpp>
 #include <illusion/runtime/GameSession.hpp>
+#include <illusion/save/SaveComponents.hpp>
 #include <illusion/ui/UiComponents.hpp>
 
 #include <filesystem>
@@ -34,6 +35,10 @@ struct TechDemoFixture
         {
             std::filesystem::copy(source / folder, assets / folder, std::filesystem::copy_options::recursive);
         }
+        registerSaveComponents();
+        // Stands for what the forest scene marks as saved (the player, the sky, the props).
+        ok(editor(), "entity.create",
+           R"({"name":"Marker","components":{"illusion.Transform":{"position":[1,0,0]},"illusion.Saved":{}}})");
         play = std::make_unique<PlaySession>(
             *base.editor, PlaySessionDesc{.jobs = &jobs, .audioOutput = AudioOutput::Offline});
         const Expected<std::string, CommandError> loaded = play->loadModule(TECHDEMO_MODULE);
@@ -84,6 +89,29 @@ struct TechDemoFixture
         const JsonDocument layout = ok(editor(), "gameui.layout", std::format(R"({{"entity":"{}"}})", path));
         const JsonValue elements = layout.root().find("elements");
         return elements.size() > 0 && elements[0].find("visible").asBool().value_or(false);
+    }
+
+    // Whether the element at @p path reacts to the pointer.
+    bool interactable(std::string_view path)
+    {
+        const JsonDocument layout = ok(editor(), "gameui.layout", std::format(R"({{"entity":"{}"}})", path));
+        return layout.root().pointer("/elements/0/interactable").asBool().value_or(false);
+    }
+
+    // The string table key that the status line of the pause menu shows.
+    std::string status()
+    {
+        const UiText* text = play->game()->world().tryGet<UiText>(named("Status"));
+        REQUIRE(text != nullptr);
+        return text->key;
+    }
+
+    // The X of the Marker entity's world position.
+    f64 markerX()
+    {
+        const JsonDocument got =
+            ok(editor(), "component.get", R"({"entity":"/Marker","type":"illusion.Transform"})");
+        return got.root().pointer("/value/position/0").asF64().value_or(-1000.0);
     }
 
     // The value of the action @p name: x and y.
@@ -207,4 +235,31 @@ TEST_CASE("Quit in the tech demo's pause menu ends Play mode")
     static_cast<void>(ok(f.editor(), "gameui.click", R"({"entity":"/Pause Menu/Panel/Quit"})"));
     f.step();
     CHECK(ok(f.editor(), "play.status").root().find("state").asString() == "stopped");
+}
+
+TEST_CASE("the tech demo's pause menu saves the game and loads it back")
+{
+    TechDemoFixture f;
+    f.press("Escape");
+    REQUIRE(f.shown("/Pause Menu/Panel/Save"));
+    // There is no slot yet: Load is disabled.
+    CHECK(f.interactable("/Pause Menu/Panel/Save"));
+    CHECK_FALSE(f.interactable("/Pause Menu/Panel/Load"));
+    CHECK(fails(f.editor(), "gameui.click", R"({"entity":"/Pause Menu/Panel/Load"})")
+              .message.find("disabled") != std::string::npos);
+
+    f.click("/Pause Menu/Panel/Save");
+    f.step(4);
+    CHECK(f.status() == "techdemo.menu.saved");
+    CHECK(f.interactable("/Pause Menu/Panel/Load"));
+    CHECK(f.play->saves()->slot("slot1").has_value());
+
+    ok(f.editor(), "transform.translate", R"({"entities":["/Marker"],"offset":[4,0,0]})");
+    CHECK(f.markerX() == doctest::Approx(5.0));
+    f.click("/Pause Menu/Panel/Load");
+    f.step(4);
+    CHECK(f.status() == "techdemo.menu.loaded");
+    CHECK(f.markerX() == doctest::Approx(1.0));
+    CHECK(f.shown("/Pause Menu/Panel/Resume"));
+    CHECK(f.play->game()->ui().statistics().missingKeys == 0);
 }

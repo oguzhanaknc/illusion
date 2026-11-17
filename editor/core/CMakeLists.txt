@@ -53,6 +53,7 @@ illusion_add_editor_library(illusion_editor_core STATIC
     src/commands/PrefabCommands.cpp
     src/commands/ProfilerCommands.cpp
     src/commands/ProjectCommands.cpp
+    src/commands/SavesCommands.cpp
     src/commands/SceneCommands.cpp
     src/commands/SelectionCommands.cpp
     src/commands/SettingsCommands.cpp
@@ -67,7 +68,8 @@ add_library(illusion::editor_core ALIAS illusion_editor_core)
 target_include_directories(illusion_editor_core PUBLIC
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>)
 target_link_libraries(illusion_editor_core PUBLIC
-    illusion::core illusion::platform illusion::text illusion::particles illusion::ui illusion::editor_strings
+    illusion::core illusion::platform illusion::text illusion::particles illusion::ui illusion::save_api
+    illusion::editor_strings
     PRIVATE illusion::assets illusion::input)
 
 illusion_configure_target(illusion_editor_core)

@@ -2343,6 +2343,51 @@ struct GamepadMotionParams
     bool enabled = false;         ///< Turn the gyroscope and accelerometer on or off.
 };
 
+// --- saves -------------------------------------------------------------------------------------------------
+
+/// One slot of the running game's saved games (`saves.list`).
+struct SavesSlotEntry
+{
+    std::string name{};    ///< The slot name.
+    std::string title{};   ///< What the game wrote as title ("" when the slot cannot be read).
+    f64 playSeconds = 0.0; ///< Time played, in seconds.
+    u32 gameVersion = 0;   ///< The game's own version number.
+    std::string custom{};  ///< The game's own text.
+    i64 savedAt = 0;       ///< When it was written, in seconds since the Unix epoch (UTC); 0 if unreadable.
+    std::string state{};   ///< "Ok", "Backup", "Corrupt" or "NewerVersion".
+    std::string screenshot{}; ///< Virtual path of the slot's image, or "".
+};
+
+/// Result of `saves.list`.
+struct SavesListResult
+{
+    std::vector<SavesSlotEntry> slots{}; ///< The slots, sorted by name.
+    bool busy = false;                   ///< A request has not delivered its event yet.
+};
+
+/// Params of `saves.write`.
+struct SavesWriteParams
+{
+    std::string slot{};                  ///< The slot: 1 to 32 letters, digits, `_` and `-`.
+    std::optional<std::string> title{};  ///< Text for the player, at most 128 bytes (default empty).
+    std::optional<f64> playSeconds{};    ///< Time played in seconds, not negative (default 0).
+    std::optional<u32> gameVersion{};    ///< A number the game gets back after a load (default 0).
+    std::optional<std::string> custom{}; ///< Text the game defines, at most 1024 bytes (default empty).
+};
+
+/// Params of `saves.load` and `saves.remove`.
+struct SavesSlotParams
+{
+    std::string slot{}; ///< The slot: 1 to 32 letters, digits, `_` and `-`.
+};
+
+/// Result of `saves.write`, `saves.load` and `saves.remove`.
+struct SavesRequestResult
+{
+    std::string slot{};  ///< The slot of the request.
+    std::string event{}; ///< The event that finished it: "Saved", "Loaded", "LoadedBackup" or "Removed".
+};
+
 } // namespace illusion::editor
 
 /// Names of GameUiKind values in JSON.

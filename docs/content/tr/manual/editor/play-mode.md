@@ -117,6 +117,14 @@ oturumun mikserini değiştirir:
 {"bus": "music", "volume": 0.5, "paused": false}
 ```
 
+## Kayıtlı oyunlar
+
+`SaveService` kullanan bir oyun Play modunda çalışırken projenin `cache:/saves` dizinine kaydeder; slot'lar
+oturumlar arasında orada kalır ve export'un parçası değildir. `saves.list`, `saves.write`, `saves.load` ve
+`saves.remove` onlar üzerinde editörden ya da bir ajandan çalışır ([Kayıtlı oyunlar](../saved-games.md#editor-commands)
+sayfasına bakın). Bir yükleme yalnızca play World'ünü değiştirir; bu yüzden oturumu durdurmak düzenlenen sahneyi
+olduğu gibi bırakır.
+
 ## Girdi eylemleri
 
 Girdi eylemleri Asset'i (bir `.input` dosyası, bkz. [Girdi eylemleri](../actions.md)) oyunun eylemlerini ve

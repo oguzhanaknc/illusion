@@ -1,7 +1,7 @@
 #pragma once
 
 /// @file
-/// What the play, module, `input.inject` and `input.read` commands need from the editor's game
+/// What the play, module, `saves`, `input.inject` and `input.read` commands need from the editor's game
 /// runtime: play sessions (ADR 0042) and game modules. The play service of the editor process
 /// (`illusion::editor_play`, PlaySession) implements it and registers with EditorContext::setPlay(); without
 /// one, the commands fail with ErrorKind::Unsupported.
@@ -12,6 +12,7 @@
 #include <illusion/editor/core/CommandError.hpp>
 #include <illusion/editor/core/Operation.hpp>
 #include <illusion/platform/Input.hpp>
+#include <illusion/save/SaveService.hpp>
 
 #include <array>
 #include <span>
@@ -149,6 +150,14 @@ struct PlayModuleInfo
     std::vector<PlayComponentMigration> migrated{}; ///< Types the last load or reload migrated.
 };
 
+/// The result of one saved-game request of the running game, as the editor saw it (for the saves commands).
+struct PlaySaveEvent
+{
+    SaveEventType type = SaveEventType::Failed; ///< What happened.
+    SaveError error = SaveError::IoError;       ///< Why, when type is Failed.
+    std::string slot{};                         ///< The slot of the request.
+};
+
 /// The editor's game runtime: one play session at a time and the loaded game modules. Called on the
 /// editor thread.
 class PlayHost
@@ -239,6 +248,18 @@ public:
     /// World: read on first use and again after a locale file changed or a scene was opened. Valid until
     /// the next call.
     [[nodiscard]] virtual const text::Localization* projectLocalization() = 0;
+
+    /// The saved games of the running game (GameSession::saves()), or nullptr when stopped or when the game
+    /// has no SaveSystem. Requests made through it are sent at the next update.
+    [[nodiscard]] virtual SaveService* saves() noexcept = 0;
+
+    /// Number of saved-game events the editor has seen since it started, over all sessions; the next one gets
+    /// this index. Events are those of every update the session ran (also steps), so none is missed.
+    [[nodiscard]] virtual u64 saveEventCount() const = 0;
+
+    /// Appends the events with an index of @p first or more that are still kept (the last 256) to @p out, in
+    /// order.
+    virtual void saveEvents(u64 first, std::vector<PlaySaveEvent>& out) const = 0;
 };
 
 } // namespace illusion::editor

@@ -77,6 +77,7 @@ plugins:
             Game UI: Oyun UI'ı
             Game Modules: Oyun Modülleri
             Game Runtime: Oyun Runtime'ı
+            Saved Games: Kayıtlı Oyunlar
             Gamepads: Gamepad'ler
             Input Actions: Input Action'ları
             Architecture: Mimari
@@ -152,6 +153,7 @@ nav:
       - Game UI: manual/ui.md
       - Game Modules: manual/modules.md
       - Game Runtime: manual/runtime.md
+      - Saved Games: manual/saved-games.md
       - Profiling: manual/profiling.md
       - Editor:
           - Editor Core: manual/editor/index.md

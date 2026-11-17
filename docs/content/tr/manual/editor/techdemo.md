@@ -36,6 +36,11 @@ tıklayın (Shift+F1 serbest bırakır).
 
 Tam bir gün altı dakika sürer.
 
+Escape (ya da East) duraklatma menüsünü açar: Resume, Save game, Load game, ana ses düzeyi, dil ve Quit. Menü
+görünürken saat durur. Oyuncu, gökyüzünün saati, küreler ve fenerler [`Saved` tag'ini](../saved-games.md) taşır;
+bu yüzden **Save game** bulunduğunuz yeri, günün saatini ve eşyaları ittiğiniz yerleri tek bir slot'ta saklar,
+**Load game** bir slot olana kadar soluktur. Hızlar, ateşböcekleri ve sesler yüklemeden sonra baştan başlar.
+
 ## İçinde ne var
 
 - **Arazi**: tepelerle çevrili düz bir açıklık; üçgen mesh collider'ı vardır, Poly Haven'ın çam ormanı iğne

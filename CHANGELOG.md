@@ -49,12 +49,17 @@ version changes are in the contributor guide ("Versions and releases"). The vers
   shadows, canvas editing in the Game view (`gameui.pick`, `gameui.place`, `gameui.set_anchors`), a HUD and a
   pause menu in the tech demo and the Tetris acceptance game, the manual page, the architecture page and the
   tutorial "A HUD and a pause menu".
+- Saved games (SAVE): the `Saved` tag, checksummed slot files with a backup and a slot image, the capture and
+  application of the tagged Entities, `SaveService` for game modules (`USES save`) with its save thread, the
+  cloud mirror through `StoreService`, `settings:/save.json`, the Editor commands `saves.list`, `saves.write`,
+  `saves.load` and `saves.remove`, Save and Load in the tech demo's pause menu, the manual page "Saved games"
+  and the HUD tutorial's section "Save and load".
 
 ### Changed
 
-- The module API version is 5 (`UiService` and `SceneService::requestExit()` are new interface functions, and
-  `UiService` gained `playTransition()` and `transitionProgress()`): game modules built for an earlier version
-  must be rebuilt.
+- The module API version is 6 (`UiService`, `SceneService::requestExit()` and `SaveService` are new interface
+  functions, and `UiService` gained `playTransition()` and `transitionProgress()`): game modules built for an
+  earlier version must be rebuilt.
 - New projects ship the input actions asset `assets/input/game.input` with the actions `ui.navigate`,
   `ui.submit` and `ui.cancel` and their default bindings, named by `settings/input.json`; older projects still
   get the actions at run time.

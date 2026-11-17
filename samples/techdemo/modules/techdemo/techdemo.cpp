@@ -8,8 +8,12 @@
 // - Night: fireflies come out over the clearing, the lanterns brighten, the crickets sing. The campfire's
 //   light flickers and the neon hums all the time.
 // - UI: the HUD and the pause menu are the scene assets:/scenes/ui.scene, instantiated at the start. Escape
-//   (or East) opens and closes the menu: Resume, the master volume, the language (English or Turkish) and
-//   Quit. While it shows, the clock stops and the modal canvas keeps the walker's actions from the input.
+//   (or East) opens and closes the menu: Resume, Save and Load, the master volume, the language (English or
+//   Turkish) and Quit. While it shows, the clock stops and the modal canvas keeps the walker's actions from
+//   the input.
+// - Saved games: the Player, the Sky, the orbs and the lanterns carry illusion.Saved; Save writes them to one
+//   slot and Load (disabled while there is no slot) puts them back. A load makes new entities, so the module
+//   finds the ones it keeps handles of again.
 // Hot reload keeps the state in the techdemo.Player Component.
 
 #include <illusion/audio/AudioService.hpp>
@@ -26,12 +30,14 @@
 #include <illusion/physics/PhysicsService.hpp>
 #include <illusion/render/SceneComponents.hpp>
 #include <illusion/runtime/SceneService.hpp>
+#include <illusion/save/SaveService.hpp>
 #include <illusion/ui/UiService.hpp>
 
 #include <algorithm>
 #include <array>
 #include <cmath>
 #include <numbers>
+#include <optional>
 #include <span>
 #include <string_view>
 
@@ -67,6 +73,14 @@ struct Player
     ActionId fastTime = 0;
 };
 
+/// What the pause menu asked SaveService for last.
+enum class RequestKind : u8
+{
+    None,
+    Save,
+    Load,
+};
+
 /// The elements of the game UI the module drives, and the frame-time readout; runtime state.
 struct Hud
 {
@@ -77,8 +91,12 @@ struct Hud
     Entity volumeLabel{};
     Entity language{};
     Entity quit{};
-    f64 sampleSeconds = 0.0; ///< Since the readout was last written.
-    u32 sampleFrames = 0;    ///< Updates since then.
+    Entity save{};
+    Entity load{};
+    Entity status{};
+    RequestKind requested = RequestKind::None; ///< The save or load whose event is awaited.
+    f64 sampleSeconds = 0.0;                   ///< Since the readout was last written.
+    u32 sampleFrames = 0;                      ///< Updates since then.
     bool readoutShown = false;
 };
 
@@ -90,9 +108,11 @@ namespace
 using namespace illusion;
 using techdemo::Hud;
 using techdemo::Player;
+using techdemo::RequestKind;
 
 constexpr std::string_view kUiScene = "assets:/scenes/ui.scene";
-constexpr f64 kReadoutSeconds = 0.5; // how often the frame-time readout changes
+constexpr std::string_view kSlot = "slot1"; // the demo keeps one saved game
+constexpr f64 kReadoutSeconds = 0.5;        // how often the frame-time readout changes
 constexpr f32 kEyeHeight = 1.65f;
 constexpr f32 kWalkSpeed = 3.2f;
 constexpr f32 kRunSpeed = 6.5f;
@@ -167,7 +187,23 @@ Hud startUi(ModuleContext& context)
     hud.volumeLabel = ui->find(hud.menu, "Volume Label");
     hud.language = ui->find(hud.menu, "Language");
     hud.quit = ui->find(hud.menu, "Quit");
+    hud.save = ui->find(hud.menu, "Save");
+    hud.load = ui->find(hud.menu, "Load");
+    hud.status = ui->find(hud.menu, "Status");
     return hud;
+}
+
+// The entities that saved games replace: a load makes new ones, so these handles are looked up again.
+void findSaved(World& world, Player& player)
+{
+    player.body = findNamed(world, "Player");
+    player.sky = findNamed(world, "Sky");
+    constexpr std::array<std::string_view, 3> kLanterns{"Lantern 0 Light", "Lantern 1 Light",
+                                                        "Lantern 2 Light"};
+    for (u32 i = 0; i < kLanterns.size(); ++i)
+    {
+        player.lanterns[i] = findNamed(world, kLanterns[i]);
+    }
 }
 
 void startModule(ModuleContext& context)
@@ -178,9 +214,8 @@ void startModule(ModuleContext& context)
     }
     World& world = context.world();
     Player player;
-    player.body = findNamed(world, "Player");
+    findSaved(world, player);
     player.eye = findNamed(world, "Eye");
-    player.sky = findNamed(world, "Sky");
     player.fireLight = findNamed(world, "Fire Light");
     if (const Transform* fire = component<Transform>(world, player.fireLight))
     {
@@ -188,12 +223,6 @@ void startModule(ModuleContext& context)
     }
     player.fireflies = findNamed(world, "Fireflies");
     player.crickets = findNamed(world, "Crickets");
-    constexpr std::array<std::string_view, 3> kLanterns{"Lantern 0 Light", "Lantern 1 Light",
-                                                        "Lantern 2 Light"};
-    for (u32 i = 0; i < kLanterns.size(); ++i)
-    {
-        player.lanterns[i] = findNamed(world, kLanterns[i]);
-    }
     constexpr std::array<std::string_view, 4> kNeon{"Neon Gate Light", "Neon Hoop 0 Light",
                                                     "Neon Hoop 1 Light", "Neon Hoop 2 Light"};
     for (u32 i = 0; i < kNeon.size(); ++i)
@@ -373,11 +402,23 @@ void showVolume(UiService& ui, const Hud& hud, f32 volume)
     static_cast<void>(ui.setTextKey(hud.volumeLabel, "techdemo.menu.volume", percent));
 }
 
-void showMenu(UiService& ui, const AudioService* audio, const Hud& hud, bool show)
+// Save needs a save directory; Load also a slot that can be read.
+void updateSaveItems(UiService& ui, const SaveService* saves, const Hud& hud)
+{
+    const bool available = saves != nullptr && saves->available();
+    static_cast<void>(ui.setInteractable(hud.save, available));
+    const std::optional<SaveSlotInfo> slot = available ? saves->slot(kSlot) : std::nullopt;
+    const bool loadable = slot && (slot->state == SaveSlotState::Ok || slot->state == SaveSlotState::Backup);
+    static_cast<void>(ui.setInteractable(hud.load, loadable));
+}
+
+void showMenu(UiService& ui, const AudioService* audio, const SaveService* saves, const Hud& hud, bool show)
 {
     static_cast<void>(ui.setVisible(hud.menu, show));
     if (show)
     {
+        static_cast<void>(ui.setText(hud.status, {}));
+        updateSaveItems(ui, saves, hud);
         const f32 volume = audio != nullptr ? audio->masterVolume() : 1.0f;
         static_cast<void>(ui.setSliderValue(hud.volume, volume));
         showVolume(ui, hud, volume);
@@ -385,8 +426,51 @@ void showMenu(UiService& ui, const AudioService* audio, const Hud& hud, bool sho
     }
 }
 
+// The results of the menu's save and load requests.
+void updateSaves(World& world, UiService& ui, SaveService& saves, Hud& hud, Player& player)
+{
+    std::array<SaveEvent, 8> events{};
+    const u32 count = std::min<u32>(saves.pollEvents(events), static_cast<u32>(events.size()));
+    for (const SaveEvent& event : std::span(events).first(count))
+    {
+        if (event.slot != kSlot)
+        {
+            continue;
+        }
+        std::string_view key;
+        switch (event.type)
+        {
+        case SaveEventType::Saved:
+            key = "techdemo.menu.saved";
+            break;
+        case SaveEventType::Loaded:
+        case SaveEventType::LoadedBackup:
+            // The saved entities are new ones; props that were still waiting for the ground wait again.
+            findSaved(world, player);
+            player.grounded = false;
+            key = event.type == SaveEventType::Loaded ? "techdemo.menu.loaded" : "techdemo.menu.loadedBackup";
+            break;
+        case SaveEventType::Failed:
+            key =
+                hud.requested == RequestKind::Load ? "techdemo.menu.loadFailed" : "techdemo.menu.saveFailed";
+            break;
+        case SaveEventType::Removed:
+            break;
+        }
+        if (!key.empty())
+        {
+            static_cast<void>(ui.setTextKey(hud.status, key, {}));
+        }
+        hud.requested = RequestKind::None;
+    }
+    if (count > 0)
+    {
+        updateSaveItems(ui, &saves, hud);
+    }
+}
+
 // The events of the pause menu, and the frame-time readout. Returns whether the menu shows.
-bool updateUi(ModuleContext& context, Hud& hud, f64 deltaSeconds)
+bool updateUi(ModuleContext& context, Hud& hud, Player& player, f64 deltaSeconds)
 {
     UiService* ui = context.service<UiService>();
     if (ui == nullptr || hud.menu.isNull())
@@ -394,17 +478,32 @@ bool updateUi(ModuleContext& context, Hud& hud, f64 deltaSeconds)
         return false;
     }
     AudioService* audio = context.service<AudioService>();
+    SaveService* saves = context.service<SaveService>();
+    if (saves != nullptr)
+    {
+        updateSaves(context.world(), *ui, *saves, hud, player);
+    }
     std::array<UiEvent, 16> events{};
     const u32 count = std::min<u32>(ui->pollEvents(events), static_cast<u32>(events.size()));
     for (const UiEvent& event : std::span(events).first(count))
     {
         if (event.type == UiEventType::Cancelled)
         {
-            showMenu(*ui, audio, hud, !ui->isVisible(hud.menu));
+            showMenu(*ui, audio, saves, hud, !ui->isVisible(hud.menu));
         }
         else if (event.type == UiEventType::Clicked && event.entity == hud.resume)
         {
-            showMenu(*ui, audio, hud, false);
+            showMenu(*ui, audio, saves, hud, false);
+        }
+        else if (event.type == UiEventType::Clicked && event.entity == hud.save && saves != nullptr)
+        {
+            hud.requested = RequestKind::Save;
+            static_cast<void>(saves->save(kSlot, {.playSeconds = static_cast<f64>(player.seconds)}));
+        }
+        else if (event.type == UiEventType::Clicked && event.entity == hud.load && saves != nullptr)
+        {
+            hud.requested = RequestKind::Load;
+            static_cast<void>(saves->load(kSlot));
         }
         else if (event.type == UiEventType::Clicked && event.entity == hud.language)
         {
@@ -461,11 +560,14 @@ void updateModule(ModuleContext& context, f64 deltaSeconds)
     // A copy: the UI may add Components to its elements.
     const Hud* stored = component<Hud>(world, self);
     Hud hud = stored != nullptr ? *stored : Hud{};
-    const bool paused = updateUi(context, hud, deltaSeconds);
+    // Also a copy, for the same reason.
+    Player walker = world.get<Player>(self);
+    const bool paused = updateUi(context, hud, walker, deltaSeconds);
     if (Hud* written = component<Hud>(world, self))
     {
         *written = hud;
     }
+    world.get<Player>(self) = walker;
 
     Player& player = world.get<Player>(self);
     const f32 dt = static_cast<f32>(std::min(deltaSeconds, 0.1));

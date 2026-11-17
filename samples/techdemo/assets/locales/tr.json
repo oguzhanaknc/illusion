@@ -12,6 +12,13 @@
     "techdemo.hud.frameTime": "{fps} FPS   {ms} ms",
     "techdemo.menu.title": "Duraklatıldı",
     "techdemo.menu.resume": "Devam et",
+    "techdemo.menu.save": "Oyunu kaydet",
+    "techdemo.menu.load": "Oyunu yükle",
+    "techdemo.menu.saved": "Oyun kaydedildi",
+    "techdemo.menu.saveFailed": "Oyun kaydedilemedi",
+    "techdemo.menu.loaded": "Oyun yüklendi",
+    "techdemo.menu.loadedBackup": "Oyun yedeğinden yüklendi",
+    "techdemo.menu.loadFailed": "Oyun yüklenemedi",
     "techdemo.menu.volume": "Ana ses düzeyi %{percent}",
     "techdemo.menu.language": "Dil: Türkçe",
     "techdemo.menu.quit": "Çık"

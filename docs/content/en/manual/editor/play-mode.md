@@ -116,6 +116,13 @@ mixer of the running session:
 {"bus": "music", "volume": 0.5, "paused": false}
 ```
 
+## Saved games
+
+A game that uses `SaveService` saves into `cache:/saves` of the project while it runs in Play mode; the slots stay
+there across sessions and are not part of an export. `saves.list`, `saves.write`, `saves.load` and
+`saves.remove` work on them from the editor or an agent (see [Saved games](../saved-games.md#editor-commands)).
+A load changes the play World only, so stopping the session leaves the edited scene as it was.
+
 ## Input actions
 
 The input actions asset (a `.input` file, see [Input actions](../actions.md)) lists the game's actions and

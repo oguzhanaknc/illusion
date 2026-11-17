@@ -11,7 +11,7 @@ void registerSaveComponents()
                .category = "Core",
                .icon = "save",
                .description = "Saved games contain the Entity and all its descendants.",
-               .docsAnchor = "manual/scenes.md#scene-deltas"});
+               .docsAnchor = "manual/saved-games.md#the-saved-tag"});
 }
 
 } // namespace illusion
