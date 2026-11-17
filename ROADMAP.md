@@ -1043,7 +1043,7 @@ until a CI job has the SDK.
 After DEMO, independent of GFX. Characters, creatures and machines that move with bones, at AAA quality.
 Nothing of it exists yet: glTF skins and animations are skipped on import and the vertex has no bone data.
 
-- ANIM-1: Import and playback, designed in ADR 0059 (skins and clips in the cooked model, poses in an
+- ✅ ANIM-1: Import and playback, designed in ADR 0059 (skins and clips in the cooked model, poses in an
   `AnimationWorld` outside the ECS, skinning once per frame in a compute pass). Three work packages:
 - ANIM-1a (`implementer`): Assets and pose math. `loadGltf()` imports skins (`Skeleton`), animations
   (`AnimationClip`, channels by joint name, Step/Linear/CubicSpline) and the `SkinVertex` stream with
@@ -1106,6 +1106,31 @@ Nothing of it exists yet: glTF skins and animations are skipped on import and th
   skinned instances, culling by the skinned bounds. Done: GPU golden test of a posed character (lavapipe),
   motion vectors of a moving joint, validation errors zero, a GPU benchmark of 300 skinned instances, the
   manual page "Animation" (EN/TR) and the architecture page.
+  ✅ Done: `RenderResources::createMesh()` uploads `MeshData::skin` into a shared skin pool (`GpuMesh::skinOffset`,
+  `skinCount`; the vertex pool gains raw views for the pass). `RenderView::animation` gives `SceneRenderer` the
+  poses (null: bind poses); the player, Play mode, the editor's viewports (edit World, snap probe, camera
+  preview) and the glTF viewer (which now loops a model's first clip) pass theirs. Culling takes entities with
+  an `AnimationPose` on the render thread: a fresh pose (`frame` equals `AnimationWorld::frame()`, skin matrices
+  of `jointCount`) on a skinned mesh is culled by `AnimationPose::bounds` and, when it reaches the camera or a
+  shadow view, gets a range of the renderer's skinned vertex buffers (`RangeAllocator`, kept while the pose
+  lasts, returned when it goes) and a dispatch of `Skinning.slang` at the start of the frame: bind-pose vertices
+  from the vertex pool, `SkinVertex` from the skin pool, this frame's and the previous frame's skin matrices
+  from one per-frame buffer, out to the `Vertex` layout plus a `Vec4` previous position per vertex (no UAV
+  barriers between instances). Skinned opaque items follow the GPU-culled region of the camera order and are
+  drawn one by one in the prepass (before the phase-2 Hi-Z), shading and wireframe with the per-material
+  pipelines; blended ones, shadow casters and entity IDs draw from the range too (vertex buffer bound at the
+  range, base vertex 0); the forward vertex shader reads previous positions (`t10`, push constant
+  `kForwardSkinned`) for motion vectors. `RenderStats::skinnedInstances`/`skinnedVertices`,
+  `RenderGpuTimings::skinning`, `SceneRenderer::skinnedVertices()` (range, for tools and tests). Tests in
+  `tests/gpu/TestSkinning.cpp` (goldens `skinned-rigged-0s`/`-1s`, GPU equals CPU skinning, motion of a moving
+  and a still joint, frustum culling and range lifetime, posed shadows, steady allocations independent of the
+  instance count, 300 x 10,240 vertices: 0.66 ms on an RTX 4070 SUPER, budget 3 ms). The showcase `Column` is
+  visible (goldens `showcase-play-300`, `showcase-game`); manual page "Animation", the scene frame on the
+  architecture overview; the Animator's docs anchor is `manual/animation.md#the-animator`.
+  Open: skinned instances are neither occlusion culled nor GPU-instanced (each is one draw per pass); a mesh of
+  several submeshes is skinned whole for each submesh's Entity; the editor's "pick behind" and frame-selection
+  bounds still use the bind-pose bounds; the steady allocation test shows NVRHI's own allocations per frame,
+  equal with one and four instances.
 - ANIM-2: Blending and control: cross-fades, additive and masked (per-bone) layers, 1D/2D blend spaces,
   a data-driven state machine with parameters and transitions, animation events (footsteps, effects),
   root motion into the CharacterController; `AnimationService` for game modules

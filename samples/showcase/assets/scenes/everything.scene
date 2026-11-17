@@ -3380,7 +3380,7 @@
           "material": "",
           "layers": 1,
           "castShadows": true,
-          "visible": false,
+          "visible": true,
           "lodBias": 1.0
         },
         "illusion.Name": {

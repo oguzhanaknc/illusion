@@ -18,7 +18,7 @@ void registerAnimationComponents(ComponentRegistry& registry)
                .category = "Animation",
                .icon = "directions_run",
                .description = "Plays an animation clip on the skeleton of the Entity's skinned mesh.",
-               .docsAnchor = "manual/rendering.md#skeletal-animation",
+               .docsAnchor = "manual/animation.md#the-animator",
                .requiredComponents = kRequires})
         .field(
             "skeleton", &Animator::skeleton,

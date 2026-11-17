@@ -2,9 +2,9 @@
 
 /// @file
 /// Forward PBR renderer for ECS scenes: frustum culling (parallel on the Job System), sorting into
-/// instanced batches, cascaded soft shadows and cube shadow maps for point lights, a depth prepass, HDR
-/// shading (opaque, then back-to-front transparent, then particles), reversed-Z depth, then ambient
-/// occlusion, TAA, bloom and tonemapping.
+/// instanced batches, GPU skinning of animated meshes, cascaded soft shadows and cube shadow maps for point
+/// lights, a depth prepass, HDR shading (opaque, then back-to-front transparent, then particles), reversed-Z
+/// depth, then ambient occlusion, TAA, bloom and tonemapping.
 
 #include <illusion/assets/Mesh.hpp>
 #include <illusion/core/Base.hpp>
@@ -23,6 +23,7 @@
 namespace illusion
 {
 
+class AnimationWorld;
 class JobSystem;
 class RenderDevice;
 class RenderResources;
@@ -48,6 +49,10 @@ struct RenderView
     /// Borrowed bitset indexed by Entity index (64 entities per word); set bits hide entities in all
     /// passes of this view. Missing words are zero. Keep alive until render() returns.
     std::span<const u64> hiddenEntities{};
+    /// Borrowed poses of the rendered World (docs/adr/0059-skeletal-animation.md): skinned meshes whose
+    /// AnimationPose this AnimationWorld wrote in its last update are skinned on the GPU; the others, and all
+    /// of them when null, are drawn in their bind pose. Keep alive until render() returns.
+    const AnimationWorld* animation = nullptr;
 
     /// View looking through @p camera placed at @p transform, for a target with @p aspect (width / height).
     [[nodiscard]] static RenderView fromCamera(const Transform& transform, const Camera& camera,
@@ -107,6 +112,9 @@ struct RenderStats
     /// An instance cross-fading between two levels counts at both.
     std::array<u32, kMaxSubmeshLods + 1> lodInstances{};
     u32 lodFades = 0; ///< Camera-visible instances cross-fading between two levels of detail.
+    /// Skinned instances posed on the GPU (seen by the camera or a shadow view; RenderView::animation).
+    u32 skinnedInstances = 0;
+    u32 skinnedVertices = 0; ///< Vertices the skinning pass wrote.
 };
 
 /// Completed GPU pass measurements in milliseconds, obtained without blocking the graphics queue.
@@ -119,6 +127,17 @@ struct RenderGpuTimings
     f32 ambientOcclusion = 0.0f; ///< Screen-space ambient occlusion.
     f32 shading = 0.0f;          ///< Volumetric fog, lighting, transparency, wireframe and transparent IDs.
     f32 post = 0.0f;             ///< Temporal resolve, bloom and tonemapping.
+    f32 skinning = 0.0f;         ///< Skinning of animated meshes.
+};
+
+/// Where the skinning pass of a SceneRenderer wrote the vertices of one skinned instance.
+struct SkinnedVertexRange
+{
+    nvrhi::IBuffer* vertices = nullptr; ///< Posed vertices in the Vertex layout (null: no range).
+    nvrhi::IBuffer* previousPositions =
+        nullptr;         ///< One Vec4 per vertex: the positions under the previous pose.
+    u32 firstVertex = 0; ///< Index of the instance's first vertex in both buffers.
+    u32 vertexCount = 0; ///< Vertices of its mesh.
 };
 
 /// Creation parameters for SceneRenderer.
@@ -213,6 +232,11 @@ public:
 
     /// Cascades used by the last render() call (count 0 when nothing cast shadows).
     [[nodiscard]] const ShadowCascades& shadowCascades() const noexcept;
+
+    /// The range of @p entity in the skinned vertex buffers, kept while its pose lasts and written by the
+    /// last render() that drew it; empty for other entities. For tools and tests: the buffers are replaced
+    /// when they grow.
+    [[nodiscard]] SkinnedVertexRange skinnedVertices(Entity entity) const noexcept;
 
 private:
     SceneRenderer();

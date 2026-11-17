@@ -14,17 +14,38 @@ illusion is built in layers. A layer may depend only on layers below it.
 | Input | Gamepads through SDL3 (rumble, LED, motion, touchpad, adaptive triggers), action mapping, rebinding, glyphs and their translatable labels | Implemented |
 | Assets | Images, Meshes, glTF models, environments, cooked formats, an import cache and asynchronous streaming | Implemented |
 | Physics | Rigid bodies, primitive, convex hull and mesh colliders, characters, joints, raycasts, shape casts and contacts with Jolt Physics on the Job System | Implemented |
+| Animation | Skeletons and clips from glTF, the saved `Animator`, poses evaluated on the Job System outside the ECS in an `AnimationWorld` ([Animation](../manual/animation.md)) | Implemented |
 | Particles | Emitters with shapes, lifetimes, gravity and drag, colour and size over life, simulated deterministically on the Job System (drawing: PFX-2) | Implemented |
 | Audio | 3D sound with cones, streaming, background loading and a mixer with buses, filters and reverb with miniaudio, mixed on its own thread | Implemented |
 | Game UI | Canvases, text (distance field fonts, localized), images, stacks and grids, buttons, sliders, text fields, scroll views, transitions, input glyphs and modal menus as Entities, drawn by a batched pass after tonemapping ([Game UI Architecture](game-ui.md)) | Implemented |
 | Saved games | The `Saved` tag, checksummed slot files with a backup and an image, the capture and application of the tagged Entities, a save thread, `SaveService` and the cloud mirror ([Saved Games](../manual/saved-games.md)) | Implemented |
 | Renderer: foundation | Vulkan 1.3 device through NVRHI, swapchains, Slang shader pipeline | Implemented |
-| Renderer: scene | Meshes, PBR Materials, direct and image-based lighting, soft shadows, GTAO, HDR post-processing (TAA, bloom, tonemapping), frustum culling, GPU occlusion culling with indirect draws, instancing, bindless multi-draw | Implemented |
+| Renderer: scene | Meshes, PBR Materials, direct and image-based lighting, soft shadows, GTAO, HDR post-processing (TAA, bloom, tonemapping), frustum culling, GPU occlusion culling with indirect draws, instancing, bindless multi-draw, GPU skinning | Implemented |
 | Editor | Separate tree with a checked export boundary; UI foundation (Dear ImGui backends, theme, fonts, icons, widget kit, gallery) done; scene editing, gizmos and the AI command API in progress ([Editor Architecture](editor.md)) | In progress |
 | Game modules | The game's own code: hot-reloadable shared libraries in development, linked statically into exported games ([Game Modules](../manual/modules.md)) | Implemented |
 
 The core is a static library. The editor and exported games link it; a game module never contains a
 second copy of engine state (see "Process-wide services" below).
+
+## The scene frame
+
+`SceneRenderer::render()` records one frame in this order:
+
+1. **Culling** on the CPU (parallel on the Job System): frustum tests against the camera, the shadow
+   cascades and the faces of shadowed point lights, levels of detail, and sorting into batches. Skinned
+   instances are culled by the world bounds of their pose.
+2. **Skinning** (compute, `Skinning.slang`): every visible skinned instance with a fresh pose writes its
+   posed vertices, in the ordinary vertex layout, and its positions under the previous pose into its range
+   of the skinned vertex buffers. Skin matrices are uploaded once per frame into one buffer.
+3. **Shadows**: cascades and point light cube faces.
+4. **Depth prepass** with GPU occlusion culling in two phases, writing depth, motion vectors and Entity IDs.
+5. **Ambient occlusion** (GTAO), then **shading**: volumetric fog, opaque surfaces, the sky, blended
+   surfaces back to front and particles.
+6. **Post-processing**: temporal anti-aliasing, bloom, exposure and tonemapping.
+
+Every pass after skinning draws a skinned instance from its range like a rigid mesh, one draw per instance;
+motion vectors read the previous positions, so temporal anti-aliasing sees joint motion. Rigid instances
+share the vertex pool and the GPU-driven, instanced path ([Animation](../manual/animation.md)).
 
 ## Principles
 

@@ -190,45 +190,11 @@ resolver.update(world, &jobs);
 
 ### İskelet animasyonu
 
-Skinned bir Mesh, `MeshRenderer`'ının Entity'sindeki kaydedilen `Animator` Component'iyle hareket eder
-(ADR 0059). World başına bir `AnimationWorld` pozları ECS'in dışında tutar ve çalışma zamanı Component'i
-`AnimationPose`'u ekler (pozun slotu, eklem sayısı ve dünya sınırları):
-
-Header'lar: `<illusion/animation/AnimationComponents.hpp>`, `<illusion/animation/AnimationWorld.hpp>`
-
-```cpp
-illusion::AnimationWorld animation(world, streamer);
-const illusion::Entity hero = world.create(
-    illusion::Transform{}, illusion::MeshRenderer{.mesh = illusion::AssetRef("game:/hero.glb#mesh/0")},
-    illusion::Animator{.skeleton = illusion::AssetRef("game:/hero.glb#skin/0"),
-                       .clip = illusion::AssetRef("game:/hero.glb#animation/Walk")});
-
-// Every frame, after game code and before physics:
-animation.update(deltaSeconds, &jobs, true);
-const illusion::AnimationPose& pose = world.get<illusion::AnimationPose>(hero);
-const std::span<const illusion::SkinMatrix> skin = animation.skinMatrices(pose.slot);
-```
-
-- `Animator`; `skeleton` (`model.glb#skin/N`), `clip` (`model.glb#animation/<name>`; boşsa dinlenme pozu
-  gösterilir), `speed` (negatifse geriye oynatır), saniye cinsinden `time`, `loop` ve `playing` alanlarını
-  tutar. Her alan kaydedilir; böylece sahneler ve [kayıtlı oyunlar](saved-games.md) klibin nerede
-  kaldığını korur.
-- `advance` true iken (Play modu ve oynatıcı; `GameSession` başlatılmışken bunu geçirir) `update()`,
-  `speed` çarpı saniyeyi `time`'a ekler; `loop` açıksa klibin içine sarar, değilse `time` klibin sonunda
-  (geriye oynarken başında) durur ve `playing` false olur. `advance` olmadan poz kaydedilen `time`'ı
-  gösterir: editör Play modu dışında böyle yapar, bu yüzden Inspector'da `time`'ı değiştirmek klibi
-  kaydırır.
-- Her model dosyası `AssetStreamer` üzerinden bir kez yüklenir; iskeletleri, klipleri ve Mesh'lerinin
-  eklem sınırları tüm Animator'lar arasında paylaşılır ve bir klip bir iskelete bir kez bağlanır. Pozlar
-  Job System üzerinde paralel örneklenip birleştirilir ve skin matrisleri tek bir bitişik tampona
-  yazılır; `previousSkinMatrices()` hareket vektörleri için bir önceki güncellemeyi tutar (bir pozun ilk
-  güncellemesinde güncel olanlara eşittir). `AnimationPose::bounds`, skinned Mesh'in dünya uzayındaki
-  sınırlarıdır.
-- Modeli yüklenirken poz bekler (`jointCount` 0'dır). Mesh'e uymayan bir iskelet (başka bir skin, başka
-  bir eklem sayısı ya da rijit bir Mesh) bir kez bildirilir ve poz almaz; Mesh bind pozunda çizilir.
-  `Inactive` etiketli Entity'ler pozlarını ve `time`'larını korur.
-- Bir model dosyasını yeniden yüklemek (`AssetStreamer::reload()`) Animator'larını yeniden bağlar;
-  başarısız bir yeniden yükleme önceki veriyi korur. Kararlı bir güncelleme bellek ayırmaz.
+Skinned bir Mesh bir `Animator` ile hareket eder ve bir `AnimationWorld` tarafından pozlanır; pozları
+renderer'a `RenderView::animation` içinde verin, Mesh'i karede bir kez GPU'da skin'ler; böylece her pass
+(gölgeler, depth prepass, gölgelendirme ve hareket vektörleri) pozlanmış şekli çizer. Pozlar verilmezse
+skinned Mesh'ler bind pozunda çizilir. Rig'li modelleri içe aktarma, `Animator`, editörde oynatma ve
+skinning pass'i için [Animasyon](animation.md) sayfasına bakın.
 
 ### Kaynak ömrü
 

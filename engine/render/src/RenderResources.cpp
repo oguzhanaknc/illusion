@@ -193,6 +193,9 @@ struct RenderResources::Impl
     nvrhi::BufferHandle indexPool;
     RangeAllocator vertexRanges;
     RangeAllocator indexRanges;
+    // SkinVertex streams of skinned meshes, read by the skinning pass of SceneRenderer.
+    nvrhi::BufferHandle skinPool;
+    RangeAllocator skinRanges;
     nvrhi::BufferHandle materialTable;
     u32 materialCapacity = 0;
     std::vector<GpuMaterialRecord> records{1};
@@ -320,8 +323,14 @@ struct RenderResources::Impl
     }
 
     // Recreates `pool` with room for `required` elements of `stride` bytes, copying `used` elements.
-    void growPool(nvrhi::BufferHandle& pool, u32 used, u32 required, u32 stride, bool vertex,
-                  const char* name)
+    enum class Pool : u8
+    {
+        Vertex, // also read by the skinning pass
+        Index,
+        Skin,
+    };
+
+    void growPool(nvrhi::BufferHandle& pool, u32 used, u32 required, u32 stride, Pool kind, const char* name)
     {
         const u64 capacity = pool ? pool->getDesc().byteSize / stride : 0;
         if (pool && required <= capacity)
@@ -329,13 +338,16 @@ struct RenderResources::Impl
             return;
         }
         nvrhi::BufferDesc desc;
+        const u64 minimum = kind == Pool::Skin ? 4096 : 65536;
         desc.byteSize =
-            static_cast<u64>(std::max<u64>(required, std::max<u64>(capacity * 2, 65536))) * stride;
-        desc.isVertexBuffer = vertex;
-        desc.isIndexBuffer = !vertex;
+            static_cast<u64>(std::max<u64>(required, std::max<u64>(capacity * 2, minimum))) * stride;
+        desc.isVertexBuffer = kind == Pool::Vertex;
+        desc.isIndexBuffer = kind == Pool::Index;
+        desc.canHaveRawViews = kind != Pool::Index;
         desc.debugName = name;
-        desc.enableAutomaticStateTracking(vertex ? nvrhi::ResourceStates::VertexBuffer
-                                                 : nvrhi::ResourceStates::IndexBuffer);
+        desc.enableAutomaticStateTracking(kind == Pool::Vertex  ? nvrhi::ResourceStates::VertexBuffer
+                                          : kind == Pool::Index ? nvrhi::ResourceStates::IndexBuffer
+                                                                : nvrhi::ResourceStates::ShaderResource);
         nvrhi::BufferHandle grown = device->createBuffer(desc);
         if (pool && used > 0)
         {
@@ -409,6 +421,10 @@ struct RenderResources::Impl
             GpuMesh& mesh = meshes[release.index];
             vertexRanges.free(mesh.vertexOffset, mesh.vertexCount);
             indexRanges.free(mesh.indexOffset, mesh.indexCount);
+            if (mesh.skinCount != 0)
+            {
+                skinRanges.free(mesh.skinOffset, mesh.skinCount);
+            }
             mesh = GpuMesh{};
             meshSlots.recycle(release.index);
             break;
@@ -777,15 +793,32 @@ MeshHandle RenderResources::createMesh(const MeshData& mesh, const char* debugNa
     gpu.vertexCount = vertices;
     gpu.indexCount = indices;
     gpu.submeshes = mesh.submeshes;
+    ILL_ASSERT(mesh.skin.empty() || mesh.skin.size() == mesh.vertices.size(),
+               "createMesh: the skin stream must be parallel to the vertices");
+    const bool skinned = mesh.skin.size() == mesh.vertices.size();
+    const u32 usedSkin = impl.skinRanges.end();
+    if (skinned)
+    {
+        gpu.skinOffset = impl.skinRanges.allocate(vertices);
+        gpu.skinCount = vertices;
+    }
 
     impl.uploads->open();
-    impl.growPool(impl.vertexPool, usedVertices, impl.vertexRanges.end(), sizeof(Vertex), true,
+    impl.growPool(impl.vertexPool, usedVertices, impl.vertexRanges.end(), sizeof(Vertex), Impl::Pool::Vertex,
                   "Vertex pool");
-    impl.growPool(impl.indexPool, usedIndices, impl.indexRanges.end(), sizeof(u32), false, "Index pool");
+    impl.growPool(impl.indexPool, usedIndices, impl.indexRanges.end(), sizeof(u32), Impl::Pool::Index,
+                  "Index pool");
     impl.uploads->writeBuffer(impl.vertexPool, mesh.vertices.data(), mesh.vertices.size() * sizeof(Vertex),
                               static_cast<u64>(gpu.vertexOffset) * sizeof(Vertex));
     impl.uploads->writeBuffer(impl.indexPool, mesh.indices.data(), mesh.indices.size() * sizeof(u32),
                               static_cast<u64>(gpu.indexOffset) * sizeof(u32));
+    if (skinned)
+    {
+        impl.growPool(impl.skinPool, usedSkin, impl.skinRanges.end(), sizeof(SkinVertex), Impl::Pool::Skin,
+                      "Skin pool");
+        impl.uploads->writeBuffer(impl.skinPool, mesh.skin.data(), mesh.skin.size() * sizeof(SkinVertex),
+                                  static_cast<u64>(gpu.skinOffset) * sizeof(SkinVertex));
+    }
     impl.uploads->close();
     impl.device->executeCommandList(impl.uploads);
 
@@ -1533,6 +1566,11 @@ nvrhi::IBuffer* RenderResources::vertexPool() const noexcept
 nvrhi::IBuffer* RenderResources::indexPool() const noexcept
 {
     return m_impl->indexPool;
+}
+
+nvrhi::IBuffer* RenderResources::skinPool() const noexcept
+{
+    return m_impl->skinPool;
 }
 
 nvrhi::IBuffer* RenderResources::materialTable() const noexcept

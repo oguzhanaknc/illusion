@@ -70,7 +70,7 @@ Her `update(deltaSeconds)` şunları çalıştırır:
 | 1. Input | `InputActions`, `keyboardMouse()`'u ve gamepad'leri okur; son update modal bir canvas gösterdiyse yalnızca `ui.*` action'ları input alır |
 | 2. Modüller | World üzerinde `ModuleHost::update()`; ardından `EntityGuid`'siz oluşturulan Entity'ler bir tane alır |
 | 3. Kayıtlar | `GameSessionDesc::saves` ile: kayıt thread'inin bitirdiği yüklemeler kayıtlı Entity'lerin yerini alır ve biten istekler bir sonraki update'in `SaveService` olayları olur; ardından 2. adımdaki `save`, `load` ve `remove` çağrıları çağrı sırasıyla gönderilir, her `save` World'ü o anda yakalar. `fixedStep` ile önce kayıt thread'ini bekler, böylece sonuçlar her zaman bir sonraki update'te gelir |
-| 4. Animasyon | `GameSessionDesc::streamer` ile: `AnimationWorld::update()` Animator'lara poz verir (bkz. [İskelet animasyonu](rendering.md#iskelet-animasyonu)); oturum başlatılmışken `time`'ları ilerler. `animation()` pozları renderer'a ve host araçlarına verir |
+| 4. Animasyon | `GameSessionDesc::streamer` ile: `AnimationWorld::update()` Animator'lara poz verir (bkz. [Animasyon](animation.md#animator)); oturum başlatılmışken `time`'ları ilerler. `animation()` pozları renderer'a ve host araçlarına verir |
 | 5. Fizik | `PhysicsWorld::update()`: gövdeler World ile eşitlenir, adım atar ve Transform'larını yazar |
 | 6. Hiyerarşi | `updateTransformHierarchy()`: çocuklar ebeveynlerini izler, `Disabled` `Inactive` olur |
 | 7. UI | `UiWorld`, `setUiFrame()`'in karesi için UI Entity'lerini yerleştirir, işaretçiyi ve `ui.navigate`, `ui.submit` ile `ui.cancel` action'larını işler (Play modu) ve çizim listesini kaydeder (`ui()`), bkz. [Oyun UI'ı](ui.md) |
