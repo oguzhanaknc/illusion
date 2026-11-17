@@ -70,6 +70,7 @@ plugins:
             Events and Time: Event'ler ve Zaman
             File System: Dosya Sistemi
             Rendering: Rendering
+            Animation: Animasyon
             Assets and Models: Asset'ler ve Modeller
             Physics: Fizik
             Audio: Ses
@@ -146,6 +147,7 @@ nav:
       - Events and Time: manual/events.md
       - File System: manual/filesystem.md
       - Rendering: manual/rendering.md
+      - Animation: manual/animation.md
       - Assets and Models: manual/assets.md
       - Physics: manual/physics.md
       - Audio: manual/audio.md

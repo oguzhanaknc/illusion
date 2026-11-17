@@ -14,17 +14,40 @@ illusion katmanlar halinde inşa edilir. Bir katman yalnızca altındaki katmanl
 | Input | SDL3 üzerinden gamepad'ler (titreşim, LED, hareket, touchpad, adaptive trigger'lar), action eşleme, yeniden atama, glyph'ler ve çevrilebilir etiketleri | Tamamlandı |
 | Asset'ler | Görüntüler, Mesh'ler, glTF modelleri, ortamlar, hazırlanmış formatlar, bir içe aktarma önbelleği ve asenkron streaming | Tamamlandı |
 | Fizik | Job System üzerinde Jolt Physics ile katı cisimler, primitif, convex hull ve Mesh collider'ları, karakterler, joint'ler, raycast'ler, shape cast'ler ve temaslar | Tamamlandı |
+| Animasyon | glTF'ten iskeletler ve klipler, kaydedilen `Animator`, ECS'in dışında bir `AnimationWorld` içinde Job System üzerinde hesaplanan pozlar ([Animasyon](../manual/animation.md)) | Tamamlandı |
 | Parçacıklar | Şekilli, ömürlü, yerçekimli ve sürtünmeli, ömür boyunca renk ve boyutu değişen emitter'lar; Job System üzerinde deterministik olarak simüle edilir (çizim: PFX-2) | Tamamlandı |
 | Ses | miniaudio ile konili 3D ses, streaming, arka planda yükleme ve bus'lı, filtreli, reverb'lü mikser; kendi thread'inde miksajlanır | Tamamlandı |
 | Oyun UI'ı | Entity olarak canvas'lar, metin (distance field fontlar, yerelleştirilmiş), görüntüler, stack ve grid'ler, düğmeler, kaydırıcılar, text field'lar, scroll view'lar, geçişler, input glyph'leri ve modal menüler; tonemapping'den sonra toplu bir pass ile çizilir ([Oyun UI'ı Mimarisi](game-ui.md)) | Tamamlandı |
 | Kayıtlı oyunlar | `Saved` tag'i, yedekli ve görüntülü, checksum'lı slot dosyaları, etiketli Entity'lerin yakalanması ve uygulanması, bir kayıt thread'i, `SaveService` ve buluta yansıtma ([Kayıtlı oyunlar](../manual/saved-games.md)) | Tamamlandı |
 | Renderer: temel | NVRHI üzerinden Vulkan 1.3 cihazı, swapchain'ler, Slang shader hattı | Tamamlandı |
-| Renderer: sahne | Mesh'ler, PBR Material'ler, doğrudan ve görüntü tabanlı aydınlatma, yumuşak gölgeler, GTAO, HDR post-processing (TAA, bloom, tonemapping), frustum culling, indirect draw'lı GPU occlusion culling, instancing, bindless multi-draw | Tamamlandı |
+| Renderer: sahne | Mesh'ler, PBR Material'ler, doğrudan ve görüntü tabanlı aydınlatma, yumuşak gölgeler, GTAO, HDR post-processing (TAA, bloom, tonemapping), frustum culling, indirect draw'lı GPU occlusion culling, instancing, bindless multi-draw, GPU skinning | Tamamlandı |
 | Editör | Denetlenen bir export sınırına sahip ayrı ağaç; UI temeli (Dear ImGui backend'leri, tema, fontlar, ikonlar, widget kiti, galeri) tamamlandı; sahne düzenleme, gizmo'lar ve AI komut API'si sürüyor ([Editör Mimarisi](editor.md)) | Sürüyor |
 | Oyun modülleri | Oyunun kendi kodu: geliştirmede hot-reload edilebilen paylaşımlı kütüphaneler, dışa aktarılan oyunlarda statik linklenir ([Oyun Modülleri](../manual/modules.md)) | Tamamlandı |
 
 Core bir statik kütüphanedir. Editör ve export edilen oyunlar onu link eder; bir oyun modülü motor
 durumunun ikinci bir kopyasını asla barındırmaz (aşağıdaki "Süreç genelindeki servisler" bölümüne bakın).
+
+## Sahne karesi
+
+`SceneRenderer::render()` bir kareyi şu sırayla kaydeder:
+
+1. CPU'da **culling** (Job System üzerinde paralel): kameraya, gölge kademelerine ve gölgeli nokta
+   ışıklarının yüzlerine karşı frustum testleri, ayrıntı seviyeleri ve batch'lere sıralama. Skinned
+   instance'lar pozlarının dünya sınırlarıyla cull edilir.
+2. **Skinning** (compute, `Skinning.slang`): taze pozu olan her görünür skinned instance, pozlanmış
+   vertex'lerini olağan vertex düzeninde ve önceki pozdaki konumlarını skinned vertex tamponlarındaki
+   kendi aralığına yazar. Skin matrisleri karede bir kez tek bir tampona yüklenir.
+3. **Gölgeler**: kademeler ve nokta ışığı küp yüzleri.
+4. İki aşamalı GPU occlusion culling ile **depth prepass**; derinlik, hareket vektörleri ve Entity ID'leri
+   yazılır.
+5. **Ortam örtmesi** (GTAO), ardından **gölgelendirme**: hacimsel sis, opak yüzeyler, gökyüzü, arkadan öne
+   harmanlanan yüzeyler ve parçacıklar.
+6. **Post-processing**: temporal anti-aliasing, bloom, pozlama ve tonemapping.
+
+Skinning'den sonraki her pass, skinned bir instance'ı rijit bir Mesh gibi kendi aralığından çizer,
+instance başına bir draw; hareket vektörleri önceki konumları okur, böylece temporal anti-aliasing eklem
+hareketini görür. Rijit instance'lar vertex havuzunu ve GPU güdümlü, instanced yolu paylaşır
+([Animasyon](../manual/animation.md)).
 
 ## İlkeler
 
