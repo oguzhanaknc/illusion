@@ -704,8 +704,8 @@ private:
             }
             if (joint.scale.x != 0.0f && joint.scale.y != 0.0f && joint.scale.z != 0.0f)
             {
-                const glm::mat3 rotation(Vec3(matrix[0]) / joint.scale.x, Vec3(matrix[1]) / joint.scale.y,
-                                         Vec3(matrix[2]) / joint.scale.z);
+                const glm::mat3 rotation{Vec3(matrix[0]) / joint.scale.x, Vec3(matrix[1]) / joint.scale.y,
+                                         Vec3(matrix[2]) / joint.scale.z};
                 joint.rotation = glm::normalize(glm::quat_cast(rotation));
             }
             return;
