@@ -55,11 +55,13 @@ add_executable(illusion_tests
     assets/TestFont.cpp
     assets/TestFontAsset.cpp
     assets/TestGltf.cpp
+    assets/TestGltfSkins.cpp
     assets/TestImageMesh.cpp
     assets/TestImportSettings.cpp
     assets/TestMaterialAsset.cpp
     assets/TestMeshLods.cpp
     assets/TestTextureCompression.cpp
+    animation/TestPose.cpp
     audio/TestAudioEffects.cpp
     audio/TestAudioWorld.cpp
     modules/TestModules.cpp
@@ -105,8 +107,8 @@ add_executable(illusion_tests
 target_include_directories(illusion_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}
     ${PROJECT_SOURCE_DIR}/engine/render/src ${PROJECT_SOURCE_DIR}/engine/player/src)
 target_link_libraries(illusion_tests PRIVATE
-    illusion::core illusion::platform illusion::input illusion::assets illusion::audio illusion::physics
-    illusion::particles illusion::render illusion::modules illusion::runtime illusion::player illusion::store
+    illusion::core illusion::platform illusion::input illusion::assets illusion::animation illusion::audio
+    illusion::physics illusion::particles illusion::render illusion::modules illusion::runtime illusion::player illusion::store
     illusion::save illusion::text illusion_text_tools illusion::ui illusion::doctest)
 illusion_require_dependency(test_font)
 target_compile_definitions(illusion_tests PRIVATE ILLUSION_TEST_DATA_DIR="${CMAKE_CURRENT_SOURCE_DIR}/data"

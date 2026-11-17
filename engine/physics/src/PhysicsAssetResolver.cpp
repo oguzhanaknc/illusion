@@ -24,6 +24,13 @@ namespace illusion
 namespace
 {
 
+// Fragments that select a mesh: a built-in or whole file (None), `#mesh/N` or `#node/<name>`.
+bool isMeshFragment(AssetFragment fragment) noexcept
+{
+    return fragment == AssetFragment::None || fragment == AssetFragment::Mesh ||
+           fragment == AssetFragment::Node;
+}
+
 enum class Status : u8
 {
     Loading,
@@ -212,7 +219,7 @@ struct PhysicsAssetResolver::Impl
         {
             const std::optional<AssetPathParts> parts =
                 splitAssetPath(AssetPathTable::instance().path(entry.asset));
-            if (!parts || isOnBuiltinMount(parts->file) || parts->fragment == AssetFragment::Material)
+            if (!parts || isOnBuiltinMount(parts->file) || !isMeshFragment(parts->fragment))
             {
                 continue;
             }
@@ -235,7 +242,7 @@ struct PhysicsAssetResolver::Impl
         entry.meshIndex = collider.meshIndex;
         entry.triangles = collider.shape == ColliderShape::Mesh;
         const std::optional<AssetPathParts> parts = splitAssetPath(collider.mesh.path());
-        if (!parts || parts->fragment == AssetFragment::Material)
+        if (!parts || !isMeshFragment(parts->fragment))
         {
             fail(entry, "not a mesh asset");
         }

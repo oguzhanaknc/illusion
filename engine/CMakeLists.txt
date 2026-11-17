@@ -5,6 +5,7 @@ add_subdirectory(${PROJECT_SOURCE_DIR}/tools/textc ${PROJECT_BINARY_DIR}/tools/t
 add_subdirectory(platform)
 add_subdirectory(input)
 add_subdirectory(assets)
+add_subdirectory(animation)
 add_subdirectory(physics)
 add_subdirectory(audio)
 add_subdirectory(particles)

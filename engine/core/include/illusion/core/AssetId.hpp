@@ -50,10 +50,12 @@ struct AssetId
 /// The part of a file that an asset path selects.
 enum class AssetFragment : u8
 {
-    None,     ///< The whole file.
-    Mesh,     ///< `#mesh/N`: mesh N of a model.
-    Material, ///< `#material/N`: material N of a model.
-    Node,     ///< `#node/<name>`: the mesh of the first model node with that name.
+    None,      ///< The whole file.
+    Mesh,      ///< `#mesh/N`: mesh N of a model.
+    Material,  ///< `#material/N`: material N of a model.
+    Node,      ///< `#node/<name>`: the mesh of the first model node with that name.
+    Skin,      ///< `#skin/N`: skeleton N of a model.
+    Animation, ///< `#animation/<name>`: the animation clip of a model with that name.
 };
 
 /// A normalized asset path split into the file and the fragment. The views point into the path.
@@ -61,13 +63,14 @@ struct AssetPathParts
 {
     std::string_view file;                        ///< Virtual path of the file (or built-in asset).
     AssetFragment fragment = AssetFragment::None; ///< Selected part.
-    u32 index = 0;                                ///< Mesh, Material: the index.
-    std::string_view node;                        ///< Node: the node name.
+    u32 index = 0;                                ///< Mesh, Material, Skin: the index.
+    std::string_view node;                        ///< Node, Animation: the node or animation name.
 };
 
-/// Normalizes the file part of @p path like normalizeVirtualPath() and writes the index of a `#mesh/N` or
-/// `#material/N` fragment in decimal without leading zeros. Returns std::nullopt for a malformed path or
-/// fragment (an unknown fragment kind, an index above 2^32 - 1, an empty or control-character node name).
+/// Normalizes the file part of @p path like normalizeVirtualPath() and writes the index of a `#mesh/N`,
+/// `#material/N` or `#skin/N` fragment in decimal without leading zeros. Returns std::nullopt for a malformed
+/// path or fragment (an unknown fragment kind, an index above 2^32 - 1, an empty or control-character node or
+/// animation name).
 [[nodiscard]] std::optional<std::string> normalizeAssetPath(std::string_view path);
 
 /// True if @p path is a valid asset path in normalized form (normalizeAssetPath() returns it unchanged).

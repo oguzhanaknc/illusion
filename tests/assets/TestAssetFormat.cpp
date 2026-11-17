@@ -5,6 +5,7 @@
 #include <doctest/doctest.h>
 
 #include <cstring>
+#include <limits>
 
 using namespace illusion;
 
@@ -133,6 +134,57 @@ TEST_CASE("cooked models with out-of-range indices are rejected")
     badTexture.materials.push_back(MaterialData{});
     badTexture.materials[0].normalTexture.image = 2; // no images
     CHECK_FALSE(deserializeModel(serializeModel(badTexture)).has_value());
+}
+
+TEST_CASE("cooked models with malformed skins or animations are rejected")
+{
+    ModelData model;
+    model.meshes.push_back(makeCube());
+    MeshData& mesh = model.meshes[0];
+    mesh.skin.assign(mesh.vertices.size(), SkinVertex{{1, 0, 0, 0}, {40000, 25535, 0, 0}});
+    mesh.jointBounds = {mesh.bounds, mesh.bounds};
+    mesh.skeleton = 0;
+    Skeleton skeleton;
+    skeleton.joints.resize(2);
+    skeleton.joints.at(0).name = "hip";
+    skeleton.joints.at(1).name = "knee";
+    skeleton.joints.at(1).parent = 0;
+    model.skins.push_back(skeleton);
+    AnimationClip clip;
+    clip.name = "walk";
+    clip.duration = 1.0f;
+    clip.channels.push_back(AnimationChannel{"knee",
+                                             AnimationPath::Rotation,
+                                             AnimationInterpolation::Linear,
+                                             {0.0f, 1.0f},
+                                             {Vec4(0, 0, 0, 1), Vec4(0, 0, 0, 1)}});
+    model.animations.push_back(clip);
+    REQUIRE(deserializeModel(serializeModel(model)).has_value());
+
+    const auto rejects = [&](auto change) {
+        ModelData broken = model;
+        change(broken);
+        return !deserializeModel(serializeModel(broken)).has_value();
+    };
+    CHECK(rejects([](ModelData& m) { m.meshes[0].skin[3].joints[1] = 2; }));  // joint index >= count
+    CHECK(rejects([](ModelData& m) { m.meshes[0].skin[0].weights[0] = 1; })); // weights do not sum to 1
+    CHECK(rejects([](ModelData& m) { m.meshes[0].skin.pop_back(); }));        // not parallel to vertices
+    CHECK(rejects([](ModelData& m) { m.meshes[0].jointBounds.pop_back(); })); // a box per joint
+    CHECK(rejects([](ModelData& m) { m.meshes[0].skeleton = 1; }));           // no such skin
+    CHECK(rejects([](ModelData& m) { m.meshes[0].skeleton = -1; }));          // rigid with skin data
+    CHECK(rejects([](ModelData& m) { m.skins[0].joints[1].parent = 1; }));    // parent >= own index
+    CHECK(rejects([](ModelData& m) { m.skins[0].joints[0].parent = -2; }));
+    CHECK(rejects([](ModelData& m) { m.skins[0].joints.resize(kMaxJoints + 1); }));         // too many joints
+    CHECK(rejects([](ModelData& m) { m.animations[0].channels[0].times = {1.0f, 1.0f}; })); // not ascending
+    CHECK(rejects([](ModelData& m) { m.animations[0].channels[0].times = {1.0f, 0.5f}; }));
+    CHECK(rejects([](ModelData& m) { m.animations[0].channels[0].times.clear(); }));
+    CHECK(rejects([](ModelData& m) { m.animations[0].channels[0].values.pop_back(); })); // values count
+    CHECK(rejects([](ModelData& m) {
+        m.animations[0].channels[0].interpolation = AnimationInterpolation::CubicSpline; // needs 3 per key
+    }));
+    CHECK(rejects([](ModelData& m) { m.animations[0].channels[0].path = static_cast<AnimationPath>(3); }));
+    CHECK(rejects([](ModelData& m) { m.animations[0].duration = 0.5f; })); // shorter than its keys
+    CHECK(rejects([](ModelData& m) { m.animations[0].duration = std::numeric_limits<f32>::quiet_NaN(); }));
 }
 
 TEST_CASE("baked environments round-trip and invalid ones are rejected")

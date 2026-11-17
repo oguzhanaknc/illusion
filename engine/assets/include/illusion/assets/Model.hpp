@@ -88,10 +88,12 @@ struct ModelNode
 /// A model: everything a glTF file describes that the engine renders.
 struct ModelData
 {
-    std::vector<MeshData> meshes;        ///< Meshes.
-    std::vector<MaterialData> materials; ///< Materials.
-    std::vector<Image> images;           ///< Decoded images with full mip chains.
-    std::vector<ModelNode> nodes;        ///< Nodes, parents before children.
+    std::vector<MeshData> meshes;          ///< Meshes.
+    std::vector<MaterialData> materials;   ///< Materials.
+    std::vector<Image> images;             ///< Decoded images with full mip chains.
+    std::vector<ModelNode> nodes;          ///< Nodes, parents before children.
+    std::vector<Skeleton> skins;           ///< Skeletons of the glTF skins (`#skin/N`).
+    std::vector<AnimationClip> animations; ///< Animations (`#animation/<name>`).
 
     /// World matrix of every node (parent chain applied), indexed like `nodes`.
     [[nodiscard]] std::vector<Mat4> worldMatrices() const;
@@ -100,8 +102,9 @@ struct ModelData
     [[nodiscard]] Aabb bounds() const;
 };
 
-/// Scales @p model uniformly by @p scale: vertex positions, bounds and node translations, so that both the
-/// node hierarchy and single meshes placed on their own come out @p scale times as large.
+/// Scales @p model uniformly by @p scale: vertex positions, bounds, node translations, and the translations
+/// of joints, inverse bind matrices, skeleton roots and translation channels, so that the node hierarchy,
+/// single meshes placed on their own and posed skinned meshes all come out @p scale times as large.
 void scaleModel(ModelData& model, f32 scale);
 
 /// Loads a glTF 2.0 file (.gltf with external or embedded buffers, or binary .glb) through @p files.

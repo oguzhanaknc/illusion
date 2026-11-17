@@ -41,6 +41,11 @@ const std::vector<illusion::Entity> entities = illusion::spawnModel(world, *mode
   `<node> (<submesh>)` adlı bir çocuk alır. Oluşturulan tüm Entity'leri, önce ebeveynler olmak üzere
   döndürür. World çizilirken modeli bir `RenderAssetResolver` yükler; `ModelHandles` alan `spawnModel()`
   ise kodla yüklenmiş bir model için `RenderMesh` Component'leri yazar (hemen çizilirler ama kaydedilmezler).
+- Skin'ler `ModelData::skins` olur (her skin için bir `Skeleton`: önce ebeveynler sıralı joint'ler, dinlenme
+  pozu, inverse bind matrisleri) ve skin'li bir Mesh `MeshData::skin`'i alır: vertex başına dört joint ve
+  ağırlık (bir vertex'te daha fazlası varsa en büyük dördü). Kanalları joint'leri hareket ettiren
+  animasyonlar `ModelData::animations` olur (`AnimationClip`: joint adına göre Step, Linear ve CubicSpline
+  keyframe'leri); morph target ağırlıkları atlanır. `engine/animation` bunları örnekler ve pozlar (ADR 0059).
 - Motorun desteklemediği zorunlu extension'lar (Draco, meshopt, KTX2 Texture'ları) bozuk görüntü
   çizmek yerine açık bir hatayla yüklemeyi başarısız kılar. `KHR_mesh_quantization` desteklenir.
 
@@ -184,6 +189,8 @@ ILL_LOG_INFO("Game", "{}", ship.mesh.path()); // game:/models/ship.glb#mesh/0
 | `game:/ship.glb#mesh/2` | 2 numaralı Mesh |
 | `game:/ship.glb#material/0` | 0 numaralı Material |
 | `game:/ship.glb#node/Hull` | `Hull` adlı node'un Mesh'i |
+| `game:/hero.glb#skin/0` | 0 numaralı iskelet (`ModelData::skins`) |
+| `game:/hero.glb#animation/Walk` | `Walk` adlı animasyon klibi |
 
 Ayrılmış `builtin:` mount'u dosya gerektirmeyen Asset'ler sağlar; `VirtualFileSystem` onu mount etmeyi reddeder:
 

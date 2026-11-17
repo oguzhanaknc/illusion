@@ -94,6 +94,32 @@ TEST_CASE("asset paths normalize their file part and fragment")
     CHECK(file->fragment == AssetFragment::None);
 }
 
+TEST_CASE("skin and animation fragments normalize like mesh and node fragments")
+{
+    CHECK(normalizeAssetPath("game:/hero.glb#skin/007") == "game:/hero.glb#skin/7");
+    CHECK(normalizeAssetPath("game:/hero.glb#animation/Run Fast") == "game:/hero.glb#animation/Run Fast");
+    CHECK(normalizeAssetPath("game:/hero.glb#animation/a/b") == "game:/hero.glb#animation/a/b");
+    CHECK_FALSE(normalizeAssetPath("game:/hero.glb#skin/").has_value());
+    CHECK_FALSE(normalizeAssetPath("game:/hero.glb#skin/x").has_value());
+    CHECK_FALSE(normalizeAssetPath("game:/hero.glb#animation/").has_value());
+    CHECK_FALSE(normalizeAssetPath("game:/hero.glb#animation/a	b").has_value());
+    CHECK(isNormalizedAssetPath("game:/hero.glb#skin/0"));
+    CHECK_FALSE(isNormalizedAssetPath("game:/hero.glb#skin/00"));
+
+    const std::optional<AssetPathParts> skin = splitAssetPath("game:/hero.glb#skin/2");
+    REQUIRE(skin.has_value());
+    CHECK(skin->fragment == AssetFragment::Skin);
+    CHECK(skin->index == 2);
+    const std::optional<AssetPathParts> clip = splitAssetPath("game:/hero.glb#animation/Walk");
+    REQUIRE(clip.has_value());
+    CHECK(clip->file == "game:/hero.glb");
+    CHECK(clip->fragment == AssetFragment::Animation);
+    CHECK(clip->node == "Walk");
+    CHECK(AssetId::fromPath("game:/hero.glb#skin/0") != AssetId::fromPath("game:/hero.glb#mesh/0"));
+    CHECK(assetKindName(AssetKind::Skeleton) == "Skeleton");
+    CHECK(assetKindName(AssetKind::AnimationClip) == "AnimationClip");
+}
+
 TEST_CASE("asset ids hash the normalized path")
 {
     CHECK(AssetId::fromPath("game:/models/../a.glb#mesh/01") == AssetId::fromPath("game:/a.glb#mesh/1"));

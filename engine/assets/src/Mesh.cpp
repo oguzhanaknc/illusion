@@ -233,6 +233,10 @@ void clearLods(MeshData& mesh)
         if (highest(lodStart, mesh.indices.size()) > fullTop && fullTop < mesh.vertices.size())
         {
             mesh.vertices.resize(usize{fullTop} + 1);
+            if (mesh.skin.size() > mesh.vertices.size())
+            {
+                mesh.skin.resize(mesh.vertices.size());
+            }
         }
         mesh.indices.resize(fullEnd);
     }
@@ -299,7 +303,12 @@ void generateLods(MeshData& mesh, const MeshLodSettings& settings)
             if (count == 0 ||
                 static_cast<f32>(count) > static_cast<f32>(source.size()) * (1.0f - kMinReduction))
             {
-                // The simplifier is stuck: thin the cards if this is foliage.
+                // The simplifier is stuck: thin the cards if this is foliage. Skinned meshes are not thinned:
+                // the card copies would need their own skin stream.
+                if (!mesh.skin.empty())
+                {
+                    break;
+                }
                 const Cards cards = findCards(mesh, source);
                 if (cards.count < kMinCards || source.size() / 3 > usize{cards.count} * kMaxCardTriangles)
                 {
