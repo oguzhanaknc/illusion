@@ -57,6 +57,14 @@ Animator animator(std::string_view clip = kClip, f32 time = 0.0f)
     return result;
 }
 
+// An Animator of @p skeleton without a clip.
+Animator skeletonOnly(std::string_view skeleton)
+{
+    Animator result;
+    result.skeleton = AssetRef(skeleton);
+    return result;
+}
+
 MeshRenderer renderer(std::string_view mesh = kMesh)
 {
     MeshRenderer result;
@@ -175,7 +183,7 @@ TEST_CASE("an Animator gets a pose once its model has loaded")
 TEST_CASE("missing skeletons and clips are reported; a missing clip shows the rest pose")
 {
     Fixture f;
-    const Entity noSkeleton = character(f.world, Animator{.skeleton = AssetRef("game:/rigged.gltf#skin/7")});
+    const Entity noSkeleton = character(f.world, skeletonOnly("game:/rigged.gltf#skin/7"));
     const Entity noClip = character(f.world, animator("game:/rigged.gltf#animation/missing"));
     f.animation.waitIdle();
     CHECK(f.animation.statistics().failures == 2);
@@ -511,7 +519,7 @@ TEST_CASE("a steady-state update allocates nothing")
     {
         character(f.world, animator(kClip, 0.05f * static_cast<f32>(i)));
     }
-    f.world.create(Transform{}, renderer(), Animator{.skeleton = AssetRef("game:/rigged.gltf#skin/1")});
+    f.world.create(Transform{}, renderer(), skeletonOnly("game:/rigged.gltf#skin/1"));
     f.animation.waitIdle();
     for (int i = 0; i < 3; ++i)
     {
