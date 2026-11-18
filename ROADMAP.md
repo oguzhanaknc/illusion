@@ -1141,6 +1141,37 @@ Nothing of it exists yet: glTF skins and animations are skipped on import and th
   sync, layers with masks and additive mode, events, root motion extraction), the blend functions added to
   `Pose.hpp`. Done: parser tests for every error, evaluation tests per feature against hand-computed poses,
   determinism, no allocation in a steady step and evaluation, benchmark `animation/graph-300` single-threaded.
+  ✅ Done: `parseAnimationGraph()` reads `illusion.animgraph` version 1 (unknown keys are errors; every message
+  names its JSON path, e.g. `layers[0].transitions[1].conditions[0].parameter: unknown parameter 'sped'`):
+  unique non-empty names (`*` is reserved), references by name, finite values, weights and normalized times
+  in [0, 1], durations and speeds >= 0, compares by type (Float: Greater/Less; Int: all four; Bool:
+  Equal/NotEqual with true/false; a Trigger takes no compare or value), Int values whole and within 2^24, clip
+  paths with an `#animation/` fragment, Blend1D points sorted and distinct, Blend2D points distinct and not
+  collinear, events sorted by time; Blend2D points are triangulated at load (Bowyer-Watson in f64, insertion
+  in file order, counter-clockwise triangles sorted, checked to cover the hull); `writeAnimationGraph()`
+  omits defaults and round-trips exactly. `bindGraph()` resolves clips (in file order), per-joint layer masks
+  (each entry sets its subtree, a later entry wins) and the root motion joint, failing with the path of the
+  missing clip or joint. `stepGraph()`: a running cross-fade advances and ends, otherwise the first
+  transition in priority order whose conditions hold fires (an any-state transition never targets the
+  current state; an exit time holds until the source's normalized time reaches it or a looping source
+  wraps), consuming its triggers; unconsumed triggers clear at the end; normalized times advance by speed
+  times the speed parameter (never backwards) over the clip's or blend space's weighted duration; events of
+  states with weight > 0 crossed in [before, after) incl. one loop wrap, written in layer order and counted
+  beyond the span. `evaluateGraph()`: 1D neighbours, 2D barycentric (nearest triangulation edge outside the
+  hull), blend clips synchronized on normalized time, cross-fades by weight, `kMaxActiveClips` (lightest by
+  weight times layer weight dropped, their layers renormalized), incremental nlerp blending, Override layers
+  through `blendPoses()` and Additive ones through `addPose()` against each clip's first frame, root motion
+  per clip (wrap: end - before + after - start; translation x/z and yaw of the joint in model space,
+  weighted and layered like the pose) and its removal (the joint is put back to its rest pose's horizontal
+  position and yaw in model space); scratch from the caller's `LinearAllocator`, rewound on return.
+  `Pose.hpp` gains `blendPoses()` and `addPose()`. Tests in `tests/animation/TestAnimationGraph.cpp` and
+  `TestAnimationGraphState.cpp`; `animation/graph-300`: 6.5 ms on one thread (budget 50 ms).
+  Open: no `GraphContext` (the header's `GraphBinding` plays its part); `AnimationGraphState::triggers` marks
+  non-trigger parameters with `kNotTrigger` so that `setValue()` can reject triggers without the graph;
+  playing backwards (negative speed) holds the state; a step longer than one loop fires each event once and
+  takes one loop's root motion; a zero-length clip advances one loop per step; an instant transition
+  (duration 0) drops the old state's root motion of the step it fires in; the new state of a transition
+  starts moving on the next step.
 - ANIM-2b (`implementer`): Runtime and API. `Animator::graph`, graph states in `AnimationWorld` (per-worker
   scratch from a `LinearAllocator`, events published per update, `AnimationPose::rootDelta`), root motion
   applied in `GameSession` (CharacterController velocity or Transform), `AnimationService` with its adapter
