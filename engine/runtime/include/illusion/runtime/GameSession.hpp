@@ -128,7 +128,11 @@ struct GameSessionDesc
 ///    therefore applied in a later update than its request; with fixedStep the step first waits for the save
 ///    thread, so it is always the next one and fixed-step runs repeat.
 /// 4. **Animation:** (with GameSessionDesc::streamer) AnimationWorld::update() poses the Animators; their
-///    time advances while the session is started.
+///    time and graphs advance while the session is started. Then, while started, root motion (ADR 0060): an
+///    Entity whose pose has AnimationPose::rootTranslation or AnimationPose::rootYaw turns about +y by the
+///    yaw; with a CharacterController it gets the translation divided by the step as its horizontal
+///    velocity (PhysicsWorld::setCharacterVelocity(), keeping its vertical velocity), otherwise the
+///    translation is added to its Transform (and its LocalTransform follows when it has a parent).
 /// 5. **Physics:** PhysicsWorld::update().
 /// 6. **Hierarchy:** updateTransformHierarchy().
 /// 7. **UI:** the UiWorld lays out for the frame of setUiFrame(), handles the pointer and wheel of
@@ -139,8 +143,8 @@ struct GameSessionDesc
 /// 9. **Resolvers:** the physics and render asset resolvers turn asset references into runtime Components.
 ///
 /// Modules find the services PhysicsService, AudioService, ParticleService, InputService, SceneService,
-/// UiService (over ui() and localization()), with GameSessionDesc::store StoreService and with
-/// GameSessionDesc::saves SaveService.
+/// UiService (over ui() and localization()), with GameSessionDesc::streamer AnimationService, with
+/// GameSessionDesc::store StoreService and with GameSessionDesc::saves SaveService.
 ///
 /// The session's Localization (localization()) holds the string tables of the project's locale files,
 /// `assets:/locales/*.json`, read by create(): the keys of every file, with the English text of `en.json`

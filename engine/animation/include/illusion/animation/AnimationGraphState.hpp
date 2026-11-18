@@ -86,6 +86,14 @@ struct AnimationGraphState
 /// The entry state of every layer and the default parameters of @p binding's graph. Allocates.
 [[nodiscard]] AnimationGraphState makeGraphState(const GraphBinding& binding);
 
+/// Seconds of one loop of state @p stateIndex of layer @p layer with the parameters of @p state: its clip's
+/// duration, or the weighted duration of its blend space. 0 for indices out of range.
+[[nodiscard]] f32 graphStateDuration(const GraphBinding& binding, const AnimationGraphState& state, u32 layer,
+                                     u32 stateIndex) noexcept;
+
+/// Bytes of LinearAllocator scratch that evaluateGraph() needs for @p binding (alignment included).
+[[nodiscard]] usize graphScratchBytes(const GraphBinding& binding) noexcept;
+
 /// One state event that an update crossed.
 struct GraphEvent
 {

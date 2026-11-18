@@ -87,6 +87,7 @@ TEST_CASE("Asset kinds come from extensions in any case")
     CHECK(assetKindOf("assets:/a.jpeg", false) == "Texture");
     CHECK(assetKindOf("assets:/a.hdr", false) == "Environment");
     CHECK(assetKindOf("assets:/a.ogg", false) == "AudioClip");
+    CHECK(assetKindOf("assets:/hero.AnimGraph", false) == "AnimationGraph");
     CHECK(assetKindOf("assets:/a.txt", false) == "Other");
     CHECK(assetKindOf("assets:/noextension", false) == "Other");
 }

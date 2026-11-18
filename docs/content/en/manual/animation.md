@@ -57,6 +57,7 @@ const std::span<const illusion::SkinMatrix> skin = animation.skinMatrices(pose.s
 | --- | --- |
 | `skeleton` | The skeleton, `model.glb#skin/N`; it must be the skin of the mesh |
 | `clip` | The clip, `model.glb#animation/<name>`; none shows the rest pose |
+| `graph` | An [animation graph](#animation-graphs) (`.animgraph`) that drives the Animator instead of `clip` |
 | `speed` | Playback rate; negative plays backwards |
 | `time` | Seconds into the clip |
 | `loop` | Wrap at the clip's end; otherwise hold the last pose |
@@ -84,6 +85,45 @@ Add an `Animator` to the Entity of a skinned `MeshRenderer` in the Inspector and
 dragging `time` in the Inspector scrubs the clip in the Scene view. In Play mode the session's
 `AnimationWorld` advances `time` of every playing Animator; Stop returns to the saved values. The showcase
 project's `Column` plays its clip `sway` this way ([Showcase project](editor/showcase.md)).
+
+## Animation graphs
+
+An Animator whose `graph` names a `.animgraph` file plays that graph instead of its clip (ADR 0060): layers
+of state machines whose states play clips or 1D/2D blend spaces, transitions on parameters with cross-fades,
+masked and additive layers, state events and root motion. The file is JSON (`"format": "illusion.animgraph"`,
+read by `parseAnimationGraph()`); the editor's asset browser lists it as an `AnimationGraph`, and exports
+ship it as it is.
+
+- The graph loads once through the `AssetStreamer` and is bound once per skeleton; each Animator keeps its
+  own state, which starts in the entry states, with `time` (seconds) as their time and the default
+  parameters. A scene or saved game starts the graph again in the same way.
+- While advancing and `playing`, the graph steps by `speed` times the seconds; outside Play mode the editor
+  shows the entry states at `time`. `clip` and `loop` are not used.
+- Game code drives it through [`AnimationService`](../reference/scripting-api.md#animationservice):
+  parameters and triggers by name, the current state and its time, and the events of the last update.
+  Animators without a graph change clip with `play()`, which cross-fades from the clip they were playing.
+- A graph with `rootMotion` takes the horizontal motion and yaw of that joint out of the pose; the
+  [game session](runtime.md#step-order) moves the Entity by it after the Animation step.
+- Changing the file (`AssetStreamer::reload()`, which the editor does for changed files) restarts its
+  Animators with the new graph; a file that fails to load or bind is reported and shows the rest pose.
+
+```cpp
+// In a game module: drive the graph of the Entity's Animator.
+if (illusion::AnimationService* animation = context.service<illusion::AnimationService>())
+{
+    static_cast<void>(animation->setFloat(hero, "speed", 3.0f));
+    static_cast<void>(animation->setTrigger(hero, "jump"));
+    std::array<illusion::AnimationEvent, 16> events{};
+    const illusion::u32 count = animation->pollEvents(events);
+    for (illusion::u32 i = 0; i < count && i < events.size(); ++i)
+    {
+        playFootstep(events[i].entity);
+    }
+}
+```
+
+The full guide to the format, with a complete example, follows with ANIM-2c; the showcase project's
+`Column` plays `assets/animations/column.animgraph`.
 
 ## Drawing skinned meshes
 
@@ -116,8 +156,7 @@ renderer->render(commands, target, world, view, &jobs);
 
 ## Not supported yet
 
-- Blending between clips, layers, blend spaces, state machines, animation events and root motion
-  (ANIM-2).
+- Interrupting a running transition, sub-state machines and saving the live state of a graph.
 - Sockets (attaching an Entity to a joint), look-at and inverse kinematics, ragdolls (ANIM-3).
 - Clip previews, a timeline, skeleton debug drawing and `animation.*` editor commands (ANIM-4).
 - Morph targets, more than four influences per vertex, and keyframe compression.

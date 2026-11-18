@@ -32,8 +32,9 @@ sahnede yoksa veya varsayılanında bırakılmışsa ya da projede eksik Asset'l
 varsa başarısız olur. Bu yüzden yeni bir Component ya da alan `build.jsonl`'da bir değer ister. Üç parçacık
 emitter'ı `ParticleEmitter`'ı kapsar: trigger pedinin üzerinde bir kıvılcım çeşmesi, blokların yanında
 oynatılmayı bekleyen bir toz emitter'ı (`playOnStart` kapalı) ve GPU'da simüle edilen 20.000 ateş böceklik bir
-alan. `Column`, `Animator`'ı kapsar: `sway` klibinin 0,4 saniyesinde tutulan ve eğik çizilen skinned bir sütun
-(`assets/models/column.gltf`, `tools/make_assets.py` yazar), bkz. [Animasyon](../animation.md#animator).
+alan. `Column`, `Animator`'ı kapsar: animasyon grafı `assets/animations/column.animgraph` onu `sway`'in 0,4
+saniyesinde tutan ve eğik çizilen skinned bir sütun (`sway` ve `lean` klipli `assets/models/column.gltf`,
+`tools/make_assets.py` yazar), bkz. [Animasyon](../animation.md#animasyon-graflar).
 Bir `Wind` Entity'si tozu (`windFactor`) avlunun öbür ucuna savurur. Devre dışı `Dusk Sky`
 Entity'si gün batımında bir `SkyAtmosphere` tutar: gökyüzünü ve güneşi hareketli olanlarla değiştirmek için onu
 etkinleştirin; devre dışı `Film Look` ise derecelendirilmiş, vinyetli bir görüntü için `PostEffects`
@@ -45,7 +46,7 @@ döndürülmüş, ölçeklenmiş, kırpılmış bir kadran; bkz. [Oyun UI'ı](..
 ## Showcase modülü
 
 Projenin oyun kodu olan `modules/showcase`, sahneyi [scripting API](../../reference/scripting-api.md)'nin
-tamamıyla oynatır: `ModuleContext`'in ve sekiz host servisinin her fonksiyonu `showcase.cpp`'den çağrılır.
+tamamıyla oynatır: `ModuleContext`'in ve dokuz host servisinin her fonksiyonu `showcase.cpp`'den çağrılır.
 Oturum başlarken mesh geometrisinden bir zemin ve bir mücevher kurar, Jump (Space, gamepad South) ve Move
 (WASD, sol çubuk) eylemlerini ekler, sayılardan bir çan sesi üretir ve mikseri ayarlar. Bir tuşa basana ya da
 bir çubuğu oynatana kadar Player trigger pedinin üzerinden kendi kendine ileri geri yürür; sonra WASD ya da sol
@@ -60,6 +61,9 @@ itibaren bir saniyeliğine Ay yerçekimine geçer ve 240. kareden sonra Player'�
 verir (katmanları artık çarpışmaz). HUD'ı `UiService` ile yönetir: kare sayacı çoğul içeren bir string table
 mesajıdır, modül paleti gizler ve gösterir, odağı taşır, widget'ları okur ve olayları poll eder;
 `ui.cancel` basılınca (Escape ya da gamepad'de East) oyunu `SceneService::requestExit()` ile bitirir.
+`AnimationService` ile Column'un grafını oynatır: `sway` ile `lean` harmanını bir parametreyle eğer, 30. karede
+bir trigger ile Column'u eğdirir, 150. kareden itibaren onu yeniden sakinleştirir ve grafın `peak` olaylarını
+sayar.
 Gördükleri, Showcase Entity'sinin `showcase.Stats` Component'inde tutulur.
 
 **Modules → Build Modules** (`module.build`) ile Build edin ve **Play**'e basın:

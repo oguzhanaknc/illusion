@@ -601,6 +601,31 @@ AnimationGraphState makeGraphState(const GraphBinding& binding)
     return state;
 }
 
+f32 graphStateDuration(const GraphBinding& binding, const AnimationGraphState& state, u32 layer,
+                       u32 stateIndex) noexcept
+{
+    if (binding.graph == nullptr || layer >= binding.graph->layers.size() ||
+        stateIndex >= binding.graph->layers[layer].states.size() ||
+        state.parameters.size() != binding.graph->parameters.size())
+    {
+        return 0.0f;
+    }
+    return stateDuration(binding, binding.firstState[layer] + stateIndex,
+                         binding.graph->layers[layer].states[stateIndex], state.parameters);
+}
+
+usize graphScratchBytes(const GraphBinding& binding) noexcept
+{
+    if (binding.graph == nullptr || binding.skeleton == nullptr)
+    {
+        return 0;
+    }
+    const usize layers = binding.graph->layers.size();
+    // Each array may need its alignment in padding.
+    return binding.skeleton->joints.size() * 4 * sizeof(JointPose) + alignof(JointPose) +
+           layers * 2 * kMaxStateClips * sizeof(ActiveClip) + alignof(ActiveClip) + layers;
+}
+
 u32 stepGraph(const GraphBinding& binding, AnimationGraphState& state, f32 seconds,
               std::span<GraphEvent> events) noexcept
 {

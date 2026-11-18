@@ -59,17 +59,18 @@ private:
 /// asset pickers; reading and resolving do not check it.
 enum class AssetKind : u8
 {
-    Any,           ///< Any asset.
-    Mesh,          ///< A mesh: `#mesh/N` or `#node/<name>` of a model, or `builtin:/mesh/...`.
-    Material,      ///< A `.material` file, `#material/N` of a model, or `builtin:/material/default`.
-    Texture,       ///< An image file.
-    Environment,   ///< An equirectangular image (usually `.hdr`) or `builtin:/sky/procedural`.
-    AudioClip,     ///< A WAV, FLAC, MP3 or Ogg Vorbis file.
-    Model,         ///< A glTF model (`.gltf`, `.glb`).
-    Scene,         ///< A scene file.
-    Font,          ///< A TrueType or OpenType font file (`.ttf`, `.otf`).
-    Skeleton,      ///< `#skin/N` of a model.
-    AnimationClip, ///< `#animation/<name>` of a model.
+    Any,            ///< Any asset.
+    Mesh,           ///< A mesh: `#mesh/N` or `#node/<name>` of a model, or `builtin:/mesh/...`.
+    Material,       ///< A `.material` file, `#material/N` of a model, or `builtin:/material/default`.
+    Texture,        ///< An image file.
+    Environment,    ///< An equirectangular image (usually `.hdr`) or `builtin:/sky/procedural`.
+    AudioClip,      ///< A WAV, FLAC, MP3 or Ogg Vorbis file.
+    Model,          ///< A glTF model (`.gltf`, `.glb`).
+    Scene,          ///< A scene file.
+    Font,           ///< A TrueType or OpenType font file (`.ttf`, `.otf`).
+    Skeleton,       ///< `#skin/N` of a model.
+    AnimationClip,  ///< `#animation/<name>` of a model.
+    AnimationGraph, ///< An animation graph file (`.animgraph`).
 };
 
 /// English name of @p kind ("Mesh", "AudioClip", ...), for tools and schemas.

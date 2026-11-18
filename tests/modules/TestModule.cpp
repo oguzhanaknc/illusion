@@ -6,12 +6,15 @@
 // 5: changes the layout of LayoutComponent (TEST_MODULE_LAYOUT_V2), which a hot reload migrates.
 // 6: widens the unreflected OpaqueComponent (TEST_MODULE_WIDE_OPAQUE), which a hot reload must reject.
 // Variants 1 to 4 and 6 start a session with two LayoutComponents and an OpaqueComponent.
-// Every variant is built with USES physics audio input render runtime ui: the API targets give it the headers
-// of those libraries and their service interfaces without their code. update() can call every service
-// function (ModuleControl::callServices) and start() can build a mesh body (ModuleControl::createMesh).
+// Every variant is built with USES physics audio animation input render runtime ui save: the API targets give
+// it the headers of those libraries and their service interfaces without their code. update() can call every
+// service function (ModuleControl::callServices) and start() can build a mesh body
+// (ModuleControl::createMesh).
 
 #include "TestModuleShared.hpp"
 
+#include <illusion/animation/AnimationComponents.hpp>
+#include <illusion/animation/AnimationService.hpp>
 #include <illusion/audio/AudioComponents.hpp>
 #include <illusion/audio/AudioService.hpp>
 #include <illusion/core/AssetRef.hpp>
@@ -45,6 +48,7 @@ constexpr i32 kVariant = TEST_MODULE_VARIANT;
 static_assert(std::is_nothrow_move_constructible_v<RigidBody>);
 static_assert(std::is_nothrow_move_constructible_v<AudioSource>);
 static_assert(std::is_nothrow_move_constructible_v<MeshRenderer>);
+static_assert(std::is_nothrow_move_constructible_v<Animator>);
 static_assert(static_cast<u32>(GamepadButton::South) == 0);
 
 // Records what start(), stop() and update() see of their World.
@@ -183,6 +187,19 @@ void callServices(ModuleContext& context)
         static_cast<void>(saves->slot("slot1"));
         std::array<SaveEvent, 2> events{};
         static_cast<void>(saves->pollEvents(events));
+    }
+    if (AnimationService* animation = context.service<AnimationService>())
+    {
+        static_cast<void>(animation->setFloat(e, "speed", 1.0f));
+        static_cast<void>(animation->setInt(e, "weapon", 2));
+        static_cast<void>(animation->setBool(e, "crouch", true));
+        static_cast<void>(animation->setTrigger(e, "jump"));
+        static_cast<void>(animation->parameter(e, "speed"));
+        static_cast<void>(animation->currentState(e, "base"));
+        static_cast<void>(animation->normalizedTime(e, "base"));
+        static_cast<void>(animation->play(e, "game:/hero.glb#animation/run", 0.2f));
+        std::array<AnimationEvent, 2> events{};
+        static_cast<void>(animation->pollEvents(events));
     }
 }
 

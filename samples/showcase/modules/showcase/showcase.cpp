@@ -1,6 +1,7 @@
 // The game module of the showcase project. It plays the everything scene through the whole scripting API:
-// every function of ModuleContext and of the eight host services (PhysicsService, AudioService, InputService,
-// ParticleService, SceneService, StoreService, UiService and SaveService) is called from here, which
+// every function of ModuleContext and of the nine host services (PhysicsService, AudioService, InputService,
+// ParticleService, SceneService, StoreService, UiService, SaveService and AnimationService) is called from
+// here, which
 // tools/check_api_coverage.py checks and the engine tests count at run time
 // (tests/showcase/TestShowcaseModule.cpp).
 //
@@ -19,10 +20,14 @@
 //   (the events and the slot list may differ between runs, so they only go into showcase.Runtime);
 //   counts its first 120 frames on the HUD (a string table message with a plural), hides and shows the
 //   palette, focuses the Go button for a while, reads the toggle and the slider, counts clicks, and ends the
-//   game when `ui.cancel` (Escape, or East on a gamepad) is pressed;
+//   game when `ui.cancel` (Escape, or East on a gamepad) is pressed; plays the Column's animation graph,
+//   leaning it with a parameter, bowing it with a trigger and calming it again, and counts its "peak"
+//   events;
 // - stop: unloads the clips.
 // Everything that hot reloads must keep lives in the Components showcase.Stats (saved) and showcase.Runtime.
 
+#include <illusion/animation/AnimationComponents.hpp>
+#include <illusion/animation/AnimationService.hpp>
 #include <illusion/audio/AudioService.hpp>
 #include <illusion/audio/AudioTypes.hpp>
 #include <illusion/core/JobSystem.hpp>
@@ -107,6 +112,11 @@ struct Runtime
     Entity hudButton{};
     Entity hudToggle{};
     Entity hudSlider{};
+    Entity column{};
+    u32 animationEvents = 0;     ///< "peak" events of the Column's graph seen so far.
+    f32 columnTime = 0.0f;       ///< Normalized time of the Column's state at the last update.
+    f32 columnLean = 0.0f;       ///< The Column's "lean" parameter as the graph used it.
+    bool columnSwings = false;   ///< The Column's graph is in its "swing" state.
     u32 uiEvents = 0;            ///< UI events seen so far.
     u32 uiClicks = 0;            ///< Clicks of the Go button.
     f32 sliderValue = 0.0f;      ///< The HUD slider at the last update.
@@ -175,6 +185,9 @@ constexpr std::string_view kWalkerAchievement = "SHOWCASE_WALKER";
 constexpr u32 kWalkerSteps = 4;     // the walker achievement unlocks after 4 x 60 frames
 constexpr u32 kCountedFrames = 120; // the HUD counts the frames up to this one
 constexpr std::string_view kFramesKey = "showcase.hud.frames";
+constexpr std::string_view kLeanClip = "assets:/models/column.gltf#animation/lean";
+constexpr u32 kBowFrame = 30;   // the Column bows (a trigger of its graph)
+constexpr u32 kCalmFrame = 150; // and returns to its first state
 
 Quat identity() noexcept
 {
@@ -385,6 +398,11 @@ void startModule(ModuleContext& context)
     runtime.platform = findNamed(world, "Platform");
     runtime.sparks = findNamed(world, "Sparks");
     runtime.dust = findNamed(world, "Dust");
+    runtime.column = findNamed(world, "Column");
+    if (Animator* animator = world.tryGet<Animator>(runtime.column))
+    {
+        animator->playing = true; // the scene holds it still for the editor
+    }
     if (PhysicsService* physics = context.service<PhysicsService>())
     {
         startPhysics(world, *physics, runtime);
@@ -773,6 +791,41 @@ void updateSaves(SaveService& saves, Runtime& runtime, const Stats& stats, u32 f
     }
 }
 
+// The Column's animation graph: a lean that follows the frame, a bow and a return, and its events.
+void updateAnimation(AnimationService& animation, Runtime& runtime, u32 frame)
+{
+    std::array<AnimationEvent, 8> events{};
+    const u32 count = animation.pollEvents(events);
+    for (u32 i = 0; i < count && i < events.size(); ++i)
+    {
+        if (events[i].entity == runtime.column && events[i].name == "peak")
+        {
+            ++runtime.animationEvents;
+        }
+    }
+    const Entity column = runtime.column;
+    if (frame == 0)
+    {
+        // A graph controls the Column, so it cannot be told to play a clip.
+        const Expected<void, AnimationError> played = animation.play(column, kLeanClip, 0.25f);
+        if (!played)
+        {
+            ILL_LOG_INFO("Showcase", "Column: {}", animationErrorName(played.error()));
+        }
+    }
+    const f32 lean = 0.5f + 0.5f * std::sin(0.05f * static_cast<f32>(frame));
+    static_cast<void>(animation.setFloat(column, "lean", lean));
+    if (frame == kBowFrame)
+    {
+        static_cast<void>(animation.setTrigger(column, "bow"));
+        static_cast<void>(animation.setInt(column, "mood", 2));
+    }
+    static_cast<void>(animation.setBool(column, "calm", frame >= kCalmFrame));
+    runtime.columnLean = animation.parameter(column, "lean").valueOr(0.0f);
+    runtime.columnTime = animation.normalizedTime(column, "base").valueOr(0.0f);
+    runtime.columnSwings = animation.currentState(column, "base").valueOr("") == "swing";
+}
+
 // The HUD: the frame counter, the palette, the focus, the values and the events of the last UI update.
 void updateUi(UiService& ui, SceneService* scenes, Runtime& runtime, u32 frame)
 {
@@ -858,6 +911,7 @@ void updateModule(ModuleContext& context, f64 deltaSeconds)
     StoreService* store = context.service<StoreService>();
     UiService* ui = context.service<UiService>();
     SaveService* saves = context.service<SaveService>();
+    AnimationService* animation = context.service<AnimationService>();
     Entity self{};
     world.query<const Stats>().each([&self](Entity entity, const Stats&) { self = entity; });
     if (!world.isAlive(self))
@@ -901,6 +955,10 @@ void updateModule(ModuleContext& context, f64 deltaSeconds)
     if (ui != nullptr)
     {
         updateUi(*ui, scenes, runtime, stats.frames);
+    }
+    if (animation != nullptr)
+    {
+        updateAnimation(*animation, runtime, stats.frames);
     }
     ++stats.frames;
 }

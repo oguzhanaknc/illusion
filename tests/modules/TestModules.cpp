@@ -815,6 +815,7 @@ TEST_CASE("a shared module calls every function of the service interfaces throug
     test::CountingScenes scenes;
     test::CountingUi ui;
     test::CountingSave saves;
+    test::CountingAnimation animation;
     ServiceSet services;
     services.provide<PhysicsService>(physics);
     services.provide<AudioService>(audio);
@@ -822,6 +823,7 @@ TEST_CASE("a shared module calls every function of the service interfaces throug
     services.provide<SceneService>(scenes);
     services.provide<UiService>(ui);
     services.provide<SaveService>(saves);
+    services.provide<AnimationService>(animation);
     f.host->attachWorld(f.secondWorld, WorldRole::Simulation, std::move(services));
     install(TEST_MODULE_V1, f.library);
     REQUIRE_FALSE(f.host->load(f.library));
@@ -835,6 +837,7 @@ TEST_CASE("a shared module calls every function of the service interfaces throug
     CHECK(scenes.everyFunctionCalledOnce());
     CHECK(ui.everyFunctionCalledOnce());
     CHECK(saves.everyFunctionCalledOnce());
+    CHECK(animation.everyFunctionCalledOnce());
     CHECK(f.host->detachWorld(f.secondWorld));
 }
 

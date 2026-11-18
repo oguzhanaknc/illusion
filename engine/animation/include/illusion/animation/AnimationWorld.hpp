@@ -14,10 +14,15 @@
 /// }
 /// @endcode
 
+#include <illusion/animation/AnimationGraphState.hpp>
+#include <illusion/animation/AnimationService.hpp>
 #include <illusion/animation/Pose.hpp>
+#include <illusion/core/AssetRef.hpp>
 #include <illusion/core/Base.hpp>
+#include <illusion/ecs/Entity.hpp>
 
 #include <memory>
+#include <optional>
 #include <span>
 
 namespace illusion
@@ -46,6 +51,16 @@ struct AnimationStatistics
 /// reported once and gets no pose (the mesh is drawn in its bind pose). Deterministic; allocates only when
 /// poses are added, assets load or capacity grows. Live reload of models re-binds their Animators. Use on the
 /// World's thread.
+///
+/// An Animator with Animator::graph plays that `.animgraph` file (ADR 0060) instead of its clip: the graph is
+/// loaded once and bound once per skeleton, and each Animator keeps its own AnimationGraphState, which starts
+/// in the entry states with Animator::time as their time in seconds and the default parameters. While
+/// advancing and Animator::playing, the graph steps by Animator::speed times the update's seconds (a negative
+/// speed holds it); without advancing, it shows the entry states at Animator::time. The state events crossed
+/// by an update are published for that update (events()), and a graph with root motion writes the joint's
+/// motion, turned into world space by the Entity's Transform, into AnimationPose::rootTranslation and
+/// AnimationPose::rootYaw. A changed graph file (AssetReloadedEvent) restarts its Animators. An Animator
+/// without a graph cross-fades from its previous clip after crossFade().
 class AnimationWorld : NonCopyable
 {
 public:
@@ -80,6 +95,34 @@ public:
 
     /// Counters.
     [[nodiscard]] const AnimationStatistics& statistics() const noexcept;
+
+    /// The World it animates.
+    [[nodiscard]] World& world() const noexcept;
+
+    /// The pose slot of @p entity's Animator (AnimationPose::slot), or std::nullopt before its first
+    /// update().
+    [[nodiscard]] std::optional<u32> findSlot(Entity entity) const noexcept;
+
+    /// The graph that drives @p slot, or null without a graph or while it loads (or failed to load or bind).
+    [[nodiscard]] const AnimationGraph* graph(u32 slot) const noexcept;
+
+    /// The graph state of @p slot (parameters and machines after the last update()), or null when graph() is.
+    [[nodiscard]] const AnimationGraphState* graphState(u32 slot) const noexcept;
+
+    /// Sets parameter @p index of @p slot's graph for its next step (AnimationGraphState::setValue()); false
+    /// when graph() is null.
+    bool setParameter(u32 slot, i32 index, f32 value) noexcept;
+
+    /// Sets the trigger @p index of @p slot's graph for its next step; false when graph() is null.
+    bool setTrigger(u32 slot, i32 index) noexcept;
+
+    /// Plays @p clip on @p entity's Animator from time 0 (and sets Animator::playing), cross-fading from its
+    /// current clip over @p seconds while both advance. False, changing nothing, if the Entity has no
+    /// Animator or its Animator has a graph.
+    bool crossFade(Entity entity, const AssetRef& clip, f32 seconds);
+
+    /// The state events of the last update(), in update order; their names stay valid until the next one.
+    [[nodiscard]] std::span<const AnimationEvent> events() const noexcept;
 
 private:
     struct Impl;

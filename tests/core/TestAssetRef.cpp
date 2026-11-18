@@ -118,6 +118,7 @@ TEST_CASE("skin and animation fragments normalize like mesh and node fragments")
     CHECK(AssetId::fromPath("game:/hero.glb#skin/0") != AssetId::fromPath("game:/hero.glb#mesh/0"));
     CHECK(assetKindName(AssetKind::Skeleton) == "Skeleton");
     CHECK(assetKindName(AssetKind::AnimationClip) == "AnimationClip");
+    CHECK(assetKindName(AssetKind::AnimationGraph) == "AnimationGraph");
 }
 
 TEST_CASE("asset ids hash the normalized path")

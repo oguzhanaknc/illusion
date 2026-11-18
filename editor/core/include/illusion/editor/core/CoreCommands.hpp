@@ -1166,7 +1166,7 @@ struct AssetEntry
 {
     std::string path; ///< Virtual path.
     std::string kind; ///< "Folder", "Scene", "Prefab", "Material", "Model", "Texture", "Environment",
-                      ///< "AudioClip", "Font" or "Other".
+                      ///< "AudioClip", "Font", "AnimationGraph" or "Other".
     u64 size = 0;     ///< Size in bytes (0 for folders).
 };
 
