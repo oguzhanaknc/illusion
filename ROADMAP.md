@@ -1131,7 +1131,28 @@ Nothing of it exists yet: glTF skins and animations are skipped on import and th
   several submeshes is skinned whole for each submesh's Entity; the editor's "pick behind" and frame-selection
   bounds still use the bind-pose bounds; the steady allocation test shows NVRHI's own allocations per frame,
   equal with one and four instances.
-- ANIM-2: Blending and control: cross-fades, additive and masked (per-bone) layers, 1D/2D blend spaces,
+- ANIM-2: Blending and control, designed in ADR 0060 (layered state machines as `.animgraph` assets driven by
+  parameters, evaluated per Animator; root motion into the CharacterController; `AnimationService`). Three
+  work packages:
+- ANIM-2a (`implementer`): Graph data and evaluation without a World. `AnimationGraph.hpp`
+  (`parseAnimationGraph()` with validation and messages naming the JSON path, Delaunay triangulation of 2D
+  blend spaces at load) and `AnimationGraphState.hpp` (`AnimationGraphState`, `GraphContext`, `stepGraph()`,
+  `evaluateGraph()`: transitions with conditions, exit times and cross-fades, triggers, 1D/2D blend spaces in
+  sync, layers with masks and additive mode, events, root motion extraction), the blend functions added to
+  `Pose.hpp`. Done: parser tests for every error, evaluation tests per feature against hand-computed poses,
+  determinism, no allocation in a steady step and evaluation, benchmark `animation/graph-300` single-threaded.
+- ANIM-2b (`implementer`): Runtime and API. `Animator::graph`, graph states in `AnimationWorld` (per-worker
+  scratch from a `LinearAllocator`, events published per update, `AnimationPose::rootDelta`), root motion
+  applied in `GameSession` (CharacterController velocity or Transform), `AnimationService` with its adapter
+  `AnimationWorldService` (`USES animation`, `illusion::animation_api`, module API version 7, SDK export), the
+  showcase module calls the whole API and `build.jsonl` sets `graph`, `AssetKind::AnimationGraph`, cooking or
+  packing of `.animgraph` files for export. Done: fixed-step determinism, root motion moves a character on a
+  slope test scene, events reach a module, live reload of a graph file restarts its Animators.
+- ANIM-2c (`mechanic`): Documentation and sample. The manual page "Animation" gets graphs, blend spaces,
+  layers, events and root motion with a complete `.animgraph` example; the scripting API reference; a tutorial
+  section (a character that walks, runs and jumps); the rigged test model gets walk/run clips if needed;
+  `CHANGELOG.md`. Done: `mkdocs build --strict`, the tutorial's code builds (`ExtractCppBlocks`).
+- ANIM-2 (scope): cross-fades, additive and masked (per-bone) layers, 1D/2D blend spaces,
   a data-driven state machine with parameters and transitions, animation events (footsteps, effects),
   root motion into the CharacterController; `AnimationService` for game modules
 - ANIM-3: Sockets and procedural animation: attach entities to bones (a lantern in a hand), look-at and
