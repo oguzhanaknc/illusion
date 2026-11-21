@@ -54,12 +54,20 @@ version changes are in the contributor guide ("Versions and releases"). The vers
   cloud mirror through `StoreService`, `settings:/save.json`, the Editor commands `saves.list`, `saves.write`,
   `saves.load` and `saves.remove`, Save and Load in the tech demo's pause menu, the manual page "Saved games"
   and the HUD tutorial's section "Save and load".
+- Skeletal animation (ANIM-1): skins and clips imported from glTF, the saved `Animator` Component and the
+  runtime `AnimationPose`, pose evaluation on the Job System and GPU skinning with motion vectors, shadows
+  and picking, scrubbing in the editor and the manual page "Animation".
+- Animation graphs (ANIM-2): `.animgraph` files (layered state machines with 1D and 2D blend spaces,
+  cross-fading transitions on parameters and triggers, masked and additive layers, state events and root
+  motion), `Animator::graph`, root motion applied to the `CharacterController` or the Transform,
+  `AnimationService` for game modules (`USES animation`: parameters, triggers, states, events and `play()`),
+  the manual section "Animation graphs" with a complete example and the tutorial "Animate a character".
 
 ### Changed
 
-- The module API version is 6 (`UiService`, `SceneService::requestExit()` and `SaveService` are new interface
-  functions, and `UiService` gained `playTransition()` and `transitionProgress()`): game modules built for an
-  earlier version must be rebuilt.
+- The module API version is 7 (`AnimationService` is a new interface; version 6 added `UiService`,
+  `SceneService::requestExit()` and `SaveService`, and `UiService` gained `playTransition()` and
+  `transitionProgress()`): game modules built for an earlier version must be rebuilt.
 - New projects ship the input actions asset `assets/input/game.input` with the actions `ui.navigate`,
   `ui.submit` and `ui.cancel` and their default bindings, named by `settings/input.json`; older projects still
   get the actions at run time.

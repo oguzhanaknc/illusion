@@ -204,6 +204,38 @@ loaded; unknown names return `UnknownName` and wrong types `TypeMismatch`. Nothi
 | `play` | Cross-fades an Animator without a graph to the clip `model.glb#animation/<name>` over `fadeSeconds`, from time 0; sets `Animator::clip` (`HasGraph` with a graph) |
 | `pollEvents` | Copies the state events of the last update (`AnimationEvent`: Entity, event, layer, state) into a span, in update order; returns the total |
 
-The names an `AnimationEvent` and `currentState()` return stay valid until the next update. The manual page
-[Animation](../manual/animation.md#animation-graphs) describes graphs; root motion is applied by the
+Every function returns an `Expected<..., AnimationError>`; `animationErrorName()` gives the name:
+
+| Error | When |
+| --- | --- |
+| `NoAnimator` | The Entity is not alive or has no `Animator` |
+| `NoGraph` | The call needs a graph and the Animator has none, or it has not loaded yet |
+| `HasGraph` | `play()` on an Animator whose graph controls it |
+| `UnknownName` | No parameter, layer or clip of that name (also a `play()` path that is not `model.glb#animation/<name>`) |
+| `TypeMismatch` | The parameter has another type (`setFloat()` on a Trigger, `setTrigger()` on a Float, ...) |
+| `InvalidValue` | A value is not finite, an Int is beyond 2^24, or a fade is negative |
+
+The events of an update are published until the next Animation update: every `pollEvents()` call in between
+returns the same events (the total, even beyond the span's size), so size the span for the busiest update
+or read it once per update. The names an `AnimationEvent` and `currentState()` return stay valid until the
+next update. Parameter writes made while the game is paused are used at the next Animation step.
+
+```cpp
+if (illusion::AnimationService* animation = context.service<illusion::AnimationService>())
+{
+    static_cast<void>(animation->setFloat(hero, "speed", 3.0f));
+    std::array<illusion::AnimationEvent, 16> events{};
+    const illusion::u32 count = animation->pollEvents(events);
+    for (illusion::u32 i = 0; i < count && i < events.size(); ++i)
+    {
+        if (events[i].name == "footstep")
+        {
+            playFootstep(events[i].entity);
+        }
+    }
+}
+```
+
+The manual page [Animation](../manual/animation.md#animation-graphs) describes graphs and the
+[tutorial](../tutorials/animated-character.md) uses them; root motion is applied by the
 [game session](../manual/runtime.md).

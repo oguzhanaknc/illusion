@@ -62,6 +62,7 @@ add_executable(illusion_tests
     assets/TestMeshLods.cpp
     assets/TestTextureCompression.cpp
     animation/TestAnimationGraph.cpp
+    animation/TestAnimationGraphExample.cpp
     animation/TestAnimationGraphState.cpp
     animation/TestAnimationRuntime.cpp
     animation/TestAnimationWorld.cpp
@@ -116,6 +117,7 @@ target_link_libraries(illusion_tests PRIVATE
     illusion::save illusion::text illusion_text_tools illusion::ui illusion::doctest)
 illusion_require_dependency(test_font)
 target_compile_definitions(illusion_tests PRIVATE ILLUSION_TEST_DATA_DIR="${CMAKE_CURRENT_SOURCE_DIR}/data"
+    ILLUSION_DOCS_DIR="${PROJECT_SOURCE_DIR}/docs/content"
     ILLUSION_TEST_FONT="${ILLUSION_TEST_FONT}")
 illusion_configure_target(illusion_tests)
 
@@ -198,6 +200,20 @@ illusion_add_module(illusion_tutorial_hud_module SHARED SOURCES ${tutorial_hud_s
 target_compile_definitions(illusion_tests PRIVATE
     TUTORIAL_HUD_MODULE="$<TARGET_FILE:illusion_tutorial_hud_module>")
 add_dependencies(illusion_tests illusion_tutorial_hud_module)
+# The same for "Animate a character".
+set(tutorial_animation_page ${PROJECT_SOURCE_DIR}/docs/content/en/tutorials/animated-character.md)
+set(tutorial_animation_source ${CMAKE_CURRENT_BINARY_DIR}/generated/tutorials/animated_character.cpp)
+add_custom_command(OUTPUT ${tutorial_animation_source}
+    COMMAND ${CMAKE_COMMAND} -D SOURCE=${tutorial_animation_page} -D OUTPUT=${tutorial_animation_source}
+        -P ${PROJECT_SOURCE_DIR}/cmake/ExtractCppBlocks.cmake
+    DEPENDS ${tutorial_animation_page} ${PROJECT_SOURCE_DIR}/cmake/ExtractCppBlocks.cmake
+    COMMENT "Extracting the code of the Animate a character tutorial"
+    VERBATIM)
+illusion_add_module(illusion_tutorial_animation_module SHARED SOURCES ${tutorial_animation_source}
+    USES animation audio input physics runtime)
+target_compile_definitions(illusion_tests PRIVATE
+    TUTORIAL_ANIMATION_MODULE="$<TARGET_FILE:illusion_tutorial_animation_module>")
+add_dependencies(illusion_tests illusion_tutorial_animation_module)
 target_compile_definitions(illusion_test_module_v3 PRIVATE TEST_MODULE_WIDE_COUNTER=1)
 target_compile_definitions(illusion_test_module_v5 PRIVATE TEST_MODULE_LAYOUT_V2=1)
 target_compile_definitions(illusion_test_module_v6 PRIVATE TEST_MODULE_WIDE_OPAQUE=1)

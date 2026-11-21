@@ -122,8 +122,284 @@ if (illusion::AnimationService* animation = context.service<illusion::AnimationS
 }
 ```
 
-The full guide to the format, with a complete example, follows with ANIM-2c; the showcase project's
-`Column` plays `assets/animations/column.animgraph`.
+The showcase project's `Column` plays `assets/animations/column.animgraph`.
+
+### The file, key by key
+
+A graph file has these keys; an unknown key is an error, so a typo does not go unnoticed.
+
+| Key | Meaning |
+| --- | --- |
+| `format`, `version` | `"illusion.animgraph"` and `1` |
+| `parameters` | The inputs of the graph (below); optional |
+| `rootMotion` | The name of the joint whose horizontal motion and yaw drive the Entity; optional |
+| `layers` | One or more layers, evaluated in order |
+
+**Parameters** are `{"name", "type", "default"}`. The names are unique and not empty.
+
+| `type` | Holds | `default` |
+| --- | --- | --- |
+| `Float` | A number (speed, direction) | A number, 0 if missing |
+| `Int` | A whole number between -2^24 and 2^24 (weapon kind) | A whole number, 0 if missing |
+| `Bool` | `true` or `false` (crouching) | `true` or `false`, `false` if missing |
+| `Trigger` | Set once, stays set until a transition consumes it or the update ends | None |
+
+**Layers** are `{"name", "weight", "blend", "mask", "entry", "states", "transitions"}`:
+
+- `weight` in [0, 1] (default 1) scales the layer; `blend` is `Override` (default), which replaces what the
+  layers below it posed, or `Additive`, which adds the difference of its pose from the first frame of each
+  clip, so a breathing or leaning clip can ride on top of any base motion.
+- `mask` lists `{"joint", "weight"}`: each entry sets the weight of that joint **and its descendants** (a
+  later entry wins for its subtree). Joints no entry covers are not changed by the layer, and an empty or
+  missing mask covers every joint. `"mask": [{"joint": "spine", "weight": 1}]` gives the upper body to the
+  layer and leaves the legs to the layers below.
+- `entry` names the state the layer starts in (default: the first state). `states` has at least one state.
+
+**States** are `{"name", "clip" or "blend1d" or "blend2d", "speed", "speedParameter", "loop", "events"}`:
+
+- A state has exactly one motion: `clip` (`"game:/hero.glb#animation/walk"`, the clip path of the
+  [asset paths](#asset-paths)), `blend1d` or `blend2d`. The name `*` is reserved.
+- `speed` (default 1, not negative) is the playback rate; `speedParameter` names a Float parameter that
+  multiplies it, so one parameter can slow a whole state down. A negative speed holds the state.
+- `loop` (default `true`) wraps at the end; otherwise the state holds its last pose and its normalized time
+  goes on above 1.
+- `events` are `{"name", "time"}` with `time` normalized in [0, 1], sorted by time.
+
+**Blend spaces** play several clips at once, weighted by Float parameters:
+
+- `"blend1d": {"parameter", "points": [{"value", "clip"}]}` has at least two points, sorted by `value`
+  without repeats. Between two neighbours the weights are linear; below the first and above the last the end
+  clip plays alone.
+- `"blend2d": {"x", "y", "points": [{"x", "y", "clip"}]}` names two different Float parameters and has at
+  least three points that are distinct and do not all lie on one line. The points are triangulated when the
+  graph loads (Delaunay); inside a triangle the three clips get the barycentric weights of the parameter
+  values, and outside the hull the nearest point of the hull's edges is used.
+- The clips of a blend space play in sync: they share one normalized time, and the state's duration is the
+  weighted average of the clips' durations. A walk and a run of different lengths therefore keep their steps
+  together while the weights change, and the state's events fire at the same moment of every clip.
+
+**Transitions** are `{"from", "to", "duration", "exitTime", "conditions"}`:
+
+- `from` is a state name or `"*"` for any state (it never fires in the target state itself); `to` is another
+  state of the layer.
+- `conditions` must **all** hold. A condition is `{"parameter", "compare", "value"}`; a Trigger takes no
+  `compare` and no `value` and holds while it is set.
+
+  | Parameter | `compare` | `value` |
+  | --- | --- | --- |
+  | `Float` | `Greater`, `Less` | A number |
+  | `Int` | `Greater`, `Less`, `Equal`, `NotEqual` | A whole number |
+  | `Bool` | `Equal`, `NotEqual` | `true` or `false` |
+  | `Trigger` | none | none |
+
+- `exitTime` (normalized, optional) holds the transition until the source state's normalized time has reached
+  it, or a looping source has wrapped. A transition with neither conditions nor an exit time fires at once.
+- `duration` (seconds, default 0) is the cross-fade: both states play while the weights move from the source
+  to the target. With 0 the change is instant.
+- **Priority is the order in the file**: each update the first transition of the layer that fires wins.
+  Put urgent ones (a jump from `*`) first.
+
+### How transitions run
+
+- While a cross-fade runs, no other transition of that layer fires: **a running transition is not
+  interrupted**. A trigger set while it runs is cleared at the end of that update without effect, so the
+  game sets it again (or keeps a Bool) if the input can arrive during a fade.
+- A fired transition consumes the triggers in its conditions. Triggers that no transition consumed are
+  cleared at the end of the update, so a trigger is a "now" signal and a Bool is a state.
+- The target starts at its time 0 and moves with the next step. The new state is the layer's
+  `currentState()` as soon as the transition fires, not when the fade ends.
+- Parameter writes of game code are used at the next Animation step.
+
+### Events
+
+An event is a named moment of a state, for footsteps, effects and gameplay hooks. After each update the
+Animators publish the events that time crossed: an event at normalized time `t` fires when the state's time
+moves across it in the half-open span [before, after). Specifically:
+
+- A looping state fires the events on both sides of its wrap in the same update.
+- A non-looping state fires each event once, when its time passes it; once it holds its last pose it fires
+  nothing more.
+- Only states with a weight above 0 fire: during a cross-fade both states fire, a state that has finished
+  fading out does not.
+- A step longer than one loop fires each event once.
+
+A module reads them with `AnimationService::pollEvents()`: the events of the last update, in layer order and
+in update order, each with the Entity, the event name, the layer and the state. They are published for one
+update; every call within an update returns the same events.
+
+### Root motion
+
+With `"rootMotion": "hips"` the horizontal translation (x and z) and the yaw of the named joint are taken out
+of its pose: the joint stays at its rest pose's horizontal position and yaw, so the mesh does not walk away
+from its Entity, and the motion is handed to the game as `AnimationPose::rootTranslation` (metres) and
+`rootYaw` (radians, about +y) in world space, weighted and layered like the pose, with blend spaces and
+cross-fades included. The motion of one update is applied by the [game session](runtime.md#step-order), only
+while the game runs (not in the editor's scrubbing):
+
+- An Entity with a `CharacterController` gets the translation divided by the step as its horizontal velocity;
+  the vertical velocity is the controller's, so gravity and jumps keep working, and a jump comes from physics,
+  not from the clip.
+- Any other Entity is moved by the translation (its `LocalTransform` under a parent).
+- Both turn by the yaw.
+- A game that steers the character itself leaves `rootMotion` out of its graph.
+
+### A complete example
+
+The graph below walks and runs on the parameter `speed`, strafes in a 2D blend space, jumps on a trigger from
+any state (the jump does not loop and returns to the locomotion near its end), aims with the upper body
+through a masked layer, breathes through an additive layer, plays a `footstep` event twice per cycle and takes
+the root motion of `hips`. The clips are the names a rigged `hero.glb` would hold. The test
+`tests/animation/TestAnimationGraphExample.cpp` parses this exact text.
+
+```json
+{
+  "format": "illusion.animgraph",
+  "version": 1,
+  "parameters": [
+    {"name": "speed", "type": "Float"},
+    {"name": "playRate", "type": "Float", "default": 1},
+    {"name": "moveX", "type": "Float"},
+    {"name": "moveY", "type": "Float"},
+    {"name": "strafing", "type": "Bool"},
+    {"name": "aiming", "type": "Bool"},
+    {"name": "jump", "type": "Trigger"}
+  ],
+  "rootMotion": "hips",
+  "layers": [
+    {
+      "name": "base",
+      "entry": "locomotion",
+      "states": [
+        {
+          "name": "locomotion",
+          "speedParameter": "playRate",
+          "blend1d": {
+            "parameter": "speed",
+            "points": [
+              {"value": 0, "clip": "game:/hero.glb#animation/idle"},
+              {"value": 1.5, "clip": "game:/hero.glb#animation/walk"},
+              {"value": 4, "clip": "game:/hero.glb#animation/run"}
+            ]
+          },
+          "events": [
+            {"name": "footstep", "time": 0.25},
+            {"name": "footstep", "time": 0.75}
+          ]
+        },
+        {
+          "name": "strafe",
+          "blend2d": {
+            "x": "moveX",
+            "y": "moveY",
+            "points": [
+              {"x": 0, "y": 0, "clip": "game:/hero.glb#animation/idle"},
+              {"x": -1, "y": 0, "clip": "game:/hero.glb#animation/strafe_left"},
+              {"x": 1, "y": 0, "clip": "game:/hero.glb#animation/strafe_right"},
+              {"x": 0, "y": 1, "clip": "game:/hero.glb#animation/walk"}
+            ]
+          },
+          "events": [
+            {"name": "footstep", "time": 0.25},
+            {"name": "footstep", "time": 0.75}
+          ]
+        },
+        {
+          "name": "jump",
+          "clip": "game:/hero.glb#animation/jump",
+          "loop": false,
+          "events": [
+            {"name": "land", "time": 0.8}
+          ]
+        }
+      ],
+      "transitions": [
+        {"from": "*", "to": "jump", "duration": 0.1, "conditions": [{"parameter": "jump"}]},
+        {
+          "from": "jump",
+          "to": "locomotion",
+          "duration": 0.2,
+          "exitTime": 0.9
+        },
+        {
+          "from": "locomotion",
+          "to": "strafe",
+          "duration": 0.25,
+          "conditions": [{"parameter": "strafing", "compare": "Equal", "value": true}]
+        },
+        {
+          "from": "strafe",
+          "to": "locomotion",
+          "duration": 0.25,
+          "conditions": [{"parameter": "strafing", "compare": "Equal", "value": false}]
+        }
+      ]
+    },
+    {
+      "name": "upper",
+      "mask": [{"joint": "spine", "weight": 1}],
+      "states": [
+        {"name": "relaxed", "clip": "game:/hero.glb#animation/idle"},
+        {"name": "aim", "clip": "game:/hero.glb#animation/aim"}
+      ],
+      "transitions": [
+        {
+          "from": "relaxed",
+          "to": "aim",
+          "duration": 0.15,
+          "conditions": [{"parameter": "aiming", "compare": "Equal", "value": true}]
+        },
+        {
+          "from": "aim",
+          "to": "relaxed",
+          "duration": 0.15,
+          "conditions": [{"parameter": "aiming", "compare": "Equal", "value": false}]
+        }
+      ]
+    },
+    {
+      "name": "breath",
+      "blend": "Additive",
+      "weight": 0.5,
+      "states": [
+        {"name": "breathe", "clip": "game:/hero.glb#animation/breathe"}
+      ]
+    }
+  ]
+}
+```
+
+A module drives it with `setFloat(hero, "speed", ...)`, `setBool(hero, "strafing", ...)`,
+`setTrigger(hero, "jump")` and reads the `footstep` and `land` events; the
+[tutorial "Animate a character"](../tutorials/animated-character.md) does it step by step.
+
+### What is saved, what restarts
+
+- The Animator's fields (`skeleton`, `graph`, `speed`, `time`, `loop`, `playing`, with `clip` unused) are
+  saved with the scene and the game. The **live state of the graph** (the current states, their times, a
+  running cross-fade, the parameter values) is not saved: a scene load, a saved game or a reload of the graph
+  file starts the graph again in its entry states with the default parameters and the Animator's `time`.
+- A game that wants to keep a parameter (a crouching Bool) writes it again after a load.
+- Editing a `.animgraph` while the game runs reloads it: the Animators using it restart with the new graph.
+  A new file that fails to parse or to bind keeps the loaded graph and is reported.
+
+### Limits and errors
+
+- One Animator samples at most `kMaxActiveClips` (16) clips in an update: all clips of the states with weight
+  (blend spaces and cross-fades count each clip). Beyond it the lightest clips, by weight times layer
+  weight, are dropped and the rest renormalized.
+- Clips must exist in the model of the skeleton and the joints named by masks and `rootMotion` in its
+  skeleton; a graph that fails to bind is reported with the missing name and shows the rest pose.
+- `parseAnimationGraph()` validates the file as a whole and names the JSON path of the problem, so an agent
+  or a test can fix it at once:
+
+  ```text
+  layers[0].transitions[1].conditions[0].parameter: unknown parameter 'sped'
+  layers[0].states[2]: needs exactly one of clip, blend1d or blend2d
+  parameters[3].default: a Trigger has no default
+  ```
+
+- Not interruptible transitions, sub-state machines and saving the live state are listed under
+  [Not supported yet](#not-supported-yet).
 
 ## Drawing skinned meshes
 
