@@ -15,7 +15,9 @@ Bu sayfa illusion'ı kaynak koddan derlemeyi, test'leri ve benchmark'ları çal�
 Derleyiciler:
 
 - **Windows:** "Desktop development with C++" iş yükü kurulu Visual Studio 2022 17.10+ veya Visual
-  Studio 2026. Aynı kurulumdaki clang-cl de çalışır.
+  Studio 2026. Aynı kurulumdaki clang-cl de çalışır; ayrıca kurulmuş bir LLVM yerine onu kullanın
+  (`VC\Tools\Llvm\x64\bin`, `PATH` üzerinde ilk sırada): MSVC standart kütüphanesi yalnızca kendi Visual
+  Studio sürümüyle gelen Clang sürümünü kabul eder.
 - **macOS:** Xcode 15+ (Apple Clang). Minimum deployment target macOS 13.3'tür.
 - **Linux:** GCC 13+ veya Clang 18+ (Ubuntu 24.04 ikisini de içerir) ve GLFW'nin kullandığı X11 ile
   Wayland geliştirme paketleri:
