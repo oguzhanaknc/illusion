@@ -116,10 +116,10 @@ FetchContent_Declare(glm
     SYSTEM
     SOURCE_SUBDIR _illusion_no_cmake)
 
-# Jolt Physics 5.6.0 (MIT): rigid-body physics. Its CMake project lives in the Build/ subdirectory.
+# Jolt Physics 5.7.0 (MIT): rigid-body physics. Its CMake project lives in the Build/ subdirectory.
 FetchContent_Declare(jolt
-    URL https://github.com/jrouwe/JoltPhysics/archive/refs/tags/v5.6.0.tar.gz
-    URL_HASH SHA256=6e069ee0172478cc78182047aac87e5310ba14a67a53348ae14cc37801fd3f8e
+    URL https://github.com/jrouwe/JoltPhysics/archive/refs/tags/v5.7.0.tar.gz
+    URL_HASH SHA256=9a0a405f2375dc4bd9f72486c56e1cbc7794c6a62e42fc48fadea45dfc93dacc
     DOWNLOAD_EXTRACT_TIMESTAMP TRUE
     SYSTEM
     SOURCE_SUBDIR Build)
