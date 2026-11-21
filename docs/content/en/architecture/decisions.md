@@ -67,6 +67,7 @@ records rather than user documentation.
 | [0058](https://github.com/oguzhanaknc/illusion/blob/main/docs/adr/0058-saved-games.md) | Saved games: slot files of the entities tagged Saved, written as scene JSON in a checksummed container, atomically with one backup on a save thread, through a polled SaveService |
 | [0059](https://github.com/oguzhanaknc/illusion/blob/main/docs/adr/0059-skeletal-animation.md) | Skeletal animation: skins and clips cooked into the model, poses in an AnimationWorld outside the ECS, skinning once per frame in a compute pass |
 | [0060](https://github.com/oguzhanaknc/illusion/blob/main/docs/adr/0060-animation-graphs.md) | Animation graphs: layered state machines as `.animgraph` assets driven by parameters, with blend spaces, events and root motion, through a polled AnimationService |
+| [0061](https://github.com/oguzhanaknc/illusion/blob/main/docs/adr/0061-sockets-ik-and-ragdolls.md) | Sockets, look-at, two-bone IK, spring bones and ragdolls as Components evaluated as fixed stages after the animation graph; foot placement raycasts in GameSession |
 
 To propose a new decision, copy `docs/adr/0000-template.md` and follow the
 [contributing guide](../contributing.md#architecture-decision-records).
