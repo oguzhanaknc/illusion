@@ -41,8 +41,10 @@ with or without a graph, and gives each feature a clear owner.
   the chain towards the target, clamped and smoothed.
 - **Two-bone IK.** A saved `TwoBoneIk` (`joint` = the end, e.g. a foot; its parent and grandparent form the
   chain; `target` Entity or point; `pole` Entity or point; `weight`; `alignToTarget` for the end rotation)
-  solves analytically. **Foot placement** is a saved `FootPlacement` on the Animator (two or more
-  `TwoBoneIk` feet, ray length, foot height, pelvis joint, max step), handled by `GameSession` before the
+  solves analytically. An Entity holds one Component of a type, so a `TwoBoneIk` acts on its own Entity's
+  Animator or, failing that, its parent's: further limbs are children of the Animator's Entity. **Foot
+  placement** is a saved `FootPlacement` on the Animator (pelvis joint, ray length, foot height, max step;
+  the feet are the `TwoBoneIk` limbs whose chain hangs from the pelvis, up to four), handled by `GameSession` before the
   Animation step: it raycasts below each foot's last animated position through `PhysicsWorld`, writes the
   hits as the IK targets and the pelvis offset, so `engine/animation` stays free of physics.
 - **Spring bones.** A saved `SpringBone` (`root` joint, applies to the chain below it; `stiffness`,
