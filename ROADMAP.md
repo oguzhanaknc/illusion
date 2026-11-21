@@ -1255,7 +1255,7 @@ typed blackboards and named actions that modules poll; sight and hearing percept
 headers are in their `include/` directories.
 
 - NAV-1: Navmeshes and crowds. Five work packages:
-- NAV-1a (`implementer`): Dependency and bake. Recast Navigation v1.6.0 in `cmake/Dependencies.cmake`
+- ✅ NAV-1a (`implementer`): Dependency and bake. Recast Navigation v1.6.0 in `cmake/Dependencies.cmake`
   (exact URL and SHA-256; our own static targets of Recast, Detour, DetourCrowd and DebugUtils with
   `DT_POLYREF64`, private to `illusion::nav`), `THIRD_PARTY_NOTICES.md`; the library `engine/nav` with
   `illusion::nav_api`; `NavMeshData.hpp` (`encodeNavMeshData()`, `decodeNavMeshData()`), `NavBuild.hpp`

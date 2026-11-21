@@ -124,6 +124,15 @@ FetchContent_Declare(jolt
     SYSTEM
     SOURCE_SUBDIR Build)
 
+# Recast Navigation 1.6.0 (Zlib): navmesh building (Recast) and queries (Detour). Only the sources of Recast,
+# Detour, DetourCrowd and DebugUtils are compiled, as our own static libraries (no demo, tests or TileCache).
+FetchContent_Declare(recastnavigation
+    URL https://github.com/recastnavigation/recastnavigation/archive/refs/tags/v1.6.0.tar.gz
+    URL_HASH SHA256=d48ca0121962fa0639502c0f56c4e3ae72f98e55d88727225444f500775c0074
+    DOWNLOAD_EXTRACT_TIMESTAMP TRUE
+    SYSTEM
+    SOURCE_SUBDIR _illusion_no_cmake)
+
 # miniaudio 0.11.25 (Public Domain / MIT-0): audio devices, mixing, WAV/FLAC/MP3 decoding, and Ogg Vorbis
 # through the stb_vorbis copy in its extras/ directory (public domain / MIT).
 FetchContent_Declare(miniaudio
@@ -243,6 +252,8 @@ endforeach()
 #   bc7enc    -> illusion::bc7enc (static library: bc7enc and rgbcx encoders)
 #   bcdec     -> illusion::bcdec (header; the implementation is compiled in illusion::assets)
 #   jolt      -> Jolt::Jolt (static library)
+#   recast    -> illusion::recast, illusion::detour (with DT_POLYREF64), illusion::detour_crowd,
+#                illusion::recast_debug (static libraries)
 #   miniaudio -> illusion::miniaudio (headers; the implementation is compiled in illusion::audio)
 #   imgui     -> ILLUSION_IMGUI_SOURCE_DIR (sources; the editor defines illusion::imgui)
 #   implot    -> ILLUSION_IMPLOT_SOURCE_DIR (sources; the editor defines illusion::implot)
@@ -359,6 +370,60 @@ function(illusion_require_dependency name)
         FetchContent_MakeAvailable(jolt)
         # Jolt's jobs synchronize inside the library, so sanitizer builds instrument it too.
         illusion_apply_sanitizer(Jolt)
+    elseif(name STREQUAL "recast")
+        FetchContent_MakeAvailable(recastnavigation)
+        set(root "${recastnavigation_SOURCE_DIR}")
+        add_library(illusion_recast STATIC
+            "${root}/Recast/Source/Recast.cpp"
+            "${root}/Recast/Source/RecastAlloc.cpp"
+            "${root}/Recast/Source/RecastArea.cpp"
+            "${root}/Recast/Source/RecastAssert.cpp"
+            "${root}/Recast/Source/RecastContour.cpp"
+            "${root}/Recast/Source/RecastFilter.cpp"
+            "${root}/Recast/Source/RecastLayers.cpp"
+            "${root}/Recast/Source/RecastMesh.cpp"
+            "${root}/Recast/Source/RecastMeshDetail.cpp"
+            "${root}/Recast/Source/RecastRasterization.cpp"
+            "${root}/Recast/Source/RecastRegion.cpp")
+        add_library(illusion::recast ALIAS illusion_recast)
+        target_include_directories(illusion_recast SYSTEM PUBLIC "$<BUILD_INTERFACE:${root}/Recast/Include>")
+        add_library(illusion_detour STATIC
+            "${root}/Detour/Source/DetourAlloc.cpp"
+            "${root}/Detour/Source/DetourAssert.cpp"
+            "${root}/Detour/Source/DetourCommon.cpp"
+            "${root}/Detour/Source/DetourNavMesh.cpp"
+            "${root}/Detour/Source/DetourNavMeshBuilder.cpp"
+            "${root}/Detour/Source/DetourNavMeshQuery.cpp"
+            "${root}/Detour/Source/DetourNode.cpp")
+        add_library(illusion::detour ALIAS illusion_detour)
+        target_include_directories(illusion_detour SYSTEM PUBLIC "$<BUILD_INTERFACE:${root}/Detour/Include>")
+        # 64-bit polygon references leave room for large tiled worlds; every user of the headers must see it.
+        target_compile_definitions(illusion_detour PUBLIC DT_POLYREF64)
+        add_library(illusion_detour_crowd STATIC
+            "${root}/DetourCrowd/Source/DetourCrowd.cpp"
+            "${root}/DetourCrowd/Source/DetourLocalBoundary.cpp"
+            "${root}/DetourCrowd/Source/DetourObstacleAvoidance.cpp"
+            "${root}/DetourCrowd/Source/DetourPathCorridor.cpp"
+            "${root}/DetourCrowd/Source/DetourPathQueue.cpp"
+            "${root}/DetourCrowd/Source/DetourProximityGrid.cpp")
+        add_library(illusion::detour_crowd ALIAS illusion_detour_crowd)
+        target_include_directories(illusion_detour_crowd SYSTEM PUBLIC
+            "$<BUILD_INTERFACE:${root}/DetourCrowd/Include>")
+        target_link_libraries(illusion_detour_crowd PUBLIC illusion_detour)
+        add_library(illusion_recast_debug STATIC
+            "${root}/DebugUtils/Source/DebugDraw.cpp"
+            "${root}/DebugUtils/Source/DetourDebugDraw.cpp"
+            "${root}/DebugUtils/Source/RecastDebugDraw.cpp"
+            "${root}/DebugUtils/Source/RecastDump.cpp")
+        add_library(illusion::recast_debug ALIAS illusion_recast_debug)
+        target_include_directories(illusion_recast_debug SYSTEM PUBLIC "$<BUILD_INTERFACE:${root}/DebugUtils/Include>")
+        # DetourDebugDraw.h names the TileCache layer types; only that header is used, TileCache is not built.
+        target_include_directories(illusion_recast_debug SYSTEM PUBLIC
+            "$<BUILD_INTERFACE:${root}/DetourTileCache/Include>")
+        target_link_libraries(illusion_recast_debug PUBLIC illusion_recast illusion_detour)
+        foreach(target illusion_recast illusion_detour illusion_detour_crowd illusion_recast_debug)
+            target_compile_features(${target} PRIVATE cxx_std_20)
+        endforeach()
     elseif(name STREQUAL "miniaudio")
         FetchContent_MakeAvailable(miniaudio)
         # Headers only; illusion::audio compiles the implementation (with stb_vorbis from miniaudio's

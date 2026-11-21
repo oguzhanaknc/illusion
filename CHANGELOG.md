@@ -62,6 +62,10 @@ version changes are in the contributor guide ("Versions and releases"). The vers
   motion), `Animator::graph`, root motion applied to the `CharacterController` or the Transform,
   `AnimationService` for game modules (`USES animation`: parameters, triggers, states, events and `play()`),
   the manual section "Animation graphs" with a complete example and the tutorial "Animate a character".
+- Navigation meshes (NAV-1a): the Recast Navigation 1.6.0 dependency, the library `illusion::nav`, the saved
+  `NavMeshSurface`, `NavArea`, `NavLink`, `NavObstacle` and `NavAgent` Components, a tiled navmesh bake from
+  colliders on the Job System with identical bytes for any worker count, per-tile input hashes with
+  `rebakeStaleTiles()`, the checksummed `.navmesh` file and the manual page "Navigation".
 
 ### Changed
 

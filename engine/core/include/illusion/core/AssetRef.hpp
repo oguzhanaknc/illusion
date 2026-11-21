@@ -71,6 +71,7 @@ enum class AssetKind : u8
     Skeleton,       ///< `#skin/N` of a model.
     AnimationClip,  ///< `#animation/<name>` of a model.
     AnimationGraph, ///< An animation graph file (`.animgraph`).
+    NavMesh,        ///< A baked navmesh file (`.navmesh`).
 };
 
 /// English name of @p kind ("Mesh", "AudioClip", ...), for tools and schemas.

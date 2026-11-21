@@ -13,6 +13,7 @@ must be included with distributed games (the export pipeline will collect them a
 | [SDL](https://github.com/libsdl-org/SDL) | 3.4.18 | Zlib | Gamepads (joystick, haptic, HIDAPI, sensors only) | Yes |
 | [glm](https://github.com/g-truc/glm) | 1.0.3 | MIT | Math | Yes |
 | [Jolt Physics](https://github.com/jrouwe/JoltPhysics) | 5.7.0 | MIT | Physics | Yes |
+| [Recast Navigation](https://github.com/recastnavigation/recastnavigation) | 1.6.0 (Recast, Detour, DetourCrowd, DebugUtils only) | Zlib | Navmesh baking, paths and crowds | Yes |
 | [miniaudio](https://github.com/mackron/miniaudio) | 0.11.25 | Public domain or MIT-0 | Audio devices, mixing, WAV/FLAC/MP3 decoding | Yes |
 | [stb_vorbis](https://github.com/nothings/stb) | v1.22 (from miniaudio 0.11.25 `extras/`) | Public domain or MIT | Ogg Vorbis decoding | Yes |
 | [verblib](https://github.com/mackron/miniaudio/tree/master/extras/nodes/ma_reverb_node) | from miniaudio 0.11.25 `extras/nodes/ma_reverb_node` | MIT-0 or public domain (based on Freeverb, public domain) | Reverb | Yes |
