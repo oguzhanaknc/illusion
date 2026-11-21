@@ -1292,7 +1292,8 @@ headers are in their `include/` directories.
   jump link moves the agent along its parabola with both events; the same World after 600 fixed steps with
   1 and 4 workers; Inactive agents do not move; a saved game restores `destination`; no allocation in a
   steady update; benchmark `nav/crowd-500` with Jobs (ADR target 2 ms).
-- NAV-1d (`mechanic`): `NavService`. `NavWorldService`, `USES nav` (`illusion::nav_api` in the SDK and
+- NAV-1d (`mechanic`): `NavService`. The interface joins the scripting API here (`@ingroup scripting_api` on the class, so
+  `tools/check_api_coverage.py` requires the showcase to call it). `NavWorldService`, `USES nav` (`illusion::nav_api` in the SDK and
   `cmake/IllusionModules.cmake`), `GameSession` provides it, module API version raised by one, the showcase
   module calls the whole `NavService` (`tools/check_api_coverage.py`). Done: a module test sends an agent to a
   point and reads its `Arrived` event; every `NavError` from the service; the SDK test builds a module that
@@ -1329,7 +1330,8 @@ headers are in their `include/` directories.
   wandering when a target is seen; the same World after 600 fixed steps with 1 and 4 workers; Inactive agents
   do not tick; a reloaded tree restarts its agents; no allocation in a steady update; benchmark
   `ai/perception-200` (200 perceivers, 50 stimuli, 256 rays, ADR target 1 ms) and `ai/world-1000`.
-- NAV-2c (`mechanic`): `AiService`. `AiWorldService`, `USES ai` (`illusion::ai_api` in the SDK), `GameSession`
+- NAV-2c (`mechanic`): `AiService`. The interface joins the scripting API here (`@ingroup scripting_api` on the class, so
+  `tools/check_api_coverage.py` requires the showcase to call it). `AiWorldService`, `USES ai` (`illusion::ai_api` in the SDK), `GameSession`
   provides it, module API version raised by one, the showcase module calls the whole `AiService`. Done: a
   module test finishes an action and sees its node succeed, sees an abort, writes a key the tree reads,
   reports a noise that a perceiver hears; every `AiError` from the service; the SDK test builds a module
