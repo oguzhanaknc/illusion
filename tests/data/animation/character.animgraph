@@ -1,0 +1,114 @@
+{
+  "format": "illusion.animgraph",
+  "version": 1,
+  "parameters": [
+    {"name": "speed", "type": "Float"},
+    {"name": "playRate", "type": "Float", "default": 1},
+    {"name": "moveX", "type": "Float"},
+    {"name": "moveY", "type": "Float"},
+    {"name": "strafing", "type": "Bool"},
+    {"name": "aiming", "type": "Bool"},
+    {"name": "jump", "type": "Trigger"}
+  ],
+  "rootMotion": "hips",
+  "layers": [
+    {
+      "name": "base",
+      "entry": "locomotion",
+      "states": [
+        {
+          "name": "locomotion",
+          "speedParameter": "playRate",
+          "blend1d": {
+            "parameter": "speed",
+            "points": [
+              {"value": 0, "clip": "game:/hero.glb#animation/idle"},
+              {"value": 1.5, "clip": "game:/hero.glb#animation/walk"},
+              {"value": 4, "clip": "game:/hero.glb#animation/run"}
+            ]
+          },
+          "events": [
+            {"name": "footstep", "time": 0.25},
+            {"name": "footstep", "time": 0.75}
+          ]
+        },
+        {
+          "name": "strafe",
+          "blend2d": {
+            "x": "moveX",
+            "y": "moveY",
+            "points": [
+              {"x": 0, "y": 0, "clip": "game:/hero.glb#animation/idle"},
+              {"x": -1, "y": 0, "clip": "game:/hero.glb#animation/strafe_left"},
+              {"x": 1, "y": 0, "clip": "game:/hero.glb#animation/strafe_right"},
+              {"x": 0, "y": 1, "clip": "game:/hero.glb#animation/walk"}
+            ]
+          },
+          "events": [
+            {"name": "footstep", "time": 0.25},
+            {"name": "footstep", "time": 0.75}
+          ]
+        },
+        {
+          "name": "jump",
+          "clip": "game:/hero.glb#animation/jump",
+          "loop": false,
+          "events": [
+            {"name": "land", "time": 0.8}
+          ]
+        }
+      ],
+      "transitions": [
+        {"from": "*", "to": "jump", "duration": 0.1, "conditions": [{"parameter": "jump"}]},
+        {
+          "from": "jump",
+          "to": "locomotion",
+          "duration": 0.2,
+          "exitTime": 0.9
+        },
+        {
+          "from": "locomotion",
+          "to": "strafe",
+          "duration": 0.25,
+          "conditions": [{"parameter": "strafing", "compare": "Equal", "value": true}]
+        },
+        {
+          "from": "strafe",
+          "to": "locomotion",
+          "duration": 0.25,
+          "conditions": [{"parameter": "strafing", "compare": "Equal", "value": false}]
+        }
+      ]
+    },
+    {
+      "name": "upper",
+      "mask": [{"joint": "spine", "weight": 1}],
+      "states": [
+        {"name": "relaxed", "clip": "game:/hero.glb#animation/idle"},
+        {"name": "aim", "clip": "game:/hero.glb#animation/aim"}
+      ],
+      "transitions": [
+        {
+          "from": "relaxed",
+          "to": "aim",
+          "duration": 0.15,
+          "conditions": [{"parameter": "aiming", "compare": "Equal", "value": true}]
+        },
+        {
+          "from": "aim",
+          "to": "relaxed",
+          "duration": 0.15,
+          "conditions": [{"parameter": "aiming", "compare": "Equal", "value": false}]
+        }
+      ]
+    },
+    {
+      "name": "breath",
+      "blend": "Additive",
+      "weight": 0.5,
+      "states": [
+        {"name": "breathe", "clip": "game:/hero.glb#animation/breathe"}
+      ]
+    }
+  ]
+}

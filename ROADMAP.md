@@ -1131,7 +1131,7 @@ Nothing of it exists yet: glTF skins and animations are skipped on import and th
   several submeshes is skinned whole for each submesh's Entity; the editor's "pick behind" and frame-selection
   bounds still use the bind-pose bounds; the steady allocation test shows NVRHI's own allocations per frame,
   equal with one and four instances.
-- ANIM-2: Blending and control, designed in ADR 0060 (layered state machines as `.animgraph` assets driven by
+- ✅ ANIM-2: Blending and control, designed in ADR 0060 (layered state machines as `.animgraph` assets driven by
   parameters, evaluated per Animator; root motion into the CharacterController; `AnimationService`). Three
   work packages:
 - ANIM-2a (`implementer`): Graph data and evaluation without a World. `AnimationGraph.hpp`
@@ -1208,6 +1208,15 @@ Nothing of it exists yet: glTF skins and animations are skipped on import and th
   layers, events and root motion with a complete `.animgraph` example; the scripting API reference; a tutorial
   section (a character that walks, runs and jumps); the rigged test model gets walk/run clips if needed;
   `CHANGELOG.md`. Done: `mkdocs build --strict`, the tutorial's code builds (`ExtractCppBlocks`).
+  ✅ Done: the manual page "Animation" has the part "Animation graphs" (the file key by key, blend spaces,
+  transitions and cross-fades, events, root motion, what is saved, limits and errors) with the complete example
+  `tests/data/animation/character.animgraph`, which `TestAnimationGraphExample.cpp` parses and finds unchanged
+  in both language pages; the `AnimationService` reference lists every error and the events' lifetime; the
+  tutorial "Animate a character" (`tutorials/animated-character.md`, graph `hero.animgraph` tested the same
+  way, its C++ built by `ExtractCppBlocks` as `illusion_tutorial_animation_module` and loaded by
+  `tests/docs/TestTutorials.cpp`); `CHANGELOG.md` (ANIM-1, ANIM-2, module API version 7).
+  Open: the tutorial needs the user's own rigged model (clips `idle`, `walk`, `run`, `jump`); the test models
+  were not extended.
 - ANIM-2 (scope): cross-fades, additive and masked (per-bone) layers, 1D/2D blend spaces,
   a data-driven state machine with parameters and transitions, animation events (footsteps, effects),
   root motion into the CharacterController; `AnimationService` for game modules

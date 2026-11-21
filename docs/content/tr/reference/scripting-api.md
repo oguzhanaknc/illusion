@@ -209,6 +209,39 @@ grafı henüz yüklenmemişken `NoGraph` döndürür; bilinmeyen adlar `UnknownN
 | `play` | Grafı olmayan bir Animator'ı `fadeSeconds` boyunca `model.glb#animation/<name>` klibine cross-fade eder, 0 zamanından başlatır; `Animator::clip`'i ayarlar (graf varsa `HasGraph`) |
 | `pollEvents` | Son update'in durum olaylarını (`AnimationEvent`: Entity, olay, katman, durum) update sırasıyla bir span'e kopyalar; toplamı döndürür |
 
-Bir `AnimationEvent`'in ve `currentState()`'in döndürdüğü adlar bir sonraki update'e kadar geçerlidir.
-[Animasyon](../manual/animation.md#animasyon-graflar) kılavuz sayfası grafları anlatır; root motion'ı
+Her fonksiyon bir `Expected<..., AnimationError>` döndürür; `animationErrorName()` adı verir:
+
+| Hata | Ne zaman |
+| --- | --- |
+| `NoAnimator` | Entity canlı değil ya da `Animator`'ı yok |
+| `NoGraph` | Çağrı bir graf gerektirir ve Animator'ın grafı yok ya da henüz yüklenmedi |
+| `HasGraph` | Grafı onu yöneten bir Animator'da `play()` |
+| `UnknownName` | O adda parametre, katman ya da klip yok (`model.glb#animation/<name>` olmayan bir `play()` yolu da) |
+| `TypeMismatch` | Parametre başka bir türde (bir Trigger'da `setFloat()`, bir Float'ta `setTrigger()`, ...) |
+| `InvalidValue` | Bir değer sonlu değil, bir Int 2^24'ün ötesinde ya da bir fade negatif |
+
+Bir update'in olayları bir sonraki Animation update'ine kadar yayımda kalır: arada yapılan her `pollEvents()`
+çağrısı aynı olayları döndürür (toplamı, span'in boyutunu aşsa bile), bu yüzden span'i en yoğun update'e göre
+boyutlandırın ya da update başına bir kez okuyun. Bir `AnimationEvent`'in ve `currentState()`'in döndürdüğü
+adlar bir sonraki update'e kadar geçerlidir. Oyun duraklatılmışken yapılan parametre yazımları bir sonraki
+Animation adımında kullanılır.
+
+```cpp
+if (illusion::AnimationService* animation = context.service<illusion::AnimationService>())
+{
+    static_cast<void>(animation->setFloat(hero, "speed", 3.0f));
+    std::array<illusion::AnimationEvent, 16> events{};
+    const illusion::u32 count = animation->pollEvents(events);
+    for (illusion::u32 i = 0; i < count && i < events.size(); ++i)
+    {
+        if (events[i].name == "footstep")
+        {
+            playFootstep(events[i].entity);
+        }
+    }
+}
+```
+
+[Animasyon](../manual/animation.md#animasyon-graflar) kılavuz sayfası grafları anlatır,
+[eğitim](../tutorials/animated-character.md) onları kullanır; root motion'ı
 [oyun oturumu](../manual/runtime.md) uygular.

@@ -113,6 +113,7 @@ plugins:
             Tetris with an Agent: Ajanla Tetris
             Tetris by Hand: Elle Tetris
             A HUD and a pause menu: HUD ve Duraklatma Menüsü
+            Animate a character: Bir Karakteri Canlandırın
             Contributing: Katkıda Bulunma
 
 markdown_extensions:
@@ -182,6 +183,7 @@ nav:
       - Tetris with an Agent: tutorials/tetris-with-an-agent.md
       - Tetris by Hand: tutorials/tetris-by-hand.md
       - A HUD and a pause menu: tutorials/hud-and-pause-menu.md
+      - Animate a character: tutorials/animated-character.md
   - Architecture:
       - Overview: architecture/overview.md
       - Editor: architecture/editor.md

@@ -1,0 +1,41 @@
+{
+  "format": "illusion.animgraph",
+  "version": 1,
+  "parameters": [
+    {"name": "speed", "type": "Float"},
+    {"name": "jump", "type": "Trigger"}
+  ],
+  "rootMotion": "hips",
+  "layers": [
+    {
+      "name": "base",
+      "entry": "locomotion",
+      "states": [
+        {
+          "name": "locomotion",
+          "blend1d": {
+            "parameter": "speed",
+            "points": [
+              {"value": 0, "clip": "assets:/models/hero.glb#animation/idle"},
+              {"value": 1.5, "clip": "assets:/models/hero.glb#animation/walk"},
+              {"value": 4, "clip": "assets:/models/hero.glb#animation/run"}
+            ]
+          },
+          "events": [
+            {"name": "footstep", "time": 0.25},
+            {"name": "footstep", "time": 0.75}
+          ]
+        },
+        {
+          "name": "jump",
+          "clip": "assets:/models/hero.glb#animation/jump",
+          "loop": false
+        }
+      ],
+      "transitions": [
+        {"from": "locomotion", "to": "jump", "duration": 0.1, "conditions": [{"parameter": "jump"}]},
+        {"from": "jump", "to": "locomotion", "duration": 0.2, "exitTime": 0.9}
+      ]
+    }
+  ]
+}
