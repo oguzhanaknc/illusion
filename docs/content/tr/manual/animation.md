@@ -761,6 +761,10 @@ renderer->render(commands, target, world, view, &jobs);
   `animation/sockets-300`).
 - 300 Animator'ın her birinde üç eklemlik bir look-at ve iki IK uzvu bir update'e yaklaşık 0,1 ms ekler
   (Benchmark `animation/ik-300`).
+- 300 Animator'ın her birinde 8 eklemlik bir spring zinciri, bir look-at ve IK uzuvları
+  `animation/world-update`'e yaklaşık 0,17 ms ekler (0,26 ms yerine 0,43 ms).
+- Yirmi ragdoll yaklaşık 0,17 ms'de simüle edilir (Benchmark `physics/ragdolls-20`, bütçe
+  1 ms).
 - Skinning, Mesh'i kaç pass çizerse çizsin karede bir kez çalışır: 10.240 vertex'lik 300 instance bir
   NVIDIA GeForce RTX 4070 SUPER'da 0,66 ms sürer (GPU testi 3 ms'lik bir bütçe koyar).
 - Görünür her skinned instance vertex başına 64 bayt GPU belleğine (pozlanmış vertex ve önceki konumu) ve

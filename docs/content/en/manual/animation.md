@@ -758,6 +758,9 @@ renderer->render(commands, target, world, view, &jobs);
 - Placing 600 sockets on 300 Animators adds about 0.05 ms to an update (benchmark `animation/sockets-300`).
 - A look-at over three joints and two IK limbs on each of 300 Animators add about 0.1 ms to an update
   (benchmark `animation/ik-300`).
+- An 8-joint spring chain with a look-at and IK limbs on each of 300 Animators adds about 0.17 ms to
+  `animation/world-update` (0.43 ms against 0.26 ms).
+- Twenty ragdolls take about 0.17 ms to simulate (benchmark `physics/ragdolls-20`, budget 1 ms).
 - Skinning runs once per frame, however many passes draw the mesh: 300 instances of 10,240 vertices take
   0.66 ms on an NVIDIA GeForce RTX 4070 SUPER (the GPU test sets a budget of 3 ms).
 - Each visible skinned instance costs 64 bytes of GPU memory per vertex (the posed vertex and its previous
