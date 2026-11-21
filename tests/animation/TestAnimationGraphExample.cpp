@@ -9,7 +9,7 @@
 #include <doctest/doctest.h>
 
 #include <fstream>
-#include <iterator>
+#include <sstream>
 #include <string>
 
 using namespace illusion;
@@ -21,7 +21,9 @@ std::string readText(const std::string& path)
 {
     std::ifstream file(utf8Path(path), std::ios::binary);
     REQUIRE_MESSAGE(file.is_open(), path);
-    std::string text((std::istreambuf_iterator<char>(file)), std::istreambuf_iterator<char>());
+    std::ostringstream buffer;
+    buffer << file.rdbuf();
+    const std::string text = buffer.str();
     std::string normalized;
     for (const char c : text)
     {
