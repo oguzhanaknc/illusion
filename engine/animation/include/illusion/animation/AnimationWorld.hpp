@@ -61,6 +61,19 @@ struct AnimationStatistics
 /// motion, turned into world space by the Entity's Transform, into AnimationPose::rootTranslation and
 /// AnimationPose::rootYaw. A changed graph file (AssetReloadedEvent) restarts its Animators. An Animator
 /// without a graph cross-fades from its previous clip after crossFade().
+///
+/// After every pose of an update is evaluated, each active Entity with a BoneAttachment whose parent
+/// (Hierarchy) has a posed Animator follows its joint (a socket, ADR 0061): its LocalTransform becomes the
+/// joint's model-space transform times the attachment's offset, and its Transform follows from the parent's
+/// current Transform. The joint name is looked up once per skeleton, again after a model reload or a change
+/// of BoneAttachment::joint. A parent without an Animator or a missing joint is logged once per Entity, which
+/// then stays where it is; a parent whose model loads leaves it alone silently.
+///
+/// Before the model-space matrices, each pose goes through the stages of ADR 0061 in its Job: the pelvis
+/// offset and foot targets of a FootPlacement (from its FootPlacementPose, which this class adds and whose
+/// animated placements it writes), the LookAt of the Entity (following its target at LookAt::speed while
+/// advancing, at once otherwise) and the TwoBoneIk limbs on the Entity and its children. Targets are read
+/// when the update starts and turned into model space through the Entity's Transform.
 class AnimationWorld : NonCopyable
 {
 public:

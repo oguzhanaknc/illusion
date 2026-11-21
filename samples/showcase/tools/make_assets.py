@@ -1,5 +1,5 @@
 """Writes the generated assets of the showcase project: a glTF model with two submeshes, a skinned column
-with two clips and an animation graph for them, the sounds (music, wind, a lamp hum, a voice and a click), a smoke sprite and a nine-slice panel
+with two clips and an animation graph for them, a skinned two-legged figure, the sounds (music, wind, a lamp hum, a voice and a click), a smoke sprite and a nine-slice panel
 for the HUD.
 
 All of them are made here from numbers, so they carry no third-party licence. Run it from anywhere:
@@ -146,6 +146,93 @@ def write_rigged(path):
                         "channels": [{"sampler": 0, "target": {"node": 1, "path": "rotation"}}]},
                        {"name": "lean", "samplers": [lean],
                         "channels": [{"sampler": 0, "target": {"node": 1, "path": "rotation"}}]}],
+        "buffers": [{"byteLength": len(data),
+                     "uri": "data:application/octet-stream;base64," + base64.b64encode(bytes(data)).decode()}],
+        "bufferViews": views,
+        "accessors": accessors,
+    }
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(gltf, indent=1) + "\n", encoding="utf-8", newline="\n")
+
+
+def write_strider(path):
+    """A small two-legged figure for look-at, two-bone IK and foot placement: "hips" (0.9 m up) with the legs
+    "thigh_l", "shin_l", "foot_l" and "thigh_r", "shin_r", "foot_r" (ankles 0.08 m above the ground) and
+    "spine" and "head" above it, one box per joint, and the clip "idle" swaying the spine 0.2 radians around x
+    and back over two seconds."""
+    names = ["hips", "thigh_l", "shin_l", "foot_l", "thigh_r", "shin_r", "foot_r", "spine", "head"]
+    parents = [-1, 0, 1, 2, 0, 4, 5, 0, 7]
+    offsets = [(0, 0.9, 0), (0.15, 0, 0), (0, -0.41, 0), (0, -0.41, 0), (-0.15, 0, 0), (0, -0.41, 0),
+               (0, -0.41, 0), (0, 0.15, 0), (0, 0.45, 0)]
+    model = []
+    for joint, (parent, offset) in enumerate(zip(parents, offsets)):
+        base = model[parent] if parent >= 0 else (0, 0, 0)
+        model.append(tuple(b + o for b, o in zip(base, offset)))
+    # Each box is skinned to one joint, given in model space around that joint.
+    boxes = [(0, (-0.22, -0.1, -0.12), (0.22, 0.12, 0.12)), (1, (-0.06, -0.41, -0.06), (0.06, 0, 0.06)),
+             (2, (-0.05, -0.41, -0.05), (0.05, 0, 0.05)), (3, (-0.06, -0.08, -0.06), (0.06, 0.02, 0.18)),
+             (4, (-0.06, -0.41, -0.06), (0.06, 0, 0.06)), (5, (-0.05, -0.41, -0.05), (0.05, 0, 0.05)),
+             (6, (-0.06, -0.08, -0.06), (0.06, 0.02, 0.18)), (7, (-0.18, 0, -0.1), (0.18, 0.45, 0.1)),
+             (8, (-0.1, 0, -0.1), (0.1, 0.22, 0.12))]
+    positions, normals, joints, weights, indices = [], [], [], [], []
+    for joint, low, high in boxes:
+        origin = model[joint]
+        box_positions, box_normals, box_indices = box(tuple(o + l for o, l in zip(origin, low)),
+                                                      tuple(o + h for o, h in zip(origin, high)))
+        base = len(positions)
+        positions += box_positions
+        normals += box_normals
+        joints += [(joint, 0, 0, 0)] * len(box_positions)
+        weights += [(1.0, 0.0, 0.0, 0.0)] * len(box_positions)
+        indices += [base + i for i in box_indices]
+    inverse_binds = [(1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, -x, -y, -z, 1) for x, y, z in model]
+    times = [0.0, 1.0, 2.0]
+    sways = [(math.sin(angle / 2), 0.0, 0.0, math.cos(angle / 2)) for angle in (0.0, 0.2, 0.0)]
+
+    data = bytearray()
+    views, accessors = [], []
+
+    def add(fmt, rows, component_type, accessor_type, minmax=False):
+        while len(data) % 4:
+            data.extend(b"\0")
+        offset = len(data)
+        for row in rows:
+            data.extend(struct.pack("<" + fmt, *(row if isinstance(row, tuple) else (row,))))
+        views.append({"buffer": 0, "byteOffset": offset, "byteLength": len(data) - offset})
+        accessor = {"bufferView": len(views) - 1, "componentType": component_type, "count": len(rows),
+                    "type": accessor_type}
+        if minmax:
+            columns = list(zip(*[row if isinstance(row, tuple) else (row,) for row in rows]))
+            accessor["min"] = [min(c) for c in columns]
+            accessor["max"] = [max(c) for c in columns]
+        accessors.append(accessor)
+        return len(accessors) - 1
+
+    attributes = {"POSITION": add("3f", positions, 5126, "VEC3", minmax=True),
+                  "NORMAL": add("3f", normals, 5126, "VEC3"),
+                  "JOINTS_0": add("4B", joints, 5121, "VEC4"),
+                  "WEIGHTS_0": add("4f", weights, 5126, "VEC4")}
+    index_accessor = add("H", indices, 5123, "SCALAR")
+    inverse_bind = add("16f", inverse_binds, 5126, "MAT4")
+    time_accessor = add("f", times, 5126, "SCALAR", minmax=True)
+    sway = {"input": time_accessor, "output": add("4f", sways, 5126, "VEC4"), "interpolation": "LINEAR"}
+    nodes = []
+    for joint, (name, offset) in enumerate(zip(names, offsets)):
+        node = {"name": name, "translation": list(offset)}
+        children = [child for child, parent in enumerate(parents) if parent == joint]
+        if children:
+            node["children"] = children
+        nodes.append(node)
+    nodes.append({"name": "strider", "mesh": 0, "skin": 0})
+    gltf = {
+        "asset": {"version": "2.0", "generator": "illusion showcase make_assets.py"},
+        "scene": 0,
+        "scenes": [{"nodes": [0, len(nodes) - 1]}],
+        "nodes": nodes,
+        "meshes": [{"name": "strider", "primitives": [{"attributes": attributes, "indices": index_accessor}]}],
+        "skins": [{"name": "strider", "joints": list(range(len(names))), "inverseBindMatrices": inverse_bind}],
+        "animations": [{"name": "idle", "samplers": [sway],
+                        "channels": [{"sampler": 0, "target": {"node": 7, "path": "rotation"}}]}],
         "buffers": [{"byteLength": len(data),
                      "uri": "data:application/octet-stream;base64," + base64.b64encode(bytes(data)).decode()}],
         "bufferViews": views,
@@ -333,6 +420,7 @@ def write_column_graph(path):
 if __name__ == "__main__":
     write_model(ROOT / "models" / "blocks.gltf")
     write_rigged(ROOT / "models" / "column.gltf")
+    write_strider(ROOT / "models" / "strider.gltf")
     write_column_graph(ROOT / "animations" / "column.animgraph")
     for name, samples in (("music", music()), ("wind", wind()), ("hum", hum()), ("voice", voice()),
                           ("click", click())):

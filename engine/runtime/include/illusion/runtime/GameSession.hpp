@@ -127,12 +127,17 @@ struct GameSessionDesc
 ///    Modules step are sent in call order, each save() capturing the World now (captureSave()). A load is
 ///    therefore applied in a later update than its request; with fixedStep the step first waits for the save
 ///    thread, so it is always the next one and fixed-step runs repeat.
-/// 4. **Animation:** (with GameSessionDesc::streamer) AnimationWorld::update() poses the Animators; their
-///    time and graphs advance while the session is started. Then, while started, root motion (ADR 0060): an
-///    Entity whose pose has AnimationPose::rootTranslation or AnimationPose::rootYaw turns about +y by the
-///    yaw; with a CharacterController it gets the translation divided by the step as its horizontal
-///    velocity (PhysicsWorld::setCharacterVelocity(), keeping its vertical velocity), otherwise the
-///    translation is added to its Transform (and its LocalTransform follows when it has a parent).
+/// 4. **Animation:** (with GameSessionDesc::streamer) while started, foot placement (ADR 0061) first casts a
+///    ray down below every foot of a FootPlacement from the last update's pose (through
+///    PhysicsWorld::raycast(), skipping the character's own bodies) and writes the lifts, tilts, weights and
+///    pelvis offset of its FootPlacementPose. AnimationWorld::update() then poses the Animators; their time
+///    and graphs advance while the session is started. Then, while started, root motion (ADR 0060): an Entity
+///    whose pose has AnimationPose::rootTranslation or AnimationPose::rootYaw turns about +y by the yaw; with
+///    a CharacterController it gets the translation divided by the step as its horizontal velocity
+///    (PhysicsWorld::setCharacterVelocity(), keeping its vertical velocity), otherwise the translation is
+///    added to its Transform (and its LocalTransform follows when it has a parent). The Entities attached to
+///    joints (BoneAttachment, ADR 0061) then take their Transforms from their moved parents, so that
+///    kinematic bodies on them follow the sockets in the physics step.
 /// 5. **Physics:** PhysicsWorld::update().
 /// 6. **Hierarchy:** updateTransformHierarchy().
 /// 7. **UI:** the UiWorld lays out for the frame of setUiFrame(), handles the pointer and wheel of

@@ -41,8 +41,10 @@ with or without a graph, and gives each feature a clear owner.
   the chain towards the target, clamped and smoothed.
 - **Two-bone IK.** A saved `TwoBoneIk` (`joint` = the end, e.g. a foot; its parent and grandparent form the
   chain; `target` Entity or point; `pole` Entity or point; `weight`; `alignToTarget` for the end rotation)
-  solves analytically. **Foot placement** is a saved `FootPlacement` on the Animator (two or more
-  `TwoBoneIk` feet, ray length, foot height, pelvis joint, max step), handled by `GameSession` before the
+  solves analytically. An Entity holds one Component of a type, so a `TwoBoneIk` acts on its own Entity's
+  Animator or, failing that, its parent's: further limbs are children of the Animator's Entity. **Foot
+  placement** is a saved `FootPlacement` on the Animator (pelvis joint, ray length, foot height, max step;
+  the feet are the `TwoBoneIk` limbs whose chain hangs from the pelvis, up to four), handled by `GameSession` before the
   Animation step: it raycasts below each foot's last animated position through `PhysicsWorld`, writes the
   hits as the IK targets and the pelvis offset, so `engine/animation` stays free of physics.
 - **Spring bones.** A saved `SpringBone` (`root` joint, applies to the chain below it; `stiffness`,
@@ -59,7 +61,8 @@ with or without a graph, and gives each feature a clear owner.
   are open.
 - **Scripting API.** `AnimationService` gains `jointTransform(entity, joint)` (world space, from the last
   update), `setLookAtTarget`, `setIkTarget`, `setIkWeight` and `setRagdoll(entity, active)`; module API
-  version 8. Everything else is Component data that modules may write directly.
+  version 8 for sockets (`jointTransform`) and 9 for IK (`setLookAtTarget`, `setIkTarget`, `setIkWeight`).
+  Everything else is Component data that modules may write directly.
 - **Budget.** 300 Animators with look-at, two feet of IK and one spring chain of eight joints add under 1 ms
   to `animation/world-graph-300` on a desktop CPU with the Job System; 20 active ragdolls step in under 1 ms of
   physics time.
@@ -72,4 +75,4 @@ with or without a graph, and gives each feature a clear owner.
 - Spring bones do not collide with the world, and ragdolls are passive; both are recorded as open.
 - `.ragdoll` profiles are optional: generated profiles get every rigged model a ragdoll, authored ones give
   good limits.
-- Adding functions to `AnimationService` raises the module API version to 8.
+- Adding functions to `AnimationService` raises the module API version: 8 for sockets, 9 for IK.

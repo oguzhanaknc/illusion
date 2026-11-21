@@ -1,6 +1,9 @@
+#include "PoseDetail.hpp"
+
 #include <illusion/animation/AnimationComponents.hpp>
 #include <illusion/animation/AnimationGraph.hpp>
 #include <illusion/animation/AnimationWorld.hpp>
+#include <illusion/animation/InverseKinematics.hpp>
 #include <illusion/assets/AssetStreamer.hpp>
 #include <illusion/assets/Mesh.hpp>
 #include <illusion/assets/Model.hpp>
@@ -31,6 +34,50 @@ namespace illusion
 {
 namespace
 {
+
+// What keeps a BoneAttachment from following its joint; each is logged once per Entity.
+enum class SocketProblem : u8
+{
+    None,
+    NoAnimator, // no parent, or a parent without an Animator
+    NoJoint,
+};
+
+// A BoneAttachment's joint, resolved against its parent's skeleton.
+struct Socket
+{
+    std::string joint;                  // the BoneAttachment::joint it was resolved for
+    const Skeleton* skeleton = nullptr; // the skeleton it was resolved against
+    u64 revision = 0;                   // Impl::revision it was resolved with
+    i32 index = -1;
+    SocketProblem reported = SocketProblem::None;
+    u64 mark = 0; // the update that last saw it
+};
+
+// A name resolved to a joint of one skeleton, for a LookAt, a TwoBoneIk or a pelvis.
+struct JointName
+{
+    std::string name;
+    const Skeleton* skeleton = nullptr;
+    u64 revision = 0;
+    i32 index = -1;
+    bool reported = false; // a missing joint was logged
+    u64 mark = 0;          // the update that last used it
+};
+
+// Most TwoBoneIk limbs per Animator, and joints of a LookAt chain.
+constexpr u32 kMaxLimbs = 8;
+constexpr u32 kMaxLookChain = 4;
+
+// A TwoBoneIk of an Animator, prepared for this update with its targets in model space.
+struct Limb
+{
+    Entity entity;
+    u32 joint = 0;
+    TwoBoneSolve solve;
+    bool align = false; // TwoBoneIk::alignToTarget
+    i32 foot = -1;      // its entry in FootPlacementPose::feet, or -1
+};
 
 // Animators posed by one Job.
 constexpr u32 kPosesPerJob = 8;
@@ -157,6 +204,24 @@ struct Slot
     bool fadeLoop = true;
     f32 fade = 0.0f; // seconds of the fade so far
     f32 fadeDuration = 0.0f;
+    // The per-pose stages of ADR 0061, prepared on the World's thread for this update.
+    u64 prepared = 0; // the update that queued the pose
+    Mat4 inverseWorld{1.0f};
+    Quat worldRotation{1.0f, 0.0f, 0.0f, 0.0f};
+    f32 stageSeconds = 0.0f; // negative when not advancing: the stages reach their targets at once
+    bool look = false;
+    LookAtSolve lookSolve;
+    f32 lookSpeed = 0.0f;
+    std::array<u32, kMaxLookChain> lookChain{};
+    u32 lookChainLength = 0;
+    JointName lookJoint;
+    Vec3 lookDirection{0.0f, 0.0f, 1.0f}; // the smoothed model-space direction from the head
+    bool lookValid = false;
+    std::array<Limb, kMaxLimbs> limbs{};
+    u32 limbCount = 0;
+    bool limbsReported = false;
+    FootPlacementPose* feet = nullptr;
+    JointName pelvisJoint;
 };
 
 struct JointRange
@@ -262,6 +327,8 @@ struct AnimationWorld::Impl
     usize arenaBytes = kMinScratchBytes;
     std::vector<Entity> scratch;
     std::vector<u32> posed;
+    std::unordered_map<u64, Socket> sockets;       // by the attached Entity's Entity::toBits()
+    std::unordered_map<u64, JointName> limbJoints; // by the TwoBoneIk Entity's Entity::toBits()
     // MeshRenderer::mesh, read through reflection: engine/render links this library.
     ComponentId meshRenderer = kInvalidComponentId;
     u32 meshOffset = 0;
@@ -740,6 +807,10 @@ struct AnimationWorld::Impl
         slot.graph = nullptr;
         slot.eventCount = 0;
         slot.fadeClip = nullptr;
+        slot.lookValid = false;
+        slot.limbsReported = false;
+        slot.lookJoint = JointName{};
+        slot.pelvisJoint = JointName{};
         return index;
     }
 
@@ -842,6 +913,7 @@ struct AnimationWorld::Impl
         if (!sameSkeleton)
         {
             slot.fadeClip = nullptr;
+            slot.lookValid = false;
         }
         if (skeleton.status == Status::Failed)
         {
@@ -962,7 +1034,305 @@ struct AnimationWorld::Impl
         slot.time = time;
         const Transform* transform = world->tryGet<Transform>(entity);
         slot.world = transform != nullptr ? transform->matrix() : Mat4(1.0f);
+        slot.worldRotation =
+            transform != nullptr ? glm::normalize(transform->rotation) : Quat{1.0f, 0.0f, 0.0f, 0.0f};
+        prepareStages(entity, slot, seconds, advance);
+        slot.prepared = frame;
         posed.push_back(pose.slot);
+    }
+
+    // Resolves @p name against @p slot's skeleton, again after a change of name, skeleton or revision.
+    i32 resolveJoint(JointName& joint, std::string_view name, const Slot& slot)
+    {
+        joint.mark = frame;
+        if (joint.name != name)
+        {
+            joint.name = name;
+            joint.skeleton = nullptr;
+            joint.reported = false;
+        }
+        if (joint.skeleton != slot.skeleton || joint.revision != revision)
+        {
+            joint.skeleton = slot.skeleton;
+            joint.revision = revision;
+            joint.index = detail::findJoint(*slot.skeleton, joint.name);
+        }
+        if (joint.index < 0 && !joint.reported)
+        {
+            joint.reported = true;
+            ILL_LOG_WARN("Animation", "entity {}: the skeleton has no joint '{}'; it is not posed by it",
+                         slot.entity.index, joint.name);
+        }
+        return joint.index;
+    }
+
+    // The world-space position of @p entity, or @p point when it is null or has no Transform.
+    [[nodiscard]] Vec3 positionOf(Entity entity, Vec3 point) const noexcept
+    {
+        const Transform* transform =
+            !entity.isNull() && world->isAlive(entity) ? world->tryGet<Transform>(entity) : nullptr;
+        return transform != nullptr ? transform->position : point;
+    }
+
+    // The look-at and foot placement of @p slot's Animator for this update (limbs come in gatherLimbs()).
+    void prepareStages(Entity entity, Slot& slot, f32 seconds, bool advance)
+    {
+        const f32 determinant = glm::determinant(slot.world);
+        slot.inverseWorld =
+            determinant != 0.0f && std::isfinite(determinant) ? glm::inverse(slot.world) : Mat4(1.0f);
+        slot.stageSeconds = advance ? seconds : -1.0f;
+        slot.limbCount = 0;
+        slot.look = false;
+        slot.feet = nullptr;
+        const LookAt* lookAt = world->tryGet<LookAt>(entity);
+        if (lookAt == nullptr || !(lookAt->weight > 0.0f))
+        {
+            slot.lookValid = false;
+        }
+        else if (const i32 head = resolveJoint(slot.lookJoint, lookAt->joint, slot); head >= 0)
+        {
+            const u32 length = std::clamp(lookAt->chainLength, 1u, kMaxLookChain);
+            u32 count = 0;
+            std::array<u32, kMaxLookChain> chain{};
+            for (i32 joint = head; joint >= 0 && count < length;
+                 joint = slot.skeleton->joints[static_cast<usize>(joint)].parent)
+            {
+                chain[count++] = static_cast<u32>(joint);
+            }
+            for (u32 i = 0; i < count; ++i)
+            {
+                slot.lookChain[i] = chain[count - 1 - i]; // parents first
+            }
+            slot.lookChainLength = count;
+            slot.lookSolve.target =
+                Vec3(slot.inverseWorld * Vec4(positionOf(lookAt->target, lookAt->point), 1.0f));
+            slot.lookSolve.forward = lookAt->forward;
+            slot.lookSolve.maxAngle = lookAt->maxAngle;
+            slot.lookSolve.weight = lookAt->weight;
+            slot.lookSpeed = lookAt->speed;
+            slot.look = true;
+        }
+        const FootPlacement* placement = world->tryGet<FootPlacement>(entity);
+        FootPlacementPose* feet = placement != nullptr ? world->tryGet<FootPlacementPose>(entity) : nullptr;
+        if (feet != nullptr && resolveJoint(slot.pelvisJoint, placement->pelvis, slot) >= 0)
+        {
+            slot.feet = feet;
+        }
+        else if (feet != nullptr)
+        {
+            feet->footCount = 0;
+        }
+    }
+
+    // The slot whose pose this update queued for @p entity's Animator, or null.
+    [[nodiscard]] Slot* preparedSlot(Entity entity) noexcept
+    {
+        const AnimationPose* pose =
+            !entity.isNull() && world->isAlive(entity) ? world->tryGet<AnimationPose>(entity) : nullptr;
+        if (pose == nullptr || pose->slot >= slots.size())
+        {
+            return nullptr;
+        }
+        Slot& slot = slots[pose->slot];
+        return slot.used && slot.entity == entity && slot.prepared == frame ? &slot : nullptr;
+    }
+
+    // Adds the TwoBoneIk of @p entity to its Animator's slot (on the Entity itself, else on its parent).
+    void addLimb(Entity entity, const TwoBoneIk& ik)
+    {
+        Entity owner = entity;
+        if (!world->has<Animator>(entity))
+        {
+            const Hierarchy* hierarchy = world->tryGet<Hierarchy>(entity);
+            owner = hierarchy != nullptr ? hierarchy->parent : Entity{};
+        }
+        Slot* slot = preparedSlot(owner);
+        if (slot == nullptr)
+        {
+            return;
+        }
+        const i32 joint = resolveJoint(limbJoints[entity.toBits()], ik.joint, *slot);
+        if (joint < 0)
+        {
+            return;
+        }
+        if (slot->limbCount == kMaxLimbs)
+        {
+            if (!slot->limbsReported)
+            {
+                slot->limbsReported = true;
+                ILL_LOG_WARN("Animation", "entity {}: more than {} TwoBoneIk limbs; the others are not posed",
+                             owner.index, kMaxLimbs);
+            }
+            return;
+        }
+        const Transform* target =
+            !ik.target.isNull() && world->isAlive(ik.target) ? world->tryGet<Transform>(ik.target) : nullptr;
+        Limb& limb = slot->limbs[slot->limbCount++];
+        limb.entity = entity;
+        limb.joint = static_cast<u32>(joint);
+        limb.foot = -1;
+        limb.align = ik.alignToTarget;
+        limb.solve.target = Vec3(slot->inverseWorld * Vec4(positionOf(ik.target, ik.point), 1.0f));
+        limb.solve.pole = ik.pole.isNull()
+                              ? ik.polePoint
+                              : Vec3(slot->inverseWorld * Vec4(positionOf(ik.pole, Vec3(0.0f)), 1.0f));
+        limb.solve.weight = ik.weight;
+        limb.solve.alignEnd = ik.alignToTarget && target != nullptr;
+        limb.solve.endRotation = target != nullptr
+                                     ? glm::normalize(glm::inverse(slot->worldRotation) * target->rotation)
+                                     : Quat{1.0f, 0.0f, 0.0f, 0.0f};
+    }
+
+    // Collects this update's TwoBoneIk limbs into their Animators' slots and picks the feet of each
+    // FootPlacement: the limbs whose chain hangs from the pelvis joint.
+    void gatherLimbs()
+    {
+        ILL_PROFILE_SCOPE();
+        usize seen = 0;
+        world->query<const TwoBoneIk>().without<Inactive>().each(
+            [this, &seen](Entity entity, const TwoBoneIk& ik) {
+                ++seen;
+                addLimb(entity, ik);
+            });
+        if (limbJoints.size() > seen)
+        {
+            std::erase_if(limbJoints, [this](const auto& entry) { return entry.second.mark != frame; });
+        }
+        for (const u32 index : posed)
+        {
+            Slot& slot = slots[index];
+            if (slot.feet == nullptr)
+            {
+                continue;
+            }
+            FootPlacementPose& feet = *slot.feet;
+            const i32 pelvis = slot.pelvisJoint.index;
+            u32 count = 0;
+            for (u32 l = 0; l < slot.limbCount && count < FootPlacementPose::kMaxFeet; ++l)
+            {
+                Limb& limb = slot.limbs[l];
+                const i32 middle = slot.skeleton->joints[limb.joint].parent;
+                const i32 root = middle >= 0 ? slot.skeleton->joints[static_cast<usize>(middle)].parent : -1;
+                if (root < 0 || slot.skeleton->joints[static_cast<usize>(root)].parent != pelvis)
+                {
+                    continue;
+                }
+                FootContact& contact = feet.feet[count];
+                if (contact.limb != limb.entity)
+                {
+                    contact = FootContact{};
+                    contact.limb = limb.entity;
+                }
+                limb.foot = static_cast<i32>(count++);
+            }
+            for (u32 f = count; f < FootPlacementPose::kMaxFeet; ++f)
+            {
+                feet.feet[f] = FootContact{};
+            }
+            feet.footCount = count;
+        }
+    }
+
+    // Foot placement before the look-at and IK: writes the animated placements of the feet and the pelvis
+    // for the session, moves the pelvis by its offset and aims the feet at their ground contacts.
+    void placeFeet(Slot& slot, std::span<JointPose> local) const noexcept
+    {
+        FootPlacementPose& feet = *slot.feet;
+        const Skeleton& skeleton = *slot.skeleton;
+        const auto pelvis = static_cast<u32>(slot.pelvisJoint.index);
+        feet.frame = frame;
+        feet.pelvis = Vec3(slot.world * detail::jointModelMatrix(skeleton, local, pelvis)[3]);
+        const Quat toModel = glm::inverse(slot.worldRotation);
+        for (u32 l = 0; l < slot.limbCount; ++l)
+        {
+            Limb& limb = slot.limbs[l];
+            if (limb.foot < 0)
+            {
+                continue;
+            }
+            FootContact& contact = feet.feet[static_cast<usize>(limb.foot)];
+            contact.animated = Vec3(slot.world * detail::jointModelMatrix(skeleton, local, limb.joint)[3]);
+            const f32 lift = std::isfinite(contact.lift) ? contact.lift : 0.0f;
+            const f32 share = std::isfinite(contact.weight) ? std::clamp(contact.weight, 0.0f, 1.0f) : 0.0f;
+            limb.solve.weight *= share;
+            limb.solve.target =
+                Vec3(slot.inverseWorld * Vec4(contact.animated + Vec3(0.0f, lift, 0.0f), 1.0f));
+            const f32 tiltLength = glm::length(contact.tilt);
+            limb.solve.alignEnd = limb.align && tiltLength > 0.0f && std::isfinite(tiltLength);
+            if (limb.solve.alignEnd)
+            {
+                const Quat tilt = toModel * (contact.tilt / tiltLength) * slot.worldRotation;
+                limb.solve.endRotation =
+                    tilt * detail::jointModelRotation(skeleton, local, static_cast<i32>(limb.joint));
+            }
+        }
+        const f32 offset = feet.pelvisOffset;
+        if (offset == 0.0f || !std::isfinite(offset))
+        {
+            return;
+        }
+        const i32 parent = skeleton.joints[pelvis].parent;
+        const Mat3 parentBasis(parent >= 0
+                                   ? detail::jointModelMatrix(skeleton, local, static_cast<u32>(parent))
+                                   : skeleton.rootTransform);
+        const f32 determinant = glm::determinant(parentBasis);
+        if (determinant != 0.0f && std::isfinite(determinant))
+        {
+            local[pelvis].translation +=
+                glm::inverse(parentBasis) * (Mat3(slot.inverseWorld) * Vec3(0.0f, offset, 0.0f));
+        }
+    }
+
+    // Turns the LookAt chain towards its target, following it at LookAt::speed while advancing.
+    static void turnHead(Slot& slot, std::span<JointPose> local) noexcept
+    {
+        const Skeleton& skeleton = *slot.skeleton;
+        const std::span<const u32> chain(slot.lookChain.data(), slot.lookChainLength);
+        const Mat4 head = detail::jointModelMatrix(skeleton, local, chain.back());
+        const Vec3 position(head[3]);
+        const Vec3 forward = Mat3(head) * slot.lookSolve.forward;
+        const Vec3 toTarget = slot.lookSolve.target - position;
+        const f32 forwardLength = glm::length(forward);
+        const f32 distance = glm::length(toTarget);
+        if (!(forwardLength > 0.0f) || !(distance > 0.0f) || !std::isfinite(forwardLength + distance))
+        {
+            return;
+        }
+        const Vec3 wanted = toTarget / distance;
+        if (!slot.lookValid)
+        {
+            slot.lookDirection = forward / forwardLength; // eases in from the animated direction
+            slot.lookValid = true;
+        }
+        const f32 turn = slot.lookSpeed * slot.stageSeconds;
+        slot.lookDirection =
+            slot.stageSeconds < 0.0f || !(slot.lookSpeed > 0.0f) || !std::isfinite(turn)
+                ? wanted
+                : detail::turnTowards(slot.lookDirection, wanted, turn, Mat3(head) * Vec3(0.0f, 1.0f, 0.0f));
+        LookAtSolve solve = slot.lookSolve;
+        solve.target = position + slot.lookDirection * distance;
+        static_cast<void>(solveLookAt(skeleton, chain, solve, local));
+    }
+
+    // The per-pose stages of ADR 0061 on @p local, before the model-space matrices are composed.
+    void applyStages(Slot& slot, std::span<JointPose> local) const noexcept
+    {
+        // Spring bones (ANIM-3c) come first.
+        if (slot.feet != nullptr)
+        {
+            placeFeet(slot, local);
+        }
+        if (slot.look)
+        {
+            turnHead(slot, local);
+        }
+        for (u32 l = 0; l < slot.limbCount; ++l)
+        {
+            static_cast<void>(
+                solveTwoBoneIk(*slot.skeleton, slot.limbs[l].joint, slot.limbs[l].solve, local));
+        }
+        // The ragdoll blend (ANIM-3c) comes last.
     }
 
     // An Inactive Entity keeps its pose: the current matrices repeat the previous ones.
@@ -1032,6 +1402,7 @@ struct AnimationWorld::Impl
         }
         slot.pose->rootTranslation = rootTranslation;
         slot.pose->rootYaw = rootYaw;
+        applyStages(slot, localPose);
         localToModel(*slot.skeleton, localPose, modelPose);
         illusion::skinMatrices(*slot.skeleton, modelPose, skinPose);
         if (slot.fresh || slot.written + 1 != frame)
@@ -1055,6 +1426,112 @@ struct AnimationWorld::Impl
         slot.pose->jointCount = joints;
         slot.pose->frame = frame;
         slot.pose->bounds = bounds.isValid() ? bounds.transformed(slot.world) : Aabb{};
+    }
+
+    void report(Socket& socket, SocketProblem problem, Entity entity, std::string_view joint)
+    {
+        if (socket.reported == problem)
+        {
+            return;
+        }
+        socket.reported = problem;
+        if (problem == SocketProblem::NoAnimator)
+        {
+            ILL_LOG_WARN("Animation",
+                         "entity {}: the parent of its BoneAttachment has no Animator; it stays where it is",
+                         entity.index);
+        }
+        else
+        {
+            ILL_LOG_WARN("Animation",
+                         "entity {}: the parent's skeleton has no joint '{}'; it stays where it is",
+                         entity.index, joint);
+        }
+    }
+
+    // The slot of @p parent's Animator if this update posed it, or null.
+    [[nodiscard]] const Slot* posedSlot(Entity parent) const noexcept
+    {
+        const AnimationPose* pose = world->tryGet<AnimationPose>(parent);
+        if (pose == nullptr || pose->slot >= slots.size())
+        {
+            return nullptr;
+        }
+        const Slot& slot = slots[pose->slot];
+        return slot.used && slot.entity == parent && slot.jointCount > 0 && slot.written == frame ? &slot
+                                                                                                  : nullptr;
+    }
+
+    // Places @p entity at its joint: the local transform is the joint's model-space transform times the
+    // offset, and the world Transform follows from the parent's current one.
+    void follow(Entity entity, const BoneAttachment& attachment, Entity parent, LocalTransform& local,
+                Transform& transform)
+    {
+        Socket& socket = sockets[entity.toBits()];
+        socket.mark = frame;
+        if (!world->isAlive(parent) || !world->has<Animator>(parent))
+        {
+            report(socket, SocketProblem::NoAnimator, entity, attachment.joint);
+            return;
+        }
+        const Slot* slot = posedSlot(parent);
+        if (slot == nullptr)
+        {
+            return; // its model loads
+        }
+        if (socket.joint != attachment.joint)
+        {
+            socket.joint = attachment.joint;
+            socket.skeleton = nullptr;
+            socket.reported = SocketProblem::None;
+        }
+        if (socket.skeleton != slot->skeleton || socket.revision != revision)
+        {
+            socket.skeleton = slot->skeleton;
+            socket.revision = revision;
+            socket.index = detail::findJoint(*slot->skeleton, socket.joint);
+        }
+        if (socket.index < 0 || static_cast<u32>(socket.index) >= slot->jointCount)
+        {
+            report(socket, SocketProblem::NoJoint, entity, attachment.joint);
+            return;
+        }
+        socket.reported = SocketProblem::None;
+        const f32 length = glm::length(attachment.rotation);
+        const Transform offset{attachment.translation,
+                               length > 0.0f && std::isfinite(length) ? attachment.rotation / length
+                                                                      : Quat{1.0f, 0.0f, 0.0f, 0.0f},
+                               attachment.scale};
+        const Mat4& joint = models[slot->offset + static_cast<u32>(socket.index)];
+        const Transform placed = Transform::fromMatrix(joint * offset.matrix());
+        local = LocalTransform::from(placed);
+        const Transform* parentTransform = world->tryGet<Transform>(parent);
+        transform = parentTransform != nullptr ? combine(*parentTransform, placed) : placed;
+    }
+
+    // Runs after every pose of the update is evaluated: moves the Entities attached to joints.
+    void updateSockets()
+    {
+        ILL_PROFILE_SCOPE();
+        usize seen = 0;
+        world->query<const BoneAttachment, const Hierarchy, LocalTransform, Transform>()
+            .without<Inactive>()
+            .each([&](Entity entity, const BoneAttachment& attachment, const Hierarchy& hierarchy,
+                      LocalTransform& local, Transform& transform) {
+                ++seen;
+                follow(entity, attachment, hierarchy.parent, local, transform);
+            });
+        world->query<const BoneAttachment>().without<Hierarchy, Inactive>().each(
+            [&](Entity entity, const BoneAttachment& attachment) {
+                ++seen;
+                Socket& socket = sockets[entity.toBits()];
+                socket.mark = frame;
+                report(socket, SocketProblem::NoAnimator, entity, attachment.joint);
+            });
+        if (sockets.size() > seen)
+        {
+            std::erase_if(sockets, [this](const auto& entry) { return entry.second.mark != frame; });
+        }
     }
 
     void update(f32 deltaSeconds, JobSystem* jobs, bool advance)
@@ -1093,6 +1570,20 @@ struct AnimationWorld::Impl
         {
             world->remove<AnimationPose>(entity);
         }
+        scratch.clear();
+        world->query<const FootPlacement>().without<FootPlacementPose>().each(
+            [this](Entity entity, const FootPlacement&) { scratch.push_back(entity); });
+        for (const Entity entity : scratch)
+        {
+            world->emplace<FootPlacementPose>(entity);
+        }
+        scratch.clear();
+        world->query<const FootPlacementPose>().without<FootPlacement>().each(
+            [this](Entity entity, const FootPlacementPose&) { scratch.push_back(entity); });
+        for (const Entity entity : scratch)
+        {
+            world->remove<FootPlacementPose>(entity);
+        }
 
         const f32 seconds = std::max(deltaSeconds, 0.0f);
         posed.clear();
@@ -1109,6 +1600,7 @@ struct AnimationWorld::Impl
                 releaseSlot(index);
             }
         }
+        gatherLimbs();
 
         prepareArenas(jobs);
         const auto work = [this](u32 begin, u32 end) {
@@ -1142,6 +1634,7 @@ struct AnimationWorld::Impl
                     AnimationEvent{slot.entity, state.events[event.event].name, layer.name, state.name});
             }
         }
+        updateSockets();
     }
 
     [[nodiscard]] Slot* slotOf(u32 index) noexcept

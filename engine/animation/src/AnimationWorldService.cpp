@@ -1,8 +1,12 @@
+#include "PoseDetail.hpp"
+
 #include <illusion/animation/AnimationComponents.hpp>
 #include <illusion/animation/AnimationGraph.hpp>
 #include <illusion/animation/AnimationWorldService.hpp>
 #include <illusion/core/AssetId.hpp>
 #include <illusion/core/AssetRef.hpp>
+#include <illusion/ecs/Hierarchy.hpp>
+#include <illusion/ecs/Transform.hpp>
 #include <illusion/ecs/World.hpp>
 
 #include <algorithm>
@@ -71,6 +75,31 @@ struct GraphTarget
         return unexpected(AnimationError::UnknownName);
     }
     return &target.state->layers[static_cast<usize>(index)];
+}
+
+// The TwoBoneIk of @p entity's Animator whose end joint is @p joint: on the Entity itself or on a child.
+[[nodiscard]] TwoBoneIk* limbOf(World& world, Entity entity, std::string_view joint)
+{
+    TwoBoneIk* own = world.tryGet<TwoBoneIk>(entity);
+    if (own != nullptr && own->joint == joint)
+    {
+        return own;
+    }
+    TwoBoneIk* found = nullptr;
+    world.query<TwoBoneIk, const Hierarchy>().each(
+        [&](Entity child, TwoBoneIk& ik, const Hierarchy& hierarchy) {
+            if (found == nullptr && hierarchy.parent == entity && ik.joint == joint &&
+                !world.has<Animator>(child))
+            {
+                found = &ik;
+            }
+        });
+    return found;
+}
+
+[[nodiscard]] bool finite(const Vec3& value) noexcept
+{
+    return std::isfinite(value.x) && std::isfinite(value.y) && std::isfinite(value.z);
 }
 
 } // namespace
@@ -238,6 +267,90 @@ u32 AnimationWorldService::pollEvents(std::span<AnimationEvent> out)
     const std::span<const AnimationEvent> events = m_animation.events();
     std::copy_n(events.begin(), std::min(events.size(), out.size()), out.begin());
     return static_cast<u32>(events.size());
+}
+
+Expected<Mat4, AnimationError> AnimationWorldService::jointTransform(Entity entity,
+                                                                     std::string_view joint) const
+{
+    if (animatorOf(m_animation, entity) == nullptr)
+    {
+        return unexpected(AnimationError::NoAnimator);
+    }
+    const std::optional<u32> slot = m_animation.findSlot(entity);
+    const Skeleton* skeleton = slot ? m_animation.skeleton(*slot) : nullptr;
+    if (skeleton == nullptr)
+    {
+        return unexpected(AnimationError::NoGraph);
+    }
+    const std::span<const Mat4> joints = m_animation.jointMatrices(*slot);
+    const i32 index = detail::findJoint(*skeleton, joint);
+    if (index < 0 || static_cast<usize>(index) >= joints.size())
+    {
+        return unexpected(AnimationError::UnknownName);
+    }
+    const Transform* transform = m_animation.world().tryGet<Transform>(entity);
+    return (transform != nullptr ? transform->matrix() : Mat4(1.0f)) * joints[static_cast<usize>(index)];
+}
+
+Expected<void, AnimationError> AnimationWorldService::setLookAtTarget(Entity entity, const Vec3& point)
+{
+    if (animatorOf(m_animation, entity) == nullptr)
+    {
+        return unexpected(AnimationError::NoAnimator);
+    }
+    LookAt* lookAt = m_animation.world().tryGet<LookAt>(entity);
+    if (lookAt == nullptr)
+    {
+        return unexpected(AnimationError::UnknownName);
+    }
+    if (!finite(point))
+    {
+        return unexpected(AnimationError::InvalidValue);
+    }
+    lookAt->point = point;
+    lookAt->target = Entity{};
+    return {};
+}
+
+Expected<void, AnimationError> AnimationWorldService::setIkTarget(Entity entity, std::string_view joint,
+                                                                  const Vec3& point)
+{
+    if (animatorOf(m_animation, entity) == nullptr)
+    {
+        return unexpected(AnimationError::NoAnimator);
+    }
+    TwoBoneIk* limb = limbOf(m_animation.world(), entity, joint);
+    if (limb == nullptr)
+    {
+        return unexpected(AnimationError::UnknownName);
+    }
+    if (!finite(point))
+    {
+        return unexpected(AnimationError::InvalidValue);
+    }
+    limb->point = point;
+    limb->target = Entity{};
+    return {};
+}
+
+Expected<void, AnimationError> AnimationWorldService::setIkWeight(Entity entity, std::string_view joint,
+                                                                  f32 weight)
+{
+    if (animatorOf(m_animation, entity) == nullptr)
+    {
+        return unexpected(AnimationError::NoAnimator);
+    }
+    TwoBoneIk* limb = limbOf(m_animation.world(), entity, joint);
+    if (limb == nullptr)
+    {
+        return unexpected(AnimationError::UnknownName);
+    }
+    if (!std::isfinite(weight))
+    {
+        return unexpected(AnimationError::InvalidValue);
+    }
+    limb->weight = std::clamp(weight, 0.0f, 1.0f);
+    return {};
 }
 
 } // namespace illusion

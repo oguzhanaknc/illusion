@@ -200,6 +200,10 @@ void callServices(ModuleContext& context)
         static_cast<void>(animation->play(e, "game:/hero.glb#animation/run", 0.2f));
         std::array<AnimationEvent, 2> events{};
         static_cast<void>(animation->pollEvents(events));
+        static_cast<void>(animation->jointTransform(e, "hand"));
+        static_cast<void>(animation->setLookAtTarget(e, Vec3(0.0f, 1.5f, 2.0f)));
+        static_cast<void>(animation->setIkTarget(e, "foot_l", Vec3(0.2f, 0.0f, 0.1f)));
+        static_cast<void>(animation->setIkWeight(e, "foot_l", 0.5f));
     }
 }
 

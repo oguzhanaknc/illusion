@@ -2,8 +2,9 @@
 
 /// @file
 /// The animation part of the scripting API (docs/adr/0060-animation-graphs.md): game modules drive the
-/// animation graphs of their Animators with parameters, cross-fade Animators without a graph, and read the
-/// state events of the last update.
+/// animation graphs of their Animators with parameters, cross-fade Animators without a graph, read the state
+/// events and joint placements of the last update, and aim look-at and IK
+/// (docs/adr/0061-sockets-ik-and-ragdolls.md).
 ///
 /// @code
 /// if (illusion::AnimationService* animation = context.service<illusion::AnimationService>())
@@ -27,6 +28,7 @@
 
 #include <illusion/core/Base.hpp>
 #include <illusion/core/Expected.hpp>
+#include <illusion/core/Math.hpp>
 #include <illusion/ecs/Entity.hpp>
 
 #include <span>
@@ -38,10 +40,10 @@ namespace illusion
 /// Why an AnimationService call failed.
 enum class AnimationError : u8
 {
-    NoAnimator,   ///< The Entity has no Animator (or is not alive).
-    NoGraph,      ///< The call needs a graph and the Animator has none, or its graph has not loaded yet.
+    NoAnimator, ///< The Entity has no Animator (or is not alive).
+    NoGraph, ///< The call needs a graph (jointTransform(): a pose) that the Animator lacks or has not loaded.
     HasGraph,     ///< play() on an Animator whose graph controls it.
-    UnknownName,  ///< No parameter, layer or clip of that name.
+    UnknownName,  ///< No parameter, layer, clip or joint of that name, or no LookAt or TwoBoneIk for it.
     TypeMismatch, ///< The parameter has another type (setFloat() on a Trigger, ...).
     InvalidValue, ///< A value is not finite or out of range (a negative fade).
 };
@@ -114,6 +116,21 @@ public:
     /// Writes the events of the last update into @p out, in update order, and returns how many there are;
     /// every call in an update returns the same events.
     virtual u32 pollEvents(std::span<AnimationEvent> out) = 0;
+
+    /// The world-space transform of the joint @p joint of @p entity's skeleton from the last update (where a
+    /// socket would place a child); UnknownName for a joint the skeleton lacks, NoGraph while it loads.
+    [[nodiscard]] virtual Expected<Mat4, AnimationError> jointTransform(Entity entity,
+                                                                        std::string_view joint) const = 0;
+
+    /// Sets the world-space point the LookAt of @p entity looks at (and clears its target Entity).
+    virtual Expected<void, AnimationError> setLookAtTarget(Entity entity, const Vec3& point) = 0;
+    /// Sets the world-space target of the TwoBoneIk of @p entity whose end joint is @p joint (clears its
+    /// target Entity).
+    virtual Expected<void, AnimationError> setIkTarget(Entity entity, std::string_view joint,
+                                                       const Vec3& point) = 0;
+    /// Sets the weight of the TwoBoneIk of @p entity whose end joint is @p joint, clamped to [0, 1] (0 turns
+    /// it off).
+    virtual Expected<void, AnimationError> setIkWeight(Entity entity, std::string_view joint, f32 weight) = 0;
 
 protected:
     AnimationService() = default;

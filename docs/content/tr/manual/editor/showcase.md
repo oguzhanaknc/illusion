@@ -34,7 +34,12 @@ emitter'ı `ParticleEmitter`'ı kapsar: trigger pedinin üzerinde bir kıvılcı
 oynatılmayı bekleyen bir toz emitter'ı (`playOnStart` kapalı) ve GPU'da simüle edilen 20.000 ateş böceklik bir
 alan. `Column`, `Animator`'ı kapsar: animasyon grafı `assets/animations/column.animgraph` onu `sway`'in 0,4
 saniyesinde tutan ve eğik çizilen skinned bir sütun (`sway` ve `lean` klipli `assets/models/column.gltf`,
-`tools/make_assets.py` yazar), bkz. [Animasyon](../animation.md#animasyon-graflar).
+`tools/make_assets.py` yazar), bkz. [Animasyon](../animation.md#animasyon-graflar); çocuğu `Column Lamp`,
+sütunun `top` eklemindeki küçük bir küreyle `BoneAttachment`'ı kapsar ([socket'ler](../animation.md#socketler)).
+Kameranın arkasındaki küçük iki bacaklı figür `Strider` (`assets/models/strider.gltf`), `LookAt`'i (sarkacı
+izler), `TwoBoneIk`'i (sol ayağı ve pole'ü `Strider Knee Pole` olan `Strider Right Leg` çocuğundaki sağ ayağı)
+ve `FootPlacement`'ı kapsar ([look-at](../animation.md#look-at), [two-bone IK](../animation.md#two-bone-ik),
+[foot placement](../animation.md#foot-placement)).
 Bir `Wind` Entity'si tozu (`windFactor`) avlunun öbür ucuna savurur. Devre dışı `Dusk Sky`
 Entity'si gün batımında bir `SkyAtmosphere` tutar: gökyüzünü ve güneşi hareketli olanlarla değiştirmek için onu
 etkinleştirin; devre dışı `Film Look` ise derecelendirilmiş, vinyetli bir görüntü için `PostEffects`
@@ -62,8 +67,10 @@ verir (katmanları artık çarpışmaz). HUD'ı `UiService` ile yönetir: kare s
 mesajıdır, modül paleti gizler ve gösterir, odağı taşır, widget'ları okur ve olayları poll eder;
 `ui.cancel` basılınca (Escape ya da gamepad'de East) oyunu `SceneService::requestExit()` ile bitirir.
 `AnimationService` ile Column'un grafını oynatır: `sway` ile `lean` harmanını bir parametreyle eğer, 30. karede
-bir trigger ile Column'u eğdirir, 150. kareden itibaren onu yeniden sakinleştirir ve grafın `peak` olaylarını
-sayar.
+bir trigger ile Column'u eğdirir, 150. kareden itibaren onu yeniden sakinleştirir, grafın `peak` olaylarını
+sayar ve `top` ekleminin yerini `jointTransform()` ile okur. 30. karede Strider lambaya döner
+(`setLookAtTarget()`), sol ayağı bir noktaya uzanır (`setIkTarget()`) ve sağ ayağının IK'si kapanır
+(`setIkWeight()`).
 Gördükleri, Showcase Entity'sinin `showcase.Stats` Component'inde tutulur.
 
 **Modules → Build Modules** (`module.build`) ile Build edin ve **Play**'e basın:

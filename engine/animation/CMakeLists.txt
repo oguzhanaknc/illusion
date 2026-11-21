@@ -9,6 +9,7 @@ add_library(illusion_animation STATIC
     src/AnimationGraphState.cpp
     src/AnimationWorld.cpp
     src/AnimationWorldService.cpp
+    src/InverseKinematics.cpp
     src/Pose.cpp)
 add_library(illusion::animation ALIAS illusion_animation)
 

@@ -64,8 +64,11 @@ add_executable(illusion_tests
     animation/TestAnimationGraph.cpp
     animation/TestAnimationGraphExample.cpp
     animation/TestAnimationGraphState.cpp
+    animation/TestAnimationIk.cpp
     animation/TestAnimationRuntime.cpp
+    animation/TestAnimationSockets.cpp
     animation/TestAnimationWorld.cpp
+    animation/TestInverseKinematics.cpp
     animation/TestPose.cpp
     audio/TestAudioEffects.cpp
     audio/TestAudioWorld.cpp

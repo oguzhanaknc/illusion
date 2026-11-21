@@ -62,6 +62,14 @@ version changes are in the contributor guide ("Versions and releases"). The vers
   motion), `Animator::graph`, root motion applied to the `CharacterController` or the Transform,
   `AnimationService` for game modules (`USES animation`: parameters, triggers, states, events and `play()`),
   the manual section "Animation graphs" with a complete example and the tutorial "Animate a character".
+- Sockets (ANIM-3a): the saved `BoneAttachment` Component makes a child Entity follow a joint of its parent's
+  Animator with an offset (kinematic bodies on it follow too), and `AnimationService::jointTransform()` gives
+  game modules a joint's world-space placement; the manual section "Sockets".
+- Look-at and IK (ANIM-3b): the saved `LookAt` (a head and up to three ancestors turned towards an Entity or a
+  point, clamped and smoothed), `TwoBoneIk` (analytic two-bone IK with a pole, on the Animator's Entity or its
+  children) and `FootPlacement` (feet kept on the ground by raycasts in the game session, the pelvis lowered
+  for the lower foot) Components, `AnimationService::setLookAtTarget()`, `setIkTarget()` and `setIkWeight()`,
+  and the manual sections "Look-at", "Two-bone IK" and "Foot placement".
 - Navigation meshes (NAV-1a): the Recast Navigation 1.6.0 dependency, the library `illusion::nav`, the saved
   `NavMeshSurface`, `NavArea`, `NavLink`, `NavObstacle` and `NavAgent` Components, a tiled navmesh bake from
   colliders on the Job System with identical bytes for any worker count, per-tile input hashes with
@@ -69,9 +77,11 @@ version changes are in the contributor guide ("Versions and releases"). The vers
 
 ### Changed
 
-- The module API version is 7 (`AnimationService` is a new interface; version 6 added `UiService`,
-  `SceneService::requestExit()` and `SaveService`, and `UiService` gained `playTransition()` and
-  `transitionProgress()`): game modules built for an earlier version must be rebuilt.
+- The module API version is 9 (`AnimationService` gained `setLookAtTarget()`, `setIkTarget()` and
+  `setIkWeight()`; version 8 added `jointTransform()`, version 7
+  `AnimationService`, version 6 `UiService`, `SceneService::requestExit()` and `SaveService`, and `UiService`
+  gained `playTransition()` and `transitionProgress()`): game modules built for an earlier version must be
+  rebuilt.
 - New projects ship the input actions asset `assets/input/game.input` with the actions `ui.navigate`,
   `ui.submit` and `ui.cancel` and their default bindings, named by `settings/input.json`; older projects still
   get the actions at run time.

@@ -93,7 +93,6 @@ struct AiActionRequest
 /// with `context.service<AiService>()`. Blackboard writes are seen by the next AI step; reads return the
 /// values after the last one. String views it returns stay valid until the next update. Adding a function
 /// changes the module API version.
-/// @ingroup scripting_api
 class AiService : NonCopyable
 {
 public:

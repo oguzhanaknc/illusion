@@ -22,7 +22,7 @@
 //   palette, focuses the Go button for a while, reads the toggle and the slider, counts clicks, and ends the
 //   game when `ui.cancel` (Escape, or East on a gamepad) is pressed; plays the Column's animation graph,
 //   leaning it with a parameter, bowing it with a trigger and calming it again, and counts its "peak"
-//   events;
+//   events and reads where its "top" joint (the lamp's socket) is;
 // - stop: unloads the clips.
 // Everything that hot reloads must keep lives in the Components showcase.Stats (saved) and showcase.Runtime.
 
@@ -113,10 +113,12 @@ struct Runtime
     Entity hudToggle{};
     Entity hudSlider{};
     Entity column{};
-    u32 animationEvents = 0;     ///< "peak" events of the Column's graph seen so far.
-    f32 columnTime = 0.0f;       ///< Normalized time of the Column's state at the last update.
-    f32 columnLean = 0.0f;       ///< The Column's "lean" parameter as the graph used it.
-    bool columnSwings = false;   ///< The Column's graph is in its "swing" state.
+    u32 animationEvents = 0;   ///< "peak" events of the Column's graph seen so far.
+    f32 columnTime = 0.0f;     ///< Normalized time of the Column's state at the last update.
+    f32 columnLean = 0.0f;     ///< The Column's "lean" parameter as the graph used it.
+    bool columnSwings = false; ///< The Column's graph is in its "swing" state.
+    f32 columnTop = 0.0f;      ///< World height of the Column's "top" joint (its lamp's socket).
+    Entity strider{};
     u32 uiEvents = 0;            ///< UI events seen so far.
     u32 uiClicks = 0;            ///< Clicks of the Go button.
     f32 sliderValue = 0.0f;      ///< The HUD slider at the last update.
@@ -399,6 +401,7 @@ void startModule(ModuleContext& context)
     runtime.sparks = findNamed(world, "Sparks");
     runtime.dust = findNamed(world, "Dust");
     runtime.column = findNamed(world, "Column");
+    runtime.strider = findNamed(world, "Strider");
     if (Animator* animator = world.tryGet<Animator>(runtime.column))
     {
         animator->playing = true; // the scene holds it still for the editor
@@ -824,6 +827,23 @@ void updateAnimation(AnimationService& animation, Runtime& runtime, u32 frame)
     runtime.columnLean = animation.parameter(column, "lean").valueOr(0.0f);
     runtime.columnTime = animation.normalizedTime(column, "base").valueOr(0.0f);
     runtime.columnSwings = animation.currentState(column, "base").valueOr("") == "swing";
+    if (const Expected<Mat4, AnimationError> top = animation.jointTransform(column, "top"))
+    {
+        runtime.columnTop = (*top)[3].y;
+    }
+    // The Strider looks at the Column's lamp once the Column has bowed, reaches out with its left foot and
+    // lets foot placement have its right one alone.
+    if (frame == kBowFrame)
+    {
+        static_cast<void>(animation.setLookAtTarget(runtime.strider, Vec3(-6.0f, runtime.columnTop, 3.0f)));
+        static_cast<void>(animation.setIkTarget(runtime.strider, "foot_l", Vec3(-13.8f, 0.3f, 17.2f)));
+        const Expected<void, AnimationError> weighted =
+            animation.setIkWeight(runtime.strider, "foot_r", 0.0f);
+        if (!weighted)
+        {
+            ILL_LOG_INFO("Showcase", "Strider: {}", animationErrorName(weighted.error()));
+        }
+    }
 }
 
 // The HUD: the frame counter, the palette, the focus, the values and the events of the last UI update.
