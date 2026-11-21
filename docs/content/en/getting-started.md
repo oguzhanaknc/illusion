@@ -15,7 +15,9 @@ This page shows how to build illusion from source and run its tests and benchmar
 Compilers:
 
 - **Windows:** Visual Studio 2022 17.10+ or Visual Studio 2026 with the "Desktop development with C++"
-  workload. clang-cl from the same installation also works.
+  workload. clang-cl from the same installation also works; use that one (`VC\Tools\Llvm\x64\bin`,
+  first on `PATH`), not a separately installed LLVM: the MSVC standard library accepts only the Clang
+  version its Visual Studio ships.
 - **macOS:** Xcode 15+ (Apple Clang). The minimum deployment target is macOS 13.3.
 - **Linux:** GCC 13+ or Clang 18+ (Ubuntu 24.04 ships both), plus the X11 and Wayland development
   packages used by GLFW:
