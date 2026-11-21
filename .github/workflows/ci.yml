@@ -112,6 +112,18 @@ jobs:
       - name: Set up MSVC environment
         if: runner.os == 'Windows'
         uses: ilammy/msvc-dev-cmd@0b201ec74fa43914dc39ae48a89fd1d8cb592756 # v1.13.0
+      - name: Use the clang-cl of the Visual Studio installation
+        # The runner's standalone LLVM comes first on PATH, but the MSVC STL accepts only the Clang version
+        # it ships with (STL1000), so the clang preset uses the clang-cl next to the active toolset.
+        if: matrix.preset == 'ci-windows-clang'
+        run: |
+          llvm="$(cygpath -u "${VCINSTALLDIR}")Tools/Llvm/x64/bin"
+          if [ ! -x "$llvm/clang-cl.exe" ]; then
+            echo "::error::clang-cl.exe not found in $llvm; install the Visual Studio 'C++ Clang tools' component"
+            exit 1
+          fi
+          cygpath -w "$llvm" >> "$GITHUB_PATH"
+          "$llvm/clang-cl.exe" --version
       - name: Restore the Slang compiler download
         # Release downloads from GitHub fail during outages (HTTP 504); FetchContent skips a download whose
         # file is already there with the pinned SHA-256, so a cached archive keeps configure working.
