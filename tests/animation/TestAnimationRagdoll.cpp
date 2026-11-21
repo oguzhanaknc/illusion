@@ -288,10 +288,10 @@ TEST_CASE("a session starts a ragdoll from its profile, blends it in, suspends t
     const f32 feet = world.get<Transform>(entity).position.y;
 
     REQUIRE(service.setRagdoll(entity, true).hasValue());
-    for (int i = 0; i < 20 && !physics.hasRagdoll(entity); ++i)
-    {
-        s.run(1); // the profile loads in the background
-    }
+    s.run(1); // requests the profile, which loads in the background
+    CHECK_FALSE(physics.hasRagdoll(entity));
+    s.streamer.waitIdle();
+    s.run(1);
     REQUIRE(physics.hasRagdoll(entity));
     const u32 slot = animation.findSlot(entity).value();
     s.run(1);
