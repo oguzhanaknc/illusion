@@ -59,7 +59,8 @@ with or without a graph, and gives each feature a clear owner.
   are open.
 - **Scripting API.** `AnimationService` gains `jointTransform(entity, joint)` (world space, from the last
   update), `setLookAtTarget`, `setIkTarget`, `setIkWeight` and `setRagdoll(entity, active)`; module API
-  version 8. Everything else is Component data that modules may write directly.
+  version 8 for sockets (`jointTransform`) and 9 for IK (`setLookAtTarget`, `setIkTarget`, `setIkWeight`).
+  Everything else is Component data that modules may write directly.
 - **Budget.** 300 Animators with look-at, two feet of IK and one spring chain of eight joints add under 1 ms
   to `animation/world-graph-300` on a desktop CPU with the Job System; 20 active ragdolls step in under 1 ms of
   physics time.
@@ -72,4 +73,4 @@ with or without a graph, and gives each feature a clear owner.
 - Spring bones do not collide with the world, and ragdolls are passive; both are recorded as open.
 - `.ragdoll` profiles are optional: generated profiles get every rigged model a ragdoll, authored ones give
   good limits.
-- Adding functions to `AnimationService` raises the module API version to 8.
+- Adding functions to `AnimationService` raises the module API version: 8 for sockets, 9 for IK.

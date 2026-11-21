@@ -264,6 +264,169 @@ void followSockets(World& world)
         });
 }
 
+// True if @p entity is @p character, one of its ancestors or one of its descendants: foot placement's rays
+// pass through the character's own bodies.
+[[nodiscard]] bool partOf(const World& world, Entity entity, Entity character)
+{
+    constexpr int kMaxDepth = 64;
+    const auto below = [&world](Entity child, Entity ancestor) {
+        Entity current = child;
+        for (int depth = 0; depth < kMaxDepth && world.isAlive(current); ++depth)
+        {
+            if (current == ancestor)
+            {
+                return true;
+            }
+            const Hierarchy* hierarchy = world.tryGet<Hierarchy>(current);
+            if (hierarchy == nullptr)
+            {
+                return false;
+            }
+            current = hierarchy->parent;
+        }
+        return false;
+    };
+    return below(entity, character) || below(character, entity);
+}
+
+// The body that carries @p character: the nearest of it and its ancestors with a CharacterController or a
+// RigidBody, else the Entity itself.
+[[nodiscard]] Entity carrierOf(const World& world, Entity character)
+{
+    constexpr int kMaxDepth = 64;
+    Entity current = character;
+    for (int depth = 0; depth < kMaxDepth && world.isAlive(current); ++depth)
+    {
+        if (world.has<CharacterController>(current) || world.has<RigidBody>(current))
+        {
+            return current;
+        }
+        const Hierarchy* hierarchy = world.tryGet<Hierarchy>(current);
+        if (hierarchy == nullptr)
+        {
+            break;
+        }
+        current = hierarchy->parent;
+    }
+    return character;
+}
+
+// The lowest height of @p entity's collision shape, from a sphere around it; nullopt for meshes and hulls.
+[[nodiscard]] std::optional<f32> bottomOf(const World& world, Entity entity)
+{
+    const Collider* collider = world.tryGet<Collider>(entity);
+    const Transform* transform = world.tryGet<Transform>(entity);
+    if (collider == nullptr || transform == nullptr)
+    {
+        return std::nullopt;
+    }
+    f32 radius = 0.0f;
+    switch (collider->shape)
+    {
+    case ColliderShape::Box:
+        radius = glm::length(collider->halfExtents);
+        break;
+    case ColliderShape::Sphere:
+        radius = collider->radius;
+        break;
+    case ColliderShape::Capsule:
+    case ColliderShape::Cylinder:
+        radius = std::hypot(collider->halfHeight + collider->radius, collider->radius);
+        break;
+    case ColliderShape::ConvexHull:
+    case ColliderShape::Mesh:
+        return std::nullopt;
+    }
+    const Vec3 scale = glm::abs(transform->scale);
+    const Vec3 center = transform->position + transform->rotation * (collider->offset * transform->scale);
+    return center.y - radius * std::max({scale.x, scale.y, scale.z});
+}
+
+// The first hit straight down from @p origin within @p length that is not part of @p character. The body
+// that carries the character is ignored; a ray that meets another of its bodies (a socket's) goes on below
+// it.
+std::optional<RaycastHit> groundBelow(const World& world, const PhysicsWorld& physics, Entity character,
+                                      Vec3 origin, f32 length, u32 layerMask)
+{
+    constexpr int kMaxSkips = 8;
+    constexpr f32 kSkipDistance = 1e-3f;
+    const Entity carrier = carrierOf(world, character);
+    for (int i = 0; i < kMaxSkips && length > 0.0f; ++i)
+    {
+        std::optional<RaycastHit> hit =
+            physics.raycast(origin, Vec3(0.0f, -1.0f, 0.0f), length, layerMask, carrier);
+        if (!hit || !partOf(world, hit->entity, character))
+        {
+            return hit;
+        }
+        const std::optional<f32> bottom = bottomOf(world, hit->entity);
+        if (!bottom)
+        {
+            return std::nullopt;
+        }
+        const f32 below = std::min(origin.y - hit->distance, *bottom) - kSkipDistance;
+        length -= origin.y - below;
+        origin.y = below;
+    }
+    return std::nullopt;
+}
+
+// Foot placement (ADR 0061), before the Animation step: below each foot's animated position of the last
+// update, the ground gives the foot its lift and tilt; the pelvis drops by the largest lowering, all of them
+// following at FootPlacement::speed. A foot without ground eases its IK off.
+void placeFeet(World& world, const PhysicsWorld& physics, f64 step)
+{
+    ILL_PROFILE_SCOPE();
+    const auto seconds = static_cast<f32>(step);
+    world.query<const FootPlacement, FootPlacementPose, const Transform>().without<Inactive>().each(
+        [&](Entity entity, const FootPlacement& settings, FootPlacementPose& pose,
+            const Transform& transform) {
+            if (pose.frame == 0)
+            {
+                return; // no update has posed the feet yet
+            }
+            const f32 rate = settings.speed * seconds;
+            const f32 follow = settings.speed > 0.0f && std::isfinite(rate) ? 1.0f - std::exp(-rate) : 1.0f;
+            const f32 maxStep = std::isfinite(settings.maxStep) ? std::max(settings.maxStep, 0.0f) : 0.0f;
+            const f32 footHeight = std::isfinite(settings.footHeight) ? settings.footHeight : 0.0f;
+            const f32 rayLength =
+                std::isfinite(settings.rayLength) ? std::max(settings.rayLength, 0.0f) : 0.0f;
+            f32 drop = 0.0f;
+            for (u32 f = 0; f < pose.footCount && f < FootPlacementPose::kMaxFeet; ++f)
+            {
+                FootContact& foot = pose.feet[f];
+                const Vec3 origin(foot.animated.x, pose.pelvis.y, foot.animated.z);
+                const std::optional<RaycastHit> hit =
+                    groundBelow(world, physics, entity, origin, rayLength, settings.layerMask);
+                f32 lift = 0.0f;
+                f32 weight = 0.0f;
+                Quat tilt{1.0f, 0.0f, 0.0f, 0.0f};
+                if (hit)
+                {
+                    // A foot keeps its animated height above the Entity's origin, at least footHeight.
+                    const f32 above = std::max(foot.animated.y - transform.position.y, footHeight);
+                    lift = std::clamp(hit->point.y + above - foot.animated.y, -maxStep, maxStep);
+                    weight = 1.0f;
+                    const f32 normalLength = glm::length(hit->normal);
+                    const Vec3 normal =
+                        normalLength > 0.0f ? hit->normal / normalLength : Vec3(0.0f, 1.0f, 0.0f);
+                    const f32 cosine = normal.y;
+                    if (cosine > -0.999f && std::isfinite(cosine))
+                    {
+                        const Vec3 axis = glm::cross(Vec3(0.0f, 1.0f, 0.0f), normal);
+                        tilt = glm::normalize(Quat(1.0f + cosine, axis.x, axis.y, axis.z));
+                    }
+                    drop = std::min(drop, lift);
+                }
+                foot.lift += (lift - foot.lift) * follow;
+                foot.weight += (weight - foot.weight) * follow;
+                const Quat from = glm::dot(foot.tilt, tilt) < 0.0f ? -foot.tilt : foot.tilt;
+                foot.tilt = glm::normalize(from * (1.0f - follow) + tilt * follow);
+            }
+            pose.pelvisOffset += (drop - pose.pelvisOffset) * follow;
+        });
+}
+
 } // namespace
 
 struct GameSession::Impl
@@ -550,6 +713,10 @@ void GameSession::update(f64 deltaSeconds)
     }
     if (impl.animation)
     {
+        if (impl.started)
+        {
+            placeFeet(impl.world, impl.physics, step);
+        }
         impl.animation->update(static_cast<f32>(step), impl.desc.jobs, impl.started);
         if (impl.started)
         {

@@ -443,6 +443,124 @@ const illusion::Expected<illusion::Mat4, illusion::AnimationError> hand =
 - A socket on an Entity that is itself attached (a hand on an attached arm) is placed in the same update,
   but physics may see its world position one update late.
 
+## Look-at
+
+A `LookAt` (`illusion.LookAt`, saved, in the Inspector's Animation category) on the Animator's Entity turns a
+head towards a target after the animation has posed it:
+
+| Field | Meaning |
+| --- | --- |
+| `joint` | The head joint |
+| `chainLength` | Joints that share the turn: the head and up to three of its ancestors (1 to 4) |
+| `target` | An Entity to look at; none uses `point` |
+| `point` | A world-space point to look at when `target` is none |
+| `forward` | The head's forward axis in its own space (+z by default) |
+| `maxAngle` | The largest turn away from the animated direction, in radians (70° by default) |
+| `weight` | Share of the turn in [0, 1]; 0 turns the look-at off |
+| `speed` | How fast the head follows the target while the game runs, in radians per second; 0 follows at once |
+
+- The turn is shared evenly along the chain, so a neck and a spine turn a little each. Each joint turns by the
+  shortest arc from the animated direction, so the head keeps its animated tilt.
+- A target farther than `maxAngle` from the animated direction is followed up to `maxAngle`. Further behind,
+  the turn fades out, and a target straight behind the head gets no turn at all: a target that crosses
+  behind the character never flips the head from one shoulder to the other.
+- While the game runs the head follows a moving target at most `speed` radians per second, starting from
+  the animated direction. The editor outside Play mode shows the full turn at once.
+
+```cpp
+illusion::LookAt look;
+look.joint = "head";
+look.chainLength = 2; // the head and the neck
+look.target = player;
+const illusion::Entity guard = world.create(illusion::Transform{}, animator, look);
+
+// From a module: look at a point instead (this clears the target Entity).
+static_cast<void>(animation->setLookAtTarget(guard, illusion::Vec3(0.0f, 1.6f, 4.0f)));
+```
+
+## Two-bone IK
+
+A `TwoBoneIk` (`illusion.TwoBoneIk`, saved) moves an end joint, a foot or a hand, to a target with its parent
+and grandparent, for example a knee and a hip:
+
+| Field | Meaning |
+| --- | --- |
+| `joint` | The end joint; its parent and grandparent form the chain |
+| `target` | An Entity whose position is the target; none uses `point` |
+| `point` | The world-space target when `target` is none |
+| `pole` | An Entity the middle joint bends towards; none uses `polePoint` |
+| `polePoint` | The pole in the Animator's model space when `pole` is none (+z: knees bend forward) |
+| `weight` | Share of the IK in [0, 1]; 0 shows the animated limb |
+| `alignToTarget` | Also give the end joint the target Entity's rotation (with foot placement: the ground's) |
+
+The solution is analytic (the law of cosines): the bones keep their lengths, the middle joint bends in the
+plane of the root, the target and the pole, and a target out of reach stretches the limb straight towards
+it. A pole on the line from the root to the target keeps the bend the animation has. Zero-length bones and
+targets on the root are left without errors.
+
+An Entity holds one Component of a kind, so a `TwoBoneIk` acts on the Animator of its own Entity or, without
+one, of its parent: put one limb on the Animator's Entity and the others on its children.
+
+```cpp
+illusion::TwoBoneIk hand;
+hand.joint = "hand_r";
+hand.target = doorHandle;
+hand.alignToTarget = true;
+const illusion::Entity reach = world.create(illusion::Transform{}, hand);
+static_cast<void>(illusion::setParent(world, reach, hero, illusion::ParentMode::KeepLocal));
+
+// From a module: blend the hand in, or aim it at a point.
+static_cast<void>(animation->setIkWeight(hero, "hand_r", 0.5f));
+static_cast<void>(animation->setIkTarget(hero, "hand_r", illusion::Vec3(1.0f, 1.2f, 0.5f)));
+```
+
+The stages run in each Animator's evaluation on the Job System, after the graph or clip and root motion and
+before the model-space matrices: look-at, then the limbs in the order of their Entities. Targets are taken
+from the World when the update starts and turned into the Animator's model space through its `Transform`,
+scale included. A missing joint is logged once; a limb whose joint has no grandparent is ignored. Sockets
+and `jointTransform()` see the solved pose.
+
+## Foot placement
+
+A `FootPlacement` (`illusion.FootPlacement`, saved) on the Animator's Entity keeps its feet on uneven ground
+while the game runs (Play mode and the player). Its feet are the `TwoBoneIk` limbs of the Animator whose chain
+hangs from the pelvis joint (a thigh's parent is the pelvis), up to four:
+
+| Field | Meaning |
+| --- | --- |
+| `pelvis` | The pelvis joint, lowered so that the lower foot can reach the ground |
+| `rayLength` | How far the rays reach below the hip height, in metres |
+| `footHeight` | The ankle's height above the ground, in metres |
+| `maxStep` | The largest height difference corrected, in metres |
+| `speed` | How fast the corrections follow, per second; 0 follows at once |
+| `layerMask` | The physics layers the rays hit |
+
+Before each Animation step the [game session](runtime.md#step-order) casts a ray straight down below each
+foot, from the hip height of the last update's animated pose. On a hit the foot is lifted or lowered to the
+ground plus its animated height above the Entity's origin (at least `footHeight`), by at most `maxStep`;
+with `alignToTarget` it lies on the ground's slope. The pelvis drops by the largest lowering, so that the
+leg over the lower ground can reach it. A foot whose ray finds nothing eases its IK off. Every change
+follows at `speed`, so steps and edges do not pop.
+
+```cpp
+illusion::FootPlacement feet;
+feet.pelvis = "hips";
+feet.rayLength = 1.6f;
+feet.layerMask = 1u << 0; // the ground's layer only
+world.emplace<illusion::FootPlacement>(hero, feet);
+// The legs: TwoBoneIk limbs on "foot_l" (on hero) and "foot_r" (on a child).
+```
+
+- The Animator's Entity is the ground level of its animation: a foot planted in the clip stays planted
+  on the ground, and a foot lifted in the clip stays lifted by as much.
+- The rays skip the body that carries the character (a `CharacterController` or `RigidBody` on the
+  Animator's Entity or an ancestor) and pass below the character's other bodies, such as those on sockets.
+  Characters on a layer of their own outside `layerMask` need none of that.
+- The rays start from the last update's pose, so the feet follow the ground one update late, which is not
+  visible at game frame rates. `engine/animation` does not use physics: the session writes the results into
+  the runtime `FootPlacementPose` that the next Animation step applies.
+- Without a running session (the editor outside Play mode) the feet keep the animated pose.
+
 ## Drawing skinned meshes
 
 `SceneRenderer` skins every posed mesh on the GPU. Give it the poses in `RenderView::animation`; the
@@ -475,7 +593,8 @@ renderer->render(commands, target, world, view, &jobs);
 ## Not supported yet
 
 - Interrupting a running transition, sub-state machines and saving the live state of a graph.
-- Look-at and inverse kinematics, spring bones and ragdolls (ANIM-3).
+- Spring bones and ragdolls (ANIM-3c); IK chains longer than two bones, and foot placement for more than
+  the legs that hang from the pelvis (such as the front legs of a four-legged rig).
 - Clip previews, a timeline, skeleton debug drawing and `animation.*` editor commands (ANIM-4).
 - Morph targets, more than four influences per vertex, and keyframe compression.
 
@@ -484,6 +603,8 @@ renderer->render(commands, target, world, view, &jobs);
 - Joints are rows in contiguous arrays, not Entities: posing 300 characters of 60 joints takes about
   1.5 ms on one desktop core (benchmark `animation/evaluate-300x60`), and spreads over the Job System.
 - Placing 600 sockets on 300 Animators adds about 0.05 ms to an update (benchmark `animation/sockets-300`).
+- A look-at over three joints and two IK limbs on each of 300 Animators add about 0.1 ms to an update
+  (benchmark `animation/ik-300`).
 - Skinning runs once per frame, however many passes draw the mesh: 300 instances of 10,240 vertices take
   0.66 ms on an NVIDIA GeForce RTX 4070 SUPER (the GPU test sets a budget of 3 ms).
 - Each visible skinned instance costs 64 bytes of GPU memory per vertex (the posed vertex and its previous

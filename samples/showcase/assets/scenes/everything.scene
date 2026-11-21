@@ -11,9 +11,11 @@
     "illusion.Collider": 1,
     "illusion.DirectionalLight": 1,
     "illusion.Disabled": 1,
+    "illusion.FootPlacement": 1,
     "illusion.Hierarchy": 1,
     "illusion.Joint": 1,
     "illusion.LocalTransform": 1,
+    "illusion.LookAt": 1,
     "illusion.MeshRenderer": 1,
     "illusion.Name": 1,
     "illusion.ParticleEmitter": 1,
@@ -25,6 +27,7 @@
     "illusion.SkyAtmosphere": 1,
     "illusion.SkyLight": 1,
     "illusion.Transform": 1,
+    "illusion.TwoBoneIk": 1,
     "illusion.UiButton": 1,
     "illusion.UiCanvas": 1,
     "illusion.UiElement": 1,
@@ -2830,6 +2833,111 @@
         },
         "illusion.Name": {
           "value": "Column Lamp"
+        }
+      }
+    },
+    {
+      "id": "18c80a5e762810c2",
+      "components": {
+        "illusion.Animator": {
+          "skeleton": "assets:/models/strider.gltf#skin/0",
+          "clip": "assets:/models/strider.gltf#animation/idle",
+          "graph": "",
+          "speed": 1.0,
+          "time": 0.0,
+          "loop": true,
+          "playing": true
+        },
+        "illusion.FootPlacement": {
+          "pelvis": "hips",
+          "rayLength": 1.6,
+          "footHeight": 0.1,
+          "maxStep": 0.4,
+          "speed": 10.0,
+          "layerMask": 3
+        },
+        "illusion.Hierarchy": {
+          "parent": null,
+          "order": 16
+        },
+        "illusion.LookAt": {
+          "joint": "head",
+          "chainLength": 2,
+          "target": "70616f2f48dce01c",
+          "point": [-6.0, 1.5, 3.0],
+          "forward": [0.0, 0.1, 1.0],
+          "maxAngle": 1.0,
+          "weight": 0.8,
+          "speed": 4.0
+        },
+        "illusion.MeshRenderer": {
+          "mesh": "assets:/models/strider.gltf#mesh/0",
+          "submesh": 0,
+          "material": "builtin:/material/default",
+          "layers": 1,
+          "castShadows": true,
+          "visible": true,
+          "lodBias": 1.0
+        },
+        "illusion.Name": {
+          "value": "Strider"
+        },
+        "illusion.Transform": {
+          "position": [-14.0, 0.0, 17.0],
+          "rotation": [0.0, 0.3826834, 0.0, 0.9238795],
+          "scale": [1.0, 1.0, 1.0]
+        },
+        "illusion.TwoBoneIk": {
+          "joint": "foot_l",
+          "target": null,
+          "point": [-13.85, 0.08, 17.1],
+          "pole": null,
+          "polePoint": [0.15, 0.5, 1.0],
+          "weight": 0.9,
+          "alignToTarget": true
+        }
+      }
+    },
+    {
+      "id": "f3f0a4b172d1294b",
+      "components": {
+        "illusion.Hierarchy": {
+          "parent": "18c80a5e762810c2",
+          "order": 0
+        },
+        "illusion.LocalTransform": {
+          "position": [-0.8131725, 0.5, 0.6010411],
+          "rotation": [0.0, -0.38268343, 0.0, 0.92387956],
+          "scale": [1.0, 1.0, 1.0]
+        },
+        "illusion.Name": {
+          "value": "Strider Knee Pole"
+        }
+      }
+    },
+    {
+      "id": "98d0ff43e17386ae",
+      "components": {
+        "illusion.Hierarchy": {
+          "parent": "18c80a5e762810c2",
+          "order": 1
+        },
+        "illusion.LocalTransform": {
+          "position": [0.0, 0.0, 0.0],
+          "rotation": [0.0, 0.0, 0.0, 1.0],
+          "scale": [1.0, 1.0, 1.0]
+        },
+        "illusion.Name": {
+          "value": "Strider Right Leg"
+        },
+        "illusion.TwoBoneIk": {
+          "joint": "foot_r",
+          "target": "70616f2f48dce01c",
+          "point": [0.0, 0.0, 0.0],
+          "pole": "f3f0a4b172d1294b",
+          "polePoint": [0.0, 0.0, 1.0],
+          "weight": 0.7,
+          "alignToTarget": false
         }
       }
     },

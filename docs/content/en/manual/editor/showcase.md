@@ -35,7 +35,11 @@ played (`playOnStart` off), and a field of 20,000 fireflies simulated on the GPU
 `Animator`: a skinned column (`assets/models/column.gltf` with the clips `sway` and `lean`, from
 `tools/make_assets.py`) whose animation graph `assets/animations/column.animgraph` holds it 0.4 seconds into
 `sway`, drawn bent, see [Animation](../animation.md#animation-graphs); its child `Column Lamp` covers
-`BoneAttachment`, a small sphere on the column's `top` joint ([sockets](../animation.md#sockets)). A `Wind` entity blows the dust
+`BoneAttachment`, a small sphere on the column's `top` joint ([sockets](../animation.md#sockets)). The `Strider`, a
+small two-legged figure (`assets/models/strider.gltf`) behind the camera, covers `LookAt` (it watches the
+pendulum), `TwoBoneIk` (its left foot, and its right foot on the child `Strider Right Leg` with the pole
+`Strider Knee Pole`) and `FootPlacement` ([look-at](../animation.md#look-at),
+[two-bone IK](../animation.md#two-bone-ik), [foot placement](../animation.md#foot-placement)). A `Wind` entity blows the dust
 (`windFactor`) across the yard. The disabled `Dusk Sky` entity holds a `SkyAtmosphere` at sunset: enable it
 to replace the sky and the sun with a moving one, and the disabled `Film Look` holds `PostEffects` for a
 graded, vignetted image. The disabled `Morning Mist` holds a `VolumetricFog` of low, drifting mist. The `HUD` entity is a game UI
@@ -64,7 +68,9 @@ plural, the module hides and shows the palette, moves the focus, reads the widge
 when `ui.cancel` is pressed (Escape, or East on a gamepad) it ends the game with `SceneService::requestExit()`.
 Through `AnimationService` it plays the Column's graph: it leans the blend of `sway` and `lean` with a
 parameter, bows the Column with a trigger at frame 30, calms it again from frame 150, counts the graph's
-`peak` events and reads where the `top` joint is with `jointTransform()`. What it saw is kept in the `showcase.Stats` Component of the Showcase entity.
+`peak` events and reads where the `top` joint is with `jointTransform()`. At frame 30 the Strider turns to
+the lamp (`setLookAtTarget()`), its left foot reaches for a point (`setIkTarget()`) and its right foot's IK
+is turned off (`setIkWeight()`). What it saw is kept in the `showcase.Stats` Component of the Showcase entity.
 
 Build it with **Modules → Build Modules** (`module.build`) and press **Play**:
 

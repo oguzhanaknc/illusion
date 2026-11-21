@@ -446,6 +446,123 @@ const illusion::Expected<illusion::Mat4, illusion::AnimationError> hand =
 - Kendisi de bağlı olan bir Entity'deki socket (bağlı bir koldaki el) aynı update'te yerleştirilir, ama
   fizik onun dünya konumunu bir update geç görebilir.
 
+## Look-at
+
+Animator'ın Entity'sindeki bir `LookAt` (`illusion.LookAt`, kaydedilir, Inspector'ın Animation
+kategorisinde), animasyon pozu yazdıktan sonra bir başı bir hedefe çevirir:
+
+| Alan | Anlamı |
+| --- | --- |
+| `joint` | Baş eklemi |
+| `chainLength` | Dönüşü paylaşan eklemler: baş ve en çok üç atası (1 ile 4 arası) |
+| `target` | Bakılacak Entity; yoksa `point` kullanılır |
+| `point` | `target` yokken bakılacak dünya uzayındaki nokta |
+| `forward` | Başın kendi uzayındaki ileri ekseni (varsayılan +z) |
+| `maxAngle` | Animasyondaki yönden en büyük dönüş, radyan cinsinden (varsayılan 70°) |
+| `weight` | Dönüşün [0, 1] aralığındaki payı; 0 look-at'i kapatır |
+| `speed` | Oyun çalışırken başın hedefi izleme hızı, saniyede radyan; 0 hemen izler |
+
+- Dönüş zincir boyunca eşit paylaşılır; boyun ve omurga her biri biraz döner. Her eklem animasyondaki yönden
+  en kısa yay boyunca döner, böylece baş animasyondaki eğimini korur.
+- Animasyondaki yönden `maxAngle`'dan uzak bir hedef `maxAngle`'a kadar izlenir. Daha arkada dönüş
+  azalarak söner ve tam başın arkasındaki bir hedef hiç dönüş almaz: karakterin arkasından geçen bir hedef
+  başı bir omuzdan ötekine hiçbir zaman çevirip atmaz.
+- Oyun çalışırken baş hareket eden bir hedefi animasyondaki yönden başlayarak saniyede en çok `speed` radyan
+  izler. Play modu dışındaki editör dönüşün tamamını hemen gösterir.
+
+```cpp
+illusion::LookAt look;
+look.joint = "head";
+look.chainLength = 2; // the head and the neck
+look.target = player;
+const illusion::Entity guard = world.create(illusion::Transform{}, animator, look);
+
+// From a module: look at a point instead (this clears the target Entity).
+static_cast<void>(animation->setLookAtTarget(guard, illusion::Vec3(0.0f, 1.6f, 4.0f)));
+```
+
+## Two-bone IK
+
+Bir `TwoBoneIk` (`illusion.TwoBoneIk`, kaydedilir) bir uç eklemi, bir ayağı ya da bir eli, ebeveyni ve
+büyük ebeveyniyle, örneğin bir dizle ve bir kalçayla, bir hedefe taşır:
+
+| Alan | Anlamı |
+| --- | --- |
+| `joint` | Uç eklem; ebeveyni ve büyük ebeveyni zinciri oluşturur |
+| `target` | Konumu hedef olan Entity; yoksa `point` kullanılır |
+| `point` | `target` yokken dünya uzayındaki hedef |
+| `pole` | Orta eklemin doğru büküldüğü Entity; yoksa `polePoint` kullanılır |
+| `polePoint` | `pole` yokken Animator'ın model uzayındaki pole (+z: dizler öne bükülür) |
+| `weight` | IK'nin [0, 1] aralığındaki payı; 0 animasyondaki uzvu gösterir |
+| `alignToTarget` | Uç ekleme hedef Entity'nin dönüşünü de ver (foot placement ile: zeminin) |
+
+Çözüm analitiktir (kosinüs teoremi): kemikler boylarını korur, orta eklem kök, hedef ve pole'ün düzleminde
+bükülür ve erişilemeyen bir hedef uzvu ona doğru dümdüz uzatır. Kökten hedefe giden doğru üzerindeki bir pole,
+animasyonun verdiği bükülmeyi korur. Sıfır uzunluklu kemikler ve kök üzerindeki hedefler hatasız bırakılır.
+
+Bir Entity bir türden tek bir Component taşır; bu yüzden bir `TwoBoneIk` kendi Entity'sinin Animator'ına, o
+yoksa ebeveyninin Animator'ına etki eder: bir uzvu Animator'ın Entity'sine, ötekileri çocuklarına koyun.
+
+```cpp
+illusion::TwoBoneIk hand;
+hand.joint = "hand_r";
+hand.target = doorHandle;
+hand.alignToTarget = true;
+const illusion::Entity reach = world.create(illusion::Transform{}, hand);
+static_cast<void>(illusion::setParent(world, reach, hero, illusion::ParentMode::KeepLocal));
+
+// From a module: blend the hand in, or aim it at a point.
+static_cast<void>(animation->setIkWeight(hero, "hand_r", 0.5f));
+static_cast<void>(animation->setIkTarget(hero, "hand_r", illusion::Vec3(1.0f, 1.2f, 0.5f)));
+```
+
+Aşamalar her Animator'ın Job System üzerindeki değerlendirmesinde, graf ya da klip ve root motion'dan sonra ve
+model uzayı matrislerinden önce çalışır: önce look-at, sonra Entity'lerinin sırasıyla uzuvlar. Hedefler
+update başlarken World'den alınır ve Animator'ın `Transform`'uyla, ölçek dahil, onun model uzayına çevrilir.
+Eksik bir eklem bir kez loglanır; ekleminin büyük ebeveyni olmayan bir uzuv yok sayılır. Socket'ler ve
+`jointTransform()` çözülmüş pozu görür.
+
+## Foot placement
+
+Animator'ın Entity'sindeki bir `FootPlacement` (`illusion.FootPlacement`, kaydedilir), oyun çalışırken (Play
+modu ve oynatıcı) ayakları engebeli zeminde tutar. Ayakları, Animator'ın zinciri pelvis ekleminden sarkan
+(bir uyluğun ebeveyni pelvistir) `TwoBoneIk` uzuvlarıdır; en çok dört tane:
+
+| Alan | Anlamı |
+| --- | --- |
+| `pelvis` | Alçaktaki ayağın zemine erişebilmesi için indirilen pelvis eklemi |
+| `rayLength` | Işınların kalça yüksekliğinin ne kadar altına uzandığı, metre cinsinden |
+| `footHeight` | Ayak bileğinin zeminden yüksekliği, metre cinsinden |
+| `maxStep` | Düzeltilen en büyük yükseklik farkı, metre cinsinden |
+| `speed` | Düzeltmelerin izleme hızı, saniye başına; 0 hemen izler |
+| `layerMask` | Işınların çarptığı fizik katmanları |
+
+[Oyun oturumu](runtime.md#adm-sras) her Animation adımından önce, son update'in animasyon pozundaki kalça
+yüksekliğinden her ayağın altına dümdüz aşağı bir ışın atar. Işın çarparsa ayak, zemine ve Entity'nin
+orijininden animasyondaki yüksekliğine (en az `footHeight`) kadar, en çok `maxStep` kadar kaldırılır ya da
+indirilir; `alignToTarget` ile zeminin eğimine yatar. Pelvis en büyük indirme kadar düşer, böylece alçak
+zeminin üstündeki bacak ona erişebilir. Işını hiçbir şey bulamayan bir ayağın IK'si yavaşça söner. Her
+değişiklik `speed` ile izlenir; basamaklar ve kenarlar sıçrama yapmaz.
+
+```cpp
+illusion::FootPlacement feet;
+feet.pelvis = "hips";
+feet.rayLength = 1.6f;
+feet.layerMask = 1u << 0; // the ground's layer only
+world.emplace<illusion::FootPlacement>(hero, feet);
+// The legs: TwoBoneIk limbs on "foot_l" (on hero) and "foot_r" (on a child).
+```
+
+- Animator'ın Entity'si animasyonunun zemin seviyesidir: klipte basan bir ayak zemine basmaya devam eder,
+  klipte kalkmış bir ayak da o kadar kalkık kalır.
+- Işınlar karakteri taşıyan gövdeyi (Animator'ın Entity'sinde ya da bir atasında bir `CharacterController`
+  veya `RigidBody`) atlar ve karakterin socket'lerdekiler gibi öteki gövdelerinin altından geçer. Kendi
+  katmanında, `layerMask` dışında duran karakterlerin buna hiç ihtiyacı yoktur.
+- Işınlar son update'in pozundan başlar; ayaklar zemini bir update geriden izler ve bu oyun kare hızlarında
+  görünmez. `engine/animation` fizik kullanmaz: oturum sonuçları, sonraki Animation adımının uyguladığı
+  runtime `FootPlacementPose`'a yazar.
+- Çalışan bir oturum yokken (Play modu dışındaki editör) ayaklar animasyondaki pozu korur.
+
 ## Skinned Mesh'leri çizme
 
 `SceneRenderer` pozlanmış her Mesh'i GPU'da skin'ler. Pozları ona `RenderView::animation` içinde verin;
@@ -477,7 +594,8 @@ renderer->render(commands, target, world, view, &jobs);
 ## Henüz desteklenmeyenler
 
 - Süren bir geçişi kesmek, alt durum makineleri ve bir grafın canlı durumunu kaydetmek.
-- Look-at ve ters kinematik, spring bone'lar ve ragdoll'lar (ANIM-3).
+- Spring bone'lar ve ragdoll'lar (ANIM-3c); ikiden fazla kemikli IK zincirleri ve pelvisten sarkan
+  bacaklardan fazlası için foot placement (dört bacaklı bir rig'in ön bacakları gibi).
 - Klip önizlemeleri, bir zaman çizelgesi, iskelet debug çizimi ve `animation.*` editör komutları (ANIM-4).
 - Morph target'lar, vertex başına dörtten fazla etki ve anahtar kare sıkıştırma.
 
@@ -488,6 +606,8 @@ renderer->render(commands, target, world, view, &jobs);
   yayılır.
 - 300 Animator üzerindeki 600 socket'i yerleştirmek bir update'e yaklaşık 0,05 ms ekler (Benchmark
   `animation/sockets-300`).
+- 300 Animator'ın her birinde üç eklemlik bir look-at ve iki IK uzvu bir update'e yaklaşık 0,1 ms ekler
+  (Benchmark `animation/ik-300`).
 - Skinning, Mesh'i kaç pass çizerse çizsin karede bir kez çalışır: 10.240 vertex'lik 300 instance bir
   NVIDIA GeForce RTX 4070 SUPER'da 0,66 ms sürer (GPU testi 3 ms'lik bir bütçe koyar).
 - Görünür her skinned instance vertex başına 64 bayt GPU belleğine (pozlanmış vertex ve önceki konumu) ve

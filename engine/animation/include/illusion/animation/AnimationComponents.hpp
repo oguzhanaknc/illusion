@@ -1,13 +1,16 @@
 #pragma once
 
 /// @file
-/// The Components of skeletal animation (docs/adr/0059-skeletal-animation.md): the saved Animator and the
-/// runtime AnimationPose that AnimationWorld adds.
+/// The Components of skeletal animation (docs/adr/0059-skeletal-animation.md,
+/// docs/adr/0061-sockets-ik-and-ragdolls.md): the saved Animator, sockets, look-at, IK and foot placement,
+/// and the runtime poses that AnimationWorld adds.
 
 #include <illusion/core/AssetRef.hpp>
 #include <illusion/core/Base.hpp>
 #include <illusion/core/Math.hpp>
+#include <illusion/ecs/Entity.hpp>
 
+#include <array>
 #include <string>
 
 namespace illusion
@@ -52,8 +55,71 @@ struct BoneAttachment
     Vec3 scale{1.0f};                      ///< Offset scale.
 };
 
-/// Registers Animator (`illusion.Animator`) and BoneAttachment (`illusion.BoneAttachment`), both saved, and
-/// AnimationPose (runtime) with @p registry.
+/// Turns a joint chain of the Entity's Animator towards a target (ADR 0061). Saved.
+struct LookAt
+{
+    std::string joint;              ///< The head joint.
+    u32 chainLength = 1;            ///< Joints that share the turn: the head and up to three ancestors (1-4).
+    Entity target;                  ///< Entity to look at; null uses point.
+    Vec3 point{0.0f};               ///< World-space point to look at when target is null.
+    Vec3 forward{0.0f, 0.0f, 1.0f}; ///< The head's forward axis in its own space.
+    f32 maxAngle = 1.2217305f;      ///< Largest turn in radians (70°).
+    f32 weight = 1.0f;              ///< In [0, 1]; 0 turns the stage off.
+    f32 speed = 6.2831853f;         ///< How fast the turn follows the target, in rad/s.
+};
+
+/// Moves an end joint (a foot, a hand) of an Animator to a target with its two parents (ADR 0061). It acts on
+/// the Animator of its own Entity, else on its parent's; an Entity holds one, so further limbs go on children
+/// of the Animator's Entity. Saved.
+struct TwoBoneIk
+{
+    std::string joint;                ///< The end joint; its parent and grandparent form the chain.
+    Entity target;                    ///< Entity whose position is the target; null uses point.
+    Vec3 point{0.0f};                 ///< World-space target when target is null.
+    Entity pole;                      ///< Entity the middle joint bends towards; null uses polePoint.
+    Vec3 polePoint{0.0f, 0.0f, 1.0f}; ///< Pole in the Animator's model space when pole is null.
+    f32 weight = 1.0f;                ///< In [0, 1]; 0 turns the limb's IK off.
+    bool alignToTarget = false;       ///< Also give the end joint the target Entity's rotation.
+};
+
+/// Keeps the feet of the Entity's Animator on the ground (ADR 0061): before each Animation step the session
+/// raycasts below every foot (a TwoBoneIk of the Animator whose chain hangs from the pelvis joint) and moves
+/// the pelvis down to the lowest one. Saved.
+struct FootPlacement
+{
+    std::string pelvis;          ///< The pelvis joint, lowered so that both feet can reach.
+    f32 rayLength = 1.0f;        ///< Ray length below the hip height, in metres.
+    f32 footHeight = 0.08f;      ///< Ankle height above the ground, in metres.
+    f32 maxStep = 0.5f;          ///< Largest height difference corrected, in metres.
+    f32 speed = 8.0f;            ///< How fast the corrections follow, per second.
+    u32 layerMask = 0xFFFFFFFFu; ///< Physics layers the rays hit.
+};
+
+/// One foot of a FootPlacementPose.
+struct FootContact
+{
+    Entity limb;                       ///< The Entity whose TwoBoneIk moves the foot.
+    Vec3 animated{0.0f};               ///< World-space foot position of the last update, before IK.
+    f32 lift = 0.0f;                   ///< Height the foot is moved by, in metres.
+    Quat tilt{1.0f, 0.0f, 0.0f, 0.0f}; ///< World-space turn from +y to the ground normal.
+    f32 weight = 0.0f;                 ///< Share of the foot's IK, in [0, 1].
+};
+
+/// The ground contact of a FootPlacement, added by AnimationWorld (runtime only, never saved): AnimationWorld
+/// writes the animated placements, GameSession the lifts, tilts, weights and pelvis offset that the next
+/// update applies. Without a session every weight stays 0 and the animated pose shows.
+struct FootPlacementPose
+{
+    static constexpr u32 kMaxFeet = 4;        ///< Feet per Animator.
+    std::array<FootContact, kMaxFeet> feet{}; ///< The first footCount are used.
+    u32 footCount = 0;                        ///< Feet found by the last update.
+    Vec3 pelvis{0.0f};       ///< World-space pelvis position of the last update, before the offset.
+    f32 pelvisOffset = 0.0f; ///< Height the pelvis is moved by, in metres (zero or negative).
+    u64 frame = 0;           ///< AnimationWorld::frame() of the update that wrote the animated placements.
+};
+
+/// Registers the saved Animator, BoneAttachment, LookAt, TwoBoneIk and FootPlacement (`illusion.<Name>`) and
+/// the runtime AnimationPose and FootPlacementPose with @p registry.
 void registerAnimationComponents(ComponentRegistry& registry);
 
 } // namespace illusion
