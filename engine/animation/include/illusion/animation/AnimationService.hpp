@@ -27,6 +27,7 @@
 
 #include <illusion/core/Base.hpp>
 #include <illusion/core/Expected.hpp>
+#include <illusion/core/Math.hpp>
 #include <illusion/ecs/Entity.hpp>
 
 #include <span>
@@ -38,8 +39,8 @@ namespace illusion
 /// Why an AnimationService call failed.
 enum class AnimationError : u8
 {
-    NoAnimator,   ///< The Entity has no Animator (or is not alive).
-    NoGraph,      ///< The call needs a graph and the Animator has none, or its graph has not loaded yet.
+    NoAnimator, ///< The Entity has no Animator (or is not alive).
+    NoGraph, ///< The call needs a graph (jointTransform(): a pose) that the Animator lacks or has not loaded.
     HasGraph,     ///< play() on an Animator whose graph controls it.
     UnknownName,  ///< No parameter, layer or clip of that name.
     TypeMismatch, ///< The parameter has another type (setFloat() on a Trigger, ...).
@@ -114,6 +115,11 @@ public:
     /// Writes the events of the last update into @p out, in update order, and returns how many there are;
     /// every call in an update returns the same events.
     virtual u32 pollEvents(std::span<AnimationEvent> out) = 0;
+
+    /// The world-space transform of the joint @p joint of @p entity's skeleton from the last update (where a
+    /// socket would place a child); UnknownName for a joint the skeleton lacks, NoGraph while it loads.
+    [[nodiscard]] virtual Expected<Mat4, AnimationError> jointTransform(Entity entity,
+                                                                        std::string_view joint) const = 0;
 
 protected:
     AnimationService() = default;

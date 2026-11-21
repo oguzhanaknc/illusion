@@ -677,7 +677,7 @@ public:
 };
 
 // Counts the calls of every AnimationService function.
-class CountingAnimation final : public CountingProxy<AnimationService, 9>
+class CountingAnimation final : public CountingProxy<AnimationService, 10>
 {
 public:
     explicit CountingAnimation(AnimationService* inner = nullptr) noexcept
@@ -727,6 +727,12 @@ public:
     u32 pollEvents(std::span<AnimationEvent> out) override
     {
         return forward<u32>(8, [&](AnimationService& s) { return s.pollEvents(out); });
+    }
+    [[nodiscard]] Expected<Mat4, AnimationError> jointTransform(Entity e,
+                                                                std::string_view joint) const override
+    {
+        return forward<Expected<Mat4, AnimationError>>(
+            9, [&](AnimationService& s) { return s.jointTransform(e, joint); });
     }
 };
 

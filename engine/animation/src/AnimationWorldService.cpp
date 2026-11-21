@@ -1,8 +1,11 @@
+#include "PoseDetail.hpp"
+
 #include <illusion/animation/AnimationComponents.hpp>
 #include <illusion/animation/AnimationGraph.hpp>
 #include <illusion/animation/AnimationWorldService.hpp>
 #include <illusion/core/AssetId.hpp>
 #include <illusion/core/AssetRef.hpp>
+#include <illusion/ecs/Transform.hpp>
 #include <illusion/ecs/World.hpp>
 
 #include <algorithm>
@@ -238,6 +241,29 @@ u32 AnimationWorldService::pollEvents(std::span<AnimationEvent> out)
     const std::span<const AnimationEvent> events = m_animation.events();
     std::copy_n(events.begin(), std::min(events.size(), out.size()), out.begin());
     return static_cast<u32>(events.size());
+}
+
+Expected<Mat4, AnimationError> AnimationWorldService::jointTransform(Entity entity,
+                                                                     std::string_view joint) const
+{
+    if (animatorOf(m_animation, entity) == nullptr)
+    {
+        return unexpected(AnimationError::NoAnimator);
+    }
+    const std::optional<u32> slot = m_animation.findSlot(entity);
+    const Skeleton* skeleton = slot ? m_animation.skeleton(*slot) : nullptr;
+    if (skeleton == nullptr)
+    {
+        return unexpected(AnimationError::NoGraph);
+    }
+    const std::span<const Mat4> joints = m_animation.jointMatrices(*slot);
+    const i32 index = detail::findJoint(*skeleton, joint);
+    if (index < 0 || static_cast<usize>(index) >= joints.size())
+    {
+        return unexpected(AnimationError::UnknownName);
+    }
+    const Transform* transform = m_animation.world().tryGet<Transform>(entity);
+    return (transform != nullptr ? transform->matrix() : Mat4(1.0f)) * joints[static_cast<usize>(index)];
 }
 
 } // namespace illusion

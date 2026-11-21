@@ -1227,6 +1227,22 @@ Nothing of it exists yet: glTF skins and animations are skipped on import and th
   evaluation, `AnimationService::jointTransform()` (module API 8), showcase coverage. Done: a child follows a
   joint through clips, cross-fades and Inactive parents; physics bodies on it follow kinematically; no
   allocation per update.
+  ✅ Done: `BoneAttachment` (`illusion.BoneAttachment`: `joint`, offset `translation`/`rotation`/`scale`, saved,
+  manual anchor `#sockets`); `AnimationWorld::update()` evaluates the poses with a marked place for the per-pose
+  stages of ADR 0061 (on the model-space matrices, before skin matrices and bounds), then places the sockets on
+  the World's thread: for an active child whose parent has a posed Animator, `LocalTransform` = joint
+  model-space matrix x offset and `Transform` from the parent's current one; the joint index is cached per
+  attached Entity and looked up again when the skeleton, a model reload (revision) or `joint` changes; a
+  parent without an Animator (or no parent) and a missing joint are logged once per Entity and leave it alone.
+  `GameSession` re-places attached children from their parents after root motion, so kinematic bodies on them
+  reach this update's socket in the physics step; the editor's edit World gets them from
+  `update(0, ..., false)`. `AnimationService::jointTransform()` (Entity `Transform` x joint model matrix of the
+  last update; `NoAnimator`, `NoGraph` while the pose loads, `UnknownName`), module API version 8. Showcase:
+  `Column Lamp` (a sphere on the Column's `top` joint) and the module reads `jointTransform()`. Tests in
+  `tests/animation/TestAnimationSockets.cpp` (the walker assets moved to `WalkerAssets.hpp`);
+  `animation/sockets-300`: 0.30 ms with Jobs for 300 Animators and 600 sockets (budget 2.5 ms).
+  Open: a `Dynamic` body on an attached Entity is not supported (teleported every update, documented); a socket
+  under an attached Animator may reach physics one update late; sockets are placed on one thread.
 - ANIM-3b (`implementer`): Look-at and two-bone IK. Pure solvers, saved `LookAt` and `TwoBoneIk`,
   `FootPlacement` raycasting in `GameSession`, `setLookAtTarget`/`setIkTarget`/`setIkWeight`. Done: solver
   tests (reach, out of reach, pole, clamp), feet on a slope and steps scene, benchmark within the ADR budget.

@@ -403,6 +403,49 @@ eğitimi bunu adım adım yapar.
 - Kesilemeyen geçişler, alt durum makineleri ve canlı durumu kaydetme
   [Henüz desteklenmeyenler](#henuz-desteklenmeyenler) altında listelenir.
 
+## Socket'ler
+
+Bir socket, bir Entity'yi bir ekleme asar: elde bir fener, sırtta bir kılıç, başta bir şapka. Entity'yi
+Animator'ın Entity'sinin çocuğu yapın ve ona bir `BoneAttachment` verin (`illusion.BoneAttachment`, kaydedilir,
+Inspector'ın Animation kategorisinde):
+
+| Alan | Anlamı |
+| --- | --- |
+| `joint` | Ebeveynin iskeletindeki eklemin adı (glTF node adı) |
+| `translation` | Eklemin uzayında, metre cinsinden kaydırma |
+| `rotation` | Eklemin uzayında kaydırma dönüşü |
+| `scale` | Kaydırma ölçeği |
+
+Her Animation update'inden sonra, editör zamanı kaydırırken de, çocuğun `LocalTransform`'u eklemin model
+uzayındaki dönüşümü ile kaydırmanın çarpımı olur ve `Transform`'u ebeveyninkinden çıkar. Kaydırma eklemle
+birlikte hareket eder: (0, 0, 0,1)'lik bir öteleme, eklemin kendi z ekseni boyunca 10 cm'dir. Bağlı Entity'nin
+kendi çocukları onu her zamanki gibi izler. `AnimationService::jointTransform()` bir modüle aynı yeri, bir
+Entity olmadan, dünya uzayında verir.
+
+```cpp
+illusion::BoneAttachment socket;
+socket.joint = "hand_r";
+socket.translation = illusion::Vec3(0.0f, 0.05f, 0.1f);
+const illusion::Entity lantern = world.create(illusion::Transform{}, socket);
+static_cast<void>(illusion::setParent(world, lantern, hero, illusion::ParentMode::KeepLocal));
+
+// Where the hand is, in world space, after the last Animation update.
+const illusion::Expected<illusion::Mat4, illusion::AnimationError> hand =
+    animation->jointTransform(hero, "hand_r");
+```
+
+- Eklem adı iskelet başına bir kez aranır; `joint` değişince ya da model yeniden yüklenince yeniden aranır.
+- Eksik bir eklem ya da `Animator`'ı olmayan bir ebeveyn (veya hiç ebeveyn olmaması) Entity başına bir kez
+  loglanır ve Entity olduğu yerde kalır. Ebeveynin modeli yüklenirken Entity mesajsız olarak kendi hâline
+  bırakılır.
+- Inactive Entity'ler atlanır: devre dışı bir ebeveyn pozunu korur ve bağlı çocukları yerinde kalır.
+- [Oyun oturumunda](runtime.md#adm-sras) socket'ler root motion'dan sonra ve fizikten önce yerleştirilir;
+  böylece bağlı bir Entity'deki `Kinematic` bir `RigidBody` aynı adımda socket'e sürülür ve dinamik
+  gövdeleri iter. Bağlı bir Entity'de `Dynamic` bir gövde desteklenmez: her update'te socket'e ışınlanır ve
+  hızını kaybeder. Onu `Kinematic` yapın ya da düşmesi için `BoneAttachment`'ı kaldırın.
+- Kendisi de bağlı olan bir Entity'deki socket (bağlı bir koldaki el) aynı update'te yerleştirilir, ama
+  fizik onun dünya konumunu bir update geç görebilir.
+
 ## Skinned Mesh'leri çizme
 
 `SceneRenderer` pozlanmış her Mesh'i GPU'da skin'ler. Pozları ona `RenderView::animation` içinde verin;
@@ -434,7 +477,7 @@ renderer->render(commands, target, world, view, &jobs);
 ## Henüz desteklenmeyenler
 
 - Süren bir geçişi kesmek, alt durum makineleri ve bir grafın canlı durumunu kaydetmek.
-- Socket'ler (bir Entity'yi bir ekleme bağlamak), look-at ve ters kinematik, ragdoll'lar (ANIM-3).
+- Look-at ve ters kinematik, spring bone'lar ve ragdoll'lar (ANIM-3).
 - Klip önizlemeleri, bir zaman çizelgesi, iskelet debug çizimi ve `animation.*` editör komutları (ANIM-4).
 - Morph target'lar, vertex başına dörtten fazla etki ve anahtar kare sıkıştırma.
 
@@ -443,6 +486,8 @@ renderer->render(commands, target, world, view, &jobs);
 - Eklemler Entity değil, bitişik dizilerde satırlardır: 60 eklemli 300 karakteri pozlamak tek bir
   masaüstü çekirdeğinde yaklaşık 1,5 ms sürer (Benchmark `animation/evaluate-300x60`) ve Job System'e
   yayılır.
+- 300 Animator üzerindeki 600 socket'i yerleştirmek bir update'e yaklaşık 0,05 ms ekler (Benchmark
+  `animation/sockets-300`).
 - Skinning, Mesh'i kaç pass çizerse çizsin karede bir kez çalışır: 10.240 vertex'lik 300 instance bir
   NVIDIA GeForce RTX 4070 SUPER'da 0,66 ms sürer (GPU testi 3 ms'lik bir bütçe koyar).
 - Görünür her skinned instance vertex başına 64 bayt GPU belleğine (pozlanmış vertex ve önceki konumu) ve

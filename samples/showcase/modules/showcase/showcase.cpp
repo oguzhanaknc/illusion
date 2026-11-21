@@ -22,7 +22,7 @@
 //   palette, focuses the Go button for a while, reads the toggle and the slider, counts clicks, and ends the
 //   game when `ui.cancel` (Escape, or East on a gamepad) is pressed; plays the Column's animation graph,
 //   leaning it with a parameter, bowing it with a trigger and calming it again, and counts its "peak"
-//   events;
+//   events and reads where its "top" joint (the lamp's socket) is;
 // - stop: unloads the clips.
 // Everything that hot reloads must keep lives in the Components showcase.Stats (saved) and showcase.Runtime.
 
@@ -117,6 +117,7 @@ struct Runtime
     f32 columnTime = 0.0f;       ///< Normalized time of the Column's state at the last update.
     f32 columnLean = 0.0f;       ///< The Column's "lean" parameter as the graph used it.
     bool columnSwings = false;   ///< The Column's graph is in its "swing" state.
+    f32 columnTop = 0.0f;        ///< World height of the Column's "top" joint (its lamp's socket).
     u32 uiEvents = 0;            ///< UI events seen so far.
     u32 uiClicks = 0;            ///< Clicks of the Go button.
     f32 sliderValue = 0.0f;      ///< The HUD slider at the last update.
@@ -824,6 +825,10 @@ void updateAnimation(AnimationService& animation, Runtime& runtime, u32 frame)
     runtime.columnLean = animation.parameter(column, "lean").valueOr(0.0f);
     runtime.columnTime = animation.normalizedTime(column, "base").valueOr(0.0f);
     runtime.columnSwings = animation.currentState(column, "base").valueOr("") == "swing";
+    if (const Expected<Mat4, AnimationError> top = animation.jointTransform(column, "top"))
+    {
+        runtime.columnTop = (*top)[3].y;
+    }
 }
 
 // The HUD: the frame counter, the palette, the focus, the values and the events of the last UI update.

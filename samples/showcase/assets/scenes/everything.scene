@@ -5,6 +5,7 @@
     "illusion.Animator": 1,
     "illusion.AudioListener": 1,
     "illusion.AudioSource": 1,
+    "illusion.BoneAttachment": 1,
     "illusion.Camera": 2,
     "illusion.CharacterController": 1,
     "illusion.Collider": 1,
@@ -2766,6 +2767,73 @@
       }
     },
     {
+      "id": "c7c9572ddea951a8",
+      "components": {
+        "illusion.Animator": {
+          "skeleton": "assets:/models/column.gltf#skin/0",
+          "clip": "assets:/models/column.gltf#animation/sway",
+          "graph": "assets:/animations/column.animgraph",
+          "speed": 0.8,
+          "time": 0.4,
+          "loop": false,
+          "playing": false
+        },
+        "illusion.Hierarchy": {
+          "parent": null,
+          "order": 15
+        },
+        "illusion.MeshRenderer": {
+          "mesh": "assets:/models/column.gltf#mesh/0",
+          "submesh": 0,
+          "material": "",
+          "layers": 1,
+          "castShadows": true,
+          "visible": true,
+          "lodBias": 1.0
+        },
+        "illusion.Name": {
+          "value": "Column"
+        },
+        "illusion.Transform": {
+          "position": [-6.0, 0.0, 3.0],
+          "rotation": [0.0, 0.0, 0.0, 1.0],
+          "scale": [1.0, 1.0, 1.0]
+        }
+      }
+    },
+    {
+      "id": "635b0b7e74f0c83e",
+      "components": {
+        "illusion.BoneAttachment": {
+          "joint": "top",
+          "translation": [0.0, 0.15, 0.1],
+          "rotation": [0.0, 0.3826834, 0.0, 0.9238795],
+          "scale": [0.2, 0.2, 0.2]
+        },
+        "illusion.Hierarchy": {
+          "parent": "c7c9572ddea951a8",
+          "order": 0
+        },
+        "illusion.LocalTransform": {
+          "position": [6.0, 0.0, -3.0],
+          "rotation": [0.0, 0.0, 0.0, 1.0],
+          "scale": [1.0, 1.0, 1.0]
+        },
+        "illusion.MeshRenderer": {
+          "mesh": "builtin:/mesh/sphere",
+          "submesh": 0,
+          "material": "builtin:/material/default",
+          "layers": 1,
+          "castShadows": true,
+          "visible": true,
+          "lodBias": 1.0
+        },
+        "illusion.Name": {
+          "value": "Column Lamp"
+        }
+      }
+    },
+    {
       "id": "14d7973c5c2a449c",
       "components": {
         "illusion.Collider": {
@@ -3360,37 +3428,6 @@
           "groundAlbedo": [0.3, 0.25, 0.2],
           "castShadows": false,
           "lightingResolution": 32
-        }
-      }
-    },
-    {
-      "id": "c7c9572ddea951a8",
-      "components": {
-        "illusion.Animator": {
-          "skeleton": "assets:/models/column.gltf#skin/0",
-          "clip": "assets:/models/column.gltf#animation/sway",
-          "graph": "assets:/animations/column.animgraph",
-          "speed": 0.8,
-          "time": 0.4,
-          "loop": false,
-          "playing": false
-        },
-        "illusion.MeshRenderer": {
-          "mesh": "assets:/models/column.gltf#mesh/0",
-          "submesh": 0,
-          "material": "",
-          "layers": 1,
-          "castShadows": true,
-          "visible": true,
-          "lodBias": 1.0
-        },
-        "illusion.Name": {
-          "value": "Column"
-        },
-        "illusion.Transform": {
-          "position": [-6.0, 0.0, 3.0],
-          "rotation": [0.0, 0.0, 0.0, 1.0],
-          "scale": [1.0, 1.0, 1.0]
         }
       }
     },

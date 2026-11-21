@@ -62,7 +62,7 @@ void update(illusion::ModuleContext& context, illusion::f64)
 - **Maliyet.** Bir çağrı tek bir dolaylı çağrıdır; `services/virtual-call` Benchmark'ı onu 10 ns'nin
   altında tutar.
 - **Uyumluluk.** Arayüzler modül ABI'sinin parçasıdır: bir fonksiyon eklemek veya değiştirmek
-  `kModuleApiVersion`'ı değiştirir (`AnimationService` ile birlikte 7) ve modüller yeniden Build edilmelidir.
+  `kModuleApiVersion`'ı değiştirir (`AnimationService::jointTransform()` ile birlikte 8) ve modüller yeniden Build edilmelidir.
 
 ## Kapsam
 
@@ -208,15 +208,16 @@ grafı henüz yüklenmemişken `NoGraph` döndürür; bilinmeyen adlar `UnknownN
 | `currentState`, `normalizedTime` | Bir katmanın geçerli durumu (süren bir geçişin hedefi) ve normalize zamanı |
 | `play` | Grafı olmayan bir Animator'ı `fadeSeconds` boyunca `model.glb#animation/<name>` klibine cross-fade eder, 0 zamanından başlatır; `Animator::clip`'i ayarlar (graf varsa `HasGraph`) |
 | `pollEvents` | Son update'in durum olaylarını (`AnimationEvent`: Entity, olay, katman, durum) update sırasıyla bir span'e kopyalar; toplamı döndürür |
+| `jointTransform` | Entity'nin iskeletindeki bir eklemin son update'teki dünya uzayı matrisi: Entity'nin `Transform`'u ile eklemin model uzayındaki pozunun çarpımı, yani bir [socket](../manual/animation.md#socketler)'in bir çocuğu yerleştireceği yer (iskelette olmayan bir eklem için `UnknownName`, poz yüklenirken `NoGraph`) |
 
 Her fonksiyon bir `Expected<..., AnimationError>` döndürür; `animationErrorName()` adı verir:
 
 | Hata | Ne zaman |
 | --- | --- |
 | `NoAnimator` | Entity canlı değil ya da `Animator`'ı yok |
-| `NoGraph` | Çağrı bir graf gerektirir ve Animator'ın grafı yok ya da henüz yüklenmedi |
+| `NoGraph` | Çağrı bir graf gerektirir ve Animator'ın grafı yok ya da henüz yüklenmedi; `jointTransform()` için poz henüz yüklenmedi |
 | `HasGraph` | Grafı onu yöneten bir Animator'da `play()` |
-| `UnknownName` | O adda parametre, katman ya da klip yok (`model.glb#animation/<name>` olmayan bir `play()` yolu da) |
+| `UnknownName` | O adda parametre, katman, klip ya da eklem yok (`model.glb#animation/<name>` olmayan bir `play()` yolu da) |
 | `TypeMismatch` | Parametre başka bir türde (bir Trigger'da `setFloat()`, bir Float'ta `setTrigger()`, ...) |
 | `InvalidValue` | Bir değer sonlu değil, bir Int 2^24'ün ötesinde ya da bir fade negatif |
 

@@ -8,6 +8,8 @@
 #include <illusion/core/Base.hpp>
 #include <illusion/core/Math.hpp>
 
+#include <string>
+
 namespace illusion
 {
 
@@ -40,7 +42,18 @@ struct AnimationPose
     f32 rootYaw = 0.0f; ///< Root motion rotation about +y of the last update, in radians.
 };
 
-/// Registers Animator (`illusion.Animator`, saved) and AnimationPose (runtime) with @p registry.
+/// Makes its Entity follow a joint of its parent's Animator (a socket, ADR 0061): AnimationWorld writes the
+/// Entity's local transform from the joint's pose and this offset after every update. Saved.
+struct BoneAttachment
+{
+    std::string joint;                     ///< Joint name in the parent's skeleton.
+    Vec3 translation{0.0f};                ///< Offset in the joint's space.
+    Quat rotation{1.0f, 0.0f, 0.0f, 0.0f}; ///< Offset rotation in the joint's space.
+    Vec3 scale{1.0f};                      ///< Offset scale.
+};
+
+/// Registers Animator (`illusion.Animator`) and BoneAttachment (`illusion.BoneAttachment`), both saved, and
+/// AnimationPose (runtime) with @p registry.
 void registerAnimationComponents(ComponentRegistry& registry);
 
 } // namespace illusion

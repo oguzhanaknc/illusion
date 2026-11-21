@@ -61,6 +61,13 @@ struct AnimationStatistics
 /// motion, turned into world space by the Entity's Transform, into AnimationPose::rootTranslation and
 /// AnimationPose::rootYaw. A changed graph file (AssetReloadedEvent) restarts its Animators. An Animator
 /// without a graph cross-fades from its previous clip after crossFade().
+///
+/// After every pose of an update is evaluated, each active Entity with a BoneAttachment whose parent
+/// (Hierarchy) has a posed Animator follows its joint (a socket, ADR 0061): its LocalTransform becomes the
+/// joint's model-space transform times the attachment's offset, and its Transform follows from the parent's
+/// current Transform. The joint name is looked up once per skeleton, again after a model reload or a change
+/// of BoneAttachment::joint. A parent without an Animator or a missing joint is logged once per Entity, which
+/// then stays where it is; a parent whose model loads leaves it alone silently.
 class AnimationWorld : NonCopyable
 {
 public:
