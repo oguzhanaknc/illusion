@@ -62,7 +62,7 @@ void update(illusion::ModuleContext& context, illusion::f64)
 - **Maliyet.** Bir çağrı tek bir dolaylı çağrıdır; `services/virtual-call` Benchmark'ı onu 10 ns'nin
   altında tutar.
 - **Uyumluluk.** Arayüzler modül ABI'sinin parçasıdır: bir fonksiyon eklemek veya değiştirmek
-  `kModuleApiVersion`'ı değiştirir (`AnimationService::jointTransform()` ile birlikte 8) ve modüller yeniden Build edilmelidir.
+  `kModuleApiVersion`'ı değiştirir (`AnimationService::setLookAtTarget()`, `setIkTarget()` ve `setIkWeight()` ile birlikte 9) ve modüller yeniden Build edilmelidir.
 
 ## Kapsam
 
@@ -194,7 +194,7 @@ kılavuz sayfası `Saved` tag'ini, metadata'yı, olayları ve dosyaları anlatı
 
 ## AnimationService
 
-Animator'ların animasyon grafları ve klipleri (ADR 0059, ADR 0060). Parametre yazımları bir sonraki
+Animator'ların animasyon grafları ve klipleri, eklemleri, look-at ve IK'leri (ADR 0059, ADR 0060, ADR 0061). Parametre yazımları bir sonraki
 Animation adımında kullanılır; okumalar grafın kullandığı değerleri döndürür. `Animator`'ı olmayan bir
 Entity üzerindeki çağrı `NoAnimator` döndürür; graf gerektiren bir çağrı, Animator'ın grafı yokken ya da
 grafı henüz yüklenmemişken `NoGraph` döndürür; bilinmeyen adlar `UnknownName`, yanlış türler
@@ -209,6 +209,9 @@ grafı henüz yüklenmemişken `NoGraph` döndürür; bilinmeyen adlar `UnknownN
 | `play` | Grafı olmayan bir Animator'ı `fadeSeconds` boyunca `model.glb#animation/<name>` klibine cross-fade eder, 0 zamanından başlatır; `Animator::clip`'i ayarlar (graf varsa `HasGraph`) |
 | `pollEvents` | Son update'in durum olaylarını (`AnimationEvent`: Entity, olay, katman, durum) update sırasıyla bir span'e kopyalar; toplamı döndürür |
 | `jointTransform` | Entity'nin iskeletindeki bir eklemin son update'teki dünya uzayı matrisi: Entity'nin `Transform`'u ile eklemin model uzayındaki pozunun çarpımı, yani bir [socket](../manual/animation.md#socketler)'in bir çocuğu yerleştireceği yer (iskelette olmayan bir eklem için `UnknownName`, poz yüklenirken `NoGraph`) |
+| `setLookAtTarget` | Entity'nin [`LookAt`](../manual/animation.md#look-at)'inin baktığı dünya uzayındaki noktayı ayarlar ve hedef Entity'sini temizler (`LookAt` yoksa `UnknownName`) |
+| `setIkTarget` | Animator'ın uç eklemi `joint` olan [`TwoBoneIk`](../manual/animation.md#two-bone-ik)'inin (Entity'de ya da bir çocukta) dünya uzayındaki hedefini ayarlar ve hedef Entity'sini temizler (yoksa `UnknownName`) |
+| `setIkWeight` | O `TwoBoneIk`'in ağırlığını [0, 1] aralığına sıkıştırarak ayarlar; 0 animasyondaki uzvu gösterir |
 
 Her fonksiyon bir `Expected<..., AnimationError>` döndürür; `animationErrorName()` adı verir:
 
@@ -217,7 +220,7 @@ Her fonksiyon bir `Expected<..., AnimationError>` döndürür; `animationErrorNa
 | `NoAnimator` | Entity canlı değil ya da `Animator`'ı yok |
 | `NoGraph` | Çağrı bir graf gerektirir ve Animator'ın grafı yok ya da henüz yüklenmedi; `jointTransform()` için poz henüz yüklenmedi |
 | `HasGraph` | Grafı onu yöneten bir Animator'da `play()` |
-| `UnknownName` | O adda parametre, katman, klip ya da eklem yok (`model.glb#animation/<name>` olmayan bir `play()` yolu da) |
+| `UnknownName` | O adda parametre, katman, klip ya da eklem yok ya da onun için `LookAt` veya `TwoBoneIk` yok (`model.glb#animation/<name>` olmayan bir `play()` yolu da) |
 | `TypeMismatch` | Parametre başka bir türde (bir Trigger'da `setFloat()`, bir Float'ta `setTrigger()`, ...) |
 | `InvalidValue` | Bir değer sonlu değil, bir Int 2^24'ün ötesinde ya da bir fade negatif |
 

@@ -65,10 +65,16 @@ version changes are in the contributor guide ("Versions and releases"). The vers
 - Sockets (ANIM-3a): the saved `BoneAttachment` Component makes a child Entity follow a joint of its parent's
   Animator with an offset (kinematic bodies on it follow too), and `AnimationService::jointTransform()` gives
   game modules a joint's world-space placement; the manual section "Sockets".
+- Look-at and IK (ANIM-3b): the saved `LookAt` (a head and up to three ancestors turned towards an Entity or a
+  point, clamped and smoothed), `TwoBoneIk` (analytic two-bone IK with a pole, on the Animator's Entity or its
+  children) and `FootPlacement` (feet kept on the ground by raycasts in the game session, the pelvis lowered
+  for the lower foot) Components, `AnimationService::setLookAtTarget()`, `setIkTarget()` and `setIkWeight()`,
+  and the manual sections "Look-at", "Two-bone IK" and "Foot placement".
 
 ### Changed
 
-- The module API version is 8 (`AnimationService` gained `jointTransform()`; version 7 added
+- The module API version is 9 (`AnimationService` gained `setLookAtTarget()`, `setIkTarget()` and
+  `setIkWeight()`; version 8 added `jointTransform()`, version 7
   `AnimationService`, version 6 `UiService`, `SceneService::requestExit()` and `SaveService`, and `UiService`
   gained `playTransition()` and `transitionProgress()`): game modules built for an earlier version must be
   rebuilt.

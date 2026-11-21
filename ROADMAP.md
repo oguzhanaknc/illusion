@@ -1246,6 +1246,27 @@ Nothing of it exists yet: glTF skins and animations are skipped on import and th
 - ANIM-3b (`implementer`): Look-at and two-bone IK. Pure solvers, saved `LookAt` and `TwoBoneIk`,
   `FootPlacement` raycasting in `GameSession`, `setLookAtTarget`/`setIkTarget`/`setIkWeight`. Done: solver
   tests (reach, out of reach, pole, clamp), feet on a slope and steps scene, benchmark within the ADR budget.
+  ✅ Done: `InverseKinematics.hpp` (`solveLookAt()`: a clamped, weighted shortest-arc turn shared evenly along up
+  to four joints, fading out for a target behind the head instead of flipping; `solveTwoBoneIk()`: law of
+  cosines, pole plane, straight stretch out of reach, optional end alignment, weight blending, no NaN for
+  degenerate input; both allocation-free); saved `LookAt`, `TwoBoneIk` and `FootPlacement` (`illusion.<Name>`,
+  manual anchors `#look-at`, `#two-bone-ik`, `#foot-placement`) and the runtime `FootPlacementPose`.
+  `AnimationWorld::update()` now runs the stages on the local pose before the model-space matrices, per
+  Animator in the parallel evaluation, with a marked place for spring bones first: foot placement's pelvis
+  offset and foot targets, look-at (`speed` smoothing state in the pose slot, the full turn at once when not
+  advancing), then the limbs (targets and poles turned into model space through the Animator's `Transform`).
+  A `TwoBoneIk` acts on its own Entity's Animator, else its parent's (one Component per Entity, so further limbs
+  go on children; the header's "several on one Entity" could not work); the feet of a `FootPlacement` are the
+  limbs whose chain hangs from the pelvis joint (up to four). `GameSession` raycasts below each foot before the
+  Animation step (skipping the character's carrier body and passing below its other bodies), writes lifts,
+  ground tilts, eased weights and the pelvis drop (clamped by `maxStep`, smoothed by `speed`) into
+  `FootPlacementPose`. `AnimationService::setLookAtTarget()`, `setIkTarget()`, `setIkWeight()` (module API 9).
+  Showcase: the `Strider` (a two-legged rig from `make_assets.py`, out of the camera's view) with all three
+  Components, and the module calls the three functions. Tests in `tests/animation/TestInverseKinematics.cpp`
+  and `TestAnimationIk.cpp`; `animation/ik-300`: 0.36 ms with Jobs for 300 Animators with a three-joint look-at
+  and two limbs (0.10 ms over `animation/world-update-300x60`; budget 2.5 ms).
+  Open: IK chains of more than two bones; foot placement for legs that do not hang from the pelvis (front legs
+  of quadrupeds); own bodies with mesh or hull shapes stop the foot rays; feet follow the ground one update late.
 - ANIM-3c (`implementer`): Spring bones and ragdolls. Saved `SpringBone` and `Ragdoll`, generated and
   `.ragdoll` profiles, Jolt ragdolls in `PhysicsWorld`, blend in and out, `setRagdoll()`. Done: deterministic
   spring chains with fixed steps, a ragdoll falls down stairs and settles, blend continuity, benchmark of 20

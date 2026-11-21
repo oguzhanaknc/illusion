@@ -46,6 +46,10 @@ public:
     u32 pollEvents(std::span<AnimationEvent> out) override;
     [[nodiscard]] Expected<Mat4, AnimationError> jointTransform(Entity entity,
                                                                 std::string_view joint) const override;
+    Expected<void, AnimationError> setLookAtTarget(Entity entity, const Vec3& point) override;
+    Expected<void, AnimationError> setIkTarget(Entity entity, std::string_view joint,
+                                               const Vec3& point) override;
+    Expected<void, AnimationError> setIkWeight(Entity entity, std::string_view joint, f32 weight) override;
     /// @}
 
 private:

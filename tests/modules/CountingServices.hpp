@@ -677,7 +677,7 @@ public:
 };
 
 // Counts the calls of every AnimationService function.
-class CountingAnimation final : public CountingProxy<AnimationService, 10>
+class CountingAnimation final : public CountingProxy<AnimationService, 13>
 {
 public:
     explicit CountingAnimation(AnimationService* inner = nullptr) noexcept
@@ -733,6 +733,18 @@ public:
     {
         return forward<Expected<Mat4, AnimationError>>(
             9, [&](AnimationService& s) { return s.jointTransform(e, joint); });
+    }
+    Void setLookAtTarget(Entity e, const Vec3& point) override
+    {
+        return forward<Void>(10, [&](AnimationService& s) { return s.setLookAtTarget(e, point); });
+    }
+    Void setIkTarget(Entity e, std::string_view joint, const Vec3& point) override
+    {
+        return forward<Void>(11, [&](AnimationService& s) { return s.setIkTarget(e, joint, point); });
+    }
+    Void setIkWeight(Entity e, std::string_view joint, f32 weight) override
+    {
+        return forward<Void>(12, [&](AnimationService& s) { return s.setIkWeight(e, joint, weight); });
     }
 };
 
