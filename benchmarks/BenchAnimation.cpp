@@ -1,10 +1,12 @@
 #include "Budget.hpp"
 
 #include <illusion/animation/AnimationComponents.hpp>
+#include <illusion/animation/AnimationGraphState.hpp>
 #include <illusion/animation/AnimationWorld.hpp>
 #include <illusion/animation/Pose.hpp>
 #include <illusion/assets/AssetStreamer.hpp>
 #include <illusion/core/JobSystem.hpp>
+#include <illusion/core/Memory.hpp>
 #include <illusion/ecs/Reflection.hpp>
 #include <illusion/ecs/Transform.hpp>
 #include <illusion/ecs/World.hpp>
@@ -46,8 +48,8 @@ Skeleton makeSkeleton()
     return skeleton;
 }
 
-// Linear translation, rotation and scale keys on every joint.
-AnimationClip makeClip()
+// Linear translation, rotation and scale keys on every joint; @p phase shifts the motion.
+AnimationClip makeClip(f32 phase = 0.0f)
 {
     AnimationClip clip;
     clip.duration = 1.0f;
@@ -62,7 +64,7 @@ AnimationClip makeClip()
             for (u32 k = 0; k < kKeys; ++k)
             {
                 const f32 time = static_cast<f32>(k) / static_cast<f32>(kKeys - 1);
-                const f32 angle = 0.5f * std::sin(6.28f * time + static_cast<f32>(j));
+                const f32 angle = 0.5f * std::sin(6.28f * time + static_cast<f32>(j) + phase);
                 channel.times.push_back(time);
                 channel.values.push_back(path == AnimationPath::Rotation
                                              ? Vec4(0.0f, 0.0f, std::sin(angle), std::cos(angle))
@@ -256,5 +258,81 @@ ILL_BENCHMARK("animation/world-update-300x60", 2'000'000.0)
     bench.run("AnimationWorld::update 300 x 60 joints", [&] {
         animation.update(1.0f / 60.0f, &jobs, true);
         ankerl::nanobench::doNotOptimizeAway(animation.statistics().joints);
+    });
+}
+
+// Budget: ns to step and evaluate 300 graph states of 60 joints on one thread, each with two layers (a masked
+// Override layer over a base layer cross-fading between a three-clip 2D blend space and a clip) and root
+// motion, about 7.5x a desktop result (6.5 ms; AnimationWorld spreads it over the Job System); see
+// Budget.hpp.
+ILL_BENCHMARK("animation/graph-300", 50'000'000.0)
+{
+    const Skeleton skeleton = makeSkeleton();
+    std::vector<AnimationClip> clips;
+    for (u32 c = 0; c < 5; ++c)
+    {
+        clips.push_back(makeClip(static_cast<f32>(c)));
+        clips.back().name = std::format("c{}", c);
+    }
+    const Expected<AnimationGraph, std::string> graph = parseAnimationGraph(R"({
+        "format": "illusion.animgraph", "version": 1, "rootMotion": "joint00",
+        "parameters": [{"name": "x", "type": "Float"}, {"name": "y", "type": "Float"}, {"name": "go", "type": "Trigger"}],
+        "layers": [
+          {"name": "base", "states": [
+             {"name": "move", "blend2d": {"x": "x", "y": "y", "points": [
+                {"x": 0, "y": 0, "clip": "bench:/rig.glb#animation/c0"}, {"x": 1, "y": 0, "clip": "bench:/rig.glb#animation/c1"},
+                {"x": 0, "y": 1, "clip": "bench:/rig.glb#animation/c2"}]},
+              "events": [{"name": "step", "time": 0.25}, {"name": "step", "time": 0.75}]},
+             {"name": "other", "clip": "bench:/rig.glb#animation/c3"}],
+           "transitions": [{"from": "move", "to": "other", "duration": 0.5, "conditions": [{"parameter": "go"}]},
+                           {"from": "other", "to": "move", "duration": 0.5, "conditions": [{"parameter": "go"}]}]},
+          {"name": "upper", "weight": 0.8, "mask": [{"joint": "joint10"}],
+           "states": [{"name": "aim", "clip": "bench:/rig.glb#animation/c4"}]}]})");
+    if (!graph)
+    {
+        return;
+    }
+    const Expected<GraphBinding, std::string> binding =
+        bindGraph(*graph, skeleton, [&](const AssetRef& ref) -> const AnimationClip* {
+            for (const AnimationClip& clip : clips)
+            {
+                if (ref.path().ends_with("/" + clip.name))
+                {
+                    return &clip;
+                }
+            }
+            return nullptr;
+        });
+    if (!binding)
+    {
+        return;
+    }
+    const i32 x = graph->findParameter("x");
+    const i32 y = graph->findParameter("y");
+    const i32 go = graph->findParameter("go");
+    std::vector<AnimationGraphState> states;
+    std::array<GraphEvent, 8> events{};
+    for (u32 i = 0; i < kSkeletons; ++i)
+    {
+        AnimationGraphState state = makeGraphState(*binding);
+        state.setValue(x, 0.3f * static_cast<f32>(i % 3) / 2.0f + 0.1f);
+        state.setValue(y, 0.3f * static_cast<f32>(i % 5) / 4.0f + 0.1f);
+        // Staggers the cross-fades, so that every step sees states at every point of a fade.
+        state.setTrigger(go);
+        (void)stepGraph(*binding, state, 0.0f, events);
+        (void)stepGraph(*binding, state, 0.0017f * static_cast<f32>(i), events);
+        states.push_back(std::move(state));
+    }
+    LinearAllocator scratch(usize{1} << 16);
+    std::vector<JointPose> pose(kJoints);
+    RootMotionDelta root;
+    bench.run("step + evaluate 300 graphs x 60 joints", [&] {
+        for (AnimationGraphState& state : states)
+        {
+            state.setTrigger(go);
+            (void)stepGraph(*binding, state, 1.0f / 60.0f, events);
+            evaluateGraph(*binding, state, scratch, pose, &root);
+        }
+        ankerl::nanobench::doNotOptimizeAway(root.yaw);
     });
 }

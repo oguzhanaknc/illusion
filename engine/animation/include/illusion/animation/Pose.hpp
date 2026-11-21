@@ -71,6 +71,18 @@ void localToModel(const Skeleton& skeleton, std::span<const JointPose> local, st
 /// Writes model-space matrix times inverse bind for every joint into @p out.
 void skinMatrices(const Skeleton& skeleton, std::span<const Mat4> model, std::span<SkinMatrix> out) noexcept;
 
+/// Blends @p from towards @p to by @p weight (0: from, 1: to) into @p out, per joint scaled by @p mask (one
+/// weight per joint in [0, 1]; empty means 1 everywhere): linear for translation and scale, shortest-path
+/// nlerp for rotation. @p out may alias @p from.
+void blendPoses(std::span<const JointPose> from, std::span<const JointPose> to, f32 weight,
+                std::span<const f32> mask, std::span<JointPose> out) noexcept;
+
+/// Adds the difference of @p additive from @p reference (both local poses of the same skeleton) to @p base,
+/// scaled by @p weight and @p mask (as in blendPoses()): translation and scale offsets, rotation
+/// base * slerp(identity, inverse(reference) * additive, weight).
+void addPose(std::span<JointPose> base, std::span<const JointPose> additive,
+             std::span<const JointPose> reference, f32 weight, std::span<const f32> mask) noexcept;
+
 /// The model-space bounds of a skinned mesh: each joint's bind-space bounds (MeshData::jointBounds; an
 /// empty box for a joint that moves no vertex) transformed by its skin matrix, merged.
 [[nodiscard]] Aabb skinnedBounds(std::span<const Aabb> jointBounds,

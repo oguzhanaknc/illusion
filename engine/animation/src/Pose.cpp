@@ -1,3 +1,5 @@
+#include "PoseDetail.hpp"
+
 #include <illusion/animation/Pose.hpp>
 #include <illusion/core/Assert.hpp>
 
@@ -91,6 +93,25 @@ Vec4 sampleChannel(const AnimationChannel& channel, f32 time) noexcept
     return value(key);
 }
 
+void applyValue(JointPose& pose, AnimationPath path, Vec4 value) noexcept
+{
+    switch (path)
+    {
+    case AnimationPath::Translation:
+        pose.translation = Vec3(value);
+        break;
+    case AnimationPath::Rotation:
+    {
+        const f32 length = glm::length(value);
+        pose.rotation = length > 0.0f ? toQuat(value / length) : Quat(1.0f, 0.0f, 0.0f, 0.0f);
+        break;
+    }
+    case AnimationPath::Scale:
+        pose.scale = Vec3(value);
+        break;
+    }
+}
+
 } // namespace
 
 ClipBinding bindClip(const AnimationClip& clip, const Skeleton& skeleton)
@@ -160,21 +181,7 @@ void sampleClip(const AnimationClip& clip, const ClipBinding& binding, const Ske
         const AnimationChannel& channel = clip.channels[c];
         const Vec4 value = sampleChannel(channel, time);
         JointPose& pose = out[static_cast<usize>(joint)];
-        switch (channel.path)
-        {
-        case AnimationPath::Translation:
-            pose.translation = Vec3(value);
-            break;
-        case AnimationPath::Rotation:
-        {
-            const f32 length = glm::length(value);
-            pose.rotation = length > 0.0f ? toQuat(value / length) : Quat(1.0f, 0.0f, 0.0f, 0.0f);
-            break;
-        }
-        case AnimationPath::Scale:
-            pose.scale = Vec3(value);
-            break;
-        }
+        applyValue(pose, channel.path, value);
     }
 }
 
@@ -211,6 +218,82 @@ void skinMatrices(const Skeleton& skeleton, std::span<const Mat4> model, std::sp
         }
     }
 }
+
+void blendPoses(std::span<const JointPose> from, std::span<const JointPose> to, f32 weight,
+                std::span<const f32> mask, std::span<JointPose> out) noexcept
+{
+    const usize count = std::min({from.size(), to.size(), out.size()});
+    ILL_ASSERT(mask.empty() || mask.size() >= count, "blendPoses needs one mask weight per joint");
+    const bool masked = !mask.empty() && mask.size() >= count;
+    for (usize j = 0; j < count; ++j)
+    {
+        const f32 w = masked ? weight * mask[j] : weight;
+        if (!(w > 0.0f) || !(w < 1.0f))
+        {
+            out[j] = w > 0.0f ? to[j] : from[j];
+            continue;
+        }
+        const JointPose& a = from[j];
+        const JointPose& b = to[j];
+        Quat target = b.rotation;
+        if (glm::dot(a.rotation, target) < 0.0f)
+        {
+            target = -target;
+        }
+        const JointPose blended{glm::mix(a.translation, b.translation, w),
+                                glm::normalize(a.rotation * (1.0f - w) + target * w),
+                                glm::mix(a.scale, b.scale, w)};
+        out[j] = blended;
+    }
+}
+
+void addPose(std::span<JointPose> base, std::span<const JointPose> additive,
+             std::span<const JointPose> reference, f32 weight, std::span<const f32> mask) noexcept
+{
+    const usize count = std::min({base.size(), additive.size(), reference.size()});
+    ILL_ASSERT(mask.empty() || mask.size() >= count, "addPose needs one mask weight per joint");
+    const bool masked = !mask.empty() && mask.size() >= count;
+    const Quat identity(1.0f, 0.0f, 0.0f, 0.0f);
+    for (usize j = 0; j < count; ++j)
+    {
+        const f32 w = masked ? weight * mask[j] : weight;
+        if (w == 0.0f)
+        {
+            continue;
+        }
+        JointPose& pose = base[j];
+        const JointPose& add = additive[j];
+        const JointPose& ref = reference[j];
+        pose.translation += (add.translation - ref.translation) * w;
+        pose.scale += (add.scale - ref.scale) * w;
+        const Quat delta = glm::inverse(ref.rotation) * add.rotation;
+        pose.rotation = glm::normalize(pose.rotation * slerpShortest(identity, delta, w));
+    }
+}
+
+namespace detail
+{
+
+JointPose sampleJoint(const AnimationClip& clip, const ClipBinding& binding, const Skeleton& skeleton,
+                      u32 joint, f32 time) noexcept
+{
+    const SkeletonJoint& rest = skeleton.joints[joint];
+    JointPose pose{rest.translation, rest.rotation, rest.scale};
+    const usize channels = std::min(clip.channels.size(), binding.joints.size());
+    for (usize c = 0; c < channels; ++c)
+    {
+        if (binding.joints[c] != static_cast<i32>(joint))
+        {
+            continue;
+        }
+        const AnimationChannel& channel = clip.channels[c];
+        const Vec4 value = sampleChannel(channel, time);
+        applyValue(pose, channel.path, value);
+    }
+    return pose;
+}
+
+} // namespace detail
 
 Aabb skinnedBounds(std::span<const Aabb> jointBounds, std::span<const SkinMatrix> skin) noexcept
 {
