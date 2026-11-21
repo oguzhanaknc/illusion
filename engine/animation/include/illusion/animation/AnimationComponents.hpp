@@ -118,8 +118,8 @@ struct FootPlacementPose
     u64 frame = 0;           ///< AnimationWorld::frame() of the update that wrote the animated placements.
 };
 
-/// Registers the saved Animator, BoneAttachment, LookAt, TwoBoneIk and FootPlacement (named `illusion.Animator`
-/// and so on) and the runtime AnimationPose and FootPlacementPose with @p registry.
+/// Registers the saved Animator, BoneAttachment, LookAt, TwoBoneIk and FootPlacement (named
+/// `illusion.Animator` and so on) and the runtime AnimationPose and FootPlacementPose with @p registry.
 void registerAnimationComponents(ComponentRegistry& registry);
 
 } // namespace illusion
