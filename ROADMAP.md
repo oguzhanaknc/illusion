@@ -1155,7 +1155,24 @@ Nothing of it exists yet: glTF skins and animations are skipped on import and th
 - ANIM-2 (scope): cross-fades, additive and masked (per-bone) layers, 1D/2D blend spaces,
   a data-driven state machine with parameters and transitions, animation events (footsteps, effects),
   root motion into the CharacterController; `AnimationService` for game modules
-- ANIM-3: Sockets and procedural animation: attach entities to bones (a lantern in a hand), look-at and
+- ANIM-3: Sockets and procedural animation, designed in ADR 0061 (post-process stages of the pose after the
+  graph: spring bones, look-at, two-bone IK, ragdoll blend; sockets; foot placement raycasts in GameSession).
+  Four work packages:
+- ANIM-3a (`implementer`): Sockets. Saved `BoneAttachment`, the stage hook in `AnimationWorld` after
+  evaluation, `AnimationService::jointTransform()` (module API 8), showcase coverage. Done: a child follows a
+  joint through clips, cross-fades and Inactive parents; physics bodies on it follow kinematically; no
+  allocation per update.
+- ANIM-3b (`implementer`): Look-at and two-bone IK. Pure solvers, saved `LookAt` and `TwoBoneIk`,
+  `FootPlacement` raycasting in `GameSession`, `setLookAtTarget`/`setIkTarget`/`setIkWeight`. Done: solver
+  tests (reach, out of reach, pole, clamp), feet on a slope and steps scene, benchmark within the ADR budget.
+- ANIM-3c (`implementer`): Spring bones and ragdolls. Saved `SpringBone` and `Ragdoll`, generated and
+  `.ragdoll` profiles, Jolt ragdolls in `PhysicsWorld`, blend in and out, `setRagdoll()`. Done: deterministic
+  spring chains with fixed steps, a ragdoll falls down stairs and settles, blend continuity, benchmark of 20
+  ragdolls.
+- ANIM-3d (`mechanic`): Documentation and sample: manual sections for each stage (EN/TR), the scripting API
+  reference, the tutorial "Animate a character" gets a lantern socket, look-at and foot placement,
+  `CHANGELOG.md`.
+- ANIM-3 (scope): attach entities to bones (a lantern in a hand), look-at and
   two-bone IK (feet on uneven ground), ragdolls on Jolt from the skeleton, physics-driven secondary motion
 - ANIM-4: Editor and agents: clip and state-machine preview in the Inspector, a timeline scrubber,
   `animation.*` commands (MCP tools), skeleton debug drawing; the tech demo gets an animated creature;

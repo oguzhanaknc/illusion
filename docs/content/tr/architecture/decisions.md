@@ -67,6 +67,7 @@ Record (ADR) olarak kaydedilir. Her kayıt bağlamı, kararı ve sonuçlarını 
 | [0058](https://github.com/oguzhanaknc/illusion/blob/main/docs/adr/0058-saved-games.md) | Kayıtlı oyunlar: Saved etiketli Entity'lerin slot dosyaları, sağlama toplamlı bir kapsayıcı içinde scene JSON olarak, tek yedekle atomik biçimde bir kayıt thread'inde yazılır; yoklanan bir SaveService üzerinden |
 | [0059](https://github.com/oguzhanaknc/illusion/blob/main/docs/adr/0059-skeletal-animation.md) | İskelet animasyonu: skin'ler ve clip'ler model içine cook edilir, pose'lar ECS dışındaki bir AnimationWorld'de tutulur, skinning kare başına bir kez bir compute pass'te yapılır |
 | [0060](https://github.com/oguzhanaknc/illusion/blob/main/docs/adr/0060-animation-graphs.md) | Animasyon graph'ları: parametrelerle sürülen, katmanlı state machine'ler olarak `.animgraph` Asset'leri; blend space'ler, event'ler ve root motion ile, yoklanan bir AnimationService üzerinden |
+| [0061](https://github.com/oguzhanaknc/illusion/blob/main/docs/adr/0061-sockets-ik-and-ragdolls.md) | Soketler, look-at, iki kemikli IK, spring bone'lar ve ragdoll'lar; animasyon graph'ından sonra sabit aşamalar olarak işlenen Component'ler; ayak yerleştirme ışınları GameSession'da atılır |
 
 Yeni bir karar önermek için `docs/adr/0000-template.md` dosyasını kopyalayın ve
 [katkıda bulunma rehberini](../contributing.md#architecture-decision-recordlar) izleyin.
