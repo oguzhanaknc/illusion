@@ -855,8 +855,8 @@ std::vector<f32> randomRun(u32 seed, u32 steps)
                                    static_cast<f32>(rig.fired)});
         for (u32 e = 0; e < std::min<u32>(rig.fired, static_cast<u32>(rig.events.size())); ++e)
         {
-            trace.push_back(
-                static_cast<f32>(rig.events[e].layer * 100 + rig.events[e].state * 10 + rig.events[e].event));
+            trace.push_back(static_cast<f32>(u32{rig.events[e].layer} * 100u +
+                                             u32{rig.events[e].state} * 10u + rig.events[e].event));
         }
     }
     return trace;
