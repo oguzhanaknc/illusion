@@ -52,7 +52,8 @@ belirtilen input action'larını ve locale dosyalarını yükler. Sahneyi `world
 `ModuleHost`'a altı servisle birlikte bir Simulation World olarak ekler. Modüller bu servislere
 `context.service<T>()` ile ulaşır: `PhysicsService`, `AudioService`, `ParticleService`, `InputService`,
 `SceneService` ve `UiService`
-(bkz. [scripting API](../reference/scripting-api.md)); `GameSessionDesc::store` ile `StoreService`
+(bkz. [scripting API](../reference/scripting-api.md)); `GameSessionDesc::streamer` ile `AnimationService`,
+`GameSessionDesc::store` ile `StoreService`
 ([Mağaza servisleri](#magaza-servisleri)), bir `SaveSystem` olan `GameSessionDesc::saves` ile de `SaveService`
 eklenir (kayıtlı oyunlar, ADR 0058; player onları `user:/saves`'te, Play modu `cache:/saves`'te tutar).
 `SceneService::requestExit()` çağıran bir
@@ -70,7 +71,7 @@ Her `update(deltaSeconds)` şunları çalıştırır:
 | 1. Input | `InputActions`, `keyboardMouse()`'u ve gamepad'leri okur; son update modal bir canvas gösterdiyse yalnızca `ui.*` action'ları input alır |
 | 2. Modüller | World üzerinde `ModuleHost::update()`; ardından `EntityGuid`'siz oluşturulan Entity'ler bir tane alır |
 | 3. Kayıtlar | `GameSessionDesc::saves` ile: kayıt thread'inin bitirdiği yüklemeler kayıtlı Entity'lerin yerini alır ve biten istekler bir sonraki update'in `SaveService` olayları olur; ardından 2. adımdaki `save`, `load` ve `remove` çağrıları çağrı sırasıyla gönderilir, her `save` World'ü o anda yakalar. `fixedStep` ile önce kayıt thread'ini bekler, böylece sonuçlar her zaman bir sonraki update'te gelir |
-| 4. Animasyon | `GameSessionDesc::streamer` ile: `AnimationWorld::update()` Animator'lara poz verir (bkz. [Animasyon](animation.md#animator)); oturum başlatılmışken `time`'ları ilerler. `animation()` pozları renderer'a ve host araçlarına verir |
+| 4. Animasyon | `GameSessionDesc::streamer` ile: `AnimationWorld::update()` Animator'lara poz verir (bkz. [Animasyon](animation.md#animator)); oturum başlatılmışken `time`'ları ve [grafları](animation.md#animasyon-graflar) ilerler. Ardından, oturum başlatılmışken, **root motion**: `AnimationPose`'u `rootTranslation` ya da `rootYaw` taşıyan bir Entity yaw kadar +y etrafında döner; `CharacterController`'ı varsa öteleme bölü adım süresini yatay hızı olarak alır (`setCharacterVelocity()`, dikey hızı korunur, böylece yerçekimi çalışmaya devam eder), yoksa öteleme `Transform`'una eklenir (ebeveyni varsa `LocalTransform`'u da izler). `animation()` pozları renderer'a ve host araçlarına verir |
 | 5. Fizik | `PhysicsWorld::update()`: gövdeler World ile eşitlenir, adım atar ve Transform'larını yazar |
 | 6. Hiyerarşi | `updateTransformHierarchy()`: çocuklar ebeveynlerini izler, `Disabled` `Inactive` olur |
 | 7. UI | `UiWorld`, `setUiFrame()`'in karesi için UI Entity'lerini yerleştirir, işaretçiyi ve `ui.navigate`, `ui.submit` ile `ui.cancel` action'larını işler (Play modu) ve çizim listesini kaydeder (`ui()`), bkz. [Oyun UI'ı](ui.md) |
@@ -203,7 +204,7 @@ derlenir:
 ```cmake
 illusion_add_module(showcase_game_module STATIC ID showcase
     SOURCES showcase/modules/showcase/showcase.cpp
-    USES physics audio particles input render runtime store ui save)
+    USES physics audio particles animation input render runtime store ui save)
 illusion_add_game(showcase_game
     MODULES showcase_game_module
     NAME "Showcase"

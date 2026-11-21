@@ -32,8 +32,9 @@ is missing from the scene or left at its default, or when the project has missin
 A new Component or field therefore needs a value in `build.jsonl`. Three particle emitters cover
 `ParticleEmitter`: a spark fountain over the trigger pad, a dust emitter by the blocks, which waits to be
 played (`playOnStart` off), and a field of 20,000 fireflies simulated on the GPU. The `Column` covers
-`Animator`: a skinned column (`assets/models/column.gltf`, from `tools/make_assets.py`) held 0.4 seconds into
-its clip `sway` and drawn bent, see [Animation](../animation.md#the-animator). A `Wind` entity blows the dust
+`Animator`: a skinned column (`assets/models/column.gltf` with the clips `sway` and `lean`, from
+`tools/make_assets.py`) whose animation graph `assets/animations/column.animgraph` holds it 0.4 seconds into
+`sway`, drawn bent, see [Animation](../animation.md#animation-graphs). A `Wind` entity blows the dust
 (`windFactor`) across the yard. The disabled `Dusk Sky` entity holds a `SkyAtmosphere` at sunset: enable it
 to replace the sky and the sun with a moving one, and the disabled `Film Look` holds `PostEffects` for a
 graded, vignetted image. The disabled `Morning Mist` holds a `VolumetricFog` of low, drifting mist. The `HUD` entity is a game UI
@@ -44,7 +45,7 @@ clipped dial; see [Game UI](../ui.md). It shows in the Game view while playing.
 ## The showcase module
 
 The project's game code, `modules/showcase`, plays the scene through the whole
-[scripting API](../../reference/scripting-api.md): every function of `ModuleContext` and of the eight host
+[scripting API](../../reference/scripting-api.md): every function of `ModuleContext` and of the nine host
 services is called from `showcase.cpp`. When the session starts, it builds a floor and a gem from mesh
 geometry, adds the Jump (Space, gamepad South) and Move (WASD, left stick) actions, makes a chime from numbers
 and sets up the mixer. Until you press a key or move a stick, the Player walks back and forth across the
@@ -60,7 +61,9 @@ gravity for a second from frame 200, and from frame 240 lets the Player walk thr
 stop colliding). It drives the HUD through `UiService`: the frame counter is a string table message with a
 plural, the module hides and shows the palette, moves the focus, reads the widgets and polls the events, and
 when `ui.cancel` is pressed (Escape, or East on a gamepad) it ends the game with `SceneService::requestExit()`.
-What it saw is kept in the `showcase.Stats` Component of the Showcase entity.
+Through `AnimationService` it plays the Column's graph: it leans the blend of `sway` and `lean` with a
+parameter, bows the Column with a trigger at frame 30, calms it again from frame 150 and counts the graph's
+`peak` events. What it saw is kept in the `showcase.Stats` Component of the Showcase entity.
 
 Build it with **Modules → Build Modules** (`module.build`) and press **Play**:
 

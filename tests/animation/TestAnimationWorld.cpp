@@ -145,9 +145,10 @@ TEST_CASE("Animator is reflected with asset kinds and units, and AnimationPose i
     const ComponentRegistry& registry = ComponentRegistry::instance();
     const TypeReflection* type = registry.reflection(registry.findByStableName("illusion.Animator"));
     REQUIRE(type != nullptr);
-    CHECK(type->fields.size() == 6);
+    CHECK(type->fields.size() == 7);
     CHECK(type->field("skeleton")->meta.assetKind == AssetKind::Skeleton);
     CHECK(type->field("clip")->meta.assetKind == AssetKind::AnimationClip);
+    CHECK(type->field("graph")->meta.assetKind == AssetKind::AnimationGraph);
     CHECK(type->field("time")->meta.unit == Unit::Seconds);
     CHECK_FALSE(type->meta.transient);
     const TypeReflection* pose = registry.reflection(registry.findByStableName("illusion.AnimationPose"));

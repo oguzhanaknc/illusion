@@ -5,6 +5,7 @@
 // function counts its calls in its own slot. A proxy made with a real service forwards every call to it;
 // one made without returns default values.
 
+#include <illusion/animation/AnimationService.hpp>
 #include <illusion/audio/AudioService.hpp>
 #include <illusion/input/InputService.hpp>
 #include <illusion/particles/ParticleService.hpp>
@@ -672,6 +673,60 @@ public:
     u32 pollEvents(std::span<SaveEvent> out) override
     {
         return forward<u32>(7, [&](SaveService& s) { return s.pollEvents(out); });
+    }
+};
+
+// Counts the calls of every AnimationService function.
+class CountingAnimation final : public CountingProxy<AnimationService, 9>
+{
+public:
+    explicit CountingAnimation(AnimationService* inner = nullptr) noexcept
+        : CountingProxy(inner)
+    {
+    }
+
+    using Void = Expected<void, AnimationError>;
+
+    Void setFloat(Entity e, std::string_view name, f32 value) override
+    {
+        return forward<Void>(0, [&](AnimationService& s) { return s.setFloat(e, name, value); });
+    }
+    Void setInt(Entity e, std::string_view name, i32 value) override
+    {
+        return forward<Void>(1, [&](AnimationService& s) { return s.setInt(e, name, value); });
+    }
+    Void setBool(Entity e, std::string_view name, bool value) override
+    {
+        return forward<Void>(2, [&](AnimationService& s) { return s.setBool(e, name, value); });
+    }
+    Void setTrigger(Entity e, std::string_view name) override
+    {
+        return forward<Void>(3, [&](AnimationService& s) { return s.setTrigger(e, name); });
+    }
+    [[nodiscard]] Expected<f32, AnimationError> parameter(Entity e, std::string_view name) const override
+    {
+        return forward<Expected<f32, AnimationError>>(
+            4, [&](AnimationService& s) { return s.parameter(e, name); });
+    }
+    [[nodiscard]] Expected<std::string_view, AnimationError>
+    currentState(Entity e, std::string_view layer) const override
+    {
+        return forward<Expected<std::string_view, AnimationError>>(
+            5, [&](AnimationService& s) { return s.currentState(e, layer); });
+    }
+    [[nodiscard]] Expected<f32, AnimationError> normalizedTime(Entity e,
+                                                               std::string_view layer) const override
+    {
+        return forward<Expected<f32, AnimationError>>(
+            6, [&](AnimationService& s) { return s.normalizedTime(e, layer); });
+    }
+    Void play(Entity e, std::string_view clip, f32 fadeSeconds) override
+    {
+        return forward<Void>(7, [&](AnimationService& s) { return s.play(e, clip, fadeSeconds); });
+    }
+    u32 pollEvents(std::span<AnimationEvent> out) override
+    {
+        return forward<u32>(8, [&](AnimationService& s) { return s.pollEvents(out); });
     }
 };
 

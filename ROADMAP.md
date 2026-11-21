@@ -1179,6 +1179,31 @@ Nothing of it exists yet: glTF skins and animations are skipped on import and th
   showcase module calls the whole API and `build.jsonl` sets `graph`, `AssetKind::AnimationGraph`, cooking or
   packing of `.animgraph` files for export. Done: fixed-step determinism, root motion moves a character on a
   slope test scene, events reach a module, live reload of a graph file restarts its Animators.
+  ✅ Done: `Animator::graph` (`AssetKind::AnimationGraph`; the editor's asset browser lists `.animgraph` files
+  as `AnimationGraph`, exports ship them as they are) drives the Animator instead of its clip: `AnimationWorld`
+  loads each graph once through the `AssetStreamer` (decoder `illusion.animgraph`), binds it once per skeleton
+  (`GraphBinding`, bound again after a model reload), keeps one `AnimationGraphState` per slot that starts in
+  the entry states at `Animator::time` (seconds, through `graphStateDuration()`), steps it by `speed` times the
+  seconds while advancing and `playing` (held otherwise; without advancing it shows the entry states, so the
+  editor scrubs `time`) and evaluates it in the existing `parallelFor` with per-worker `LinearAllocator`s
+  (sized with `graphScratchBytes()` when a graph is bound); the events of an update are gathered per slot
+  (room for every event a step can cross, reserved at binding) and published in update order (`events()`);
+  root motion is turned into world space by the Entity's Transform (rotation, scale, mirroring flips the yaw)
+  into `AnimationPose::rootTranslation`/`rootYaw`. A changed graph file restarts its Animators; a broken one
+  keeps the loaded graph; a graph that fails to load or bind is reported and shows the rest pose. Animators
+  without a graph cross-fade after `crossFade()` (the previous clip, its time and the fade in the slot); a
+  loaded model keeps all its clips, so `play()` to another clip of it needs no load. `GameSession` applies
+  root motion after the Animation step while started (a `CharacterController` gets the horizontal velocity and
+  keeps its vertical one; other Entities move, through `LocalTransform` under a parent; both turn by the yaw)
+  and provides `AnimationService` (`AnimationWorldService`) with a streamer; `USES animation`
+  (`illusion::animation_api`, in the SDK), module API version 7. The showcase `Column` plays
+  `assets/animations/column.animgraph` (two states, a 1D blend of `sway` and the new clip `lean`, a trigger
+  transition, an event) and the module calls the whole `AnimationService`. Tests in
+  `tests/animation/TestAnimationRuntime.cpp`; `animation/world-graph-300`: 0.65 ms with Jobs (budget 5 ms).
+  Open: `AnimationGraphState.hpp` gained `graphStateDuration()` and `graphScratchBytes()`; root motion is
+  applied once per update, so a non-fixed update that runs several physics steps spreads it as one velocity;
+  `play()` while a cross-fade runs drops the older clip; the graph's live state is neither saved nor shown in
+  the editor; `.animgraph` files are not validated by the cook.
 - ANIM-2c (`mechanic`): Documentation and sample. The manual page "Animation" gets graphs, blend spaces,
   layers, events and root motion with a complete `.animgraph` example; the scripting API reference; a tutorial
   section (a character that walks, runs and jumps); the rigged test model gets walk/run clips if needed;

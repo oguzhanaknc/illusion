@@ -3,6 +3,7 @@
 #include <illusion/animation/AnimationComponents.hpp>
 #include <illusion/animation/AnimationGraphState.hpp>
 #include <illusion/animation/AnimationWorld.hpp>
+#include <illusion/animation/AnimationWorldService.hpp>
 #include <illusion/animation/Pose.hpp>
 #include <illusion/assets/AssetStreamer.hpp>
 #include <illusion/core/JobSystem.hpp>
@@ -87,9 +88,10 @@ usize append(std::vector<std::byte>& buffer, const std::vector<T>& values)
     return offset;
 }
 
-// The glTF text of a model of makeSkeleton() with a triangle on every joint and a rotation clip "wave" on
-// every joint; its buffer is written into @p buffer (the file "rig.bin").
-std::string rigGltf(std::vector<std::byte>& buffer)
+// The glTF text of a model of makeSkeleton() with a triangle on every joint and, per name of @p clips, a clip
+// of that name rotating every joint (each with another phase); its buffer is written into @p buffer (the file
+// "rig.bin").
+std::string rigGltf(std::vector<std::byte>& buffer, const std::vector<std::string>& clips)
 {
     const Skeleton skeleton = makeSkeleton();
     std::vector<Vec3> positions;
@@ -136,8 +138,6 @@ std::string rigGltf(std::vector<std::byte>& buffer)
         timeView, kKeys);
     std::string nodes;
     std::string skinJoints;
-    std::string samplers;
-    std::string channels;
     for (u32 j = 0; j < kJoints; ++j)
     {
         std::string children;
@@ -151,31 +151,45 @@ std::string rigGltf(std::vector<std::byte>& buffer)
         nodes += std::format(R"({{"name": "{}", "translation": [0, 0.1, 0], "children": [{}]}}, )",
                              skeleton.joints[j].name, children);
         skinJoints += std::format("{}{}", j == 0 ? "" : ", ", j);
-        std::vector<Vec4> rotations;
-        for (u32 k = 0; k < kKeys; ++k)
+    }
+    std::string animations;
+    u32 accessorCount = 5;
+    for (usize c = 0; c < clips.size(); ++c)
+    {
+        std::string samplers;
+        std::string channels;
+        for (u32 j = 0; j < kJoints; ++j)
         {
-            const f32 angle = 0.5f * std::sin(6.28f * times[k] + static_cast<f32>(j));
-            rotations.emplace_back(0.0f, 0.0f, std::sin(angle), std::cos(angle));
+            std::vector<Vec4> rotations;
+            for (u32 k = 0; k < kKeys; ++k)
+            {
+                const f32 angle =
+                    0.5f * std::sin(6.28f * times[k] + static_cast<f32>(j) + static_cast<f32>(c));
+                rotations.emplace_back(0.0f, 0.0f, std::sin(angle), std::cos(angle));
+            }
+            const u32 rotationView = view(append(buffer, rotations), rotations.size() * sizeof(Vec4));
+            accessors +=
+                std::format(R"(, {{"bufferView": {}, "componentType": 5126, "count": {}, "type": "VEC4"}})",
+                            rotationView, kKeys);
+            const std::string_view comma = j == 0 ? "" : ", ";
+            samplers += std::format(R"({}{{"input": 4, "output": {}, "interpolation": "LINEAR"}})", comma,
+                                    accessorCount++);
+            channels += std::format(R"({}{{"sampler": {}, "target": {{"node": {}, "path": "rotation"}}}})",
+                                    comma, j, j);
         }
-        const u32 rotationView = view(append(buffer, rotations), rotations.size() * sizeof(Vec4));
-        accessors +=
-            std::format(R"(, {{"bufferView": {}, "componentType": 5126, "count": {}, "type": "VEC4"}})",
-                        rotationView, kKeys);
-        const std::string_view comma = j == 0 ? "" : ", ";
-        samplers += std::format(R"({}{{"input": 4, "output": {}, "interpolation": "LINEAR"}})", comma, 5 + j);
-        channels +=
-            std::format(R"({}{{"sampler": {}, "target": {{"node": {}, "path": "rotation"}}}})", comma, j, j);
+        animations += std::format(R"({}{{"name": "{}", "samplers": [{}], "channels": [{}]}})",
+                                  c == 0 ? "" : ", ", clips[c], samplers, channels);
     }
     return std::format(
         R"({{"asset": {{"version": "2.0"}}, "scene": 0, "scenes": [{{"nodes": [0, {}]}}], )"
         R"("nodes": [{}{{"name": "body", "mesh": 0, "skin": 0}}], )"
         R"("meshes": [{{"primitives": [{{"attributes": {{"POSITION": 0, "JOINTS_0": 1, "WEIGHTS_0": 2}}, "indices": 3}}]}}], )"
-        R"("skins": [{{"joints": [{}]}}], "animations": [{{"name": "wave", "samplers": [{}], "channels": [{}]}}], )"
+        R"("skins": [{{"joints": [{}]}}], "animations": [{}], )"
         R"("buffers": [{{"uri": "rig.bin", "byteLength": {}}}], "bufferViews": [{}], "accessors": [{}]}})",
-        kJoints, nodes, skinJoints, samplers, channels, buffer.size(), views, accessors);
+        kJoints, nodes, skinJoints, animations, buffer.size(), views, accessors);
 }
 
-// rigGltf() as "bench:/rig.gltf" in a temporary directory.
+// rigGltf() as "bench:/rig.gltf" in a temporary directory, with the clips @p clips.
 struct RigFiles
 {
     std::filesystem::path root = std::filesystem::temp_directory_path() /
@@ -183,11 +197,11 @@ struct RigFiles
     VirtualFileSystem files;
     bool ready = false;
 
-    RigFiles()
+    explicit RigFiles(const std::vector<std::string>& clips = {"wave"})
     {
         std::filesystem::create_directories(root);
         std::vector<std::byte> buffer;
-        const std::string gltf = rigGltf(buffer);
+        const std::string gltf = rigGltf(buffer, clips);
         ready = files.mount("bench", root, MountAccess::ReadWrite) == FileError::None &&
                 files.writeFile("bench:/rig.bin", buffer) == FileError::None &&
                 files.writeText("bench:/rig.gltf", gltf) == FileError::None;
@@ -334,5 +348,67 @@ ILL_BENCHMARK("animation/graph-300", 50'000'000.0)
             evaluateGraph(*binding, state, scratch, pose, &root);
         }
         ankerl::nanobench::doNotOptimizeAway(root.yaw);
+    });
+}
+
+// Budget: ns per AnimationWorld::update() of 300 graph Animators of 60 joints with the Job System, each with
+// the two layers of animation/graph-300 (a masked Override layer over a base layer cross-fading between a
+// three-clip 2D blend space and a clip), root motion and events, about 8x a desktop result (0.65 ms; ADR 0060
+// asks for less than 3 ms); see Budget.hpp.
+ILL_BENCHMARK("animation/world-graph-300", 5'000'000.0)
+{
+    reflectRenderComponents();
+    registerAnimationComponents(ComponentRegistry::instance());
+    RigFiles rig({"c0", "c1", "c2", "c3", "c4"});
+    const bool written = rig.ready && rig.files.writeText("bench:/rig.animgraph", R"({
+        "format": "illusion.animgraph", "version": 1, "rootMotion": "joint00",
+        "parameters": [{"name": "x", "type": "Float"}, {"name": "y", "type": "Float"}, {"name": "go", "type": "Trigger"}],
+        "layers": [
+          {"name": "base", "states": [
+             {"name": "move", "blend2d": {"x": "x", "y": "y", "points": [
+                {"x": 0, "y": 0, "clip": "bench:/rig.gltf#animation/c0"}, {"x": 1, "y": 0, "clip": "bench:/rig.gltf#animation/c1"},
+                {"x": 0, "y": 1, "clip": "bench:/rig.gltf#animation/c2"}]},
+              "events": [{"name": "step", "time": 0.25}, {"name": "step", "time": 0.75}]},
+             {"name": "other", "clip": "bench:/rig.gltf#animation/c3"}],
+           "transitions": [{"from": "move", "to": "other", "duration": 0.5, "conditions": [{"parameter": "go"}]},
+                           {"from": "other", "to": "move", "duration": 0.5, "conditions": [{"parameter": "go"}]}]},
+          {"name": "upper", "weight": 0.8, "mask": [{"joint": "joint10"}],
+           "states": [{"name": "aim", "clip": "bench:/rig.gltf#animation/c4"}]}]})") == FileError::None;
+    if (!written)
+    {
+        return;
+    }
+    JobSystem jobs;
+    AssetStreamer streamer(rig.files, jobs, AssetStreamerDesc{.cacheMount = ""});
+    World world;
+    AnimationWorld animation(world, streamer);
+    std::vector<Entity> entities;
+    for (u32 i = 0; i < kSkeletons; ++i)
+    {
+        Transform transform;
+        transform.position = Vec3(static_cast<f32>(i % 20), 0.0f, static_cast<f32>(i / 20));
+        MeshRenderer renderer;
+        renderer.mesh = AssetRef("bench:/rig.gltf#mesh/0");
+        Animator animator;
+        animator.skeleton = AssetRef("bench:/rig.gltf#skin/0");
+        animator.graph = AssetRef("bench:/rig.animgraph");
+        animator.time = 0.01f * static_cast<f32>(i);
+        entities.push_back(world.create(transform, renderer, animator));
+    }
+    animation.waitIdle();
+    AnimationWorldService service(animation);
+    for (u32 i = 0; i < kSkeletons; ++i)
+    {
+        (void)service.setFloat(entities[i], "x", 0.3f * static_cast<f32>(i % 3) / 2.0f + 0.1f);
+        (void)service.setFloat(entities[i], "y", 0.3f * static_cast<f32>(i % 5) / 4.0f + 0.1f);
+    }
+    u32 frame = 0;
+    bench.run("AnimationWorld::update 300 graphs x 60 joints", [&] {
+        // Staggers the cross-fades, so that every update sees Animators at every point of a fade.
+        (void)service.setTrigger(entities[frame % kSkeletons], "go");
+        (void)service.setTrigger(entities[(frame + kSkeletons / 2) % kSkeletons], "go");
+        ++frame;
+        animation.update(1.0f / 60.0f, &jobs, true);
+        ankerl::nanobench::doNotOptimizeAway(animation.events().size());
     });
 }

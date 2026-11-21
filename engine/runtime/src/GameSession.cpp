@@ -1,4 +1,6 @@
+#include <illusion/animation/AnimationComponents.hpp>
 #include <illusion/animation/AnimationWorld.hpp>
+#include <illusion/animation/AnimationWorldService.hpp>
 #include <illusion/audio/AudioWorldService.hpp>
 #include <illusion/core/Assert.hpp>
 #include <illusion/core/Log.hpp>
@@ -17,6 +19,7 @@
 #include <illusion/particles/ParticleWorld.hpp>
 #include <illusion/particles/ParticleWorldService.hpp>
 #include <illusion/physics/PhysicsAssetResolver.hpp>
+#include <illusion/physics/PhysicsComponents.hpp>
 #include <illusion/physics/PhysicsWorld.hpp>
 #include <illusion/physics/PhysicsWorldService.hpp>
 #include <illusion/platform/FileSystem.hpp>
@@ -207,6 +210,43 @@ StoreService* saveCloud(const GameSessionDesc& session)
     return mirrored ? session.store : nullptr;
 }
 
+// Moves the Entities whose pose the last Animation step wrote by their root motion (ADR 0060): a character
+// gets it as its horizontal velocity for @p step seconds, keeping its vertical velocity; any other Entity
+// is moved, through its LocalTransform when it has a parent. Both turn about +y by the yaw.
+void applyRootMotion(World& world, PhysicsWorld& physics, u64 frame, f64 step)
+{
+    if (!(step > 0.0))
+    {
+        return;
+    }
+    const auto seconds = static_cast<f32>(step);
+    world.query<const AnimationPose, Transform>().without<Inactive>().each(
+        [&](Entity entity, const AnimationPose& pose, Transform& transform) {
+            if (pose.frame != frame || (pose.rootTranslation == Vec3(0.0f) && pose.rootYaw == 0.0f))
+            {
+                return;
+            }
+            const Quat turn = glm::angleAxis(pose.rootYaw, Vec3(0.0f, 1.0f, 0.0f));
+            transform.rotation = glm::normalize(turn * transform.rotation);
+            if (world.tryGet<CharacterController>(entity) != nullptr)
+            {
+                const Vec3 velocity = physics.characterVelocity(entity);
+                physics.setCharacterVelocity(entity, Vec3(pose.rootTranslation.x / seconds, velocity.y,
+                                                          pose.rootTranslation.z / seconds));
+                return;
+            }
+            transform.position += pose.rootTranslation;
+            const Hierarchy* hierarchy = world.tryGet<Hierarchy>(entity);
+            LocalTransform* local = world.tryGet<LocalTransform>(entity);
+            if (hierarchy == nullptr || local == nullptr || !world.isAlive(hierarchy->parent))
+            {
+                return; // a root: updateTransformHierarchy() copies Transform into LocalTransform
+            }
+            const Transform* parent = world.tryGet<Transform>(hierarchy->parent);
+            *local = LocalTransform::from(relativeTo(transform, parent != nullptr ? *parent : Transform{}));
+        });
+}
+
 } // namespace
 
 struct GameSession::Impl
@@ -360,6 +400,7 @@ struct GameSession::Impl
     UiWorldService uiService;
     SaveSystemService saveService;
     std::unique_ptr<AnimationWorld> animation;
+    std::unique_ptr<AnimationWorldService> animationService;
     std::unique_ptr<PhysicsAssetResolver> physicsAssets;
     std::unique_ptr<RenderAssetResolver> renderAssets;
     std::vector<const GamepadState*> gamepads;
@@ -390,6 +431,7 @@ Expected<std::unique_ptr<GameSession>, std::string> GameSession::create(const Ga
     {
         impl->physicsAssets = std::make_unique<PhysicsAssetResolver>(impl->physics, *desc.streamer);
         impl->animation = std::make_unique<AnimationWorld>(impl->world, *desc.streamer);
+        impl->animationService = std::make_unique<AnimationWorldService>(*impl->animation);
     }
     if (desc.renderAssets != nullptr)
     {
@@ -435,6 +477,10 @@ void GameSession::start()
         services.provide<InputService>(impl.inputService);
         services.provide<SceneService>(impl.sceneService);
         services.provide<UiService>(impl.uiService);
+        if (impl.animationService)
+        {
+            services.provide<AnimationService>(*impl.animationService);
+        }
         if (impl.desc.store != nullptr)
         {
             services.provide<StoreService>(*impl.desc.store);
@@ -488,6 +534,10 @@ void GameSession::update(f64 deltaSeconds)
     if (impl.animation)
     {
         impl.animation->update(static_cast<f32>(step), impl.desc.jobs, impl.started);
+        if (impl.started)
+        {
+            applyRootMotion(impl.world, impl.physics, impl.animation->frame(), step);
+        }
     }
     impl.physics.update(step);
     updateTransformHierarchy(impl.world, impl.hierarchy, impl.desc.jobs);

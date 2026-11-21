@@ -50,8 +50,8 @@ while (running)
 named by `InputSettings::actions` and the locale files. Load the scene into `world()`, then `start()` attaches the World to the
 `ModuleHost` as a Simulation World with six services, which modules reach with `context.service<T>()`:
 `PhysicsService`, `AudioService`, `ParticleService`, `InputService`, `SceneService` and `UiService` (see the
-[scripting API](../reference/scripting-api.md)); with `GameSessionDesc::store` it adds `StoreService`
-([Store services](#store-services)), and with `GameSessionDesc::saves`, a `SaveSystem`, `SaveService` (saved
+[scripting API](../reference/scripting-api.md)); with `GameSessionDesc::streamer` it adds `AnimationService`,
+with `GameSessionDesc::store` `StoreService` ([Store services](#store-services)), and with `GameSessionDesc::saves`, a `SaveSystem`, `SaveService` (saved
 games, ADR 0058; the player keeps them in `user:/saves`, Play mode in `cache:/saves`). A module that calls `SceneService::requestExit()` ends
 the game: `exitRequested()` of the session turns true, and the host stops after that update.
 
@@ -67,7 +67,7 @@ Every `update(deltaSeconds)` runs:
 | 1. Input | The `InputActions` read `keyboardMouse()` and the gamepads; while the last update showed a modal canvas, only the `ui.*` actions get input |
 | 2. Modules | `ModuleHost::update()` on the World; then Entities created without an `EntityGuid` get one |
 | 3. Saves | With `GameSessionDesc::saves`: loads the save thread finished replace the saved Entities and finished requests become the next update's `SaveService` events; then the `save`, `load` and `remove` calls of step 2 are sent in call order, each `save` capturing the World now. With `fixedStep` it first waits for the save thread, so results always arrive in the next update |
-| 4. Animation | With `GameSessionDesc::streamer`: `AnimationWorld::update()` poses the Animators (see [Animation](animation.md#the-animator)); their `time` advances while the session is started. `animation()` gives the poses to the renderer and host tools |
+| 4. Animation | With `GameSessionDesc::streamer`: `AnimationWorld::update()` poses the Animators (see [Animation](animation.md#the-animator)); their `time` and [graphs](animation.md#animation-graphs) advance while the session is started. Then, while started, **root motion**: an Entity whose `AnimationPose` has `rootTranslation` or `rootYaw` turns about +y by the yaw; with a `CharacterController` it gets the translation divided by the step as its horizontal velocity (`setCharacterVelocity()`, its vertical velocity kept, so gravity still works), otherwise the translation is added to its `Transform` (its `LocalTransform` follows when it has a parent). `animation()` gives the poses to the renderer and host tools |
 | 5. Physics | `PhysicsWorld::update()`: bodies sync with the World, step and write their Transforms |
 | 6. Hierarchy | `updateTransformHierarchy()`: children follow their parents, `Disabled` becomes `Inactive` |
 | 7. UI | `UiWorld` lays out the UI Entities for the frame of `setUiFrame()`, handles the pointer and the actions `ui.navigate`, `ui.submit` and `ui.cancel` (Play mode), and records the draw list (`ui()`), see [Game UI](ui.md) |
@@ -198,7 +198,7 @@ project's data next to the executable with `illusion_pack`. The showcase project
 ```cmake
 illusion_add_module(showcase_game_module STATIC ID showcase
     SOURCES showcase/modules/showcase/showcase.cpp
-    USES physics audio particles input render runtime store ui save)
+    USES physics audio particles animation input render runtime store ui save)
 illusion_add_game(showcase_game
     MODULES showcase_game_module
     NAME "Showcase"

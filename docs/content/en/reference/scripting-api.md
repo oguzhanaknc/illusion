@@ -2,7 +2,7 @@
 
 Game code is C++ in a [game module](../manual/modules.md). A shared module (the editor's hot-reloadable
 build) carries its own copy of `illusion::core` but no other engine library: it reaches physics, audio,
-particles, input, scenes, the store, the game UI and saved games through eight **host service interfaces**. Each is an abstract class without data members;
+particles, animation, input, scenes, the store, the game UI and saved games through nine **host service interfaces**. Each is an abstract class without data members;
 the host implements it with an adapter over its engine object and hands it to the module, which finds it
 with `context.service<T>()`. The design is in ADR 0041; the Doxygen group "Scripting API" of the
 [API reference](api.md) documents every function.
@@ -17,6 +17,7 @@ with `context.service<T>()`. The design is in ADR 0041; the Doxygen group "Scrip
 | `StoreService` | `store` | `illusion/store/StoreService.hpp` | `NullStoreService` or `SteamStoreService` (ADR 0056) |
 | `UiService` | `ui` | `illusion/ui/UiService.hpp` | `UiWorldService` over `UiWorld` (`illusion::ui`; ADR 0057) |
 | `SaveService` | `save` | `illusion/save/SaveService.hpp` | `SaveSystemService` over `SaveSystem` (`illusion::save`; ADR 0058) |
+| `AnimationService` | `animation` | `illusion/animation/AnimationService.hpp` | `AnimationWorldService` over `AnimationWorld` (`illusion::animation`; ADR 0060) |
 
 ```cmake
 illusion_add_module(tetris SOURCES game/Tetris.cpp USES physics audio input runtime)
@@ -58,11 +59,11 @@ void update(illusion::ModuleContext& context, illusion::f64)
   work there too.
 - **Cost.** A call is one indirect call; the `services/virtual-call` Benchmark keeps it under 10 ns.
 - **Compatibility.** The interfaces are part of the module ABI: adding or changing a function changes
-  `kModuleApiVersion` (6 since `SaveService`), and modules must be rebuilt.
+  `kModuleApiVersion` (7 since `AnimationService`), and modules must be rebuilt.
 
 ## Coverage
 
-The Doxygen group "Scripting API" holds `ModuleContext` and the eight interfaces. The
+The Doxygen group "Scripting API" holds `ModuleContext` and the nine interfaces. The
 [showcase module](../manual/editor/showcase.md#the-showcase-module) calls every public function of the group,
 and `python tools/check_api_coverage.py` fails in CI when one is not called there, or when a counting proxy
 of the module tests (`tests/modules/CountingServices.hpp`) has the wrong number of counters. A new function
@@ -186,3 +187,23 @@ player), or empty when the slot has none. With a store whose cloud is remote, sl
 cloud and a newer cloud file replaces the local slot when the session starts; this produces no event
 ([Saved games in the cloud](../manual/runtime.md#saved-games-in-the-cloud)). The manual page
 [Saved games](../manual/saved-games.md) explains the `Saved` tag, the metadata, the events and the files.
+
+## AnimationService
+
+The animation graphs and clips of the Animators (ADR 0059, ADR 0060). Parameter writes are used at the next
+Animation step; reads return the values the graph uses. A call on an Entity without an `Animator` returns
+`NoAnimator`; one that needs a graph returns `NoGraph` while the Animator has none or its graph has not
+loaded; unknown names return `UnknownName` and wrong types `TypeMismatch`. Nothing asserts.
+
+| Function | Purpose |
+| --- | --- |
+| `setFloat`, `setInt`, `setBool` | Set a parameter of the Entity's graph (`InvalidValue` for a value that is not finite, or an Int beyond 2^24) |
+| `setTrigger` | Set a trigger until a transition consumes it or the next step ends |
+| `parameter` | The value of a Float, Int or Bool parameter (Int and Bool as numbers) |
+| `currentState`, `normalizedTime` | The current state of a layer (the target of a running transition) and its normalized time |
+| `play` | Cross-fades an Animator without a graph to the clip `model.glb#animation/<name>` over `fadeSeconds`, from time 0; sets `Animator::clip` (`HasGraph` with a graph) |
+| `pollEvents` | Copies the state events of the last update (`AnimationEvent`: Entity, event, layer, state) into a span, in update order; returns the total |
+
+The names an `AnimationEvent` and `currentState()` return stay valid until the next update. The manual page
+[Animation](../manual/animation.md#animation-graphs) describes graphs; root motion is applied by the
+[game session](../manual/runtime.md).

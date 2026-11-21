@@ -3369,6 +3369,7 @@
         "illusion.Animator": {
           "skeleton": "assets:/models/column.gltf#skin/0",
           "clip": "assets:/models/column.gltf#animation/sway",
+          "graph": "assets:/animations/column.animgraph",
           "speed": 0.8,
           "time": 0.4,
           "loop": false,

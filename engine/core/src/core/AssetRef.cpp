@@ -143,6 +143,8 @@ std::string_view assetKindName(AssetKind kind) noexcept
         return "Skeleton";
     case AssetKind::AnimationClip:
         return "AnimationClip";
+    case AssetKind::AnimationGraph:
+        return "AnimationGraph";
     }
     return "Unknown";
 }

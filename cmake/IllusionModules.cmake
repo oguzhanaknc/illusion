@@ -2,7 +2,7 @@
 # docs/adr/0027-module-system-and-hot-reload.md and docs/adr/0041-module-api-v3.md).
 #
 # illusion_add_module(<target> [SHARED | STATIC] [ID <id>] SOURCES <files...>
-#                     [USES <physics | audio | particles | ui | input | render | runtime | store | save>...]
+#                     [USES <physics | audio | particles | animation | ui | input | render | runtime | store | save>...]
 #                     [LINK <libraries...>])
 #
 # Builds a module from sources that use ILL_MODULE(). SHARED builds a loadable library that a ModuleHost

@@ -1,5 +1,5 @@
 """Writes the generated assets of the showcase project: a glTF model with two submeshes, a skinned column
-with a clip, the sounds (music, wind, a lamp hum, a voice and a click), a smoke sprite and a nine-slice panel
+with two clips and an animation graph for them, the sounds (music, wind, a lamp hum, a voice and a click), a smoke sprite and a nine-slice panel
 for the HUD.
 
 All of them are made here from numbers, so they carry no third-party licence. Run it from anywhere:
@@ -83,7 +83,8 @@ def write_model(path):
 
 def write_rigged(path):
     """A square column on two joints, "base" and "top" (one metre up), with the clip "sway" bending the top
-    joint 0.5 radians around z and back over two seconds. The middle ring is shared by both joints."""
+    joint 0.5 radians around z and back over two seconds, and the clip "lean" bending it 0.3 radians around x
+    and back. The middle ring is shared by both joints."""
     half = 0.2
     corners = [(-half, -half), (half, -half), (half, half), (-half, half)]
     positions, normals, joints, weights = [], [], [], []
@@ -129,8 +130,10 @@ def write_rigged(path):
                   "WEIGHTS_0": add("4f", weights, 5126, "VEC4")}
     index_accessor = add("H", indices, 5123, "SCALAR")
     inverse_bind = add("16f", inverse_binds, 5126, "MAT4")
-    sampler = {"input": add("f", times, 5126, "SCALAR", minmax=True),
-               "output": add("4f", rotations, 5126, "VEC4"), "interpolation": "LINEAR"}
+    time_accessor = add("f", times, 5126, "SCALAR", minmax=True)
+    sampler = {"input": time_accessor, "output": add("4f", rotations, 5126, "VEC4"), "interpolation": "LINEAR"}
+    leans = [(math.sin(angle / 2), 0.0, 0.0, math.cos(angle / 2)) for angle in (0.0, 0.3, 0.0)]
+    lean = {"input": time_accessor, "output": add("4f", leans, 5126, "VEC4"), "interpolation": "LINEAR"}
     gltf = {
         "asset": {"version": "2.0", "generator": "illusion showcase make_assets.py"},
         "scene": 0,
@@ -140,6 +143,8 @@ def write_rigged(path):
         "meshes": [{"name": "column", "primitives": [{"attributes": attributes, "indices": index_accessor}]}],
         "skins": [{"name": "column", "joints": [0, 1], "inverseBindMatrices": inverse_bind}],
         "animations": [{"name": "sway", "samplers": [sampler],
+                        "channels": [{"sampler": 0, "target": {"node": 1, "path": "rotation"}}]},
+                       {"name": "lean", "samplers": [lean],
                         "channels": [{"sampler": 0, "target": {"node": 1, "path": "rotation"}}]}],
         "buffers": [{"byteLength": len(data),
                      "uri": "data:application/octet-stream;base64," + base64.b64encode(bytes(data)).decode()}],
@@ -297,9 +302,38 @@ def write_panel(path, size=32, corner=8, edge=3):
     write_png(path, size, rows)
 
 
+def write_column_graph(path):
+    """The animation graph of the column: it holds "sway" until the trigger "bow" fades it into "swing", a
+    blend of "sway" and "lean" by the Float "lean" with the event "peak" at its middle, which returns to
+    "hold" once "calm" is set; "mood" (an Int) speeds nothing up but is there for the scripting API."""
+    clip = "assets:/models/column.gltf#animation/"
+    graph = {
+        "format": "illusion.animgraph",
+        "version": 1,
+        "parameters": [{"name": "lean", "type": "Float", "default": 0.5}, {"name": "calm", "type": "Bool"},
+                       {"name": "mood", "type": "Int"}, {"name": "bow", "type": "Trigger"}],
+        "layers": [{
+            "name": "base",
+            "entry": "hold",
+            "states": [
+                {"name": "hold", "clip": clip + "sway"},
+                {"name": "swing", "blend1d": {"parameter": "lean", "points": [
+                    {"value": 0, "clip": clip + "sway"}, {"value": 1, "clip": clip + "lean"}]},
+                 "events": [{"name": "peak", "time": 0.5}]}],
+            "transitions": [
+                {"from": "hold", "to": "swing", "duration": 0.3, "conditions": [{"parameter": "bow"}]},
+                {"from": "swing", "to": "hold", "duration": 0.3, "exitTime": 0.9,
+                 "conditions": [{"parameter": "calm", "compare": "Equal", "value": True}]}],
+        }],
+    }
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(graph, indent=2) + "\n", encoding="utf-8", newline="\n")
+
+
 if __name__ == "__main__":
     write_model(ROOT / "models" / "blocks.gltf")
     write_rigged(ROOT / "models" / "column.gltf")
+    write_column_graph(ROOT / "animations" / "column.animgraph")
     for name, samples in (("music", music()), ("wind", wind()), ("hum", hum()), ("voice", voice()),
                           ("click", click())):
         write_wav(ROOT / "audio" / f"{name}.wav", samples)

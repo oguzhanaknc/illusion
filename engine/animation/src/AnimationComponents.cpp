@@ -26,6 +26,10 @@ void registerAnimationComponents(ComponentRegistry& registry)
         .field("clip", &Animator::clip,
                {.description = "The clip (#animation/<name>); none shows the rest pose.",
                 .assetKind = AssetKind::AnimationClip})
+        .field(
+            "graph", &Animator::graph,
+            {.description = "An animation graph (.animgraph) that drives the Animator instead of the clip.",
+             .assetKind = AssetKind::AnimationGraph})
         .field("speed", &Animator::speed,
                {.description = "Playback rate; negative plays backwards.", .softMin = -2.0, .softMax = 2.0})
         .field("time", &Animator::time,

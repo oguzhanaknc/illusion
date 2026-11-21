@@ -57,6 +57,7 @@ const std::span<const illusion::SkinMatrix> skin = animation.skinMatrices(pose.s
 | --- | --- |
 | `skeleton` | İskelet, `model.glb#skin/N`; Mesh'in skin'i olmalıdır |
 | `clip` | Klip, `model.glb#animation/<name>`; boşsa dinlenme pozu gösterilir |
+| `graph` | Animator'ı `clip` yerine yöneten bir [animasyon grafı](#animasyon-graflar) (`.animgraph`) |
 | `speed` | Oynatma hızı; negatifse geriye oynatır |
 | `time` | Klibin içinde saniye |
 | `loop` | Klibin sonunda başa sar; değilse son pozda kal |
@@ -86,6 +87,46 @@ ayarlayın. Play modu dışında editör, edit World'ünü kaydedilen `time`'da 
 Inspector'da `time`'ı sürüklemek klibi Scene görünümünde kaydırır. Play modunda oturumun `AnimationWorld`'ü
 oynayan her Animator'ın `time`'ını ilerletir; Stop kaydedilen değerlere döner. Showcase projesinin
 `Column`'u `sway` klibini bu şekilde oynatır ([Showcase projesi](editor/showcase.md)).
+
+## Animasyon grafları
+
+`graph` alanı bir `.animgraph` dosyasını adlandıran bir Animator, klibi yerine o grafı oynatır (ADR 0060):
+durumları klip ya da 1D/2D blend space oynatan durum makinesi katmanları, parametrelerle tetiklenen ve
+cross-fade yapan geçişler, maskeli ve additive katmanlar, durum olayları ve root motion. Dosya JSON'dur
+(`"format": "illusion.animgraph"`, `parseAnimationGraph()` okur); editörün Asset tarayıcısı onu bir
+`AnimationGraph` olarak listeler ve export'lar onu olduğu gibi taşır.
+
+- Graf `AssetStreamer` üzerinden bir kez yüklenir ve iskelet başına bir kez bağlanır; her Animator kendi
+  durumunu tutar. Bu durum giriş durumlarında, zaman olarak `time` (saniye) ve varsayılan parametrelerle
+  başlar. Bir sahne ya da kayıtlı oyun grafı aynı şekilde yeniden başlatır.
+- İlerletilirken ve `playing` açıkken graf, `speed` çarpı saniye kadar adım atar; Play modu dışında editör
+  giriş durumlarını `time`'da gösterir. `clip` ve `loop` kullanılmaz.
+- Oyun kodu onu [`AnimationService`](../reference/scripting-api.md#animationservice) üzerinden yönetir:
+  ada göre parametreler ve trigger'lar, geçerli durum ve zamanı, son update'in olayları. Grafı olmayan
+  Animator'lar klibi `play()` ile değiştirir; bu, oynattıkları klipten cross-fade yapar.
+- `rootMotion` içeren bir graf o eklemin yatay hareketini ve yaw'ını pozdan çıkarır;
+  [oyun oturumu](runtime.md#adm-sras) Animation adımından sonra Entity'yi onunla hareket ettirir.
+- Dosyayı değiştirmek (`AssetStreamer::reload()`; editör bunu değişen dosyalar için yapar) Animator'larını
+  yeni grafla yeniden başlatır; yüklenemeyen ya da bağlanamayan bir dosya bildirilir ve dinlenme pozunu
+  gösterir.
+
+```cpp
+// In a game module: drive the graph of the Entity's Animator.
+if (illusion::AnimationService* animation = context.service<illusion::AnimationService>())
+{
+    static_cast<void>(animation->setFloat(hero, "speed", 3.0f));
+    static_cast<void>(animation->setTrigger(hero, "jump"));
+    std::array<illusion::AnimationEvent, 16> events{};
+    const illusion::u32 count = animation->pollEvents(events);
+    for (illusion::u32 i = 0; i < count && i < events.size(); ++i)
+    {
+        playFootstep(events[i].entity);
+    }
+}
+```
+
+Biçimin tam kılavuzu, eksiksiz bir örnekle ANIM-2c ile gelecek; showcase projesinin `Column`'u
+`assets/animations/column.animgraph`'ı oynatır.
 
 ## Skinned Mesh'leri çizme
 
@@ -117,8 +158,7 @@ renderer->render(commands, target, world, view, &jobs);
 
 ## Henüz desteklenmeyenler
 
-- Klipler arası harmanlama, katmanlar, blend space'ler, durum makineleri, animasyon olayları ve root motion
-  (ANIM-2).
+- Süren bir geçişi kesmek, alt durum makineleri ve bir grafın canlı durumunu kaydetmek.
 - Socket'ler (bir Entity'yi bir ekleme bağlamak), look-at ve ters kinematik, ragdoll'lar (ANIM-3).
 - Klip önizlemeleri, bir zaman çizelgesi, iskelet debug çizimi ve `animation.*` editör komutları (ANIM-4).
 - Morph target'lar, vertex başına dörtten fazla etki ve anahtar kare sıkıştırma.

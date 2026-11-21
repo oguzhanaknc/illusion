@@ -69,7 +69,7 @@ Options considered for **how control is authored**:
 - **Events.** States' events that time crosses this update (including the loop wrap and both sides of a
   cross-fade, only for states with weight above 0) are collected per Animator in update order and published
   for one update, like `SaveEvent`.
-- **Root motion.** `AnimationPose` gains `rootDelta` (translation in metres, yaw in radians, world space). The
+- **Root motion.** `AnimationPose` gains `rootTranslation` (metres) and `rootYaw` (radians), in world space. The
   `GameSession` applies it after Animation: an Entity with a `CharacterController` gets it as this step's
   velocity (`setCharacterVelocity(delta / step)`, gravity kept by the controller); otherwise it is added to the
   Entity's `Transform`. A game that wants to steer itself turns root motion off in the graph.

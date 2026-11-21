@@ -2,7 +2,7 @@
 
 Oyun kodu, bir [oyun modülünde](../manual/modules.md) C++ olarak yazılır. Shared bir modül (editörün hot
 reload yapılabilen Build'i) `illusion::core`'un kendi kopyasını taşır, ama başka hiçbir engine
-kütüphanesini taşımaz: fiziğe, sese, parçacıklara, girdiye, sahnelere, mağazaya, oyun UI'ına ve kayıtlı oyunlara sekiz
+kütüphanesini taşımaz: fiziğe, sese, parçacıklara, animasyona, girdiye, sahnelere, mağazaya, oyun UI'ına ve kayıtlı oyunlara dokuz
 **host servis arayüzü** üzerinden ulaşır.
 Her biri veri üyesi olmayan soyut bir sınıftır; host onu kendi engine nesnesi üzerinde bir adaptörle
 uygular ve modüle verir, modül de onu `context.service<T>()` ile bulur. Tasarım ADR 0041'dedir;
@@ -18,6 +18,7 @@ uygular ve modüle verir, modül de onu `context.service<T>()` ile bulur. Tasar�
 | `StoreService` | `store` | `illusion/store/StoreService.hpp` | `NullStoreService` veya `SteamStoreService` (ADR 0056) |
 | `UiService` | `ui` | `illusion/ui/UiService.hpp` | `UiWorld` üzerinde `UiWorldService` (`illusion::ui`; ADR 0057) |
 | `SaveService` | `save` | `illusion/save/SaveService.hpp` | `SaveSystem` üzerinde `SaveSystemService` (`illusion::save`; ADR 0058) |
+| `AnimationService` | `animation` | `illusion/animation/AnimationService.hpp` | `AnimationWorld` üzerinde `AnimationWorldService` (`illusion::animation`; ADR 0060) |
 
 ```cmake
 illusion_add_module(tetris SOURCES game/Tetris.cpp USES physics audio input runtime)
@@ -61,11 +62,11 @@ void update(illusion::ModuleContext& context, illusion::f64)
 - **Maliyet.** Bir çağrı tek bir dolaylı çağrıdır; `services/virtual-call` Benchmark'ı onu 10 ns'nin
   altında tutar.
 - **Uyumluluk.** Arayüzler modül ABI'sinin parçasıdır: bir fonksiyon eklemek veya değiştirmek
-  `kModuleApiVersion`'ı değiştirir (`SaveService` ile birlikte 6) ve modüller yeniden Build edilmelidir.
+  `kModuleApiVersion`'ı değiştirir (`AnimationService` ile birlikte 7) ve modüller yeniden Build edilmelidir.
 
 ## Kapsam
 
-"Scripting API" Doxygen grubu `ModuleContext`'i ve sekiz arayüzü içerir.
+"Scripting API" Doxygen grubu `ModuleContext`'i ve dokuz arayüzü içerir.
 [Showcase modülü](../manual/editor/showcase.md#showcase-modulu) grubun her public fonksiyonunu çağırır;
 biri orada çağrılmıyorsa ya da modül testlerinin bir sayaçlı proxy'sinin (`tests/modules/CountingServices.hpp`)
 sayaç sayısı yanlışsa `python tools/check_api_coverage.py` CI'da başarısız olur. Bu yüzden yeni bir
@@ -190,3 +191,24 @@ slotun görüntüsü yoksa boştur. Bulutu uzakta olan bir mağazayla slot dosya
 başladığında daha yeni bir bulut dosyası yerel slotun yerini alır; bu hiçbir olay üretmez
 ([Buluttaki kayıtlı oyunlar](../manual/runtime.md#buluttaki-kaytl-oyunlar)). [Kayıtlı oyunlar](../manual/saved-games.md)
 kılavuz sayfası `Saved` tag'ini, metadata'yı, olayları ve dosyaları anlatır.
+
+## AnimationService
+
+Animator'ların animasyon grafları ve klipleri (ADR 0059, ADR 0060). Parametre yazımları bir sonraki
+Animation adımında kullanılır; okumalar grafın kullandığı değerleri döndürür. `Animator`'ı olmayan bir
+Entity üzerindeki çağrı `NoAnimator` döndürür; graf gerektiren bir çağrı, Animator'ın grafı yokken ya da
+grafı henüz yüklenmemişken `NoGraph` döndürür; bilinmeyen adlar `UnknownName`, yanlış türler
+`TypeMismatch` döndürür. Hiçbir şey assert etmez.
+
+| Fonksiyon | Amaç |
+| --- | --- |
+| `setFloat`, `setInt`, `setBool` | Entity'nin grafındaki bir parametreyi ayarlar (sonlu olmayan bir değer ya da 2^24'ün ötesindeki bir Int için `InvalidValue`) |
+| `setTrigger` | Bir trigger'ı, bir geçiş onu tüketene ya da sonraki adım bitene kadar kurar |
+| `parameter` | Bir Float, Int ya da Bool parametresinin değeri (Int ve Bool sayı olarak) |
+| `currentState`, `normalizedTime` | Bir katmanın geçerli durumu (süren bir geçişin hedefi) ve normalize zamanı |
+| `play` | Grafı olmayan bir Animator'ı `fadeSeconds` boyunca `model.glb#animation/<name>` klibine cross-fade eder, 0 zamanından başlatır; `Animator::clip`'i ayarlar (graf varsa `HasGraph`) |
+| `pollEvents` | Son update'in durum olaylarını (`AnimationEvent`: Entity, olay, katman, durum) update sırasıyla bir span'e kopyalar; toplamı döndürür |
+
+Bir `AnimationEvent`'in ve `currentState()`'in döndürdüğü adlar bir sonraki update'e kadar geçerlidir.
+[Animasyon](../manual/animation.md#animasyon-graflar) kılavuz sayfası grafları anlatır; root motion'ı
+[oyun oturumu](../manual/runtime.md) uygular.

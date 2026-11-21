@@ -17,8 +17,10 @@ class ComponentRegistry;
 /// so scenes and saved games keep where the clip was.
 struct Animator
 {
-    AssetRef skeleton;   ///< The skeleton: `model.glb#skin/N`.
-    AssetRef clip;       ///< The clip: `model.glb#animation/<name>`; none plays the rest pose.
+    AssetRef skeleton; ///< The skeleton: `model.glb#skin/N`.
+    AssetRef clip;     ///< The clip: `model.glb#animation/<name>`; none plays the rest pose.
+    /// An animation graph (`.animgraph`, ADR 0060) that drives the Animator instead of clip; none plays clip.
+    AssetRef graph;
     f32 speed = 1.0f;    ///< Playback rate; negative plays backwards.
     f32 time = 0.0f;     ///< Seconds into the clip.
     bool loop = true;    ///< Wrap at the clip's end; otherwise hold the last pose.
@@ -33,6 +35,9 @@ struct AnimationPose
     /// AnimationWorld::frame() of the last update that wrote the pose; the renderer skins only fresh poses.
     u64 frame = 0;
     Aabb bounds; ///< World-space bounds of the posed mesh (for culling).
+    /// Root motion of the last update in world space (metres), applied by the session; zero without it.
+    Vec3 rootTranslation{0.0f};
+    f32 rootYaw = 0.0f; ///< Root motion rotation about +y of the last update, in radians.
 };
 
 /// Registers Animator (`illusion.Animator`, saved) and AnimationPose (runtime) with @p registry.

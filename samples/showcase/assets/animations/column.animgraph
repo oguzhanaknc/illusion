@@ -1,0 +1,82 @@
+{
+  "format": "illusion.animgraph",
+  "version": 1,
+  "parameters": [
+    {
+      "name": "lean",
+      "type": "Float",
+      "default": 0.5
+    },
+    {
+      "name": "calm",
+      "type": "Bool"
+    },
+    {
+      "name": "mood",
+      "type": "Int"
+    },
+    {
+      "name": "bow",
+      "type": "Trigger"
+    }
+  ],
+  "layers": [
+    {
+      "name": "base",
+      "entry": "hold",
+      "states": [
+        {
+          "name": "hold",
+          "clip": "assets:/models/column.gltf#animation/sway"
+        },
+        {
+          "name": "swing",
+          "blend1d": {
+            "parameter": "lean",
+            "points": [
+              {
+                "value": 0,
+                "clip": "assets:/models/column.gltf#animation/sway"
+              },
+              {
+                "value": 1,
+                "clip": "assets:/models/column.gltf#animation/lean"
+              }
+            ]
+          },
+          "events": [
+            {
+              "name": "peak",
+              "time": 0.5
+            }
+          ]
+        }
+      ],
+      "transitions": [
+        {
+          "from": "hold",
+          "to": "swing",
+          "duration": 0.3,
+          "conditions": [
+            {
+              "parameter": "bow"
+            }
+          ]
+        },
+        {
+          "from": "swing",
+          "to": "hold",
+          "duration": 0.3,
+          "exitTime": 0.9,
+          "conditions": [
+            {
+              "parameter": "calm",
+              "compare": "Equal",
+              "value": true
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}
