@@ -26,6 +26,9 @@ namespace illusion
 
 class JobSystem;
 class World;
+struct Ragdoll;
+struct RagdollProfile;
+struct Skeleton;
 
 /// Creation parameters for PhysicsWorld.
 struct PhysicsWorldDesc
@@ -185,6 +188,44 @@ public:
 
     /// Entities whose Joint broke during the last update() (see Joint::breakForce), sorted.
     [[nodiscard]] std::span<const Entity> brokenJoints() const noexcept;
+
+    /// @}
+
+    /// @name Ragdolls
+    /// Ragdolls of skinned characters (docs/adr/0061-sockets-ik-and-ragdolls.md), started by the host when
+    /// Ragdoll::active turns true (GameSession does this). update() removes the ragdoll of an Entity that is
+    /// destroyed, becomes Inactive, loses its Ragdoll or whose Ragdoll::active is false.
+    /// @{
+
+    /// Starts a ragdoll for @p entity: a dynamic capsule per part of @p profile whose joint @p skeleton has
+    /// (parts on unknown joints are skipped), each joined to the part of its nearest ancestor joint (or the
+    /// first part) by a swing-twist constraint at its joint, collisions between joined parts off, on layer
+    /// Ragdoll::layer with Ragdoll::mass shared by the parts. @p joints are the world-space matrices of every
+    /// joint of the pose to start from; with @p previousJoints from @p seconds earlier, the parts start with
+    /// that motion. While it runs, the Entity's character (CharacterController) is taken out of the
+    /// simulation. Replaces a running ragdoll. False, logging why, if no part fits the skeleton, the inputs
+    /// do not match it or the body limit is reached.
+    bool startRagdoll(Entity entity, const Ragdoll& settings, const RagdollProfile& profile,
+                      const Skeleton& skeleton, std::span<const Mat4> joints,
+                      std::span<const Mat4> previousJoints = {}, f32 seconds = 0.0f);
+
+    /// Removes the ragdoll of @p entity and gives its character back to the simulation.
+    void stopRagdoll(Entity entity);
+
+    /// True while @p entity has a ragdoll.
+    [[nodiscard]] bool hasRagdoll(Entity entity) const;
+
+    /// Number of running ragdolls.
+    [[nodiscard]] u32 ragdollCount() const noexcept;
+
+    /// World-space matrices of every joint of @p entity's ragdoll after the last update() (interpolated
+    /// between the last two steps like dynamic bodies): a joint with a part follows its body, the others keep
+    /// the transform they had relative to the part of their nearest ancestor (or the first part) at the
+    /// start. Empty without a ragdoll.
+    [[nodiscard]] std::span<const Mat4> ragdollJoints(Entity entity) const;
+
+    /// True while a body of @p entity's ragdoll is awake.
+    [[nodiscard]] bool isRagdollAwake(Entity entity) const;
 
     /// @}
 

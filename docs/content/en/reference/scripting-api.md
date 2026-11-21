@@ -59,7 +59,7 @@ void update(illusion::ModuleContext& context, illusion::f64)
   work there too.
 - **Cost.** A call is one indirect call; the `services/virtual-call` Benchmark keeps it under 10 ns.
 - **Compatibility.** The interfaces are part of the module ABI: adding or changing a function changes
-  `kModuleApiVersion` (9 since `AnimationService::setLookAtTarget()`, `setIkTarget()` and `setIkWeight()`), and modules must be rebuilt.
+  `kModuleApiVersion` (10 since `AnimationService::setRagdoll()`), and modules must be rebuilt.
 
 ## Coverage
 
@@ -190,7 +190,7 @@ cloud and a newer cloud file replaces the local slot when the session starts; th
 
 ## AnimationService
 
-The animation graphs and clips of the Animators, their joints, look-at and IK (ADR 0059, ADR 0060, ADR 0061). Parameter writes are used at the next
+The animation graphs and clips of the Animators, their joints, look-at, IK and ragdolls (ADR 0059, ADR 0060, ADR 0061). Parameter writes are used at the next
 Animation step; reads return the values the graph uses. A call on an Entity without an `Animator` returns
 `NoAnimator`; one that needs a graph returns `NoGraph` while the Animator has none or its graph has not
 loaded; unknown names return `UnknownName` and wrong types `TypeMismatch`. Nothing asserts.
@@ -207,6 +207,7 @@ loaded; unknown names return `UnknownName` and wrong types `TypeMismatch`. Nothi
 | `setLookAtTarget` | Sets the world-space point the Entity's [`LookAt`](../manual/animation.md#look-at) looks at and clears its target Entity (`UnknownName` without a `LookAt`) |
 | `setIkTarget` | Sets the world-space target of the Animator's [`TwoBoneIk`](../manual/animation.md#two-bone-ik) whose end joint is `joint` (on the Entity or a child) and clears its target Entity (`UnknownName` without one) |
 | `setIkWeight` | Sets the weight of that `TwoBoneIk`, clamped to [0, 1]; 0 shows the animated limb |
+| `setRagdoll` | Turns the Entity's [`Ragdoll`](../manual/animation.md#ragdolls) on (it falls from its current pose and velocity) or off (the pose blends back to the animation) by writing `Ragdoll::active` (`UnknownName` without a `Ragdoll`) |
 
 Every function returns an `Expected<..., AnimationError>`; `animationErrorName()` gives the name:
 
@@ -215,7 +216,7 @@ Every function returns an `Expected<..., AnimationError>`; `animationErrorName()
 | `NoAnimator` | The Entity is not alive or has no `Animator` |
 | `NoGraph` | The call needs a graph and the Animator has none, or it has not loaded yet; for `jointTransform()`, the pose has not loaded |
 | `HasGraph` | `play()` on an Animator whose graph controls it |
-| `UnknownName` | No parameter, layer, clip or joint of that name, or no `LookAt` or `TwoBoneIk` for it (also a `play()` path that is not `model.glb#animation/<name>`) |
+| `UnknownName` | No parameter, layer, clip or joint of that name, or no `LookAt`, `TwoBoneIk` or `Ragdoll` for it (also a `play()` path that is not `model.glb#animation/<name>`) |
 | `TypeMismatch` | The parameter has another type (`setFloat()` on a Trigger, `setTrigger()` on a Float, ...) |
 | `InvalidValue` | A value is not finite, an Int is beyond 2^24, or a fade is negative |
 

@@ -74,6 +74,13 @@ struct AnimationStatistics
 /// animated placements it writes), the LookAt of the Entity (following its target at LookAt::speed while
 /// advancing, at once otherwise) and the TwoBoneIk limbs on the Entity and its children. Targets are read
 /// when the update starts and turned into model space through the Entity's Transform.
+///
+/// A SpringBone on the Entity runs before those stages: the joints below its root (at most 32) swing in world
+/// space with Verlet integration in fixed steps of 1/60 s (at most four per update, the remainder carried to
+/// the next), pulled towards the animated pose and kept out of its colliders; outside play (without
+/// advancing) the chain shows the animated pose and starts at rest. After them, the ragdoll blend: a pose
+/// handed over with setRagdollPose() replaces the result by a weight that moves by the update's seconds over
+/// the blend time, towards it while the ragdoll is active and back to the animation afterwards.
 class AnimationWorld : NonCopyable
 {
 public:
@@ -136,6 +143,19 @@ public:
 
     /// The state events of the last update(), in update order; their names stay valid until the next one.
     [[nodiscard]] std::span<const AnimationEvent> events() const noexcept;
+
+    /// The bind-space bounds of @p slot's joints (MeshData::jointBounds), empty without a skinned mesh.
+    [[nodiscard]] std::span<const Aabb> jointBounds(u32 slot) const noexcept;
+
+    /// Hands @p slot the pose of its ragdoll (ADR 0061): @p joints holds the world-space matrix of every
+    /// joint (AnimationPose::jointCount), or is empty to keep the last one. While @p active the next updates
+    /// blend towards it over @p blendSeconds; once inactive they blend back to the animation from the last
+    /// pose given. False, changing nothing, for a slot without a pose, a pose of another size, or an empty
+    /// pose with @p active before any pose was given.
+    bool setRagdollPose(u32 slot, std::span<const Mat4> joints, bool active, f32 blendSeconds);
+
+    /// The weight of the ragdoll pose in @p slot's last update, in [0, 1].
+    [[nodiscard]] f32 ragdollWeight(u32 slot) const noexcept;
 
 private:
     struct Impl;

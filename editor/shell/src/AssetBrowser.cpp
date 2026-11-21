@@ -222,13 +222,17 @@ ui::Icon kindIcon(std::string_view kind) noexcept
     {
         return ui::icons::kAccountTree;
     }
+    if (kind == "RagdollProfile")
+    {
+        return ui::icons::kPersonalInjury;
+    }
     return ui::icons::kDescription;
 }
 
 // The file kinds of kAssetKinds without "Folder", in display order.
-constexpr std::array<std::string_view, 10> kFileKinds{"Scene",          "Prefab",      "Material",  "Model",
-                                                      "Texture",        "Environment", "AudioClip", "Font",
-                                                      "AnimationGraph", "Other"};
+constexpr std::array<std::string_view, 11> kFileKinds{
+    "Scene",     "Prefab", "Material",       "Model",          "Texture", "Environment",
+    "AudioClip", "Font",   "AnimationGraph", "RagdollProfile", "Other"};
 
 // @p bytes as a short human-readable size into @p out.
 void formatSize(u64 bytes, char* out, usize cap) noexcept

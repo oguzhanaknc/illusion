@@ -1,4 +1,5 @@
 #include <illusion/physics/PhysicsComponents.hpp>
+#include <illusion/physics/Ragdoll.hpp>
 
 namespace illusion
 {
@@ -7,6 +8,7 @@ namespace
 
 constexpr std::string_view kRigidBodyRequires[] = {"illusion.Transform", "illusion.Collider"};
 constexpr std::string_view kRequiresTransform[] = {"illusion.Transform"};
+constexpr std::string_view kRequiresAnimator[] = {"illusion.Animator"};
 constexpr f64 kMaxLayer = static_cast<f64>(kMaxPhysicsLayers - 1);
 
 } // namespace
@@ -95,6 +97,24 @@ void reflectPhysicsComponents(ComponentRegistry& registry)
                {.description = "Force that breaks the joint; 0 never breaks.",
                 .unit = Unit::Newtons,
                 .min = 0.0});
+    reflect<Ragdoll>("illusion.Ragdoll", 1, registry)
+        .meta({.displayName = "Ragdoll",
+               .category = "Animation",
+               .icon = "personal_injury",
+               .description = "Turns the Entity's animated character into a physics ragdoll while active.",
+               .docsAnchor = "manual/animation.md#ragdolls",
+               .requiredComponents = kRequiresAnimator})
+        .field("profile", &Ragdoll::profile,
+               {.description = "A .ragdoll profile of shapes and limits; none makes one from the skeleton.",
+                .assetKind = AssetKind::RagdollProfile})
+        .field("active", &Ragdoll::active, {.description = "Simulated by physics instead of animated."})
+        .field("blendSeconds", &Ragdoll::blendSeconds,
+               {.description = "Time to blend between the animated and the simulated pose, both ways.",
+                .unit = Unit::Seconds,
+                .min = 0.0})
+        .field("mass", &Ragdoll::mass,
+               {.description = "Total mass, shared by the parts.", .unit = Unit::Kilograms, .min = 0.0})
+        .field("layer", &Ragdoll::layer, {.min = 0.0, .max = kMaxLayer, .hint = FieldHint::Layer});
 
     reflectRuntime<PhysicsBody>("illusion.PhysicsBody", {.displayName = "Physics body"}, registry);
     reflectRuntime<CharacterBody>("illusion.CharacterBody", {.displayName = "Character body"}, registry);

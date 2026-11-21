@@ -1,5 +1,6 @@
 #include <illusion/animation/AnimationComponents.hpp>
 #include <illusion/ecs/Reflection.hpp>
+#include <illusion/ecs/StructRegistry.hpp>
 
 namespace illusion
 {
@@ -131,6 +132,37 @@ void registerAnimationComponents(ComponentRegistry& registry)
                {.description = "How fast the corrections follow, per second; 0 follows at once.", .min = 0.0})
         .field("layerMask", &FootPlacement::layerMask,
                {.description = "Physics layers the rays hit (bit i = layer i)."});
+    reflectStruct<SpringCollider>("illusion.SpringCollider", 1, registry.structs())
+        .meta({.displayName = "Spring collider", .docsAnchor = "manual/animation.md#spring-bones"})
+        .field("joint", &SpringCollider::joint,
+               {.description = "Joint the sphere moves with; empty turns the entry off."})
+        .field("offset", &SpringCollider::offset,
+               {.description = "Centre in the joint's space.", .unit = Unit::Meters})
+        .field("radius", &SpringCollider::radius,
+               {.description = "Radius.", .unit = Unit::Meters, .min = 0.0});
+    reflect<SpringBone>("illusion.SpringBone", 1, registry)
+        .meta({.displayName = "Spring bone",
+               .category = "Animation",
+               .icon = "waves",
+               .description =
+                   "Lets a joint chain of the Animator (hair, a tail) swing with inertia and gravity.",
+               .docsAnchor = "manual/animation.md#spring-bones",
+               .requiredComponents = kRequiresAnimator})
+        .field("root", &SpringBone::root,
+               {.description = "First joint of the chain; every joint below it swings."})
+        .field("stiffness", &SpringBone::stiffness,
+               {.description = "Pull back towards the animated pose per step.",
+                .unit = Unit::Ratio,
+                .min = 0.0,
+                .max = 1.0})
+        .field("damping", &SpringBone::damping,
+               {.description = "Velocity lost per step.", .unit = Unit::Ratio, .min = 0.0, .max = 1.0})
+        .field("gravity", &SpringBone::gravity, {.description = "World-space acceleration in m/s²."})
+        .field(
+            "radius", &SpringBone::radius,
+            {.description = "Radius of each chain joint for collisions.", .unit = Unit::Meters, .min = 0.0})
+        .field("colliders", &SpringBone::colliders,
+               {.description = "Spheres on joints of the same skeleton that the chain stays out of."});
     reflectRuntime<AnimationPose>("illusion.AnimationPose", {.displayName = "Animation pose"}, registry);
     reflectRuntime<FootPlacementPose>("illusion.FootPlacementPose", {.displayName = "Foot placement pose"},
                                       registry);
