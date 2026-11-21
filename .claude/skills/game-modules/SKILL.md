@@ -44,7 +44,7 @@ Read first: `docs/adr/0027-module-system-and-hot-reload.md`, `docs/adr/0041-modu
    `python tools/check_api_coverage.py` fails until every function of the `scripting_api` group is called
    there, and `tests/showcase/TestShowcaseModule.cpp` counts the calls at run time.
 4. Any change to an interface changes the module ABI: bump `kModuleApiVersion` in
-   `engine/core/include/illusion/core/Module.hpp` (9 since `AnimationService::setLookAtTarget()`, `setIkTarget()` and `setIkWeight()`)
+   `engine/core/include/illusion/core/Module.hpp` (10 since `AnimationService::setRagdoll()`)
    and say so in the commit.
 5. Update `reference/scripting-api.md` in English and Turkish.
 

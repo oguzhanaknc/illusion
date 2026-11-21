@@ -459,10 +459,10 @@ ILL_BENCHMARK("animation/sockets-300", 2'500'000.0)
 }
 
 // Budget: ns per AnimationWorld::update() of animation/world-update-300x60 with the stages of ADR 0061 on
-// every Animator: a look-at over three joints, two two-bone IK limbs (one on a child Entity) and a
-// FootPlacement whose foot is held on the ground (the session's part is not timed), about 7x a desktop result
-// (0.36 ms, of which the stages take 0.10 ms; ADR 0061 allows 1 ms on top of animation/world-update-300x60);
-// see Budget.hpp.
+// every Animator: a spring chain of eight joints with a collider, a look-at over three joints, two two-bone
+// IK limbs (one on a child Entity) and a FootPlacement whose foot is held on the ground (the session's part
+// is not timed), about 6x a desktop result (0.43 ms, of which the stages take 0.17 ms; ADR 0061 allows 1 ms
+// on top of animation/world-update-300x60); see Budget.hpp.
 ILL_BENCHMARK("animation/ik-300", 2'500'000.0)
 {
     reflectCoreComponents();
@@ -498,7 +498,11 @@ ILL_BENCHMARK("animation/ik-300", 2'500'000.0)
         foot.point = transform.position + Vec3(0.05f, 0.1f, 0.1f);
         FootPlacement placement;
         placement.pelvis = "joint01";
-        const Entity character = world.create(transform, renderer, animator, look, foot, placement);
+        SpringBone spring;
+        spring.root = "joint42"; // joint42 to joint49
+        spring.colliders[0] =
+            SpringCollider{.joint = "joint40", .offset = Vec3(0.0f, 0.3f, 0.1f), .radius = 0.1f};
+        const Entity character = world.create(transform, renderer, animator, look, foot, placement, spring);
         TwoBoneIk hand;
         hand.joint = "joint22";
         hand.point = transform.position + Vec3(-0.1f, 0.25f, 0.1f);
@@ -514,7 +518,7 @@ ILL_BENCHMARK("animation/ik-300", 2'500'000.0)
         pose.feet[0].lift = -0.05f;
         pose.pelvisOffset = -0.05f;
     }
-    bench.run("AnimationWorld::update 300 x 60 joints, look-at and two limbs each", [&] {
+    bench.run("AnimationWorld::update 300 x 60 joints, a spring chain, look-at and two limbs each", [&] {
         animation.update(1.0f / 60.0f, &jobs, true);
         ankerl::nanobench::doNotOptimizeAway(animation.statistics().joints);
     });

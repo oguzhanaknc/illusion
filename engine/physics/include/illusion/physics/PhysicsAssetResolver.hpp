@@ -23,6 +23,8 @@ namespace illusion
 class AssetStreamer;
 class PhysicsWorld;
 class World;
+struct AssetRef;
+struct RagdollProfile;
 
 /// Counters of a PhysicsAssetResolver.
 struct PhysicsAssetStatistics
@@ -45,6 +47,9 @@ struct PhysicsAssetStatistics
 /// Live reload: when AssetStreamer::reload() reports a model file (AssetReloadedEvent), the geometry made
 /// from it is cooked again and the Colliders that use it are rebuilt; the previous geometry stays when the
 /// reload fails. See docs/adr/0045-asset-catalog-and-file-watching.md.
+///
+/// It also loads the `.ragdoll` profiles of Ragdoll Components (ragdollProfile()), again when their file
+/// changes.
 class PhysicsAssetResolver : NonCopyable
 {
 public:
@@ -63,6 +68,11 @@ public:
 
     /// Counters.
     [[nodiscard]] const PhysicsAssetStatistics& statistics() const noexcept;
+
+    /// The `.ragdoll` profile @p profile (parseRagdollProfile()), loaded through the streamer on the first
+    /// call: null while it loads, and null with @p failed set when it cannot be read (logged once). A reload
+    /// that fails keeps the previous profile.
+    [[nodiscard]] const RagdollProfile* ragdollProfile(const AssetRef& profile, bool& failed);
 
 private:
     struct Impl;

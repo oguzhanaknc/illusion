@@ -1,0 +1,85 @@
+{
+  "format": "illusion.ragdoll",
+  "version": 1,
+  "parts": [
+    {
+      "joint": "hips",
+      "radius": 0.12,
+      "halfHeight": 0.1,
+      "rotation": [
+        0,
+        0,
+        0.7071068,
+        0.7071068
+      ],
+      "massShare": 0.3
+    },
+    {
+      "joint": "thigh_l",
+      "radius": 0.06,
+      "halfHeight": 0.145,
+      "offset": [
+        0,
+        -0.205,
+        0
+      ]
+    },
+    {
+      "joint": "shin_l",
+      "swingLimit": 0.5,
+      "twistMin": -0.1,
+      "twistMax": 0.1,
+      "radius": 0.06,
+      "halfHeight": 0.145,
+      "offset": [
+        0,
+        -0.205,
+        0
+      ]
+    },
+    {
+      "joint": "thigh_r",
+      "radius": 0.06,
+      "halfHeight": 0.145,
+      "offset": [
+        0,
+        -0.205,
+        0
+      ]
+    },
+    {
+      "joint": "shin_r",
+      "swingLimit": 0.5,
+      "twistMin": -0.1,
+      "twistMax": 0.1,
+      "radius": 0.06,
+      "halfHeight": 0.145,
+      "offset": [
+        0,
+        -0.205,
+        0
+      ]
+    },
+    {
+      "joint": "spine",
+      "radius": 0.14,
+      "halfHeight": 0.08,
+      "offset": [
+        0,
+        0.225,
+        0
+      ]
+    },
+    {
+      "joint": "head",
+      "radius": 0.11,
+      "halfHeight": 0,
+      "offset": [
+        0,
+        0.1,
+        0
+      ],
+      "swingLimit": 0.6
+    }
+  ]
+}

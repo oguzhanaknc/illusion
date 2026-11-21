@@ -22,10 +22,12 @@
     "illusion.PointLight": 1,
     "illusion.PostEffects": 1,
     "illusion.ProceduralSky": 1,
+    "illusion.Ragdoll": 1,
     "illusion.RigidBody": 1,
     "illusion.Saved": 1,
     "illusion.SkyAtmosphere": 1,
     "illusion.SkyLight": 1,
+    "illusion.SpringBone": 1,
     "illusion.Transform": 1,
     "illusion.TwoBoneIk": 1,
     "illusion.UiButton": 1,
@@ -2797,6 +2799,35 @@
         "illusion.Name": {
           "value": "Column"
         },
+        "illusion.SpringBone": {
+          "root": "base",
+          "stiffness": 0.35,
+          "damping": 0.3,
+          "gravity": [0.0, -4.0, 0.5],
+          "radius": 0.06,
+          "colliders": [
+            {
+              "joint": "base",
+              "offset": [0.0, 0.5, 0.2],
+              "radius": 0.15
+            },
+            {
+              "joint": "",
+              "offset": [0.0, 0.0, 0.0],
+              "radius": 0.1
+            },
+            {
+              "joint": "",
+              "offset": [0.0, 0.0, 0.0],
+              "radius": 0.1
+            },
+            {
+              "joint": "",
+              "offset": [0.0, 0.0, 0.0],
+              "radius": 0.1
+            }
+          ]
+        },
         "illusion.Transform": {
           "position": [-6.0, 0.0, 3.0],
           "rotation": [0.0, 0.0, 0.0, 1.0],
@@ -2981,6 +3012,42 @@
         },
         "illusion.Transform": {
           "position": [-5.5, 3.0, -3.0],
+          "rotation": [0.0, 0.0, 0.0, 1.0],
+          "scale": [1.0, 1.0, 1.0]
+        }
+      }
+    },
+    {
+      "id": "180a2bd6343d01f8",
+      "components": {
+        "illusion.Collider": {
+          "shape": "Box",
+          "halfExtents": [2.0, 0.25, 2.0],
+          "radius": 0.5,
+          "halfHeight": 0.5,
+          "offset": [0.0, 0.0, 0.0],
+          "rotation": [0.0, 0.0, 0.0, 1.0],
+          "mesh": "",
+          "meshIndex": 0
+        },
+        "illusion.Name": {
+          "value": "Ragdoll Floor"
+        },
+        "illusion.RigidBody": {
+          "motionType": "Static",
+          "mass": 0.0,
+          "friction": 0.5,
+          "restitution": 0.0,
+          "linearDamping": 0.05,
+          "angularDamping": 0.05,
+          "gravityFactor": 1.0,
+          "layer": 0,
+          "sensor": false,
+          "allowSleeping": true,
+          "continuousCollision": false
+        },
+        "illusion.Transform": {
+          "position": [-17.0, -0.25, 14.0],
           "rotation": [0.0, 0.0, 0.0, 1.0],
           "scale": [1.0, 1.0, 1.0]
         }
@@ -3558,6 +3625,44 @@
           "position": [0.0, 0.0, 0.0],
           "rotation": [0.0, 0.0, 0.0, 1.0],
           "scale": [20.0, 1.0, 20.0]
+        }
+      }
+    },
+    {
+      "id": "db20290ac13e4a81",
+      "components": {
+        "illusion.Animator": {
+          "skeleton": "assets:/models/strider.gltf#skin/0",
+          "clip": "assets:/models/strider.gltf#animation/idle",
+          "graph": "",
+          "speed": 1.0,
+          "time": 0.0,
+          "loop": true,
+          "playing": true
+        },
+        "illusion.MeshRenderer": {
+          "mesh": "assets:/models/strider.gltf#mesh/0",
+          "submesh": 0,
+          "material": "builtin:/material/default",
+          "layers": 1,
+          "castShadows": true,
+          "visible": true,
+          "lodBias": 1.0
+        },
+        "illusion.Name": {
+          "value": "Fallen Strider"
+        },
+        "illusion.Ragdoll": {
+          "profile": "assets:/animations/strider.ragdoll",
+          "active": true,
+          "blendSeconds": 0.4,
+          "mass": 55.0,
+          "layer": 1
+        },
+        "illusion.Transform": {
+          "position": [-17.0, 0.0, 14.0],
+          "rotation": [0.0, -0.3826834, 0.0, 0.9238795],
+          "scale": [1.0, 1.0, 1.0]
         }
       }
     },

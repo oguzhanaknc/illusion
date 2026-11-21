@@ -5,7 +5,8 @@ add_library(illusion_physics STATIC
     src/PhysicsAssetResolver.cpp
     src/PhysicsComponents.cpp
     src/PhysicsWorldService.cpp
-    src/PhysicsWorld.cpp)
+    src/PhysicsWorld.cpp
+    src/Ragdoll.cpp)
 add_library(illusion::physics ALIAS illusion_physics)
 
 target_include_directories(illusion_physics PUBLIC

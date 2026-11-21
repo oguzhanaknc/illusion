@@ -119,6 +119,7 @@ struct Runtime
     bool columnSwings = false; ///< The Column's graph is in its "swing" state.
     f32 columnTop = 0.0f;      ///< World height of the Column's "top" joint (its lamp's socket).
     Entity strider{};
+    Entity fallenStrider{};      ///< Starts as a ragdoll, stands up and falls again.
     u32 uiEvents = 0;            ///< UI events seen so far.
     u32 uiClicks = 0;            ///< Clicks of the Go button.
     f32 sliderValue = 0.0f;      ///< The HUD slider at the last update.
@@ -190,6 +191,8 @@ constexpr std::string_view kFramesKey = "showcase.hud.frames";
 constexpr std::string_view kLeanClip = "assets:/models/column.gltf#animation/lean";
 constexpr u32 kBowFrame = 30;   // the Column bows (a trigger of its graph)
 constexpr u32 kCalmFrame = 150; // and returns to its first state
+constexpr u32 kStandFrame = 90; // the Fallen Strider blends back from its ragdoll to its animation
+constexpr u32 kFallFrame = 200; // and falls again
 
 Quat identity() noexcept
 {
@@ -402,6 +405,7 @@ void startModule(ModuleContext& context)
     runtime.dust = findNamed(world, "Dust");
     runtime.column = findNamed(world, "Column");
     runtime.strider = findNamed(world, "Strider");
+    runtime.fallenStrider = findNamed(world, "Fallen Strider");
     if (Animator* animator = world.tryGet<Animator>(runtime.column))
     {
         animator->playing = true; // the scene holds it still for the editor
@@ -842,6 +846,15 @@ void updateAnimation(AnimationService& animation, Runtime& runtime, u32 frame)
         if (!weighted)
         {
             ILL_LOG_INFO("Showcase", "Strider: {}", animationErrorName(weighted.error()));
+        }
+    }
+    if (frame == kStandFrame || frame == kFallFrame)
+    {
+        const Expected<void, AnimationError> ragdoll =
+            animation.setRagdoll(runtime.fallenStrider, frame == kFallFrame);
+        if (!ragdoll)
+        {
+            ILL_LOG_INFO("Showcase", "Fallen Strider: {}", animationErrorName(ragdoll.error()));
         }
     }
 }
