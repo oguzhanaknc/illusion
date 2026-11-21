@@ -66,6 +66,7 @@ records rather than user documentation.
 | [0057](https://github.com/oguzhanaknc/illusion/blob/main/docs/adr/0057-game-ui.md) | Game UI: elements are Entities with saved Components under a canvas, signed distance field fonts baked with stb_truetype, a batched draw list drawn after tonemapping, navigation through InputActions and a polled UiService |
 | [0058](https://github.com/oguzhanaknc/illusion/blob/main/docs/adr/0058-saved-games.md) | Saved games: slot files of the entities tagged Saved, written as scene JSON in a checksummed container, atomically with one backup on a save thread, through a polled SaveService |
 | [0059](https://github.com/oguzhanaknc/illusion/blob/main/docs/adr/0059-skeletal-animation.md) | Skeletal animation: skins and clips cooked into the model, poses in an AnimationWorld outside the ECS, skinning once per frame in a compute pass |
+| [0060](https://github.com/oguzhanaknc/illusion/blob/main/docs/adr/0060-animation-graphs.md) | Animation graphs: layered state machines as `.animgraph` assets driven by parameters, with blend spaces, events and root motion, through a polled AnimationService |
 
 To propose a new decision, copy `docs/adr/0000-template.md` and follow the
 [contributing guide](../contributing.md#architecture-decision-records).
