@@ -132,7 +132,9 @@ struct GameSessionDesc
 ///    Entity whose pose has AnimationPose::rootTranslation or AnimationPose::rootYaw turns about +y by the
 ///    yaw; with a CharacterController it gets the translation divided by the step as its horizontal
 ///    velocity (PhysicsWorld::setCharacterVelocity(), keeping its vertical velocity), otherwise the
-///    translation is added to its Transform (and its LocalTransform follows when it has a parent).
+///    translation is added to its Transform (and its LocalTransform follows when it has a parent). The
+///    Entities attached to joints (BoneAttachment, ADR 0061) then take their Transforms from their moved
+///    parents, so that kinematic bodies on them follow the sockets in the physics step.
 /// 5. **Physics:** PhysicsWorld::update().
 /// 6. **Hierarchy:** updateTransformHierarchy().
 /// 7. **UI:** the UiWorld lays out for the frame of setUiFrame(), handles the pointer and wheel of

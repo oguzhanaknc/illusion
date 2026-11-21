@@ -247,6 +247,23 @@ void applyRootMotion(World& world, PhysicsWorld& physics, u64 frame, f64 step)
         });
 }
 
+// Places the Entities attached to joints (BoneAttachment) by their parents' Transforms after root motion
+// moved them, so that physics drives their bodies to where the sockets are in this update.
+void followSockets(World& world)
+{
+    world.query<const BoneAttachment, const Hierarchy, const LocalTransform, Transform>()
+        .without<Inactive>()
+        .each([&world](const BoneAttachment&, const Hierarchy& hierarchy, const LocalTransform& local,
+                       Transform& transform) {
+            const Transform* parent =
+                world.isAlive(hierarchy.parent) ? world.tryGet<Transform>(hierarchy.parent) : nullptr;
+            if (parent != nullptr)
+            {
+                transform = combine(*parent, local.asTransform());
+            }
+        });
+}
+
 } // namespace
 
 struct GameSession::Impl
@@ -537,6 +554,7 @@ void GameSession::update(f64 deltaSeconds)
         if (impl.started)
         {
             applyRootMotion(impl.world, impl.physics, impl.animation->frame(), step);
+            followSockets(impl.world);
         }
     }
     impl.physics.update(step);

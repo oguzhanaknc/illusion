@@ -461,18 +461,6 @@ void removeRootMotion(const Skeleton& skeleton, u32 root, std::span<JointPose> p
         glm::normalize(glm::inverse(parentRotation) * turn * parentRotation * pose[root].rotation);
 }
 
-i32 findJoint(const Skeleton& skeleton, std::string_view name) noexcept
-{
-    for (usize j = 0; j < skeleton.joints.size(); ++j)
-    {
-        if (skeleton.joints[j].name == name)
-        {
-            return static_cast<i32>(j);
-        }
-    }
-    return -1;
-}
-
 } // namespace
 
 Expected<GraphBinding, std::string>
@@ -527,7 +515,7 @@ bindGraph(const AnimationGraph& graph, const Skeleton& skeleton,
             std::vector<u8> subtree(joints, 0);
             for (usize m = 0; m < layer.mask.size(); ++m)
             {
-                const i32 joint = findJoint(skeleton, layer.mask[m].joint);
+                const i32 joint = detail::findJoint(skeleton, layer.mask[m].joint);
                 if (joint < 0)
                 {
                     return unexpected(std::format("layers[{}].mask[{}].joint: the skeleton has no joint '{}'",
@@ -551,7 +539,7 @@ bindGraph(const AnimationGraph& graph, const Skeleton& skeleton,
     }
     if (!graph.rootMotion.empty())
     {
-        binding.rootJoint = findJoint(skeleton, graph.rootMotion);
+        binding.rootJoint = detail::findJoint(skeleton, graph.rootMotion);
         if (binding.rootJoint < 0)
         {
             return unexpected(std::format("rootMotion: the skeleton has no joint '{}'", graph.rootMotion));

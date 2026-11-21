@@ -57,8 +57,8 @@ class World;
 /// only loads modules built with the same value. Version 3 added start() and stop() and moved World work
 /// out of load() (ADR 0041); version 4 added UiService and SceneService::requestExit(); version 5 added
 /// UiService::playTransition() and transitionProgress(); version 6 added SaveService; version 7 added
-/// AnimationService.
-inline constexpr u32 kModuleApiVersion = 7;
+/// AnimationService; version 8 added AnimationService::jointTransform().
+inline constexpr u32 kModuleApiVersion = 8;
 
 /// What a World attached to a ModuleHost is for.
 enum class WorldRole : u8

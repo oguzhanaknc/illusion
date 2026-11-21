@@ -62,12 +62,16 @@ version changes are in the contributor guide ("Versions and releases"). The vers
   motion), `Animator::graph`, root motion applied to the `CharacterController` or the Transform,
   `AnimationService` for game modules (`USES animation`: parameters, triggers, states, events and `play()`),
   the manual section "Animation graphs" with a complete example and the tutorial "Animate a character".
+- Sockets (ANIM-3a): the saved `BoneAttachment` Component makes a child Entity follow a joint of its parent's
+  Animator with an offset (kinematic bodies on it follow too), and `AnimationService::jointTransform()` gives
+  game modules a joint's world-space placement; the manual section "Sockets".
 
 ### Changed
 
-- The module API version is 7 (`AnimationService` is a new interface; version 6 added `UiService`,
-  `SceneService::requestExit()` and `SaveService`, and `UiService` gained `playTransition()` and
-  `transitionProgress()`): game modules built for an earlier version must be rebuilt.
+- The module API version is 8 (`AnimationService` gained `jointTransform()`; version 7 added
+  `AnimationService`, version 6 `UiService`, `SceneService::requestExit()` and `SaveService`, and `UiService`
+  gained `playTransition()` and `transitionProgress()`): game modules built for an earlier version must be
+  rebuilt.
 - New projects ship the input actions asset `assets/input/game.input` with the actions `ui.navigate`,
   `ui.submit` and `ui.cancel` and their default bindings, named by `settings/input.json`; older projects still
   get the actions at run time.

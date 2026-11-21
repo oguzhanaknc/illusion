@@ -200,6 +200,7 @@ void callServices(ModuleContext& context)
         static_cast<void>(animation->play(e, "game:/hero.glb#animation/run", 0.2f));
         std::array<AnimationEvent, 2> events{};
         static_cast<void>(animation->pollEvents(events));
+        static_cast<void>(animation->jointTransform(e, "hand"));
     }
 }
 

@@ -293,6 +293,18 @@ JointPose sampleJoint(const AnimationClip& clip, const ClipBinding& binding, con
     return pose;
 }
 
+i32 findJoint(const Skeleton& skeleton, std::string_view name) noexcept
+{
+    for (usize j = 0; j < skeleton.joints.size(); ++j)
+    {
+        if (skeleton.joints[j].name == name)
+        {
+            return static_cast<i32>(j);
+        }
+    }
+    return -1;
+}
+
 } // namespace detail
 
 Aabb skinnedBounds(std::span<const Aabb> jointBounds, std::span<const SkinMatrix> skin) noexcept

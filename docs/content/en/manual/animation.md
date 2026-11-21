@@ -401,6 +401,48 @@ A module drives it with `setFloat(hero, "speed", ...)`, `setBool(hero, "strafing
 - Not interruptible transitions, sub-state machines and saving the live state are listed under
   [Not supported yet](#not-supported-yet).
 
+## Sockets
+
+A socket hangs an Entity on a joint: a lantern in a hand, a sword on a back, a hat on a head. Make the Entity
+a child of the Animator's Entity and give it a `BoneAttachment` (`illusion.BoneAttachment`, saved, in the
+Inspector's Animation category):
+
+| Field | Meaning |
+| --- | --- |
+| `joint` | The joint's name in the parent's skeleton (the glTF node name) |
+| `translation` | Offset in the joint's space, in metres |
+| `rotation` | Offset rotation in the joint's space |
+| `scale` | Offset scale |
+
+After every Animation update, also while the editor scrubs, the child's `LocalTransform` becomes the joint's
+model-space transform times the offset, and its `Transform` follows from its parent's. The offset moves with
+the joint: a translation of (0, 0, 0.1) is 10 cm along the joint's own z axis. The attached Entity's own
+children follow it as usual. `AnimationService::jointTransform()` gives a module the same place in world
+space without an Entity.
+
+```cpp
+illusion::BoneAttachment socket;
+socket.joint = "hand_r";
+socket.translation = illusion::Vec3(0.0f, 0.05f, 0.1f);
+const illusion::Entity lantern = world.create(illusion::Transform{}, socket);
+static_cast<void>(illusion::setParent(world, lantern, hero, illusion::ParentMode::KeepLocal));
+
+// Where the hand is, in world space, after the last Animation update.
+const illusion::Expected<illusion::Mat4, illusion::AnimationError> hand =
+    animation->jointTransform(hero, "hand_r");
+```
+
+- The joint name is looked up once per skeleton, and again when `joint` changes or the model is reloaded.
+- A missing joint, or a parent without an `Animator` (or no parent at all), is logged once per Entity, and
+  the Entity stays where it is. While the parent's model loads, the Entity is left alone without a message.
+- Inactive Entities are skipped: a disabled parent keeps its pose and its attached children stay.
+- In the [game session](runtime.md#step-order) sockets are placed after root motion and before physics, so a
+  `Kinematic` `RigidBody` on an attached Entity is driven to the socket in the same step and pushes dynamic
+  bodies. A `Dynamic` body on an attached Entity is not supported: it would be teleported to the socket every
+  update and lose its velocity. Make it `Kinematic`, or remove the `BoneAttachment` to let it fall.
+- A socket on an Entity that is itself attached (a hand on an attached arm) is placed in the same update,
+  but physics may see its world position one update late.
+
 ## Drawing skinned meshes
 
 `SceneRenderer` skins every posed mesh on the GPU. Give it the poses in `RenderView::animation`; the
@@ -433,7 +475,7 @@ renderer->render(commands, target, world, view, &jobs);
 ## Not supported yet
 
 - Interrupting a running transition, sub-state machines and saving the live state of a graph.
-- Sockets (attaching an Entity to a joint), look-at and inverse kinematics, ragdolls (ANIM-3).
+- Look-at and inverse kinematics, spring bones and ragdolls (ANIM-3).
 - Clip previews, a timeline, skeleton debug drawing and `animation.*` editor commands (ANIM-4).
 - Morph targets, more than four influences per vertex, and keyframe compression.
 
@@ -441,6 +483,7 @@ renderer->render(commands, target, world, view, &jobs);
 
 - Joints are rows in contiguous arrays, not Entities: posing 300 characters of 60 joints takes about
   1.5 ms on one desktop core (benchmark `animation/evaluate-300x60`), and spreads over the Job System.
+- Placing 600 sockets on 300 Animators adds about 0.05 ms to an update (benchmark `animation/sockets-300`).
 - Skinning runs once per frame, however many passes draw the mesh: 300 instances of 10,240 vertices take
   0.66 ms on an NVIDIA GeForce RTX 4070 SUPER (the GPU test sets a budget of 3 ms).
 - Each visible skinned instance costs 64 bytes of GPU memory per vertex (the posed vertex and its previous

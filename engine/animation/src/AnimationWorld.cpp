@@ -1,3 +1,5 @@
+#include "PoseDetail.hpp"
+
 #include <illusion/animation/AnimationComponents.hpp>
 #include <illusion/animation/AnimationGraph.hpp>
 #include <illusion/animation/AnimationWorld.hpp>
@@ -31,6 +33,25 @@ namespace illusion
 {
 namespace
 {
+
+// What keeps a BoneAttachment from following its joint; each is logged once per Entity.
+enum class SocketProblem : u8
+{
+    None,
+    NoAnimator, // no parent, or a parent without an Animator
+    NoJoint,
+};
+
+// A BoneAttachment's joint, resolved against its parent's skeleton.
+struct Socket
+{
+    std::string joint;                  // the BoneAttachment::joint it was resolved for
+    const Skeleton* skeleton = nullptr; // the skeleton it was resolved against
+    u64 revision = 0;                   // Impl::revision it was resolved with
+    i32 index = -1;
+    SocketProblem reported = SocketProblem::None;
+    u64 mark = 0; // the update that last saw it
+};
 
 // Animators posed by one Job.
 constexpr u32 kPosesPerJob = 8;
@@ -262,6 +283,7 @@ struct AnimationWorld::Impl
     usize arenaBytes = kMinScratchBytes;
     std::vector<Entity> scratch;
     std::vector<u32> posed;
+    std::unordered_map<u64, Socket> sockets; // by the attached Entity's Entity::toBits()
     // MeshRenderer::mesh, read through reflection: engine/render links this library.
     ComponentId meshRenderer = kInvalidComponentId;
     u32 meshOffset = 0;
@@ -1033,6 +1055,8 @@ struct AnimationWorld::Impl
         slot.pose->rootTranslation = rootTranslation;
         slot.pose->rootYaw = rootYaw;
         localToModel(*slot.skeleton, localPose, modelPose);
+        // The per-pose stages of ADR 0061 (spring bones, look-at, two-bone IK, ragdoll blend) change
+        // modelPose here, in that order, before the skin matrices and bounds are taken from it.
         illusion::skinMatrices(*slot.skeleton, modelPose, skinPose);
         if (slot.fresh || slot.written + 1 != frame)
         {
@@ -1055,6 +1079,112 @@ struct AnimationWorld::Impl
         slot.pose->jointCount = joints;
         slot.pose->frame = frame;
         slot.pose->bounds = bounds.isValid() ? bounds.transformed(slot.world) : Aabb{};
+    }
+
+    void report(Socket& socket, SocketProblem problem, Entity entity, std::string_view joint)
+    {
+        if (socket.reported == problem)
+        {
+            return;
+        }
+        socket.reported = problem;
+        if (problem == SocketProblem::NoAnimator)
+        {
+            ILL_LOG_WARN("Animation",
+                         "entity {}: the parent of its BoneAttachment has no Animator; it stays where it is",
+                         entity.index);
+        }
+        else
+        {
+            ILL_LOG_WARN("Animation",
+                         "entity {}: the parent's skeleton has no joint '{}'; it stays where it is",
+                         entity.index, joint);
+        }
+    }
+
+    // The slot of @p parent's Animator if this update posed it, or null.
+    [[nodiscard]] const Slot* posedSlot(Entity parent) const noexcept
+    {
+        const AnimationPose* pose = world->tryGet<AnimationPose>(parent);
+        if (pose == nullptr || pose->slot >= slots.size())
+        {
+            return nullptr;
+        }
+        const Slot& slot = slots[pose->slot];
+        return slot.used && slot.entity == parent && slot.jointCount > 0 && slot.written == frame ? &slot
+                                                                                                  : nullptr;
+    }
+
+    // Places @p entity at its joint: the local transform is the joint's model-space transform times the
+    // offset, and the world Transform follows from the parent's current one.
+    void follow(Entity entity, const BoneAttachment& attachment, Entity parent, LocalTransform& local,
+                Transform& transform)
+    {
+        Socket& socket = sockets[entity.toBits()];
+        socket.mark = frame;
+        if (!world->isAlive(parent) || !world->has<Animator>(parent))
+        {
+            report(socket, SocketProblem::NoAnimator, entity, attachment.joint);
+            return;
+        }
+        const Slot* slot = posedSlot(parent);
+        if (slot == nullptr)
+        {
+            return; // its model loads
+        }
+        if (socket.joint != attachment.joint)
+        {
+            socket.joint = attachment.joint;
+            socket.skeleton = nullptr;
+            socket.reported = SocketProblem::None;
+        }
+        if (socket.skeleton != slot->skeleton || socket.revision != revision)
+        {
+            socket.skeleton = slot->skeleton;
+            socket.revision = revision;
+            socket.index = detail::findJoint(*slot->skeleton, socket.joint);
+        }
+        if (socket.index < 0 || static_cast<u32>(socket.index) >= slot->jointCount)
+        {
+            report(socket, SocketProblem::NoJoint, entity, attachment.joint);
+            return;
+        }
+        socket.reported = SocketProblem::None;
+        const f32 length = glm::length(attachment.rotation);
+        const Transform offset{attachment.translation,
+                               length > 0.0f && std::isfinite(length) ? attachment.rotation / length
+                                                                      : Quat{1.0f, 0.0f, 0.0f, 0.0f},
+                               attachment.scale};
+        const Mat4& joint = models[slot->offset + static_cast<u32>(socket.index)];
+        const Transform placed = Transform::fromMatrix(joint * offset.matrix());
+        local = LocalTransform::from(placed);
+        const Transform* parentTransform = world->tryGet<Transform>(parent);
+        transform = parentTransform != nullptr ? combine(*parentTransform, placed) : placed;
+    }
+
+    // Runs after every pose of the update is evaluated: moves the Entities attached to joints.
+    void updateSockets()
+    {
+        ILL_PROFILE_SCOPE();
+        usize seen = 0;
+        world->query<const BoneAttachment, const Hierarchy, LocalTransform, Transform>()
+            .without<Inactive>()
+            .each([&](Entity entity, const BoneAttachment& attachment, const Hierarchy& hierarchy,
+                      LocalTransform& local, Transform& transform) {
+                ++seen;
+                follow(entity, attachment, hierarchy.parent, local, transform);
+            });
+        world->query<const BoneAttachment>().without<Hierarchy, Inactive>().each(
+            [&](Entity entity, const BoneAttachment& attachment) {
+                ++seen;
+                Socket& socket = sockets[entity.toBits()];
+                socket.mark = frame;
+                report(socket, SocketProblem::NoAnimator, entity, attachment.joint);
+            });
+        if (sockets.size() > seen)
+        {
+            std::erase_if(sockets, [this](const auto& entry) { return entry.second.mark != frame; });
+        }
     }
 
     void update(f32 deltaSeconds, JobSystem* jobs, bool advance)
@@ -1142,6 +1272,7 @@ struct AnimationWorld::Impl
                     AnimationEvent{slot.entity, state.events[event.event].name, layer.name, state.name});
             }
         }
+        updateSockets();
     }
 
     [[nodiscard]] Slot* slotOf(u32 index) noexcept

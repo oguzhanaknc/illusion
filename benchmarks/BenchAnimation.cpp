@@ -8,6 +8,7 @@
 #include <illusion/assets/AssetStreamer.hpp>
 #include <illusion/core/JobSystem.hpp>
 #include <illusion/core/Memory.hpp>
+#include <illusion/ecs/Hierarchy.hpp>
 #include <illusion/ecs/Reflection.hpp>
 #include <illusion/ecs/Transform.hpp>
 #include <illusion/ecs/World.hpp>
@@ -410,5 +411,49 @@ ILL_BENCHMARK("animation/world-graph-300", 5'000'000.0)
         ++frame;
         animation.update(1.0f / 60.0f, &jobs, true);
         ankerl::nanobench::doNotOptimizeAway(animation.events().size());
+    });
+}
+
+// Budget: ns per AnimationWorld::update() of animation/world-update-300x60 with two Entities attached to
+// joints of every Animator (600 sockets placed after the poses), about 8x a desktop result (0.30 ms, of which
+// the sockets take 0.05 ms); see Budget.hpp.
+ILL_BENCHMARK("animation/sockets-300", 2'500'000.0)
+{
+    reflectCoreComponents();
+    reflectRenderComponents();
+    registerAnimationComponents(ComponentRegistry::instance());
+    RigFiles rig;
+    if (!rig.ready)
+    {
+        return;
+    }
+    JobSystem jobs;
+    AssetStreamer streamer(rig.files, jobs, AssetStreamerDesc{.cacheMount = ""});
+    World world;
+    AnimationWorld animation(world, streamer);
+    for (u32 i = 0; i < kSkeletons; ++i)
+    {
+        Transform transform;
+        transform.position = Vec3(static_cast<f32>(i % 20), 0.0f, static_cast<f32>(i / 20));
+        MeshRenderer renderer;
+        renderer.mesh = AssetRef("bench:/rig.gltf#mesh/0");
+        Animator animator;
+        animator.skeleton = AssetRef("bench:/rig.gltf#skin/0");
+        animator.clip = AssetRef("bench:/rig.gltf#animation/wave");
+        animator.time = 0.01f * static_cast<f32>(i);
+        const Entity character = world.create(transform, renderer, animator);
+        for (const std::string_view joint : {std::string_view("joint09"), std::string_view("joint19")})
+        {
+            BoneAttachment attachment;
+            attachment.joint = joint;
+            attachment.translation = Vec3(0.0f, 0.1f, 0.05f);
+            const Entity item = world.create(Transform{}, attachment);
+            (void)setParent(world, item, character, ParentMode::KeepLocal);
+        }
+    }
+    animation.waitIdle();
+    bench.run("AnimationWorld::update 300 x 60 joints, 600 sockets", [&] {
+        animation.update(1.0f / 60.0f, &jobs, true);
+        ankerl::nanobench::doNotOptimizeAway(animation.statistics().joints);
     });
 }
