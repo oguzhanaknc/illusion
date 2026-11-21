@@ -43,6 +43,15 @@ JPH::JobSystem::JobHandle JoltJobSystem::CreateJob(const char* name, JPH::ColorA
     return handle;
 }
 
+void JoltJobSystem::CreateJobs(const char* name, JPH::ColorArg color, const JobFunction& function,
+                               JobHandle* jobs, JPH::uint32 count, JPH::uint32 dependencies)
+{
+    for (JPH::uint32 i = 0; i < count; ++i)
+    {
+        jobs[i] = CreateJob(name, color, function, dependencies);
+    }
+}
+
 void JoltJobSystem::QueueJob(Job* job)
 {
     // Execute() runs a job at most once, so the barrier's waiting thread and a worker may both try.
