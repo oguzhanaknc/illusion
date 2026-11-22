@@ -4,6 +4,7 @@
 /// Cooking: importing every asset of a directory ahead of time, so a game can ship the import cache
 /// (packed into an archive, see Archive.hpp) instead of the source files.
 
+#include <illusion/assets/ShaderCompiler.hpp>
 #include <illusion/core/Base.hpp>
 
 #include <string>
@@ -18,11 +19,13 @@ class VirtualFileSystem;
 /// Outcome of cookAssets().
 struct CookResult
 {
-    u32 images = 0;                  ///< Images cooked (default import settings).
-    u32 models = 0;                  ///< glTF models cooked (with the images they use).
-    u32 materials = 0;               ///< Material files checked (their textures are cooked).
-    u32 fonts = 0;                   ///< Fonts cooked (.ttf, .otf).
-    std::vector<std::string> errors; ///< One message per file that failed.
+    u32 images = 0;                                  ///< Images cooked (default import settings).
+    u32 models = 0;                                  ///< glTF models cooked (with the images they use).
+    u32 materials = 0;                               ///< Material files checked (their textures are cooked).
+    u32 fonts = 0;                                   ///< Fonts cooked (.ttf, .otf).
+    u32 shaders = 0;                                 ///< Material shaders compiled (.shader).
+    std::vector<std::string> errors;                 ///< One message per file that failed.
+    std::vector<ShaderDiagnostic> shaderDiagnostics; ///< What the shader compiler reported, in file order.
 };
 
 /// Imports every image (.png, .jpg, .jpeg, .tga, .bmp, .hdr), glTF model (.gltf, .glb) and font (.ttf,
@@ -34,9 +37,11 @@ struct CookResult
 /// materialTextureUses()); the material files themselves are read directly, so ship them with the game's
 /// files. Models are cooked with their images compressed by use (ModelImportSettings). Every import honours
 /// the asset's import settings sidecar (ImportSettings.hpp); an invalid sidecar fails its asset, and a
-/// sidecar whose asset does not exist or has no import settings is reported as an error. Files are visited in
-/// sorted order, so the result is deterministic.
+/// sidecar whose asset does not exist or has no import settings is reported as an error. Material shaders
+/// (.shader) are compiled with @p shaderCompiler; without one each is an error. Files are visited in sorted
+/// order, so the result is deterministic.
 [[nodiscard]] CookResult cookAssets(VirtualFileSystem& files, std::string_view directory,
-                                    std::string_view cacheMount);
+                                    std::string_view cacheMount,
+                                    const ShaderCompiler* shaderCompiler = nullptr);
 
 } // namespace illusion

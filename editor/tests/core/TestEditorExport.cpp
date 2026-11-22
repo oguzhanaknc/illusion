@@ -5,10 +5,12 @@
 #include "EditorCoreTestSupport.hpp"
 
 #include <illusion/assets/AppIcon.hpp>
+#include <illusion/assets/AssetDatabase.hpp>
 #include <illusion/editor/core/Export.hpp>
 #include <illusion/editor/core/ExportTools.hpp>
 #include <illusion/editor/core/ModuleBuild.hpp>
 #include <illusion/platform/Archive.hpp>
+#include <illusion/platform/FileSystem.hpp>
 
 #include <algorithm>
 #include <filesystem>
@@ -141,7 +143,9 @@ ModuleToolchain fakeToolchain()
                            .config = "Debug",
                            .package = "sdk",
                            .player = true,
-                           .pack = utf8Path(ILLUSION_PACK_EXECUTABLE)};
+                           .pack = utf8Path(ILLUSION_PACK_EXECUTABLE),
+                           .slangc = utf8Path(ILLUSION_TEST_SLANGC),
+                           .shaders = utf8Path(ILLUSION_TEST_SHADER_LIBRARY)};
 }
 
 // A project with a startup scene, a module, a glTF model with an external buffer and an image, files the
@@ -323,7 +327,8 @@ TEST_CASE("a model whose texture is excluded fails the cook with a message that 
     const std::unique_ptr<ProjectExport> exported = start(project.options());
     finish(*exported);
     CHECK_FALSE(exported->succeeded());
-    CHECK(exported->error() == "cooking the assets failed (exit code 1)");
+    CHECK(exported->error().starts_with("cooking the assets failed (exit code 1):"));
+    CHECK(exported->error().find("checker.png") != std::string::npos);
     CHECK(exported->outputTail().find("checker.png") != std::string::npos);
     CHECK_FALSE(std::filesystem::exists(project.output));
 }
@@ -600,27 +605,78 @@ TEST_CASE("a failed cook ends the export without a game directory")
     }
     CHECK_FALSE(exported->succeeded());
     CHECK(last == ProjectExport::Stage::Cook);
-    CHECK(exported->error() == "cooking the assets failed (exit code 1)");
+    CHECK(exported->error().starts_with("cooking the assets failed (exit code 1):"));
     CHECK(exported->outputTail().find("broken.png") != std::string::npos);
     CHECK_FALSE(std::filesystem::exists(project.output));
 }
 
-TEST_CASE("toolchain descriptions name illusion_pack relative to their file")
+TEST_CASE("a material shader that does not compile fails the export with the compiler's message")
+{
+    const ExportProject project;
+    writeFile(project.root / "assets" / "materials" / "broken.shader",
+              "struct Parameters\n{\n};\n\nSurfaceOutput surface(SurfaceInput input)\n{\n    return "
+              "missingValue;\n}\n");
+    const std::unique_ptr<ProjectExport> exported = start(project.options());
+    finish(*exported);
+    CHECK_FALSE(exported->succeeded());
+    CHECK(exported->error().find(
+              "assets:/materials/broken.shader:7:12: error: undefined identifier 'missingValue'") !=
+          std::string::npos);
+    const std::vector<BuildDiagnostic>& diagnostics = exported->diagnostics();
+    const auto found =
+        std::find_if(diagnostics.begin(), diagnostics.end(), [](const BuildDiagnostic& diagnostic) {
+            return diagnostic.file == "assets:/materials/broken.shader";
+        });
+    REQUIRE(found != diagnostics.end());
+    CHECK(found->line == 7);
+    CHECK(found->column == 12);
+    CHECK(found->severity == DiagnosticSeverity::Error);
+    CHECK_FALSE(std::filesystem::exists(project.output));
+}
+
+TEST_CASE("material shaders are cooked into the cache archive")
+{
+    const ExportProject project;
+    writeFile(project.root / "assets" / "materials" / "plain.shader",
+              "struct Parameters\n{\n};\n\nSurfaceOutput surface(SurfaceInput input)\n{\n    return "
+              "defaultSurface();\n}\n");
+    const std::unique_ptr<ProjectExport> exported = start(project.options());
+    finish(*exported);
+    INFO(exported->outputTail());
+    REQUIRE(exported->succeeded());
+    const std::filesystem::path data = dataOf(project.output / utf8Path(gameDirectoryName("Space Blocks 2")));
+    VirtualFileSystem shipped;
+    REQUIRE(shipped.mountArchive("cache", data / "cache.illpak") == FileError::None);
+    AssetDatabase database(shipped, "cache", false);
+    const std::optional<ShaderAsset> shader = database.loadShader("assets:/materials/plain.shader", nullptr);
+    REQUIRE(shader.has_value());
+    CHECK(shader->variants.size() == 15);
+}
+
+TEST_CASE("toolchain descriptions name illusion_pack and slangc relative to their file")
 {
     TempDirectory directory;
     const std::filesystem::path file =
         directory.path / "lib" / "cmake" / "illusion" / "Debug" / "illusion-sdk.json";
-    writeFile(file, R"({"format": "illusion.sdk", "version": 2, "cmake": "cmake", "generator": "Ninja",)"
-                    R"( "config": "Debug", "package": "..", "player": true,)"
-                    R"( "pack": "../../../../bin/Debug/illusion_pack", "modulePrefix": "",)"
-                    R"( "moduleSuffix": ".dll", "arguments": []})");
+    writeFile(file,
+              R"({"format": "illusion.sdk", "version": 2, "cmake": "cmake", "generator": "Ninja",)"
+              R"( "config": "Debug", "package": "..", "player": true,)"
+              R"( "pack": "../../../../bin/Debug/illusion_pack", "modulePrefix": "",)"
+              R"( "slangc": "../../../../slang/bin/slangc", "shaders": "../../../../share/illusion/shaders",)"
+              R"( "moduleSuffix": ".dll", "arguments": []})");
     const Expected<ModuleToolchain, std::string> toolchain = readModuleToolchain(file);
     REQUIRE(toolchain.hasValue());
     CHECK(toolchain->pack == (directory.path / "bin" / "Debug" / "illusion_pack").lexically_normal());
+    CHECK(toolchain->slangc == (directory.path / "slang" / "bin" / "slangc").lexically_normal());
+    CHECK(toolchain->shaders == (directory.path / "share" / "illusion" / "shaders").lexically_normal());
     CHECK(parseModuleToolchain(R"({"format": "illusion.sdk", "version": 2, "cmake": "c", "generator": "g",)"
                                R"( "config": "Debug", "package": "p", "player": true, "pack": 3,)"
                                R"( "modulePrefix": "", "moduleSuffix": ".so", "arguments": []})")
               .error() == "\"pack\" must be a string");
+    CHECK(parseModuleToolchain(R"({"format": "illusion.sdk", "version": 2, "cmake": "c", "generator": "g",)"
+                               R"( "config": "Debug", "package": "p", "player": true, "slangc": false,)"
+                               R"( "modulePrefix": "", "moduleSuffix": ".so", "arguments": []})")
+              .error() == "\"slangc\" must be a string");
     CHECK(exportStageName(ProjectExport::Stage::Cook) == "cook");
     CHECK(exportPackageName(ExportPackage::Archive) == "archive");
 }
@@ -674,7 +730,7 @@ TEST_CASE("export.build reports a failed step in its result and leaves no game b
     const JsonDocument result = ok(*fixture.editor, "export.build", R"({"output":")" + output + R"("})");
     CHECK(result.root().find("succeeded").asBool() == false);
     CHECK(result.root().find("stage").asString() == "cook");
-    CHECK(result.root().find("error").asString() == "cooking the assets failed (exit code 1)");
+    CHECK(result.root().find("error").asString()->starts_with("cooking the assets failed (exit code 1):"));
     CHECK(result.root().find("output").asString()->find("red.png") != std::string_view::npos);
     CHECK(result.root().find("files").size() == 0);
     CHECK_FALSE(std::filesystem::exists(fixture.directory.path / "exported"));

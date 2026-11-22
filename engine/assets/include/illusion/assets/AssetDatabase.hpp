@@ -9,17 +9,21 @@
 #include <illusion/assets/Font.hpp>
 #include <illusion/assets/Image.hpp>
 #include <illusion/assets/Model.hpp>
+#include <illusion/assets/ShaderAsset.hpp>
 #include <illusion/assets/TextureCompression.hpp>
 #include <illusion/core/Base.hpp>
 
 #include <optional>
 #include <string>
 #include <string_view>
+#include <vector>
 
 namespace illusion
 {
 
+class ShaderCompiler;
 class VirtualFileSystem;
+struct ShaderDiagnostic;
 
 /// How an image file is imported.
 struct ImageImportSettings
@@ -61,6 +65,15 @@ public:
     /// Loads the font at @p virtualPath (.ttf or .otf), baked with the settings of its import settings
     /// sidecar, if it has one.
     [[nodiscard]] std::optional<Font> loadFont(std::string_view virtualPath, std::string* error = nullptr);
+
+    /// Loads the material shader at @p virtualPath (`.shader`). A cached shader is used while its source is
+    /// unchanged and, with a @p compiler, while it was compiled with the compiler's version and shader
+    /// library; otherwise @p compiler compiles it (blocking). Without a compiler only cached shaders load.
+    /// The compiler's diagnostics are appended to @p diagnostics; @p error says why nothing loaded.
+    [[nodiscard]] std::optional<ShaderAsset> loadShader(std::string_view virtualPath,
+                                                        const ShaderCompiler* compiler,
+                                                        std::vector<ShaderDiagnostic>* diagnostics = nullptr,
+                                                        std::string* error = nullptr);
 
     /// Virtual path of the cached file for an import of @p virtualPath with @p importKey (importer name,
     /// version and settings). Exposed for tools and tests.

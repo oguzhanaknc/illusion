@@ -285,7 +285,9 @@ edildiğini gösterir.
 Bir doğrulama sorunu, her nedeni adlandıran bir mesajla komutu başarısız kılar. Başarısız bir cook, derleme veya
 link komutu başarısız kılmaz: komut `succeeded: false`, başarısız olan `stage` ve dosya, satır ve mesaj içeren
 `diagnostics` ile döner; tıpkı `module.build` gibi. Geçici dizin silinir, bu yüzden çıktıda hiçbir zaman yarım bir
-oyun kalmaz. Önce `diagnostics`, ham araç satırları için ise `output` alanını okuyun.
+oyun kalmaz. Önce `diagnostics`, ham araç satırları için ise `output` alanını okuyun. Başarısız bir cook, `illusion_pack`'ın çıktısını hatada
+aktarır; böylece derlenmeyen bir Material shader'ının `file:line:column: error: ...` satırları orada görünür.
+Cook, `illusion-sdk.json`'ın adlandırdığı `slangc` ve shader kütüphanesini kullanır.
 
 ## Henüz olmayanlar
 

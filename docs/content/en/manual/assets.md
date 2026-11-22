@@ -221,6 +221,96 @@ A `.material` file describes a Material without a model, so several Meshes can s
 
 Header: `<illusion/assets/MaterialAsset.hpp>`
 
+### Material shaders
+
+A `.shader` file is the Slang source of a material's surface (ADR 0063). It declares the material's
+parameters and a `surface()` function; the engine's lighting and passes do the rest. The shader compiler
+(`slangc`, pinned by the engine) places the file between the surface API (`illusion/Surface.slang`) and the
+engine's passes and cooks it into an Asset with SPIR-V for every pass. The player has no compiler and loads
+the cooked result.
+
+```slang
+[ShadingModel("Unlit")]
+struct Parameters
+{
+    [Color(1, 0.5, 0.25, 1)] float4 tint;
+    [Default(2.5)] [Range(0, 10)] float intensity;
+    [Default(-3)] int steps;
+    [Default(1)] bool pulse;
+    [Default2(0.5, 0.25)] float2 scroll;
+    [Texture("black", "mask")] Texture2DSlot mask;
+    [Texture("game:/textures/detail_n.png", "normal")] Texture2DSlot detail;
+    float3 direction;
+};
+
+SurfaceOutput surface(SurfaceInput input)
+{
+    const Parameters p = parameters(input);
+    SurfaceOutput output = defaultSurface();
+    const float2 uv = input.uv + p.scroll * input.time;
+    output.baseColor = p.tint.rgb * sampleTexture(input, p.mask, uv).r;
+    output.normal = unpackNormal(sampleTexture(input, p.detail, uv), 1.0);
+    output.emission = p.tint.rgb * p.intensity * (p.pulse ? 0.5 + 0.5 * sin(input.time) : 1.0);
+    output.opacity = p.tint.a * valueNoise(input.worldPosition * float(p.steps));
+    return output;
+}
+
+float3 worldOffset(WorldOffsetInput input)
+{
+    return float3(0.0, 0.1 * sin(input.time + input.worldPosition.x), 0.0);
+}
+```
+
+- `struct Parameters` is required and may be empty. It holds at most 256 bytes and at most eight textures.
+  Fields are `float`, `float2`, `float3`, `float4`, `int`, `bool` or `Texture2DSlot` (with `[Texture]`).
+- `surface()` is required. Read the parameters with `parameters(input)`, sample a texture with
+  `sampleTexture()` and start the result from `defaultSurface()`.
+- `worldOffset()` is optional and moves vertices in world space; it must have exactly the signature above.
+- `[ShadingModel("...")]` on `Parameters` names the shading model: `Default`, `Unlit`, `Subsurface`,
+  `TwoSidedFoliage` or `ClearCoat`. Without it the shader uses `Default`.
+
+| Attribute | On | Meaning |
+| --- | --- | --- |
+| `[Default(v)]` | `float`, `int`, `bool` | Default value (an `int` takes a whole number, a `bool` 0 or 1). |
+| `[Default2(x, y)]`, `[Default3(...)]`, `[Default4(...)]` | `float2`, `float3`, `float4` | Default of a vector. |
+| `[Color(r, g, b, a)]` | `float3`, `float4` | Default of a colour. |
+| `[Range(min, max)]` | `float`, `int` | Lowest and highest value the Editor offers. |
+| `[Texture(fallback, usage)]` | `Texture2DSlot` | `fallback` is `"white"`, `"black"`, `"normal"` (a flat normal map) or an Asset path; `usage` is `"color"`, `"linear"`, `"normal"` or `"mask"` and picks how images are imported. |
+
+A parameter without an attribute defaults to zero. A field has at most one default.
+
+#### Variants and cooking
+
+The compiler builds one SPIR-V module per pass and alpha mode: the passes `forward`, `forwardBindless`,
+`depthPrepass`, `shadowCaster`, `motionVectors` and `entityIds`, each for `opaque` and `mask` materials, and
+for `blend` materials only `forward`, `forwardBindless` and `entityIds`. That makes 15 variants for every
+shader. Cooking (`cookAssets()` with a `ShaderCompiler`, or [`illusion_pack`](#shipping-cooked-assets)) writes
+the cooked shader to the import cache. The cache entry (`shader:1`) is valid while the hash of the source, the
+hash of the engine's shader library and the version of `slangc` stored in the file match; any change compiles
+the shader again. A shader that does not compile is not cached.
+
+#### Errors
+
+Diagnostics keep the file, line and column of the `.shader` file and are written one per line like GCC
+messages:
+
+```text
+game:/materials/glow.shader:8:24: error: undefined identifier 'undefinedThing'. [E30015]
+```
+
+Checks of the engine (a missing `surface()` or `Parameters`, a parameter of an unsupported type, a default that
+does not fit its type, too many bytes or textures) name the field they are about in the same format.
+
+#### Limits
+
+- `#include` in a `.shader` file is not supported.
+- `SurfaceInput.customData` is zero and `SurfaceInput.color` is white until the renderer provides them.
+- Shading models other than `Unlit` light like `Default` until MAT-3.
+- `.material` files do not name shaders yet (MAT-2, MAT-4). The reference of the surface API comes with MAT-4;
+  until then the header comment of `illusion/Surface.slang` describes it.
+
+Headers: `<illusion/assets/ShaderAsset.hpp>`, `<illusion/assets/ShaderCompiler.hpp>`
+
 ## Asset database
 
 Decoding PNGs, building mip chains and converting glTF files takes time. The `AssetDatabase` does it once
@@ -550,3 +640,14 @@ auto helmet = streamer.loadModel("game:/models/helmet.glb"); // served from the 
   run time, so they are not shipped. A sidecar whose asset is missing, or next to a file that has no
   import settings, is reported as an error.
 - `cookAssets()` does the same from code and reports what it cooked and which files failed.
+- Cooking also compiles the [material shaders](#material-shaders) (`.shader`) under `data/` with `slangc`.
+  Name the compiler and the engine's shader library before `--cook`:
+
+```bash
+illusion_pack --slangc slang/bin/slangc --shaders share/illusion/shaders --cook game data/ build/cooked.illpak
+```
+
+- `--slangc` and `--shaders` go together. Without them, `illusion_pack` of an installed engine uses `slang/bin`
+  and `share/illusion/shaders` two directories above it; with no compiler a `.shader` file is a cook error.
+- The compiler's diagnostics are printed as `file:line:column: error: message` lines, and a failed shader fails
+  the cook.

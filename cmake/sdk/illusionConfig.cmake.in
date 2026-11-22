@@ -24,6 +24,9 @@ set(ILLUSION_SHARED_MODULES ON)
 set(ILLUSION_PROFILING OFF)
 set(ILLUSION_WARNINGS_AS_ERRORS OFF)
 set(ILLUSION_SANITIZER "@ILLUSION_SANITIZER@")
+# The slangc and shader library that cook material shaders (ADR 0063).
+set(ILLUSION_SDK_SLANGC "@ILLUSION_SDK_SLANGC@")
+set(ILLUSION_SDK_SHADERS "@ILLUSION_SDK_SHADERS@")
 
 include("@ILLUSION_SDK_CMAKE_DIR@/IllusionCompilerSettings.cmake")
 include("@ILLUSION_SDK_CMAKE_DIR@/IllusionModules.cmake")

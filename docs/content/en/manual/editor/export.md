@@ -283,7 +283,9 @@ stapled).
 A validation problem fails the command with a message that names each cause. A failed cook, compile or link does
 not: the command succeeds with `succeeded: false`, the `stage` that failed and `diagnostics` with file, line and
 message, exactly like `module.build`. The staging directory is removed, so the output never holds a partial game.
-Read `diagnostics` first and `output` for the raw tool lines.
+Read `diagnostics` first and `output` for the raw tool lines. A failed cook quotes the output of `illusion_pack`
+in the error, so a material shader that does not compile shows its `file:line:column: error: ...` lines there.
+The cook gets the `slangc` and shader library that `illusion-sdk.json` names.
 
 ## Not there yet
 

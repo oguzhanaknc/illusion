@@ -80,8 +80,29 @@ ImageImportSettings standaloneImageImport(const VirtualFileSystem& files, const 
     return import;
 }
 
-void cookDirectory(VirtualFileSystem& files, AssetDatabase& database, const std::string& directory,
-                   CookResult& result)
+// Compiles a material shader into the cache.
+void cookShader(AssetDatabase& database, const ShaderCompiler* compiler, const std::string& path,
+                CookResult& result)
+{
+    if (compiler == nullptr)
+    {
+        result.errors.push_back(
+            std::format("{}: cooking material shaders needs the shader compiler (slangc)", path));
+        return;
+    }
+    std::string error;
+    if (database.loadShader(path, compiler, &result.shaderDiagnostics, &error))
+    {
+        ++result.shaders;
+    }
+    else
+    {
+        result.errors.push_back(std::move(error));
+    }
+}
+
+void cookDirectory(VirtualFileSystem& files, AssetDatabase& database, const ShaderCompiler* compiler,
+                   const std::string& directory, CookResult& result)
 {
     std::vector<DirectoryEntry> entries;
     if (const FileError error = files.list(directory, entries); error != FileError::None)
@@ -95,7 +116,7 @@ void cookDirectory(VirtualFileSystem& files, AssetDatabase& database, const std:
             directory.ends_with('/') ? directory + entry.name : directory + "/" + entry.name;
         if (entry.isDirectory)
         {
-            cookDirectory(files, database, path, result);
+            cookDirectory(files, database, compiler, path, result);
             continue;
         }
         const std::string extension = lowerExtension(entry.name);
@@ -136,6 +157,10 @@ void cookDirectory(VirtualFileSystem& files, AssetDatabase& database, const std:
                 result.errors.push_back(error);
             }
         }
+        else if (extension == kShaderAssetExtension)
+        {
+            cookShader(database, compiler, path, result);
+        }
         else if (extension == kMaterialAssetExtension)
         {
             cookMaterial(files, database, path, result);
@@ -156,12 +181,13 @@ void cookDirectory(VirtualFileSystem& files, AssetDatabase& database, const std:
 
 } // namespace
 
-CookResult cookAssets(VirtualFileSystem& files, std::string_view directory, std::string_view cacheMount)
+CookResult cookAssets(VirtualFileSystem& files, std::string_view directory, std::string_view cacheMount,
+                      const ShaderCompiler* shaderCompiler)
 {
     ILL_PROFILE_SCOPE();
     CookResult result;
     AssetDatabase database(files, std::string(cacheMount));
-    cookDirectory(files, database, std::string(directory), result);
+    cookDirectory(files, database, shaderCompiler, std::string(directory), result);
     return result;
 }
 

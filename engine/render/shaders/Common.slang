@@ -1,5 +1,7 @@
 // Definitions shared by the scene shaders. Layouts must match SceneRenderer.cpp.
 
+#pragma once
+
 #include "Atmosphere.slang"
 
 static const uint kMaxDirectionalLights = 4;
