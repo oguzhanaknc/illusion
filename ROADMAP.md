@@ -1295,14 +1295,29 @@ Nothing of it exists yet: glTF skins and animations are skipped on import and th
   `AnimationWorld` is not reachable without a GPU viewport); `animation.set_parameter` and `animation.trigger`
   need the graph loaded (steps load it), they do not wait for it, because a non-advancing update would
   restart every graph.
-- ANIM-4b (`implementer`): Inspector and viewport. In the Animator's Inspector: a clip and graph summary, a
+- ✅ ANIM-4b (`implementer`): Inspector and viewport. In the Animator's Inspector: a clip and graph summary, a
   timeline scrubber over `Animator::time` (edit World, undoable through `animation.scrub`), the current state
   per layer, live parameters and events in Play mode; a "Skeleton" viewport visualiser drawing the joints of
   selected Animators from `AnimationWorld::jointMatrices()` (and IK targets, spring chains and ragdoll parts
   when present); the tech demo creature is the manual's screenshot subject. Panels change state only through
-  the ANIM-4a commands. Done: UiDriver tests of the scrubber and the state view, a golden image of the
-  Inspector section and of the skeleton view, idle frames allocate nothing, EN/TR manual sections in
-  `manual/animation.md` and `manual/editor/*`, `CHANGELOG.md`.
+  the ANIM-4a commands.
+  Done: the Animator card's Preview/Live section (`AnimatorSection` in `editor/shell`: joints, clip or graph
+  summary, a scrubber that runs `animation.scrub` with one undo step per drag, each layer's state and
+  progress, the parameters, which Play mode sets through `animation.set_parameter` and `animation.trigger`,
+  the last eight events), the edit World's poses reachable as `ViewportHost::editAnimation()`,
+  `AnimationWorld::clip()` and `graphBinding()`, the Skeletons visualiser (`ViewportVisualisers::skeleton`,
+  drawn over the scene in the theme's `info`, `text.primary`, `warning`, `success` and `error` colours;
+  ragdoll profiles read once and cached until the assets change), UiDriver tests
+  (`editor/tests/shell/TestAnimatorInspector.cpp`), the CPU test of the visualiser, the goldens
+  `shell-dark-100-animator` and `viewport-skeleton`, an idle-frame allocation test with an Animator selected,
+  the EN/TR manual sections "In the Inspector" and "The skeleton view" (`manual/animation.md`), the Inspector
+  and Visualisers sections of `manual/editor/`, the command reference and `CHANGELOG.md`.
+  On the way the Inspector stopped reporting parts of files (`#mesh/0`) as missing assets and stopped
+  touching the file system for asset fields in every frame (that made every idle frame with a model allocate).
+  Open: the tech demo creature as the manual's screenshot subject (the creature arrives with NAV-3, PR #160,
+  which is not on this branch); `animation.status` in the edit World still reports the saved fields only,
+  although `ViewportHost::editAnimation()` now gives it the viewports' poses; an editor frame that runs several
+  game updates shows the events of its last update only.
 - ANIM-4 (scope): clip and state-machine preview in the Inspector, a timeline scrubber,
   `animation.*` commands (MCP tools), skeleton debug drawing; the tech demo gets an animated creature;
   documentation (EN/TR)

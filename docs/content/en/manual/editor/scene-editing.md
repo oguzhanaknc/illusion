@@ -107,11 +107,22 @@ Several engine Components tailor their card to the active mode so irrelevant fie
 - **Collider** (`illusion.Collider`) shows only the dimensions that belong to the chosen `shape` (`halfExtents` for `Box`, `radius` for `Sphere`, `radius` and `halfHeight` for `Capsule` and `Cylinder`, `mesh` and `meshIndex` for `ConvexHull` and `Mesh`).
 - **Joint** (`illusion.Joint`) hides anchor, axis, limit and motor fields that do not apply to the chosen `JointType`, and shows `minLimit` / `maxLimit` only when `limited` is checked.
 - **AudioSource** (`illusion.AudioSource`) hides 3D distance, rolloff, doppler and cone fields when `spatial` is off.
+- **Animator** (`illusion.Animator`) adds a **Preview** section above its fields (**Live** in Play mode): the
+  skeleton's joint count, the clip with its length or the size of the graph, a **Time** scrubber, the state of
+  each layer of the graph with its progress (and the state a transition fades out), and every graph
+  parameter. Dragging the scrubber runs `animation.scrub`, so the drag is one undo step and the Scene view
+  shows the pose at once; it reaches up to the clip's length, or the length of the graph's entry state. In
+  Play mode the section shows what the running game plays: the time as a bar, the live states, parameters you
+  can change (`animation.set_parameter`; **Fire** runs `animation.trigger`) and the last eight events of the
+  Animator. The section needs poses: without a Scene view (a headless editor) and without a play session it
+  shows a hint and the saved fields only ([Animation](../animation.md#in-the-inspector)).
 
 When a Component has a configuration problem, a warning banner appears at the top of its card with a one-click fix-it button:
 
 - A Component whose `requiredComponents` dependency is missing offers **Add** to add the missing Component across the selection.
 - A `Collider` with `shape = Mesh` on an entity with a `Dynamic` `RigidBody` warns that triangle meshes are static/kinematic only and offers **Use ConvexHull**.
+- An asset field whose file does not exist warns **Missing asset** and offers **Clear**. The Inspector checks
+  each file once and again after the assets change on disk.
 
 ### Multi-entity editing
 

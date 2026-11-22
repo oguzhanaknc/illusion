@@ -22960,9 +22960,12 @@
                 },
                 "perception": {
                   "type": "boolean"
+                },
+                "skeleton": {
+                  "type": "boolean"
                 }
               },
-              "required": ["lights", "cameras", "colliders", "characters", "joints", "audio", "perception"],
+              "required": ["lights", "cameras", "colliders", "characters", "joints", "audio", "perception", "skeleton"],
               "additionalProperties": false
             },
             "visualiserScope": {
@@ -23422,9 +23425,12 @@
                       },
                       "perception": {
                         "type": "boolean"
+                      },
+                      "skeleton": {
+                        "type": "boolean"
                       }
                     },
-                    "required": ["lights", "cameras", "colliders", "characters", "joints", "audio", "perception"],
+                    "required": ["lights", "cameras", "colliders", "characters", "joints", "audio", "perception", "skeleton"],
                     "additionalProperties": false
                   },
                   "visualiserScope": {
@@ -24255,9 +24261,12 @@
                 },
                 "perception": {
                   "type": "boolean"
+                },
+                "skeleton": {
+                  "type": "boolean"
                 }
               },
-              "required": ["lights", "cameras", "colliders", "characters", "joints", "audio", "perception"],
+              "required": ["lights", "cameras", "colliders", "characters", "joints", "audio", "perception", "skeleton"],
               "additionalProperties": false
             },
             "visualiserScope": {
@@ -24445,9 +24454,12 @@
                 },
                 "perception": {
                   "type": "boolean"
+                },
+                "skeleton": {
+                  "type": "boolean"
                 }
               },
-              "required": ["lights", "cameras", "colliders", "characters", "joints", "audio", "perception"],
+              "required": ["lights", "cameras", "colliders", "characters", "joints", "audio", "perception", "skeleton"],
               "additionalProperties": false
             },
             "visualiserScope": {
@@ -24669,6 +24681,16 @@
                       "type": "null"
                     }
                   ]
+                },
+                "skeleton": {
+                  "anyOf": [
+                    {
+                      "type": "boolean"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
                 }
               },
               "additionalProperties": false
@@ -24778,9 +24800,12 @@
                 },
                 "perception": {
                   "type": "boolean"
+                },
+                "skeleton": {
+                  "type": "boolean"
                 }
               },
-              "required": ["lights", "cameras", "colliders", "characters", "joints", "audio", "perception"],
+              "required": ["lights", "cameras", "colliders", "characters", "joints", "audio", "perception", "skeleton"],
               "additionalProperties": false
             },
             "visualiserScope": {

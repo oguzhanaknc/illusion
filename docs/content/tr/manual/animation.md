@@ -85,7 +85,8 @@ const std::span<const illusion::SkinMatrix> skin = animation.skinMatrices(pose.s
 Inspector'da skinned bir `MeshRenderer`'ın Entity'sine bir `Animator` ekleyin ve `skeleton` ile `clip`'ini
 ayarlayın. Play modu dışında editör, edit World'ünü kaydedilen `time`'da ilerletmeden pozlar; bu yüzden
 Inspector'da `time`'ı sürüklemek klibi Scene görünümünde kaydırır. Play modunda oturumun `AnimationWorld`'ü
-oynayan her Animator'ın `time`'ını ilerletir; Stop kaydedilen değerlere döner. Showcase projesinin
+oynayan her Animator'ın `time`'ını ilerletir; Stop kaydedilen değerlere döner. Inspector'daki Animator kartında
+ayrıca bir zaman kaydırıcısı vardır ([Inspector'da](#inspectorda)). Showcase projesinin
 `Column`'u `sway` klibini bu şekilde oynatır ([Showcase projesi](editor/showcase.md)).
 
 ## Editörden ve ajanlardan
@@ -118,6 +119,44 @@ kullanır; bu yüzden bir komuttan sonra `play.step` etkisini `animation.status`
 World'ünde `animation.status` yalnızca kayıtlı alanları bildirir (`live` false'tur ve `note` bunu söyler):
 pozlar, state'ler ve parametreler play oturumunda vardır. Geçersiz her parametre JSON Pointer'ı ile bildirilir
 (grafta olmayan bir parametre için `/name`, öneriler ile; yanlış türde bir değer için `/value`).
+
+### Inspector'da
+
+`Animator`'ı olan bir Entity seçin; Inspector kartı bir **Preview** bölümüyle başlar (Play modunda **Live**):
+
+| Satır | Ne gösterir |
+| --- | --- |
+| Pose | İskeletin eklem sayısı |
+| Clip ya da Graph | Saniye cinsinden uzunluğuyla clip, ya da graph'ın layer, state ve parametreleri |
+| Time (s) | Play modu dışında 0'dan clip'in uzunluğuna giden bir kaydırıcı (graph için ilk layer'ının giriş state'inin uzunluğu); Play modunda zaman bir çubuk olarak |
+| Her layer için bir satır | Layer'ın geçerli state'i ve ilerlemesi, ve süren bir geçişin söndürdüğü state |
+| Her parametre için bir satır | Değeri: Play modu dışında devre dışı (varsayılanlar), Play modunda düzenlenebilir; **Fire** bir `Trigger` kurar |
+| Events | Play modunda Animator'ın son sekiz state event'i, en yenisi önce |
+
+Her değişiklik, bir ajanınki gibi bir komuttan geçer: kaydırıcıyı sürüklemek `animation.scrub` çalıştırır (bir
+sürükleme tek bir undo adımıdır ve Scene görünümü siz sürüklerken pozu gösterir), bir parametre
+`animation.set_parameter`, **Fire** ise `animation.trigger` çalıştırır; ikisi de play World'üne etki eder.
+Event'ler editörün her karesinde bir kez okunur; bu yüzden birkaç oyun update'i çalıştıran bir editör karesi
+sonuncusunun event'lerini gösterir. Bölüm Play modu dışında Scene görünümünün pozlarını, Play modunda play
+oturumununkileri okur; bunlar olmadan (**Play**'den önce headless bir Editor) bir ipucu gösterir ve kart
+yalnızca kayıtlı alanları tutar.
+
+### İskelet görünümü
+
+Scene görünümünün **Skeletons** visualiser'ı (Visualisers menüsü ya da
+`{"visualisers": {"skeleton": true}}` ile `viewport.set_overlays`) seçili Animator'ların (**All** ile hepsinin)
+pozlarını çizer:
+
+| Parça | Renk |
+| --- | --- |
+| Eklemler arasındaki kemikler | `info` |
+| Eklemler, her birinde küçük bir artı | `text.primary` |
+| `LookAt` ve `TwoBoneIk` hedefleri (Animator'da ya da çocuklarında) ve uzuvların pole'ları, her biri ekleminden bir çizgiyle | `warning` |
+| Kökleri altındaki `SpringBone` zincirleri, eklem yarıçapları ve collider'ları | `success` |
+| `.ragdoll` profilinden ya da iskeletten üretilen kapsüller olarak `Ragdoll` parçaları | `error` |
+
+Renkler editör temasının token'larıdır, bu yüzden seçtiğiniz temaya uyar. Play modu dışında visualiser
+kayıtlı zamandaki pozu, Play modunda ragdoll'lar dahil çalışan oyunun pozunu gösterir.
 
 ## Animasyon grafları
 

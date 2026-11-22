@@ -21,8 +21,9 @@
 
 namespace illusion
 {
+class AnimationWorld;
 struct UiLayout;
-}
+} // namespace illusion
 
 namespace illusion::editor
 {
@@ -118,6 +119,7 @@ struct ViewportVisualisers
     bool joints = true;     ///< Joint anchors, axes and limits.
     bool audio = true;      ///< AudioSource distances and cones.
     bool perception = true; ///< Sight cones and what agents see and remember (play World).
+    bool skeleton = true;   ///< Joints and bones of Animators, IK targets, spring chains and ragdoll parts.
 };
 
 /// What a viewport draws.
@@ -248,6 +250,11 @@ struct ViewportStyle
     Vec4 axisX{0.94f, 0.32f, 0.31f, 1.0f};   ///< The x axis of the grid.
     Vec4 axisY{0.48f, 0.8f, 0.16f, 1.0f};    ///< The y axis (orthographic side views).
     Vec4 axisZ{0.24f, 0.55f, 0.96f, 1.0f};   ///< The z axis of the grid.
+    Vec4 bone{0.35f, 0.65f, 1.0f, 1.0f};     ///< Bones of the skeleton visualiser.
+    Vec4 joint{0.95f, 0.95f, 0.95f, 1.0f};   ///< Joints of the skeleton visualiser.
+    Vec4 ikTarget{1.0f, 0.7f, 0.2f, 1.0f};   ///< Look-at and IK targets.
+    Vec4 spring{0.3f, 0.85f, 0.45f, 1.0f};   ///< Spring bone chains and their colliders.
+    Vec4 ragdoll{0.95f, 0.4f, 0.4f, 1.0f};   ///< Ragdoll parts.
 };
 
 /// What an icon billboard stands for.
@@ -462,6 +469,10 @@ public:
     /// when not playing, the running game's UI otherwise); false when the viewport is unknown, is not a Game
     /// view, or has drawn no UI yet.
     [[nodiscard]] virtual bool gameUiLayout(std::string_view id, UiLayout& out) = 0;
+
+    /// The poses of the edit World's Animators at their saved times (ADR 0059), updated by the viewports'
+    /// frames; null when this host keeps none.
+    [[nodiscard]] virtual const AnimationWorld* editAnimation() const noexcept = 0;
 };
 
 } // namespace illusion::editor

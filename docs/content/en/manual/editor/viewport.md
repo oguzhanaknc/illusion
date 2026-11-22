@@ -109,6 +109,7 @@ Visualisers draw the shape of Components that have no image of their own, as lin
 | Joints | The anchor and axis of every `Joint`, with its limits and the line to the connected body. |
 | Audio | The minimum and maximum distance spheres and the cones of spatial `AudioSource`s. |
 | Perception | In a play session, the sight cones of the `AiPerception`s, what they see and remember and the noises of the last update; independent of the selection ([AI](../ai.md#the-perception-view)). |
+| Skeletons | The bones and joints of posed `Animator`s, the targets of `LookAt` and `TwoBoneIk` (also on children) with the poles, the chains and colliders of `SpringBone`s and the capsules of `Ragdoll` parts ([Animation](../animation.md#the-skeleton-view)). |
 
 By default they draw only the selected entities; **All** in the Visualisers menu draws every entity. Hidden
 and inactive entities are never drawn.

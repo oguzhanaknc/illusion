@@ -316,6 +316,7 @@ Expected<ViewportSettingsResult, CommandError> setOverlays(CommandContext& conte
         visualisers.joints = kinds.joints.value_or(visualisers.joints);
         visualisers.audio = kinds.audio.value_or(visualisers.audio);
         visualisers.perception = kinds.perception.value_or(visualisers.perception);
+        visualisers.skeleton = kinds.skeleton.value_or(visualisers.skeleton);
     }
     return applySettings(context, *target, settings);
 }
@@ -1118,12 +1119,15 @@ void registerViewportCommands(CommandRegistry& registry)
         .name = "viewport.set_overlays",
         .title = strings::kCommandViewportSetOverlaysTitle,
         .description = strings::kCommandViewportSetOverlaysDescription,
-        .agentSummary = "Turns a viewport's overlays on or off: the ground grid, the selection outline, the "
-                        "hover highlight, icon billboards, the view cube, the stats overlay, the "
-                        "picture-in-picture camera preview and the DebugDraw visualisers (lights, cameras, "
-                        "colliders, characters, joints, audio) of the selected or of all entities. Only the "
-                        "given fields change. Example: {\"visualisers\": {\"colliders\": true}, "
-                        "\"visualiserScope\": \"all\", \"stats\": true}.",
+        .agentSummary =
+            "Turns a viewport's overlays on or off: the ground grid, the selection outline, the "
+            "hover highlight, icon billboards, the view cube, the stats overlay, the "
+            "picture-in-picture camera preview and the DebugDraw visualisers (lights, cameras, "
+            "colliders, characters, joints, audio, perception, and skeleton: the joints and bones of "
+            "Animators with their IK targets, spring chains and ragdoll parts) of the selected or "
+            "of all entities. Only the given fields change. Example: {\"visualisers\": "
+            "{\"colliders\": true, \"skeleton\": true}, "
+            "\"visualiserScope\": \"all\", \"stats\": true}.",
         .category = "Viewport",
         .icon = "layers",
         .flags = {.idempotent = true, .needsGpu = true},

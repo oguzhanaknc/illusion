@@ -118,6 +118,29 @@ private:
     std::unique_ptr<State> m_state;
 };
 
+/// The live part of the Animator's Inspector card (ADR 0059-0061): the clip or graph, a timeline scrubber
+/// over Animator::time (edit World, through `animation.scrub`), the state of each layer, the parameters (set
+/// in Play mode through `animation.set_parameter` and `animation.trigger`) and the last events of the running
+/// game. It reads the edit World's poses from the viewports (ViewportHost::editAnimation()) and the running
+/// game's from the PlayHost, and draws only a hint without them. Idle frames do not allocate.
+class AnimatorSection
+{
+public:
+    AnimatorSection();
+    ~AnimatorSection();
+    AnimatorSection(const AnimatorSection&) = delete;
+    AnimatorSection& operator=(const AnimatorSection&) = delete;
+
+    /// Draws the section of the Animator of @p entity (the edit World's Entity with @p guid) below the card
+    /// @p cardId; the undo steps of one scrub merge under @p mergeKey.
+    void draw(Impl& shell, ui::UiKit& kit, Entity entity, EntityGuid guid, std::string_view cardId,
+              std::string_view mergeKey);
+
+private:
+    struct State;
+    std::unique_ptr<State> m_state;
+};
+
 /// The Inspector panel: entity header, lock toggle, Local/World Transform card with Euler continuity cache,
 /// metadata-driven and custom Component cards, multi-entity editing, inline validation and Add Component.
 class Inspector

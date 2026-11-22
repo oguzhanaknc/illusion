@@ -2,8 +2,9 @@
 
 /// @file
 /// The DebugDraw visualisers of the Scene views (GPU-free): light ranges and directions, camera frusta,
-/// collider shapes, character capsules, joint anchors, axes and limits, and audio distances and cones,
-/// recorded as world-space lines.
+/// collider shapes, character capsules, joint anchors, axes and limits, audio distances and cones, and the
+/// skeletons of Animators with their IK targets, spring chains and ragdoll parts, recorded as world-space
+/// lines.
 ///
 /// ```cpp
 /// DebugDraw draw(65536);
@@ -21,8 +22,13 @@
 
 namespace illusion
 {
+class AnimationWorld;
 class DebugDraw;
 class World;
+struct Aabb;
+struct Ragdoll;
+struct RagdollPart;
+struct Skeleton;
 } // namespace illusion
 
 namespace illusion::editor::viewport
@@ -31,15 +37,32 @@ namespace illusion::editor::viewport
 /// Linear RGBA colours of the visualisers.
 struct VisualiserColors
 {
-    Vec4 light{1.0f, 0.8f, 0.25f, 1.0f};       ///< Light ranges and directions.
-    Vec4 camera{0.8f, 0.8f, 0.8f, 1.0f};       ///< Camera frusta.
-    Vec4 collider{0.25f, 0.9f, 0.3f, 1.0f};    ///< Solid colliders.
-    Vec4 sensor{0.3f, 0.55f, 1.0f, 1.0f};      ///< Colliders of sensor bodies (triggers).
-    Vec4 character{0.2f, 0.85f, 0.85f, 1.0f};  ///< Character capsules.
-    Vec4 joint{1.0f, 0.35f, 0.75f, 1.0f};      ///< Joint anchors and axes.
-    Vec4 jointLimit{1.0f, 0.55f, 0.15f, 1.0f}; ///< Joint limits.
-    Vec4 audioNear{0.45f, 0.6f, 1.0f, 1.0f};   ///< AudioSource minimum distance and inner cone.
-    Vec4 audioFar{0.25f, 0.3f, 0.75f, 1.0f};   ///< AudioSource maximum distance and outer cone.
+    Vec4 light{1.0f, 0.8f, 0.25f, 1.0f};           ///< Light ranges and directions.
+    Vec4 camera{0.8f, 0.8f, 0.8f, 1.0f};           ///< Camera frusta.
+    Vec4 collider{0.25f, 0.9f, 0.3f, 1.0f};        ///< Solid colliders.
+    Vec4 sensor{0.3f, 0.55f, 1.0f, 1.0f};          ///< Colliders of sensor bodies (triggers).
+    Vec4 character{0.2f, 0.85f, 0.85f, 1.0f};      ///< Character capsules.
+    Vec4 joint{1.0f, 0.35f, 0.75f, 1.0f};          ///< Joint anchors and axes.
+    Vec4 jointLimit{1.0f, 0.55f, 0.15f, 1.0f};     ///< Joint limits.
+    Vec4 audioNear{0.45f, 0.6f, 1.0f, 1.0f};       ///< AudioSource minimum distance and inner cone.
+    Vec4 audioFar{0.25f, 0.3f, 0.75f, 1.0f};       ///< AudioSource maximum distance and outer cone.
+    Vec4 bone{0.35f, 0.65f, 1.0f, 1.0f};           ///< Bones of skeletons.
+    Vec4 skeletonJoint{0.95f, 0.95f, 0.95f, 1.0f}; ///< Joints of skeletons.
+    Vec4 ikTarget{1.0f, 0.7f, 0.2f, 1.0f};         ///< LookAt and TwoBoneIk targets and poles.
+    Vec4 spring{0.3f, 0.85f, 0.45f, 1.0f};         ///< SpringBone chains and colliders.
+    Vec4 ragdoll{0.95f, 0.4f, 0.4f, 1.0f};         ///< Ragdoll parts.
+};
+
+/// Finds the parts of a Ragdoll for the skeleton visualiser (the viewports read and cache `.ragdoll` files).
+class RagdollParts
+{
+public:
+    virtual ~RagdollParts() = default;
+
+    /// The parts of @p ragdoll on @p skeleton, whose mesh has @p jointBounds (MeshData::jointBounds); empty
+    /// when its profile cannot be read. The span stays valid until the next call.
+    [[nodiscard]] virtual std::span<const RagdollPart> parts(const Ragdoll& ragdoll, const Skeleton& skeleton,
+                                                             std::span<const Aabb> jointBounds) = 0;
 };
 
 /// What recordVisualisers() draws.
@@ -53,6 +76,9 @@ struct VisualiserOptions
     f32 frustumLength = 3.0f;        ///< Depth to which camera frusta are drawn, in world units.
     f32 lineWidth = 1.5f;            ///< Line width in output pixels.
     VisualiserColors colors;         ///< Colours.
+    /// The poses the skeleton kind draws (AnimationWorld::jointMatrices()); none draws no skeletons.
+    const AnimationWorld* animation = nullptr;
+    RagdollParts* ragdolls = nullptr; ///< Ragdoll profiles of the skeleton kind; none draws no ragdolls.
 };
 
 /// What recordVisualisers() recorded.
@@ -63,7 +89,9 @@ struct VisualiserStats
 };
 
 /// Records the visualisers of the entities of @p world that are not Inactive or hidden into @p draw (it is
-/// not cleared). Positions come from the world-space Transforms. Recording stops when @p draw is full.
+/// not cleared). Positions come from the world-space Transforms, skeletons from the poses of
+/// VisualiserOptions::animation; a TwoBoneIk on a child of an Animator is drawn with that Animator. Recording
+/// stops when @p draw is full.
 VisualiserStats recordVisualisers(World& world, DebugDraw& draw, const VisualiserOptions& options) noexcept;
 
 } // namespace illusion::editor::viewport

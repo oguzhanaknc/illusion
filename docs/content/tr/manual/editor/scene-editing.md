@@ -107,11 +107,23 @@ Birkaç motor Component'i, ilgisiz alanların kalabalık etmemesi için kartın�
 - **Collider** (`illusion.Collider`) yalnızca seçilen `shape` değerine ait boyutları gösterir (`Box` için `halfExtents`, `Sphere` için `radius`, `Capsule` ve `Cylinder` için `radius` ve `halfHeight`, `ConvexHull` ve `Mesh` için `mesh` ve `meshIndex`).
 - **Joint** (`illusion.Joint`) seçilen `JointType` için geçerli olmayan çapa, eksen, sınır ve motor alanlarını gizler; `minLimit` / `maxLimit` alanlarını yalnızca `limited` işaretliyken gösterir.
 - **AudioSource** (`illusion.AudioSource`) `spatial` kapalıyken 3B mesafe, azalma, doppler ve koni alanlarını gizler.
+- **Animator** (`illusion.Animator`) alanlarının üstüne bir **Preview** bölümü ekler (Play modunda **Live**):
+  iskeletin eklem sayısı, uzunluğuyla birlikte clip ya da graph'ın boyutu, bir **Time** kaydırıcısı, graph'ın
+  her layer'ının state'i ve ilerlemesi (ve bir geçişin söndürdüğü state) ve graph'ın her parametresi.
+  Kaydırıcıyı sürüklemek `animation.scrub` çalıştırır; böylece sürükleme tek bir undo adımıdır ve Scene
+  görünümü pozu hemen gösterir. Kaydırıcı clip'in uzunluğuna ya da graph'ın giriş state'inin uzunluğuna kadar
+  gider. Play modunda bölüm, çalışan oyunun oynattığını gösterir: zamanı bir çubuk olarak, canlı state'leri,
+  değiştirebileceğiniz parametreleri (`animation.set_parameter`; **Fire** `animation.trigger` çalıştırır) ve
+  Animator'ın son sekiz event'ini. Bölüm pozlara ihtiyaç duyar: Scene görünümü olmadan (headless bir Editor)
+  ve play oturumu olmadan bir ipucu ve yalnızca kayıtlı alanları gösterir
+  ([Animasyon](../animation.md#inspectorda)).
 
 Bir Component'te yapılandırma sorunu olduğunda, kartının üst kısmında tek tıklamalı düzeltme düğmesi içeren bir uyarı şeridi görünür:
 
 - `requiredComponents` bağımlılığı eksik olan bir Component, eksik Component'i seçimin tamamına eklemek için **Add** düğmesini sunar.
 - `Dynamic` bir `RigidBody`'ye sahip Entity üzerindeki `shape = Mesh` olan bir `Collider`, üçgen Mesh'lerin yalnızca statik/kinematik olduğunu bildirir ve **Use ConvexHull** seçeneğini sunar.
+- Dosyası bulunmayan bir Asset alanı **Missing asset** uyarısı verir ve **Clear** sunar. Inspector her dosyayı
+  bir kez, Asset'ler diskte değiştikten sonra yeniden denetler.
 
 ### Çoklu Entity düzenleme
 

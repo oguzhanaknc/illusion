@@ -318,7 +318,8 @@ void reflectCoreCommandTypes(StructRegistry& structs)
             .field("characters", &ViewportVisualisers::characters)
             .field("joints", &ViewportVisualisers::joints)
             .field("audio", &ViewportVisualisers::audio)
-            .field("perception", &ViewportVisualisers::perception);
+            .field("perception", &ViewportVisualisers::perception)
+            .field("skeleton", &ViewportVisualisers::skeleton);
         reflectStruct<ViewportSettings>("editor.ViewportSettings", 1, structs)
             .field("shading", &ViewportSettings::shading)
             .field("wireframe", &ViewportSettings::wireframe)
@@ -383,7 +384,8 @@ void reflectCoreCommandTypes(StructRegistry& structs)
             .field("characters", &ViewportVisualisersParams::characters)
             .field("joints", &ViewportVisualisersParams::joints)
             .field("audio", &ViewportVisualisersParams::audio)
-            .field("perception", &ViewportVisualisersParams::perception);
+            .field("perception", &ViewportVisualisersParams::perception)
+            .field("skeleton", &ViewportVisualisersParams::skeleton);
         reflectStruct<ViewportOverlaysParams>("editor.ViewportOverlaysParams", 1, structs)
             .field("viewport", &ViewportOverlaysParams::viewport)
             .field("grid", &ViewportOverlaysParams::grid)
