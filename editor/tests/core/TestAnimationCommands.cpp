@@ -4,6 +4,10 @@
 
 #include "EditorCoreTestSupport.hpp"
 
+#include <illusion/animation/AnimationWorld.hpp>
+#include <illusion/assets/AssetStreamer.hpp>
+#include <illusion/core/JobSystem.hpp>
+
 using namespace illusion;
 using namespace illusion::editor;
 using namespace illusion::test;
@@ -118,6 +122,38 @@ TEST_CASE("animation.status in the edit World shows the saved fields and says it
     REQUIRE(one.root().find("animators").size() == 1);
     CHECK(one.root().pointer("/animators/0/graph").asString() == "");
     CHECK(one.root().find("total").asU64() == 2);
+}
+
+TEST_CASE("animation.status in the edit World reports the poses a viewport gives it")
+{
+    EditorFixture f;
+    EditorContext& editor = *f.editor;
+    buildScene(editor);
+    JobSystem jobs;
+    AssetStreamer streamer(editor.files(), jobs, AssetStreamerDesc{.cacheMount = ""});
+    AnimationWorld poses(editor.world(), streamer);
+    f.viewports.animation = &poses;
+    poses.waitIdle();
+    for (int i = 0; i < 4; ++i)
+    {
+        poses.update(0.0f, nullptr, false);
+    }
+
+    const JsonDocument status = ok(editor, "animation.status", R"({"entity":"/Column"})");
+    CHECK(status.root().find("world").asString() == "edit");
+    CHECK(status.root().find("live").asBool() == true);
+    CHECK(status.root().find("note").asString() == "");
+    const JsonValue column = status.root().pointer("/animators/0");
+    CHECK(column.find("posed").asBool() == true);
+    CHECK(column.find("joints").asU64() == 2);
+    CHECK(column.find("time").asF64().value_or(0.0) == doctest::Approx(0.4));
+    CHECK(column.find("graphLoaded").asBool() == true);
+    CHECK(column.find("layers").size() == 1);
+
+    f.viewports.animation = nullptr;
+    const JsonDocument without = ok(editor, "animation.status", R"({"entity":"/Column"})");
+    CHECK(without.root().find("live").asBool() == false);
+    CHECK(without.root().pointer("/animators/0/posed").asBool() == false);
 }
 
 TEST_CASE("animation.status in a play session reports the layers, parameters and states of the graph")
