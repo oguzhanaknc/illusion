@@ -108,6 +108,7 @@ public:
     u32 clickUi(Vec2 pixels, std::vector<UiEvent>& events) override;
     [[nodiscard]] const text::Localization* projectLocalization() override;
     [[nodiscard]] SaveService* saves() noexcept override;
+    [[nodiscard]] AiWorld* ai() noexcept override;
     [[nodiscard]] u64 saveEventCount() const override;
     void saveEvents(u64 first, std::vector<PlaySaveEvent>& out) const override;
 

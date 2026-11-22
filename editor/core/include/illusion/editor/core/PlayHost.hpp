@@ -1,7 +1,7 @@
 #pragma once
 
 /// @file
-/// What the play, module, `saves`, `input.inject` and `input.read` commands need from the editor's game
+/// What the play, module, `saves`, `ai`, `input.inject` and `input.read` commands need from the editor's game
 /// runtime: play sessions (ADR 0042) and game modules. The play service of the editor process
 /// (`illusion::editor_play`, PlaySession) implements it and registers with EditorContext::setPlay(); without
 /// one, the commands fail with ErrorKind::Unsupported.
@@ -22,6 +22,7 @@
 
 namespace illusion
 {
+class AiWorld;
 class GameSession;
 class UiWorld;
 struct UiEvent;
@@ -252,6 +253,10 @@ public:
     /// The saved games of the running game (GameSession::saves()), or nullptr when stopped or when the game
     /// has no SaveSystem. Requests made through it are sent at the next update.
     [[nodiscard]] virtual SaveService* saves() noexcept = 0;
+
+    /// The AI of the running game (GameSession::ai()), or nullptr when stopped (the AI commands and the
+    /// perception view).
+    [[nodiscard]] virtual AiWorld* ai() noexcept = 0;
 
     /// Number of saved-game events the editor has seen since it started, over all sessions; the next one gets
     /// this index. Events are those of every update the session ran (also steps), so none is missed.

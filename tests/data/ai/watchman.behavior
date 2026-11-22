@@ -1,0 +1,41 @@
+{
+  "format": "illusion.behavior",
+  "version": 1,
+  "blackboard": [
+    {"name": "target", "type": "Entity"},
+    {"name": "home", "type": "Vector3", "default": [0, 0, 0]},
+    {"name": "alert", "type": "Bool"},
+    {"name": "ammo", "type": "Int", "default": 3},
+    {"name": "boldness", "type": "Float", "default": 0.5}
+  ],
+  "root": {"name": "watchman", "selector": [
+    {"name": "fight", "guard": {"key": "target", "compare": "IsSet", "abort": "LowerPriority",
+      "child": {"sequence": [
+        {"setValue": {"key": "alert", "value": true}},
+        {"moveTo": {"key": "target", "acceptance": 1.5}},
+        {"retry": {"count": 2, "child": {"timeLimit": {"seconds": 3, "child": {"action": "bite"}}}}},
+        {"setValue": {"key": "target", "value": null}}
+      ]}}},
+    {"name": "reload", "guard": {"key": "ammo", "compare": "Less", "value": 1,
+      "child": {"cooldown": {"seconds": 5, "child": {"sequence": [
+        {"action": "reload"},
+        {"setValue": {"key": "ammo", "value": 3}}
+      ]}}}}},
+    {"name": "patrol", "sequence": [
+      {"inverter": {"child": {"condition": {"key": "alert", "compare": "Equal", "value": true}}}},
+      {"parallel": {"successes": 1, "children": [
+        {"repeat": {"count": 3, "child": {"wander": {"key": "home", "radius": 8}}}},
+        {"failer": {"child": {"wait": {"seconds": 1}}}}
+      ]}},
+      {"succeeder": {"child": {"action": "sniff"}}},
+      {"wait": {"seconds": 2, "deviation": 1}},
+      {"stop": {}}
+    ]},
+    {"name": "calm down", "sequence": [
+      {"setValue": {"key": "alert", "value": false}},
+      {"setValue": {"key": "home", "value": [0, 0, 0]}},
+      {"condition": {"key": "boldness", "compare": "Greater", "value": 0.25}},
+      {"setValue": {"key": "boldness", "value": 0.75}}
+    ]}
+  ]}
+}

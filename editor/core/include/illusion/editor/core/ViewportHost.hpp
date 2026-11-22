@@ -117,6 +117,7 @@ struct ViewportVisualisers
     bool characters = true; ///< CharacterController capsules.
     bool joints = true;     ///< Joint anchors, axes and limits.
     bool audio = true;      ///< AudioSource distances and cones.
+    bool perception = true; ///< Sight cones and what agents see and remember (play World).
 };
 
 /// What a viewport draws.

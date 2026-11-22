@@ -317,7 +317,8 @@ void reflectCoreCommandTypes(StructRegistry& structs)
             .field("colliders", &ViewportVisualisers::colliders)
             .field("characters", &ViewportVisualisers::characters)
             .field("joints", &ViewportVisualisers::joints)
-            .field("audio", &ViewportVisualisers::audio);
+            .field("audio", &ViewportVisualisers::audio)
+            .field("perception", &ViewportVisualisers::perception);
         reflectStruct<ViewportSettings>("editor.ViewportSettings", 1, structs)
             .field("shading", &ViewportSettings::shading)
             .field("wireframe", &ViewportSettings::wireframe)
@@ -381,7 +382,8 @@ void reflectCoreCommandTypes(StructRegistry& structs)
             .field("colliders", &ViewportVisualisersParams::colliders)
             .field("characters", &ViewportVisualisersParams::characters)
             .field("joints", &ViewportVisualisersParams::joints)
-            .field("audio", &ViewportVisualisersParams::audio);
+            .field("audio", &ViewportVisualisersParams::audio)
+            .field("perception", &ViewportVisualisersParams::perception);
         reflectStruct<ViewportOverlaysParams>("editor.ViewportOverlaysParams", 1, structs)
             .field("viewport", &ViewportOverlaysParams::viewport)
             .field("grid", &ViewportOverlaysParams::grid)
@@ -979,6 +981,60 @@ void reflectCoreCommandTypes(StructRegistry& structs)
             .field("agents", &NavDebugResult::agents)
             .field("paths", &NavDebugResult::paths)
             .field("obstacles", &NavDebugResult::obstacles);
+        reflectStruct<AiStatusParams>("editor.AiStatusParams", 1, structs)
+            .field("entity", &AiStatusParams::entity)
+            .field("wait", &AiStatusParams::wait);
+        reflectStruct<AiStatusKey>("editor.AiStatusKey", 1, structs)
+            .field("name", &AiStatusKey::name)
+            .field("type", &AiStatusKey::type)
+            .field("set", &AiStatusKey::set)
+            .field("value", &AiStatusKey::value);
+        reflectStruct<AiStatusPerceived>("editor.AiStatusPerceived", 1, structs)
+            .field("entity", &AiStatusPerceived::entity)
+            .field("sense", &AiStatusPerceived::sense)
+            .field("position", &AiStatusPerceived::position)
+            .field("age", &AiStatusPerceived::age)
+            .field("current", &AiStatusPerceived::current);
+        reflectStruct<AiStatusAgent>("editor.AiStatusAgent", 1, structs)
+            .field("entity", &AiStatusAgent::entity)
+            .field("tree", &AiStatusAgent::tree)
+            .field("loaded", &AiStatusAgent::loaded)
+            .field("running", &AiStatusAgent::running)
+            .field("ticks", &AiStatusAgent::ticks)
+            .field("blackboard", &AiStatusAgent::blackboard)
+            .field("perceived", &AiStatusAgent::perceived);
+        reflectStruct<AiStatusResult>("editor.AiStatusResult", 1, structs)
+            .field("agents", &AiStatusResult::agents)
+            .field("total", &AiStatusResult::total)
+            .field("ticked", &AiStatusResult::ticked)
+            .field("pending", &AiStatusResult::pending)
+            .field("failures", &AiStatusResult::failures);
+        reflectStruct<AiSetValueParams>("editor.AiSetValueParams", 1, structs)
+            .field("entity", &AiSetValueParams::entity)
+            .field("key", &AiSetValueParams::key)
+            .field("value", &AiSetValueParams::value);
+        reflectStruct<AiSetValueResult>("editor.AiSetValueResult", 1, structs)
+            .field("entity", &AiSetValueResult::entity)
+            .field("key", &AiSetValueResult::key);
+        reflectStruct<AiNoiseParams>("editor.AiNoiseParams", 1, structs)
+            .field("position", &AiNoiseParams::position)
+            .field("radius", &AiNoiseParams::radius, {.min = 0.0, .max = 1.0e6})
+            .field("instigator", &AiNoiseParams::instigator)
+            .field("team", &AiNoiseParams::team, {.min = 0.0, .max = 31.0});
+        reflectStruct<AiNoiseResult>("editor.AiNoiseResult", 1, structs)
+            .field("position", &AiNoiseResult::position)
+            .field("radius", &AiNoiseResult::radius)
+            .field("team", &AiNoiseResult::team)
+            .field("listeners", &AiNoiseResult::listeners);
+        reflectStruct<AiValidateParams>("editor.AiValidateParams", 1, structs)
+            .field("path", &AiValidateParams::path);
+        reflectStruct<AiValidateResult>("editor.AiValidateResult", 1, structs)
+            .field("path", &AiValidateResult::path)
+            .field("valid", &AiValidateResult::valid)
+            .field("error", &AiValidateResult::error)
+            .field("errorPath", &AiValidateResult::errorPath)
+            .field("nodes", &AiValidateResult::nodes)
+            .field("keys", &AiValidateResult::keys);
         reflectStruct<PlaySetMixParams>("editor.PlaySetMixParams", 1, structs)
             .field("masterVolume", &PlaySetMixParams::masterVolume, {.min = 0.0, .max = 4.0})
             .field("bus", &PlaySetMixParams::bus)
@@ -1352,6 +1408,7 @@ void registerCoreCommands(CommandRegistry& registry)
     detail::registerSavesCommands(registry);
     detail::registerModuleCommands(registry);
     detail::registerNavCommands(registry);
+    detail::registerAiCommands(registry);
     detail::registerExportCommands(registry);
     detail::registerToolCommands(registry);
 }

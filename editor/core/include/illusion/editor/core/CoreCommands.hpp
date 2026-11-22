@@ -958,6 +958,7 @@ struct ViewportVisualisersParams
     std::optional<bool> characters{}; ///< CharacterController capsules.
     std::optional<bool> joints{};     ///< Joint anchors, axes and limits.
     std::optional<bool> audio{};      ///< AudioSource distances and cones.
+    std::optional<bool> perception{}; ///< Sight cones and what agents see and remember (play World).
 };
 
 /// Params of `viewport.set_overlays`.
@@ -1166,7 +1167,7 @@ struct AssetEntry
 {
     std::string path; ///< Virtual path.
     std::string kind; ///< "Folder", "Scene", "Prefab", "Material", "Model", "Texture", "Environment",
-                      ///< "AudioClip", "Font", "AnimationGraph", "RagdollProfile" or "Other".
+                      ///< "AudioClip", "Font", "AnimationGraph", "RagdollProfile", "BehaviorTree" or "Other".
     u64 size = 0;     ///< Size in bytes (0 for folders).
 };
 
@@ -1878,6 +1879,106 @@ struct NavDebugResult
     bool agents = true;    ///< Agents.
     bool paths = true;     ///< Corridors.
     bool obstacles = true; ///< NavObstacles.
+};
+
+/// Params of `ai.status`.
+struct AiStatusParams
+{
+    std::optional<std::string> entity{}; ///< Entity reference of one agent (default: every agent).
+    std::optional<bool> wait{};          ///< Finish loading the trees first (default true).
+};
+
+/// A blackboard key in the results of `ai.status` and `ai.setValue`.
+struct AiStatusKey
+{
+    std::string name; ///< The key.
+    std::string type; ///< "Bool", "Int", "Float", "Vector3" or "Entity".
+    bool set = false; ///< Has a value.
+    std::string
+        value; ///< The value as text, e.g. "true", "3", "[1, 0, 2]" or an Entity's path ("" if unset).
+};
+
+/// What an agent perceives or remembers in the result of `ai.status`.
+struct AiStatusPerceived
+{
+    EntitySummary entity; ///< What it perceives.
+    std::string sense;    ///< "Sight" or "Hearing".
+    Vec3 position{0.0f};  ///< Last known position in world space, in m.
+    f32 age = 0.0f;       ///< Seconds since it was last sensed.
+    bool current = false; ///< Sensed in the last update.
+};
+
+/// An agent in the result of `ai.status`.
+struct AiStatusAgent
+{
+    EntitySummary entity;                     ///< The Entity.
+    std::string tree;                         ///< Its `.behavior` file ("" for a perceiver without a tree).
+    bool loaded = false;                      ///< Its tree has loaded.
+    std::string running;                      ///< Name of the deepest running node ("" for none).
+    u32 ticks = 0;                            ///< Ticks since the tree (re)started (at most 4294967295).
+    std::vector<AiStatusKey> blackboard;      ///< Every key of its tree.
+    std::vector<AiStatusPerceived> perceived; ///< What it perceives or remembers, nearest first.
+};
+
+/// Result of `ai.status`.
+struct AiStatusResult
+{
+    std::vector<AiStatusAgent> agents; ///< The agents asked for, in Entity order (at most 100).
+    u32 total = 0;                     ///< Entities with a BehaviorAgent or an AiPerception.
+    u32 ticked = 0;                    ///< Trees ticked by the last update.
+    u32 pending = 0;                   ///< Agents waiting for their tree.
+    u32 failures = 0;                  ///< Trees that failed to load.
+};
+
+/// Params of `ai.setValue`.
+struct AiSetValueParams
+{
+    std::string entity; ///< Entity reference of the agent.
+    std::string key;    ///< Blackboard key of its tree.
+    /// The value: true or false, a number, [x, y, z] or an Entity reference; null clears a Vector3 or Entity.
+    JsonText value;
+};
+
+/// Result of `ai.setValue`.
+struct AiSetValueResult
+{
+    EntitySummary entity; ///< The agent.
+    AiStatusKey key;      ///< The key afterwards.
+};
+
+/// Params of `ai.noise`.
+struct AiNoiseParams
+{
+    Vec3 position{0.0f};                     ///< Where it is made, in world space, in m.
+    std::optional<f32> radius{};             ///< Distance in m at which hearing 1 hears it (default 10).
+    std::optional<std::string> instigator{}; ///< Entity reference of who makes it (default none).
+    std::optional<u32> team{};               ///< Team of the noise, 0 to 31 (default 0).
+};
+
+/// Result of `ai.noise`.
+struct AiNoiseResult
+{
+    Vec3 position{0.0f}; ///< Where it is made.
+    f32 radius = 10.0f;  ///< Its radius in m.
+    u32 team = 0;        ///< Its team.
+    u32 listeners = 0;   ///< Perceivers within its reach that notice its team (before the update's checks).
+};
+
+/// Params of `ai.validate`.
+struct AiValidateParams
+{
+    std::string path; ///< A `.behavior` file of the assets: mount, e.g. "assets:/ai/guard.behavior".
+};
+
+/// Result of `ai.validate`.
+struct AiValidateResult
+{
+    std::string path;      ///< The file.
+    bool valid = false;    ///< It parses.
+    std::string error;     ///< The first problem, with its JSON path ("" if valid).
+    std::string errorPath; ///< The JSON path of the problem, e.g. "root.sequence[1].wait" ("" if none).
+    u32 nodes = 0;         ///< Nodes of the tree (0 if invalid).
+    u32 keys = 0;          ///< Blackboard keys of the tree (0 if invalid).
 };
 
 /// Result of the `play.*` commands: the state of the play session.

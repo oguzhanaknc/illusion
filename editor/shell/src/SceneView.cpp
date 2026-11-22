@@ -115,6 +115,8 @@ constexpr std::array kVisualiserItems = {
                    "joints"},
     VisualiserItem{&ViewportVisualisers::audio, s::kViewportVisualisersAudio, "viewport.visualisers.audio",
                    "audio"},
+    VisualiserItem{&ViewportVisualisers::perception, s::kViewportVisualisersPerception,
+                   "viewport.visualisers.perception", "perception"},
 };
 
 struct OverlayItem

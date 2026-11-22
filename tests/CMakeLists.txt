@@ -8,6 +8,7 @@ add_executable(illusion_tests
     ai/TestAiService.cpp
     ai/TestAiWorld.cpp
     ai/TestBehaviorTree.cpp
+    ai/TestBehaviorTreeExample.cpp
     ai/TestBehaviorTreeState.cpp
     ai/TestBlackboard.cpp
     ai/TestPerception.cpp
@@ -234,6 +235,20 @@ illusion_add_module(illusion_tutorial_animation_module SHARED SOURCES ${tutorial
 target_compile_definitions(illusion_tests PRIVATE
     TUTORIAL_ANIMATION_MODULE="$<TARGET_FILE:illusion_tutorial_animation_module>")
 add_dependencies(illusion_tests illusion_tutorial_animation_module)
+# The same for "A creature that wanders and chases".
+set(tutorial_creature_page ${PROJECT_SOURCE_DIR}/docs/content/en/tutorials/creature-ai.md)
+set(tutorial_creature_source ${CMAKE_CURRENT_BINARY_DIR}/generated/tutorials/creature_ai.cpp)
+add_custom_command(OUTPUT ${tutorial_creature_source}
+    COMMAND ${CMAKE_COMMAND} -D SOURCE=${tutorial_creature_page} -D OUTPUT=${tutorial_creature_source}
+        -P ${PROJECT_SOURCE_DIR}/cmake/ExtractCppBlocks.cmake
+    DEPENDS ${tutorial_creature_page} ${PROJECT_SOURCE_DIR}/cmake/ExtractCppBlocks.cmake
+    COMMENT "Extracting the code of the A creature that wanders and chases tutorial"
+    VERBATIM)
+illusion_add_module(illusion_tutorial_creature_module SHARED SOURCES ${tutorial_creature_source}
+    USES ai input physics runtime)
+target_compile_definitions(illusion_tests PRIVATE
+    TUTORIAL_CREATURE_MODULE="$<TARGET_FILE:illusion_tutorial_creature_module>")
+add_dependencies(illusion_tests illusion_tutorial_creature_module)
 target_compile_definitions(illusion_test_module_v3 PRIVATE TEST_MODULE_WIDE_COUNTER=1)
 target_compile_definitions(illusion_test_module_v5 PRIVATE TEST_MODULE_LAYOUT_V2=1)
 target_compile_definitions(illusion_test_module_v6 PRIVATE TEST_MODULE_WIDE_OPAQUE=1)

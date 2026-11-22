@@ -263,6 +263,10 @@ std::string_view assetKindOf(std::string_view path, bool isDirectory)
     {
         return "RagdollProfile";
     }
+    if (extension == ".behavior")
+    {
+        return "BehaviorTree";
+    }
     return "Other";
 }
 
