@@ -5,9 +5,8 @@ key'lerden oluşan bir blackboard ve bir agent'ın tick tick ne yapacağına kar
 ([ADR 0062](../architecture/decisions.md)). Hareket [Navigasyon](navigation.md) üzerinden gider.
 
 !!! note "Bugün neler var"
-    Bu sayfa `.behavior` formatını, blackboard'u, tick'i ve algının geometrisini anlatır. `AiWorld` (bir
-    World'deki Component'ler ve algı, NAV-2b), oyun modülleri için `AiService` (NAV-2c) ve `ai.*` Editor
-    commands (NAV-2d) sonraki paketlerle gelir.
+    Bu sayfa `.behavior` formatını, blackboard'u, tick'i, AI Component'lerini ve `AiWorld`'ü anlatır. Oyun
+    modülleri için `AiService` (NAV-2c) ve `ai.*` Editor commands (NAV-2d) sonraki paketlerle gelir.
 
 ## The `.behavior` file
 
@@ -185,9 +184,88 @@ Node'ların bir tick'teki davranışı:
 - **Wait.** Deviation, state'in `Random`'ından çekilir; aynı seed aynı bekleyişleri tekrarlar.
 - **Abort'lar.** Abort edilen bir node, hareketini ya da action'ını context üzerinden durdurur.
 
+## Agents
+
+`BehaviorAgent` Component'i, Entity'si için bir tree çalıştırır; genellikle onu hareket ettiren bir
+`NavAgent` ile birlikte.
+
+| Alan | Anlamı |
+| --- | --- |
+| `tree` | `.behavior` dosyası |
+| `enabled` | Oyun çalışırken tick'lenir |
+| `tickInterval` | Tick'ler arası saniye; 0 her update'te tick'ler |
+| `blackboard` | Tree'nin varsayılanlarının yerine geçen başlangıç değerleri (`BlackboardOverride`: `key`, Bool, Int ve Float için `number`, Vector3 için `vector`, Entity için `entity`) |
+
+`AiWorld` bir World'ün AI'ını tutar. Her update'te her tree dosyasını `AssetStreamer` üzerinden bir kez
+yükler (decoder `illusion.behavior`), her agent'a bir slot ve runtime `AiAgentState` verir (slot'u, son
+tick'ten sonraki durum, çalışan node ve algının hedefi) ve oyun çalışırken algılar ve etkin tree'leri Job
+olarak tick'ler. Bir tree varsayılanları ve agent'ın başlangıç değerleriyle başlar; `Random`'ı agent'ın
+`EntityGuid`'inden tohumlanır, böylece bir sahne aynı beklemeleri ve gezinmeleri tekrarlar. `tickInterval`'ı
+olan tree'ler her aralıkta bir kez, son tick'lerinden beri geçen süreyle tick'lenir; çok sayıda agent aynı
+update'te tick'lenmesin diye aralığa yayılırlar. `Inactive` etiketli Entity'ler durumlarını korur ve
+tick'lenmez.
+
+Hareketler [`NavWorld`](navigation.md) üzerinden gider: bir `moveTo` `NavAgent`'ın hedefini ayarlar ve agent
+`acceptance` içine vardığında başarılı olur; bir `wander` yarıçapı içinde ulaşılabilir bir navmesh noktası
+seçer. `NavAgent`'ı olmayan bir agent'ın hareketleri başarısız olur.
+
+```cpp
+illusion::AiWorld ai(world, navigation, &streamer);
+ai.update(step, &jobs, &physics, true); // after the modules, before navigation
+for (const illusion::AiActionRequest& request : ai.actions())
+{
+    if (request.phase == illusion::AiActionPhase::Started && request.name == "greet")
+    {
+        ai.finishAction(request.entity, request.action, true);
+    }
+}
+```
+
+### Actions
+
+Bir `action` node'u oyun kodundan bir şey yapmasını ister. `actions()` son update'in başlattığı ya da abort
+ettiği action'ları slot sırasıyla listeler; `finishAction()` sonucu bildirir, node onu bir sonraki tick'inde
+görür. `setValue()` ve `value()` bir agent'ın blackboard'undaki bir key'i yazar ve okur, `restart()` tree'yi
+başlangıç blackboard'uyla kökten yeniden başlatır.
+
+### Live reload
+
+Bir `.behavior` dosyası değiştiğinde agent'ları yeni tree ile yeniden başlar; çalışan action'ları abort
+edilmiş olarak bildirilir. Artık ayrıştırılamayan bir dosya eski tree'yi korur ve hatayı log'a yazar.
+
 ## Perception
 
-`illusion/ai/Perception.hpp`, `AiWorld`'ün kullanacağı geometriyi saf fonksiyonlar olarak taşır:
+`AiPerception` bir Entity'nin görmesini ve duymasını sağlar. `faceMovement`'lı bir `NavAgent`'ın baktığı
+gibi +z ekseni boyunca bakar.
+
+| Alan | Anlamı |
+| --- | --- |
+| `sightRadius` | m cinsinden; 0 kördür |
+| `sightAngle` | Radyan cinsinden tam koni açısı (120°) |
+| `eyeHeight` | Gözün Entity'nin konumundan yüksekliği, m |
+| `occluderMask` | Görüşü engelleyen fizik katmanları |
+| `hearing` | Gürültülerin yarıçapının çarpanı; 0 sağırdır |
+| `memorySeconds` | Artık algılamadığı şeyi ne kadar hatırladığı |
+| `detectTeams` | Fark ettiği takımlar (bit i = takım i) |
+| `targetKey` | Tree'sinin seçilen hedefe ayarlanan Entity key'i, hedef unutulunca temizlenir |
+| `positionKey` | Tree'sinin hedefin bilinen son konumuna ayarlanan Vector3 key'i |
+
+Her update'te bir algılayıcı konisindeki uyaranları toplar (Job olarak; en çok
+`AiWorldDesc::maxSightCandidates`, en yakın önce), ardından gözden görüş hattını bir `PhysicsWorld`
+raycast'iyle sınar. Raycast'ler update başına `AiWorldDesc::maxSightRaysPerUpdate` ile sınırlıdır ve sırayla
+dağıtılır, böylece her algılayıcı sırasını alır; bu update'te sırası gelmeyen son sonucunu korur.
+`reportNoise()` ile bildirilen gürültüler bir sonraki update'te `radius` çarpı `hearing` içinde duyulur.
+Algılanan şey `memorySeconds` boyunca hatırlanır; `perceived()` onu en yakın önce listeler. Hedef şu an
+algılanan en yakın şeydir, yoksa en yeni hatıradır. `targetKey` ile
+`{"key": "target", "compare": "IsSet", "abort": "LowerPriority"}` gibi bir guard, bir hedef görülür görülmez
+gezinmeyi keser.
+
+### Stimuli
+
+`AiStimulus` bir Entity'yi algılayıcıların gördüğü bir şey yapar: `team` (`kMaxAiTeams`, 32'nin altında),
+`offset` (bakılan nokta, Entity'nin konumuna göre) ve `visible` (saklanırken false).
+
+Geometri `illusion/ai/Perception.hpp` içinde saf fonksiyonlar olarak durur:
 
 - `inSightCone(eye, forward, radius, angle, point)`, `point` `eye`'ın `radius` içinde ve birim `forward`
   çevresindeki tam açısı `angle` olan koninin içindeyse doğrudur (radyan; 2 pi ya da fazlası her yönü
@@ -195,7 +273,17 @@ Node'ların bir tick'teki davranışı:
 - `hearsNoise(listener, hearing, noise)`, gürültü `radius` çarpı `hearing` içindeyse doğrudur (dahil).
   `hearing` 0 iken hiçbir şey duyulmaz.
 
+### In a game session
+
+`GameSession` bir `AiWorld`'e sahiptir (`ai()`). AI adımı Saves'ten sonra ve Navigation'dan önce çalışır,
+böylece bir tick'in hareketleri aynı update'te hedef olur; sabit adımlarla önce navmesh'leri ve tree
+yüklemelerini bekler. Tree'ler yalnızca oturum başlatılmışken tick'lenir; `drawDebug()` görüş konilerini,
+görüleni, hatıraları ve gürültüleri çizer.
+
 ## Performance
 
 Geliştirme masaüstünde ölçüldü: 1.000 tree'yi bir kez tick'lemek 33 µs sürer (Benchmark `ai/tick-1000`,
-bütçe 250 µs).
+bütçe 250 µs). 50 hareketli uyaran arasında 200 algılayıcı ve 256 görüş raycast'iyle bir `AiWorld`
+update'i yaklaşık 0,13 ms (`ai/perception-200`, bütçe 0,75 ms; ADR 0062 1 ms'yi hedefler), 30 node'luk bir
+tree çalıştıran 1.000 agent'lık bir update yaklaşık 0,19 ms sürer (`ai/world-1000`, bütçe 1,3 ms); ikisi de
+Job System üzerinde.

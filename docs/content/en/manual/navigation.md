@@ -190,7 +190,8 @@ navigation.warp(guard, spawnPoint); // moves at once and searches the path again
 `GameSession` owns a `NavWorld` (`navigation()`). Its Navigation step runs after Saves and before
 Animation: `NavWorld::update()` (with fixed steps it first waits for bakes and loads), then the session
 gives `Character` agents their velocities and sets the `speedParameter`s. The crowd advances only while the
-session is started.
+session is started. The AI step runs just before it: the moves of behaviour trees become the agents'
+destinations in the same update.
 
 ### From a module
 

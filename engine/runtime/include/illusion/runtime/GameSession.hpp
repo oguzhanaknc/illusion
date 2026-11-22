@@ -40,6 +40,7 @@
 namespace illusion
 {
 
+class AiWorld;
 class AnimationWorld;
 class AssetStreamer;
 class GamepadSystem;
@@ -128,13 +129,16 @@ struct GameSessionDesc
 ///    Modules step are sent in call order, each save() capturing the World now (captureSave()). A load is
 ///    therefore applied in a later update than its request; with fixedStep the step first waits for the save
 ///    thread, so it is always the next one and fixed-step runs repeat.
-/// 4. **Navigation:** NavWorld::update() (ADR 0062; with fixedStep it first waits for the navmesh bakes and
-///    loads, NavWorld::waitIdle(), so that runs repeat) moves the crowd while started. Then, while started,
+/// 4. **AI:** AiWorld::update() (ADR 0062; with fixedStep it first waits for the navmeshes and the
+///    behaviour tree loads, NavWorld::waitIdle() and AiWorld::waitIdle()) perceives with line-of-sight
+///    raycasts through physics() and ticks the behaviour trees while started; their moves become the
+///    NavAgents' destinations for the Navigation step.
+/// 5. **Navigation:** NavWorld::update() (ADR 0062) moves the crowd while started. Then, while started,
 ///    a NavAgent whose drive is Character gives its CharacterController the horizontal part of
 ///    NavAgentState::velocity (PhysicsWorld::setCharacterVelocity(), keeping its vertical velocity; none
 ///    while it crosses a NavLink, when navigation moves its Transform), and a NavAgent with a speedParameter
 ///    sets that Float parameter of its animation graph to NavAgentState::speed.
-/// 5. **Animation:** (with GameSessionDesc::streamer) while started, foot placement (ADR 0061) first casts a
+/// 6. **Animation:** (with GameSessionDesc::streamer) while started, foot placement (ADR 0061) first casts a
 ///    ray down below every foot of a FootPlacement from the last update's pose (through
 ///    PhysicsWorld::raycast(), skipping the character's own bodies) and writes the lifts, tilts, weights and
 ///    pelvis offset of its FootPlacementPose. AnimationWorld::update() then poses the Animators; their time
@@ -146,14 +150,14 @@ struct GameSessionDesc
 ///    NavAgent whose drive is Character or Transform is not applied. The Entities attached to
 ///    joints (BoneAttachment, ADR 0061) then take their Transforms from their moved parents, so that
 ///    kinematic bodies on them follow the sockets in the physics step.
-/// 6. **Physics:** PhysicsWorld::update().
-/// 7. **Hierarchy:** updateTransformHierarchy().
-/// 8. **UI:** the UiWorld lays out for the frame of setUiFrame(), handles the pointer and wheel of
+/// 7. **Physics:** PhysicsWorld::update().
+/// 8. **Hierarchy:** updateTransformHierarchy().
+/// 9. **UI:** the UiWorld lays out for the frame of setUiFrame(), handles the pointer and wheel of
 ///    keyboardMouse() and the actions `ui.navigate`, `ui.submit` and `ui.cancel` (Play mode), and records
 ///    the draw list (ui()). UiGlyph labels come from the actions: the first binding for the device used
 ///    last, through localization().
-/// 9. **Particles and audio:** ParticleWorld::update() and AudioWorld::update().
-/// 10. **Resolvers:** the physics and render asset resolvers turn asset references into runtime Components.
+/// 10. **Particles and audio:** ParticleWorld::update() and AudioWorld::update().
+/// 11. **Resolvers:** the physics and render asset resolvers turn asset references into runtime Components.
 ///
 /// Modules find the services PhysicsService, AudioService, ParticleService, InputService, SceneService,
 /// UiService (over ui() and localization()), NavService (over navigation()), with GameSessionDesc::streamer
@@ -237,6 +241,9 @@ public:
     /// The navmeshes and the crowd of the World; without GameSessionDesc::streamer navmeshes are baked, never
     /// loaded.
     [[nodiscard]] NavWorld& navigation() noexcept;
+
+    /// The perception and behaviour trees of the World; without GameSessionDesc::streamer trees never load.
+    [[nodiscard]] AiWorld& ai() noexcept;
 
     /// Sets the target the UI is laid out for from the next update() on (the host's view size and safe
     /// insets). Starts empty. The cursor of keyboardMouse() times @p pointerScale is the pointer in the

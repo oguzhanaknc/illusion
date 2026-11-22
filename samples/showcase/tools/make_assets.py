@@ -417,11 +417,30 @@ def write_column_graph(path):
     path.write_text(json.dumps(graph, indent=2) + "\n", encoding="utf-8", newline="\n")
 
 
+def write_guard_tree(path):
+    """The behaviour tree of the AI guard: it walks to a target its perception sees and asks game code to
+    "greet" it, and otherwise wanders around "home" (a starting value of the agent) with pauses."""
+    tree = {
+        "format": "illusion.behavior",
+        "version": 1,
+        "blackboard": [{"name": "target", "type": "Entity"}, {"name": "lastSeen", "type": "Vector3"},
+                       {"name": "home", "type": "Vector3"}],
+        "root": {"selector": [
+            {"guard": {"key": "target", "compare": "IsSet", "abort": "LowerPriority", "child": {"sequence": [
+                {"moveTo": {"key": "target", "acceptance": 1.5}}, {"action": "greet"}]}}},
+            {"sequence": [{"wander": {"key": "home", "radius": 5}},
+                          {"wait": {"seconds": 1.5, "deviation": 0.5}}]}]},
+    }
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(tree, indent=2) + "\n", encoding="utf-8", newline="\n")
+
+
 if __name__ == "__main__":
     write_model(ROOT / "models" / "blocks.gltf")
     write_rigged(ROOT / "models" / "column.gltf")
     write_strider(ROOT / "models" / "strider.gltf")
     write_column_graph(ROOT / "animations" / "column.animgraph")
+    write_guard_tree(ROOT / "ai" / "guard.behavior")
     for name, samples in (("music", music()), ("wind", wind()), ("hum", hum()), ("voice", voice()),
                           ("click", click())):
         write_wav(ROOT / "audio" / f"{name}.wav", samples)
