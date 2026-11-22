@@ -86,6 +86,37 @@ dragging `time` in the Inspector scrubs the clip in the Scene view. In Play mode
 `AnimationWorld` advances `time` of every playing Animator; Stop returns to the saved values. The showcase
 project's `Column` plays its clip `sway` this way ([Showcase project](editor/showcase.md)).
 
+## From the editor and agents
+
+The `animation.*` [Editor commands](../reference/editor-commands.md) let people and agents look inside animation,
+scrub it and drive it:
+
+| Command | What it does |
+| --- | --- |
+| `animation.list` | The skins and clips of a model (`path`): for each skin the reference for `Animator::skeleton` and its joint count, for each clip the reference for `Animator::clip`, its duration in seconds and its channel count |
+| `animation.status` | The Animators of the scene (`entity`, or every Animator up to 100): the saved fields and, in a play session, whether the pose exists, whether the graph has loaded, per layer the current state, its normalized time and the state a running transition fades out, every parameter with its value, and the state events of the last update |
+| `animation.set_parameter` | Sets a `Float`, `Int` or `Bool` parameter of the graph of an Animator in the play session; the value must fit the parameter's type |
+| `animation.trigger` | Sets a `Trigger` of the graph in the play session |
+| `animation.scrub` | Sets `Animator::time` of an Animator of the open scene: an undoable edit of the saved Component, shown at once in the Scene view |
+| `animation.validate` | Parses an `.animgraph` or `.ragdoll` file. The result says `valid`, counts `parameters`, `layers` and `states` (or `parts`), and for a mistake gives `error` and its JSON `errorPath`, e.g. `layers[0].states[2].motion`. A file that does not parse is a result, not a failed command |
+
+```json
+{"call": "animation.list", "params": {"path": "assets:/models/column.gltf"}}
+{"call": "animation.validate", "params": {"path": "assets:/animations/column.animgraph"}}
+{"call": "animation.scrub", "params": {"entity": "/Column", "time": 0.6}}
+{"call": "animation.status", "params": {"entity": "/Column"}}
+{"call": "animation.set_parameter", "params": {"entity": "/Column", "name": "lean", "value": 0.8}}
+{"call": "animation.trigger", "params": {"entity": "/Column", "name": "bow"}}
+```
+
+`animation.set_parameter` and `animation.trigger` need a running session (`play.start`); they act on the play
+World and are not undoable, because a parameter is runtime state. The graph uses a written value at the next
+update, so `play.step` after a command shows its effect in `animation.status`. `animation.scrub` always acts on
+the edit World, also while the game plays, and the game starts from the time it left. `animation.status` in the
+edit World reports the saved fields only (`live` is false and `note` says so): the poses, states and parameters
+exist in the play session. Every invalid param is reported with its JSON Pointer (`/name` for a parameter the
+graph does not have, with suggestions, `/value` for a value of the wrong type).
+
 ## Animation graphs
 
 An Animator whose `graph` names a `.animgraph` file plays that graph instead of its clip (ADR 0060): layers
@@ -748,7 +779,7 @@ renderer->render(commands, target, world, view, &jobs);
 - Interrupting a running transition, sub-state machines and saving the live state of a graph.
 - IK chains longer than two bones, and foot placement for more than
   the legs that hang from the pelvis (such as the front legs of a four-legged rig).
-- Clip previews, a timeline, skeleton debug drawing and `animation.*` editor commands (ANIM-4).
+- Clip previews, a timeline and skeleton debug drawing in the editor (ANIM-4b).
 - Morph targets, more than four influences per vertex, and keyframe compression.
 
 ## Performance

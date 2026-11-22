@@ -1035,6 +1035,94 @@ void reflectCoreCommandTypes(StructRegistry& structs)
             .field("errorPath", &AiValidateResult::errorPath)
             .field("nodes", &AiValidateResult::nodes)
             .field("keys", &AiValidateResult::keys);
+        reflectStruct<AnimationListParams>("editor.AnimationListParams", 1, structs)
+            .field("path", &AnimationListParams::path);
+        reflectStruct<AnimationListSkin>("editor.AnimationListSkin", 1, structs)
+            .field("ref", &AnimationListSkin::ref)
+            .field("name", &AnimationListSkin::name)
+            .field("joints", &AnimationListSkin::joints);
+        reflectStruct<AnimationListClip>("editor.AnimationListClip", 1, structs)
+            .field("ref", &AnimationListClip::ref)
+            .field("name", &AnimationListClip::name)
+            .field("duration", &AnimationListClip::duration)
+            .field("channels", &AnimationListClip::channels);
+        reflectStruct<AnimationListResult>("editor.AnimationListResult", 1, structs)
+            .field("path", &AnimationListResult::path)
+            .field("skins", &AnimationListResult::skins)
+            .field("clips", &AnimationListResult::clips);
+        reflectStruct<AnimationStatusParams>("editor.AnimationStatusParams", 1, structs)
+            .field("entity", &AnimationStatusParams::entity);
+        reflectStruct<AnimationStatusParameter>("editor.AnimationStatusParameter", 1, structs)
+            .field("name", &AnimationStatusParameter::name)
+            .field("type", &AnimationStatusParameter::type)
+            .field("value", &AnimationStatusParameter::value);
+        reflectStruct<AnimationStatusLayer>("editor.AnimationStatusLayer", 1, structs)
+            .field("name", &AnimationStatusLayer::name)
+            .field("state", &AnimationStatusLayer::state)
+            .field("normalizedTime", &AnimationStatusLayer::normalizedTime)
+            .field("previous", &AnimationStatusLayer::previous)
+            .field("fade", &AnimationStatusLayer::fade);
+        reflectStruct<AnimationStatusAnimator>("editor.AnimationStatusAnimator", 1, structs)
+            .field("entity", &AnimationStatusAnimator::entity)
+            .field("skeleton", &AnimationStatusAnimator::skeleton)
+            .field("clip", &AnimationStatusAnimator::clip)
+            .field("graph", &AnimationStatusAnimator::graph)
+            .field("speed", &AnimationStatusAnimator::speed)
+            .field("time", &AnimationStatusAnimator::time)
+            .field("loop", &AnimationStatusAnimator::loop)
+            .field("playing", &AnimationStatusAnimator::playing)
+            .field("posed", &AnimationStatusAnimator::posed)
+            .field("joints", &AnimationStatusAnimator::joints)
+            .field("graphLoaded", &AnimationStatusAnimator::graphLoaded)
+            .field("layers", &AnimationStatusAnimator::layers)
+            .field("parameters", &AnimationStatusAnimator::parameters);
+        reflectStruct<AnimationStatusEvent>("editor.AnimationStatusEvent", 1, structs)
+            .field("entity", &AnimationStatusEvent::entity)
+            .field("name", &AnimationStatusEvent::name)
+            .field("layer", &AnimationStatusEvent::layer)
+            .field("state", &AnimationStatusEvent::state);
+        reflectStruct<AnimationStatusResult>("editor.AnimationStatusResult", 1, structs)
+            .field("world", &AnimationStatusResult::world)
+            .field("live", &AnimationStatusResult::live)
+            .field("note", &AnimationStatusResult::note)
+            .field("animators", &AnimationStatusResult::animators)
+            .field("total", &AnimationStatusResult::total)
+            .field("pending", &AnimationStatusResult::pending)
+            .field("failures", &AnimationStatusResult::failures)
+            .field("events", &AnimationStatusResult::events);
+        reflectStruct<AnimationSetParameterParams>("editor.AnimationSetParameterParams", 1, structs)
+            .field("entity", &AnimationSetParameterParams::entity)
+            .field("name", &AnimationSetParameterParams::name)
+            .field("value", &AnimationSetParameterParams::value);
+        reflectStruct<AnimationSetParameterResult>("editor.AnimationSetParameterResult", 1, structs)
+            .field("entity", &AnimationSetParameterResult::entity)
+            .field("parameter", &AnimationSetParameterResult::parameter);
+        reflectStruct<AnimationTriggerParams>("editor.AnimationTriggerParams", 1, structs)
+            .field("entity", &AnimationTriggerParams::entity)
+            .field("name", &AnimationTriggerParams::name);
+        reflectStruct<AnimationTriggerResult>("editor.AnimationTriggerResult", 1, structs)
+            .field("entity", &AnimationTriggerResult::entity)
+            .field("name", &AnimationTriggerResult::name);
+        reflectStruct<AnimationScrubParams>("editor.AnimationScrubParams", 1, structs)
+            .field("entity", &AnimationScrubParams::entity)
+            .field("time", &AnimationScrubParams::time, {.min = 0.0, .max = 1.0e6});
+        reflectStruct<AnimationScrubResult>("editor.AnimationScrubResult", 1, structs)
+            .field("entity", &AnimationScrubResult::entity)
+            .field("previous", &AnimationScrubResult::previous)
+            .field("time", &AnimationScrubResult::time)
+            .field("changed", &AnimationScrubResult::changed);
+        reflectStruct<AnimationValidateParams>("editor.AnimationValidateParams", 1, structs)
+            .field("path", &AnimationValidateParams::path);
+        reflectStruct<AnimationValidateResult>("editor.AnimationValidateResult", 1, structs)
+            .field("path", &AnimationValidateResult::path)
+            .field("kind", &AnimationValidateResult::kind)
+            .field("valid", &AnimationValidateResult::valid)
+            .field("error", &AnimationValidateResult::error)
+            .field("errorPath", &AnimationValidateResult::errorPath)
+            .field("parameters", &AnimationValidateResult::parameters)
+            .field("layers", &AnimationValidateResult::layers)
+            .field("states", &AnimationValidateResult::states)
+            .field("parts", &AnimationValidateResult::parts);
         reflectStruct<PlaySetMixParams>("editor.PlaySetMixParams", 1, structs)
             .field("masterVolume", &PlaySetMixParams::masterVolume, {.min = 0.0, .max = 4.0})
             .field("bus", &PlaySetMixParams::bus)
@@ -1409,6 +1497,7 @@ void registerCoreCommands(CommandRegistry& registry)
     detail::registerModuleCommands(registry);
     detail::registerNavCommands(registry);
     detail::registerAiCommands(registry);
+    detail::registerAnimationCommands(registry);
     detail::registerExportCommands(registry);
     detail::registerToolCommands(registry);
 }

@@ -28,6 +28,7 @@ illusion_add_editor_executable(illusion_editor_tests
     core/TestGameUiCommands.cpp
     core/TestUiPlacementEdit.cpp
     core/TestAiCommands.cpp
+    core/TestAnimationCommands.cpp
     core/TestNavCommands.cpp
     core/TestParticleCommands.cpp
     core/TestEditorPrefabs.cpp
@@ -65,7 +66,7 @@ target_include_directories(illusion_editor_tests PRIVATE ${CMAKE_CURRENT_SOURCE_
 target_link_libraries(illusion_editor_tests PRIVATE
     illusion_ui_gallery_pages illusion::editor_core illusion::editor_client illusion::editor_shell
     illusion::editor_viewport illusion::editor_play
-    illusion::render illusion::assets illusion::ui illusion::input illusion::physics illusion::audio illusion::save illusion::nav illusion::ai illusion::doctest)
+    illusion::render illusion::assets illusion::ui illusion::input illusion::physics illusion::audio illusion::save illusion::nav illusion::ai illusion::animation illusion::doctest)
 # Golden files of the editor core (ILLUSION_UPDATE_GOLDENS=1 rewrites them).
 target_compile_definitions(illusion_editor_tests PRIVATE ILLUSION_EDITOR_TEST_DATA="${CMAKE_CURRENT_SOURCE_DIR}/data"
     ILLUSION_ENGINE_TEST_DATA="${PROJECT_SOURCE_DIR}/tests/data" ILLUSION_SAMPLES_DIR="${PROJECT_SOURCE_DIR}/samples")
@@ -136,7 +137,7 @@ target_include_directories(illusion_editor_gpu_tests PRIVATE ${CMAKE_CURRENT_SOU
 target_link_libraries(illusion_editor_gpu_tests PRIVATE
     illusion_ui_gallery_pages illusion::editor_shell illusion::editor_client illusion::editor_viewport
     illusion::editor_play illusion::render
-    illusion::physics illusion::audio illusion::particles illusion::save illusion::nav illusion::ai illusion::doctest)
+    illusion::physics illusion::audio illusion::particles illusion::save illusion::nav illusion::ai illusion::animation illusion::doctest)
 target_compile_definitions(illusion_editor_gpu_tests PRIVATE
     ILLUSION_FAKE_CMAKE="$<TARGET_FILE:illusion_fake_cmake>"
     ILLUSION_PACK_EXECUTABLE="$<TARGET_FILE:illusion_pack>"
@@ -178,6 +179,24 @@ add_test(NAME acceptance.game_ui.menu
         replay ${PROJECT_SOURCE_DIR}/tests/acceptance/game-ui/menu.jsonl --temp-workspace
     CONFIGURATIONS Release RelWithDebInfo)
 set_tests_properties(acceptance.game_ui.menu PROPERTIES LABELS "acceptance" TIMEOUT 360)
+
+# An agent reads, scrubs and drives the animation of the showcase's column with the animation.* commands
+# (tests/acceptance/animation/scrub.jsonl), on a copy of the showcase project.
+set(animation_project ${CMAKE_BINARY_DIR}/acceptance/animation/showcase)
+add_test(NAME acceptance.animation.scrub.project
+    COMMAND ${CMAKE_COMMAND} -DMODE=copy -DSOURCE=${PROJECT_SOURCE_DIR}/samples/showcase
+        -DDESTINATION=${animation_project} -P ${PROJECT_SOURCE_DIR}/tests/sdk/ExportGame.cmake
+    CONFIGURATIONS Release RelWithDebInfo)
+add_test(NAME acceptance.animation.scrub
+    COMMAND illusion_ctl --launch $<TARGET_FILE:illusion_editor>
+        --editor-arg --headless --editor-arg --no-gpu --editor-arg --deterministic
+        --editor-arg --project --editor-arg ${animation_project}
+        replay ${PROJECT_SOURCE_DIR}/tests/acceptance/animation/scrub.jsonl
+    CONFIGURATIONS Release RelWithDebInfo)
+set_tests_properties(acceptance.animation.scrub.project PROPERTIES LABELS "acceptance"
+    FIXTURES_SETUP animation_scrub_project)
+set_tests_properties(acceptance.animation.scrub PROPERTIES LABELS "acceptance" TIMEOUT 360
+    FIXTURES_REQUIRED animation_scrub_project)
 
 # The same scenario with a GPU (labels "gpu" and "acceptance"): the C6 rendering checks run, including the
 # game-view golden image tests/acceptance/tetris/golden/board.png. Every configuration, for the gpu CI job.

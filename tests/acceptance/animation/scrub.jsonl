@@ -1,0 +1,27 @@
+{"comment": "Animation commands (ANIM-4a): an agent reads the clips of the showcase column, checks its graph, scrubs its Animator in the edit World (and undoes it), then enters Play mode, reads the graph state, sets a parameter and fires a trigger. Replayed with the showcase project open (editor/tests/CMakeLists.txt copies it)."}
+{"call": "scene.open", "params": {"path": "assets:/scenes/everything.scene"}}
+{"call": "animation.list", "params": {"path": "assets:/models/column.gltf"}, "expect": {"result": {"path": "assets:/models/column.gltf", "skins": [{"ref": "assets:/models/column.gltf#skin/0", "name": "column", "joints": 2}], "clips": [{"ref": "assets:/models/column.gltf#animation/sway", "name": "sway", "duration": {"$approx": 2}, "channels": 1}, {"ref": "assets:/models/column.gltf#animation/lean", "name": "lean", "duration": {"$approx": 2}, "channels": 1}]}}}
+{"call": "animation.validate", "params": {"path": "assets:/animations/column.animgraph"}, "expect": {"result": {"kind": "AnimationGraph", "valid": true, "parameters": 4, "layers": 1, "states": 2, "error": ""}}}
+{"call": "animation.validate", "params": {"path": "assets:/animations/strider.ragdoll"}, "expect": {"result": {"kind": "RagdollProfile", "valid": true, "error": ""}}}
+{"call": "animation.validate", "params": {"path": "assets:/animations/missing.animgraph"}, "expect": {"error": {"message": {"$regex": ".*does not exist.*"}}}}
+{"call": "animation.status", "params": {"entity": "/Column"}, "expect": {"result": {"world": "edit", "live": false, "animators": [{"entity": {"path": "/Column"}, "graph": "assets:/animations/column.animgraph", "time": {"$approx": 0.4}, "speed": {"$approx": 0.8}, "loop": false, "playing": false, "posed": false, "graphLoaded": false}]}}}
+{"call": "animation.scrub", "params": {"entity": "/Column", "time": 1.2}, "expect": {"result": {"entity": {"path": "/Column"}, "previous": {"$approx": 0.4}, "time": {"$approx": 1.2}, "changed": true}}}
+{"call": "animation.status", "params": {"entity": "/Column"}, "expect": {"result": {"animators": [{"time": {"$approx": 1.2}}]}}}
+{"call": "scene.info", "params": {}, "expect": {"result": {"dirty": true}}}
+{"call": "history.undo", "params": {}}
+{"call": "animation.status", "params": {"entity": "/Column"}, "expect": {"result": {"animators": [{"time": {"$approx": 0.4}}]}}}
+{"call": "animation.scrub", "params": {"entity": "/Column", "time": -1}, "expect": {"error": {"message": {"$regex": ".*"}}}}
+{"call": "animation.scrub", "params": {"entity": "/Nobody", "time": 1}, "expect": {"error": {"message": {"$regex": ".*"}}}}
+{"call": "animation.set_parameter", "params": {"entity": "/Column", "name": "lean", "value": 0.8}, "expect": {"error": {"message": {"$regex": ".*play session.*"}}}}
+{"call": "play.start", "params": {"fixedStep": true}, "expect": {"result": {"state": "playing"}}}
+{"call": "play.pause", "params": {"paused": true}, "expect": {"result": {"state": "paused"}}}
+{"call": "play.step", "params": {"steps": 3}}
+{"call": "animation.status", "params": {"entity": "/Column"}, "expect": {"result": {"world": "play", "live": true, "failures": 0, "animators": [{"entity": {"path": "/Column"}, "graphLoaded": true, "layers": [{"name": "base", "state": "hold", "previous": ""}], "parameters": [{"name": "lean", "type": "Float", "value": {"$approx": 0.5}}, {"name": "calm", "type": "Bool", "value": 0}, {"name": "mood", "type": "Int", "value": 0}, {"name": "bow", "type": "Trigger", "value": 0}]}]}}}
+{"call": "animation.set_parameter", "params": {"entity": "/Column", "name": "lean", "value": 0.8}, "expect": {"result": {"parameter": {"name": "lean", "type": "Float", "value": {"$approx": 0.8}}}}}
+{"call": "animation.set_parameter", "params": {"entity": "/Column", "name": "bow", "value": 1}, "expect": {"error": {"message": {"$regex": ".*"}}}}
+{"call": "animation.trigger", "params": {"entity": "/Column", "name": "bow"}, "expect": {"result": {"name": "bow"}}}
+{"call": "animation.status", "params": {"entity": "/Column"}, "expect": {"result": {"animators": [{"playing": false, "layers": [{"state": "hold"}], "parameters": [{"name": "lean"}, {"name": "calm"}, {"name": "mood"}, {"name": "bow", "value": 1}]}]}}}
+{"call": "component.set_field", "params": {"entity": "/Column", "type": "illusion.Animator", "path": "playing", "value": true}}
+{"call": "play.step", "params": {"steps": 1}}
+{"call": "animation.status", "params": {"entity": "/Column"}, "expect": {"result": {"animators": [{"layers": [{"name": "base", "state": "swing", "previous": "hold"}], "parameters": [{"name": "lean", "value": {"$approx": 0.8}}, {"name": "calm"}, {"name": "mood"}, {"name": "bow", "value": 0}]}]}}}
+{"call": "play.stop", "params": {}}

@@ -1278,7 +1278,32 @@ Nothing of it exists yet: glTF skins and animations are skipped on import and th
   `CHANGELOG.md`.
 - ANIM-3 (scope): attach entities to bones (a lantern in a hand), look-at and
   two-bone IK (feet on uneven ground), ragdolls on Jolt from the skeleton, physics-driven secondary motion
-- ANIM-4: Editor and agents: clip and state-machine preview in the Inspector, a timeline scrubber,
+- ANIM-4: Editor and agents, in two work packages (no new ADR: it builds on ADR 0059-0061 and the editor
+  command rules of ADR 0036/0039):
+- ✅ ANIM-4a (`mechanic`): Commands. `animation.list` (the skins and clips of a model with joint counts and
+  durations), `animation.status` (an Animator's clip or graph, time, current state per layer, parameters, the
+  last events; edit or play World), `animation.set_parameter` and `animation.trigger` (play World, through
+  `AnimationService`), `animation.scrub` (sets `Animator::time` through `WorldEditor`, undoable, edit World),
+  `animation.validate` (a `.animgraph` or `.ragdoll` file's errors with JSON paths); every param validated,
+  fuzz cases, reference and `catalog.json`, agent summaries with examples.
+  Done: all six commands with `PlayHost::animation()` (PlaySession and the test FakePlay), command tests for
+  every command and error, the reference and `catalog.json`, the acceptance transcript
+  `tests/acceptance/animation/scrub.jsonl` (CTest `acceptance.animation.scrub`, on a copy of the showcase)
+  that lists the column's clips, scrubs and undoes it, then plays, sets a parameter and fires a trigger,
+  and the "From the editor and agents" section of `manual/animation.md` (EN/TR).
+  Open: `animation.status` in the edit World reports the saved Animator fields only (the editor viewport's
+  `AnimationWorld` is not reachable without a GPU viewport); `animation.set_parameter` and `animation.trigger`
+  need the graph loaded (steps load it), they do not wait for it, because a non-advancing update would
+  restart every graph.
+- ANIM-4b (`implementer`): Inspector and viewport. In the Animator's Inspector: a clip and graph summary, a
+  timeline scrubber over `Animator::time` (edit World, undoable through `animation.scrub`), the current state
+  per layer, live parameters and events in Play mode; a "Skeleton" viewport visualiser drawing the joints of
+  selected Animators from `AnimationWorld::jointMatrices()` (and IK targets, spring chains and ragdoll parts
+  when present); the tech demo creature is the manual's screenshot subject. Panels change state only through
+  the ANIM-4a commands. Done: UiDriver tests of the scrubber and the state view, a golden image of the
+  Inspector section and of the skeleton view, idle frames allocate nothing, EN/TR manual sections in
+  `manual/animation.md` and `manual/editor/*`, `CHANGELOG.md`.
+- ANIM-4 (scope): clip and state-machine preview in the Inspector, a timeline scrubber,
   `animation.*` commands (MCP tools), skeleton debug drawing; the tech demo gets an animated creature;
   documentation (EN/TR)
 

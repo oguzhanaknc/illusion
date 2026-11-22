@@ -34,6 +34,7 @@ illusion_add_editor_library(illusion_editor_core STATIC
     src/ViewportHost.cpp
     src/WorldEditor.cpp
     src/commands/AiCommands.cpp
+    src/commands/AnimationCommands.cpp
     src/commands/AssetCommands.cpp
     src/commands/ClipboardCommands.cpp
     src/commands/ComponentCommands.cpp
@@ -71,8 +72,8 @@ add_library(illusion::editor_core ALIAS illusion_editor_core)
 target_include_directories(illusion_editor_core PUBLIC
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>)
 target_link_libraries(illusion_editor_core PUBLIC
-    illusion::core illusion::platform illusion::text illusion::particles illusion::nav illusion::ai illusion::ui illusion::save_api
+    illusion::core illusion::platform illusion::text illusion::particles illusion::nav illusion::ai illusion::animation illusion::ui illusion::save_api
     illusion::editor_strings
-    PRIVATE illusion::assets illusion::input)
+    PRIVATE illusion::assets illusion::input illusion::physics)
 
 illusion_configure_target(illusion_editor_core)

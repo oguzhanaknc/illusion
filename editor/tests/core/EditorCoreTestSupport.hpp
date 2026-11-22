@@ -7,6 +7,8 @@
 
 #include <illusion/ai/AiComponents.hpp>
 #include <illusion/ai/AiWorld.hpp>
+#include <illusion/animation/AnimationComponents.hpp>
+#include <illusion/animation/AnimationWorld.hpp>
 #include <illusion/assets/AssetStreamer.hpp>
 #include <illusion/core/AssetRef.hpp>
 #include <illusion/core/JobSystem.hpp>
@@ -90,6 +92,7 @@ inline void reflectEditorTestComponents()
         reflectCoreComponents();
         reflectParticleComponents();
         reflectPhysicsComponents();
+        registerAnimationComponents(ComponentRegistry::instance());
         registerNavComponents(ComponentRegistry::instance());
         registerAiComponents(ComponentRegistry::instance());
         registerUiComponents();
@@ -179,10 +182,40 @@ inline JsonDocument ok(editor::EditorContext& editor, std::string_view name, std
     return parseJson(*result);
 }
 
+/// Writes the showcase's skinned column (model, animation graph and ragdoll profile) into the project's
+/// assets: mount, as "assets:/models/column.gltf", "assets:/animations/column.animgraph" and
+/// "assets:/animations/strider.ragdoll".
+inline void installAnimationAssets(editor::EditorContext& editor)
+{
+    constexpr std::string_view kFiles[][2] = {
+        {"models/column.gltf", "assets:/models/column.gltf"},
+        {"animations/column.animgraph", "assets:/animations/column.animgraph"},
+        {"animations/strider.ragdoll", "assets:/animations/strider.ragdoll"}};
+    for (const auto& file : kFiles)
+    {
+        std::ifstream in(utf8Path(ILLUSION_SAMPLES_DIR) / "showcase" / "assets" / file[0], std::ios::binary);
+        REQUIRE(in.good());
+        const std::string text((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
+        JsonMutDocument doc;
+        JsonMutValue params = doc.makeObject();
+        params.add("path", doc.makeString(file[1]));
+        params.add("text", doc.makeString(text));
+        doc.setRoot(params);
+        std::string json;
+        REQUIRE(doc.write(json, JsonWriteOptions{.pretty = false}));
+        (void)ok(editor, "project.file_write", json);
+    }
+}
+
 /// Runs a setup of EditorCommandCases.hpp: "name" (with {} params) or "name {params}", several separated by
 /// " ; ".
 inline void runSetup(editor::EditorContext& editor, std::string_view setup)
 {
+    if (setup == "test.install_animation")
+    {
+        installAnimationAssets(editor);
+        return;
+    }
     if (const usize next = setup.find(" ; "); next != std::string_view::npos)
     {
         runSetup(editor, setup.substr(0, next));
@@ -650,6 +683,8 @@ public:
         m_ui = std::make_unique<UiWorld>(*m_world);
         m_ui->update(gameUiFrame());
         m_ai = std::make_unique<FakeAi>(*m_world, m_editor->files());
+        m_ai->animation
+            .waitIdle(); // the graphs of the Animators, as a GameSession loads them in its first updates
         m_saves.reset();
         m_status = editor::PlayStatus{
             editor::PlayState::Playing, options.mode, options.fixedStep, m_status.timeScale, 0, 0.0};
@@ -690,6 +725,7 @@ public:
         {
             m_ai->ai.waitIdle(); // the trees of the first steps, as a GameSession with a fixed step does
             m_ai->ai.update(1.0f / 60.0f, &m_ai->jobs, nullptr, true);
+            m_ai->animation.update(1.0f / 60.0f, &m_ai->jobs, true);
         }
         m_editor->playWorldAdvanced();
         return steps;
@@ -728,6 +764,8 @@ public:
     SaveService* saves() noexcept override { return m_world ? &m_saves : nullptr; }
 
     AiWorld* ai() noexcept override { return m_ai ? &m_ai->ai : nullptr; }
+
+    AnimationWorld* animation() noexcept override { return m_ai ? &m_ai->animation : nullptr; }
 
     u64 saveEventCount() const override { return m_saves.log.size(); }
 
@@ -860,6 +898,7 @@ private:
             : streamer(files, jobs, AssetStreamerDesc{.cacheMount = ""})
             , navigation(world, &streamer)
             , ai(world, navigation, &streamer)
+            , animation(world, streamer)
         {
         }
 
@@ -867,6 +906,7 @@ private:
         AssetStreamer streamer;
         NavWorld navigation;
         AiWorld ai;
+        AnimationWorld animation;
     };
 
     editor::EditorContext*& m_editor;
