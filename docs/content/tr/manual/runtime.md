@@ -49,9 +49,9 @@ while (running)
 
 `create()` proje ayarlarından boş bir World ve System'lerini kurar ve `InputSettings::actions` ile
 belirtilen input action'larını ve locale dosyalarını yükler. Sahneyi `world()` içine yükleyin; ardından `start()` World'ü
-`ModuleHost`'a altı servisle birlikte bir Simulation World olarak ekler. Modüller bu servislere
+`ModuleHost`'a yedi servisle birlikte bir Simulation World olarak ekler. Modüller bu servislere
 `context.service<T>()` ile ulaşır: `PhysicsService`, `AudioService`, `ParticleService`, `InputService`,
-`SceneService` ve `UiService`
+`SceneService`, `UiService` ve `NavService` (`navigation()` üzerinde)
 (bkz. [scripting API](../reference/scripting-api.md)); `GameSessionDesc::streamer` ile `AnimationService`,
 `GameSessionDesc::store` ile `StoreService`
 ([Mağaza servisleri](#magaza-servisleri)), bir `SaveSystem` olan `GameSessionDesc::saves` ile de `SaveService`
@@ -205,7 +205,7 @@ derlenir:
 ```cmake
 illusion_add_module(showcase_game_module STATIC ID showcase
     SOURCES showcase/modules/showcase/showcase.cpp
-    USES physics audio particles animation input render runtime store ui save)
+    USES physics audio particles animation nav input render runtime store ui save)
 illusion_add_game(showcase_game
     MODULES showcase_game_module
     NAME "Showcase"

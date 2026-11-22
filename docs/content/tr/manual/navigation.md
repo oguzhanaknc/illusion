@@ -192,6 +192,51 @@ Animation'dan önce çalışır: `NavWorld::update()` (sabit adımlarla önce ba
 ardından oturum `Character` agent'larına hızlarını verir ve `speedParameter`'ları ayarlar. Crowd yalnızca
 oturum başlatılmışken ilerler.
 
+### Bir modülden
+
+Bir oyun modülü navigasyona [`NavService`](../reference/scripting-api.md#navservice) ile (`USES nav`) ulaşır:
+`NavWorld`'ün sorgularının aynıları, bir agent'ın Entity'si için `setDestination()`, `stop()` ve `warp()`,
+`status()` ve `remainingDistance()`, ve son update'in olayları için `pollEvents()`. Her çağrı assert etmek
+yerine `NavError` taşıyan bir `Expected` döndürür.
+
+```cpp
+#include <illusion/core/Module.hpp>
+#include <illusion/nav/NavService.hpp>
+
+#include <array>
+
+void update(illusion::ModuleContext& context, illusion::f64)
+{
+    illusion::NavService* nav = context.service<illusion::NavService>();
+    if (nav == nullptr)
+    {
+        return; // this World was attached without navigation
+    }
+    if (needsOrders)
+    {
+        const illusion::Expected<void, illusion::NavError> sent = nav->setDestination(guard, door);
+        if (!sent)
+        {
+            ILL_LOG_INFO("Game", "guard: {}", illusion::navErrorName(sent.error()));
+        }
+        needsOrders = false;
+    }
+    if (nav->status(guard).valueOr(illusion::NavAgentStatus::Idle) == illusion::NavAgentStatus::Arrived)
+    {
+        openDoor();
+    }
+    std::array<illusion::NavEvent, 8> events{};
+    const illusion::u32 count = nav->pollEvents(events);
+    for (illusion::u32 i = 0; i < count && i < events.size(); ++i)
+    {
+        if (events[i].type == illusion::NavEventType::PathFailed)
+        {
+            giveUp(events[i].agent);
+        }
+    }
+}
+```
+
 ## Baking
 
 Bake, `illusion/nav/NavBuild.hpp` içindeki iki saf fonksiyondur:

@@ -2,6 +2,7 @@
 
 #include <illusion/core/Log.hpp>
 #include <illusion/core/Module.hpp>
+#include <illusion/nav/NavService.hpp>
 #include <illusion/runtime/SceneService.hpp>
 
 namespace
@@ -25,6 +26,11 @@ void update(illusion::ModuleContext& context, illusion::f64)
 {
     if (++g_updates == kExitUpdate)
     {
+        if (illusion::NavService* nav = context.service<illusion::NavService>())
+        {
+            ILL_LOG_INFO("SdkGame", "NavService: {}",
+                         illusion::navErrorName(nav->status(illusion::Entity{}).error()));
+        }
         if (illusion::SceneService* scenes = context.service<illusion::SceneService>())
         {
             scenes->requestExit();

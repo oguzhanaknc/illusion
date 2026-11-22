@@ -8,6 +8,7 @@
 #include <illusion/animation/AnimationService.hpp>
 #include <illusion/audio/AudioService.hpp>
 #include <illusion/input/InputService.hpp>
+#include <illusion/nav/NavService.hpp>
 #include <illusion/particles/ParticleService.hpp>
 #include <illusion/physics/PhysicsService.hpp>
 #include <illusion/runtime/SceneService.hpp>
@@ -749,6 +750,67 @@ public:
     Void setRagdoll(Entity e, bool active) override
     {
         return forward<Void>(13, [&](AnimationService& s) { return s.setRagdoll(e, active); });
+    }
+};
+
+// Counts the calls of every NavService function.
+class CountingNav final : public CountingProxy<NavService, 10>
+{
+public:
+    explicit CountingNav(NavService* inner = nullptr) noexcept
+        : CountingProxy(inner)
+    {
+    }
+
+    using Void = Expected<void, NavError>;
+
+    Expected<NavPathResult, NavError> findPath(const Vec3& from, const Vec3& to, std::span<Vec3> out,
+                                               const NavQueryFilter& filter) override
+    {
+        return forward<Expected<NavPathResult, NavError>>(
+            0, [&](NavService& s) { return s.findPath(from, to, out, filter); });
+    }
+    [[nodiscard]] Expected<Vec3, NavError> nearestPoint(const Vec3& position,
+                                                        const NavQueryFilter& filter) override
+    {
+        return forward<Expected<Vec3, NavError>>(
+            1, [&](NavService& s) { return s.nearestPoint(position, filter); });
+    }
+    [[nodiscard]] Expected<NavRaycastHit, NavError> raycast(const Vec3& from, const Vec3& to,
+                                                            const NavQueryFilter& filter) override
+    {
+        return forward<Expected<NavRaycastHit, NavError>>(
+            2, [&](NavService& s) { return s.raycast(from, to, filter); });
+    }
+    [[nodiscard]] Expected<Vec3, NavError> randomPoint(const Vec3& center, f32 radius, u64 seed,
+                                                       const NavQueryFilter& filter) override
+    {
+        return forward<Expected<Vec3, NavError>>(
+            3, [&](NavService& s) { return s.randomPoint(center, radius, seed, filter); });
+    }
+    Void setDestination(Entity e, const Vec3& destination) override
+    {
+        return forward<Void>(4, [&](NavService& s) { return s.setDestination(e, destination); });
+    }
+    Void stop(Entity e) override
+    {
+        return forward<Void>(5, [&](NavService& s) { return s.stop(e); });
+    }
+    Void warp(Entity e, const Vec3& position) override
+    {
+        return forward<Void>(6, [&](NavService& s) { return s.warp(e, position); });
+    }
+    [[nodiscard]] Expected<NavAgentStatus, NavError> status(Entity e) const override
+    {
+        return forward<Expected<NavAgentStatus, NavError>>(7, [&](NavService& s) { return s.status(e); });
+    }
+    [[nodiscard]] Expected<f32, NavError> remainingDistance(Entity e) const override
+    {
+        return forward<Expected<f32, NavError>>(8, [&](NavService& s) { return s.remainingDistance(e); });
+    }
+    u32 pollEvents(std::span<NavEvent> out) override
+    {
+        return forward<u32>(9, [&](NavService& s) { return s.pollEvents(out); });
     }
 };
 

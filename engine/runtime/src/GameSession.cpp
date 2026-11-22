@@ -19,6 +19,7 @@
 #include <illusion/modules/ModuleHost.hpp>
 #include <illusion/nav/NavComponents.hpp>
 #include <illusion/nav/NavWorld.hpp>
+#include <illusion/nav/NavWorldService.hpp>
 #include <illusion/particles/ParticleWorld.hpp>
 #include <illusion/particles/ParticleWorldService.hpp>
 #include <illusion/physics/PhysicsAssetResolver.hpp>
@@ -490,6 +491,7 @@ struct GameSession::Impl
         , audio(world, *sessionDesc.files, audioDesc(sessionDesc))
         , particles(world)
         , navigation(world, sessionDesc.streamer)
+        , navigationService(navigation)
         , ui(world)
         , physicsService(physics)
         , audioService(audio)
@@ -716,6 +718,7 @@ struct GameSession::Impl
     AudioWorld audio;
     ParticleWorld particles;
     NavWorld navigation;
+    NavWorldService navigationService;
     UiWorld ui;
     UiFrame uiFrame{};
     Vec2 pointerScale{1.0f};
@@ -814,6 +817,7 @@ void GameSession::start()
         services.provide<InputService>(impl.inputService);
         services.provide<SceneService>(impl.sceneService);
         services.provide<UiService>(impl.uiService);
+        services.provide<NavService>(impl.navigationService);
         if (impl.animationService)
         {
             services.provide<AnimationService>(*impl.animationService);

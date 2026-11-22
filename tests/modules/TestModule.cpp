@@ -6,9 +6,9 @@
 // 5: changes the layout of LayoutComponent (TEST_MODULE_LAYOUT_V2), which a hot reload migrates.
 // 6: widens the unreflected OpaqueComponent (TEST_MODULE_WIDE_OPAQUE), which a hot reload must reject.
 // Variants 1 to 4 and 6 start a session with two LayoutComponents and an OpaqueComponent.
-// Every variant is built with USES physics audio animation input render runtime ui save: the API targets give
-// it the headers of those libraries and their service interfaces without their code. update() can call every
-// service function (ModuleControl::callServices) and start() can build a mesh body
+// Every variant is built with USES physics audio animation nav input render runtime ui save: the API targets
+// give it the headers of those libraries and their service interfaces without their code. update() can call
+// every service function (ModuleControl::callServices) and start() can build a mesh body
 // (ModuleControl::createMesh).
 
 #include "TestModuleShared.hpp"
@@ -27,6 +27,7 @@
 #include <illusion/ecs/World.hpp>
 #include <illusion/input/Gamepad.hpp>
 #include <illusion/input/InputService.hpp>
+#include <illusion/nav/NavService.hpp>
 #include <illusion/physics/PhysicsComponents.hpp>
 #include <illusion/physics/PhysicsService.hpp>
 #include <illusion/render/SceneComponents.hpp>
@@ -206,6 +207,49 @@ void callServices(ModuleContext& context)
         static_cast<void>(animation->setIkWeight(e, "foot_l", 0.5f));
         static_cast<void>(animation->setRagdoll(e, true));
     }
+    if (NavService* nav = context.service<NavService>())
+    {
+        const NavQueryFilter filter{
+            .agentType = 0, .areaMask = 0xFFFFFFFFu, .searchExtents = Vec3(2.0f, 4.0f, 2.0f)};
+        std::array<Vec3, 4> corners{};
+        static_cast<void>(nav->findPath(v, Vec3(2.0f, 0.0f, 2.0f), corners, filter));
+        static_cast<void>(nav->nearestPoint(v, filter));
+        static_cast<void>(nav->raycast(v, Vec3(2.0f, 0.0f, 2.0f), filter));
+        static_cast<void>(nav->randomPoint(v, 3.0f, 7, filter));
+        static_cast<void>(nav->setDestination(e, v));
+        static_cast<void>(nav->stop(e));
+        static_cast<void>(nav->warp(e, v));
+        static_cast<void>(nav->status(e));
+        static_cast<void>(nav->remainingDistance(e));
+        std::array<NavEvent, 2> events{};
+        static_cast<void>(nav->pollEvents(events));
+    }
+}
+
+// Sends control.navAgent to control.navDestination when asked and reads its state and events.
+void driveNavAgent(ModuleContext& context, test::ModuleControl& control)
+{
+    NavService* nav = context.service<NavService>();
+    if (nav == nullptr || control.navAgent.isNull())
+    {
+        return;
+    }
+    if (control.navSend)
+    {
+        control.navSend = false;
+        control.navSent = nav->setDestination(control.navAgent, control.navDestination).hasValue();
+    }
+    control.navStatus = nav->status(control.navAgent).valueOr(NavAgentStatus::Failed);
+    control.navRemaining = nav->remainingDistance(control.navAgent).valueOr(-1.0f);
+    std::array<NavEvent, 8> events{};
+    const u32 count = nav->pollEvents(events);
+    for (u32 i = 0; i < count && i < events.size(); ++i)
+    {
+        if (events[i].agent == control.navAgent && events[i].type == NavEventType::Arrived)
+        {
+            ++control.navArrivals;
+        }
+    }
 }
 
 // Builds a static triangle-mesh body whose geometry the host's PhysicsWorld creates. The geometry and its
@@ -351,6 +395,7 @@ void updateModule(ModuleContext& context, f64)
     {
         callServices(context);
     }
+    driveNavAgent(context, control);
     ILL_ASSERT(!control.assertInUpdate, "assertion from the test module");
 }
 

@@ -113,6 +113,7 @@ struct NavEvent
 /// Navigation of the running game, implemented by the host (NavWorldService over a NavWorld) and found by
 /// modules with `context.service<NavService>()`. Destination changes take effect at the next Navigation
 /// step. Adding a function changes the module API version.
+/// @ingroup scripting_api
 class NavService : NonCopyable
 {
 public:
