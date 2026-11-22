@@ -7,12 +7,15 @@ ADRs for its significant decisions. Items marked ✅ are done.
 
 1. TEX (texture compression), 2. M8 (release pipeline), 3. UI (game interface), 4. SAVE (saved games),
 5. ANIM (skeletal animation), 6. NAV (navigation and AI), 7. MAT (custom shaders and materials),
-8. PLAY (gameplay foundations), 9. CAM (camera system), 10. ANIM-5 (retargeting and aim layers), 11. DECAL,
-12. POST (cinematic post effects), 13. SHOOTER (third-person shooter demo), 14. PROBE (reflection and light
-probes, screen-space reflections, contact shadows), 15. TERRAIN (with GPU grass and impostors), 16. WATER,
-17. GFX-3 (lit smoke, clouds), 18. M9 (upscaling and frame generation), 19. M10 (hybrid ray tracing).
+8. CAM (camera system), 9. ANIM-5 (retargeting and aim layers), 10. DECAL, 11. POST (cinematic post
+effects), 12. PLAY (gameplay foundations), 13. SHOOTER (third-person shooter demo), 14. PROBE (reflection
+and light probes, screen-space reflections, contact shadows), 15. TERRAIN (with GPU grass and impostors),
+16. WATER, 17. GFX-3 (lit smoke, clouds), 18. M9 (upscaling and frame generation), 19. M10 (hybrid ray
+tracing).
 
 The release pipeline comes early so that every later milestone is exercised by an exported build in CI.
+PLAY comes right before SHOOTER: the demo is its first real user, it builds on the cameras of CAM (the
+character a camera follows) and the animation events of ANIM-5, and nothing before SHOOTER needs it.
 MAT comes before the render features that add shader paths (decals, grass, impostors, water), so they are
 written once on the material system.
 
@@ -1517,32 +1520,6 @@ Today games can only set the parameters of the built-in PBR material.
 - Shading models (default, subsurface, two-sided foliage, unlit, clear coat); a node-based material editor
   later; documentation of the surface API
 
-## PLAY — Gameplay foundations
-
-Found by reading the tech demo and showcase modules (2026-11-22): game code there does work that every game
-needs and that belongs in the engine. Each item replaces code in `samples/techdemo/modules/techdemo` and
-keeps its behaviour (the tech demo tests must not change).
-
-- Pause and time scale: `SceneService::setPaused()` / `setTimeScale()` honoured by `GameSession` for
-  physics, animation, AI, navigation, particles and audio buses (UI keeps running); the tech demo pause menu
-  stops its own clock and holds the creature by hand today, while physics, particles and animation run on
-- Level readiness: the session holds dynamic bodies, characters, navigation and AI until the static
-  colliders and navmeshes of the loaded scene are cooked and loaded (`SceneService::isReady()` and a loading
-  phase the UI can show); the tech demo checks for ground with a raycast and switches props named `Orb ...` /
-  `Lantern ...` from kinematic to dynamic once the terrain collider exists
-- Finding Entities by name or tag from modules (`SceneService::find()` over an index of `Name`), instead of
-  the `findNamed()` scan that every sample module repeats
-- A saved `CharacterMovement` Component (walk, run, crouch, jump, air control, slopes) driven by input
-  actions on a `CharacterController`, with first-person head bob; the cameras that follow it come with CAM
-- Light animation: a saved `LightAnimator` (flicker, pulse, noise on intensity and position) for fires,
-  neon and torches, done by hand in `updateLights()` today
-- Time of day: a saved `DayNightCycle` on the `SkyAtmosphere` (speed, start time) with day/night events and
-  intensity curves for lights tagged to follow it, replacing `updateTime()`
-- Footsteps: animation events or stride distance turned into `AiStimulus` noises and footstep sounds by a
-  saved `Footsteps` Component, replacing the stride counter in the module
-- A shared, pinned asset fetcher (`tools/fetch_assets.py` of the tech demo generalised for SHOOTER: a
-  manifest of URLs, sizes and SHA-256, a local override folder, never committed)
-
 ## CAM — Camera system
 
 Games have only the `Camera` Component; every sample moves it by hand. A general camera system in the spirit
@@ -1589,6 +1566,32 @@ Correct indirect light indoors and in shadow until ray tracing (M10) is availabl
   by `PostEffects` and by virtual cameras (CAM)
 - Per-object motion blur from the existing motion vectors; lens effects (lens dirt on bloom, flares)
 - Quality levels in `RenderSettings`; GPU goldens and budgets on lavapipe
+
+## PLAY — Gameplay foundations
+
+Found by reading the tech demo and showcase modules (2026-11-22): game code there does work that every game
+needs and that belongs in the engine. Each item replaces code in `samples/techdemo/modules/techdemo` and
+keeps its behaviour (the tech demo tests must not change).
+
+- Pause and time scale: `SceneService::setPaused()` / `setTimeScale()` honoured by `GameSession` for
+  physics, animation, AI, navigation, particles and audio buses (UI keeps running); the tech demo pause menu
+  stops its own clock and holds the creature by hand today, while physics, particles and animation run on
+- Level readiness: the session holds dynamic bodies, characters, navigation and AI until the static
+  colliders and navmeshes of the loaded scene are cooked and loaded (`SceneService::isReady()` and a loading
+  phase the UI can show); the tech demo checks for ground with a raycast and switches props named `Orb ...` /
+  `Lantern ...` from kinematic to dynamic once the terrain collider exists
+- Finding Entities by name or tag from modules (`SceneService::find()` over an index of `Name`), instead of
+  the `findNamed()` scan that every sample module repeats
+- A saved `CharacterMovement` Component (walk, run, crouch, jump, air control, slopes) driven by input
+  actions on a `CharacterController`, with first-person head bob; the cameras that follow it come with CAM
+- Light animation: a saved `LightAnimator` (flicker, pulse, noise on intensity and position) for fires,
+  neon and torches, done by hand in `updateLights()` today
+- Time of day: a saved `DayNightCycle` on the `SkyAtmosphere` (speed, start time) with day/night events and
+  intensity curves for lights tagged to follow it, replacing `updateTime()`
+- Footsteps: animation events or stride distance turned into `AiStimulus` noises and footstep sounds by a
+  saved `Footsteps` Component, replacing the stride counter in the module
+- A shared, pinned asset fetcher (`tools/fetch_assets.py` of the tech demo generalised for SHOOTER: a
+  manifest of URLs, sizes and SHA-256, a local override folder, never committed)
 
 ## SHOOTER — Third-person shooter demo
 
