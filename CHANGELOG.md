@@ -70,6 +70,10 @@ version changes are in the contributor guide ("Versions and releases"). The vers
   children) and `FootPlacement` (feet kept on the ground by raycasts in the game session, the pelvis lowered
   for the lower foot) Components, `AnimationService::setLookAtTarget()`, `setIkTarget()` and `setIkWeight()`,
   and the manual sections "Look-at", "Two-bone IK" and "Foot placement".
+- Navigation meshes (NAV-1a): the Recast Navigation 1.6.0 dependency, the library `illusion::nav`, the saved
+  `NavMeshSurface`, `NavArea`, `NavLink`, `NavObstacle` and `NavAgent` Components, a tiled navmesh bake from
+  colliders on the Job System with identical bytes for any worker count, per-tile input hashes with
+  `rebakeStaleTiles()`, the checksummed `.navmesh` file and the manual page "Navigation".
 
 ### Changed
 
