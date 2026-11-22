@@ -45,7 +45,7 @@ to replace the sky and the sun with a moving one, and the disabled `Film Look` h
 graded, vignetted image. The disabled `Morning Mist` holds a `VolumetricFog` of low, drifting mist. The `HUD` entity is a game UI
 with every UI Component: a status panel with a nine-slice image and a stack of texts (one literal, one
 localized by a key of `assets/locales/en.json` and `tr.json`), a grid of coloured cells and a rotated, scaled,
-clipped dial; see [Game UI](../ui.md). It shows in the Game view while playing.
+clipped dial; see [Game UI](../ui.md). It shows in the Game view while playing. The Nav yard, east of the others at x = 30, covers the navigation Components: `Nav Floor` and `Nav Step` are the ground, the `Nav Surface` entity bakes it for agent type 1 and loads `assets/navigation/yard.navmesh`, `Nav Hole` cuts a square out of it, `Nav Ladder` links the floor to the top of the step, the carving `Nav Barrel` blocks the way and `Nav Walker` is an agent with a destination across the yard (see [Navigation](../navigation.md)).
 
 ## The showcase module
 

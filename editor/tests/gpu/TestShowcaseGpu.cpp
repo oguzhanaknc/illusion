@@ -14,6 +14,7 @@
 #include <illusion/editor/ui/OffscreenUi.hpp>
 #include <illusion/editor/ui/UiContext.hpp>
 #include <illusion/editor/viewport/ViewportService.hpp>
+#include <illusion/nav/NavComponents.hpp>
 #include <illusion/particles/ParticleComponents.hpp>
 #include <illusion/physics/PhysicsComponents.hpp>
 #include <illusion/render/Components.hpp>
@@ -81,6 +82,7 @@ struct ShowcaseGpu
         reflectAudioComponents();
         reflectParticleComponents();
         registerAnimationComponents(ComponentRegistry::instance());
+        registerNavComponents(ComponentRegistry::instance());
         registerUiComponents();
         registerSaveComponents();
         const std::filesystem::path project = directory.path / "showcase";

@@ -6,6 +6,7 @@
 #include <illusion/animation/AnimationComponents.hpp>
 #include <illusion/audio/AudioComponents.hpp>
 #include <illusion/ecs/ComponentJson.hpp>
+#include <illusion/nav/NavComponents.hpp>
 #include <illusion/particles/ParticleComponents.hpp>
 #include <illusion/physics/PhysicsComponents.hpp>
 #include <illusion/render/Components.hpp>
@@ -39,6 +40,7 @@ struct ShowcaseFixture
         reflectAudioComponents();
         reflectParticleComponents();
         registerAnimationComponents(ComponentRegistry::instance());
+        registerNavComponents(ComponentRegistry::instance());
         registerUiComponents();
         registerSaveComponents();
         const std::filesystem::path project = directory.path / "showcase";

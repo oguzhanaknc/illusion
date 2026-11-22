@@ -1305,7 +1305,7 @@ headers are in their `include/` directories.
   (truncated, checksum, versions, duplicate tile); a moved box changes only the hashes of its tiles and
   `rebakeStaleTiles()` rebuilds only those; benchmark `nav/bake-tile` (one 64 x 64-cell tile of a
   10,000-triangle scene, budget from the measurement, ADR target 20 ms) and `nav/bake-256m` with Jobs.
-- NAV-1b (`implementer`): `NavWorld` surfaces and queries. Loading `NavMeshSurface::data` through the
+- ✅ NAV-1b (`implementer`): `NavWorld` surfaces and queries. Loading `NavMeshSurface::data` through the
   streamer (decoder `illusion.navmesh`), baking surfaces without data or with rejected files in the
   background, stale tiles (rebuilt with `rebuildAtRuntime`, otherwise counted and logged once), the rebuild
   of tiles touched by changed sources and settled carving obstacles, `invalidate()`, live reload of
