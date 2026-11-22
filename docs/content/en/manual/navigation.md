@@ -5,9 +5,9 @@ the colliders of a level with Recast Navigation ([ADR 0062](../architecture/deci
 in a `.navmesh` file.
 
 !!! note "What exists today"
-    This page describes the saved Components, the bake, and `NavWorld` with its run-time navmeshes and
-    queries. The crowd and `NavAgent` movement (NAV-1c), `NavService` for game modules (NAV-1d) and the editor
-    commands with their documentation (NAV-1e) arrive in the next packages. Until then agents do not move.
+    This page describes the saved Components, the bake, and `NavWorld` with its run-time navmeshes, queries
+    and crowd. `NavService` for game modules (NAV-1d) and the editor commands with their documentation
+    (NAV-1e) arrive in the next packages.
 
 ## Surfaces
 
@@ -88,8 +88,8 @@ The bake treats a carving obstacle like a non-walkable area volume.
 
 ## Agents
 
-A `NavAgent` walks the navmesh of its `agentType` to `destination`. The Component and its runtime state
-`NavAgentState` are registered now, but nothing moves agents yet (NAV-1c).
+A `NavAgent` walks the navmesh of its `agentType` to `destination`. `NavWorld` gives it a crowd slot and
+adds the runtime state `NavAgentState` at its first update.
 
 | Field | Meaning |
 | --- | --- |
@@ -106,6 +106,91 @@ A `NavAgent` walks the navmesh of its `agentType` to `destination`. The Componen
 | `faceMovement` | Turn about +y towards the direction of movement |
 | `speedParameter` | Float parameter of the animation graph set to its speed; empty for none |
 | `destination` | Where it goes in world space; none stands still |
+
+### Drives
+
+`drive` says who moves the agent:
+
+| Drive | Who moves it |
+| --- | --- |
+| `Character` | Its `CharacterController`. Navigation writes only `NavAgentState::velocity`; the game session gives its horizontal part to physics and keeps the vertical velocity. The next update reads where physics put the character, so it keeps collisions, steps and slopes. |
+| `Transform` | Navigation: it moves the Transform on the navmesh surface. For crowds without physics. |
+| `RootMotion` | The Animator's root motion. Navigation turns the Entity towards its path and sets its speed. |
+| `None` | Game code. Navigation keeps the path, the status and the desired velocity. |
+
+Root motion translation is not applied to `Character` and `Transform` agents. `faceMovement` turns the
+Entity's +z axis towards the movement at `turnSpeed`; `RootMotion` agents always turn.
+
+### The crowd
+
+Each update with `advance` runs these phases:
+
+1. Slots and positions are synchronised on the World's thread; changed destinations request a path.
+2. At most `maxPathRequestsPerUpdate` path searches start, in slot order. Each runs as a Job with
+   `maxPathIterations` A* iterations per update until it finishes.
+3. A proximity grid of the agents' positions at the start of the update is built.
+4. Jobs per agent: the path corridor follows the agent, then corners, walls nearby, up to `maxNeighbours`
+   neighbours, the desired velocity, separation and obstacle avoidance.
+5. Jobs per agent: acceleration, movement and separation (`Transform`), link traversal.
+6. `NavAgentState`, Transforms and events are written on the World's thread in Entity order.
+
+Each Job phase reads the state at the start of the update and writes only its own agent, so a run with
+fixed steps gives the same result for any number of workers. An agent avoids the neighbours whose
+`priority` is not higher than its own, and every `NavObstacle` near it. Entities with the `Inactive` tag
+keep their slot and do not move. Without `advance` (the editor outside Play mode) agents get slots and
+states but do not move.
+
+A path that cannot reach the destination is partial: the agent walks to its end and its status is
+`Partial`. An agent farther than its radius plus 1 m from the navmesh is `OffMesh` and searches its path
+again when it comes back. An agent pushed away after it arrived walks back.
+
+### Crossing links
+
+When an agent's path reaches a `NavLink`, navigation moves its Transform along the link (physics teleports
+a character along): a parabola whose top is `height` above the higher end for `Jump`, vertical then
+horizontal for `Ladder` (the climb happens at the lower end), straight for the others. Crossing takes
+`seconds`, or the link's length over `maxSpeed` when it is 0. Meanwhile `NavAgentState::link` is the link's
+Entity.
+
+### Status and events
+
+| `NavAgentStatus` | Meaning |
+| --- | --- |
+| `Idle` | No destination |
+| `Pending` | Waiting for a path, or for its navmesh to load |
+| `Moving` | Following a path |
+| `Partial` | Following a path to the reachable point nearest the destination |
+| `Arrived` | Within `stoppingDistance` of the destination |
+| `Failed` | No path: the destination is not on the navmesh or nothing leads nearer to it |
+| `OffMesh` | Too far from the navmesh to steer; it searches again when it returns |
+
+`events()` returns the events of the last update in Entity order: `Arrived`, `PathFailed`, `LinkEntered`
+and `LinkExited` (with the link's Entity and kind). At most `maxEvents` are kept; the others are counted in
+`NavStatistics::droppedEvents`.
+
+```cpp
+navigation.setDestination(guard, door); // saved in NavAgent::destination
+navigation.update(step, &jobs, true);
+for (const illusion::NavEvent& event : navigation.events())
+{
+    if (event.type == illusion::NavEventType::LinkEntered && event.kind == illusion::NavLinkKind::Door)
+    {
+        openDoor(event.link);
+    }
+}
+navigation.stop(guard);             // slows to a stop
+navigation.warp(guard, spawnPoint); // moves at once and searches the path again
+```
+
+`findSlot()` returns an agent's slot and `pathCorners(slot)` the corners ahead of it. A saved game restores
+`destination` only: the agent searches its path again after the load.
+
+### In a game session
+
+`GameSession` owns a `NavWorld` (`navigation()`). Its Navigation step runs after Saves and before
+Animation: `NavWorld::update()` (with fixed steps it first waits for bakes and loads), then the session
+gives `Character` agents their velocities and sets the `speedParameter`s. The crowd advances only while the
+session is started.
 
 ## Baking
 
@@ -183,8 +268,8 @@ navigation.waitIdle(&jobs);
 - **`waitIdle(&jobs)`** calls `update(0, jobs, false)` until no surface waits for its data or tiles.
   `isReady(agentType)` tells whether a navmesh has every tile.
 
-`statistics()` reports `surfaces`, `tiles`, `polygons`, `pendingTiles`, `staleTiles`, `tileBuilds` and
-`failures`.
+`statistics()` reports `surfaces`, `tiles`, `polygons`, `pendingTiles`, `staleTiles`, `tileBuilds`,
+`failures`, and for the crowd `agents`, `moving`, `pathSearches` and `droppedEvents`.
 
 ## Queries
 
@@ -265,8 +350,7 @@ LineSink sink;
 navigation.drawDebug(options, sink);
 ```
 
-`navMesh`, `tiles`, `links`, `obstacles` and `agentTypeMask` draw today. `agents` and `paths` draw nothing
-until the crowd arrives (NAV-1c).
+`agents` draws each agent's circle, height and velocity, and `paths` the corners ahead of it.
 
 ## Performance
 
@@ -278,3 +362,5 @@ Measured on the development desktop:
   budget 600 ms).
 - Finding 1,000 paths takes 13 ms (Benchmark `nav/find-path-1000`: mean length 96 m on 729 tiles with 225
   walls, budget 80 ms).
+- Updating a crowd of 500 walking agents takes 0.3 ms with the Job System (Benchmark `nav/crowd-500`,
+  budget 2 ms).

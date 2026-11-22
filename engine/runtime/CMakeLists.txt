@@ -14,7 +14,7 @@ target_include_directories(illusion_runtime PUBLIC
 
 target_link_libraries(illusion_runtime
     PUBLIC illusion::core illusion::platform illusion::input illusion::physics illusion::audio illusion::particles
-        illusion::animation illusion::render illusion::ui illusion::text
+        illusion::animation illusion::nav illusion::render illusion::ui illusion::text
         illusion::modules illusion::store_api illusion::save)
 
 illusion_configure_target(illusion_runtime)

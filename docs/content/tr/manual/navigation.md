@@ -5,10 +5,9 @@ Recast Navigation ile bir navigasyon mesh'i (navmesh) üretir ([ADR 0062](../arc
 onu bir `.navmesh` dosyasında saklar.
 
 !!! note "Bugün neler var"
-    Bu sayfa kaydedilen Component'leri, bake işlemini ve çalışma zamanı navmesh'leri ile sorguları olan
-    `NavWorld`'ü anlatır. Crowd ve `NavAgent` hareketi (NAV-1c), oyun modülleri için `NavService` (NAV-1d) ve
-    dokümantasyonlu editör komutları (NAV-1e) sonraki paketlerle gelir. O zamana kadar agent'lar hareket
-    etmez.
+    Bu sayfa kaydedilen Component'leri, bake işlemini ve çalışma zamanı navmesh'leri, sorguları ve crowd'u
+    olan `NavWorld`'ü anlatır. Oyun modülleri için `NavService` (NAV-1d) ve dokümantasyonlu editör komutları
+    (NAV-1e) sonraki paketlerle gelir.
 
 ## Surfaces
 
@@ -89,8 +88,8 @@ kesilir. Bake, carve eden bir obstacle'ı yürünemez bir alan hacmi gibi ele al
 
 ## Agents
 
-Bir `NavAgent`, `agentType`'ının navmesh'inde `destination`'a yürür. Component ve çalışma zamanı durumu
-`NavAgentState` şimdiden kayıtlıdır, ama henüz hiçbir şey agent'ları hareket ettirmez (NAV-1c).
+Bir `NavAgent`, `agentType`'ının navmesh'inde `destination`'a yürür. `NavWorld` ona ilk update'inde bir
+crowd slot'u verir ve çalışma zamanı durumu `NavAgentState`'i ekler.
 
 | Alan | Anlamı |
 | --- | --- |
@@ -107,6 +106,91 @@ Bir `NavAgent`, `agentType`'ının navmesh'inde `destination`'a yürür. Compone
 | `faceMovement` | Hareket yönüne doğru +y etrafında dön |
 | `speedParameter` | Animasyon grafının hızına ayarlanan float parametresi; boşsa yok |
 | `destination` | Dünya uzayında gittiği yer; yoksa yerinde durur |
+
+### Drive'lar
+
+`drive`, agent'ı kimin hareket ettirdiğini söyler:
+
+| Drive | Onu kim hareket ettirir |
+| --- | --- |
+| `Character` | `CharacterController`'ı. Navigasyon yalnızca `NavAgentState::velocity`'yi yazar; oyun oturumu yatay kısmını fiziğe verir ve dikey hızı korur. Sonraki update fiziğin karakteri koyduğu yeri okur; böylece çarpışmalar, basamaklar ve eğimler korunur. |
+| `Transform` | Navigasyon: Transform'u navmesh yüzeyinde hareket ettirir. Fiziksiz crowd'lar için. |
+| `RootMotion` | Animator'ün root motion'ı. Navigasyon Entity'yi yoluna doğru döndürür ve hızını ayarlar. |
+| `None` | Oyun kodu. Navigasyon yolu, durumu ve istenen hızı tutar. |
+
+Root motion ötelemesi `Character` ve `Transform` agent'larına uygulanmaz. `faceMovement`, Entity'nin +z
+eksenini `turnSpeed` ile harekete doğru döndürür; `RootMotion` agent'ları her zaman döner.
+
+### Crowd
+
+`advance` ile her update şu aşamaları çalıştırır:
+
+1. Slot'lar ve konumlar World'ün thread'inde eşitlenir; değişen hedefler bir yol ister.
+2. En fazla `maxPathRequestsPerUpdate` yol araması slot sırasıyla başlar. Her biri bitene kadar update
+   başına `maxPathIterations` A* adımıyla bir Job olarak çalışır.
+3. Agent'ların update başındaki konumlarından bir yakınlık ızgarası kurulur.
+4. Agent başına Job'lar: yol koridoru agent'ı izler, ardından köşeler, yakındaki duvarlar, en fazla
+   `maxNeighbours` komşu, istenen hız, ayrışma ve engelden kaçınma gelir.
+5. Agent başına Job'lar: ivme, hareket ve ayrışma (`Transform`), link geçişi.
+6. `NavAgentState`, Transform'lar ve olaylar World'ün thread'inde Entity sırasıyla yazılır.
+
+Her Job aşaması update başındaki durumu okur ve yalnızca kendi agent'ını yazar; bu yüzden sabit adımlı
+bir çalışma her Worker sayısında aynı sonucu verir. Bir agent, `priority` değeri kendisininkinden yüksek
+olmayan komşulardan ve yakınındaki her `NavObstacle`'dan kaçınır. `Inactive` etiketli Entity'ler
+slot'larını korur ve hareket etmez. `advance` olmadan (Play modu dışındaki editör) agent'lar slot ve durum
+alır ama hareket etmez.
+
+Hedefe ulaşamayan bir yol kısmidir: agent yolun sonuna yürür ve durumu `Partial` olur. Navmesh'ten
+yarıçapı artı 1 m'den uzak bir agent `OffMesh` olur ve geri döndüğünde yolunu yeniden arar. Vardıktan
+sonra itilen bir agent geri yürür.
+
+### Link geçişi
+
+Bir agent'ın yolu bir `NavLink`'e ulaştığında navigasyon Transform'unu link boyunca taşır (fizik bir
+karakteri peşinden ışınlar): `Jump` için tepesi yüksek ucun `height` kadar üstünde olan bir parabol,
+`Ladder` için önce dikey sonra yatay (tırmanış alçak uçta olur), diğerleri için düz bir çizgi. Geçiş
+`seconds` sürer; 0 ise link'in uzunluğunun `maxSpeed`'e bölümü kadar. Bu sırada `NavAgentState::link`
+link'in Entity'sidir.
+
+### Durum ve olaylar
+
+| `NavAgentStatus` | Anlamı |
+| --- | --- |
+| `Idle` | Hedef yok |
+| `Pending` | Bir yolu ya da navmesh'inin yüklenmesini bekliyor |
+| `Moving` | Bir yolu izliyor |
+| `Partial` | Hedefe en yakın ulaşılabilir noktaya giden bir yolu izliyor |
+| `Arrived` | Hedefin `stoppingDistance` yakınında |
+| `Failed` | Yol yok: hedef navmesh üzerinde değil ya da hiçbir yol ona yaklaştırmıyor |
+| `OffMesh` | Yönlendirilemeyecek kadar navmesh'ten uzak; döndüğünde yeniden arar |
+
+`events()` son update'in olaylarını Entity sırasıyla döndürür: `Arrived`, `PathFailed`, `LinkEntered` ve
+`LinkExited` (link'in Entity'si ve türüyle). En fazla `maxEvents` tutulur; diğerleri
+`NavStatistics::droppedEvents`'te sayılır.
+
+```cpp
+navigation.setDestination(guard, door); // saved in NavAgent::destination
+navigation.update(step, &jobs, true);
+for (const illusion::NavEvent& event : navigation.events())
+{
+    if (event.type == illusion::NavEventType::LinkEntered && event.kind == illusion::NavLinkKind::Door)
+    {
+        openDoor(event.link);
+    }
+}
+navigation.stop(guard);             // slows to a stop
+navigation.warp(guard, spawnPoint); // moves at once and searches the path again
+```
+
+`findSlot()` bir agent'ın slot'unu, `pathCorners(slot)` önündeki köşeleri döndürür. Kayıtlı bir oyun
+yalnızca `destination`'ı geri getirir: agent yüklemeden sonra yolunu yeniden arar.
+
+### Oyun oturumunda
+
+`GameSession` bir `NavWorld`'e sahiptir (`navigation()`). Navigation adımı Saves'ten sonra ve
+Animation'dan önce çalışır: `NavWorld::update()` (sabit adımlarla önce bake ve yüklemeleri bekler),
+ardından oturum `Character` agent'larına hızlarını verir ve `speedParameter`'ları ayarlar. Crowd yalnızca
+oturum başlatılmışken ilerler.
 
 ## Baking
 
@@ -186,8 +270,8 @@ navigation.waitIdle(&jobs);
   `update(0, jobs, false)` çağırır. `isReady(agentType)` bir navmesh'in tüm tile'lara sahip olup olmadığını
   söyler.
 
-`statistics()` `surfaces`, `tiles`, `polygons`, `pendingTiles`, `staleTiles`, `tileBuilds` ve `failures`
-değerlerini verir.
+`statistics()` `surfaces`, `tiles`, `polygons`, `pendingTiles`, `staleTiles`, `tileBuilds`, `failures`
+ve crowd için `agents`, `moving`, `pathSearches` ve `droppedEvents` değerlerini verir.
 
 ## Sorgular
 
@@ -267,8 +351,7 @@ LineSink sink;
 navigation.drawDebug(options, sink);
 ```
 
-Bugün `navMesh`, `tiles`, `links`, `obstacles` ve `agentTypeMask` çizer. `agents` ve `paths`, crowd gelene
-kadar (NAV-1c) hiçbir şey çizmez.
+`agents` her agent'ın çemberini, yüksekliğini ve hızını, `paths` ise önündeki köşeleri çizer.
 
 ## Performans
 
@@ -280,3 +363,5 @@ Geliştirme masaüstünde ölçüldü:
   `nav/bake-256m`, bütçe 600 ms).
 - 1.000 yol bulmak 13 ms sürer (Benchmark `nav/find-path-1000`: 729 tile ve 225 duvarlı sahnede ortalama
   96 m uzunluk, bütçe 80 ms).
+- Yürüyen 500 agent'lık bir crowd'u Job System ile güncellemek 0,3 ms sürer (Benchmark `nav/crowd-500`,
+  bütçe 2 ms).

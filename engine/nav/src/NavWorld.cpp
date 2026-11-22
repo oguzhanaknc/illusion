@@ -1,5 +1,6 @@
 #include "NavAllocator.hpp"
 #include "NavBake.hpp"
+#include "NavCrowd.hpp"
 
 #include <illusion/assets/AssetStreamer.hpp>
 #include <illusion/assets/Mesh.hpp>
@@ -353,6 +354,8 @@ struct NavWorld::Impl
 
     std::vector<AssetId> reloads;
     Subscription reloaded;
+
+    std::unique_ptr<detail::NavCrowd> crowd;
 
     // --- Versions -------------------------------------------------------------------------------------
 
@@ -1422,6 +1425,19 @@ struct NavWorld::Impl
         }
         schedule(jobs != nullptr ? jobs : (streamer != nullptr ? &streamer->jobs() : nullptr));
         updateStatistics();
+        std::array<detail::NavCrowdSurface, kMaxNavAgentTypes> walkable{};
+        for (u32 type = 0; type < kMaxNavAgentTypes; ++type)
+        {
+            const Surface& surface = surfaces[type];
+            if (surface.used() && surface.mesh && surface.installed > 0)
+            {
+                walkable[type] = detail::NavCrowdSurface{.mesh = surface.mesh.get(),
+                                                         .generation = surface.generation,
+                                                         .areaCosts = surface.settings.areaCosts,
+                                                         .links = surface.links};
+            }
+        }
+        crowd->update(seconds, jobs, advance, walkable, statistics);
     }
 
     [[nodiscard]] bool busy() const noexcept
@@ -1495,6 +1511,7 @@ NavWorld::NavWorld(World& world, AssetStreamer* streamer, const NavWorldDesc& de
     impl.queryPolygons = std::make_unique<dtPolyRef[]>(static_cast<usize>(kQueryPolygons));
     impl.queryCorners = std::make_unique<f32[]>(static_cast<usize>(kQueryCorners) * 3);
     impl.queryCornerFlags = std::make_unique<u8[]>(static_cast<usize>(kQueryCorners));
+    impl.crowd = std::make_unique<detail::NavCrowd>(world, desc);
     if (streamer != nullptr)
     {
         impl.reloaded = streamer->events().subscribe<AssetReloadedEvent>(
@@ -1805,22 +1822,23 @@ Expected<void, NavError> NavWorld::warp(Entity entity, const Vec3& position)
         placed.position = *point;
         world.set(entity, std::move(placed));
     }
+    m_impl->crowd->warped(entity);
     return {};
 }
 
-std::optional<u32> NavWorld::findSlot(Entity) const noexcept
+std::optional<u32> NavWorld::findSlot(Entity entity) const noexcept
 {
-    return std::nullopt;
+    return m_impl->crowd->findSlot(entity);
 }
 
-std::span<const Vec3> NavWorld::pathCorners(u32) const noexcept
+std::span<const Vec3> NavWorld::pathCorners(u32 slot) const noexcept
 {
-    return {};
+    return m_impl->crowd->pathCorners(slot);
 }
 
 std::span<const NavEvent> NavWorld::events() const noexcept
 {
-    return {};
+    return m_impl->crowd->events();
 }
 
 void NavWorld::invalidate(const Aabb& bounds)
@@ -1941,6 +1959,10 @@ void NavWorld::drawDebug(const NavDebugOptions& options, NavDebugSink& sink) con
                 }
             }
         }
+    }
+    if (options.agents || options.paths)
+    {
+        impl.crowd->drawDebug(options.agents, options.paths, options.agentTypeMask, sink);
     }
     if (!options.obstacles)
     {
