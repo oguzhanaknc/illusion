@@ -118,7 +118,30 @@ struct FootPlacementPose
     u64 frame = 0;           ///< AnimationWorld::frame() of the update that wrote the animated placements.
 };
 
-/// Registers the saved Animator, BoneAttachment, LookAt, TwoBoneIk and FootPlacement (named
+/// Most collision spheres of one SpringBone.
+inline constexpr u32 kMaxSpringColliders = 4;
+
+/// A sphere that a SpringBone chain is kept out of, attached to a joint of the same skeleton.
+struct SpringCollider
+{
+    std::string joint; ///< Joint the sphere moves with; empty turns the entry off.
+    Vec3 offset{0.0f}; ///< Centre in the joint's space, in metres.
+    f32 radius = 0.1f; ///< Radius in metres.
+};
+
+/// Lets the joint chain below `root` of the Entity's Animator swing with inertia and gravity (hair, tails,
+/// cloth strips; ADR 0061), simulated after the graph with Verlet integration. Saved.
+struct SpringBone
+{
+    std::string root;                 ///< First joint of the chain; every descendant joint swings.
+    f32 stiffness = 0.6f;             ///< Pull back towards the animated pose per step, in [0, 1].
+    f32 damping = 0.2f;               ///< Velocity lost per step, in [0, 1].
+    Vec3 gravity{0.0f, -9.81f, 0.0f}; ///< World-space acceleration in m/s².
+    f32 radius = 0.02f;               ///< Radius of each chain joint for collisions, in metres.
+    std::array<SpringCollider, kMaxSpringColliders> colliders{}; ///< Spheres the chain stays out of.
+};
+
+/// Registers the saved Animator, BoneAttachment, LookAt, TwoBoneIk, FootPlacement and SpringBone (named
 /// `illusion.Animator` and so on) and the runtime AnimationPose and FootPlacementPose with @p registry.
 void registerAnimationComponents(ComponentRegistry& registry);
 

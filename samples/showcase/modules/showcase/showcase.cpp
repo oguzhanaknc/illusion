@@ -122,6 +122,7 @@ struct Runtime
     bool columnSwings = false; ///< The Column's graph is in its "swing" state.
     f32 columnTop = 0.0f;      ///< World height of the Column's "top" joint (its lamp's socket).
     Entity strider{};
+    Entity fallenStrider{}; ///< Starts as a ragdoll, stands up and falls again.
     Entity walker{};
     u32 navArrivals = 0;                             ///< Arrived events of the Nav Walker so far.
     f32 navPathLength = 0.0f;                        ///< Length of the path found at frame 5, in m.
@@ -203,6 +204,8 @@ constexpr u32 kNavGoFrame = 10;    // the Nav Walker is sent to its destination
 constexpr u32 kNavWarpFrame = 200; // warped back to where it started
 constexpr u32 kNavStopFrame = 280; // and stopped
 constexpr u32 kNavAgentType = 1;   // the yard's navmesh (the Nav Surface)
+constexpr u32 kStandFrame = 90;    // the Fallen Strider blends back from its ragdoll to its animation
+constexpr u32 kFallFrame = 200;    // and falls again
 
 Quat identity() noexcept
 {
@@ -415,6 +418,7 @@ void startModule(ModuleContext& context)
     runtime.dust = findNamed(world, "Dust");
     runtime.column = findNamed(world, "Column");
     runtime.strider = findNamed(world, "Strider");
+    runtime.fallenStrider = findNamed(world, "Fallen Strider");
     runtime.walker = findNamed(world, "Nav Walker");
     if (Animator* animator = world.tryGet<Animator>(runtime.column))
     {
@@ -856,6 +860,15 @@ void updateAnimation(AnimationService& animation, Runtime& runtime, u32 frame)
         if (!weighted)
         {
             ILL_LOG_INFO("Showcase", "Strider: {}", animationErrorName(weighted.error()));
+        }
+    }
+    if (frame == kStandFrame || frame == kFallFrame)
+    {
+        const Expected<void, AnimationError> ragdoll =
+            animation.setRagdoll(runtime.fallenStrider, frame == kFallFrame);
+        if (!ragdoll)
+        {
+            ILL_LOG_INFO("Showcase", "Fallen Strider: {}", animationErrorName(ragdoll.error()));
         }
     }
 }

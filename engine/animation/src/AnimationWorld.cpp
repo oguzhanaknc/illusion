@@ -4,6 +4,7 @@
 #include <illusion/animation/AnimationGraph.hpp>
 #include <illusion/animation/AnimationWorld.hpp>
 #include <illusion/animation/InverseKinematics.hpp>
+#include <illusion/animation/SpringBones.hpp>
 #include <illusion/assets/AssetStreamer.hpp>
 #include <illusion/assets/Mesh.hpp>
 #include <illusion/assets/Model.hpp>
@@ -78,6 +79,11 @@ struct Limb
     bool align = false; // TwoBoneIk::alignToTarget
     i32 foot = -1;      // its entry in FootPlacementPose::feet, or -1
 };
+
+// Most joints of one SpringBone chain, simulation steps of one update and the step length in seconds.
+constexpr u32 kMaxSpringJoints = 32;
+constexpr u32 kMaxSpringSteps = 4;
+constexpr f32 kSpringStep = 1.0f / 60.0f;
 
 // Animators posed by one Job.
 constexpr u32 kPosesPerJob = 8;
@@ -222,6 +228,30 @@ struct Slot
     bool limbsReported = false;
     FootPlacementPose* feet = nullptr;
     JointName pelvisJoint;
+    // SpringBone: the root and its descendants, parents first, and their simulation.
+    bool spring = false;
+    JointName springRoot;
+    const Skeleton* springSkeleton = nullptr; // the skeleton springChain was built for
+    u64 springRevision = 0;
+    i32 springChainRoot = -1;
+    std::vector<u32> springChain;
+    std::vector<SpringParticle> springParticles;
+    bool springValid = false; // the particles hold a state
+    bool springReported = false;
+    f32 springTime = 0.0f; // seconds not stepped yet
+    u32 springSteps = 0;   // steps of this update
+    SpringSolve springSolve;
+    std::array<JointName, kMaxSpringColliders> colliderJoints{};
+    std::array<u32, kMaxSpringColliders> colliderIndex{};
+    std::array<Vec3, kMaxSpringColliders> colliderOffset{};
+    std::array<SpringSphere, kMaxSpringColliders> springSpheres{};
+    u32 springSphereCount = 0;
+    // The ragdoll pose handed over by setRagdollPose(), in world space, and its blend.
+    std::vector<Mat4> ragdollJoints;
+    bool ragdollPose = false;   // ragdollJoints hold a pose to blend with
+    bool ragdollActive = false; // blending towards it (else back to the animation)
+    f32 ragdollBlend = 0.0f;    // seconds of a whole blend
+    f32 ragdollWeight = 0.0f;   // of this update
 };
 
 struct JointRange
@@ -811,6 +841,15 @@ struct AnimationWorld::Impl
         slot.limbsReported = false;
         slot.lookJoint = JointName{};
         slot.pelvisJoint = JointName{};
+        slot.springRoot = JointName{};
+        slot.springSkeleton = nullptr;
+        slot.springValid = false;
+        slot.springReported = false;
+        slot.springTime = 0.0f;
+        slot.colliderJoints = {};
+        slot.ragdollPose = false;
+        slot.ragdollActive = false;
+        slot.ragdollWeight = 0.0f;
         return index;
     }
 
@@ -914,6 +953,9 @@ struct AnimationWorld::Impl
         {
             slot.fadeClip = nullptr;
             slot.lookValid = false;
+            slot.springValid = false;
+            slot.ragdollPose = false;
+            slot.ragdollWeight = 0.0f;
         }
         if (skeleton.status == Status::Failed)
         {
@@ -948,7 +990,9 @@ struct AnimationWorld::Impl
         reserveJoints(slot, joints);
         slot.fresh = slot.fresh || !sameSkeleton || slot.offset != offset;
         slot.jointCount = joints;
-        arenaBytes = std::max(arenaBytes, usize{joints} * sizeof(JointPose) + alignof(JointPose));
+        // A cross-fade needs one local pose; the ragdoll blend a local pose and model-space matrices.
+        arenaBytes = std::max(arenaBytes, usize{joints} * (sizeof(JointPose) + sizeof(Mat4)) +
+                                              alignof(JointPose) + alignof(Mat4));
         if (graph != nullptr && graph->status == Status::Ready)
         {
             const GraphBindingEntry& binding =
@@ -1112,6 +1156,8 @@ struct AnimationWorld::Impl
             slot.lookSpeed = lookAt->speed;
             slot.look = true;
         }
+        prepareSpring(entity, slot, seconds, advance);
+        prepareRagdoll(slot, seconds, advance);
         const FootPlacement* placement = world->tryGet<FootPlacement>(entity);
         FootPlacementPose* feet = placement != nullptr ? world->tryGet<FootPlacementPose>(entity) : nullptr;
         if (feet != nullptr && resolveJoint(slot.pelvisJoint, placement->pelvis, slot) >= 0)
@@ -1122,6 +1168,164 @@ struct AnimationWorld::Impl
         {
             feet->footCount = 0;
         }
+    }
+
+    // The SpringBone of @p slot's Animator for this update: its chain (built again for another root, skeleton
+    // or revision), colliders and the fixed steps the update advances by.
+    void prepareSpring(Entity entity, Slot& slot, f32 seconds, bool advance)
+    {
+        slot.spring = false;
+        const SpringBone* bone = world->tryGet<SpringBone>(entity);
+        const i32 root = bone != nullptr ? resolveJoint(slot.springRoot, bone->root, slot) : -1;
+        if (root < 0)
+        {
+            slot.springValid = false;
+            return;
+        }
+        if (slot.springSkeleton != slot.skeleton || slot.springRevision != revision ||
+            slot.springChainRoot != root)
+        {
+            slot.springSkeleton = slot.skeleton;
+            slot.springRevision = revision;
+            slot.springChainRoot = root;
+            slot.springValid = false;
+            slot.springReported = false;
+            slot.springChain.clear();
+            slot.springChain.push_back(static_cast<u32>(root));
+            const auto& joints = slot.skeleton->joints;
+            for (usize j = static_cast<usize>(root) + 1; j < joints.size(); ++j)
+            {
+                if (std::ranges::find(slot.springChain, static_cast<u32>(joints[j].parent)) ==
+                    slot.springChain.end())
+                {
+                    continue;
+                }
+                if (slot.springChain.size() == kMaxSpringJoints)
+                {
+                    if (!slot.springReported)
+                    {
+                        slot.springReported = true;
+                        ILL_LOG_WARN(
+                            "Animation",
+                            "entity {}: the SpringBone chain below '{}' has more than {} joints; the "
+                            "others follow their parents",
+                            entity.index, bone->root, kMaxSpringJoints);
+                    }
+                    break;
+                }
+                slot.springChain.push_back(static_cast<u32>(j));
+            }
+            slot.springParticles.resize(slot.springChain.size());
+        }
+        if (slot.springChain.size() < 2)
+        {
+            return;
+        }
+        slot.springSolve.world = slot.world;
+        slot.springSolve.stiffness = bone->stiffness;
+        slot.springSolve.damping = bone->damping;
+        slot.springSolve.gravity = bone->gravity;
+        slot.springSolve.radius = bone->radius;
+        slot.springSolve.stepSeconds = kSpringStep;
+        slot.springSphereCount = 0;
+        for (u32 c = 0; c < kMaxSpringColliders; ++c)
+        {
+            const SpringCollider& collider = bone->colliders[c];
+            if (collider.joint.empty() || !(collider.radius > 0.0f))
+            {
+                continue;
+            }
+            const i32 joint = resolveJoint(slot.colliderJoints[c], collider.joint, slot);
+            if (joint < 0)
+            {
+                continue;
+            }
+            const u32 sphere = slot.springSphereCount++;
+            slot.colliderIndex[sphere] = static_cast<u32>(joint);
+            slot.colliderOffset[sphere] = collider.offset;
+            slot.springSpheres[sphere].radius = collider.radius;
+        }
+        if (!advance)
+        {
+            // The editor shows the animated pose: the chain starts at rest when the game runs.
+            slot.springValid = false;
+            slot.springTime = 0.0f;
+            slot.springSteps = 0;
+        }
+        else
+        {
+            slot.springTime += seconds;
+            const f32 due = std::floor(slot.springTime / kSpringStep);
+            slot.springSteps =
+                std::isfinite(due) ? static_cast<u32>(std::clamp(due, 0.0f, f32{kMaxSpringSteps})) : 0u;
+            slot.springTime = std::clamp(slot.springTime - static_cast<f32>(slot.springSteps) * kSpringStep,
+                                         0.0f, kSpringStep);
+        }
+        slot.spring = true;
+    }
+
+    // Advances the ragdoll blend of @p slot: towards the ragdoll pose while it is active, back otherwise.
+    static void prepareRagdoll(Slot& slot, f32 seconds, bool advance) noexcept
+    {
+        if (!slot.ragdollPose)
+        {
+            slot.ragdollWeight = 0.0f;
+            return;
+        }
+        const f32 rate = advance && slot.ragdollBlend > 0.0f ? seconds / slot.ragdollBlend : 1.0f;
+        slot.ragdollWeight = std::clamp(slot.ragdollWeight + (slot.ragdollActive ? rate : -rate), 0.0f, 1.0f);
+        if (!slot.ragdollActive && slot.ragdollWeight == 0.0f)
+        {
+            slot.ragdollPose = false;
+        }
+    }
+
+    // Spring bones, the first stage: the colliders follow their joints, then the chain swings.
+    static void swingSprings(Slot& slot, std::span<JointPose> local) noexcept
+    {
+        const Skeleton& skeleton = *slot.skeleton;
+        for (u32 s = 0; s < slot.springSphereCount; ++s)
+        {
+            const Mat4 joint = slot.world * detail::jointModelMatrix(skeleton, local, slot.colliderIndex[s]);
+            slot.springSpheres[s].center = Vec3(joint * Vec4(slot.colliderOffset[s], 1.0f));
+        }
+        if (!slot.springValid)
+        {
+            resetSpringChain(skeleton, slot.springChain, slot.world, local, slot.springParticles);
+            slot.springValid = true;
+        }
+        stepSpringChain(skeleton, slot.springChain, slot.springSolve,
+                        std::span<const SpringSphere>(slot.springSpheres.data(), slot.springSphereCount),
+                        slot.springSteps, slot.springParticles, local);
+    }
+
+    // The ragdoll blend, the last stage: turns the world-space ragdoll pose into local transforms under the
+    // Animator's current Transform and blends towards them by the slot's weight.
+    void blendRagdoll(Slot& slot, std::span<JointPose> local) noexcept
+    {
+        const Skeleton& skeleton = *slot.skeleton;
+        const u32 joints = slot.jointCount;
+        LinearAllocator& memory = arena();
+        const LinearAllocator::Marker marker = memory.mark();
+        Mat4* model = memory.allocateArray<Mat4>(joints);
+        JointPose* target = memory.allocateArray<JointPose>(joints);
+        ILL_CHECK(model != nullptr && target != nullptr, "the animation scratch arena is too small");
+        for (u32 j = 0; j < joints; ++j)
+        {
+            model[j] = slot.inverseWorld * slot.ragdollJoints[j];
+            const i32 parent = skeleton.joints[j].parent;
+            const Mat4& above = parent >= 0 ? model[static_cast<usize>(parent)] : skeleton.rootTransform;
+            const f32 determinant = glm::determinant(above);
+            if (!(determinant != 0.0f && std::isfinite(determinant)))
+            {
+                target[j] = local[j];
+                continue;
+            }
+            const Transform relative = Transform::fromMatrix(glm::inverse(above) * model[j]);
+            target[j] = JointPose{relative.position, relative.rotation, relative.scale};
+        }
+        blendPoses(local, std::span<const JointPose>(target, joints), slot.ragdollWeight, {}, local);
+        memory.rewind(marker);
     }
 
     // The slot whose pose this update queued for @p entity's Animator, or null.
@@ -1316,9 +1520,12 @@ struct AnimationWorld::Impl
     }
 
     // The per-pose stages of ADR 0061 on @p local, before the model-space matrices are composed.
-    void applyStages(Slot& slot, std::span<JointPose> local) const noexcept
+    void applyStages(Slot& slot, std::span<JointPose> local) noexcept
     {
-        // Spring bones (ANIM-3c) come first.
+        if (slot.spring)
+        {
+            swingSprings(slot, local);
+        }
         if (slot.feet != nullptr)
         {
             placeFeet(slot, local);
@@ -1332,7 +1539,10 @@ struct AnimationWorld::Impl
             static_cast<void>(
                 solveTwoBoneIk(*slot.skeleton, slot.limbs[l].joint, slot.limbs[l].solve, local));
         }
-        // The ragdoll blend (ANIM-3c) comes last.
+        if (slot.ragdollWeight > 0.0f)
+        {
+            blendRagdoll(slot, local);
+        }
     }
 
     // An Inactive Entity keeps its pose: the current matrices repeat the previous ones.
@@ -1641,6 +1851,11 @@ struct AnimationWorld::Impl
     {
         return index < slots.size() && slots[index].used ? &slots[index] : nullptr;
     }
+
+    [[nodiscard]] const Slot* slotOf(u32 index) const noexcept
+    {
+        return index < slots.size() && slots[index].used ? &slots[index] : nullptr;
+    }
 };
 
 AnimationWorld::AnimationWorld(World& world, AssetStreamer& streamer)
@@ -1809,6 +2024,39 @@ bool AnimationWorld::crossFade(Entity entity, const AssetRef& clip, f32 seconds)
 std::span<const AnimationEvent> AnimationWorld::events() const noexcept
 {
     return m_impl->events;
+}
+
+std::span<const Aabb> AnimationWorld::jointBounds(u32 slot) const noexcept
+{
+    const Slot* entry = m_impl->slotOf(slot);
+    return entry != nullptr && entry->jointCount > 0 && entry->jointBounds != nullptr
+               ? std::span<const Aabb>(*entry->jointBounds)
+               : std::span<const Aabb>();
+}
+
+bool AnimationWorld::setRagdollPose(u32 slot, std::span<const Mat4> joints, bool active, f32 blendSeconds)
+{
+    Slot* entry = m_impl->slotOf(slot);
+    if (entry == nullptr || entry->jointCount == 0 ||
+        (!joints.empty() && joints.size() != entry->jointCount) ||
+        (active && joints.empty() && !entry->ragdollPose))
+    {
+        return false;
+    }
+    if (!joints.empty())
+    {
+        entry->ragdollJoints.assign(joints.begin(), joints.end());
+        entry->ragdollPose = true;
+    }
+    entry->ragdollActive = active;
+    entry->ragdollBlend = std::isfinite(blendSeconds) ? std::max(blendSeconds, 0.0f) : 0.0f;
+    return true;
+}
+
+f32 AnimationWorld::ragdollWeight(u32 slot) const noexcept
+{
+    const Slot* entry = m_impl->slotOf(slot);
+    return entry != nullptr ? entry->ragdollWeight : 0.0f;
 }
 
 } // namespace illusion

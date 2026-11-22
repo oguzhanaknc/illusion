@@ -132,6 +132,10 @@ public:
     /// it off).
     virtual Expected<void, AnimationError> setIkWeight(Entity entity, std::string_view joint, f32 weight) = 0;
 
+    /// Turns the Ragdoll of @p entity on (the body falls from its current pose and velocity) or off (the pose
+    /// blends back to the animation); NoAnimator without an Animator, UnknownName without a Ragdoll.
+    virtual Expected<void, AnimationError> setRagdoll(Entity entity, bool active) = 0;
+
 protected:
     AnimationService() = default;
     virtual ~AnimationService() = default;

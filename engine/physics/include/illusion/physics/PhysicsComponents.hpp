@@ -173,8 +173,9 @@ struct PhysicsJoint
 inline constexpr u32 kMaxPhysicsLayers = 16;
 
 /// Reflects RigidBody ("illusion.RigidBody"), Collider ("illusion.Collider"), CharacterController
-/// ("illusion.CharacterController") and Joint ("illusion.Joint") with editor metadata, and the runtime state
-/// PhysicsBody, CharacterBody and PhysicsJoint ("illusion.<Name>", TypeMeta::transient).
+/// ("illusion.CharacterController"), Joint ("illusion.Joint") and Ragdoll ("illusion.Ragdoll", Ragdoll.hpp)
+/// with editor metadata, and the runtime state PhysicsBody, CharacterBody and PhysicsJoint
+/// ("illusion.<Name>", TypeMeta::transient).
 void reflectPhysicsComponents(ComponentRegistry& registry = ComponentRegistry::instance());
 
 } // namespace illusion

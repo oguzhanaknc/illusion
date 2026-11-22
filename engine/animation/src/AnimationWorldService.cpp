@@ -6,6 +6,7 @@
 #include <illusion/core/AssetId.hpp>
 #include <illusion/core/AssetRef.hpp>
 #include <illusion/ecs/Hierarchy.hpp>
+#include <illusion/ecs/Reflection.hpp>
 #include <illusion/ecs/Transform.hpp>
 #include <illusion/ecs/World.hpp>
 
@@ -350,6 +351,29 @@ Expected<void, AnimationError> AnimationWorldService::setIkWeight(Entity entity,
         return unexpected(AnimationError::InvalidValue);
     }
     limb->weight = std::clamp(weight, 0.0f, 1.0f);
+    return {};
+}
+
+// The Ragdoll Component lives in engine/physics, which this library does not link: it is reached through
+// reflection.
+Expected<void, AnimationError> AnimationWorldService::setRagdoll(Entity entity, bool active)
+{
+    if (animatorOf(m_animation, entity) == nullptr)
+    {
+        return unexpected(AnimationError::NoAnimator);
+    }
+    World& world = m_animation.world();
+    const ComponentRegistry& registry = world.registry();
+    const ComponentId id = registry.findByStableName("illusion.Ragdoll");
+    const TypeReflection* type = id != kInvalidComponentId ? registry.reflection(id) : nullptr;
+    const FieldInfo* field = type != nullptr ? type->field("active") : nullptr;
+    void* data =
+        field != nullptr && field->type == FieldType::Bool ? world.componentData(entity, id) : nullptr;
+    if (data == nullptr)
+    {
+        return unexpected(AnimationError::UnknownName);
+    }
+    *reinterpret_cast<bool*>(static_cast<std::byte*>(data) + field->offset) = active;
     return {};
 }
 

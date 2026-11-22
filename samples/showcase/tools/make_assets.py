@@ -417,6 +417,26 @@ def write_column_graph(path):
     path.write_text(json.dumps(graph, indent=2) + "\n", encoding="utf-8", newline="\n")
 
 
+def write_strider_ragdoll(path):
+    """The ragdoll profile of the strider: a capsule across the hips, one along each thigh, shin and the spine,
+    and a ball for the head, with tighter limits for the knees and the neck."""
+    leg = {"radius": 0.06, "halfHeight": 0.145, "offset": [0, -0.205, 0]}
+    profile = {
+        "format": "illusion.ragdoll",
+        "version": 1,
+        "parts": [
+            {"joint": "hips", "radius": 0.12, "halfHeight": 0.1, "rotation": [0, 0, 0.7071068, 0.7071068],
+             "massShare": 0.3},
+            dict(joint="thigh_l", **leg), dict(joint="shin_l", swingLimit=0.5, twistMin=-0.1, twistMax=0.1, **leg),
+            dict(joint="thigh_r", **leg), dict(joint="shin_r", swingLimit=0.5, twistMin=-0.1, twistMax=0.1, **leg),
+            {"joint": "spine", "radius": 0.14, "halfHeight": 0.08, "offset": [0, 0.225, 0]},
+            {"joint": "head", "radius": 0.11, "halfHeight": 0, "offset": [0, 0.1, 0], "swingLimit": 0.6},
+        ],
+    }
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(profile, indent=2) + "\n", encoding="utf-8", newline="\n")
+
+
 def write_guard_tree(path):
     """The behaviour tree of the AI guard: it walks to a target its perception sees and asks game code to
     "greet" it, and otherwise wanders around "home" (a starting value of the agent) with pauses."""
@@ -440,6 +460,7 @@ if __name__ == "__main__":
     write_rigged(ROOT / "models" / "column.gltf")
     write_strider(ROOT / "models" / "strider.gltf")
     write_column_graph(ROOT / "animations" / "column.animgraph")
+    write_strider_ragdoll(ROOT / "animations" / "strider.ragdoll")
     write_guard_tree(ROOT / "ai" / "guard.behavior")
     for name, samples in (("music", music()), ("wind", wind()), ("hum", hum()), ("voice", voice()),
                           ("click", click())):

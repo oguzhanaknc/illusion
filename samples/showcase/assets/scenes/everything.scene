@@ -30,10 +30,12 @@
     "illusion.PointLight": 1,
     "illusion.PostEffects": 1,
     "illusion.ProceduralSky": 1,
+    "illusion.Ragdoll": 1,
     "illusion.RigidBody": 1,
     "illusion.Saved": 1,
     "illusion.SkyAtmosphere": 1,
     "illusion.SkyLight": 1,
+    "illusion.SpringBone": 1,
     "illusion.Transform": 1,
     "illusion.TwoBoneIk": 1,
     "illusion.UiButton": 1,
@@ -2805,6 +2807,35 @@
         "illusion.Name": {
           "value": "Column"
         },
+        "illusion.SpringBone": {
+          "root": "base",
+          "stiffness": 0.35,
+          "damping": 0.3,
+          "gravity": [0.0, -4.0, 0.5],
+          "radius": 0.06,
+          "colliders": [
+            {
+              "joint": "base",
+              "offset": [0.0, 0.5, 0.2],
+              "radius": 0.15
+            },
+            {
+              "joint": "",
+              "offset": [0.0, 0.0, 0.0],
+              "radius": 0.1
+            },
+            {
+              "joint": "",
+              "offset": [0.0, 0.0, 0.0],
+              "radius": 0.1
+            },
+            {
+              "joint": "",
+              "offset": [0.0, 0.0, 0.0],
+              "radius": 0.1
+            }
+          ]
+        },
         "illusion.Transform": {
           "position": [-6.0, 0.0, 3.0],
           "rotation": [0.0, 0.0, 0.0, 1.0],
@@ -2952,17 +2983,52 @@
     {
       "id": "00077ba99ea524f2",
       "components": {
-        "illusion.Name": {
-          "value": "Nav Hole"
+        "illusion.Collider": {
+          "shape": "Box",
+          "halfExtents": [1.5, 0.5, 1.5],
+          "radius": 0.5,
+          "halfHeight": 0.5,
+          "offset": [0.0, 0.0, 0.0],
+          "rotation": [0.0, 0.0, 0.0, 1.0],
+          "mesh": "",
+          "meshIndex": 0
         },
-        "illusion.NavArea": {
-          "area": 2,
-          "walkable": false,
-          "volume": true,
-          "size": [2.0, 1.0, 2.0]
+        "illusion.Name": {
+          "value": "Nav Step"
+        },
+        "illusion.RigidBody": {
+          "motionType": "Static",
+          "mass": 0.0,
+          "friction": 0.5,
+          "restitution": 0.0,
+          "linearDamping": 0.05,
+          "angularDamping": 0.05,
+          "gravityFactor": 1.0,
+          "layer": 0,
+          "sensor": false,
+          "allowSleeping": true,
+          "continuousCollision": false
         },
         "illusion.Transform": {
-          "position": [27.0, 0.0, -3.0],
+          "position": [34.0, 0.5, 4.0],
+          "rotation": [0.0, 0.0, 0.0, 1.0],
+          "scale": [1.0, 1.0, 1.0]
+        }
+      }
+    },
+    {
+      "id": "0781577a0f53e5d6",
+      "components": {
+        "illusion.AiStimulus": {
+          "team": 1,
+          "offset": [0.0, 0.8, 0.0],
+          "visible": false
+        },
+        "illusion.Name": {
+          "value": "AI Hidden Intruder"
+        },
+        "illusion.Transform": {
+          "position": [26.0, 0.0, 3.0],
           "rotation": [0.0, 0.0, 0.0, 1.0],
           "scale": [1.0, 1.0, 1.0]
         }
@@ -3018,7 +3084,7 @@
       "components": {
         "illusion.Collider": {
           "shape": "Box",
-          "halfExtents": [8.0, 0.25, 8.0],
+          "halfExtents": [2.0, 0.25, 2.0],
           "radius": 0.5,
           "halfHeight": 0.5,
           "offset": [0.0, 0.0, 0.0],
@@ -3027,7 +3093,7 @@
           "meshIndex": 0
         },
         "illusion.Name": {
-          "value": "Nav Floor"
+          "value": "Ragdoll Floor"
         },
         "illusion.RigidBody": {
           "motionType": "Static",
@@ -3043,7 +3109,7 @@
           "continuousCollision": false
         },
         "illusion.Transform": {
-          "position": [30.0, -0.25, 0.0],
+          "position": [-17.0, -0.25, 14.0],
           "rotation": [0.0, 0.0, 0.0, 1.0],
           "scale": [1.0, 1.0, 1.0]
         }
@@ -3211,20 +3277,33 @@
       "id": "4f05f03735c3b951",
       "components": {
         "illusion.Name": {
-          "value": "Nav Ladder"
+          "value": "Nav Surface"
         },
-        "illusion.NavLink": {
-          "end": [2.5, 1.0, 0.0],
-          "kind": "Ladder",
-          "bidirectional": false,
-          "radius": 0.4,
-          "height": 0.5,
-          "seconds": 1.5,
-          "area": 1,
-          "agentTypeMask": 2
+        "illusion.NavMeshSurface": {
+          "size": [16.0, 6.0, 16.0],
+          "agentType": 1,
+          "agentRadius": 0.4,
+          "agentHeight": 1.7,
+          "agentMaxClimb": 0.3,
+          "agentMaxSlope": 0.7,
+          "build": {
+            "cellSize": 0.2,
+            "cellHeight": 0.15,
+            "tileSize": 32,
+            "minRegionArea": 2.0,
+            "mergeRegionArea": 6.0,
+            "maxEdgeLength": 10.0,
+            "maxSimplificationError": 1.1,
+            "detailSampleDistance": 5.0,
+            "detailSampleMaxError": 0.8
+          },
+          "layerMask": 3,
+          "areaCosts": [1.0, 2.0, 4.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0],
+          "data": "assets:/navigation/yard.navmesh",
+          "rebuildAtRuntime": true
         },
         "illusion.Transform": {
-          "position": [31.0, 0.0, 4.0],
+          "position": [30.0, 1.0, 0.0],
           "rotation": [0.0, 0.0, 0.0, 1.0],
           "scale": [1.0, 1.0, 1.0]
         }
@@ -3405,16 +3484,52 @@
     {
       "id": "764176e3c9cf4b25",
       "components": {
-        "illusion.AiStimulus": {
-          "team": 1,
-          "offset": [0.0, 1.2, 0.0],
-          "visible": true
+        "illusion.AiPerception": {
+          "sightRadius": 12.0,
+          "sightAngle": 1.8,
+          "eyeHeight": 1.4,
+          "occluderMask": 3,
+          "hearing": 1.5,
+          "memorySeconds": 4.0,
+          "detectTeams": 2,
+          "targetKey": "target",
+          "positionKey": "lastSeen"
+        },
+        "illusion.BehaviorAgent": {
+          "tree": "assets:/ai/guard.behavior",
+          "enabled": true,
+          "tickInterval": 0.1,
+          "blackboard": [
+            {
+              "key": "home",
+              "number": 0.0,
+              "vector": [28.0, 0.0, -2.0],
+              "entity": null
+            }
+          ]
         },
         "illusion.Name": {
-          "value": "AI Intruder"
+          "value": "AI Guard"
+        },
+        "illusion.NavAgent": {
+          "agentType": 1,
+          "radius": 0.3,
+          "height": 1.8,
+          "maxSpeed": 3.5,
+          "maxAcceleration": 8.0,
+          "turnSpeed": 6.2831855,
+          "stoppingDistance": 0.1,
+          "avoidance": "Medium",
+          "priority": 50,
+          "separationWeight": 2.0,
+          "areaMask": 4294967295,
+          "drive": "Transform",
+          "faceMovement": true,
+          "speedParameter": "",
+          "destination": null
         },
         "illusion.Transform": {
-          "position": [32.0, 0.0, 2.0],
+          "position": [28.0, 0.0, -2.0],
           "rotation": [0.0, 0.0, 0.0, 1.0],
           "scale": [1.0, 1.0, 1.0]
         }
@@ -3423,17 +3538,28 @@
     {
       "id": "7bc42e82782acb92",
       "components": {
-        "illusion.BehaviorAgent": {
-          "tree": "assets:/ai/guard.behavior",
-          "enabled": false,
-          "tickInterval": 0.0,
-          "blackboard": []
-        },
         "illusion.Name": {
-          "value": "AI Sleeper"
+          "value": "Nav Walker"
+        },
+        "illusion.NavAgent": {
+          "agentType": 1,
+          "radius": 0.4,
+          "height": 1.7,
+          "maxSpeed": 2.5,
+          "maxAcceleration": 6.0,
+          "turnSpeed": 4.0,
+          "stoppingDistance": 0.3,
+          "avoidance": "High",
+          "priority": 20,
+          "separationWeight": 1.5,
+          "areaMask": 65531,
+          "drive": "Transform",
+          "faceMovement": false,
+          "speedParameter": "speed",
+          "destination": [34.0, 1.0, 4.0]
         },
         "illusion.Transform": {
-          "position": [33.0, 0.0, -4.0],
+          "position": [25.0, 0.0, -5.0],
           "rotation": [0.0, 0.0, 0.0, 1.0],
           "scale": [1.0, 1.0, 1.0]
         }
@@ -3487,27 +3613,20 @@
       "id": "96bf5d405151ec53",
       "components": {
         "illusion.Name": {
-          "value": "Nav Walker"
+          "value": "Nav Ladder"
         },
-        "illusion.NavAgent": {
-          "agentType": 1,
+        "illusion.NavLink": {
+          "end": [2.5, 1.0, 0.0],
+          "kind": "Ladder",
+          "bidirectional": false,
           "radius": 0.4,
-          "height": 1.7,
-          "maxSpeed": 2.5,
-          "maxAcceleration": 6.0,
-          "turnSpeed": 4.0,
-          "stoppingDistance": 0.3,
-          "avoidance": "High",
-          "priority": 20,
-          "separationWeight": 1.5,
-          "areaMask": 65531,
-          "drive": "Transform",
-          "faceMovement": false,
-          "speedParameter": "speed",
-          "destination": [34.0, 1.0, 4.0]
+          "height": 0.5,
+          "seconds": 1.5,
+          "area": 1,
+          "agentTypeMask": 2
         },
         "illusion.Transform": {
-          "position": [25.0, 0.0, -5.0],
+          "position": [31.0, 0.0, 4.0],
           "rotation": [0.0, 0.0, 0.0, 1.0],
           "scale": [1.0, 1.0, 1.0]
         }
@@ -3530,6 +3649,24 @@
         },
         "illusion.Transform": {
           "position": [6.0, 0.5, -3.0],
+          "rotation": [0.0, 0.0, 0.0, 1.0],
+          "scale": [1.0, 1.0, 1.0]
+        }
+      }
+    },
+    {
+      "id": "a3e9bfbbf6c43e6f",
+      "components": {
+        "illusion.AiStimulus": {
+          "team": 1,
+          "offset": [0.0, 1.2, 0.0],
+          "visible": true
+        },
+        "illusion.Name": {
+          "value": "AI Intruder"
+        },
+        "illusion.Transform": {
+          "position": [32.0, 0.0, 2.0],
           "rotation": [0.0, 0.0, 0.0, 1.0],
           "scale": [1.0, 1.0, 1.0]
         }
@@ -3618,52 +3755,20 @@
     {
       "id": "aa3de53fbde4ae5b",
       "components": {
-        "illusion.AiPerception": {
-          "sightRadius": 12.0,
-          "sightAngle": 1.8,
-          "eyeHeight": 1.4,
-          "occluderMask": 3,
-          "hearing": 1.5,
-          "memorySeconds": 4.0,
-          "detectTeams": 2,
-          "targetKey": "target",
-          "positionKey": "lastSeen"
-        },
-        "illusion.BehaviorAgent": {
-          "tree": "assets:/ai/guard.behavior",
-          "enabled": true,
-          "tickInterval": 0.1,
-          "blackboard": [
-            {
-              "key": "home",
-              "number": 0.0,
-              "vector": [28.0, 0.0, -2.0],
-              "entity": null
-            }
-          ]
-        },
         "illusion.Name": {
-          "value": "AI Guard"
+          "value": "Nav Barrel"
         },
-        "illusion.NavAgent": {
-          "agentType": 1,
-          "radius": 0.3,
-          "height": 1.8,
-          "maxSpeed": 3.5,
-          "maxAcceleration": 8.0,
-          "turnSpeed": 6.2831855,
-          "stoppingDistance": 0.1,
-          "avoidance": "Medium",
-          "priority": 50,
-          "separationWeight": 2.0,
-          "areaMask": 4294967295,
-          "drive": "Transform",
-          "faceMovement": true,
-          "speedParameter": "",
-          "destination": null
+        "illusion.NavObstacle": {
+          "shape": "Cylinder",
+          "size": [0.8, 1.0, 0.8],
+          "radius": 0.4,
+          "height": 1.2,
+          "carve": true,
+          "moveThreshold": 0.25,
+          "settleSeconds": 1.0
         },
         "illusion.Transform": {
-          "position": [28.0, 0.0, -2.0],
+          "position": [26.0, 0.5, 3.0],
           "rotation": [0.0, 0.0, 0.0, 1.0],
           "scale": [1.0, 1.0, 1.0]
         }
@@ -3708,19 +3813,16 @@
       "id": "bc73014050141d01",
       "components": {
         "illusion.Name": {
-          "value": "Nav Barrel"
+          "value": "Nav Hole"
         },
-        "illusion.NavObstacle": {
-          "shape": "Cylinder",
-          "size": [0.8, 1.0, 0.8],
-          "radius": 0.4,
-          "height": 1.2,
-          "carve": true,
-          "moveThreshold": 0.25,
-          "settleSeconds": 1.0
+        "illusion.NavArea": {
+          "area": 2,
+          "walkable": false,
+          "volume": true,
+          "size": [2.0, 1.0, 2.0]
         },
         "illusion.Transform": {
-          "position": [26.0, 0.5, 3.0],
+          "position": [27.0, 0.0, -3.0],
           "rotation": [0.0, 0.0, 0.0, 1.0],
           "scale": [1.0, 1.0, 1.0]
         }
@@ -3793,45 +3895,9 @@
     {
       "id": "d80391ffb30d1390",
       "components": {
-        "illusion.Name": {
-          "value": "Nav Surface"
-        },
-        "illusion.NavMeshSurface": {
-          "size": [16.0, 6.0, 16.0],
-          "agentType": 1,
-          "agentRadius": 0.4,
-          "agentHeight": 1.7,
-          "agentMaxClimb": 0.3,
-          "agentMaxSlope": 0.7,
-          "build": {
-            "cellSize": 0.2,
-            "cellHeight": 0.15,
-            "tileSize": 32,
-            "minRegionArea": 2.0,
-            "mergeRegionArea": 6.0,
-            "maxEdgeLength": 10.0,
-            "maxSimplificationError": 1.1,
-            "detailSampleDistance": 5.0,
-            "detailSampleMaxError": 0.8
-          },
-          "layerMask": 3,
-          "areaCosts": [1.0, 2.0, 4.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0],
-          "data": "assets:/navigation/yard.navmesh",
-          "rebuildAtRuntime": true
-        },
-        "illusion.Transform": {
-          "position": [30.0, 1.0, 0.0],
-          "rotation": [0.0, 0.0, 0.0, 1.0],
-          "scale": [1.0, 1.0, 1.0]
-        }
-      }
-    },
-    {
-      "id": "db20290ac13e4a81",
-      "components": {
         "illusion.Collider": {
           "shape": "Box",
-          "halfExtents": [1.5, 0.5, 1.5],
+          "halfExtents": [8.0, 0.25, 8.0],
           "radius": 0.5,
           "halfHeight": 0.5,
           "offset": [0.0, 0.0, 0.0],
@@ -3840,7 +3906,7 @@
           "meshIndex": 0
         },
         "illusion.Name": {
-          "value": "Nav Step"
+          "value": "Nav Floor"
         },
         "illusion.RigidBody": {
           "motionType": "Static",
@@ -3856,8 +3922,46 @@
           "continuousCollision": false
         },
         "illusion.Transform": {
-          "position": [34.0, 0.5, 4.0],
+          "position": [30.0, -0.25, 0.0],
           "rotation": [0.0, 0.0, 0.0, 1.0],
+          "scale": [1.0, 1.0, 1.0]
+        }
+      }
+    },
+    {
+      "id": "db20290ac13e4a81",
+      "components": {
+        "illusion.Animator": {
+          "skeleton": "assets:/models/strider.gltf#skin/0",
+          "clip": "assets:/models/strider.gltf#animation/idle",
+          "graph": "",
+          "speed": 1.0,
+          "time": 0.0,
+          "loop": true,
+          "playing": true
+        },
+        "illusion.MeshRenderer": {
+          "mesh": "assets:/models/strider.gltf#mesh/0",
+          "submesh": 0,
+          "material": "builtin:/material/default",
+          "layers": 1,
+          "castShadows": true,
+          "visible": true,
+          "lodBias": 1.0
+        },
+        "illusion.Name": {
+          "value": "Fallen Strider"
+        },
+        "illusion.Ragdoll": {
+          "profile": "assets:/animations/strider.ragdoll",
+          "active": true,
+          "blendSeconds": 0.4,
+          "mass": 55.0,
+          "layer": 1
+        },
+        "illusion.Transform": {
+          "position": [-17.0, 0.0, 14.0],
+          "rotation": [0.0, -0.3826834, 0.0, 0.9238795],
           "scale": [1.0, 1.0, 1.0]
         }
       }
@@ -3990,16 +4094,17 @@
     {
       "id": "fd845ef300ce2d0b",
       "components": {
-        "illusion.AiStimulus": {
-          "team": 1,
-          "offset": [0.0, 0.8, 0.0],
-          "visible": false
+        "illusion.BehaviorAgent": {
+          "tree": "assets:/ai/guard.behavior",
+          "enabled": false,
+          "tickInterval": 0.0,
+          "blackboard": []
         },
         "illusion.Name": {
-          "value": "AI Hidden Intruder"
+          "value": "AI Sleeper"
         },
         "illusion.Transform": {
-          "position": [26.0, 0.0, 3.0],
+          "position": [33.0, 0.0, -4.0],
           "rotation": [0.0, 0.0, 0.0, 1.0],
           "scale": [1.0, 1.0, 1.0]
         }
