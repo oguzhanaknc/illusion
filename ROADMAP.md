@@ -917,7 +917,7 @@ distance field fonts, and a batched pass draws the UI after tonemapping. Public 
 Open (recorded by ADR 0057): right-to-left text and shaping, CJK with dynamic atlas pages, multi-channel
 distance fields, world-space UI, HDR output of the UI pass (M9).
 
-## SAVE — Saved games
+## SAVE — Saved games ✅
 
 - Save slots written to `user:/` through the VFS: chosen Components and module state serialized with the
   reflection, versioned with migrations, checksummed, written atomically in the background; screenshots and
@@ -1483,7 +1483,26 @@ headers are in their `include/` directories.
 
 Today games can only set the parameters of the built-in PBR material.
 
-- Material templates in Slang: a surface function (base colour, normal, roughness, emission, opacity,
+- MAT is designed in ADR 0063 (Slang surface functions in `.shader` assets, compiled by the pinned `slangc`
+  at cook time and on hot reload, cooked SPIR-V in the player). Four work packages:
+- MAT-1 (`implementer`): Shader assets and the compiler. `illusion/Surface.slang` (the surface API),
+  `.shader` files with declared parameters, `ShaderCompiler` running `slangc` per variant with JSON
+  reflection, `AssetType::Shader` cooked with a cache keyed by source, engine shader and compiler versions,
+  errors with file/line/column; the pinned `slangc` in the editor CPack component and the SDK. Done: compile,
+  cache and error tests on small shaders, a malformed shader never crashes the cooker, export fails with the
+  compiler's message.
+- MAT-2 (`implementer`): The renderer. The standard PBR material rewritten as `builtin:/shader/standard` on
+  the surface API (golden images unchanged), pipelines per (shader, variant, state) built lazily and cached,
+  per-material parameter buffers on the bindless path, `worldOffset` in prepass, shadows and motion vectors,
+  the fallback/error material, hot reload swapping pipelines. Done: GPU goldens of a custom emissive and a
+  wind-offset shader, zero validation errors, benchmark of 1,000 materials over 20 shaders.
+- MAT-3 (`implementer`): Shading models `Unlit`, `Subsurface`, `TwoSidedFoliage`, `ClearCoat` in the
+  lighting code. Done: a golden per model, the tech demo foliage on `TwoSidedFoliage` with unchanged images.
+- MAT-4 (`mechanic`): Editor and documentation. `.material` `shader` and typed parameters in the Inspector,
+  `material.compile`/`material.validate` commands (diagnostics for agents), the asset browser kind `Shader`,
+  the showcase (a custom shader with every parameter type), a tech demo example, the manual "Material
+  shaders" (EN/TR, the surface API reference), a tutorial, `CHANGELOG.md`.
+- Material templates in Slang (scope): a surface function (base colour, normal, roughness, emission, opacity,
   world offset) compiled into the forward, prepass, shadow and bindless variants, with typed parameters and
   textures exposed to `.material` files and the Inspector; shader permutations cached and hot-reloaded
 - Shading models (default, subsurface, two-sided foliage, unlit, clear coat); a node-based material editor
