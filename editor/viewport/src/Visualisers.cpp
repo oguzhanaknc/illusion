@@ -1,3 +1,5 @@
+#include <illusion/animation/AnimationComponents.hpp>
+#include <illusion/animation/AnimationWorld.hpp>
 #include <illusion/audio/AudioComponents.hpp>
 #include <illusion/core/Profiler.hpp>
 #include <illusion/ecs/Hierarchy.hpp>
@@ -5,11 +7,15 @@
 #include <illusion/ecs/World.hpp>
 #include <illusion/editor/viewport/Visualisers.hpp>
 #include <illusion/physics/PhysicsComponents.hpp>
+#include <illusion/physics/Ragdoll.hpp>
 #include <illusion/render/DebugDraw.hpp>
 #include <illusion/render/SceneComponents.hpp>
 
+#include <algorithm>
 #include <array>
 #include <cmath>
+#include <optional>
+#include <string_view>
 
 namespace illusion::editor::viewport
 {
@@ -28,6 +34,8 @@ constexpr f32 kLimitRadius = 0.4f;
 constexpr f32 kTickSize = 0.08f;
 constexpr f32 kSunDisc = 0.5f;
 constexpr f32 kSunRay = 2.0f;
+// Joint markers are this fraction of the average bone length.
+constexpr f32 kJointMarker = 0.12f;
 
 // cos and sin of kSegments + 1 points around the unit circle (the last repeats the first).
 const std::array<Vec2, kSegments + 1>& unitCircle() noexcept
@@ -68,6 +76,7 @@ struct Recorder
     DebugDraw& draw;
     f32 width = 1.5f;
     bool full = false;
+    DebugDepth depth = DebugDepth::Tested;
 
     void line(Vec3 a, Vec3 b, Vec4 color) noexcept
     {
@@ -81,7 +90,7 @@ struct Recorder
         {
             return;
         }
-        if (!draw.line(a, b, color, width))
+        if (!draw.line(a, b, color, width, depth))
         {
             full = true;
         }
@@ -424,6 +433,223 @@ void recordAudio(Recorder& out, const Transform& transform, const AudioSource& s
     }
 }
 
+// Index of the joint @p name in @p skeleton, or -1.
+i32 findJoint(const Skeleton& skeleton, std::string_view name) noexcept
+{
+    if (name.empty())
+    {
+        return -1;
+    }
+    for (usize i = 0; i < skeleton.joints.size(); ++i)
+    {
+        if (skeleton.joints[i].name == name)
+        {
+            return static_cast<i32>(i);
+        }
+    }
+    return -1;
+}
+
+// An octahedron of @p size around @p center (targets and poles).
+void diamond(Recorder& out, Vec3 center, f32 size, Vec4 color) noexcept
+{
+    const std::array<Vec3, 6> tips = {center + Vec3(size, 0.0f, 0.0f), center - Vec3(size, 0.0f, 0.0f),
+                                      center + Vec3(0.0f, size, 0.0f), center - Vec3(0.0f, size, 0.0f),
+                                      center + Vec3(0.0f, 0.0f, size), center - Vec3(0.0f, 0.0f, size)};
+    for (u32 a = 0; a < 2; ++a)
+    {
+        for (u32 b = 2; b < 6; ++b)
+        {
+            out.line(tips[a], tips[b], color);
+        }
+    }
+    for (u32 a = 2; a < 4; ++a)
+    {
+        for (u32 b = 4; b < 6; ++b)
+        {
+            out.line(tips[a], tips[b], color);
+        }
+    }
+}
+
+// The world-space pose of one Animator: its skeleton, model-space joints and the Entity's matrix.
+struct PosedSkeleton
+{
+    const Skeleton* skeleton = nullptr;
+    std::span<const Mat4> joints;
+    Mat4 world{1.0f};
+    u32 slot = 0;
+    f32 marker = 0.02f; // size of joint markers, from the bone lengths
+
+    [[nodiscard]] Vec3 position(usize joint) const noexcept { return Vec3(world * joints[joint][3]); }
+};
+
+std::optional<PosedSkeleton> posed(const World& world, const AnimationWorld& animation,
+                                   Entity entity) noexcept
+{
+    const Transform* transform = world.tryGet<Transform>(entity);
+    const std::optional<u32> slot = animation.findSlot(entity);
+    const Skeleton* skeleton = slot ? animation.skeleton(*slot) : nullptr;
+    if (transform == nullptr || skeleton == nullptr)
+    {
+        return std::nullopt;
+    }
+    const std::span<const Mat4> joints = animation.jointMatrices(*slot);
+    if (joints.size() != skeleton->joints.size() || joints.empty())
+    {
+        return std::nullopt;
+    }
+    PosedSkeleton out{skeleton, joints, transform->matrix(), *slot};
+    f32 total = 0.0f;
+    u32 bones = 0;
+    for (usize i = 0; i < joints.size(); ++i)
+    {
+        const i32 parent = skeleton->joints[i].parent;
+        if (parent >= 0)
+        {
+            total += glm::length(out.position(i) - out.position(static_cast<usize>(parent)));
+            ++bones;
+        }
+    }
+    if (bones > 0 && std::isfinite(total))
+    {
+        out.marker = std::clamp(total / static_cast<f32>(bones) * kJointMarker, 0.005f, 0.1f);
+    }
+    return out;
+}
+
+void recordBones(Recorder& out, const PosedSkeleton& pose, const VisualiserColors& colors) noexcept
+{
+    for (usize i = 0; i < pose.joints.size(); ++i)
+    {
+        const Vec3 at = pose.position(i);
+        const i32 parent = pose.skeleton->joints[i].parent;
+        if (parent >= 0)
+        {
+            out.line(pose.position(static_cast<usize>(parent)), at, colors.bone);
+        }
+        out.cross(at, pose.marker, colors.skeletonJoint);
+    }
+}
+
+// The chain below SpringBone::root and its collider spheres.
+void recordSpring(Recorder& out, const PosedSkeleton& pose, const SpringBone& spring,
+                  const VisualiserColors& colors) noexcept
+{
+    const i32 root = findJoint(*pose.skeleton, spring.root);
+    if (root < 0)
+    {
+        return;
+    }
+    const usize count = std::min<usize>(pose.joints.size(), kMaxJoints);
+    std::array<u64, kMaxJoints / 64> chain{};
+    const auto mark = [&](usize joint) {
+        chain[joint / 64] |= u64{1} << (joint % 64);
+    };
+    const auto inChain = [&](usize joint) {
+        return (chain[joint / 64] >> (joint % 64) & 1u) != 0;
+    };
+    mark(static_cast<usize>(root));
+    for (usize i = static_cast<usize>(root) + 1; i < count; ++i)
+    {
+        const i32 parent = pose.skeleton->joints[i].parent;
+        if (parent >= 0 && inChain(static_cast<usize>(parent)))
+        {
+            mark(i);
+            const Vec3 at = pose.position(i);
+            out.line(pose.position(static_cast<usize>(parent)), at, colors.spring);
+            out.sphere(glm::translate(Mat4(1.0f), at), spring.radius, colors.spring);
+        }
+    }
+    for (const SpringCollider& collider : spring.colliders)
+    {
+        const i32 joint = findJoint(*pose.skeleton, collider.joint);
+        if (joint >= 0)
+        {
+            const Mat4& model = pose.joints[static_cast<usize>(joint)];
+            const Vec3 center(pose.world * (model * Vec4(collider.offset, 1.0f)));
+            out.sphere(glm::translate(Mat4(1.0f), center), collider.radius, colors.spring);
+        }
+    }
+}
+
+// The world-space position of @p target, or @p fallback without one.
+Vec3 targetPosition(const World& world, Entity target, Vec3 fallback) noexcept
+{
+    if (!target.isNull() && world.isAlive(target))
+    {
+        if (const Transform* transform = world.tryGet<Transform>(target))
+        {
+            return transform->position;
+        }
+    }
+    return fallback;
+}
+
+void recordLookAt(Recorder& out, const World& world, const PosedSkeleton& pose, const LookAt& look,
+                  const VisualiserColors& colors) noexcept
+{
+    const i32 head = findJoint(*pose.skeleton, look.joint);
+    if (head < 0 || !(look.weight > 0.0f))
+    {
+        return;
+    }
+    const Vec3 target = targetPosition(world, look.target, look.point);
+    out.line(pose.position(static_cast<usize>(head)), target, colors.ikTarget);
+    diamond(out, target, pose.marker * 2.0f, colors.ikTarget);
+}
+
+void recordLimb(Recorder& out, const World& world, const PosedSkeleton& pose, const TwoBoneIk& ik,
+                const VisualiserColors& colors) noexcept
+{
+    const i32 end = findJoint(*pose.skeleton, ik.joint);
+    if (end < 0 || !(ik.weight > 0.0f))
+    {
+        return;
+    }
+    const Vec3 target = targetPosition(world, ik.target, ik.point);
+    out.line(pose.position(static_cast<usize>(end)), target, colors.ikTarget);
+    diamond(out, target, pose.marker * 2.0f, colors.ikTarget);
+    const i32 middle = pose.skeleton->joints[static_cast<usize>(end)].parent;
+    if (middle < 0)
+    {
+        return;
+    }
+    // Without a pole Entity, polePoint is in the Animator's model space.
+    const Vec3 modelPole(pose.world * Vec4(ik.polePoint, 1.0f));
+    const Vec3 pole = targetPosition(world, ik.pole, modelPole);
+    out.line(pose.position(static_cast<usize>(middle)), pole, colors.ikTarget);
+    diamond(out, pole, pose.marker, colors.ikTarget);
+}
+
+void recordRagdoll(Recorder& out, const PosedSkeleton& pose, std::span<const RagdollPart> parts,
+                   const VisualiserColors& colors) noexcept
+{
+    for (const RagdollPart& part : parts)
+    {
+        const i32 joint = findJoint(*pose.skeleton, part.joint);
+        if (joint < 0)
+        {
+            continue;
+        }
+        Mat4 local = glm::mat4_cast(part.rotation);
+        local[3] = Vec4(part.offset, 1.0f);
+        out.capsule(pose.world * pose.joints[static_cast<usize>(joint)] * local, part.radius, part.halfHeight,
+                    colors.ragdoll);
+    }
+}
+
+// The Animator a TwoBoneIk acts on: the one of its own Entity, else its parent's.
+Entity limbOwner(const World& world, Entity entity) noexcept
+{
+    if (world.has<Animator>(entity))
+    {
+        return entity;
+    }
+    const Hierarchy* hierarchy = world.tryGet<Hierarchy>(entity);
+    return hierarchy != nullptr ? hierarchy->parent : Entity{};
+}
+
 } // namespace
 
 VisualiserStats recordVisualisers(World& world, DebugDraw& draw, const VisualiserOptions& options) noexcept
@@ -515,6 +741,52 @@ VisualiserStats recordVisualisers(World& world, DebugDraw& draw, const Visualise
                     ++stats.objects;
                 }
             });
+    }
+    if (kinds.skeleton && options.animation != nullptr)
+    {
+        const AnimationWorld& animation = *options.animation;
+        // Skeletons are inside their meshes.
+        out.depth = DebugDepth::OnTop;
+        world.query<Animator>().without<Inactive>().each([&](Entity entity, const Animator&) {
+            if (!wanted(entity))
+            {
+                return;
+            }
+            const std::optional<PosedSkeleton> pose = posed(world, animation, entity);
+            if (!pose)
+            {
+                return;
+            }
+            recordBones(out, *pose, colors);
+            if (const SpringBone* spring = world.tryGet<SpringBone>(entity))
+            {
+                recordSpring(out, *pose, *spring, colors);
+            }
+            if (const LookAt* look = world.tryGet<LookAt>(entity))
+            {
+                recordLookAt(out, world, *pose, *look, colors);
+            }
+            const Ragdoll* ragdoll = world.tryGet<Ragdoll>(entity);
+            if (ragdoll != nullptr && options.ragdolls != nullptr)
+            {
+                const std::span<const RagdollPart> parts =
+                    options.ragdolls->parts(*ragdoll, *pose->skeleton, animation.jointBounds(pose->slot));
+                recordRagdoll(out, *pose, parts, colors);
+            }
+            ++stats.objects;
+        });
+        world.query<TwoBoneIk>().without<Inactive>().each([&](Entity entity, const TwoBoneIk& ik) {
+            const Entity owner = limbOwner(world, entity);
+            if (owner.isNull() || !world.isAlive(owner) || world.has<Inactive>(owner) || !wanted(owner))
+            {
+                return;
+            }
+            if (const std::optional<PosedSkeleton> pose = posed(world, animation, owner))
+            {
+                recordLimb(out, world, *pose, ik, colors);
+            }
+        });
+        out.depth = DebugDepth::Tested;
     }
     stats.full = out.full;
     return stats;

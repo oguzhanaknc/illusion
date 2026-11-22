@@ -959,6 +959,7 @@ struct ViewportVisualisersParams
     std::optional<bool> joints{};     ///< Joint anchors, axes and limits.
     std::optional<bool> audio{};      ///< AudioSource distances and cones.
     std::optional<bool> perception{}; ///< Sight cones and what agents see and remember (play World).
+    std::optional<bool> skeleton{};   ///< Joints and bones of Animators, IK targets, springs and ragdolls.
 };
 
 /// Params of `viewport.set_overlays`.

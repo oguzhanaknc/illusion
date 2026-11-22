@@ -1966,6 +1966,18 @@ const AnimationGraphState* AnimationWorld::graphState(u32 slot) const noexcept
     return entry != nullptr && entry->graph != nullptr ? &entry->graphState : nullptr;
 }
 
+const GraphBinding* AnimationWorld::graphBinding(u32 slot) const noexcept
+{
+    const Slot* entry = m_impl->slotOf(slot);
+    return entry != nullptr ? entry->graph : nullptr;
+}
+
+const AnimationClip* AnimationWorld::clip(u32 slot) const noexcept
+{
+    const Slot* entry = m_impl->slotOf(slot);
+    return entry != nullptr && entry->graph == nullptr && entry->jointCount > 0 ? entry->clip : nullptr;
+}
+
 bool AnimationWorld::setParameter(u32 slot, i32 index, f32 value) noexcept
 {
     Slot* entry = m_impl->slotOf(slot);

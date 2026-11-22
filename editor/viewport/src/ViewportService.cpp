@@ -27,6 +27,7 @@
 #include <illusion/editor/viewport/ViewportService.hpp>
 #include <illusion/editor/viewport/Visualisers.hpp>
 #include <illusion/nav/NavWorld.hpp>
+#include <illusion/physics/Ragdoll.hpp>
 #include <illusion/render/Components.hpp>
 #include <illusion/render/DebugDraw.hpp>
 #include <illusion/render/ReadbackRing.hpp>
@@ -195,8 +196,65 @@ private:
 bool hasVisualisers(const ViewportVisualisers& kinds) noexcept
 {
     return kinds.lights || kinds.cameras || kinds.colliders || kinds.characters || kinds.joints ||
-           kinds.audio;
+           kinds.audio || kinds.skeleton;
 }
+
+// The ragdoll profiles of the skeleton visualiser: `.ragdoll` files read once, profiles generated once per
+// skeleton and mesh; cleared when assets change or a play session starts or stops.
+class RagdollProfiles final : public RagdollParts
+{
+public:
+    explicit RagdollProfiles(VirtualFileSystem& files)
+        : m_files(files)
+    {
+    }
+
+    std::span<const RagdollPart> parts(const Ragdoll& ragdoll, const Skeleton& skeleton,
+                                       std::span<const Aabb> jointBounds) override
+    {
+        const AssetId file = ragdoll.profile.id;
+        for (const Entry& entry : m_entries)
+        {
+            if (entry.file == file &&
+                (file || (entry.skeleton == &skeleton && entry.bounds == jointBounds.data())))
+            {
+                return entry.parts;
+            }
+        }
+        Entry& entry = m_entries.emplace_back();
+        entry.file = file;
+        entry.skeleton = &skeleton;
+        entry.bounds = jointBounds.data();
+        if (!file)
+        {
+            entry.parts = makeRagdollProfile(skeleton, jointBounds).parts;
+            return entry.parts;
+        }
+        std::vector<std::byte> bytes;
+        if (m_files.readFile(ragdoll.profile.path(), bytes) == FileError::None)
+        {
+            const std::string_view text(reinterpret_cast<const char*>(bytes.data()), bytes.size());
+            if (Expected<RagdollProfile, std::string> profile = parseRagdollProfile(text))
+            {
+                entry.parts = std::move(profile->parts);
+            }
+        }
+        return entry.parts;
+    }
+
+    void clear() noexcept { m_entries.clear(); }
+
+private:
+    struct Entry
+    {
+        AssetId file;
+        const Skeleton* skeleton = nullptr;
+        const Aabb* bounds = nullptr;
+        std::vector<RagdollPart> parts; // empty when the file cannot be read
+    };
+    VirtualFileSystem& m_files;
+    std::vector<Entry> m_entries;
+};
 
 // The grid plane, cell size and fades for a camera (see Grid.slang).
 detail::GridPass gridPass(const ViewportCamera& camera, const Mat4& viewProjection,
@@ -362,6 +420,7 @@ struct ViewportService::Impl
         , cache(resources, streamer)
         , resolver(cache)
         , editAnimation(editorContext.world(), streamer)
+        , ragdolls(editorContext.files())
     {
         assetSubscription = editor.events().subscribe(
             "asset.changed", [this](const EditorEvent& event) { queueAssetChanges(event.payload); });
@@ -402,6 +461,8 @@ struct ViewportService::Impl
     RenderAssetResolver resolver;
     // Poses the edit World's Animators at their saved time, so that the Inspector scrubs (ADR 0059).
     AnimationWorld editAnimation;
+    // Ragdoll profiles of the skeleton visualiser.
+    RagdollProfiles ragdolls;
     // The game UI of the play session, drawn over the Game view.
     std::unique_ptr<illusion::UiRenderer> gameUi;
     std::unique_ptr<UiRenderAssets> gameUiAssets;
@@ -560,6 +621,7 @@ struct ViewportService::Impl
             cache.evictUnused(); // assets only the play World used
         }
         playSession = editor.playSessions();
+        ragdolls.clear(); // generated profiles are keyed by skeletons of the World's AnimationWorld
         for (Viewport& viewport : viewports)
         {
             viewport.hovered = Entity{};
@@ -648,6 +710,7 @@ struct ViewportService::Impl
             streamer.reload(file);
         }
         snapMeshes.clear(); // CPU copies for vertex snapping are loaded again on use
+        ragdolls.clear();
         shownResolver().releaseUnused(shown());
         cache.evictUnused();
     }
@@ -1374,6 +1437,13 @@ struct ViewportService::Impl
             options.selection = selectionBits;
             options.hidden = hiddenBits;
             options.cameraAspect = gameAspect();
+            options.animation = shownAnimation();
+            options.ragdolls = &ragdolls;
+            options.colors.bone = viewport.style.bone;
+            options.colors.skeletonJoint = viewport.style.joint;
+            options.colors.ikTarget = viewport.style.ikTarget;
+            options.colors.spring = viewport.style.spring;
+            options.colors.ragdoll = viewport.style.ragdoll;
             if (hasVisualisers(settings.visualisers) && (all || !editor.selection().empty()))
             {
                 const VisualiserStats recorded = recordVisualisers(shown(), debugDraw, options);
@@ -2376,6 +2446,11 @@ std::optional<Expected<std::optional<ViewportSnap>, CommandError>> ViewportServi
     found->result.reset();
     found->ticket = 0;
     return result;
+}
+
+const AnimationWorld* ViewportService::editAnimation() const noexcept
+{
+    return &m_impl->editAnimation;
 }
 
 bool ViewportService::gameUiLayout(std::string_view id, UiLayout& out)

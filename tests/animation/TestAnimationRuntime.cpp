@@ -156,6 +156,9 @@ TEST_CASE("a graph Animator starts in its entry state at Animator::time and foll
     const std::optional<u32> slot = f.animation.findSlot(entity);
     REQUIRE(slot.has_value());
     REQUIRE(f.animation.graph(*slot) != nullptr);
+    REQUIRE(f.animation.graphBinding(*slot) != nullptr);
+    CHECK(f.animation.graphBinding(*slot)->graph == f.animation.graph(*slot));
+    CHECK(f.animation.clip(*slot) == nullptr); // a graph plays its own clips
     CHECK(f.world.get<AnimationPose>(entity).jointCount == 2);
     CHECK(stateOf(f.service, entity) == "idle");
     CHECK(f.service.normalizedTime(entity, "base").valueOr(-1.0f) == doctest::Approx(0.25f));

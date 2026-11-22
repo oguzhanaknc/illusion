@@ -165,6 +165,7 @@ TEST_CASE("an Animator gets a pose once its model has loaded")
     CHECK(f.pose(entity).jointCount == 0);
     CHECK(f.animation.statistics().pending == 1);
     CHECK(f.animation.skeleton(f.pose(entity).slot) == nullptr);
+    CHECK(f.animation.clip(f.pose(entity).slot) == nullptr);
 
     f.animation.waitIdle();
     CHECK(f.animation.statistics().pending == 0);
@@ -178,6 +179,10 @@ TEST_CASE("an Animator gets a pose once its model has loaded")
     REQUIRE(f.animation.skeleton(f.pose(entity).slot) != nullptr);
     CHECK(f.animation.skeleton(f.pose(entity).slot)->joints.size() == 5);
     CHECK(f.animation.jointMatrices(f.pose(entity).slot).size() == 5);
+    REQUIRE(f.animation.clip(f.pose(entity).slot) != nullptr);
+    CHECK(f.animation.clip(f.pose(entity).slot)->duration == doctest::Approx(kLinearDuration));
+    CHECK(f.animation.graphBinding(f.pose(entity).slot) == nullptr);
+    CHECK(f.animation.clip(f.pose(entity).slot + 1) == nullptr);
     CHECK(equal(f.skin(entity), expectedSkin(loadRigged(), 0.0f)));
 }
 

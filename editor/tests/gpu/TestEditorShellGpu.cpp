@@ -124,6 +124,40 @@ TEST_CASE("the shell in play mode tints its panels, shows Stop and can maximize 
     }
 }
 
+TEST_CASE("the Animator's Inspector section in Play mode matches its golden image")
+{
+    GpuShell gpu;
+    EditorContext& editor = *gpu.fixture.editor;
+    EditorContext* current = &editor;
+    test::FakePlay play(current);
+    editor.setPlay(&play);
+    test::ok(editor, "preferences.set", R"({"value":{"maximizeOnPlay":false}})");
+    test::installAnimationAssets(editor);
+    test::ok(
+        editor, "entity.create",
+        R"({"name":"Column","components":{"illusion.Transform":{},"illusion.Animator":{)"
+        R"("skeleton":"assets:/models/column.gltf#skin/0","clip":"assets:/models/column.gltf#animation/sway",)"
+        R"("graph":"assets:/animations/column.animgraph","speed":0.8,"loop":false}}})");
+    test::ok(editor, "selection.set", R"({"entities":["/Column"]})");
+    test::ok(editor, "play.start");
+    test::ok(editor, "play.step");
+    (void)gpu.capture(4);
+    // The trigger starts the fade to "swing"; the Inspector reads the events of every step.
+    test::ok(editor, "animation.set_parameter", R"({"entity":"/Column","name":"lean","value":0.25})");
+    test::ok(editor, "animation.trigger", R"({"entity":"/Column","name":"bow"})");
+    for (int i = 0; i < 100; ++i)
+    {
+        test::ok(editor, "play.step");
+        (void)gpu.capture(1);
+    }
+    test::ok(editor, "log.clear");
+    const Image actual = gpu.capture(4);
+    test::checkGolden("shell-dark-100-animator", actual);
+    CHECK(gpu.device->validationErrorCount() == 0);
+    play.stop();
+    editor.setPlay(nullptr);
+}
+
 TEST_CASE("the canvas editing overlays of the Game view and the Inspector's placement drawer (golden)")
 {
     GpuShell gpu;

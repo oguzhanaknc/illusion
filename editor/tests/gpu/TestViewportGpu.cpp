@@ -655,6 +655,46 @@ TEST_CASE("nav.debug draws the navmesh and its tiles in the Scene view and match
     CHECK(test::compareImages(gpu.capture(), without).differentFraction < 0.001);
 }
 
+TEST_CASE(
+    "the skeleton visualiser draws a selected Animator's bones, IK targets, springs and ragdoll (golden)")
+{
+    GpuViewports gpu;
+    EditorContext& editor = gpu.editor();
+    test::installAnimationAssets(editor);
+    test::installShowcaseAsset(editor, "models/strider.gltf", "assets:/models/strider.gltf");
+    test::ok(editor, "entity.create",
+             R"({"name":"Strider","components":{"illusion.Transform":{"rotation":[0,0.3826834,0,0.9238795]},)"
+             R"("illusion.MeshRenderer":{"mesh":"assets:/models/strider.gltf#mesh/0"},)"
+             R"("illusion.Animator":{"skeleton":"assets:/models/strider.gltf#skin/0",)"
+             R"("clip":"assets:/models/strider.gltf#animation/idle"},)"
+             R"("illusion.LookAt":{"joint":"head","point":[-0.6,1.6,0.8]},)"
+             R"("illusion.SpringBone":{"root":"spine","radius":0.05},)"
+             R"("illusion.Ragdoll":{"profile":"assets:/animations/strider.ragdoll"}}})");
+    test::ok(editor, "entity.create",
+             R"({"name":"Leg","parent":"/Strider","components":{"illusion.TwoBoneIk":{"joint":"foot_r",)"
+             R"("point":[0.5,0.2,0.4],"polePoint":[0.2,0.5,1]}}})");
+    test::ok(editor, "viewport.set_overlays", R"({"grid":false,"selectionOutline":false})");
+    test::ok(editor, "viewport.set_mode", R"({"shading":"unlit"})");
+    test::ok(editor, "viewport.camera_set",
+             R"({"pivot":[0,0.9,0],"yaw":30,"pitch":-15,"distance":2.6,"animate":false})");
+    for (int i = 0; i < 4; ++i)
+    {
+        gpu.frame();
+    }
+    const Image without = gpu.capture();
+    test::ok(editor, "selection.set", R"({"entities":["/Strider"]})");
+    test::ok(editor, "viewport.set_overlays", R"({"visualisers":{"skeleton":false}})");
+    gpu.frame();
+    const Image hidden = gpu.capture();
+    CHECK(test::compareImages(hidden, without).differentFraction < 0.001);
+    test::ok(editor, "viewport.set_overlays", R"({"visualisers":{"skeleton":true}})");
+    gpu.frame();
+    const Image with = gpu.capture();
+    CHECK(test::compareImages(with, without).differentFraction > 0.001);
+    CHECK(gpu.service->stats().visualisers >= 1);
+    test::checkGolden("viewport-skeleton", with);
+}
+
 TEST_CASE("a selected Camera shows its frustum, icon and picture-in-picture view")
 {
     GpuViewports gpu;

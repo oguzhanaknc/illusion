@@ -491,6 +491,7 @@ struct Inspector::State
 
     int worldSpace = 0; // 0 = Local, 1 = World
     u64 dragSerial = 1;
+    AnimatorSection animator;
 
     u64 lastNameGuid = 0;
     usize lastInspectedCount = 0;
@@ -500,14 +501,71 @@ struct Inspector::State
     std::array<char, 512> textFieldBuffer{};
     bool focusAddSearch = false;
 
+    // Whether the files of asset fields exist, by AssetId, forgotten on `asset.changed`: checking the file
+    // system every frame would allocate.
+    struct AssetCheck
+    {
+        u64 id = 0;
+        bool exists = false;
+    };
+    std::vector<AssetCheck> assetChecks;
+    EditorContext* assetEvents = nullptr;
+    u32 assetSubscription = 0;
+
     State()
     {
+        assetChecks.reserve(64);
         lockedGuids.reserve(16);
         inspected.reserve(16);
         commonComponents.reserve(32);
         componentPtrs.reserve(16);
         eulerCache.reserve(16);
         addCandidates.reserve(64);
+    }
+
+    ~State()
+    {
+        if (assetEvents != nullptr)
+        {
+            (void)assetEvents->events().unsubscribe(assetSubscription);
+        }
+    }
+
+    State(const State&) = delete;
+    State& operator=(const State&) = delete;
+
+    // True if the file of the asset @p ref (without a `#` part such as `#mesh/0`) exists, checked once until
+    // the assets change.
+    bool assetExists(EditorContext& editor, const AssetRef& ref)
+    {
+        if (assetEvents != &editor)
+        {
+            if (assetEvents != nullptr)
+            {
+                (void)assetEvents->events().unsubscribe(assetSubscription);
+            }
+            assetEvents = &editor;
+            assetSubscription = editor.events().subscribe(
+                "asset.changed", [this](const EditorEvent&) { assetChecks.clear(); });
+            assetChecks.clear();
+            // The catalog posts `asset.changed` only once it has been scanned.
+            (void)editor.assets();
+        }
+        for (const AssetCheck& check : assetChecks)
+        {
+            if (check.id == ref.id.value)
+            {
+                return check.exists;
+            }
+        }
+        if (assetChecks.size() == assetChecks.capacity())
+        {
+            assetChecks.clear();
+        }
+        const std::string_view path = ref.path();
+        const bool exists = editor.files().exists(path.substr(0, path.find('#')));
+        assetChecks.push_back(AssetCheck{ref.id.value, exists});
+        return exists;
     }
 
     const char* mergeKey(ui::FrameText& text, std::string_view component, std::string_view path) const
@@ -2039,15 +2097,27 @@ void Inspector::State::drawValueWidget(Impl& shell, ui::UiKit& kit, const TypeRe
             }
         }
         if (!mixed && !assetPath.empty() && !assetPath.starts_with("builtin:") &&
-            shell.editor.project() != nullptr && !shell.editor.files().exists(assetPath))
+            shell.editor.project() != nullptr && !assetExists(shell.editor, ref))
         {
             ImGui::AlignTextToFramePadding();
             ImGui::PushStyleColor(ImGuiCol_Text, imvec(kit.theme.color(ui::ThemeToken::Warning)));
             ImGui::TextUnformatted(ui::icons::kWarning.c_str());
             ImGui::SameLine(0.0f, style.ItemInnerSpacing.x);
-            ImGui::TextUnformatted(text.format(s::kInspectorFixMissingAsset, {{"path", assetPath}}));
+            const char* warningText = text.format(s::kInspectorFixMissingAsset, {{"path", assetPath}});
+            const char* buttonText = text.format(s::kInspectorFixClear);
+            const f32 buttonWidth = ImGui::CalcTextSize(buttonText).x + style.FramePadding.x * 2.0f;
+            // A long path wraps and puts the button below it, where it stays visible.
+            const bool sameLine =
+                ImGui::CalcTextSize(warningText).x + style.ItemInnerSpacing.x + buttonWidth <=
+                ImGui::GetContentRegionAvail().x;
+            ImGui::PushTextWrapPos(0.0f);
+            ImGui::TextUnformatted(warningText);
+            ImGui::PopTextWrapPos();
             ImGui::PopStyleColor();
-            ImGui::SameLine(0.0f, style.ItemInnerSpacing.x);
+            if (sameLine)
+            {
+                ImGui::SameLine(0.0f, style.ItemInnerSpacing.x);
+            }
             if (ImGui::SmallButton(text.label(s::kInspectorFixClear, text.concat(fieldId, ".fix.clear"))))
             {
                 applyFieldJson(shell, compReflection.name, fieldPath, "\"\"", false);
@@ -2431,6 +2501,11 @@ void Inspector::State::drawComponentCard(Impl& shell, ui::UiKit& kit, ComponentI
     }
 
     drawValidationWarnings(shell, kit, reflection, cardId);
+    if (reflection.name == "illusion.Animator" && inspected.size() == 1 && settings.type == nullptr)
+    {
+        animator.draw(shell, kit, inspected[0].entity, inspected[0].guid, cardId,
+                      mergeKey(text, "illusion.Animator", "scrub"));
+    }
 
     const void* primaryData = componentPtrs.empty() ? nullptr : componentPtrs[0];
     bool hasVisibleFields = false;

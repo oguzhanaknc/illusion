@@ -117,6 +117,8 @@ constexpr std::array kVisualiserItems = {
                    "audio"},
     VisualiserItem{&ViewportVisualisers::perception, s::kViewportVisualisersPerception,
                    "viewport.visualisers.perception", "perception"},
+    VisualiserItem{&ViewportVisualisers::skeleton, s::kViewportVisualisersSkeleton,
+                   "viewport.visualisers.skeleton", "skeleton"},
 };
 
 struct OverlayItem
@@ -890,6 +892,11 @@ void SceneView::draw(Impl& shell)
     style.axisX = theme.color(kit.colorBlindAxes ? ui::ThemeToken::AxisCbX : ui::ThemeToken::AxisX);
     style.axisY = theme.color(kit.colorBlindAxes ? ui::ThemeToken::AxisCbY : ui::ThemeToken::AxisY);
     style.axisZ = theme.color(kit.colorBlindAxes ? ui::ThemeToken::AxisCbZ : ui::ThemeToken::AxisZ);
+    style.bone = theme.color(ui::ThemeToken::Info);
+    style.joint = theme.color(ui::ThemeToken::TextPrimary);
+    style.ikTarget = theme.color(ui::ThemeToken::Warning);
+    style.spring = theme.color(ui::ThemeToken::Success);
+    style.ragdoll = theme.color(ui::ThemeToken::Error);
 
     m_last = host->frame(m_id, pixels, input, style);
     shell.viewportNavigating = shell.viewportNavigating || m_last.navigating || gizmoDragging;

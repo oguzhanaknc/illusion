@@ -129,6 +129,12 @@ public:
     /// The graph state of @p slot (parameters and machines after the last update()), or null when graph() is.
     [[nodiscard]] const AnimationGraphState* graphState(u32 slot) const noexcept;
 
+    /// The graph of @p slot bound to its skeleton (for graphStateDuration()), or null when graph() is.
+    [[nodiscard]] const GraphBinding* graphBinding(u32 slot) const noexcept;
+
+    /// The clip that @p slot plays without a graph, or null while it loads, without one or with a graph.
+    [[nodiscard]] const AnimationClip* clip(u32 slot) const noexcept;
+
     /// Sets parameter @p index of @p slot's graph for its next step (AnimationGraphState::setValue()); false
     /// when graph() is null.
     bool setParameter(u32 slot, i32 index, f32 value) noexcept;

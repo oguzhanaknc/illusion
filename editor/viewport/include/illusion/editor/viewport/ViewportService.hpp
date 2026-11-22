@@ -119,6 +119,7 @@ public:
     [[nodiscard]] std::optional<Expected<std::optional<ViewportSnap>, CommandError>>
     snap(u64 ticket) override;
     [[nodiscard]] bool gameUiLayout(std::string_view id, UiLayout& out) override;
+    [[nodiscard]] const AnimationWorld* editAnimation() const noexcept override;
 
     /// The service's state, defined in its sources.
     struct Impl;

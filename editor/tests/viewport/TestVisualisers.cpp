@@ -1,14 +1,22 @@
+#include <illusion/animation/AnimationComponents.hpp>
+#include <illusion/animation/AnimationWorld.hpp>
+#include <illusion/assets/AssetStreamer.hpp>
 #include <illusion/audio/AudioComponents.hpp>
+#include <illusion/core/JobSystem.hpp>
+#include <illusion/ecs/Component.hpp>
 #include <illusion/ecs/Hierarchy.hpp>
 #include <illusion/ecs/Transform.hpp>
 #include <illusion/ecs/World.hpp>
 #include <illusion/editor/viewport/Visualisers.hpp>
 #include <illusion/physics/PhysicsComponents.hpp>
+#include <illusion/physics/Ragdoll.hpp>
+#include <illusion/platform/FileSystem.hpp>
 #include <illusion/render/DebugDraw.hpp>
 #include <illusion/render/SceneComponents.hpp>
 
 #include <doctest/doctest.h>
 
+#include <algorithm>
 #include <vector>
 
 using namespace illusion;
@@ -16,7 +24,7 @@ using namespace illusion::editor;
 using namespace illusion::editor::viewport;
 
 // CPU tests of the DebugDraw visualisers: what each Component records, the scope, hidden and Inactive
-// entities, and a full DebugDraw.
+// entities, a full DebugDraw, and the skeletons of Animators with IK targets, spring chains and ragdolls.
 
 namespace
 {
@@ -30,7 +38,7 @@ VisualiserOptions everything()
 
 ViewportVisualisers only(bool ViewportVisualisers::* kind)
 {
-    ViewportVisualisers kinds{false, false, false, false, false, false};
+    ViewportVisualisers kinds{false, false, false, false, false, false, false, false};
     kinds.*kind = true;
     return kinds;
 }
@@ -195,7 +203,7 @@ TEST_CASE(
     options.hidden = {};
     CHECK(recordVisualisers(world, draw, options).objects == 2);
 
-    options.kinds = ViewportVisualisers{false, false, false, false, false, false};
+    options.kinds = ViewportVisualisers{false, false, false, false, false, false, false, false};
     draw.clear();
     CHECK(recordVisualisers(world, draw, options).objects == 0);
     CHECK(draw.lines().empty());
@@ -222,5 +230,123 @@ TEST_CASE("visualisers skip degenerate and non-finite geometry")
     DebugDraw draw(256);
     const VisualiserStats stats = recordVisualisers(world, draw, everything());
     CHECK(stats.objects == 2);
+    CHECK(draw.lines().empty());
+}
+
+namespace
+{
+
+// Ragdoll profiles given by the test, counting the lookups.
+class FixedRagdollParts final : public RagdollParts
+{
+public:
+    std::span<const RagdollPart> parts(const Ragdoll&, const Skeleton&, std::span<const Aabb>) override
+    {
+        ++calls;
+        return list;
+    }
+
+    std::vector<RagdollPart> list;
+    u32 calls = 0;
+};
+
+usize linesOf(const DebugDraw& draw, Vec4 color)
+{
+    return static_cast<usize>(std::count_if(draw.lines().begin(), draw.lines().end(),
+                                            [&](const DebugLine& line) { return line.color == color; }));
+}
+
+} // namespace
+
+TEST_CASE("the skeleton visualiser draws posed Animators with their IK targets, spring chains and ragdolls")
+{
+    registerAnimationComponents(ComponentRegistry::instance());
+    VirtualFileSystem files;
+    REQUIRE(files.mount("assets", utf8Path(ILLUSION_SAMPLES_DIR) / "showcase" / "assets") == FileError::None);
+    JobSystem jobs;
+    AssetStreamer streamer(files, jobs, AssetStreamerDesc{.cacheMount = ""});
+    World world;
+    AnimationWorld animation(world, streamer);
+
+    const Entity strider = spawn(world, Vec3(2.0f, 0.0f, 0.0f));
+    Animator animator;
+    animator.skeleton = AssetRef("assets:/models/strider.gltf#skin/0");
+    animator.clip = AssetRef("assets:/models/strider.gltf#animation/idle");
+    world.set(strider, animator);
+    LookAt look;
+    look.joint = "head";
+    look.point = Vec3(2.0f, 1.5f, 3.0f);
+    world.set(strider, look);
+    SpringBone spring;
+    spring.root = "spine";
+    spring.colliders[0].joint = "hips";
+    world.set(strider, spring);
+    world.set(strider, Ragdoll{});
+    // A limb on a child, as the showcase's second leg.
+    const Entity leg = spawn(world, Vec3(0.0f));
+    REQUIRE(setParent(world, leg, strider).hasValue());
+    TwoBoneIk ik;
+    ik.joint = "foot_r";
+    ik.point = Vec3(2.2f, 0.0f, 0.3f);
+    world.set(leg, ik);
+    // An Animator whose model is missing draws nothing.
+    Animator missing = animator;
+    missing.skeleton = AssetRef("assets:/models/none.gltf#skin/0");
+    world.set(spawn(world, Vec3(0.0f)), missing);
+    animation.waitIdle();
+    REQUIRE(animation.findSlot(strider).has_value());
+
+    const VisualiserColors colors;
+    FixedRagdollParts ragdolls;
+    ragdolls.list.push_back(RagdollPart{.joint = "hips"});
+    ragdolls.list.push_back(RagdollPart{.joint = "no such joint"});
+    DebugDraw draw(65536);
+    VisualiserOptions options = everything();
+    options.kinds = only(&ViewportVisualisers::skeleton);
+    // Without poses there is nothing to draw.
+    CHECK(recordVisualisers(world, draw, options).objects == 0);
+    CHECK(draw.lines().empty());
+
+    options.animation = &animation;
+    CHECK(recordVisualisers(world, draw, options).objects == 1);
+    // Nine joints: eight bones and a cross of three lines at every joint.
+    CHECK(linesOf(draw, colors.bone) == 8);
+    CHECK(linesOf(draw, colors.skeletonJoint) == 9 * 3);
+    // Skeletons are inside their meshes, so they are drawn over the scene.
+    CHECK(std::all_of(draw.lines().begin(), draw.lines().end(),
+                      [](const DebugLine& line) { return line.end.w == 1.0f; }));
+    // The chain below the spine (the head) and its collider.
+    CHECK(linesOf(draw, colors.spring) > 1 + 48);
+    // LookAt and TwoBoneIk: a diamond at each target and at the pole of the limb, and lines to them (the
+    // foot's line is empty when the limb reaches its target).
+    CHECK(linesOf(draw, colors.ikTarget) >= 3 * 12 + 2);
+    CHECK(linesOf(draw, colors.ragdoll) == 0); // no profiles given
+    // A bone ends at a joint's world position: the root joint, moved with the Entity.
+    const Mat4 hips =
+        world.get<Transform>(strider).matrix() * animation.jointMatrices(*animation.findSlot(strider))[0];
+    const Vec3 root(hips[3]);
+    CHECK(std::any_of(draw.lines().begin(), draw.lines().end(), [&](const DebugLine& line) {
+        return line.color == colors.bone && near(Vec3(line.start), root);
+    }));
+
+    draw.clear();
+    options.ragdolls = &ragdolls;
+    (void)recordVisualisers(world, draw, options);
+    CHECK(ragdolls.calls == 1);
+    CHECK(linesOf(draw, colors.ragdoll) > 0); // the hips capsule; the part of an unknown joint is skipped
+
+    // Only a selected Animator is drawn; selecting the leg alone draws nothing.
+    draw.clear();
+    std::vector<u64> selection(1, u64{1} << leg.index);
+    options.all = false;
+    options.selection = selection;
+    CHECK(recordVisualisers(world, draw, options).objects == 0);
+    CHECK(draw.lines().empty());
+    selection[0] = u64{1} << strider.index;
+    CHECK(recordVisualisers(world, draw, options).objects == 1);
+    CHECK(linesOf(draw, colors.ikTarget) >= 3 * 12 + 2);
+    world.emplace<Inactive>(strider);
+    draw.clear();
+    CHECK(recordVisualisers(world, draw, options).objects == 0);
     CHECK(draw.lines().empty());
 }

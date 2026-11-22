@@ -182,29 +182,30 @@ inline JsonDocument ok(editor::EditorContext& editor, std::string_view name, std
     return parseJson(*result);
 }
 
+/// Writes the showcase's file @p file (relative to its `assets/`) into the project as @p path.
+inline void installShowcaseAsset(editor::EditorContext& editor, std::string_view file, std::string_view path)
+{
+    std::ifstream in(utf8Path(ILLUSION_SAMPLES_DIR) / "showcase" / "assets" / file, std::ios::binary);
+    REQUIRE(in.good());
+    const std::string text((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
+    JsonMutDocument doc;
+    JsonMutValue params = doc.makeObject();
+    params.add("path", doc.makeString(path));
+    params.add("text", doc.makeString(text));
+    doc.setRoot(params);
+    std::string json;
+    REQUIRE(doc.write(json, JsonWriteOptions{.pretty = false}));
+    (void)ok(editor, "project.file_write", json);
+}
+
 /// Writes the showcase's skinned column (model, animation graph and ragdoll profile) into the project's
 /// assets: mount, as "assets:/models/column.gltf", "assets:/animations/column.animgraph" and
 /// "assets:/animations/strider.ragdoll".
 inline void installAnimationAssets(editor::EditorContext& editor)
 {
-    constexpr std::string_view kFiles[][2] = {
-        {"models/column.gltf", "assets:/models/column.gltf"},
-        {"animations/column.animgraph", "assets:/animations/column.animgraph"},
-        {"animations/strider.ragdoll", "assets:/animations/strider.ragdoll"}};
-    for (const auto& file : kFiles)
-    {
-        std::ifstream in(utf8Path(ILLUSION_SAMPLES_DIR) / "showcase" / "assets" / file[0], std::ios::binary);
-        REQUIRE(in.good());
-        const std::string text((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
-        JsonMutDocument doc;
-        JsonMutValue params = doc.makeObject();
-        params.add("path", doc.makeString(file[1]));
-        params.add("text", doc.makeString(text));
-        doc.setRoot(params);
-        std::string json;
-        REQUIRE(doc.write(json, JsonWriteOptions{.pretty = false}));
-        (void)ok(editor, "project.file_write", json);
-    }
+    installShowcaseAsset(editor, "models/column.gltf", "assets:/models/column.gltf");
+    installShowcaseAsset(editor, "animations/column.animgraph", "assets:/animations/column.animgraph");
+    installShowcaseAsset(editor, "animations/strider.ragdoll", "assets:/animations/strider.ragdoll");
 }
 
 /// Runs a setup of EditorCommandCases.hpp: "name" (with {} params) or "name {params}", several separated by
@@ -527,6 +528,8 @@ public:
         return true;
     }
 
+    const AnimationWorld* editAnimation() const noexcept override { return animation; }
+
     Secondary& find(std::string_view id)
     {
         const auto found = std::find_if(secondary.begin(), secondary.end(),
@@ -555,7 +558,8 @@ public:
     editor::ViewportRenderStats stats;
     std::optional<UiLayout> gameLayout; ///< What gameUiLayout() reports for "game" (none: no UI drawn).
     UVec2 gamePanel{0};                 ///< The size the last frame() of "game" was asked for.
-    u32 validationErrors = 0;           // reported by gpuInfo()
+    const AnimationWorld* animation = nullptr; ///< What editAnimation() reports (the test updates it).
+    u32 validationErrors = 0;                  // reported by gpuInfo()
     editor::ViewportChannel readChannel = editor::ViewportChannel::Color;
     UVec2 readOrigin{0};
     UVec2 readExtent{0};

@@ -104,7 +104,10 @@ const text::MessageArgument kSampleArguments[] = {
     {"subject", "scene"},  {"average", 8.3},         {"max", 16.7},
     {"errors", 1},         {"warnings", 2},          {"file", "settings:/physics.json"},
     {"player", 1},         {"seconds", 12.5},        {"megabytes", 48.25},
-    {"stage", "Cooking"},  {"variable", "SIGN"},
+    {"stage", "Cooking"},  {"variable", "SIGN"},     {"layer", "base"},
+    {"state", "swing"},    {"previous", "hold"},     {"layers", 1},
+    {"states", 2},         {"parameters", 4},        {"time", 0.5},
+    {"duration", 1.25},
 };
 
 TEST_CASE("every character of the editor strings in English and en-XA has a glyph in every text font")

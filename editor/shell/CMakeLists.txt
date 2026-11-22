@@ -4,6 +4,7 @@
 
 illusion_add_editor_library(illusion_editor_shell STATIC
     src/Agents.cpp
+    src/AnimatorSection.cpp
     src/AssetBrowser.cpp
     src/CanvasEdit.cpp
     src/Console.cpp
