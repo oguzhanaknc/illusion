@@ -1273,7 +1273,7 @@ Nothing of it exists yet: glTF skins and animations are skipped on import and th
   ragdolls.
   Open: the Entity's Transform stays where it was while its ragdoll runs (game code moves it before turning
   the ragdoll off); spring chains collide only with their own spheres; powered ragdolls.
-- ANIM-3d (`mechanic`): Documentation and sample: manual sections for each stage (EN/TR), the scripting API
+- ✅ ANIM-3d (`mechanic`): Documentation and sample: manual sections for each stage (EN/TR), the scripting API
   reference, the tutorial "Animate a character" gets a lantern socket, look-at and foot placement,
   `CHANGELOG.md`.
 - ANIM-3 (scope): attach entities to bones (a lantern in a hand), look-at and

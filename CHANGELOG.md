@@ -75,6 +75,8 @@ version changes are in the contributor guide ("Versions and releases"). The vers
   (Jolt capsule bodies and swing-twist limits from a `.ragdoll` profile or generated from the skeleton, blended
   in and out of the animation), `AnimationService::setRagdoll()`, and the manual sections "Spring bones" and
   "Ragdolls".
+- The tutorial "Animate a character" (ANIM-3d) gained a lantern on a socket, a head that follows a target, foot
+  placement on a step and a ragdoll, and the manual lists the benchmarks of spring bones and ragdolls.
 - Navigation meshes (NAV-1a): the Recast Navigation 1.6.0 dependency, the library `illusion::nav`, the saved
   `NavMeshSurface`, `NavArea`, `NavLink`, `NavObstacle` and `NavAgent` Components, a tiled navmesh bake from
   colliders on the Job System with identical bytes for any worker count, per-tile input hashes with
