@@ -114,14 +114,17 @@ scrub it and drive it:
 World and are not undoable, because a parameter is runtime state. The graph uses a written value at the next
 update, so `play.step` after a command shows its effect in `animation.status`. `animation.scrub` always acts on
 the edit World, also while the game plays, and the game starts from the time it left. `animation.status` in the
-edit World reports the saved fields only (`live` is false and `note` says so): the poses, states and parameters
-exist in the play session. Every invalid param is reported with its JSON Pointer (`/name` for a parameter the
+edit World is `live` when a Scene view poses it: then it also reports `posed`, `joints` and the loaded graph's
+layers and parameters at the saved time; without a viewport (a headless editor without a GPU) `live` is false
+and `note` says so. Events and running states exist in the play session. Every invalid param is reported with its JSON Pointer (`/name` for a parameter the
 graph does not have, with suggestions, `/value` for a value of the wrong type).
 
 ### In the Inspector
 
 Select an Entity with an `Animator` and its Inspector card starts with a **Preview** section (**Live** in Play
 mode):
+
+![The tech demo's creature selected: the Preview section of its Animator in the Inspector and its skeleton in the Scene view](../images/editor/animation-preview.png)
 
 | Row | What it shows |
 | --- | --- |

@@ -7,13 +7,17 @@ ADRs for its significant decisions. Items marked ✅ are done.
 
 1. TEX (texture compression), 2. M8 (release pipeline), 3. UI (game interface), 4. SAVE (saved games),
 5. ANIM (skeletal animation), 6. NAV (navigation and AI), 7. MAT (custom shaders and materials),
-8. PROBE (reflection and light probes, screen-space reflections, contact shadows), 9. DECAL,
-10. TERRAIN (with GPU grass and impostors), 11. WATER, 12. GFX-3 (lit smoke, clouds),
-13. M9 (upscaling and frame generation), 14. M10 (hybrid ray tracing).
+8. CAM (camera system), 9. ANIM-5 (retargeting and aim layers), 10. DECAL, 11. POST (cinematic post
+effects), 12. SHOOTER (third-person shooter demo), 13. PROBE (reflection and light probes, screen-space
+reflections, contact shadows), 14. TERRAIN (with GPU grass and impostors), 15. WATER, 16. GFX-3 (lit smoke,
+clouds), 17. M9 (upscaling and frame generation), 18. M10 (hybrid ray tracing).
 
 The release pipeline comes early so that every later milestone is exercised by an exported build in CI.
 MAT comes before the render features that add shader paths (decals, grass, impostors, water), so they are
 written once on the material system.
+
+CAM, ANIM-5, DECAL and POST are the engine features the SHOOTER demo needs; each is a general engine
+system (the demo only configures it), designed in its own ADR and finished before the demo starts.
 
 ## M0 — Foundation ✅
 
@@ -1038,7 +1042,7 @@ Open (recorded by ADR 0058): velocities of dynamic bodies, live particles and pl
 compression and a binary World section; several level deltas in one slot; the Steam cloud path is untested
 until a CI job has the SDK.
 
-## ANIM — Skeletal animation
+## ANIM — Skeletal animation ✅
 
 After DEMO, independent of GFX. Characters, creatures and machines that move with bones, at AAA quality.
 Nothing of it exists yet: glTF skins and animations are skipped on import and the vertex has no bone data.
@@ -1278,7 +1282,7 @@ Nothing of it exists yet: glTF skins and animations are skipped on import and th
   `CHANGELOG.md`.
 - ANIM-3 (scope): attach entities to bones (a lantern in a hand), look-at and
   two-bone IK (feet on uneven ground), ragdolls on Jolt from the skeleton, physics-driven secondary motion
-- ANIM-4: Editor and agents, in two work packages (no new ADR: it builds on ADR 0059-0061 and the editor
+- ✅ ANIM-4: Editor and agents, in three work packages (no new ADR: it builds on ADR 0059-0061 and the editor
   command rules of ADR 0036/0039):
 - ✅ ANIM-4a (`mechanic`): Commands. `animation.list` (the skins and clips of a model with joint counts and
   durations), `animation.status` (an Animator's clip or graph, time, current state per layer, parameters, the
@@ -1314,10 +1318,15 @@ Nothing of it exists yet: glTF skins and animations are skipped on import and th
   and Visualisers sections of `manual/editor/`, the command reference and `CHANGELOG.md`.
   On the way the Inspector stopped reporting parts of files (`#mesh/0`) as missing assets and stopped
   touching the file system for asset fields in every frame (that made every idle frame with a model allocate).
-  Open: the tech demo creature as the manual's screenshot subject (the creature arrives with NAV-3, PR #160,
-  which is not on this branch); `animation.status` in the edit World still reports the saved fields only,
-  although `ViewportHost::editAnimation()` now gives it the viewports' poses; an editor frame that runs several
-  game updates shows the events of its last update only.
+  Open (closed by ANIM-4c, except the last): an editor frame that runs several game updates shows the events of
+  its last update only.
+- ✅ ANIM-4c (`mechanic`): Closing. `animation.status` in the edit World reads `ViewportHost::editAnimation()`:
+  with a Scene view posing the World it is `live` with `posed`, `joints`, the loaded graph's layers and
+  parameters at the saved time (the result's shape is unchanged, so the command's version stays); without a
+  viewport it keeps `live: false` and the saved fields. The tech demo's creature is the animation manual's
+  screenshot (`images/editor/animation-preview.png`: Preview section and Skeletons visualiser), taken by
+  `docs/screenshots/animation.jsonl` (CTest `docs.screenshots.animation`, label `gpu`) on a copy of
+  `samples/techdemo` without its downloaded assets, with a scene built from committed files only.
 - ANIM-4 (scope): clip and state-machine preview in the Inspector, a timeline scrubber,
   `animation.*` commands (MCP tools), skeleton debug drawing; the tech demo gets an animated creature;
   documentation (EN/TR)
@@ -1508,6 +1517,29 @@ Today games can only set the parameters of the built-in PBR material.
 - Shading models (default, subsurface, two-sided foliage, unlit, clear coat); a node-based material editor
   later; documentation of the surface API
 
+## CAM — Camera system
+
+Games have only the `Camera` Component; every sample moves it by hand. A general camera system in the spirit
+of virtual-camera rigs, so that a third-person, first-person, orbit, rail or cutscene camera is data, not
+game code.
+
+- Virtual cameras as saved Components with priorities; the camera brain on the real `Camera` picks the
+  highest live one and blends to it (cut, ease, custom curve, per-pair overrides)
+- Body and aim stages as data: follow with offset and damping, orbit, spring arm with collision against
+  physics layers, framing composer (dead and soft zones), look-at with damping, path/dolly tracks
+- Impulses and noise: camera shake from game events with falloff, handheld noise profiles
+- Input binding through `InputActions` (look, zoom, shoulder swap) and a `CameraService` for modules
+- `camera.*` editor commands, a preview of the live and blending cameras in the Scene view, EN/TR docs
+- Determinism with fixed steps; no per-frame allocation; benchmarks of 100 virtual cameras
+
+## ANIM-5 — Retargeting and aim layers
+
+- Humanoid retargeting: a joint map per skeleton (generated by name and topology, editable), clips played
+  on any mapped skeleton with rest-pose correction and proportional root motion
+- Aim layers: additive aim offsets from a pitch/yaw blend space on an upper-body mask, so a character aims
+  while it walks, runs or crouches; `AnimationService` calls to drive them
+- Tests on two CC0 rigs with different joint names and proportions; benchmarks
+
 ## PROBE — Reflection and light probes
 
 Correct indirect light indoors and in shadow until ray tracing (M10) is available.
@@ -1524,6 +1556,31 @@ Correct indirect light indoors and in shadow until ray tracing (M10) is availabl
 - Deferred-style decals projected onto opaque surfaces in a box (base colour, normal, roughness, emission),
   sorted, layered and culled by mask; decal materials on the MAT system; footprints and impacts from game
   code through a pooled `DecalService`
+
+## POST — Cinematic post effects
+
+- Depth of field (physically based circle of confusion from focus distance and aperture, bokeh), driven
+  by `PostEffects` and by virtual cameras (CAM)
+- Per-object motion blur from the existing motion vectors; lens effects (lens dirt on bloom, flares)
+- Quality levels in `RenderSettings`; GPU goldens and budgets on lavapipe
+
+## SHOOTER — Third-person shooter demo
+
+A playable game in `samples/shooter` (beside the forest tech demo) that shows the engine at its best; it is
+built only from engine features and game-module code, and exported with `export.build`.
+
+- Player: walk, run, sprint, crouch, roll, aim, strafe, two weapons with hitscan fire and reload, hit
+  reactions, ragdoll on death; gamepad and keyboard/mouse with glyphs
+- Enemies: soldiers (patrol, hear, chase, take cover, shoot), a heavy mech, a melee creature, all on
+  behaviour trees, with ragdolls; a friendly NPC who gives the mission, with subtitled lines
+- Two scenes as missions with objectives, markers, triggers and checkpoints: an outpost at sunset and a
+  facility at night with the mech fight and the extraction
+- UI: main menu, settings (graphics, audio, rebinding), HUD (health, ammo, crosshair, objective, damage
+  direction, compass), pause, save slots with images, loading screen, mission complete
+- Sky, fog and light shafts; muzzle flashes, tracers, sparks, smoke, explosions, decals; weapons, footsteps,
+  ambience and music
+- Assets: CC0 packs pinned by size and SHA-256 and fetched by a script (never committed), replaceable by
+  the owner's own packs from a local folder that is never committed either
 
 ## TERRAIN — Terrain
 

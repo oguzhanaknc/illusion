@@ -82,7 +82,8 @@ version changes are in the contributor guide ("Versions and releases"). The vers
   Inspector card with the clip or graph, a timeline scrubber (one undo step per drag), the state of each layer,
   the parameters and the last events in Play mode; the Skeletons visualiser of the Scene view (bones, joints, IK
   targets, spring chains and ragdoll parts in theme colours, `viewport.set_overlays` `skeleton`);
-  `AnimationWorld::clip()` and `AnimationWorld::graphBinding()`.
+  `AnimationWorld::clip()` and `AnimationWorld::graphBinding()`; `animation.status` in the edit World reports
+  the poses of the Scene view, and the manual shows the tech demo's creature in the Inspector.
 - Navigation meshes (NAV-1a): the Recast Navigation 1.6.0 dependency, the library `illusion::nav`, the saved
   `NavMeshSurface`, `NavArea`, `NavLink`, `NavObstacle` and `NavAgent` Components, a tiled navmesh bake from
   colliders on the Job System with identical bytes for any worker count, per-tile input hashes with

@@ -262,12 +262,20 @@ Expected<AnimationStatusResult, CommandError> animationStatus(CommandContext& co
                                                               const AnimationStatusParams& params)
 {
     World& world = context.world();
-    AnimationWorld* animation = nullptr;
+    const AnimationWorld* animation = nullptr;
     if (context.onPlayWorld())
     {
         if (PlayHost* play = context.editor().play())
         {
             animation = play->animation();
+        }
+    }
+    else if (const ViewportHost* viewports = context.editor().viewports())
+    {
+        animation = viewports->editAnimation();
+        if (animation != nullptr && &animation->world() != &world)
+        {
+            animation = nullptr;
         }
     }
     std::optional<Entity> one;
@@ -299,8 +307,8 @@ Expected<AnimationStatusResult, CommandError> animationStatus(CommandContext& co
         result.note =
             context.onPlayWorld()
                 ? "the play session has no animation runtime: only the saved Animator fields are shown"
-                : "the edit World has no animation runtime here: only the saved Animator fields are "
-                  "shown; start a play session (play.start) for poses, states and parameters";
+                : "the edit World has no animation runtime here (no viewport poses it): only the saved "
+                  "Animator fields are shown; start a play session (play.start) for states and parameters";
     }
     {
         u32 total = 0;
@@ -636,8 +644,9 @@ void registerAnimationCommands(CommandRegistry& registry)
             "graph, speed, time, loop and playing, and, in a play session (play.start), whether the pose "
             "exists and its joint count, whether the graph has loaded, for each layer the current state, its "
             "normalized time and the state a running transition fades out, every parameter with its value "
-            "(a Trigger is 1 while set), and the state events of the last update. Without a play session "
-            "(world edit) only the saved fields are shown and note says so. Example: "
+            "(a Trigger is 1 while set), and the state events of the last update. The edit World reports "
+            "live:true with the poses (time, joints) of the viewports when a viewport poses it; else only "
+            "the saved fields are shown and note says so. Example: "
             "{\"entity\": \"/Column\"}.",
         .category = "Animation",
         .icon = "animation",
