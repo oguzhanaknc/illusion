@@ -59,8 +59,8 @@ class World;
 /// UiService::playTransition() and transitionProgress(); version 6 added SaveService; version 7 added
 /// AnimationService; version 8 added AnimationService::jointTransform(); version 9 added
 /// AnimationService::setLookAtTarget(), setIkTarget() and setIkWeight(); version 10 belongs to
-/// the ANIM-3 ragdolls; version 11 added NavService.
-inline constexpr u32 kModuleApiVersion = 11;
+/// the ANIM-3 ragdolls; version 11 added NavService; version 12 added AiService.
+inline constexpr u32 kModuleApiVersion = 12;
 
 /// What a World attached to a ModuleHost is for.
 enum class WorldRole : u8

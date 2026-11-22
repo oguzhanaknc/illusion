@@ -3,6 +3,10 @@
 #include "modules/TestModuleShared.hpp"
 #include "physics/PhysicsTestSupport.hpp"
 
+#include <illusion/ai/AiComponents.hpp>
+#include <illusion/ai/AiWorld.hpp>
+#include <illusion/ai/AiWorldService.hpp>
+#include <illusion/assets/AssetStreamer.hpp>
 #include <illusion/core/AssetRef.hpp>
 #include <illusion/core/JobSystem.hpp>
 #include <illusion/core/Json.hpp>
@@ -17,6 +21,7 @@
 #include <illusion/nav/NavWorld.hpp>
 #include <illusion/nav/NavWorldService.hpp>
 #include <illusion/physics/PhysicsWorldService.hpp>
+#include <illusion/platform/FileSystem.hpp>
 
 #include <doctest/doctest.h>
 
@@ -819,6 +824,7 @@ TEST_CASE("a shared module calls every function of the service interfaces throug
     test::CountingSave saves;
     test::CountingAnimation animation;
     test::CountingNav nav;
+    test::CountingAi ai;
     ServiceSet services;
     services.provide<PhysicsService>(physics);
     services.provide<AudioService>(audio);
@@ -828,6 +834,7 @@ TEST_CASE("a shared module calls every function of the service interfaces throug
     services.provide<SaveService>(saves);
     services.provide<AnimationService>(animation);
     services.provide<NavService>(nav);
+    services.provide<AiService>(ai);
     f.host->attachWorld(f.secondWorld, WorldRole::Simulation, std::move(services));
     install(TEST_MODULE_V1, f.library);
     REQUIRE_FALSE(f.host->load(f.library));
@@ -843,6 +850,7 @@ TEST_CASE("a shared module calls every function of the service interfaces throug
     CHECK(saves.everyFunctionCalledOnce());
     CHECK(animation.everyFunctionCalledOnce());
     CHECK(nav.everyFunctionCalledOnce());
+    CHECK(ai.everyFunctionCalledOnce());
     CHECK(f.host->detachWorld(f.secondWorld));
 }
 
@@ -903,6 +911,81 @@ TEST_CASE("a shared module sends a NavAgent to a point and reads its status, dis
     CHECK(f.control.navStatus == NavAgentStatus::Arrived);
     CHECK(f.control.navRemaining < 0.5f);
     CHECK(glm::distance(world.get<Transform>(agent).position, Vec3(8.0f, 0.0f, 8.0f)) < 0.5f);
+    CHECK(f.host->detachWorld(world));
+}
+
+TEST_CASE(
+    "a shared module finishes an action, sees an abort, writes a key the tree reads and reports a noise")
+{
+    constexpr std::string_view kFinishTree = R"({"format": "illusion.behavior", "version": 1,
+      "blackboard": [{"name": "done", "type": "Bool"}],
+      "root": {"sequence": [{"action": "bite"}, {"setValue": {"key": "done", "value": true}},
+                            {"wait": {"seconds": 100}}]}})";
+    constexpr std::string_view kGuardTree = R"({"format": "illusion.behavior", "version": 1,
+      "blackboard": [{"name": "alarm", "type": "Bool"}],
+      "root": {"selector": [
+        {"guard": {"key": "alarm", "compare": "Equal", "value": true, "abort": "LowerPriority",
+                   "child": {"wait": {"seconds": 100}}}},
+        {"sequence": [{"name": "biting", "action": "bite"}, {"wait": {"seconds": 100}}]}]}})";
+
+    Fixture f;
+    World& world = f.secondWorld;
+    registerAiComponents(ComponentRegistry::instance());
+    VirtualFileSystem files;
+    REQUIRE(files.mount("game", f.directory.path, MountAccess::ReadWrite) == FileError::None);
+    REQUIRE(files.writeText("game:/finish.behavior", kFinishTree) == FileError::None);
+    REQUIRE(files.writeText("game:/guard.behavior", kGuardTree) == FileError::None);
+    AssetStreamer streamer(files, f.jobs);
+
+    BehaviorAgent finishing;
+    finishing.tree = AssetRef("game:/finish.behavior");
+    const Entity finisher = world.create(Transform{}, finishing);
+    BehaviorAgent guarded;
+    guarded.tree = AssetRef("game:/guard.behavior");
+    AiPerception ears;
+    ears.sightRadius = 0.0f;
+    const Entity listener = world.create(Transform{}, guarded, ears);
+    const Entity maker = world.create(Transform{});
+
+    NavWorld navigation(world, nullptr);
+    AiWorld ai(world, navigation, &streamer);
+    ai.waitIdle();
+    AiWorldService aiService(ai);
+    ServiceSet services;
+    services.provide<AiService>(aiService);
+    f.host->attachWorld(world, WorldRole::Simulation, std::move(services));
+    install(TEST_MODULE_V1, f.library);
+    REQUIRE_FALSE(f.host->load(f.library));
+    f.control.aiFinisher = finisher;
+    f.control.aiGuarded = listener;
+    f.control.aiNoisePosition = Vec3(2.0f, 1.6f, 0.0f);
+    f.control.aiNoiseSource = maker;
+
+    constexpr f64 kStep = 1.0 / 60.0;
+    const auto step = [&] {
+        f.host->update(world, kStep);
+        ai.update(static_cast<f32>(kStep), &f.jobs, nullptr, true);
+    };
+    for (u32 i = 0; i < 4 && !f.control.aiFinisherDone; ++i)
+    {
+        step();
+    }
+    CHECK(f.control.aiStarted == 2); // both agents bit once
+    CHECK(f.control.aiFinisherDone);
+    CHECK(std::string_view(f.control.aiRunning) == "biting");
+    CHECK(f.control.aiError == static_cast<i32>(AiError::NoAgent));
+
+    f.control.aiWrite = true;
+    step();
+    step();
+    CHECK(f.control.aiWritten);
+    CHECK(f.control.aiAborted == 1);
+
+    f.control.aiNoise = true;
+    step();
+    step();
+    CHECK(f.control.aiNoiseSent);
+    CHECK(f.control.aiPerceivedCount == 1);
     CHECK(f.host->detachWorld(world));
 }
 

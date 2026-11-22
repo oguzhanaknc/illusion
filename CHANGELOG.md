@@ -86,10 +86,13 @@ version changes are in the contributor guide ("Versions and releases"). The vers
   decorators, guards with abort modes and leaves for movement and game actions), `parseBehaviorTree()`, the
   tick `tickBehaviorTree()` over a `BehaviorContext`, the geometry of sight and hearing, the Benchmark
   `ai/tick-1000` and the manual page "AI".
+- AI in the game and for modules (NAV-2b, NAV-2c): `AiWorld` with perception (sight with line-of-sight
+  raycasts, hearing, memory), the AI step of the game session, and `AiService` (blackboard writes and reads,
+  game actions, noises, what an agent perceives) with the adapter `AiWorldService`.
 
 ### Changed
 
-- The module API version is 9 (`AnimationService` gained `setLookAtTarget()`, `setIkTarget()` and
+- The module API version is 12 (`AiService` joined in version 12, `NavService` in 11, `AnimationService` gained `setLookAtTarget()`, `setIkTarget()` and
   `setIkWeight()`; version 8 added `jointTransform()`, version 7
   `AnimationService`, version 6 `UiService`, `SceneService::requestExit()` and `SaveService`, and `UiService`
   gained `playTransition()` and `transitionProgress()`): game modules built for an earlier version must be

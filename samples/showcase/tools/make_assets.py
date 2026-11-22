@@ -419,12 +419,14 @@ def write_column_graph(path):
 
 def write_guard_tree(path):
     """The behaviour tree of the AI guard: it walks to a target its perception sees and asks game code to
-    "greet" it, and otherwise wanders around "home" (a starting value of the agent) with pauses."""
+    "greet" it, and otherwise wanders around "home" (a starting value of the agent) with pauses. Game code
+    writes "alert", "greetings" and "boldness" through the AiService."""
     tree = {
         "format": "illusion.behavior",
         "version": 1,
         "blackboard": [{"name": "target", "type": "Entity"}, {"name": "lastSeen", "type": "Vector3"},
-                       {"name": "home", "type": "Vector3"}],
+                       {"name": "home", "type": "Vector3"}, {"name": "alert", "type": "Bool"},
+                       {"name": "greetings", "type": "Int"}, {"name": "boldness", "type": "Float"}],
         "root": {"selector": [
             {"guard": {"key": "target", "compare": "IsSet", "abort": "LowerPriority", "child": {"sequence": [
                 {"moveTo": {"key": "target", "acceptance": 1.5}}, {"action": "greet"}]}}},

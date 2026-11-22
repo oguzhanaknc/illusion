@@ -5,8 +5,8 @@ key'lerden oluşan bir blackboard ve bir agent'ın tick tick ne yapacağına kar
 ([ADR 0062](../architecture/decisions.md)). Hareket [Navigasyon](navigation.md) üzerinden gider.
 
 !!! note "Bugün neler var"
-    Bu sayfa `.behavior` formatını, blackboard'u, tick'i, AI Component'lerini ve `AiWorld`'ü anlatır. Oyun
-    modülleri için `AiService` (NAV-2c) ve `ai.*` Editor commands (NAV-2d) sonraki paketlerle gelir.
+    Bu sayfa `.behavior` formatını, blackboard'u, tick'i, AI Component'lerini, `AiWorld`'ü ve oyun modülleri
+    için `AiService`'i anlatır. `ai.*` Editor commands (NAV-2d) sonraki paketle gelir.
 
 ## The `.behavior` file
 
@@ -279,6 +279,13 @@ Geometri `illusion/ai/Perception.hpp` içinde saf fonksiyonlar olarak durur:
 böylece bir tick'in hareketleri aynı update'te hedef olur; sabit adımlarla önce navmesh'leri ve tree
 yüklemelerini bekler. Tree'ler yalnızca oturum başlatılmışken tick'lenir; `drawDebug()` görüş konilerini,
 görüleni, hatıraları ve gürültüleri çizer.
+
+## Bir modülden
+
+Bir oyun modülü `AiService`'i `context.service<illusion::AiService>()` ile bulur (`illusion_add_module`'da
+`USES ai`). Tree'nin okuduğu blackboard key'lerini yazar, tree'nin istediği action'ları yürütür ve noise
+bildirir. [Scripting API referansı](../reference/scripting-api.md#aiservice) her fonksiyonu ve hatalarını
+listeler.
 
 ## Performance
 

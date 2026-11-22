@@ -108,6 +108,20 @@ struct ModuleControl
     NavAgentStatus navStatus = NavAgentStatus::Idle; // status() at the last update
     f32 navRemaining = -1.0f;                        // remainingDistance() at the last update
     u32 navArrivals = 0;                             // Arrived events of navAgent seen
+    Entity aiFinisher;    // update() finishes the "bite" actions of this agent with success
+    Entity aiGuarded;     // the agent whose "alarm" key, noise and perception update() uses
+    bool aiWrite = false; // update() sets aiGuarded's Bool key "alarm", then clears this
+    bool aiNoise = false; // update() reports a noise at aiNoisePosition, then clears this
+    Vec3 aiNoisePosition{0.0f};
+    Entity aiNoiseSource;        // instigator of that noise
+    bool aiWritten = false;      // the write was accepted
+    bool aiNoiseSent = false;    // the noise was accepted
+    bool aiFinisherDone = false; // aiFinisher's Bool key "done" at the last update
+    u32 aiStarted = 0;           // Started actions seen
+    u32 aiAborted = 0;           // Aborted actions seen
+    u32 aiPerceivedCount = 0;    // what aiGuarded perceives at the last update
+    char aiRunning[32]{};        // runningNode() of aiGuarded at the last update
+    i32 aiError = -1;            // AiError of a write to an Entity without an agent
 };
 
 } // namespace illusion::test

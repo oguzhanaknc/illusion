@@ -6,13 +6,14 @@
 // 5: changes the layout of LayoutComponent (TEST_MODULE_LAYOUT_V2), which a hot reload migrates.
 // 6: widens the unreflected OpaqueComponent (TEST_MODULE_WIDE_OPAQUE), which a hot reload must reject.
 // Variants 1 to 4 and 6 start a session with two LayoutComponents and an OpaqueComponent.
-// Every variant is built with USES physics audio animation nav input render runtime ui save: the API targets
-// give it the headers of those libraries and their service interfaces without their code. update() can call
-// every service function (ModuleControl::callServices) and start() can build a mesh body
+// Every variant is built with USES physics audio animation nav ai input render runtime ui save: the API
+// targets give it the headers of those libraries and their service interfaces without their code. update()
+// can call every service function (ModuleControl::callServices) and start() can build a mesh body
 // (ModuleControl::createMesh).
 
 #include "TestModuleShared.hpp"
 
+#include <illusion/ai/AiService.hpp>
 #include <illusion/animation/AnimationComponents.hpp>
 #include <illusion/animation/AnimationService.hpp>
 #include <illusion/audio/AudioComponents.hpp>
@@ -35,7 +36,9 @@
 #include <illusion/save/SaveService.hpp>
 #include <illusion/ui/UiService.hpp>
 
+#include <algorithm>
 #include <array>
+#include <string_view>
 #include <type_traits>
 
 namespace
@@ -223,6 +226,71 @@ void callServices(ModuleContext& context)
         std::array<NavEvent, 2> events{};
         static_cast<void>(nav->pollEvents(events));
     }
+    if (AiService* ai = context.service<AiService>())
+    {
+        static_cast<void>(ai->setBool(e, "flag", true));
+        static_cast<void>(ai->setInt(e, "count", 3));
+        static_cast<void>(ai->setFloat(e, "speed", 1.5f));
+        static_cast<void>(ai->setVector(e, "goal", v));
+        static_cast<void>(ai->setEntity(e, "friend", e));
+        static_cast<void>(ai->clearValue(e, "goal"));
+        static_cast<void>(ai->value(e, "flag"));
+        std::array<AiActionRequest, 2> actions{};
+        static_cast<void>(ai->pollActions(actions));
+        static_cast<void>(ai->finishAction(e, 1, true));
+        static_cast<void>(ai->reportNoise({.position = v, .radius = 4.0f, .instigator = e, .team = 0}));
+        std::array<AiPerceived, 2> perceived{};
+        static_cast<void>(ai->perceived(e, perceived));
+        static_cast<void>(ai->runningNode(e));
+        static_cast<void>(ai->restart(e));
+    }
+}
+
+// Finishes the "bite" actions of control.aiFinisher, writes, reports and reads what the control asks for.
+void driveAi(ModuleContext& context, test::ModuleControl& control)
+{
+    AiService* ai = context.service<AiService>();
+    if (ai == nullptr || control.aiFinisher.isNull())
+    {
+        return;
+    }
+    std::array<AiActionRequest, 8> actions{};
+    const u32 count = ai->pollActions(actions);
+    for (u32 i = 0; i < count && i < actions.size(); ++i)
+    {
+        if (actions[i].phase == AiActionPhase::Aborted)
+        {
+            ++control.aiAborted;
+            continue;
+        }
+        ++control.aiStarted;
+        if (actions[i].entity == control.aiFinisher && actions[i].name == "bite")
+        {
+            static_cast<void>(ai->finishAction(actions[i].entity, actions[i].action, true));
+        }
+    }
+    if (control.aiWrite)
+    {
+        control.aiWrite = false;
+        control.aiWritten = ai->setBool(control.aiGuarded, "alarm", true).hasValue();
+    }
+    if (control.aiNoise)
+    {
+        control.aiNoise = false;
+        control.aiNoiseSent = ai->reportNoise({.position = control.aiNoisePosition,
+                                               .radius = 8.0f,
+                                               .instigator = control.aiNoiseSource,
+                                               .team = 0})
+                                  .hasValue();
+    }
+    control.aiFinisherDone = ai->value(control.aiFinisher, "done").valueOr(BlackboardValue{}).flag;
+    std::array<AiPerceived, 4> perceived{};
+    control.aiPerceivedCount = ai->perceived(control.aiGuarded, perceived).valueOr(0u);
+    const std::string_view node = ai->runningNode(control.aiGuarded).valueOr(std::string_view{});
+    const usize length = std::min(node.size(), sizeof(control.aiRunning) - 1);
+    std::copy_n(node.begin(), length, control.aiRunning);
+    control.aiRunning[length] = '\0';
+    control.aiError = static_cast<i32>(ai->setBool(Entity{}, "alarm", true).error());
 }
 
 // Sends control.navAgent to control.navDestination when asked and reads its state and events.
@@ -395,6 +463,7 @@ void updateModule(ModuleContext& context, f64)
         callServices(context);
     }
     driveNavAgent(context, control);
+    driveAi(context, control);
     ILL_ASSERT(!control.assertInUpdate, "assertion from the test module");
 }
 

@@ -1,9 +1,8 @@
 // The game module of the showcase project. It plays the everything scene through the whole scripting API:
-// every function of ModuleContext and of the ten host services (PhysicsService, AudioService, InputService,
-// ParticleService, SceneService, StoreService, UiService, SaveService, AnimationService and NavService) is
-// called from here, which
-// tools/check_api_coverage.py checks and the engine tests count at run time
-// (tests/showcase/TestShowcaseModule.cpp).
+// every function of ModuleContext and of the eleven host services (PhysicsService, AudioService,
+// InputService, ParticleService, SceneService, StoreService, UiService, SaveService, AnimationService,
+// NavService and AiService) is called from here, which tools/check_api_coverage.py checks and the engine
+// tests count at run time (tests/showcase/TestShowcaseModule.cpp).
 //
 // What it does, decided only by the frame number and the input so that fixed-step runs repeat exactly:
 // - start: a floor and a gem from mesh geometry, the Jump and Move actions, a chime made from numbers, the
@@ -28,6 +27,7 @@
 // - stop: unloads the clips.
 // Everything that hot reloads must keep lives in the Components showcase.Stats (saved) and showcase.Runtime.
 
+#include <illusion/ai/AiService.hpp>
 #include <illusion/animation/AnimationComponents.hpp>
 #include <illusion/animation/AnimationService.hpp>
 #include <illusion/audio/AudioService.hpp>
@@ -123,9 +123,16 @@ struct Runtime
     f32 columnTop = 0.0f;      ///< World height of the Column's "top" joint (its lamp's socket).
     Entity strider{};
     Entity walker{};
-    u32 navArrivals = 0;                             ///< Arrived events of the Nav Walker so far.
-    f32 navPathLength = 0.0f;                        ///< Length of the path found at frame 5, in m.
-    f32 navRemaining = 0.0f;                         ///< Distance the Nav Walker had left at the last update.
+    Entity aiGuard{};         ///< The AI Guard, whose actions the module carries out.
+    Entity aiSleeper{};       ///< The AI Sleeper, whose blackboard the module writes.
+    Entity aiIntruder{};      ///< The AI Intruder the guard sees.
+    Entity aiHidden{};        ///< The AI Hidden Intruder, who makes a noise at frame 40.
+    u32 aiGreets = 0;         ///< Greet actions the module finished.
+    u32 aiPerceived = 0;      ///< What the AI Guard perceived at the last update.
+    bool aiBusy = false;      ///< The AI Guard's tree had a running node at the last update.
+    u32 navArrivals = 0;      ///< Arrived events of the Nav Walker so far.
+    f32 navPathLength = 0.0f; ///< Length of the path found at frame 5, in m.
+    f32 navRemaining = 0.0f;  ///< Distance the Nav Walker had left at the last update.
     NavAgentStatus navStatus = NavAgentStatus::Idle; ///< What the Nav Walker did at the last update.
     u32 uiEvents = 0;                                ///< UI events seen so far.
     u32 uiClicks = 0;                                ///< Clicks of the Go button.
@@ -196,13 +203,16 @@ constexpr u32 kWalkerSteps = 4;     // the walker achievement unlocks after 4 x 
 constexpr u32 kCountedFrames = 120; // the HUD counts the frames up to this one
 constexpr std::string_view kFramesKey = "showcase.hud.frames";
 constexpr std::string_view kLeanClip = "assets:/models/column.gltf#animation/lean";
-constexpr u32 kBowFrame = 30;      // the Column bows (a trigger of its graph)
-constexpr u32 kCalmFrame = 150;    // and returns to its first state
-constexpr u32 kNavQueryFrame = 5;  // the yard's navmesh is queried
-constexpr u32 kNavGoFrame = 10;    // the Nav Walker is sent to its destination
-constexpr u32 kNavWarpFrame = 200; // warped back to where it started
-constexpr u32 kNavStopFrame = 280; // and stopped
-constexpr u32 kNavAgentType = 1;   // the yard's navmesh (the Nav Surface)
+constexpr u32 kBowFrame = 30;        // the Column bows (a trigger of its graph)
+constexpr u32 kCalmFrame = 150;      // and returns to its first state
+constexpr u32 kNavQueryFrame = 5;    // the yard's navmesh is queried
+constexpr u32 kNavGoFrame = 10;      // the Nav Walker is sent to its destination
+constexpr u32 kNavWarpFrame = 200;   // warped back to where it started
+constexpr u32 kNavStopFrame = 280;   // and stopped
+constexpr u32 kNavAgentType = 1;     // the yard's navmesh (the Nav Surface)
+constexpr u32 kAiWriteFrame = 20;    // the AI Sleeper's blackboard is written and read
+constexpr u32 kAiNoiseFrame = 40;    // the hidden intruder makes a noise
+constexpr u32 kAiRestartFrame = 250; // the sleeper's tree starts again
 
 Quat identity() noexcept
 {
@@ -416,6 +426,10 @@ void startModule(ModuleContext& context)
     runtime.column = findNamed(world, "Column");
     runtime.strider = findNamed(world, "Strider");
     runtime.walker = findNamed(world, "Nav Walker");
+    runtime.aiGuard = findNamed(world, "AI Guard");
+    runtime.aiSleeper = findNamed(world, "AI Sleeper");
+    runtime.aiIntruder = findNamed(world, "AI Intruder");
+    runtime.aiHidden = findNamed(world, "AI Hidden Intruder");
     if (Animator* animator = world.tryGet<Animator>(runtime.column))
     {
         animator->playing = true; // the scene holds it still for the editor
@@ -908,6 +922,50 @@ void updateNavigation(NavService& nav, Runtime& runtime, u32 frame)
     runtime.navRemaining = nav.remainingDistance(runtime.walker).valueOr(0.0f);
 }
 
+// The AI Guard: its greet actions are carried out, what it perceives and runs is read, a noise is reported
+// and the AI Sleeper's blackboard is written, read and cleared.
+void updateAi(AiService& ai, Runtime& runtime, u32 frame)
+{
+    std::array<AiActionRequest, 8> actions{};
+    const u32 count = ai.pollActions(actions);
+    for (u32 i = 0; i < count && i < actions.size(); ++i)
+    {
+        if (actions[i].phase == AiActionPhase::Started && actions[i].name == "greet" &&
+            ai.finishAction(actions[i].entity, actions[i].action, true))
+        {
+            ++runtime.aiGreets;
+        }
+    }
+    if (frame == kAiWriteFrame)
+    {
+        static_cast<void>(ai.setBool(runtime.aiSleeper, "alert", true));
+        static_cast<void>(ai.setInt(runtime.aiSleeper, "greetings", 3));
+        static_cast<void>(ai.setFloat(runtime.aiSleeper, "boldness", 0.5f));
+        static_cast<void>(ai.setVector(runtime.aiSleeper, "home", Vec3(33.0f, 0.0f, -4.0f)));
+        static_cast<void>(ai.setEntity(runtime.aiSleeper, "target", runtime.aiIntruder));
+        const Expected<BlackboardValue, AiError> target = ai.value(runtime.aiSleeper, "target");
+        if (!target)
+        {
+            ILL_LOG_INFO("Showcase", "AI target: {}", aiErrorName(target.error()));
+        }
+        static_cast<void>(ai.clearValue(runtime.aiSleeper, "target"));
+    }
+    if (frame == kAiNoiseFrame)
+    {
+        static_cast<void>(ai.reportNoise({.position = Vec3(26.0f, 0.0f, 3.0f),
+                                          .radius = 10.0f,
+                                          .instigator = runtime.aiHidden,
+                                          .team = 1}));
+    }
+    if (frame == kAiRestartFrame)
+    {
+        static_cast<void>(ai.restart(runtime.aiSleeper));
+    }
+    std::array<AiPerceived, 8> perceived{};
+    runtime.aiPerceived = ai.perceived(runtime.aiGuard, perceived).valueOr(0u);
+    runtime.aiBusy = !ai.runningNode(runtime.aiGuard).valueOr(std::string_view{}).empty();
+}
+
 // The HUD: the frame counter, the palette, the focus, the values and the events of the last UI update.
 void updateUi(UiService& ui, SceneService* scenes, Runtime& runtime, u32 frame)
 {
@@ -995,6 +1053,7 @@ void updateModule(ModuleContext& context, f64 deltaSeconds)
     SaveService* saves = context.service<SaveService>();
     AnimationService* animation = context.service<AnimationService>();
     NavService* nav = context.service<NavService>();
+    AiService* ai = context.service<AiService>();
     Entity self{};
     world.query<const Stats>().each([&self](Entity entity, const Stats&) { self = entity; });
     if (!world.isAlive(self))
@@ -1046,6 +1105,10 @@ void updateModule(ModuleContext& context, f64 deltaSeconds)
     if (nav != nullptr)
     {
         updateNavigation(*nav, runtime, stats.frames);
+    }
+    if (ai != nullptr)
+    {
+        updateAi(*ai, runtime, stats.frames);
     }
     ++stats.frames;
 }
