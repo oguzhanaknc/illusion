@@ -501,6 +501,8 @@ struct RpcServer::Shared
         std::string method;
         std::string clientToken;
         std::string params; // summary for the activity ring
+        // The gate of the command's later frames (its steps check it), so it outlives the command.
+        std::unique_ptr<PermissionGate> gate;
         std::unique_ptr<RunningCommand> command;
         CommandProgress sent; // progress in the last rpc.progress
         bool cancelled = false;
@@ -1623,11 +1625,11 @@ bool RpcServer::startTask(const std::shared_ptr<Connection>& connection, const R
             return false;
         }
     }
-    const PermissionGate gate(m_shared->mode.load(), connection->allowed, approved);
+    auto gate = std::make_unique<PermissionGate>(m_shared->mode.load(), connection->allowed, approved);
     CommandOptions options;
     options.origin = connection->origin;
     options.caller = connection->id;
-    options.gate = &gate;
+    options.gate = gate.get();
     Expected<std::unique_ptr<RunningCommand>, CommandError> started =
         m_editor.startJson(request.method, request.params, options);
     if (!started)
@@ -1647,6 +1649,7 @@ bool RpcServer::startTask(const std::shared_ptr<Connection>& connection, const R
     task.method = std::string(request.method);
     task.clientToken = std::string(clientToken.value_or(""));
     task.params = summary(request.params, kActivityParams);
+    task.gate = std::move(gate);
     task.command = std::move(started).value();
     task.started = std::chrono::steady_clock::now();
     m_shared->tasks.push_back(std::move(task));
