@@ -27,6 +27,7 @@ illusion_add_editor_executable(illusion_editor_tests
     core/TestEditorModules.cpp
     core/TestGameUiCommands.cpp
     core/TestUiPlacementEdit.cpp
+    core/TestNavCommands.cpp
     core/TestParticleCommands.cpp
     core/TestEditorPrefabs.cpp
     core/TestEditorProfiler.cpp
@@ -63,7 +64,7 @@ target_include_directories(illusion_editor_tests PRIVATE ${CMAKE_CURRENT_SOURCE_
 target_link_libraries(illusion_editor_tests PRIVATE
     illusion_ui_gallery_pages illusion::editor_core illusion::editor_client illusion::editor_shell
     illusion::editor_viewport illusion::editor_play
-    illusion::render illusion::assets illusion::ui illusion::input illusion::physics illusion::audio illusion::save illusion::nav illusion::doctest)
+    illusion::render illusion::assets illusion::ui illusion::input illusion::physics illusion::audio illusion::save illusion::nav illusion::ai illusion::doctest)
 # Golden files of the editor core (ILLUSION_UPDATE_GOLDENS=1 rewrites them).
 target_compile_definitions(illusion_editor_tests PRIVATE ILLUSION_EDITOR_TEST_DATA="${CMAKE_CURRENT_SOURCE_DIR}/data"
     ILLUSION_ENGINE_TEST_DATA="${PROJECT_SOURCE_DIR}/tests/data" ILLUSION_SAMPLES_DIR="${PROJECT_SOURCE_DIR}/samples")
@@ -134,7 +135,7 @@ target_include_directories(illusion_editor_gpu_tests PRIVATE ${CMAKE_CURRENT_SOU
 target_link_libraries(illusion_editor_gpu_tests PRIVATE
     illusion_ui_gallery_pages illusion::editor_shell illusion::editor_client illusion::editor_viewport
     illusion::editor_play illusion::render
-    illusion::physics illusion::audio illusion::particles illusion::save illusion::nav illusion::doctest)
+    illusion::physics illusion::audio illusion::particles illusion::save illusion::nav illusion::ai illusion::doctest)
 target_compile_definitions(illusion_editor_gpu_tests PRIVATE
     ILLUSION_FAKE_CMAKE="$<TARGET_FILE:illusion_fake_cmake>"
     ILLUSION_PACK_EXECUTABLE="$<TARGET_FILE:illusion_pack>"

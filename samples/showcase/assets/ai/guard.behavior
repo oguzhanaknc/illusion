@@ -1,0 +1,58 @@
+{
+  "format": "illusion.behavior",
+  "version": 1,
+  "blackboard": [
+    {
+      "name": "target",
+      "type": "Entity"
+    },
+    {
+      "name": "lastSeen",
+      "type": "Vector3"
+    },
+    {
+      "name": "home",
+      "type": "Vector3"
+    }
+  ],
+  "root": {
+    "selector": [
+      {
+        "guard": {
+          "key": "target",
+          "compare": "IsSet",
+          "abort": "LowerPriority",
+          "child": {
+            "sequence": [
+              {
+                "moveTo": {
+                  "key": "target",
+                  "acceptance": 1.5
+                }
+              },
+              {
+                "action": "greet"
+              }
+            ]
+          }
+        }
+      },
+      {
+        "sequence": [
+          {
+            "wander": {
+              "key": "home",
+              "radius": 5
+            }
+          },
+          {
+            "wait": {
+              "seconds": 1.5,
+              "deviation": 0.5
+            }
+          }
+        ]
+      }
+    ]
+  }
+}

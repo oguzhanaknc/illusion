@@ -282,6 +282,22 @@ TEST_CASE("undoing 2000 random commands restores the scene byte for byte, and re
         {
             editor.endFrame(1.0 / 60.0);
         }
+        // A surface to bake, and bakes that write a file and set NavMeshSurface::data (undoable steps).
+        if (i % 250 == 100)
+        {
+            ok(editor, "entity.create",
+               R"({"name":"Surface )" + std::to_string(i) +
+                   R"(","components":{"illusion.Transform":{},)"
+                   R"("illusion.NavMeshSurface":{"size":[4,2,4],"build":{"cellSize":0.5,"tileSize":16}}}})");
+        }
+        else if (i % 250 == 200)
+        {
+            const Expected<std::string, CommandError> baked = test::run(editor, "nav.bake");
+            if (!baked)
+            {
+                CHECK_MESSAGE(baked.error().kind != ErrorKind::Internal, baked.error().message);
+            }
+        }
     }
     const std::string final = fixture.scene();
     const usize steps = editor.history().position();

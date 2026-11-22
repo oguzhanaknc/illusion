@@ -83,11 +83,19 @@ version changes are in the contributor guide ("Versions and releases"). The vers
   rebuilds the tiles of changed sources in the background, and answers `findPath()`, `nearestPoint()`,
   `raycast()` and `randomPoint()` queries with `NavQueryFilter` and area costs; `drawDebug()`, the Nav yard
   of the showcase and the manual sections "Run time" and "Queries".
+- Navigation in the editor (NAV-1e): the Editor commands `nav.bake` (changed tiles only, writes the `.navmesh`
+  and sets `NavMeshSurface::data`), `nav.status`, `nav.path` and `nav.debug`, the edit World's `NavWorld`, the
+  navigation shown in the Scene views, a `nav.bake` step in the showcase build and the manual section "In the
+  editor".
+- Behaviour trees (NAV-2a): the library `illusion::ai` with `.behavior` files (blackboard keys, composites,
+  decorators, guards with abort modes and leaves for movement and game actions), `parseBehaviorTree()`, the
+  tick `tickBehaviorTree()` over a `BehaviorContext`, the geometry of sight and hearing, the Benchmark
+  `ai/tick-1000` and the manual page "AI".
 
 ### Changed
 
-- The module API version is 10 (`AnimationService` gained `setRagdoll()`; version 9 added
-  `setLookAtTarget()`, `setIkTarget()` and `setIkWeight()`, version 8 added `jointTransform()`, version 7
+- The module API version is 11 (`NavService` was added; version 10 added `AnimationService::setRagdoll()`,
+  version 9 `setLookAtTarget()`, `setIkTarget()` and `setIkWeight()`, version 8 `jointTransform()`, version 7
   `AnimationService`, version 6 `UiService`, `SceneService::requestExit()` and `SaveService`, and `UiService`
   gained `playTransition()` and `transitionProgress()`): game modules built for an earlier version must be
   rebuilt.

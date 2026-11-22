@@ -190,7 +190,8 @@ navigation.warp(guard, spawnPoint); // moves at once and searches the path again
 `GameSession` owns a `NavWorld` (`navigation()`). Its Navigation step runs after Saves and before
 Animation: `NavWorld::update()` (with fixed steps it first waits for bakes and loads), then the session
 gives `Character` agents their velocities and sets the `speedParameter`s. The crowd advances only while the
-session is started.
+session is started. The AI step runs just before it: the moves of behaviour trees become the agents'
+destinations in the same update.
 
 ### From a module
 
@@ -278,6 +279,52 @@ of these errors:
 | `Truncated` | The file ends early or a size field is out of range |
 | `Checksum` | The checksum does not match |
 | `Invalid` | A value is out of range (tile coordinates, settings, a duplicate tile) |
+
+## In the editor
+
+The editor bakes and inspects navmeshes with four [Editor commands](../reference/editor-commands.md),
+which humans (the command palette) and AI agents share. The editor keeps a `NavWorld` over the edited scene
+that loads or bakes each surface's navmesh and is never advanced: its agents do not move.
+
+`nav.bake` bakes one `NavMeshSurface` (`surface`) or every surface of the scene, and sets
+`NavMeshSurface::data` to the `.navmesh` file it wrote. A surface without `data` gets
+`assets:/navigation/<entity name>.navmesh`, or the `path` of the call. The command is asynchronous, because
+the models of Mesh Colliders load first.
+
+```json
+{"method":"nav.bake","params":{"surface":"/Nav Surface"}}
+```
+
+- **Changed tiles only.** If the file exists, only the tiles whose input hash differs are built again
+  (`rebakeStaleTiles()`); `force` builds them all. The result lists the tiles and the rebuilt tiles of each
+  surface.
+- **Baking twice changes nothing.** The bytes are the same for the same input. A file whose bytes do not
+  change is not written, and the second bake rebuilds no tile.
+- **Undo.** The file is written first, then `data` is set by an undoable step. Undoing it restores `data`
+  and keeps the file.
+- **Errors.** A target that is not a `NavMeshSurface`, a `path` that is not a `.navmesh` file in `assets:/`,
+  or two surfaces that would write the same file, fail before anything is baked.
+
+`nav.status` lists the surfaces with their agent type, data file and whether their navmesh is complete, and
+counts tiles, polygons, pending and stale tiles and failed surfaces. `nav.path` finds a path between two
+points for an agent type, and returns its corner points, its length and whether it is partial. A point more
+than 2 m from the navmesh (4 m up and down) fails with an error that names `/from` or `/to`. Use it to check
+that a level is connected.
+
+```json
+{"method":"nav.path","params":{"from":[24,0,-6],"to":[35,1,5],"agentType":1}}
+```
+
+`nav.debug` shows the navigation in the Scene views through `drawDebug()`: the navmesh polygons coloured by
+area (`navMesh`), tile borders (`tiles`), links, agents, paths and obstacles. It is editor state, not
+undoable, and the flags you leave out keep their value.
+
+```json
+{"method":"nav.debug","params":{"enabled":true,"tiles":true}}
+```
+
+The `showcase` project bakes its navmesh with a `nav.bake` step of `build.jsonl`, so replaying the file
+regenerates `assets/navigation/yard.navmesh`.
 
 ## Run time
 

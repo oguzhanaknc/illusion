@@ -60,6 +60,54 @@ enum class BehaviorNodeType : u8
     Action,    ///< Game code: Running until a module finishes it (AiService::finishAction()).
 };
 
+/// Name of @p type as a `.behavior` file writes it, e.g. "moveTo".
+[[nodiscard]] constexpr std::string_view behaviorNodeTypeName(BehaviorNodeType type) noexcept
+{
+    switch (type)
+    {
+    case BehaviorNodeType::Sequence:
+        return "sequence";
+    case BehaviorNodeType::Selector:
+        return "selector";
+    case BehaviorNodeType::Parallel:
+        return "parallel";
+    case BehaviorNodeType::Inverter:
+        return "inverter";
+    case BehaviorNodeType::Succeeder:
+        return "succeeder";
+    case BehaviorNodeType::Failer:
+        return "failer";
+    case BehaviorNodeType::Repeat:
+        return "repeat";
+    case BehaviorNodeType::Retry:
+        return "retry";
+    case BehaviorNodeType::Cooldown:
+        return "cooldown";
+    case BehaviorNodeType::TimeLimit:
+        return "timeLimit";
+    case BehaviorNodeType::Guard:
+        return "guard";
+    case BehaviorNodeType::Wait:
+        return "wait";
+    case BehaviorNodeType::MoveTo:
+        return "moveTo";
+    case BehaviorNodeType::Wander:
+        return "wander";
+    case BehaviorNodeType::Stop:
+        return "stop";
+    case BehaviorNodeType::SetValue:
+        return "setValue";
+    case BehaviorNodeType::Condition:
+        return "condition";
+    case BehaviorNodeType::Action:
+        return "action";
+    }
+    return "sequence";
+}
+
+/// Acceptance radius in m of the moves of a Wander node.
+inline constexpr f32 kWanderAcceptance = 0.5f;
+
 /// What a Guard aborts when its condition changes.
 enum class BehaviorAbort : u8
 {
@@ -72,7 +120,7 @@ enum class BehaviorAbort : u8
 struct BehaviorNode
 {
     BehaviorNodeType type = BehaviorNodeType::Sequence; ///< Its kind.
-    std::string name;   ///< Optional label (status and debugging); defaults to the type's name.
+    std::string name;   ///< Label (status and debugging); defaults to behaviorNodeTypeName().
     u32 firstChild = 0; ///< Index of its first child in BehaviorTree::children.
     u32 childCount = 0; ///< Children: composites one or more, decorators one, leaves none.
     i32 key = -1;       ///< Guard, Condition, MoveTo, Wander, SetValue: blackboard key index, or -1.

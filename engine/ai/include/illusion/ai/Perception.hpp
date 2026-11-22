@@ -8,6 +8,9 @@
 #include <illusion/core/Math.hpp>
 #include <illusion/ecs/Entity.hpp>
 
+#include <cmath>
+#include <numbers>
+
 namespace illusion
 {
 
@@ -40,12 +43,40 @@ struct AiPerceived
     bool current = false;           ///< Sensed in the last update.
 };
 
-/// True when @p point lies within @p radius of @p eye and within the cone of full angle @p angle around the
-/// unit @p forward. Does not test the line of sight.
-[[nodiscard]] bool inSightCone(const Vec3& eye, const Vec3& forward, f32 radius, f32 angle,
-                               const Vec3& point) noexcept;
+/// True when @p point lies within @p radius of @p eye and within the cone of full angle @p angle (radians;
+/// 2 pi or more sees all around) around the unit @p forward. Both bounds are inclusive and the eye itself is
+/// inside. Does not test the line of sight.
+[[nodiscard]] inline bool inSightCone(const Vec3& eye, const Vec3& forward, f32 radius, f32 angle,
+                                      const Vec3& point) noexcept
+{
+    const Vec3 offset = point - eye;
+    const f32 distanceSquared = glm::dot(offset, offset);
+    if (!(radius > 0.0f) || distanceSquared > radius * radius)
+    {
+        return false;
+    }
+    if (distanceSquared == 0.0f || angle >= 2.0f * std::numbers::pi_v<f32>)
+    {
+        return true;
+    }
+    if (!(angle > 0.0f))
+    {
+        return false;
+    }
+    return glm::dot(offset, forward) >= std::cos(angle * 0.5f) * std::sqrt(distanceSquared);
+}
 
-/// True when a listener at @p listener with @p hearing hears @p noise.
-[[nodiscard]] bool hearsNoise(const Vec3& listener, f32 hearing, const AiNoise& noise) noexcept;
+/// True when a listener at @p listener with @p hearing hears @p noise: within the noise's radius times
+/// @p hearing (inclusive). A listener with hearing 0 or a noise of radius 0 hears nothing.
+[[nodiscard]] inline bool hearsNoise(const Vec3& listener, f32 hearing, const AiNoise& noise) noexcept
+{
+    const f32 reach = noise.radius * hearing;
+    if (!(hearing > 0.0f) || !(reach > 0.0f))
+    {
+        return false;
+    }
+    const Vec3 offset = noise.position - listener;
+    return glm::dot(offset, offset) <= reach * reach;
+}
 
 } // namespace illusion

@@ -80,8 +80,64 @@ enum class BlackboardCompare : u8
 };
 
 /// True when @p value compares with @p operand as @p compare says; @p alive is the liveness of an Entity
-/// value (the caller looks it up).
-[[nodiscard]] bool compareBlackboard(const BlackboardValue& value, BlackboardCompare compare,
-                                     const BlackboardValue& operand, bool alive) noexcept;
+/// value (the caller looks it up). Comparisons a type does not support (see BlackboardCompare) are false.
+[[nodiscard]] inline bool compareBlackboard(const BlackboardValue& value, BlackboardCompare compare,
+                                            const BlackboardValue& operand, bool alive) noexcept
+{
+    const bool set = value.type == BlackboardType::Entity ? value.set && alive : value.set;
+    if (compare == BlackboardCompare::IsSet)
+    {
+        return set;
+    }
+    if (compare == BlackboardCompare::IsNotSet)
+    {
+        return !set;
+    }
+    switch (value.type)
+    {
+    case BlackboardType::Bool:
+        if (compare == BlackboardCompare::Equal)
+        {
+            return value.flag == operand.flag;
+        }
+        return compare == BlackboardCompare::NotEqual && value.flag != operand.flag;
+    case BlackboardType::Int:
+        switch (compare)
+        {
+        case BlackboardCompare::Equal:
+            return value.integer == operand.integer;
+        case BlackboardCompare::NotEqual:
+            return value.integer != operand.integer;
+        case BlackboardCompare::Greater:
+            return value.integer > operand.integer;
+        case BlackboardCompare::Less:
+            return value.integer < operand.integer;
+        case BlackboardCompare::GreaterEqual:
+            return value.integer >= operand.integer;
+        case BlackboardCompare::LessEqual:
+            return value.integer <= operand.integer;
+        default:
+            return false;
+        }
+    case BlackboardType::Float:
+        switch (compare)
+        {
+        case BlackboardCompare::Equal:
+            return value.number == operand.number;
+        case BlackboardCompare::NotEqual:
+            return value.number != operand.number;
+        case BlackboardCompare::Greater:
+            return value.number > operand.number;
+        case BlackboardCompare::Less:
+            return value.number < operand.number;
+        default:
+            return false;
+        }
+    case BlackboardType::Vector3:
+    case BlackboardType::Entity:
+        return false;
+    }
+    return false;
+}
 
 } // namespace illusion

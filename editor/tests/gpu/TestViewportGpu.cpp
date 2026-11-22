@@ -622,6 +622,39 @@ TEST_CASE("the entity under a resting cursor is highlighted and reported, the ba
     CHECK(hover(pixel).hovered.isNull());
 }
 
+TEST_CASE("nav.debug draws the navmesh and its tiles in the Scene view and matches the golden image")
+{
+    GpuViewports gpu;
+    EditorContext& editor = gpu.editor();
+    test::ok(
+        editor, "entity.create",
+        R"({"name":"Ground","components":{"illusion.Transform":{"position":[0,-0.25,0]},)"
+        R"("illusion.RigidBody":{"motionType":"Static"},"illusion.Collider":{"halfExtents":[10,0.25,10]}}})");
+    test::ok(
+        editor, "entity.create",
+        R"({"name":"Wall","components":{"illusion.Transform":{"position":[0,1,-3.5]},)"
+        R"("illusion.RigidBody":{"motionType":"Static"},"illusion.Collider":{"halfExtents":[0.5,1,6.5]}}})");
+    test::ok(editor, "entity.create",
+             R"({"name":"Yard","components":{"illusion.Transform":{"position":[0,1,0]},)"
+             R"("illusion.NavMeshSurface":{"size":[20,4,20],"agentRadius":0.5,)"
+             R"("build":{"cellSize":0.5,"tileSize":20}}}})");
+    test::ok(editor, "viewport.set_overlays", R"({"grid":false})");
+    test::ok(editor, "viewport.set_mode", R"({"shading":"unlit"})");
+    test::ok(editor, "viewport.camera_set",
+             R"({"pivot":[0,0,0],"yaw":20,"pitch":-55,"distance":30,"animate":false})");
+    gpu.frame();
+    const Image without = gpu.capture();
+    test::ok(editor, "nav.debug", R"({"enabled":true,"tiles":true})");
+    test::ok(editor, "nav.status", "{}");
+    gpu.frame();
+    const Image with = gpu.capture();
+    CHECK(test::compareImages(with, without).differentFraction > 0.001);
+    test::checkGolden("viewport-navigation", with);
+    test::ok(editor, "nav.debug", R"({"enabled":false})");
+    gpu.frame();
+    CHECK(test::compareImages(gpu.capture(), without).differentFraction < 0.001);
+}
+
 TEST_CASE("a selected Camera shows its frustum, icon and picture-in-picture view")
 {
     GpuViewports gpu;

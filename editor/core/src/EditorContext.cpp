@@ -350,6 +350,8 @@ EditorContext::~EditorContext()
         std::error_code code;
         std::filesystem::remove_all(m_project->stateDirectory() / "trash" / utf8Path(m_session), code);
         m_thumbnails.close();
+        // Its streamer reads project files on a background thread until it is destroyed.
+        m_navigation.reset();
         m_project->unmount(m_files);
     }
     if (m_log)
@@ -369,6 +371,8 @@ Expected<void, CommandError> EditorContext::openProject(const std::filesystem::p
     {
         m_journal.closeClean();
         m_thumbnails.close();
+        // Its streamer reads project files on a background thread until it is destroyed.
+        m_navigation.reset();
         m_project->unmount(m_files);
         m_project.reset();
         m_editor.setFiles(nullptr, {}, {});
@@ -1664,6 +1668,15 @@ usize EditorContext::clearHistory()
     return removed;
 }
 
+EditorNavigation& EditorContext::navigation()
+{
+    if (!m_navigation)
+    {
+        m_navigation = std::make_unique<EditorNavigation>(m_world, m_files);
+    }
+    return *m_navigation;
+}
+
 void EditorContext::endFrame(f64 deltaSeconds)
 {
     ILL_PROFILE_SCOPE();
@@ -1672,6 +1685,10 @@ void EditorContext::endFrame(f64 deltaSeconds)
     {
         advanceWind(m_world, static_cast<f32>(deltaSeconds));
         m_previewParticles.update(static_cast<f32>(deltaSeconds));
+        if (m_navigation)
+        {
+            m_navigation->update();
+        }
     }
     if (m_commands.revision() != m_commandsRevision)
     {

@@ -10,8 +10,8 @@ by `build.jsonl` through `asset.set_import_settings`.
 `assets/input/showcase.input` holds the default bindings of the UI actions `ui.navigate`, `ui.submit` and
 `ui.cancel` (`input.action_define`); `settings/input.json` names it (`project.settings_set` on
 `illusion.InputSettings`).
-`assets/navigation/yard.navmesh` is the navmesh of the `Nav Surface` entity: `bakeNavMesh()` of its
-`collectNavGeometry()` in the saved scene, written with `encodeNavMeshData()`.
+`assets/navigation/yard.navmesh` is the navmesh of the `Nav Surface` entity, baked and written by the `nav.bake`
+step of `build.jsonl`.
 `settings/export.json` (product "Showcase", identifier `dev.illusion.showcase`, a copyright line, the icon
 `assets/icons/showcase.png`, one exclude pattern) comes from `project.settings_set` on `illusion.ExportSettings`.
 The icon is the engine's icon at 256 pixels, written by `illusion_icon - --png 256 assets/icons/showcase.png`.
