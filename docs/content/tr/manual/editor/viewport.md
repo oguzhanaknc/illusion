@@ -112,6 +112,7 @@ Görselleştiriciler kendi görüntüsü olmayan Component'lerin biçimini sahne
 | Joints | Her `Joint`'in bağlantı noktası ve ekseni, sınırları ve bağlı gövdeye giden çizgiyle. |
 | Audio | Uzamsal `AudioSource`'ların en küçük ve en büyük uzaklık küreleri ve konileri. |
 | Perception | Bir play oturumunda `AiPerception`'ların görüş konileri, gördükleri ve hatırladıkları şeyler ve son update'in gürültüleri; seçimden bağımsızdır ([AI](../ai.md#perception-gorunumu)). |
+| Skeletons | Pozlanmış `Animator`'ların kemikleri ve eklemleri, `LookAt` ve `TwoBoneIk` hedefleri (çocuklardakiler de) ve pole'ları, `SpringBone` zincirleri ve collider'ları ve `Ragdoll` parçalarının kapsülleri ([Animasyon](../animation.md#iskelet-gorunumu)). |
 
 Varsayılan olarak yalnızca seçili Entity'leri çizerler; Visualisers menüsündeki **All** her Entity'yi çizer.
 Gizli ve etkin olmayan Entity'ler asla çizilmez.

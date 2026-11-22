@@ -77,6 +77,12 @@ version changes are in the contributor guide ("Versions and releases"). The vers
   "Ragdolls".
 - The tutorial "Animate a character" (ANIM-3d) gained a lantern on a socket, a head that follows a target, foot
   placement on a step and a ragdoll, and the manual lists the benchmarks of spring bones and ragdolls.
+- Animation in the editor (ANIM-4): the Editor commands `animation.list`, `animation.status`,
+  `animation.set_parameter`, `animation.trigger`, `animation.scrub` and `animation.validate`; the Animator's
+  Inspector card with the clip or graph, a timeline scrubber (one undo step per drag), the state of each layer,
+  the parameters and the last events in Play mode; the Skeletons visualiser of the Scene view (bones, joints, IK
+  targets, spring chains and ragdoll parts in theme colours, `viewport.set_overlays` `skeleton`);
+  `AnimationWorld::clip()` and `AnimationWorld::graphBinding()`.
 - Navigation meshes (NAV-1a): the Recast Navigation 1.6.0 dependency, the library `illusion::nav`, the saved
   `NavMeshSurface`, `NavArea`, `NavLink`, `NavObstacle` and `NavAgent` Components, a tiled navmesh bake from
   colliders on the Job System with identical bytes for any worker count, per-tile input hashes with
@@ -118,3 +124,7 @@ version changes are in the contributor guide ("Versions and releases"). The vers
 - The editor without a GPU (`--headless --no-gpu`) now makes disabled Entities and their descendants Inactive
   after every change, so `gameui.layout`, `gameui.pick` and the physics queries no longer report disabled
   canvases, elements and bodies there.
+- The Inspector no longer warns that a part of a file (`model.gltf#mesh/0`, `#skin/0`, `#animation/<name>`) is a
+  missing asset, keeps the **Clear** button of the warning visible below a long path, and checks each file once
+  and again after `asset.changed` instead of in every frame, so idle frames with a model selected allocate
+  nothing.

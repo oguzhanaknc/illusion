@@ -83,7 +83,8 @@ const std::span<const illusion::SkinMatrix> skin = animation.skinMatrices(pose.s
 Add an `Animator` to the Entity of a skinned `MeshRenderer` in the Inspector and set its `skeleton` and
 `clip`. Outside Play mode the editor poses the edit World at the saved `time` without advancing it, so
 dragging `time` in the Inspector scrubs the clip in the Scene view. In Play mode the session's
-`AnimationWorld` advances `time` of every playing Animator; Stop returns to the saved values. The showcase
+`AnimationWorld` advances `time` of every playing Animator; Stop returns to the saved values. The
+Animator's card in the Inspector also has a timeline scrubber ([In the Inspector](#in-the-inspector)). The showcase
 project's `Column` plays its clip `sway` this way ([Showcase project](editor/showcase.md)).
 
 ## From the editor and agents
@@ -116,6 +117,43 @@ the edit World, also while the game plays, and the game starts from the time it 
 edit World reports the saved fields only (`live` is false and `note` says so): the poses, states and parameters
 exist in the play session. Every invalid param is reported with its JSON Pointer (`/name` for a parameter the
 graph does not have, with suggestions, `/value` for a value of the wrong type).
+
+### In the Inspector
+
+Select an Entity with an `Animator` and its Inspector card starts with a **Preview** section (**Live** in Play
+mode):
+
+| Row | What it shows |
+| --- | --- |
+| Pose | The joint count of the skeleton |
+| Clip or Graph | The clip with its length in seconds, or the layers, states and parameters of the graph |
+| Time (s) | Outside Play mode a scrubber from 0 to the clip's length (for a graph, the length of the entry state of its first layer); in Play mode the time as a bar |
+| One row per layer | The layer's current state with its progress, and the state a running transition fades out |
+| One row per parameter | Its value: disabled outside Play mode (the defaults), editable in Play mode; **Fire** sets a `Trigger` |
+| Events | In Play mode, the last eight state events of the Animator, newest first |
+
+Every change goes through a command, as an agent's would: dragging the scrubber runs `animation.scrub` (a drag
+is one undo step, and the Scene view shows the pose while you drag), a parameter runs
+`animation.set_parameter` and **Fire** runs `animation.trigger`, both on the play World. Events are read once
+per editor frame, so an editor frame that runs several game updates shows the events of its last one. The
+section reads the poses of the Scene view outside Play mode and those of the play session in Play mode;
+without them (a headless editor before **Play**) it shows a hint and the card keeps the saved fields only.
+
+### The skeleton view
+
+The **Skeletons** visualiser of the Scene view (the Visualisers menu, or `viewport.set_overlays` with
+`{"visualisers": {"skeleton": true}}`) draws the poses of the selected Animators (or of all with **All**):
+
+| Part | Colour |
+| --- | --- |
+| Bones between joints | `info` |
+| Joints, a small cross at each | `text.primary` |
+| `LookAt` and `TwoBoneIk` targets (on the Animator or its children) and the poles of the limbs, each with a line from its joint | `warning` |
+| `SpringBone` chains below their root, their joint radius and their colliders | `success` |
+| `Ragdoll` parts as capsules, from the `.ragdoll` profile or generated from the skeleton | `error` |
+
+The colours are tokens of the editor theme, so they follow the theme you pick. Outside Play mode the
+visualiser shows the pose at the saved time; in Play mode the pose of the running game, ragdolls included.
 
 ## Animation graphs
 
