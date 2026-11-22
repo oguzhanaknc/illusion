@@ -5,6 +5,7 @@
 #include "GoldenSupport.hpp"
 #include "core/EditorCoreTestSupport.hpp"
 
+#include <illusion/ai/AiComponents.hpp>
 #include <illusion/animation/AnimationComponents.hpp>
 #include <illusion/assets/AssetStreamer.hpp>
 #include <illusion/audio/AudioComponents.hpp>
@@ -83,6 +84,7 @@ struct ShowcaseGpu
         reflectParticleComponents();
         registerAnimationComponents(ComponentRegistry::instance());
         registerNavComponents(ComponentRegistry::instance());
+        registerAiComponents(ComponentRegistry::instance());
         registerUiComponents();
         registerSaveComponents();
         const std::filesystem::path project = directory.path / "showcase";

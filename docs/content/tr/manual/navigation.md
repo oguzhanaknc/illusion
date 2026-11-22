@@ -190,7 +190,8 @@ yalnızca `destination`'ı geri getirir: agent yüklemeden sonra yolunu yeniden 
 `GameSession` bir `NavWorld`'e sahiptir (`navigation()`). Navigation adımı Saves'ten sonra ve
 Animation'dan önce çalışır: `NavWorld::update()` (sabit adımlarla önce bake ve yüklemeleri bekler),
 ardından oturum `Character` agent'larına hızlarını verir ve `speedParameter`'ları ayarlar. Crowd yalnızca
-oturum başlatılmışken ilerler.
+oturum başlatılmışken ilerler. AI adımı hemen ondan önce çalışır: behaviour tree'lerin hareketleri aynı
+update'te agent'ların hedefleri olur.
 
 ### Bir modülden
 

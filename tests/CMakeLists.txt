@@ -3,6 +3,9 @@ illusion_require_dependency(doctest)
 add_executable(illusion_tests
     main.cpp
     AllocationCounter.cpp
+    ai/TestAiComponents.cpp
+    ai/TestAiPerceptionWorld.cpp
+    ai/TestAiWorld.cpp
     ai/TestBehaviorTree.cpp
     ai/TestBehaviorTreeState.cpp
     ai/TestBlackboard.cpp

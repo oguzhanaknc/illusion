@@ -1,14 +1,19 @@
 # illusion::ai — behaviour trees, blackboards and perception (ADR 0062): the `.behavior` format, the tree
-# state and its tick, the geometry of sight and hearing. AiWorld and its AiService adapter join it with NAV-2b.
+# state and its tick, the geometry of sight and hearing, the AI Components and AiWorld (perception through
+# PhysicsWorld raycasts, trees moving NavAgents through NavWorld). The AiService adapter joins it with NAV-2c.
 
 add_library(illusion_ai STATIC
+    src/AiComponents.cpp
+    src/AiWorld.cpp
     src/BehaviorTree.cpp
     src/BehaviorTreeState.cpp)
 add_library(illusion::ai ALIAS illusion_ai)
 
 target_include_directories(illusion_ai PUBLIC
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>)
-target_link_libraries(illusion_ai PUBLIC illusion::core)
+target_link_libraries(illusion_ai
+    PUBLIC illusion::core illusion::nav illusion::physics
+    PRIVATE illusion::assets)
 
 illusion_configure_target(illusion_ai)
 

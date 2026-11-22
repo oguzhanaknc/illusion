@@ -7,6 +7,7 @@
 //                     [--no-gpu] [--deterministic] [--seed <n>] [--permissions read-only|ask|auto]
 //                     [--frames <n>] [--ui-size <w>x<h>] [--user-dir <dir>]
 
+#include <illusion/ai/AiComponents.hpp>
 #include <illusion/animation/AnimationComponents.hpp>
 #include <illusion/assets/AssetStreamer.hpp>
 #include <illusion/assets/Image.hpp>
@@ -576,6 +577,7 @@ int run(const std::vector<std::string>& args)
     reflectParticleComponents();
     registerAnimationComponents(ComponentRegistry::instance());
     registerNavComponents(ComponentRegistry::instance());
+    registerAiComponents(ComponentRegistry::instance());
     registerUiComponents();
     registerSaveComponents();
 

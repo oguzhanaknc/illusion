@@ -1,11 +1,27 @@
 #include "Budget.hpp"
 
+#include <illusion/ai/AiComponents.hpp>
+#include <illusion/ai/AiWorld.hpp>
 #include <illusion/ai/BehaviorTree.hpp>
 #include <illusion/ai/BehaviorTreeState.hpp>
+#include <illusion/assets/AssetStreamer.hpp>
 #include <illusion/core/Assert.hpp>
+#include <illusion/core/JobSystem.hpp>
+#include <illusion/ecs/Transform.hpp>
+#include <illusion/ecs/World.hpp>
+#include <illusion/nav/NavWorld.hpp>
+#include <illusion/physics/PhysicsComponents.hpp>
+#include <illusion/physics/PhysicsWorld.hpp>
+#include <illusion/platform/FileSystem.hpp>
 
+#include <array>
+#include <cmath>
+#include <filesystem>
+#include <format>
 #include <optional>
+#include <random>
 #include <string_view>
+#include <system_error>
 #include <vector>
 
 using namespace illusion;
@@ -91,6 +107,37 @@ private:
     u32 m_actionStart = 0;
 };
 
+// kTree as "bench:/bench.behavior" in a temporary directory.
+struct TreeFiles
+{
+    std::filesystem::path root =
+        std::filesystem::temp_directory_path() / std::format("illusion-bench-ai-{}", std::random_device{}());
+    VirtualFileSystem files;
+    bool ready = false;
+
+    TreeFiles()
+    {
+        std::filesystem::create_directories(root);
+        ready = files.mount("bench", root, MountAccess::ReadWrite) == FileError::None &&
+                files.writeText("bench:/bench.behavior", kTree) == FileError::None;
+    }
+    ~TreeFiles()
+    {
+        std::error_code ignored;
+        std::filesystem::remove_all(root, ignored);
+    }
+    TreeFiles(const TreeFiles&) = delete;
+    TreeFiles& operator=(const TreeFiles&) = delete;
+};
+
+Transform placed(Vec3 position, f32 yaw = 0.0f)
+{
+    Transform transform;
+    transform.position = position;
+    transform.rotation = glm::angleAxis(yaw, Vec3(0.0f, 1.0f, 0.0f));
+    return transform;
+}
+
 } // namespace
 
 // Budget: ns per tick of 1,000 trees of 30 nodes on one thread, about 8x a desktop result (33 us); ADR 0062
@@ -123,5 +170,119 @@ ILL_BENCHMARK("ai/tick-1000", 250'000.0)
                            : 0u;
         }
         ankerl::nanobench::doNotOptimizeAway(running);
+    });
+}
+
+// Budget: ns per AiWorld update of 200 perceivers among 50 moving stimuli on a 100 m ground with 40 walls,
+// 256 line-of-sight raycasts, with the Job System, about 7x a 12-thread desktop result (0.1 ms); ADR 0062
+// aims at 1 ms.
+ILL_BENCHMARK("ai/perception-200", 750'000.0)
+{
+    constexpr f32 kStep = 1.0f / 60.0f;
+    JobSystem jobs;
+    World world;
+    PhysicsWorld physics(world, jobs);
+    NavWorld navigation(world, nullptr);
+    AiWorld ai(world, navigation, nullptr,
+               AiWorldDesc{.maxAgents = 256,
+                           .maxSightRaysPerUpdate = 256,
+                           .maxSightCandidates = 8,
+                           .maxNoisesPerUpdate = 64,
+                           .maxActions = 64,
+                           .seed = 1});
+    RigidBody fixed;
+    fixed.motionType = MotionType::Static;
+    Collider ground;
+    ground.shape = ColliderShape::Box;
+    ground.halfExtents = Vec3(50.0f, 0.5f, 50.0f);
+    world.create(placed(Vec3(0.0f, -0.5f, 0.0f)), fixed, ground);
+    Random random(3);
+    const auto point = [&random] {
+        return Vec3(random.uniformF32() * 90.0f - 45.0f, 0.0f, random.uniformF32() * 90.0f - 45.0f);
+    };
+    for (u32 i = 0; i < 40; ++i)
+    {
+        Collider wall;
+        wall.shape = ColliderShape::Box;
+        wall.halfExtents = i % 2 == 0 ? Vec3(4.0f, 1.5f, 0.25f) : Vec3(0.25f, 1.5f, 4.0f);
+        world.create(placed(point() + Vec3(0.0f, 1.5f, 0.0f)), fixed, wall);
+    }
+    for (u32 i = 0; i < 200; ++i)
+    {
+        AiPerception perception;
+        perception.sightRadius = 20.0f;
+        world.create(placed(point(), random.uniformF32() * 6.2831853f), perception);
+    }
+    std::vector<Entity> stimuli;
+    std::vector<Vec3> velocities;
+    for (u32 i = 0; i < 50; ++i)
+    {
+        stimuli.push_back(world.create(
+            placed(point()), AiStimulus{.team = 0, .offset = Vec3(0.0f, 1.0f, 0.0f), .visible = true}));
+        velocities.push_back(
+            Vec3(random.uniformF32() * 4.0f - 2.0f, 0.0f, random.uniformF32() * 4.0f - 2.0f));
+    }
+    physics.update(static_cast<f64>(kStep));
+    const auto update = [&] {
+        for (usize i = 0; i < stimuli.size(); ++i)
+        {
+            Vec3& position = world.get<Transform>(stimuli[i]).position;
+            position += velocities[i] * kStep;
+            if (std::abs(position.x) > 45.0f || std::abs(position.z) > 45.0f)
+            {
+                velocities[i] = -velocities[i];
+            }
+        }
+        ai.update(kStep, &jobs, &physics, true);
+    };
+    for (u32 i = 0; i < 30; ++i)
+    {
+        update();
+    }
+    ILL_CHECK(ai.statistics().rays == 256, "the perceivers have more candidates than the ray budget");
+    bench.unit("update").run("perceive with 200 perceivers, 50 stimuli and 256 rays", [&] {
+        update();
+        ankerl::nanobench::doNotOptimizeAway(ai.statistics().rays);
+    });
+}
+
+// Budget: ns per AiWorld update of 1,000 agents running the 30-node tree (no navigation, so moves fail at
+// once; every started action is finished), with the Job System, about 7x a 12-thread desktop result (0.18
+// ms).
+ILL_BENCHMARK("ai/world-1000", 1'300'000.0)
+{
+    constexpr f32 kStep = 1.0f / 60.0f;
+    TreeFiles tree;
+    ILL_CHECK(tree.ready, "the benchmark tree is written");
+    JobSystem jobs;
+    AssetStreamer streamer(tree.files, jobs, AssetStreamerDesc{.cacheMount = ""});
+    World world;
+    NavWorld navigation(world, nullptr);
+    AiWorld ai(world, navigation, &streamer);
+    for (u32 i = 0; i < kTrees; ++i)
+    {
+        BehaviorAgent agent;
+        agent.tree = AssetRef("bench:/bench.behavior");
+        world.create(placed(Vec3(static_cast<f32>(i % 32), 0.0f, static_cast<f32>(i / 32))), agent);
+    }
+    ai.waitIdle();
+    ILL_CHECK(ai.statistics().agents == kTrees && ai.statistics().pending == 0, "every agent has its tree");
+    const auto update = [&] {
+        ai.update(kStep, &jobs, nullptr, true);
+        for (const AiActionRequest& request : ai.actions())
+        {
+            if (request.phase == AiActionPhase::Started)
+            {
+                static_cast<void>(ai.finishAction(request.entity, request.action, true));
+            }
+        }
+    };
+    for (u32 i = 0; i < 30; ++i)
+    {
+        update();
+    }
+    bench.unit("update").run("update 1,000 agents", [&] {
+        update();
+        ankerl::nanobench::doNotOptimizeAway(ai.statistics().ticked);
     });
 }

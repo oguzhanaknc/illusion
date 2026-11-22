@@ -5,6 +5,7 @@
 
 #include "TestSupport.hpp"
 
+#include <illusion/ai/AiComponents.hpp>
 #include <illusion/core/AssetRef.hpp>
 #include <illusion/core/Json.hpp>
 #include <illusion/ecs/Reflection.hpp>
@@ -86,6 +87,7 @@ inline void reflectEditorTestComponents()
         reflectParticleComponents();
         reflectPhysicsComponents();
         registerNavComponents(ComponentRegistry::instance());
+        registerAiComponents(ComponentRegistry::instance());
         registerUiComponents();
         reflect<editortest::Link>("test.Link")
             .meta({.displayName = "Link", .category = "Test"})

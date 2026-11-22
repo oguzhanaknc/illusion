@@ -40,11 +40,12 @@ struct BehaviorAgent
     std::vector<BlackboardOverride> blackboard; ///< Starting values that replace the tree's defaults.
 };
 
-/// Lets the Entity see and hear AiStimulus Entities and noises.
+/// Lets the Entity see and hear AiStimulus Entities and noises. It looks along its +z axis, the way a
+/// NavAgent with faceMovement faces.
 struct AiPerception
 {
     f32 sightRadius = 15.0f;        ///< In m; 0 is blind.
-    f32 sightAngle = 2.0943951f;    ///< Full cone angle about the Entity's forward (-z) in radians (120°).
+    f32 sightAngle = 2.0943951f;    ///< Full cone angle about the Entity's +z axis in radians (120°).
     f32 eyeHeight = 1.6f;           ///< Height of the eye above the Entity's position in m.
     u32 occluderMask = 0xFFFFFFFFu; ///< Physics layers that block sight (bit i = layer i).
     f32 hearing = 1.0f;             ///< Multiplier of the radius of noises; 0 is deaf.
