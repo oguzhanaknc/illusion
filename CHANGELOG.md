@@ -82,6 +82,10 @@ version changes are in the contributor guide ("Versions and releases"). The vers
   and sets `NavMeshSurface::data`), `nav.status`, `nav.path` and `nav.debug`, the edit World's `NavWorld`, the
   navigation shown in the Scene views, a `nav.bake` step in the showcase build and the manual section "In the
   editor".
+- Behaviour trees (NAV-2a): the library `illusion::ai` with `.behavior` files (blackboard keys, composites,
+  decorators, guards with abort modes and leaves for movement and game actions), `parseBehaviorTree()`, the
+  tick `tickBehaviorTree()` over a `BehaviorContext`, the geometry of sight and hearing, the Benchmark
+  `ai/tick-1000` and the manual page "AI".
 
 ### Changed
 

@@ -1348,7 +1348,7 @@ headers are in their `include/` directories.
   Open: the Inspector's Bake button and the `.navmesh` items of the Asset Browser and the export; the `nav.*`
   commands and the debug view act on the edit World only.
 - NAV-2: Behaviour trees and perception. Four work packages:
-- NAV-2a (`implementer`): Trees without a World. The library `engine/ai` with `illusion::ai_api`;
+- ✅ NAV-2a (`implementer`): Trees without a World. The library `engine/ai` with `illusion::ai_api`;
   `Blackboard.hpp` (`compareBlackboard()`), `BehaviorTree.hpp` (`parseBehaviorTree()`,
   `writeBehaviorTree()`, `findKey()`), `BehaviorTreeState.hpp` (`makeBehaviorTreeState()`,
   `resetBehaviorTree()`, `tickBehaviorTree()`, `runningNode()`), `Perception.hpp` (`inSightCone()`,
