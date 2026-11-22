@@ -1,4 +1,5 @@
-# illusion::assets — CPU-side asset data and importers: images, meshes, materials, glTF models, fonts.
+# illusion::assets — CPU-side asset data and importers: images, meshes, materials, glTF models, fonts, and the
+# material shader compiler (runs the pinned slangc; nothing of Slang is linked).
 
 add_library(illusion_assets STATIC
     src/AppIcon.cpp
@@ -17,6 +18,8 @@ add_library(illusion_assets STATIC
     src/ImportSettings.cpp
     src/MaterialAsset.cpp
     src/Mesh.cpp
+    src/ShaderAsset.cpp
+    src/ShaderCompiler.cpp
     src/TextureCompression.cpp
     src/ThirdPartyImpl.cpp)
 add_library(illusion::assets ALIAS illusion_assets)

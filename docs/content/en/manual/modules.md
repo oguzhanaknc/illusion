@@ -336,7 +336,9 @@ Vulkan loader and MoltenVK inside, and on Linux it gets a PNG and a `.desktop` f
 [`export.build`](editor/export.md#packages) writes; call it once, after the target's `OUTPUT_NAME` is final.
 
 `<build>/sdk/<Config>/illusion-sdk.json` is version 2: it adds `"player": true` when the package has the
-component for that configuration, and `"player": false` otherwise. The editor reads it before it exports a game.
+component for that configuration, and `"player": false` otherwise. It also names the `slangc` executable and
+the engine's shader library as `"slangc"` and `"shaders"` (empty without the component), which cook
+[material shaders](assets.md#material-shaders). The editor reads it before it exports a game.
 
 This is a complete game outside the engine tree (`tests/sdk/game`):
 
@@ -379,6 +381,8 @@ multi-config generator. The prefix then contains:
 | `include/` | The public headers. |
 | `lib/<Config>/` | The static libraries. |
 | `bin/<Config>/` | `illusion_pack`. |
+| `slang/` | The pinned `slangc` (`slang/bin/slangc`) that compiles material shaders. |
+| `share/illusion/shaders/` | The engine's shader library (`illusion/Surface.slang` and the files it includes). |
 | `lib/cmake/illusion/` | The package: `illusionConfig.cmake`, the target files, the CMake modules and `<Config>/illusion-sdk.json`. |
 
 The installed package refers to its own files relative to its location, so you can move the directory.

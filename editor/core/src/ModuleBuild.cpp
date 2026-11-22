@@ -409,9 +409,15 @@ Expected<ModuleToolchain, std::string> parseModuleToolchain(std::string_view jso
         return unexpected(std::string("\"environmentScript\" must be a string"));
     }
     const JsonValue pack = root.find("pack");
-    if (!pack.isAbsent() && !pack.isString())
+    const JsonValue slangc = root.find("slangc");
+    const JsonValue shaders = root.find("shaders");
+    for (const auto& [name, value] :
+         {std::pair{"pack", pack}, std::pair{"slangc", slangc}, std::pair{"shaders", shaders}})
     {
-        return unexpected(std::string("\"pack\" must be a string"));
+        if (!value.isAbsent() && !value.isString())
+        {
+            return unexpected(std::string("\"") + name + "\" must be a string");
+        }
     }
     ModuleToolchain toolchain{.cmake = pathFromUtf8(*cmake),
                               .generator = *generator,
@@ -421,7 +427,9 @@ Expected<ModuleToolchain, std::string> parseModuleToolchain(std::string_view jso
                               .moduleSuffix = *suffix,
                               .environmentScript = pathFromUtf8(script.asString().value_or("")),
                               .player = version == 2u && player.asBool() == true,
-                              .pack = pathFromUtf8(pack.asString().value_or(""))};
+                              .pack = pathFromUtf8(pack.asString().value_or("")),
+                              .slangc = pathFromUtf8(slangc.asString().value_or("")),
+                              .shaders = pathFromUtf8(shaders.asString().value_or(""))};
     const JsonValue arguments = root.find("arguments");
     if (!arguments.isArray())
     {
@@ -456,6 +464,8 @@ Expected<ModuleToolchain, std::string> readModuleToolchain(const std::filesystem
     // An installed SDK names its files relative to this one, so that it can move.
     toolchain->package = sdkPath(file, toolchain->package);
     toolchain->pack = sdkPath(file, toolchain->pack);
+    toolchain->slangc = sdkPath(file, toolchain->slangc);
+    toolchain->shaders = sdkPath(file, toolchain->shaders);
     return toolchain;
 }
 

@@ -1,6 +1,6 @@
 # Packs the data of a game for the player (script mode, run by illusion_add_game(... PROJECT ...)):
 #   cmake -DPACK=<illusion_pack> -DPROJECT=<project directory> -DOUTPUT=<data directory> [-DSTAMP=<file>]
-#         -P PackGameData.cmake
+#         [-DSLANGC=<slangc> -DSHADERS=<engine shader library>] -P PackGameData.cmake
 # writes OUTPUT/assets.illpak, OUTPUT/settings.illpak and OUTPUT/cache.illpak (the assets cooked for the
 # `assets` mount). A project without a settings directory gets an empty settings archive.
 
@@ -30,7 +30,11 @@ endfunction()
 
 pack("${PROJECT}/assets" "${OUTPUT}/assets.illpak")
 pack("${settings}" "${OUTPUT}/settings.illpak")
-pack(--cook assets "${PROJECT}/assets" "${OUTPUT}/cache.illpak")
+set(shader_tools "")
+if(SLANGC)
+    set(shader_tools --slangc "${SLANGC}" --shaders "${SHADERS}")
+endif()
+pack(${shader_tools} --cook assets "${PROJECT}/assets" "${OUTPUT}/cache.illpak")
 if(settings STREQUAL "${OUTPUT}/.empty-settings")
     file(REMOVE_RECURSE "${settings}")
 endif()

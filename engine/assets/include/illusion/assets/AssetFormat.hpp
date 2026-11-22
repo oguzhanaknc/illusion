@@ -27,6 +27,7 @@ enum class AssetType : u32
     Model = 2,       ///< serializeModel() payload.
     Environment = 3, ///< serializeEnvironment() payload.
     Font = 4,        ///< serializeFont() payload (Font.hpp).
+    Shader = 5,      ///< serializeShader() payload (ShaderAsset.hpp).
 };
 
 /// A source file an asset was imported from, with the hash of its content at import time.
@@ -56,6 +57,8 @@ inline constexpr u32 kModelFormatVersion = 6;
 inline constexpr u32 kEnvironmentFormatVersion = 2;
 /// @copydoc kImageFormatVersion
 inline constexpr u32 kFontFormatVersion = 1;
+/// @copydoc kImageFormatVersion
+inline constexpr u32 kShaderFormatVersion = 1;
 
 /// Encodes @p file: magic, container version, type, version, dependencies, payload size and checksum,
 /// payload.

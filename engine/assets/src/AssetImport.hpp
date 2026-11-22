@@ -29,6 +29,7 @@ namespace detail
 inline constexpr std::string_view kImageImporter = "image:2";
 inline constexpr std::string_view kModelImporter = "gltf:3";
 inline constexpr std::string_view kFontImporter = "font:1";
+inline constexpr std::string_view kShaderImporter = "shader:1";
 
 [[nodiscard]] std::string imageImportKey(const ImageImportSettings& settings);
 

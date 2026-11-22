@@ -469,10 +469,17 @@ int main(int argc, char** argv)
         else()
             set(data_output "$<TARGET_FILE_DIR:${target}>/${arg_DATA_DIRECTORY}")
         endif()
+        # Material shaders cook with the package's slangc, or the engine's in the engine's own build.
+        set(shader_tools "")
+        if(ILLUSION_SDK_SLANGC)
+            set(shader_tools "-DSLANGC=${ILLUSION_SDK_SLANGC}" "-DSHADERS=${ILLUSION_SDK_SHADERS}")
+        elseif(ILLUSION_SLANGC AND ILLUSION_SHADER_LIBRARY_DIR)
+            set(shader_tools "-DSLANGC=${ILLUSION_SLANGC}" "-DSHADERS=${ILLUSION_SHADER_LIBRARY_DIR}")
+        endif()
         add_custom_command(
             OUTPUT "${stamp}"
             COMMAND "${CMAKE_COMMAND}" "-DPACK=$<TARGET_FILE:illusion::pack>" "-DPROJECT=${arg_PROJECT}"
-                    "-DOUTPUT=${data_output}" "-DSTAMP=${stamp}"
+                    "-DOUTPUT=${data_output}" "-DSTAMP=${stamp}" ${shader_tools}
                     -P "${ILLUSION_PACK_GAME_DATA_SCRIPT}"
             DEPENDS "$<TARGET_FILE:illusion::pack>" ${inputs} "${ILLUSION_PACK_GAME_DATA_SCRIPT}"
             COMMENT "Packing the data of ${target}"

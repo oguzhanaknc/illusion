@@ -13,9 +13,15 @@
 //   illusion_pack --cook <mount> <directory> <list.txt> <archive.illpak>
 //       The same for only the files of <directory> that <list.txt> names (as for --files): what is not listed
 //       is neither cooked nor visible to the imports.
+//
+// Cooking compiles material shaders (.shader) with slangc. Before the other arguments, `--slangc
+// <executable>` and `--shaders <directory>` name the compiler and the engine's shader library; without them
+// illusion_pack uses those of the installed engine (slang/bin and share/illusion/shaders two directories
+// above it). The compiler's diagnostics are printed as `file:line:column: error: message` lines.
 
 #include <illusion/assets/AssetCooker.hpp>
 #include <illusion/assets/AssetReflection.hpp>
+#include <illusion/assets/ShaderCompiler.hpp>
 #include <illusion/core/Log.hpp>
 #include <illusion/platform/Archive.hpp>
 #include <illusion/platform/FileSystem.hpp>
@@ -23,6 +29,7 @@
 #include <cstdio>
 #include <filesystem>
 #include <fstream>
+#include <optional>
 #include <random>
 #include <string>
 #include <string_view>
@@ -37,9 +44,17 @@ int usage()
 {
     std::fprintf(stderr, "usage: illusion_pack <directory> <archive.illpak>\n"
                          "       illusion_pack --files <directory> <list.txt> <archive.illpak>\n"
-                         "       illusion_pack --cook <mount> <directory> [<list.txt>] <archive.illpak>\n");
+                         "       illusion_pack [--slangc <executable> --shaders <directory>]\n"
+                         "                     --cook <mount> <directory> [<list.txt>] <archive.illpak>\n");
     return 2;
 }
+
+// The shader compiler and library of a cook: named on the command line, else those of the installed engine.
+struct ShaderTools
+{
+    std::filesystem::path slangc;
+    std::filesystem::path library;
+};
 
 int pack(const std::filesystem::path& directory, const std::filesystem::path& archive)
 {
@@ -122,8 +137,8 @@ int packList(const std::filesystem::path& directory, const std::filesystem::path
     return 0;
 }
 
-int cook(std::string_view mount, std::filesystem::path directory, const std::filesystem::path& archive,
-         const std::filesystem::path& list = {})
+int cook(const ShaderTools& tools, std::string_view mount, std::filesystem::path directory,
+         const std::filesystem::path& archive, const std::filesystem::path& list = {})
 {
     std::error_code code;
     const std::filesystem::path work = std::filesystem::temp_directory_path(code) /
@@ -169,19 +184,75 @@ int cook(std::string_view mount, std::filesystem::path directory, const std::fil
         std::fprintf(stderr, "illusion_pack: cannot mount %s\n", directory.string().c_str());
         return 1;
     }
-    const CookResult result = cookAssets(files, std::string(mount) + ":/", "cookcache");
+    std::optional<ShaderCompiler> compiler;
+    if (!tools.slangc.empty())
+    {
+        Expected<ShaderCompiler, std::string> created =
+            ShaderCompiler::create(ShaderCompilerDesc{.slangc = tools.slangc,
+                                                      .library = tools.library,
+                                                      .workDirectory = work,
+                                                      .timeout = std::chrono::minutes(5),
+                                                      .maxProcesses = 0});
+        if (!created)
+        {
+            std::fprintf(stderr, "illusion_pack: %s\n", created.error().c_str());
+            return 1;
+        }
+        compiler = std::move(*created);
+    }
+    const CookResult result =
+        cookAssets(files, std::string(mount) + ":/", "cookcache", compiler ? &*compiler : nullptr);
+    for (const ShaderDiagnostic& diagnostic : result.shaderDiagnostics)
+    {
+        std::fprintf(stderr, "%s\n", formatShaderDiagnostic(diagnostic).c_str());
+    }
     for (const std::string& error : result.errors)
     {
         std::fprintf(stderr, "illusion_pack: %s\n", error.c_str());
     }
-    std::printf("cooked %u model(s), %u image(s), %u material(s) and %u font(s)\n", result.models,
-                result.images, result.materials, result.fonts);
+    std::printf("cooked %u model(s), %u image(s), %u material(s), %u font(s) and %u shader(s)\n", result.models,
+                result.images, result.materials, result.fonts, result.shaders);
     return result.errors.empty() ? pack(cache, archive) : 1;
 }
 
-int run(const std::vector<std::string>& arguments)
+// The installed engine's compiler and library, when this illusion_pack is part of one.
+ShaderTools installedShaderTools()
+{
+#if defined(_WIN32)
+    constexpr std::string_view kSlangc = "slangc.exe";
+#else
+    constexpr std::string_view kSlangc = "slangc";
+#endif
+    const std::filesystem::path prefix = executableDirectory().parent_path().parent_path();
+    ShaderTools tools{.slangc = prefix / "slang" / "bin" / utf8Path(kSlangc),
+                      .library = prefix / "share" / "illusion" / "shaders"};
+    std::error_code code;
+    if (!std::filesystem::is_regular_file(tools.slangc, code) ||
+        !std::filesystem::is_directory(tools.library, code))
+    {
+        return {};
+    }
+    return tools;
+}
+
+int run(std::vector<std::string> arguments)
 {
     Logger::instance().setLevel(LogLevel::Warn);
+    ShaderTools tools;
+    while (arguments.size() >= 2 && (arguments[0] == "--slangc" || arguments[0] == "--shaders"))
+    {
+        (arguments[0] == "--slangc" ? tools.slangc : tools.library) = utf8Path(arguments[1]);
+        arguments.erase(arguments.begin(), arguments.begin() + 2);
+    }
+    if (tools.slangc.empty() != tools.library.empty())
+    {
+        std::fprintf(stderr, "illusion_pack: --slangc and --shaders go together\n");
+        return 2;
+    }
+    if (tools.slangc.empty())
+    {
+        tools = installedShaderTools();
+    }
     if (arguments.size() == 2)
     {
         return pack(utf8Path(arguments[0]), utf8Path(arguments[1]));
@@ -192,11 +263,12 @@ int run(const std::vector<std::string>& arguments)
     }
     if (arguments.size() == 4 && arguments[0] == "--cook")
     {
-        return cook(arguments[1], utf8Path(arguments[2]), utf8Path(arguments[3]));
+        return cook(tools, arguments[1], utf8Path(arguments[2]), utf8Path(arguments[3]));
     }
     if (arguments.size() == 5 && arguments[0] == "--cook")
     {
-        return cook(arguments[1], utf8Path(arguments[2]), utf8Path(arguments[4]), utf8Path(arguments[3]));
+        return cook(tools, arguments[1], utf8Path(arguments[2]), utf8Path(arguments[4]),
+                    utf8Path(arguments[3]));
     }
     return usage();
 }

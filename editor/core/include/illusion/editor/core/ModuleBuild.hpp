@@ -35,6 +35,9 @@ struct ModuleToolchain
     std::filesystem::path environmentScript{};
     bool player = false; ///< The package has the component `player` for this configuration (version 2 only).
     std::filesystem::path pack{}; ///< The package's `illusion_pack` for this configuration ("" without one).
+    std::filesystem::path
+        slangc{}; ///< The package's `slangc`, which cooks material shaders ("" without one).
+    std::filesystem::path shaders{}; ///< The package's engine shader library ("" without one).
 };
 
 /// Reads a toolchain description; the error says what is wrong.

@@ -12,11 +12,13 @@
 #
 # Next to it, <build>/sdk/<Config>/illusion-sdk.json describes the toolchain of that configuration, which the
 # editor passes to CMake when it configures a project's modules, so they get the build key of the editor, and
-# names the illusion_pack that `export.build` cooks and packs a game's data with.
+# names the illusion_pack that `export.build` cooks and packs a game's data with, and the slangc and shader library
+# that cook material shaders (ADR 0063).
 #
 # Both target sets are export sets, so `cmake --install <build> --prefix <dir>` also writes a relocatable copy:
 # headers in include/, static libraries in lib/<Config>/ (with MSVC, each with its compiler PDB), illusion_pack in
-# bin/<Config>/ and the package with its sdk.json files in lib/cmake/illusion/. Install components: `sdk`
+# bin/<Config>/, slangc in slang/, the shader library in share/illusion/shaders and the package with its sdk.json
+# files in lib/cmake/illusion/. Install components: `sdk`
 # (headers, the module SDK, the package files) and `player` (the libraries behind illusion::player, illusion_pack,
 # illusion_add_game()). The engine package (cmake/IllusionRelease.cmake) adds `editor` and `tools`.
 
@@ -264,16 +266,27 @@ function(illusion_write_sdk)
             DESTINATION "${package_dir}" COMPONENT player)
         install(DIRECTORY "${PROJECT_SOURCE_DIR}/engine/steam/src" "${PROJECT_SOURCE_DIR}/engine/steam/include"
             DESTINATION "${package_dir}/steam" COMPONENT player)
+        if(TARGET illusion_pack)
+            illusion_install_shader_compiler(player)
+        endif()
         list(APPEND header_targets ${player_targets})
     endif()
     _illusion_sdk_install_headers(${header_targets})
 
     # The build tree's package uses the engine's CMake files in place; the installed one carries copies.
+    # Material shaders are cooked with the pinned slangc and the engine's shader library (ADR 0063).
+    set(slangc_name "slangc${CMAKE_EXECUTABLE_SUFFIX}")
+    file(RELATIVE_PATH package_to_prefix "${PROJECT_BINARY_DIR}/prefix/${package_dir}" "${PROJECT_BINARY_DIR}/prefix")
+    string(REGEX REPLACE "/$" "" package_to_prefix "${package_to_prefix}")
     set(ILLUSION_SDK_CMAKE_DIR "${PROJECT_SOURCE_DIR}/cmake")
     set(ILLUSION_SDK_STEAM_DIR "${PROJECT_SOURCE_DIR}/engine/steam")
+    set(ILLUSION_SDK_SLANGC "${ILLUSION_SLANGC}")
+    set(ILLUSION_SDK_SHADERS "${ILLUSION_SHADER_LIBRARY_DIR}")
     configure_file("${PROJECT_SOURCE_DIR}/cmake/sdk/illusionConfig.cmake.in" "${sdk}/illusionConfig.cmake" @ONLY)
     set(ILLUSION_SDK_CMAKE_DIR "\${CMAKE_CURRENT_LIST_DIR}")
     set(ILLUSION_SDK_STEAM_DIR "\${CMAKE_CURRENT_LIST_DIR}/steam")
+    set(ILLUSION_SDK_SLANGC "\${CMAKE_CURRENT_LIST_DIR}/${package_to_prefix}/slang/bin/${slangc_name}")
+    set(ILLUSION_SDK_SHADERS "\${CMAKE_CURRENT_LIST_DIR}/${package_to_prefix}/share/illusion/shaders")
     configure_file("${PROJECT_SOURCE_DIR}/cmake/sdk/illusionConfig.cmake.in" "${sdk}/install/illusionConfig.cmake"
         @ONLY)
     configure_file("${PROJECT_SOURCE_DIR}/cmake/sdk/illusionConfigVersion.cmake.in"
@@ -367,29 +380,41 @@ function(illusion_write_sdk)
         # files are written at generate time, when the location of illusion_pack is known.
         file(RELATIVE_PATH pack_directory "${PROJECT_BINARY_DIR}/prefix/${package_dir}/${config}"
             "${PROJECT_BINARY_DIR}/prefix/${CMAKE_INSTALL_BINDIR}/${config}")
+        file(RELATIVE_PATH config_to_prefix "${PROJECT_BINARY_DIR}/prefix/${package_dir}/${config}"
+            "${PROJECT_BINARY_DIR}/prefix")
+        string(REGEX REPLACE "/$" "" config_to_prefix "${config_to_prefix}")
         foreach(variant build install)
             set(package "")
             set(pack "")
+            set(slangc "")
+            set(shaders "")
             if(variant STREQUAL "build")
                 illusion_sdk_json_string(package "${sdk}")
                 if(player AND TARGET illusion_pack)
                     set(pack "\"$<TARGET_FILE:illusion_pack>\"")
+                    illusion_sdk_json_string(slangc "${ILLUSION_SLANGC}")
+                    illusion_sdk_json_string(shaders "${ILLUSION_SHADER_LIBRARY_DIR}")
                 endif()
                 set(file "${sdk}/${config}/illusion-sdk.json")
             else()
                 illusion_sdk_json_string(package "..")
                 if(player AND TARGET illusion_pack)
                     set(pack "\"${pack_directory}/$<TARGET_FILE_NAME:illusion_pack>\"")
+                    illusion_sdk_json_string(slangc "${config_to_prefix}/slang/bin/${slangc_name}")
+                    illusion_sdk_json_string(shaders "${config_to_prefix}/share/illusion/shaders")
                 endif()
                 set(file "${sdk}/install/${config}/illusion-sdk.json")
             endif()
-            if(NOT pack)
-                set(pack "\"\"")
-            endif()
+            foreach(field pack slangc shaders)
+                if(NOT ${field})
+                    set(${field} "\"\"")
+                endif()
+            endforeach()
             string(CONCAT json
                 "{\n  \"format\": \"illusion.sdk\",\n  \"version\": 2,\n  \"engineVersion\": \"${PROJECT_VERSION}\",\n"
                 "  \"cmake\": ${cmake},\n  \"generator\": ${generator_json},\n  \"config\": ${config_json},\n"
                 "  \"package\": ${package},\n  \"player\": ${player_json},\n  \"pack\": ${pack},\n"
+                "  \"slangc\": ${slangc},\n  \"shaders\": ${shaders},\n"
                 "  \"modulePrefix\": ${prefix},\n  \"moduleSuffix\": ${suffix},\n"
                 "  \"environmentScript\": ${environment_json},\n"
                 "  \"arguments\": [\n    ${arguments}\n  ]\n}\n")

@@ -15,7 +15,11 @@
 include_guard(GLOBAL)
 
 set(ILLUSION_SHADERS_EMBED_SCRIPT "${CMAKE_CURRENT_LIST_DIR}/EmbedShader.cmake")
+# The engine's shader library: what material shaders (ADR 0063) are compiled against.
+set(ILLUSION_SHADER_LIBRARY_DIR "${CMAKE_CURRENT_LIST_DIR}/../engine/render/shaders")
+cmake_path(NORMAL_PATH ILLUSION_SHADER_LIBRARY_DIR)
 
+# ShaderCompiler (engine/assets) repeats these flags, without -warnings-as-errors, for material shaders.
 # Register shifts match NVRHI's default Vulkan binding offsets (t: 0, s: 128, b: 256, u: 384), so
 # HLSL-style registers map to the bindings NVRHI creates. Matrices are column-major like glm, so
 # mul(matrix, vector) in shaders equals matrix * vector in C++.
@@ -93,4 +97,36 @@ namespace @arg_NAMESPACE@
 
     target_sources(${target} PRIVATE ${sources})
     target_include_directories(${target} PUBLIC "$<BUILD_INTERFACE:${out_dir}/include>")
+endfunction()
+
+# Installs the pinned slangc (without the parts that only CPU targets need) in slang/ and the shader library in
+# share/illusion/shaders under the prefix, with the install component <component>: the cooker (illusion_pack)
+# and the editor compile material shaders with them (ADR 0063).
+function(illusion_install_shader_compiler component)
+    illusion_require_dependency(slang)
+    cmake_path(GET ILLUSION_SLANGC PARENT_PATH slang_bin)
+    cmake_path(GET slang_bin PARENT_PATH slang_root)
+    install(DIRECTORY "${slang_bin}/" DESTINATION slang/bin COMPONENT ${component} USE_SOURCE_PERMISSIONS
+        PATTERN "*slang-llvm*" EXCLUDE
+        PATTERN "gfx*" EXCLUDE
+        PATTERN "slangd*" EXCLUDE
+        PATTERN "slangi*" EXCLUDE
+        PATTERN "*.lib" EXCLUDE
+        PATTERN "*.pdb" EXCLUDE)
+    if(IS_DIRECTORY "${slang_root}/lib")
+        install(DIRECTORY "${slang_root}/lib/" DESTINATION slang/lib COMPONENT ${component} USE_SOURCE_PERMISSIONS
+            FILES_MATCHING PATTERN "*.so*" PATTERN "*.dylib" PATTERN "*slang-standard-module*"
+            PATTERN "*slang-llvm*" EXCLUDE
+            PATTERN "*gfx*" EXCLUDE
+            PATTERN "cmake" EXCLUDE)
+    endif()
+    foreach(licence LICENSE LICENSES)
+        if(IS_DIRECTORY "${slang_root}/${licence}")
+            install(DIRECTORY "${slang_root}/${licence}" DESTINATION slang COMPONENT ${component})
+        elseif(EXISTS "${slang_root}/${licence}")
+            install(FILES "${slang_root}/${licence}" DESTINATION slang COMPONENT ${component})
+        endif()
+    endforeach()
+    install(DIRECTORY "${ILLUSION_SHADER_LIBRARY_DIR}/" DESTINATION share/illusion/shaders COMPONENT ${component}
+        FILES_MATCHING PATTERN "*.slang")
 endfunction()

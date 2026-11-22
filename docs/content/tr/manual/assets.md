@@ -226,6 +226,98 @@ ve bir `MeshRenderer` bir modelin Material'ini değiştirebilir:
 
 Header: `<illusion/assets/MaterialAsset.hpp>`
 
+### Material shader'ları
+
+Bir `.shader` dosyası, bir Material'in yüzeyinin Slang kaynağıdır (ADR 0063). Material'in parametrelerini ve
+bir `surface()` fonksiyonunu tanımlar; ışıklandırmayı ve Render Pass'leri motor yapar. Shader derleyicisi
+(motorun sabitlediği `slangc`), dosyayı surface API'si (`illusion/Surface.slang`) ile motorun Render
+Pass'lerinin arasına yerleştirir ve her Render Pass için SPIR-V içeren bir Asset olarak cook eder. Player'ın
+derleyicisi yoktur; cook edilmiş sonucu yükler.
+
+```slang
+[ShadingModel("Unlit")]
+struct Parameters
+{
+    [Color(1, 0.5, 0.25, 1)] float4 tint;
+    [Default(2.5)] [Range(0, 10)] float intensity;
+    [Default(-3)] int steps;
+    [Default(1)] bool pulse;
+    [Default2(0.5, 0.25)] float2 scroll;
+    [Texture("black", "mask")] Texture2DSlot mask;
+    [Texture("game:/textures/detail_n.png", "normal")] Texture2DSlot detail;
+    float3 direction;
+};
+
+SurfaceOutput surface(SurfaceInput input)
+{
+    const Parameters p = parameters(input);
+    SurfaceOutput output = defaultSurface();
+    const float2 uv = input.uv + p.scroll * input.time;
+    output.baseColor = p.tint.rgb * sampleTexture(input, p.mask, uv).r;
+    output.normal = unpackNormal(sampleTexture(input, p.detail, uv), 1.0);
+    output.emission = p.tint.rgb * p.intensity * (p.pulse ? 0.5 + 0.5 * sin(input.time) : 1.0);
+    output.opacity = p.tint.a * valueNoise(input.worldPosition * float(p.steps));
+    return output;
+}
+
+float3 worldOffset(WorldOffsetInput input)
+{
+    return float3(0.0, 0.1 * sin(input.time + input.worldPosition.x), 0.0);
+}
+```
+
+- `struct Parameters` zorunludur ve boş olabilir. En fazla 256 bayt ve en fazla sekiz Texture tutar. Alanlar
+  `float`, `float2`, `float3`, `float4`, `int`, `bool` veya `Texture2DSlot` (`[Texture]` ile) olabilir.
+- `surface()` zorunludur. Parametreleri `parameters(input)` ile okuyun, bir Texture'ı `sampleTexture()` ile
+  örnekleyin ve sonucu `defaultSurface()` ile başlatın.
+- `worldOffset()` isteğe bağlıdır ve vertex'leri dünya uzayında kaydırır; imzası tam olarak yukarıdaki gibi
+  olmalıdır.
+- `Parameters` üzerindeki `[ShadingModel("...")]` shading model'i adlandırır: `Default`, `Unlit`, `Subsurface`,
+  `TwoSidedFoliage` veya `ClearCoat`. Yazılmazsa shader `Default` kullanır.
+
+| Attribute | Üzerinde | Anlamı |
+| --- | --- | --- |
+| `[Default(v)]` | `float`, `int`, `bool` | Varsayılan değer (`int` tam sayı, `bool` 0 veya 1 alır). |
+| `[Default2(x, y)]`, `[Default3(...)]`, `[Default4(...)]` | `float2`, `float3`, `float4` | Bir vektörün varsayılanı. |
+| `[Color(r, g, b, a)]` | `float3`, `float4` | Bir rengin varsayılanı. |
+| `[Range(min, max)]` | `float`, `int` | Editor'ün sunduğu en düşük ve en yüksek değer. |
+| `[Texture(fallback, usage)]` | `Texture2DSlot` | `fallback` `"white"`, `"black"`, `"normal"` (düz normal map) veya bir Asset yoludur; `usage` `"color"`, `"linear"`, `"normal"` veya `"mask"` olup görüntülerin nasıl içe aktarılacağını seçer. |
+
+Attribute'suz bir parametrenin varsayılanı sıfırdır. Bir alanın en fazla bir varsayılanı olur.
+
+#### Variant'lar ve cook
+
+Derleyici her Render Pass ve alpha modu için bir SPIR-V modülü üretir: `forward`, `forwardBindless`,
+`depthPrepass`, `shadowCaster`, `motionVectors` ve `entityIds` Render Pass'lerinin her biri `opaque` ve `mask`
+Material'ler için; `blend` Material'ler için yalnızca `forward`, `forwardBindless` ve `entityIds`. Bu, her
+shader için 15 variant eder. Cook (`ShaderCompiler` ile `cookAssets()` veya
+[`illusion_pack`](#hazrlanms-assetleri-dagtma)) cook edilmiş shader'ı import önbelleğine yazar. Önbellek
+girdisi (`shader:1`), dosyada saklanan kaynak hash'i, motorun shader kütüphanesinin hash'i ve `slangc` sürümü
+eşleştiği sürece geçerlidir; herhangi biri değişirse shader yeniden derlenir. Derlenmeyen shader önbelleğe
+yazılmaz.
+
+#### Hatalar
+
+Diagnostic'ler `.shader` dosyasının adını, satırını ve sütununu korur ve GCC mesajları gibi satır başına bir
+tane yazılır:
+
+```text
+game:/materials/glow.shader:8:24: error: undefined identifier 'undefinedThing'. [E30015]
+```
+
+Motorun denetimleri (eksik `surface()` veya `Parameters`, desteklenmeyen türde parametre, türüne uymayan
+varsayılan, çok fazla bayt veya Texture) ilgili alanı aynı biçimde adlandırır.
+
+#### Sınırlar
+
+- Bir `.shader` dosyasında `#include` desteklenmez.
+- Renderer sağlayana kadar `SurfaceInput.customData` sıfırdır ve `SurfaceInput.color` beyazdır.
+- `Unlit` dışındaki shading model'ler MAT-3'e kadar `Default` gibi ışıklandırılır.
+- `.material` dosyaları henüz shader adlandırmaz (MAT-2, MAT-4). Surface API'sinin başvuru belgesi MAT-4 ile
+  gelir; o zamana kadar `illusion/Surface.slang` başlık yorumu onu anlatır.
+
+Header'lar: `<illusion/assets/ShaderAsset.hpp>`, `<illusion/assets/ShaderCompiler.hpp>`
+
 ## Asset veritabanı
 
 PNG'leri çözmek, mip zincirleri oluşturmak ve glTF dosyalarını dönüştürmek zaman alır. `AssetDatabase`
@@ -564,3 +656,15 @@ auto helmet = streamer.loadModel("game:/models/helmet.glb"); // served from the 
   olmayan bir dosyanın yanındaki sidecar hata olarak bildirilir.
 - `cookAssets()` aynısını koddan yapar ve neyi hazırladığını ve hangi dosyaların başarısız olduğunu
   bildirir.
+- Cook, `data/` altındaki [Material shader'larını](#material-shaderlar) (`.shader`) da `slangc` ile derler.
+  Derleyiciyi ve motorun shader kütüphanesini `--cook`'tan önce verin:
+
+```bash
+illusion_pack --slangc slang/bin/slangc --shaders share/illusion/shaders --cook game data/ build/cooked.illpak
+```
+
+- `--slangc` ve `--shaders` birlikte verilir. Verilmezse kurulu bir motorun `illusion_pack`'ı, kendisinden iki
+  dizin yukarıdaki `slang/bin` ve `share/illusion/shaders` dizinlerini kullanır; derleyici yoksa bir `.shader`
+  dosyası cook hatasıdır.
+- Derleyicinin diagnostic'leri `file:line:column: error: message` satırları olarak yazdırılır ve derlenmeyen
+  bir shader cook'u başarısız kılar.

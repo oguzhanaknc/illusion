@@ -1485,7 +1485,7 @@ Today games can only set the parameters of the built-in PBR material.
 
 - MAT is designed in ADR 0063 (Slang surface functions in `.shader` assets, compiled by the pinned `slangc`
   at cook time and on hot reload, cooked SPIR-V in the player). Four work packages:
-- MAT-1 (`implementer`): Shader assets and the compiler. `illusion/Surface.slang` (the surface API),
+- ✅ MAT-1 (`implementer`): Shader assets and the compiler. `illusion/Surface.slang` (the surface API),
   `.shader` files with declared parameters, `ShaderCompiler` running `slangc` per variant with JSON
   reflection, `AssetType::Shader` cooked with a cache keyed by source, engine shader and compiler versions,
   errors with file/line/column; the pinned `slangc` in the editor CPack component and the SDK. Done: compile,

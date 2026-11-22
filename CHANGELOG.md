@@ -111,6 +111,11 @@ version changes are in the contributor guide ("Versions and releases"). The vers
   speed, a navmesh over the clearing with a costly area around the campfire, and a behaviour tree that wanders
   around its den, chases the player it sees or hears (footsteps reported as noises), and goes home when it loses
   them; the HUD shows an alert while it chases, and the pause menu stops it.
+- Material shaders (MAT-1): `.shader` files (Slang `surface()` and `worldOffset()` with `Parameters`
+  attributes), the `ShaderCompiler` that runs the pinned `slangc` into 15 variants per shader with
+  `file:line:column` diagnostics, the cooked `ShaderAsset` in the import cache, `illusion_pack --slangc
+  --shaders`, `slangc` and the shader library in the SDK (`slang/`, `share/illusion/shaders`, `"slangc"` and
+  `"shaders"` in `illusion-sdk.json`), and the quoted tool output of a failed export cook.
 
 ### Changed
 

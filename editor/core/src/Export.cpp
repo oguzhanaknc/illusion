@@ -1114,11 +1114,22 @@ struct ProjectExport::Impl
             return;
         }
         phase = Phase::Cook;
-        spawn(tool(options.toolchain.pack,
-                   {"--cook", "assets", pathText(assets), pathText(exportRoot() / "cook.files"),
-                    pathText(dataDirectory() / std::string(kArchives[2]))},
-                   "cooking the assets"),
-              Stage::Cook);
+        std::vector<std::string> cookArguments;
+        if (!options.toolchain.slangc.empty() && !options.toolchain.shaders.empty())
+        {
+            cookArguments = {"--slangc", pathText(options.toolchain.slangc), "--shaders",
+                             pathText(options.toolchain.shaders)};
+        }
+        for (std::string argument :
+             {std::string("--cook"), std::string("assets"), pathText(assets),
+              pathText(exportRoot() / "cook.files"), pathText(dataDirectory() / std::string(kArchives[2]))})
+        {
+            cookArguments.push_back(std::move(argument));
+        }
+        // A failed cook quotes what went wrong, such as the shader compiler's errors.
+        ToolCommand cook = tool(options.toolchain.pack, std::move(cookArguments), "cooking the assets");
+        cook.quoteOutput = true;
+        spawn(std::move(cook), Stage::Cook);
     }
 
     bool writeList(std::string_view name, const std::vector<std::string>& files)

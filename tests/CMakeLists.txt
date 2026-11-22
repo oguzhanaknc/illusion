@@ -69,6 +69,8 @@ add_executable(illusion_tests
     assets/TestImportSettings.cpp
     assets/TestMaterialAsset.cpp
     assets/TestMeshLods.cpp
+    assets/TestShaderAsset.cpp
+    assets/TestShaderCompiler.cpp
     assets/TestTextureCompression.cpp
     animation/TestAnimationGraph.cpp
     animation/TestAnimationGraphExample.cpp
@@ -169,6 +171,10 @@ get_property(locale_dirs GLOBAL PROPERTY ILLUSION_LOCALE_DIRECTORIES)
 list(REMOVE_DUPLICATES locale_dirs)
 add_test(NAME text.locales COMMAND illusion_textc check ${locale_dirs})
 set_tests_properties(text.locales PROPERTIES LABELS "unit")
+
+# The material shader compiler (tests/assets/TestShaderCompiler.cpp) runs the pinned slangc on the engine's shaders.
+target_compile_definitions(illusion_tests PRIVATE ILLUSION_TEST_SLANGC="${ILLUSION_SLANGC}"
+    ILLUSION_TEST_SHADER_LIBRARY="${ILLUSION_SHADER_LIBRARY_DIR}")
 
 # Child program of tests/platform/TestProcess.cpp.
 add_executable(illusion_process_helper platform/ProcessHelper.cpp)

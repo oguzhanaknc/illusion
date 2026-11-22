@@ -112,7 +112,8 @@ add_dependencies(illusion_editor_tests illusion_fake_cmake illusion_fake_cpack)
 if(NOT TARGET illusion_pack)
     message(FATAL_ERROR "The editor tests need illusion_pack: configure with ILLUSION_BUILD_TOOLS=ON")
 endif()
-target_compile_definitions(illusion_editor_tests PRIVATE ILLUSION_PACK_EXECUTABLE="$<TARGET_FILE:illusion_pack>")
+target_compile_definitions(illusion_editor_tests PRIVATE ILLUSION_PACK_EXECUTABLE="$<TARGET_FILE:illusion_pack>"
+    ILLUSION_TEST_SLANGC="${ILLUSION_SLANGC}" ILLUSION_TEST_SHADER_LIBRARY="${ILLUSION_SHADER_LIBRARY_DIR}")
 add_dependencies(illusion_editor_tests illusion_pack)
 if(NOT ILLUSION_PROFILING)
     target_compile_definitions(illusion_editor_tests PRIVATE

@@ -343,7 +343,9 @@ bunları [export rehberi](editor/export.md#icon-identifier-ve-copyright) listele
 CPack'i ayarlar; hedefin `OUTPUT_NAME` değeri kesinleştikten sonra bir kez çağırın.
 
 `<build>/sdk/<Config>/illusion-sdk.json` sürüm 2'dir: paket o konfigürasyon için component'e sahipse
-`"player": true`, değilse `"player": false` ekler. Editör bir oyunu dışa aktarmadan önce onu okur.
+`"player": true`, değilse `"player": false` ekler. Ayrıca `slangc` çalıştırılabilir dosyasını ve motorun shader
+kütüphanesini `"slangc"` ve `"shaders"` olarak adlandırır (component yoksa boş); bunlar
+[Material shader'larını](assets.md#material-shaderlar) cook eder. Editör bir oyunu dışa aktarmadan önce onu okur.
 
 Motor ağacının dışındaki eksiksiz bir oyun (`tests/sdk/game`):
 
@@ -386,6 +388,8 @@ bir generator ile `--config <Config>` kullanın. Prefix'in içeriği şöyledir:
 | `include/` | Public header'lar. |
 | `lib/<Config>/` | Statik kütüphaneler. |
 | `bin/<Config>/` | `illusion_pack`. |
+| `slang/` | Material shader'larını derleyen sabitlenmiş `slangc` (`slang/bin/slangc`). |
+| `share/illusion/shaders/` | Motorun shader kütüphanesi (`illusion/Surface.slang` ve içerdiği dosyalar). |
 | `lib/cmake/illusion/` | Paket: `illusionConfig.cmake`, hedef dosyaları, CMake modülleri ve `<Config>/illusion-sdk.json`. |
 
 Kurulmuş paket kendi dosyalarına konumuna göre göreli yollarla başvurur; bu yüzden dizini taşıyabilirsiniz.
