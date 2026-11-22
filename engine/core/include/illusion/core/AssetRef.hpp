@@ -72,6 +72,7 @@ enum class AssetKind : u8
     AnimationClip,  ///< `#animation/<name>` of a model.
     AnimationGraph, ///< An animation graph file (`.animgraph`).
     NavMesh,        ///< A baked navmesh file (`.navmesh`).
+    RagdollProfile, ///< A ragdoll profile file (`.ragdoll`).
     BehaviorTree,   ///< A behaviour tree file (`.behavior`).
 };
 

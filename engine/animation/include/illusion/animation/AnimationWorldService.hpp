@@ -50,6 +50,7 @@ public:
     Expected<void, AnimationError> setIkTarget(Entity entity, std::string_view joint,
                                                const Vec3& point) override;
     Expected<void, AnimationError> setIkWeight(Entity entity, std::string_view joint, f32 weight) override;
+    Expected<void, AnimationError> setRagdoll(Entity entity, bool active) override;
     /// @}
 
 private:

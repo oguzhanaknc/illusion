@@ -73,11 +73,13 @@ add_executable(illusion_tests
     animation/TestAnimationGraphExample.cpp
     animation/TestAnimationGraphState.cpp
     animation/TestAnimationIk.cpp
+    animation/TestAnimationRagdoll.cpp
     animation/TestAnimationRuntime.cpp
     animation/TestAnimationSockets.cpp
     animation/TestAnimationWorld.cpp
     animation/TestInverseKinematics.cpp
     animation/TestPose.cpp
+    animation/TestSpringBones.cpp
     audio/TestAudioEffects.cpp
     audio/TestAudioWorld.cpp
     modules/TestModules.cpp
@@ -93,6 +95,7 @@ add_executable(illusion_tests
     physics/TestPhysicsExtensions.cpp
     physics/TestPhysicsHierarchy.cpp
     physics/TestPhysicsWorld.cpp
+    physics/TestRagdoll.cpp
     player/TestPlayerSetup.cpp
     render/TestFrameCapture.cpp
     render/TestPostProcess.cpp

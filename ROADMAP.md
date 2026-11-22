@@ -1267,11 +1267,13 @@ Nothing of it exists yet: glTF skins and animations are skipped on import and th
   and two limbs (0.10 ms over `animation/world-update-300x60`; budget 2.5 ms).
   Open: IK chains of more than two bones; foot placement for legs that do not hang from the pelvis (front legs
   of quadrupeds); own bodies with mesh or hull shapes stop the foot rays; feet follow the ground one update late.
-- ANIM-3c (`implementer`): Spring bones and ragdolls. Saved `SpringBone` and `Ragdoll`, generated and
+- ✅ ANIM-3c (`implementer`): Spring bones and ragdolls. Saved `SpringBone` and `Ragdoll`, generated and
   `.ragdoll` profiles, Jolt ragdolls in `PhysicsWorld`, blend in and out, `setRagdoll()`. Done: deterministic
   spring chains with fixed steps, a ragdoll falls down stairs and settles, blend continuity, benchmark of 20
   ragdolls.
-- ANIM-3d (`mechanic`): Documentation and sample: manual sections for each stage (EN/TR), the scripting API
+  Open: the Entity's Transform stays where it was while its ragdoll runs (game code moves it before turning
+  the ragdoll off); spring chains collide only with their own spheres; powered ragdolls.
+- ✅ ANIM-3d (`mechanic`): Documentation and sample: manual sections for each stage (EN/TR), the scripting API
   reference, the tutorial "Animate a character" gets a lantern socket, look-at and foot placement,
   `CHANGELOG.md`.
 - ANIM-3 (scope): attach entities to bones (a lantern in a hand), look-at and

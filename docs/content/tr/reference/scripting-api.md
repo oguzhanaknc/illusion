@@ -196,7 +196,7 @@ kılavuz sayfası `Saved` tag'ini, metadata'yı, olayları ve dosyaları anlatı
 
 ## AnimationService
 
-Animator'ların animasyon grafları ve klipleri, eklemleri, look-at ve IK'leri (ADR 0059, ADR 0060, ADR 0061). Parametre yazımları bir sonraki
+Animator'ların animasyon grafları ve klipleri, eklemleri, look-at'leri, IK'leri ve ragdoll'ları (ADR 0059, ADR 0060, ADR 0061). Parametre yazımları bir sonraki
 Animation adımında kullanılır; okumalar grafın kullandığı değerleri döndürür. `Animator`'ı olmayan bir
 Entity üzerindeki çağrı `NoAnimator` döndürür; graf gerektiren bir çağrı, Animator'ın grafı yokken ya da
 grafı henüz yüklenmemişken `NoGraph` döndürür; bilinmeyen adlar `UnknownName`, yanlış türler
@@ -214,6 +214,7 @@ grafı henüz yüklenmemişken `NoGraph` döndürür; bilinmeyen adlar `UnknownN
 | `setLookAtTarget` | Entity'nin [`LookAt`](../manual/animation.md#look-at)'inin baktığı dünya uzayındaki noktayı ayarlar ve hedef Entity'sini temizler (`LookAt` yoksa `UnknownName`) |
 | `setIkTarget` | Animator'ın uç eklemi `joint` olan [`TwoBoneIk`](../manual/animation.md#two-bone-ik)'inin (Entity'de ya da bir çocukta) dünya uzayındaki hedefini ayarlar ve hedef Entity'sini temizler (yoksa `UnknownName`) |
 | `setIkWeight` | O `TwoBoneIk`'in ağırlığını [0, 1] aralığına sıkıştırarak ayarlar; 0 animasyondaki uzvu gösterir |
+| `setRagdoll` | `Ragdoll::active`'i yazarak Entity'nin [`Ragdoll`](../manual/animation.md#ragdolls)'unu açar (mevcut pozundan ve hızından düşer) ya da kapatır (poz animasyona geri harmanlanır) (`Ragdoll` yoksa `UnknownName`) |
 
 Her fonksiyon bir `Expected<..., AnimationError>` döndürür; `animationErrorName()` adı verir:
 
@@ -222,7 +223,7 @@ Her fonksiyon bir `Expected<..., AnimationError>` döndürür; `animationErrorNa
 | `NoAnimator` | Entity canlı değil ya da `Animator`'ı yok |
 | `NoGraph` | Çağrı bir graf gerektirir ve Animator'ın grafı yok ya da henüz yüklenmedi; `jointTransform()` için poz henüz yüklenmedi |
 | `HasGraph` | Grafı onu yöneten bir Animator'da `play()` |
-| `UnknownName` | O adda parametre, katman, klip ya da eklem yok ya da onun için `LookAt` veya `TwoBoneIk` yok (`model.glb#animation/<name>` olmayan bir `play()` yolu da) |
+| `UnknownName` | O adda parametre, katman, klip ya da eklem yok ya da onun için `LookAt`, `TwoBoneIk` veya `Ragdoll` yok (`model.glb#animation/<name>` olmayan bir `play()` yolu da) |
 | `TypeMismatch` | Parametre başka bir türde (bir Trigger'da `setFloat()`, bir Float'ta `setTrigger()`, ...) |
 | `InvalidValue` | Bir değer sonlu değil, bir Int 2^24'ün ötesinde ya da bir fade negatif |
 

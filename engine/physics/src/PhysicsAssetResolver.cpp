@@ -11,6 +11,7 @@
 #include <illusion/physics/PhysicsAssetResolver.hpp>
 #include <illusion/physics/PhysicsComponents.hpp>
 #include <illusion/physics/PhysicsWorld.hpp>
+#include <illusion/physics/Ragdoll.hpp>
 
 #include <algorithm>
 #include <optional>
@@ -52,6 +53,30 @@ struct GeometryEntry
     bool again = false;     // the file changed again during the reload
 };
 
+// Decoder name of `.ragdoll` files in the AssetStreamer.
+constexpr std::string_view kRagdollDecoder = "illusion.ragdoll";
+
+// A `.ragdoll` profile and its running load.
+struct ProfileEntry
+{
+    Status status = Status::Loading;
+    AssetHandle<RagdollProfile> load;
+    bool again = false; // the file changed during the load
+    RagdollProfile profile;
+};
+
+std::optional<RagdollProfile> decodeProfile(std::vector<std::byte>&& bytes, std::string& error)
+{
+    Expected<RagdollProfile, std::string> profile =
+        parseRagdollProfile(std::string_view(reinterpret_cast<const char*>(bytes.data()), bytes.size()));
+    if (!profile)
+    {
+        error = std::move(profile.error());
+        return std::nullopt;
+    }
+    return std::move(*profile);
+}
+
 u64 geometryKey(AssetId asset, u32 meshIndex, ColliderShape shape) noexcept
 {
     u64 key = hashCombine(asset.value, meshIndex);
@@ -87,7 +112,45 @@ struct PhysicsAssetResolver::Impl
     std::vector<AssetId> reloads;            // files reloaded since the last update()
     std::vector<u64> refreshed;              // entries whose geometry changed: their Colliders take it again
     std::vector<PhysicsMeshHandle> replaced; // destroyed once the Colliders use the new geometry
+    std::unordered_map<u64, ProfileEntry> profiles;
     Subscription reloaded;
+
+    void startProfileLoad(AssetId id, ProfileEntry& entry)
+    {
+        entry.load = streamer->loadFile<RagdollProfile>(AssetPathTable::instance().path(id), kRagdollDecoder,
+                                                        decodeProfile);
+    }
+
+    // Takes the finished load of @p entry; a failed reload keeps the previous profile.
+    void advanceProfile(AssetId id, ProfileEntry& entry)
+    {
+        if (!entry.load || entry.load.state() == AssetState::Loading)
+        {
+            return;
+        }
+        if (const RagdollProfile* loaded = entry.load.get())
+        {
+            entry.profile = *loaded;
+            entry.status = Status::Ready;
+        }
+        else if (entry.status == Status::Ready)
+        {
+            ILL_LOG_WARN("Physics", "cannot reload the ragdoll profile '{}', keeping the previous one: {}",
+                         AssetPathTable::instance().path(id), entry.load.error());
+        }
+        else
+        {
+            entry.status = Status::Failed;
+            ++statistics.failures;
+            ILL_LOG_WARN("Physics", "cannot use the ragdoll profile '{}': {}",
+                         AssetPathTable::instance().path(id), entry.load.error());
+        }
+        entry.load = {};
+        if (std::exchange(entry.again, false))
+        {
+            startProfileLoad(id, entry);
+        }
+    }
 
     void fail(GeometryEntry& entry, std::string_view message)
     {
@@ -215,6 +278,20 @@ struct PhysicsAssetResolver::Impl
     {
         std::vector<AssetId> files;
         files.swap(reloads);
+        for (const AssetId file : files)
+        {
+            if (const auto profile = profiles.find(file.value); profile != profiles.end())
+            {
+                if (profile->second.load)
+                {
+                    profile->second.again = true;
+                }
+                else
+                {
+                    startProfileLoad(file, profile->second);
+                }
+            }
+        }
         for (auto& [key, entry] : entries)
         {
             const std::optional<AssetPathParts> parts =
@@ -273,6 +350,10 @@ struct PhysicsAssetResolver::Impl
         if (!reloads.empty())
         {
             startReloads();
+        }
+        for (auto& [key, profile] : profiles)
+        {
+            advanceProfile(AssetId{key}, profile);
         }
         for (usize i = 0; i < loading.size();)
         {
@@ -365,7 +446,11 @@ void PhysicsAssetResolver::update()
 void PhysicsAssetResolver::waitIdle()
 {
     update();
-    while (m_impl->statistics.pending > 0 || !m_impl->loading.empty())
+    const auto profileLoading = [this] {
+        return std::ranges::any_of(m_impl->profiles,
+                                   [](const auto& entry) { return bool(entry.second.load); });
+    };
+    while (m_impl->statistics.pending > 0 || !m_impl->loading.empty() || profileLoading())
     {
         m_impl->streamer->waitIdle();
         update();
@@ -375,6 +460,32 @@ void PhysicsAssetResolver::waitIdle()
 const PhysicsAssetStatistics& PhysicsAssetResolver::statistics() const noexcept
 {
     return m_impl->statistics;
+}
+
+const RagdollProfile* PhysicsAssetResolver::ragdollProfile(const AssetRef& profile, bool& failed)
+{
+    failed = false;
+    const auto [found, inserted] = m_impl->profiles.try_emplace(profile.id.value);
+    ProfileEntry& entry = found->second;
+    if (inserted)
+    {
+        const std::string_view path = profile.path();
+        const std::optional<AssetPathParts> parts = splitAssetPath(path);
+        if (!profile || !parts || parts->fragment != AssetFragment::None ||
+            !path.ends_with(kRagdollProfileExtension) || isOnBuiltinMount(path))
+        {
+            entry.status = Status::Failed;
+            ++m_impl->statistics.failures;
+            ILL_LOG_WARN("Physics", "cannot use '{}': not a ragdoll profile (.ragdoll)", path);
+        }
+        else
+        {
+            m_impl->startProfileLoad(profile.id, entry);
+        }
+    }
+    m_impl->advanceProfile(profile.id, entry);
+    failed = entry.status == Status::Failed;
+    return entry.status == Status::Ready ? &entry.profile : nullptr;
 }
 
 } // namespace illusion

@@ -3,7 +3,8 @@
 This tutorial puts a rigged character into a scene and makes it walk, run and jump. You import a glTF model
 with clips, describe how the clips blend in an animation graph, give the character a `CharacterController`,
 and write a small C++ game module that sets the graph's `speed` from the input, triggers a jump, plays a
-footstep sound on an animation event, and lets root motion move the character.
+footstep sound on an animation event, and lets root motion move the character. Then you hang a lantern on
+the hand, turn the head towards a visitor, keep the feet on a step, and let the character fall like a ragdoll.
 
 You need a Release build of illusion, the C++ compiler the editor was built with, a rigged glTF model whose
 clips are called `idle`, `walk`, `run` and `jump` (a character from any glTF library works; the clip names are
@@ -20,6 +21,8 @@ module's calls.
 - Root motion: the feet do not slide, because the clips, not the code, move the character. The
   `CharacterController` gets the horizontal velocity from the animation and keeps its own vertical one.
 - A module that drives the parameters from the input actions and plays a sound on each `footstep` event.
+- A lantern in the right hand (a socket), a head that follows a visitor (look-at), feet that stand on a step
+  (foot placement), and a key that makes the character fall and stand up (a ragdoll).
 
 ## 2. Create the project and import the model
 
@@ -124,7 +127,7 @@ graph, and `speed` and `playing` still control how fast the graph runs and wheth
 
 ## 5. Input actions
 
-The module reads two actions. Create `assets/input/hero.input`:
+The module reads three actions; the last one is used in step 10. Create `assets/input/hero.input`:
 
 ```json
 {
@@ -132,7 +135,8 @@ The module reads two actions. Create `assets/input/hero.input`:
   "version": 1,
   "actions": [
     {"name": "hero.move", "type": "Vector2", "bindings": ["Keys.W.S.A.D", "Stick.Left"]},
-    {"name": "hero.jump", "type": "Button", "bindings": ["Key.Space", "Gamepad.South"]}
+    {"name": "hero.jump", "type": "Button", "bindings": ["Key.Space", "Gamepad.South"]},
+    {"name": "hero.fall", "type": "Button", "bindings": ["Key.R", "Gamepad.East"]}
   ]
 }
 ```
@@ -157,10 +161,12 @@ The state of the module is one runtime Component, so that a hot reload keeps it:
 #include <illusion/core/Module.hpp>
 #include <illusion/ecs/Name.hpp>
 #include <illusion/ecs/Reflection.hpp>
+#include <illusion/ecs/Transform.hpp>
 #include <illusion/ecs/World.hpp>
 #include <illusion/input/InputService.hpp>
 #include <illusion/physics/PhysicsComponents.hpp>
 #include <illusion/physics/PhysicsService.hpp>
+#include <illusion/physics/Ragdoll.hpp>
 
 #include <algorithm>
 #include <array>
@@ -177,6 +183,8 @@ struct State
     ActionId move = 0;
     ActionId jump = 0;
     AudioClipHandle footstep{};
+    ActionId fall = 0;
+    bool fallen = false;
 };
 
 } // namespace hero
@@ -212,12 +220,13 @@ void startHero(ModuleContext& context)
     }
     const std::optional<ActionId> move = input->findAction("hero.move");
     const std::optional<ActionId> jump = input->findAction("hero.jump");
-    if (!move || !jump)
+    const std::optional<ActionId> fall = input->findAction("hero.fall");
+    if (!move || !jump || !fall)
     {
         return;
     }
     const AudioClipHandle footstep = audio->loadClip("assets:/audio/footstep.wav", AudioClipMode::Decode);
-    context.world().create(Name{"Hero State"}, State{*move, *jump, footstep});
+    context.world().create(Name{"Hero State"}, State{*move, *jump, footstep, *fall, false});
 }
 ```
 
@@ -276,8 +285,163 @@ void updateHero(ModuleContext& context, f64)
     }
 }
 
+} // namespace
+```
+
+The module is not finished yet: steps 7 to 10 add a lantern, a gaze, foot placement and a ragdoll, and step 11
+registers and builds it.
+
+## 7. A lantern in the hand
+
+A **socket** hangs an Entity on a joint. Make the lantern a child of Hero and give it a `BoneAttachment`; the
+Animation step then writes its transform from the joint's pose and the offset after every update:
+
+```json
+{"call": "entity.create", "params": {"name": "Lantern", "parent": "/Hero", "components": {"illusion.MeshRenderer": {"mesh": "builtin:/mesh/sphere", "material": "builtin:/material/default"}, "illusion.BoneAttachment": {"joint": "hand_r", "translation": [0, 0.05, 0.1], "scale": [0.15, 0.15, 0.15]}}}}
+```
+
+Use the name of the right hand joint of your model for `joint`. The `translation` is 10 cm along the joint's
+own z axis and 5 cm along y, so the lantern hangs in the palm, and `scale` makes the sphere 15 cm wide. The
+`BoneAttachment` owns the lantern's `Transform`, so the size is set here and not on the Transform. You should
+see the lantern in the Scene view in the idle pose; during Play it swings with the hand.
+
+## 8. A head that follows
+
+A `LookAt` turns the head joint and a few joints below it towards a target, after the animation, up to a
+largest angle and at a limited speed. The commands above add a **Visitor** sphere at (3, 1.6, 4) and a `LookAt`
+on Hero that turns the head and the neck by at most 1.2 rad (about 70°) at 5 rad/s. Setting the `target`
+field to the Visitor's Entity is enough in the Inspector. A module can aim the head at any point instead,
+with `AnimationService::setLookAtTarget()`, which clears `target`. This one follows the Visitor's position,
+so a game that moves the Visitor moves the gaze:
+
+```json
+{"call": "entity.create", "params": {"name": "Visitor", "components": {"illusion.Transform": {"position": [3, 1.6, 4]}, "illusion.MeshRenderer": {"mesh": "builtin:/mesh/sphere", "material": "builtin:/material/default"}}}}
+{"call": "component.add", "params": {"entity": "/Hero", "type": "illusion.LookAt", "value": {"joint": "head", "chainLength": 2, "maxAngle": 1.2, "speed": 5}}}
+```
+
+```cpp
+namespace
+{
+
+void updateGaze(ModuleContext& context)
+{
+    AnimationService* animation = context.service<AnimationService>();
+    if (animation == nullptr || !context.hasWorld())
+    {
+        return;
+    }
+    World& world = context.world();
+    Entity hero{};
+    world.query<const Animator, const LookAt>().each(
+        [&hero](Entity entity, const Animator&, const LookAt&) { hero = entity; });
+    std::optional<Vec3> visitor;
+    world.query<const Name, const Transform>().each([&visitor](Entity, const Name& name, const Transform& transform) {
+        if (name.value == "Visitor")
+        {
+            visitor = transform.position;
+        }
+    });
+    if (visitor && world.isAlive(hero))
+    {
+        static_cast<void>(animation->setLookAtTarget(hero, *visitor));
+    }
+}
+
+} // namespace
+```
+
+`updateGaze` is called from the module's update in step 11. Move the Visitor in the Scene view while the game
+runs: Hero's head follows it, only as far as `maxAngle`, and returns to the animated direction when the
+Visitor is behind the character.
+
+## 9. Feet on uneven ground
+
+`FootPlacement` casts a ray below each foot before every Animation step, lifts or lowers the foot to the
+ground and moves the pelvis down to the lowest one. The feet are `TwoBoneIk` limbs of the Animator; the
+first one can sit on Hero, the others on its children. Add the two legs, the placement and a low step to walk
+over:
+
+```json
+{"call": "entity.create", "params": {"name": "Foot Target Left", "parent": "/Hero", "components": {"illusion.TwoBoneIk": {"joint": "foot_l", "polePoint": [0, 0.5, 1]}}}}
+{"call": "entity.create", "params": {"name": "Foot Target Right", "parent": "/Hero", "components": {"illusion.TwoBoneIk": {"joint": "foot_r", "polePoint": [0, 0.5, 1]}}}}
+{"call": "component.add", "params": {"entity": "/Hero", "type": "illusion.FootPlacement", "value": {"pelvis": "hips", "rayLength": 1.6, "footHeight": 0.08, "maxStep": 0.4, "speed": 10, "layerMask": 1}}}
+{"call": "entity.create", "params": {"name": "Step", "components": {"illusion.Transform": {"position": [2, 0.15, 0], "scale": [2, 0.3, 2]}, "illusion.MeshRenderer": {"mesh": "builtin:/mesh/cube", "material": "builtin:/material/default"}, "illusion.RigidBody": {"motionType": "Static"}, "illusion.Collider": {"halfExtents": [0.5, 0.5, 0.5]}}}}
+```
+
+`polePoint` is where the knee bends towards, in Hero's own space: forward and a little up. The ground rays
+reach 1.6 m below the hip and correct at most 0.4 m (the step is 0.3 m high). `layerMask` 1 is the physics
+layer of the ground, and the **Step** body on it is a static `RigidBody`. Run Hero over the step: the feet
+stay on its top and the hips drop, instead of the legs clipping into the ground. In the editor outside Play
+mode the feet keep the animated pose, because the rays run in the game session.
+
+## 10. Fall down
+
+A `Ragdoll` on the Animator's Entity turns the animated character into a physics ragdoll while it is
+`active`. Without a `profile` the session builds capsules from the skeleton:
+
+```json
+{"call": "component.add", "params": {"entity": "/Hero", "type": "illusion.Ragdoll", "value": {"mass": 70, "blendSeconds": 0.3}}}
+```
+
+Add the last function of the module, which toggles the ragdoll on the `hero.fall` action and remembers
+which way it went in the module's `State`:
+
+```cpp
+namespace
+{
+
+void updateFall(ModuleContext& context)
+{
+    InputService* input = context.service<InputService>();
+    AnimationService* animation = context.service<AnimationService>();
+    if (input == nullptr || animation == nullptr || !context.hasWorld())
+    {
+        return;
+    }
+    World& world = context.world();
+    Entity hero{};
+    world.query<const Animator, const Ragdoll>().each(
+        [&hero](Entity entity, const Animator&, const Ragdoll&) { hero = entity; });
+    if (!world.isAlive(hero))
+    {
+        return;
+    }
+    world.query<State>().each([&](Entity, State& state) {
+        if (input->wasPressed(state.fall))
+        {
+            const bool fall = !state.fallen;
+            if (animation->setRagdoll(hero, fall).hasValue())
+            {
+                state.fallen = fall;
+            }
+        }
+    });
+}
+
+} // namespace
+```
+
+`setRagdoll()` writes `Ragdoll::active`. The character falls from its current pose and velocity, with the
+**blendSeconds** blend, and a second press blends the pose back to the animation over the same time. The
+lantern, as a socket, falls with the hand.
+
+## 11. Build and try it
+
+The module calls the new functions from its update. Register the module with it:
+
+```cpp
+namespace
+{
+
+void updateAll(ModuleContext& context, f64 deltaSeconds)
+{
+    updateHero(context, deltaSeconds);
+    updateGaze(context);
+    updateFall(context);
+}
+
 constexpr ModuleApi kHero =
-    makeModuleApi("hero", "1.0.0", {.load = &loadHero, .start = &startHero, .update = &updateHero});
+    makeModuleApi("hero", "1.0.0", {.load = &loadHero, .start = &startHero, .update = &updateAll});
 
 } // namespace
 
@@ -286,22 +450,25 @@ ILL_MODULE(hero, kHero)
 
 Press **Ctrl+B** (**Modules → Build Modules**). When the build succeeds the module is loaded.
 
-## 7. Try it
-
 Press **Play**:
 
-- Hero stands in the idle pose. Hold **W**: it runs forward, driven by the root motion of the `run` clip, and
-  a footstep sounds at the two marked moments of each cycle. A stick pushed half way walks, with the slower
-  clip and slower steps; between them the clips blend.
+- Hero stands in the idle pose with the lantern in its hand. Hold **W**: it runs forward, driven by the root
+  motion of the `run` clip, and a footstep sounds at the two marked moments of each cycle. A stick pushed half
+  way walks, with the slower clip and slower steps; between them the clips blend.
 - Press **Space**: `jump` plays with a 0.1 s cross-fade, the character leaves the ground, and when the clip is
   nearly over the graph fades back to locomotion.
+- The head turns towards the Visitor while it is in front of Hero, and the feet follow the step.
+- Press **R**: Hero collapses with the lantern in its hand. Press **R** again: it blends back to the animation
+  where its Entity stands (the ragdoll does not move the Entity; the
+  [manual](../manual/animation.md#what-is-suspended-while-a-ragdoll-runs) shows how to stand up where the
+  character lies).
 - Change `hero.animgraph` while the game runs (a different `exitTime`, a new event time): the editor reloads
   the file and Hero restarts with the new graph.
 
 An agent starts the game with `play.start`, reads the state of the graph through the module's own logic or
 `play.step`, and sees the pose in `viewport.screenshot`; the graph's parameters are set only by game code.
 
-## 8. The limits
+## 12. The limits
 
 - Root motion moves the character forward along the clips' direction. Turning toward the stick is game
   code: rotate the Entity's `Transform` before the Animation step (a graph with root motion turns the
@@ -310,6 +477,8 @@ An agent starts the game with `play.start`, reads the state of the graph through
   lost: the trigger is cleared at the end of the update. Keep the cross-fades short or press again.
 - Animations of one skeleton are not shared across different joint names; retarget the clips in a DCC tool.
 - The live state of the graph is not saved: loading a saved game restarts Hero in `locomotion`.
+- A ragdoll only falls: it has no motors, and it suspends root motion and the `CharacterController`.
+  Foot placement and look-at do not show on a simulated character.
 
 ## Next steps
 

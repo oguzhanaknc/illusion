@@ -679,7 +679,7 @@ public:
 };
 
 // Counts the calls of every AnimationService function.
-class CountingAnimation final : public CountingProxy<AnimationService, 13>
+class CountingAnimation final : public CountingProxy<AnimationService, 14>
 {
 public:
     explicit CountingAnimation(AnimationService* inner = nullptr) noexcept
@@ -747,6 +747,10 @@ public:
     Void setIkWeight(Entity e, std::string_view joint, f32 weight) override
     {
         return forward<Void>(12, [&](AnimationService& s) { return s.setIkWeight(e, joint, weight); });
+    }
+    Void setRagdoll(Entity e, bool active) override
+    {
+        return forward<Void>(13, [&](AnimationService& s) { return s.setRagdoll(e, active); });
     }
 };
 

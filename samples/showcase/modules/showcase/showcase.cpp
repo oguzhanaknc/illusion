@@ -122,6 +122,7 @@ struct Runtime
     bool columnSwings = false; ///< The Column's graph is in its "swing" state.
     f32 columnTop = 0.0f;      ///< World height of the Column's "top" joint (its lamp's socket).
     Entity strider{};
+    Entity fallenStrider{}; ///< Starts as a ragdoll, stands up and falls again.
     Entity walker{};
     Entity aiGuard{};         ///< The AI Guard, whose actions the module carries out.
     Entity aiSleeper{};       ///< The AI Sleeper, whose blackboard the module writes.
@@ -213,6 +214,8 @@ constexpr u32 kNavAgentType = 1;     // the yard's navmesh (the Nav Surface)
 constexpr u32 kAiWriteFrame = 20;    // the AI Sleeper's blackboard is written and read
 constexpr u32 kAiNoiseFrame = 40;    // the hidden intruder makes a noise
 constexpr u32 kAiRestartFrame = 250; // the sleeper's tree starts again
+constexpr u32 kStandFrame = 90;      // the Fallen Strider blends back from its ragdoll to its animation
+constexpr u32 kFallFrame = 200;      // and falls again
 
 Quat identity() noexcept
 {
@@ -425,6 +428,7 @@ void startModule(ModuleContext& context)
     runtime.dust = findNamed(world, "Dust");
     runtime.column = findNamed(world, "Column");
     runtime.strider = findNamed(world, "Strider");
+    runtime.fallenStrider = findNamed(world, "Fallen Strider");
     runtime.walker = findNamed(world, "Nav Walker");
     runtime.aiGuard = findNamed(world, "AI Guard");
     runtime.aiSleeper = findNamed(world, "AI Sleeper");
@@ -870,6 +874,15 @@ void updateAnimation(AnimationService& animation, Runtime& runtime, u32 frame)
         if (!weighted)
         {
             ILL_LOG_INFO("Showcase", "Strider: {}", animationErrorName(weighted.error()));
+        }
+    }
+    if (frame == kStandFrame || frame == kFallFrame)
+    {
+        const Expected<void, AnimationError> ragdoll =
+            animation.setRagdoll(runtime.fallenStrider, frame == kFallFrame);
+        if (!ragdoll)
+        {
+            ILL_LOG_INFO("Showcase", "Fallen Strider: {}", animationErrorName(ragdoll.error()));
         }
     }
 }
