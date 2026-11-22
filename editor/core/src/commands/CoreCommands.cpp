@@ -922,6 +922,63 @@ void reflectCoreCommandTypes(StructRegistry& structs)
             .field("clipKilobytes", &PlayDiagnosticsResult::clipKilobytes)
             .field("masterVolume", &PlayDiagnosticsResult::masterVolume)
             .field("buses", &PlayDiagnosticsResult::buses);
+        reflectStruct<NavBakeParams>("editor.NavBakeParams", 1, structs)
+            .field("surface", &NavBakeParams::surface)
+            .field("path", &NavBakeParams::path)
+            .field("force", &NavBakeParams::force);
+        reflectStruct<NavBakeSurface>("editor.NavBakeSurface", 1, structs)
+            .field("entity", &NavBakeSurface::entity)
+            .field("path", &NavBakeSurface::path)
+            .field("tiles", &NavBakeSurface::tiles)
+            .field("rebuiltTiles", &NavBakeSurface::rebuiltTiles)
+            .field("bytes", &NavBakeSurface::bytes)
+            .field("written", &NavBakeSurface::written)
+            .field("dataChanged", &NavBakeSurface::dataChanged);
+        reflectStruct<NavBakeResult>("editor.NavBakeResult", 1, structs)
+            .field("surfaces", &NavBakeResult::surfaces)
+            .field("rebuiltTiles", &NavBakeResult::rebuiltTiles)
+            .field("written", &NavBakeResult::written);
+        reflectStruct<NavStatusParams>("editor.NavStatusParams", 1, structs)
+            .field("wait", &NavStatusParams::wait);
+        reflectStruct<NavStatusSurface>("editor.NavStatusSurface", 1, structs)
+            .field("entity", &NavStatusSurface::entity)
+            .field("agentType", &NavStatusSurface::agentType)
+            .field("data", &NavStatusSurface::data)
+            .field("ready", &NavStatusSurface::ready);
+        reflectStruct<NavStatusResult>("editor.NavStatusResult", 1, structs)
+            .field("surfaces", &NavStatusResult::surfaces)
+            .field("tiles", &NavStatusResult::tiles)
+            .field("polygons", &NavStatusResult::polygons)
+            .field("pendingTiles", &NavStatusResult::pendingTiles)
+            .field("staleTiles", &NavStatusResult::staleTiles)
+            .field("failures", &NavStatusResult::failures);
+        reflectStruct<NavPathParams>("editor.NavPathParams", 1, structs)
+            .field("from", &NavPathParams::from)
+            .field("to", &NavPathParams::to)
+            .field("agentType", &NavPathParams::agentType, {.min = 0.0, .max = 7.0})
+            .field("areaMask", &NavPathParams::areaMask)
+            .field("maxCorners", &NavPathParams::maxCorners, {.min = 2.0, .max = 1024.0});
+        reflectStruct<NavRouteResult>("editor.NavRouteResult", 1, structs)
+            .field("partial", &NavRouteResult::partial)
+            .field("length", &NavRouteResult::length)
+            .field("total", &NavRouteResult::total)
+            .field("corners", &NavRouteResult::corners);
+        reflectStruct<NavDebugParams>("editor.NavDebugParams", 1, structs)
+            .field("enabled", &NavDebugParams::enabled)
+            .field("navMesh", &NavDebugParams::navMesh)
+            .field("tiles", &NavDebugParams::tiles)
+            .field("links", &NavDebugParams::links)
+            .field("agents", &NavDebugParams::agents)
+            .field("paths", &NavDebugParams::paths)
+            .field("obstacles", &NavDebugParams::obstacles);
+        reflectStruct<NavDebugResult>("editor.NavDebugResult", 1, structs)
+            .field("enabled", &NavDebugResult::enabled)
+            .field("navMesh", &NavDebugResult::navMesh)
+            .field("tiles", &NavDebugResult::tiles)
+            .field("links", &NavDebugResult::links)
+            .field("agents", &NavDebugResult::agents)
+            .field("paths", &NavDebugResult::paths)
+            .field("obstacles", &NavDebugResult::obstacles);
         reflectStruct<PlaySetMixParams>("editor.PlaySetMixParams", 1, structs)
             .field("masterVolume", &PlaySetMixParams::masterVolume, {.min = 0.0, .max = 4.0})
             .field("bus", &PlaySetMixParams::bus)
@@ -1294,6 +1351,7 @@ void registerCoreCommands(CommandRegistry& registry)
     detail::registerGamepadCommands(registry);
     detail::registerSavesCommands(registry);
     detail::registerModuleCommands(registry);
+    detail::registerNavCommands(registry);
     detail::registerExportCommands(registry);
     detail::registerToolCommands(registry);
 }

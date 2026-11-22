@@ -9,6 +9,7 @@ illusion_add_editor_library(illusion_editor_core STATIC
     src/CommandRegistry.cpp
     src/CrashJournal.cpp
     src/EditorContext.cpp
+    src/EditorNavigation.cpp
     src/EntityIndex.cpp
     src/Export.cpp
     src/ExportTools.cpp
@@ -48,6 +49,7 @@ illusion_add_editor_library(illusion_editor_core STATIC
     src/commands/LogCommands.cpp
     src/commands/MaterialCommands.cpp
     src/commands/ModuleCommands.cpp
+    src/commands/NavCommands.cpp
     src/commands/ParticleCommands.cpp
     src/commands/PlayCommands.cpp
     src/commands/PrefabCommands.cpp
@@ -68,7 +70,7 @@ add_library(illusion::editor_core ALIAS illusion_editor_core)
 target_include_directories(illusion_editor_core PUBLIC
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>)
 target_link_libraries(illusion_editor_core PUBLIC
-    illusion::core illusion::platform illusion::text illusion::particles illusion::ui illusion::save_api
+    illusion::core illusion::platform illusion::text illusion::particles illusion::nav illusion::ui illusion::save_api
     illusion::editor_strings
     PRIVATE illusion::assets illusion::input)
 

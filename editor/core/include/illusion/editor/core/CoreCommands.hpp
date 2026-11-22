@@ -1781,6 +1781,105 @@ struct ParticlesStatsResult
     u32 alive = 0;    ///< Their live particles.
 };
 
+/// Params of `nav.bake`.
+struct NavBakeParams
+{
+    std::optional<std::string> surface{}; ///< Entity reference of a NavMeshSurface (default: every surface).
+    /// The `.navmesh` file of `surface` when its `data` is empty, e.g. "assets:/navigation/yard.navmesh"
+    /// (default: `assets:/navigation/<entity name>.navmesh`).
+    std::optional<std::string> path{};
+    std::optional<bool> force{}; ///< Build every tile again instead of the stale ones (default false).
+};
+
+/// What `nav.bake` did for one surface.
+struct NavBakeSurface
+{
+    EntitySummary entity;     ///< The NavMeshSurface's Entity.
+    std::string path;         ///< The `.navmesh` file.
+    u32 tiles = 0;            ///< Tiles of the grid.
+    u32 rebuiltTiles = 0;     ///< Tiles built again (all of them for a first bake).
+    u32 bytes = 0;            ///< Size of the file.
+    bool written = false;     ///< The file changed and was written.
+    bool dataChanged = false; ///< `NavMeshSurface::data` was set to the file.
+};
+
+/// Result of `nav.bake`.
+struct NavBakeResult
+{
+    std::vector<NavBakeSurface> surfaces; ///< Every surface that was baked, in Entity order.
+    u32 rebuiltTiles = 0;                 ///< Tiles built again in all.
+    u32 written = 0;                      ///< Files written.
+};
+
+/// Params of `nav.status`.
+struct NavStatusParams
+{
+    std::optional<bool> wait{}; ///< Finish loading and baking first (default true).
+};
+
+/// A NavMeshSurface in the result of `nav.status`.
+struct NavStatusSurface
+{
+    EntitySummary entity; ///< The NavMeshSurface's Entity.
+    u32 agentType = 0;    ///< Agent type it serves.
+    std::string data;     ///< Its `.navmesh` file ("" for none).
+    bool ready = false;   ///< Its navmesh has every tile.
+};
+
+/// Result of `nav.status`.
+struct NavStatusResult
+{
+    std::vector<NavStatusSurface> surfaces; ///< Every surface.
+    u32 tiles = 0;                          ///< Tiles with polygons.
+    u32 polygons = 0;                       ///< Polygons of every navmesh.
+    u32 pendingTiles = 0;                   ///< Tiles waiting to be baked.
+    u32 staleTiles = 0;                     ///< Loaded tiles whose input changed.
+    u32 failures = 0;                       ///< Surfaces whose data or bake failed.
+};
+
+/// Params of `nav.path`.
+struct NavPathParams
+{
+    Vec3 from{0.0f};                 ///< Start in world space, in m.
+    Vec3 to{0.0f};                   ///< Destination in world space, in m.
+    std::optional<u32> agentType{};  ///< Navmesh to search, 0 to 7 (default 0).
+    std::optional<u32> areaMask{};   ///< Areas it may cross, bit i = area i (default all).
+    std::optional<u32> maxCorners{}; ///< Corner points returned, 2 to 1024 (default 256).
+};
+
+/// Result of `nav.path`.
+struct NavRouteResult
+{
+    bool partial = false;      ///< The path ends at the reachable point nearest the destination.
+    f32 length = 0.0f;         ///< Length of the whole path in m.
+    u32 total = 0;             ///< Corner points of the whole path.
+    std::vector<Vec3> corners; ///< The first corner points, from the start on the navmesh.
+};
+
+/// Params of `nav.debug`.
+struct NavDebugParams
+{
+    std::optional<bool> enabled{};   ///< Draw the navigation in the Scene views.
+    std::optional<bool> navMesh{};   ///< Polygon edges, coloured by area.
+    std::optional<bool> tiles{};     ///< Tile borders.
+    std::optional<bool> links{};     ///< Off-mesh links.
+    std::optional<bool> agents{};    ///< Agent cylinders and velocities.
+    std::optional<bool> paths{};     ///< Corridors of moving agents.
+    std::optional<bool> obstacles{}; ///< NavObstacles.
+};
+
+/// Result of `nav.debug`: what the Scene views draw now.
+struct NavDebugResult
+{
+    bool enabled = false;  ///< The navigation is drawn.
+    bool navMesh = true;   ///< Polygon edges.
+    bool tiles = false;    ///< Tile borders.
+    bool links = true;     ///< Off-mesh links.
+    bool agents = true;    ///< Agents.
+    bool paths = true;     ///< Corridors.
+    bool obstacles = true; ///< NavObstacles.
+};
+
 /// Result of the `play.*` commands: the state of the play session.
 struct PlayStatusResult
 {

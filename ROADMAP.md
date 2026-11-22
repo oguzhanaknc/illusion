@@ -1335,7 +1335,7 @@ headers are in their `include/` directories.
   module calls the whole `NavService` (`tools/check_api_coverage.py`). Done: a module test sends an agent to a
   point and reads its `Arrived` event; every `NavError` from the service; the SDK test builds a module that
   uses it.
-- NAV-1e (`mechanic`): Editor and documentation. Commands `nav.bake` (async: one or every surface, changed
+- ✅ NAV-1e (`mechanic`): Editor and documentation. Commands `nav.bake` (async: one or every surface, changed
   tiles only, writes the `.navmesh`, sets `NavMeshSurface::data` through `executeStep()`), `nav.status`,
   `nav.path`, `nav.debug`; the edit World's `NavWorld` (never advanced); a viewport visualiser over
   `drawDebug()`; a Bake button in the Inspector of `NavMeshSurface`; the asset browser lists `.navmesh` as
@@ -1345,6 +1345,8 @@ headers are in their `include/` directories.
   `NavService` reference, `CHANGELOG.md`. Done: command tests (bake twice writes the same file and changes
   nothing the second time, a moved wall rebakes its tiles only, `nav.path` around a wall, every invalid
   param), the fuzz test, a GPU golden image of the visualiser, `mkdocs build --strict`, docs parity.
+  Open: the Inspector's Bake button and the `.navmesh` items of the Asset Browser and the export; the `nav.*`
+  commands and the debug view act on the edit World only.
 - NAV-2: Behaviour trees and perception. Four work packages:
 - NAV-2a (`implementer`): Trees without a World. The library `engine/ai` with `illusion::ai_api`;
   `Blackboard.hpp` (`compareBlackboard()`), `BehaviorTree.hpp` (`parseBehaviorTree()`,

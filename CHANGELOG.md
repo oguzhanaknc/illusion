@@ -78,6 +78,10 @@ version changes are in the contributor guide ("Versions and releases"). The vers
   rebuilds the tiles of changed sources in the background, and answers `findPath()`, `nearestPoint()`,
   `raycast()` and `randomPoint()` queries with `NavQueryFilter` and area costs; `drawDebug()`, the Nav yard
   of the showcase and the manual sections "Run time" and "Queries".
+- Navigation in the editor (NAV-1e): the Editor commands `nav.bake` (changed tiles only, writes the `.navmesh`
+  and sets `NavMeshSurface::data`), `nav.status`, `nav.path` and `nav.debug`, the edit World's `NavWorld`, the
+  navigation shown in the Scene views, a `nav.bake` step in the showcase build and the manual section "In the
+  editor".
 
 ### Changed
 

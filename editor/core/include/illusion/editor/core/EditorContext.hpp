@@ -16,6 +16,7 @@
 #include <illusion/editor/core/ChangeJournal.hpp>
 #include <illusion/editor/core/CommandRegistry.hpp>
 #include <illusion/editor/core/CrashJournal.hpp>
+#include <illusion/editor/core/EditorNavigation.hpp>
 #include <illusion/editor/core/EntityIndex.hpp>
 #include <illusion/editor/core/GamepadHost.hpp>
 #include <illusion/editor/core/Gizmo.hpp>
@@ -280,6 +281,12 @@ public:
 
     /// The edited World.
     [[nodiscard]] World& world() noexcept { return m_world; }
+
+    /// The navigation of the edit World, created (and started loading the scene's navmeshes) on first use.
+    [[nodiscard]] EditorNavigation& navigation();
+
+    /// The navigation of the edit World, or null before navigation() was first called.
+    [[nodiscard]] EditorNavigation* findNavigation() noexcept { return m_navigation.get(); }
 
     /// Entities by id, path and name.
     [[nodiscard]] EntityIndex& entities() noexcept { return m_index; }
@@ -692,7 +699,8 @@ private:
     VirtualFileSystem m_files;
     std::optional<Project> m_project;
     World m_world;
-    ParticleWorld m_previewParticles{m_world}; // advances the edit World's emitters for the Scene view
+    ParticleWorld m_previewParticles{m_world};      // advances the edit World's emitters for the Scene view
+    std::unique_ptr<EditorNavigation> m_navigation; // the edit World's navmeshes, created by navigation()
     GuidGenerator m_guids;
     std::string m_session;
     EntityIndex m_index;

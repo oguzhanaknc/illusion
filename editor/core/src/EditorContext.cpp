@@ -1664,6 +1664,15 @@ usize EditorContext::clearHistory()
     return removed;
 }
 
+EditorNavigation& EditorContext::navigation()
+{
+    if (!m_navigation)
+    {
+        m_navigation = std::make_unique<EditorNavigation>(m_world, m_files);
+    }
+    return *m_navigation;
+}
+
 void EditorContext::endFrame(f64 deltaSeconds)
 {
     ILL_PROFILE_SCOPE();
@@ -1672,6 +1681,10 @@ void EditorContext::endFrame(f64 deltaSeconds)
     {
         advanceWind(m_world, static_cast<f32>(deltaSeconds));
         m_previewParticles.update(static_cast<f32>(deltaSeconds));
+        if (m_navigation)
+        {
+            m_navigation->update();
+        }
     }
     if (m_commands.revision() != m_commandsRevision)
     {
