@@ -77,6 +77,14 @@ version changes are in the contributor guide ("Versions and releases"). The vers
   "Ragdolls".
 - The tutorial "Animate a character" (ANIM-3d) gained a lantern on a socket, a head that follows a target, foot
   placement on a step and a ragdoll, and the manual lists the benchmarks of spring bones and ragdolls.
+- Navigation meshes (NAV-1a): the Recast Navigation 1.6.0 dependency, the library `illusion::nav`, the saved
+  `NavMeshSurface`, `NavArea`, `NavLink`, `NavObstacle` and `NavAgent` Components, a tiled navmesh bake from
+  colliders on the Job System with identical bytes for any worker count, per-tile input hashes with
+  `rebakeStaleTiles()`, the checksummed `.navmesh` file and the manual page "Navigation".
+- Run-time navigation (NAV-1b): `NavWorld` loads the `.navmesh` files of the NavMeshSurfaces or bakes them,
+  rebuilds the tiles of changed sources in the background, and answers `findPath()`, `nearestPoint()`,
+  `raycast()` and `randomPoint()` queries with `NavQueryFilter` and area costs; `drawDebug()`, the Nav yard
+  of the showcase and the manual sections "Run time" and "Queries".
 
 ### Changed
 

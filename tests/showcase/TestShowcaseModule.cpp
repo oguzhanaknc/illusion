@@ -20,10 +20,13 @@
 #include <illusion/ecs/Name.hpp>
 #include <illusion/ecs/Reflection.hpp>
 #include <illusion/ecs/SceneSerializer.hpp>
+#include <illusion/ecs/Transform.hpp>
 #include <illusion/ecs/World.hpp>
 #include <illusion/input/InputActions.hpp>
 #include <illusion/input/InputActionsService.hpp>
 #include <illusion/modules/ModuleHost.hpp>
+#include <illusion/nav/NavComponents.hpp>
+#include <illusion/nav/NavWorld.hpp>
 #include <illusion/particles/ParticleComponents.hpp>
 #include <illusion/particles/ParticleWorld.hpp>
 #include <illusion/particles/ParticleWorldService.hpp>
@@ -67,6 +70,7 @@ void reflectAll()
     reflectAudioComponents();
     reflectParticleComponents();
     registerAnimationComponents(ComponentRegistry::instance());
+    registerNavComponents(ComponentRegistry::instance());
     reflectRenderComponents();
     reflectRuntimeStructs();
     registerUiComponents();
@@ -349,4 +353,42 @@ TEST_CASE("fixed-step showcase sessions with the same input end in the same stat
     const SessionRun idle = runSession(false);
     CHECK(idle.jumps == 0);
     CHECK(idle.hash != first.hash);
+}
+
+TEST_CASE("the showcase Nav Walker walks around the hole and up the ladder to its destination")
+{
+    reflectAll();
+    VirtualFileSystem files;
+    mountShowcase(files);
+    JobSystem jobs{JobSystemDesc{2, 1024}};
+    GameSessionDesc desc;
+    desc.jobs = &jobs;
+    desc.files = &files;
+    desc.audioOutput = AudioOutput::Offline;
+    desc.fixedStep = true;
+    Expected<std::unique_ptr<GameSession>, std::string> created = GameSession::create(desc);
+    REQUIRE(created.hasValue());
+    GameSession& session = **created;
+    loadShowcaseScene(session.world(), files);
+    const Entity walker = findNamed(session.world(), "Nav Walker");
+    const Entity ladder = findNamed(session.world(), "Nav Ladder");
+    REQUIRE_FALSE(walker.isNull());
+    session.start();
+    bool climbed = false;
+    bool arrived = false;
+    for (int frame = 0; frame < 60 * 30 && !arrived; ++frame)
+    {
+        session.update(kStep);
+        for (const NavEvent& event : session.navigation().events())
+        {
+            climbed = climbed || (event.agent == walker && event.type == NavEventType::LinkExited &&
+                                  event.link == ladder && event.kind == NavLinkKind::Ladder);
+            arrived = arrived || (event.agent == walker && event.type == NavEventType::Arrived);
+        }
+    }
+    CHECK(climbed);
+    CHECK(arrived);
+    const Vec3 position = session.world().get<Transform>(walker).position;
+    CHECK(glm::distance(Vec2(position.x, position.z), Vec2(34.0f, 4.0f)) < 0.35f);
+    CHECK(position.y > 0.9f);
 }

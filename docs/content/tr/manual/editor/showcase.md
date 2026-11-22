@@ -46,7 +46,7 @@ etkinleştirin; devre dışı `Film Look` ise derecelendirilmiş, vinyetli bir g
 tutar. Devre dışı `Morning Mist`, alçakta süzülen bir sis için bir `VolumetricFog` tutar. `HUD` Entity'si her UI
 Component'ini kullanan bir oyun UI'ıdır: nine-slice görüntülü bir durum paneli ve bir metin stack'i (biri düz,
 biri `assets/locales/en.json` ve `tr.json` içindeki bir anahtarla yerelleştirilmiş), renkli hücrelerden bir grid ve
-döndürülmüş, ölçeklenmiş, kırpılmış bir kadran; bkz. [Oyun UI'ı](../ui.md). Play sırasında Game görünümünde görünür.
+döndürülmüş, ölçeklenmiş, kırpılmış bir kadran; bkz. [Oyun UI'ı](../ui.md). Play sırasında Game görünümünde görünür. Diğerlerinin doğusunda, x = 30'daki Nav yard navigasyon Component'lerini kapsar: `Nav Floor` ve `Nav Step` zemindir, `Nav Surface` Entity'si onu agent türü 1 için bake eder ve `assets/navigation/yard.navmesh` dosyasını yükler, `Nav Hole` ondan bir kare keser, `Nav Ladder` zemini basamağın tepesine bağlar, carve eden `Nav Barrel` yolu kapatır ve `Nav Walker` avlunun karşısında bir hedefi olan bir agent'tır ([Navigasyon](../navigation.md)).
 
 ## Showcase modülü
 

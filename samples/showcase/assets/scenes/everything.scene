@@ -18,6 +18,11 @@
     "illusion.LookAt": 1,
     "illusion.MeshRenderer": 1,
     "illusion.Name": 1,
+    "illusion.NavAgent": 1,
+    "illusion.NavArea": 1,
+    "illusion.NavLink": 1,
+    "illusion.NavMeshSurface": 1,
+    "illusion.NavObstacle": 1,
     "illusion.ParticleEmitter": 1,
     "illusion.PointLight": 1,
     "illusion.PostEffects": 1,
@@ -2973,6 +2978,42 @@
       }
     },
     {
+      "id": "00077ba99ea524f2",
+      "components": {
+        "illusion.Collider": {
+          "shape": "Box",
+          "halfExtents": [1.5, 0.5, 1.5],
+          "radius": 0.5,
+          "halfHeight": 0.5,
+          "offset": [0.0, 0.0, 0.0],
+          "rotation": [0.0, 0.0, 0.0, 1.0],
+          "mesh": "",
+          "meshIndex": 0
+        },
+        "illusion.Name": {
+          "value": "Nav Step"
+        },
+        "illusion.RigidBody": {
+          "motionType": "Static",
+          "mass": 0.0,
+          "friction": 0.5,
+          "restitution": 0.0,
+          "linearDamping": 0.05,
+          "angularDamping": 0.05,
+          "gravityFactor": 1.0,
+          "layer": 0,
+          "sensor": false,
+          "allowSleeping": true,
+          "continuousCollision": false
+        },
+        "illusion.Transform": {
+          "position": [34.0, 0.5, 4.0],
+          "rotation": [0.0, 0.0, 0.0, 1.0],
+          "scale": [1.0, 1.0, 1.0]
+        }
+      }
+    },
+    {
       "id": "14d7973c5c2a449c",
       "components": {
         "illusion.Collider": {
@@ -3212,6 +3253,42 @@
       }
     },
     {
+      "id": "4f05f03735c3b951",
+      "components": {
+        "illusion.Name": {
+          "value": "Nav Surface"
+        },
+        "illusion.NavMeshSurface": {
+          "size": [16.0, 6.0, 16.0],
+          "agentType": 1,
+          "agentRadius": 0.4,
+          "agentHeight": 1.7,
+          "agentMaxClimb": 0.3,
+          "agentMaxSlope": 0.7,
+          "build": {
+            "cellSize": 0.2,
+            "cellHeight": 0.15,
+            "tileSize": 32,
+            "minRegionArea": 2.0,
+            "mergeRegionArea": 6.0,
+            "maxEdgeLength": 10.0,
+            "maxSimplificationError": 1.1,
+            "detailSampleDistance": 5.0,
+            "detailSampleMaxError": 0.8
+          },
+          "layerMask": 3,
+          "areaCosts": [1.0, 2.0, 4.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0],
+          "data": "assets:/navigation/yard.navmesh",
+          "rebuildAtRuntime": true
+        },
+        "illusion.Transform": {
+          "position": [30.0, 1.0, 0.0],
+          "rotation": [0.0, 0.0, 0.0, 1.0],
+          "scale": [1.0, 1.0, 1.0]
+        }
+      }
+    },
+    {
       "id": "5692161d100b05e5",
       "components": {
         "illusion.AudioListener": {},
@@ -3384,6 +3461,36 @@
       }
     },
     {
+      "id": "7bc42e82782acb92",
+      "components": {
+        "illusion.Name": {
+          "value": "Nav Walker"
+        },
+        "illusion.NavAgent": {
+          "agentType": 1,
+          "radius": 0.4,
+          "height": 1.7,
+          "maxSpeed": 2.5,
+          "maxAcceleration": 6.0,
+          "turnSpeed": 4.0,
+          "stoppingDistance": 0.3,
+          "avoidance": "High",
+          "priority": 20,
+          "separationWeight": 1.5,
+          "areaMask": 65531,
+          "drive": "Transform",
+          "faceMovement": false,
+          "speedParameter": "speed",
+          "destination": [34.0, 1.0, 4.0]
+        },
+        "illusion.Transform": {
+          "position": [25.0, 0.0, -5.0],
+          "rotation": [0.0, 0.0, 0.0, 1.0],
+          "scale": [1.0, 1.0, 1.0]
+        }
+      }
+    },
+    {
       "id": "85e7bb0f12278575",
       "components": {
         "illusion.Disabled": {},
@@ -3423,6 +3530,29 @@
         "illusion.Transform": {
           "position": [0.0, 20.0, 0.0],
           "rotation": [-0.7071068, 0.0, 0.0, 0.7071068],
+          "scale": [1.0, 1.0, 1.0]
+        }
+      }
+    },
+    {
+      "id": "96bf5d405151ec53",
+      "components": {
+        "illusion.Name": {
+          "value": "Nav Ladder"
+        },
+        "illusion.NavLink": {
+          "end": [2.5, 1.0, 0.0],
+          "kind": "Ladder",
+          "bidirectional": false,
+          "radius": 0.4,
+          "height": 0.5,
+          "seconds": 1.5,
+          "area": 1,
+          "agentTypeMask": 2
+        },
+        "illusion.Transform": {
+          "position": [31.0, 0.0, 4.0],
+          "rotation": [0.0, 0.0, 0.0, 1.0],
           "scale": [1.0, 1.0, 1.0]
         }
       }
@@ -3530,6 +3660,28 @@
       }
     },
     {
+      "id": "aa3de53fbde4ae5b",
+      "components": {
+        "illusion.Name": {
+          "value": "Nav Barrel"
+        },
+        "illusion.NavObstacle": {
+          "shape": "Cylinder",
+          "size": [0.8, 1.0, 0.8],
+          "radius": 0.4,
+          "height": 1.2,
+          "carve": true,
+          "moveThreshold": 0.25,
+          "settleSeconds": 1.0
+        },
+        "illusion.Transform": {
+          "position": [26.0, 0.5, 3.0],
+          "rotation": [0.0, 0.0, 0.0, 1.0],
+          "scale": [1.0, 1.0, 1.0]
+        }
+      }
+    },
+    {
       "id": "b54b3c40881e2907",
       "components": {
         "illusion.AudioSource": {
@@ -3559,6 +3711,25 @@
         },
         "illusion.Transform": {
           "position": [0.0, 0.0, 0.0],
+          "rotation": [0.0, 0.0, 0.0, 1.0],
+          "scale": [1.0, 1.0, 1.0]
+        }
+      }
+    },
+    {
+      "id": "bc73014050141d01",
+      "components": {
+        "illusion.Name": {
+          "value": "Nav Hole"
+        },
+        "illusion.NavArea": {
+          "area": 2,
+          "walkable": false,
+          "volume": true,
+          "size": [2.0, 1.0, 2.0]
+        },
+        "illusion.Transform": {
+          "position": [27.0, 0.0, -3.0],
           "rotation": [0.0, 0.0, 0.0, 1.0],
           "scale": [1.0, 1.0, 1.0]
         }
@@ -3625,6 +3796,42 @@
           "position": [0.0, 0.0, 0.0],
           "rotation": [0.0, 0.0, 0.0, 1.0],
           "scale": [20.0, 1.0, 20.0]
+        }
+      }
+    },
+    {
+      "id": "d80391ffb30d1390",
+      "components": {
+        "illusion.Collider": {
+          "shape": "Box",
+          "halfExtents": [8.0, 0.25, 8.0],
+          "radius": 0.5,
+          "halfHeight": 0.5,
+          "offset": [0.0, 0.0, 0.0],
+          "rotation": [0.0, 0.0, 0.0, 1.0],
+          "mesh": "",
+          "meshIndex": 0
+        },
+        "illusion.Name": {
+          "value": "Nav Floor"
+        },
+        "illusion.RigidBody": {
+          "motionType": "Static",
+          "mass": 0.0,
+          "friction": 0.5,
+          "restitution": 0.0,
+          "linearDamping": 0.05,
+          "angularDamping": 0.05,
+          "gravityFactor": 1.0,
+          "layer": 0,
+          "sensor": false,
+          "allowSleeping": true,
+          "continuousCollision": false
+        },
+        "illusion.Transform": {
+          "position": [30.0, -0.25, 0.0],
+          "rotation": [0.0, 0.0, 0.0, 1.0],
+          "scale": [1.0, 1.0, 1.0]
         }
       }
     },
