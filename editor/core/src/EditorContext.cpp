@@ -350,6 +350,8 @@ EditorContext::~EditorContext()
         std::error_code code;
         std::filesystem::remove_all(m_project->stateDirectory() / "trash" / utf8Path(m_session), code);
         m_thumbnails.close();
+        // Its streamer reads project files on a background thread until it is destroyed.
+        m_navigation.reset();
         m_project->unmount(m_files);
     }
     if (m_log)
@@ -369,6 +371,8 @@ Expected<void, CommandError> EditorContext::openProject(const std::filesystem::p
     {
         m_journal.closeClean();
         m_thumbnails.close();
+        // Its streamer reads project files on a background thread until it is destroyed.
+        m_navigation.reset();
         m_project->unmount(m_files);
         m_project.reset();
         m_editor.setFiles(nullptr, {}, {});
