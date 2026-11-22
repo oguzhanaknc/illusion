@@ -1526,7 +1526,23 @@ Games have only the `Camera` Component; every sample moves it by hand. A general
 of virtual-camera rigs, so that a third-person, first-person, orbit, rail or cutscene camera is data, not
 game code.
 
-- Virtual cameras as saved Components with priorities; the camera brain on the real `Camera` picks the
+- CAM is designed in ADR 0064 (virtual cameras as saved rigs of body/aim/noise stages, a `CameraBrain` that
+  blends to the live one, `CameraWorld` in a new GPU-free `engine/camera` after Hierarchy). Four work packages:
+- CAM-1 (`implementer`): Stages without a World. `engine/camera` with the pure stage functions (follow,
+  orbit, spring arm against a query interface, dolly, look-at, composer, noise) and blending. Done: a test per
+  stage and damping against hand-computed values, composer zones, blend curves, determinism, no allocation,
+  benchmark `camera/stages-100`.
+- CAM-2 (`implementer`): Runtime. The saved Components, `CameraBrain`, `CameraWorld` in `GameSession` after
+  Hierarchy, spring-arm sphere casts through `PhysicsWorld`, impulses and shake, the showcase covering every
+  Component. Done: a spring arm keeps out of a wall, a blend between two cameras is continuous, fixed-step
+  runs repeat, benchmark of 100 virtual cameras.
+- CAM-3 (`mechanic`): `CameraService` (`USES camera`, module API version raised by one), the showcase module
+  calls it; the tech demo walker uses a first-person virtual camera with unchanged screenshots. Done: module
+  tests for every function and error.
+- CAM-4 (`mechanic`): Editor and documentation: `camera.*` commands, frusta in the Scene view, Game view
+  preview of a virtual camera, manual page "Cameras" (EN/TR), a tutorial (a third-person camera with
+  shoulder swap), `CHANGELOG.md`.
+- Virtual cameras (scope) as saved Components with priorities; the camera brain on the real `Camera` picks the
   highest live one and blends to it (cut, ease, custom curve, per-pair overrides)
 - Body and aim stages as data: follow with offset and damping, orbit, spring arm with collision against
   physics layers, framing composer (dead and soft zones), look-at with damping, path/dolly tracks
