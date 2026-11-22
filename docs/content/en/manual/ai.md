@@ -4,10 +4,6 @@ illusion drives game characters with behaviour trees. A tree is a `.behavior` fi
 keys and a tree of nodes that decide, tick by tick, what an agent does ([ADR 0062](../architecture/decisions.md)).
 Movement goes through [Navigation](navigation.md).
 
-!!! note "What exists today"
-    This page describes the `.behavior` format, the blackboard, the tick, the AI Components, `AiWorld` and
-    `AiService` for game modules. The `ai.*` Editor commands (NAV-2d) arrive in the next package.
-
 ## The `.behavior` file
 
 A file is a JSON object. Unknown keys are errors, and `AssetKind::BehaviorTree` is the Asset kind of the
@@ -146,6 +142,70 @@ Invalid JSON is reported with its line and column, and a file without `format` o
 is rejected before any node is read. `writeBehaviorTree()` writes a tree back, and `parseBehaviorTree()`
 reads that unchanged.
 
+### A complete example
+
+The tree below uses every node type and every type of key. A watchman fights its `target` (`fight`), reloads
+when it is out of ammunition (`reload`), patrols while it is not alert (`patrol`) and otherwise calms down
+(`calm down`):
+
+```json
+{
+  "format": "illusion.behavior",
+  "version": 1,
+  "blackboard": [
+    {"name": "target", "type": "Entity"},
+    {"name": "home", "type": "Vector3", "default": [0, 0, 0]},
+    {"name": "alert", "type": "Bool"},
+    {"name": "ammo", "type": "Int", "default": 3},
+    {"name": "boldness", "type": "Float", "default": 0.5}
+  ],
+  "root": {"name": "watchman", "selector": [
+    {"name": "fight", "guard": {"key": "target", "compare": "IsSet", "abort": "LowerPriority",
+      "child": {"sequence": [
+        {"setValue": {"key": "alert", "value": true}},
+        {"moveTo": {"key": "target", "acceptance": 1.5}},
+        {"retry": {"count": 2, "child": {"timeLimit": {"seconds": 3, "child": {"action": "bite"}}}}},
+        {"setValue": {"key": "target", "value": null}}
+      ]}}},
+    {"name": "reload", "guard": {"key": "ammo", "compare": "Less", "value": 1,
+      "child": {"cooldown": {"seconds": 5, "child": {"sequence": [
+        {"action": "reload"},
+        {"setValue": {"key": "ammo", "value": 3}}
+      ]}}}}},
+    {"name": "patrol", "sequence": [
+      {"inverter": {"child": {"condition": {"key": "alert", "compare": "Equal", "value": true}}}},
+      {"parallel": {"successes": 1, "children": [
+        {"repeat": {"count": 3, "child": {"wander": {"key": "home", "radius": 8}}}},
+        {"failer": {"child": {"wait": {"seconds": 1}}}}
+      ]}},
+      {"succeeder": {"child": {"action": "sniff"}}},
+      {"wait": {"seconds": 2, "deviation": 1}},
+      {"stop": {}}
+    ]},
+    {"name": "calm down", "sequence": [
+      {"setValue": {"key": "alert", "value": false}},
+      {"setValue": {"key": "home", "value": [0, 0, 0]}},
+      {"condition": {"key": "boldness", "compare": "Greater", "value": 0.25}},
+      {"setValue": {"key": "boldness", "value": 0.75}}
+    ]}
+  ]}
+}
+```
+
+- **fight** is a `guard` with `LowerPriority`: as soon as `target` is set it interrupts the running lower
+  children. It sets `alert`, moves to the target, tries `bite` up to three times (`retry` 2, each `timeLimit` 3
+  seconds) and clears `target`.
+- **reload** is a `guard` on the `Int` key `ammo`; `cooldown` makes it fail for 5 seconds after a reload so
+  that the selector goes on to the next child.
+- **patrol** starts with an `inverter` over a `condition`, so it fails while `alert` is true. Its `parallel`
+  needs one of its two children to succeed: three `wander`s around `home` (`repeat`); the `failer` over a
+  `wait` ends in failure after a second, which does not count. `succeeder` makes the optional `sniff` action never fail, `wait` pauses with a deviation and
+  `stop` stops the agent.
+- **calm down** is a `sequence` of `setValue`s and a `condition` on the `Float` key `boldness`.
+
+`tests/ai/TestBehaviorTreeExample.cpp` parses this exact text, checks that it uses every node type, and checks
+that both languages of this page show it unchanged.
+
 ## Ticking a tree
 
 The tick is two pure functions over plain data, so it runs without a World. Each agent has a
@@ -278,6 +338,41 @@ The geometry is in `illusion/ai/Perception.hpp`, as pure functions:
 of a tick become destinations in the same update; with fixed steps it first waits for navmeshes and tree
 loads. Trees tick only while the session is started; `drawDebug()` draws sight cones, what is seen,
 memories and noises.
+
+## In the Editor
+
+The Asset Browser lists a `.behavior` file as a `BehaviorTree` (filter by that kind, or `asset.list` with
+`"kind": "BehaviorTree"`), and an export ships it as it is, like every other file of `assets:/`.
+
+The `ai.*` [Editor commands](../reference/editor-commands.md) let people and agents look inside a game:
+
+| Command | What it does |
+| --- | --- |
+| `ai.validate` | Parses a `.behavior` file. The result says `valid`, counts `nodes` and `keys`, and for a mistake gives `error` and its JSON `errorPath`, e.g. `root.selector[0].guard.key`. A file that does not parse is a result, not a failed command |
+| `ai.status` | In a play session, per agent (`entity`, or every agent up to 100): the tree file, whether it has loaded, the deepest running node, the ticks, every blackboard key with its type and value, and what it perceives or remembers (sense, position, age). It waits for trees to load unless `wait` is false |
+| `ai.setValue` | Writes a blackboard key of an agent. The value must fit the key's type: `true` or `false`, a whole number, a number, `[x, y, z]` or an Entity reference; `null` clears a `Vector3` or `Entity` key |
+| `ai.noise` | Makes a noise at a position, as `AiService::reportNoise()` does. The result counts the perceivers within its reach |
+
+```json
+{"call": "ai.validate", "params": {"path": "assets:/ai/guard.behavior"}}
+{"call": "ai.status", "params": {"entity": "/Creature"}}
+{"call": "ai.setValue", "params": {"entity": "/Creature", "key": "target", "value": "/Player"}}
+{"call": "ai.noise", "params": {"position": [4, 0, 2], "radius": 12, "instigator": "/Player"}}
+```
+
+`ai.status`, `ai.setValue` and `ai.noise` need a running session (`play.start`); they act on the play World
+and are not undoable, because a blackboard is runtime state. The tree sees a written key or a noise at the next
+AI step, so `play.step` after a command shows its effect. Every invalid param is reported with its JSON
+Pointer (`/key` for a key the tree does not have, `/value` for a value of the wrong type).
+
+### The perception view
+
+In the **Scene** view, the **Perception** entry of the **Visualisers** menu (`viewport.set_overlays` with
+`"visualisers": {"perception": true}`, on by default) draws what the `AiWorld` of the play session knows: the
+sight cone of every `AiPerception`, a line from the eye to what it sees, a cross where it remembers something it
+no longer senses and a circle of the radius of each noise of the last update. It is independent of the
+selection and shows only while a play session runs. [Tutorial](../tutorials/creature-ai.md): a creature that
+wanders and chases.
 
 ## From a module
 

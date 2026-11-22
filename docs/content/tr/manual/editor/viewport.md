@@ -111,6 +111,7 @@ Görselleştiriciler kendi görüntüsü olmayan Component'lerin biçimini sahne
 | Characters | Her `CharacterController`'ın kapsülü. |
 | Joints | Her `Joint`'in bağlantı noktası ve ekseni, sınırları ve bağlı gövdeye giden çizgiyle. |
 | Audio | Uzamsal `AudioSource`'ların en küçük ve en büyük uzaklık küreleri ve konileri. |
+| Perception | Bir play oturumunda `AiPerception`'ların görüş konileri, gördükleri ve hatırladıkları şeyler ve son update'in gürültüleri; seçimden bağımsızdır ([AI](../ai.md#perception-gorunumu)). |
 
 Varsayılan olarak yalnızca seçili Entity'leri çizerler; Visualisers menüsündeki **All** her Entity'yi çizer.
 Gizli ve etkin olmayan Entity'ler asla çizilmez.

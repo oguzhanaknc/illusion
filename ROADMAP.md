@@ -1347,7 +1347,7 @@ headers are in their `include/` directories.
   param), the fuzz test, a GPU golden image of the visualiser, `mkdocs build --strict`, docs parity.
   Open: the Inspector's Bake button and the `.navmesh` items of the Asset Browser and the export; the `nav.*`
   commands and the debug view act on the edit World only.
-- NAV-2: Behaviour trees and perception. Four work packages:
+- ✅ NAV-2: Behaviour trees and perception. Four work packages:
 - ✅ NAV-2a (`implementer`): Trees without a World. The library `engine/ai` with `illusion::ai_api`;
   `Blackboard.hpp` (`compareBlackboard()`), `BehaviorTree.hpp` (`parseBehaviorTree()`,
   `writeBehaviorTree()`, `findKey()`), `BehaviorTreeState.hpp` (`makeBehaviorTreeState()`,
@@ -1386,7 +1386,7 @@ headers are in their `include/` directories.
   reads, reports a noise a listener hears), `CountingAi`, the showcase module calls all 13 functions (the guard
   tree gained the keys `alert`, `greetings`, `boldness`), the SDK test module uses it; the scripting API
   reference gained "AiService" (EN/TR). Open: the `ai.*` commands and the visualiser (NAV-2d).
-- NAV-2d (`mechanic`): Editor and documentation. Commands `ai.status` (running node, blackboard, perceived),
+- ✅ NAV-2d (`mechanic`): Editor and documentation. Commands `ai.status` (running node, blackboard, perceived),
   `ai.setValue`, `ai.noise` (Play mode) and `ai.validate` (a `.behavior` file's errors), a perception
   visualiser over `AiWorld::drawDebug()`; the asset browser lists `.behavior` as `BehaviorTree`; exports
   ship them; the command reference and `catalog.json`; the manual page "AI" (EN/TR: the `.behavior` file
@@ -1394,6 +1394,19 @@ headers are in their `include/` directories.
   the `AiService` reference, the tutorial "A creature that wanders and chases" (its C++ built by
   `ExtractCppBlocks`, its tree parsed by a test), `CHANGELOG.md`. Done: command tests and the fuzz test,
   `mkdocs build --strict`, docs parity, the tutorial module loads in `tests/docs/TestTutorials.cpp`.
+  Done: `ai.status`, `ai.setValue`, `ai.noise` (CommandMode::Any on the play World through `PlayHost::ai()`) and
+  `ai.validate` (`editor/core/src/commands/AiCommands.cpp`, tests in `editor/tests/core/TestAiCommands.cpp`: a
+  running node and the blackboard, every key type written and cleared, a noise heard at the next step, every
+  invalid param, the fuzz test; the test play host runs a real `AiWorld`); the Perception visualiser
+  (`ViewportVisualisers::perception`, on by default, in the Visualisers menu and `viewport.set_overlays`) over
+  `AiWorld::drawDebug()`; the Asset Browser kind `BehaviorTree` (exports ship `.behavior` files like every file of
+  `assets:/`); the command reference and `catalog.json`; the manual page "AI" with the complete example
+  `tests/data/ai/watchman.behavior` (every node and key type; `tests/ai/TestBehaviorTreeExample.cpp` parses it
+  and checks both languages show it unchanged), "In the Editor" and the perception view; the `AiService` reference
+  checked; the tutorial "A creature that wanders and chases" (`tutorials/creature-ai.md`, module
+  `illusion_tutorial_creature_module` built by `ExtractCppBlocks`, its tree `creature.behavior` parsed by the same
+  test); `CHANGELOG.md`. Open: a GPU golden image of the perception view; `ai.*` act on the play World only; the
+  `.navmesh` kind of the Asset Browser and the Inspector's Bake button (NAV-1e).
 - NAV-3 (`implementer`): The tech demo creature. A `NavMeshSurface` over the clearing baked by `build.jsonl`
   (`nav.bake`, the `.navmesh` committed), a creature (the ANIM-4 creature, or until it lands a simple rigged
   model from `make_assets.py`) with a `NavAgent` (Character drive, `speedParameter` into its graph), an

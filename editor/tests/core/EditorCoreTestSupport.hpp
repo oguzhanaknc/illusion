@@ -6,7 +6,10 @@
 #include "TestSupport.hpp"
 
 #include <illusion/ai/AiComponents.hpp>
+#include <illusion/ai/AiWorld.hpp>
+#include <illusion/assets/AssetStreamer.hpp>
 #include <illusion/core/AssetRef.hpp>
+#include <illusion/core/JobSystem.hpp>
 #include <illusion/core/Json.hpp>
 #include <illusion/ecs/Reflection.hpp>
 #include <illusion/ecs/SceneSerializer.hpp>
@@ -19,6 +22,7 @@
 #include <illusion/editor/core/UiHost.hpp>
 #include <illusion/editor/core/ViewportHost.hpp>
 #include <illusion/nav/NavComponents.hpp>
+#include <illusion/nav/NavWorld.hpp>
 #include <illusion/particles/ParticleComponents.hpp>
 #include <illusion/physics/PhysicsComponents.hpp>
 #include <illusion/platform/FileSystem.hpp>
@@ -645,6 +649,7 @@ public:
         REQUIRE_MESSAGE(loaded.ok(), loaded.error);
         m_ui = std::make_unique<UiWorld>(*m_world);
         m_ui->update(gameUiFrame());
+        m_ai = std::make_unique<FakeAi>(*m_world, m_editor->files());
         m_saves.reset();
         m_status = editor::PlayStatus{
             editor::PlayState::Playing, options.mode, options.fixedStep, m_status.timeScale, 0, 0.0};
@@ -657,6 +662,7 @@ public:
         if (m_world)
         {
             m_editor->detachPlayWorld();
+            m_ai.reset();
             m_ui.reset();
             m_world.reset();
             m_status = editor::PlayStatus{.timeScale = m_status.timeScale};
@@ -680,6 +686,11 @@ public:
         m_status.steps += steps;
         m_status.time += steps / 60.0;
         m_ui->update(gameUiFrame());
+        for (u32 i = 0; i < steps; ++i)
+        {
+            m_ai->ai.waitIdle(); // the trees of the first steps, as a GameSession with a fixed step does
+            m_ai->ai.update(1.0f / 60.0f, &m_ai->jobs, nullptr, true);
+        }
         m_editor->playWorldAdvanced();
         return steps;
     }
@@ -715,6 +726,8 @@ public:
     GameSession* game() noexcept override { return nullptr; }
 
     SaveService* saves() noexcept override { return m_world ? &m_saves : nullptr; }
+
+    AiWorld* ai() noexcept override { return m_ai ? &m_ai->ai : nullptr; }
 
     u64 saveEventCount() const override { return m_saves.log.size(); }
 
@@ -840,8 +853,25 @@ public:
     std::vector<editor::PlayComponentMigration> nextMigration; ///< What reloadModule() reports as migrated.
 
 private:
+    // The AI of the play World: trees load through a streamer over the project's files, with no navmesh.
+    struct FakeAi
+    {
+        FakeAi(World& world, VirtualFileSystem& files)
+            : streamer(files, jobs, AssetStreamerDesc{.cacheMount = ""})
+            , navigation(world, &streamer)
+            , ai(world, navigation, &streamer)
+        {
+        }
+
+        JobSystem jobs;
+        AssetStreamer streamer;
+        NavWorld navigation;
+        AiWorld ai;
+    };
+
     editor::EditorContext*& m_editor;
     std::unique_ptr<World> m_world;
+    std::unique_ptr<FakeAi> m_ai;
     std::unique_ptr<UiWorld> m_ui;
     std::unique_ptr<GameStringTable> m_strings;
     std::unique_ptr<text::Localization> m_texts;

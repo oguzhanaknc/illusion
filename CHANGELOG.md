@@ -89,6 +89,11 @@ version changes are in the contributor guide ("Versions and releases"). The vers
 - AI in the game and for modules (NAV-2b, NAV-2c): `AiWorld` with perception (sight with line-of-sight
   raycasts, hearing, memory), the AI step of the game session, and `AiService` (blackboard writes and reads,
   game actions, noises, what an agent perceives) with the adapter `AiWorldService`.
+- AI in the editor (NAV-2d): the Editor commands `ai.status` (running node, blackboard and perceived things of
+  the agents of a play session), `ai.setValue`, `ai.noise` and `ai.validate` (a `.behavior` file's first error
+  with its JSON path), the **Perception** visualiser over `AiWorld::drawDebug()`, the `BehaviorTree` kind of
+  the Asset Browser, the manual page "AI" with a complete example tree and the tutorial "A creature that
+  wanders and chases".
 
 ### Changed
 

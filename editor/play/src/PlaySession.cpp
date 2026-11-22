@@ -1,3 +1,4 @@
+#include <illusion/ai/AiWorld.hpp>
 #include <illusion/assets/AssetStreamer.hpp>
 #include <illusion/core/Json.hpp>
 #include <illusion/core/Log.hpp>
@@ -387,6 +388,11 @@ void PlaySession::stopIfExitRequested()
 SaveService* PlaySession::saves() noexcept
 {
     return m_impl->game ? m_impl->game->saves() : nullptr;
+}
+
+AiWorld* PlaySession::ai() noexcept
+{
+    return m_impl->game ? &m_impl->game->ai() : nullptr;
 }
 
 u64 PlaySession::saveEventCount() const

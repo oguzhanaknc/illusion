@@ -1,5 +1,6 @@
 #include "ViewportOverlays.hpp"
 
+#include <illusion/ai/AiWorld.hpp>
 #include <illusion/animation/AnimationWorld.hpp>
 #include <illusion/assets/AssetStreamer.hpp>
 #include <illusion/assets/Image.hpp>
@@ -14,6 +15,7 @@
 #include <illusion/ecs/Transform.hpp>
 #include <illusion/editor/core/EditorContext.hpp>
 #include <illusion/editor/core/EditorNavigation.hpp>
+#include <illusion/editor/core/PlayHost.hpp>
 #include <illusion/editor/core/Preferences.hpp>
 #include <illusion/editor/core/Snap.hpp>
 #include <illusion/editor/ui/UiRenderer.hpp>
@@ -171,7 +173,7 @@ std::vector<VertexSnapGrid> snapGridsOf(const MeshData& mesh)
     return out;
 }
 
-// Records the lines of NavWorld::drawDebug() into a DebugDraw.
+// Records the lines of NavWorld::drawDebug() and AiWorld::drawDebug() into a DebugDraw.
 class NavLines final : public NavDebugSink
 {
 public:
@@ -1357,9 +1359,13 @@ struct ViewportService::Impl
         const EditorNavigation* navigation = editor.findNavigation();
         const bool drawsNavigation = viewport.kind == ViewportKind::Scene && navigation != nullptr &&
                                      navigation->debugEnabled && &shown() == &editor.world();
+        PlayHost* play = editor.play();
+        const AiWorld* ai = play != nullptr && editor.playWorld() != nullptr ? play->ai() : nullptr;
+        const bool drawsPerception =
+            viewport.kind == ViewportKind::Scene && ai != nullptr && settings.visualisers.perception;
         if (viewport.kind == ViewportKind::Scene &&
             ((hasVisualisers(settings.visualisers) && (all || !editor.selection().empty())) ||
-             drawsNavigation))
+             drawsNavigation || drawsPerception))
         {
             debugDraw.clear();
             VisualiserOptions options;
@@ -1377,6 +1383,11 @@ struct ViewportService::Impl
             {
                 NavLines lines{debugDraw};
                 navigation->world().drawDebug(navigation->debugOptions, lines);
+            }
+            if (drawsPerception)
+            {
+                NavLines lines{debugDraw};
+                ai->drawDebug(AiDebugOptions{.sight = true, .hearing = true, .memory = true}, lines);
             }
             if (!debugDraw.lines().empty())
             {

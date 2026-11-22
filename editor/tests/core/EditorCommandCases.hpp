@@ -15,6 +15,10 @@ struct CommandCase
 };
 
 inline constexpr CommandCase kCommandCases[] = {
+    {"ai.noise", R"({"position":[1,0,2],"radius":8,"instigator":"/Guard","team":0})"},
+    {"ai.setValue", R"({"entity":"/Guard","key":"alert","value":true})"},
+    {"ai.status", R"({"entity":"/Guard"})"},
+    {"ai.validate", R"({"path":"assets:/ai/guard.behavior"})"},
     {"asset.create_folder", R"({"path":"assets:/models"})"},
     {"asset.cook", "{}"},
     {"asset.delete", R"({"path":"assets:/textures/red.png","force":true})"},
@@ -234,6 +238,14 @@ inline constexpr CommandCase kCommandCases[] = {
 
 // Commands that need another one to run first on the fixture: "name" (with {} params) or "name {params}".
 inline constexpr CommandCase kCommandSetups[] = {
+    {"ai.noise",
+     R"x(project.file_write {"path":"assets:/ai/guard.behavior","text":"{\"format\":\"illusion.behavior\",\"version\":1,\"blackboard\":[{\"name\":\"alert\",\"type\":\"Bool\"},{\"name\":\"target\",\"type\":\"Entity\"},{\"name\":\"home\",\"type\":\"Vector3\"}],\"root\":{\"name\":\"idle\",\"wait\":{\"seconds\":60}}}"} ; entity.create {"name":"Guard","components":{"illusion.Transform":{},"illusion.AiPerception":{},"illusion.BehaviorAgent":{"tree":"assets:/ai/guard.behavior"}}} ; play.start)x"},
+    {"ai.setValue",
+     R"x(project.file_write {"path":"assets:/ai/guard.behavior","text":"{\"format\":\"illusion.behavior\",\"version\":1,\"blackboard\":[{\"name\":\"alert\",\"type\":\"Bool\"},{\"name\":\"target\",\"type\":\"Entity\"},{\"name\":\"home\",\"type\":\"Vector3\"}],\"root\":{\"name\":\"idle\",\"wait\":{\"seconds\":60}}}"} ; entity.create {"name":"Guard","components":{"illusion.Transform":{},"illusion.AiPerception":{},"illusion.BehaviorAgent":{"tree":"assets:/ai/guard.behavior"}}} ; play.start)x"},
+    {"ai.status",
+     R"x(project.file_write {"path":"assets:/ai/guard.behavior","text":"{\"format\":\"illusion.behavior\",\"version\":1,\"blackboard\":[{\"name\":\"alert\",\"type\":\"Bool\"},{\"name\":\"target\",\"type\":\"Entity\"},{\"name\":\"home\",\"type\":\"Vector3\"}],\"root\":{\"name\":\"idle\",\"wait\":{\"seconds\":60}}}"} ; entity.create {"name":"Guard","components":{"illusion.Transform":{},"illusion.AiPerception":{},"illusion.BehaviorAgent":{"tree":"assets:/ai/guard.behavior"}}} ; play.start)x"},
+    {"ai.validate",
+     R"x(project.file_write {"path":"assets:/ai/guard.behavior","text":"{\"format\":\"illusion.behavior\",\"version\":1,\"blackboard\":[{\"name\":\"alert\",\"type\":\"Bool\"},{\"name\":\"target\",\"type\":\"Entity\"},{\"name\":\"home\",\"type\":\"Vector3\"}],\"root\":{\"name\":\"idle\",\"wait\":{\"seconds\":60}}}"})x"},
     {"camera.bookmark_go", "camera.bookmark_set"},
     {"gameui.click", R"(gameui.create {"kind":"button","name":"Start"} ; play.start)"},
     {"gameui.focus", R"(gameui.create {"kind":"button","name":"Start"} ; play.start)"},

@@ -315,6 +315,7 @@ Expected<ViewportSettingsResult, CommandError> setOverlays(CommandContext& conte
         visualisers.characters = kinds.characters.value_or(visualisers.characters);
         visualisers.joints = kinds.joints.value_or(visualisers.joints);
         visualisers.audio = kinds.audio.value_or(visualisers.audio);
+        visualisers.perception = kinds.perception.value_or(visualisers.perception);
     }
     return applySettings(context, *target, settings);
 }

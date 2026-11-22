@@ -259,6 +259,10 @@ std::string_view assetKindOf(std::string_view path, bool isDirectory)
     {
         return "AnimationGraph";
     }
+    if (extension == ".behavior")
+    {
+        return "BehaviorTree";
+    }
     return "Other";
 }
 

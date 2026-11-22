@@ -4,10 +4,6 @@ illusion oyun karakterlerini behaviour tree'lerle yönetir. Bir tree, bir `.beha
 key'lerden oluşan bir blackboard ve bir agent'ın tick tick ne yapacağına karar veren bir node ağacı
 ([ADR 0062](../architecture/decisions.md)). Hareket [Navigasyon](navigation.md) üzerinden gider.
 
-!!! note "Bugün neler var"
-    Bu sayfa `.behavior` formatını, blackboard'u, tick'i, AI Component'lerini, `AiWorld`'ü ve oyun modülleri
-    için `AiService`'i anlatır. `ai.*` Editor commands (NAV-2d) sonraki paketle gelir.
-
 ## The `.behavior` file
 
 Dosya bir JSON nesnesidir. Bilinmeyen anahtarlar hatadır; `AssetKind::BehaviorTree`, `.behavior`
@@ -145,6 +141,71 @@ Geçersiz JSON satır ve sütunuyla bildirilir; `format`'ı olmayan ya da başka
 herhangi bir node okunmadan reddedilir. `writeBehaviorTree()` bir tree'yi geri yazar ve
 `parseBehaviorTree()` onu değişmeden okur.
 
+### Eksiksiz bir örnek
+
+Aşağıdaki tree her node türünü ve her key türünü kullanır. Bir bekçi `target`'ıyla savaşır (`fight`), cephanesi
+bittiğinde yeniden doldurur (`reload`), alarmda değilken devriye gezer (`patrol`) ve aksi halde sakinleşir
+(`calm down`):
+
+```json
+{
+  "format": "illusion.behavior",
+  "version": 1,
+  "blackboard": [
+    {"name": "target", "type": "Entity"},
+    {"name": "home", "type": "Vector3", "default": [0, 0, 0]},
+    {"name": "alert", "type": "Bool"},
+    {"name": "ammo", "type": "Int", "default": 3},
+    {"name": "boldness", "type": "Float", "default": 0.5}
+  ],
+  "root": {"name": "watchman", "selector": [
+    {"name": "fight", "guard": {"key": "target", "compare": "IsSet", "abort": "LowerPriority",
+      "child": {"sequence": [
+        {"setValue": {"key": "alert", "value": true}},
+        {"moveTo": {"key": "target", "acceptance": 1.5}},
+        {"retry": {"count": 2, "child": {"timeLimit": {"seconds": 3, "child": {"action": "bite"}}}}},
+        {"setValue": {"key": "target", "value": null}}
+      ]}}},
+    {"name": "reload", "guard": {"key": "ammo", "compare": "Less", "value": 1,
+      "child": {"cooldown": {"seconds": 5, "child": {"sequence": [
+        {"action": "reload"},
+        {"setValue": {"key": "ammo", "value": 3}}
+      ]}}}}},
+    {"name": "patrol", "sequence": [
+      {"inverter": {"child": {"condition": {"key": "alert", "compare": "Equal", "value": true}}}},
+      {"parallel": {"successes": 1, "children": [
+        {"repeat": {"count": 3, "child": {"wander": {"key": "home", "radius": 8}}}},
+        {"failer": {"child": {"wait": {"seconds": 1}}}}
+      ]}},
+      {"succeeder": {"child": {"action": "sniff"}}},
+      {"wait": {"seconds": 2, "deviation": 1}},
+      {"stop": {}}
+    ]},
+    {"name": "calm down", "sequence": [
+      {"setValue": {"key": "alert", "value": false}},
+      {"setValue": {"key": "home", "value": [0, 0, 0]}},
+      {"condition": {"key": "boldness", "compare": "Greater", "value": 0.25}},
+      {"setValue": {"key": "boldness", "value": 0.75}}
+    ]}
+  ]}
+}
+```
+
+- **fight**, `LowerPriority`'li bir `guard`'dır: `target` ayarlanır ayarlanmaz çalışan alt öncelikli çocukları
+  keser. `alert`'i ayarlar, hedefe gider, `bite`'ı en fazla üç kez dener (`retry` 2, her biri `timeLimit` 3
+  saniye) ve `target`'ı temizler.
+- **reload**, `Int` key'i `ammo` üzerinde bir `guard`'dır; `cooldown` bir yeniden doldurmadan sonra 5 saniye
+  başarısız olur, böylece selector sonraki çocuğa geçer.
+- **patrol**, bir `condition` üzerinde bir `inverter`'la başlar; bu yüzden `alert` true iken başarısız olur.
+  `parallel`'i iki çocuğundan birinin başarılı olmasını ister: `home` çevresinde üç `wander` (`repeat`);
+  bir `wait` üzerindeki `failer` bir saniye sonra başarısızlıkla biter ve sayılmaz. `succeeder` isteğe bağlı `sniff` action'ının asla başarısız olmamasını sağlar,
+  `wait` bir sapmayla bekler ve `stop` agent'ı durdurur.
+- **calm down**, `setValue`'lardan ve `Float` key'i `boldness` üzerinde bir `condition`'dan oluşan bir
+  `sequence`'tir.
+
+`tests/ai/TestBehaviorTreeExample.cpp` bu metni aynen parse eder, her node türünü kullandığını denetler ve bu
+sayfanın iki dilinin de onu değişmeden gösterdiğini denetler.
+
 ## Ticking a tree
 
 Tick, düz veri üzerinde iki saf fonksiyondur; bu yüzden bir World olmadan çalışır. Her agent'ın bir
@@ -279,6 +340,43 @@ Geometri `illusion/ai/Perception.hpp` içinde saf fonksiyonlar olarak durur:
 böylece bir tick'in hareketleri aynı update'te hedef olur; sabit adımlarla önce navmesh'leri ve tree
 yüklemelerini bekler. Tree'ler yalnızca oturum başlatılmışken tick'lenir; `drawDebug()` görüş konilerini,
 görüleni, hatıraları ve gürültüleri çizer.
+
+## Editörde
+
+Asset Browser bir `.behavior` dosyasını `BehaviorTree` olarak listeler (o türe göre filtreleyin ya da
+`"kind": "BehaviorTree"` ile `asset.list` kullanın) ve bir export onu, `assets:/` içindeki her dosya gibi,
+olduğu gibi gönderir.
+
+`ai.*` [Editor commands](../reference/editor-commands.md) insanların ve ajanların bir oyunun içine bakmasını
+sağlar:
+
+| Komut | Ne yapar |
+| --- | --- |
+| `ai.validate` | Bir `.behavior` dosyasını parse eder. Sonuç `valid`'i söyler, `nodes` ve `keys` sayısını verir; hata varsa `error`'ı ve JSON `errorPath`'ini verir, örn. `root.selector[0].guard.key`. Parse olmayan bir dosya bir sonuçtur, başarısız bir komut değil |
+| `ai.status` | Bir play oturumunda her agent için (`entity` ya da 100'e kadar her agent): tree dosyası, yüklenip yüklenmediği, en derindeki çalışan node, tick sayısı, türü ve değeriyle her blackboard key'i ve algıladığı ya da hatırladığı şeyler (duyu, konum, yaş). `wait` false değilse tree'lerin yüklenmesini bekler |
+| `ai.setValue` | Bir agent'ın blackboard key'ini yazar. Değer key'in türüne uymalıdır: `true` ya da `false`, bir tam sayı, bir sayı, `[x, y, z]` ya da bir Entity referansı; `null` bir `Vector3` ya da `Entity` key'ini temizler |
+| `ai.noise` | `AiService::reportNoise()` gibi bir konumda bir gürültü çıkarır. Sonuç menzilindeki algılayıcıları sayar |
+
+```json
+{"call": "ai.validate", "params": {"path": "assets:/ai/guard.behavior"}}
+{"call": "ai.status", "params": {"entity": "/Creature"}}
+{"call": "ai.setValue", "params": {"entity": "/Creature", "key": "target", "value": "/Player"}}
+{"call": "ai.noise", "params": {"position": [4, 0, 2], "radius": 12, "instigator": "/Player"}}
+```
+
+`ai.status`, `ai.setValue` ve `ai.noise` çalışan bir oturum (`play.start`) ister; play World'ü üzerinde çalışırlar
+ve geri alınamazlar, çünkü blackboard runtime durumudur. Tree yazılan bir key'i ya da bir gürültüyü sonraki AI
+adımında görür; bu yüzden bir komuttan sonra `play.step` etkisini gösterir. Geçersiz her param JSON Pointer'ıyla
+bildirilir (tree'de olmayan bir key için `/key`, yanlış türde bir değer için `/value`).
+
+### Perception görünümü
+
+**Scene** view'da **Visualisers** menüsünün **Perception** girdisi (`viewport.set_overlays` ile
+`"visualisers": {"perception": true}`, varsayılan olarak açık) play oturumunun `AiWorld`'ünün bildiğini çizer:
+her `AiPerception`'ın görüş konisini, gözden gördüğü şeye bir çizgiyi, artık algılamadığı ama hatırladığı bir
+şeyin yerinde bir artıyı ve son update'in her gürültüsü için yarıçapında bir daireyi. Seçimden bağımsızdır ve
+yalnızca bir play oturumu çalışırken görünür. [Eğitim](../tutorials/creature-ai.md): dolaşan ve kovalayan bir
+yaratık.
 
 ## Bir modülden
 

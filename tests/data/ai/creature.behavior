@@ -1,0 +1,26 @@
+{
+  "format": "illusion.behavior",
+  "version": 1,
+  "blackboard": [
+    {"name": "target", "type": "Entity"},
+    {"name": "lastSeen", "type": "Vector3"}
+  ],
+  "root": {"name": "creature", "selector": [
+    {"name": "chase", "guard": {"key": "target", "compare": "IsSet", "abort": "LowerPriority",
+      "child": {"sequence": [
+        {"moveTo": {"key": "target", "acceptance": 1.2}},
+        {"timeLimit": {"seconds": 2, "child": {"action": "bite"}}},
+        {"wait": {"seconds": 1}}
+      ]}}},
+    {"name": "search", "guard": {"key": "lastSeen", "compare": "IsSet", "abort": "Self",
+      "child": {"sequence": [
+        {"moveTo": {"key": "lastSeen", "acceptance": 1}},
+        {"wait": {"seconds": 3}},
+        {"setValue": {"key": "lastSeen", "value": null}}
+      ]}}},
+    {"name": "wander", "sequence": [
+      {"wander": {"radius": 10}},
+      {"wait": {"seconds": 2, "deviation": 1}}
+    ]}
+  ]}
+}
