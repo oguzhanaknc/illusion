@@ -192,6 +192,51 @@ Animation: `NavWorld::update()` (with fixed steps it first waits for bakes and l
 gives `Character` agents their velocities and sets the `speedParameter`s. The crowd advances only while the
 session is started.
 
+### From a module
+
+A game module reaches navigation through [`NavService`](../reference/scripting-api.md#navservice)
+(`USES nav`): the same queries as `NavWorld`, `setDestination()`, `stop()` and `warp()` for an agent's
+Entity, its `status()` and `remainingDistance()`, and `pollEvents()` for the events of the last update.
+Every call returns an `Expected` with a `NavError` instead of asserting.
+
+```cpp
+#include <illusion/core/Module.hpp>
+#include <illusion/nav/NavService.hpp>
+
+#include <array>
+
+void update(illusion::ModuleContext& context, illusion::f64)
+{
+    illusion::NavService* nav = context.service<illusion::NavService>();
+    if (nav == nullptr)
+    {
+        return; // this World was attached without navigation
+    }
+    if (needsOrders)
+    {
+        const illusion::Expected<void, illusion::NavError> sent = nav->setDestination(guard, door);
+        if (!sent)
+        {
+            ILL_LOG_INFO("Game", "guard: {}", illusion::navErrorName(sent.error()));
+        }
+        needsOrders = false;
+    }
+    if (nav->status(guard).valueOr(illusion::NavAgentStatus::Idle) == illusion::NavAgentStatus::Arrived)
+    {
+        openDoor();
+    }
+    std::array<illusion::NavEvent, 8> events{};
+    const illusion::u32 count = nav->pollEvents(events);
+    for (illusion::u32 i = 0; i < count && i < events.size(); ++i)
+    {
+        if (events[i].type == illusion::NavEventType::PathFailed)
+        {
+            giveUp(events[i].agent);
+        }
+    }
+}
+```
+
 ## Baking
 
 The bake is two pure functions of `illusion/nav/NavBuild.hpp`:

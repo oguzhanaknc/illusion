@@ -48,8 +48,8 @@ while (running)
 
 `create()` builds an empty World and its systems from the project settings and loads the input actions
 named by `InputSettings::actions` and the locale files. Load the scene into `world()`, then `start()` attaches the World to the
-`ModuleHost` as a Simulation World with six services, which modules reach with `context.service<T>()`:
-`PhysicsService`, `AudioService`, `ParticleService`, `InputService`, `SceneService` and `UiService` (see the
+`ModuleHost` as a Simulation World with seven services, which modules reach with `context.service<T>()`:
+`PhysicsService`, `AudioService`, `ParticleService`, `InputService`, `SceneService`, `UiService` and `NavService` (over `navigation()`; see the
 [scripting API](../reference/scripting-api.md)); with `GameSessionDesc::streamer` it adds `AnimationService`,
 with `GameSessionDesc::store` `StoreService` ([Store services](#store-services)), and with `GameSessionDesc::saves`, a `SaveSystem`, `SaveService` (saved
 games, ADR 0058; the player keeps them in `user:/saves`, Play mode in `cache:/saves`). A module that calls `SceneService::requestExit()` ends
@@ -199,7 +199,7 @@ project's data next to the executable with `illusion_pack`. The showcase project
 ```cmake
 illusion_add_module(showcase_game_module STATIC ID showcase
     SOURCES showcase/modules/showcase/showcase.cpp
-    USES physics audio particles animation input render runtime store ui save)
+    USES physics audio particles animation nav input render runtime store ui save)
 illusion_add_game(showcase_game
     MODULES showcase_game_module
     NAME "Showcase"

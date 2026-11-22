@@ -27,6 +27,7 @@
 #include <illusion/modules/ModuleHost.hpp>
 #include <illusion/nav/NavComponents.hpp>
 #include <illusion/nav/NavWorld.hpp>
+#include <illusion/nav/NavWorldService.hpp>
 #include <illusion/particles/ParticleComponents.hpp>
 #include <illusion/particles/ParticleWorld.hpp>
 #include <illusion/particles/ParticleWorldService.hpp>
@@ -247,6 +248,8 @@ TEST_CASE("the showcase module calls every function of the scripting API on the 
     AnimationWorld animation(world, streamer);
     AnimationWorldService animationService(animation);
     animation.waitIdle();
+    NavWorld navigation(world, &streamer);
+    NavWorldService navService(navigation);
     GuidGenerator guids(3);
     test::CountingPhysics countingPhysics(&physicsService);
     test::CountingAudio countingAudio(&audioService);
@@ -257,6 +260,7 @@ TEST_CASE("the showcase module calls every function of the scripting API on the 
     test::CountingUi countingUi(&uiService);
     test::CountingSave countingSave(&saveService);
     test::CountingAnimation countingAnimation(&animationService);
+    test::CountingNav countingNav(&navService);
     ServiceSet services;
     services.provide<PhysicsService>(countingPhysics);
     services.provide<AudioService>(countingAudio);
@@ -267,6 +271,7 @@ TEST_CASE("the showcase module calls every function of the scripting API on the 
     services.provide<UiService>(countingUi);
     services.provide<SaveService>(countingSave);
     services.provide<AnimationService>(countingAnimation);
+    services.provide<NavService>(countingNav);
 
     ModuleHostDesc hostDesc;
     hostDesc.shadowDirectory = directory.path / "shadow";
@@ -280,6 +285,7 @@ TEST_CASE("the showcase module calls every function of the scripting API on the 
         saveService.update(world, &guids, true);
         streamer.update();
         animation.update(static_cast<f32>(kStep), &jobs, true);
+        navigation.update(static_cast<f32>(kStep), &jobs, true);
         physics.update(kStep);
         particles.update(static_cast<f32>(kStep), &jobs);
         audio.update(kStep);
@@ -311,6 +317,7 @@ TEST_CASE("the showcase module calls every function of the scripting API on the 
     INFO("uncalled UI functions: " << uncalled(countingUi.calls));
     INFO("uncalled save functions: " << uncalled(countingSave.calls));
     INFO("uncalled animation functions: " << uncalled(countingAnimation.calls));
+    INFO("uncalled navigation functions: " << uncalled(countingNav.calls));
     CHECK(countingPhysics.everyFunctionCalled());
     CHECK(countingAudio.everyFunctionCalled());
     CHECK(countingInput.everyFunctionCalled());
@@ -320,6 +327,7 @@ TEST_CASE("the showcase module calls every function of the scripting API on the 
     CHECK(countingUi.everyFunctionCalled());
     CHECK(countingSave.everyFunctionCalled());
     CHECK(countingAnimation.everyFunctionCalled());
+    CHECK(countingNav.everyFunctionCalled());
     CHECK(sceneService.exitRequested());
 
     // The game ran on the real services: it counted its frames, met contacts and spawned a gem and a lantern.

@@ -2,7 +2,7 @@
 
 Game code is C++ in a [game module](../manual/modules.md). A shared module (the editor's hot-reloadable
 build) carries its own copy of `illusion::core` but no other engine library: it reaches physics, audio,
-particles, animation, input, scenes, the store, the game UI and saved games through nine **host service interfaces**. Each is an abstract class without data members;
+particles, animation, navigation, input, scenes, the store, the game UI and saved games through ten **host service interfaces**. Each is an abstract class without data members;
 the host implements it with an adapter over its engine object and hands it to the module, which finds it
 with `context.service<T>()`. The design is in ADR 0041; the Doxygen group "Scripting API" of the
 [API reference](api.md) documents every function.
@@ -18,6 +18,7 @@ with `context.service<T>()`. The design is in ADR 0041; the Doxygen group "Scrip
 | `UiService` | `ui` | `illusion/ui/UiService.hpp` | `UiWorldService` over `UiWorld` (`illusion::ui`; ADR 0057) |
 | `SaveService` | `save` | `illusion/save/SaveService.hpp` | `SaveSystemService` over `SaveSystem` (`illusion::save`; ADR 0058) |
 | `AnimationService` | `animation` | `illusion/animation/AnimationService.hpp` | `AnimationWorldService` over `AnimationWorld` (`illusion::animation`; ADR 0060) |
+| `NavService` | `nav` | `illusion/nav/NavService.hpp` | `NavWorldService` over `NavWorld` (`illusion::nav`; ADR 0062) |
 
 ```cmake
 illusion_add_module(tetris SOURCES game/Tetris.cpp USES physics audio input runtime)
@@ -59,11 +60,11 @@ void update(illusion::ModuleContext& context, illusion::f64)
   work there too.
 - **Cost.** A call is one indirect call; the `services/virtual-call` Benchmark keeps it under 10 ns.
 - **Compatibility.** The interfaces are part of the module ABI: adding or changing a function changes
-  `kModuleApiVersion` (9 since `AnimationService::setLookAtTarget()`, `setIkTarget()` and `setIkWeight()`), and modules must be rebuilt.
+  `kModuleApiVersion` (11 since `NavService`), and modules must be rebuilt.
 
 ## Coverage
 
-The Doxygen group "Scripting API" holds `ModuleContext` and the nine interfaces. The
+The Doxygen group "Scripting API" holds `ModuleContext` and the ten interfaces. The
 [showcase module](../manual/editor/showcase.md#the-showcase-module) calls every public function of the group,
 and `python tools/check_api_coverage.py` fails in CI when one is not called there, or when a counting proxy
 of the module tests (`tests/modules/CountingServices.hpp`) has the wrong number of counters. A new function
@@ -243,3 +244,65 @@ if (illusion::AnimationService* animation = context.service<illusion::AnimationS
 The manual page [Animation](../manual/animation.md#animation-graphs) describes graphs and the
 [tutorial](../tutorials/animated-character.md) uses them; root motion is applied by the
 [game session](../manual/runtime.md).
+
+## NavService
+
+The navmeshes and the NavAgents of the game (ADR 0062). The queries (`findPath`, `nearestPoint`, `raycast`,
+`randomPoint`) take a `NavQueryFilter` (agent type, area mask, search extents) and write corner points into
+your span. Destination changes (`setDestination`, `stop`) are saved in `NavAgent::destination` and take effect
+at the next Navigation step; `warp` moves at once. A call on an Entity that is not alive or has no `NavAgent`
+returns `NoAgent`; nothing asserts.
+
+| Function | Purpose |
+| --- | --- |
+| `findPath` | Writes the corner points of the shortest path into a span and returns `NavPathResult`: `count` written, `total` of the whole path, `length` in m and `partial` (the path ends at the reachable point nearest the destination) |
+| `nearestPoint` | The navmesh point nearest a position within `searchExtents` |
+| `raycast` | Walks the navmesh from one point towards another and returns `NavRaycastHit`: `hit`, `point`, the horizontal `normal` of the wall and the `fraction` walked |
+| `randomPoint` | A navmesh point within a radius that is reachable from the centre; the same seed gives the same point |
+| `setDestination`, `stop` | Send the Entity's agent to a world-space point, or clear its destination |
+| `warp` | Moves the agent to the navmesh point nearest a position at once and drops its path |
+| `status`, `remainingDistance` | The agent's `NavAgentStatus` and the distance left along its path in m, as of the last update (an agent that has not been updated yet is `Idle`, or `Pending` with a destination, with 0 m left) |
+| `pollEvents` | Copies the events of the last update (`NavEvent`: agent, type, link, link kind, position) into a span, in Entity order; returns the total |
+
+Every function except `pollEvents` returns an `Expected<..., NavError>`; `navErrorName()` gives the name:
+
+| Error | When |
+| --- | --- |
+| `NoAgent` | The Entity is not alive or has no `NavAgent` |
+| `NoNavMesh` | No navmesh of that agent type is loaded yet |
+| `OffMesh` | No navmesh polygon within `searchExtents` of a point |
+| `NoPath` | The points are on the navmesh but nothing reachable is nearer the destination than the start |
+| `InvalidValue` | A value is not finite or out of range: an agent type of 8 or more, a negative radius or extent, an empty span |
+
+The events of an update are published until the next Navigation update: every `pollEvents()` call in between
+returns the same events (the total, even beyond the span's size), so size the span for the busiest update or
+read it once per update.
+
+```cpp
+if (illusion::NavService* nav = context.service<illusion::NavService>())
+{
+    const illusion::NavQueryFilter filter{
+        .agentType = 0, .areaMask = 0xFFFFFFFFu, .searchExtents = illusion::Vec3(2.0f, 4.0f, 2.0f)};
+    if (auto point = nav->randomPoint(home, 10.0f, seed, filter))
+    {
+        static_cast<void>(nav->setDestination(creature, *point));
+    }
+    if (nav->status(creature).valueOr(illusion::NavAgentStatus::Idle) == illusion::NavAgentStatus::Moving)
+    {
+        const illusion::f32 left = nav->remainingDistance(creature).valueOr(0.0f);
+        showDistance(left);
+    }
+    std::array<illusion::NavEvent, 16> events{};
+    const illusion::u32 count = nav->pollEvents(events);
+    for (illusion::u32 i = 0; i < count && i < events.size(); ++i)
+    {
+        if (events[i].type == illusion::NavEventType::LinkEntered)
+        {
+            playJump(events[i].agent);
+        }
+    }
+}
+```
+
+The manual page [Navigation](../manual/navigation.md#from-a-module) describes surfaces, agents and the
+crowd.

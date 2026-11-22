@@ -3,8 +3,10 @@
 // Types shared by the module tests and the test modules they load.
 
 #include <illusion/core/Base.hpp>
+#include <illusion/core/Math.hpp>
 #include <illusion/ecs/Component.hpp>
 #include <illusion/ecs/Entity.hpp>
+#include <illusion/nav/NavComponents.hpp>
 #include <illusion/physics/PhysicsComponents.hpp>
 
 #include <atomic>
@@ -99,6 +101,13 @@ struct ModuleControl
     PhysicsMeshHandle mesh;           // the geometry start() created
     Entity meshEntity;                // the body start() created
     Entity layoutTarget;              // the first LayoutComponent start() created, the target of the second
+    bool navSend = false;             // update() sends navAgent to navDestination, then clears this
+    Entity navAgent;                  // the agent update() reads through the NavService
+    Vec3 navDestination{0.0f};
+    bool navSent = false;                            // the destination was accepted
+    NavAgentStatus navStatus = NavAgentStatus::Idle; // status() at the last update
+    f32 navRemaining = -1.0f;                        // remainingDistance() at the last update
+    u32 navArrivals = 0;                             // Arrived events of navAgent seen
 };
 
 } // namespace illusion::test

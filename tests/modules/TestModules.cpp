@@ -14,6 +14,8 @@
 #include <illusion/ecs/Transform.hpp>
 #include <illusion/ecs/World.hpp>
 #include <illusion/modules/ModuleHost.hpp>
+#include <illusion/nav/NavWorld.hpp>
+#include <illusion/nav/NavWorldService.hpp>
 #include <illusion/physics/PhysicsWorldService.hpp>
 
 #include <doctest/doctest.h>
@@ -816,6 +818,7 @@ TEST_CASE("a shared module calls every function of the service interfaces throug
     test::CountingUi ui;
     test::CountingSave saves;
     test::CountingAnimation animation;
+    test::CountingNav nav;
     ServiceSet services;
     services.provide<PhysicsService>(physics);
     services.provide<AudioService>(audio);
@@ -824,6 +827,7 @@ TEST_CASE("a shared module calls every function of the service interfaces throug
     services.provide<UiService>(ui);
     services.provide<SaveService>(saves);
     services.provide<AnimationService>(animation);
+    services.provide<NavService>(nav);
     f.host->attachWorld(f.secondWorld, WorldRole::Simulation, std::move(services));
     install(TEST_MODULE_V1, f.library);
     REQUIRE_FALSE(f.host->load(f.library));
@@ -838,7 +842,68 @@ TEST_CASE("a shared module calls every function of the service interfaces throug
     CHECK(ui.everyFunctionCalledOnce());
     CHECK(saves.everyFunctionCalledOnce());
     CHECK(animation.everyFunctionCalledOnce());
+    CHECK(nav.everyFunctionCalledOnce());
     CHECK(f.host->detachWorld(f.secondWorld));
+}
+
+TEST_CASE("a shared module sends a NavAgent to a point and reads its status, distance and Arrived event")
+{
+    Fixture f;
+    World& world = f.secondWorld;
+    Transform center;
+    center.position = Vec3(0.0f, 2.0f, 0.0f);
+    NavMeshSurface surface;
+    surface.size = Vec3(40.0f, 8.0f, 40.0f);
+    surface.build.cellSize = 0.2f;
+    surface.build.tileSize = 50;
+    world.create(center, surface);
+    Transform floor;
+    floor.position = Vec3(0.0f, -0.5f, 0.0f);
+    Collider box;
+    box.shape = ColliderShape::Box;
+    box.halfExtents = Vec3(20.0f, 0.5f, 20.0f);
+    RigidBody fixed;
+    fixed.motionType = MotionType::Static;
+    world.create(floor, box, fixed);
+    Transform start;
+    start.position = Vec3(-8.0f, 0.0f, -8.0f);
+    NavAgent walker;
+    walker.drive = NavDrive::Transform;
+    const Entity agent = world.create(start, walker);
+
+    NavWorld navigation(world, nullptr);
+    navigation.waitIdle(&f.jobs);
+    NavWorldService navService(navigation);
+    ServiceSet services;
+    services.provide<NavService>(navService);
+    f.host->attachWorld(world, WorldRole::Simulation, std::move(services));
+    install(TEST_MODULE_V1, f.library);
+    REQUIRE_FALSE(f.host->load(f.library));
+    f.control.navAgent = agent;
+    f.control.navDestination = Vec3(8.0f, 0.0f, 8.0f);
+    f.control.navSend = true;
+
+    constexpr f64 kStep = 1.0 / 60.0;
+    bool moving = false;
+    f32 firstRemaining = 0.0f;
+    for (u32 i = 0; i < 60 * 60 && f.control.navArrivals == 0; ++i)
+    {
+        f.host->update(world, kStep);
+        navigation.update(static_cast<f32>(kStep), &f.jobs, true);
+        if (!moving && f.control.navStatus == NavAgentStatus::Moving)
+        {
+            moving = true;
+            firstRemaining = f.control.navRemaining;
+        }
+    }
+    CHECK(f.control.navSent);
+    CHECK(moving);
+    CHECK(firstRemaining > 15.0f);
+    CHECK(f.control.navArrivals == 1);
+    CHECK(f.control.navStatus == NavAgentStatus::Arrived);
+    CHECK(f.control.navRemaining < 0.5f);
+    CHECK(glm::distance(world.get<Transform>(agent).position, Vec3(8.0f, 0.0f, 8.0f)) < 0.5f);
+    CHECK(f.host->detachWorld(world));
 }
 
 TEST_CASE("geometry a module creates through PhysicsService outlives hot reloads and unloading")

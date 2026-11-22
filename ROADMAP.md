@@ -1329,7 +1329,7 @@ headers are in their `include/` directories.
   jump link moves the agent along its parabola with both events; the same World after 600 fixed steps with
   1 and 4 workers; Inactive agents do not move; a saved game restores `destination`; no allocation in a
   steady update; benchmark `nav/crowd-500` with Jobs (ADR target 2 ms).
-- NAV-1d (`mechanic`): `NavService`. The interface joins the scripting API here (`@ingroup scripting_api` on the class, so
+- ✅ NAV-1d (`mechanic`): `NavService`. The interface joins the scripting API here (`@ingroup scripting_api` on the class, so
   `tools/check_api_coverage.py` requires the showcase to call it). `NavWorldService`, `USES nav` (`illusion::nav_api` in the SDK and
   `cmake/IllusionModules.cmake`), `GameSession` provides it, module API version raised by one, the showcase
   module calls the whole `NavService` (`tools/check_api_coverage.py`). Done: a module test sends an agent to a

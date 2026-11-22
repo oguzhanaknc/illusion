@@ -1,5 +1,5 @@
-# illusion::nav — navigation (ADR 0062): the navigation Components, the .navmesh format and the bake of
-# navmesh tiles with Recast. Recast and Detour are private: no public header includes them.
+# illusion::nav — navigation (ADR 0062): the navigation Components, the .navmesh format, the bake of
+# navmesh tiles with Recast, NavWorld and its NavService adapter. Recast and Detour are private: no public header includes them.
 
 add_library(illusion_nav STATIC
     src/NavAllocator.cpp
@@ -7,7 +7,8 @@ add_library(illusion_nav STATIC
     src/NavComponents.cpp
     src/NavCrowd.cpp
     src/NavMeshData.cpp
-    src/NavWorld.cpp)
+    src/NavWorld.cpp
+    src/NavWorldService.cpp)
 add_library(illusion::nav ALIAS illusion_nav)
 
 target_include_directories(illusion_nav PUBLIC
