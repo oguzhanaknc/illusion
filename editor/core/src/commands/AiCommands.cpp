@@ -272,7 +272,8 @@ Expected<BlackboardValue, CommandError> parseValue(CommandContext& context, Blac
     case BlackboardType::Float:
     {
         const std::optional<f64> number = json.asF64();
-        if (!number || !std::isfinite(*number) || std::abs(*number) > std::numeric_limits<f32>::max())
+        if (!number || !std::isfinite(*number) ||
+            std::abs(*number) > static_cast<f64>(std::numeric_limits<f32>::max()))
         {
             return unexpected(CommandError::invalid("/value", "must be a finite number for a Float key"));
         }

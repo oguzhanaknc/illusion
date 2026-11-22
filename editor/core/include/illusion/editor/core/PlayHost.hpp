@@ -254,7 +254,7 @@ public:
     /// has no SaveSystem. Requests made through it are sent at the next update.
     [[nodiscard]] virtual SaveService* saves() noexcept = 0;
 
-    /// The AI of the running game (GameSession::ai()), or nullptr when stopped (the `ai.*` commands and the
+    /// The AI of the running game (GameSession::ai()), or nullptr when stopped (the AI commands and the
     /// perception view).
     [[nodiscard]] virtual AiWorld* ai() noexcept = 0;
 
