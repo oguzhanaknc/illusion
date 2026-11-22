@@ -101,6 +101,10 @@ version changes are in the contributor guide ("Versions and releases"). The vers
   with its JSON path), the **Perception** visualiser over `AiWorld::drawDebug()`, the `BehaviorTree` kind of
   the Asset Browser, the manual page "AI" with a complete example tree and the tutorial "A creature that
   wanders and chases".
+- The tech demo's creature (NAV-3): a rigged animal with idle, walk and run clips blended by its `NavAgent`'s
+  speed, a navmesh over the clearing with a costly area around the campfire, and a behaviour tree that wanders
+  around its den, chases the player it sees or hears (footsteps reported as noises), and goes home when it loses
+  them; the HUD shows an alert while it chases, and the pause menu stops it.
 
 ### Changed
 
@@ -115,6 +119,8 @@ version changes are in the contributor guide ("Versions and releases"). The vers
 
 ### Fixed
 
+- An asynchronous command started over JSON-RPC or MCP no longer reads a freed permission gate in its later
+  frames: `nav.bake` crashed the editor when it set the surface's `data` through a step.
 - The editor without a GPU (`--headless --no-gpu`) now makes disabled Entities and their descendants Inactive
   after every change, so `gameui.layout`, `gameui.pick` and the physics queries no longer report disabled
   canvases, elements and bodies there.

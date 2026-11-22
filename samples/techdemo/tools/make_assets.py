@@ -397,6 +397,245 @@ def fire(seconds=6.0, seed=33):
     return loop(out, 0.3)
 
 
+# --- The creature -------------------------------------------------------------------------------------------
+
+# A wolf-like animal of boxes facing +z: its joints (name, parent, offset from the parent in metres; every
+# joint starts unrotated) and the boxes skinned to them (joint, low corner, high corner, around the joint).
+CREATURE_JOINTS = [
+    ("hips", -1, (0.0, 0.55, -0.25)),
+    ("chest", 0, (0.0, 0.03, 0.5)),
+    ("neck", 1, (0.0, 0.08, 0.2)),
+    ("head", 2, (0.0, 0.1, 0.12)),
+    ("tail", 0, (0.0, 0.06, -0.14)),
+    ("thigh_bl", 0, (0.12, -0.06, 0.0)),
+    ("shin_bl", 5, (0.0, -0.24, 0.0)),
+    ("thigh_br", 0, (-0.12, -0.06, 0.0)),
+    ("shin_br", 7, (0.0, -0.24, 0.0)),
+    ("thigh_fl", 1, (0.12, -0.09, 0.0)),
+    ("shin_fl", 9, (0.0, -0.24, 0.0)),
+    ("thigh_fr", 1, (-0.12, -0.09, 0.0)),
+    ("shin_fr", 11, (0.0, -0.24, 0.0)),
+]
+CREATURE_BOXES = [
+    (0, (-0.16, -0.12, -0.12), (0.16, 0.13, 0.28)),
+    (1, (-0.18, -0.13, -0.24), (0.18, 0.15, 0.14)),
+    (2, (-0.08, -0.06, -0.06), (0.08, 0.1, 0.14)),
+    (3, (-0.11, -0.07, -0.06), (0.11, 0.11, 0.16)),
+    (3, (-0.06, -0.07, 0.14), (0.06, 0.02, 0.3)),
+    (3, (0.04, 0.1, -0.03), (0.1, 0.2, 0.03)),
+    (3, (-0.1, 0.1, -0.03), (-0.04, 0.2, 0.03)),
+    (4, (-0.03, -0.03, -0.38), (0.03, 0.04, 0.0)),
+] + [box for thigh in (5, 7, 9, 11) for box in (
+    (thigh, (-0.05, -0.24, -0.06), (0.05, 0.03, 0.07)),
+    (thigh + 1, (-0.035, -0.25, -0.035), (0.035, 0.0, 0.04)),
+    (thigh + 1, (-0.045, -0.25, -0.04), (0.045, -0.2, 0.08)))]
+# Clip name: (seconds per cycle, keys per cycle).
+CREATURE_CLIPS = {"idle": (3.0, 12), "walk": (1.0, 16), "run": (0.55, 16)}
+# The walk sets the feet down one after another, the run (a gallop) the hind and the fore legs in pairs.
+WALK_PHASES = {"bl": 0.0, "fl": 0.25, "br": 0.5, "fr": 0.75}
+RUN_PHASES = {"bl": 0.0, "br": 0.1, "fl": 0.5, "fr": 0.6}
+
+
+def creature_box(low, high):
+    """Positions, normals and indices of an axis-aligned box (24 vertices, 36 indices)."""
+    (x0, y0, z0), (x1, y1, z1) = low, high
+    faces = [
+        ((1, 0, 0), [(x1, y0, z1), (x1, y0, z0), (x1, y1, z0), (x1, y1, z1)]),
+        ((-1, 0, 0), [(x0, y0, z0), (x0, y0, z1), (x0, y1, z1), (x0, y1, z0)]),
+        ((0, 1, 0), [(x0, y1, z1), (x1, y1, z1), (x1, y1, z0), (x0, y1, z0)]),
+        ((0, -1, 0), [(x0, y0, z0), (x1, y0, z0), (x1, y0, z1), (x0, y0, z1)]),
+        ((0, 0, 1), [(x0, y0, z1), (x1, y0, z1), (x1, y1, z1), (x0, y1, z1)]),
+        ((0, 0, -1), [(x1, y0, z0), (x0, y0, z0), (x0, y1, z0), (x1, y1, z0)]),
+    ]
+    positions, normals, indices = [], [], []
+    for normal, corners in faces:
+        base = len(positions)
+        positions += corners
+        normals += [normal] * 4
+        indices += [base, base + 1, base + 2, base, base + 2, base + 3]
+    return positions, normals, indices
+
+
+def creature_model_positions():
+    """Model-space position of every joint of the bind pose."""
+    model = []
+    for _, parent, offset in CREATURE_JOINTS:
+        model.append(add(model[parent], offset) if parent >= 0 else offset)
+    return model
+
+
+def axis_rotation(axis, angle):
+    s = math.sin(angle / 2.0)
+    return (axis[0] * s, axis[1] * s, axis[2] * s, math.cos(angle / 2.0))
+
+
+def creature_pose(clip, u):
+    """The local rotations (quaternions x, y, z, w by joint name) and the hips' translation of @p clip at
+    @p u, the fraction of its cycle in [0, 1]. Legs swing about x: a positive angle moves the foot back."""
+    turn = 2.0 * math.pi * u
+    rotations = {}
+    hips = list(CREATURE_JOINTS[0][2])
+    x_axis, y_axis = (1.0, 0.0, 0.0), (0.0, 1.0, 0.0)
+    if clip == "idle":
+        rotations["chest"] = axis_rotation(x_axis, 0.03 * math.sin(turn))
+        rotations["head"] = axis_rotation(y_axis, 0.35 * math.sin(turn))
+        rotations["neck"] = axis_rotation(x_axis, -0.05 + 0.04 * math.sin(turn + 1.0))
+        rotations["tail"] = axis_rotation(y_axis, 0.25 * math.sin(2.0 * turn))
+        hips[1] += 0.008 * math.sin(turn)
+    else:
+        walk = clip == "walk"
+        phases = WALK_PHASES if walk else RUN_PHASES
+        swing, bend = (0.45, 0.7) if walk else (0.8, 1.1)
+        for leg, phase in phases.items():
+            angle = turn + 2.0 * math.pi * phase
+            rotations[f"thigh_{leg}"] = axis_rotation(x_axis, swing * math.sin(angle))
+            # The paw lifts while the leg swings forward.
+            rotations[f"shin_{leg}"] = axis_rotation(x_axis, bend * max(0.0, -math.cos(angle)))
+        if walk:
+            hips[1] += 0.02 * math.sin(2.0 * turn)
+            rotations["neck"] = axis_rotation(x_axis, 0.05 * math.sin(2.0 * turn))
+            rotations["tail"] = axis_rotation(y_axis, 0.15 * math.sin(turn))
+        else:
+            hips[1] += 0.05 * math.sin(turn)
+            rotations["chest"] = axis_rotation(x_axis, 0.12 * math.sin(turn))
+            rotations["neck"] = axis_rotation(x_axis, 0.25 + 0.1 * math.sin(turn + 0.5))
+            rotations["tail"] = axis_rotation(x_axis, -0.5 + 0.15 * math.sin(turn))
+    return rotations, tuple(hips)
+
+
+def write_creature(path):
+    """The creature (`creature.gltf` with `creature.bin`): one skinned mesh, its skin and the looping clips
+    "idle", "walk" and "run". Every channel of a clip has the same keys, the last equal to the first."""
+    model = creature_model_positions()
+    positions, normals, joints, weights, indices = [], [], [], [], []
+    for joint, low, high in CREATURE_BOXES:
+        origin = model[joint]
+        box_positions, box_normals, box_indices = creature_box(add(origin, low), add(origin, high))
+        base = len(positions)
+        positions += box_positions
+        normals += box_normals
+        joints += [(joint, 0, 0, 0)] * len(box_positions)
+        weights += [(1.0, 0.0, 0.0, 0.0)] * len(box_positions)
+        indices += [base + i for i in box_indices]
+
+    blob = bytearray()
+    views, accessors = [], []
+
+    def add_accessor(fmt, rows, component_type, kind, minmax=False):
+        while len(blob) % 4:
+            blob.append(0)
+        offset = len(blob)
+        for row in rows:
+            blob.extend(struct.pack("<" + fmt, *(row if isinstance(row, tuple) else (row,))))
+        views.append({"buffer": 0, "byteOffset": offset, "byteLength": len(blob) - offset})
+        accessor = {"bufferView": len(views) - 1, "componentType": component_type, "count": len(rows), "type": kind}
+        if minmax:
+            columns = list(zip(*[row if isinstance(row, tuple) else (row,) for row in rows]))
+            accessor["min"] = [min(c) for c in columns]
+            accessor["max"] = [max(c) for c in columns]
+        accessors.append(accessor)
+        return len(accessors) - 1
+
+    attributes = {"POSITION": add_accessor("3f", positions, 5126, "VEC3", minmax=True),
+                  "NORMAL": add_accessor("3f", normals, 5126, "VEC3"),
+                  "JOINTS_0": add_accessor("4B", joints, 5121, "VEC4"),
+                  "WEIGHTS_0": add_accessor("4f", weights, 5126, "VEC4")}
+    index_accessor = add_accessor("H", indices, 5123, "SCALAR")
+    inverse_binds = [(1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, -x, -y, -z, 1) for x, y, z in model]
+    inverse_bind = add_accessor("16f", inverse_binds, 5126, "MAT4")
+
+    names = [name for name, _, _ in CREATURE_JOINTS]
+    animations = []
+    for clip, (seconds, keys) in CREATURE_CLIPS.items():
+        times = [seconds * k / keys for k in range(keys + 1)]
+        poses = [creature_pose(clip, k / keys) for k in range(keys + 1)]
+        time_accessor = add_accessor("f", times, 5126, "SCALAR", minmax=True)
+        samplers, channels = [], []
+        for joint in sorted({name for rotations, _ in poses for name in rotations}, key=names.index):
+            output = add_accessor("4f", [rotations[joint] for rotations, _ in poses], 5126, "VEC4")
+            samplers.append({"input": time_accessor, "output": output, "interpolation": "LINEAR"})
+            channels.append({"sampler": len(samplers) - 1, "target": {"node": names.index(joint), "path": "rotation"}})
+        output = add_accessor("3f", [hips for _, hips in poses], 5126, "VEC3")
+        samplers.append({"input": time_accessor, "output": output, "interpolation": "LINEAR"})
+        channels.append({"sampler": len(samplers) - 1, "target": {"node": 0, "path": "translation"}})
+        animations.append({"name": clip, "samplers": samplers, "channels": channels})
+
+    nodes = []
+    for joint, (name, _, offset) in enumerate(CREATURE_JOINTS):
+        node = {"name": name, "translation": list(offset)}
+        children = [child for child, (_, parent, _) in enumerate(CREATURE_JOINTS) if parent == joint]
+        if children:
+            node["children"] = children
+        nodes.append(node)
+    nodes.append({"name": "creature", "mesh": 0, "skin": 0})
+    bin_path = path.with_suffix(".bin")
+    document = {
+        "asset": {"version": "2.0", "generator": "illusion techdemo make_assets.py"},
+        "scene": 0,
+        "scenes": [{"nodes": [0, len(nodes) - 1]}],
+        "nodes": nodes,
+        "meshes": [{"name": "creature", "primitives": [{"attributes": attributes, "indices": index_accessor}]}],
+        "skins": [{"name": "creature", "joints": list(range(len(names))), "inverseBindMatrices": inverse_bind}],
+        "animations": animations,
+        "buffers": [{"byteLength": len(blob), "uri": bin_path.name}],
+        "bufferViews": views,
+        "accessors": accessors,
+    }
+    path.parent.mkdir(parents=True, exist_ok=True)
+    bin_path.write_bytes(bytes(blob))
+    path.write_text(json.dumps(document, separators=(",", ":")), encoding="utf-8")
+
+
+# Speeds in m/s at which the graph plays only the walk and only the run; the module gives the creature these
+# speeds when it wanders and when it chases.
+CREATURE_WALK_SPEED = 1.4
+CREATURE_RUN_SPEED = 4.2
+
+
+def write_creature_graph(path):
+    """The creature's animation graph: idle, walk and run blended by "speed", the NavAgent's speedParameter."""
+    clip = "assets:/models/creature.gltf#animation/"
+    graph = {
+        "format": "illusion.animgraph",
+        "version": 1,
+        "parameters": [{"name": "speed", "type": "Float"}],
+        "layers": [{"name": "base", "entry": "locomotion", "states": [{"name": "locomotion", "blend1d": {
+            "parameter": "speed",
+            "points": [{"value": 0, "clip": f"{clip}idle"}, {"value": CREATURE_WALK_SPEED, "clip": f"{clip}walk"},
+                       {"value": CREATURE_RUN_SPEED, "clip": f"{clip}run"}]}}]}],
+    }
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(graph, indent=2) + "\n", encoding="utf-8", newline="\n")
+
+
+def write_creature_tree(path):
+    """The creature's behaviour tree, in order of priority: chase the target the perception chose and growl at
+    it (an action the module answers); after losing it, search where it was last sensed and go home; else
+    wander around "home" (the den, a starting value of the agent) with pauses."""
+    tree = {
+        "format": "illusion.behavior",
+        "version": 1,
+        "blackboard": [{"name": "target", "type": "Entity"}, {"name": "lastSeen", "type": "Vector3"},
+                       {"name": "home", "type": "Vector3"}],
+        "root": {"name": "creature", "selector": [
+            {"name": "chase", "guard": {"key": "target", "compare": "IsSet", "abort": "LowerPriority",
+                                        "child": {"sequence": [
+                                            {"name": "run to the player", "moveTo": {"key": "target", "acceptance": 1.6}},
+                                            {"name": "growl", "timeLimit": {"seconds": 1, "child": {"action": "growl"}}},
+                                            {"name": "watch", "wait": {"seconds": 1.5}}]}}},
+            {"name": "return", "guard": {"key": "lastSeen", "compare": "IsSet", "abort": "Self",
+                                         "child": {"sequence": [
+                                             {"name": "search", "moveTo": {"key": "lastSeen", "acceptance": 1}},
+                                             {"name": "sniff", "wait": {"seconds": 2, "deviation": 0.5}},
+                                             {"name": "go home", "moveTo": {"key": "home", "acceptance": 1.5}},
+                                             {"setValue": {"key": "lastSeen", "value": None}}]}}},
+            {"name": "wander", "sequence": [{"name": "roam", "wander": {"key": "home", "radius": 4}},
+                                            {"name": "rest", "wait": {"seconds": 2.5, "deviation": 1.5}}]}]},
+    }
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(tree, indent=2) + "\n", encoding="utf-8", newline="\n")
+
+
 # --- Main ---------------------------------------------------------------------------------------------------
 
 
@@ -411,6 +650,9 @@ def main():
     sprite(ROOT / "textures" / "smoke.png", 64, smoke)
     for name, samples in (("forest_wind", forest_wind()), ("crickets", crickets()), ("fire", fire())):
         write_wav(ROOT / "audio" / f"{name}.wav", samples)
+    write_creature(ROOT / "models" / "creature.gltf")
+    write_creature_graph(ROOT / "animations" / "creature.animgraph")
+    write_creature_tree(ROOT / "ai" / "creature.behavior")
 
 
 if __name__ == "__main__":

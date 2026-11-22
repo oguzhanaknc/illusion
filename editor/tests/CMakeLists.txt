@@ -91,7 +91,7 @@ add_dependencies(illusion_editor_tests illusion_tetris_module illusion_tetris_ag
 # tests run on the demo's UI scene alone (the forest needs downloaded assets).
 illusion_add_module(illusion_techdemo_module SHARED
     SOURCES ${PROJECT_SOURCE_DIR}/samples/techdemo/modules/techdemo/techdemo.cpp
-    USES physics audio particles input render runtime ui save)
+    USES physics audio particles input render runtime ui save ai nav)
 target_compile_definitions(illusion_editor_tests PRIVATE TECHDEMO_MODULE="$<TARGET_FILE:illusion_techdemo_module>")
 add_dependencies(illusion_editor_tests illusion_techdemo_module)
 # The module build tests run a stand-in for CMake, and one real build with the module SDK of this build tree

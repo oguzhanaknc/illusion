@@ -2,8 +2,12 @@
   "format": "illusion.scene",
   "version": 2,
   "types": {
+    "illusion.AiPerception": 1,
+    "illusion.AiStimulus": 1,
+    "illusion.Animator": 1,
     "illusion.AudioListener": 1,
     "illusion.AudioSource": 1,
+    "illusion.BehaviorAgent": 1,
     "illusion.Camera": 2,
     "illusion.CharacterController": 1,
     "illusion.Collider": 1,
@@ -11,6 +15,9 @@
     "illusion.LocalTransform": 1,
     "illusion.MeshRenderer": 1,
     "illusion.Name": 1,
+    "illusion.NavAgent": 1,
+    "illusion.NavArea": 1,
+    "illusion.NavMeshSurface": 1,
     "illusion.ParticleEmitter": 1,
     "illusion.PointLight": 1,
     "illusion.PostEffects": 1,
@@ -118059,6 +118066,88 @@
       }
     },
     {
+      "id": "44abdc6ed7cb8ac9",
+      "components": {
+        "illusion.AiPerception": {
+          "sightRadius": 9.0,
+          "sightAngle": 2.0943952,
+          "eyeHeight": 0.75,
+          "occluderMask": 4294967295,
+          "hearing": 1.0,
+          "memorySeconds": 5.0,
+          "detectTeams": 4294967295,
+          "targetKey": "target",
+          "positionKey": "lastSeen"
+        },
+        "illusion.Animator": {
+          "skeleton": "assets:/models/creature.gltf#skin/0",
+          "clip": "",
+          "graph": "assets:/animations/creature.animgraph",
+          "speed": 1.0,
+          "time": 0.0,
+          "loop": true,
+          "playing": true
+        },
+        "illusion.BehaviorAgent": {
+          "tree": "assets:/ai/creature.behavior",
+          "enabled": true,
+          "tickInterval": 0.1,
+          "blackboard": [
+            {
+              "key": "home",
+              "number": 0.0,
+              "vector": [-6.0, 0.025, -6.0],
+              "entity": null
+            }
+          ]
+        },
+        "illusion.CharacterController": {
+          "radius": 0.3,
+          "height": 0.9,
+          "maxSlope": 0.87266463,
+          "stepHeight": 0.3,
+          "mass": 40.0,
+          "maxPushForce": 100.0,
+          "gravityFactor": 1.0,
+          "layer": 0
+        },
+        "illusion.MeshRenderer": {
+          "mesh": "assets:/models/creature.gltf#mesh/0",
+          "submesh": 0,
+          "material": "assets:/materials/creature_fur.material",
+          "layers": 1,
+          "castShadows": true,
+          "visible": true,
+          "lodBias": 1.0
+        },
+        "illusion.Name": {
+          "value": "Creature"
+        },
+        "illusion.NavAgent": {
+          "agentType": 0,
+          "radius": 0.4,
+          "height": 1.0,
+          "maxSpeed": 1.4,
+          "maxAcceleration": 6.0,
+          "turnSpeed": 5.0,
+          "stoppingDistance": 0.3,
+          "avoidance": "Medium",
+          "priority": 50,
+          "separationWeight": 2.0,
+          "areaMask": 4294967295,
+          "drive": "Character",
+          "faceMovement": true,
+          "speedParameter": "speed",
+          "destination": null
+        },
+        "illusion.Transform": {
+          "position": [-6.0, 0.025, -6.0],
+          "rotation": [0.0, 1.0, 0.0, 0.0],
+          "scale": [1.0, 1.0, 1.0]
+        }
+      }
+    },
+    {
       "id": "44ba21c92149d43d",
       "components": {
         "illusion.MeshRenderer": {
@@ -126020,6 +126109,25 @@
           "position": [-2.446, -0.156, -19.916],
           "rotation": [0.0024, 0.6585, -0.0398, -0.7515],
           "scale": [4.0033, 4.3912, 4.0033]
+        }
+      }
+    },
+    {
+      "id": "4b05af2b71af16ab",
+      "components": {
+        "illusion.Name": {
+          "value": "Campfire Area"
+        },
+        "illusion.NavArea": {
+          "area": 1,
+          "walkable": true,
+          "volume": true,
+          "size": [4.5, 2.0, 4.5]
+        },
+        "illusion.Transform": {
+          "position": [0.0, 0.0, 0.0],
+          "rotation": [0.0, 0.0, 0.0, 1.0],
+          "scale": [1.0, 1.0, 1.0]
         }
       }
     },
@@ -174649,6 +174757,11 @@
     {
       "id": "71bb54d8d101b5b9",
       "components": {
+        "illusion.AiStimulus": {
+          "team": 0,
+          "offset": [0.0, 1.2, 0.0],
+          "visible": true
+        },
         "illusion.CharacterController": {
           "radius": 0.35,
           "height": 1.8,
@@ -318611,6 +318724,42 @@
           "position": [-21.689, -0.055, -7.198],
           "rotation": [0.0071, 0.387, -0.0174, -0.9219],
           "scale": [4.7595, 4.6864, 4.7595]
+        }
+      }
+    },
+    {
+      "id": "e675083e03b40421",
+      "components": {
+        "illusion.Name": {
+          "value": "Clearing Navigation"
+        },
+        "illusion.NavMeshSurface": {
+          "size": [40.0, 12.0, 40.0],
+          "agentType": 0,
+          "agentRadius": 0.4,
+          "agentHeight": 1.0,
+          "agentMaxClimb": 0.35,
+          "agentMaxSlope": 0.87266463,
+          "build": {
+            "cellSize": 0.25,
+            "cellHeight": 0.1,
+            "tileSize": 64,
+            "minRegionArea": 1.0,
+            "mergeRegionArea": 4.0,
+            "maxEdgeLength": 12.0,
+            "maxSimplificationError": 1.3,
+            "detailSampleDistance": 6.0,
+            "detailSampleMaxError": 1.0
+          },
+          "layerMask": 4294967295,
+          "areaCosts": [1.0, 25.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0],
+          "data": "assets:/navigation/clearing.navmesh",
+          "rebuildAtRuntime": false
+        },
+        "illusion.Transform": {
+          "position": [0.0, 1.0, 0.0],
+          "rotation": [0.0, 0.0, 0.0, 1.0],
+          "scale": [1.0, 1.0, 1.0]
         }
       }
     },

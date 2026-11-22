@@ -275,6 +275,54 @@
       }
     },
     {
+      "id": "aca7f65aba719c40",
+      "components": {
+        "illusion.Disabled": {},
+        "illusion.Hierarchy": {
+          "parent": "12772fabcb634dae",
+          "order": 3
+        },
+        "illusion.LocalTransform": {
+          "position": [0.0, 0.0, 0.0],
+          "rotation": [0.0, 0.0, 0.0, 1.0],
+          "scale": [1.0, 1.0, 1.0]
+        },
+        "illusion.Name": {
+          "value": "Creature Alert"
+        },
+        "illusion.UiElement": {
+          "placement": {
+            "anchorMin": [0.5, 1.0],
+            "anchorMax": [0.5, 1.0],
+            "offsetMin": [-480.0, -150.0],
+            "offsetMax": [480.0, -96.0]
+          },
+          "size": [0.0, 0.0],
+          "pivot": [0.5, 0.5],
+          "rotation": 0.0,
+          "scale": [1.0, 1.0],
+          "opacity": 1.0,
+          "clipChildren": false
+        },
+        "illusion.UiText": {
+          "text": "",
+          "key": "techdemo.hud.creatureAlert",
+          "font": "assets:/fonts/Roboto-Regular.ttf",
+          "size": 36.0,
+          "color": [1.0, 0.55, 0.4, 1.0],
+          "align": "Center",
+          "verticalAlign": "Middle",
+          "wrap": false,
+          "lineSpacing": 1.0,
+          "letterSpacing": 0.0,
+          "outlineWidth": 2.0,
+          "outlineColor": [0.01, 0.012, 0.015, 1.0],
+          "shadowOffset": [0.0, 3.0],
+          "shadowColor": [0.0, 0.0, 0.0, 0.45]
+        }
+      }
+    },
+    {
       "id": "6c06234ea222f989",
       "components": {
         "illusion.Disabled": {},

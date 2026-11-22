@@ -2,9 +2,11 @@
 
 `samples/techdemo` is a first-person walk through a clearing in a fir forest that turns from day to night:
 firs, grass and ferns bend in the wind, the low sun shines through the trunks at dusk, fireflies come out,
-a campfire crackles and lights the trees, neon hoops hum, and glowing orbs roll when you push them. It brings
-together the [SkyAtmosphere](../rendering.md#day-and-night), [Wind](../rendering.md#wind),
-[GPU particles](../particles.md#gpu-simulation), physics, audio and [mouse look](../actions.md#mouse-look).
+a campfire crackles and lights the trees, neon hoops hum, glowing orbs roll when you push them, and a creature
+that lives at the edge of the clearing comes after you when it sees or hears you. It brings together the
+[SkyAtmosphere](../rendering.md#day-and-night), [Wind](../rendering.md#wind),
+[GPU particles](../particles.md#gpu-simulation), physics, audio, [mouse look](../actions.md#mouse-look),
+navigation, AI and animation.
 
 ![The clearing at eleven in the morning](../../images/techdemo/day.png)
 
@@ -64,6 +66,33 @@ after a load.
 - **Neon**: a gate, three hoops and bars in cyan, magenta and violet, with HDR emission that blooms.
 - **Physics**: the orbs and lanterns are dynamic bodies the player pushes. They stay kinematic until the
   terrain's collider is ready, so they do not fall through it while it is cooked.
+- **Creature**: a wolf-like animal with a den at the edge of the clearing, behind the campfire (below).
+
+### The creature
+
+The creature wanders around its den, follows you when it sees or hears you, and goes home when it loses you.
+It is made of the engine's [navigation](../navigation.md), [AI](../ai.md) and [animation](../animation.md):
+
+- **Navmesh**: the Entity *Clearing Navigation* has a `NavMeshSurface` of 40 × 40 m over the clearing, baked by
+  `build.jsonl` into `assets/navigation/clearing.navmesh` (committed). The *Campfire Area* is a `NavArea` volume
+  of area 1 around the fire, whose cost the surface sets to 25: the creature walks around the fire rather than
+  over it, unless there is no other way.
+- **Body**: a rigged model of boxes (`assets/models/creature.gltf`) with the clips `idle`, `walk` and `run`.
+  Its animation graph (`assets/animations/creature.animgraph`) blends them by the parameter `speed`, which the
+  `NavAgent` sets to its speed every update (`speedParameter`), so the legs keep pace with the ground.
+- **Movement**: a `NavAgent` with the `Character` drive steers its `CharacterController`. The module gives it
+  1.4 m/s while it wanders and 4.2 m/s while it chases.
+- **Senses**: an `AiPerception` sees 9 m ahead in a cone of 120 degrees, blocked by trees and rocks, and hears
+  noises. The player has an `AiStimulus`; the module reports every footstep as a noise through `AiService`,
+  heard within 7 m when you walk and 15 m when you run.
+- **Behaviour**: a `BehaviorAgent` runs `assets/ai/creature.behavior`, three branches in order of priority:
+  *chase* (run to the player and growl, an action the module answers), *return* (search where it sensed you
+  last, sniff, then go home) and *wander* (a random point within 4 m of its den, then a rest). Its `home` key is
+  the den, a starting value of the agent.
+
+While it chases you, the HUD says so. The pause menu stops it, as it stops the clock: the module disables its
+`BehaviorAgent` and stops its `NavAgent`, and lets it go on when the menu closes. It also waits for the terrain's
+collider, like the player.
 
 ### Lighter trees
 
@@ -85,11 +114,13 @@ Everything but the Poly Haven files is made by scripts with fixed seeds:
 
 - `tools/fetch_assets.py` downloads the pinned Poly Haven files (size and SHA-256 checked), merges each plant's
   colour and alpha maps into RGBA leaf textures and writes the lighter trees.
-- `tools/make_assets.py` writes the terrain, neon, logs, the sprites and the sounds, and provides
-  `terrain_height()`.
+- `tools/make_assets.py` writes the terrain, neon, logs, the sprites, the sounds and the creature with its
+  animation graph and behaviour tree, and provides `terrain_height()`.
 - `tools/make_scene.py` writes `build.jsonl`, the editor commands that create the materials and the scene,
-  placing everything on the ground with `terrain_height()`.
-- `modules/techdemo` is the game module: walking, looking, the clock, night effects, flickering lights.
+  placing everything on the ground with `terrain_height()`. The creature, its navmesh and the HUD's alert come
+  last, so that the ids of everything else stay the same.
+- `modules/techdemo` is the game module: walking, looking, the clock, night effects, flickering lights, the
+  creature's footsteps, speeds and growls.
 
 To change the scene, edit a script and rebuild:
 
