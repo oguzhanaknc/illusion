@@ -5,11 +5,9 @@ the colliders of a level with Recast Navigation ([ADR 0062](../architecture/deci
 in a `.navmesh` file.
 
 !!! note "What exists today"
-    This page describes the saved Components and the bake. Agents that walk the navmesh, path queries, the
-    crowd, the scripting API and the editor commands arrive in the next packages: `NavWorld` with queries
-    (NAV-1b), the crowd and `NavAgent` movement (NAV-1c), `NavService` for game modules (NAV-1d) and the
-    editor commands with their documentation (NAV-1e). Until then you can bake with the C++ functions
-    of `illusion/nav/NavBuild.hpp`.
+    This page describes the saved Components, the bake, and `NavWorld` with its run-time navmeshes and
+    queries. The crowd and `NavAgent` movement (NAV-1c), `NavService` for game modules (NAV-1d) and the editor
+    commands with their documentation (NAV-1e) arrive in the next packages. Until then agents do not move.
 
 ## Surfaces
 
@@ -151,6 +149,125 @@ of these errors:
 | `Checksum` | The checksum does not match |
 | `Invalid` | A value is out of range (tile coordinates, settings, a duplicate tile) |
 
+## Run time
+
+`NavWorld` (`illusion/nav/NavWorld.hpp`) keeps one tiled navmesh per `NavMeshSurface`. Create it with the
+World and the `AssetStreamer`, and call `update()` once per step:
+
+```cpp
+illusion::NavWorld navigation(world, &streamer);
+while (running)
+{
+    streamer.update();
+    navigation.update(step, &jobs, true);
+}
+navigation.waitIdle(&jobs);
+```
+
+- **Loading.** `update()` loads each surface's `data` through the streamer (decoder `illusion.navmesh`).
+- **Baking.** A surface without `data`, or whose file is missing or rejected, is baked instead. A missing
+  or rejected file logs one line and counts in `NavStatistics::failures`. Without a streamer, surfaces are
+  always baked.
+- **Stale tiles.** When the input of a loaded tile no longer matches its hash, the tile is rebuilt if
+  `rebuildAtRuntime` is on. Otherwise it is counted in `NavStatistics::staleTiles` and logged once.
+- **Changes while running.** With `rebuildAtRuntime`, the tiles touched by a changed Transform, Collider,
+  RigidBody, NavArea or NavLink, and by a carving NavObstacle once it has settled, are rebuilt. A change to
+  a model file used by a Mesh Collider does not trigger a rebake.
+- **`invalidate(bounds)`** marks the tiles that overlap an `Aabb` stale. Use it when the input changed in a
+  way the World cannot see.
+- **Live reload.** Saving a `.navmesh` file replaces the tiles of its surface.
+- **One surface per agent type.** When several surfaces use the same agent type, the one on the lowest Entity
+  index wins; the others are logged once and ignored.
+- **Builds.** At most `NavWorldDesc::maxTileBuildsInFlight` tiles are built in the background at once.
+  Finished tiles are swapped in at the start of an update, in the order the builds started.
+- **`waitIdle(&jobs)`** calls `update(0, jobs, false)` until no surface waits for its data or tiles.
+  `isReady(agentType)` tells whether a navmesh has every tile.
+
+`statistics()` reports `surfaces`, `tiles`, `polygons`, `pendingTiles`, `staleTiles`, `tileBuilds` and
+`failures`.
+
+## Queries
+
+The queries are `const`, run on the World's thread and never allocate. Every query takes a
+`NavQueryFilter`:
+
+| Field | Default | Meaning |
+| --- | --- | --- |
+| `agentType` | 0 | The navmesh to ask |
+| `areaMask` | all areas | Areas the query may cross (bit i = area i) |
+| `searchExtents` | (2, 4, 2) | Half size in m of the box searched for the polygon of a point |
+
+```cpp
+illusion::NavQueryFilter filter;
+filter.agentType = 1;
+filter.areaMask = ~(1u << 2); // keep out of area 2
+
+std::array<illusion::Vec3, 32> corners;
+auto path = navigation.findPath(from, to, corners, filter);
+if (path)
+{
+    // corners[0 .. path->count) is the route; path->total, path->length and path->partial describe all of it
+}
+else if (path.error() == illusion::NavError::NoPath)
+{
+    // the points are on the navmesh but nothing reachable is nearer to `to` than `from`
+}
+```
+
+`findPath()` writes the corner points of the shortest path; the first is the start on the navmesh. When the
+destination cannot be reached, the path is partial: it ends at the reachable point nearest the destination
+and `partial` is true. `NoPath` is returned only when nothing reachable is nearer the destination than the
+start. An output span smaller than the path gives `count` points, while `total` and `length` still describe
+the whole path.
+
+```cpp
+auto ground = navigation.nearestPoint(position, filter);
+auto sight = navigation.raycast(from, to, filter);
+if (sight && sight->hit)
+{
+    // sight->point, sight->normal and sight->fraction describe the wall
+}
+auto spot = navigation.randomPoint(center, 5.0f, 1234, filter);
+```
+
+- `nearestPoint()` returns the navmesh point nearest the position within `searchExtents`.
+- `raycast()` walks the navmesh surface and reports the first wall it meets: `hit`, the `point` where the
+  walk stopped, the horizontal `normal` of the wall and the `fraction` of the way walked.
+- `randomPoint()` returns a navmesh point within the radius that is reachable from the centre. The same seed
+  gives the same point.
+
+`areaCosts` and `areaMask` apply at query time: changing `areaCosts` needs no rebuild.
+
+### Errors
+
+| `NavError` | Meaning |
+| --- | --- |
+| `NoAgent` | The Entity has no `NavAgent` or is not alive |
+| `NoNavMesh` | No navmesh of that agent type is loaded yet |
+| `OffMesh` | No navmesh polygon within `searchExtents` of a point |
+| `NoPath` | The points are on the navmesh but nothing connects them |
+| `InvalidValue` | A value is not finite or is out of range (an agent type, a negative radius, an empty span) |
+
+### Debug drawing
+
+`drawDebug()` sends lines to a `NavDebugSink`; the editor's viewport adapts it to its debug draw.
+
+```cpp
+struct LineSink : illusion::NavDebugSink
+{
+    void line(const illusion::Vec3& a, const illusion::Vec3& b, const illusion::Vec4& color) override;
+};
+
+illusion::NavDebugOptions options;
+options.tiles = true;
+options.agentTypeMask = 1u << 1;
+LineSink sink;
+navigation.drawDebug(options, sink);
+```
+
+`navMesh`, `tiles`, `links`, `obstacles` and `agentTypeMask` draw today. `agents` and `paths` draw nothing
+until the crowd arrives (NAV-1c).
+
 ## Performance
 
 Measured on the development desktop:
@@ -159,3 +276,5 @@ Measured on the development desktop:
   20 ms).
 - Baking 256 m x 256 m, 729 tiles in parallel on the Job System, takes 99 ms (Benchmark `nav/bake-256m`,
   budget 600 ms).
+- Finding 1,000 paths takes 13 ms (Benchmark `nav/find-path-1000`: mean length 96 m on 729 tiles with 225
+  walls, budget 80 ms).

@@ -123,7 +123,8 @@ public:
     /// @{
 
     /// Writes the corner points of the shortest path from @p from to @p to into @p out (the first is the
-    /// start on the navmesh). A path to an unreachable point ends at the nearest reachable one (partial).
+    /// start on the navmesh). A path to an unreachable point ends at the nearest reachable one (partial);
+    /// NoPath when nothing reachable is nearer to @p to than the start.
     [[nodiscard]] Expected<NavPathResult, NavError>
     findPath(const Vec3& from, const Vec3& to, std::span<Vec3> out, const NavQueryFilter& filter = {}) const;
 

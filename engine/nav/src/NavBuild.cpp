@@ -1,4 +1,5 @@
 #include "NavAllocator.hpp"
+#include "NavBake.hpp"
 #include "NavValidation.hpp"
 
 #include <illusion/assets/Mesh.hpp>
@@ -226,15 +227,7 @@ void addMeshData(TriangleSink& sink, const MeshData& mesh)
 
 // --- Tile grid ----------------------------------------------------------------------------------------
 
-struct TileGrid
-{
-    Vec3 origin{0.0f};
-    f32 tileWorld = 0.0f;
-    f32 border = 0.0f; // in m
-    i32 borderCells = 0;
-    u32 tilesX = 0;
-    u32 tilesZ = 0;
-};
+using TileGrid = detail::NavTileGrid;
 
 [[nodiscard]] Expected<TileGrid, std::string> makeGrid(const NavGeometry& geometry)
 {
@@ -443,12 +436,7 @@ struct RecastDeleter
 template <class T>
 using RecastPtr = std::unique_ptr<T, RecastDeleter>;
 
-struct TileResult
-{
-    std::vector<std::byte> detour;
-    u64 inputHash = 0;
-    std::string error;
-};
+using TileResult = detail::NavTileResult;
 
 [[nodiscard]] u8 recastArea(u8 area) noexcept
 {
@@ -1112,5 +1100,45 @@ Expected<void, std::string> rebakeStaleTiles(const NavGeometry& geometry, JobSys
     rebuilt = std::move(stale);
     return {};
 }
+
+namespace detail
+{
+
+Expected<NavTileGrid, std::string> makeNavTileGrid(const NavGeometry& geometry)
+{
+    return makeGrid(geometry);
+}
+
+std::vector<std::vector<u32>> navTileCandidates(const NavGeometry& geometry, const NavTileGrid& grid)
+{
+    return tileCandidates(geometry, grid);
+}
+
+u64 navTileHash(const NavGeometry& geometry, const NavTileGrid& grid, NavTileCoord tile,
+                std::span<const u32> candidates)
+{
+    std::vector<u32> triangles;
+    selectTriangles(geometry, tileBox(geometry, grid, tile), candidates, triangles);
+    return hashTileInput(geometry, grid, tile, triangles);
+}
+
+void buildNavTile(const NavGeometry& geometry, const NavTileGrid& grid, NavTileCoord tile,
+                  std::span<const u32> candidates, NavTileResult& result)
+{
+    installNavAllocators();
+    buildTile(geometry, grid, tile, candidates, result);
+}
+
+Aabb navVolumeBounds(const NavVolumeData& volume) noexcept
+{
+    return volumeBounds(volume);
+}
+
+f32 navYaw(const Quat& rotation) noexcept
+{
+    return yawOf(rotation);
+}
+
+} // namespace detail
 
 } // namespace illusion
