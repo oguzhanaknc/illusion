@@ -51,7 +51,7 @@ döndürülmüş, ölçeklenmiş, kırpılmış bir kadran; bkz. [Oyun UI'ı](..
 ## Showcase modülü
 
 Projenin oyun kodu olan `modules/showcase`, sahneyi [scripting API](../../reference/scripting-api.md)'nin
-tamamıyla oynatır: `ModuleContext`'in ve dokuz host servisinin her fonksiyonu `showcase.cpp`'den çağrılır.
+tamamıyla oynatır: `ModuleContext`'in ve on host servisinin her fonksiyonu `showcase.cpp`'den çağrılır.
 Oturum başlarken mesh geometrisinden bir zemin ve bir mücevher kurar, Jump (Space, gamepad South) ve Move
 (WASD, sol çubuk) eylemlerini ekler, sayılardan bir çan sesi üretir ve mikseri ayarlar. Bir tuşa basana ya da
 bir çubuğu oynatana kadar Player trigger pedinin üzerinden kendi kendine ileri geri yürür; sonra WASD ya da sol
@@ -70,7 +70,8 @@ mesajıdır, modül paleti gizler ve gösterir, odağı taşır, widget'ları ok
 bir trigger ile Column'u eğdirir, 150. kareden itibaren onu yeniden sakinleştirir, grafın `peak` olaylarını
 sayar ve `top` ekleminin yerini `jointTransform()` ile okur. 30. karede Strider lambaya döner
 (`setLookAtTarget()`), sol ayağı bir noktaya uzanır (`setIkTarget()`) ve sağ ayağının IK'si kapanır
-(`setIkWeight()`).
+(`setIkWeight()`). `NavService` ile 5. karede bahçenin navmesh'ini sorgular, 10. karede Nav Walker'ı hedefine
+gönderir, durumunu ve kalan mesafesini okur, `Arrived` olaylarını sayar, 200. karede onu başa ışınlar ve 280. karede durdurur.
 Gördükleri, Showcase Entity'sinin `showcase.Stats` Component'inde tutulur.
 
 **Modules → Build Modules** (`module.build`) ile Build edin ve **Play**'e basın:

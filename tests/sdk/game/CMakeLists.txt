@@ -11,7 +11,7 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 
 find_package(illusion REQUIRED CONFIG COMPONENTS player)
 
-illusion_add_module(hello STATIC SOURCES modules/hello/hello.cpp USES runtime)
+illusion_add_module(hello STATIC SOURCES modules/hello/hello.cpp USES runtime nav)
 illusion_add_game(sdk_game
     MODULES hello
     NAME "SDK Game"
