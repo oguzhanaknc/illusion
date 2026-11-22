@@ -22,7 +22,7 @@ struct PointLightData
 
 static const uint kMaxShadowCascades = 4;
 static const uint kMaxShadowedPointLights = 4;
-// Shadow views: the cascades, then six cube faces per shadowed point light (ShadowCaster.slang).
+// Shadow views: the cascades, then six cube faces per shadowed point light (illusion/MaterialPass.slang).
 static const uint kPointShadowFaces = 6;
 
 // The cube shadow map of one point light (ADR 0051): perspective faces with reversed, infinite depth

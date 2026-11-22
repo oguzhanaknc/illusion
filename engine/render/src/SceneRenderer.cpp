@@ -233,6 +233,40 @@ struct ShadowPush
     u32 cascade; // shadow view
 };
 
+// The pipelines a SceneRenderer builds for each material shader (ADR 0063), on first use.
+enum class MaterialPipeline : u8
+{
+    Prepass,           // depth, motion vectors and Entity ids, bound material resources
+    PrepassBindless,   // the same for the opaque surfaces of multi-draws (the forward bindless vertex shader)
+    Forward,           // lit colour, bound material resources
+    ForwardBindless,   // lit colour of multi-draws, materials from the material table
+    Shadow,            // a cascade of the directional light's shadow map
+    PointShadow,       // a cube face of a point light's shadow map (reversed depth)
+    EntityIds,         // Entity ids of blended surfaces
+    Wireframe,         // the wireframe overlay
+    WireframeBindless, // the wireframe overlay of multi-draws
+};
+constexpr u32 kMaterialPipelineKinds = 9;
+
+// The fragment stage of a material pipeline: the engine's (the prepass without alpha test, the wireframe, or
+// none for shadow casters) or the material shader's variant for an alpha mode.
+enum class MaterialFragment : u8
+{
+    Engine,
+    Opaque,
+    Mask,
+    Blend,
+};
+constexpr u32 kMaterialFragments = 4;
+constexpr u32 kMaterialPipelines = kMaterialPipelineKinds * kMaterialFragments * 2; // also by two-sidedness
+
+[[nodiscard]] constexpr MaterialFragment materialFragment(AlphaMode mode) noexcept
+{
+    return mode == AlphaMode::Mask    ? MaterialFragment::Mask
+           : mode == AlphaMode::Blend ? MaterialFragment::Blend
+                                      : MaterialFragment::Opaque;
+}
+
 constexpr nvrhi::Format kDepthFormat = nvrhi::Format::D32;
 constexpr nvrhi::Format kHdrFormat = nvrhi::Format::RGBA16_FLOAT;
 constexpr nvrhi::Format kMotionFormat = nvrhi::Format::RG16_FLOAT;
@@ -285,37 +319,40 @@ struct SceneRenderer::Impl
     RenderResources* resources = nullptr;
     SceneRendererDesc desc;
 
-    nvrhi::ShaderHandle vertexShader;
-    nvrhi::ShaderHandle fragmentShader;
     nvrhi::ShaderHandle skyboxVertexShader;
     nvrhi::ShaderHandle skyboxFragmentShader;
-    nvrhi::ShaderHandle shadowVertexShader;
-    nvrhi::ShaderHandle shadowFragmentShader;
-    nvrhi::ShaderHandle entityIdShader;
+    // The engine's fragment shaders that run with a material shader's vertex shader (MaterialPrepass.slang).
+    nvrhi::ShaderHandle prepassShader; // opaque surfaces that do not cross-fade, with Entity ids if enabled
     nvrhi::ShaderHandle wireframeShader;
-    nvrhi::ShaderHandle bindlessWireframeShader;
-    std::array<nvrhi::GraphicsPipelineHandle, 2> entityIdPipelines{};
-    std::array<nvrhi::GraphicsPipelineHandle, 2> wireframePipelines{};
-    std::array<nvrhi::GraphicsPipelineHandle, 2> bindlessWireframePipelines{};
     bool wireframeSupported = false;
     bool wireframe = false;
-    nvrhi::ShaderHandle prepassShader;
-    nvrhi::ShaderHandle prepassMaskedShader;
-    // Bindless variants (material table + texture descriptor array, multi-draw indirect).
+    // Bindless rendering (material table + texture descriptor array, multi-draw indirect).
     bool multiDrawIndirect = false;
-    nvrhi::ShaderHandle bindlessVertexShader;
-    nvrhi::ShaderHandle bindlessFragmentShader;
-    nvrhi::ShaderHandle bindlessPrepassShader;
-    nvrhi::ShaderHandle bindlessPrepassMaskedShader;
-    std::array<nvrhi::GraphicsPipelineHandle, 2> bindlessPipelines{}; // [doubleSided]
-    std::array<std::array<nvrhi::GraphicsPipelineHandle, 2>, 2>
-        bindlessPrepassPipelines{}; // [masked][doubleSided]
+    // Pipelines of each material shader by MaterialPipeline, MaterialFragment and two-sidedness, indexed by
+    // shader slot; made again when the shader's revision changes (hot reload, a reused slot).
+    struct ShaderPipelines
+    {
+        u64 revision = 0;
+        std::array<nvrhi::GraphicsPipelineHandle, kMaterialPipelines> pipelines{};
+        std::array<bool, kMaterialPipelines> failed{}; // logged once, then skipped
+    };
+    std::vector<ShaderPipelines> shaderPipelines;
+    nvrhi::FramebufferInfo colorInfo;
+    nvrhi::FramebufferInfo prepassInfo;
+    nvrhi::FramebufferInfo idInfo;
+    nvrhi::FramebufferInfo shadowInfo;
+    // The pipeline of material shader slot @p shader (the standard shader's for a released slot), built on
+    // first use; nullptr when it cannot be built (the draw is skipped).
+    nvrhi::IGraphicsPipeline* materialPipeline(u32 shader, MaterialPipeline kind, MaterialFragment fragment,
+                                               bool doubleSided);
+    nvrhi::GraphicsPipelineHandle buildMaterialPipeline(const RenderResources::GpuShader& shader,
+                                                        MaterialPipeline kind, MaterialFragment fragment,
+                                                        bool doubleSided) const;
     u32 resourceGeneration = ~0u;
     nvrhi::GraphicsPipelineHandle skyboxPipeline;
     nvrhi::SamplerHandle clampSampler;
     nvrhi::SamplerHandle shadowSampler;
-    nvrhi::InputLayoutHandle inputLayout;
-    nvrhi::InputLayoutHandle shadowInputLayout;
+    nvrhi::InputLayoutHandle inputLayout; // Vertex in slot 0, the vertex colours in slot 1
     nvrhi::BindingLayoutHandle viewLayout;
     nvrhi::BindingLayoutHandle shadowLayout;
     nvrhi::BufferHandle viewConstants;
@@ -326,23 +363,17 @@ struct SceneRenderer::Impl
     // the shadow map changes.
     std::unordered_map<u64, nvrhi::BindingSetHandle> viewSets;
     nvrhi::BindingSetHandle shadowSet;
-    // [blend][doubleSided]
-    std::array<std::array<nvrhi::GraphicsPipelineHandle, 2>, 2> pipelines{};
-    // Depth prepass, [alpha masked][doubleSided]
-    std::array<std::array<nvrhi::GraphicsPipelineHandle, 2>, 2> prepassPipelines{};
 
     // Shadow map: one array layer per cascade (a 1x1 placeholder while shadows are off).
     nvrhi::TextureHandle shadowMap;
     std::array<nvrhi::FramebufferHandle, kMaxShadowCascades> shadowFramebuffers{};
-    std::array<nvrhi::GraphicsPipelineHandle, 2> shadowPipelines{}; // [alpha masked]
     bool shadowResourcesDirty = true;
     ShadowCascades cascades;
     // Point light shadows (ADR 0051): six layers (cube faces) per slot, reversed depth (a 1x1 placeholder
     // while point shadows are off).
     nvrhi::TextureHandle pointShadowMap;
     std::array<nvrhi::FramebufferHandle, kPointShadowViews> pointShadowFramebuffers{};
-    std::array<nvrhi::GraphicsPipelineHandle, 2> pointShadowPipelines{}; // [alpha masked]
-    u32 pointShadowSlots = 0;                                            // slots the map has room for
+    u32 pointShadowSlots = 0;         // slots the map has room for
     bool pointShadowsCleared = false; // the new map has been cleared once (it is bound before it is drawn)
     // Point lights with castShadows gathered this frame (at most kMaxPointLights), and the chosen ones.
     struct PointShadowCandidate
@@ -487,6 +518,14 @@ struct SceneRenderer::Impl
                                       .setOffset(static_cast<u64>(item.skinned) * sizeof(Vertex))
                                 : nvrhi::VertexBufferBinding().setBuffer(resources->vertexPool()).setSlot(0);
     }
+    // The vertex colours of an item, read with the same vertex index as vertexBinding().
+    [[nodiscard]] nvrhi::VertexBufferBinding colorBinding(const DrawItem& item) const noexcept
+    {
+        return nvrhi::VertexBufferBinding()
+            .setBuffer(resources->colorPool())
+            .setSlot(1)
+            .setOffset(item.isSkinned() ? static_cast<u64>(item.mesh->vertexOffset) * sizeof(u32) : 0u);
+    }
     // The vertex offset of an item's draw: skinned ranges are bound at their offset (see vertexBinding()).
     [[nodiscard]] static u32 baseVertex(const DrawItem& item) noexcept
     {
@@ -570,29 +609,27 @@ void SceneRenderer::Impl::pollTimers()
 
 bool SceneRenderer::Impl::initialize()
 {
-    vertexShader =
-        createShader(device, nvrhi::ShaderType::Vertex, shaders::forwardPbrVertex(), "ForwardPbr VS");
-    fragmentShader =
-        createShader(device, nvrhi::ShaderType::Pixel, shaders::forwardPbrFragment(), "ForwardPbr FS");
+    const RenderResources::GpuShader* standard = resources->shader(resources->standardShader().index);
+    ILL_ASSERT(standard != nullptr, "RenderResources always has the standard shader");
     skyboxVertexShader =
         createShader(device, nvrhi::ShaderType::Vertex, shaders::skyboxVertex(), "Skybox VS");
     skyboxFragmentShader =
         createShader(device, nvrhi::ShaderType::Pixel, shaders::skyboxFragment(), "Skybox FS");
-    shadowVertexShader =
-        createShader(device, nvrhi::ShaderType::Vertex, shaders::shadowCasterVertex(), "Shadow caster VS");
-    shadowFragmentShader =
-        createShader(device, nvrhi::ShaderType::Pixel, shaders::shadowCasterFragment(), "Shadow caster FS");
     prepassShader = createShader(
         device, nvrhi::ShaderType::Pixel,
         (desc.entityIds ? shaders::prepassIdsFragment() : shaders::prepassFragment()), "Prepass FS");
-    prepassMaskedShader = createShader(
-        device, nvrhi::ShaderType::Pixel,
-        (desc.entityIds ? shaders::prepassMaskedIdsFragment() : shaders::prepassMaskedFragment()),
-        "Prepass masked FS");
-    if (!vertexShader || !fragmentShader || !skyboxVertexShader || !skyboxFragmentShader ||
-        !shadowVertexShader || !shadowFragmentShader || !prepassShader || !prepassMaskedShader)
+    if (!skyboxVertexShader || !skyboxFragmentShader || !prepassShader)
     {
         return false;
+    }
+    if (wireframeSupported)
+    {
+        wireframeShader =
+            createShader(device, nvrhi::ShaderType::Pixel, shaders::wireframeFragment(), "Wireframe FS");
+        if (!wireframeShader)
+        {
+            return false;
+        }
     }
     clampSampler = device->createSampler(
         nvrhi::SamplerDesc().setAllFilters(true).setAllAddressModes(nvrhi::SamplerAddressMode::Clamp));
@@ -608,20 +645,20 @@ bool SceneRenderer::Impl::initialize()
             .setOffset(static_cast<u32>(offset))
             .setElementStride(sizeof(Vertex));
     };
+    // Every material pass reads the same vertex input (illusion/MaterialVaryings.slang).
     const nvrhi::VertexAttributeDesc attributes[] = {
         attribute("POSITION", nvrhi::Format::RGB32_FLOAT, offsetof(Vertex, position)),
         attribute("NORMAL", nvrhi::Format::RGB32_FLOAT, offsetof(Vertex, normal)),
         attribute("TANGENT", nvrhi::Format::RGBA32_FLOAT, offsetof(Vertex, tangent)),
         attribute("TEXCOORD", nvrhi::Format::RG32_FLOAT, offsetof(Vertex, uv)),
+        nvrhi::VertexAttributeDesc()
+            .setName("COLOR")
+            .setFormat(nvrhi::Format::RGBA8_UNORM)
+            .setBufferIndex(1)
+            .setElementStride(sizeof(u32)),
     };
-    inputLayout =
-        device->createInputLayout(attributes, static_cast<u32>(std::size(attributes)), vertexShader);
-    const nvrhi::VertexAttributeDesc shadowAttributes[] = {
-        attribute("POSITION", nvrhi::Format::RGB32_FLOAT, offsetof(Vertex, position)),
-        attribute("TEXCOORD", nvrhi::Format::RG32_FLOAT, offsetof(Vertex, uv)),
-    };
-    shadowInputLayout = device->createInputLayout(
-        shadowAttributes, static_cast<u32>(std::size(shadowAttributes)), shadowVertexShader);
+    inputLayout = device->createInputLayout(attributes, static_cast<u32>(std::size(attributes)),
+                                            standard->vertexShader(ShaderPass::Forward, AlphaMode::Opaque));
 
     nvrhi::BindingLayoutDesc layout;
     layout.visibility = nvrhi::ShaderType::All;
@@ -636,10 +673,10 @@ bool SceneRenderer::Impl::initialize()
         nvrhi::BindingLayoutItem::Texture_SRV(4),           // shadow map
         nvrhi::BindingLayoutItem::Texture_SRV(5),           // screen-space ambient occlusion
         nvrhi::BindingLayoutItem::StructuredBuffer_SRV(6),  // draw list
-        nvrhi::BindingLayoutItem::StructuredBuffer_SRV(7),  // material table
         nvrhi::BindingLayoutItem::Texture_SRV(8),           // volumetric fog
         nvrhi::BindingLayoutItem::Texture_SRV(9),           // point light shadow maps
         nvrhi::BindingLayoutItem::StructuredBuffer_SRV(10), // previous positions of skinned vertices
+        nvrhi::BindingLayoutItem::StructuredBuffer_SRV(11), // material table (illusion/MaterialPass.slang)
         nvrhi::BindingLayoutItem::Sampler(2).setSize(9),    // material samplers
         nvrhi::BindingLayoutItem::Sampler(0),
         nvrhi::BindingLayoutItem::Sampler(1), // shadow comparison
@@ -657,112 +694,21 @@ bool SceneRenderer::Impl::initialize()
         nvrhi::BindingLayoutItem::PushConstants(1, sizeof(ShadowPush)),
     };
     shadowLayout = device->createBindingLayout(shadowLayoutDesc);
-    if (!viewLayout || !shadowLayout)
+    if (!inputLayout || !viewLayout || !shadowLayout)
     {
         return false;
     }
     viewConstants = device->createBuffer(
         nvrhi::utils::CreateVolatileConstantBufferDesc(sizeof(GpuViewConstants), "View constants", 16));
 
-    const nvrhi::FramebufferInfo info =
-        nvrhi::FramebufferInfo().addColorFormat(kHdrFormat).setDepthFormat(kDepthFormat);
-    nvrhi::FramebufferInfo prepassInfo =
-        nvrhi::FramebufferInfo().addColorFormat(kMotionFormat).setDepthFormat(kDepthFormat);
+    colorInfo = nvrhi::FramebufferInfo().addColorFormat(kHdrFormat).setDepthFormat(kDepthFormat);
+    prepassInfo = nvrhi::FramebufferInfo().addColorFormat(kMotionFormat).setDepthFormat(kDepthFormat);
     if (desc.entityIds)
     {
         prepassInfo.addColorFormat(nvrhi::Format::RG32_UINT);
-        entityIdShader =
-            createShader(device, nvrhi::ShaderType::Pixel, shaders::entityIdFragment(), "Entity IDs FS");
-        if (!entityIdShader)
-        {
-            return false;
-        }
     }
-    if (wireframeSupported)
-    {
-        wireframeShader =
-            createShader(device, nvrhi::ShaderType::Pixel, shaders::wireframeFragment(), "Wireframe FS");
-        if (!wireframeShader)
-        {
-            return false;
-        }
-    }
-    for (u32 blend = 0; blend < 2; ++blend)
-    {
-        for (u32 doubleSided = 0; doubleSided < 2; ++doubleSided)
-        {
-            nvrhi::GraphicsPipelineDesc pipeline;
-            pipeline.primType = nvrhi::PrimitiveType::TriangleList;
-            pipeline.inputLayout = inputLayout;
-            pipeline.VS = vertexShader;
-            pipeline.PS = fragmentShader;
-            pipeline.bindingLayouts = {viewLayout, resources->materialBindingLayout()};
-            pipeline.renderState.rasterState.setFrontCounterClockwise(true);
-            if (doubleSided != 0)
-            {
-                pipeline.renderState.rasterState.setCullNone();
-            }
-            else
-            {
-                pipeline.renderState.rasterState.setCullBack();
-            }
-            // Opaque depth comes from the prepass (same vertex shader, so equal depths pass).
-            pipeline.renderState.depthStencilState.setDepthTestEnable(true)
-                .setDepthWriteEnable(false)
-                .setDepthFunc(nvrhi::ComparisonFunc::GreaterOrEqual); // reversed-Z
-            if (blend != 0)
-            {
-                pipeline.renderState.blendState.targets[0]
-                    .setBlendEnable(true)
-                    .setSrcBlend(nvrhi::BlendFactor::SrcAlpha)
-                    .setDestBlend(nvrhi::BlendFactor::InvSrcAlpha)
-                    .setSrcBlendAlpha(nvrhi::BlendFactor::One)
-                    .setDestBlendAlpha(nvrhi::BlendFactor::InvSrcAlpha);
-            }
-            pipelines[blend][doubleSided] = device->createGraphicsPipeline(pipeline, info);
-            if (!pipelines[blend][doubleSided])
-            {
-                return false;
-            }
-
-            if (blend == 0 && desc.entityIds)
-            {
-                auto idPass = pipeline;
-                idPass.PS = entityIdShader;
-                idPass.renderState.depthStencilState.setDepthWriteEnable(true);
-                entityIdPipelines[doubleSided] =
-                    device->createGraphicsPipeline(idPass, nvrhi::FramebufferInfo()
-                                                               .addColorFormat(nvrhi::Format::RG32_UINT)
-                                                               .setDepthFormat(kDepthFormat));
-                if (!entityIdPipelines[doubleSided])
-                {
-                    return false;
-                }
-            }
-            if (blend == 0 && wireframeSupported)
-            {
-                auto wire = pipeline;
-                wire.PS = wireframeShader;
-                wire.renderState.rasterState.setFillWireframe();
-                wireframePipelines[doubleSided] = device->createGraphicsPipeline(wire, info);
-                if (!wireframePipelines[doubleSided])
-                {
-                    return false;
-                }
-            }
-
-            // Prepass variant: index 0/1 here means opaque/alpha masked.
-            nvrhi::GraphicsPipelineDesc prepass = pipeline;
-            prepass.PS = blend != 0 ? prepassMaskedShader.Get() : prepassShader.Get();
-            prepass.renderState.blendState = nvrhi::BlendState();
-            prepass.renderState.depthStencilState.setDepthWriteEnable(true);
-            prepassPipelines[blend][doubleSided] = device->createGraphicsPipeline(prepass, prepassInfo);
-            if (!prepassPipelines[blend][doubleSided])
-            {
-                return false;
-            }
-        }
-    }
+    idInfo = nvrhi::FramebufferInfo().addColorFormat(nvrhi::Format::RG32_UINT).setDepthFormat(kDepthFormat);
+    shadowInfo = nvrhi::FramebufferInfo().setDepthFormat(kDepthFormat);
 
     nvrhi::GraphicsPipelineDesc skybox;
     skybox.primType = nvrhi::PrimitiveType::TriangleList;
@@ -773,82 +719,10 @@ bool SceneRenderer::Impl::initialize()
     // Depth 0 is both the cleared value and infinity with reversed-Z, so only uncovered pixels pass.
     skybox.renderState.depthStencilState.setDepthTestEnable(true).setDepthWriteEnable(false).setDepthFunc(
         nvrhi::ComparisonFunc::GreaterOrEqual);
-    skyboxPipeline = device->createGraphicsPipeline(skybox, info);
+    skyboxPipeline = device->createGraphicsPipeline(skybox, colorInfo);
     if (!skyboxPipeline)
     {
         return false;
-    }
-    if (resources->bindless() && multiDrawIndirect)
-    {
-        bindlessVertexShader = createShader(device, nvrhi::ShaderType::Vertex,
-                                            shaders::forwardPbrBindlessVertex(), "ForwardPbr bindless VS");
-        bindlessFragmentShader =
-            createShader(device, nvrhi::ShaderType::Pixel, shaders::forwardPbrBindlessFragment(),
-                         "ForwardPbr bindless FS");
-        bindlessPrepassShader = createShader(
-            device, nvrhi::ShaderType::Pixel,
-            (desc.entityIds ? shaders::prepassIdsBindlessFragment() : shaders::prepassBindlessFragment()),
-            "Prepass bindless FS");
-        bindlessPrepassMaskedShader =
-            createShader(device, nvrhi::ShaderType::Pixel,
-                         (desc.entityIds ? shaders::prepassMaskedIdsBindlessFragment()
-                                         : shaders::prepassMaskedBindlessFragment()),
-                         "Prepass masked bindless FS");
-        if (wireframeSupported)
-        {
-            bindlessWireframeShader =
-                createShader(device, nvrhi::ShaderType::Pixel, shaders::wireframeBindlessFragment(),
-                             "Wireframe bindless FS");
-            if (!bindlessWireframeShader)
-            {
-                return false;
-            }
-        }
-        for (u32 doubleSided = 0; doubleSided < 2; ++doubleSided)
-        {
-            nvrhi::GraphicsPipelineDesc pipeline;
-            pipeline.primType = nvrhi::PrimitiveType::TriangleList;
-            pipeline.inputLayout = inputLayout;
-            pipeline.VS = bindlessVertexShader;
-            pipeline.PS = bindlessFragmentShader;
-            pipeline.bindingLayouts = {viewLayout, resources->bindlessLayout()};
-            pipeline.renderState.rasterState.setFrontCounterClockwise(true);
-            if (doubleSided != 0)
-            {
-                pipeline.renderState.rasterState.setCullNone();
-            }
-            else
-            {
-                pipeline.renderState.rasterState.setCullBack();
-            }
-            pipeline.renderState.depthStencilState.setDepthTestEnable(true)
-                .setDepthWriteEnable(false)
-                .setDepthFunc(nvrhi::ComparisonFunc::GreaterOrEqual);
-            bindlessPipelines[doubleSided] = device->createGraphicsPipeline(pipeline, info);
-            if (!bindlessPipelines[doubleSided])
-            {
-                return false;
-            }
-            if (wireframeSupported)
-            {
-                auto wire = pipeline;
-                wire.PS = bindlessWireframeShader;
-                wire.renderState.rasterState.setFillWireframe();
-                bindlessWireframePipelines[doubleSided] = device->createGraphicsPipeline(wire, info);
-                if (!bindlessWireframePipelines[doubleSided])
-                {
-                    return false;
-                }
-            }
-            for (u32 masked = 0; masked < 2; ++masked)
-            {
-                nvrhi::GraphicsPipelineDesc prepass = pipeline;
-                prepass.PS = masked != 0 ? bindlessPrepassMaskedShader.Get() : bindlessPrepassShader.Get();
-                prepass.renderState.depthStencilState.setDepthWriteEnable(true);
-                bindlessPrepassPipelines[masked][doubleSided] =
-                    device->createGraphicsPipeline(prepass, prepassInfo);
-            }
-        }
     }
     ensureInstanceCapacity(1024);
 
@@ -880,6 +754,160 @@ bool SceneRenderer::Impl::initialize()
     return updateShadowResources();
 }
 
+nvrhi::IGraphicsPipeline* SceneRenderer::Impl::materialPipeline(u32 shader, MaterialPipeline kind,
+                                                                MaterialFragment fragment, bool doubleSided)
+{
+    const RenderResources::GpuShader* gpu = resources->shader(shader);
+    if (gpu == nullptr)
+    {
+        shader = resources->standardShader().index;
+        gpu = resources->shader(shader);
+    }
+    if (shaderPipelines.size() <= shader)
+    {
+        shaderPipelines.resize(static_cast<usize>(shader) + 1);
+    }
+    ShaderPipelines& cache = shaderPipelines[shader];
+    if (cache.revision != gpu->revision)
+    {
+        cache = ShaderPipelines{};
+        cache.revision = gpu->revision;
+    }
+    const usize index = (static_cast<usize>(kind) * kMaterialFragments + static_cast<usize>(fragment)) * 2 +
+                        (doubleSided ? 1u : 0u);
+    nvrhi::GraphicsPipelineHandle& pipeline = cache.pipelines[index];
+    if (!pipeline && !cache.failed[index])
+    {
+        pipeline = buildMaterialPipeline(*gpu, kind, fragment, doubleSided);
+        cache.failed[index] = !pipeline;
+        if (pipeline)
+        {
+            ++stats.pipelinesBuilt;
+        }
+        else
+        {
+            ILL_LOG_ERROR("Render", "shader '{}': cannot build pipeline {} {}; its surfaces are not drawn",
+                          gpu->layout.source, static_cast<u32>(kind), static_cast<u32>(fragment));
+        }
+    }
+    return pipeline;
+}
+
+nvrhi::GraphicsPipelineHandle
+SceneRenderer::Impl::buildMaterialPipeline(const RenderResources::GpuShader& shader, MaterialPipeline kind,
+                                           MaterialFragment fragment, bool doubleSided) const
+{
+    ILL_PROFILE_SCOPE();
+    ShaderPass pass = ShaderPass::Forward;
+    switch (kind)
+    {
+    case MaterialPipeline::Prepass:
+        pass = desc.entityIds ? ShaderPass::EntityIds : ShaderPass::MotionVectors;
+        break;
+    case MaterialPipeline::PrepassBindless:
+    case MaterialPipeline::ForwardBindless:
+    case MaterialPipeline::WireframeBindless:
+        pass = ShaderPass::ForwardBindless;
+        break;
+    case MaterialPipeline::Forward:
+        pass = ShaderPass::Forward;
+        break;
+    case MaterialPipeline::Shadow:
+    case MaterialPipeline::PointShadow:
+        pass = ShaderPass::ShadowCaster;
+        break;
+    case MaterialPipeline::EntityIds:
+        pass = ShaderPass::EntityIds;
+        break;
+    case MaterialPipeline::Wireframe:
+        pass = ShaderPass::MotionVectors;
+        break;
+    }
+    const AlphaMode mode = fragment == MaterialFragment::Mask    ? AlphaMode::Mask
+                           : fragment == MaterialFragment::Blend ? AlphaMode::Blend
+                                                                 : AlphaMode::Opaque;
+    if (!shaderVariantExists(pass, mode))
+    {
+        return {};
+    }
+    const bool bindlessKind = pass == ShaderPass::ForwardBindless;
+    const bool shadow = pass == ShaderPass::ShadowCaster;
+    nvrhi::GraphicsPipelineDesc pipeline;
+    pipeline.primType = nvrhi::PrimitiveType::TriangleList;
+    pipeline.inputLayout = inputLayout;
+    pipeline.VS = shader.vertexShader(pass, mode);
+    pipeline.PS = fragment == MaterialFragment::Engine ? nullptr : shader.fragmentShader(pass, mode);
+    pipeline.bindingLayouts = {shadow ? shadowLayout.Get() : viewLayout.Get(),
+                               bindlessKind ? resources->bindlessLayout()
+                                            : resources->materialBindingLayout()};
+    pipeline.renderState.rasterState.setFrontCounterClockwise(true);
+    if (doubleSided)
+    {
+        pipeline.renderState.rasterState.setCullNone();
+    }
+    else
+    {
+        pipeline.renderState.rasterState.setCullBack();
+    }
+    // Opaque colour takes its depth from the prepass (the same vertex shader, so equal depths pass).
+    pipeline.renderState.depthStencilState.setDepthTestEnable(true).setDepthWriteEnable(false).setDepthFunc(
+        nvrhi::ComparisonFunc::GreaterOrEqual); // reversed-Z
+    const nvrhi::FramebufferInfo* framebuffer = &colorInfo;
+    switch (kind)
+    {
+    case MaterialPipeline::Prepass:
+    case MaterialPipeline::PrepassBindless:
+        if (fragment == MaterialFragment::Engine)
+        {
+            pipeline.PS = prepassShader;
+        }
+        pipeline.renderState.depthStencilState.setDepthWriteEnable(true);
+        framebuffer = &prepassInfo;
+        break;
+    case MaterialPipeline::Forward:
+    case MaterialPipeline::ForwardBindless:
+        if (fragment == MaterialFragment::Blend)
+        {
+            pipeline.renderState.blendState.targets[0]
+                .setBlendEnable(true)
+                .setSrcBlend(nvrhi::BlendFactor::SrcAlpha)
+                .setDestBlend(nvrhi::BlendFactor::InvSrcAlpha)
+                .setSrcBlendAlpha(nvrhi::BlendFactor::One)
+                .setDestBlendAlpha(nvrhi::BlendFactor::InvSrcAlpha);
+        }
+        break;
+    case MaterialPipeline::Shadow:
+    case MaterialPipeline::PointShadow:
+    {
+        // Both faces cast: single-sided geometry must not leak light. Point light faces store reversed depth:
+        // the nearest caster has the largest value, and the bias pushes casters away from the light, towards
+        // 0.
+        const bool point = kind == MaterialPipeline::PointShadow;
+        pipeline.renderState.rasterState.setCullNone().setSlopeScaleDepthBias(point ? -desc.shadows.slopeBias
+                                                                                    : desc.shadows.slopeBias);
+        pipeline.renderState.depthStencilState.setDepthWriteEnable(true).setDepthFunc(
+            point ? nvrhi::ComparisonFunc::GreaterOrEqual : nvrhi::ComparisonFunc::LessOrEqual);
+        framebuffer = &shadowInfo;
+        break;
+    }
+    case MaterialPipeline::EntityIds:
+        pipeline.renderState.depthStencilState.setDepthWriteEnable(true);
+        framebuffer = &idInfo;
+        break;
+    case MaterialPipeline::Wireframe:
+    case MaterialPipeline::WireframeBindless:
+        pipeline.PS = wireframeShader;
+        pipeline.renderState.rasterState.setFillWireframe();
+        break;
+    }
+    // Only shadow casters may go without a fragment shader.
+    if (!pipeline.VS || (!pipeline.PS && !(shadow && fragment == MaterialFragment::Engine)))
+    {
+        return {};
+    }
+    return device->createGraphicsPipeline(pipeline, *framebuffer);
+}
+
 bool SceneRenderer::Impl::updateShadowResources()
 {
     if (!shadowResourcesDirty)
@@ -908,26 +936,10 @@ bool SceneRenderer::Impl::updateShadowResources()
             shadowMap, nvrhi::TextureSubresourceSet(0, 1, layer, 1)));
     }
 
-    const nvrhi::FramebufferInfo shadowInfo = nvrhi::FramebufferInfo().setDepthFormat(kDepthFormat);
-    for (u32 masked = 0; masked < 2; ++masked)
+    // Shadow caster pipelines carry the slope bias.
+    for (ShaderPipelines& pipelines : shaderPipelines)
     {
-        nvrhi::GraphicsPipelineDesc pipeline;
-        pipeline.primType = nvrhi::PrimitiveType::TriangleList;
-        pipeline.inputLayout = shadowInputLayout;
-        pipeline.VS = shadowVertexShader;
-        pipeline.PS = masked != 0 ? shadowFragmentShader.Get() : nullptr;
-        pipeline.bindingLayouts = {shadowLayout, resources->materialBindingLayout()};
-        // Both faces cast: single-sided geometry must not leak light.
-        pipeline.renderState.rasterState.setCullNone().setSlopeScaleDepthBias(settings.slopeBias);
-        pipeline.renderState.depthStencilState.setDepthTestEnable(true)
-            .setDepthWriteEnable(true)
-            .setDepthFunc(nvrhi::ComparisonFunc::LessOrEqual);
-        shadowPipelines[masked] = device->createGraphicsPipeline(pipeline, shadowInfo);
-        // Point light faces store reversed depth: the nearest caster has the largest value, and the bias
-        // pushes casters away from the light, towards 0.
-        pipeline.renderState.rasterState.setSlopeScaleDepthBias(-settings.slopeBias);
-        pipeline.renderState.depthStencilState.setDepthFunc(nvrhi::ComparisonFunc::GreaterOrEqual);
-        pointShadowPipelines[masked] = device->createGraphicsPipeline(pipeline, shadowInfo);
+        pipelines.revision = 0;
     }
 
     pointShadowSlots = settings.enabled ? std::min(settings.pointLightCount, kMaxShadowedPointLights) : 0u;
@@ -946,8 +958,7 @@ bool SceneRenderer::Impl::updateShadowResources()
                 pointShadowMap, nvrhi::TextureSubresourceSet(0, 1, layer, 1)));
     }
     viewSets.clear();
-    return shadowMap && pointShadowMap && shadowPipelines[0] && shadowPipelines[1] &&
-           pointShadowPipelines[0] && pointShadowPipelines[1];
+    return shadowMap && pointShadowMap;
 }
 
 void SceneRenderer::Impl::ensureInstanceCapacity(u32 count)
@@ -1179,12 +1190,12 @@ nvrhi::IBindingSet* SceneRenderer::Impl::viewSetFor(EnvironmentHandle environmen
             nvrhi::BindingSetItem::Texture_SRV(4, shadowMap),
             nvrhi::BindingSetItem::Texture_SRV(5, post.ambientOcclusion()),
             nvrhi::BindingSetItem::StructuredBuffer_SRV(6, culling.drawList()),
-            nvrhi::BindingSetItem::StructuredBuffer_SRV(7, resources->materialTable()),
             nvrhi::BindingSetItem::Texture_SRV(8, fog.volume()),
             nvrhi::BindingSetItem::Texture_SRV(9, pointShadowMap),
             nvrhi::BindingSetItem::StructuredBuffer_SRV(
                 10, previousPositions, nvrhi::Format::UNKNOWN,
                 previousWindows.range(previousWindow, sizeof(Vec4), previousPositions->getDesc().byteSize)),
+            nvrhi::BindingSetItem::StructuredBuffer_SRV(11, resources->materialTable()),
             nvrhi::BindingSetItem::Sampler(0, clampSampler),
             nvrhi::BindingSetItem::Sampler(1, shadowSampler),
             nvrhi::BindingSetItem::PushConstants(1, sizeof(ForwardPush)),
@@ -1395,8 +1406,12 @@ void SceneRenderer::Impl::cull(World& world, const RenderView& view, f32 viewpor
             state.fade = std::min(state.fade + fadeStep, 1.0f);
         }
         const bool fading = state.fade < 1.0f && state.previousLod != state.lod;
+        // The shaders read the normal matrix as 3x3; its fourth column carries the Entity's custom data
+        // (SurfaceInput::customData), zero for now.
+        Mat4 normalMatrix = glm::transpose(glm::inverse(matrix));
+        normalMatrix[3] = Vec4(0.0f);
         const GpuInstance instance{matrix,
-                                   glm::transpose(glm::inverse(matrix)),
+                                   normalMatrix,
                                    previous,
                                    {material->index, entity.index, entity.generation,
                                     lodFadeCode(state.lod, state.fade, fading, false)}};
@@ -1609,11 +1624,11 @@ i32 SceneRenderer::Impl::gatherLights(World& world, GpuViewConstants& constants,
     return shadowed;
 }
 
-// Opaque rigid casters ignore their material, so they batch by mesh alone; masked casters and casters that
-// move in the wind need it.
+// Opaque rigid casters ignore their material and draw with the standard shader, so they batch by mesh alone;
+// masked casters and casters whose vertices move (wind, worldOffset()) need their own.
 const RenderResources::GpuMaterial* SceneRenderer::Impl::shadowMaterial(const DrawItem& item) const noexcept
 {
-    return item.material->alphaMode == AlphaMode::Mask || item.material->wind ? item.material : nullptr;
+    return item.material->alphaMode == AlphaMode::Mask || item.material->moves ? item.material : nullptr;
 }
 
 // Chooses the shadowed point lights: candidates whose range reaches into the view, nearest to the camera
@@ -1727,7 +1742,6 @@ void SceneRenderer::Impl::drawShadows(nvrhi::ICommandList* commandList, u32 shad
     const bool point = shadowView >= kMaxShadowCascades;
     nvrhi::IFramebuffer* framebuffer = point ? pointShadowFramebuffers[shadowView - kMaxShadowCascades].Get()
                                              : shadowFramebuffers[shadowView].Get();
-    const auto& casterPipelines = point ? pointShadowPipelines : shadowPipelines;
     const nvrhi::Viewport viewport = framebuffer->getFramebufferInfo().getViewport();
     const u32 count = static_cast<u32>(order.size());
     u32 begin = 0;
@@ -1747,14 +1761,27 @@ void SceneRenderer::Impl::drawShadows(nvrhi::ICommandList* commandList, u32 shad
             }
             ++end;
         }
+        // Cross-fading casters dither in the material's fragment shader; the others write depth only.
+        const MaterialFragment fragment = own != nullptr && own->alphaMode == AlphaMode::Mask
+                                              ? MaterialFragment::Mask
+                                          : first.fading() ? MaterialFragment::Opaque
+                                                           : MaterialFragment::Engine;
+        nvrhi::IGraphicsPipeline* pipeline = materialPipeline(
+            own != nullptr ? own->shader : resources->standardShader().index,
+            point ? MaterialPipeline::PointShadow : MaterialPipeline::Shadow, fragment, false);
+        if (pipeline == nullptr)
+        {
+            begin = end;
+            continue;
+        }
         nvrhi::GraphicsState state;
-        // Cross-fading casters dither in the alpha-tested pipeline (an opaque material never fails its test).
-        const bool masked = (own != nullptr && own->alphaMode == AlphaMode::Mask) || first.fading();
-        state.pipeline = casterPipelines[masked ? 1 : 0];
+        state.pipeline = pipeline;
         state.framebuffer = framebuffer;
-        // The material set is bound for opaque casters too: the pipeline layout includes it.
-        state.bindings = {shadowSet, own != nullptr ? own->bindingSet : first.material->bindingSet};
-        state.vertexBuffers = {vertexBinding(first)};
+        // The others draw with the default material: the standard shader's parameters, without wind.
+        state.bindings = {shadowSet, own != nullptr
+                                         ? own->bindingSet
+                                         : resources->material(resources->defaultMaterial())->bindingSet};
+        state.vertexBuffers = {vertexBinding(first), colorBinding(first)};
         state.indexBuffer =
             nvrhi::IndexBufferBinding().setBuffer(resources->indexPool()).setFormat(nvrhi::Format::R32_UINT);
         state.viewport.addViewportAndScissorRect(viewport);
@@ -1941,16 +1968,25 @@ void SceneRenderer::render(nvrhi::ICommandList* commandList, nvrhi::ITexture* co
     impl.cull(world, view, size.y, jobs);
     const u32 visibleCount = impl.stats.visible;
 
-    // Bindless rendering draws each pipeline's batches with one multi-draw; materials vary per instance.
+    // Bindless rendering draws the batches of each pipeline with one multi-draw; materials vary per instance.
+    // The prepass of alpha-tested and cross-fading surfaces evaluates their material and binds it, so their
+    // batches keep to one material.
     const bool bindless = impl.desc.bindless && impl.resources->bindless() && impl.multiDrawIndirect;
-    const auto pipelineKey = [](const DrawItem& item) {
-        return (item.material->alphaMode == AlphaMode::Mask || item.fading() ? 2u : 0u) +
-               (item.material->doubleSided ? 1u : 0u);
+    const auto tested = [](const DrawItem& item) {
+        return item.material->alphaMode == AlphaMode::Mask || item.fading();
     };
-    // Rigid opaque and masked items first, grouped by material (or pipeline) and mesh; then skinned opaque
-    // ones, drawn one by one from their own vertices; then blended items back to front.
+    const auto boundPrepass = [&](const DrawItem& item) {
+        return !bindless || tested(item);
+    };
+    // Rigid opaque and masked items first, grouped by shader, pipeline state, material where it is bound, and
+    // mesh; then skinned opaque ones, drawn one by one from their own vertices; then blended items back to
+    // front.
     const auto region = [](const DrawItem& item) {
         return item.material->alphaMode == AlphaMode::Blend ? 2u : (item.isSkinned() ? 1u : 0u);
+    };
+    const auto pipelineKey = [&](const DrawItem& item) {
+        return (static_cast<u64>(item.material->shader) << 8) | (item.material->doubleSided ? 16u : 0u) |
+               (static_cast<u32>(item.material->alphaMode) << 1) | (tested(item) ? 1u : 0u);
     };
     std::sort(impl.cameraOrder.begin(), impl.cameraOrder.end(), [&](u32 a, u32 b) {
         const DrawItem& x = impl.items[a];
@@ -1963,11 +1999,11 @@ void SceneRenderer::render(nvrhi::ICommandList* commandList, nvrhi::ITexture* co
         {
             return x.distanceSquared > y.distanceSquared;
         }
-        if (bindless && pipelineKey(x) != pipelineKey(y))
+        if (pipelineKey(x) != pipelineKey(y))
         {
             return pipelineKey(x) < pipelineKey(y);
         }
-        if (!bindless && x.material != y.material)
+        if (boundPrepass(x) && x.material != y.material)
         {
             return x.material < y.material;
         }
@@ -2084,8 +2120,8 @@ void SceneRenderer::render(nvrhi::ICommandList* commandList, nvrhi::ITexture* co
         while (end < culledCount)
         {
             const DrawItem& next = impl.items[impl.cameraOrder[end]];
-            const bool sameState =
-                bindless ? pipelineKey(next) == pipelineKey(first) : next.material == first.material;
+            const bool sameState = pipelineKey(next) == pipelineKey(first) &&
+                                   (!boundPrepass(first) || next.material == first.material);
             if (!sameState || next.mesh != first.mesh || next.submesh != first.submesh ||
                 next.lod != first.lod || next.fading() != first.fading())
             {
@@ -2216,16 +2252,18 @@ void SceneRenderer::render(nvrhi::ICommandList* commandList, nvrhi::ITexture* co
 
     endPass(0);
     const nvrhi::Viewport viewport = framebuffer->getFramebufferInfo().getViewport();
-    // `first` is the item drawn by a single draw, or the first item of the indirect draws.
-    const auto setDrawState = [&](nvrhi::IGraphicsPipeline* pipeline, nvrhi::IFramebuffer* target,
-                                  const DrawItem& first, bool indirect, u32 slot, u32 flags) {
+    // `first` is the item drawn by a single draw, or the first item of the indirect draws. Pipelines of the
+    // bindless kinds read the material table and the texture descriptor array instead of the material's set.
+    const auto setDrawState = [&](nvrhi::IGraphicsPipeline* pipeline, bool bindlessMaterials,
+                                  nvrhi::IFramebuffer* target, const DrawItem& first, bool indirect, u32 slot,
+                                  u32 flags) {
         nvrhi::GraphicsState state;
         state.pipeline = pipeline;
         state.framebuffer = target;
         const bool skinned = !indirect && first.isSkinned();
         const u32 previousWindow = skinned ? impl.previousWindows.window(first.skinned) : 0u;
         nvrhi::IBindingSet* itemViewSet = skinned ? impl.viewSetFor(environment, previousWindow) : viewSet;
-        if (bindless && indirect)
+        if (bindlessMaterials)
         {
             state.bindings = {itemViewSet, impl.resources->bindlessTextures()};
         }
@@ -2233,7 +2271,7 @@ void SceneRenderer::render(nvrhi::ICommandList* commandList, nvrhi::ITexture* co
         {
             state.bindings = {itemViewSet, first.material->bindingSet};
         }
-        state.vertexBuffers = {impl.vertexBinding(first)};
+        state.vertexBuffers = {impl.vertexBinding(first), impl.colorBinding(first)};
         state.indexBuffer = nvrhi::IndexBufferBinding()
                                 .setBuffer(impl.resources->indexPool())
                                 .setFormat(nvrhi::Format::R32_UINT);
@@ -2248,11 +2286,21 @@ void SceneRenderer::render(nvrhi::ICommandList* commandList, nvrhi::ITexture* co
         const ForwardPush push{slot, flags | (skinned ? kForwardSkinned : 0u), previousVertex, 0};
         commandList->setPushConstants(&push, sizeof(push));
     };
-    // One item drawn by the CPU (camera order index `index`, at or after culledCount) with its own vertices.
-    const auto drawItem = [&](nvrhi::IGraphicsPipeline* pipeline, nvrhi::IFramebuffer* target, u32 index,
-                              u32 flags) {
-        const DrawItem& item = impl.items[impl.cameraOrder[index]];
-        setDrawState(pipeline, target, item, false, blendedSlotBase + (index - culledCount), flags);
+    const auto itemAt = [&](u32 index) -> const DrawItem& {
+        return impl.items[impl.cameraOrder[index]];
+    };
+    // One item drawn by the CPU (camera order index `index`, at or after culledCount) with its own vertices
+    // and its material's set; returns its triangles.
+    const auto drawItem = [&](MaterialPipeline kind, MaterialFragment fragment, nvrhi::IFramebuffer* target,
+                              u32 index, u32 flags) -> u64 {
+        const DrawItem& item = itemAt(index);
+        nvrhi::IGraphicsPipeline* pipeline =
+            impl.materialPipeline(item.material->shader, kind, fragment, item.material->doubleSided);
+        if (pipeline == nullptr)
+        {
+            return 0;
+        }
+        setDrawState(pipeline, false, target, item, false, blendedSlotBase + (index - culledCount), flags);
         const SubmeshLod range = item.range();
         commandList->drawIndexed(nvrhi::DrawArguments()
                                      .setVertexCount(range.indexCount)
@@ -2261,18 +2309,18 @@ void SceneRenderer::render(nvrhi::ICommandList* commandList, nvrhi::ITexture* co
         ++impl.stats.drawCalls;
         return range.indexCount / 3;
     };
-    // Opaque batches are drawn in groups: with bindless rendering a group is every consecutive batch with
-    // the same pipeline, drawn by one multi-draw indirect call; otherwise each batch is its own group.
+    // Opaque batches are drawn in groups: with bindless rendering a group is every consecutive batch that
+    // `sameGroup` puts with the first, drawn by one multi-draw indirect call; otherwise each batch is its own
+    // group.
     const auto batchFirst = [&](u32 batch) -> const DrawItem& {
         return impl.items[impl.cameraOrder[impl.batchStarts[batch]]];
     };
     const auto batchCount = static_cast<u32>(impl.cullBatches.size());
-    const auto forEachGroup = [&](auto&& draw) {
+    const auto forEachGroup = [&](auto&& sameGroup, auto&& draw) {
         for (u32 first = 0; first < batchCount;)
         {
             u32 last = first + 1;
-            while (bindless && last < batchCount &&
-                   pipelineKey(batchFirst(last)) == pipelineKey(batchFirst(first)))
+            while (bindless && last < batchCount && sameGroup(batchFirst(first), batchFirst(last)))
             {
                 ++last;
             }
@@ -2280,31 +2328,52 @@ void SceneRenderer::render(nvrhi::ICommandList* commandList, nvrhi::ITexture* co
             first = last;
         }
     };
-    const auto drawGroup = [&](nvrhi::IGraphicsPipeline* pipeline, nvrhi::IFramebuffer* target,
-                               u32 firstBatch, u32 count, u32 phase, u32 flags) {
+    const auto drawGroup = [&](nvrhi::IGraphicsPipeline* pipeline, bool bindlessMaterials,
+                               nvrhi::IFramebuffer* target, u32 firstBatch, u32 count, u32 phase, u32 flags) {
+        if (pipeline == nullptr)
+        {
+            return;
+        }
         const u32 start = impl.batchStarts[firstBatch];
         // Single draws carry their draw-list offset in a push constant; multi-draws in each draw's
         // first-instance field.
         const u32 slot = bindless ? 0u : (phase == 1 ? 0u : impl.culling.phase2Offset()) + start;
-        setDrawState(pipeline, target, batchFirst(firstBatch), true, slot, flags);
+        setDrawState(pipeline, bindlessMaterials, target, batchFirst(firstBatch), true, slot, flags);
         commandList->drawIndexedIndirect(impl.culling.argumentOffset(firstBatch, phase), count);
         ++impl.stats.drawCalls;
     };
-    // Skinned items always take the pipelines with material binding sets (`single`).
-    const auto prepassPipeline = [&](const DrawItem& first, bool single = false) {
-        // Cross-fading instances dither in the alpha-tested prepass.
-        const u32 masked = first.material->alphaMode == AlphaMode::Mask || first.fading() ? 1 : 0;
-        const u32 doubleSided = first.material->doubleSided ? 1 : 0;
-        return bindless && !single ? impl.bindlessPrepassPipelines[masked][doubleSided].Get()
-                                   : impl.prepassPipelines[masked][doubleSided].Get();
+    const auto samePrepass = [&](const DrawItem& a, const DrawItem& b) {
+        return a.material->shader == b.material->shader &&
+               a.material->doubleSided == b.material->doubleSided && tested(a) == tested(b) &&
+               (!tested(a) || a.material == b.material);
     };
-    const auto shadingPipeline = [&](const DrawItem& first, bool single = false) {
-        const u32 doubleSided = first.material->doubleSided ? 1 : 0;
-        return bindless && !single ? impl.bindlessPipelines[doubleSided].Get()
-                                   : impl.pipelines[0][doubleSided].Get();
+    const auto sameShading = [](const DrawItem& a, const DrawItem& b) {
+        return a.material->shader == b.material->shader &&
+               a.material->doubleSided == b.material->doubleSided &&
+               a.material->alphaMode == b.material->alphaMode;
     };
-    const auto itemAt = [&](u32 index) -> const DrawItem& {
-        return impl.items[impl.cameraOrder[index]];
+    const auto sameWireframe = [](const DrawItem& a, const DrawItem& b) {
+        return a.material->shader == b.material->shader && a.material->doubleSided == b.material->doubleSided;
+    };
+    // Opaque surfaces that do not cross-fade take the engine's prepass fragment shader (no discard, so depth
+    // tests stay early); the others evaluate their material for the alpha test and the dither.
+    const auto prepassFragment = [&](const DrawItem& item) {
+        return tested(item) ? materialFragment(item.material->alphaMode) : MaterialFragment::Engine;
+    };
+    const auto drawPrepassGroup = [&](u32 first, u32 count, const DrawItem& item, u32 phase) {
+        const bool bindlessMaterials = !boundPrepass(item);
+        drawGroup(impl.materialPipeline(item.material->shader,
+                                        bindlessMaterials ? MaterialPipeline::PrepassBindless
+                                                          : MaterialPipeline::Prepass,
+                                        prepassFragment(item), item.material->doubleSided),
+                  bindlessMaterials, impl.prepassFramebuffer, first, count, phase, 0);
+    };
+    const auto drawShadingGroup = [&](u32 first, u32 count, const DrawItem& item, u32 phase) {
+        drawGroup(
+            impl.materialPipeline(item.material->shader,
+                                  bindless ? MaterialPipeline::ForwardBindless : MaterialPipeline::Forward,
+                                  materialFragment(item.material->alphaMode), item.material->doubleSided),
+            bindless, framebuffer, first, count, phase, kForwardAmbientOcclusion);
     };
 
     // Depth prepass in two culling phases: draw what last frame's depth does not hide, build a Hi-Z of
@@ -2318,20 +2387,21 @@ void SceneRenderer::render(nvrhi::ICommandList* commandList, nvrhi::ITexture* co
         commandList->clearTextureUInt(impl.ids, nvrhi::AllSubresources, ~0u);
     }
     impl.culling.cull(commandList, 1);
-    forEachGroup([&](u32 first, u32 count, const DrawItem& item) {
-        drawGroup(prepassPipeline(item), impl.prepassFramebuffer, first, count, 1, 0);
+    forEachGroup(samePrepass, [&](u32 first, u32 count, const DrawItem& item) {
+        drawPrepassGroup(first, count, item, 1);
     });
     // Skinned instances are not occlusion culled; drawn here, they hide what is behind them in phase 2.
     for (u32 i = culledCount; i < opaqueCount; ++i)
     {
-        static_cast<void>(drawItem(prepassPipeline(itemAt(i), true), impl.prepassFramebuffer, i, 0));
+        static_cast<void>(
+            drawItem(MaterialPipeline::Prepass, prepassFragment(itemAt(i)), impl.prepassFramebuffer, i, 0));
     }
     if (impl.desc.occlusionCulling)
     {
         impl.culling.buildHiZ(commandList);
         impl.culling.cull(commandList, 2);
-        forEachGroup([&](u32 first, u32 count, const DrawItem& item) {
-            drawGroup(prepassPipeline(item), impl.prepassFramebuffer, first, count, 2, 0);
+        forEachGroup(samePrepass, [&](u32 first, u32 count, const DrawItem& item) {
+            drawPrepassGroup(first, count, item, 2);
         });
         impl.culling.buildHiZ(commandList);
     }
@@ -2350,11 +2420,11 @@ void SceneRenderer::render(nvrhi::ICommandList* commandList, nvrhi::ITexture* co
     commandList->clearTextureFloat(impl.hdr, nvrhi::AllSubresources,
                                    nvrhi::Color(impl.desc.clearColor.r, impl.desc.clearColor.g,
                                                 impl.desc.clearColor.b, impl.desc.clearColor.a));
-    forEachGroup([&](u32 first, u32 count, const DrawItem& item) {
-        drawGroup(shadingPipeline(item), framebuffer, first, count, 1, kForwardAmbientOcclusion);
+    forEachGroup(sameShading, [&](u32 first, u32 count, const DrawItem& item) {
+        drawShadingGroup(first, count, item, 1);
         if (impl.desc.occlusionCulling)
         {
-            drawGroup(shadingPipeline(item), framebuffer, first, count, 2, kForwardAmbientOcclusion);
+            drawShadingGroup(first, count, item, 2);
         }
     });
     for (u32 batch = 0; batch < batchCount; ++batch)
@@ -2366,7 +2436,8 @@ void SceneRenderer::render(nvrhi::ICommandList* commandList, nvrhi::ITexture* co
     for (u32 i = culledCount; i < opaqueCount; ++i)
     {
         impl.stats.triangles +=
-            drawItem(shadingPipeline(itemAt(i), true), framebuffer, i, kForwardAmbientOcclusion);
+            drawItem(MaterialPipeline::Forward, materialFragment(itemAt(i).material->alphaMode), framebuffer,
+                     i, kForwardAmbientOcclusion);
     }
     // The sky after opaque geometry (covered pixels fail the depth test) and before blended geometry.
     if (drawBackground)
@@ -2388,27 +2459,28 @@ void SceneRenderer::render(nvrhi::ICommandList* commandList, nvrhi::ITexture* co
     for (u32 i = opaqueCount; i < visibleCount; ++i)
     {
         impl.stats.triangles +=
-            drawItem(impl.pipelines[1][itemAt(i).material->doubleSided ? 1 : 0], framebuffer, i, kForwardFog);
+            drawItem(MaterialPipeline::Forward, MaterialFragment::Blend, framebuffer, i, kForwardFog);
     }
     // Particles after the blended geometry, into the HDR colour so bright ones feed bloom.
     impl.particles.draw(commandList, impl.hdr, impl.depth, viewport, particleView);
     impl.stats.drawCalls += impl.particles.drawCalls();
     if (impl.wireframe)
     {
-        forEachGroup([&](u32 first, u32 count, const DrawItem& item) {
-            const u32 sided = item.material->doubleSided ? 1u : 0u;
-            auto* pipeline = bindless ? impl.bindlessWireframePipelines[sided].Get()
-                                      : impl.wireframePipelines[sided].Get();
-            drawGroup(pipeline, framebuffer, first, count, 1, 0);
+        forEachGroup(sameWireframe, [&](u32 first, u32 count, const DrawItem& item) {
+            nvrhi::IGraphicsPipeline* pipeline = impl.materialPipeline(
+                item.material->shader,
+                bindless ? MaterialPipeline::WireframeBindless : MaterialPipeline::Wireframe,
+                MaterialFragment::Engine, item.material->doubleSided);
+            drawGroup(pipeline, bindless, framebuffer, first, count, 1, 0);
             if (impl.desc.occlusionCulling)
             {
-                drawGroup(pipeline, framebuffer, first, count, 2, 0);
+                drawGroup(pipeline, bindless, framebuffer, first, count, 2, 0);
             }
         });
         for (u32 i = culledCount; i < opaqueCount; ++i)
         {
-            static_cast<void>(drawItem(impl.wireframePipelines[itemAt(i).material->doubleSided ? 1 : 0],
-                                       framebuffer, i, 0));
+            static_cast<void>(
+                drawItem(MaterialPipeline::Wireframe, MaterialFragment::Engine, framebuffer, i, 0));
         }
     }
     if (impl.ids && visibleCount > opaqueCount)
@@ -2418,8 +2490,8 @@ void SceneRenderer::render(nvrhi::ICommandList* commandList, nvrhi::ITexture* co
         commandList->copyTexture(impl.idDepth, nvrhi::TextureSlice(), impl.depth, nvrhi::TextureSlice());
         for (u32 i = opaqueCount; i < visibleCount; ++i)
         {
-            static_cast<void>(drawItem(impl.entityIdPipelines[itemAt(i).material->doubleSided ? 1 : 0],
-                                       impl.idFramebuffer, i, 0));
+            static_cast<void>(
+                drawItem(MaterialPipeline::EntityIds, MaterialFragment::Blend, impl.idFramebuffer, i, 0));
         }
     }
     commandList->endMarker();

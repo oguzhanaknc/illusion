@@ -178,7 +178,7 @@ void injectMain(uint3 id: SV_DispatchThreadID)
         const PointLightData light = g_view.points[i];
         const float3 toLight = light.positionRange.xyz - position;
         const float distanceSquared = max(dot(toLight, toLight), kMinLightDistanceSquared);
-        // The falloff of ForwardPbr.slang: inverse square, windowed to reach zero at the range.
+        // The falloff of illusion/MaterialPass.slang: inverse square, windowed to reach zero at the range.
         const float ratio = distanceSquared / (light.positionRange.w * light.positionRange.w);
         const float window = saturate(1.0 - ratio * ratio);
         float attenuation = window * window / distanceSquared;

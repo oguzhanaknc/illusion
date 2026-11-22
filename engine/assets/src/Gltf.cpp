@@ -24,6 +24,18 @@ namespace illusion
 namespace
 {
 
+// @p color, clamped to [0, 1], as RGBA8 with red in the lowest byte (MeshData::colors).
+u32 packColor(const Vec4& color) noexcept
+{
+    u32 packed = 0;
+    for (glm::length_t i = 0; i < 4; ++i)
+    {
+        const f32 channel = std::isnan(color[i]) ? 0.0f : std::clamp(color[i], 0.0f, 1.0f);
+        packed |= static_cast<u32>(std::lround(channel * 255.0f)) << (8 * i);
+    }
+    return packed;
+}
+
 // --- File access through the VirtualFileSystem -------------------------------------------------------------
 
 struct FileContext
@@ -271,6 +283,7 @@ private:
             const cgltf_accessor* normals = nullptr;
             const cgltf_accessor* tangents = nullptr;
             const cgltf_accessor* uvs = nullptr;
+            const cgltf_accessor* colors = nullptr;
             std::array<const cgltf_accessor*, 2> joints{};
             std::array<const cgltf_accessor*, 2> weights{};
             for (cgltf_size a = 0; a < primitive.attributes_count; ++a)
@@ -291,6 +304,12 @@ private:
                     if (attribute.index == 0)
                     {
                         uvs = attribute.data;
+                    }
+                    break;
+                case cgltf_attribute_type_color:
+                    if (attribute.index == 0)
+                    {
+                        colors = attribute.data;
                     }
                     break;
                 case cgltf_attribute_type_joints:
@@ -355,6 +374,23 @@ private:
                 for (cgltf_size v = 0; v < count; ++v)
                 {
                     vertices[v].uv = Vec2(scratch[v * 2], scratch[v * 2 + 1]);
+                }
+            }
+            // Colours are kept per vertex once any primitive has them; the others are white.
+            const bool hasColors = colors != nullptr && colors->count == count;
+            if (hasColors || !mesh.colors.empty())
+            {
+                mesh.colors.resize(mesh.vertices.size(), 0xFFFFFFFFu);
+                if (hasColors)
+                {
+                    const cgltf_size components = cgltf_num_components(colors->type);
+                    unpack(colors, components);
+                    for (cgltf_size v = 0; v < count; ++v)
+                    {
+                        const f32* c = scratch.get() + v * components;
+                        const Vec4 color(c[0], c[1], c[2], components == 4 ? c[3] : 1.0f);
+                        mesh.colors[baseVertex + v] = packColor(color);
+                    }
                 }
             }
             if (skinned && !readSkinVertices(joints, weights, count, skin->remap, skinStream))

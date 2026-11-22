@@ -4,6 +4,7 @@
 #include "Budget.hpp"
 
 #include <illusion/assets/Mesh.hpp>
+#include <illusion/assets/ShaderAsset.hpp>
 #include <illusion/core/Assert.hpp>
 #include <illusion/core/JobSystem.hpp>
 #include <illusion/ecs/World.hpp>
@@ -14,7 +15,15 @@
 #include <illusion/render/SceneRenderer.hpp>
 
 #include <memory>
+#include <optional>
+#include <span>
 #include <vector>
+
+namespace illusion::bench_shaders
+{
+// tests/data/shaders/Glow.shader, compiled at build time (benchmarks/CMakeLists.txt).
+std::span<const std::byte> glowShader() noexcept;
+} // namespace illusion::bench_shaders
 
 using namespace illusion;
 
@@ -144,6 +153,40 @@ ILL_BENCHMARK("render/10k-instances", 2'000.0)
     bench.batch(10'000).unit("instance").run("full frame, 10k cubes, 50 materials, 1280x720", [&] {
         scene.frame();
     });
+}
+
+ILL_BENCHMARK("render/material-shaders", 2'000.0)
+{
+    Scene scene;
+    const std::optional<ShaderAsset> glow = deserializeShader(bench_shaders::glowShader());
+    ILL_CHECK(glow.has_value(), "the embedded benchmark shader is invalid");
+    // 20 shaders (one source, but each its own pipelines), 50 materials of each.
+    std::vector<MaterialHandle> materials;
+    for (u32 s = 0; s < 20; ++s)
+    {
+        const ShaderHandle shader = scene.resources->createShader(*glow, "Benchmark shader");
+        ILL_CHECK(shader.index != 0, "cannot create the benchmark shader");
+        for (u32 m = 0; m < 50; ++m)
+        {
+            MaterialDesc material;
+            material.shader = shader;
+            const f32 hue = static_cast<f32>(s * 50 + m) / 1000.0f;
+            material.shaderParameters = {{"glowColor", {hue, 1.0f - hue, 0.5f, 0.0f}},
+                                         {"intensity", {0.5f, 0.0f, 0.0f, 0.0f}}};
+            materials.push_back(scene.resources->createMaterial(material));
+        }
+    }
+    const MeshHandle cube = scene.resources->createMesh(makeCube(0.5f), "Cube");
+    for (u32 i = 0; i < 10'000; ++i)
+    {
+        Transform t;
+        t.position = Vec3(static_cast<f32>(i % 100) - 50.0f, 0.0f, -static_cast<f32>(i / 100));
+        scene.world.create(t, RenderMesh{cube, 0, materials[i % materials.size()]});
+    }
+    scene.frame(); // builds the pipelines
+    bench.batch(10'000)
+        .unit("instance")
+        .run("full frame, 10k cubes, 1,000 materials over 20 shaders, 1280x720", [&] { scene.frame(); });
 }
 
 ILL_BENCHMARK("render/10k-lod-spheres", 2'000.0)

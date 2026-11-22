@@ -65,5 +65,8 @@ target_include_directories(illusion_gpu_benchmarks PRIVATE ${CMAKE_CURRENT_SOURC
 target_link_libraries(illusion_gpu_benchmarks PRIVATE illusion::render illusion::nanobench)
 target_compile_definitions(illusion_gpu_benchmarks PRIVATE ILLUSION_TEST_FONT="${ILLUSION_TEST_FONT}")
 illusion_configure_target(illusion_gpu_benchmarks)
+illusion_add_material_shaders(illusion_gpu_benchmarks
+    NAMESPACE illusion::bench_shaders
+    SHADERS glowShader ${PROJECT_SOURCE_DIR}/tests/data/shaders/Glow.shader game:/shaders/glow.shader)
 add_test(NAME gpu_benchmarks COMMAND illusion_gpu_benchmarks CONFIGURATIONS Release RelWithDebInfo)
 set_tests_properties(gpu_benchmarks PROPERTIES LABELS "gpu;benchmark" RUN_SERIAL TRUE TIMEOUT 600)

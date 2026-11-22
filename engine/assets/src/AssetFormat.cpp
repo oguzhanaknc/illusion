@@ -321,6 +321,7 @@ std::vector<std::byte> serializeModel(const ModelData& model)
         writer.writeVector(std::span<const SkinVertex>(mesh.skin));
         writer.writeVector(std::span<const Aabb>(mesh.jointBounds));
         writer.write(mesh.skeleton);
+        writer.writeVector(std::span<const u32>(mesh.colors));
     }
     writer.write(static_cast<u32>(model.images.size()));
     for (const Image& image : model.images)
@@ -391,7 +392,8 @@ std::optional<ModelData> deserializeModel(std::span<const std::byte> bytes)
         if (!reader.readVector(mesh.vertices) || !reader.readVector(mesh.indices) ||
             !reader.readVector(mesh.submeshes) || !reader.read(mesh.bounds) ||
             !reader.readVector(mesh.skin) || !reader.readVector(mesh.jointBounds) ||
-            !reader.read(mesh.skeleton))
+            !reader.read(mesh.skeleton) || !reader.readVector(mesh.colors) ||
+            (!mesh.colors.empty() && mesh.colors.size() != mesh.vertices.size()))
         {
             return std::nullopt;
         }

@@ -99,6 +99,43 @@ namespace @arg_NAMESPACE@
     target_include_directories(${target} PUBLIC "$<BUILD_INTERFACE:${out_dir}/include>")
 endfunction()
 
+# Material shaders (ADR 0063) compiled at build time by illusion_shaderc and embedded as cooked ShaderAssets.
+#
+# illusion_add_material_shaders(<target>
+#     NAMESPACE <c++ namespace>
+#     SHADERS <function> <source.shader> <virtual path> [<function> <source.shader> <virtual path> ...])
+#
+# Each shader defines `std::span<const std::byte> <namespace>::<function>() noexcept` in <target>, the bytes of
+# serializeShader() for deserializeShader(); declare it where it is used. Compile errors fail the build.
+function(illusion_add_material_shaders target)
+    cmake_parse_arguments(PARSE_ARGV 1 arg "" "NAMESPACE" "SHADERS")
+    list(LENGTH arg_SHADERS count)
+    math(EXPR remainder "${count} % 3")
+    if(NOT arg_NAMESPACE OR count EQUAL 0 OR NOT remainder EQUAL 0)
+        message(FATAL_ERROR "illusion_add_material_shaders: NAMESPACE and SHADERS <function> <source> <path> are required")
+    endif()
+    illusion_require_dependency(slang)
+    file(GLOB_RECURSE library CONFIGURE_DEPENDS "${ILLUSION_SHADER_LIBRARY_DIR}/*.slang")
+    math(EXPR last "${count} - 1")
+    foreach(index RANGE 0 ${last} 3)
+        math(EXPR i_source "${index} + 1")
+        math(EXPR i_path "${index} + 2")
+        list(GET arg_SHADERS ${index} function)
+        list(GET arg_SHADERS ${i_source} source)
+        list(GET arg_SHADERS ${i_path} virtual_path)
+        cmake_path(ABSOLUTE_PATH source BASE_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}" NORMALIZE)
+        set(cpp "${CMAKE_CURRENT_BINARY_DIR}/material_shaders_${target}/$<CONFIG>/${function}.cpp")
+        add_custom_command(
+            OUTPUT "${cpp}"
+            COMMAND illusion_shaderc "${ILLUSION_SLANGC}" "${ILLUSION_SHADER_LIBRARY_DIR}" "${source}"
+                    "${virtual_path}" "${arg_NAMESPACE}" "${function}" "${cpp}"
+            DEPENDS illusion_shaderc "${source}" ${library}
+            COMMENT "Compiling material shader ${virtual_path}"
+            VERBATIM)
+        target_sources(${target} PRIVATE "${cpp}")
+    endforeach()
+endfunction()
+
 # Installs the pinned slangc (without the parts that only CPU targets need) in slang/ and the shader library in
 # share/illusion/shaders under the prefix, with the install component <component>: the cooker (illusion_pack)
 # and the editor compile material shaders with them (ADR 0063).

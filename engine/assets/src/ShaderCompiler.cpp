@@ -731,6 +731,25 @@ std::string_view passDefine(ShaderPass pass) noexcept
     return kDefines[static_cast<usize>(pass)];
 }
 
+// Bytes of Parameters in a structured buffer (std430, the bindless material table): the fields' offsets are
+// those of the constant buffer, the size is rounded to the largest alignment of a field instead of 16.
+u32 structuredParameterBytes(const ShaderAsset& shader) noexcept
+{
+    u32 end = 0;
+    u32 alignment = 4;
+    for (const ShaderParameter& parameter : shader.parameters)
+    {
+        const u32 components = shaderParameterComponents(parameter.type);
+        end = std::max(end, parameter.offset + 4 * components);
+        alignment = std::max(alignment, components == 1 ? 4u : (components == 2 ? 8u : 16u));
+    }
+    for (const ShaderTexture& texture : shader.textures)
+    {
+        end = std::max(end, texture.offset + 4);
+    }
+    return (end + alignment - 1) / alignment * alignment;
+}
+
 // True if the probe of worldOffset() failed only because the shader has none.
 bool missingWorldOffset(const std::vector<ShaderDiagnostic>& diagnostics)
 {
@@ -854,12 +873,13 @@ Expected<ShaderCompiler, std::string> ShaderCompiler::create(ShaderCompilerDesc 
     }
     ShaderCompiler compiler;
 
-    // The library's files sorted by path, so the hash is the same on every machine.
+    // The library's Slang files sorted by path, so the hash is the same on every machine and in the SDK,
+    // which installs only them.
     std::vector<std::filesystem::path> files;
     for (std::filesystem::recursive_directory_iterator it(desc.library, code), end; !code && it != end;
          it.increment(code))
     {
-        if (it->is_regular_file(code))
+        if (it->is_regular_file(code) && it->path().extension() == ".slang")
         {
             files.push_back(it->path().lexically_relative(desc.library));
         }
@@ -1006,6 +1026,8 @@ ShaderCompileResult ShaderCompiler::compile(std::string_view virtualPath, std::s
     }
     const std::string shadingModel =
         std::format("-DILLUSION_SHADING_MODEL={}", static_cast<u32>(shader.shadingModel));
+    const std::string padding = std::format(
+        "-DILLUSION_PARAMETER_PADDING={}", (kMaxShaderParameterBytes - structuredParameterBytes(shader)) / 4);
     std::vector<std::filesystem::path> outputs(keys.size());
     bool compiled = true;
     for (usize first = 0; first < keys.size(); first += m_desc.maxProcesses)
@@ -1035,6 +1057,7 @@ ShaderCompileResult ShaderCompiler::compile(std::string_view virtualPath, std::s
                 arguments.emplace_back("-DILLUSION_MATERIAL_PARAMETERS=1");
             }
             arguments.push_back(shadingModel);
+            arguments.push_back(padding);
             for (const std::string_view argument :
                  {std::string_view("-entry"), kShaderVertexEntry, std::string_view("-stage"),
                   std::string_view("vertex"), std::string_view("-entry"), kShaderFragmentEntry,

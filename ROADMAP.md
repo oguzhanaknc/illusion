@@ -1500,11 +1500,23 @@ Today games can only set the parameters of the built-in PBR material.
   errors with file/line/column; the pinned `slangc` in the editor CPack component and the SDK. Done: compile,
   cache and error tests on small shaders, a malformed shader never crashes the cooker, export fails with the
   compiler's message.
-- MAT-2 (`implementer`): The renderer. The standard PBR material rewritten as `builtin:/shader/standard` on
+- ✅ MAT-2 (`implementer`): The renderer. The standard PBR material rewritten as `builtin:/shader/standard` on
   the surface API (golden images unchanged), pipelines per (shader, variant, state) built lazily and cached,
   per-material parameter buffers on the bindless path, `worldOffset` in prepass, shadows and motion vectors,
-  the fallback/error material, hot reload swapping pipelines. Done: GPU goldens of a custom emissive and a
-  wind-offset shader, zero validation errors, benchmark of 1,000 materials over 20 shaders.
+  the fallback/error material, hot reload swapping pipelines. Done: `builtin:/shader/standard` and
+  `builtin:/shader/error` compiled at build time by `illusion_shaderc` (`illusion_add_material_shaders()`);
+  `RenderResources::createShader()`/`updateShader()`/`releaseShader()`, `MaterialDesc::shader` with parameters
+  and textures by name, 272-byte material table records in the shader's layout; `SceneRenderer` pipelines per
+  shader, pass, alpha mode and sides built on first draw (`RenderStats::pipelinesBuilt`), rebuilt on a new
+  shader revision; glTF vertex colours (`MeshData::colors`, model format 7) as a second vertex stream; GPU
+  goldens `material-glow` and `material-sway`, tests of the bound and bindless paths, alpha-masked custom
+  shaders, `worldOffset()` in depth, ids, shadows and motion vectors, hot reload keeping parameters by name,
+  released shaders and the error checker, all with zero validation errors; benchmark
+  `render/material-shaders` (10k cubes, 1,000 materials over 20 shaders). Open: `.material` files naming a
+  shader and the editor recompiling changed `.shader` files on a background thread (MAT-4 wires both to
+  `updateShader()`); `SurfaceInput.customData` stays zero until `MeshRenderer` carries it; in the bindless
+  path, alpha-masked and cross-fading batches take the bound prepass per Material (no bindless prepass
+  variant).
 - MAT-3 (`implementer`): Shading models `Unlit`, `Subsurface`, `TwoSidedFoliage`, `ClearCoat` in the
   lighting code. Done: a golden per model, the tech demo foliage on `TwoSidedFoliage` with unchanged images.
 - MAT-4 (`mechanic`): Editor and documentation. `.material` `shader` and typed parameters in the Inspector,

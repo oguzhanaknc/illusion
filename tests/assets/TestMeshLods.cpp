@@ -399,3 +399,27 @@ TEST_CASE("imported models get levels of detail as their import settings say")
         FileError::None);
     CHECK(lodCount() == 0);
 }
+
+TEST_CASE("levels of detail keep vertex colours parallel to the vertices")
+{
+    MeshData sphere = makeSphere(1.0f, 48, 24);
+    sphere.colors.assign(sphere.vertices.size(), 0xFF00FF00u);
+    generateLods(sphere);
+    CHECK(sphere.colors.size() == sphere.vertices.size());
+
+    // Thinned foliage cards copy the colour of the vertex they enlarge.
+    MeshData foliage = cardFoliage(2000);
+    for (usize v = 0; v < foliage.vertices.size(); ++v)
+    {
+        foliage.colors.push_back(static_cast<u32>(v));
+    }
+    const usize fullVertices = foliage.vertices.size();
+    generateLods(foliage, MeshLodSettings{.maxError = 0.5f});
+    REQUIRE(foliage.colors.size() == foliage.vertices.size());
+    REQUIRE(foliage.vertices.size() > fullVertices);
+    CHECK(foliage.colors[fullVertices] < fullVertices);
+
+    clearLods(foliage);
+    CHECK(foliage.vertices.size() == fullVertices);
+    CHECK(foliage.colors.size() == fullVertices);
+}
