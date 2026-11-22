@@ -41,6 +41,7 @@
 #include <map>
 #include <memory>
 #include <optional>
+#include <sstream>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -195,7 +196,9 @@ inline void installAnimationAssets(editor::EditorContext& editor)
     {
         std::ifstream in(utf8Path(ILLUSION_SAMPLES_DIR) / "showcase" / "assets" / file[0], std::ios::binary);
         REQUIRE(in.good());
-        const std::string text((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
+        std::ostringstream buffer;
+        buffer << in.rdbuf();
+        const std::string text = buffer.str();
         JsonMutDocument doc;
         JsonMutValue params = doc.makeObject();
         params.add("path", doc.makeString(file[1]));
