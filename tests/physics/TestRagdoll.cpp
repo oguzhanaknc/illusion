@@ -15,7 +15,9 @@
 #include <doctest/doctest.h>
 
 #include <algorithm>
+#include <array>
 #include <cmath>
+#include <span>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -240,7 +242,11 @@ TEST_CASE("a .ragdoll profile that cannot be used names the JSON path of the pro
 TEST_CASE("a profile made from the skeleton fits a capsule along each bone and skips small joints")
 {
     const Skeleton skeleton = figure();
-    std::vector<Aabb> bounds(skeleton.joints.size());
+    // A fixed array rather than a vector: GCC 13 -O3 reports a false null dereference through vector indexing
+    // inside the lambda.
+    std::array<Aabb, kMaxJoints> storage{};
+    REQUIRE(skeleton.joints.size() <= storage.size());
+    const std::span<Aabb> bounds(storage.data(), skeleton.joints.size());
     const auto box = [&](usize joint, Vec3 low, Vec3 high) {
         bounds[joint].expand(low);
         bounds[joint].expand(high);
