@@ -18,10 +18,11 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from make_assets import BOWL_RADIUS, CLEARING_RADIUS, TERRAIN_SIZE, terrain_height  # noqa: E402
+from make_assets import BOWL_RADIUS, CLEARING_RADIUS, CREATURE_WALK_SPEED, TERRAIN_SIZE, terrain_height  # noqa: E402
 
 PROJECT = Path(__file__).resolve().parent.parent
 EXTERNAL = "assets:/external"
+FOREST_SCENE = "assets:/scenes/forest.scene"
 PLAYER_START = (0.0, 7.0)
 FAR_FIRS = BOWL_RADIUS + 6.0  # metres from the centre
 SHADOWED_FIRS = 28.0
@@ -646,7 +647,7 @@ def build():
                                                  "attenuation": "None", "spatial": False, "loop": True, "volume": 0.35,
                                                  "playOnStart": False}})
 
-    call("scene.save_as", {"path": "assets:/scenes/forest.scene", "overwrite": True})
+    call("scene.save_as", {"path": FOREST_SCENE, "overwrite": True})
 
 
 FONT = "assets:/fonts/Roboto-Regular.ttf"
@@ -733,14 +734,60 @@ def build_ui():
                            "value": {"tint": [0.95, 0.97, 0.92, 1.0]}})
     button("Language", "/Pause Menu/Panel", "techdemo.menu.language")
     button("Quit", "/Pause Menu/Panel", "techdemo.menu.quit")
+    # Shown by the module while the creature chases the player; made last so that the other ids stay.
+    entity("Creature Alert", {"illusion.UiElement": {"placement": placement([0.5, 1], [0.5, 1], [-480, -150], [480, -96])},
+                              "illusion.UiText": text("techdemo.hud.creatureAlert", 36, [1.0, 0.55, 0.4, 1.0], "Center")},
+           "/HUD")
+    call("entity.set_enabled", {"entity": "/HUD/Creature Alert", "enabled": False})
     call("entity.set_enabled", {"entity": "/Pause Menu", "enabled": False})
 
     call("scene.save_as", {"path": UI_SCENE, "overwrite": True})
 
 
+DEN = (-6.0, -6.0)  # where the creature lives, at the edge of the clearing behind the campfire
+CREATURE_NAVMESH = "assets:/navigation/clearing.navmesh"
+FIRE_AREA = 1  # the area type of the ground around the campfire
+FIRE_COST = 25.0  # how much the creature would rather walk around the fire than over it
+
+
+def build_creature():
+    """The creature, added to the forest scene after the UI so that the ids of everything else stay: a navmesh
+    over the clearing (baked into CREATURE_NAVMESH) with a costly area around the campfire, and a creature with
+    a NavAgent, an AiPerception and a BehaviorAgent that wanders around its den. The player becomes something it
+    perceives."""
+    call("scene.open", {"path": FOREST_SCENE, "discardChanges": True})
+    fur = material("Creature Fur", {"baseColorFactor": [0.2, 0.17, 0.15, 1.0], "metallicFactor": 0.0,
+                                    "roughnessFactor": 0.9})
+    call("component.add", {"entity": "/Player", "type": "illusion.AiStimulus", "value": {"offset": [0.0, 1.2, 0.0]}})
+    costs = [1.0] * 16
+    costs[FIRE_AREA] = FIRE_COST
+    entity("Clearing Navigation", {"illusion.Transform": {"position": [0.0, 1.0, 0.0]},
+                                   "illusion.NavMeshSurface": {"size": [40.0, 12.0, 40.0], "agentRadius": 0.4,
+                                                               "agentHeight": 1.0, "build": {"cellSize": 0.25},
+                                                               "areaCosts": costs}})
+    entity("Campfire Area", {"illusion.Transform": {"position": [0.0, 0.0, 0.0]},
+                             "illusion.NavArea": {"area": FIRE_AREA, "volume": True, "size": [4.5, 2.0, 4.5]}})
+    call("nav.bake", {"surface": "/Clearing Navigation", "path": CREATURE_NAVMESH})
+    home = ground(DEN[0], DEN[1])
+    model = "assets:/models/creature.gltf"
+    entity("Creature", {"illusion.Transform": {"position": home, "rotation": r3(yaw_quaternion(math.pi))},
+                        "illusion.MeshRenderer": {"mesh": f"{model}#mesh/0", "material": fur},
+                        "illusion.Animator": {"skeleton": f"{model}#skin/0", "graph": "assets:/animations/creature.animgraph"},
+                        "illusion.CharacterController": {"radius": 0.3, "height": 0.9, "stepHeight": 0.3, "mass": 40},
+                        "illusion.NavAgent": {"radius": 0.4, "height": 1.0, "maxSpeed": CREATURE_WALK_SPEED,
+                                              "maxAcceleration": 6.0, "turnSpeed": 5.0, "stoppingDistance": 0.3,
+                                              "speedParameter": "speed"},
+                        "illusion.AiPerception": {"sightRadius": 9.0, "eyeHeight": 0.75, "memorySeconds": 5.0,
+                                                  "targetKey": "target", "positionKey": "lastSeen"},
+                        "illusion.BehaviorAgent": {"tree": "assets:/ai/creature.behavior", "tickInterval": 0.1,
+                                                   "blackboard": [{"key": "home", "vector": home}]}})
+    call("scene.save", {})
+
+
 def main():
     build()
     build_ui()
+    build_creature()
     header = {"comment": "Builds assets:/scenes/forest.scene and the game UI assets:/scenes/ui.scene of the tech demo "
                          "through editor commands. Generated by tools/make_scene.py: edit that and run it again "
                          "instead of editing this file."}

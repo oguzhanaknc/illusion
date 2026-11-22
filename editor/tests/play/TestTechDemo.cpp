@@ -1,17 +1,28 @@
-// The tech demo's game UI (samples/techdemo): its module instantiates assets:/scenes/ui.scene, a HUD and a
-// modal pause menu, and drives them through UiService. The forest scene needs downloaded assets, so these
-// tests run the module in a project that has only the committed UI scene, string tables and font.
+// The tech demo (samples/techdemo). Its module instantiates assets:/scenes/ui.scene, a HUD and a modal pause
+// menu, and drives them through UiService; most tests run it in a project that has only the committed UI
+// scene, string tables and font. The creature's tests open the forest scene with the committed assets only:
+// the trees, rocks and plants of the download are missing, so their colliders are too (the baked navmesh
+// still avoids them).
 
 #include "core/EditorCoreTestSupport.hpp"
 
+#include <illusion/ai/AiComponents.hpp>
+#include <illusion/animation/AnimationComponents.hpp>
+#include <illusion/assets/AssetStreamer.hpp>
+#include <illusion/audio/AudioComponents.hpp>
 #include <illusion/core/JobSystem.hpp>
 #include <illusion/ecs/Name.hpp>
+#include <illusion/ecs/Transform.hpp>
 #include <illusion/editor/play/PlaySession.hpp>
+#include <illusion/nav/NavComponents.hpp>
+#include <illusion/physics/PhysicsComponents.hpp>
+#include <illusion/render/Components.hpp>
 #include <illusion/runtime/GameSession.hpp>
 #include <illusion/save/SaveComponents.hpp>
 #include <illusion/ui/UiComponents.hpp>
 
 #include <filesystem>
+#include <optional>
 #include <string>
 #include <string_view>
 
@@ -262,4 +273,207 @@ TEST_CASE("the tech demo's pause menu saves the game and loads it back")
     CHECK(f.markerX() == doctest::Approx(1.0));
     CHECK(f.shown("/Pause Menu/Panel/Resume"));
     CHECK(f.play->game()->ui().statistics().missingKeys == 0);
+}
+
+namespace
+{
+
+constexpr u32 kSteps = 600;       // ten seconds of fixed steps
+constexpr u32 kWanderSteps = 180; // before the scripted player sets off
+constexpr f32 kReach = 2.0f;      // metres between the two that count as caught up (moveTo acceptance 1.6)
+
+// The forest scene with the tech demo module in fixed-step Play mode, in a project with every committed asset
+// of the tech demo.
+struct ForestFixture
+{
+    ForestFixture()
+    {
+        reflectRenderComponents();
+        reflectAudioComponents();
+        registerAnimationComponents(ComponentRegistry::instance());
+        registerSaveComponents();
+        const std::filesystem::path source = utf8Path(ILLUSION_SAMPLES_DIR) / "techdemo" / "assets";
+        const std::filesystem::path assets = base.directory.path / "project" / "assets";
+        for (const std::filesystem::directory_entry& entry : std::filesystem::directory_iterator(source))
+        {
+            if (entry.is_directory() && entry.path().filename() != "external")
+            {
+                std::filesystem::copy(entry.path(), assets / entry.path().filename(),
+                                      std::filesystem::copy_options::recursive |
+                                          std::filesystem::copy_options::overwrite_existing);
+            }
+        }
+        ok(editor(), "scene.open", R"({"path":"assets:/scenes/forest.scene"})");
+        streamer =
+            std::make_unique<AssetStreamer>(editor().files(), jobs, AssetStreamerDesc{.cacheMount = ""});
+        play = std::make_unique<PlaySession>(
+            *base.editor,
+            PlaySessionDesc{.jobs = &jobs, .streamer = streamer.get(), .audioOutput = AudioOutput::Offline});
+        const Expected<std::string, CommandError> loaded = play->loadModule(TECHDEMO_MODULE);
+        REQUIRE_MESSAGE(loaded.hasValue(), (loaded ? std::string() : loaded.error().message));
+        ok(editor(), "play.start", R"({"fixedStep":true})");
+        creature = named("Creature");
+        player = named("Player");
+        REQUIRE(world().isAlive(creature));
+        REQUIRE(world().isAlive(player));
+    }
+
+    ~ForestFixture()
+    {
+        play->stop();
+        (void)play->unloadModule("techdemo");
+    }
+
+    ForestFixture(const ForestFixture&) = delete;
+    ForestFixture& operator=(const ForestFixture&) = delete;
+
+    EditorContext& editor() { return *base.editor; }
+    World& world() { return play->game()->world(); }
+
+    void step(u32 steps = 1)
+    {
+        ok(editor(), "play.step", std::format(R"({{"steps":{}}})", steps));
+        stepped += steps;
+    }
+
+    void key(std::string_view name, bool down)
+    {
+        ok(editor(), "input.inject",
+           std::format(R"({{"keys":[{{"key":"{}","down":{}}}]}})", name, down ? "true" : "false"));
+    }
+
+    Entity named(std::string_view name)
+    {
+        Entity found{};
+        world().query<const Name>().each([&](Entity entity, const Name& entityName) {
+            if (entityName.value == name)
+            {
+                found = entity;
+            }
+        });
+        return found;
+    }
+
+    Vec3 position(Entity entity) { return world().get<Transform>(entity).position; }
+
+    // The perception's target of the creature: the player once it has noticed them.
+    Entity target()
+    {
+        const AiAgentState* state = world().tryGet<AiAgentState>(creature);
+        return state != nullptr ? state->target : Entity{};
+    }
+
+    bool shown(std::string_view path)
+    {
+        const JsonDocument layout = ok(editor(), "gameui.layout", std::format(R"({{"entity":"{}"}})", path));
+        const JsonValue elements = layout.root().find("elements");
+        return elements.size() > 0 && elements[0].find("visible").asBool().value_or(false);
+    }
+
+    EditorFixture base;
+    JobSystem jobs{JobSystemDesc{2, 1024}};
+    std::unique_ptr<AssetStreamer> streamer;
+    std::unique_ptr<PlaySession> play;
+    Entity creature{};
+    Entity player{};
+    u32 stepped = 0;
+};
+
+f32 flatDistance(const Vec3& a, const Vec3& b)
+{
+    return glm::length(Vec2(a.x - b.x, a.z - b.z));
+}
+
+// What one run of the creature's scenario saw.
+struct CreatureRun
+{
+    f32 wandered = 0.0f;          // metres from the den after kWanderSteps
+    std::optional<u32> noticed{}; // the step at which it chose the player as its target
+    std::optional<u32> reached{}; // the step at which it was within kReach of the player
+    bool alertShown = false;      // the HUD's alert showed when it reached the player
+    Vec3 creatureEnd{0.0f};
+    Vec3 playerEnd{0.0f};
+};
+
+// The creature wanders; the player walks towards its den (W and A: forward and left, away from the fire) and
+// stops once it has noticed them; it runs up to the player. Ten seconds of fixed steps in all.
+CreatureRun runCreature()
+{
+    ForestFixture f;
+    CreatureRun run;
+    const Vec3 den = f.position(f.creature);
+    f.step(kWanderSteps);
+    run.wandered = flatDistance(f.position(f.creature), den);
+    CHECK(f.target().isNull());
+    f.key("W", true);
+    f.key("A", true);
+    while (f.stepped < kSteps && !run.noticed)
+    {
+        f.step();
+        if (f.target() == f.player)
+        {
+            run.noticed = f.stepped;
+        }
+    }
+    f.key("W", false);
+    f.key("A", false);
+    while (f.stepped < kSteps && !run.reached)
+    {
+        f.step();
+        if (flatDistance(f.position(f.creature), f.position(f.player)) <= kReach)
+        {
+            run.reached = f.stepped;
+            run.alertShown = f.shown("/HUD/Creature Alert");
+        }
+    }
+    if (f.stepped < kSteps)
+    {
+        f.step(kSteps - f.stepped);
+    }
+    run.creatureEnd = f.position(f.creature);
+    run.playerEnd = f.position(f.player);
+    return run;
+}
+
+} // namespace
+
+TEST_CASE("the tech demo's creature wanders, notices the player walking up and reaches them, the same twice")
+{
+    const CreatureRun first = runCreature();
+    CHECK(first.wandered > 0.5f);
+    REQUIRE(first.noticed.has_value());
+    REQUIRE(first.reached.has_value());
+    CHECK(*first.reached > *first.noticed);
+    CHECK(first.alertShown);
+
+    const CreatureRun second = runCreature();
+    CHECK(second.wandered == first.wandered);
+    CHECK(second.noticed == first.noticed);
+    CHECK(second.reached == first.reached);
+    CHECK(second.creatureEnd == first.creatureEnd);
+    CHECK(second.playerEnd == first.playerEnd);
+}
+
+TEST_CASE("the tech demo's pause menu stops the creature and resuming lets it go on")
+{
+    ForestFixture f;
+    f.step(60);
+    REQUIRE(f.world().get<BehaviorAgent>(f.creature).enabled);
+    f.key("Escape", true);
+    f.step();
+    f.key("Escape", false);
+    f.step(2);
+    CHECK_FALSE(f.world().get<BehaviorAgent>(f.creature).enabled);
+    CHECK_FALSE(f.world().get<NavAgent>(f.creature).destination.has_value());
+    // It comes to a halt, then stands still while the menu shows.
+    f.step(60);
+    const Vec3 halted = f.position(f.creature);
+    f.step(120);
+    CHECK(flatDistance(f.position(f.creature), halted) < 0.01f);
+
+    f.key("Escape", true);
+    f.step();
+    f.key("Escape", false);
+    f.step(2);
+    CHECK(f.world().get<BehaviorAgent>(f.creature).enabled);
 }

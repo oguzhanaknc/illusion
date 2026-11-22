@@ -1,0 +1,115 @@
+{
+  "format": "illusion.behavior",
+  "version": 1,
+  "blackboard": [
+    {
+      "name": "target",
+      "type": "Entity"
+    },
+    {
+      "name": "lastSeen",
+      "type": "Vector3"
+    },
+    {
+      "name": "home",
+      "type": "Vector3"
+    }
+  ],
+  "root": {
+    "name": "creature",
+    "selector": [
+      {
+        "name": "chase",
+        "guard": {
+          "key": "target",
+          "compare": "IsSet",
+          "abort": "LowerPriority",
+          "child": {
+            "sequence": [
+              {
+                "name": "run to the player",
+                "moveTo": {
+                  "key": "target",
+                  "acceptance": 1.6
+                }
+              },
+              {
+                "name": "growl",
+                "timeLimit": {
+                  "seconds": 1,
+                  "child": {
+                    "action": "growl"
+                  }
+                }
+              },
+              {
+                "name": "watch",
+                "wait": {
+                  "seconds": 1.5
+                }
+              }
+            ]
+          }
+        }
+      },
+      {
+        "name": "return",
+        "guard": {
+          "key": "lastSeen",
+          "compare": "IsSet",
+          "abort": "Self",
+          "child": {
+            "sequence": [
+              {
+                "name": "search",
+                "moveTo": {
+                  "key": "lastSeen",
+                  "acceptance": 1
+                }
+              },
+              {
+                "name": "sniff",
+                "wait": {
+                  "seconds": 2,
+                  "deviation": 0.5
+                }
+              },
+              {
+                "name": "go home",
+                "moveTo": {
+                  "key": "home",
+                  "acceptance": 1.5
+                }
+              },
+              {
+                "setValue": {
+                  "key": "lastSeen",
+                  "value": null
+                }
+              }
+            ]
+          }
+        }
+      },
+      {
+        "name": "wander",
+        "sequence": [
+          {
+            "name": "roam",
+            "wander": {
+              "key": "home",
+              "radius": 4
+            }
+          },
+          {
+            "name": "rest",
+            "wait": {
+              "seconds": 2.5,
+              "deviation": 1.5
+            }
+          }
+        ]
+      }
+    ]
+  }
+}

@@ -1,5 +1,11 @@
 #include "rpc/RpcTestSupport.hpp"
 
+#include <filesystem>
+#include <memory>
+#include <optional>
+#include <string>
+#include <utility>
+
 using namespace illusion;
 using namespace illusion::editor;
 using namespace illusion::editor::rpc;
@@ -32,6 +38,40 @@ JsonDocument callOn(RpcHarness& rpc, RpcPeer& peer, std::string_view method, std
 Expected<NoResult, CommandError> ping(CommandContext&, const NoParams&)
 {
     return NoResult{};
+}
+
+// Waits one frame, then writes a file through a step with its own options, as nav.bake sets the data of a
+// surface.
+class LateStepTask final : public CommandTask<NoResult>
+{
+public:
+    Expected<std::optional<NoResult>, CommandError> update(CommandContext& context, CommandProgress&) override
+    {
+        if (!std::exchange(m_waited, true))
+        {
+            return std::optional<NoResult>{};
+        }
+        CommandOptions options;
+        options.origin = context.options().origin;
+        options.caller = context.options().caller;
+        options.gate = context.options().gate;
+        const JsonDocument params = test::parseJson(R"({"path":"assets:/late.txt","text":"x"})");
+        Expected<std::string, CommandError> written =
+            context.editor().executeStep("project.file_write", params.root(), options);
+        if (!written)
+        {
+            return unexpected(std::move(written).error());
+        }
+        return std::optional<NoResult>(NoResult{});
+    }
+
+private:
+    bool m_waited = false;
+};
+
+Expected<std::unique_ptr<CommandTask<NoResult>>, CommandError> lateStep(CommandContext&, const NoParams&)
+{
+    return std::unique_ptr<CommandTask<NoResult>>(std::make_unique<LateStepTask>());
 }
 
 } // namespace
@@ -163,4 +203,21 @@ TEST_CASE("commands registered later become callable after commands.changed")
     const JsonDocument events = rpc.call("editor.poll_events");
     REQUIRE(events.root().pointer("/result/events").size() == 1);
     CHECK(events.root().pointer("/result/events/0/topic").asString() == "commands.changed");
+}
+
+TEST_CASE("the steps of an async command obey the permission mode in its later frames")
+{
+    RpcServerOptions ask;
+    ask.permissions = PermissionMode::Ask;
+    RpcHarness rpc(ask);
+    rpc.fixture.editor->commands().addAsync<&lateStep>(CommandInfo{
+        .name = "test.late_step",
+        .agentSummary = "Writes a file one frame later. Example: {}.",
+        .category = "Test",
+        .flags = {.readOnly = true},
+    });
+    rpc.fixture.editor->endFrame(0.0);
+    const JsonDocument denied = rpc.call("test.late_step");
+    CHECK_MESSAGE(codeOf(denied) == 1001, denied.root().dump());
+    CHECK_FALSE(std::filesystem::exists(rpc.fixture.directory.path / "project" / "assets" / "late.txt"));
 }

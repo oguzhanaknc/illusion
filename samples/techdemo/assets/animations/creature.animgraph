@@ -1,0 +1,38 @@
+{
+  "format": "illusion.animgraph",
+  "version": 1,
+  "parameters": [
+    {
+      "name": "speed",
+      "type": "Float"
+    }
+  ],
+  "layers": [
+    {
+      "name": "base",
+      "entry": "locomotion",
+      "states": [
+        {
+          "name": "locomotion",
+          "blend1d": {
+            "parameter": "speed",
+            "points": [
+              {
+                "value": 0,
+                "clip": "assets:/models/creature.gltf#animation/idle"
+              },
+              {
+                "value": 1.4,
+                "clip": "assets:/models/creature.gltf#animation/walk"
+              },
+              {
+                "value": 4.2,
+                "clip": "assets:/models/creature.gltf#animation/run"
+              }
+            ]
+          }
+        }
+      ]
+    }
+  ]
+}

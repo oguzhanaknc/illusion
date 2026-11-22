@@ -1282,7 +1282,7 @@ Nothing of it exists yet: glTF skins and animations are skipped on import and th
   `animation.*` commands (MCP tools), skeleton debug drawing; the tech demo gets an animated creature;
   documentation (EN/TR)
 
-## NAV — Navigation and AI
+## NAV — Navigation and AI ✅
 
 After ANIM. Designed in ADR 0062: tiled Recast navmeshes (Recast Navigation v1.6.0, private to `engine/nav`)
 baked from the colliders inside a `NavMeshSurface` by one pure bake function, in the editor into `.navmesh`
@@ -1293,7 +1293,7 @@ typed blackboards and named actions that modules poll; sight and hearing percept
 `AiService`. Two libraries: `engine/nav` (`illusion::nav`) and `engine/ai` (`illusion::ai`); the public
 headers are in their `include/` directories.
 
-- NAV-1: Navmeshes and crowds. Five work packages:
+- ✅ NAV-1: Navmeshes and crowds. Five work packages:
 - ✅ NAV-1a (`implementer`): Dependency and bake. Recast Navigation v1.6.0 in `cmake/Dependencies.cmake`
   (exact URL and SHA-256; our own static targets of Recast, Detour, DetourCrowd and DebugUtils with
   `DT_POLYREF64`, private to `illusion::nav`), `THIRD_PARTY_NOTICES.md`; the library `engine/nav` with
@@ -1409,7 +1409,7 @@ headers are in their `include/` directories.
   `illusion_tutorial_creature_module` built by `ExtractCppBlocks`, its tree `creature.behavior` parsed by the same
   test); `CHANGELOG.md`. Open: a GPU golden image of the perception view; `ai.*` act on the play World only; the
   `.navmesh` kind of the Asset Browser and the Inspector's Bake button (NAV-1e).
-- NAV-3 (`implementer`): The tech demo creature. A `NavMeshSurface` over the clearing baked by `build.jsonl`
+- ✅ NAV-3 (`implementer`): The tech demo creature. A `NavMeshSurface` over the clearing baked by `build.jsonl`
   (`nav.bake`, the `.navmesh` committed), a creature (the ANIM-4 creature, or until it lands a simple rigged
   model from `make_assets.py`) with a `NavAgent` (Character drive, `speedParameter` into its graph), an
   `AiPerception` and a `BehaviorAgent` whose tree wanders around its den, follows the player it sees or
@@ -1417,6 +1417,21 @@ headers are in their `include/` directories.
   and returns home when it loses the player; the pause menu stops it. Done: `TestTechDemo.cpp` runs the
   module on the scene for 600 fixed steps and sees the creature wander, notice a scripted player and reach
   it, with the same result twice; the techdemo manual page (EN/TR) and its README describe the creature.
+  Done: `make_assets.py` writes the creature (`creature.gltf`: 13 joints of boxes, clips `idle`, `walk`, `run`),
+  `creature.animgraph` (a 1D blend by `speed` at 0, 1.4 and 4.2 m/s) and `creature.behavior` (chase and the
+  action `growl`, return: search then go home, wander around `home`); `make_scene.py` adds after the UI (every
+  other id stays) the Player's `AiStimulus`, *Clearing Navigation* (40 x 40 m, `nav.bake` into
+  `assets/navigation/clearing.navmesh`), *Campfire Area* (area 1, cost 25) and *Creature* (`NavAgent` with the
+  Character drive and `speedParameter`, `AiPerception`, `BehaviorAgent` with `home`), and to `ui.scene` the
+  hidden HUD line *Creature Alert* (`techdemo.hud.creatureAlert`, EN/TR); the module (`USES ai nav`) reports
+  footsteps as noises (7 m walking, 15 m running), sets the walk or run speed, answers `growl`, shows the alert
+  while it chases, and holds the tree and the navigation until the ground exists and while the pause menu
+  shows; tests in `editor/tests/play/TestTechDemo.cpp` (600 fixed steps twice: wanders, notices at step 244,
+  reaches at 363, identical; the pause menu stops it) and `tools/test_tools.py`; the techdemo manual page and
+  README. Fixed on the way: async commands over RPC kept a pointer to a freed `PermissionGate`, so `nav.bake`
+  crashed the editor (regression test in `editor/tests/rpc/TestRpcAsync.cpp`). Goldens unchanged (the alert is
+  hidden in the pause-menu image). Open: the creature is not `Saved` (a load restarts nothing of it); its
+  perception's memory keeps running while the game is paused; the ANIM-4 creature may replace the box model.
 - NAV (scope): navigation meshes baked from colliders and walkable surfaces with Recast (zlib), in the
   editor and at run time for changing levels, tiled for large worlds; path queries and crowds with Detour on
   the Job System; off-mesh links (jumps, ladders)

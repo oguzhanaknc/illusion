@@ -9,6 +9,7 @@
     "techdemo.hud.title": "Forest Clearing",
     "techdemo.hud.menuHint": "Menu",
     "techdemo.hud.frameTime": "{fps} FPS   {ms} ms",
+    "techdemo.hud.creatureAlert": "Something has picked up your trail",
     "techdemo.menu.title": "Paused",
     "techdemo.menu.resume": "Resume",
     "techdemo.menu.save": "Save game",

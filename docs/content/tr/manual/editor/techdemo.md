@@ -3,9 +3,10 @@
 `samples/techdemo`, gündüzden geceye dönen bir köknar ormanındaki açıklıkta birinci şahıs bir yürüyüştür:
 köknarlar, çimenler ve eğreltiler rüzgarda eğilir, alacakaranlıkta alçalan güneş gövdelerin arasından parlar,
 ateş böcekleri çıkar, bir kamp ateşi çıtırdar ve ağaçları aydınlatır, neon halkalar uğuldar, ışıldayan küreler
-ittiğinizde yuvarlanır. [SkyAtmosphere](../rendering.md#gece-ve-gunduz), [Wind](../rendering.md#ruzgar),
-[GPU parçacıkları](../particles.md#gpu-simulasyonu), fizik, ses ve [fareyle bakış](../actions.md#fareyle-bakis)
-bir araya gelir.
+ittiğinizde yuvarlanır, açıklığın kenarında yaşayan bir yaratık sizi gördüğünde ya da duyduğunda peşinize
+düşer. [SkyAtmosphere](../rendering.md#gece-ve-gunduz), [Wind](../rendering.md#ruzgar),
+[GPU parçacıkları](../particles.md#gpu-simulasyonu), fizik, ses, [fareyle bakış](../actions.md#fareyle-bakis),
+navigasyon, yapay zeka ve animasyon bir araya gelir.
 
 ![Sabah on birde açıklık](../../images/techdemo/day.png)
 
@@ -66,6 +67,35 @@ bu yüzden **Save game** bulunduğunuz yeri, günün saatini ve eşyaları itti�
 - **Neon**: camgöbeği, eflatun ve mor renklerde bir kapı, üç halka ve çubuklar; bloom oluşturan HDR ışımayla.
 - **Fizik**: küreler ve fenerler oyuncunun ittiği dinamik gövdelerdir. Arazinin collider'ı hazır olana kadar
   kinematik kalırlar; böylece o pişirilirken içinden düşmezler.
+- **Yaratık**: açıklığın kenarında, kamp ateşinin arkasında ini olan kurda benzer bir hayvan (aşağıda).
+
+### Yaratık
+
+Yaratık ininin çevresinde dolaşır, sizi gördüğünde ya da duyduğunda peşinize düşer, sizi kaybettiğinde evine
+döner. Motorun [navigasyonu](../navigation.md), [yapay zekası](../ai.md) ve [animasyonuyla](../animation.md)
+yapılmıştır:
+
+- **Navmesh**: *Clearing Navigation* Entity'sinin açıklığın üzerinde 40 × 40 m'lik bir `NavMeshSurface`'i
+  vardır; `build.jsonl` onu `assets/navigation/clearing.navmesh` dosyasına bake eder (depoda). *Campfire Area*,
+  ateşin çevresinde alan 1'den bir `NavArea` hacmidir ve surface bu alanın maliyetini 25 yapar: yaratık, başka
+  yol yoksa, ateşin üzerinden değil çevresinden yürür.
+- **Gövde**: `idle`, `walk` ve `run` clip'leriyle kutulardan rig'li bir model (`assets/models/creature.gltf`).
+  Animasyon grafiği (`assets/animations/creature.animgraph`) onları `speed` parametresine göre karıştırır;
+  `NavAgent` bu parametreyi her güncellemede kendi hızına ayarlar (`speedParameter`), böylece bacaklar zemine
+  ayak uydurur.
+- **Hareket**: `Character` drive'lı bir `NavAgent`, `CharacterController`'ını yönlendirir. Modül ona dolaşırken
+  1,4 m/s, kovalarken 4,2 m/s verir.
+- **Duyular**: bir `AiPerception` önündeki 9 m'yi 120 derecelik bir koni içinde görür, ağaçlar ve kayalar görüşü
+  keser; sesleri de duyar. Oyuncunun bir `AiStimulus`'u vardır; modül her ayak sesini `AiService` üzerinden bir
+  ses olarak bildirir: yürürken 7 m, koşarken 15 m içinde duyulur.
+- **Davranış**: bir `BehaviorAgent`, öncelik sırasıyla üç dallı `assets/ai/creature.behavior`'ı çalıştırır:
+  *chase* (oyuncuya koş ve hırla; bu, modülün yanıtladığı bir action'dır), *return* (sizi en son sezdiği yeri
+  ara, kokla, sonra eve dön) ve *wander* (ininin 4 m yakınında rastgele bir nokta, sonra bir mola). `home`
+  anahtarı, ajanın bir başlangıç değeri olan inidir.
+
+Sizi kovalarken HUD bunu söyler. Duraklatma menüsü saati durdurduğu gibi onu da durdurur: modül
+`BehaviorAgent`'ını kapatır ve `NavAgent`'ını durdurur, menü kapanınca devam etmesine izin verir. Oyuncu gibi o
+da arazinin collider'ını bekler.
 
 ### Hafifletilmiş ağaçlar
 
@@ -87,11 +117,13 @@ Poly Haven dosyaları dışındaki her şeyi sabit seed'lerle script'ler üretir
 
 - `tools/fetch_assets.py` sabitlenmiş Poly Haven dosyalarını indirir (boyut ve SHA-256 denetlenir), her
   bitkinin renk ve alfa haritalarını RGBA yaprak dokularında birleştirir ve hafif ağaçları yazar.
-- `tools/make_assets.py` araziyi, neonu, kütükleri, sprite'ları ve sesleri yazar; `terrain_height()`
-  fonksiyonunu sağlar.
+- `tools/make_assets.py` araziyi, neonu, kütükleri, sprite'ları, sesleri ve animasyon grafiği ile davranış
+  ağacıyla birlikte yaratığı yazar; `terrain_height()` fonksiyonunu sağlar.
 - `tools/make_scene.py`, Material'leri ve sahneyi oluşturan editör komutlarını, `build.jsonl`'u yazar; her şeyi
-  `terrain_height()` ile yere yerleştirir.
-- `modules/techdemo` oyun modülüdür: yürüme, bakma, saat, gece efektleri, titreyen ışıklar.
+  `terrain_height()` ile yere yerleştirir. Yaratık, navmesh'i ve HUD'un uyarısı en sona gelir; böylece geri
+  kalan her şeyin id'leri aynı kalır.
+- `modules/techdemo` oyun modülüdür: yürüme, bakma, saat, gece efektleri, titreyen ışıklar, yaratığın duyduğu
+  ayak sesleri, hızları ve hırlamaları.
 
 Sahneyi değiştirmek için bir script'i düzenleyin ve yeniden kurun:
 

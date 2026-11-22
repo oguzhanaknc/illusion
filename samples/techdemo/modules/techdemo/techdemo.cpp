@@ -14,8 +14,16 @@
 // - Saved games: the Player, the Sky, the orbs and the lanterns carry illusion.Saved; Save writes them to one
 //   slot and Load (disabled while there is no slot) puts them back. A load makes new entities, so the module
 //   finds the ones it keeps handles of again.
-// Hot reload keeps the state in the techdemo.Player Component.
+// - The creature: its behaviour tree (assets:/ai/creature.behavior) wanders around its den, chases the player
+//   it sees or hears, keeps away from the campfire (a costly NavArea) and goes home when it loses the player.
+//   The module reports the player's footsteps as noises, walks the creature while it wanders and runs it
+//   while it chases (its animation graph blends by the speed), answers its "growl" action and shows the HUD's
+//   alert while it chases. Until the ground exists, and while the pause menu shows, its tree and navigation
+//   stop.
+// Hot reload keeps the state in the techdemo.Player, techdemo.Hud and techdemo.Creature Components.
 
+#include <illusion/ai/AiComponents.hpp>
+#include <illusion/ai/AiService.hpp>
 #include <illusion/audio/AudioService.hpp>
 #include <illusion/core/Log.hpp>
 #include <illusion/core/Module.hpp>
@@ -25,6 +33,8 @@
 #include <illusion/ecs/World.hpp>
 #include <illusion/input/InputActions.hpp>
 #include <illusion/input/InputService.hpp>
+#include <illusion/nav/NavComponents.hpp>
+#include <illusion/nav/NavService.hpp>
 #include <illusion/particles/ParticleService.hpp>
 #include <illusion/physics/PhysicsComponents.hpp>
 #include <illusion/physics/PhysicsService.hpp>
@@ -100,12 +110,24 @@ struct Hud
     bool readoutShown = false;
 };
 
+/// The creature of the clearing and the player's footsteps; runtime state.
+struct Creature
+{
+    Entity body{};
+    Entity alert{};       ///< The HUD line shown while it chases the player.
+    f32 stride = 0.0f;    ///< Metres the player walked since the last footstep.
+    u32 growls = 0;       ///< Times it caught up with the player.
+    bool chasing = false; ///< Its tree's target is the player.
+    bool held = true;     ///< Its tree and navigation are stopped.
+};
+
 } // namespace techdemo
 
 namespace
 {
 
 using namespace illusion;
+using techdemo::Creature;
 using techdemo::Hud;
 using techdemo::Player;
 using techdemo::RequestKind;
@@ -124,6 +146,11 @@ constexpr f32 kFireIntensity = 40.0f;
 constexpr f32 kLanternDay = 1.5f;
 constexpr f32 kLanternNight = 7.0f;
 constexpr f32 kNeonIntensity = 26.0f;
+constexpr f32 kFootstepStride = 0.8f; // metres between two footsteps
+constexpr f32 kWalkNoise = 7.0f;      // metres at which a footstep is heard (hearing 1)
+constexpr f32 kRunNoise = 15.0f;
+constexpr f32 kCreatureWalkSpeed = 1.4f; // the walk and run of its graph (tools/make_assets.py)
+constexpr f32 kCreatureRunSpeed = 4.2f;
 
 // The Component of an entity that the scene may lack: the module also runs on the UI scene alone.
 template <typename T>
@@ -159,6 +186,7 @@ bool loadModule(ModuleContext& context)
 {
     reflectRuntime<Player>("techdemo.Player", {.displayName = "Tech demo player"});
     reflectRuntime<Hud>("techdemo.Hud", {.displayName = "Tech demo HUD"});
+    reflectRuntime<Creature>("techdemo.Creature", {.displayName = "Tech demo creature"});
     ILL_LOG_INFO("TechDemo", "module '{}' {}", context.moduleName(),
                  context.isReloading() ? "reloaded" : "loaded");
     return true;
@@ -248,7 +276,19 @@ void startModule(ModuleContext& context)
         player.sprint = action(*input, "Sprint", ActionType::Button, sprint);
         player.fastTime = action(*input, "Fast Time", ActionType::Button, fastTime);
     }
-    world.create(Name{"Tech Demo"}, player, startUi(context));
+    const Hud hud = startUi(context);
+    Creature creature;
+    creature.body = findNamed(world, "Creature");
+    // It waits for the ground like the player; updateCreature() lets it go.
+    if (BehaviorAgent* agent = component<BehaviorAgent>(world, creature.body))
+    {
+        agent->enabled = false;
+    }
+    if (const UiService* ui = context.service<UiService>())
+    {
+        creature.alert = ui->find({}, "Creature Alert");
+    }
+    world.create(Name{"Tech Demo"}, player, hud, creature);
 }
 
 void updateWalk(PhysicsService& physics, const InputService& input, Player& player, f32 dt)
@@ -548,6 +588,90 @@ bool updateUi(ModuleContext& context, Hud& hud, Player& player, f64 deltaSeconds
     return open;
 }
 
+// Every kFootstepStride metres the player walks on the ground, a noise the creature may hear; running is
+// louder.
+void reportFootsteps(World& world, AiService& ai, const PhysicsService& physics, const Player& player,
+                     Creature& creature, f32 dt)
+{
+    const Transform* body = component<Transform>(world, player.body);
+    if (body == nullptr || !physics.isCharacterGrounded(player.body))
+    {
+        return;
+    }
+    const Vec3 velocity = physics.characterVelocity(player.body);
+    const f32 speed = glm::length(Vec2(velocity.x, velocity.z));
+    creature.stride += speed * dt;
+    if (creature.stride < kFootstepStride)
+    {
+        return;
+    }
+    creature.stride -= kFootstepStride;
+    AiNoise noise;
+    noise.position = body->position;
+    noise.radius = speed > 0.5f * (kWalkSpeed + kRunSpeed) ? kRunNoise : kWalkNoise;
+    noise.instigator = player.body;
+    static_cast<void>(ai.reportNoise(noise));
+}
+
+// The creature hunts once the ground exists and while the game runs: the pause menu stops its tree and its
+// navigation, as it stops the clock.
+void updateCreature(ModuleContext& context, const Player& player, Creature& creature, bool paused, f32 dt)
+{
+    World& world = context.world();
+    AiService* ai = context.service<AiService>();
+    NavService* nav = context.service<NavService>();
+    PhysicsService* physics = context.service<PhysicsService>();
+    BehaviorAgent* agent = component<BehaviorAgent>(world, creature.body);
+    NavAgent* walker = component<NavAgent>(world, creature.body);
+    if (ai == nullptr || nav == nullptr || physics == nullptr || agent == nullptr || walker == nullptr)
+    {
+        return;
+    }
+    const bool hold = paused || !player.grounded;
+    if (hold != creature.held)
+    {
+        creature.held = hold;
+        agent->enabled = !hold;
+        if (hold)
+        {
+            static_cast<void>(nav->stop(creature.body));
+        }
+    }
+    if (!player.grounded)
+    {
+        physics->setCharacterVelocity(creature.body, Vec3(0.0f));
+    }
+    if (!paused)
+    {
+        reportFootsteps(world, *ai, *physics, player, creature, dt);
+    }
+
+    std::array<AiActionRequest, 8> actions{};
+    const u32 count = std::min<u32>(ai->pollActions(actions), static_cast<u32>(actions.size()));
+    for (const AiActionRequest& request : std::span(actions).first(count))
+    {
+        if (request.phase == AiActionPhase::Started && request.entity == creature.body &&
+            request.name == "growl")
+        {
+            ++creature.growls;
+            static_cast<void>(ai->finishAction(request.entity, request.action, true));
+        }
+    }
+
+    const Expected<BlackboardValue, AiError> target = ai->value(creature.body, "target");
+    const bool chasing = target.hasValue() && target->set && target->entity == player.body;
+    walker->maxSpeed = chasing ? kCreatureRunSpeed : kCreatureWalkSpeed;
+    if (chasing != creature.chasing)
+    {
+        creature.chasing = chasing;
+        ILL_LOG_INFO("TechDemo", "the creature {} the player", chasing ? "chases" : "has lost");
+        if (UiService* ui = context.service<UiService>())
+        {
+            static_cast<void>(ui->setVisible(creature.alert, chasing));
+        }
+    }
+}
+
 void updateModule(ModuleContext& context, f64 deltaSeconds)
 {
     World& world = context.world();
@@ -592,6 +716,14 @@ void updateModule(ModuleContext& context, f64 deltaSeconds)
     updateTime(world, input, context.service<ParticleService>(), context.service<AudioService>(), current,
                clock);
     updateLights(world, current);
+    if (const Creature* kept = component<Creature>(world, self))
+    {
+        // Copies: the alert's visibility changes the structure of the World.
+        const Player walking = world.get<Player>(self);
+        Creature creature = *kept;
+        updateCreature(context, walking, creature, paused, dt);
+        world.get<Creature>(self) = creature;
+    }
 }
 
 constexpr ModuleApi kTechDemo =

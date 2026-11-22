@@ -271,7 +271,70 @@ class MakeAssetsTest(unittest.TestCase):
         self.assertTrue(all(abs(s) < 2.0 for s in samples))
 
 
+class MakeCreatureTest(unittest.TestCase):
+    def test_parents_come_before_their_joints_and_the_paws_stand_on_the_ground(self):
+        for joint, (_, parent, _) in enumerate(make_assets.CREATURE_JOINTS):
+            self.assertLess(parent, joint)
+        model = make_assets.creature_model_positions()
+        bottoms = [model[joint][1] + low[1] for joint, low, _ in make_assets.CREATURE_BOXES]
+        self.assertAlmostEqual(min(bottoms), 0.0, places=6)
+        for joint, low, high in make_assets.CREATURE_BOXES:
+            self.assertLess(joint, len(model))
+            self.assertTrue(all(a < b for a, b in zip(low, high)))
+
+    def test_every_clip_loops_and_rotations_are_unit_quaternions(self):
+        for clip in make_assets.CREATURE_CLIPS:
+            start, start_hips = make_assets.creature_pose(clip, 0.0)
+            end, end_hips = make_assets.creature_pose(clip, 1.0)
+            self.assertEqual(set(start), set(end))
+            for joint, rotation in start.items():
+                for a, b in zip(rotation, end[joint]):
+                    self.assertAlmostEqual(a, b, places=6)
+                self.assertAlmostEqual(sum(c * c for c in rotation), 1.0, places=6)
+            for a, b in zip(start_hips, end_hips):
+                self.assertAlmostEqual(a, b, places=6)
+
+    def test_the_model_graph_and_tree_refer_to_each_other(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            make_assets.write_creature(root / "creature.gltf")
+            make_assets.write_creature_graph(root / "creature.animgraph")
+            make_assets.write_creature_tree(root / "creature.behavior")
+            model = json.loads((root / "creature.gltf").read_text())
+            self.assertEqual(model["buffers"][0]["byteLength"], (root / "creature.bin").stat().st_size)
+            self.assertEqual([a["name"] for a in model["animations"]], list(make_assets.CREATURE_CLIPS))
+            self.assertEqual(len(model["skins"][0]["joints"]), len(make_assets.CREATURE_JOINTS))
+            graph = json.loads((root / "creature.animgraph").read_text())
+            points = graph["layers"][0]["states"][0]["blend1d"]["points"]
+            self.assertEqual([p["clip"].rsplit("/", 1)[1] for p in points], ["idle", "walk", "run"])
+            self.assertEqual([p["value"] for p in points], sorted(p["value"] for p in points))
+            tree = json.loads((root / "creature.behavior").read_text())
+            keys = {key["name"] for key in tree["blackboard"]}
+            used = set(re.findall(r'"key": "([^"]+)"', json.dumps(tree["root"])))
+            self.assertEqual(used, keys)
+
+
 class MakeSceneTest(unittest.TestCase):
+    def test_the_creature_comes_after_the_forest_and_its_ui_in_the_forest_scene(self):
+        make_scene.commands.clear()
+        make_scene.build_creature()
+        calls = [c["call"] for c in make_scene.commands]
+        self.assertEqual(make_scene.commands[0]["params"]["path"], make_scene.FOREST_SCENE)
+        self.assertEqual(calls[0], "scene.open")
+        self.assertEqual(calls[-1], "scene.save")
+        self.assertLess(calls.index("nav.bake"), len(calls) - 2)
+        creature = next(c["params"]["components"] for c in make_scene.commands
+                        if c["call"] == "entity.create" and c["params"]["name"] == "Creature")
+        home = creature["illusion.BehaviorAgent"]["blackboard"][0]
+        self.assertEqual(home["key"], "home")
+        self.assertEqual(home["vector"], creature["illusion.Transform"]["position"])
+        surface = next(c["params"]["components"]["illusion.NavMeshSurface"] for c in make_scene.commands
+                       if c["call"] == "entity.create" and c["params"]["name"] == "Clearing Navigation")
+        self.assertGreater(surface["areaCosts"][make_scene.FIRE_AREA], 1.0)
+        local = make_scene.PROJECT / "assets"
+        for value in re.findall(r'"(assets:/(?:models|animations|ai)/[^"#]+)', json.dumps(make_scene.commands)):
+            self.assertTrue((local / value[len("assets:/"):]).is_file(), value)
+
     def test_the_scene_has_unique_names_assets_that_exist_and_saves_once(self):
         make_scene.commands.clear()
         make_scene.build()
