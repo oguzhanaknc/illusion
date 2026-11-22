@@ -291,7 +291,8 @@ TEST_CASE("a profile made from the skeleton fits a capsule along each bone and s
     {
         joint.inverseBind = joint.inverseBind * glm::scale(Mat4(1.0f), Vec3(100.0f));
     }
-    std::vector<Aabb> centimetres = bounds;
+    std::array<Aabb, kMaxJoints> centimetreStorage = storage;
+    const std::span<Aabb> centimetres(centimetreStorage.data(), bounds.size());
     for (Aabb& b : centimetres)
     {
         b = Aabb{b.min * 100.0f, b.max * 100.0f};
