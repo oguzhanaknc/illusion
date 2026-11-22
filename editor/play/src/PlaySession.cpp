@@ -395,6 +395,11 @@ AiWorld* PlaySession::ai() noexcept
     return m_impl->game ? &m_impl->game->ai() : nullptr;
 }
 
+AnimationWorld* PlaySession::animation() noexcept
+{
+    return m_impl->game ? m_impl->game->animation() : nullptr;
+}
+
 u64 PlaySession::saveEventCount() const
 {
     return m_impl->saveEventsSeen;

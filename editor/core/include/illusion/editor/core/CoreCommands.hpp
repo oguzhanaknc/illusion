@@ -1981,6 +1981,167 @@ struct AiValidateResult
     u32 keys = 0;          ///< Blackboard keys of the tree (0 if invalid).
 };
 
+/// Params of `animation.list`.
+struct AnimationListParams
+{
+    std::string path; ///< A model of the assets: mount, e.g. "assets:/models/hero.glb".
+};
+
+/// A skin (skeleton) of a model in the result of `animation.list`.
+struct AnimationListSkin
+{
+    std::string ref;  ///< The reference for Animator::skeleton, e.g. "assets:/models/hero.glb#skin/0".
+    std::string name; ///< The skin's name ("" if it has none).
+    u32 joints = 0;   ///< Joints of its skeleton.
+};
+
+/// A clip of a model in the result of `animation.list`.
+struct AnimationListClip
+{
+    std::string ref;     ///< The reference for Animator::clip, e.g. "assets:/models/hero.glb#animation/walk".
+    std::string name;    ///< The clip's name.
+    f32 duration = 0.0f; ///< Its length in seconds.
+    u32 channels = 0;    ///< Animated properties of joints.
+};
+
+/// Result of `animation.list`.
+struct AnimationListResult
+{
+    std::string path;                     ///< The model.
+    std::vector<AnimationListSkin> skins; ///< Its skins, in order.
+    std::vector<AnimationListClip> clips; ///< Its animations, in order.
+};
+
+/// Params of `animation.status`.
+struct AnimationStatusParams
+{
+    std::optional<std::string> entity{}; ///< Entity reference of one Animator (default: every Animator).
+};
+
+/// A parameter of a graph in the results of `animation.status` and `animation.set_parameter`.
+struct AnimationStatusParameter
+{
+    std::string name; ///< The parameter.
+    std::string type; ///< "Float", "Int", "Bool" or "Trigger".
+    f32 value = 0.0f; ///< Its value (Int and Bool as numbers; a Trigger is 1 while set).
+};
+
+/// A layer of a graph in the result of `animation.status`.
+struct AnimationStatusLayer
+{
+    std::string name;          ///< The layer.
+    std::string state;         ///< Its current (target) state.
+    f32 normalizedTime = 0.0f; ///< Normalized time of the state (above 1 for a held non-looping state).
+    std::string previous;      ///< State a running transition fades out ("" for none).
+    f32 fade = 0.0f;           ///< Progress of the running transition in [0, 1] (0 without one).
+};
+
+/// An Animator in the result of `animation.status`.
+struct AnimationStatusAnimator
+{
+    EntitySummary entity;     ///< The Entity.
+    std::string skeleton;     ///< Animator::skeleton ("" for none).
+    std::string clip;         ///< Animator::clip ("" for none).
+    std::string graph;        ///< Animator::graph ("" for none).
+    f32 speed = 1.0f;         ///< Animator::speed.
+    f32 time = 0.0f;          ///< Animator::time, in seconds.
+    bool loop = true;         ///< Animator::loop.
+    bool playing = true;      ///< Animator::playing.
+    bool posed = false;       ///< The animation runtime has posed it (always false without one).
+    u32 joints = 0;           ///< Joints of its pose (0 while its assets load).
+    bool graphLoaded = false; ///< Its graph has loaded and is bound to the skeleton.
+    std::vector<AnimationStatusLayer> layers;         ///< The layers of its graph.
+    std::vector<AnimationStatusParameter> parameters; ///< The parameters of its graph.
+};
+
+/// A state event in the result of `animation.status`.
+struct AnimationStatusEvent
+{
+    EntitySummary entity; ///< The Entity of the Animator.
+    std::string name;     ///< The event's name in the graph.
+    std::string layer;    ///< The layer of the state.
+    std::string state;    ///< The state.
+};
+
+/// Result of `animation.status`.
+struct AnimationStatusResult
+{
+    std::string world; ///< "edit" or "play".
+    bool live = false; ///< Poses, graph states and events are live (a play session); else saved fields only.
+    std::string note;  ///< What is missing when not live ("" otherwise).
+    std::vector<AnimationStatusAnimator>
+        animators;    ///< The Animators asked for, in Entity order (at most 100).
+    u32 total = 0;    ///< Entities with an Animator.
+    u32 pending = 0;  ///< Animators waiting for their model (live only).
+    u32 failures = 0; ///< Animators whose skeleton or clip could not be found (live only).
+    std::vector<AnimationStatusEvent> events; ///< State events of the last update (live only, at most 64).
+};
+
+/// Params of `animation.set_parameter`.
+struct AnimationSetParameterParams
+{
+    std::string entity; ///< Entity reference of the Animator.
+    std::string name;   ///< Parameter of its graph (not a Trigger).
+    JsonText value;     ///< true or false for a Bool, a whole number for an Int, a number for a Float.
+};
+
+/// Result of `animation.set_parameter`.
+struct AnimationSetParameterResult
+{
+    EntitySummary entity;               ///< The Animator's Entity.
+    AnimationStatusParameter parameter; ///< The parameter with the value written.
+};
+
+/// Params of `animation.trigger`.
+struct AnimationTriggerParams
+{
+    std::string entity; ///< Entity reference of the Animator.
+    std::string name;   ///< Trigger of its graph.
+};
+
+/// Result of `animation.trigger`.
+struct AnimationTriggerResult
+{
+    EntitySummary entity; ///< The Animator's Entity.
+    std::string name;     ///< The trigger set.
+};
+
+/// Params of `animation.scrub`.
+struct AnimationScrubParams
+{
+    std::string entity; ///< Entity reference of the Animator.
+    f32 time = 0.0f;    ///< Seconds into the clip (or the entry states of the graph), 0 to 1,000,000.
+};
+
+/// Result of `animation.scrub`.
+struct AnimationScrubResult
+{
+    EntitySummary entity; ///< The Animator's Entity.
+    f32 previous = 0.0f;  ///< Animator::time before.
+    f32 time = 0.0f;      ///< Animator::time now.
+    bool changed = false; ///< The time differs.
+};
+
+/// Params of `animation.validate`.
+struct AnimationValidateParams
+{
+    std::string path; ///< An `.animgraph` or `.ragdoll` file of the assets: mount.
+};
+
+/// Result of `animation.validate`.
+struct AnimationValidateResult
+{
+    std::string path;      ///< The file.
+    std::string kind;      ///< "AnimationGraph" or "RagdollProfile".
+    bool valid = false;    ///< It parses.
+    std::string error;     ///< The first problem, with its JSON path ("" if valid).
+    std::string errorPath; ///< The JSON path of the problem, e.g. "layers[0].states[2].motion" ("" if none).
+    u32 parameters = 0;    ///< Parameters of a valid graph.
+    u32 layers = 0;        ///< Layers of a valid graph.
+    u32 states = 0;        ///< States of a valid graph, over all layers.
+    u32 parts = 0;         ///< Parts of a valid ragdoll profile.
+};
+
 /// Result of the `play.*` commands: the state of the play session.
 struct PlayStatusResult
 {

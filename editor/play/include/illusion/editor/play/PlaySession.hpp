@@ -109,6 +109,7 @@ public:
     [[nodiscard]] const text::Localization* projectLocalization() override;
     [[nodiscard]] SaveService* saves() noexcept override;
     [[nodiscard]] AiWorld* ai() noexcept override;
+    [[nodiscard]] AnimationWorld* animation() noexcept override;
     [[nodiscard]] u64 saveEventCount() const override;
     void saveEvents(u64 first, std::vector<PlaySaveEvent>& out) const override;
 

@@ -23,6 +23,7 @@
 namespace illusion
 {
 class AiWorld;
+class AnimationWorld;
 class GameSession;
 class UiWorld;
 struct UiEvent;
@@ -257,6 +258,10 @@ public:
     /// The AI of the running game (GameSession::ai()), or nullptr when stopped (the AI commands and the
     /// perception view).
     [[nodiscard]] virtual AiWorld* ai() noexcept = 0;
+
+    /// The animation of the running game (GameSession::animation()), or nullptr when stopped (the animation
+    /// commands).
+    [[nodiscard]] virtual AnimationWorld* animation() noexcept = 0;
 
     /// Number of saved-game events the editor has seen since it started, over all sessions; the next one gets
     /// this index. Events are those of every update the session ran (also steps), so none is missed.

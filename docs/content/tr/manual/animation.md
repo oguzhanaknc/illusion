@@ -88,6 +88,37 @@ Inspector'da `time`'ı sürüklemek klibi Scene görünümünde kaydırır. Play
 oynayan her Animator'ın `time`'ını ilerletir; Stop kaydedilen değerlere döner. Showcase projesinin
 `Column`'u `sway` klibini bu şekilde oynatır ([Showcase projesi](editor/showcase.md)).
 
+## Editörden ve ajanlardan
+
+`animation.*` [Editor commands](../reference/editor-commands.md) insanların ve ajanların animasyonun içine
+bakmasını, onu kaydırmasını ve sürmesini sağlar:
+
+| Komut | Ne yapar |
+| --- | --- |
+| `animation.list` | Bir modelin (`path`) skin'leri ve klipleri: her skin için `Animator::skeleton` referansı ve eklem sayısı, her klip için `Animator::clip` referansı, saniye cinsinden süresi ve kanal sayısı |
+| `animation.status` | Sahnedeki Animator'lar (`entity`, ya da en fazla 100 Animator): kayıtlı alanlar ve bir play oturumunda ayrıca pozun var olup olmadığı, grafın yüklenip yüklenmediği, her layer için geçerli state, normalleştirilmiş zamanı ve süren bir geçişin söndürdüğü state, her parametre ve değeri, son update'in state event'leri |
+| `animation.set_parameter` | Play oturumunda bir Animator'ın grafının `Float`, `Int` veya `Bool` parametresini ayarlar; değer parametrenin türüne uymalıdır |
+| `animation.trigger` | Play oturumunda grafın bir `Trigger`'ını ayarlar |
+| `animation.scrub` | Açık sahnedeki bir Animator'ın `Animator::time` değerini ayarlar: kayıtlı Component'in geri alınabilir bir düzenlemesi, Scene görünümünde hemen görünür |
+| `animation.validate` | Bir `.animgraph` ya da `.ragdoll` dosyasını ayrıştırır. Sonuç `valid` der, `parameters`, `layers` ve `states` (ya da `parts`) sayar, bir hata için `error` ve JSON `errorPath` verir, ör. `layers[0].states[2].motion`. Ayrıştırılamayan bir dosya başarısız bir komut değil, bir sonuçtur |
+
+```json
+{"call": "animation.list", "params": {"path": "assets:/models/column.gltf"}}
+{"call": "animation.validate", "params": {"path": "assets:/animations/column.animgraph"}}
+{"call": "animation.scrub", "params": {"entity": "/Column", "time": 0.6}}
+{"call": "animation.status", "params": {"entity": "/Column"}}
+{"call": "animation.set_parameter", "params": {"entity": "/Column", "name": "lean", "value": 0.8}}
+{"call": "animation.trigger", "params": {"entity": "/Column", "name": "bow"}}
+```
+
+`animation.set_parameter` ve `animation.trigger` çalışan bir oturum (`play.start`) ister; play World'üne etki
+eder ve geri alınamaz, çünkü parametre çalışma zamanı durumudur. Graf yazılan değeri bir sonraki update'te
+kullanır; bu yüzden bir komuttan sonra `play.step` etkisini `animation.status` içinde gösterir.
+`animation.scrub` oyun oynarken bile her zaman edit World'üne etki eder ve oyun bıraktığı zamandan başlar. Edit
+World'ünde `animation.status` yalnızca kayıtlı alanları bildirir (`live` false'tur ve `note` bunu söyler):
+pozlar, state'ler ve parametreler play oturumunda vardır. Geçersiz her parametre JSON Pointer'ı ile bildirilir
+(grafta olmayan bir parametre için `/name`, öneriler ile; yanlış türde bir değer için `/value`).
+
 ## Animasyon grafları
 
 `graph` alanı bir `.animgraph` dosyasını adlandıran bir Animator, klibi yerine o grafı oynatır (ADR 0060):
@@ -749,7 +780,7 @@ renderer->render(commands, target, world, view, &jobs);
 - Süren bir geçişi kesmek, alt durum makineleri ve bir grafın canlı durumunu kaydetmek.
 - İkiden fazla kemikli IK zincirleri ve pelvisten sarkan
   bacaklardan fazlası için foot placement (dört bacaklı bir rig'in ön bacakları gibi).
-- Klip önizlemeleri, bir zaman çizelgesi, iskelet debug çizimi ve `animation.*` editör komutları (ANIM-4).
+- Editörde klip önizlemeleri, bir zaman çizelgesi ve iskelet debug çizimi (ANIM-4b).
 - Morph target'lar, vertex başına dörtten fazla etki ve anahtar kare sıkıştırma.
 
 ## Performans
