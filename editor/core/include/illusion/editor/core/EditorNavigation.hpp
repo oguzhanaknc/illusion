@@ -2,8 +2,8 @@
 
 /// @file
 /// The navigation of the edit World (ADR 0062): a NavWorld that loads or bakes the navmeshes of the edited
-/// scene and answers the `nav.*` commands, never advanced (its agents do not move). EditorContext creates it
-/// on first use.
+/// scene and answers the navigation commands, never advanced (its agents do not move). EditorContext creates
+/// it on first use.
 
 #include <illusion/core/Base.hpp>
 #include <illusion/nav/NavWorld.hpp>
@@ -34,6 +34,8 @@ public:
 
     /// The NavWorld.
     [[nodiscard]] NavWorld& world() noexcept;
+
+    /// The NavWorld, read-only.
     [[nodiscard]] const NavWorld& world() const noexcept;
 
     /// The Job System that bakes run on.
