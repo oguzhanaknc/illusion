@@ -5,9 +5,8 @@ keys and a tree of nodes that decide, tick by tick, what an agent does ([ADR 006
 Movement goes through [Navigation](navigation.md).
 
 !!! note "What exists today"
-    This page describes the `.behavior` format, the blackboard, the tick, the AI Components and `AiWorld`.
-    `AiService` for game modules (NAV-2c) and the `ai.*` Editor commands (NAV-2d) arrive in the next
-    packages.
+    This page describes the `.behavior` format, the blackboard, the tick, the AI Components, `AiWorld` and
+    `AiService` for game modules. The `ai.*` Editor commands (NAV-2d) arrive in the next package.
 
 ## The `.behavior` file
 
@@ -279,6 +278,13 @@ The geometry is in `illusion/ai/Perception.hpp`, as pure functions:
 of a tick become destinations in the same update; with fixed steps it first waits for navmeshes and tree
 loads. Trees tick only while the session is started; `drawDebug()` draws sight cones, what is seen,
 memories and noises.
+
+## From a module
+
+A game module finds the `AiService` with `context.service<illusion::AiService>()` (`USES ai` in
+`illusion_add_module`). It writes blackboard keys that the tree reads, carries out the actions the tree asks
+for and reports noises. The [scripting API reference](../reference/scripting-api.md#aiservice) lists every
+function and its errors.
 
 ## Performance
 

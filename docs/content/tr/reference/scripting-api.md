@@ -2,7 +2,7 @@
 
 Oyun kodu, bir [oyun modülünde](../manual/modules.md) C++ olarak yazılır. Shared bir modül (editörün hot
 reload yapılabilen Build'i) `illusion::core`'un kendi kopyasını taşır, ama başka hiçbir engine
-kütüphanesini taşımaz: fiziğe, sese, parçacıklara, animasyona, navigasyona, girdiye, sahnelere, mağazaya, oyun UI'ına ve kayıtlı oyunlara on
+kütüphanesini taşımaz: fiziğe, sese, parçacıklara, animasyona, navigasyona, AI'a, girdiye, sahnelere, mağazaya, oyun UI'ına ve kayıtlı oyunlara on bir
 **host servis arayüzü** üzerinden ulaşır.
 Her biri veri üyesi olmayan soyut bir sınıftır; host onu kendi engine nesnesi üzerinde bir adaptörle
 uygular ve modüle verir, modül de onu `context.service<T>()` ile bulur. Tasarım ADR 0041'dedir;
@@ -20,6 +20,7 @@ uygular ve modüle verir, modül de onu `context.service<T>()` ile bulur. Tasar�
 | `SaveService` | `save` | `illusion/save/SaveService.hpp` | `SaveSystem` üzerinde `SaveSystemService` (`illusion::save`; ADR 0058) |
 | `AnimationService` | `animation` | `illusion/animation/AnimationService.hpp` | `AnimationWorld` üzerinde `AnimationWorldService` (`illusion::animation`; ADR 0060) |
 | `NavService` | `nav` | `illusion/nav/NavService.hpp` | `NavWorld` üzerinde `NavWorldService` (`illusion::nav`; ADR 0062) |
+| `AiService` | `ai` | `illusion/ai/AiService.hpp` | `AiWorld` üzerinde `AiWorldService` (`illusion::ai`; ADR 0062) |
 
 ```cmake
 illusion_add_module(tetris SOURCES game/Tetris.cpp USES physics audio input runtime)
@@ -63,7 +64,7 @@ void update(illusion::ModuleContext& context, illusion::f64)
 - **Maliyet.** Bir çağrı tek bir dolaylı çağrıdır; `services/virtual-call` Benchmark'ı onu 10 ns'nin
   altında tutar.
 - **Uyumluluk.** Arayüzler modül ABI'sinin parçasıdır: bir fonksiyon eklemek veya değiştirmek
-  `kModuleApiVersion`'ı değiştirir (`NavService` ile birlikte 11) ve modüller yeniden Build edilmelidir.
+  `kModuleApiVersion`'ı değiştirir (`AiService` ile birlikte 12) ve modüller yeniden Build edilmelidir.
 
 ## Kapsam
 
@@ -313,3 +314,66 @@ if (illusion::NavService* nav = context.service<illusion::NavService>())
 
 [Navigasyon](../manual/navigation.md#bir-modulden) kılavuz sayfası surface'leri, agent'ları ve crowd'u
 anlatır.
+
+## AiService
+
+Oyunun behaviour tree'leri (ADR 0062). Bir tree'nin **blackboard**'u, node'larının okuduğu ve yazdığı tipli
+key'leri tutar; setter'lar (`setBool`, `setInt`, `setFloat`, `setVector`, `setEntity`) Entity'nin tree'sindeki
+bir key'i yazar ve bir sonraki AI adımı değeri görür. Bir tree'nin oyun action'ları (`{"action": "bite"}`)
+kodunuza verilir: `pollActions` son update'in başlattığı ya da iptal ettiği action'ları listeler,
+`finishAction` çalışan birini bitirir. Canlı olmayan ya da `BehaviorAgent`'ı veya `AiPerception`'ı olmayan bir
+Entity üzerindeki çağrı `NoAgent` döndürür; hiçbir şey assert etmez.
+
+| Fonksiyon | Amaç |
+| --- | --- |
+| `setBool`, `setInt`, `setFloat`, `setVector`, `setEntity` | Adındaki tipte bir key yazar; null bir Entity, Entity key'ini temizler |
+| `clearValue` | Bir Vector3 ya da Entity key'ini temizler |
+| `value` | Bir key'i `BlackboardValue` olarak okur (`type`'ı, `set` olup olmadığı ve o tipin alanı), son yazma ya da AI adımı itibarıyla |
+| `pollActions` | Son update'in `AiActionRequest`'lerini (agent, action id'si, node'un `name`'i ve `Started` ya da `Aborted` fazı) agent sırasıyla bir span'e yazar; toplamı döndürür |
+| `finishAction` | Çalışan bir action'ı id'siyle bitirir: node'u bir sonraki AI adımında başarılı ya da başarısız olur; `Aborted` bir action bitirilmez |
+| `reportNoise` | Algılayanların bir sonraki AI adımında duyacağı bir `AiNoise` (konum, yarıçap, instigator, team) bildirir |
+| `perceived` | Bir `AiPerception`'ın algıladığı ya da hatırladığı şeyleri (`AiPerceived`: Entity, duyu, bilinen son konum, yaş, güncel olup olmadığı) en yakın önce bir span'e yazar; sayıyı döndürür |
+| `runningNode` | Tree'nin çalışan en derin node'unun adı, hiçbiri çalışmıyorsa boş ad |
+| `restart` | Tree'yi kökünden, başlangıç blackboard'uyla yeniden başlatır; çalışan action'lar iptal olur |
+
+`pollActions` dışındaki her fonksiyon bir `Expected<..., AiError>` döndürür; `aiErrorName()` adı verir:
+
+| Hata | Ne zaman |
+| --- | --- |
+| `NoAgent` | Entity canlı değil ya da ne `BehaviorAgent`'ı ne de `AiPerception`'ı var |
+| `NoTree` | Agent'ın tree'si henüz yüklenmedi ya da yüklenemedi |
+| `UnknownKey` | Tree'de o adda bir key yok |
+| `TypeMismatch` | Key başka bir tipte (Bool, Int ya da Float key'inde `clearValue` de) |
+| `UnknownAction` | Entity'de o id'de çalışan bir action yok |
+| `InvalidValue` | Bir değer sonlu değil ya da aralık dışı: negatif bir noise yarıçapı, 32 veya daha büyük bir team |
+| `Full` | Bu update'in noise'ları dolu (`AiWorldDesc::maxNoisesPerUpdate`) |
+
+Bir update'in action'ları bir sonraki AI update'ine kadar yayımda kalır: arada yapılan her `pollActions()`
+çağrısı aynı action'ları döndürür (toplamı, span'in boyutunu aşsa bile), bu yüzden span'i en yoğun update'e göre
+boyutlandırın ya da update başına bir kez okuyun. Bir action'ın `name`'i ve `runningNode`'un döndürdüğü string
+bir sonraki update'e kadar geçerlidir.
+
+```cpp
+if (illusion::AiService* ai = context.service<illusion::AiService>())
+{
+    std::array<illusion::AiActionRequest, 16> actions{};
+    const illusion::u32 count = ai->pollActions(actions);
+    for (illusion::u32 i = 0; i < count && i < actions.size(); ++i)
+    {
+        if (actions[i].phase == illusion::AiActionPhase::Started && actions[i].name == "bite")
+        {
+            static_cast<void>(ai->finishAction(actions[i].entity, actions[i].action, bite(actions[i].entity)));
+        }
+    }
+    static_cast<void>(ai->setEntity(creature, "target", player));
+    if (jumped)
+    {
+        static_cast<void>(ai->reportNoise({.position = playerPosition, .radius = 8.0f, .instigator = player}));
+    }
+    std::array<illusion::AiPerceived, 8> seen{};
+    const illusion::u32 seenCount = ai->perceived(creature, seen).valueOr(0u);
+    showAlert(seenCount > 0);
+}
+```
+
+[AI](../manual/ai.md#bir-modulden) kılavuz sayfası tree'leri, action'ları ve algılamayı anlatır.

@@ -13,6 +13,18 @@
     {
       "name": "home",
       "type": "Vector3"
+    },
+    {
+      "name": "alert",
+      "type": "Bool"
+    },
+    {
+      "name": "greetings",
+      "type": "Int"
+    },
+    {
+      "name": "boldness",
+      "type": "Float"
     }
   ],
   "root": {

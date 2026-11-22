@@ -159,7 +159,7 @@ aynı şekilde.
 `load()` kütüphaneyi bir gölge dizine kopyalar ve kopyayı yükler; böylece build orijinalin üzerine
 yazabilir. Ardından modülü denetler ve bir sorun varsa bir hata mesajı döndürür:
 
-- modül API sürümü (11; daha eski bir sürüm için derlenmiş modüller yeniden derlenmelidir, sürüm 2 için
+- modül API sürümü (12; daha eski bir sürüm için derlenmiş modüller yeniden derlenmelidir, sürüm 2 için
   derlenmiş olanlar ayrıca World işlerini `start`'a taşımalıdır), engine sürümü (shared modüller tam olarak bu engine'e karşı derlenmiş olmalıdır) ve
   build ayarları (derleyici ve sürümü, Debug veya Release, assert'ler);
 - geçerli ve benzersiz bir ad ile semantik bir sürüm;

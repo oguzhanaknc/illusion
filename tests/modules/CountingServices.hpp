@@ -5,6 +5,7 @@
 // function counts its calls in its own slot. A proxy made with a real service forwards every call to it;
 // one made without returns default values.
 
+#include <illusion/ai/AiService.hpp>
 #include <illusion/animation/AnimationService.hpp>
 #include <illusion/audio/AudioService.hpp>
 #include <illusion/input/InputService.hpp>
@@ -811,6 +812,72 @@ public:
     u32 pollEvents(std::span<NavEvent> out) override
     {
         return forward<u32>(9, [&](NavService& s) { return s.pollEvents(out); });
+    }
+};
+
+// Counts the calls of every AiService function.
+class CountingAi final : public CountingProxy<AiService, 13>
+{
+public:
+    explicit CountingAi(AiService* inner = nullptr) noexcept
+        : CountingProxy(inner)
+    {
+    }
+
+    using Void = Expected<void, AiError>;
+
+    Void setBool(Entity e, std::string_view key, bool value) override
+    {
+        return forward<Void>(0, [&](AiService& s) { return s.setBool(e, key, value); });
+    }
+    Void setInt(Entity e, std::string_view key, i32 value) override
+    {
+        return forward<Void>(1, [&](AiService& s) { return s.setInt(e, key, value); });
+    }
+    Void setFloat(Entity e, std::string_view key, f32 value) override
+    {
+        return forward<Void>(2, [&](AiService& s) { return s.setFloat(e, key, value); });
+    }
+    Void setVector(Entity e, std::string_view key, const Vec3& value) override
+    {
+        return forward<Void>(3, [&](AiService& s) { return s.setVector(e, key, value); });
+    }
+    Void setEntity(Entity e, std::string_view key, Entity value) override
+    {
+        return forward<Void>(4, [&](AiService& s) { return s.setEntity(e, key, value); });
+    }
+    Void clearValue(Entity e, std::string_view key) override
+    {
+        return forward<Void>(5, [&](AiService& s) { return s.clearValue(e, key); });
+    }
+    [[nodiscard]] Expected<BlackboardValue, AiError> value(Entity e, std::string_view key) const override
+    {
+        return forward<Expected<BlackboardValue, AiError>>(6, [&](AiService& s) { return s.value(e, key); });
+    }
+    u32 pollActions(std::span<AiActionRequest> out) override
+    {
+        return forward<u32>(7, [&](AiService& s) { return s.pollActions(out); });
+    }
+    Void finishAction(Entity e, u32 action, bool success) override
+    {
+        return forward<Void>(8, [&](AiService& s) { return s.finishAction(e, action, success); });
+    }
+    Void reportNoise(const AiNoise& noise) override
+    {
+        return forward<Void>(9, [&](AiService& s) { return s.reportNoise(noise); });
+    }
+    Expected<u32, AiError> perceived(Entity e, std::span<AiPerceived> out) const override
+    {
+        return forward<Expected<u32, AiError>>(10, [&](AiService& s) { return s.perceived(e, out); });
+    }
+    [[nodiscard]] Expected<std::string_view, AiError> runningNode(Entity e) const override
+    {
+        return forward<Expected<std::string_view, AiError>>(11,
+                                                            [&](AiService& s) { return s.runningNode(e); });
+    }
+    Void restart(Entity e) override
+    {
+        return forward<Void>(12, [&](AiService& s) { return s.restart(e); });
     }
 };
 

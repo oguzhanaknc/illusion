@@ -2,7 +2,7 @@
 
 Game code is C++ in a [game module](../manual/modules.md). A shared module (the editor's hot-reloadable
 build) carries its own copy of `illusion::core` but no other engine library: it reaches physics, audio,
-particles, animation, navigation, input, scenes, the store, the game UI and saved games through ten **host service interfaces**. Each is an abstract class without data members;
+particles, animation, navigation, AI, input, scenes, the store, the game UI and saved games through eleven **host service interfaces**. Each is an abstract class without data members;
 the host implements it with an adapter over its engine object and hands it to the module, which finds it
 with `context.service<T>()`. The design is in ADR 0041; the Doxygen group "Scripting API" of the
 [API reference](api.md) documents every function.
@@ -19,6 +19,7 @@ with `context.service<T>()`. The design is in ADR 0041; the Doxygen group "Scrip
 | `SaveService` | `save` | `illusion/save/SaveService.hpp` | `SaveSystemService` over `SaveSystem` (`illusion::save`; ADR 0058) |
 | `AnimationService` | `animation` | `illusion/animation/AnimationService.hpp` | `AnimationWorldService` over `AnimationWorld` (`illusion::animation`; ADR 0060) |
 | `NavService` | `nav` | `illusion/nav/NavService.hpp` | `NavWorldService` over `NavWorld` (`illusion::nav`; ADR 0062) |
+| `AiService` | `ai` | `illusion/ai/AiService.hpp` | `AiWorldService` over `AiWorld` (`illusion::ai`; ADR 0062) |
 
 ```cmake
 illusion_add_module(tetris SOURCES game/Tetris.cpp USES physics audio input runtime)
@@ -60,7 +61,7 @@ void update(illusion::ModuleContext& context, illusion::f64)
   work there too.
 - **Cost.** A call is one indirect call; the `services/virtual-call` Benchmark keeps it under 10 ns.
 - **Compatibility.** The interfaces are part of the module ABI: adding or changing a function changes
-  `kModuleApiVersion` (11 since `NavService`), and modules must be rebuilt.
+  `kModuleApiVersion` (12 since `AiService`), and modules must be rebuilt.
 
 ## Coverage
 
@@ -307,3 +308,65 @@ if (illusion::NavService* nav = context.service<illusion::NavService>())
 
 The manual page [Navigation](../manual/navigation.md#from-a-module) describes surfaces, agents and the
 crowd.
+
+## AiService
+
+The behaviour trees of the game (ADR 0062). A tree's **blackboard** holds the typed keys its nodes read and
+write; the setters (`setBool`, `setInt`, `setFloat`, `setVector`, `setEntity`) write a key of the Entity's tree,
+and the next AI step sees the value. Game actions of a tree (`{"action": "bite"}`) are handed to your code:
+`pollActions` lists the ones the last update started or aborted, and `finishAction` ends a running one. A call
+on an Entity that is not alive or has no `BehaviorAgent` or `AiPerception` returns `NoAgent`; nothing asserts.
+
+| Function | Purpose |
+| --- | --- |
+| `setBool`, `setInt`, `setFloat`, `setVector`, `setEntity` | Write a key of the type in the name; a null Entity clears an Entity key |
+| `clearValue` | Clears a Vector3 or Entity key |
+| `value` | Reads a key as a `BlackboardValue` (its `type`, whether it is `set` and the field of that type), as of the last write or AI step |
+| `pollActions` | Writes the `AiActionRequest`s of the last update (agent, action id, the node's `name` and the phase `Started` or `Aborted`) into a span, in agent order; returns the total |
+| `finishAction` | Ends a running action by its id: its node succeeds or fails at the next AI step; an `Aborted` action is not finished |
+| `reportNoise` | Reports an `AiNoise` (position, radius, instigator, team) that perceivers hear in the next AI step |
+| `perceived` | Writes what an `AiPerception` senses or remembers (`AiPerceived`: Entity, sense, last known position, age, whether it is current) into a span, nearest first; returns the count |
+| `runningNode` | The name of the deepest running node of the tree, or an empty name when none runs |
+| `restart` | Starts the tree again from its root with its starting blackboard; running actions abort |
+
+Every function except `pollActions` returns an `Expected<..., AiError>`; `aiErrorName()` gives the name:
+
+| Error | When |
+| --- | --- |
+| `NoAgent` | The Entity is not alive or has neither a `BehaviorAgent` nor an `AiPerception` |
+| `NoTree` | The agent's tree has not loaded yet, or failed to load |
+| `UnknownKey` | The tree has no key of that name |
+| `TypeMismatch` | The key has another type (`clearValue` on a Bool, Int or Float key too) |
+| `UnknownAction` | The Entity has no running action of that id |
+| `InvalidValue` | A value is not finite or out of range: a negative noise radius, a team of 32 or more |
+| `Full` | The noises of this update are full (`AiWorldDesc::maxNoisesPerUpdate`) |
+
+The actions of an update are published until the next AI update: every `pollActions()` call in between
+returns the same actions (the total, even beyond the span's size), so size the span for the busiest update or
+read it once per update. The `name` of an action and the string `runningNode` returns stay valid until the
+next update.
+
+```cpp
+if (illusion::AiService* ai = context.service<illusion::AiService>())
+{
+    std::array<illusion::AiActionRequest, 16> actions{};
+    const illusion::u32 count = ai->pollActions(actions);
+    for (illusion::u32 i = 0; i < count && i < actions.size(); ++i)
+    {
+        if (actions[i].phase == illusion::AiActionPhase::Started && actions[i].name == "bite")
+        {
+            static_cast<void>(ai->finishAction(actions[i].entity, actions[i].action, bite(actions[i].entity)));
+        }
+    }
+    static_cast<void>(ai->setEntity(creature, "target", player));
+    if (jumped)
+    {
+        static_cast<void>(ai->reportNoise({.position = playerPosition, .radius = 8.0f, .instigator = player}));
+    }
+    std::array<illusion::AiPerceived, 8> seen{};
+    const illusion::u32 seenCount = ai->perceived(creature, seen).valueOr(0u);
+    showAlert(seenCount > 0);
+}
+```
+
+The manual page [AI](../manual/ai.md#from-a-module) describes the trees, the actions and the perception.

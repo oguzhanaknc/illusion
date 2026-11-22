@@ -1,4 +1,5 @@
 #include <illusion/ai/AiWorld.hpp>
+#include <illusion/ai/AiWorldService.hpp>
 #include <illusion/animation/AnimationComponents.hpp>
 #include <illusion/animation/AnimationWorld.hpp>
 #include <illusion/animation/AnimationWorldService.hpp>
@@ -494,6 +495,7 @@ struct GameSession::Impl
         , navigation(world, sessionDesc.streamer)
         , navigationService(navigation)
         , ai(world, navigation, sessionDesc.streamer)
+        , aiService(ai)
         , ui(world)
         , physicsService(physics)
         , audioService(audio)
@@ -722,6 +724,7 @@ struct GameSession::Impl
     NavWorld navigation;
     NavWorldService navigationService;
     AiWorld ai;
+    AiWorldService aiService;
     UiWorld ui;
     UiFrame uiFrame{};
     Vec2 pointerScale{1.0f};
@@ -821,6 +824,7 @@ void GameSession::start()
         services.provide<SceneService>(impl.sceneService);
         services.provide<UiService>(impl.uiService);
         services.provide<NavService>(impl.navigationService);
+        services.provide<AiService>(impl.aiService);
         if (impl.animationService)
         {
             services.provide<AnimationService>(*impl.animationService);

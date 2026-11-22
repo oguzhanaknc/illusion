@@ -1376,12 +1376,18 @@ headers are in their `include/` directories.
   gained Agents, Actions, Live reload, Perception, Stimuli and the game session step (EN/TR). Open: the
   `AiWorldService` adapter and the scripting API (NAV-2c); the `ai.*` commands and the visualiser over
   `drawDebug()` (NAV-2d).
-- NAV-2c (`mechanic`): `AiService`. The interface joins the scripting API here (`@ingroup scripting_api` on the class, so
+- ✅ NAV-2c (`mechanic`): `AiService`. The interface joins the scripting API here (`@ingroup scripting_api` on the class, so
   `tools/check_api_coverage.py` requires the showcase to call it). `AiWorldService`, `USES ai` (`illusion::ai_api` in the SDK), `GameSession`
   provides it, module API version raised by one, the showcase module calls the whole `AiService`. Done: a
   module test finishes an action and sees its node succeed, sees an abort, writes a key the tree reads,
   reports a noise that a perceiver hears; every `AiError` from the service; the SDK test builds a module
   that uses it.
+  Done: `AiWorldService` (`engine/ai/src/AiWorldService.cpp`), `USES ai` and `illusion_ai_api` in the SDK, `GameSession`
+  provides the service, `kModuleApiVersion` 12; `tests/ai/TestAiService.cpp` (every function and every `AiError`),
+  a module test in `tests/modules/TestModules.cpp` (finishes an action, sees an abort, writes a key the tree
+  reads, reports a noise a listener hears), `CountingAi`, the showcase module calls all 13 functions (the guard
+  tree gained the keys `alert`, `greetings`, `boldness`), the SDK test module uses it; the scripting API
+  reference gained "AiService" (EN/TR). Open: the `ai.*` commands and the visualiser (NAV-2d).
 - NAV-2d (`mechanic`): Editor and documentation. Commands `ai.status` (running node, blackboard, perceived),
   `ai.setValue`, `ai.noise` (Play mode) and `ai.validate` (a `.behavior` file's errors), a perception
   visualiser over `AiWorld::drawDebug()`; the asset browser lists `.behavior` as `BehaviorTree`; exports
