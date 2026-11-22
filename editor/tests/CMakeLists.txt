@@ -424,6 +424,21 @@ set_tests_properties(docs.screenshots.project PROPERTIES LABELS "gpu" FIXTURES_S
 set_tests_properties(docs.screenshots PROPERTIES LABELS "gpu" TIMEOUT 600 FIXTURES_REQUIRED docs_showcase
     ENVIRONMENT "ILLUSION_UI_CAPTURE_DIR=${CMAKE_BINARY_DIR}/ui-captures")
 
+# The screenshot of the animation manual (docs/screenshots/animation.jsonl): the tech demo's creature, on a copy
+# of samples/techdemo without its downloaded assets.
+set(ILLUSION_DOCS_TECHDEMO ${CMAKE_BINARY_DIR}/docs-screenshots/techdemo)
+add_test(NAME docs.screenshots.animation.project
+    COMMAND ${CMAKE_COMMAND} -D SOURCE=${PROJECT_SOURCE_DIR}/samples/techdemo -D DESTINATION=${ILLUSION_DOCS_TECHDEMO}
+        -D EXCLUDE=external -P ${PROJECT_SOURCE_DIR}/docs/screenshots/CopyProject.cmake)
+add_test(NAME docs.screenshots.animation
+    COMMAND illusion_ctl --launch $<TARGET_FILE:illusion_editor>
+        --editor-arg --headless --editor-arg --deterministic --editor-arg --seed --editor-arg 1
+        --editor-arg --project --editor-arg ${ILLUSION_DOCS_TECHDEMO}
+        replay ${PROJECT_SOURCE_DIR}/docs/screenshots/animation.jsonl --gpu)
+set_tests_properties(docs.screenshots.animation.project PROPERTIES LABELS "gpu" FIXTURES_SETUP docs_techdemo)
+set_tests_properties(docs.screenshots.animation PROPERTIES LABELS "gpu" TIMEOUT 600 FIXTURES_REQUIRED docs_techdemo
+    ENVIRONMENT "ILLUSION_UI_CAPTURE_DIR=${CMAKE_BINARY_DIR}/ui-captures")
+
 # The same scenario through the MCP bridge in both protocol eras (ADR 0039): every step is a tool call.
 foreach(era legacy modern)
     add_test(NAME acceptance.tetris.board.mcp-${era}

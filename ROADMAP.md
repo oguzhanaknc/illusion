@@ -1038,7 +1038,7 @@ Open (recorded by ADR 0058): velocities of dynamic bodies, live particles and pl
 compression and a binary World section; several level deltas in one slot; the Steam cloud path is untested
 until a CI job has the SDK.
 
-## ANIM — Skeletal animation
+## ANIM — Skeletal animation ✅
 
 After DEMO, independent of GFX. Characters, creatures and machines that move with bones, at AAA quality.
 Nothing of it exists yet: glTF skins and animations are skipped on import and the vertex has no bone data.
@@ -1278,7 +1278,7 @@ Nothing of it exists yet: glTF skins and animations are skipped on import and th
   `CHANGELOG.md`.
 - ANIM-3 (scope): attach entities to bones (a lantern in a hand), look-at and
   two-bone IK (feet on uneven ground), ragdolls on Jolt from the skeleton, physics-driven secondary motion
-- ANIM-4: Editor and agents, in two work packages (no new ADR: it builds on ADR 0059-0061 and the editor
+- ✅ ANIM-4: Editor and agents, in three work packages (no new ADR: it builds on ADR 0059-0061 and the editor
   command rules of ADR 0036/0039):
 - ✅ ANIM-4a (`mechanic`): Commands. `animation.list` (the skins and clips of a model with joint counts and
   durations), `animation.status` (an Animator's clip or graph, time, current state per layer, parameters, the
@@ -1314,10 +1314,15 @@ Nothing of it exists yet: glTF skins and animations are skipped on import and th
   and Visualisers sections of `manual/editor/`, the command reference and `CHANGELOG.md`.
   On the way the Inspector stopped reporting parts of files (`#mesh/0`) as missing assets and stopped
   touching the file system for asset fields in every frame (that made every idle frame with a model allocate).
-  Open: the tech demo creature as the manual's screenshot subject (the creature arrives with NAV-3, PR #160,
-  which is not on this branch); `animation.status` in the edit World still reports the saved fields only,
-  although `ViewportHost::editAnimation()` now gives it the viewports' poses; an editor frame that runs several
-  game updates shows the events of its last update only.
+  Open (closed by ANIM-4c, except the last): an editor frame that runs several game updates shows the events of
+  its last update only.
+- ✅ ANIM-4c (`mechanic`): Closing. `animation.status` in the edit World reads `ViewportHost::editAnimation()`:
+  with a Scene view posing the World it is `live` with `posed`, `joints`, the loaded graph's layers and
+  parameters at the saved time (the result's shape is unchanged, so the command's version stays); without a
+  viewport it keeps `live: false` and the saved fields. The tech demo's creature is the animation manual's
+  screenshot (`images/editor/animation-preview.png`: Preview section and Skeletons visualiser), taken by
+  `docs/screenshots/animation.jsonl` (CTest `docs.screenshots.animation`, label `gpu`) on a copy of
+  `samples/techdemo` without its downloaded assets, with a scene built from committed files only.
 - ANIM-4 (scope): clip and state-machine preview in the Inspector, a timeline scrubber,
   `animation.*` commands (MCP tools), skeleton debug drawing; the tech demo gets an animated creature;
   documentation (EN/TR)

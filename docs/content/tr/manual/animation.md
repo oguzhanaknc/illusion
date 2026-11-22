@@ -116,13 +116,16 @@ bakmasını, onu kaydırmasını ve sürmesini sağlar:
 eder ve geri alınamaz, çünkü parametre çalışma zamanı durumudur. Graf yazılan değeri bir sonraki update'te
 kullanır; bu yüzden bir komuttan sonra `play.step` etkisini `animation.status` içinde gösterir.
 `animation.scrub` oyun oynarken bile her zaman edit World'üne etki eder ve oyun bıraktığı zamandan başlar. Edit
-World'ünde `animation.status` yalnızca kayıtlı alanları bildirir (`live` false'tur ve `note` bunu söyler):
-pozlar, state'ler ve parametreler play oturumunda vardır. Geçersiz her parametre JSON Pointer'ı ile bildirilir
+World'ünde `animation.status`, bir Scene görünümü onu pozluyorsa `live` olur: o zaman kayıtlı zamanda `posed`,
+`joints` ile yüklenmiş graph'ın layer'larını ve parametrelerini de bildirir; viewport yoksa (GPU'suz headless
+bir editor) `live` false'tur ve `note` bunu söyler. Event'ler ve çalışan state'ler play oturumunda vardır. Geçersiz her parametre JSON Pointer'ı ile bildirilir
 (grafta olmayan bir parametre için `/name`, öneriler ile; yanlış türde bir değer için `/value`).
 
 ### Inspector'da
 
 `Animator`'ı olan bir Entity seçin; Inspector kartı bir **Preview** bölümüyle başlar (Play modunda **Live**):
+
+![Tech demo'nun creature'ı seçili: Animator'ının Preview bölümü Inspector'da ve iskeleti Scene görünümünde](../images/editor/animation-preview.png)
 
 | Satır | Ne gösterir |
 | --- | --- |
