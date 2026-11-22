@@ -72,6 +72,7 @@ plugins:
             Rendering: Rendering
             Animation: Animasyon
             Navigation: Navigasyon
+            AI: AI
             Assets and Models: Asset'ler ve Modeller
             Physics: Fizik
             Audio: Ses
@@ -151,6 +152,7 @@ nav:
       - Rendering: manual/rendering.md
       - Animation: manual/animation.md
       - Navigation: manual/navigation.md
+      - AI: manual/ai.md
       - Assets and Models: manual/assets.md
       - Physics: manual/physics.md
       - Audio: manual/audio.md

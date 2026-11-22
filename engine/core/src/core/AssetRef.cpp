@@ -147,6 +147,8 @@ std::string_view assetKindName(AssetKind kind) noexcept
         return "AnimationGraph";
     case AssetKind::NavMesh:
         return "NavMesh";
+    case AssetKind::BehaviorTree:
+        return "BehaviorTree";
     }
     return "Unknown";
 }
