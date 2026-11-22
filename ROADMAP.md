@@ -1317,7 +1317,7 @@ headers are in their `include/` directories.
   start of an update; `waitIdle()` then the same queries give the same results; `randomPoint()` repeats for a
   seed; no allocation per query (`test::ScopedAllocationCounter`); benchmark `nav/find-path-1000` (1,000 paths
   of about 100 m on a 256 m tiled navmesh, one thread, ADR target 50 ms).
-- NAV-1c (`implementer`): The crowd. `NavAgent`/`NavAgentState`, crowd slots, the six phases of ADR 0062
+- ✅ NAV-1c (`implementer`): The crowd. `NavAgent`/`NavAgentState`, crowd slots, the six phases of ADR 0062
   with per-worker Detour queries and avoidance, the four drives, link traversal with `LinkEntered`/
   `LinkExited` events, `Arrived`/`PathFailed`, `OffMesh` and replanning, `setDestination()`, `stop()`,
   `warp()`, `pathCorners()`; `GameSession` gets a `NavWorld` (`navigation()`) and the Navigation step after

@@ -19,6 +19,7 @@
 #include <illusion/ecs/World.hpp>
 #include <illusion/input/GamepadSystem.hpp>
 #include <illusion/modules/ModuleHost.hpp>
+#include <illusion/nav/NavComponents.hpp>
 #include <illusion/particles/ParticleComponents.hpp>
 #include <illusion/physics/PhysicsComponents.hpp>
 #include <illusion/platform/Dialog.hpp>
@@ -157,6 +158,7 @@ void reflectEngineTypes()
     reflectAudioComponents();
     reflectParticleComponents();
     registerAnimationComponents(ComponentRegistry::instance());
+    registerNavComponents(ComponentRegistry::instance());
     reflectRenderComponents();
     registerUiComponents();
     registerSaveComponents();

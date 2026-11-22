@@ -5,6 +5,7 @@ add_library(illusion_nav STATIC
     src/NavAllocator.cpp
     src/NavBuild.cpp
     src/NavComponents.cpp
+    src/NavCrowd.cpp
     src/NavMeshData.cpp
     src/NavWorld.cpp)
 add_library(illusion::nav ALIAS illusion_nav)

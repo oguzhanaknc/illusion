@@ -137,3 +137,60 @@ ILL_BENCHMARK("nav/find-path-1000", 80'000'000.0)
         ankerl::nanobench::doNotOptimizeAway(length);
     });
 }
+
+// Budget: ns per crowd update of 500 Transform agents walking between random points of a 64 m ground with
+// 49 pillars, with the Job System, about 7x a 12-thread desktop result (0.3 ms); ADR 0062 aims at 2 ms.
+ILL_BENCHMARK("nav/crowd-500", 2'000'000.0)
+{
+    constexpr f32 kStep = 1.0f / 60.0f;
+    JobSystem jobs;
+    World world;
+    Transform center;
+    center.position = Vec3(0.0f, 2.0f, 0.0f);
+    NavMeshSurface surface;
+    surface.size = Vec3(64.0f, 8.0f, 64.0f);
+    world.create(center, surface);
+    addBox(world, Vec3(0.0f, -0.5f, 0.0f), Vec3(32.0f, 0.5f, 32.0f));
+    for (i32 z = -3; z <= 3; ++z)
+    {
+        for (i32 x = -3; x <= 3; ++x)
+        {
+            addBox(world, Vec3(static_cast<f32>(x) * 8.0f + 4.0f, 1.0f, static_cast<f32>(z) * 8.0f + 4.0f),
+                   Vec3(0.5f, 1.0f, 0.5f));
+        }
+    }
+    NavWorld navigation(world, nullptr);
+    navigation.waitIdle(&jobs);
+    Random random(11);
+    const auto point = [&random] {
+        return Vec3(random.uniformF32() * 56.0f - 28.0f, 0.0f, random.uniformF32() * 56.0f - 28.0f);
+    };
+    for (u32 i = 0; i < 500; ++i)
+    {
+        Transform transform;
+        transform.position = point();
+        NavAgent agent;
+        agent.drive = NavDrive::Transform;
+        agent.destination = point();
+        world.create(transform, agent);
+    }
+    // New destinations for the agents that arrived keep the crowd walking.
+    const auto update = [&] {
+        navigation.update(kStep, &jobs, true);
+        for (const NavEvent& event : navigation.events())
+        {
+            if (event.type == NavEventType::Arrived || event.type == NavEventType::PathFailed)
+            {
+                static_cast<void>(navigation.setDestination(event.agent, point()));
+            }
+        }
+    };
+    for (u32 i = 0; i < 120; ++i)
+    {
+        update();
+    }
+    bench.unit("update").run("update a crowd of 500 agents", [&] {
+        update();
+        ankerl::nanobench::doNotOptimizeAway(navigation.statistics().moving);
+    });
+}

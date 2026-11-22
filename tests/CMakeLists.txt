@@ -76,6 +76,7 @@ add_executable(illusion_tests
     modules/TestServices.cpp
     nav/TestNavBuild.cpp
     nav/TestNavComponents.cpp
+    nav/TestNavCrowd.cpp
     nav/TestNavMeshData.cpp
     nav/TestNavWorld.cpp
     physics/TestPhysicsAssets.cpp
