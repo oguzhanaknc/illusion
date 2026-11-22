@@ -561,6 +561,159 @@ world.emplace<illusion::FootPlacement>(hero, feet);
   the runtime `FootPlacementPose` that the next Animation step applies.
 - Without a running session (the editor outside Play mode) the feet keep the animated pose.
 
+## Spring bones
+
+A `SpringBone` (`illusion.SpringBone`, saved, in the Inspector's Animation category) on the Animator's Entity
+lets a chain of joints (hair, a tail, the edge of a cloak) swing with inertia and gravity after the animation
+has posed it:
+
+| Field | Meaning |
+| --- | --- |
+| `root` | The first joint of the chain; it stays on its animated place and every joint below it swings |
+| `stiffness` | The pull back towards the animated pose per step, in [0, 1] (0.6 by default) |
+| `damping` | The share of the velocity lost per step, in [0, 1] (0.2 by default) |
+| `gravity` | The world-space acceleration, in m/s² (0, -9.81, 0 by default) |
+| `radius` | The radius of each chain joint for collisions, in metres |
+| `colliders` | Up to four spheres the chain stays out of: `joint`, `offset` in the joint's space in metres, `radius` in metres; an entry with an empty `joint` is off |
+
+Each joint below the root is pulled towards where its animated pose puts it relative to its simulated
+parent, keeps its bone length and is pushed out of the colliders. The simulation uses Verlet integration in
+world space, so a character that moves or turns drags the chain along.
+
+```cpp
+illusion::SpringBone tail;
+tail.root = "tail_01";
+tail.stiffness = 0.35f;
+tail.damping = 0.3f;
+tail.colliders[0] = {"hips", illusion::Vec3(0.0f, 0.0f, -0.1f), 0.15f}; // keeps the tail off the body
+world.emplace<illusion::SpringBone>(hero, tail);
+```
+
+- The steps are fixed at 1/60 s: an update runs as many as its time holds, at most four, and carries the
+  remainder to the next update. The result depends only on the poses and the update times, so a game with
+  `GameSessionDesc::fixedStep` swings the same way on every run.
+- A chain has at most 32 joints: the joints below the root, in the skeleton's order. A longer chain swings
+  only its first 32 joints.
+- The colliders are spheres on joints of the same skeleton. The chain does not collide with the physics
+  world: bodies and the ground do not stop it.
+- A missing `root` or collider joint is logged once; a chain without a root does nothing.
+- While an update does not advance time (the editor outside Play mode, scrubbing) the chain shows the
+  animated pose and starts at rest.
+- The chain runs before look-at and IK, so those stages see the swung joints.
+
+## Ragdolls
+
+A `Ragdoll` (`illusion.Ragdoll`, saved, in the Inspector's Animation category) on the Animator's Entity turns
+the animated character into a physics ragdoll while it is `active`: capsule bodies drive the joints, fall,
+collide with the world and settle.
+
+| Field | Meaning |
+| --- | --- |
+| `profile` | A `.ragdoll` file with the shapes and limits; none makes a profile from the skeleton |
+| `active` | The character is simulated by physics instead of animated |
+| `blendSeconds` | The time to blend from the animated pose to the simulated one, and back, in seconds (0.25 by default) |
+| `mass` | The total mass in kg, shared by the parts by volume (70 by default) |
+| `layer` | The physics layer of the parts, in [0, 15] |
+
+When `active` turns true, the [game session](runtime.md#step-order) starts the ragdoll from the pose of the
+last Animation step and the velocity the character had (a `CharacterController`'s or a body's), so a
+character hit while running falls forwards. Every physics step then publishes the parts' world transforms,
+and the Animation step blends them into the pose over `blendSeconds`. When `active` turns false the ragdoll
+is removed and the pose blends back to the animation over the same time. Ragdolls run in the game session
+(Play mode and the player); the editor outside Play mode shows the animation.
+
+```cpp
+illusion::Ragdoll ragdoll;
+ragdoll.profile = illusion::AssetRef("assets:/animations/strider.ragdoll");
+ragdoll.mass = 55.0f;
+ragdoll.layer = 1;
+world.emplace<illusion::Ragdoll>(hero, ragdoll);
+
+// From a module: fall, and stand up again later.
+static_cast<void>(animation->setRagdoll(hero, true));
+static_cast<void>(animation->setRagdoll(hero, false));
+```
+
+[`AnimationService::setRagdoll()`](../reference/scripting-api.md#animationservice) writes `active` for a
+module. The showcase project's Fallen Strider starts as a ragdoll, stands up at frame 90 of its module and
+falls again at frame 200.
+
+### Profiles
+
+A `.ragdoll` file (`"format": "illusion.ragdoll"`, version 1) lists the bodies, parents before children.
+Each part is a capsule along its joint's bone, joined to the part of its nearest ancestor joint by a
+constraint at its joint. A joint without a part moves with the part above it. This is the Strider of the
+showcase project (`samples/showcase/assets/animations/strider.ragdoll`), shortened:
+
+```json
+{
+  "format": "illusion.ragdoll",
+  "version": 1,
+  "parts": [
+    { "joint": "hips", "radius": 0.12, "halfHeight": 0.1, "rotation": [0, 0, 0.7071068, 0.7071068], "massShare": 0.3 },
+    { "joint": "thigh_l", "radius": 0.06, "halfHeight": 0.145, "offset": [0, -0.205, 0] },
+    { "joint": "shin_l", "radius": 0.06, "halfHeight": 0.145, "offset": [0, -0.205, 0],
+      "swingLimit": 0.5, "twistMin": -0.1, "twistMax": 0.1 }
+  ]
+}
+```
+
+| Key of a part | Meaning |
+| --- | --- |
+| `joint` | The joint's name; required, and each joint appears once. A joint the skeleton lacks is skipped |
+| `radius` | The capsule's radius in metres; must be positive (0.05 by default) |
+| `halfHeight` | Half the length of the capsule's cylinder in metres (0.1 by default; 0 makes a sphere) |
+| `offset` | The capsule's centre in the joint's space, `[x, y, z]` in metres |
+| `rotation` | The capsule's orientation in the joint's space, a quaternion `[x, y, z, w]`; the capsule's axis is +y |
+| `massShare` | The share of `Ragdoll::mass` in [0, 1]; parts with 0 share the rest by volume; the shares add up to at most 1 |
+| `swingLimit` | The cone limit to the parent part, in radians in [0, π] (45° by default) |
+| `twistMin`, `twistMax` | The twist limits, in radians in [-π, 0] and [0, π] (-30° and 30° by default) |
+
+Errors name the JSON path, as `.animgraph` errors do (`parts[2].radius: must be positive`). A file that
+cannot be read is logged once, and the ragdoll is not started until `active` has been turned off and on
+again. A profile is loaded once, and again when its file changes.
+
+Without a `profile` the session generates one from the model: a capsule for each joint whose vertices span
+more than 4 cm, fitted along the bone towards its child, with the default limits above. It gives every rigged
+model a ragdoll that works; an authored profile gives better shapes and limits.
+
+### What is suspended while a ragdoll runs
+
+- **Root motion** of the Animator is not applied, and the Entity's `CharacterController` is taken out of the
+  simulation until the ragdoll is removed.
+- The Entity's own `Transform` stays where it was when the ragdoll started: the simulated parts move the
+  joints, not the Entity. Before you turn `active` off, move the Entity to where the character lies, so that
+  it stands up there and not at its old place. `AnimationService::jointTransform()` gives the simulated joint
+  in world space:
+
+```cpp
+// The simulated hips, from the last update: where the character lies.
+const illusion::Expected<illusion::Mat4, illusion::AnimationError> hips =
+    animation->jointTransform(hero, "hips");
+if (hips)
+{
+    illusion::Transform& transform = world.get<illusion::Transform>(hero);
+    transform.position = illusion::Vec3((*hips)[3].x, transform.position.y, (*hips)[3].z);
+    static_cast<void>(animation->setRagdoll(hero, false));
+}
+```
+
+- The ragdoll blend is the last stage of the pose, after look-at and IK: a simulated character shows the
+  ragdoll's pose without them, and the blend back starts from the ragdoll's pose.
+- Sockets follow the blended pose: a lantern in a ragdoll's hand falls with it.
+
+### Removal
+
+The ragdoll is removed, and its character goes back to the simulation, when `active` turns false, when the
+Entity is destroyed or becomes `Inactive`, or when the `Ragdoll` is removed. A ragdoll that cannot start
+(no part fits the skeleton, or the physics world is out of bodies) is refused and logged once; turn `active`
+off and on to try again. While the model or the `.ragdoll` file is still loading, the ragdoll starts as soon
+as they are ready.
+
+!!! note "Passive ragdolls"
+    A ragdoll only falls. Motors that make the parts follow the animation (powered ragdolls) and shapes other
+    than capsules are not available yet.
+
 ## Drawing skinned meshes
 
 `SceneRenderer` skins every posed mesh on the GPU. Give it the poses in `RenderView::animation`; the
@@ -593,7 +746,7 @@ renderer->render(commands, target, world, view, &jobs);
 ## Not supported yet
 
 - Interrupting a running transition, sub-state machines and saving the live state of a graph.
-- Spring bones and ragdolls (ANIM-3c); IK chains longer than two bones, and foot placement for more than
+- IK chains longer than two bones, and foot placement for more than
   the legs that hang from the pelvis (such as the front legs of a four-legged rig).
 - Clip previews, a timeline, skeleton debug drawing and `animation.*` editor commands (ANIM-4).
 - Morph targets, more than four influences per vertex, and keyframe compression.
@@ -605,6 +758,9 @@ renderer->render(commands, target, world, view, &jobs);
 - Placing 600 sockets on 300 Animators adds about 0.05 ms to an update (benchmark `animation/sockets-300`).
 - A look-at over three joints and two IK limbs on each of 300 Animators add about 0.1 ms to an update
   (benchmark `animation/ik-300`).
+- An 8-joint spring chain with a look-at and IK limbs on each of 300 Animators adds about 0.17 ms to
+  `animation/world-update` (0.43 ms against 0.26 ms).
+- Twenty ragdolls take about 0.17 ms to simulate (benchmark `physics/ragdolls-20`, budget 1 ms).
 - Skinning runs once per frame, however many passes draw the mesh: 300 instances of 10,240 vertices take
   0.66 ms on an NVIDIA GeForce RTX 4070 SUPER (the GPU test sets a budget of 3 ms).
 - Each visible skinned instance costs 64 bytes of GPU memory per vertex (the posed vertex and its previous

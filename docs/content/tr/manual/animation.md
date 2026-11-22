@@ -563,6 +563,159 @@ world.emplace<illusion::FootPlacement>(hero, feet);
   runtime `FootPlacementPose`'a yazar.
 - Çalışan bir oturum yokken (Play modu dışındaki editör) ayaklar animasyondaki pozu korur.
 
+## Spring bones
+
+Animator'ın Entity'sindeki bir `SpringBone` (`illusion.SpringBone`, kaydedilir, Inspector'ın Animation
+kategorisinde), animasyon pozladıktan sonra bir eklem zincirinin (saç, kuyruk, pelerin kenarı) eylemsizlik ve
+yerçekimiyle sallanmasını sağlar:
+
+| Alan | Anlamı |
+| --- | --- |
+| `root` | Zincirin ilk eklemi; animasyondaki yerinde kalır, altındaki her eklem sallanır |
+| `stiffness` | Adım başına animasyon pozuna doğru çekme, [0, 1] aralığında (varsayılan 0,6) |
+| `damping` | Adım başına kaybedilen hız payı, [0, 1] aralığında (varsayılan 0,2) |
+| `gravity` | Dünya uzayındaki ivme, m/s² cinsinden (varsayılan 0, -9,81, 0) |
+| `radius` | Çarpışmalar için her zincir ekleminin yarıçapı, metre cinsinden |
+| `colliders` | Zincirin dışında kaldığı en çok dört küre: `joint`, eklemin uzayında `offset` (metre), `radius` (metre); `joint`'i boş bir girdi kapalıdır |
+
+Kökün altındaki her eklem, animasyon pozunun onu simüle edilen ebeveynine göre koyduğu yere doğru çekilir,
+kemik uzunluğunu korur ve collider'ların dışına itilir. Simülasyon dünya uzayında Verlet entegrasyonu
+kullanır; bu yüzden hareket eden ya da dönen bir karakter zinciri de sürükler.
+
+```cpp
+illusion::SpringBone tail;
+tail.root = "tail_01";
+tail.stiffness = 0.35f;
+tail.damping = 0.3f;
+tail.colliders[0] = {"hips", illusion::Vec3(0.0f, 0.0f, -0.1f), 0.15f}; // keeps the tail off the body
+world.emplace<illusion::SpringBone>(hero, tail);
+```
+
+- Adımlar 1/60 sn'de sabittir: bir update süresinin içine sığdığı kadar, en çok dört adım çalıştırır ve
+  kalanı sonraki update'e taşır. Sonuç yalnızca pozlara ve update sürelerine bağlıdır; bu yüzden
+  `GameSessionDesc::fixedStep` ile çalışan bir oyun her çalıştırmada aynı şekilde sallanır.
+- Bir zincir en çok 32 eklemlidir: kökün altındaki eklemler, iskeletin sırasıyla. Daha uzun bir zincirde
+  yalnızca ilk 32 eklem sallanır.
+- Collider'lar aynı iskeletin eklemlerindeki kürelerdir. Zincir fizik dünyasıyla çarpışmaz: gövdeler ve zemin
+  onu durdurmaz.
+- Eksik bir `root` ya da collider eklemi bir kez loglanır; kökü olmayan bir zincir hiçbir şey yapmaz.
+- Bir update zamanı ilerletmediğinde (Play modu dışındaki editör, scrubbing) zincir animasyon pozunu
+  gösterir ve durgun başlar.
+- Zincir look-at ve IK'dan önce çalışır; bu yüzden onlar sallanmış eklemleri görür.
+
+## Ragdolls
+
+Animator'ın Entity'sindeki bir `Ragdoll` (`illusion.Ragdoll`, kaydedilir, Inspector'ın Animation
+kategorisinde), `active` olduğu sürece animasyonlu karakteri bir fizik ragdoll'una çevirir: kapsül gövdeler
+eklemleri sürer, düşer, dünyayla çarpışır ve durulur.
+
+| Alan | Anlamı |
+| --- | --- |
+| `profile` | Şekilleri ve sınırları içeren bir `.ragdoll` dosyası; yoksa iskeletten bir profil üretilir |
+| `active` | Karakter animasyonla değil, fizikle simüle edilir |
+| `blendSeconds` | Animasyon pozundan simüle edilen poza ve geri harmanlama süresi, saniye cinsinden (varsayılan 0,25) |
+| `mass` | Toplam kütle, kg cinsinden; parçalar arasında hacme göre paylaşılır (varsayılan 70) |
+| `layer` | Parçaların fizik katmanı, [0, 15] aralığında |
+
+`active` true olduğunda [oyun oturumu](runtime.md#adm-sras) ragdoll'u son Animation adımının pozundan ve
+karakterin sahip olduğu hızdan (bir `CharacterController`'ın ya da bir gövdenin) başlatır; böylece koşarken
+vurulan bir karakter öne doğru düşer. Her fizik adımı sonra parçaların dünya Transform'larını yayımlar ve
+Animation adımı onları `blendSeconds` boyunca poza harmanlar. `active` false olduğunda ragdoll kaldırılır ve
+poz aynı sürede animasyona geri harmanlanır. Ragdoll'lar oyun oturumunda (Play modu ve oynatıcı) çalışır;
+Play modu dışındaki editör animasyonu gösterir.
+
+```cpp
+illusion::Ragdoll ragdoll;
+ragdoll.profile = illusion::AssetRef("assets:/animations/strider.ragdoll");
+ragdoll.mass = 55.0f;
+ragdoll.layer = 1;
+world.emplace<illusion::Ragdoll>(hero, ragdoll);
+
+// From a module: fall, and stand up again later.
+static_cast<void>(animation->setRagdoll(hero, true));
+static_cast<void>(animation->setRagdoll(hero, false));
+```
+
+[`AnimationService::setRagdoll()`](../reference/scripting-api.md#animationservice) bir modül için `active`
+değerini yazar. Showcase projesindeki Fallen Strider ragdoll olarak başlar, modülünün 90. karesinde ayağa
+kalkar ve 200. karede yeniden düşer.
+
+### Profiller
+
+Bir `.ragdoll` dosyası (`"format": "illusion.ragdoll"`, sürüm 1) gövdeleri, ebeveynler çocuklardan önce
+gelecek şekilde listeler. Her parça, eklemin kemiği boyunca uzanan bir kapsüldür ve eklemindeki bir
+kısıtlamayla en yakın ata ekleminin parçasına bağlanır. Parçası olmayan bir eklem, üstündeki parçayla
+birlikte hareket eder. Bu, showcase projesinin Strider'ıdır
+(`samples/showcase/assets/animations/strider.ragdoll`), kısaltılmış:
+
+```json
+{
+  "format": "illusion.ragdoll",
+  "version": 1,
+  "parts": [
+    { "joint": "hips", "radius": 0.12, "halfHeight": 0.1, "rotation": [0, 0, 0.7071068, 0.7071068], "massShare": 0.3 },
+    { "joint": "thigh_l", "radius": 0.06, "halfHeight": 0.145, "offset": [0, -0.205, 0] },
+    { "joint": "shin_l", "radius": 0.06, "halfHeight": 0.145, "offset": [0, -0.205, 0],
+      "swingLimit": 0.5, "twistMin": -0.1, "twistMax": 0.1 }
+  ]
+}
+```
+
+| Bir parçanın anahtarı | Anlamı |
+| --- | --- |
+| `joint` | Eklemin adı; zorunludur ve her eklem bir kez geçer. İskelette olmayan bir eklem atlanır |
+| `radius` | Kapsülün yarıçapı, metre cinsinden; pozitif olmalıdır (varsayılan 0,05) |
+| `halfHeight` | Kapsülün silindir uzunluğunun yarısı, metre cinsinden (varsayılan 0,1; 0 bir küre yapar) |
+| `offset` | Kapsülün merkezi, eklemin uzayında, `[x, y, z]` metre cinsinden |
+| `rotation` | Kapsülün eklemin uzayındaki yönelimi, bir quaternion `[x, y, z, w]`; kapsülün ekseni +y'dir |
+| `massShare` | `Ragdoll::mass`'in payı, [0, 1] aralığında; 0 olan parçalar kalanı hacme göre paylaşır; paylar en çok 1 eder |
+| `swingLimit` | Ebeveyn parçaya koni sınırı, radyan cinsinden [0, π] aralığında (varsayılan 45°) |
+| `twistMin`, `twistMax` | Twist sınırları, radyan cinsinden [-π, 0] ve [0, π] aralığında (varsayılan -30° ve 30°) |
+
+Hatalar, `.animgraph` hataları gibi JSON yolunu adlandırır (`parts[2].radius: must be positive`). Okunamayan
+bir dosya bir kez loglanır ve `active` kapatılıp yeniden açılana kadar ragdoll başlatılmaz. Bir profil bir
+kez yüklenir ve dosyası değişince yeniden yüklenir.
+
+`profile` olmadan oturum modelden bir tane üretir: vertex'leri 4 cm'den fazla yayılan her eklem için kemik
+boyunca çocuğuna doğru yerleştirilmiş bir kapsül, yukarıdaki varsayılan sınırlarla. Bu, her rig'li modele
+çalışan bir ragdoll verir; elle yazılmış bir profil daha iyi şekiller ve sınırlar verir.
+
+### Ragdoll çalışırken askıya alınanlar
+
+- Animator'ın **root motion**'ı uygulanmaz ve Entity'nin `CharacterController`'ı ragdoll kaldırılana kadar
+  simülasyondan çıkarılır.
+- Entity'nin kendi `Transform`'u ragdoll başladığında bulunduğu yerde kalır: simüle edilen parçalar Entity'yi
+  değil, eklemleri hareket ettirir. `active`'i kapatmadan önce Entity'yi karakterin yattığı yere taşıyın;
+  böylece karakter eski yerinde değil orada ayağa kalkar. `AnimationService::jointTransform()` simüle edilen
+  eklemi dünya uzayında verir:
+
+```cpp
+// The simulated hips, from the last update: where the character lies.
+const illusion::Expected<illusion::Mat4, illusion::AnimationError> hips =
+    animation->jointTransform(hero, "hips");
+if (hips)
+{
+    illusion::Transform& transform = world.get<illusion::Transform>(hero);
+    transform.position = illusion::Vec3((*hips)[3].x, transform.position.y, (*hips)[3].z);
+    static_cast<void>(animation->setRagdoll(hero, false));
+}
+```
+
+- Ragdoll harmanlaması pozun son aşamasıdır, look-at ve IK'dan sonra gelir: simüle edilen bir karakter
+  ragdoll'un pozunu onlar olmadan gösterir ve geri harmanlama ragdoll'un pozundan başlar.
+- Socket'ler harmanlanmış pozu izler: bir ragdoll'un elindeki fener onunla birlikte düşer.
+
+### Kaldırma
+
+Ragdoll, `active` false olduğunda, Entity yok edildiğinde ya da `Inactive` olduğunda veya `Ragdoll`
+kaldırıldığında kaldırılır ve karakteri simülasyona geri döner. Başlayamayan bir ragdoll (hiçbir parça
+iskelete uymuyor ya da fizik dünyasının gövdeleri bitti) reddedilir ve bir kez loglanır; yeniden denemek için
+`active`'i kapatıp açın. Model ya da `.ragdoll` dosyası hâlâ yüklenirken ragdoll, hazır olur olmaz başlar.
+
+!!! note "Pasif ragdoll'lar"
+    Bir ragdoll yalnızca düşer. Parçaların animasyonu izlemesini sağlayan motorlar (powered ragdoll'lar) ve
+    kapsül dışındaki şekiller henüz yoktur.
+
 ## Skinned Mesh'leri çizme
 
 `SceneRenderer` pozlanmış her Mesh'i GPU'da skin'ler. Pozları ona `RenderView::animation` içinde verin;
@@ -594,7 +747,7 @@ renderer->render(commands, target, world, view, &jobs);
 ## Henüz desteklenmeyenler
 
 - Süren bir geçişi kesmek, alt durum makineleri ve bir grafın canlı durumunu kaydetmek.
-- Spring bone'lar ve ragdoll'lar (ANIM-3c); ikiden fazla kemikli IK zincirleri ve pelvisten sarkan
+- İkiden fazla kemikli IK zincirleri ve pelvisten sarkan
   bacaklardan fazlası için foot placement (dört bacaklı bir rig'in ön bacakları gibi).
 - Klip önizlemeleri, bir zaman çizelgesi, iskelet debug çizimi ve `animation.*` editör komutları (ANIM-4).
 - Morph target'lar, vertex başına dörtten fazla etki ve anahtar kare sıkıştırma.
@@ -608,6 +761,10 @@ renderer->render(commands, target, world, view, &jobs);
   `animation/sockets-300`).
 - 300 Animator'ın her birinde üç eklemlik bir look-at ve iki IK uzvu bir update'e yaklaşık 0,1 ms ekler
   (Benchmark `animation/ik-300`).
+- 300 Animator'ın her birinde 8 eklemlik bir spring zinciri, bir look-at ve IK uzuvları
+  `animation/world-update`'e yaklaşık 0,17 ms ekler (0,26 ms yerine 0,43 ms).
+- Yirmi ragdoll yaklaşık 0,17 ms'de simüle edilir (Benchmark `physics/ragdolls-20`, bütçe
+  1 ms).
 - Skinning, Mesh'i kaç pass çizerse çizsin karede bir kez çalışır: 10.240 vertex'lik 300 instance bir
   NVIDIA GeForce RTX 4070 SUPER'da 0,66 ms sürer (GPU testi 3 ms'lik bir bütçe koyar).
 - Görünür her skinned instance vertex başına 64 bayt GPU belleğine (pozlanmış vertex ve önceki konumu) ve

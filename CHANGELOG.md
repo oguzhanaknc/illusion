@@ -70,6 +70,13 @@ version changes are in the contributor guide ("Versions and releases"). The vers
   children) and `FootPlacement` (feet kept on the ground by raycasts in the game session, the pelvis lowered
   for the lower foot) Components, `AnimationService::setLookAtTarget()`, `setIkTarget()` and `setIkWeight()`,
   and the manual sections "Look-at", "Two-bone IK" and "Foot placement".
+- Spring bones and ragdolls (ANIM-3c): the saved `SpringBone` Component (a joint chain of up to 32 joints
+  swings with Verlet integration in fixed steps of 1/60 s, with sphere colliders) and `Ragdoll` Component
+  (Jolt capsule bodies and swing-twist limits from a `.ragdoll` profile or generated from the skeleton, blended
+  in and out of the animation), `AnimationService::setRagdoll()`, and the manual sections "Spring bones" and
+  "Ragdolls".
+- The tutorial "Animate a character" (ANIM-3d) gained a lantern on a socket, a head that follows a target, foot
+  placement on a step and a ragdoll, and the manual lists the benchmarks of spring bones and ragdolls.
 - Navigation meshes (NAV-1a): the Recast Navigation 1.6.0 dependency, the library `illusion::nav`, the saved
   `NavMeshSurface`, `NavArea`, `NavLink`, `NavObstacle` and `NavAgent` Components, a tiled navmesh bake from
   colliders on the Job System with identical bytes for any worker count, per-tile input hashes with
@@ -97,8 +104,8 @@ version changes are in the contributor guide ("Versions and releases"). The vers
 
 ### Changed
 
-- The module API version is 12 (`AiService` joined in version 12, `NavService` in 11, `AnimationService` gained `setLookAtTarget()`, `setIkTarget()` and
-  `setIkWeight()`; version 8 added `jointTransform()`, version 7
+- The module API version is 12 (`AiService` was added; version 11 added `NavService`, version 10 added `AnimationService::setRagdoll()`,
+  version 9 `setLookAtTarget()`, `setIkTarget()` and `setIkWeight()`, version 8 `jointTransform()`, version 7
   `AnimationService`, version 6 `UiService`, `SceneService::requestExit()` and `SaveService`, and `UiService`
   gained `playTransition()` and `transitionProgress()`): game modules built for an earlier version must be
   rebuilt.

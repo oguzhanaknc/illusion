@@ -4,6 +4,8 @@ Bu eğitim sahneye rig'li bir karakter koyar ve onu yürütür, koşturur ve zı
 aktarır, kliplerin nasıl harmanlanacağını bir animasyon grafında tarif eder, karaktere bir `CharacterController`
 verir ve grafın `speed` parametresini input'tan ayarlayan, bir zıplamayı tetikleyen, bir animasyon olayında ayak
 sesi çalan ve root motion'ın karakteri hareket ettirmesine izin veren küçük bir C++ oyun modülü yazarsınız.
+Sonra ele bir fener asar, başı bir ziyaretçiye çevirir, ayakları bir basamakta tutar ve karakteri ragdoll gibi
+düşürürsünüz.
 
 Bir illusion Release build'ine, editörün derlendiği C++ derleyicisine, klipleri `idle`, `walk`, `run` ve `jump`
 adlı rig'li bir glTF modeline (herhangi bir glTF kütüphanesinden bir karakter olur; klip adları aşağıdaki grafın
@@ -20,6 +22,8 @@ kullandıklarıdır) ve kısa bir `footstep.wav` dosyasına ihtiyacınız var. B
 - Root motion: ayaklar kaymaz, çünkü karakteri kod değil klipler hareket ettirir. `CharacterController`
   yatay hızı animasyondan alır ve dikey hızını kendisi tutar.
 - Parametreleri input action'larından yöneten ve her `footstep` olayında bir ses çalan bir modül.
+- Sağ elde bir fener (bir socket), bir ziyaretçiyi izleyen bir baş (look-at), bir basamakta duran ayaklar
+  (foot placement) ve karakteri düşürüp ayağa kaldıran bir tuş (bir ragdoll).
 
 ## 2. Projeyi oluşturun ve modeli içe aktarın
 
@@ -124,7 +128,7 @@ Play modu dışında Scene view Hero'yu giriş durumunda (Animator'ın `time` de
 
 ## 5. Input action'ları
 
-Modül iki action okur. `assets/input/hero.input` dosyasını oluşturun:
+Modül üç action okur; sonuncusu 10. adımda kullanılır. `assets/input/hero.input` dosyasını oluşturun:
 
 ```json
 {
@@ -132,7 +136,8 @@ Modül iki action okur. `assets/input/hero.input` dosyasını oluşturun:
   "version": 1,
   "actions": [
     {"name": "hero.move", "type": "Vector2", "bindings": ["Keys.W.S.A.D", "Stick.Left"]},
-    {"name": "hero.jump", "type": "Button", "bindings": ["Key.Space", "Gamepad.South"]}
+    {"name": "hero.jump", "type": "Button", "bindings": ["Key.Space", "Gamepad.South"]},
+    {"name": "hero.fall", "type": "Button", "bindings": ["Key.R", "Gamepad.East"]}
   ]
 }
 ```
@@ -157,10 +162,12 @@ Modülün durumu tek bir runtime Component'tir, böylece hot reload onu korur:
 #include <illusion/core/Module.hpp>
 #include <illusion/ecs/Name.hpp>
 #include <illusion/ecs/Reflection.hpp>
+#include <illusion/ecs/Transform.hpp>
 #include <illusion/ecs/World.hpp>
 #include <illusion/input/InputService.hpp>
 #include <illusion/physics/PhysicsComponents.hpp>
 #include <illusion/physics/PhysicsService.hpp>
+#include <illusion/physics/Ragdoll.hpp>
 
 #include <algorithm>
 #include <array>
@@ -177,6 +184,8 @@ struct State
     ActionId move = 0;
     ActionId jump = 0;
     AudioClipHandle footstep{};
+    ActionId fall = 0;
+    bool fallen = false;
 };
 
 } // namespace hero
@@ -212,12 +221,13 @@ void startHero(ModuleContext& context)
     }
     const std::optional<ActionId> move = input->findAction("hero.move");
     const std::optional<ActionId> jump = input->findAction("hero.jump");
-    if (!move || !jump)
+    const std::optional<ActionId> fall = input->findAction("hero.fall");
+    if (!move || !jump || !fall)
     {
         return;
     }
     const AudioClipHandle footstep = audio->loadClip("assets:/audio/footstep.wav", AudioClipMode::Decode);
-    context.world().create(Name{"Hero State"}, State{*move, *jump, footstep});
+    context.world().create(Name{"Hero State"}, State{*move, *jump, footstep, *fall, false});
 }
 ```
 
@@ -276,8 +286,163 @@ void updateHero(ModuleContext& context, f64)
     }
 }
 
+} // namespace
+```
+
+Modül henüz bitmedi: 7'den 10'a kadar olan adımlar bir fener, bir bakış, foot placement ve bir ragdoll ekler;
+11. adım modülü kaydeder ve derler.
+
+## 7. Elde bir fener
+
+Bir **socket** bir Entity'yi bir eklemde asılı tutur. Feneri Hero'nun çocuğu yapın ve ona bir `BoneAttachment`
+verin; Animation adımı her update'ten sonra transform'unu eklemin pozundan ve ofsetten yazar:
+
+```json
+{"call": "entity.create", "params": {"name": "Lantern", "parent": "/Hero", "components": {"illusion.MeshRenderer": {"mesh": "builtin:/mesh/sphere", "material": "builtin:/material/default"}, "illusion.BoneAttachment": {"joint": "hand_r", "translation": [0, 0.05, 0.1], "scale": [0.15, 0.15, 0.15]}}}}
+```
+
+`joint` için modelinizin sağ el ekleminin adını kullanın. `translation` eklemin kendi z ekseni boyunca 10 cm ve
+y boyunca 5 cm'dir, böylece fener avucta asılı durur; `scale` küreyi 15 cm genişliğinde yapar.
+`BoneAttachment` fenerin `Transform`'una sahiptir, bu yüzden boyut Transform'da değil burada ayarlanır. Feneri
+Scene görünümünde idle pozunda görmelisiniz; Play sırasında elle birlikte sallanır.
+
+## 8. Takip eden bir baş
+
+Bir `LookAt`, animasyondan sonra baş eklemini ve altındaki birkaç eklemi bir hedefe çevirir; en büyük bir
+açıya kadar ve sınırlı bir hızla. Yukarıdaki komutlar (3, 1.6, 4) konumuna bir **Visitor** küresi ve Hero'ya
+başı ve boynu en fazla 1,2 rad (yaklaşık 70°) ve 5 rad/s ile çeviren bir `LookAt` ekler. Inspector'da `target`
+alanını Visitor'ın Entity'sine ayarlamak yeter. Bir modül ise başı `AnimationService::setLookAtTarget()` ile
+herhangi bir noktaya çevirebilir; bu çağrı `target`'ı temizler. Bu fonksiyon Visitor'ın konumunu izler, yani
+Visitor'ı hareket ettiren bir oyun bakışı da hareket ettirir:
+
+```json
+{"call": "entity.create", "params": {"name": "Visitor", "components": {"illusion.Transform": {"position": [3, 1.6, 4]}, "illusion.MeshRenderer": {"mesh": "builtin:/mesh/sphere", "material": "builtin:/material/default"}}}}
+{"call": "component.add", "params": {"entity": "/Hero", "type": "illusion.LookAt", "value": {"joint": "head", "chainLength": 2, "maxAngle": 1.2, "speed": 5}}}
+```
+
+```cpp
+namespace
+{
+
+void updateGaze(ModuleContext& context)
+{
+    AnimationService* animation = context.service<AnimationService>();
+    if (animation == nullptr || !context.hasWorld())
+    {
+        return;
+    }
+    World& world = context.world();
+    Entity hero{};
+    world.query<const Animator, const LookAt>().each(
+        [&hero](Entity entity, const Animator&, const LookAt&) { hero = entity; });
+    std::optional<Vec3> visitor;
+    world.query<const Name, const Transform>().each([&visitor](Entity, const Name& name, const Transform& transform) {
+        if (name.value == "Visitor")
+        {
+            visitor = transform.position;
+        }
+    });
+    if (visitor && world.isAlive(hero))
+    {
+        static_cast<void>(animation->setLookAtTarget(hero, *visitor));
+    }
+}
+
+} // namespace
+```
+
+`updateGaze`, modülün update'inden 11. adımda çağrılır. Oyun çalışırken Visitor'ı Scene görünümünde hareket
+ettirin: Hero'nun başı onu yalnızca `maxAngle`'a kadar izler ve Visitor karakterin arkasına geçince animasyonun
+yönüne döner.
+
+## 9. Engebeli zeminde ayaklar
+
+`FootPlacement` her Animation adımından önce her ayağın altına bir ray atar, ayağı zemine kaldırır ya da
+indirir ve pelvis'i en alçak ayağa göre aşağı çeker. Ayaklar Animator'ın `TwoBoneIk` uzuvlarıdır; ilki
+Hero'da, diğerleri çocuklarında durabilir. İki bacağı, foot placement'ı ve üzerinden geçilecek alçak bir
+basamağı ekleyin:
+
+```json
+{"call": "entity.create", "params": {"name": "Foot Target Left", "parent": "/Hero", "components": {"illusion.TwoBoneIk": {"joint": "foot_l", "polePoint": [0, 0.5, 1]}}}}
+{"call": "entity.create", "params": {"name": "Foot Target Right", "parent": "/Hero", "components": {"illusion.TwoBoneIk": {"joint": "foot_r", "polePoint": [0, 0.5, 1]}}}}
+{"call": "component.add", "params": {"entity": "/Hero", "type": "illusion.FootPlacement", "value": {"pelvis": "hips", "rayLength": 1.6, "footHeight": 0.08, "maxStep": 0.4, "speed": 10, "layerMask": 1}}}
+{"call": "entity.create", "params": {"name": "Step", "components": {"illusion.Transform": {"position": [2, 0.15, 0], "scale": [2, 0.3, 2]}, "illusion.MeshRenderer": {"mesh": "builtin:/mesh/cube", "material": "builtin:/material/default"}, "illusion.RigidBody": {"motionType": "Static"}, "illusion.Collider": {"halfExtents": [0.5, 0.5, 0.5]}}}}
+```
+
+`polePoint`, dizin hangi yöne büküleceğidir, Hero'nun kendi uzayında: ileri ve biraz yukarı. Zemin ray'leri kalçanın
+1,6 m altına uzanır ve en fazla 0,4 m düzeltir (basamak 0,3 m yüksektir). `layerMask` 1 zeminin physics
+katmanıdır ve üzerindeki **Step** gövdesi statik bir `RigidBody`'dir. Hero'yu basamağın üzerinden koşturun:
+bacaklar zemine gömülmek yerine ayaklar basamağın üstünde kalır ve kalça iner. Play modu dışındaki editörde
+ayaklar animasyonlu pozu korur, çünkü ray'ler oyun oturumunda çalışır.
+
+## 10. Düşün
+
+Animator'ın Entity'sindeki bir `Ragdoll`, `active` olduğu sürece animasyonlu karakteri bir physics ragdoll'una
+çevirir. Bir `profile` olmadan oturum iskeletten kapsüller üretir:
+
+```json
+{"call": "component.add", "params": {"entity": "/Hero", "type": "illusion.Ragdoll", "value": {"mass": 70, "blendSeconds": 0.3}}}
+```
+
+Modülün son fonksiyonunu ekleyin; `hero.fall` action'ında ragdoll'u açıp kapatır ve hangi yöne gittiğini
+modülün `State`'inde hatırlar:
+
+```cpp
+namespace
+{
+
+void updateFall(ModuleContext& context)
+{
+    InputService* input = context.service<InputService>();
+    AnimationService* animation = context.service<AnimationService>();
+    if (input == nullptr || animation == nullptr || !context.hasWorld())
+    {
+        return;
+    }
+    World& world = context.world();
+    Entity hero{};
+    world.query<const Animator, const Ragdoll>().each(
+        [&hero](Entity entity, const Animator&, const Ragdoll&) { hero = entity; });
+    if (!world.isAlive(hero))
+    {
+        return;
+    }
+    world.query<State>().each([&](Entity, State& state) {
+        if (input->wasPressed(state.fall))
+        {
+            const bool fall = !state.fallen;
+            if (animation->setRagdoll(hero, fall).hasValue())
+            {
+                state.fallen = fall;
+            }
+        }
+    });
+}
+
+} // namespace
+```
+
+`setRagdoll()` `Ragdoll::active`'i yazar. Karakter mevcut pozundan ve hızından, **blendSeconds** kadar bir
+harmanlamayla düşer; ikinci bir basış pozu aynı sürede animasyona geri harmanlar. Fener bir socket olarak
+elle birlikte düşer.
+
+## 11. Derleyin ve deneyin
+
+Modül yeni fonksiyonları update'inden çağırır. Modülü onunla kaydedin:
+
+```cpp
+namespace
+{
+
+void updateAll(ModuleContext& context, f64 deltaSeconds)
+{
+    updateHero(context, deltaSeconds);
+    updateGaze(context);
+    updateFall(context);
+}
+
 constexpr ModuleApi kHero =
-    makeModuleApi("hero", "1.0.0", {.load = &loadHero, .start = &startHero, .update = &updateHero});
+    makeModuleApi("hero", "1.0.0", {.load = &loadHero, .start = &startHero, .update = &updateAll});
 
 } // namespace
 
@@ -286,22 +451,24 @@ ILL_MODULE(hero, kHero)
 
 **Ctrl+B**'ye (**Modules → Build Modules**) basın. Build başarılı olduğunda modül yüklenir.
 
-## 7. Deneyin
-
 **Play**'e basın:
 
-- Hero idle pozunda durur. **W**'ye basılı tutun: `run` klibinin root motion'ının sürdüğü şekilde ileri koşar
-  ve her döngünün iki işaretli anında bir ayak sesi duyulur. Yarıya itilmiş bir kol, daha yavaş klip ve daha
-  yavaş adımlarla yürür; aralarında klipler harmanlanır.
+- Hero elinde fenerle idle pozunda durur. **W**'ye basılı tutun: `run` klibinin root motion'ının sürdüğü şekilde
+  ileri koşar ve her döngünün iki işaretli anında bir ayak sesi duyulur. Yarıya itilmiş bir kol, daha yavaş klip ve
+  daha yavaş adımlarla yürür; aralarında klipler harmanlanır.
 - **Space**'e basın: `jump` 0,1 sn'lik bir cross-fade ile oynar, karakter yerden kalkar ve klip bitmek üzereyken
   graf locomotion'a geri geçer.
+- Baş, Hero'nun önünde olduğu sürece Visitor'a döner ve ayaklar basamağı izler.
+- **R**'ye basın: Hero elindeki fenerle yığılır. **R**'ye yeniden basın: Entity'sinin durduğu yerde animasyona
+  geri harmanlanır (ragdoll Entity'yi hareket ettirmez; karakterin yattığı yerde ayağa kalkmayı
+  [kılavuz](../manual/animation.md#ragdoll-calsrken-askya-alnanlar) gösterir).
 - Oyun çalışırken `hero.animgraph`'ı değiştirin (başka bir `exitTime`, yeni bir olay zamanı): editör dosyayı
   yeniden yükler ve Hero yeni grafla yeniden başlar.
 
 Bir ajan oyunu `play.start` ile başlatır, grafın durumunu modülün kendi mantığı ya da `play.step` ile okur ve
 pozu `viewport.screenshot` ile görür; grafın parametrelerini yalnızca oyun kodu ayarlar.
 
-## 8. Sınırlar
+## 12. Sınırlar
 
 - Root motion karakteri kliplerin yönünde ileri hareket ettirir. Kola doğru dönmek oyun kodudur: Entity'nin
   `Transform`'unu Animation adımından önce döndürün (root motion'lı bir graf Entity'yi yalnızca klibin yaw'ı
@@ -310,6 +477,8 @@ pozu `viewport.screenshot` ile görür; grafın parametrelerini yalnızca oyun k
   update'in sonunda temizlenir. Cross-fade'leri kısa tutun ya da yeniden basın.
 - Bir iskeletin animasyonları farklı eklem adları arasında paylaşılmaz; klipleri bir DCC aracında retarget edin.
 - Grafın canlı durumu kaydedilmez: kayıtlı bir oyunu yüklemek Hero'yu `locomotion`'da yeniden başlatır.
+- Bir ragdoll yalnızca düşer: motoru yoktur ve root motion'ı ile `CharacterController`'ı askıya alır.
+  Foot placement ve look-at simüle edilen bir karakterde görünmez.
 
 ## Sonraki adımlar
 

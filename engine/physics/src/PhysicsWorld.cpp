@@ -1,5 +1,6 @@
 #include "JoltJobSystem.hpp"
 
+#include <illusion/assets/Animation.hpp>
 #include <illusion/core/Assert.hpp>
 #include <illusion/core/Log.hpp>
 #include <illusion/core/Profiler.hpp>
@@ -8,6 +9,7 @@
 #include <illusion/ecs/Transform.hpp>
 #include <illusion/ecs/World.hpp>
 #include <illusion/physics/PhysicsWorld.hpp>
+#include <illusion/physics/Ragdoll.hpp>
 
 #include <Jolt/Jolt.h>
 #include <Jolt/Core/Factory.h>
@@ -34,8 +36,11 @@
 #include <Jolt/Physics/Constraints/HingeConstraint.h>
 #include <Jolt/Physics/Constraints/PointConstraint.h>
 #include <Jolt/Physics/Constraints/SliderConstraint.h>
+#include <Jolt/Physics/Constraints/SwingTwistConstraint.h>
 #include <Jolt/Physics/PhysicsSystem.h>
+#include <Jolt/Physics/Ragdoll/Ragdoll.h>
 #include <Jolt/RegisterTypes.h>
+#include <Jolt/Skeleton/Skeleton.h>
 
 #include <algorithm>
 #include <array>
@@ -46,6 +51,7 @@
 #include <mutex>
 #include <numbers>
 #include <optional>
+#include <string>
 #include <string_view>
 #include <type_traits>
 #include <vector>
@@ -117,6 +123,39 @@ Vec3 fromJolt(JPH::Vec3Arg v) noexcept
 Quat fromJolt(JPH::QuatArg q) noexcept
 {
     return {q.GetW(), q.GetX(), q.GetY(), q.GetZ()};
+}
+
+constexpr f32 kPi = std::numbers::pi_v<f32>;
+// Ragdoll parts: smallest radius and mass, and the surface and damping of every part.
+constexpr f32 kMinRagdollRadius = 0.01f;
+constexpr f32 kMinRagdollMass = 0.1f;
+constexpr f32 kRagdollFriction = 0.8f;
+constexpr f32 kRagdollDamping = 0.05f;
+
+bool finite(const Vec3& v) noexcept
+{
+    return std::isfinite(v.x) && std::isfinite(v.y) && std::isfinite(v.z);
+}
+
+Mat4 rigidMatrix(const Vec3& position, const Quat& rotation) noexcept
+{
+    Mat4 matrix = glm::mat4_cast(rotation);
+    matrix[3] = Vec4(position, 1.0f);
+    return matrix;
+}
+
+// The rotation of @p matrix with its scale removed.
+Quat unitRotation(const Mat4& matrix) noexcept
+{
+    Mat3 basis(matrix);
+    for (glm::length_t c = 0; c < 3; ++c)
+    {
+        const f32 length = glm::length(basis[c]);
+        basis[c] = length > 1e-12f ? basis[c] / length : Vec3(0.0f);
+    }
+    const Quat rotation = glm::quat_cast(basis);
+    const f32 length = glm::length(rotation);
+    return length > 0.0f && std::isfinite(length) ? rotation / length : Quat{1.0f, 0.0f, 0.0f, 0.0f};
 }
 
 // Object layer = collision layer * 2 + 1 for moving bodies (kinematic, dynamic), + 0 for static ones.
@@ -569,6 +608,18 @@ struct PhysicsWorld::Impl
         f32 gravityFactor = 1.0f;
         f32 stepHeight = 0.0f;
         JPH::ObjectLayer layer = 0;
+        bool suspended = false; // a ragdoll of its Entity runs: out of the simulation
+    };
+
+    struct RagdollRecord
+    {
+        Entity entity;
+        JPH::Ref<JPH::Ragdoll> ragdoll;
+        std::vector<u32> jointPart;         // per skeleton joint: the part (body index) it follows
+        std::vector<Mat4> jointOffset;      // per skeleton joint: its transform relative to that part's body
+        std::vector<Mat4> joints;           // per skeleton joint: world space after the last update()
+        std::vector<Vec3> previousPosition; // per part, for interpolation
+        std::vector<Quat> previousRotation;
     };
 
     struct JointRecord
@@ -690,6 +741,7 @@ struct PhysicsWorld::Impl
     void destroyCharacter(u32 id)
     {
         Character& slot = characters[id];
+        resumeCharacter(slot); // its inner body must be in the system when it goes
         characterCollision.Remove(slot.character.GetPtr());
         slot = Character{}; // the CharacterVirtual removes its inner body
         freeCharacters.push_back(id);
@@ -819,7 +871,7 @@ struct PhysicsWorld::Impl
         const JPH::Vec3 gravity = physics.GetGravity();
         for (Character& slot : characters)
         {
-            if (slot.character == nullptr)
+            if (slot.character == nullptr || slot.suspended)
             {
                 continue;
             }
@@ -1477,7 +1529,7 @@ struct PhysicsWorld::Impl
                 link.writtenRotation = transform.rotation;
             });
         world.query<Transform, CharacterBody>().each([&](Transform& transform, CharacterBody& link) {
-            if (link.id == CharacterBody::kInvalidId)
+            if (link.id == CharacterBody::kInvalidId || characters[link.id].suspended)
             {
                 return;
             }
@@ -1493,6 +1545,126 @@ struct PhysicsWorld::Impl
             link.ground =
                 touching && !ground.IsInvalid() ? Entity::fromBits(bodies.GetUserData(ground)) : kNullEntity;
         });
+    }
+
+    // --- Ragdolls -------------------------------------------------------------------------------------
+
+    void suspendCharacter(Entity entity)
+    {
+        const CharacterBody* link = world.tryGet<CharacterBody>(entity);
+        if (link == nullptr || link->id >= characters.size())
+        {
+            return;
+        }
+        Character& slot = characters[link->id];
+        if (slot.character == nullptr || slot.suspended || slot.entity != entity)
+        {
+            return;
+        }
+        slot.suspended = true;
+        characterCollision.Remove(slot.character.GetPtr());
+        const JPH::BodyID inner = slot.character->GetInnerBodyID();
+        if (!inner.IsInvalid())
+        {
+            physics.GetBodyInterfaceNoLock().RemoveBody(inner);
+        }
+    }
+
+    void resumeCharacter(Character& slot)
+    {
+        if (!slot.suspended)
+        {
+            return;
+        }
+        slot.suspended = false;
+        characterCollision.Add(slot.character.GetPtr());
+        const JPH::BodyID inner = slot.character->GetInnerBodyID();
+        if (!inner.IsInvalid())
+        {
+            physics.GetBodyInterfaceNoLock().AddBody(inner, JPH::EActivation::DontActivate);
+        }
+    }
+
+    [[nodiscard]] const RagdollRecord* ragdollOf(Entity entity) const noexcept
+    {
+        const auto found = std::ranges::find(ragdolls, entity, &RagdollRecord::entity);
+        return found != ragdolls.end() ? &*found : nullptr;
+    }
+
+    void destroyRagdoll(usize index)
+    {
+        RagdollRecord& record = ragdolls[index];
+        record.ragdoll->RemoveFromPhysicsSystem();
+        record.ragdoll = nullptr; // destroys the bodies
+        if (world.isAlive(record.entity))
+        {
+            const CharacterBody* link = world.tryGet<CharacterBody>(record.entity);
+            if (link != nullptr && link->id < characters.size() &&
+                characters[link->id].entity == record.entity && characters[link->id].character != nullptr)
+            {
+                resumeCharacter(characters[link->id]);
+            }
+        }
+        ragdolls[index] = std::move(ragdolls.back());
+        ragdolls.pop_back();
+    }
+
+    // Removes the ragdolls whose Entity is gone, Inactive or no longer has an active Ragdoll, and keeps the
+    // characters of the others out of the simulation (a rebuilt character would come back in).
+    void updateRagdolls()
+    {
+        for (usize i = 0; i < ragdolls.size();)
+        {
+            const Entity entity = ragdolls[i].entity;
+            const Ragdoll* settings = world.isAlive(entity) ? world.tryGet<Ragdoll>(entity) : nullptr;
+            if (settings == nullptr || !settings->active || world.has<Inactive>(entity))
+            {
+                destroyRagdoll(i);
+                continue;
+            }
+            suspendCharacter(entity);
+            ++i;
+        }
+    }
+
+    void captureRagdolls()
+    {
+        const JPH::BodyInterface& bodies = physics.GetBodyInterfaceNoLock();
+        for (RagdollRecord& record : ragdolls)
+        {
+            for (usize part = 0; part < record.previousPosition.size(); ++part)
+            {
+                JPH::RVec3 position;
+                JPH::Quat rotation;
+                bodies.GetPositionAndRotation(record.ragdoll->GetBodyID(static_cast<int>(part)), position,
+                                              rotation);
+                record.previousPosition[part] = fromJolt(JPH::Vec3(position));
+                record.previousRotation[part] = fromJolt(rotation);
+            }
+        }
+    }
+
+    void writeRagdolls(f32 alpha)
+    {
+        const JPH::BodyInterface& bodies = physics.GetBodyInterfaceNoLock();
+        for (RagdollRecord& record : ragdolls)
+        {
+            scratchMatrices.clear();
+            for (usize part = 0; part < record.previousPosition.size(); ++part)
+            {
+                JPH::RVec3 position;
+                JPH::Quat rotation;
+                bodies.GetPositionAndRotation(record.ragdoll->GetBodyID(static_cast<int>(part)), position,
+                                              rotation);
+                const Vec3 at = glm::mix(record.previousPosition[part], fromJolt(JPH::Vec3(position)), alpha);
+                const Quat turn = glm::slerp(record.previousRotation[part], fromJolt(rotation), alpha);
+                scratchMatrices.push_back(rigidMatrix(at, turn));
+            }
+            for (usize joint = 0; joint < record.joints.size(); ++joint)
+            {
+                record.joints[joint] = scratchMatrices[record.jointPart[joint]] * record.jointOffset[joint];
+            }
+        }
     }
 
     World& world;
@@ -1516,6 +1688,9 @@ struct PhysicsWorld::Impl
     std::vector<u32> freeCharacters;
     std::vector<JointRecord> joints;
     std::vector<u32> freeJoints;
+    std::vector<RagdollRecord> ragdolls;
+    std::vector<Mat4> scratchMatrices;
+    JPH::CollisionGroup::GroupID nextRagdollGroup = 1;
     std::vector<Entity> brokenJoints;
     std::vector<Entity> rebuilds;
     std::vector<Entity> scratchEntities;
@@ -1552,6 +1727,10 @@ void removeAll(World& world, std::vector<Entity>& scratch)
 PhysicsWorld::~PhysicsWorld()
 {
     Impl& impl = *m_impl;
+    while (!impl.ragdolls.empty())
+    {
+        impl.destroyRagdoll(impl.ragdolls.size() - 1);
+    }
     for (u32 id = 0; id < impl.joints.size(); ++id)
     {
         if (impl.joints[id].constraint != nullptr)
@@ -1589,6 +1768,7 @@ void PhysicsWorld::update(f64 deltaSeconds)
     impl.createBodies();
     impl.createCharacters();
     impl.createJoints();
+    impl.updateRagdolls();
     const u32 steps = impl.timestep.advance(deltaSeconds);
     const auto stepSeconds = static_cast<f32>(impl.timestep.stepSeconds());
     impl.followTransforms(static_cast<f64>(steps) * impl.timestep.stepSeconds());
@@ -1598,6 +1778,7 @@ void PhysicsWorld::update(f64 deltaSeconds)
         if (step + 1 == steps)
         {
             impl.capturePrevious();
+            impl.captureRagdolls();
         }
         ILL_PROFILE_SCOPE_N("Physics step");
         impl.stepCharacters(stepSeconds);
@@ -1613,6 +1794,7 @@ void PhysicsWorld::update(f64 deltaSeconds)
         impl.breakJoints(stepSeconds);
     }
     impl.writeTransforms(static_cast<f32>(impl.timestep.alpha()));
+    impl.writeRagdolls(static_cast<f32>(impl.timestep.alpha()));
     impl.contacts.finish();
     std::sort(impl.brokenJoints.begin(), impl.brokenJoints.end(),
               [](Entity a, Entity b) { return a.toBits() < b.toBits(); });
@@ -1621,6 +1803,275 @@ void PhysicsWorld::update(f64 deltaSeconds)
 void PhysicsWorld::rebuild(Entity entity)
 {
     m_impl->rebuilds.push_back(entity);
+}
+
+bool PhysicsWorld::startRagdoll(Entity entity, const Ragdoll& settings, const RagdollProfile& profile,
+                                const Skeleton& skeleton, std::span<const Mat4> joints,
+                                std::span<const Mat4> previousJoints, f32 seconds)
+{
+    ILL_PROFILE_SCOPE();
+    Impl& impl = *m_impl;
+    const usize jointCount = skeleton.joints.size();
+    if (!impl.world.isAlive(entity) || jointCount == 0 || joints.size() != jointCount)
+    {
+        ILL_LOG_WARN("Physics", "entity {}: cannot start a ragdoll: the pose does not match the skeleton",
+                     entity.index);
+        return false;
+    }
+    stopRagdoll(entity);
+
+    // The parts on joints of the skeleton, parents first.
+    struct Picked
+    {
+        u32 joint = 0;
+        const RagdollPart* part = nullptr;
+    };
+    std::vector<Picked> picked;
+    picked.reserve(profile.parts.size());
+    for (const RagdollPart& part : profile.parts)
+    {
+        const auto found = std::ranges::find(skeleton.joints, part.joint, &SkeletonJoint::name);
+        if (found == skeleton.joints.end())
+        {
+            ILL_LOG_WARN("Physics",
+                         "entity {}: the ragdoll part on '{}' is skipped: the skeleton has no such joint",
+                         entity.index, part.joint);
+            continue;
+        }
+        const auto joint = static_cast<u32>(found - skeleton.joints.begin());
+        if (std::ranges::find(picked, joint, &Picked::joint) == picked.end())
+        {
+            picked.push_back(Picked{.joint = joint, .part = &part});
+        }
+    }
+    std::ranges::sort(picked, {}, &Picked::joint);
+    if (picked.empty())
+    {
+        ILL_LOG_WARN("Physics", "entity {}: cannot start a ragdoll: no part fits the skeleton", entity.index);
+        return false;
+    }
+
+    // The part each joint follows: its own, else its nearest ancestor's, else the first.
+    std::vector<i32> ownPart(jointCount, -1);
+    for (usize k = 0; k < picked.size(); ++k)
+    {
+        ownPart[picked[k].joint] = static_cast<i32>(k);
+    }
+    std::vector<u32> jointPart(jointCount, 0);
+    for (usize j = 0; j < jointCount; ++j)
+    {
+        const i32 parent = skeleton.joints[j].parent;
+        jointPart[j] = ownPart[j] >= 0                                 ? static_cast<u32>(ownPart[j])
+                       : parent >= 0 && static_cast<usize>(parent) < j ? jointPart[static_cast<usize>(parent)]
+                                                                       : 0u;
+    }
+
+    const Vec3 up(0.0f, 1.0f, 0.0f);
+    const auto bodyPlacement = [&](const Mat4& joint, const RagdollPart& part, Vec3& position,
+                                   Quat& rotation) {
+        position = Vec3(joint * Vec4(part.offset, 1.0f));
+        rotation = glm::normalize(unitRotation(joint) * part.rotation);
+    };
+
+    // Shapes and masses: explicit shares first, the rest of the mass by volume.
+    const f32 totalMass = std::isfinite(settings.mass) && settings.mass > 0.0f ? settings.mass : 70.0f;
+    f32 explicitShare = 0.0f;
+    f32 freeVolume = 0.0f;
+    std::vector<f32> volumes(picked.size());
+    for (usize k = 0; k < picked.size(); ++k)
+    {
+        const RagdollPart& part = *picked[k].part;
+        const f32 radius = std::max(part.radius, kMinRagdollRadius);
+        const f32 halfHeight = std::max(part.halfHeight, 0.0f);
+        volumes[k] = std::numbers::pi_v<f32> * radius * radius * (4.0f / 3.0f * radius + 2.0f * halfHeight);
+        if (part.massShare > 0.0f)
+        {
+            explicitShare += part.massShare;
+        }
+        else
+        {
+            freeVolume += volumes[k];
+        }
+    }
+    const f32 freeMass = totalMass * std::max(1.0f - explicitShare, 0.0f);
+
+    JPH::Ref<JPH::Skeleton> joltSkeleton = new JPH::Skeleton();
+    JPH::Ref<JPH::RagdollSettings> ragdollSettings = new JPH::RagdollSettings();
+    ragdollSettings->mSkeleton = joltSkeleton;
+    ragdollSettings->mParts.resize(picked.size());
+    const JPH::ObjectLayer layer = objectLayer(std::min(settings.layer, kMaxPhysicsLayers - 1), true);
+    std::vector<Mat4> bodyMatrices(picked.size());
+    for (usize k = 0; k < picked.size(); ++k)
+    {
+        const u32 joint = picked[k].joint;
+        const RagdollPart& part = *picked[k].part;
+        i32 parentPart = -1;
+        if (k > 0)
+        {
+            parentPart = 0;
+            for (i32 ancestor = skeleton.joints[joint].parent; ancestor >= 0;
+                 ancestor = skeleton.joints[static_cast<usize>(ancestor)].parent)
+            {
+                if (ownPart[static_cast<usize>(ancestor)] >= 0)
+                {
+                    parentPart = ownPart[static_cast<usize>(ancestor)];
+                    break;
+                }
+            }
+        }
+        joltSkeleton->AddJoint(skeleton.joints[joint].name, parentPart);
+
+        Vec3 position(0.0f);
+        Quat rotation{1.0f, 0.0f, 0.0f, 0.0f};
+        bodyPlacement(joints[joint], part, position, rotation);
+        bodyMatrices[k] = rigidMatrix(position, rotation);
+        const f32 radius = std::max(part.radius, kMinRagdollRadius);
+        const f32 halfHeight = std::max(part.halfHeight, 0.0f);
+        JPH::RagdollSettings::Part& body = ragdollSettings->mParts[k];
+        if (halfHeight > kMinRagdollRadius)
+        {
+            body.SetShape(new JPH::CapsuleShape(halfHeight, radius));
+        }
+        else
+        {
+            body.SetShape(new JPH::SphereShape(radius));
+        }
+        body.mPosition = JPH::RVec3(toJolt(position));
+        body.mRotation = toJolt(rotation);
+        body.mMotionType = JPH::EMotionType::Dynamic;
+        body.mObjectLayer = layer;
+        body.mFriction = kRagdollFriction;
+        body.mLinearDamping = kRagdollDamping;
+        body.mAngularDamping = kRagdollDamping;
+        body.mOverrideMassProperties = JPH::EOverrideMassProperties::CalculateInertia;
+        const f32 share = part.massShare > 0.0f ? totalMass * part.massShare
+                          : freeVolume > 0.0f   ? freeMass * volumes[k] / freeVolume
+                                                : 0.0f;
+        body.mMassPropertiesOverride.mMass = std::max(share, kMinRagdollMass);
+        if (parentPart >= 0)
+        {
+            JPH::Ref<JPH::SwingTwistConstraintSettings> limit = new JPH::SwingTwistConstraintSettings();
+            limit->mSpace = JPH::EConstraintSpace::WorldSpace;
+            const Vec3 pivot(joints[joint][3]);
+            const Vec3 twist = glm::normalize(rotation * up);
+            const Vec3 plane = glm::normalize(rotation * Vec3(1.0f, 0.0f, 0.0f));
+            limit->mPosition1 = limit->mPosition2 = JPH::RVec3(toJolt(pivot));
+            limit->mTwistAxis1 = limit->mTwistAxis2 = toJolt(twist);
+            limit->mPlaneAxis1 = limit->mPlaneAxis2 = toJolt(plane);
+            limit->mNormalHalfConeAngle = limit->mPlaneHalfConeAngle = std::clamp(part.swingLimit, 0.0f, kPi);
+            limit->mTwistMinAngle = std::clamp(std::min(part.twistMin, part.twistMax), -kPi, kPi);
+            limit->mTwistMaxAngle = std::clamp(std::max(part.twistMin, part.twistMax), -kPi, kPi);
+            body.mToParent = limit;
+        }
+    }
+    static_cast<void>(ragdollSettings->Stabilize());
+    ragdollSettings->DisableParentChildCollisions();
+    ragdollSettings->CalculateBodyIndexToConstraintIndex();
+    JPH::Ref<JPH::Ragdoll> ragdoll =
+        ragdollSettings->CreateRagdoll(impl.nextRagdollGroup++, entity.toBits(), &impl.physics);
+    if (ragdoll == nullptr)
+    {
+        ILL_LOG_WARN("Physics", "entity {}: cannot start a ragdoll: the maximum number of bodies is reached",
+                     entity.index);
+        return false;
+    }
+    ragdoll->AddToPhysicsSystem(JPH::EActivation::Activate);
+
+    JPH::BodyInterface& bodies = impl.physics.GetBodyInterfaceNoLock();
+    const bool moving = previousJoints.size() == jointCount && seconds > 0.0f && std::isfinite(seconds);
+    for (usize k = 0; k < picked.size(); ++k)
+    {
+        const JPH::BodyID id = ragdoll->GetBodyID(static_cast<int>(k));
+        impl.slots[id.GetIndex()] = BodySlot{id, entity, false};
+        if (!moving)
+        {
+            continue;
+        }
+        Vec3 before(0.0f);
+        Quat turnedFrom{1.0f, 0.0f, 0.0f, 0.0f};
+        bodyPlacement(previousJoints[picked[k].joint], *picked[k].part, before, turnedFrom);
+        const Vec3 now(bodyMatrices[k][3]);
+        const Vec3 linear = (now - before) / seconds;
+        Quat delta = glm::normalize(glm::quat_cast(Mat3(bodyMatrices[k])) * glm::inverse(turnedFrom));
+        if (delta.w < 0.0f)
+        {
+            delta = -delta;
+        }
+        const f32 angle = 2.0f * std::acos(std::clamp(delta.w, -1.0f, 1.0f));
+        const f32 sine = std::sqrt(std::max(1.0f - delta.w * delta.w, 0.0f));
+        const Vec3 angular =
+            sine > 1e-6f ? Vec3(delta.x, delta.y, delta.z) / sine * (angle / seconds) : Vec3(0.0f);
+        if (finite(linear) && finite(angular))
+        {
+            bodies.SetLinearAndAngularVelocity(id, toJolt(linear), toJolt(angular));
+        }
+    }
+
+    Impl::RagdollRecord record;
+    record.entity = entity;
+    record.ragdoll = ragdoll;
+    record.jointPart = std::move(jointPart);
+    record.jointOffset.resize(jointCount);
+    for (usize j = 0; j < jointCount; ++j)
+    {
+        record.jointOffset[j] = glm::inverse(bodyMatrices[record.jointPart[j]]) * joints[j];
+    }
+    record.joints.assign(joints.begin(), joints.end());
+    record.previousPosition.resize(picked.size());
+    record.previousRotation.resize(picked.size());
+    for (usize k = 0; k < picked.size(); ++k)
+    {
+        record.previousPosition[k] = Vec3(bodyMatrices[k][3]);
+        record.previousRotation[k] = glm::normalize(glm::quat_cast(Mat3(bodyMatrices[k])));
+    }
+    impl.ragdolls.push_back(std::move(record));
+    impl.scratchMatrices.reserve(std::max(impl.scratchMatrices.capacity(), picked.size()));
+    impl.suspendCharacter(entity);
+    return true;
+}
+
+void PhysicsWorld::stopRagdoll(Entity entity)
+{
+    Impl& impl = *m_impl;
+    const auto found = std::ranges::find(impl.ragdolls, entity, &Impl::RagdollRecord::entity);
+    if (found != impl.ragdolls.end())
+    {
+        impl.destroyRagdoll(static_cast<usize>(found - impl.ragdolls.begin()));
+    }
+}
+
+bool PhysicsWorld::hasRagdoll(Entity entity) const
+{
+    return m_impl->ragdollOf(entity) != nullptr;
+}
+
+u32 PhysicsWorld::ragdollCount() const noexcept
+{
+    return static_cast<u32>(m_impl->ragdolls.size());
+}
+
+std::span<const Mat4> PhysicsWorld::ragdollJoints(Entity entity) const
+{
+    const Impl::RagdollRecord* record = m_impl->ragdollOf(entity);
+    return record != nullptr ? std::span<const Mat4>(record->joints) : std::span<const Mat4>();
+}
+
+bool PhysicsWorld::isRagdollAwake(Entity entity) const
+{
+    const Impl::RagdollRecord* record = m_impl->ragdollOf(entity);
+    if (record == nullptr)
+    {
+        return false;
+    }
+    const JPH::BodyInterface& bodies = m_impl->physics.GetBodyInterfaceNoLock();
+    for (const JPH::BodyID id : record->ragdoll->GetBodyIDs())
+    {
+        if (bodies.IsActive(id))
+        {
+            return true;
+        }
+    }
+    return false;
 }
 
 u32 PhysicsWorld::bodyCount() const noexcept

@@ -3,6 +3,7 @@
 #include <illusion/animation/AnimationComponents.hpp>
 #include <illusion/animation/AnimationWorld.hpp>
 #include <illusion/animation/AnimationWorldService.hpp>
+#include <illusion/assets/Animation.hpp>
 #include <illusion/audio/AudioWorldService.hpp>
 #include <illusion/core/Assert.hpp>
 #include <illusion/core/Log.hpp>
@@ -27,6 +28,7 @@
 #include <illusion/physics/PhysicsComponents.hpp>
 #include <illusion/physics/PhysicsWorld.hpp>
 #include <illusion/physics/PhysicsWorldService.hpp>
+#include <illusion/physics/Ragdoll.hpp>
 #include <illusion/platform/FileSystem.hpp>
 #include <illusion/platform/Input.hpp>
 #include <illusion/render/RenderAssets.hpp>
@@ -49,6 +51,7 @@
 #include <optional>
 #include <string>
 #include <string_view>
+#include <unordered_set>
 #include <utility>
 #include <vector>
 
@@ -217,7 +220,8 @@ StoreService* saveCloud(const GameSessionDesc& session)
 
 // Moves the Entities whose pose the last Animation step wrote by their root motion (ADR 0060): a character
 // gets it as its horizontal velocity for @p step seconds, keeping its vertical velocity; any other Entity
-// is moved, through its LocalTransform when it has a parent. Both turn about +y by the yaw.
+// is moved, through its LocalTransform when it has a parent. Both turn about +y by the yaw. An active Ragdoll
+// suspends it (ADR 0061).
 void applyRootMotion(World& world, PhysicsWorld& physics, u64 frame, f64 step)
 {
     if (!(step > 0.0))
@@ -228,6 +232,10 @@ void applyRootMotion(World& world, PhysicsWorld& physics, u64 frame, f64 step)
     world.query<const AnimationPose, Transform>().without<Inactive>().each(
         [&](Entity entity, const AnimationPose& pose, Transform& transform) {
             if (pose.frame != frame || (pose.rootTranslation == Vec3(0.0f) && pose.rootYaw == 0.0f))
+            {
+                return;
+            }
+            if (const Ragdoll* ragdoll = world.tryGet<Ragdoll>(entity); ragdoll != nullptr && ragdoll->active)
             {
                 return;
             }
@@ -459,6 +467,21 @@ void placeFeet(World& world, const PhysicsWorld& physics, f64 step)
         });
 }
 
+// The model-space matrix of a joint from its skin matrix and inverse bind matrix.
+[[nodiscard]] Mat4 modelFromSkin(const SkinMatrix& skin, const Mat4& inverseBind) noexcept
+{
+    Mat4 matrix(1.0f);
+    for (glm::length_t row = 0; row < 3; ++row)
+    {
+        for (glm::length_t column = 0; column < 4; ++column)
+        {
+            matrix[column][row] = skin.rows[static_cast<usize>(row)][column];
+        }
+    }
+    const f32 determinant = glm::determinant(inverseBind);
+    return determinant != 0.0f && std::isfinite(determinant) ? matrix * glm::inverse(inverseBind) : matrix;
+}
+
 } // namespace
 
 struct GameSession::Impl
@@ -591,6 +614,105 @@ struct GameSession::Impl
         return result;
     }
 
+    // Before the Animation step: a Ragdoll that turned off (ADR 0061) lets its pose blend back from this step
+    // on.
+    void releaseRagdolls()
+    {
+        world.query<const Ragdoll, const AnimationPose>().without<Inactive>().each(
+            [this](Entity entity, const Ragdoll& ragdoll, const AnimationPose& pose) {
+                if (!ragdoll.active)
+                {
+                    refusedRagdolls.erase(entity.toBits());
+                    static_cast<void>(animation->setRagdollPose(pose.slot, {}, false, ragdoll.blendSeconds));
+                }
+            });
+    }
+
+    // Before the physics step: a Ragdoll that turned active gets its Jolt ragdoll from the pose and motion of
+    // the Animation step, with its `.ragdoll` profile or one made from the skeleton.
+    void startRagdolls(f64 step)
+    {
+        ILL_PROFILE_SCOPE();
+        ragdollStarts.clear();
+        world.query<const Ragdoll>().without<Inactive>().each([this](Entity entity, const Ragdoll& ragdoll) {
+            if (ragdoll.active && !physics.hasRagdoll(entity) && !refusedRagdolls.contains(entity.toBits()))
+            {
+                ragdollStarts.push_back(entity);
+            }
+        });
+        for (const Entity entity : ragdollStarts)
+        {
+            startRagdoll(entity, step);
+        }
+    }
+
+    void startRagdoll(Entity entity, f64 step)
+    {
+        const std::optional<u32> slot = animation->findSlot(entity);
+        const Skeleton* skeleton = slot ? animation->skeleton(*slot) : nullptr;
+        if (skeleton == nullptr)
+        {
+            return; // its model loads
+        }
+        const Ragdoll& ragdoll = world.get<Ragdoll>(entity);
+        const RagdollProfile* profile = nullptr;
+        RagdollProfile generated;
+        if (ragdoll.profile && physicsAssets)
+        {
+            bool failed = false;
+            profile = physicsAssets->ragdollProfile(ragdoll.profile, failed);
+            if (profile == nullptr && !failed)
+            {
+                return; // the profile loads
+            }
+        }
+        if (profile == nullptr)
+        {
+            generated = makeRagdollProfile(*skeleton, animation->jointBounds(*slot));
+            profile = &generated;
+        }
+        const std::span<const Mat4> model = animation->jointMatrices(*slot);
+        const std::span<const SkinMatrix> previous = animation->previousSkinMatrices(*slot);
+        const Transform* transform = world.tryGet<Transform>(entity);
+        const Mat4 placement = transform != nullptr ? transform->matrix() : Mat4(1.0f);
+        // The Entity's own motion over the last step: its character's or its body's velocity.
+        const Vec3 velocity = world.has<CharacterController>(entity) ? physics.characterVelocity(entity)
+                                                                     : physics.linearVelocity(entity);
+        const Mat4 before = glm::translate(Mat4(1.0f), -velocity * static_cast<f32>(step)) * placement;
+        ragdollPose.resize(model.size());
+        ragdollPrevious.resize(model.size());
+        for (usize j = 0; j < model.size(); ++j)
+        {
+            ragdollPose[j] = placement * model[j];
+            ragdollPrevious[j] =
+                before * (j < previous.size() ? modelFromSkin(previous[j], skeleton->joints[j].inverseBind)
+                                              : model[j]);
+        }
+        if (!physics.startRagdoll(entity, ragdoll, *profile, *skeleton, ragdollPose, ragdollPrevious,
+                                  static_cast<f32>(step)))
+        {
+            refusedRagdolls.insert(entity.toBits());
+        }
+    }
+
+    // After the physics step: the ragdoll poses go to the AnimationWorld, which blends them in.
+    void handRagdollPoses()
+    {
+        if (physics.ragdollCount() == 0)
+        {
+            return;
+        }
+        world.query<const Ragdoll, const AnimationPose>().without<Inactive>().each(
+            [this](Entity entity, const Ragdoll& ragdoll, const AnimationPose& pose) {
+                const std::span<const Mat4> joints = physics.ragdollJoints(entity);
+                if (!joints.empty())
+                {
+                    static_cast<void>(
+                        animation->setRagdollPose(pose.slot, joints, true, ragdoll.blendSeconds));
+                }
+            });
+    }
+
     GameSessionDesc desc;
     std::optional<GuidGenerator> seededGuids; // fixedStep: ids of Entities created while running
     GameStringTable strings;                  // viewed by localization
@@ -624,6 +746,10 @@ struct GameSession::Impl
     std::unique_ptr<PhysicsAssetResolver> physicsAssets;
     std::unique_ptr<RenderAssetResolver> renderAssets;
     std::vector<const GamepadState*> gamepads;
+    std::vector<Entity> ragdollStarts;
+    std::vector<Mat4> ragdollPose;
+    std::vector<Mat4> ragdollPrevious;
+    std::unordered_set<u64> refusedRagdolls; // could not start; tried again once Ragdoll::active turns off
     u64 updates = 0;
     f64 time = 0.0;
     bool started = false;
@@ -770,14 +896,20 @@ void GameSession::update(f64 deltaSeconds)
         {
             placeFeet(impl.world, impl.physics, step);
         }
+        impl.releaseRagdolls();
         impl.animation->update(static_cast<f32>(step), impl.desc.jobs, impl.started);
         if (impl.started)
         {
             applyRootMotion(impl.world, impl.physics, impl.animation->frame(), step);
             followSockets(impl.world);
         }
+        impl.startRagdolls(step);
     }
     impl.physics.update(step);
+    if (impl.animation)
+    {
+        impl.handRagdollPoses();
+    }
     updateTransformHierarchy(impl.world, impl.hierarchy, impl.desc.jobs);
     impl.localization.applyPendingLocale();
     impl.glyphs.refresh();

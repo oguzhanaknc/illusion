@@ -149,8 +149,14 @@ struct GameSessionDesc
 ///    added to its Transform (and its LocalTransform follows when it has a parent); the translation of a
 ///    NavAgent whose drive is Character or Transform is not applied. The Entities attached to
 ///    joints (BoneAttachment, ADR 0061) then take their Transforms from their moved parents, so that
-///    kinematic bodies on them follow the sockets in the physics step.
-/// 7. **Physics:** PhysicsWorld::update().
+///    kinematic bodies on them follow the sockets in the physics step. An active Ragdoll suspends root
+///    motion.
+/// 7. **Physics:** (with GameSessionDesc::streamer) a Ragdoll (ADR 0061) that turned active gets its ragdoll
+///    (PhysicsWorld::startRagdoll()) from the pose and motion of the Animation step, with the profile of
+///    Ragdoll::profile (loaded by the physics asset resolver) or one made from the skeleton
+///    (makeRagdollProfile()); one that turned off lets the AnimationWorld blend back to the animation. Then
+///    PhysicsWorld::update(), and the ragdoll poses go to AnimationWorld::setRagdollPose() for the next
+///    Animation step.
 /// 8. **Hierarchy:** updateTransformHierarchy().
 /// 9. **UI:** the UiWorld lays out for the frame of setUiFrame(), handles the pointer and wheel of
 ///    keyboardMouse() and the actions `ui.navigate`, `ui.submit` and `ui.cancel` (Play mode), and records
