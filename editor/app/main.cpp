@@ -31,6 +31,7 @@
 #include <illusion/editor/ui/UiPlatformBackend.hpp>
 #include <illusion/editor/viewport/ViewportService.hpp>
 #include <illusion/input/GamepadSystem.hpp>
+#include <illusion/nav/NavComponents.hpp>
 #include <illusion/particles/ParticleComponents.hpp>
 #include <illusion/physics/PhysicsComponents.hpp>
 #include <illusion/platform/Events.hpp>
@@ -574,6 +575,7 @@ int run(const std::vector<std::string>& args)
     reflectAudioComponents();
     reflectParticleComponents();
     registerAnimationComponents(ComponentRegistry::instance());
+    registerNavComponents(ComponentRegistry::instance());
     registerUiComponents();
     registerSaveComponents();
 

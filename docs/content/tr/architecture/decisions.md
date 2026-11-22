@@ -68,6 +68,7 @@ Record (ADR) olarak kaydedilir. Her kayıt bağlamı, kararı ve sonuçlarını 
 | [0059](https://github.com/oguzhanaknc/illusion/blob/main/docs/adr/0059-skeletal-animation.md) | İskelet animasyonu: skin'ler ve clip'ler model içine cook edilir, pose'lar ECS dışındaki bir AnimationWorld'de tutulur, skinning kare başına bir kez bir compute pass'te yapılır |
 | [0060](https://github.com/oguzhanaknc/illusion/blob/main/docs/adr/0060-animation-graphs.md) | Animasyon graph'ları: parametrelerle sürülen, katmanlı state machine'ler olarak `.animgraph` Asset'leri; blend space'ler, event'ler ve root motion ile, yoklanan bir AnimationService üzerinden |
 | [0061](https://github.com/oguzhanaknc/illusion/blob/main/docs/adr/0061-sockets-ik-and-ragdolls.md) | Soketler, look-at, iki kemikli IK, spring bone'lar ve ragdoll'lar; animasyon graph'ından sonra sabit aşamalar olarak işlenen Component'ler; ayak yerleştirme ışınları GameSession'da atılır |
+| [0062](https://github.com/oguzhanaknc/illusion/blob/main/docs/adr/0062-navigation-and-ai.md) | Navigasyon ve yapay zekâ: Collider'lardan Editor'de ve çalışma anında bake edilen, tile'lara bölünmüş Recast navmesh'leri; CharacterController'ları yönlendiren, Job System üzerinde deterministik bir kalabalık; tipli blackboard'lu `.behavior` Asset'leri olarak davranış ağaçları; görme ve işitme algısı; yoklanan NavService ve AiService üzerinden |
 
 Yeni bir karar önermek için `docs/adr/0000-template.md` dosyasını kopyalayın ve
 [katkıda bulunma rehberini](../contributing.md#architecture-decision-recordlar) izleyin.

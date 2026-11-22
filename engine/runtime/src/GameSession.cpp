@@ -17,6 +17,8 @@
 #include <illusion/input/InputActionsService.hpp>
 #include <illusion/input/InputStrings.hpp>
 #include <illusion/modules/ModuleHost.hpp>
+#include <illusion/nav/NavComponents.hpp>
+#include <illusion/nav/NavWorld.hpp>
 #include <illusion/particles/ParticleWorld.hpp>
 #include <illusion/particles/ParticleWorldService.hpp>
 #include <illusion/physics/PhysicsAssetResolver.hpp>
@@ -236,6 +238,12 @@ void applyRootMotion(World& world, PhysicsWorld& physics, u64 frame, f64 step)
             }
             const Quat turn = glm::angleAxis(pose.rootYaw, Vec3(0.0f, 1.0f, 0.0f));
             transform.rotation = glm::normalize(turn * transform.rotation);
+            if (const NavAgent* agent = world.tryGet<NavAgent>(entity);
+                agent != nullptr &&
+                (agent->drive == NavDrive::Character || agent->drive == NavDrive::Transform))
+            {
+                return; // navigation moves it
+            }
             if (world.tryGet<CharacterController>(entity) != nullptr)
             {
                 const Vec3 velocity = physics.characterVelocity(entity);
@@ -252,6 +260,27 @@ void applyRootMotion(World& world, PhysicsWorld& physics, u64 frame, f64 step)
             }
             const Transform* parent = world.tryGet<Transform>(hierarchy->parent);
             *local = LocalTransform::from(relativeTo(transform, parent != nullptr ? *parent : Transform{}));
+        });
+}
+
+// Hands the crowd's output to physics and animation (ADR 0062): Character agents get the horizontal part of
+// their desired velocity, keeping their vertical velocity, and speed parameters follow the agents' speeds.
+void applyNavigation(World& world, PhysicsWorld& physics, AnimationService* animation)
+{
+    ILL_PROFILE_SCOPE();
+    world.query<const NavAgent, const NavAgentState>().without<Inactive>().each(
+        [&](Entity entity, const NavAgent& agent, const NavAgentState& state) {
+            if (agent.drive == NavDrive::Character && world.has<CharacterController>(entity))
+            {
+                const Vec3 velocity = physics.characterVelocity(entity);
+                physics.setCharacterVelocity(
+                    entity,
+                    state.link.isNull() ? Vec3(state.velocity.x, velocity.y, state.velocity.z) : Vec3(0.0f));
+            }
+            if (animation != nullptr && !agent.speedParameter.empty() && world.has<Animator>(entity))
+            {
+                static_cast<void>(animation->setFloat(entity, agent.speedParameter, state.speed));
+            }
         });
 }
 
@@ -460,6 +489,7 @@ struct GameSession::Impl
         , physics(world, *sessionDesc.jobs, physicsDesc(sessionDesc.settings.physics))
         , audio(world, *sessionDesc.files, audioDesc(sessionDesc))
         , particles(world)
+        , navigation(world, sessionDesc.streamer)
         , ui(world)
         , physicsService(physics)
         , audioService(audio)
@@ -685,6 +715,7 @@ struct GameSession::Impl
     PhysicsWorld physics;
     AudioWorld audio;
     ParticleWorld particles;
+    NavWorld navigation;
     UiWorld ui;
     UiFrame uiFrame{};
     Vec2 pointerScale{1.0f};
@@ -837,6 +868,15 @@ void GameSession::update(f64 deltaSeconds)
     {
         impl.saveService.update(impl.world, &impl.guids(), impl.desc.fixedStep);
     }
+    if (impl.desc.fixedStep)
+    {
+        impl.navigation.waitIdle(impl.desc.jobs);
+    }
+    impl.navigation.update(static_cast<f32>(step), impl.desc.jobs, impl.started);
+    if (impl.started)
+    {
+        applyNavigation(impl.world, impl.physics, impl.animationService.get());
+    }
     if (impl.animation)
     {
         if (impl.started)
@@ -920,6 +960,11 @@ ParticleWorld& GameSession::particles() noexcept
 AnimationWorld* GameSession::animation() noexcept
 {
     return m_impl->animation.get();
+}
+
+NavWorld& GameSession::navigation() noexcept
+{
+    return m_impl->navigation;
 }
 
 AudioWorld& GameSession::audio() noexcept

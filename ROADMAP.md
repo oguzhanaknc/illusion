@@ -1284,12 +1284,119 @@ Nothing of it exists yet: glTF skins and animations are skipped on import and th
 
 ## NAV — Navigation and AI
 
-- Navigation meshes baked from colliders and walkable surfaces with Recast (zlib), in the editor and at run
-  time for changing levels, tiled for large worlds; path queries and crowds with Detour on the Job System;
-  off-mesh links (jumps, ladders)
-- A `NavAgent` Component steering CharacterControllers, avoidance, debug drawing; behaviour trees as saved
-  assets with blackboards, perception (sight, hearing) and an `AiService`; `nav.*` and `ai.*` commands; a
-  creature that wanders the tech demo
+After ANIM. Designed in ADR 0062: tiled Recast navmeshes (Recast Navigation v1.6.0, private to `engine/nav`)
+baked from the colliders inside a `NavMeshSurface` by one pure bake function, in the editor into `.navmesh`
+files and at run time for missing or changed tiles; a crowd of our own built from Detour's parts that runs
+as Jobs and repeats with fixed steps for any worker count; `NavAgent`s that steer CharacterControllers
+through their velocity and read back where physics put them; behaviour trees as `.behavior` assets with
+typed blackboards and named actions that modules poll; sight and hearing perception; `NavService` and
+`AiService`. Two libraries: `engine/nav` (`illusion::nav`) and `engine/ai` (`illusion::ai`); the public
+headers are in their `include/` directories.
+
+- NAV-1: Navmeshes and crowds. Five work packages:
+- ✅ NAV-1a (`implementer`): Dependency and bake. Recast Navigation v1.6.0 in `cmake/Dependencies.cmake`
+  (exact URL and SHA-256; our own static targets of Recast, Detour, DetourCrowd and DebugUtils with
+  `DT_POLYREF64`, private to `illusion::nav`), `THIRD_PARTY_NOTICES.md`; the library `engine/nav` with
+  `illusion::nav_api`; `NavMeshData.hpp` (`encodeNavMeshData()`, `decodeNavMeshData()`), `NavBuild.hpp`
+  (`collectNavGeometry()`: every Collider shape as triangles, Mesh and ConvexHull through the lookup, areas,
+  volumes, links, carving obstacles; `navTileInputHash()`, `bakeNavMesh()`, `rebakeStaleTiles()`),
+  `registerNavComponents()` for the saved surface, area, link and obstacle Components, `AssetKind::NavMesh`,
+  Recast and Detour allocations through the engine heap. Done: tests for every shape's triangles and scale,
+  layer masks, Static/Kinematic/Dynamic filtering, Inactive sources, areas and volumes, link input; the same
+  bytes from 1 and 4 workers and from two bakes; encode/decode round trip and every `NavDataError`
+  (truncated, checksum, versions, duplicate tile); a moved box changes only the hashes of its tiles and
+  `rebakeStaleTiles()` rebuilds only those; benchmark `nav/bake-tile` (one 64 x 64-cell tile of a
+  10,000-triangle scene, budget from the measurement, ADR target 20 ms) and `nav/bake-256m` with Jobs.
+- ✅ NAV-1b (`implementer`): `NavWorld` surfaces and queries. Loading `NavMeshSurface::data` through the
+  streamer (decoder `illusion.navmesh`), baking surfaces without data or with rejected files in the
+  background, stale tiles (rebuilt with `rebuildAtRuntime`, otherwise counted and logged once), the rebuild
+  of tiles touched by changed sources and settled carving obstacles, `invalidate()`, live reload of
+  `.navmesh` files, one surface per agent type; `findPath()`, `nearestPoint()`, `raycast()`, `randomPoint()`
+  with area masks and costs; `drawDebug()` (navmesh, tiles, links, obstacles). Showcase: a `NavMeshSurface`,
+  a `NavArea`, a `NavLink` and a `NavObstacle` with non-default values in `build.jsonl`. Done: a path around
+  a wall, over a ramp and through a jump link; area costs change the path, an area mask blocks it; partial
+  and failed paths; carving cuts a path and the rebuild touches only its tiles; tiles swapped in only at the
+  start of an update; `waitIdle()` then the same queries give the same results; `randomPoint()` repeats for a
+  seed; no allocation per query (`test::ScopedAllocationCounter`); benchmark `nav/find-path-1000` (1,000 paths
+  of about 100 m on a 256 m tiled navmesh, one thread, ADR target 50 ms).
+- ✅ NAV-1c (`implementer`): The crowd. `NavAgent`/`NavAgentState`, crowd slots, the six phases of ADR 0062
+  with per-worker Detour queries and avoidance, the four drives, link traversal with `LinkEntered`/
+  `LinkExited` events, `Arrived`/`PathFailed`, `OffMesh` and replanning, `setDestination()`, `stop()`,
+  `warp()`, `pathCorners()`; `GameSession` gets a `NavWorld` (`navigation()`) and the Navigation step after
+  Saves (Character velocities into `PhysicsWorld::setCharacterVelocity()` keeping the vertical velocity,
+  `speedParameter` into the Animator's graph, root motion translation skipped for Character and Transform
+  agents); the player and the editor register the Components. Showcase: a `NavAgent` with non-default
+  values. Done: a Character agent walks up a ramp and a step to its destination through physics; two agents
+  crossing do not touch; a crowd of 50 through a doorway arrives; a Transform agent stays on the navmesh; a
+  jump link moves the agent along its parabola with both events; the same World after 600 fixed steps with
+  1 and 4 workers; Inactive agents do not move; a saved game restores `destination`; no allocation in a
+  steady update; benchmark `nav/crowd-500` with Jobs (ADR target 2 ms).
+- NAV-1d (`mechanic`): `NavService`. The interface joins the scripting API here (`@ingroup scripting_api` on the class, so
+  `tools/check_api_coverage.py` requires the showcase to call it). `NavWorldService`, `USES nav` (`illusion::nav_api` in the SDK and
+  `cmake/IllusionModules.cmake`), `GameSession` provides it, module API version raised by one, the showcase
+  module calls the whole `NavService` (`tools/check_api_coverage.py`). Done: a module test sends an agent to a
+  point and reads its `Arrived` event; every `NavError` from the service; the SDK test builds a module that
+  uses it.
+- NAV-1e (`mechanic`): Editor and documentation. Commands `nav.bake` (async: one or every surface, changed
+  tiles only, writes the `.navmesh`, sets `NavMeshSurface::data` through `executeStep()`), `nav.status`,
+  `nav.path`, `nav.debug`; the edit World's `NavWorld` (never advanced); a viewport visualiser over
+  `drawDebug()`; a Bake button in the Inspector of `NavMeshSurface`; the asset browser lists `.navmesh` as
+  `NavMesh`; exports ship `.navmesh` files; the command reference (`illusion_editor_command_reference
+  --write docs/content`) and `catalog.json` (`ILLUSION_UPDATE_GOLDENS=1`); the manual page "Navigation"
+  (EN/TR: surfaces, settings, areas, links, obstacles, agents and drives, run-time rebuilds, limits), the
+  `NavService` reference, `CHANGELOG.md`. Done: command tests (bake twice writes the same file and changes
+  nothing the second time, a moved wall rebakes its tiles only, `nav.path` around a wall, every invalid
+  param), the fuzz test, a GPU golden image of the visualiser, `mkdocs build --strict`, docs parity.
+- NAV-2: Behaviour trees and perception. Four work packages:
+- NAV-2a (`implementer`): Trees without a World. The library `engine/ai` with `illusion::ai_api`;
+  `Blackboard.hpp` (`compareBlackboard()`), `BehaviorTree.hpp` (`parseBehaviorTree()`,
+  `writeBehaviorTree()`, `findKey()`), `BehaviorTreeState.hpp` (`makeBehaviorTreeState()`,
+  `resetBehaviorTree()`, `tickBehaviorTree()`, `runningNode()`), `Perception.hpp` (`inSightCone()`,
+  `hearsNoise()`), `AssetKind::BehaviorTree`. Done: a parser test for every error (messages with the JSON
+  path) and the round trip; per node type a test against a fake `BehaviorContext` (sequence and selector
+  order, parallel thresholds, every decorator, guards with each abort mode, aborted moves and actions,
+  Wait deviation from the seed); the same statuses for the same seed; no allocation in `tickBehaviorTree()`;
+  cone and hearing edge cases; benchmark `ai/tick-1000` (1,000 trees of 30 nodes, one thread, ADR target
+  1 ms).
+- NAV-2b (`implementer`): `AiWorld` and perception. `AiComponents.hpp` (`registerAiComponents()`), `AiWorld`
+  (tree loading through the streamer, decoder `illusion.behavior`, slots, blackboard overrides, the context
+  over `NavWorld`, perception with the raycast budget, blackboard keys from perception, actions, staggered
+  ticks, live reload), `GameSession` gets an `AiWorld` (`ai()`) and the AI step before Navigation; the player
+  and the editor register the Components. Showcase: a `BehaviorAgent` (with a small `.behavior` file and an
+  override), an `AiPerception` and an `AiStimulus` with non-default values. Done: sight within the cone and
+  radius, blocked by a wall, outside the cone; hearing within the scaled radius; memory forgets after
+  `memorySeconds`; the raycast budget serves every perceiver in turn; a guard with `LowerPriority` interrupts
+  wandering when a target is seen; the same World after 600 fixed steps with 1 and 4 workers; Inactive agents
+  do not tick; a reloaded tree restarts its agents; no allocation in a steady update; benchmark
+  `ai/perception-200` (200 perceivers, 50 stimuli, 256 rays, ADR target 1 ms) and `ai/world-1000`.
+- NAV-2c (`mechanic`): `AiService`. The interface joins the scripting API here (`@ingroup scripting_api` on the class, so
+  `tools/check_api_coverage.py` requires the showcase to call it). `AiWorldService`, `USES ai` (`illusion::ai_api` in the SDK), `GameSession`
+  provides it, module API version raised by one, the showcase module calls the whole `AiService`. Done: a
+  module test finishes an action and sees its node succeed, sees an abort, writes a key the tree reads,
+  reports a noise that a perceiver hears; every `AiError` from the service; the SDK test builds a module
+  that uses it.
+- NAV-2d (`mechanic`): Editor and documentation. Commands `ai.status` (running node, blackboard, perceived),
+  `ai.setValue`, `ai.noise` (Play mode) and `ai.validate` (a `.behavior` file's errors), a perception
+  visualiser over `AiWorld::drawDebug()`; the asset browser lists `.behavior` as `BehaviorTree`; exports
+  ship them; the command reference and `catalog.json`; the manual page "AI" (EN/TR: the `.behavior` file
+  node by node with a complete example tested like `character.animgraph`, blackboards, actions, perception),
+  the `AiService` reference, the tutorial "A creature that wanders and chases" (its C++ built by
+  `ExtractCppBlocks`, its tree parsed by a test), `CHANGELOG.md`. Done: command tests and the fuzz test,
+  `mkdocs build --strict`, docs parity, the tutorial module loads in `tests/docs/TestTutorials.cpp`.
+- NAV-3 (`implementer`): The tech demo creature. A `NavMeshSurface` over the clearing baked by `build.jsonl`
+  (`nav.bake`, the `.navmesh` committed), a creature (the ANIM-4 creature, or until it lands a simple rigged
+  model from `make_assets.py`) with a `NavAgent` (Character drive, `speedParameter` into its graph), an
+  `AiPerception` and a `BehaviorAgent` whose tree wanders around its den, follows the player it sees or
+  hears (footsteps reported by the module as noises), keeps away from the campfire (a high-cost `NavArea`)
+  and returns home when it loses the player; the pause menu stops it. Done: `TestTechDemo.cpp` runs the
+  module on the scene for 600 fixed steps and sees the creature wander, notice a scripted player and reach
+  it, with the same result twice; the techdemo manual page (EN/TR) and its README describe the creature.
+- NAV (scope): navigation meshes baked from colliders and walkable surfaces with Recast (zlib), in the
+  editor and at run time for changing levels, tiled for large worlds; path queries and crowds with Detour on
+  the Job System; off-mesh links (jumps, ladders)
+- NAV (scope): a `NavAgent` Component steering CharacterControllers, avoidance, debug drawing; behaviour
+  trees as saved assets with blackboards, perception (sight, hearing) and an `AiService`; `nav.*` and `ai.*`
+  commands; a creature that wanders the tech demo
 
 ## MAT — Custom shaders and materials
 

@@ -71,6 +71,7 @@ plugins:
             File System: Dosya Sistemi
             Rendering: Rendering
             Animation: Animasyon
+            Navigation: Navigasyon
             Assets and Models: Asset'ler ve Modeller
             Physics: Fizik
             Audio: Ses
@@ -149,6 +150,7 @@ nav:
       - File System: manual/filesystem.md
       - Rendering: manual/rendering.md
       - Animation: manual/animation.md
+      - Navigation: manual/navigation.md
       - Assets and Models: manual/assets.md
       - Physics: manual/physics.md
       - Audio: manual/audio.md

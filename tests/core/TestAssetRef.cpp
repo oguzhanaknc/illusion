@@ -119,6 +119,7 @@ TEST_CASE("skin and animation fragments normalize like mesh and node fragments")
     CHECK(assetKindName(AssetKind::Skeleton) == "Skeleton");
     CHECK(assetKindName(AssetKind::AnimationClip) == "AnimationClip");
     CHECK(assetKindName(AssetKind::AnimationGraph) == "AnimationGraph");
+    CHECK(assetKindName(AssetKind::NavMesh) == "NavMesh");
     CHECK(assetKindName(AssetKind::RagdollProfile) == "RagdollProfile");
 }
 

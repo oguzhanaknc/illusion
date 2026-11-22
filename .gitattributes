@@ -7,4 +7,5 @@
 *.hdr binary
 *.exr binary
 *.glb binary
+*.navmesh binary
 *.ktx2 binary

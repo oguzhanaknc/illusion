@@ -10,6 +10,7 @@
 #include <illusion/ecs/StructRegistry.hpp>
 #include <illusion/ecs/Transform.hpp>
 #include <illusion/ecs/World.hpp>
+#include <illusion/nav/NavComponents.hpp>
 #include <illusion/particles/ParticleComponents.hpp>
 #include <illusion/physics/PhysicsComponents.hpp>
 #include <illusion/platform/FileSystem.hpp>
@@ -41,6 +42,7 @@ void reflectEngine()
     reflectAudioComponents();
     reflectParticleComponents();
     registerAnimationComponents(ComponentRegistry::instance());
+    registerNavComponents(ComponentRegistry::instance());
     reflectAssetStructs();
     registerUiComponents();
     registerSaveComponents();
