@@ -149,6 +149,8 @@ std::string_view assetKindName(AssetKind kind) noexcept
         return "NavMesh";
     case AssetKind::RagdollProfile:
         return "RagdollProfile";
+    case AssetKind::BehaviorTree:
+        return "BehaviorTree";
     }
     return "Unknown";
 }

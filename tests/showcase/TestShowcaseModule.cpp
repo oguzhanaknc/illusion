@@ -4,6 +4,7 @@
 #include "TestSupport.hpp"
 #include "modules/CountingServices.hpp"
 
+#include <illusion/ai/AiComponents.hpp>
 #include <illusion/animation/AnimationComponents.hpp>
 #include <illusion/animation/AnimationWorld.hpp>
 #include <illusion/animation/AnimationWorldService.hpp>
@@ -72,6 +73,7 @@ void reflectAll()
     reflectParticleComponents();
     registerAnimationComponents(ComponentRegistry::instance());
     registerNavComponents(ComponentRegistry::instance());
+    registerAiComponents(ComponentRegistry::instance());
     reflectRenderComponents();
     reflectRuntimeStructs();
     registerUiComponents();

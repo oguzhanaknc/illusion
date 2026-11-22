@@ -1,5 +1,6 @@
 // Checks the reflection metadata of every engine type, so that the editor shows them consistently.
 
+#include <illusion/ai/AiComponents.hpp>
 #include <illusion/animation/AnimationComponents.hpp>
 #include <illusion/assets/AssetReflection.hpp>
 #include <illusion/audio/AudioComponents.hpp>
@@ -43,6 +44,7 @@ void reflectEngine()
     reflectParticleComponents();
     registerAnimationComponents(ComponentRegistry::instance());
     registerNavComponents(ComponentRegistry::instance());
+    registerAiComponents(ComponentRegistry::instance());
     reflectAssetStructs();
     registerUiComponents();
     registerSaveComponents();

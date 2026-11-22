@@ -3,6 +3,13 @@ illusion_require_dependency(doctest)
 add_executable(illusion_tests
     main.cpp
     AllocationCounter.cpp
+    ai/TestAiComponents.cpp
+    ai/TestAiPerceptionWorld.cpp
+    ai/TestAiWorld.cpp
+    ai/TestBehaviorTree.cpp
+    ai/TestBehaviorTreeState.cpp
+    ai/TestBlackboard.cpp
+    ai/TestPerception.cpp
     core/TestAssert.cpp
     core/TestAssetRef.cpp
     core/TestEventBus.cpp
@@ -126,7 +133,7 @@ target_include_directories(illusion_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}
 target_link_libraries(illusion_tests PRIVATE
     illusion::core illusion::platform illusion::input illusion::assets illusion::animation illusion::audio
     illusion::physics illusion::particles illusion::render illusion::modules illusion::runtime illusion::player illusion::store
-    illusion::save illusion::text illusion_text_tools illusion::ui illusion::nav illusion::doctest)
+    illusion::save illusion::text illusion_text_tools illusion::ui illusion::nav illusion::ai illusion::doctest)
 illusion_require_dependency(test_font)
 target_compile_definitions(illusion_tests PRIVATE ILLUSION_TEST_DATA_DIR="${CMAKE_CURRENT_SOURCE_DIR}/data"
     ILLUSION_DOCS_DIR="${PROJECT_SOURCE_DIR}/docs/content"

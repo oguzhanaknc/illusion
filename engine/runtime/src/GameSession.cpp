@@ -1,3 +1,4 @@
+#include <illusion/ai/AiWorld.hpp>
 #include <illusion/animation/AnimationComponents.hpp>
 #include <illusion/animation/AnimationWorld.hpp>
 #include <illusion/animation/AnimationWorldService.hpp>
@@ -492,6 +493,7 @@ struct GameSession::Impl
         , particles(world)
         , navigation(world, sessionDesc.streamer)
         , navigationService(navigation)
+        , ai(world, navigation, sessionDesc.streamer)
         , ui(world)
         , physicsService(physics)
         , audioService(audio)
@@ -719,6 +721,7 @@ struct GameSession::Impl
     ParticleWorld particles;
     NavWorld navigation;
     NavWorldService navigationService;
+    AiWorld ai;
     UiWorld ui;
     UiFrame uiFrame{};
     Vec2 pointerScale{1.0f};
@@ -875,7 +878,9 @@ void GameSession::update(f64 deltaSeconds)
     if (impl.desc.fixedStep)
     {
         impl.navigation.waitIdle(impl.desc.jobs);
+        impl.ai.waitIdle();
     }
+    impl.ai.update(static_cast<f32>(step), impl.desc.jobs, &impl.physics, impl.started);
     impl.navigation.update(static_cast<f32>(step), impl.desc.jobs, impl.started);
     if (impl.started)
     {
@@ -969,6 +974,11 @@ AnimationWorld* GameSession::animation() noexcept
 NavWorld& GameSession::navigation() noexcept
 {
     return m_impl->navigation;
+}
+
+AiWorld& GameSession::ai() noexcept
+{
+    return m_impl->ai;
 }
 
 AudioWorld& GameSession::audio() noexcept

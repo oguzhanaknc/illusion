@@ -2,9 +2,12 @@
   "format": "illusion.scene",
   "version": 2,
   "types": {
+    "illusion.AiPerception": 1,
+    "illusion.AiStimulus": 1,
     "illusion.Animator": 1,
     "illusion.AudioListener": 1,
     "illusion.AudioSource": 1,
+    "illusion.BehaviorAgent": 1,
     "illusion.BoneAttachment": 1,
     "illusion.Camera": 2,
     "illusion.CharacterController": 1,
@@ -3014,6 +3017,24 @@
       }
     },
     {
+      "id": "0781577a0f53e5d6",
+      "components": {
+        "illusion.AiStimulus": {
+          "team": 1,
+          "offset": [0.0, 0.8, 0.0],
+          "visible": false
+        },
+        "illusion.Name": {
+          "value": "AI Hidden Intruder"
+        },
+        "illusion.Transform": {
+          "position": [26.0, 0.0, 3.0],
+          "rotation": [0.0, 0.0, 0.0, 1.0],
+          "scale": [1.0, 1.0, 1.0]
+        }
+      }
+    },
+    {
       "id": "14d7973c5c2a449c",
       "components": {
         "illusion.Collider": {
@@ -3461,6 +3482,60 @@
       }
     },
     {
+      "id": "764176e3c9cf4b25",
+      "components": {
+        "illusion.AiPerception": {
+          "sightRadius": 12.0,
+          "sightAngle": 1.8,
+          "eyeHeight": 1.4,
+          "occluderMask": 3,
+          "hearing": 1.5,
+          "memorySeconds": 4.0,
+          "detectTeams": 2,
+          "targetKey": "target",
+          "positionKey": "lastSeen"
+        },
+        "illusion.BehaviorAgent": {
+          "tree": "assets:/ai/guard.behavior",
+          "enabled": true,
+          "tickInterval": 0.1,
+          "blackboard": [
+            {
+              "key": "home",
+              "number": 0.0,
+              "vector": [28.0, 0.0, -2.0],
+              "entity": null
+            }
+          ]
+        },
+        "illusion.Name": {
+          "value": "AI Guard"
+        },
+        "illusion.NavAgent": {
+          "agentType": 1,
+          "radius": 0.3,
+          "height": 1.8,
+          "maxSpeed": 3.5,
+          "maxAcceleration": 8.0,
+          "turnSpeed": 6.2831855,
+          "stoppingDistance": 0.1,
+          "avoidance": "Medium",
+          "priority": 50,
+          "separationWeight": 2.0,
+          "areaMask": 4294967295,
+          "drive": "Transform",
+          "faceMovement": true,
+          "speedParameter": "",
+          "destination": null
+        },
+        "illusion.Transform": {
+          "position": [28.0, 0.0, -2.0],
+          "rotation": [0.0, 0.0, 0.0, 1.0],
+          "scale": [1.0, 1.0, 1.0]
+        }
+      }
+    },
+    {
       "id": "7bc42e82782acb92",
       "components": {
         "illusion.Name": {
@@ -3574,6 +3649,24 @@
         },
         "illusion.Transform": {
           "position": [6.0, 0.5, -3.0],
+          "rotation": [0.0, 0.0, 0.0, 1.0],
+          "scale": [1.0, 1.0, 1.0]
+        }
+      }
+    },
+    {
+      "id": "a3e9bfbbf6c43e6f",
+      "components": {
+        "illusion.AiStimulus": {
+          "team": 1,
+          "offset": [0.0, 1.2, 0.0],
+          "visible": true
+        },
+        "illusion.Name": {
+          "value": "AI Intruder"
+        },
+        "illusion.Transform": {
+          "position": [32.0, 0.0, 2.0],
           "rotation": [0.0, 0.0, 0.0, 1.0],
           "scale": [1.0, 1.0, 1.0]
         }
@@ -3994,6 +4087,25 @@
         "illusion.Transform": {
           "position": [0.0, 0.0, 0.0],
           "rotation": [0.5, 0.0, 0.0, 0.8660254],
+          "scale": [1.0, 1.0, 1.0]
+        }
+      }
+    },
+    {
+      "id": "fd845ef300ce2d0b",
+      "components": {
+        "illusion.BehaviorAgent": {
+          "tree": "assets:/ai/guard.behavior",
+          "enabled": false,
+          "tickInterval": 0.0,
+          "blackboard": []
+        },
+        "illusion.Name": {
+          "value": "AI Sleeper"
+        },
+        "illusion.Transform": {
+          "position": [33.0, 0.0, -4.0],
+          "rotation": [0.0, 0.0, 0.0, 1.0],
           "scale": [1.0, 1.0, 1.0]
         }
       }

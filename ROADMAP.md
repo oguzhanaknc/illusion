@@ -1337,7 +1337,7 @@ headers are in their `include/` directories.
   module calls the whole `NavService` (`tools/check_api_coverage.py`). Done: a module test sends an agent to a
   point and reads its `Arrived` event; every `NavError` from the service; the SDK test builds a module that
   uses it.
-- NAV-1e (`mechanic`): Editor and documentation. Commands `nav.bake` (async: one or every surface, changed
+- ✅ NAV-1e (`mechanic`): Editor and documentation. Commands `nav.bake` (async: one or every surface, changed
   tiles only, writes the `.navmesh`, sets `NavMeshSurface::data` through `executeStep()`), `nav.status`,
   `nav.path`, `nav.debug`; the edit World's `NavWorld` (never advanced); a viewport visualiser over
   `drawDebug()`; a Bake button in the Inspector of `NavMeshSurface`; the asset browser lists `.navmesh` as
@@ -1347,8 +1347,10 @@ headers are in their `include/` directories.
   `NavService` reference, `CHANGELOG.md`. Done: command tests (bake twice writes the same file and changes
   nothing the second time, a moved wall rebakes its tiles only, `nav.path` around a wall, every invalid
   param), the fuzz test, a GPU golden image of the visualiser, `mkdocs build --strict`, docs parity.
+  Open: the Inspector's Bake button and the `.navmesh` items of the Asset Browser and the export; the `nav.*`
+  commands and the debug view act on the edit World only.
 - NAV-2: Behaviour trees and perception. Four work packages:
-- NAV-2a (`implementer`): Trees without a World. The library `engine/ai` with `illusion::ai_api`;
+- ✅ NAV-2a (`implementer`): Trees without a World. The library `engine/ai` with `illusion::ai_api`;
   `Blackboard.hpp` (`compareBlackboard()`), `BehaviorTree.hpp` (`parseBehaviorTree()`,
   `writeBehaviorTree()`, `findKey()`), `BehaviorTreeState.hpp` (`makeBehaviorTreeState()`,
   `resetBehaviorTree()`, `tickBehaviorTree()`, `runningNode()`), `Perception.hpp` (`inSightCone()`,
@@ -1358,7 +1360,7 @@ headers are in their `include/` directories.
   Wait deviation from the seed); the same statuses for the same seed; no allocation in `tickBehaviorTree()`;
   cone and hearing edge cases; benchmark `ai/tick-1000` (1,000 trees of 30 nodes, one thread, ADR target
   1 ms).
-- NAV-2b (`implementer`): `AiWorld` and perception. `AiComponents.hpp` (`registerAiComponents()`), `AiWorld`
+- ✅ NAV-2b (`implementer`): `AiWorld` and perception. `AiComponents.hpp` (`registerAiComponents()`), `AiWorld`
   (tree loading through the streamer, decoder `illusion.behavior`, slots, blackboard overrides, the context
   over `NavWorld`, perception with the raycast budget, blackboard keys from perception, actions, staggered
   ticks, live reload), `GameSession` gets an `AiWorld` (`ai()`) and the AI step before Navigation; the player
@@ -1369,6 +1371,11 @@ headers are in their `include/` directories.
   wandering when a target is seen; the same World after 600 fixed steps with 1 and 4 workers; Inactive agents
   do not tick; a reloaded tree restarts its agents; no allocation in a steady update; benchmark
   `ai/perception-200` (200 perceivers, 50 stimuli, 256 rays, ADR target 1 ms) and `ai/world-1000`.
+  Done: every item above in `tests/ai/TestAiWorld.cpp`, `TestAiPerceptionWorld.cpp` and `TestAiComponents.cpp`;
+  `ai/perception-200` 0.13 ms (budget 0.75 ms), `ai/world-1000` 0.19 ms (budget 1.3 ms); the manual page "AI"
+  gained Agents, Actions, Live reload, Perception, Stimuli and the game session step (EN/TR). Open: the
+  `AiWorldService` adapter and the scripting API (NAV-2c); the `ai.*` commands and the visualiser over
+  `drawDebug()` (NAV-2d).
 - NAV-2c (`mechanic`): `AiService`. The interface joins the scripting API here (`@ingroup scripting_api` on the class, so
   `tools/check_api_coverage.py` requires the showcase to call it). `AiWorldService`, `USES ai` (`illusion::ai_api` in the SDK), `GameSession`
   provides it, module API version raised by one, the showcase module calls the whole `AiService`. Done: a

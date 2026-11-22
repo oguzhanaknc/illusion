@@ -5,6 +5,7 @@
 
 #include "TestSupport.hpp"
 
+#include <illusion/ai/AiComponents.hpp>
 #include <illusion/core/AssetRef.hpp>
 #include <illusion/core/Json.hpp>
 #include <illusion/ecs/Reflection.hpp>
@@ -17,7 +18,9 @@
 #include <illusion/editor/core/ThumbnailHost.hpp>
 #include <illusion/editor/core/UiHost.hpp>
 #include <illusion/editor/core/ViewportHost.hpp>
+#include <illusion/nav/NavComponents.hpp>
 #include <illusion/particles/ParticleComponents.hpp>
+#include <illusion/physics/PhysicsComponents.hpp>
 #include <illusion/platform/FileSystem.hpp>
 #include <illusion/runtime/GameLocalization.hpp>
 #include <illusion/text/Localization.hpp>
@@ -82,6 +85,9 @@ inline void reflectEditorTestComponents()
     static const bool reflected = [] {
         reflectCoreComponents();
         reflectParticleComponents();
+        reflectPhysicsComponents();
+        registerNavComponents(ComponentRegistry::instance());
+        registerAiComponents(ComponentRegistry::instance());
         registerUiComponents();
         reflect<editortest::Link>("test.Link")
             .meta({.displayName = "Link", .category = "Test"})
