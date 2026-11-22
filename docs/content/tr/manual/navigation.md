@@ -279,6 +279,53 @@ verisi ve hash'iyle tile ızgarasını, bake edilmiş link'leri ve bir xxhash64 
 | `Checksum` | Sağlama toplamı uyuşmuyor |
 | `Invalid` | Bir değer aralık dışı (tile koordinatları, ayarlar, yinelenen tile) |
 
+## Editor'de
+
+Editor, navmesh'leri dört [Editor commands](../reference/editor-commands.md) ile bake eder ve inceler;
+bunları insanlar (command palette) ve AI agent'lar ortak kullanır. Editor, düzenlenen sahne üzerinde, her
+surface'in navmesh'ini yükleyen ya da bake eden ve hiç ilerletilmeyen bir `NavWorld` tutar: agent'ları
+hareket etmez.
+
+`nav.bake` bir `NavMeshSurface`'i (`surface`) ya da sahnedeki her surface'i bake eder ve
+`NavMeshSurface::data` alanını yazdığı `.navmesh` dosyasına ayarlar. `data`'sı olmayan bir surface
+`assets:/navigation/<entity adı>.navmesh` dosyasını ya da çağrının `path` değerini alır. Komut asenkrondur,
+çünkü önce Mesh Collider'ların model'leri yüklenir.
+
+```json
+{"method":"nav.bake","params":{"surface":"/Nav Surface"}}
+```
+
+- **Yalnızca değişen tile'lar.** Dosya varsa yalnızca girdi hash'i farklı olan tile'lar yeniden üretilir
+  (`rebakeStaleTiles()`); `force` hepsini üretir. Sonuç, her surface için tile'ları ve yeniden üretilen
+  tile'ları listeler.
+- **İki kez bake etmek hiçbir şeyi değiştirmez.** Aynı girdi için baytlar aynıdır. Baytları değişmeyen bir
+  dosya yazılmaz ve ikinci bake hiçbir tile'ı yeniden üretmez.
+- **Geri alma.** Önce dosya yazılır, sonra `data` geri alınabilir bir adımla ayarlanır. Adımı geri almak
+  `data`'yı eski haline getirir ve dosyayı bırakır.
+- **Hatalar.** `NavMeshSurface` olmayan bir hedef, `assets:/` içinde `.navmesh` dosyası olmayan bir `path`
+  ya da aynı dosyayı yazacak iki surface, hiçbir şey bake edilmeden önce hata verir.
+
+`nav.status`, surface'leri agent türleri, veri dosyaları ve navmesh'lerinin tam olup olmadığıyla listeler;
+tile, polygon, bekleyen ve eski tile'ları ve başarısız surface'leri sayar. `nav.path` bir agent türü için iki
+nokta arasında yol bulur ve köşe noktalarını, uzunluğunu ve kısmi olup olmadığını döndürür. Navmesh'e 2 m'den
+(yukarı ve aşağı 4 m) uzak bir nokta, `/from` ya da `/to` adını veren bir hata verir. Bir seviyenin bağlı
+olduğunu denetlemek için kullanın.
+
+```json
+{"method":"nav.path","params":{"from":[24,0,-6],"to":[35,1,5],"agentType":1}}
+```
+
+`nav.debug`, navigasyonu `drawDebug()` ile Scene görünümlerinde gösterir: alana göre renklenen navmesh
+polygon'ları (`navMesh`), tile sınırları (`tiles`), link'ler, agent'lar, yollar ve obstacle'lar. Editor
+durumudur, geri alınamaz ve vermediğiniz bayraklar değerini korur.
+
+```json
+{"method":"nav.debug","params":{"enabled":true,"tiles":true}}
+```
+
+`showcase` projesi navmesh'ini `build.jsonl` içindeki bir `nav.bake` adımıyla bake eder; dosyayı yeniden
+oynatmak `assets/navigation/yard.navmesh` dosyasını yeniden üretir.
+
 ## Çalışma zamanı
 
 `NavWorld` (`illusion/nav/NavWorld.hpp`) her `NavMeshSurface` için döşemeli (tiled) bir navmesh tutar. World

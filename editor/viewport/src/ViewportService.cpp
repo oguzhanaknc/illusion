@@ -13,6 +13,7 @@
 #include <illusion/ecs/Hierarchy.hpp>
 #include <illusion/ecs/Transform.hpp>
 #include <illusion/editor/core/EditorContext.hpp>
+#include <illusion/editor/core/EditorNavigation.hpp>
 #include <illusion/editor/core/Preferences.hpp>
 #include <illusion/editor/core/Snap.hpp>
 #include <illusion/editor/ui/UiRenderer.hpp>
@@ -23,6 +24,7 @@
 #include <illusion/editor/viewport/ThumbnailRenderer.hpp>
 #include <illusion/editor/viewport/ViewportService.hpp>
 #include <illusion/editor/viewport/Visualisers.hpp>
+#include <illusion/nav/NavWorld.hpp>
 #include <illusion/render/Components.hpp>
 #include <illusion/render/DebugDraw.hpp>
 #include <illusion/render/ReadbackRing.hpp>
@@ -168,6 +170,25 @@ std::vector<VertexSnapGrid> snapGridsOf(const MeshData& mesh)
     }
     return out;
 }
+
+// Records the lines of NavWorld::drawDebug() into a DebugDraw.
+class NavLines final : public NavDebugSink
+{
+public:
+    explicit NavLines(DebugDraw& draw) noexcept
+        : m_draw(draw)
+    {
+    }
+
+    void line(const Vec3& a, const Vec3& b, const Vec4& color) override
+    {
+        static_cast<void>(m_draw.line(a, b, color, kNavLineWidth));
+    }
+
+private:
+    static constexpr f32 kNavLineWidth = 1.5f;
+    DebugDraw& m_draw;
+};
 
 bool hasVisualisers(const ViewportVisualisers& kinds) noexcept
 {
@@ -1333,8 +1354,12 @@ struct ViewportService::Impl
         }
         const ViewportSettings& settings = viewport.settings;
         const bool all = settings.visualiserScope == ViewportVisualiserScope::All;
-        if (viewport.kind == ViewportKind::Scene && hasVisualisers(settings.visualisers) &&
-            (all || !editor.selection().empty()))
+        const EditorNavigation* navigation = editor.findNavigation();
+        const bool drawsNavigation = viewport.kind == ViewportKind::Scene && navigation != nullptr &&
+                                     navigation->debugEnabled && &shown() == &editor.world();
+        if (viewport.kind == ViewportKind::Scene &&
+            ((hasVisualisers(settings.visualisers) && (all || !editor.selection().empty())) ||
+             drawsNavigation))
         {
             debugDraw.clear();
             VisualiserOptions options;
@@ -1343,8 +1368,16 @@ struct ViewportService::Impl
             options.selection = selectionBits;
             options.hidden = hiddenBits;
             options.cameraAspect = gameAspect();
-            const VisualiserStats recorded = recordVisualisers(shown(), debugDraw, options);
-            stats.visualisers += recorded.objects;
+            if (hasVisualisers(settings.visualisers) && (all || !editor.selection().empty()))
+            {
+                const VisualiserStats recorded = recordVisualisers(shown(), debugDraw, options);
+                stats.visualisers += recorded.objects;
+            }
+            if (drawsNavigation)
+            {
+                NavLines lines{debugDraw};
+                navigation->world().drawDebug(navigation->debugOptions, lines);
+            }
             if (!debugDraw.lines().empty())
             {
                 (void)viewport.debugRenderer->render(commands, viewport.color, targets, debugDraw);

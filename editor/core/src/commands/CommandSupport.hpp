@@ -45,6 +45,7 @@ void registerInputCommands(CommandRegistry& registry);
 void registerGamepadCommands(CommandRegistry& registry);
 void registerSavesCommands(CommandRegistry& registry);
 void registerModuleCommands(CommandRegistry& registry);
+void registerNavCommands(CommandRegistry& registry);
 void registerExportCommands(CommandRegistry& registry);
 void registerToolCommands(CommandRegistry& registry);
 
