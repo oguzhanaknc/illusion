@@ -103,8 +103,9 @@ struct ShaderTextureValue
 /// A material: its shader and parameters with GPU textures (unset textures use neutral defaults).
 ///
 /// The standard shader (an empty `shader` or RenderResources::standardShader()) takes its parameters and the
-/// five textures from `parameters`; every shader takes the alpha mode, two-sidedness and the wrap modes of
-/// MaterialData::baseColorTexture from it. `shaderParameters` and `shaderTextures` then set the shader's
+/// five textures from `parameters`, and so does the foliage shader, which an empty `shader` picks for
+/// materials with diffuse transmission; every shader takes the alpha mode, two-sidedness and the wrap modes
+/// of MaterialData::baseColorTexture from it. `shaderParameters` and `shaderTextures` then set the shader's
 /// fields by name: fields they leave out keep the shader's defaults (for the standard shader, the values of
 /// `parameters`), and names the shader does not declare are ignored, so a material outlives edits of its
 /// shader.
@@ -116,7 +117,7 @@ struct MaterialDesc
     TextureHandle normal;            ///< Tangent-space normal map.
     TextureHandle occlusion;         ///< Occlusion (R).
     TextureHandle emissive;          ///< sRGB emissive texture.
-    ShaderHandle shader{};           ///< The material shader (empty: the standard shader).
+    ShaderHandle shader{};           ///< The material shader (empty: the standard or foliage shader).
     std::vector<ShaderParameterValue> shaderParameters{}; ///< Values of the shader's parameters by name.
     std::vector<ShaderTextureValue> shaderTextures{}; ///< Textures of the shader's texture fields by name.
 };
@@ -203,8 +204,8 @@ public:
     /// (asserted).
     bool updateShader(ShaderHandle shader, const ShaderAsset& asset);
 
-    /// Releases @p shader like releaseMesh(); its materials draw with the standard shader from then on. The
-    /// built-in shaders cannot be released (asserted). An empty handle is ignored.
+    /// Releases @p shader like releaseMesh(); its materials draw with the standard (or foliage) shader from
+    /// then on. The built-in shaders cannot be released (asserted). An empty handle is ignored.
     void releaseShader(ShaderHandle shader);
 
     /// The standard material shader (builtin:/shader/standard), which the engine compiles in.
@@ -213,6 +214,11 @@ public:
     /// The error material shader (builtin:/shader/error), an unlit magenta checker for materials whose shader
     /// does not compile; the engine compiles it in.
     [[nodiscard]] ShaderHandle errorShader() const noexcept { return ShaderHandle{2}; }
+
+    /// The foliage material shader (builtin:/shader/foliage): the standard shader in the TwoSidedFoliage
+    /// shading model, which materials with an empty shader and MaterialData::diffuseTransmission above zero
+    /// draw with.
+    [[nodiscard]] ShaderHandle foliageShader() const noexcept { return ShaderHandle{3}; }
 
     /// The parameter layout and shading model of @p shader (without SPIR-V), or nullptr for an invalid or
     /// released handle.

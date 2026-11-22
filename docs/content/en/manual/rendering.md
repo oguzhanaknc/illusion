@@ -258,8 +258,9 @@ resources.releaseShader(glow); // its materials draw with the standard shader fr
 ```
 
 - `createShader()` takes a `ShaderAsset` with all of its variants and returns an empty Handle, with an error in
-  the log, when one is missing or the GPU rejects it. `standardShader()` and `errorShader()` are always there
-  and cannot be released; a `MaterialDesc` without a shader uses the standard one.
+  the log, when one is missing or the GPU rejects it. `standardShader()`, `errorShader()` and `foliageShader()`
+  are always there and cannot be released; a `MaterialDesc` without a shader uses the standard one, or the
+  foliage one for translucent Materials (see [Shading models](#shading-models)).
 - `shaderParameters` and `shaderTextures` set the shader's fields by name; fields they leave out keep the
   shader's defaults, and names the shader does not declare are ignored, so a Material outlives edits of its
   shader. For the standard shader, `parameters` and the five Texture Handles fill its fields as before.
@@ -274,6 +275,49 @@ resources.releaseShader(glow); // its materials draw with the standard shader fr
   whose vertices do not move draw with the standard shader.
 - Meshes keep glTF vertex colours (`COLOR_0`, `MeshData::colors`) for `SurfaceInput.color`; meshes without
   them read white. `SurfaceInput.customData` is zero for now.
+
+### Shading models
+
+The `[ShadingModel("...")]` attribute of a shader's `Parameters` picks how the lighting treats its surface. The
+model is fixed per shader, so each one compiles into its own Pipelines and a Material of the `Default` model
+pays nothing for the others; Materials of different models mix freely in a frame and in the bindless path.
+
+| Model | Reads from `SurfaceOutput` | Lighting |
+| --- | --- | --- |
+| `Default` | base colour, normal, metallic, roughness, occlusion, emission | Metallic-roughness PBR, as above. |
+| `Unlit` | base colour, emission | The base colour as it is: no light, shadow or sky. |
+| `Subsurface` | the above, `subsurfaceColor`, `thickness` | Diffuse light wraps past the terminator; the light beyond Lambert's is tinted by `subsurfaceColor`. A `thickness` of 1 wraps nothing (like `Default`), 0 wraps the light around the whole surface. |
+| `TwoSidedFoliage` | the above, `subsurfaceColor`, `thickness` | [Translucency](#translucency): `1 - thickness` of the diffuse light passes to the other side, tinted by `subsurfaceColor`. |
+| `ClearCoat` | the above, `clearCoat`, `clearCoatRoughness` | A second, dielectric specular lobe over the base along the geometric normal, with its own roughness; the base loses the light the coat reflects. A `clearCoat` of 0 is `Default`. |
+
+The extra fields default to values that leave a surface as it was: `thickness` 1, `clearCoat` 0. Wrapped light
+reaches only where a light reaches the surface: a shadowed side stays dark, so the scatter shows most in the
+penumbra and under lights without shadows.
+
+```slang
+[ShadingModel("ClearCoat")]
+struct Parameters
+{
+    [Color(0.6, 0.05, 0.05, 1)] float3 paint;
+    [Default(0.08)] [Range(0, 1)] float coatRoughness;
+};
+
+SurfaceOutput surface(SurfaceInput input)
+{
+    const Parameters p = parameters(input);
+    SurfaceOutput output = defaultSurface();
+    output.baseColor = p.paint;
+    output.roughness = 0.7; // the rough paint under the coat
+    output.clearCoat = 1.0; // a full coat
+    output.clearCoatRoughness = p.coatRoughness;
+    return output;
+}
+```
+
+The standard shader uses `Default`. A `MaterialDesc` without a shader whose `diffuseTransmission` is above zero
+draws with `builtin:/shader/foliage` (`foliageShader()`), the same surface in the `TwoSidedFoliage` model, so
+leaves and grass keep their look; a Material that names `standardShader()` keeps the `Default` model and its
+transmission has no effect.
 
 ### Texture compression and mip streaming
 
@@ -401,7 +445,9 @@ it glows. Metals do not transmit. This is the glTF `KHR_materials_diffuse_transm
 that use it import their factors (its two textures are not read).
 
 Shadows still apply: a leaf behind another leaf, or behind a trunk, stays dark. The shadow test of a
-translucent surface uses the side the light reaches, so a single leaf does not shade itself.
+translucent surface uses the side the light reaches, so a single leaf does not shade itself. Translucent
+Materials draw with `builtin:/shader/foliage`, the `TwoSidedFoliage` [shading model](#shading-models); a
+material shader gets the same light by naming that model and setting `thickness` and `subsurfaceColor`.
 
 ```cpp
 illusion::MaterialData leaf = illusion::MaterialData{};
