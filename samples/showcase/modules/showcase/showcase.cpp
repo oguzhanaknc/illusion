@@ -1,7 +1,7 @@
 // The game module of the showcase project. It plays the everything scene through the whole scripting API:
-// every function of ModuleContext and of the nine host services (PhysicsService, AudioService, InputService,
-// ParticleService, SceneService, StoreService, UiService, SaveService and AnimationService) is called from
-// here, which
+// every function of ModuleContext and of the ten host services (PhysicsService, AudioService, InputService,
+// ParticleService, SceneService, StoreService, UiService, SaveService, AnimationService and NavService) is
+// called from here, which
 // tools/check_api_coverage.py checks and the engine tests count at run time
 // (tests/showcase/TestShowcaseModule.cpp).
 //
@@ -22,7 +22,9 @@
 //   palette, focuses the Go button for a while, reads the toggle and the slider, counts clicks, and ends the
 //   game when `ui.cancel` (Escape, or East on a gamepad) is pressed; plays the Column's animation graph,
 //   leaning it with a parameter, bowing it with a trigger and calming it again, and counts its "peak"
-//   events and reads where its "top" joint (the lamp's socket) is;
+//   events and reads where its "top" joint (the lamp's socket) is; queries the navmesh of the yard, sends
+//   the Nav Walker to a point, reads its status and remaining distance and counts its Arrived events, then
+//   warps it back and stops it;
 // - stop: unloads the clips.
 // Everything that hot reloads must keep lives in the Components showcase.Stats (saved) and showcase.Runtime.
 
@@ -40,6 +42,7 @@
 #include <illusion/input/Gamepad.hpp>
 #include <illusion/input/InputActions.hpp>
 #include <illusion/input/InputService.hpp>
+#include <illusion/nav/NavService.hpp>
 #include <illusion/particles/ParticleService.hpp>
 #include <illusion/physics/PhysicsComponents.hpp>
 #include <illusion/physics/PhysicsService.hpp>
@@ -119,10 +122,15 @@ struct Runtime
     bool columnSwings = false; ///< The Column's graph is in its "swing" state.
     f32 columnTop = 0.0f;      ///< World height of the Column's "top" joint (its lamp's socket).
     Entity strider{};
-    Entity fallenStrider{};      ///< Starts as a ragdoll, stands up and falls again.
-    u32 uiEvents = 0;            ///< UI events seen so far.
-    u32 uiClicks = 0;            ///< Clicks of the Go button.
-    f32 sliderValue = 0.0f;      ///< The HUD slider at the last update.
+    Entity fallenStrider{}; ///< Starts as a ragdoll, stands up and falls again.
+    Entity walker{};
+    u32 navArrivals = 0;                             ///< Arrived events of the Nav Walker so far.
+    f32 navPathLength = 0.0f;                        ///< Length of the path found at frame 5, in m.
+    f32 navRemaining = 0.0f;                         ///< Distance the Nav Walker had left at the last update.
+    NavAgentStatus navStatus = NavAgentStatus::Idle; ///< What the Nav Walker did at the last update.
+    u32 uiEvents = 0;                                ///< UI events seen so far.
+    u32 uiClicks = 0;                                ///< Clicks of the Go button.
+    f32 sliderValue = 0.0f;                          ///< The HUD slider at the last update.
     f32 buttonWidth = 0.0f;      ///< Width of the Go button at frame 100, in canvas units.
     f32 buttonTransition = 0.0f; ///< Progress of the Go button's transition at frame 225.
     bool toggleOn = false;       ///< The HUD toggle at the last update.
@@ -189,10 +197,15 @@ constexpr u32 kWalkerSteps = 4;     // the walker achievement unlocks after 4 x 
 constexpr u32 kCountedFrames = 120; // the HUD counts the frames up to this one
 constexpr std::string_view kFramesKey = "showcase.hud.frames";
 constexpr std::string_view kLeanClip = "assets:/models/column.gltf#animation/lean";
-constexpr u32 kBowFrame = 30;   // the Column bows (a trigger of its graph)
-constexpr u32 kCalmFrame = 150; // and returns to its first state
-constexpr u32 kStandFrame = 90; // the Fallen Strider blends back from its ragdoll to its animation
-constexpr u32 kFallFrame = 200; // and falls again
+constexpr u32 kBowFrame = 30;      // the Column bows (a trigger of its graph)
+constexpr u32 kCalmFrame = 150;    // and returns to its first state
+constexpr u32 kNavQueryFrame = 5;  // the yard's navmesh is queried
+constexpr u32 kNavGoFrame = 10;    // the Nav Walker is sent to its destination
+constexpr u32 kNavWarpFrame = 200; // warped back to where it started
+constexpr u32 kNavStopFrame = 280; // and stopped
+constexpr u32 kNavAgentType = 1;   // the yard's navmesh (the Nav Surface)
+constexpr u32 kStandFrame = 90;    // the Fallen Strider blends back from its ragdoll to its animation
+constexpr u32 kFallFrame = 200;    // and falls again
 
 Quat identity() noexcept
 {
@@ -406,6 +419,7 @@ void startModule(ModuleContext& context)
     runtime.column = findNamed(world, "Column");
     runtime.strider = findNamed(world, "Strider");
     runtime.fallenStrider = findNamed(world, "Fallen Strider");
+    runtime.walker = findNamed(world, "Nav Walker");
     if (Animator* animator = world.tryGet<Animator>(runtime.column))
     {
         animator->playing = true; // the scene holds it still for the editor
@@ -859,6 +873,54 @@ void updateAnimation(AnimationService& animation, Runtime& runtime, u32 frame)
     }
 }
 
+// The yard's navmesh and the Nav Walker: queries, a destination, its status and events, a warp and a stop.
+void updateNavigation(NavService& nav, Runtime& runtime, u32 frame)
+{
+    const NavQueryFilter filter{
+        .agentType = kNavAgentType, .areaMask = 0xFFFFFFFFu, .searchExtents = Vec3(2.0f, 4.0f, 2.0f)};
+    const Vec3 start(25.0f, 0.0f, -5.0f);
+    const Vec3 goal(34.0f, 1.0f, 4.0f);
+    if (frame == kNavQueryFrame)
+    {
+        std::array<Vec3, 16> corners{};
+        const Expected<NavPathResult, NavError> path = nav.findPath(start, goal, corners, filter);
+        if (path)
+        {
+            runtime.navPathLength = path->length;
+        }
+        else
+        {
+            ILL_LOG_INFO("Showcase", "Nav path: {}", navErrorName(path.error()));
+        }
+        static_cast<void>(nav.nearestPoint(Vec3(30.0f, 3.0f, 0.0f), filter));
+        static_cast<void>(nav.raycast(start, goal, filter));
+        static_cast<void>(nav.randomPoint(Vec3(30.0f, 1.0f, 0.0f), 4.0f, 7, filter));
+    }
+    if (frame == kNavGoFrame)
+    {
+        static_cast<void>(nav.setDestination(runtime.walker, goal));
+    }
+    if (frame == kNavWarpFrame)
+    {
+        static_cast<void>(nav.warp(runtime.walker, start));
+    }
+    if (frame == kNavStopFrame)
+    {
+        static_cast<void>(nav.stop(runtime.walker));
+    }
+    std::array<NavEvent, 8> events{};
+    const u32 count = nav.pollEvents(events);
+    for (u32 i = 0; i < count && i < events.size(); ++i)
+    {
+        if (events[i].agent == runtime.walker && events[i].type == NavEventType::Arrived)
+        {
+            ++runtime.navArrivals;
+        }
+    }
+    runtime.navStatus = nav.status(runtime.walker).valueOr(NavAgentStatus::Idle);
+    runtime.navRemaining = nav.remainingDistance(runtime.walker).valueOr(0.0f);
+}
+
 // The HUD: the frame counter, the palette, the focus, the values and the events of the last UI update.
 void updateUi(UiService& ui, SceneService* scenes, Runtime& runtime, u32 frame)
 {
@@ -945,6 +1007,7 @@ void updateModule(ModuleContext& context, f64 deltaSeconds)
     UiService* ui = context.service<UiService>();
     SaveService* saves = context.service<SaveService>();
     AnimationService* animation = context.service<AnimationService>();
+    NavService* nav = context.service<NavService>();
     Entity self{};
     world.query<const Stats>().each([&self](Entity entity, const Stats&) { self = entity; });
     if (!world.isAlive(self))
@@ -992,6 +1055,10 @@ void updateModule(ModuleContext& context, f64 deltaSeconds)
     if (animation != nullptr)
     {
         updateAnimation(*animation, runtime, stats.frames);
+    }
+    if (nav != nullptr)
+    {
+        updateNavigation(*nav, runtime, stats.frames);
     }
     ++stats.frames;
 }

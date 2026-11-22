@@ -89,10 +89,10 @@ statik bir kütüphane üretir. `SHARED` veya `STATIC` birini zorlar. Shared bir
 kendi kopyasını taşır ve giriş noktası dışında hiçbir şeyi dışa aktarmaz.
 
 `USES`, modülün header'larına ve düz veri Component'lerine ihtiyaç duyduğu engine kütüphanelerini
-adlandırır: `physics`, `audio`, `particles`, `animation`, `input`, `render` (`SceneComponents.hpp`'nin
+adlandırır: `physics`, `audio`, `particles`, `animation`, `nav`, `input`, `render` (`SceneComponents.hpp`'nin
 kaydedilen, GPU'suz Component'leri), `runtime`, `store`, `ui` ve `save`. Her biri yalnızca header içeren
 `illusion::<name>_api` hedefini linkler: kütüphanenin header'ları, Component'leri ve servis arayüzü
-(`PhysicsService`, `AudioService`, `ParticleService`, `AnimationService`, `InputService`, `SceneService`,
+(`PhysicsService`, `AudioService`, `ParticleService`, `AnimationService`, `NavService`, `InputService`, `SceneService`,
 `StoreService`, `UiService`, `SaveService`); kütüphanenin kodu asla.
 
 !!! warning "Shared modüller engine kütüphanelerini linklemez"
@@ -153,13 +153,13 @@ modules.detachWorld(world);
 ```
 
 Oyunlar bunu nadiren elle kurar: bir [oyun oturumu](runtime.md) World'ünü fizik, ses, parçacık, animasyon,
-input, sahne ve UI servisleriyle (ve mağazayla ve kayıtlı oyunlarla) ekler ve modülleri kendi adım sırasında günceller; editörün Play modunda da oyuncuda da
+navigasyon, input, sahne ve UI servisleriyle (ve mağazayla ve kayıtlı oyunlarla) ekler ve modülleri kendi adım sırasında günceller; editörün Play modunda da oyuncuda da
 aynı şekilde.
 
 `load()` kütüphaneyi bir gölge dizine kopyalar ve kopyayı yükler; böylece build orijinalin üzerine
 yazabilir. Ardından modülü denetler ve bir sorun varsa bir hata mesajı döndürür:
 
-- modül API sürümü (10; daha eski bir sürüm için derlenmiş modüller yeniden derlenmelidir, sürüm 2 için
+- modül API sürümü (11; daha eski bir sürüm için derlenmiş modüller yeniden derlenmelidir, sürüm 2 için
   derlenmiş olanlar ayrıca World işlerini `start`'a taşımalıdır), engine sürümü (shared modüller tam olarak bu engine'e karşı derlenmiş olmalıdır) ve
   build ayarları (derleyici ve sürümü, Debug veya Release, assert'ler);
 - geçerli ve benzersiz bir ad ile semantik bir sürüm;

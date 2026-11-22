@@ -162,8 +162,8 @@ struct GameSessionDesc
 /// 10. **Resolvers:** the physics and render asset resolvers turn asset references into runtime Components.
 ///
 /// Modules find the services PhysicsService, AudioService, ParticleService, InputService, SceneService,
-/// UiService (over ui() and localization()), with GameSessionDesc::streamer AnimationService, with
-/// GameSessionDesc::store StoreService and with GameSessionDesc::saves SaveService.
+/// UiService (over ui() and localization()), NavService (over navigation()), with GameSessionDesc::streamer
+/// AnimationService, with GameSessionDesc::store StoreService and with GameSessionDesc::saves SaveService.
 ///
 /// The session's Localization (localization()) holds the string tables of the project's locale files,
 /// `assets:/locales/*.json`, read by create(): the keys of every file, with the English text of `en.json`

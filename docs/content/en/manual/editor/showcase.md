@@ -50,7 +50,7 @@ clipped dial; see [Game UI](../ui.md). It shows in the Game view while playing. 
 ## The showcase module
 
 The project's game code, `modules/showcase`, plays the scene through the whole
-[scripting API](../../reference/scripting-api.md): every function of `ModuleContext` and of the nine host
+[scripting API](../../reference/scripting-api.md): every function of `ModuleContext` and of the ten host
 services is called from `showcase.cpp`. When the session starts, it builds a floor and a gem from mesh
 geometry, adds the Jump (Space, gamepad South) and Move (WASD, left stick) actions, makes a chime from numbers
 and sets up the mixer. Until you press a key or move a stick, the Player walks back and forth across the
@@ -70,7 +70,9 @@ Through `AnimationService` it plays the Column's graph: it leans the blend of `s
 parameter, bows the Column with a trigger at frame 30, calms it again from frame 150, counts the graph's
 `peak` events and reads where the `top` joint is with `jointTransform()`. At frame 30 the Strider turns to
 the lamp (`setLookAtTarget()`), its left foot reaches for a point (`setIkTarget()`) and its right foot's IK
-is turned off (`setIkWeight()`). What it saw is kept in the `showcase.Stats` Component of the Showcase entity.
+is turned off (`setIkWeight()`). Through `NavService` it queries the yard's navmesh at frame 5, sends the Nav Walker to
+its destination at frame 10, reads its status and remaining distance and counts its `Arrived` events, warps it
+back at frame 200 and stops it at frame 280. What it saw is kept in the `showcase.Stats` Component of the Showcase entity.
 
 Build it with **Modules → Build Modules** (`module.build`) and press **Play**:
 

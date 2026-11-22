@@ -2,7 +2,7 @@
 
 Oyun kodu, bir [oyun modülünde](../manual/modules.md) C++ olarak yazılır. Shared bir modül (editörün hot
 reload yapılabilen Build'i) `illusion::core`'un kendi kopyasını taşır, ama başka hiçbir engine
-kütüphanesini taşımaz: fiziğe, sese, parçacıklara, animasyona, girdiye, sahnelere, mağazaya, oyun UI'ına ve kayıtlı oyunlara dokuz
+kütüphanesini taşımaz: fiziğe, sese, parçacıklara, animasyona, navigasyona, girdiye, sahnelere, mağazaya, oyun UI'ına ve kayıtlı oyunlara on
 **host servis arayüzü** üzerinden ulaşır.
 Her biri veri üyesi olmayan soyut bir sınıftır; host onu kendi engine nesnesi üzerinde bir adaptörle
 uygular ve modüle verir, modül de onu `context.service<T>()` ile bulur. Tasarım ADR 0041'dedir;
@@ -19,6 +19,7 @@ uygular ve modüle verir, modül de onu `context.service<T>()` ile bulur. Tasar�
 | `UiService` | `ui` | `illusion/ui/UiService.hpp` | `UiWorld` üzerinde `UiWorldService` (`illusion::ui`; ADR 0057) |
 | `SaveService` | `save` | `illusion/save/SaveService.hpp` | `SaveSystem` üzerinde `SaveSystemService` (`illusion::save`; ADR 0058) |
 | `AnimationService` | `animation` | `illusion/animation/AnimationService.hpp` | `AnimationWorld` üzerinde `AnimationWorldService` (`illusion::animation`; ADR 0060) |
+| `NavService` | `nav` | `illusion/nav/NavService.hpp` | `NavWorld` üzerinde `NavWorldService` (`illusion::nav`; ADR 0062) |
 
 ```cmake
 illusion_add_module(tetris SOURCES game/Tetris.cpp USES physics audio input runtime)
@@ -62,11 +63,11 @@ void update(illusion::ModuleContext& context, illusion::f64)
 - **Maliyet.** Bir çağrı tek bir dolaylı çağrıdır; `services/virtual-call` Benchmark'ı onu 10 ns'nin
   altında tutar.
 - **Uyumluluk.** Arayüzler modül ABI'sinin parçasıdır: bir fonksiyon eklemek veya değiştirmek
-  `kModuleApiVersion`'ı değiştirir (`AnimationService::setRagdoll()` ile birlikte 10) ve modüller yeniden Build edilmelidir.
+  `kModuleApiVersion`'ı değiştirir (`NavService` ile birlikte 11) ve modüller yeniden Build edilmelidir.
 
 ## Kapsam
 
-"Scripting API" Doxygen grubu `ModuleContext`'i ve dokuz arayüzü içerir.
+"Scripting API" Doxygen grubu `ModuleContext`'i ve on arayüzü içerir.
 [Showcase modülü](../manual/editor/showcase.md#showcase-modulu) grubun her public fonksiyonunu çağırır;
 biri orada çağrılmıyorsa ya da modül testlerinin bir sayaçlı proxy'sinin (`tests/modules/CountingServices.hpp`)
 sayaç sayısı yanlışsa `python tools/check_api_coverage.py` CI'da başarısız olur. Bu yüzden yeni bir
@@ -250,3 +251,65 @@ if (illusion::AnimationService* animation = context.service<illusion::AnimationS
 [Animasyon](../manual/animation.md#animasyon-graflar) kılavuz sayfası grafları anlatır,
 [eğitim](../tutorials/animated-character.md) onları kullanır; root motion'ı
 [oyun oturumu](../manual/runtime.md) uygular.
+
+## NavService
+
+Oyunun navmesh'leri ve NavAgent'ları (ADR 0062). Sorgular (`findPath`, `nearestPoint`, `raycast`,
+`randomPoint`) bir `NavQueryFilter` (agent type, area mask, search extents) alır ve köşe noktalarını sizin
+span'inize yazar. Hedef değişiklikleri (`setDestination`, `stop`) `NavAgent::destination`'a kaydedilir ve bir
+sonraki Navigation adımında etki eder; `warp` hemen taşır. Canlı olmayan ya da `NavAgent`'ı olmayan bir Entity
+üzerindeki çağrı `NoAgent` döndürür; hiçbir şey assert etmez.
+
+| Fonksiyon | Amaç |
+| --- | --- |
+| `findPath` | En kısa yolun köşe noktalarını bir span'e yazar ve `NavPathResult` döndürür: yazılan `count`, tüm yolun `total`'ı, m cinsinden `length` ve `partial` (yol, hedefe en yakın erişilebilir noktada biter) |
+| `nearestPoint` | Bir konuma `searchExtents` içinde en yakın navmesh noktası |
+| `raycast` | Navmesh üzerinde bir noktadan ötekine yürür ve `NavRaycastHit` döndürür: `hit`, `point`, duvarın yatay `normal`'i ve yürünen `fraction` |
+| `randomPoint` | Merkezden erişilebilen, bir yarıçap içindeki bir navmesh noktası; aynı seed aynı noktayı verir |
+| `setDestination`, `stop` | Entity'nin agent'ını dünya uzayındaki bir noktaya gönderir ya da hedefini temizler |
+| `warp` | Agent'ı bir konuma en yakın navmesh noktasına hemen taşır ve yolunu bırakır |
+| `status`, `remainingDistance` | Agent'ın son update'teki `NavAgentStatus`'ı ve yolunda kalan mesafe (m); henüz update edilmemiş bir agent `Idle`'dır (hedefi varsa `Pending`), kalan 0 m |
+| `pollEvents` | Son update'in olaylarını (`NavEvent`: agent, tür, link, link türü, konum) Entity sırasıyla bir span'e kopyalar; toplamı döndürür |
+
+`pollEvents` dışındaki her fonksiyon bir `Expected<..., NavError>` döndürür; `navErrorName()` adı verir:
+
+| Hata | Ne zaman |
+| --- | --- |
+| `NoAgent` | Entity canlı değil ya da `NavAgent`'ı yok |
+| `NoNavMesh` | O agent type'ın henüz yüklenmiş bir navmesh'i yok |
+| `OffMesh` | Bir noktanın `searchExtents` içinde navmesh poligonu yok |
+| `NoPath` | Noktalar navmesh üzerinde ama erişilebilen hiçbir şey hedefe başlangıçtan daha yakın değil |
+| `InvalidValue` | Bir değer sonlu değil ya da aralık dışı: 8 veya daha büyük bir agent type, negatif bir yarıçap ya da extent, boş bir span |
+
+Bir update'in olayları bir sonraki Navigation update'ine kadar yayımda kalır: arada yapılan her `pollEvents()`
+çağrısı aynı olayları döndürür (toplamı, span'in boyutunu aşsa bile), bu yüzden span'i en yoğun update'e göre
+boyutlandırın ya da update başına bir kez okuyun.
+
+```cpp
+if (illusion::NavService* nav = context.service<illusion::NavService>())
+{
+    const illusion::NavQueryFilter filter{
+        .agentType = 0, .areaMask = 0xFFFFFFFFu, .searchExtents = illusion::Vec3(2.0f, 4.0f, 2.0f)};
+    if (auto point = nav->randomPoint(home, 10.0f, seed, filter))
+    {
+        static_cast<void>(nav->setDestination(creature, *point));
+    }
+    if (nav->status(creature).valueOr(illusion::NavAgentStatus::Idle) == illusion::NavAgentStatus::Moving)
+    {
+        const illusion::f32 left = nav->remainingDistance(creature).valueOr(0.0f);
+        showDistance(left);
+    }
+    std::array<illusion::NavEvent, 16> events{};
+    const illusion::u32 count = nav->pollEvents(events);
+    for (illusion::u32 i = 0; i < count && i < events.size(); ++i)
+    {
+        if (events[i].type == illusion::NavEventType::LinkEntered)
+        {
+            playJump(events[i].agent);
+        }
+    }
+}
+```
+
+[Navigasyon](../manual/navigation.md#bir-modulden) kılavuz sayfası surface'leri, agent'ları ve crowd'u
+anlatır.

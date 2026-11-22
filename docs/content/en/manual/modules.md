@@ -89,10 +89,10 @@ and a static library otherwise. `SHARED` or `STATIC` forces one. A shared module
 everything it links and exports nothing but its entry point.
 
 `USES` names the engine libraries whose headers and plain-data Components the module needs: `physics`,
-`audio`, `particles`, `animation`, `input`, `render` (the saved, GPU-free Components of `SceneComponents.hpp`),
+`audio`, `particles`, `animation`, `nav`, `input`, `render` (the saved, GPU-free Components of `SceneComponents.hpp`),
 `runtime`, `store`, `ui` and `save`. Each links the header-only target `illusion::<name>_api`: the library's
 headers, its Components and its service interface (`PhysicsService`, `AudioService`, `ParticleService`,
-`AnimationService`, `InputService`, `SceneService`, `StoreService`, `UiService`, `SaveService`), never the
+`AnimationService`, `NavService`, `InputService`, `SceneService`, `StoreService`, `UiService`, `SaveService`), never the
 library's code.
 
 !!! warning "Shared modules do not link engine libraries"
@@ -150,13 +150,13 @@ modules.detachWorld(world);
 ```
 
 Games rarely wire this by hand: a [game session](runtime.md) attaches its World with the physics, audio,
-particle, animation, input, scene and UI services (and the store and saved games) and updates the modules in its step order, in the editor's Play mode and in the
+particle, animation, navigation, input, scene and UI services (and the store and saved games) and updates the modules in its step order, in the editor's Play mode and in the
 player alike.
 
 `load()` copies the library to a shadow directory and loads the copy, so the build can overwrite the
 original. It then checks the module and returns an error message if anything is wrong:
 
-- the module API version (10; modules built for an older version must be rebuilt, and those built for version
+- the module API version (11; modules built for an older version must be rebuilt, and those built for version
   2 must also move their World work to `start`), the engine version (shared modules must be built against exactly this engine) and the build
   settings (compiler and its version, Debug or Release, asserts);
 - a valid, unique name and a semantic version;
