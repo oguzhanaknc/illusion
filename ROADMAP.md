@@ -1568,9 +1568,17 @@ game code.
   eases it over frames); `activate()`, `setPriority()`, `swapShoulder()` and the target setters write the saved
   fields of the Components; the walker still writes the Eye Point's Transform, since `CameraFollow` has no
   pitch input; the forest needs downloaded assets, so its images were not retaken.
-- CAM-4 (`mechanic`): Editor and documentation: `camera.*` commands, frusta in the Scene view, Game view
-  preview of a virtual camera, manual page "Cameras" (EN/TR), a tutorial (a third-person camera with
-  shoulder swap), `CHANGELOG.md`.
+- ✅ CAM-4 (`mechanic`): Editor and documentation: the commands `camera.list`, `camera.status`,
+  `camera.activate` (priority one above the others, undoable) and `camera.preview` (`ViewState::previewCamera()`),
+  the frusta of virtual cameras in the Scene view (`VisualiserColors::virtualCamera`, `liveCamera` and
+  `blendingCamera`: the live and the blending camera of a play session are always drawn, at the brain's pose), the
+  Game view looking through the previewed camera, manual sections "Rigs", "In the editor" and "Performance" of
+  "Cameras" (EN/TR), `CHANGELOG.md`. Done: `editor/tests/core/TestCameraCommands.cpp`, the camera commands in the
+  fuzz, dry-run and random-command history tests, `camera.status` of a running game and its blend in
+  `editor/tests/play/TestPlayMode.cpp`, the frusta in `editor/tests/viewport/TestVisualisers.cpp`, the preview and
+  the Scene view frustum in `editor/tests/gpu/TestViewportGpu.cpp`. Tutorial "A third-person camera" (module built by
+  `tests/CMakeLists.txt`, test in `tests/docs/TestTutorials.cpp`). Open: the edit World does not run camera stages, so `camera.preview` shows a camera where its Entity
+  stands.
 - Virtual cameras (scope) as saved Components with priorities; the camera brain on the real `Camera` picks the
   highest live one and blends to it (cut, ease, custom curve, per-pair overrides)
 - Body and aim stages as data: follow with offset and damping, orbit, spring arm with collision against

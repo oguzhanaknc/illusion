@@ -2,9 +2,9 @@
 
 /// @file
 /// The DebugDraw visualisers of the Scene views (GPU-free): light ranges and directions, camera frusta,
-/// collider shapes, character capsules, joint anchors, axes and limits, audio distances and cones, and the
-/// skeletons of Animators with their IK targets, spring chains and ragdoll parts, recorded as world-space
-/// lines.
+/// the frusta of virtual cameras (the live and blending ones always), collider shapes, character capsules,
+/// joint anchors, axes and limits, audio distances and cones, and the skeletons of Animators with their IK
+/// targets, spring chains and ragdoll parts, recorded as world-space lines.
 ///
 /// ```cpp
 /// DebugDraw draw(65536);
@@ -16,6 +16,7 @@
 
 #include <illusion/core/Base.hpp>
 #include <illusion/core/Math.hpp>
+#include <illusion/ecs/Entity.hpp>
 #include <illusion/editor/core/ViewportHost.hpp>
 
 #include <span>
@@ -39,6 +40,9 @@ struct VisualiserColors
 {
     Vec4 light{1.0f, 0.8f, 0.25f, 1.0f};           ///< Light ranges and directions.
     Vec4 camera{0.8f, 0.8f, 0.8f, 1.0f};           ///< Camera frusta.
+    Vec4 virtualCamera{0.45f, 0.75f, 0.85f, 1.0f}; ///< Frusta of virtual cameras.
+    Vec4 liveCamera{1.0f, 0.85f, 0.2f, 1.0f}; ///< The virtual camera a brain shows (or the previewed one).
+    Vec4 blendingCamera{1.0f, 0.5f, 0.15f, 1.0f};  ///< The virtual camera a brain blends from.
     Vec4 collider{0.25f, 0.9f, 0.3f, 1.0f};        ///< Solid colliders.
     Vec4 sensor{0.3f, 0.55f, 1.0f, 1.0f};          ///< Colliders of sensor bodies (triggers).
     Vec4 character{0.2f, 0.85f, 0.85f, 1.0f};      ///< Character capsules.
@@ -74,6 +78,7 @@ struct VisualiserOptions
     std::span<const u64> hidden;     ///< Entities never drawn (64 Entity indices per word).
     f32 cameraAspect = 16.0f / 9.0f; ///< Width / height of camera frusta.
     f32 frustumLength = 3.0f;        ///< Depth to which camera frusta are drawn, in world units.
+    Entity previewCamera{};          ///< The VirtualCamera a Game view previews, drawn like a live one.
     f32 lineWidth = 1.5f;            ///< Line width in output pixels.
     VisualiserColors colors;         ///< Colours.
     /// The poses the skeleton kind draws (AnimationWorld::jointMatrices()); none draws no skeletons.

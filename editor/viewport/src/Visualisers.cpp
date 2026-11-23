@@ -1,6 +1,7 @@
 #include <illusion/animation/AnimationComponents.hpp>
 #include <illusion/animation/AnimationWorld.hpp>
 #include <illusion/audio/AudioComponents.hpp>
+#include <illusion/camera/CameraComponents.hpp>
 #include <illusion/core/Profiler.hpp>
 #include <illusion/ecs/Hierarchy.hpp>
 #include <illusion/ecs/Transform.hpp>
@@ -246,10 +247,9 @@ Mat4 rigidMatrix(const Transform& transform) noexcept
 }
 
 void recordCamera(Recorder& out, const Transform& transform, const Camera& camera,
-                  const VisualiserOptions& options) noexcept
+                  const VisualiserOptions& options, Vec4 color) noexcept
 {
     const Mat4 matrix = rigidMatrix(transform);
-    const Vec4 color = options.colors.camera;
     const f32 aspect = options.cameraAspect > 0.0f ? options.cameraAspect : 16.0f / 9.0f;
     const f32 nearPlane = std::max(camera.nearPlane, 1e-4f);
     const bool orthographic = camera.projection == CameraProjection::Orthographic;
@@ -639,6 +639,66 @@ void recordRagdoll(Recorder& out, const PosedSkeleton& pose, std::span<const Rag
     }
 }
 
+// The frusta of the VirtualCameras: those a brain shows or blends from (and the previewed one) always, at the
+// pose the brain evaluated; the others where @p wanted says, at their Transform.
+template <typename Wanted>
+u32 recordVirtualCameras(Recorder& out, World& world, const VisualiserOptions& options,
+                         const Wanted& wanted) noexcept
+{
+    u32 recorded = 0;
+    constexpr usize kMaxBrains = 8;
+    std::array<Entity, kMaxBrains> live{};
+    std::array<Entity, kMaxBrains> blendingFrom{};
+    usize liveCount = 0;
+    usize fromCount = 0;
+    world.query<const CameraBrainState>().each([&](Entity, const CameraBrainState& state) {
+        if (liveCount < kMaxBrains && !state.live.isNull())
+        {
+            live[liveCount++] = state.live;
+        }
+        if (fromCount < kMaxBrains && state.blending && !state.from.isNull())
+        {
+            blendingFrom[fromCount++] = state.from;
+        }
+    });
+    const auto contains = [](const std::array<Entity, kMaxBrains>& list, usize count, Entity entity) {
+        return std::find(list.begin(), list.begin() + static_cast<std::ptrdiff_t>(count), entity) !=
+               list.begin() + static_cast<std::ptrdiff_t>(count);
+    };
+    const VisualiserColors& colors = options.colors;
+    world.query<const Transform, const VirtualCamera>().without<Inactive>().each(
+        [&](Entity entity, const Transform& transform, const VirtualCamera& camera) {
+            const bool isLive = contains(live, liveCount, entity) || entity == options.previewCamera;
+            const bool isFrom = contains(blendingFrom, fromCount, entity);
+            if (bitSet(options.hidden, entity.index) || (!isLive && !isFrom && !wanted(entity)))
+            {
+                return;
+            }
+            CameraPose pose{.position = transform.position,
+                            .rotation = transform.rotation,
+                            .fovY = camera.fovY,
+                            .nearPlane = camera.nearPlane,
+                            .dutch = camera.dutch};
+            const VirtualCameraState* state = world.tryGet<VirtualCameraState>(entity);
+            if (state != nullptr && state->evaluated != 0 && (isLive || isFrom) &&
+                entity != options.previewCamera)
+            {
+                pose = state->pose;
+            }
+            const Transform placed{
+                .position = pose.position, .rotation = cameraViewRotation(pose), .scale = Vec3(1.0f)};
+            Camera lens;
+            lens.fovY = pose.fovY;
+            lens.nearPlane = pose.nearPlane;
+            recordCamera(out, placed, lens, options,
+                         isLive   ? colors.liveCamera
+                         : isFrom ? colors.blendingCamera
+                                  : colors.virtualCamera);
+            ++recorded;
+        });
+    return recorded;
+}
+
 // The Animator a TwoBoneIk acts on: the one of its own Entity, else its parent's.
 Entity limbOwner(const World& world, Entity entity) noexcept
 {
@@ -688,10 +748,14 @@ VisualiserStats recordVisualisers(World& world, DebugDraw& draw, const Visualise
             [&](Entity entity, const Transform& transform, const Camera& camera) {
                 if (wanted(entity))
                 {
-                    recordCamera(out, transform, camera, options);
+                    recordCamera(out, transform, camera, options, colors.camera);
                     ++stats.objects;
                 }
             });
+    }
+    if (kinds.cameras)
+    {
+        stats.objects += recordVirtualCameras(out, world, options, wanted);
     }
     if (kinds.colliders)
     {

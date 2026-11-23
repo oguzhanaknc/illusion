@@ -7,6 +7,7 @@
 #include <illusion/assets/Mesh.hpp>
 #include <illusion/assets/Model.hpp>
 #include <illusion/audio/AudioComponents.hpp>
+#include <illusion/camera/CameraComponents.hpp>
 #include <illusion/core/JobSystem.hpp>
 #include <illusion/core/Json.hpp>
 #include <illusion/core/Log.hpp>
@@ -1323,6 +1324,30 @@ struct ViewportService::Impl
         return !editor.view().hidden(guid) && !editor.view().locked(guid);
     }
 
+    // The VirtualCamera the Game views of the edit World preview (camera.preview); null for none, and while
+    // a play session runs: then the Game view shows what the brain writes to the Camera.
+    [[nodiscard]] Entity previewedCamera()
+    {
+        const EntityGuid guid = editor.view().previewCamera();
+        if (guid.isNull() || &shown() != &editor.world())
+        {
+            return Entity{};
+        }
+        const Entity entity = shownEntities().lookup(guid);
+        World& world = shown();
+        return !entity.isNull() && world.isAlive(entity) && world.has<VirtualCamera>(entity) &&
+                       world.has<Transform>(entity)
+                   ? entity
+                   : Entity{};
+    }
+
+    // What a Game view looks through: the previewed VirtualCamera, else the scene's main Camera.
+    [[nodiscard]] Entity gameCamera()
+    {
+        const Entity preview = previewedCamera();
+        return preview.isNull() ? findMainCamera(shown()) : preview;
+    }
+
     // The view of @p viewport for an image of @p aspect: its editor camera (with @p animated, where the
     // camera is now rather than where it goes), or the scene's main Camera (std::nullopt without one).
     std::optional<RenderView> viewOf(const Viewport& viewport, f32 aspect, bool animated)
@@ -1330,6 +1355,23 @@ struct ViewportService::Impl
         if (viewport.kind == ViewportKind::Game)
         {
             World& world = shown();
+            if (const Entity preview = previewedCamera(); !preview.isNull())
+            {
+                const VirtualCamera& virtualCamera = world.get<VirtualCamera>(preview);
+                const Transform& placed = world.get<Transform>(preview);
+                const CameraPose pose{.position = placed.position,
+                                      .rotation = placed.rotation,
+                                      .fovY = virtualCamera.fovY,
+                                      .nearPlane = virtualCamera.nearPlane,
+                                      .dutch = virtualCamera.dutch};
+                Camera lens;
+                lens.fovY = pose.fovY;
+                lens.nearPlane = pose.nearPlane;
+                return RenderView::fromCamera(Transform{.position = pose.position,
+                                                        .rotation = cameraViewRotation(pose),
+                                                        .scale = Vec3(1.0f)},
+                                              lens, aspect);
+            }
             const Entity entity = findMainCamera(world);
             if (entity.isNull())
             {
@@ -1357,7 +1399,7 @@ struct ViewportService::Impl
         ILL_PROFILE_SCOPE();
         if (viewport.kind == ViewportKind::Game)
         {
-            viewport.sceneCamera = findMainCamera(shown());
+            viewport.sceneCamera = gameCamera();
             if (viewport.sceneCamera.isNull())
             {
                 return false;
@@ -1426,9 +1468,9 @@ struct ViewportService::Impl
         const AiWorld* ai = play != nullptr && editor.playWorld() != nullptr ? play->ai() : nullptr;
         const bool drawsPerception =
             viewport.kind == ViewportKind::Scene && ai != nullptr && settings.visualisers.perception;
-        if (viewport.kind == ViewportKind::Scene &&
-            ((hasVisualisers(settings.visualisers) && (all || !editor.selection().empty())) ||
-             drawsNavigation || drawsPerception))
+        const bool drawsVisualisers = hasVisualisers(settings.visualisers) &&
+                                      (all || !editor.selection().empty() || settings.visualisers.cameras);
+        if (viewport.kind == ViewportKind::Scene && (drawsVisualisers || drawsNavigation || drawsPerception))
         {
             debugDraw.clear();
             VisualiserOptions options;
@@ -1437,6 +1479,7 @@ struct ViewportService::Impl
             options.selection = selectionBits;
             options.hidden = hiddenBits;
             options.cameraAspect = gameAspect();
+            options.previewCamera = previewedCamera();
             options.animation = shownAnimation();
             options.ragdolls = &ragdolls;
             options.colors.bone = viewport.style.bone;
@@ -1444,7 +1487,7 @@ struct ViewportService::Impl
             options.colors.ikTarget = viewport.style.ikTarget;
             options.colors.spring = viewport.style.spring;
             options.colors.ragdoll = viewport.style.ragdoll;
-            if (hasVisualisers(settings.visualisers) && (all || !editor.selection().empty()))
+            if (drawsVisualisers)
             {
                 const VisualiserStats recorded = recordVisualisers(shown(), debugDraw, options);
                 stats.visualisers += recorded.objects;
@@ -1989,7 +2032,7 @@ std::vector<ViewportInfo> ViewportService::viewports() const
         }
         if (viewport.kind == ViewportKind::Game)
         {
-            info.sceneCamera = findMainCamera(impl.shown());
+            info.sceneCamera = impl.gameCamera();
         }
         out.push_back(std::move(info));
     }
@@ -2157,7 +2200,7 @@ ViewportFrame ViewportService::frame(std::string_view id, UVec2 size, const View
     out.settings = viewport->settings;
     out.projection = viewport->camera.target().projection;
     out.kind = viewport->kind;
-    out.hasCamera = scene || !findMainCamera(impl.shown()).isNull();
+    out.hasCamera = scene || !impl.gameCamera().isNull();
     out.camera = viewport->camera.camera();
     out.hovered = viewport->hovered;
     if (out.hasCamera && impl.ensureTarget(*viewport))

@@ -62,6 +62,69 @@ küre atılır; küre hedefin kendi gövdelerinden geçer ve kol duvarların dı
 `CameraComposer` hedefi `screenPosition` konumunda tutar (her eksende -1 ile 1 arası): ölü bölgenin içinde
 kamera kıpırdamaz, yumuşak bölgenin içinde sönümlenerek geri döner ve hedef yumuşak bölgeden hiç çıkmaz.
 
+## Rig'ler
+
+Rig, bir stili oluşturan aşamaları olan bir sanal kameradır. Çoğu oyunun ihtiyaç duyduğu üçü aşağıda.
+`follow` ve `lookAt` alanları, hedef için `entity.create`'in döndürdüğü `id` değerini alır.
+
+**Takip kamerası.** Hedefin arkasında sabit bir offset'te bir follow gövdesi ve göğsüne bakan bir look-at
+nişanı:
+
+```json
+{"method": "entity.create", "params": {"name": "Chase", "components": {
+  "illusion.VirtualCamera": {"priority": 10, "follow": "1f3a9c52e0b7d468", "lookAt": "1f3a9c52e0b7d468"},
+  "illusion.CameraFollow": {"offset": [0, 2, 6], "damping": [0.2, 0.2, 0.2]},
+  "illusion.CameraLookAt": {"targetOffset": [0, 1.5, 0]}}}}
+```
+
+**Omuz üstü kamera.** Fare ya da sağ çubuğun döndürdüğü (`lookAction`) ve duvarların kısalttığı bir yaylı kol;
+oyuncu nişan alırken ona daha yüksek bir `priority` verin:
+
+```json
+{"method": "entity.create", "params": {"name": "Shoulder", "components": {
+  "illusion.VirtualCamera": {"priority": 5, "follow": "1f3a9c52e0b7d468", "fovY": 0.9},
+  "illusion.CameraSpringArm": {"shoulderOffset": [0.6, 1.6, 0], "armLength": 2.5, "lookAction": "camera.look"}}}}
+```
+
+**Ray kamerası.** Hedefin yakınında kalan bir parkur boyunca dolly; yandan kaydırmalı oyunlar ya da bir
+ara sahne çekimi için, composer hedefi merkezin soluna yerleştirir:
+
+```json
+{"method": "entity.create", "params": {"name": "Rail", "components": {
+  "illusion.VirtualCamera": {"priority": 1, "follow": "1f3a9c52e0b7d468"},
+  "illusion.CameraDolly": {"mode": "NearestToTarget", "path": [
+    {"position": [-8, 2, 6], "tangent": [8, 0, 0]}, {"position": [8, 2, 6], "tangent": [8, 0, 0]}]},
+  "illusion.CameraComposer": {"screenPosition": [-0.2, 0]}}}}
+```
+
+`Camera`'nın Entity'sine bir `CameraBrain` koyun. `priority` değeri en yüksek kamera canlıdır; yani takip
+kamerası (10) gösterilir, diğer ikisi bekler; `camera.activate` ya da `CameraService::activate()` başka birini
+onun üstüne çıkarır. Beynin bir çift geçişi, yeni kameranın kendi `blendIn` değerini geçersiz kılar: bu,
+takip kamerasından omuz kamerasına 0,35 sn'de hızlı başlayan bir eğriyle, geri kalan her şeyde 0,8 sn'de
+geçer.
+
+```json
+{"method": "component.set", "params": {"entity": "/Camera", "type": "illusion.CameraBrain", "value": {
+  "defaultBlend": {"style": "EaseInOut", "duration": 0.8},
+  "blends": [{"from": "7c20d4e1a95b3f68", "to": "b6094a7d12ce8f35", "blend": {"style": "Curve", "duration": 0.35,
+    "control1": [0.2, 0.0], "control2": [0.0, 1.0]}}]}}}
+```
+
+Bir modül oyun çalışırken aynı rig'leri sürer: nişan alırken omuz kamerası zoom yapar, bir düğme omzu
+değiştirir ve kol yansır. `swapShoulder()`, yaylı kolu olmayan bir kamerada `CameraError::NoStage` ile
+başarısız olur.
+
+```cpp
+if (illusion::CameraService* cameras = context.service<illusion::CameraService>())
+{
+    static_cast<void>(cameras->setFieldOfView(shoulder, aiming ? 0.7f : 0.9f));
+    if (swapPressed)
+    {
+        static_cast<void>(cameras->swapShoulder(shoulder));
+    }
+}
+```
+
 ## Gürültü ve sarsıntılar
 
 `CameraNoise` elde çekim salınımı ekler: her eksende `seed` ile fazlanan iki sinüs. Bir `CameraImpulse`
@@ -96,3 +159,63 @@ Bir oyun modülü `CameraService`'i `context.service<illusion::CameraService>()`
 döndürür, omzu değiştirir, görüş alanıyla zoom yapar, shake'leri ve impulse'ları başlatır, canlı kamerayı
 ve geçişin ilerlemesini okur. [Scripting API referansı](../reference/scripting-api.md#cameraservice) her
 fonksiyonu ve hatalarını listeler.
+
+## Editörde
+
+Dört `camera.*` [Editor commands](../reference/editor-commands.md) kameraların içine bakar ve onları sürer;
+insanlar (command palette) ve AI agent'lar için aynı şekilde:
+
+| Komut | Ne yapar |
+| --- | --- |
+| `camera.list` | Sahnenin sanal kameraları (en fazla 200): `priority`, `enabled`, `inactive` olup olmadıkları, derece ve metre cinsinden lens, gövde ve nişan aşaması (`Follow`, `Orbit`, `SpringArm`, `Dolly` ya da `None`; `LookAt`, `Composer` ya da `None`), `noise`, `follow` ve `lookAt` hedefleri ve bir beynin onları şimdi gösterip göstermediği (`live`); varsayılan geçişleri ve çift geçiş sayılarıyla beyinler; `CameraImpulse` kaynaklarının sayısı |
+| `camera.status` | Bir play oturumunda her beynin gösterdiği: `live` kamerası, geçtiği kamera (`from`), geçişin 0'dan 1'e `progress` değeri, canlı kameranın `weight` değeri ve Camera'ya yazdığı `position`, `rotation` (pitch, yaw, roll, derece) ve `fieldOfView`, ayrıca son update'in kaç kamera değerlendirdiği |
+| `camera.activate` | Bir kameraya diğer her etkin kameradan bir fazla `priority` verir; böylece beyin onu gösterir. Kaydedilen `VirtualCamera`'yı düzenler; bu yüzden geri alınabilir ve oyun o kamera canlıyken başlar. Kamera etkin olmalı ve `Inactive` olmamalıdır |
+| `camera.preview` | Game görünümlerini bir sanal kameranın (`entity`) içinden baktırır, ya da `clear` ile yeniden ana Camera'dan |
+
+```json
+{"call": "camera.list", "params": {}}
+{"call": "camera.activate", "params": {"entity": "/Rigs/Shoulder"}}
+{"call": "camera.preview", "params": {"entity": "/Rigs/Shoulder"}}
+{"call": "camera.preview", "params": {"clear": true}}
+{"call": "play.step", "params": {"steps": 30}}
+{"call": "camera.status", "params": {}}
+```
+
+`camera.list` ve `camera.status`, bir oyun çalışırken play World'ünde, aksi halde edit World'ünde çalışır.
+Aşamaları yalnızca bir play oturumu çalıştırır; bu yüzden edit World'ünde `camera.status` `live` değerini
+false verir ve bunu `note` içinde söyler; `play.step` ve ardından `camera.status` bir geçişi ya da yaylı kolu
+deterministik biçimde gösterir. `camera.activate` ve `camera.preview` oyun oynarken de her zaman edit
+World'ünde çalışır; oyun bıraktıkları yerden başlar. Çalışan oyunun kamerasını dışarıdan değiştirmek için
+bir `VirtualCamera`'nın `priority` değerini play World'ünde çalışan `component.set_field` ile ayarlayın ya da
+bir modülden `CameraService::activate()` çağırın. Geçersiz parametreler JSON Pointer'larıyla bildirilir:
+`VirtualCamera` olmayan, devre dışı ya da etkin olmayan bir Entity için `/entity`, `entity` ile birlikte
+verilen `clear` için `/clear`.
+
+### Viewport'larda
+
+Scene görünümünün **Cameras** görselleştiricisi (`viewport.set_overlays` ile `{"visualisers": {"cameras": true}}`,
+varsayılan olarak açık) her `VirtualCamera`'nın frustum'unu da çizer: seçili olanlarınkini ya da **All** ile
+hepsininkini, kameranın `Transform` ve lensinde, mavi renkle. Bir play oturumunda bir beynin gösterdiği
+kamera her zaman, beynin değerlendirdiği pozda, sönümleme ve sarsıntısıyla sarı çizilir; bir geçişin
+başladığı kamera turuncu çizilir; böylece bir geçiş, yer değiştiren iki frustum olarak görünür. Önizlenen
+kamera da sarıdır.
+
+**Game** görünümü beynin çıktısını ek bir ayar olmadan gösterir: bir play oturumunda beyin `Camera`'sına
+yazar; Game görünümü de geçişler dahil oyuncunun gördüğünün aynısıdır. Play oturumunun dışında kameralar
+durur, çünkü aşamaları yalnızca bir oyunda çalışır; `camera.preview` Game görünümünü bir sanal kameranın
+içinden, Entity'sinin durduğu yerden ve lensiyle baktırır; bu, sahnede ana bir `Camera` olmadan sabit bir
+çekimi ya da bir rayın başlangıç noktasını yerleştirmeye yeter. Önizleme editor durumudur: kaydedilmez, geri
+alınmaz ve bir play oturumu onun yerine beyninin yazdığını gösterir.
+
+## Performans
+
+Geliştirme masaüstünde ölçüldü (Release):
+
+- Hepsi bir gövde aşaması (follow, orbit, kesmeli yaylı kol, dolly), bir nişan aşaması, gürültü ve bir geçiş
+  çalıştıran 100 sanal kameranın tek bir update'i 53 µs sürer (Benchmark `camera/stages-100`, bütçe
+  400 µs).
+- 100 sanal kamerası ve canlı kamerasını her on update'te bir değiştiren bir beyni olan bir World'de
+  `CameraWorld::update()` 2,1 µs sürer (Benchmark `camera/world-100`, bütçe 20 µs): yalnızca canlı kamera ve
+  bir geçişin başladığı kamera değerlendirilir; bu yüzden maliyet kamera sayısını değil beyin sayısını izler.
+- World kameralarını bir kez gördükten sonra bir update'te hiçbir şey allocate edilmez; yaylı kol canlı kol
+  başına bir küre cast'ine mal olur.

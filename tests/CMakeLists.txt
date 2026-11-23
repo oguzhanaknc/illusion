@@ -264,6 +264,20 @@ illusion_add_module(illusion_tutorial_creature_module SHARED SOURCES ${tutorial_
 target_compile_definitions(illusion_tests PRIVATE
     TUTORIAL_CREATURE_MODULE="$<TARGET_FILE:illusion_tutorial_creature_module>")
 add_dependencies(illusion_tests illusion_tutorial_creature_module)
+# The same for "A third-person camera".
+set(tutorial_camera_page ${PROJECT_SOURCE_DIR}/docs/content/en/tutorials/third-person-camera.md)
+set(tutorial_camera_source ${CMAKE_CURRENT_BINARY_DIR}/generated/tutorials/third_person_camera.cpp)
+add_custom_command(OUTPUT ${tutorial_camera_source}
+    COMMAND ${CMAKE_COMMAND} -D SOURCE=${tutorial_camera_page} -D OUTPUT=${tutorial_camera_source}
+        -P ${PROJECT_SOURCE_DIR}/cmake/ExtractCppBlocks.cmake
+    DEPENDS ${tutorial_camera_page} ${PROJECT_SOURCE_DIR}/cmake/ExtractCppBlocks.cmake
+    COMMENT "Extracting the code of the A third-person camera tutorial"
+    VERBATIM)
+illusion_add_module(illusion_tutorial_camera_module SHARED SOURCES ${tutorial_camera_source}
+    USES camera input physics runtime)
+target_compile_definitions(illusion_tests PRIVATE
+    TUTORIAL_CAMERA_MODULE="$<TARGET_FILE:illusion_tutorial_camera_module>")
+add_dependencies(illusion_tests illusion_tutorial_camera_module)
 target_compile_definitions(illusion_test_module_v3 PRIVATE TEST_MODULE_WIDE_COUNTER=1)
 target_compile_definitions(illusion_test_module_v5 PRIVATE TEST_MODULE_LAYOUT_V2=1)
 target_compile_definitions(illusion_test_module_v6 PRIVATE TEST_MODULE_WIDE_OPAQUE=1)

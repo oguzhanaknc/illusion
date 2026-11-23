@@ -46,6 +46,7 @@ void registerGamepadCommands(CommandRegistry& registry);
 void registerSavesCommands(CommandRegistry& registry);
 void registerModuleCommands(CommandRegistry& registry);
 void registerNavCommands(CommandRegistry& registry);
+void registerCameraCommands(CommandRegistry& registry);
 void registerAiCommands(CommandRegistry& registry);
 void registerAnimationCommands(CommandRegistry& registry);
 void registerExportCommands(CommandRegistry& registry);
