@@ -20,6 +20,7 @@ add_library(illusion_assets STATIC
     src/Mesh.cpp
     src/ShaderAsset.cpp
     src/ShaderCompiler.cpp
+    src/ShaderLoader.cpp
     src/TextureCompression.cpp
     src/ThirdPartyImpl.cpp)
 add_library(illusion::assets ALIAS illusion_assets)

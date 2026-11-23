@@ -38,6 +38,13 @@
 /// waitIdle() finishes the pending ones. Material files ask for their textures compressed
 /// (materialTextureUses()).
 ///
+/// Material shaders: a material file with a `shader` loads it through RenderAssetCacheDesc::shaders and
+/// waits for it; the shader's parameters and textures come from the file's "parameters" (checked against the
+/// shader's layout, so a name it does not declare fails the material). A shader that did not build draws the
+/// material with the error shader (RenderResources::errorShader()); when a `.shader` file changes the cache
+/// builds it again on the loader's thread and swaps it in without a frame waiting, and the materials that use
+/// it are checked against its new layout. See docs/adr/0063-material-shaders.md.
+///
 /// Mip streaming: with RenderAssetCacheDesc::textureBudgetBytes set, the textures of material files keep only
 /// the levels the renderers that use them need. Resolvers given views (TextureStreamingView) report how large
 /// each material appears; the cache keeps the textures within the budget (RenderResources::setTextureMips()),
@@ -57,6 +64,7 @@ namespace illusion
 
 class AssetStreamer;
 class JobSystem;
+class ShaderLoader;
 class World;
 struct MeshRenderer;
 struct ProceduralSky;
@@ -74,6 +82,11 @@ struct RenderAssetCacheDesc
     u32 textureStreamingCooldown = 120;
     /// Levels up to this many pixels on their longer side are always resident.
     u32 textureStreamingMinSize = 64;
+    /// Builds the `.shader` files that material files name (ADR 0063); it must outlive the cache. The editor
+    /// gives it one with a compiler, so a changed shader is recompiled on its thread and swapped in with
+    /// RenderResources::updateShader(); the player gives it one that reads cooked shaders. Without one,
+    /// materials that name a shader fail to load.
+    ShaderLoader* shaders = nullptr;
 };
 
 /// A view whose renderers ask for texture levels (see RenderAssetResolver::update()).
@@ -93,6 +106,7 @@ struct RenderAssetCacheStatistics
     u32 models = 0;        ///< Models on the GPU.
     u32 meshes = 0;        ///< Mesh assets ready (built-in meshes and meshes of models).
     u32 materials = 0;     ///< Material assets ready.
+    u32 shaders = 0;       ///< Material shaders ready (built-in ones named by material files included).
     u32 textures = 0;      ///< Textures of material files on the GPU.
     u32 environments = 0;  ///< Environments baked.
     u32 loading = 0;       ///< Assets still loading (first loads, reloads and files waiting to reload).

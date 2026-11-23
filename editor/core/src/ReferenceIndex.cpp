@@ -353,6 +353,27 @@ Expected<void, std::string> sceneReferences(std::string_view json, std::string_v
     return {};
 }
 
+// The texture paths of a material's "parameters": its strings other than colours ("#rrggbb"). The file does
+// not say which parameters are textures (the shader does), and a string that names no asset is only a
+// reference to a missing one.
+template <class F>
+void forEachParameterAsset(const JsonText& parameters, F&& fn)
+{
+    const Expected<JsonDocument, JsonError> document = JsonDocument::parse(parameters.text);
+    if (!document)
+    {
+        return;
+    }
+    for (const JsonMember member : document->root().members())
+    {
+        const std::optional<std::string_view> text = member.value.asString();
+        if (text && !text->empty() && !text->starts_with('#'))
+        {
+            fn(member.key, *text);
+        }
+    }
+}
+
 Expected<void, std::string> materialReferences(std::string_view json, std::string_view source,
                                                std::vector<AssetReference>& out)
 {
@@ -367,6 +388,14 @@ Expected<void, std::string> materialReferences(std::string_view json, std::strin
             out.push_back(AssetReference{
                 std::string(reference.path()), std::string(source), {}, {}, std::string(pointer)});
         }
+    });
+    forEachParameterAsset(material->parameters, [&](std::string_view name, std::string_view path) {
+        std::string pointer = "/parameters/";
+        for (const char c : name)
+        {
+            pointer += c == '~' ? "~0" : c == '/' ? "~1" : std::string(1, c);
+        }
+        out.push_back(AssetReference{std::string(path), std::string(source), {}, {}, std::move(pointer)});
     });
     return {};
 }
@@ -519,6 +548,37 @@ rewriteMaterialReferences(std::string_view json, std::string_view from, std::str
             changed = true;
         }
     });
+    // Texture paths in "parameters".
+    bool parametersMoved = false;
+    forEachParameterAsset(material->parameters, [&](std::string_view, std::string_view path) {
+        parametersMoved = parametersMoved || refersTo(path, from);
+    });
+    if (parametersMoved)
+    {
+        const Expected<JsonDocument, JsonError> parameters = JsonDocument::parse(material->parameters.text);
+        JsonMutDocument doc;
+        JsonMutValue root = doc.makeObject();
+        for (const JsonMember member : parameters->root().members())
+        {
+            const std::optional<std::string_view> text = member.value.asString();
+            if (text && !text->empty() && !text->starts_with('#') && refersTo(*text, from))
+            {
+                root.add(member.key, doc.makeString(movedReference(*text, from, to)));
+            }
+            else
+            {
+                root.add(member.key, doc.copy(member.value));
+            }
+        }
+        doc.setRoot(root);
+        if (Expected<void, JsonError> written =
+                doc.write(material->parameters.text, JsonWriteOptions{.pretty = false});
+            !written)
+        {
+            return unexpected("cannot write the material: " + written.error().message);
+        }
+        changed = true;
+    }
     if (!changed)
     {
         return std::optional<std::string>{};

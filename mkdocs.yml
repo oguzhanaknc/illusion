@@ -71,6 +71,7 @@ plugins:
             File System: Dosya Sistemi
             Rendering: Rendering
             Animation: Animasyon
+            Material shaders: Material Shader'ları
             Navigation: Navigasyon
             AI: AI
             Assets and Models: Asset'ler ve Modeller
@@ -116,6 +117,7 @@ plugins:
             Tetris by Hand: Elle Tetris
             A HUD and a pause menu: HUD ve Duraklatma Menüsü
             Animate a character: Bir Karakteri Canlandırın
+            A dissolving surface: Çözünen Bir Yüzey
             A creature that wanders and chases: Dolaşan ve Kovalayan Bir Yaratık
             Contributing: Katkıda Bulunma
 
@@ -152,6 +154,7 @@ nav:
       - File System: manual/filesystem.md
       - Rendering: manual/rendering.md
       - Animation: manual/animation.md
+      - Material shaders: manual/material-shaders.md
       - Navigation: manual/navigation.md
       - AI: manual/ai.md
       - Assets and Models: manual/assets.md
@@ -189,6 +192,7 @@ nav:
       - Tetris by Hand: tutorials/tetris-by-hand.md
       - A HUD and a pause menu: tutorials/hud-and-pause-menu.md
       - Animate a character: tutorials/animated-character.md
+      - A dissolving surface: tutorials/dissolve-shader.md
       - A creature that wanders and chases: tutorials/creature-ai.md
   - Architecture:
       - Overview: architecture/overview.md

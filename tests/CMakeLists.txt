@@ -30,6 +30,7 @@ add_executable(illusion_tests
     core/TestTime.cpp
     core/TestTypeName.cpp
     core/TestVersion.cpp
+    docs/TestShaderExamples.cpp
     docs/TestTutorials.cpp
     ecs/TestCommandBuffer.cpp
     ecs/TestComponent.cpp
@@ -71,6 +72,7 @@ add_executable(illusion_tests
     assets/TestMeshLods.cpp
     assets/TestShaderAsset.cpp
     assets/TestShaderCompiler.cpp
+    assets/TestShaderLoader.cpp
     assets/TestTextureCompression.cpp
     animation/TestAnimationGraph.cpp
     animation/TestAnimationGraphExample.cpp
@@ -363,7 +365,8 @@ add_executable(illusion_gpu_tests
 target_include_directories(illusion_gpu_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
 target_link_libraries(illusion_gpu_tests PRIVATE illusion::render illusion::save illusion::doctest)
 target_compile_definitions(illusion_gpu_tests PRIVATE ILLUSION_TEST_DATA_DIR="${CMAKE_CURRENT_SOURCE_DIR}/data"
-    ILLUSION_TEST_FONT="${ILLUSION_TEST_FONT}")
+    ILLUSION_TEST_FONT="${ILLUSION_TEST_FONT}" ILLUSION_TEST_SLANGC="${ILLUSION_SLANGC}"
+    ILLUSION_TEST_SHADER_LIBRARY="${ILLUSION_SHADER_LIBRARY_DIR}")
 illusion_configure_target(illusion_gpu_tests)
 # Material shaders of TestMaterialShaders.cpp, compiled at build time like the engine's built-in ones.
 illusion_add_material_shaders(illusion_gpu_tests

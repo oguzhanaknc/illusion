@@ -457,6 +457,39 @@ def write_guard_tree(path):
     path.write_text(json.dumps(tree, indent=2) + "\n", encoding="utf-8", newline="\n")
 
 
+SHOWCASE_SHADER = """// A pulsing emissive material that declares every parameter type: a float with a range, a vector, two colours,
+// an int, a bool and a texture. The material pulse.material sets each of them.
+struct Parameters
+{
+    [Color(1, 0.4, 0.1, 1)] float4 tint;
+    [Color(0.1, 0.1, 0.1, 1)] float3 base;
+    [Default(2.5)] [Range(0, 10)] float intensity;
+    [Default(3)] int bands;
+    [Default(1)] bool pulse;
+    [Default2(0.5, 0.25)] float2 scroll;
+    [Texture("white", "mask")] Texture2DSlot mask;
+};
+
+SurfaceOutput surface(SurfaceInput input)
+{
+    const Parameters p = parameters(input);
+    const float2 uv = input.uv + p.scroll * input.time;
+    const float band = step(0.5, frac(uv.y * float(p.bands)));
+    const float beat = p.pulse ? 0.5 + 0.5 * sin(input.time * 3.0) : 1.0;
+    SurfaceOutput output = defaultSurface();
+    output.baseColor = p.base;
+    output.emission = p.tint.rgb * p.intensity * band * beat * sampleTexture(input, p.mask, uv).r;
+    return output;
+}
+"""
+
+
+def write_pulse_shader(path):
+    """The material shader of the showcase (ADR 0063)."""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(SHOWCASE_SHADER, encoding="utf-8", newline="\n")
+
+
 if __name__ == "__main__":
     write_model(ROOT / "models" / "blocks.gltf")
     write_rigged(ROOT / "models" / "column.gltf")
@@ -464,6 +497,7 @@ if __name__ == "__main__":
     write_column_graph(ROOT / "animations" / "column.animgraph")
     write_strider_ragdoll(ROOT / "animations" / "strider.ragdoll")
     write_guard_tree(ROOT / "ai" / "guard.behavior")
+    write_pulse_shader(ROOT / "shaders" / "pulse.shader")
     for name, samples in (("music", music()), ("wind", wind()), ("hum", hum()), ("voice", voice()),
                           ("click", click())):
         write_wav(ROOT / "audio" / f"{name}.wav", samples)

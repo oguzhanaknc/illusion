@@ -74,6 +74,7 @@ enum class AssetKind : u8
     NavMesh,        ///< A baked navmesh file (`.navmesh`).
     RagdollProfile, ///< A ragdoll profile file (`.ragdoll`).
     BehaviorTree,   ///< A behaviour tree file (`.behavior`).
+    Shader,         ///< A material shader file (`.shader`).
 };
 
 /// English name of @p kind ("Mesh", "AudioClip", ...), for tools and schemas.

@@ -84,10 +84,15 @@ void reflectAssetStructs(ComponentRegistry& registry)
         .field("normal", &MaterialTextures::normal, {.assetKind = AssetKind::Texture})
         .field("occlusion", &MaterialTextures::occlusion, {.assetKind = AssetKind::Texture})
         .field("emissive", &MaterialTextures::emissive, {.assetKind = AssetKind::Texture});
-    reflectStruct<MaterialAsset>("illusion.MaterialAsset", 1, structs)
+    reflectStruct<MaterialAsset>("illusion.MaterialAsset", 2, structs)
         .meta({.displayName = "Material asset", .docsAnchor = "manual/assets.md#material-assets"})
         .field("material", &MaterialAsset::material)
-        .field("textures", &MaterialAsset::textures);
+        .field("textures", &MaterialAsset::textures)
+        .field("shader", &MaterialAsset::shader,
+               {.description = "The material shader (a .shader file); empty for the standard shader.",
+                .assetKind = AssetKind::Shader})
+        .field("parameters", &MaterialAsset::parameters,
+               {.description = "Values of the shader's parameters by name (an object)."});
 }
 
 } // namespace illusion

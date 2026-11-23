@@ -33,8 +33,8 @@ bool isImage(std::string_view extension)
 }
 
 // Checks a material file and cooks its textures with the settings the renderer loads them with.
-void cookMaterial(VirtualFileSystem& files, AssetDatabase& database, const std::string& path,
-                  CookResult& result)
+void cookMaterial(VirtualFileSystem& files, AssetDatabase& database, const ShaderCompiler* compiler,
+                  const std::string& path, CookResult& result)
 {
     std::vector<std::byte> bytes;
     if (const FileError error = files.readFile(path, bytes); error != FileError::None)
@@ -55,6 +55,38 @@ void cookMaterial(VirtualFileSystem& files, AssetDatabase& database, const std::
         std::string error;
         if (use.texture && !database.loadImage(use.texture.path(),
                                                {.srgb = use.srgb, .compression = use.compression}, &error))
+        {
+            result.errors.push_back(std::format("{}: {}", path, error));
+        }
+    }
+    if (material->shader.empty())
+    {
+        return;
+    }
+    // The textures of its shader's parameters are imported as the shader's usages say.
+    std::string error;
+    const std::optional<ShaderAsset> shader =
+        database.loadShader(material->shader.path(), compiler, nullptr, &error);
+    if (!shader)
+    {
+        if (compiler != nullptr) // without one, cookShader() has said that shaders cannot be cooked
+        {
+            result.errors.push_back(std::format("{}: its shader does not load: {}", path, error));
+        }
+        return;
+    }
+    const Expected<MaterialParameters, std::string> parameters =
+        resolveMaterialParameters(*material, *shader);
+    if (!parameters)
+    {
+        result.errors.push_back(std::format("{}: {}", path, parameters.error()));
+        return;
+    }
+    for (const MaterialTextureParameter& texture : parameters->textures)
+    {
+        if (texture.texture &&
+            !database.loadImage(texture.texture.path(),
+                                {.srgb = texture.use.srgb, .compression = texture.use.compression}, &error))
         {
             result.errors.push_back(std::format("{}: {}", path, error));
         }
@@ -163,7 +195,7 @@ void cookDirectory(VirtualFileSystem& files, AssetDatabase& database, const Shad
         }
         else if (extension == kMaterialAssetExtension)
         {
-            cookMaterial(files, database, path, result);
+            cookMaterial(files, database, compiler, path, result);
         }
         else if (isImage(extension))
         {

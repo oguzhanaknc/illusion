@@ -6,6 +6,7 @@
 {"call": "material.create", "params": {"path": "assets:/materials/blue.material", "value": {"material": {"name": "Blue", "baseColorFactor": [0.15, 0.35, 0.85, 1], "roughnessFactor": 0.5}}, "overwrite": true}}
 {"call": "material.create", "params": {"path": "assets:/materials/pad.material", "value": {"material": {"name": "Pad", "baseColorFactor": [0.2, 0.9, 0.4, 1], "emissiveFactor": [0.1, 0.6, 0.2]}}, "overwrite": true}}
 {"call": "material.create", "params": {"path": "assets:/materials/ground.material", "value": {"material": {"name": "Ground", "baseColorFactor": [0.3, 0.34, 0.3, 1], "roughnessFactor": 0.9}}, "overwrite": true}}
+{"call": "material.create", "params": {"path": "assets:/materials/pulse.material", "value": {"shader": "assets:/shaders/pulse.shader", "material": {"name": "Pulse"}, "parameters": {"tint": [0.2, 0.8, 1, 1], "base": [0.05, 0.1, 0.2], "intensity": 4, "bands": 5, "pulse": false, "scroll": [0.1, 0.4], "mask": "assets:/textures/smoke.png"}}, "overwrite": true}}
 {"call": "asset.set_import_settings", "params": {"path": "assets:/textures/smoke.png", "value": {"texture": {"quality": "high"}}}}
 {"call": "project.settings_set", "params": {"type": "illusion.WindowSettings", "value": {"width": 1600, "height": 900, "resizable": false}}}
 {"call": "project.settings_set", "params": {"type": "illusion.SaveSettings", "value": {"cloud": false}}}
@@ -137,4 +138,5 @@
 {"call": "entity.create", "params": {"name": "AI Sleeper", "components": {"illusion.Transform": {"position": [33, 0, -4]}, "illusion.BehaviorAgent": {"tree": "assets:/ai/guard.behavior", "enabled": false}}}}
 {"call": "entity.create", "params": {"name": "AI Intruder", "components": {"illusion.Transform": {"position": [32, 0, 2]}, "illusion.AiStimulus": {"team": 1, "offset": [0, 1.2, 0]}}}}
 {"call": "entity.create", "params": {"name": "AI Hidden Intruder", "components": {"illusion.Transform": {"position": [26, 0, 3]}, "illusion.AiStimulus": {"team": 1, "offset": [0, 0.8, 0], "visible": false}}}}
+{"call": "entity.create", "params": {"name": "Shader Cube", "components": {"illusion.Transform": {"position": [40, 1, -2]}, "illusion.MeshRenderer": {"mesh": "builtin:/mesh/cube", "material": "assets:/materials/pulse.material"}}}}
 {"call": "scene.save_as", "params": {"path": "assets:/scenes/everything.scene", "overwrite": true}}

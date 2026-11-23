@@ -4,6 +4,7 @@
 #include <illusion/assets/Environment.hpp>
 #include <illusion/assets/MaterialAsset.hpp>
 #include <illusion/assets/Mesh.hpp>
+#include <illusion/assets/ShaderLoader.hpp>
 #include <illusion/assets/TextureCompression.hpp>
 #include <illusion/core/AssetRef.hpp>
 #include <illusion/core/EventBus.hpp>
@@ -115,9 +116,22 @@ struct MaterialEntry
     AssetHandle<MaterialAsset> file; // until created
     bool texturesRequested = false;
     std::array<u64, 5> textures{}; // TextureEntry keys; 0 for none
-    MaterialDesc desc;             // of a .material file, kept for updateMaterial()
+    u64 shader = 0;                // ShaderEntry key of the file's `shader`; 0 for none
+    bool shaderTexturesRequested = false;
+    std::vector<u64> shaderTextures; // TextureEntry keys of desc.shaderTextures, in the same order
+    MaterialDesc desc;               // of a .material file, kept for updateMaterial()
     MaterialHandle handle;
     u32 references = 0;
+};
+
+// A material shader (a .shader file or a built-in one) on the GPU, built by the ShaderLoader.
+struct ShaderEntry
+{
+    Status status = Status::Loading;
+    Reload reload;
+    ShaderHandle handle;  // empty until the first build that worked
+    u64 completed = 0;    // the loader's count of finished builds when this entry asked for one
+    bool builtin = false; // owned by RenderResources
 };
 
 struct EnvironmentEntry
@@ -311,11 +325,13 @@ struct RenderAssetCache::Impl
     std::unordered_map<u64, MeshEntry> meshes;
     std::unordered_map<u64, TextureEntry> textures;
     std::unordered_map<u64, MaterialEntry> materials;
+    std::unordered_map<u64, ShaderEntry> shaders;
     std::unordered_map<u64, EnvironmentEntry> environments;
     std::unordered_map<u64, std::string> errors; // by asset id
     std::vector<u64> loadingModels;
     std::vector<u64> loadingTextures;
     std::vector<u64> loadingMeshes;
+    std::vector<u64> loadingShaders;
     std::vector<u64> loadingMaterials;
     std::vector<u64> loadingEnvironments;
     std::vector<std::pair<AssetId, AssetReloadMode>> reloads; // files reloaded since the last update()
@@ -654,6 +670,14 @@ struct RenderAssetCache::Impl
                             uses = true;
                         }
                     }
+                    for (usize t = 0; t < material.shaderTextures.size(); ++t)
+                    {
+                        if (material.shaderTextures[t] == key && t < material.desc.shaderTextures.size())
+                        {
+                            material.desc.shaderTextures[t].texture = texture;
+                            uses = true;
+                        }
+                    }
                     if (uses)
                     {
                         resources->updateMaterial(material.handle, material.desc);
@@ -727,6 +751,140 @@ struct RenderAssetCache::Impl
                  "not a material (a .material file, model#material/N or builtin:/material/default)");
         }
         return entry;
+    }
+
+    // Shaders ---------------------------------------------------------------------------------------------
+
+    u64 requestShader(AssetId id)
+    {
+        const auto [found, inserted] = shaders.try_emplace(id.value);
+        if (!inserted)
+        {
+            return id.value;
+        }
+        ShaderEntry& entry = found->second;
+        const std::string_view path = AssetPathTable::instance().path(id);
+        if (isOnBuiltinMount(path))
+        {
+            entry.builtin = true;
+            if (path == "builtin:/shader/standard")
+            {
+                entry.handle = resources->standardShader();
+            }
+            else if (path == "builtin:/shader/foliage")
+            {
+                entry.handle = resources->foliageShader();
+            }
+            else if (path == "builtin:/shader/error")
+            {
+                entry.handle = resources->errorShader();
+            }
+            if (entry.handle.index != 0)
+            {
+                entry.status = Status::Ready;
+            }
+            else
+            {
+                fail(entry.status, id, "not a built-in shader (builtin:/shader/standard, foliage or error)");
+            }
+        }
+        else if (!endsWithIgnoreCase(path, kShaderAssetExtension))
+        {
+            fail(entry.status, id, "not a shader (a .shader file or a builtin:/shader/ one)");
+        }
+        else if (desc.shaders == nullptr)
+        {
+            fail(entry.status, id,
+                 "this renderer cannot load shaders (RenderAssetCacheDesc::shaders is unset)");
+        }
+        else
+        {
+            entry.completed = desc.shaders->state(path).completed;
+            desc.shaders->request(path);
+            loadingShaders.push_back(id.value);
+        }
+        return id.value;
+    }
+
+    bool advanceShader(u64 key)
+    {
+        ShaderEntry& entry = shaders.at(key);
+        const AssetId id{key};
+        const std::string_view path = AssetPathTable::instance().path(id);
+        const ShaderLoader::State state = desc.shaders->state(path);
+        if (state.building || state.completed <= entry.completed)
+        {
+            return false;
+        }
+        const bool replacing = entry.reload.active && entry.status == Status::Ready;
+        bool changed = false;
+        if (state.build && state.build->succeeded())
+        {
+            const ShaderAsset& asset = *state.build->shader;
+            const std::string name(path);
+            if (entry.handle.index != 0)
+            {
+                changed = resources->updateShader(entry.handle, asset);
+                if (!changed)
+                {
+                    failReload(entry.status, true, id, "the renderer rejected the new version of the shader");
+                }
+            }
+            else
+            {
+                entry.handle = resources->createShader(asset, name.c_str());
+                changed = entry.handle.index != 0;
+                if (!changed)
+                {
+                    fail(entry.status, id, "the renderer rejected the shader");
+                }
+            }
+            if (changed)
+            {
+                entry.status = Status::Ready;
+                errors.erase(key);
+            }
+        }
+        else
+        {
+            // The compiler's diagnostics are in the log; a shader that drew before keeps its last version.
+            failReload(entry.status, replacing, id,
+                       state.build ? state.build->error : std::string("the shader was not built"));
+        }
+        if (changed)
+        {
+            // Materials made with it are laid out and checked against the new version.
+            for (auto& [materialKey, material] : materials)
+            {
+                if (material.shader == key && material.fromFile && material.status != Status::Loading)
+                {
+                    reloadMaterial(materialKey);
+                }
+            }
+        }
+        if (entry.reload.active)
+        {
+            entry.reload.active = false;
+            ++reloadsDone;
+            if (std::exchange(entry.reload.again, false))
+            {
+                reloads.emplace_back(id, AssetReloadMode::IfChanged);
+            }
+        }
+        return true;
+    }
+
+    void reloadShader(u64 key)
+    {
+        ShaderEntry& entry = shaders.at(key);
+        if (entry.builtin || desc.shaders == nullptr || !beginReload(entry))
+        {
+            return;
+        }
+        const std::string_view path = AssetPathTable::instance().path(AssetId{key});
+        entry.completed = desc.shaders->state(path).completed;
+        desc.shaders->request(path);
+        loadingShaders.push_back(key);
     }
 
     bool advanceMaterial(u64 key)
@@ -812,6 +970,90 @@ struct RenderAssetCache::Impl
         {
             materialTexture(material, t) = handles[t];
         }
+        std::string shaderProblem;
+        if (!asset.shader.empty())
+        {
+            entry.shader = requestShader(asset.shader.id);
+            const ShaderEntry& shader = shaders.at(entry.shader);
+            if (busy(shader))
+            {
+                return false;
+            }
+            const ShaderAsset* layout =
+                shader.status == Status::Ready ? resources->shaderLayout(shader.handle) : nullptr;
+            if (layout == nullptr)
+            {
+                // A shader that did not build: the material draws with the error shader until it does.
+                material.shader = resources->errorShader();
+                shaderProblem = std::format("its shader '{}' did not build", asset.shader.path());
+                entry.shaderTextures.clear();
+                entry.shaderTexturesRequested = false;
+            }
+            else
+            {
+                Expected<MaterialParameters, std::string> parameters =
+                    resolveMaterialParameters(asset, *layout);
+                if (!parameters)
+                {
+                    failReload(entry.status, replacing, id, std::move(parameters.error()));
+                    entry.file = {};
+                    finishMaterialReload(key, replacing);
+                    return true;
+                }
+                if (!entry.shaderTexturesRequested)
+                {
+                    entry.shaderTextures.clear();
+                    for (const MaterialTextureParameter& texture : parameters->textures)
+                    {
+                        entry.shaderTextures.push_back(
+                            texture.texture ? requestTexture(texture.texture.id, texture.use.srgb,
+                                                             texture.use.compression)
+                                            : 0);
+                    }
+                    entry.shaderTexturesRequested = true;
+                }
+                material.shader = shader.handle;
+                for (const MaterialParameterValue& value : parameters->values)
+                {
+                    if (value.set)
+                    {
+                        material.shaderParameters.push_back({value.name, value.value});
+                    }
+                }
+                for (usize t = 0; t < parameters->textures.size(); ++t)
+                {
+                    const MaterialTextureParameter& texture = parameters->textures[t];
+                    TextureHandle handle;
+                    if (entry.shaderTextures[t] != 0)
+                    {
+                        const TextureEntry& image = textures.at(entry.shaderTextures[t]);
+                        if (image.status == Status::Loading)
+                        {
+                            return false;
+                        }
+                        if (image.status == Status::Failed)
+                        {
+                            failReload(entry.status, replacing, id,
+                                       std::format("texture '{}' failed to load",
+                                                   AssetPathTable::instance().path(image.asset)));
+                            entry.file = {};
+                            finishMaterialReload(key, replacing);
+                            return true;
+                        }
+                        handle = image.handle;
+                    }
+                    if (texture.set || handle.index != 0)
+                    {
+                        material.shaderTextures.push_back({texture.name, handle});
+                    }
+                }
+            }
+        }
+        else
+        {
+            entry.shader = 0;
+            entry.shaderTextures.clear();
+        }
         if (replacing)
         {
             resources->updateMaterial(entry.handle, material); // the handle stays: nothing to resolve again
@@ -824,6 +1066,10 @@ struct RenderAssetCache::Impl
         entry.status = Status::Ready;
         streamingDirty = true;
         errors.erase(key);
+        if (!shaderProblem.empty())
+        {
+            errors.insert_or_assign(key, std::move(shaderProblem));
+        }
         entry.file = {};
         finishMaterialReload(key, replacing);
         return true;
@@ -1132,6 +1378,7 @@ struct RenderAssetCache::Impl
         entry.file = streamer->loadFile<MaterialAsset>(AssetPathTable::instance().path(AssetId{key}),
                                                        kMaterialDecoderName, materialAssetDecoder());
         entry.texturesRequested = false;
+        entry.shaderTexturesRequested = false;
         loadingMaterials.push_back(key);
     }
 
@@ -1172,6 +1419,10 @@ struct RenderAssetCache::Impl
             for (const u64 key : keys)
             {
                 reloadTexture(key);
+            }
+            if (shaders.contains(file.value))
+            {
+                reloadShader(file.value);
             }
             if (materials.contains(file.value))
             {
@@ -1224,6 +1475,24 @@ struct RenderAssetCache::Impl
             return true;
         });
         std::unordered_set<u64> used;
+        for (const auto& [key, material] : materials)
+        {
+            used.insert(material.shader);
+        }
+        std::erase_if(shaders, [&](auto& item) {
+            ShaderEntry& shader = item.second;
+            if (used.contains(item.first) || busy(shader))
+            {
+                return false;
+            }
+            if (!shader.builtin && shader.handle.index != 0)
+            {
+                resources->releaseShader(shader.handle);
+            }
+            ++count;
+            return true;
+        });
+        used.clear();
         for (const auto& [key, mesh] : meshes)
         {
             used.insert(mesh.model);
@@ -1249,6 +1518,7 @@ struct RenderAssetCache::Impl
         for (const auto& [key, material] : materials)
         {
             used.insert(material.textures.begin(), material.textures.end());
+            used.insert(material.shaderTextures.begin(), material.shaderTextures.end());
         }
         std::erase_if(textures, [&](auto& item) {
             TextureEntry& texture = item.second;
@@ -1286,7 +1556,8 @@ struct RenderAssetCache::Impl
     [[nodiscard]] u32 loading() const noexcept
     {
         return static_cast<u32>(loadingModels.size() + loadingTextures.size() + loadingMeshes.size() +
-                                loadingMaterials.size() + loadingEnvironments.size() + reloads.size());
+                                loadingShaders.size() + loadingMaterials.size() + loadingEnvironments.size() +
+                                reloads.size());
     }
 
     // Mip streaming --------------------------------------------------------------------------------------
@@ -1450,6 +1721,7 @@ struct RenderAssetCache::Impl
             advanceAll(loadingModels, [this](u64 key) { return advanceModel(key); });
             advanceAll(loadingTextures, [this](u64 key) { return advanceTexture(key); });
             advanceAll(loadingMeshes, [this](u64 key) { return advanceMesh(key); });
+            advanceAll(loadingShaders, [this](u64 key) { return advanceShader(key); });
             advanceAll(loadingMaterials, [this](u64 key) { return advanceMaterial(key); });
             advanceAll(loadingEnvironments, [this](u64 key) { return advanceEnvironment(key); });
         }
@@ -1480,6 +1752,10 @@ void RenderAssetCache::waitIdle()
     // Every step starts reloads, publishes loads or uploads at least one model, so this ends.
     while (m_impl->loading() > 0)
     {
+        if (m_impl->desc.shaders != nullptr)
+        {
+            m_impl->desc.shaders->waitIdle();
+        }
         m_impl->streamer->waitIdle();
         m_impl->update();
     }
@@ -1504,6 +1780,7 @@ RenderAssetCacheStatistics RenderAssetCache::statistics() const noexcept
     count(m_impl->models, statistics.models);
     count(m_impl->meshes, statistics.meshes);
     count(m_impl->materials, statistics.materials);
+    count(m_impl->shaders, statistics.shaders);
     count(m_impl->textures, statistics.textures);
     count(m_impl->environments, statistics.environments);
     statistics.loading = m_impl->loading();

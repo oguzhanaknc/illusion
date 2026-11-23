@@ -2,6 +2,7 @@
 #include "ReflectedObject.hpp"
 
 #include <illusion/assets/AssetReflection.hpp>
+#include <illusion/assets/ShaderLoader.hpp>
 #include <illusion/core/Json.hpp>
 #include <illusion/core/Log.hpp>
 #include <illusion/core/Profiler.hpp>
@@ -10,8 +11,10 @@
 #include <illusion/editor/EditorStrings.hpp>
 #include <illusion/editor/core/CoreCommands.hpp>
 #include <illusion/editor/core/EditorContext.hpp>
+#include <illusion/editor/core/ModuleBuild.hpp>
 
 #include <algorithm>
+#include <array>
 #include <charconv>
 #include <fstream>
 #include <iterator>
@@ -280,6 +283,48 @@ Expected<ComponentId, CommandError> CommandContext::componentType(std::string_vi
     return unexpected(std::move(error));
 }
 
+namespace
+{
+
+// The shader loader of a project: it compiles when the module SDK names a slangc and the shader library.
+ShaderLoaderDesc shaderLoaderDesc(const std::filesystem::path& moduleSdk)
+{
+    ShaderLoaderDesc desc;
+    if (moduleSdk.empty())
+    {
+        return desc;
+    }
+    if (const Expected<ModuleToolchain, std::string> toolchain = readModuleToolchain(moduleSdk);
+        toolchain && !toolchain->slangc.empty() && !toolchain->shaders.empty())
+    {
+        ShaderCompilerDesc compiler;
+        compiler.slangc = toolchain->slangc;
+        compiler.library = toolchain->shaders;
+        desc.compiler = std::move(compiler);
+    }
+    return desc;
+}
+
+bool isShaderFile(std::string_view path)
+{
+    const usize dot = path.rfind('.');
+    if (dot == std::string_view::npos || path.size() - dot != kShaderAssetExtension.size())
+    {
+        return false;
+    }
+    for (usize i = 0; i < kShaderAssetExtension.size(); ++i)
+    {
+        const char c = path[dot + i];
+        if ((c >= 'A' && c <= 'Z' ? static_cast<char>(c - 'A' + 'a') : c) != kShaderAssetExtension[i])
+        {
+            return false;
+        }
+    }
+    return true;
+}
+
+} // namespace
+
 EditorContext::EditorContext(const EditorContextOptions& options)
     : m_options(options)
     , m_guids(options.seed != 0 ? GuidGenerator(options.seed) : GuidGenerator())
@@ -289,6 +334,7 @@ EditorContext::EditorContext(const EditorContextOptions& options)
     , m_history(options.undoBudget)
 {
     reflectOnce();
+    m_shaders = std::make_unique<ShaderLoader>(m_files, shaderLoaderDesc(options.moduleSdk));
     m_settings.add("illusion.ExportSettings", SettingsScope::Project, kExportSettingsFile);
     if (options.logCapacity > 0)
     {
@@ -352,6 +398,7 @@ EditorContext::~EditorContext()
         m_thumbnails.close();
         // Its streamer reads project files on a background thread until it is destroyed.
         m_navigation.reset();
+        m_shaders->waitIdle();
         m_project->unmount(m_files);
     }
     if (m_log)
@@ -373,6 +420,7 @@ Expected<void, CommandError> EditorContext::openProject(const std::filesystem::p
         m_thumbnails.close();
         // Its streamer reads project files on a background thread until it is destroyed.
         m_navigation.reset();
+        m_shaders->waitIdle();
         m_project->unmount(m_files);
         m_project.reset();
         m_editor.setFiles(nullptr, {}, {});
@@ -659,6 +707,26 @@ void EditorContext::postAssetChanges(const AssetCatalogChanges& changes)
                 m_pendingPrefabRefresh.end())
         {
             m_pendingPrefabRefresh.push_back(path);
+        }
+    }
+    // A shader that changed is built again on the loader's thread.
+    const std::array<const std::vector<std::string>*, 3> built{&changes.added, &changes.modified,
+                                                               &m_assetReimports};
+    for (const std::vector<std::string>* paths : built)
+    {
+        for (const std::string& path : *paths)
+        {
+            if (isShaderFile(path))
+            {
+                m_shaders->request(path);
+            }
+        }
+    }
+    for (const AssetRename& rename : changes.renamed)
+    {
+        if (isShaderFile(rename.to))
+        {
+            m_shaders->request(rename.to);
         }
     }
     std::sort(m_assetReimports.begin(), m_assetReimports.end());

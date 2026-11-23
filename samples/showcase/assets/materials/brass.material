@@ -1,6 +1,6 @@
 {
   "format": "illusion.material",
-  "version": 1,
+  "version": 2,
   "material": {
     "name": "Brass",
     "baseColorFactor": [0.78, 0.57, 0.11, 1.0],

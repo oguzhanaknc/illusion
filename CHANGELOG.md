@@ -117,6 +117,13 @@ version changes are in the contributor guide ("Versions and releases"). The vers
   `file:line:column` diagnostics, the cooked `ShaderAsset` in the import cache, `illusion_pack --slangc
   --shaders`, `slangc` and the shader library in the SDK (`slang/`, `share/illusion/shaders`, `"slangc"` and
   `"shaders"` in `illusion-sdk.json`), and the quoted tool output of a failed export cook.
+- Material shaders in the editor (MAT-4): `.material` files of version 2 with `shader` and `parameters` by name
+  (version 1 files read as they are), `ShaderLoader` (builds shaders on a background thread) and
+  `RenderAssetCacheDesc::shaders`, the editor recompiling changed `.shader` files without blocking a frame and
+  swapping them in with `updateShader()`, typed parameter widgets for materials in the Asset Browser, the asset
+  kind `Shader`, the commands `material.compile` and `material.validate` (diagnostics with file, line and
+  column), the showcase's `pulse.shader`, the manual page "Material shaders" and the tutorial "A dissolving
+  surface" (EN/TR).
 
 ### Changed
 

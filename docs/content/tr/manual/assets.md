@@ -209,7 +209,7 @@ ve bir `MeshRenderer` bir modelin Material'ini değiştirebilir:
 ```json
 {
   "format": "illusion.material",
-  "version": 1,
+  "version": 2,
   "material": {"baseColorFactor": [0.8, 0.1, 0.1, 1], "roughnessFactor": 0.4, "metallicFactor": 0},
   "textures": {"baseColor": "game:/textures/paint.png", "normal": "game:/textures/paint_n.png"}
 }
@@ -219,6 +219,10 @@ ve bir `MeshRenderer` bir modelin Material'ini değiştirebilir:
   `...Texture` üyeleri yalnızca sarma (wrap) modlarını belirler.
 - `textures` görüntüleri adlandırır: `baseColor` ve `emissive` sRGB olarak, `metallicRoughness`, `normal`
   ve `occlusion` doğrusal veri olarak yüklenir.
+- `shader` bir [material shader'ı](material-shaders.md) adlandırır ve `parameters` parametrelerinin değerlerini
+  ada göre verir (2. sürüm); ikisi de isteğe bağlıdır ve 1. sürüm dosyalar olduğu gibi okunur.
+  `resolveMaterialParameters()` `parameters`'ı derlenmiş bir shader'a karşı denetler ve `cookAssets()` onların
+  adını verdiği görüntüleri cook eder.
 - `parseMaterialAsset()` ve `writeMaterialAsset()` dosyaları okur ve yazar (önce bir kez
   `reflectAssetStructs()` çağırın); `materialAssetDecoder()` onları `AssetStreamer::loadFile()` ile
   akışla yükler.

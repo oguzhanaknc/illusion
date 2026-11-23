@@ -15,6 +15,7 @@ illusion_add_editor_executable(illusion_editor_tests
     core/TestAssetCatalog.cpp
     core/TestEditorAssets.cpp
     core/TestEditorImportSettings.cpp
+    core/TestEditorMaterials.cpp
     core/TestEditorClipboard.cpp
     core/TestEditorCommands.cpp
     core/TestEditorCore.cpp
@@ -143,6 +144,8 @@ target_link_libraries(illusion_editor_gpu_tests PRIVATE
 target_compile_definitions(illusion_editor_gpu_tests PRIVATE
     ILLUSION_FAKE_CMAKE="$<TARGET_FILE:illusion_fake_cmake>"
     ILLUSION_PACK_EXECUTABLE="$<TARGET_FILE:illusion_pack>"
+    ILLUSION_TEST_SLANGC="${ILLUSION_SLANGC}"
+    ILLUSION_TEST_SHADER_LIBRARY="${ILLUSION_SHADER_LIBRARY_DIR}"
     ILLUSION_GOLDEN_DIR="${CMAKE_CURRENT_SOURCE_DIR}/data/golden"
     ILLUSION_UI_CAPTURE_DIR="${CMAKE_BINARY_DIR}/ui-captures"
     ILLUSION_EDITOR_TEST_DATA="${CMAKE_CURRENT_SOURCE_DIR}/data"

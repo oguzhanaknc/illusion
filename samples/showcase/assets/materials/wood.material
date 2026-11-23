@@ -1,6 +1,6 @@
 {
   "format": "illusion.material",
-  "version": 1,
+  "version": 2,
   "material": {
     "name": "Wood",
     "baseColorFactor": [0.45, 0.28, 0.14, 1.0],

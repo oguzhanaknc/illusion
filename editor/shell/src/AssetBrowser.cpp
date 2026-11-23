@@ -226,13 +226,17 @@ ui::Icon kindIcon(std::string_view kind) noexcept
     {
         return ui::icons::kPersonalInjury;
     }
+    if (kind == "Shader")
+    {
+        return ui::icons::kCode;
+    }
     return ui::icons::kDescription;
 }
 
 // The file kinds of kAssetKinds without "Folder", in display order.
-constexpr std::array<std::string_view, 12> kFileKinds{
-    "Scene",     "Prefab", "Material",       "Model",          "Texture",      "Environment",
-    "AudioClip", "Font",   "AnimationGraph", "RagdollProfile", "BehaviorTree", "Other"};
+constexpr std::array<std::string_view, 13> kFileKinds{
+    "Scene", "Prefab",         "Material",       "Model",        "Texture", "Environment", "AudioClip",
+    "Font",  "AnimationGraph", "RagdollProfile", "BehaviorTree", "Shader",  "Other"};
 
 // @p bytes as a short human-readable size into @p out.
 void formatSize(u64 bytes, char* out, usize cap) noexcept
@@ -302,6 +306,25 @@ struct AssetBrowser::State
     u32 references = 0;
     bool hasInfo = false;
     u64 infoVersion = ~u64{0};
+
+    // The material inspector: the shader of the inspected `.material` file and its typed parameters.
+    struct MaterialParam
+    {
+        std::string name;
+        std::string type; // "float", "float2", "float3", "float4", "int", "bool" or "texture"
+        bool color = false;
+        bool hasRange = false;
+        f32 minimum = 0.0f;
+        f32 maximum = 1.0f;
+        std::array<f32, 4> value{};
+        std::string texture;
+    };
+    bool isMaterial = false;
+    std::string materialShader;
+    std::string materialStatus; // "" without a shader, else the shader's status
+    std::string materialProblem;
+    std::vector<MaterialParam> materialParams;
+    u32 materialPolls = 0; // frames since the last refresh while the shader builds
 
     // The visible files and folders of the `modules:` mount (all depths, sorted by path), listed when
     // moduleScanStale is set; entries of a `modules:` folder point into moduleRecords.
@@ -383,6 +406,9 @@ struct AssetBrowser::State
     void scanModules(Impl& shell);
     void rebuild(Impl& shell);
     void refreshInspector(Impl& shell);
+    void refreshMaterial(Impl& shell);
+    void drawMaterial(Impl& shell, ui::UiKit& kit);
+    void setMaterial(Impl& shell, std::string_view json, std::string_view mergeKey);
     void openEntry(Impl& shell, std::string_view path, bool isFolder);
     void requestThumbnails(Impl& shell);
     void drawSidebar(Impl& shell, ui::UiKit& kit);
@@ -540,6 +566,16 @@ void AssetBrowser::State::refreshInspector(Impl& shell)
         return;
     }
     settingsKind = importSettingsKindOf(inspected);
+    isMaterial = inspected.ends_with(".material");
+    materialShader.clear();
+    materialStatus.clear();
+    materialProblem.clear();
+    materialParams.clear();
+    materialPolls = 0;
+    if (isMaterial)
+    {
+        refreshMaterial(shell);
+    }
     FilePathParams params;
     params.path = inspected;
     CommandOptions options;
@@ -559,6 +595,230 @@ void AssetBrowser::State::refreshInspector(Impl& shell)
             }
         }
     }
+}
+
+// Reads the material file and what its shader declares into the inspector.
+void AssetBrowser::State::refreshMaterial(Impl& shell)
+{
+    FilePathParams params;
+    params.path = inspected;
+    CommandOptions options;
+    options.origin = "asset_browser";
+    Expected<MaterialGetResult, CommandError> got =
+        shell.editor.execute<MaterialGetResult>("material.get", params, options);
+    if (!got)
+    {
+        materialProblem = got.error().message;
+        return;
+    }
+    Expected<JsonDocument, JsonError> value = JsonDocument::parse(got->value.text);
+    if (!value)
+    {
+        return;
+    }
+    materialShader = std::string(value->root().find("shader").asString().value_or(""));
+    if (!got->shader)
+    {
+        return;
+    }
+    materialStatus = got->shader->status;
+    materialProblem = got->shader->error;
+    for (const ShaderDiagnosticInfo& diagnostic : got->shader->diagnostics)
+    {
+        if (diagnostic.severity == "error")
+        {
+            materialProblem = diagnostic.file + ":" + std::to_string(diagnostic.line) + ":" +
+                              std::to_string(diagnostic.column) + ": " + diagnostic.message;
+            break;
+        }
+    }
+    const JsonValue values = value->root().find("parameters");
+    for (const MaterialParameterInfo& info : got->shader->parameters)
+    {
+        MaterialParam param;
+        param.name = info.name;
+        param.type = info.type;
+        param.color = info.color;
+        param.hasRange = info.minimum.has_value() && info.maximum.has_value();
+        param.minimum = static_cast<f32>(info.minimum.value_or(0.0));
+        param.maximum = static_cast<f32>(info.maximum.value_or(1.0));
+        const Expected<JsonDocument, JsonError> fallback = JsonDocument::parse(info.defaultValue.text);
+        const JsonValue json = values.find(info.name).isAbsent() ? fallback->root() : values.find(info.name);
+        if (json.isString())
+        {
+            param.texture = std::string(json.asString().value_or(""));
+        }
+        else if (json.isBool())
+        {
+            param.value[0] = json.asBool().value_or(false) ? 1.0f : 0.0f;
+        }
+        else if (json.isArray())
+        {
+            usize i = 0;
+            for (const JsonValue element : json.elements())
+            {
+                if (i < 4)
+                {
+                    param.value[i++] = static_cast<f32>(element.asF64().value_or(0.0));
+                }
+            }
+        }
+        else
+        {
+            param.value[0] = static_cast<f32>(json.asF64().value_or(0.0));
+        }
+        materialParams.push_back(std::move(param));
+    }
+}
+
+void AssetBrowser::State::setMaterial(Impl& shell, std::string_view json, std::string_view mergeKey)
+{
+    (void)shell.run("material.set",
+                    "{\"path\":" + jsonQuote(inspected) + ",\"value\":" + std::string(json) + "}",
+                    "asset_browser", {}, mergeKey);
+    infoVersion = ~u64{0};
+}
+
+void AssetBrowser::State::drawMaterial(Impl& shell, ui::UiKit& kit)
+{
+    ui::FrameText& text = shell.text;
+    ui::sectionHeader(kit, text.format(s::kAssetBrowserMaterialTitle));
+    const char* shown =
+        materialShader.empty() ? text.format(s::kAssetBrowserMaterialStandard) : text.copy(materialShader);
+    ImGui::Selectable(text.concat(shown, "###asset_browser.material.shader"));
+    if (ImGui::BeginDragDropTarget())
+    {
+        if (const ImGuiPayload* payload = ImGui::AcceptDragDropPayload(kAssetPayload))
+        {
+            const std::string_view dropped(static_cast<const char*>(payload->Data),
+                                           static_cast<usize>(std::max(payload->DataSize - 1, 0)));
+            if (dropped.ends_with(".shader"))
+            {
+                setMaterial(shell, "{\"shader\":" + jsonQuote(dropped) + "}", {});
+            }
+        }
+        ImGui::EndDragDropTarget();
+    }
+    if (!materialShader.empty())
+    {
+        ImGui::SameLine();
+        if (ImGui::SmallButton(text.label(s::kAssetBrowserMaterialClear, "asset_browser.material.clear")))
+        {
+            setMaterial(shell, "{\"shader\":\"\"}", {});
+        }
+    }
+    if (materialStatus == "building")
+    {
+        ImGui::TextDisabled("%s", text.format(s::kAssetBrowserMaterialBuilding));
+        if (++materialPolls % 15 == 0)
+        {
+            infoVersion = ~u64{0}; // asks for the shader again
+        }
+    }
+    else if (materialStatus == "failed" || materialStatus == "missing")
+    {
+        ImGui::PushStyleColor(ImGuiCol_Text, imvec(shell.theme.color(ui::ThemeToken::Error)));
+        ImGui::TextWrapped("%s", text.copy(materialProblem));
+        ImGui::PopStyleColor();
+    }
+    if (materialParams.empty())
+    {
+        if (materialStatus == "ok")
+        {
+            ImGui::TextDisabled("%s", text.format(s::kAssetBrowserMaterialNoParameters));
+        }
+        return;
+    }
+    if (!ui::beginPropertyTable(kit, "asset_browser.material"))
+    {
+        return;
+    }
+    for (MaterialParam& param : materialParams)
+    {
+        ui::propertyLabel(kit, text.copy(param.name));
+        const std::string_view id = text.concat("asset_browser.material.param.", param.name);
+        const char* widget = text.hidden(id);
+        const std::string key = "material:" + inspected + ":" + param.name;
+        const std::string name = jsonQuote(param.name);
+        const auto send = [&](const std::string& value, bool continuous) {
+            setMaterial(shell, "{\"parameters\":{" + name + ":" + value + "}}",
+                        continuous ? std::string_view(key) : std::string_view());
+        };
+        char number[64];
+        ImGui::SetNextItemWidth(-1.0f);
+        if (param.type == "float")
+        {
+            const bool changed =
+                param.hasRange ? ImGui::SliderFloat(widget, &param.value[0], param.minimum, param.maximum)
+                               : ImGui::DragFloat(widget, &param.value[0], 0.01f);
+            if (changed)
+            {
+                std::snprintf(number, sizeof(number), "%.7g", static_cast<f64>(param.value[0]));
+                send(number, true);
+            }
+        }
+        else if (param.type == "int")
+        {
+            int v = static_cast<int>(param.value[0]);
+            if (ImGui::DragInt(widget, &v))
+            {
+                param.value[0] = static_cast<f32>(v);
+                send(std::to_string(v), true);
+            }
+        }
+        else if (param.type == "bool")
+        {
+            bool v = param.value[0] != 0.0f;
+            if (ImGui::Checkbox(widget, &v))
+            {
+                param.value[0] = v ? 1.0f : 0.0f;
+                send(v ? "true" : "false", false);
+            }
+        }
+        else if (param.type == "texture")
+        {
+            ImGui::Selectable(
+                text.concat(param.texture.empty() ? "-" : param.texture, text.concat("###", id)));
+            if (ImGui::BeginDragDropTarget())
+            {
+                if (const ImGuiPayload* payload = ImGui::AcceptDragDropPayload(kAssetPayload))
+                {
+                    const std::string_view dropped(static_cast<const char*>(payload->Data),
+                                                   static_cast<usize>(std::max(payload->DataSize - 1, 0)));
+                    param.texture = std::string(dropped);
+                    send(jsonQuote(dropped), false);
+                }
+                ImGui::EndDragDropTarget();
+            }
+        }
+        else
+        {
+            const usize count = param.type == "float2" ? 2 : param.type == "float3" ? 3 : 4;
+            bool changed = false;
+            if (param.color && count >= 3)
+            {
+                changed = count == 3
+                              ? ImGui::ColorEdit3(widget, param.value.data(), ImGuiColorEditFlags_Float)
+                              : ImGui::ColorEdit4(widget, param.value.data(), ImGuiColorEditFlags_Float);
+            }
+            else
+            {
+                changed = ImGui::DragScalarN(widget, ImGuiDataType_Float, param.value.data(),
+                                             static_cast<int>(count), 0.01f);
+            }
+            if (changed)
+            {
+                std::string array = "[";
+                for (usize i = 0; i < count; ++i)
+                {
+                    std::snprintf(number, sizeof(number), "%.7g", static_cast<f64>(param.value[i]));
+                    array += (i == 0 ? "" : ",") + std::string(number);
+                }
+                send(array + "]", true);
+            }
+        }
+    }
+    ui::endPropertyTable();
 }
 
 void AssetBrowser::State::openEntry(Impl& shell, std::string_view path, bool isFolder)
@@ -1146,6 +1406,12 @@ void AssetBrowser::State::drawInspector(Impl& shell, ui::UiKit& kit)
             "%s", text.format(s::kAssetBrowserReferences, {{"count", static_cast<u64>(references)}}));
     }
     ImGui::Separator();
+    if (isMaterial)
+    {
+        drawMaterial(shell, kit);
+        ImGui::EndChild();
+        return;
+    }
     if (settingsKind == ImportSettingsKind::None)
     {
         ImGui::TextDisabled("%s", text.format(s::kAssetBrowserImportNone));

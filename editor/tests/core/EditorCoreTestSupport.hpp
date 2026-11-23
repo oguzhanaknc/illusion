@@ -936,11 +936,14 @@ inline std::filesystem::path writeFakeModuleSdk(const std::filesystem::path& fil
 #else
     constexpr const char* kLibrary = R"("modulePrefix": "lib", "moduleSuffix": ".so")";
 #endif
-    // Exports (export.build) cook and pack with the real illusion_pack of this build.
+    // Exports (export.build) cook and pack with the real illusion_pack of this build; material shaders
+    // compile with the pinned slangc.
     std::ofstream(file) << R"({"format": "illusion.sdk", "version": 2, "cmake": ")" ILLUSION_FAKE_CMAKE
                         << R"(", "generator": "Ninja", "config": "Debug", "package": "sdk", "player": true, )"
-                        << R"("pack": ")" ILLUSION_PACK_EXECUTABLE R"(", )" << kLibrary
-                        << R"(, "arguments": ["-DCMAKE_BUILD_TYPE=Debug"]})";
+                        << R"("pack": ")" ILLUSION_PACK_EXECUTABLE R"(", )"
+                        << R"("slangc": ")" ILLUSION_TEST_SLANGC
+                           R"(", "shaders": ")" ILLUSION_TEST_SHADER_LIBRARY
+                        << R"(", )" << kLibrary << R"(, "arguments": ["-DCMAKE_BUILD_TYPE=Debug"]})";
     return file;
 }
 

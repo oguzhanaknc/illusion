@@ -151,6 +151,8 @@ std::string_view assetKindName(AssetKind kind) noexcept
         return "RagdollProfile";
     case AssetKind::BehaviorTree:
         return "BehaviorTree";
+    case AssetKind::Shader:
+        return "Shader";
     }
     return "Unknown";
 }

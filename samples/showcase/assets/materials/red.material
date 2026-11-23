@@ -1,6 +1,6 @@
 {
   "format": "illusion.material",
-  "version": 1,
+  "version": 2,
   "material": {
     "name": "Red",
     "baseColorFactor": [0.8, 0.12, 0.1, 1.0],

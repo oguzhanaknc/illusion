@@ -204,7 +204,7 @@ A `.material` file describes a Material without a model, so several Meshes can s
 ```json
 {
   "format": "illusion.material",
-  "version": 1,
+  "version": 2,
   "material": {"baseColorFactor": [0.8, 0.1, 0.1, 1], "roughnessFactor": 0.4, "metallicFactor": 0},
   "textures": {"baseColor": "game:/textures/paint.png", "normal": "game:/textures/paint_n.png"}
 }
@@ -214,6 +214,9 @@ A `.material` file describes a Material without a model, so several Meshes can s
   `...Texture` members only set wrap modes.
 - `textures` names the images: `baseColor` and `emissive` load as sRGB, `metallicRoughness`, `normal` and
   `occlusion` as linear data.
+- `shader` names a [material shader](material-shaders.md) and `parameters` gives the values of its parameters by
+  name (version 2); both are optional, and version 1 files read as they are. `resolveMaterialParameters()`
+  checks `parameters` against a compiled shader, and `cookAssets()` cooks the images they name.
 - `parseMaterialAsset()` and `writeMaterialAsset()` read and write the files (call
   `reflectAssetStructs()` once first); `materialAssetDecoder()` streams them with
   `AssetStreamer::loadFile()`.

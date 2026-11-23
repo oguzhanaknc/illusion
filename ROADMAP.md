@@ -1491,7 +1491,7 @@ headers are in their `include/` directories.
   trees as saved assets with blackboards, perception (sight, hearing) and an `AiService`; `nav.*` and `ai.*`
   commands; a creature that wanders the tech demo
 
-## MAT — Custom shaders and materials
+## MAT — Custom shaders and materials ✅
 
 Today games can only set the parameters of the built-in PBR material.
 
@@ -1532,10 +1532,24 @@ Today games can only set the parameters of the built-in PBR material.
   after), `thickness` 1 and `clearCoat` 0 equal to the standard shader, every model in one frame alike in the
   bound and bindless paths; existing goldens unchanged, `render/*` benchmarks unchanged. Open: shadows still
   darken wrapped light (no shadow-map thickness for `Subsurface`); no clear-coat normal map.
-- MAT-4 (`mechanic`): Editor and documentation. `.material` `shader` and typed parameters in the Inspector,
-  `material.compile`/`material.validate` commands (diagnostics for agents), the asset browser kind `Shader`,
-  the showcase (a custom shader with every parameter type), a tech demo example, the manual "Material
-  shaders" (EN/TR, the surface API reference), a tutorial, `CHANGELOG.md`.
+- ✅ MAT-4 (`mechanic`): Editor and documentation. Done: `.material` files of version 2 with `shader` and
+  `parameters` by name (version 1 files read as they are; unknown names and wrong types are errors with a JSON
+  Pointer, missing ones take the declared defaults; `builtin:/shader/standard`, `foliage` and `error` can be
+  named), `resolveMaterialParameters()`, the cooker cooks the images a material's parameters name;
+  `ShaderLoader` (a background thread that builds `.shader` files with the compiler or reads the cooked ones),
+  `RenderAssetCacheDesc::shaders` (the cache loads the shader of a material, checks the material against its
+  layout, swaps a rebuilt shader in with `updateShader()` without a frame waiting, keeps the last working
+  version when an edit does not compile and draws a material whose shader never built with the error shader),
+  the editor asks its loader for every `.shader` that changed, the player's loader reads the cooked shaders;
+  the commands `material.compile` (async) and `material.validate` (file, line, column for agents),
+  `material.get` with the shader's declared parameters and `material.set` merging `parameters` by name,
+  reference index and rename of the textures in `parameters`, the asset kind `Shader`, typed parameter widgets
+  (float, vector, colour, int, bool, texture) in the Asset Browser's material inspector, the showcase's
+  `pulse.shader` with a parameter of every type and `pulse.material` (new entity `Shader Cube`), the manual
+  "Material shaders" and the tutorial "A dissolving surface" (EN/TR; their shaders are compiled by
+  `tests/docs/TestShaderExamples.cpp`), `CHANGELOG.md`. Open: no tech demo example (its goldens were not
+  re-captured in this package); the Inspector panel of Entities has no shader section (materials are edited in
+  the Asset Browser); no golden image of the material inspector.
 - Material templates in Slang (scope): a surface function (base colour, normal, roughness, emission, opacity,
   world offset) compiled into the forward, prepass, shadow and bindless variants, with typed parameters and
   textures exposed to `.material` files and the Inspector; shader permutations cached and hot-reloaded

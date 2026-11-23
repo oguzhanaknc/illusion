@@ -790,15 +790,50 @@ void reflectCoreCommandTypes(StructRegistry& structs)
             .field("path", &MaterialCreateParams::path)
             .field("value", &MaterialCreateParams::value)
             .field("overwrite", &MaterialCreateParams::overwrite);
+        reflectStruct<ShaderDiagnosticInfo>("editor.ShaderDiagnosticInfo", 1, structs)
+            .field("file", &ShaderDiagnosticInfo::file)
+            .field("line", &ShaderDiagnosticInfo::line)
+            .field("column", &ShaderDiagnosticInfo::column)
+            .field("severity", &ShaderDiagnosticInfo::severity)
+            .field("code", &ShaderDiagnosticInfo::code)
+            .field("message", &ShaderDiagnosticInfo::message);
+        reflectStruct<MaterialParameterInfo>("editor.MaterialParameterInfo", 1, structs)
+            .field("name", &MaterialParameterInfo::name)
+            .field("type", &MaterialParameterInfo::type)
+            .field("color", &MaterialParameterInfo::color)
+            .field("minimum", &MaterialParameterInfo::minimum)
+            .field("maximum", &MaterialParameterInfo::maximum)
+            .field("defaultValue", &MaterialParameterInfo::defaultValue)
+            .field("usage", &MaterialParameterInfo::usage);
+        reflectStruct<MaterialShaderInfo>("editor.MaterialShaderInfo", 1, structs)
+            .field("path", &MaterialShaderInfo::path)
+            .field("status", &MaterialShaderInfo::status)
+            .field("shadingModel", &MaterialShaderInfo::shadingModel)
+            .field("worldOffset", &MaterialShaderInfo::worldOffset)
+            .field("parameters", &MaterialShaderInfo::parameters)
+            .field("diagnostics", &MaterialShaderInfo::diagnostics)
+            .field("error", &MaterialShaderInfo::error);
         reflectStruct<MaterialGetResult>("editor.MaterialGetResult", 1, structs)
             .field("path", &MaterialGetResult::path)
-            .field("value", &MaterialGetResult::value);
+            .field("value", &MaterialGetResult::value)
+            .field("shader", &MaterialGetResult::shader);
         reflectStruct<MaterialSetParams>("editor.MaterialSetParams", 1, structs)
             .field("path", &MaterialSetParams::path)
             .field("value", &MaterialSetParams::value);
         reflectStruct<MaterialSetResult>("editor.MaterialSetResult", 1, structs)
             .field("path", &MaterialSetResult::path)
             .field("changed", &MaterialSetResult::changed);
+        reflectStruct<MaterialCompileParams>("editor.MaterialCompileParams", 1, structs)
+            .field("path", &MaterialCompileParams::path);
+        reflectStruct<MaterialValidateParams>("editor.MaterialValidateParams", 1, structs)
+            .field("path", &MaterialValidateParams::path);
+        reflectStruct<MaterialValidateResult>("editor.MaterialValidateResult", 1, structs)
+            .field("path", &MaterialValidateResult::path)
+            .field("kind", &MaterialValidateResult::kind)
+            .field("valid", &MaterialValidateResult::valid)
+            .field("error", &MaterialValidateResult::error)
+            .field("errorPath", &MaterialValidateResult::errorPath)
+            .field("shader", &MaterialValidateResult::shader);
 
         reflectStruct<LogReadParams>("editor.LogReadParams", 1, structs)
             .field("since", &LogReadParams::since)

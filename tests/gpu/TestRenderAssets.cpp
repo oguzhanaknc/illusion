@@ -5,6 +5,7 @@
 #include <illusion/assets/AssetStreamer.hpp>
 #include <illusion/assets/Environment.hpp>
 #include <illusion/assets/MaterialAsset.hpp>
+#include <illusion/assets/ShaderLoader.hpp>
 #include <illusion/assets/TextureCompression.hpp>
 #include <illusion/core/AssetRef.hpp>
 #include <illusion/core/JobSystem.hpp>
@@ -21,6 +22,7 @@
 #include <doctest/doctest.h>
 
 #include <algorithm>
+#include <chrono>
 #include <cmath>
 #include <cstdlib>
 #include <cstring>
@@ -153,7 +155,186 @@ void reflectAll()
     reflectParticleComponents();
 }
 
+constexpr std::string_view kTintShader = R"([ShadingModel("Unlit")]
+struct Parameters
+{
+    [Color(1, 0, 0, 1)] float3 tint;
+    [Default(1)] float gain;
+};
+
+SurfaceOutput surface(SurfaceInput input)
+{
+    const Parameters p = parameters(input);
+    SurfaceOutput output = defaultSurface();
+    output.baseColor = p.tint * p.gain;
+    return output;
+}
+)";
+
+// The same parameters with the channels swapped, so that an edit shows in the picture.
+constexpr std::string_view kSwappedShader = R"([ShadingModel("Unlit")]
+struct Parameters
+{
+    [Color(1, 0, 0, 1)] float3 tint;
+    [Default(1)] float gain;
+};
+
+SurfaceOutput surface(SurfaceInput input)
+{
+    const Parameters p = parameters(input);
+    SurfaceOutput output = defaultSurface();
+    output.baseColor = p.tint.bgr * p.gain;
+    return output;
+}
+)";
+
+constexpr std::string_view kBrokenShader = "struct Parameters {};\nnonsense";
+
+ShaderLoaderDesc compilingLoader()
+{
+    ShaderLoaderDesc desc;
+    desc.compiler = ShaderCompilerDesc{.slangc = utf8Path(ILLUSION_TEST_SLANGC),
+                                       .library = utf8Path(ILLUSION_TEST_SHADER_LIBRARY),
+                                       .workDirectory = {},
+                                       .timeout = std::chrono::minutes(2),
+                                       .maxProcesses = 0};
+    return desc;
+}
+
+// The colour at the middle of a rendered picture.
+Vec3 centerOf(const std::vector<u8>& pixels)
+{
+    const usize index = (static_cast<usize>(kSize / 2) * kSize + kSize / 2) * 4;
+    return Vec3(pixels[index], pixels[index + 1], pixels[index + 2]);
+}
+
+std::string shaderMaterial(std::string_view shader, std::string_view parameters)
+{
+    return R"({"format": "illusion.material", "version": 2, "shader": ")" + std::string(shader) +
+           R"(", "parameters": )" + std::string(parameters) + "}";
+}
+
 } // namespace
+
+TEST_CASE("material files name a shader with parameters, and edits of the shader swap in")
+{
+    reflectAll();
+    auto device = RenderDevice::create(headless());
+    REQUIRE(device != nullptr);
+    {
+        test::AssetProject project;
+        const auto write = [&](std::string_view path, std::string_view text) {
+            REQUIRE(project.files.writeFile(std::string(path), bytesOf(text)) == FileError::None);
+        };
+        write("game:/tint.shader", kTintShader);
+        write("game:/red.material", shaderMaterial("game:/tint.shader", R"({"gain": 2})"));
+        write("game:/blue.material", shaderMaterial("game:/tint.shader", R"({"tint": [0, 0, 1]})"));
+        write("game:/wrong.material", shaderMaterial("game:/tint.shader", R"({"glow": 2})"));
+        write("game:/broken.material", shaderMaterial("game:/broken.shader", "{}"));
+        write("game:/broken.shader", kBrokenShader);
+        write("game:/standard.material", shaderMaterial("builtin:/shader/standard", "{}"));
+        JobSystem jobs(JobSystemDesc{2, 256});
+        AssetStreamer streamer(project.files, jobs);
+        ShaderLoader loader(project.files, compilingLoader());
+        RenderResources resources(*device);
+        SceneRendererDesc rendererDesc;
+        rendererDesc.colorFormat = nvrhi::Format::RGBA8_UNORM;
+        rendererDesc.post.bloom.enabled = false;
+        rendererDesc.post.ambientOcclusion.enabled = false;
+        rendererDesc.occlusionCulling = false;
+        auto renderer = SceneRenderer::create(*device, resources, rendererDesc);
+        REQUIRE(renderer != nullptr);
+        RenderAssetCacheDesc cacheDesc = smallBakes();
+        cacheDesc.shaders = &loader;
+        RenderAssetCache cache(resources, streamer, cacheDesc);
+        RenderAssetResolver resolver(cache);
+
+        World world;
+        const Entity cube =
+            world.create(Transform{}, MeshRenderer{.mesh = AssetRef("builtin:/mesh/cube"),
+                                                   .material = AssetRef("game:/red.material")});
+        resolver.waitIdle(world, &jobs);
+        CHECK(cache.statistics().failed == 0);
+        CHECK(cache.statistics().shaders == 1);
+        const MaterialHandle red = world.get<RenderMesh>(cube).material;
+        CHECK(red != resources.defaultMaterial());
+        const ShaderHandle tint = resources.materialShader(red);
+        CHECK(tint.index > 3); // not one of the built-in shaders
+        Vec3 pixel = centerOf(renderScene(*device, *renderer, world));
+        CHECK(pixel.r > 200.0f);
+        CHECK(pixel.g < 40.0f);
+        CHECK(pixel.b < 40.0f);
+
+        // A material sets the parameters it names and leaves the others at the shader's defaults.
+        world.get<MeshRenderer>(cube).material = AssetRef("game:/blue.material");
+        resolver.waitIdle(world, &jobs);
+        pixel = centerOf(renderScene(*device, *renderer, world));
+        CHECK(pixel.b > 100.0f);
+        CHECK(pixel.r < 40.0f);
+        CHECK(resources.materialShader(world.get<RenderMesh>(cube).material) == tint); // one shader for both
+        CHECK(cache.statistics().shaders == 1);
+
+        // A name the shader does not declare fails the material, which then draws with the default one.
+        world.get<MeshRenderer>(cube).material = AssetRef("game:/wrong.material");
+        resolver.waitIdle(world, &jobs);
+        CHECK(world.get<RenderMesh>(cube).material == resources.defaultMaterial());
+        const std::string_view wrong = cache.error(AssetId::fromPath("game:/wrong.material"));
+        CHECK(wrong.starts_with(
+            "/parameters/glow: the shader 'game:/tint.shader' declares no parameter 'glow'"));
+        CHECK(wrong.find("(it declares: tint, gain)") != std::string_view::npos);
+
+        // A shader that does not compile draws its materials with the error shader and keeps the message.
+        world.get<MeshRenderer>(cube).material = AssetRef("game:/broken.material");
+        resolver.waitIdle(world, &jobs);
+        const MaterialHandle broken = world.get<RenderMesh>(cube).material;
+        CHECK(broken != resources.defaultMaterial());
+        CHECK(resources.materialShader(broken) == resources.errorShader());
+        CHECK_FALSE(cache.error(AssetId::fromPath("game:/broken.material")).empty());
+        CHECK_FALSE(cache.error(AssetId::fromPath("game:/broken.shader")).empty());
+
+        // The built-in shaders can be named too.
+        world.get<MeshRenderer>(cube).material = AssetRef("game:/standard.material");
+        resolver.waitIdle(world, &jobs);
+        CHECK(resources.materialShader(world.get<RenderMesh>(cube).material) == resources.standardShader());
+
+        // Editing the shader builds it on the loader's thread and swaps it in: the same handles, new
+        // colours, the parameters of the material kept by name.
+        world.get<MeshRenderer>(cube).material = AssetRef("game:/blue.material");
+        resolver.waitIdle(world, &jobs);
+        const MaterialHandle blue = world.get<RenderMesh>(cube).material;
+        write("game:/tint.shader", kSwappedShader);
+        REQUIRE(streamer.reload("game:/tint.shader"));
+        cache.waitIdle();
+        resolver.waitIdle(world, &jobs);
+        CHECK(world.get<RenderMesh>(cube).material == blue);
+        CHECK(resources.materialShader(blue) == tint);
+        pixel = centerOf(renderScene(*device, *renderer, world));
+        CHECK(pixel.r > 100.0f); // the tint (0, 0, 1) now reads as (1, 0, 0)
+        CHECK(pixel.b < 40.0f);
+        CHECK(cache.statistics().reloads > 0);
+
+        // A shader that stops compiling keeps the last version that did.
+        write("game:/tint.shader", kBrokenShader);
+        REQUIRE(streamer.reload("game:/tint.shader"));
+        cache.waitIdle();
+        resolver.waitIdle(world, &jobs);
+        CHECK_FALSE(cache.error(AssetId::fromPath("game:/tint.shader")).empty());
+        pixel = centerOf(renderScene(*device, *renderer, world));
+        CHECK(pixel.r > 100.0f);
+
+        // Without a loader a material that names a shader fails.
+        RenderAssetCache withoutLoader(resources, streamer, smallBakes());
+        RenderAssetResolver plainResolver(withoutLoader);
+        World other;
+        other.create(Transform{}, MeshRenderer{.mesh = AssetRef("builtin:/mesh/cube"),
+                                               .material = AssetRef("game:/blue.material")});
+        plainResolver.waitIdle(other, &jobs);
+        CHECK_FALSE(withoutLoader.error(AssetId::fromPath("game:/tint.shader")).empty());
+        CHECK(withoutLoader.statistics().shaders == 0);
+    }
+    device->waitIdle();
+    CHECK(device->validationErrorCount() == 0);
+}
 
 TEST_CASE("a scene of asset references renders like the same scene built from handles")
 {
