@@ -101,8 +101,11 @@ public:
                                                         f32 radius, u32 layerMask) const noexcept = 0;
 
 protected:
+    /// Creates the interface (for implementations).
     CameraCollisionQuery() = default;
+    /// Copies the interface (for implementations).
     CameraCollisionQuery(const CameraCollisionQuery&) = default;
+    /// Copies the interface (for implementations).
     CameraCollisionQuery& operator=(const CameraCollisionQuery&) = default;
 };
 
