@@ -270,6 +270,28 @@ std::optional<ModelData> importModel(const VirtualFileSystem& files, std::string
     {
         return std::nullopt;
     }
+    for (usize s = 0; s < settings->model.skins.size(); ++s)
+    {
+        const std::string at = std::format("{}{}/model/skins/{}", normalized, kImportSettingsSuffix, s);
+        if (s >= model->skins.size())
+        {
+            if (error != nullptr)
+            {
+                *error = std::format("{}: the model has {} skins", at, model->skins.size());
+            }
+            return std::nullopt;
+        }
+        Skeleton& skin = model->skins[s];
+        if (Expected<void, std::string> applied = applyRigOverrides(skin.rig, skin, settings->model.skins[s]);
+            !applied)
+        {
+            if (error != nullptr)
+            {
+                *error = std::format("{}/{}", at, applied.error());
+            }
+            return std::nullopt;
+        }
+    }
     scaleModel(*model, settings->model.scale);
     const MeshLodSettings lods{.levels = settings->model.lodCount, .reduction = settings->model.lodReduction};
     for (MeshData& mesh : model->meshes)

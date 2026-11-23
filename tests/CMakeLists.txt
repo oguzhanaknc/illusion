@@ -69,6 +69,7 @@ add_executable(illusion_tests
     assets/TestImportSettings.cpp
     assets/TestMaterialAsset.cpp
     assets/TestMeshLods.cpp
+    assets/TestRigMap.cpp
     assets/TestShaderAsset.cpp
     assets/TestShaderCompiler.cpp
     assets/TestTextureCompression.cpp

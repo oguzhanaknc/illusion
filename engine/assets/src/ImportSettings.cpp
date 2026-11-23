@@ -1,5 +1,6 @@
 #include "AssetImport.hpp"
 
+#include <illusion/assets/Animation.hpp>
 #include <illusion/assets/AssetDatabase.hpp>
 #include <illusion/assets/ImportSettings.hpp>
 #include <illusion/assets/Mesh.hpp>
@@ -21,6 +22,9 @@ constexpr f64 kMaxModelScale = 1000.0;
 constexpr f64 kMinLodReduction = 0.1;
 constexpr f64 kMaxLodReduction = 0.9;
 constexpr u64 kMaxCodePoint = 0x10FFFF;
+constexpr usize kMaxSkinSettings = 256;
+constexpr usize kMaxJointNameLength = 256;
+constexpr u64 kFirstSkinsVersion = 3;
 
 constexpr std::array<std::string_view, 3> kColorSpaceNames{"auto", "srgb", "linear"};
 constexpr std::array<std::string_view, 6> kCompressionNames{"auto", "none", "bc7", "bc5", "bc4", "bc6h"};
@@ -166,7 +170,196 @@ Expected<void, ImportSettingsError> mergeTexture(TextureImportSettings& texture,
     return {};
 }
 
-Expected<void, ImportSettingsError> mergeModel(ModelImportSettings& model, const JsonValue& patch)
+// @p text as a JSON pointer token (RFC 6901).
+std::string pointerToken(std::string_view text)
+{
+    std::string token;
+    for (const char c : text)
+    {
+        if (c == '~')
+        {
+            token += "~0";
+        }
+        else if (c == '/')
+        {
+            token += "~1";
+        }
+        else
+        {
+            token += c;
+        }
+    }
+    return token;
+}
+
+// Parses the object @p value at @p pointer, whose members are joint names (1 to kMaxJointNameLength bytes),
+// into @p out with @p read (member, pointer), sorted by joint.
+template <typename Override, typename Read>
+Expected<void, ImportSettingsError> parseJointMap(const JsonValue& value, const std::string& pointer,
+                                                  std::vector<Override>& out, Read read)
+{
+    if (!value.isObject() || value.size() > kMaxJoints)
+    {
+        return unexpected(fail(pointer, std::format("must be an object of at most {} joints", kMaxJoints)));
+    }
+    out.clear();
+    out.reserve(value.size());
+    for (const JsonMember member : value.members())
+    {
+        const std::string at = std::format("{}/{}", pointer, pointerToken(member.key));
+        if (member.key.empty() || member.key.size() > kMaxJointNameLength)
+        {
+            return unexpected(fail(at, "a joint name must have 1 to 256 bytes"));
+        }
+        Expected<Override, ImportSettingsError> entry = read(member, at);
+        if (!entry)
+        {
+            return unexpected(std::move(entry).error());
+        }
+        out.push_back(std::move(*entry));
+    }
+    std::sort(out.begin(), out.end(), [](const Override& a, const Override& b) { return a.joint < b.joint; });
+    for (usize i = 1; i < out.size(); ++i)
+    {
+        if (out[i].joint == out[i - 1].joint)
+        {
+            return unexpected(
+                fail(std::format("{}/{}", pointer, pointerToken(out[i].joint)), "is listed twice"));
+        }
+    }
+    return {};
+}
+
+constexpr std::array<RetargetTranslation, 3> kTranslationModes{
+    RetargetTranslation::Skeleton, RetargetTranslation::Scaled, RetargetTranslation::Animation};
+
+Expected<RigBoneOverride, ImportSettingsError> parseBoneOverride(const JsonMember& member,
+                                                                 const std::string& pointer)
+{
+    const std::optional<std::string_view> bone = member.value.asString();
+    if (!bone || (!bone->empty() && !isValidBoneName(*bone)))
+    {
+        return unexpected(fail(pointer,
+                               "must be a bone name (1 to 64 letters, digits, '_', '-' or '.', such as "
+                               "\"leftUpperArm\") or \"\" to unmap the joint"));
+    }
+    return RigBoneOverride{.joint = std::string(member.key), .bone = std::string(*bone)};
+}
+
+Expected<RigTranslationOverride, ImportSettingsError> parseTranslationOverride(const JsonMember& member,
+                                                                               const std::string& pointer)
+{
+    const std::optional<std::string_view> name = member.value.asString();
+    for (const RetargetTranslation mode : kTranslationModes)
+    {
+        if (name && *name == retargetTranslationName(mode))
+        {
+            return RigTranslationOverride{.joint = std::string(member.key), .mode = mode};
+        }
+    }
+    return unexpected(fail(pointer, "must be \"Skeleton\", \"Scaled\" or \"Animation\""));
+}
+
+// One entry of "skins": {"generate": bool, "bones": {joint: bone}, "translation": {joint: mode}}.
+Expected<SkinImportSettings, ImportSettingsError> parseSkin(const JsonValue& value,
+                                                            const std::string& pointer)
+{
+    if (!value.isObject())
+    {
+        return unexpected(fail(pointer, "must be an object with generate, bones and translation"));
+    }
+    SkinImportSettings skin;
+    for (const JsonMember member : value.members())
+    {
+        const std::string at = std::format("{}/{}", pointer, member.key);
+        Expected<void, ImportSettingsError> parsed;
+        if (member.key == "generate")
+        {
+            const std::optional<bool> flag = member.value.asBool();
+            if (!flag)
+            {
+                return unexpected(fail(at, "must be true or false"));
+            }
+            skin.generate = *flag;
+        }
+        else if (member.key == "bones")
+        {
+            parsed = parseJointMap(member.value, at, skin.bones, parseBoneOverride);
+        }
+        else if (member.key == "translation")
+        {
+            parsed = parseJointMap(member.value, at, skin.translation, parseTranslationOverride);
+        }
+        else
+        {
+            return unexpected(fail(at, "is not a skin setting (generate, bones, translation)"));
+        }
+        if (!parsed)
+        {
+            return unexpected(std::move(parsed).error());
+        }
+    }
+    return skin;
+}
+
+Expected<std::vector<SkinImportSettings>, ImportSettingsError> parseSkins(const JsonValue& value,
+                                                                          const std::string& pointer)
+{
+    if (!value.isArray() || value.size() > kMaxSkinSettings)
+    {
+        return unexpected(
+            fail(pointer, std::format("must be a list of at most {} skin settings, one per #skin/N",
+                                      kMaxSkinSettings)));
+    }
+    std::vector<SkinImportSettings> skins;
+    skins.reserve(value.size());
+    for (usize i = 0; i < value.size(); ++i)
+    {
+        Expected<SkinImportSettings, ImportSettingsError> skin =
+            parseSkin(value[i], std::format("{}/{}", pointer, i));
+        if (!skin)
+        {
+            return unexpected(std::move(skin).error());
+        }
+        skins.push_back(std::move(*skin));
+    }
+    return skins;
+}
+
+// @p skins as the "skins" array of a sidecar: every member when @p full, else those that differ from their
+// defaults.
+JsonMutValue skinsValue(JsonMutDocument& document, const std::vector<SkinImportSettings>& skins, bool full)
+{
+    JsonMutValue list = document.makeArray();
+    for (const SkinImportSettings& skin : skins)
+    {
+        JsonMutValue entry = list.pushObject();
+        if (full || !skin.generate)
+        {
+            entry.add("generate", document.makeBool(skin.generate));
+        }
+        if (full || !skin.bones.empty())
+        {
+            JsonMutValue bones = entry.addObject("bones");
+            for (const RigBoneOverride& bone : skin.bones)
+            {
+                bones.add(bone.joint, document.makeString(bone.bone));
+            }
+        }
+        if (full || !skin.translation.empty())
+        {
+            JsonMutValue modes = entry.addObject("translation");
+            for (const RigTranslationOverride& mode : skin.translation)
+            {
+                modes.add(mode.joint, document.makeString(retargetTranslationName(mode.mode)));
+            }
+        }
+    }
+    return list;
+}
+
+Expected<void, ImportSettingsError> mergeModel(ModelImportSettings& model, const JsonValue& patch,
+                                               u64 version)
 {
     if (patch.isNull())
     {
@@ -254,13 +447,32 @@ Expected<void, ImportSettingsError> mergeModel(ModelImportSettings& model, const
             }
             merged.textureQuality = static_cast<TextureQuality>(*index);
         }
+        else if (member.key == "skins" && version >= kFirstSkinsVersion)
+        {
+            if (value.isNull())
+            {
+                merged.skins.clear();
+                continue;
+            }
+            Expected<std::vector<SkinImportSettings>, ImportSettingsError> skins = parseSkins(value, pointer);
+            if (!skins)
+            {
+                return unexpected(std::move(skins).error());
+            }
+            merged.skins = std::move(*skins);
+        }
+        else if (member.key == "skins")
+        {
+            return unexpected(
+                fail(pointer, std::format("needs import settings version {} or later", kFirstSkinsVersion)));
+        }
         else
         {
             return unexpected(fail(pointer, "is not a model setting (scale, lodCount, lodReduction, "
-                                            "compressTextures, textureQuality)"));
+                                            "compressTextures, textureQuality, skins)"));
         }
     }
-    model = merged;
+    model = std::move(merged);
     return {};
 }
 
@@ -367,7 +579,8 @@ Expected<void, ImportSettingsError> mergeFont(FontImportSettings& font, const Js
 // Merges the section @p member ("texture", "model" or "font") into @p settings; only the section of @p kind
 // exists.
 Expected<void, ImportSettingsError> mergeSection(ImportSettings& settings, const JsonMember& member,
-                                                 ImportSettingsKind kind)
+                                                 ImportSettingsKind kind,
+                                                 u64 version = kImportSettingsVersion)
 {
     if (member.key != sectionName(kind))
     {
@@ -384,7 +597,7 @@ Expected<void, ImportSettingsError> mergeSection(ImportSettings& settings, const
     case ImportSettingsKind::Font:
         return mergeFont(settings.font, member.value);
     default:
-        return mergeModel(settings.model, member.value);
+        return mergeModel(settings.model, member.value, version);
     }
 }
 
@@ -522,7 +735,8 @@ Expected<ImportSettings, ImportSettingsError> parseImportSettings(std::string_vi
         {
             continue;
         }
-        if (Expected<void, ImportSettingsError> section = mergeSection(settings, member, kind); !section)
+        if (Expected<void, ImportSettingsError> section = mergeSection(settings, member, kind, *version);
+            !section)
         {
             return unexpected(std::move(section).error());
         }
@@ -591,6 +805,10 @@ std::string writeImportSettings(const ImportSettings& settings, ImportSettingsKi
         {
             model.add("textureQuality",
                       document.makeString(kQualityNames[static_cast<usize>(settings.model.textureQuality)]));
+        }
+        if (!settings.model.skins.empty())
+        {
+            model.add("skins", skinsValue(document, settings.model.skins, false));
         }
         any = true;
     }
@@ -662,6 +880,7 @@ std::string importSettingsValue(const ImportSettings& settings, ImportSettingsKi
         model.add("compressTextures", document.makeBool(settings.model.compressTextures));
         model.add("textureQuality",
                   document.makeString(kQualityNames[static_cast<usize>(settings.model.textureQuality)]));
+        model.add("skins", skinsValue(document, settings.model.skins, true));
         document.setRoot(root);
         std::string text;
         if (document.write(text, JsonWriteOptions{.pretty = false}))

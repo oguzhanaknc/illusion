@@ -2,6 +2,7 @@
 #include <illusion/core/Hash.hpp>
 #include <illusion/core/Serialization.hpp>
 
+#include <algorithm>
 #include <cmath>
 #include <format>
 #include <utility>
@@ -91,6 +92,43 @@ void writeSkeleton(BinaryWriter& writer, const Skeleton& skeleton)
         writer.write(joint.scale);
         writer.write(joint.inverseBind);
     }
+    writer.write(static_cast<u32>(skeleton.rig.bones.size()));
+    for (usize i = 0; i < skeleton.rig.bones.size(); ++i)
+    {
+        writer.writeString(skeleton.rig.bones[i]);
+        writer.write(static_cast<u8>(skeleton.rig.translation[i]));
+    }
+}
+
+// A rig map is empty or has a valid bone name or none and a translation mode per joint, each bone once.
+bool readRig(BinaryReader& reader, Skeleton& skeleton)
+{
+    u32 count = 0;
+    if (!reader.read(count) || (count != 0 && count != skeleton.joints.size()))
+    {
+        return false;
+    }
+    RigMap& rig = skeleton.rig;
+    rig.bones.resize(count);
+    rig.translation.resize(count);
+    std::vector<std::string_view> named;
+    for (usize i = 0; i < count; ++i)
+    {
+        u8 mode = 0;
+        if (!reader.readString(rig.bones[i]) || !reader.read(mode) ||
+            mode > static_cast<u8>(RetargetTranslation::Animation) ||
+            (!rig.bones[i].empty() && !isValidBoneName(rig.bones[i])))
+        {
+            return false;
+        }
+        rig.translation.at(i) = static_cast<RetargetTranslation>(mode);
+        if (!rig.bones[i].empty())
+        {
+            named.push_back(rig.bones[i]);
+        }
+    }
+    std::sort(named.begin(), named.end());
+    return std::adjacent_find(named.begin(), named.end()) == named.end();
 }
 
 bool readSkeleton(BinaryReader& reader, Skeleton& skeleton)
@@ -118,7 +156,7 @@ bool readSkeleton(BinaryReader& reader, Skeleton& skeleton)
             return false;
         }
     }
-    return true;
+    return readRig(reader, skeleton);
 }
 
 // A rigid mesh has no skin data; a skinned one has a SkinVertex per vertex whose joints exist in its
@@ -170,6 +208,7 @@ void writeClip(BinaryWriter& writer, const AnimationClip& clip)
         writer.writeVector(std::span<const f32>(channel.times));
         writer.writeVector(std::span<const Vec4>(channel.values));
     }
+    writer.write(clip.skeleton);
 }
 
 bool readClip(BinaryReader& reader, AnimationClip& clip)
@@ -210,7 +249,7 @@ bool readClip(BinaryReader& reader, AnimationClip& clip)
             }
         }
     }
-    return true;
+    return reader.read(clip.skeleton);
 }
 
 } // namespace
@@ -525,7 +564,8 @@ std::optional<ModelData> deserializeModel(std::span<const std::byte> bytes)
     model.animations.resize(count);
     for (AnimationClip& clip : model.animations)
     {
-        if (!readClip(reader, clip))
+        if (!readClip(reader, clip) || clip.skeleton < -1 ||
+            (clip.skeleton >= 0 && static_cast<usize>(clip.skeleton) >= model.skins.size()))
         {
             return std::nullopt;
         }

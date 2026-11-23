@@ -1,0 +1,1021 @@
+{
+  "asset": {
+    "version": "2.0",
+    "generator": "illusion tests"
+  },
+  "scene": 0,
+  "scenes": [
+    {
+      "nodes": [
+        0,
+        68
+      ]
+    }
+  ],
+  "nodes": [
+    {
+      "name": "Armature",
+      "scale": [
+        0.01,
+        0.01,
+        0.01
+      ],
+      "children": [
+        1
+      ]
+    },
+    {
+      "name": "mixamorig:Hips",
+      "translation": [
+        0.0,
+        100.0,
+        0.0
+      ],
+      "children": [
+        2,
+        34,
+        63
+      ]
+    },
+    {
+      "name": "mixamorig:Spine",
+      "translation": [
+        0.0,
+        10.0,
+        0.0
+      ],
+      "children": [
+        3
+      ]
+    },
+    {
+      "name": "mixamorig:Spine1",
+      "translation": [
+        0.0,
+        12.0,
+        0.0
+      ],
+      "children": [
+        4
+      ]
+    },
+    {
+      "name": "mixamorig:Spine2",
+      "translation": [
+        0.0,
+        13.0,
+        0.0
+      ],
+      "children": [
+        5,
+        10,
+        39
+      ]
+    },
+    {
+      "name": "mixamorig:Neck",
+      "translation": [
+        0.0,
+        15.0,
+        0.0
+      ],
+      "children": [
+        6
+      ]
+    },
+    {
+      "name": "mixamorig:Head",
+      "translation": [
+        0.0,
+        10.0,
+        0.0
+      ],
+      "children": [
+        7,
+        8,
+        9
+      ]
+    },
+    {
+      "name": "mixamorig:HeadTop_End",
+      "translation": [
+        0.0,
+        18.0,
+        0.0
+      ]
+    },
+    {
+      "name": "mixamorig:LeftEye",
+      "translation": [
+        3.0,
+        6.0,
+        8.0
+      ]
+    },
+    {
+      "name": "mixamorig:RightEye",
+      "translation": [
+        -3.0,
+        6.0,
+        8.0
+      ]
+    },
+    {
+      "name": "mixamorig:LeftShoulder",
+      "translation": [
+        6.0,
+        10.0,
+        0.0
+      ],
+      "children": [
+        11
+      ]
+    },
+    {
+      "name": "mixamorig:LeftArm",
+      "translation": [
+        12.0,
+        0.0,
+        0.0
+      ],
+      "children": [
+        12
+      ]
+    },
+    {
+      "name": "mixamorig:LeftForeArm",
+      "translation": [
+        28.0,
+        0.0,
+        0.0
+      ],
+      "children": [
+        13
+      ]
+    },
+    {
+      "name": "mixamorig:LeftHand",
+      "translation": [
+        26.0,
+        0.0,
+        0.0
+      ],
+      "children": [
+        14,
+        18,
+        22,
+        26,
+        30
+      ]
+    },
+    {
+      "name": "mixamorig:LeftHandThumb1",
+      "translation": [
+        2.0,
+        0.0,
+        4.0
+      ],
+      "children": [
+        15
+      ]
+    },
+    {
+      "name": "mixamorig:LeftHandThumb2",
+      "translation": [
+        3.0,
+        0.0,
+        0.0
+      ],
+      "children": [
+        16
+      ]
+    },
+    {
+      "name": "mixamorig:LeftHandThumb3",
+      "translation": [
+        3.0,
+        0.0,
+        0.0
+      ],
+      "children": [
+        17
+      ]
+    },
+    {
+      "name": "mixamorig:LeftHandThumb4",
+      "translation": [
+        3.0,
+        0.0,
+        0.0
+      ]
+    },
+    {
+      "name": "mixamorig:LeftHandIndex1",
+      "translation": [
+        9.0,
+        0.0,
+        3.0
+      ],
+      "children": [
+        19
+      ]
+    },
+    {
+      "name": "mixamorig:LeftHandIndex2",
+      "translation": [
+        3.0,
+        0.0,
+        0.0
+      ],
+      "children": [
+        20
+      ]
+    },
+    {
+      "name": "mixamorig:LeftHandIndex3",
+      "translation": [
+        3.0,
+        0.0,
+        0.0
+      ],
+      "children": [
+        21
+      ]
+    },
+    {
+      "name": "mixamorig:LeftHandIndex4",
+      "translation": [
+        3.0,
+        0.0,
+        0.0
+      ]
+    },
+    {
+      "name": "mixamorig:LeftHandMiddle1",
+      "translation": [
+        9.5,
+        0.0,
+        1.0
+      ],
+      "children": [
+        23
+      ]
+    },
+    {
+      "name": "mixamorig:LeftHandMiddle2",
+      "translation": [
+        3.0,
+        0.0,
+        0.0
+      ],
+      "children": [
+        24
+      ]
+    },
+    {
+      "name": "mixamorig:LeftHandMiddle3",
+      "translation": [
+        3.0,
+        0.0,
+        0.0
+      ],
+      "children": [
+        25
+      ]
+    },
+    {
+      "name": "mixamorig:LeftHandMiddle4",
+      "translation": [
+        3.0,
+        0.0,
+        0.0
+      ]
+    },
+    {
+      "name": "mixamorig:LeftHandRing1",
+      "translation": [
+        9.0,
+        0.0,
+        -1.0
+      ],
+      "children": [
+        27
+      ]
+    },
+    {
+      "name": "mixamorig:LeftHandRing2",
+      "translation": [
+        3.0,
+        0.0,
+        0.0
+      ],
+      "children": [
+        28
+      ]
+    },
+    {
+      "name": "mixamorig:LeftHandRing3",
+      "translation": [
+        3.0,
+        0.0,
+        0.0
+      ],
+      "children": [
+        29
+      ]
+    },
+    {
+      "name": "mixamorig:LeftHandRing4",
+      "translation": [
+        3.0,
+        0.0,
+        0.0
+      ]
+    },
+    {
+      "name": "mixamorig:LeftHandPinky1",
+      "translation": [
+        8.0,
+        0.0,
+        -3.0
+      ],
+      "children": [
+        31
+      ]
+    },
+    {
+      "name": "mixamorig:LeftHandPinky2",
+      "translation": [
+        3.0,
+        0.0,
+        0.0
+      ],
+      "children": [
+        32
+      ]
+    },
+    {
+      "name": "mixamorig:LeftHandPinky3",
+      "translation": [
+        3.0,
+        0.0,
+        0.0
+      ],
+      "children": [
+        33
+      ]
+    },
+    {
+      "name": "mixamorig:LeftHandPinky4",
+      "translation": [
+        3.0,
+        0.0,
+        0.0
+      ]
+    },
+    {
+      "name": "mixamorig:LeftUpLeg",
+      "translation": [
+        9.0,
+        -5.0,
+        0.0
+      ],
+      "children": [
+        35
+      ]
+    },
+    {
+      "name": "mixamorig:LeftLeg",
+      "translation": [
+        0.0,
+        -43.0,
+        0.0
+      ],
+      "children": [
+        36
+      ]
+    },
+    {
+      "name": "mixamorig:LeftFoot",
+      "translation": [
+        0.0,
+        -42.0,
+        0.0
+      ],
+      "children": [
+        37
+      ]
+    },
+    {
+      "name": "mixamorig:LeftToeBase",
+      "translation": [
+        0.0,
+        -6.0,
+        12.0
+      ],
+      "children": [
+        38
+      ]
+    },
+    {
+      "name": "mixamorig:LeftToe_End",
+      "translation": [
+        0.0,
+        0.0,
+        8.0
+      ]
+    },
+    {
+      "name": "mixamorig:RightShoulder",
+      "translation": [
+        -6.0,
+        10.0,
+        0.0
+      ],
+      "children": [
+        40
+      ]
+    },
+    {
+      "name": "mixamorig:RightArm",
+      "translation": [
+        -12.0,
+        0.0,
+        0.0
+      ],
+      "children": [
+        41
+      ]
+    },
+    {
+      "name": "mixamorig:RightForeArm",
+      "translation": [
+        -28.0,
+        0.0,
+        0.0
+      ],
+      "children": [
+        42
+      ]
+    },
+    {
+      "name": "mixamorig:RightHand",
+      "translation": [
+        -26.0,
+        0.0,
+        0.0
+      ],
+      "children": [
+        43,
+        47,
+        51,
+        55,
+        59
+      ]
+    },
+    {
+      "name": "mixamorig:RightHandThumb1",
+      "translation": [
+        -2.0,
+        0.0,
+        4.0
+      ],
+      "children": [
+        44
+      ]
+    },
+    {
+      "name": "mixamorig:RightHandThumb2",
+      "translation": [
+        -3.0,
+        0.0,
+        0.0
+      ],
+      "children": [
+        45
+      ]
+    },
+    {
+      "name": "mixamorig:RightHandThumb3",
+      "translation": [
+        -3.0,
+        0.0,
+        0.0
+      ],
+      "children": [
+        46
+      ]
+    },
+    {
+      "name": "mixamorig:RightHandThumb4",
+      "translation": [
+        -3.0,
+        0.0,
+        0.0
+      ]
+    },
+    {
+      "name": "mixamorig:RightHandIndex1",
+      "translation": [
+        -9.0,
+        0.0,
+        3.0
+      ],
+      "children": [
+        48
+      ]
+    },
+    {
+      "name": "mixamorig:RightHandIndex2",
+      "translation": [
+        -3.0,
+        0.0,
+        0.0
+      ],
+      "children": [
+        49
+      ]
+    },
+    {
+      "name": "mixamorig:RightHandIndex3",
+      "translation": [
+        -3.0,
+        0.0,
+        0.0
+      ],
+      "children": [
+        50
+      ]
+    },
+    {
+      "name": "mixamorig:RightHandIndex4",
+      "translation": [
+        -3.0,
+        0.0,
+        0.0
+      ]
+    },
+    {
+      "name": "mixamorig:RightHandMiddle1",
+      "translation": [
+        -9.5,
+        0.0,
+        1.0
+      ],
+      "children": [
+        52
+      ]
+    },
+    {
+      "name": "mixamorig:RightHandMiddle2",
+      "translation": [
+        -3.0,
+        0.0,
+        0.0
+      ],
+      "children": [
+        53
+      ]
+    },
+    {
+      "name": "mixamorig:RightHandMiddle3",
+      "translation": [
+        -3.0,
+        0.0,
+        0.0
+      ],
+      "children": [
+        54
+      ]
+    },
+    {
+      "name": "mixamorig:RightHandMiddle4",
+      "translation": [
+        -3.0,
+        0.0,
+        0.0
+      ]
+    },
+    {
+      "name": "mixamorig:RightHandRing1",
+      "translation": [
+        -9.0,
+        0.0,
+        -1.0
+      ],
+      "children": [
+        56
+      ]
+    },
+    {
+      "name": "mixamorig:RightHandRing2",
+      "translation": [
+        -3.0,
+        0.0,
+        0.0
+      ],
+      "children": [
+        57
+      ]
+    },
+    {
+      "name": "mixamorig:RightHandRing3",
+      "translation": [
+        -3.0,
+        0.0,
+        0.0
+      ],
+      "children": [
+        58
+      ]
+    },
+    {
+      "name": "mixamorig:RightHandRing4",
+      "translation": [
+        -3.0,
+        0.0,
+        0.0
+      ]
+    },
+    {
+      "name": "mixamorig:RightHandPinky1",
+      "translation": [
+        -8.0,
+        0.0,
+        -3.0
+      ],
+      "children": [
+        60
+      ]
+    },
+    {
+      "name": "mixamorig:RightHandPinky2",
+      "translation": [
+        -3.0,
+        0.0,
+        0.0
+      ],
+      "children": [
+        61
+      ]
+    },
+    {
+      "name": "mixamorig:RightHandPinky3",
+      "translation": [
+        -3.0,
+        0.0,
+        0.0
+      ],
+      "children": [
+        62
+      ]
+    },
+    {
+      "name": "mixamorig:RightHandPinky4",
+      "translation": [
+        -3.0,
+        0.0,
+        0.0
+      ]
+    },
+    {
+      "name": "mixamorig:RightUpLeg",
+      "translation": [
+        -9.0,
+        -5.0,
+        0.0
+      ],
+      "children": [
+        64
+      ]
+    },
+    {
+      "name": "mixamorig:RightLeg",
+      "translation": [
+        0.0,
+        -43.0,
+        0.0
+      ],
+      "children": [
+        65
+      ]
+    },
+    {
+      "name": "mixamorig:RightFoot",
+      "translation": [
+        0.0,
+        -42.0,
+        0.0
+      ],
+      "children": [
+        66
+      ]
+    },
+    {
+      "name": "mixamorig:RightToeBase",
+      "translation": [
+        0.0,
+        -6.0,
+        12.0
+      ],
+      "children": [
+        67
+      ]
+    },
+    {
+      "name": "mixamorig:RightToe_End",
+      "translation": [
+        0.0,
+        0.0,
+        8.0
+      ]
+    },
+    {
+      "name": "body",
+      "mesh": 0,
+      "skin": 0
+    }
+  ],
+  "meshes": [
+    {
+      "name": "body",
+      "primitives": [
+        {
+          "attributes": {
+            "POSITION": 0,
+            "JOINTS_0": 1,
+            "WEIGHTS_0": 2
+          }
+        }
+      ]
+    }
+  ],
+  "skins": [
+    {
+      "name": "body",
+      "joints": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16,
+        17,
+        18,
+        19,
+        20,
+        21,
+        22,
+        23,
+        24,
+        25,
+        26,
+        27,
+        28,
+        29,
+        30,
+        31,
+        32,
+        33,
+        34,
+        35,
+        36,
+        37,
+        38,
+        39,
+        40,
+        41,
+        42,
+        43,
+        44,
+        45,
+        46,
+        47,
+        48,
+        49,
+        50,
+        51,
+        52,
+        53,
+        54,
+        55,
+        56,
+        57,
+        58,
+        59,
+        60,
+        61,
+        62,
+        63,
+        64,
+        65,
+        66,
+        67
+      ],
+      "inverseBindMatrices": 3
+    }
+  ],
+  "animations": [
+    {
+      "name": "walk",
+      "samplers": [
+        {
+          "input": 4,
+          "output": 5,
+          "interpolation": "LINEAR"
+        },
+        {
+          "input": 6,
+          "output": 7,
+          "interpolation": "LINEAR"
+        },
+        {
+          "input": 8,
+          "output": 9,
+          "interpolation": "LINEAR"
+        }
+      ],
+      "channels": [
+        {
+          "sampler": 0,
+          "target": {
+            "node": 1,
+            "path": "translation"
+          }
+        },
+        {
+          "sampler": 1,
+          "target": {
+            "node": 34,
+            "path": "rotation"
+          }
+        },
+        {
+          "sampler": 2,
+          "target": {
+            "node": 63,
+            "path": "rotation"
+          }
+        }
+      ]
+    }
+  ],
+  "buffers": [
+    {
+      "uri": "data:application/octet-stream;base64,zczMvQAAgD8AAAAAzczMPQAAgD8AAAAAAAAAAM3MjD8AAAAAAAAAAAAAAAAAAAAAAACAPwAAAAAAAAAAAAAAAAAAgD8AAAAAAAAAAAAAAAAAAIA/AAAAAAAAAAAAAAAAAADIQgAAAAAAAAAAAAAAAAAAAAAAAMhCAAAAAAAAAAAAAAAAAAAAAAAAyEIAAAAAAAAAgAAAyMIAAACAAACAPwAAyEIAAAAAAAAAAAAAAAAAAAAAAADIQgAAAAAAAAAAAAAAAAAAAAAAAMhCAAAAAAAAAIAAANzCAAAAgAAAgD8AAMhCAAAAAAAAAAAAAAAAAAAAAAAAyEIAAAAAAAAAAAAAAAAAAAAAAADIQgAAAAAAAACAAAD0wgAAAIAAAIA/AADIQgAAAAAAAAAAAAAAAAAAAAAAAMhCAAAAAAAAAAAAAAAAAAAAAAAAyEIAAAAAAAAAgAAAB8MAAACAAACAPwAAyEIAAAAAAAAAAAAAAAAAAAAAAADIQgAAAAAAAAAAAAAAAAAAAAAAAMhCAAAAAAAAAIAAABbDAAAAgAAAgD8AAMhCAAAAAAAAAAAAAAAAAAAAAAAAyEIAAAAAAAAAAAAAAAAAAAAAAADIQgAAAAAAAACAAAAgwwAAAIAAAIA/AADIQgAAAAAAAAAAAAAAAAAAAAAAAMhCAAAAAAAAAAAAAAAAAAAAAAAAyEIAAAAAAAAAgAAAMsMAAACAAACAPwAAyEIAAAAAAAAAAAAAAAAAAAAAAADIQgAAAAAAAAAAAAAAAAAAAAAAAMhCAAAAAAAAQMAAACbDAAAAwQAAgD8AAMhCAAAAAAAAAAAAAAAAAAAAAAAAyEIAAAAAAAAAAAAAAAAAAAAAAADIQgAAAAAAAEBAAAAmwwAAAMEAAIA/AADIQgAAAAAAAAAAAAAAAAAAAAAAAMhCAAAAAAAAAAAAAAAAAAAAAAAAyEIAAAAAAADAwAAAEcMAAACAAACAPwAAyEIAAAAAAAAAAAAAAAAAAAAAAADIQgAAAAAAAAAAAAAAAAAAAAAAAMhCAAAAAAAAkMEAABHDAAAAgAAAgD8AAMhCAAAAAAAAAAAAAAAAAAAAAAAAyEIAAAAAAAAAAAAAAAAAAAAAAADIQgAAAAAAADjCAAARwwAAAIAAAIA/AADIQgAAAAAAAAAAAAAAAAAAAAAAAMhCAAAAAAAAAAAAAAAAAAAAAAAAyEIAAAAAAACQwgAAEcMAAACAAACAPwAAyEIAAAAAAAAAAAAAAAAAAAAAAADIQgAAAAAAAAAAAAAAAAAAAAAAAMhCAAAAAAAAlMIAABHDAACAwAAAgD8AAMhCAAAAAAAAAAAAAAAAAAAAAAAAyEIAAAAAAAAAAAAAAAAAAAAAAADIQgAAAAAAAJrCAAARwwAAgMAAAIA/AADIQgAAAAAAAAAAAAAAAAAAAAAAAMhCAAAAAAAAAAAAAAAAAAAAAAAAyEIAAAAAAACgwgAAEcMAAIDAAACAPwAAyEIAAAAAAAAAAAAAAAAAAAAAAADIQgAAAAAAAAAAAAAAAAAAAAAAAMhCAAAAAAAApsIAABHDAACAwAAAgD8AAMhCAAAAAAAAAAAAAAAAAAAAAAAAyEIAAAAAAAAAAAAAAAAAAAAAAADIQgAAAAAAAKLCAAARwwAAQMAAAIA/AADIQgAAAAAAAAAAAAAAAAAAAAAAAMhCAAAAAAAAAAAAAAAAAAAAAAAAyEIAAAAAAACowgAAEcMAAEDAAACAPwAAyEIAAAAAAAAAAAAAAAAAAAAAAADIQgAAAAAAAAAAAAAAAAAAAAAAAMhCAAAAAAAArsIAABHDAABAwAAAgD8AAMhCAAAAAAAAAAAAAAAAAAAAAAAAyEIAAAAAAAAAAAAAAAAAAAAAAADIQgAAAAAAALTCAAARwwAAQMAAAIA/AADIQgAAAAAAAAAAAAAAAAAAAAAAAMhCAAAAAAAAAAAAAAAAAAAAAAAAyEIAAAAAAACjwgAAEcMAAIC/AACAPwAAyEIAAAAAAAAAAAAAAAAAAAAAAADIQgAAAAAAAAAAAAAAAAAAAAAAAMhCAAAAAAAAqcIAABHDAACAvwAAgD8AAMhCAAAAAAAAAAAAAAAAAAAAAAAAyEIAAAAAAAAAAAAAAAAAAAAAAADIQgAAAAAAAK/CAAARwwAAgL8AAIA/AADIQgAAAAAAAAAAAAAAAAAAAAAAAMhCAAAAAAAAAAAAAAAAAAAAAAAAyEIAAAAAAAC1wgAAEcMAAIC/AACAPwAAyEIAAAAAAAAAAAAAAAAAAAAAAADIQgAAAAAAAAAAAAAAAAAAAAAAAMhCAAAAAAAAosIAABHDAACAPwAAgD8AAMhCAAAAAAAAAAAAAAAAAAAAAAAAyEIAAAAAAAAAAAAAAAAAAAAAAADIQgAAAAAAAKjCAAARwwAAgD8AAIA/AADIQgAAAAAAAAAAAAAAAAAAAAAAAMhCAAAAAAAAAAAAAAAAAAAAAAAAyEIAAAAAAACuwgAAEcMAAIA/AACAPwAAyEIAAAAAAAAAAAAAAAAAAAAAAADIQgAAAAAAAAAAAAAAAAAAAAAAAMhCAAAAAAAAtMIAABHDAACAPwAAgD8AAMhCAAAAAAAAAAAAAAAAAAAAAAAAyEIAAAAAAAAAAAAAAAAAAAAAAADIQgAAAAAAAKDCAAARwwAAQEAAAIA/AADIQgAAAAAAAAAAAAAAAAAAAAAAAMhCAAAAAAAAAAAAAAAAAAAAAAAAyEIAAAAAAACmwgAAEcMAAEBAAACAPwAAyEIAAAAAAAAAAAAAAAAAAAAAAADIQgAAAAAAAAAAAAAAAAAAAAAAAMhCAAAAAAAArMIAABHDAABAQAAAgD8AAMhCAAAAAAAAAAAAAAAAAAAAAAAAyEIAAAAAAAAAAAAAAAAAAAAAAADIQgAAAAAAALLCAAARwwAAQEAAAIA/AADIQgAAAAAAAAAAAAAAAAAAAAAAAMhCAAAAAAAAAAAAAAAAAAAAAAAAyEIAAAAAAAAQwQAAvsIAAACAAACAPwAAyEIAAAAAAAAAAAAAAAAAAAAAAADIQgAAAAAAAAAAAAAAAAAAAAAAAMhCAAAAAAAAEMEAAFDCAAAAgAAAgD8AAMhCAAAAAAAAAAAAAAAAAAAAAAAAyEIAAAAAAAAAAAAAAAAAAAAAAADIQgAAAAAAABDBAAAgwQAAAIAAAIA/AADIQgAAAAAAAAAAAAAAAAAAAAAAAMhCAAAAAAAAAAAAAAAAAAAAAAAAyEIAAAAAAAAQwQAAgMAAAEDBAACAPwAAyEIAAAAAAAAAAAAAAAAAAAAAAADIQgAAAAAAAAAAAAAAAAAAAAAAAMhCAAAAAAAAEMEAAIDAAACgwQAAgD8AAMhCAAAAAAAAAAAAAAAAAAAAAAAAyEIAAAAAAAAAAAAAAAAAAAAAAADIQgAAAAAAAMBAAAARwwAAAIAAAIA/AADIQgAAAAAAAAAAAAAAAAAAAAAAAMhCAAAAAAAAAAAAAAAAAAAAAAAAyEIAAAAAAACQQQAAEcMAAACAAACAPwAAyEIAAAAAAAAAAAAAAAAAAAAAAADIQgAAAAAAAAAAAAAAAAAAAAAAAMhCAAAAAAAAOEIAABHDAAAAgAAAgD8AAMhCAAAAAAAAAAAAAAAAAAAAAAAAyEIAAAAAAAAAAAAAAAAAAAAAAADIQgAAAAAAAJBCAAARwwAAAIAAAIA/AADIQgAAAAAAAAAAAAAAAAAAAAAAAMhCAAAAAAAAAAAAAAAAAAAAAAAAyEIAAAAAAACUQgAAEcMAAIDAAACAPwAAyEIAAAAAAAAAAAAAAAAAAAAAAADIQgAAAAAAAAAAAAAAAAAAAAAAAMhCAAAAAAAAmkIAABHDAACAwAAAgD8AAMhCAAAAAAAAAAAAAAAAAAAAAAAAyEIAAAAAAAAAAAAAAAAAAAAAAADIQgAAAAAAAKBCAAARwwAAgMAAAIA/AADIQgAAAAAAAAAAAAAAAAAAAAAAAMhCAAAAAAAAAAAAAAAAAAAAAAAAyEIAAAAAAACmQgAAEcMAAIDAAACAPwAAyEIAAAAAAAAAAAAAAAAAAAAAAADIQgAAAAAAAAAAAAAAAAAAAAAAAMhCAAAAAAAAokIAABHDAABAwAAAgD8AAMhCAAAAAAAAAAAAAAAAAAAAAAAAyEIAAAAAAAAAAAAAAAAAAAAAAADIQgAAAAAAAKhCAAARwwAAQMAAAIA/AADIQgAAAAAAAAAAAAAAAAAAAAAAAMhCAAAAAAAAAAAAAAAAAAAAAAAAyEIAAAAAAACuQgAAEcMAAEDAAACAPwAAyEIAAAAAAAAAAAAAAAAAAAAAAADIQgAAAAAAAAAAAAAAAAAAAAAAAMhCAAAAAAAAtEIAABHDAABAwAAAgD8AAMhCAAAAAAAAAAAAAAAAAAAAAAAAyEIAAAAAAAAAAAAAAAAAAAAAAADIQgAAAAAAAKNCAAARwwAAgL8AAIA/AADIQgAAAAAAAAAAAAAAAAAAAAAAAMhCAAAAAAAAAAAAAAAAAAAAAAAAyEIAAAAAAACpQgAAEcMAAIC/AACAPwAAyEIAAAAAAAAAAAAAAAAAAAAAAADIQgAAAAAAAAAAAAAAAAAAAAAAAMhCAAAAAAAAr0IAABHDAACAvwAAgD8AAMhCAAAAAAAAAAAAAAAAAAAAAAAAyEIAAAAAAAAAAAAAAAAAAAAAAADIQgAAAAAAALVCAAARwwAAgL8AAIA/AADIQgAAAAAAAAAAAAAAAAAAAAAAAMhCAAAAAAAAAAAAAAAAAAAAAAAAyEIAAAAAAACiQgAAEcMAAIA/AACAPwAAyEIAAAAAAAAAAAAAAAAAAAAAAADIQgAAAAAAAAAAAAAAAAAAAAAAAMhCAAAAAAAAqEIAABHDAACAPwAAgD8AAMhCAAAAAAAAAAAAAAAAAAAAAAAAyEIAAAAAAAAAAAAAAAAAAAAAAADIQgAAAAAAAK5CAAARwwAAgD8AAIA/AADIQgAAAAAAAAAAAAAAAAAAAAAAAMhCAAAAAAAAAAAAAAAAAAAAAAAAyEIAAAAAAAC0QgAAEcMAAIA/AACAPwAAyEIAAAAAAAAAAAAAAAAAAAAAAADIQgAAAAAAAAAAAAAAAAAAAAAAAMhCAAAAAAAAoEIAABHDAABAQAAAgD8AAMhCAAAAAAAAAAAAAAAAAAAAAAAAyEIAAAAAAAAAAAAAAAAAAAAAAADIQgAAAAAAAKZCAAARwwAAQEAAAIA/AADIQgAAAAAAAAAAAAAAAAAAAAAAAMhCAAAAAAAAAAAAAAAAAAAAAAAAyEIAAAAAAACsQgAAEcMAAEBAAACAPwAAyEIAAAAAAAAAAAAAAAAAAAAAAADIQgAAAAAAAAAAAAAAAAAAAAAAAMhCAAAAAAAAskIAABHDAABAQAAAgD8AAMhCAAAAAAAAAAAAAAAAAAAAAAAAyEIAAAAAAAAAAAAAAAAAAAAAAADIQgAAAAAAABBBAAC+wgAAAIAAAIA/AADIQgAAAAAAAAAAAAAAAAAAAAAAAMhCAAAAAAAAAAAAAAAAAAAAAAAAyEIAAAAAAAAQQQAAUMIAAACAAACAPwAAyEIAAAAAAAAAAAAAAAAAAAAAAADIQgAAAAAAAAAAAAAAAAAAAAAAAMhCAAAAAAAAEEEAACDBAAAAgAAAgD8AAMhCAAAAAAAAAAAAAAAAAAAAAAAAyEIAAAAAAAAAAAAAAAAAAAAAAADIQgAAAAAAABBBAACAwAAAQMEAAIA/AADIQgAAAAAAAAAAAAAAAAAAAAAAAMhCAAAAAAAAAAAAAAAAAAAAAAAAyEIAAAAAAAAQQQAAgMAAAKDBAACAPwAAAAAAAAA/AACAPwAAAAAAAMhCAAAAAAAAAAAAAMRCAABIQgAAAAAAAMhCAADIQgAAAAAAAAA/AACAP1miXT4AAAAAAAAAAInueT9Zol2+AAAAgAAAAICJ7nk/WaJdPgAAAAAAAAAAie55PwAAAAAAAAA/AACAP1miXb4AAACAAAAAgInueT9Zol0+AAAAAAAAAACJ7nk/WaJdvgAAAIAAAACAie55Pw==",
+      "byteLength": 4552
+    }
+  ],
+  "bufferViews": [
+    {
+      "buffer": 0,
+      "byteOffset": 0,
+      "byteLength": 36
+    },
+    {
+      "buffer": 0,
+      "byteOffset": 36,
+      "byteLength": 12
+    },
+    {
+      "buffer": 0,
+      "byteOffset": 48,
+      "byteLength": 48
+    },
+    {
+      "buffer": 0,
+      "byteOffset": 96,
+      "byteLength": 4288
+    },
+    {
+      "buffer": 0,
+      "byteOffset": 4384,
+      "byteLength": 12
+    },
+    {
+      "buffer": 0,
+      "byteOffset": 4396,
+      "byteLength": 36
+    },
+    {
+      "buffer": 0,
+      "byteOffset": 4432,
+      "byteLength": 12
+    },
+    {
+      "buffer": 0,
+      "byteOffset": 4444,
+      "byteLength": 48
+    },
+    {
+      "buffer": 0,
+      "byteOffset": 4492,
+      "byteLength": 12
+    },
+    {
+      "buffer": 0,
+      "byteOffset": 4504,
+      "byteLength": 48
+    }
+  ],
+  "accessors": [
+    {
+      "bufferView": 0,
+      "componentType": 5126,
+      "count": 3,
+      "type": "VEC3",
+      "min": [
+        -0.1,
+        1.0,
+        0.0
+      ],
+      "max": [
+        0.1,
+        1.1,
+        0.0
+      ]
+    },
+    {
+      "bufferView": 1,
+      "componentType": 5121,
+      "count": 3,
+      "type": "VEC4"
+    },
+    {
+      "bufferView": 2,
+      "componentType": 5126,
+      "count": 3,
+      "type": "VEC4"
+    },
+    {
+      "bufferView": 3,
+      "componentType": 5126,
+      "count": 67,
+      "type": "MAT4"
+    },
+    {
+      "bufferView": 4,
+      "componentType": 5126,
+      "count": 3,
+      "type": "SCALAR",
+      "min": [
+        0
+      ],
+      "max": [
+        1
+      ]
+    },
+    {
+      "bufferView": 5,
+      "componentType": 5126,
+      "count": 3,
+      "type": "VEC3"
+    },
+    {
+      "bufferView": 6,
+      "componentType": 5126,
+      "count": 3,
+      "type": "SCALAR",
+      "min": [
+        0
+      ],
+      "max": [
+        1
+      ]
+    },
+    {
+      "bufferView": 7,
+      "componentType": 5126,
+      "count": 3,
+      "type": "VEC4"
+    },
+    {
+      "bufferView": 8,
+      "componentType": 5126,
+      "count": 3,
+      "type": "SCALAR",
+      "min": [
+        0
+      ],
+      "max": [
+        1
+      ]
+    },
+    {
+      "bufferView": 9,
+      "componentType": 5126,
+      "count": 3,
+      "type": "VEC4"
+    }
+  ]
+}

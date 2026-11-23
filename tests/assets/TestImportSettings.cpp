@@ -106,7 +106,7 @@ TEST_CASE("sidecars hold only the settings that differ from their defaults")
     CHECK(*lodsAgain == lods);
     CHECK(
         importSettingsValue(ImportSettings{}, ImportSettingsKind::Model) ==
-        R"({"model":{"scale":1.0,"lodCount":3,"lodReduction":0.5,"compressTextures":true,"textureQuality":"normal"}})");
+        R"({"model":{"scale":1.0,"lodCount":3,"lodReduction":0.5,"compressTextures":true,"textureQuality":"normal","skins":[]}})");
 
     CHECK(
         importSettingsValue(settings, ImportSettingsKind::Texture) ==
@@ -218,20 +218,20 @@ TEST_CASE("parsing a sidecar checks its format and version")
     CHECK(parse("{ not json").error().message.find("invalid JSON") != std::string::npos);
     CHECK(parse(R"({"version": 1})").error().pointer == "/format");
     CHECK(parse(R"({"format": "illusion.material", "version": 1})").error().pointer == "/format");
-    CHECK(parse(R"({"format": "illusion.import", "version": 3})").error().pointer == "/version");
+    CHECK(parse(R"({"format": "illusion.import", "version": 4})").error().pointer == "/version");
     CHECK(parse(R"({"format": "illusion.import", "version": 0})").error().pointer == "/version");
     CHECK(parse(R"({"format": "illusion.import", "version": 1, "model": {}})").error().pointer == "/model");
     CHECK_FALSE(
         parseImportSettings(R"({"format": "illusion.import", "version": 1})", ImportSettingsKind::None));
 }
 
-TEST_CASE("sidecar version 2 reads, writes and round trips compression and quality")
+TEST_CASE("sidecars read, write and round trip compression and quality")
 {
     ImportSettings texture;
     texture.texture.compression = ImportCompression::BC5;
     texture.texture.quality = TextureQuality::High;
     const std::string text = writeImportSettings(texture, ImportSettingsKind::Texture);
-    CHECK(text.find("\"version\": 2") != std::string::npos);
+    CHECK(text.find("\"version\": 3") != std::string::npos);
     CHECK(text.find("\"compression\": \"bc5\"") != std::string::npos);
     CHECK(text.find("\"quality\": \"high\"") != std::string::npos);
     CHECK(text.find("maxSize") == std::string::npos);
@@ -272,7 +272,7 @@ TEST_CASE("sidecar version 2 reads, writes and round trips compression and quali
     CHECK(*parsed == model);
     CHECK(
         importSettingsValue(model, ImportSettingsKind::Model) ==
-        R"({"model":{"scale":1.0,"lodCount":3,"lodReduction":0.5,"compressTextures":false,"textureQuality":"fast"}})");
+        R"({"model":{"scale":1.0,"lodCount":3,"lodReduction":0.5,"compressTextures":false,"textureQuality":"fast","skins":[]}})");
     CHECK(
         importSettingsValue(texture, ImportSettingsKind::Texture) ==
         R"({"texture":{"colorSpace":"auto","generateMips":true,"maxSize":0,"compression":"bc5","quality":"high"}})");

@@ -14,6 +14,7 @@
 #include <memory>
 #include <numeric>
 #include <span>
+#include <string_view>
 #include <unordered_map>
 #include <unordered_set>
 #include <utility>
@@ -834,6 +835,12 @@ private:
             {
                 cgltf_node_transform_world(ancestor, &skeleton.rootTransform[0][0]);
             }
+            RigMapReport report;
+            skeleton.rig = generateRigMap(skeleton, &report);
+            for (const std::string& warning : report.warnings)
+            {
+                ILL_LOG_INFO("Assets", "skin '{}': {}", skinName, warning);
+            }
             imported.skeleton = static_cast<i32>(model.skins.size());
             model.skins.push_back(std::move(skeleton));
         }
@@ -895,8 +902,33 @@ private:
                              [](const AnimationChannel& x, const AnimationChannel& y) {
                                  return x.joint != y.joint ? x.joint < y.joint : x.path < y.path;
                              });
+            clip.skeleton = sourceSkeleton(clip, model.skins);
             model.animations.push_back(std::move(clip));
         }
+    }
+
+    // The skin whose joint names the channels of @p clip hit most (the lowest index on ties), or -1.
+    static i32 sourceSkeleton(const AnimationClip& clip, const std::vector<Skeleton>& skins)
+    {
+        i32 best = -1;
+        usize bestHits = 0;
+        for (usize s = 0; s < skins.size(); ++s)
+        {
+            std::unordered_set<std::string_view> names;
+            for (const SkeletonJoint& joint : skins[s].joints)
+            {
+                names.insert(joint.name);
+            }
+            const auto hits = static_cast<usize>(std::count_if(
+                clip.channels.begin(), clip.channels.end(),
+                [&](const AnimationChannel& channel) { return names.contains(channel.joint); }));
+            if (hits > bestHits)
+            {
+                best = static_cast<i32>(s);
+                bestHits = hits;
+            }
+        }
+        return best;
     }
 
     bool convertChannel(const cgltf_animation_channel& source, std::string_view clip,

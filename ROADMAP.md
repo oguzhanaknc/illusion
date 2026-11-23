@@ -1590,7 +1590,7 @@ game code.
   `humanoid_a` (Mixamo-style `mixamorig:` names, T-pose, 1.8 m, joint axes along the model axes) and
   `humanoid_b` (Blender-style `pelvis`, `thigh.L` names, A-pose, 1.2 m, bones along local +y, a `root` joint
   on the ground, one more spine joint and a twist joint). Four work packages, one PR each:
-- ANIM-5a (`implementer`): Rig maps. `illusion/assets/Rig.hpp` (`generateRigMap()`, `applyRigOverrides()`,
+- ✅ ANIM-5a (`implementer`): Rig maps. `illusion/assets/Rig.hpp` (`generateRigMap()`, `applyRigOverrides()`,
   `isHumanoidBone()`, `isValidBoneName()`, `retargetTranslationName()`), `Skeleton::rig`,
   `AnimationClip::skeleton`, model format 7, import settings version 3 with `skins` (parse, merge, write,
   JSON-path errors), the sidecar as a source of the cooked model. Done: `tests/assets/TestRigMap.cpp`: both

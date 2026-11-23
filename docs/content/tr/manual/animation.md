@@ -817,6 +817,14 @@ renderer->render(commands, target, world, view, &jobs);
   `RenderStats::skinnedInstances` ve `skinnedVertices` son karenin işini, `RenderGpuTimings::skinning`
   GPU süresini sayar.
 
+## Kaynak skin'ler ve rig map'leri
+
+Her clip kaynak skin'ini kaydeder: `AnimationClip::skeleton`, channel'larının joint adlarını en çok bulan
+skin'in modeldeki indeksidir (eşitlikte en küçük indeks); yoksa -1. Her skin bir rig map taşır: her joint'in
+bone adı, içe aktarmada üretilir ve modelin sidecar'ı ile düzeltilir (bkz. [rig map'leri](assets.md#rig-mapleri)).
+Oynatma yukarıdaki gibi hâlâ joint adlarını kullanır; bir clip'i bu rig map'ler üzerinden başka joint adlarına
+sahip bir skeleton'da oynatmak (retargeting) ANIM-5b ile gelir.
+
 ## Henüz desteklenmeyenler
 
 - Süren bir geçişi kesmek, alt durum makineleri ve bir grafın canlı durumunu kaydetmek.

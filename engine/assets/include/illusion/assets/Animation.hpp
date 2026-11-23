@@ -4,6 +4,7 @@
 /// Skeletons, animation clips and the skinning stream of a mesh, as imported from glTF and cooked into a
 /// ModelData (docs/adr/0059-skeletal-animation.md). Plain data; sampling and posing live in engine/animation.
 
+#include <illusion/assets/Rig.hpp>
 #include <illusion/core/Base.hpp>
 #include <illusion/core/Math.hpp>
 
@@ -47,6 +48,8 @@ struct Skeleton
     std::vector<SkeletonJoint> joints; ///< At most kMaxJoints joints.
     /// Model-space matrix of the skeleton's root parent (the glTF nodes above the joints).
     Mat4 rootTransform{1.0f};
+    /// The bone of every joint (empty, or parallel to joints); generated at import (generateRigMap()).
+    RigMap rig{};
 };
 
 /// What an AnimationChannel moves.
@@ -83,6 +86,8 @@ struct AnimationClip
     std::string name;                       ///< The glTF animation name (unique in its model).
     f32 duration = 0.0f;                    ///< Last keyframe time of all channels, seconds.
     std::vector<AnimationChannel> channels; ///< Channels, sorted by joint name, then path.
+    /// The skin of its model whose joint names its channels hit most (lowest index on ties), or -1.
+    i32 skeleton = -1;
 };
 
 } // namespace illusion
