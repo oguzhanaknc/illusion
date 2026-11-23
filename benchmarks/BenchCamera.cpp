@@ -3,11 +3,17 @@
 #include <illusion/camera/CameraAim.hpp>
 #include <illusion/camera/CameraBlend.hpp>
 #include <illusion/camera/CameraBody.hpp>
+#include <illusion/camera/CameraComponents.hpp>
 #include <illusion/camera/CameraNoise.hpp>
+#include <illusion/camera/CameraWorld.hpp>
+#include <illusion/ecs/Reflection.hpp>
+#include <illusion/ecs/Transform.hpp>
+#include <illusion/ecs/World.hpp>
 
 #include <array>
 #include <cmath>
 #include <optional>
+#include <utility>
 #include <vector>
 
 using namespace illusion;
@@ -18,9 +24,11 @@ namespace
 constexpr u32 kCameras = 100;
 
 // A floor at y = 0.5: one plane test per cast, standing in for a physics sphere cast.
-class FloorQuery final : public CameraCollisionQuery
+class FloorQuery final : public CameraWorldCollision
 {
 public:
+    void setIgnored(Entity /*target*/) noexcept override {}
+
     std::optional<f32> sphereCast(Vec3 origin, Vec3 direction, f32 maxDistance, f32 radius,
                                   u32 /*layerMask*/) const noexcept override
     {
@@ -128,5 +136,82 @@ ILL_BENCHMARK("camera/stages-100", 400'000.0)
             poses[i] = blendCameraPoses(poses[i], pose, cameraBlendWeight(blend, 0.5f));
         }
         ankerl::nanobench::doNotOptimizeAway(poses.back());
+    });
+}
+
+// Budget: ns per CameraWorld::update() of a World with 100 virtual cameras (follow, orbit, spring arm and
+// dolly bodies with look-at or composer aims and noise, all following one moving target) and one brain whose
+// live camera changes every 10 updates, so that a blend of two cameras always runs, with one shake; about 10x
+// a desktop result (2.1 us); see Budget.hpp.
+ILL_BENCHMARK("camera/world-100", 20'000.0)
+{
+    reflectCoreComponents();
+    registerCameraComponents(ComponentRegistry::instance());
+    World world;
+    const Entity target = world.create(Transform{});
+    std::vector<Entity> cameras;
+    for (u32 i = 0; i < kCameras; ++i)
+    {
+        VirtualCamera camera;
+        camera.priority = 0;
+        camera.follow = target;
+        CameraNoise noise;
+        noise.seed = i;
+        const Entity entity = world.create(Transform{}, camera, noise);
+        switch (i % 4)
+        {
+        case 0:
+            world.emplace<CameraFollow>(entity);
+            break;
+        case 1:
+            world.emplace<CameraOrbit>(entity);
+            break;
+        case 2:
+            world.emplace<CameraSpringArm>(entity);
+            break;
+        default:
+        {
+            CameraDolly dolly;
+            dolly.path.assign(kTrack.begin(), kTrack.end());
+            dolly.mode = CameraDollyMode::NearestToTarget;
+            world.emplace<CameraDolly>(entity, std::move(dolly));
+            break;
+        }
+        }
+        if (i % 2 == 0)
+        {
+            world.emplace<CameraLookAt>(entity);
+        }
+        else
+        {
+            world.emplace<CameraComposer>(entity);
+        }
+        cameras.push_back(entity);
+    }
+    CameraBrain brain;
+    brain.defaultBlend.duration = 0.5f;
+    world.create(Transform{}, brain);
+    CameraWorld cameraWorld(world);
+    FloorQuery floor;
+    CameraWorldUpdate input;
+    input.collision = &floor;
+    constexpr f32 kDt = 1.0f / 60.0f;
+    cameraWorld.update(kDt, input);
+    u32 frame = 0;
+    bench.run("update a CameraWorld of 100 virtual cameras", [&] {
+        ++frame;
+        const f32 time = kDt * static_cast<f32>(frame);
+        world.get<Transform>(target).position =
+            Vec3(4.0f * std::sin(time), 0.0f, 3.0f * std::cos(0.7f * time));
+        if (frame % 10 == 0)
+        {
+            world.get<VirtualCamera>(cameras[(frame / 10) % kCameras]).priority = static_cast<i32>(frame);
+        }
+        if (cameraWorld.statistics().shakes == 0)
+        {
+            static_cast<void>(cameraWorld.shake({}));
+        }
+        cameraWorld.update(kDt, input);
+        ankerl::nanobench::doNotOptimizeAway(cameraWorld.statistics().evaluated);
     });
 }

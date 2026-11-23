@@ -10,6 +10,15 @@
     "illusion.BehaviorAgent": 1,
     "illusion.BoneAttachment": 1,
     "illusion.Camera": 2,
+    "illusion.CameraBrain": 1,
+    "illusion.CameraComposer": 1,
+    "illusion.CameraDolly": 1,
+    "illusion.CameraFollow": 1,
+    "illusion.CameraImpulse": 1,
+    "illusion.CameraLookAt": 1,
+    "illusion.CameraNoise": 1,
+    "illusion.CameraOrbit": 1,
+    "illusion.CameraSpringArm": 1,
     "illusion.CharacterController": 1,
     "illusion.Collider": 1,
     "illusion.DirectionalLight": 1,
@@ -52,6 +61,7 @@
     "illusion.UiTextField": 1,
     "illusion.UiToggle": 1,
     "illusion.UiTransition": 1,
+    "illusion.VirtualCamera": 1,
     "illusion.VolumetricFog": 1,
     "illusion.Wind": 1
   },
@@ -3131,6 +3141,52 @@
       }
     },
     {
+      "id": "263346a69dd14426",
+      "components": {
+        "illusion.CameraSpringArm": {
+          "shoulderOffset": [0.6, 1.5, 0.2],
+          "side": -1.0,
+          "sideDamping": 0.25,
+          "armLength": 2.5,
+          "collisionRadius": 0.25,
+          "collisionLayers": 3,
+          "pullInSpeed": 8.0,
+          "recoverySpeed": 3.0,
+          "alignToTarget": false,
+          "yaw": 0.3,
+          "pitch": -0.2,
+          "minPitch": -0.9,
+          "maxPitch": 0.9,
+          "lookAction": "camera.look",
+          "lookSpeed": [2.0, 1.0]
+        },
+        "illusion.Name": {
+          "value": "Shoulder Camera"
+        },
+        "illusion.Transform": {
+          "position": [42.0, 2.0, 3.0],
+          "rotation": [0.0, 0.0, 0.0, 1.0],
+          "scale": [1.0, 1.0, 1.0]
+        },
+        "illusion.VirtualCamera": {
+          "priority": 3,
+          "enabled": true,
+          "follow": "d909c315b21d8f6c",
+          "lookAt": null,
+          "fovY": 1.0471976,
+          "nearPlane": 0.1,
+          "dutch": 0.0,
+          "customBlend": false,
+          "blendIn": {
+            "style": "EaseInOut",
+            "duration": 1.0,
+            "control1": [0.42, 0.0],
+            "control2": [0.58, 1.0]
+          }
+        }
+      }
+    },
+    {
       "id": "2ac2ce17a5794a3b",
       "components": {
         "illusion.Collider": {
@@ -3170,6 +3226,48 @@
         },
         "illusion.Transform": {
           "position": [2.0, 1.5, 0.0],
+          "rotation": [0.0, 0.0, 0.0, 1.0],
+          "scale": [1.0, 1.0, 1.0]
+        }
+      }
+    },
+    {
+      "id": "2f596652cb9a9f17",
+      "components": {
+        "illusion.Camera": {
+          "fovY": 1.0471976,
+          "nearPlane": 0.1,
+          "exposure": 1.0,
+          "projection": "Perspective",
+          "orthoHeight": 10.0,
+          "farPlane": 1000.0,
+          "priority": -2
+        },
+        "illusion.CameraBrain": {
+          "defaultBlend": {
+            "style": "Linear",
+            "duration": 0.8,
+            "control1": [0.25, 0.1],
+            "control2": [0.75, 0.9]
+          },
+          "blends": [
+            {
+              "from": "e8e6022a79eb517b",
+              "to": "62db179ca8487c5a",
+              "blend": {
+                "style": "Curve",
+                "duration": 1.5,
+                "control1": [0.3, 0.1],
+                "control2": [0.7, 0.9]
+              }
+            }
+          ]
+        },
+        "illusion.Name": {
+          "value": "Camera Brain"
+        },
+        "illusion.Transform": {
+          "position": [40.0, 3.0, 8.0],
           "rotation": [0.0, 0.0, 0.0, 1.0],
           "scale": [1.0, 1.0, 1.0]
         }
@@ -3329,6 +3427,60 @@
           "position": [0.0, 5.5, 13.0],
           "rotation": [-0.1736482, 0.0, 0.0, 0.9848078],
           "scale": [1.0, 1.0, 1.0]
+        }
+      }
+    },
+    {
+      "id": "62db179ca8487c5a",
+      "components": {
+        "illusion.CameraComposer": {
+          "targetOffset": [0.0, 1.4, 0.0],
+          "screenPosition": [0.1, -0.05],
+          "deadZone": [0.05, 0.08],
+          "softZone": [0.5, 0.4],
+          "damping": [0.3, 0.2]
+        },
+        "illusion.CameraOrbit": {
+          "yaw": 0.5,
+          "pitch": -0.4,
+          "minPitch": -1.0,
+          "maxPitch": 1.0,
+          "limitYaw": true,
+          "minYaw": -2.0,
+          "maxYaw": 2.0,
+          "distance": 6.0,
+          "minDistance": 2.0,
+          "maxDistance": 12.0,
+          "pivotOffset": [0.0, 1.2, 0.0],
+          "damping": 0.08,
+          "lookAction": "camera.look",
+          "lookSpeed": [2.5, 1.5],
+          "zoomAction": "camera.zoom",
+          "zoomSpeed": 3.0
+        },
+        "illusion.Name": {
+          "value": "Orbit Camera"
+        },
+        "illusion.Transform": {
+          "position": [40.0, 2.0, -6.0],
+          "rotation": [0.0, 0.0, 0.0, 1.0],
+          "scale": [1.0, 1.0, 1.0]
+        },
+        "illusion.VirtualCamera": {
+          "priority": 5,
+          "enabled": false,
+          "follow": "d909c315b21d8f6c",
+          "lookAt": null,
+          "fovY": 1.0471976,
+          "nearPlane": 0.1,
+          "dutch": 0.0,
+          "customBlend": false,
+          "blendIn": {
+            "style": "EaseInOut",
+            "duration": 1.0,
+            "control1": [0.42, 0.0],
+            "control2": [0.58, 1.0]
+          }
         }
       }
     },
@@ -3633,6 +3785,26 @@
       }
     },
     {
+      "id": "98f30af45f97eca2",
+      "components": {
+        "illusion.CameraImpulse": {
+          "strength": 0.6,
+          "radius": 8.0,
+          "duration": 0.3,
+          "playOnStart": false,
+          "interval": 4.0
+        },
+        "illusion.Name": {
+          "value": "Camera Shaker"
+        },
+        "illusion.Transform": {
+          "position": [41.0, 0.0, 1.0],
+          "rotation": [0.0, 0.0, 0.0, 1.0],
+          "scale": [1.0, 1.0, 1.0]
+        }
+      }
+    },
+    {
       "id": "9afcd44d14cf8bfe",
       "components": {
         "illusion.MeshRenderer": {
@@ -3651,6 +3823,55 @@
           "position": [6.0, 0.5, -3.0],
           "rotation": [0.0, 0.0, 0.0, 1.0],
           "scale": [1.0, 1.0, 1.0]
+        }
+      }
+    },
+    {
+      "id": "a2e4fe841f72235e",
+      "components": {
+        "illusion.CameraDolly": {
+          "path": [
+            {
+              "position": [-4.0, 0.0, 0.0],
+              "tangent": [4.0, 0.0, 0.0]
+            },
+            {
+              "position": [0.0, 1.0, -1.0],
+              "tangent": [4.0, 0.5, 0.0]
+            },
+            {
+              "position": [4.0, 0.0, 0.0],
+              "tangent": [4.0, -0.5, 0.0]
+            }
+          ],
+          "closed": true,
+          "mode": "NearestToTarget",
+          "position": 1.5,
+          "damping": 0.4
+        },
+        "illusion.Name": {
+          "value": "Rail Camera"
+        },
+        "illusion.Transform": {
+          "position": [40.0, 2.0, 10.0],
+          "rotation": [0.0, 0.0, 0.0, 1.0],
+          "scale": [1.0, 1.0, 1.0]
+        },
+        "illusion.VirtualCamera": {
+          "priority": 1,
+          "enabled": true,
+          "follow": "d909c315b21d8f6c",
+          "lookAt": null,
+          "fovY": 1.0471976,
+          "nearPlane": 0.1,
+          "dutch": 0.0,
+          "customBlend": false,
+          "blendIn": {
+            "style": "EaseInOut",
+            "duration": 1.0,
+            "control1": [0.42, 0.0],
+            "control2": [0.58, 1.0]
+          }
         }
       }
     },
@@ -3929,6 +4150,19 @@
       }
     },
     {
+      "id": "d909c315b21d8f6c",
+      "components": {
+        "illusion.Name": {
+          "value": "Camera Target"
+        },
+        "illusion.Transform": {
+          "position": [40.0, 0.0, 0.0],
+          "rotation": [0.0, 0.0, 0.0, 1.0],
+          "scale": [1.0, 1.0, 1.0]
+        }
+      }
+    },
+    {
       "id": "db20290ac13e4a81",
       "components": {
         "illusion.Animator": {
@@ -4028,6 +4262,54 @@
           "position": [0.0, 2.45, 2.0],
           "rotation": [0.0, 0.0, 0.0, 1.0],
           "scale": [1.0, 1.0, 1.0]
+        }
+      }
+    },
+    {
+      "id": "e8e6022a79eb517b",
+      "components": {
+        "illusion.CameraFollow": {
+          "offset": [0.0, 3.0, 6.0],
+          "space": "World",
+          "damping": [0.2, 0.3, 0.2],
+          "rotationDamping": 0.2
+        },
+        "illusion.CameraLookAt": {
+          "targetOffset": [0.0, 1.0, 0.0],
+          "damping": 0.15
+        },
+        "illusion.CameraNoise": {
+          "positionAmplitude": [0.02, 0.02, 0.01],
+          "positionFrequency": [0.8, 0.9, 0.7],
+          "rotationAmplitude": [0.004, 0.006, 0.002],
+          "rotationFrequency": [0.4, 0.6, 0.3],
+          "amplitudeGain": 0.8,
+          "frequencyGain": 1.2,
+          "seed": 7
+        },
+        "illusion.Name": {
+          "value": "Follow Camera"
+        },
+        "illusion.Transform": {
+          "position": [40.0, 3.0, 6.0],
+          "rotation": [0.0, 0.0, 0.0, 1.0],
+          "scale": [1.0, 1.0, 1.0]
+        },
+        "illusion.VirtualCamera": {
+          "priority": 12,
+          "enabled": true,
+          "follow": "d909c315b21d8f6c",
+          "lookAt": "d909c315b21d8f6c",
+          "fovY": 0.9,
+          "nearPlane": 0.2,
+          "dutch": 0.05,
+          "customBlend": true,
+          "blendIn": {
+            "style": "Linear",
+            "duration": 0.4,
+            "control1": [0.2, 0.0],
+            "control2": [0.8, 1.0]
+          }
         }
       }
     },

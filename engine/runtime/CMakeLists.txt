@@ -5,6 +5,7 @@
 add_library(illusion_runtime STATIC
     src/GameLocalization.cpp
     src/GameSession.cpp
+    src/PhysicsCameraCollision.cpp
     src/ProjectSettings.cpp
     src/SceneLoaderService.cpp)
 add_library(illusion::runtime ALIAS illusion_runtime)
@@ -14,7 +15,7 @@ target_include_directories(illusion_runtime PUBLIC
 
 target_link_libraries(illusion_runtime
     PUBLIC illusion::core illusion::platform illusion::input illusion::physics illusion::audio illusion::particles
-        illusion::ai illusion::animation illusion::nav illusion::render illusion::ui illusion::text
+        illusion::ai illusion::animation illusion::camera illusion::nav illusion::render illusion::ui illusion::text
         illusion::modules illusion::store_api illusion::save)
 
 illusion_configure_target(illusion_runtime)
