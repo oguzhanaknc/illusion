@@ -72,6 +72,10 @@ struct ExportPackageFormat
 /// `xcrun` arguments that staple the notarization ticket to @p package.
 [[nodiscard]] std::vector<std::string> stapleArguments(std::string_view package);
 
+/// Whether the output of a failed cpack run shows a transient `hdiutil` failure ("Resource busy") worth a
+/// retry.
+[[nodiscard]] bool isTransientPackageFailure(std::string_view output) noexcept;
+
 /// makensis on PATH or in the NSIS directory of Program Files (environment variables `ProgramFiles(x86)` and
 /// `ProgramFiles`).
 [[nodiscard]] std::optional<std::filesystem::path> findMakensis();

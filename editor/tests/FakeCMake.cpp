@@ -22,7 +22,9 @@
 //   --config <CPackConfig.cmake> -G <generator> -C <config> -B <dir> -D CPACK_PACKAGE_FILE_NAME=<name> ...
 //                             cpack (this program built as cpack[.exe]): writes <dir>/<name><extension of the
 //                             generator> holding the generator and the game in the build tree, and the
-//                             arguments to <dir>/cpack-args.txt.
+//                             arguments to <dir>/cpack-args.txt. Fails as hdiutil does with a busy disk
+//                             image while <src>/PACKAGE_BUSY holds a count above zero (counting it down), and
+//                             with a CPack error when <src>/PACKAGE_FAIL exists.
 
 #include <cstdlib>
 #include <filesystem>
@@ -274,6 +276,24 @@ int cpack(const std::vector<std::string>& args)
     if (game.empty() || name.empty() || extension.empty() || directory.empty())
     {
         std::cerr << "CPack Error: unexpected arguments\n";
+        return 1;
+    }
+    const std::filesystem::path busy = source / "PACKAGE_BUSY";
+    if (std::filesystem::exists(busy))
+    {
+        const int left = std::atoi(readFile(busy).c_str());
+        if (left > 0)
+        {
+            std::ofstream(busy, std::ios::binary) << (left - 1);
+            std::cout << "CPack: Create package using DragNDrop\n";
+            std::cerr << "CPack Error: Error executing: /usr/bin/hdiutil detach \"/Volumes/" << name << "\"\n"
+                      << "CPack Error: Output: hdiutil: couldn't unmount \"disk4\" - Resource busy\n";
+            return 1;
+        }
+    }
+    if (std::filesystem::exists(source / "PACKAGE_FAIL"))
+    {
+        std::cerr << "CPack Error: Problem copying the package: " << name << extension << ": No space left\n";
         return 1;
     }
     std::filesystem::create_directories(directory);
