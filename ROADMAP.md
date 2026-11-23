@@ -1638,6 +1638,22 @@ keeps its behaviour (the tech demo tests must not change).
 - A shared, pinned asset fetcher (`tools/fetch_assets.py` of the tech demo generalised for SHOOTER: a
   manifest of URLs, sizes and SHA-256, a local override folder, never committed)
 
+Found by checking the SHOOTER plan against the engine (2026-11-23): what a game with missions and a
+settings menu needs and the engine does not offer yet.
+
+- Scene changes: `SceneService::loadScene()` replaces the running scene asynchronously (stream, cook, wait
+  for readiness, swap), keeps Entities marked to persist, reports progress for a loading screen and is the
+  point where saved games restore; today modules can only `instantiate()` into the running scene
+- Settings at run time: modules change window mode, resolution, vsync, frame limit, render scale and
+  quality levels while the game runs and persist them in the user's settings (`user:`), not only through
+  the project's `settings:` files read at start
+- World-space UI: UI elements anchored to an Entity or a world point (objective markers, name plates,
+  health bars, damage numbers) with clamping to the screen edge and distance fading
+- Surface types: a surface type on Colliders and materials (concrete, metal, dirt, wood, flesh) reported by
+  raycasts and contacts, so impacts, decals and footsteps pick their effect and sound
+- Music and mixing: music tracks that cross-fade and loop by section, and mixer snapshots (pause menu,
+  underwater, combat) that blend bus volumes and filters over time
+
 ## SHOOTER — Third-person shooter demo
 
 A playable game in `samples/shooter` (beside the forest tech demo) that shows the engine at its best; it is
