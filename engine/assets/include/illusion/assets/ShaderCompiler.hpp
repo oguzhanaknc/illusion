@@ -92,7 +92,7 @@ public:
     /// The version `slangc` reports, e.g. "2026.19".
     [[nodiscard]] const std::string& compilerVersion() const noexcept { return m_version; }
 
-    /// Hash of every file of the shader library (paths and contents): the engine's shader version.
+    /// Hash of the `.slang` files of the shader library (paths and contents): the engine's shader version.
     [[nodiscard]] u64 libraryHash() const noexcept { return m_libraryHash; }
 
     /// Compiles @p source, the text of the `.shader` file at @p virtualPath (the file named by diagnostics),

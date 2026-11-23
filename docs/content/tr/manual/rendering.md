@@ -241,6 +241,52 @@ Bir glTF modelini çizmek için onu `loadGltf()` ile yükleyin ([Asset'ler ve Mo
 sayfasına bakın), `RenderResources::uploadModel()` ile GPU'ya yükleyin ve Entity'lerini `spawnModel()`
 ile oluşturun.
 
+### Material shader'ları {#material-shaders}
+
+Her Material bir material shader'ıyla çizilir (ADR 0063): `surface()` fonksiyonunu motorun geçişlerinin
+çağırdığı bir [`.shader` dosyası](assets.md#material-shaderlar). Yukarıdaki glTF material'i, aynı surface
+API'siyle yazılmış yerleşik `builtin:/shader/standard` shader'ıdır; ışıksız macenta bir dama deseni olan
+`builtin:/shader/error`, shader'ı derlenmeyen Material'leri işaretler. `RenderResources`'a cook edilmiş bir
+shader verin ve onu bir `MaterialDesc` içinde belirtin:
+
+```cpp
+// A cooked shader (AssetDatabase::loadShader(), or a ShaderCompiler result in tools).
+const illusion::ShaderHandle glow = resources.createShader(shaderAsset, "Glow");
+
+illusion::MaterialDesc material;
+material.shader = glow;
+material.parameters.alphaMode = illusion::AlphaMode::Opaque; // alpha mode, sides and wrapping as before
+material.shaderParameters = {{"glowColor", {0.1f, 0.8f, 1.0f, 0.0f}}, {"intensity", {3.0f, 0.0f, 0.0f, 0.0f}}};
+material.shaderTextures = {{"mask", maskTexture}};
+const illusion::MaterialHandle handle = resources.createMaterial(material);
+
+// Hot reload: the new version replaces the old one; materials keep their values by name.
+if (!resources.updateShader(glow, editedShaderAsset))
+{
+    ILL_LOG_WARN("Game", "the edited shader is invalid; the previous version stays");
+}
+resources.releaseShader(glow); // its materials draw with the standard shader from now on
+```
+
+- `createShader()`, tüm varyantlarıyla bir `ShaderAsset` alır; biri eksikse veya GPU onu reddederse log'a bir
+  hata yazar ve boş bir Handle döndürür. `standardShader()` ve `errorShader()` her zaman vardır ve serbest
+  bırakılamaz; shader'ı olmayan bir `MaterialDesc` standart shader'ı kullanır.
+- `shaderParameters` ve `shaderTextures`, shader'ın alanlarını adlarıyla ayarlar; dışarıda bıraktıkları alanlar
+  shader'ın varsayılanlarını korur, shader'ın bildirmediği adlar yok sayılır; böylece bir Material, shader'ı
+  düzenlendikten sonra da yaşar. Standart shader için alanlarını eskisi gibi `parameters` ve beş Texture
+  Handle'ı doldurur.
+- Renderer'lar bir shader'ın Pipeline'larını (geçiş, alpha modu ve çift yüzlülük başına) onu ilk çizdiklerinde
+  kurar, saklar ve `updateShader()`'dan sonra yeniden kurar. `stats().pipelinesBuilt` bir karede kurulan
+  Pipeline'ları sayar: kararlı durumda sıfırdır.
+- [Bindless rendering](#bindless-rendering) ile her Material'in Material tablosundaki kaydı, parametrelerini
+  shader'ının düzeninde tutar ve Texture'ları bindless dizideki indekslerdir; böylece bir shader'ın
+  Material'leri tek bir multi-draw'u paylaşır.
+- `worldOffset()` her geçişte (gölgeler, derinlik ön geçişi, Entity kimlikleri, gölgelendirme ve hareket
+  vektörleri) bu karenin ve önceki karenin zamanı için çalışır; böylece şekil, gölgesi ve hareketi uyuşur.
+  Vertex'leri hareket etmeyen gölge düşürenler standart shader'la çizilir.
+- Mesh'ler glTF vertex renklerini (`COLOR_0`, `MeshData::colors`) `SurfaceInput.color` için saklar; vertex
+  rengi olmayan Mesh'ler beyaz okur. `SurfaceInput.customData` şimdilik sıfırdır.
+
 ### Texture sıkıştırma ve mip streaming {#texture-compression-and-mip-streaming}
 
 Görüntüler içe aktarılırken BC formatlarına sıkıştırılır (formatlar ve onları seçen ayarlar için
@@ -464,8 +510,9 @@ Destekleyen GPU'larda renderer tüm opak Mesh'leri birkaç çağrıyla çizer:
   yeni buffer gerektirmez.
 - Tüm Material'ler tek bir tablodaki kayıtlardır ve tüm Texture'lar tek bir bindless descriptor
   dizisindedir; böylece bir draw Material'leri karıştırabilir: her instance kendi Material'ini belirtir.
-- Aynı Pipeline'a (opak veya alpha-mask'li, tek veya çift yüzlü) sahip batch'ler, geçiş başına tek bir
-  multi-draw indirect çağrısıyla çizilir.
+- Aynı shader'a ve Pipeline durumuna (alpha modu, tek veya çift yüzlü) sahip batch'ler, geçiş başına tek
+  bir multi-draw indirect çağrısıyla çizilir. Derinlik ön geçişinde alpha-mask'li ve geçiş yapan (cross-fade)
+  batch'ler Material'lerinin yüzeyini hesapladığından Material başına çizilir.
 
 ```cpp
 const illusion::GpuInfo& gpu = device->gpu();
@@ -927,6 +974,20 @@ dosyaları takip eder.
 
 Slang derleyicisi otomatik olarak indirilir (sabitlenmiş sürüm). Başka bir `slangc` kullanmak için
 `ILLUSION_SLANGC_EXECUTABLE` değişkenini ayarlayın.
+
+[Material shader'ları](#material-shaders) da build sırasında derlenebilir; bu, bir programın her zaman
+ihtiyaç duyduğu shader'lara uyar (motor yerleşik shader'larını bu yolla gömer):
+
+```cmake
+illusion_add_material_shaders(my_game
+    NAMESPACE my_game::shaders
+    SHADERS
+        glowShader shaders/Glow.shader game:/shaders/glow.shader)
+```
+
+Her satır bir C++ fonksiyon adını, `.shader` dosyasını ve tanılarının andığı sanal yolu belirtir.
+`std::span<const std::byte> glowShader() noexcept;` bildirimini namespace içinde yapın ve byte'ları önce
+`deserializeShader()`'a, sonra `RenderResources::createShader()`'a verin.
 
 ## Tanılama
 

@@ -12,13 +12,16 @@
 #include <illusion/assets/Atmosphere.hpp>
 #include <illusion/assets/Environment.hpp>
 #include <illusion/assets/Model.hpp>
+#include <illusion/assets/ShaderAsset.hpp>
 #include <illusion/core/Base.hpp>
 #include <illusion/render/ReadbackRing.hpp>
 
 #include <nvrhi/nvrhi.h>
 
+#include <array>
 #include <memory>
 #include <span>
+#include <string>
 #include <vector>
 
 namespace illusion
@@ -53,6 +56,15 @@ struct MaterialHandle
     friend bool operator==(const MaterialHandle&, const MaterialHandle&) noexcept = default;
 };
 
+/// Handle to a material shader (see RenderResources::createShader()).
+struct ShaderHandle
+{
+    u32 index = 0;      ///< Slot (1-based; 0 = none, which materials read as the standard shader).
+    u32 generation = 0; ///< Use of the slot the handle was made for; a released handle is stale.
+    /// Handles are equal when they refer to the same slot.
+    friend bool operator==(const ShaderHandle&, const ShaderHandle&) noexcept = default;
+};
+
 /// Handle to a lighting environment (see RenderResources::createEnvironment()).
 struct EnvironmentHandle
 {
@@ -74,7 +86,28 @@ struct EnvironmentDesc
     bool compress = true;
 };
 
-/// Material parameters with GPU textures (unset textures use neutral defaults).
+/// The value of a material shader parameter, by name (MaterialDesc::shaderParameters).
+struct ShaderParameterValue
+{
+    std::string name{};                               ///< Field of the shader's Parameters.
+    std::array<f32, 4> value{0.0f, 0.0f, 0.0f, 0.0f}; ///< Components (ints and bools as numbers).
+};
+
+/// A texture of a material shader, by name (MaterialDesc::shaderTextures).
+struct ShaderTextureValue
+{
+    std::string name{};      ///< Texture field of the shader's Parameters.
+    TextureHandle texture{}; ///< The image (empty: the field's fallback).
+};
+
+/// A material: its shader and parameters with GPU textures (unset textures use neutral defaults).
+///
+/// The standard shader (an empty `shader` or RenderResources::standardShader()) takes its parameters and the
+/// five textures from `parameters`; every shader takes the alpha mode, two-sidedness and the wrap modes of
+/// MaterialData::baseColorTexture from it. `shaderParameters` and `shaderTextures` then set the shader's
+/// fields by name: fields they leave out keep the shader's defaults (for the standard shader, the values of
+/// `parameters`), and names the shader does not declare are ignored, so a material outlives edits of its
+/// shader.
 struct MaterialDesc
 {
     MaterialData parameters;         ///< Factors, alpha mode, wrapping; texture image indices are ignored.
@@ -83,6 +116,9 @@ struct MaterialDesc
     TextureHandle normal;            ///< Tangent-space normal map.
     TextureHandle occlusion;         ///< Occlusion (R).
     TextureHandle emissive;          ///< sRGB emissive texture.
+    ShaderHandle shader{};           ///< The material shader (empty: the standard shader).
+    std::vector<ShaderParameterValue> shaderParameters{}; ///< Values of the shader's parameters by name.
+    std::vector<ShaderTextureValue> shaderTextures{}; ///< Textures of the shader's texture fields by name.
 };
 
 /// Handles created by uploading a ModelData, indexed like its meshes, images and materials.
@@ -155,6 +191,35 @@ public:
 
     /// Creates a material.
     [[nodiscard]] MaterialHandle createMaterial(const MaterialDesc& desc);
+
+    /// Creates the GPU shaders of every variant of the material shader @p shader (a compiled or cooked
+    /// ShaderAsset); renderers build its pipelines when they first draw it and keep them. Returns an empty
+    /// handle, with an error in the log, when a variant is missing or the device rejects its SPIR-V.
+    [[nodiscard]] ShaderHandle createShader(const ShaderAsset& shader, const char* debugName = "Shader");
+
+    /// Replaces @p shader with a new version of it (hot reload): renderers build its pipelines again in the
+    /// next frame they draw, and its materials are laid out again from their parameters by name. Returns
+    /// false and keeps the previous version when createShader() would fail. @p shader must be valid
+    /// (asserted).
+    bool updateShader(ShaderHandle shader, const ShaderAsset& asset);
+
+    /// Releases @p shader like releaseMesh(); its materials draw with the standard shader from then on. The
+    /// built-in shaders cannot be released (asserted). An empty handle is ignored.
+    void releaseShader(ShaderHandle shader);
+
+    /// The standard material shader (builtin:/shader/standard), which the engine compiles in.
+    [[nodiscard]] ShaderHandle standardShader() const noexcept { return ShaderHandle{1}; }
+
+    /// The error material shader (builtin:/shader/error), an unlit magenta checker for materials whose shader
+    /// does not compile; the engine compiles it in.
+    [[nodiscard]] ShaderHandle errorShader() const noexcept { return ShaderHandle{2}; }
+
+    /// The parameter layout and shading model of @p shader (without SPIR-V), or nullptr for an invalid or
+    /// released handle.
+    [[nodiscard]] const ShaderAsset* shaderLayout(ShaderHandle shader) const noexcept;
+
+    /// The shader @p material draws with (the default material's for an invalid or released handle).
+    [[nodiscard]] ShaderHandle materialShader(MaterialHandle material) const noexcept;
 
     /// Uploads every mesh, used image and material of @p model.
     [[nodiscard]] ModelHandles uploadModel(const ModelData& model);
@@ -231,6 +296,8 @@ public:
     [[nodiscard]] bool isValid(MaterialHandle handle) const noexcept;
     /// @copydoc isValid(MeshHandle) const
     [[nodiscard]] bool isValid(EnvironmentHandle handle) const noexcept;
+    /// @copydoc isValid(MeshHandle) const
+    [[nodiscard]] bool isValid(ShaderHandle handle) const noexcept;
 
     /// Diffuse irradiance of @p environment (zero for an invalid or released handle).
     [[nodiscard]] const ShIrradiance& irradiance(EnvironmentHandle environment) const noexcept;
@@ -244,8 +311,9 @@ public:
     /// The default material (white, rough, non-metallic).
     [[nodiscard]] MaterialHandle defaultMaterial() const noexcept { return MaterialHandle{1}; }
 
-    /// Number of meshes, textures, materials and environments currently stored (released ones are not
-    /// counted; the textures include the two default textures, the materials the default material).
+    /// Number of meshes, textures, materials, environments and shaders currently stored (released ones are
+    /// not counted; the textures include the three default textures, the materials the default material, the
+    /// shaders the two built-in shaders).
     [[nodiscard]] u32 meshCount() const noexcept;
     /// @copydoc meshCount
     [[nodiscard]] u32 textureCount() const noexcept;
@@ -253,6 +321,8 @@ public:
     [[nodiscard]] u32 materialCount() const noexcept;
     /// @copydoc meshCount
     [[nodiscard]] u32 environmentCount() const noexcept;
+    /// @copydoc meshCount
+    [[nodiscard]] u32 shaderCount() const noexcept;
 
     /// Memory use of the geometry pools, textures and environments, and resources waiting to be freed.
     [[nodiscard]] RenderResourceStatistics statistics() const noexcept;
@@ -261,6 +331,11 @@ public:
     struct GpuMesh;
     struct GpuMaterial;
     struct GpuEnvironment;
+    struct GpuShader;
+    // The shader in slot @p index, or nullptr for a free slot.
+    [[nodiscard]] const GpuShader* shader(u32 index) const noexcept;
+    // Number of shader slots, live and free (the size of a table indexed by GpuMaterial::shader).
+    [[nodiscard]] u32 shaderSlots() const noexcept;
     [[nodiscard]] const GpuMesh* mesh(MeshHandle handle) const noexcept;
     // The default material for an invalid or released handle.
     [[nodiscard]] const GpuMaterial* material(MaterialHandle handle) const noexcept;
@@ -276,6 +351,8 @@ public:
     [[nodiscard]] nvrhi::IBuffer* indexPool() const noexcept;
     // The SkinVertex streams of skinned meshes (null until one is uploaded).
     [[nodiscard]] nvrhi::IBuffer* skinPool() const noexcept;
+    // Vertex colours (RGBA8) parallel to the vertex pool, white for meshes without colours.
+    [[nodiscard]] nvrhi::IBuffer* colorPool() const noexcept;
     [[nodiscard]] nvrhi::IBuffer* materialTable() const noexcept;
     [[nodiscard]] nvrhi::ISampler* materialSampler(u32 index) const noexcept;
     [[nodiscard]] bool bindless() const noexcept;

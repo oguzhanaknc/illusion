@@ -52,7 +52,7 @@ struct AssetFile
 /// Payload format versions; bump when the serialized layout changes.
 inline constexpr u32 kImageFormatVersion = 2;
 /// @copydoc kImageFormatVersion
-inline constexpr u32 kModelFormatVersion = 6;
+inline constexpr u32 kModelFormatVersion = 7;
 /// @copydoc kImageFormatVersion
 inline constexpr u32 kEnvironmentFormatVersion = 2;
 /// @copydoc kImageFormatVersion

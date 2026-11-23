@@ -46,21 +46,9 @@ illusion_add_shaders(illusion_render
         debugDrawFragment shaders/DebugDraw.slang fragmentMain fragment
         debugTriangleVertex shaders/DebugTriangle.slang vertexMain vertex
         debugTriangleFragment shaders/DebugTriangle.slang fragmentMain fragment
-        forwardPbrVertex shaders/ForwardPbr.slang vertexMain vertex
-        forwardPbrFragment shaders/ForwardPbr.slang fragmentMain fragment
-        prepassFragment shaders/ForwardPbr.slang prepassMain fragment
-        prepassMaskedFragment shaders/ForwardPbr.slang prepassMaskedMain fragment
-        forwardPbrBindlessVertex shaders/ForwardPbrBindless.slang vertexMain vertex
-        forwardPbrBindlessFragment shaders/ForwardPbrBindless.slang fragmentMain fragment
-        prepassBindlessFragment shaders/ForwardPbrBindless.slang prepassMain fragment
-        prepassMaskedBindlessFragment shaders/ForwardPbrBindless.slang prepassMaskedMain fragment
-        prepassIdsFragment shaders/ForwardPbr.slang prepassIdsMain fragment
-        prepassMaskedIdsFragment shaders/ForwardPbr.slang prepassMaskedIdsMain fragment
-        prepassIdsBindlessFragment shaders/ForwardPbrBindless.slang prepassIdsMain fragment
-        prepassMaskedIdsBindlessFragment shaders/ForwardPbrBindless.slang prepassMaskedIdsMain fragment
-        entityIdFragment shaders/ForwardPbr.slang entityIdMain fragment
-        wireframeFragment shaders/ForwardPbr.slang wireframeMain fragment
-        wireframeBindlessFragment shaders/ForwardPbrBindless.slang wireframeMain fragment
+        prepassFragment shaders/MaterialPrepass.slang prepassMain fragment
+        prepassIdsFragment shaders/MaterialPrepass.slang prepassIdsMain fragment
+        wireframeFragment shaders/MaterialPrepass.slang wireframeMain fragment
         occlusionCull shaders/OcclusionCull.slang cullMain compute
         hizReduce shaders/HiZ.slang hizReduceMain compute
         skinning shaders/Skinning.slang skinMain compute
@@ -75,8 +63,6 @@ illusion_add_shaders(illusion_render
         fogApply shaders/VolumetricFog.slang applyMain compute
         tonemapVertex shaders/Tonemap.slang vertexMain vertex
         tonemapFragment shaders/Tonemap.slang fragmentMain fragment
-        shadowCasterVertex shaders/ShadowCaster.slang vertexMain vertex
-        shadowCasterFragment shaders/ShadowCaster.slang fragmentMain fragment
         particlesVertex shaders/Particles.slang vertexMain vertex
         particlesFragment shaders/Particles.slang fragmentMain fragment
         particlesGpuVertex shaders/ParticlesGpu.slang vertexMain vertex
@@ -94,6 +80,13 @@ illusion_add_shaders(illusion_render
         atmosphereCube shaders/AtmosphereCube.slang atmosphereCube compute
         uiVertex shaders/Ui.slang vertexMain vertex
         uiFragment shaders/Ui.slang fragmentMain fragment)
+
+# The built-in material shaders (ADR 0063), compiled like a game's shaders and embedded as cooked ShaderAssets.
+illusion_add_material_shaders(illusion_render
+    NAMESPACE illusion::shaders
+    SHADERS
+        standardShader shaders/illusion/Standard.shader builtin:/shader/standard
+        errorShader shaders/illusion/Error.shader builtin:/shader/error)
 
 illusion_configure_target(illusion_render)
 

@@ -359,6 +359,7 @@ add_executable(illusion_gpu_tests
     gpu/TestRenderAssets.cpp
     gpu/TestRenderDevice.cpp
     gpu/TestSceneRenderer.cpp
+    gpu/TestMaterialShaders.cpp
     gpu/TestRendererExtensions.cpp
     gpu/TestResourceLifetime.cpp
     gpu/TestSaveThumbnail.cpp
@@ -373,6 +374,13 @@ target_link_libraries(illusion_gpu_tests PRIVATE illusion::render illusion::save
 target_compile_definitions(illusion_gpu_tests PRIVATE ILLUSION_TEST_DATA_DIR="${CMAKE_CURRENT_SOURCE_DIR}/data"
     ILLUSION_TEST_FONT="${ILLUSION_TEST_FONT}")
 illusion_configure_target(illusion_gpu_tests)
+# Material shaders of TestMaterialShaders.cpp, compiled at build time like the engine's built-in ones.
+illusion_add_material_shaders(illusion_gpu_tests
+    NAMESPACE illusion::test_shaders
+    SHADERS
+        glowShader data/shaders/Glow.shader game:/shaders/glow.shader
+        glowEditedShader data/shaders/GlowEdited.shader game:/shaders/glow.shader
+        swayShader data/shaders/Sway.shader game:/shaders/sway.shader)
 # The exported showcase (samples/CMakeLists.txt) against the golden image of the editor's Play mode.
 if(ILLUSION_BUILD_SAMPLES AND ILLUSION_BUILD_TOOLS)
     target_sources(illusion_gpu_tests PRIVATE gpu/TestShowcaseGame.cpp)

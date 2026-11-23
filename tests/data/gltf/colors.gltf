@@ -1,0 +1,31 @@
+{
+  "asset": {"version": "2.0", "generator": "illusion tests: a triangle drawn twice, with and without COLOR_0"},
+  "scene": 0,
+  "scenes": [{"nodes": [0]}],
+  "nodes": [{"name": "triangles", "mesh": 0}],
+  "meshes": [
+    {
+      "name": "triangles",
+      "primitives": [
+        {"attributes": {"POSITION": 0, "COLOR_0": 1}, "indices": 2},
+        {"attributes": {"POSITION": 0}, "indices": 2}
+      ]
+    }
+  ],
+  "buffers": [
+    {
+      "byteLength": 92,
+      "uri": "data:application/octet-stream;base64,AAAAAAAAAAAAAAAAAACAPwAAAAAAAAAAAAAAAAAAgD8AAAAAAACAPwAAAAAAAAAAAACAPwAAAAAAAIA/AAAAAAAAAD8AAAAAAAAAAAAAgD8AAIA/AAABAAIAAAA="
+    }
+  ],
+  "bufferViews": [
+    {"buffer": 0, "byteOffset": 0, "byteLength": 36},
+    {"buffer": 0, "byteOffset": 36, "byteLength": 48},
+    {"buffer": 0, "byteOffset": 84, "byteLength": 6}
+  ],
+  "accessors": [
+    {"bufferView": 0, "componentType": 5126, "count": 3, "type": "VEC3", "min": [0, 0, 0], "max": [1, 1, 0]},
+    {"bufferView": 1, "componentType": 5126, "count": 3, "type": "VEC4"},
+    {"bufferView": 2, "componentType": 5123, "count": 3, "type": "SCALAR"}
+  ]
+}

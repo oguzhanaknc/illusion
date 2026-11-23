@@ -27,7 +27,8 @@ const std::vector<illusion::Entity> entities = illusion::spawnModel(world, *mode
 ```
 
 - Meshes keep their submeshes (glTF primitives), each with its own Material and bounding box. Missing
-  normals are computed; tangents are read when present and derived in the shader otherwise.
+  normals are computed; tangents are read when present and derived in the shader otherwise. Vertex
+  colours (`COLOR_0`) are kept in `MeshData::colors` for [material shaders](#material-shaders).
 - Materials use the metallic-roughness model with base colour, metallic-roughness, normal, occlusion
   and emissive Textures, alpha modes and `KHR_materials_emissive_strength`.
 - Images (PNG, JPEG) are decoded and get full mip chains. Colour Textures (base colour, emissive) are
@@ -304,10 +305,13 @@ does not fit its type, too many bytes or textures) name the field they are about
 #### Limits
 
 - `#include` in a `.shader` file is not supported.
-- `SurfaceInput.customData` is zero and `SurfaceInput.color` is white until the renderer provides them.
+- `SurfaceInput.color` is the mesh's vertex colour (glTF `COLOR_0`), white without one;
+  `SurfaceInput.customData` is zero for now.
 - Shading models other than `Unlit` light like `Default` until MAT-3.
-- `.material` files do not name shaders yet (MAT-2, MAT-4). The reference of the surface API comes with MAT-4;
-  until then the header comment of `illusion/Surface.slang` describes it.
+- `.material` files do not name shaders yet (MAT-4); code gives shaders to Materials through
+  `RenderResources` (see [Material shaders](rendering.md#material-shaders) in the rendering manual). The
+  reference of the surface API comes with MAT-4; until then the header comment of `illusion/Surface.slang`
+  describes it.
 
 Headers: `<illusion/assets/ShaderAsset.hpp>`, `<illusion/assets/ShaderCompiler.hpp>`
 

@@ -337,8 +337,8 @@ TEST_CASE("texture statistics count compressed bytes and return to their value a
         RenderResources resources(*device);
         const RenderResourceStatistics before = resources.statistics();
         CHECK(before.textures == resources.textureCount());
-        CHECK(before.textureBytes == 8); // the two 1x1 RGBA8 default textures
-        CHECK(before.textureBytesUncompressed == 8);
+        CHECK(before.textureBytes == 12); // the three 1x1 RGBA8 default textures
+        CHECK(before.textureBytesUncompressed == 12);
         CHECK(before.streamingSavedBytes == 0);
 
         // One level: exactly a quarter (BC7, BC5) or an eighth (BC4) of RGBA8.

@@ -92,7 +92,7 @@ struct SurfaceInput
     float3 tangent;       // world-space tangent frame, normalized (derived from UVs without vertex tangents)
     float3 bitangent;
     float2 uv;
-    float4 color;         // vertex colour (white: the engine's meshes have none)
+    float4 color;         // vertex colour (MeshData::colors; white for meshes without colours)
     float3 viewDirection; // from the surface to the camera, normalized
     float time;           // seconds, the same in every pass of a frame
     float4 customData;    // the Entity's custom data (zero until the renderer provides it)
@@ -159,6 +159,14 @@ Parameters parameters(SurfaceInput input)
 Parameters parameters(WorldOffsetInput input)
 {
     return illusionMaterialParameters(input.material);
+}
+
+// The engine's wind (the scene's Wind, ADR 0048) at the vertex: @p sway bends the object with the square of the
+// height above its origin (metres per m/s of wind at 1 m), @p flutter jitters it (metres per m/s).
+float3 windOffset(WorldOffsetInput input, float sway, float flutter)
+{
+    return windOffset(g_view.wind, g_view.windGusts, input.time, float2(max(sway, 0.0), max(flutter, 0.0)),
+                      input.objectOrigin, input.worldPosition);
 }
 
 // Samples a texture of the material (with derivatives: only in surface()).

@@ -1,7 +1,10 @@
+#include <illusion/assets/Mesh.hpp>
 #include <illusion/assets/Model.hpp>
 #include <illusion/platform/FileSystem.hpp>
 
 #include <doctest/doctest.h>
+
+#include <array>
 
 using namespace illusion;
 
@@ -135,4 +138,30 @@ TEST_CASE("glTF errors are reported instead of crashing")
     // Regression: a padding-only base64 image used to underflow the decoded size.
     CHECK_FALSE(loadGltf(files, "test:/gltf/scene/bad_image_uri.gltf", &error).has_value());
     CHECK(error.find("base64") != std::string::npos);
+}
+
+TEST_CASE("glTF vertex colours import as RGBA8, white for primitives without COLOR_0")
+{
+    VirtualFileSystem files;
+    mountTestData(files);
+    std::string error;
+    const std::optional<ModelData> model = loadGltf(files, "test:/gltf/colors.gltf", &error);
+    INFO(error);
+    REQUIRE(model.has_value());
+    REQUIRE(model->meshes.size() == 1);
+    const MeshData& mesh = model->meshes[0];
+    REQUIRE(mesh.submeshes.size() == 2);
+    REQUIRE(mesh.colors.size() == mesh.vertices.size());
+    // Red, green at half alpha and blue, with red in the lowest byte.
+    const std::array<u32, 3> colored{0xFF0000FFu, 0x8000FF00u, 0xFFFF0000u};
+    for (u32 i = 0; i < 3; ++i)
+    {
+        CHECK(mesh.colors[mesh.indices[mesh.submeshes[0].indexOffset + i]] == colored[i]);
+        CHECK(mesh.colors[mesh.indices[mesh.submeshes[1].indexOffset + i]] == 0xFFFFFFFFu);
+    }
+
+    // A mesh without colours keeps none.
+    const std::optional<ModelData> quad = loadGltf(files, "test:/gltf/embedded.gltf", &error);
+    REQUIRE(quad.has_value());
+    CHECK(quad->meshes[0].colors.empty());
 }

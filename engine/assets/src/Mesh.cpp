@@ -145,6 +145,10 @@ u32 thinCards(MeshData& mesh, std::span<const u32> source, const Cards& cards, f
             vertex.position = centre + (vertex.position - centre) * scale;
             copy = static_cast<u32>(mesh.vertices.size());
             mesh.vertices.push_back(vertex);
+            if (!mesh.colors.empty())
+            {
+                mesh.colors.push_back(mesh.colors[source[i]]);
+            }
         }
         out.push_back(copy);
     }
@@ -236,6 +240,10 @@ void clearLods(MeshData& mesh)
             if (mesh.skin.size() > mesh.vertices.size())
             {
                 mesh.skin.resize(mesh.vertices.size());
+            }
+            if (mesh.colors.size() > mesh.vertices.size())
+            {
+                mesh.colors.resize(mesh.vertices.size());
             }
         }
         mesh.indices.resize(fullEnd);
@@ -330,6 +338,10 @@ void generateLods(MeshData& mesh, const MeshLodSettings& settings)
                         static_cast<f32>(source.size()) * (1.0f - kMinReduction))
                 {
                     mesh.vertices.resize(vertexEnd);
+                    if (!mesh.colors.empty())
+                    {
+                        mesh.colors.resize(vertexEnd);
+                    }
                     break;
                 }
                 for (usize v = vertexEnd; v < mesh.vertices.size(); ++v)

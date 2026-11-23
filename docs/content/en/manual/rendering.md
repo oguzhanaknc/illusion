@@ -230,6 +230,51 @@ tonemapping. Indirect light comes from a `SkyLight` (see below).
 To draw a glTF model, load it with `loadGltf()` (see [Assets and Models](assets.md)), upload it with
 `RenderResources::uploadModel()` and create its Entities with `spawnModel()`.
 
+### Material shaders
+
+Every Material draws with a material shader (ADR 0063): a [`.shader` file](assets.md#material-shaders) whose
+`surface()` function the engine's passes call. The glTF material above is the built-in shader
+`builtin:/shader/standard`, written against the same surface API; `builtin:/shader/error`, an unlit magenta
+checker, marks Materials whose shader does not compile. Give `RenderResources` a cooked shader and name it in a
+`MaterialDesc`:
+
+```cpp
+// A cooked shader (AssetDatabase::loadShader(), or a ShaderCompiler result in tools).
+const illusion::ShaderHandle glow = resources.createShader(shaderAsset, "Glow");
+
+illusion::MaterialDesc material;
+material.shader = glow;
+material.parameters.alphaMode = illusion::AlphaMode::Opaque; // alpha mode, sides and wrapping as before
+material.shaderParameters = {{"glowColor", {0.1f, 0.8f, 1.0f, 0.0f}}, {"intensity", {3.0f, 0.0f, 0.0f, 0.0f}}};
+material.shaderTextures = {{"mask", maskTexture}};
+const illusion::MaterialHandle handle = resources.createMaterial(material);
+
+// Hot reload: the new version replaces the old one; materials keep their values by name.
+if (!resources.updateShader(glow, editedShaderAsset))
+{
+    ILL_LOG_WARN("Game", "the edited shader is invalid; the previous version stays");
+}
+resources.releaseShader(glow); // its materials draw with the standard shader from now on
+```
+
+- `createShader()` takes a `ShaderAsset` with all of its variants and returns an empty Handle, with an error in
+  the log, when one is missing or the GPU rejects it. `standardShader()` and `errorShader()` are always there
+  and cannot be released; a `MaterialDesc` without a shader uses the standard one.
+- `shaderParameters` and `shaderTextures` set the shader's fields by name; fields they leave out keep the
+  shader's defaults, and names the shader does not declare are ignored, so a Material outlives edits of its
+  shader. For the standard shader, `parameters` and the five Texture Handles fill its fields as before.
+- Renderers build a shader's Pipelines (per pass, alpha mode and two-sidedness) the first time they draw it,
+  keep them, and build them again after `updateShader()`. `stats().pipelinesBuilt` counts the Pipelines
+  built in a frame: zero in the steady state.
+- With [bindless rendering](#bindless-rendering), each Material's record in the Material table holds its
+  parameters in its shader's layout, and its Textures are indices into the bindless array, so Materials of
+  one shader share a multi-draw.
+- `worldOffset()` runs in every pass (shadows, the depth prepass, Entity ids, shading and motion vectors), for
+  this frame's time and the previous frame's, so the shape, its shadow and its motion agree. Shadow casters
+  whose vertices do not move draw with the standard shader.
+- Meshes keep glTF vertex colours (`COLOR_0`, `MeshData::colors`) for `SurfaceInput.color`; meshes without
+  them read white. `SurfaceInput.customData` is zero for now.
+
 ### Texture compression and mip streaming
 
 Images are compressed to BC formats on import (see [texture compression](assets.md#texture-compression) for
@@ -444,8 +489,9 @@ On GPUs that support it, the renderer draws all opaque Meshes with a handful of 
 - All Meshes share one vertex pool and one index pool, so switching Meshes needs no new buffers.
 - All Materials are records in one table and all Textures sit in one bindless descriptor array, so a
   draw can mix Materials: each instance names its own.
-- Batches with the same Pipeline (opaque or alpha-masked, single- or double-sided) are drawn by one
-  multi-draw indirect call per pass.
+- Batches with the same shader and Pipeline state (alpha mode, single- or double-sided) are drawn by one
+  multi-draw indirect call per pass. In the depth prepass, alpha-masked and cross-fading batches evaluate
+  their Material's surface, so they are drawn per Material.
 
 ```cpp
 const illusion::GpuInfo& gpu = device->gpu();
@@ -895,6 +941,20 @@ declares `std::span<const std::byte> meshVertex() noexcept;` and so on; pass the
 
 The Slang compiler is downloaded automatically (pinned version). Set `ILLUSION_SLANGC_EXECUTABLE` to use
 another `slangc`.
+
+[Material shaders](#material-shaders) can be compiled at build time too, which suits shaders a program always
+needs (the engine embeds its built-in ones this way):
+
+```cmake
+illusion_add_material_shaders(my_game
+    NAMESPACE my_game::shaders
+    SHADERS
+        glowShader shaders/Glow.shader game:/shaders/glow.shader)
+```
+
+Each line names a C++ function, the `.shader` file and the virtual path its diagnostics name. Declare
+`std::span<const std::byte> glowShader() noexcept;` in the namespace and pass the bytes to
+`deserializeShader()`, then to `RenderResources::createShader()`.
 
 ## Diagnostics
 
