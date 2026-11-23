@@ -2608,6 +2608,110 @@
       "additionalProperties": false
     }
   },
+  "camera.activate": {
+    "version": 1,
+    "permission": "edit",
+    "mode": "edit",
+    "undoable": true,
+    "readOnly": false,
+    "params": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "type": "object",
+      "properties": {
+        "entity": {
+          "type": "string"
+        },
+        "dryRun": {
+          "type": "boolean"
+        },
+        "mergeKey": {
+          "type": "string"
+        },
+        "clientToken": {
+          "type": "string"
+        },
+        "expectRevision": {
+          "anyOf": [
+            {
+              "type": "string",
+              "pattern": "^[0-9]+$"
+            },
+            {
+              "type": "integer",
+              "minimum": 0
+            }
+          ]
+        }
+      },
+      "required": ["entity"],
+      "additionalProperties": false
+    },
+    "result": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "type": "object",
+      "properties": {
+        "entity": {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": "string"
+            },
+            "name": {
+              "type": "string"
+            },
+            "path": {
+              "type": "string"
+            }
+          },
+          "required": ["id", "name", "path"],
+          "additionalProperties": false
+        },
+        "previous": {
+          "type": "integer",
+          "minimum": -2147483648,
+          "maximum": 2147483647
+        },
+        "priority": {
+          "type": "integer",
+          "minimum": -2147483648,
+          "maximum": 2147483647
+        },
+        "changed": {
+          "type": "boolean"
+        },
+        "_editor": {
+          "type": "object",
+          "properties": {
+            "revision": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "transaction": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "dryRun": {
+              "type": "boolean"
+            },
+            "operations": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "warnings": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          },
+          "required": ["revision", "transaction", "dryRun", "operations", "warnings"],
+          "additionalProperties": false
+        }
+      },
+      "required": ["entity", "previous", "priority", "changed", "_editor"],
+      "additionalProperties": false
+    }
+  },
   "camera.bookmark_go": {
     "version": 1,
     "permission": "edit",
@@ -3001,6 +3105,429 @@
         }
       },
       "required": ["viewport", "camera", "eye", "forward", "_editor"],
+      "additionalProperties": false
+    }
+  },
+  "camera.list": {
+    "version": 1,
+    "permission": "read",
+    "mode": "any",
+    "undoable": false,
+    "readOnly": true,
+    "params": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "type": "object",
+      "properties": {
+        "world": {
+          "type": "string",
+          "enum": ["edit", "play"]
+        }
+      },
+      "additionalProperties": false
+    },
+    "result": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "type": "object",
+      "properties": {
+        "world": {
+          "type": "string"
+        },
+        "cameras": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "entity": {
+                "type": "object",
+                "properties": {
+                  "id": {
+                    "type": "string"
+                  },
+                  "name": {
+                    "type": "string"
+                  },
+                  "path": {
+                    "type": "string"
+                  }
+                },
+                "required": ["id", "name", "path"],
+                "additionalProperties": false
+              },
+              "priority": {
+                "type": "integer",
+                "minimum": -2147483648,
+                "maximum": 2147483647
+              },
+              "enabled": {
+                "type": "boolean"
+              },
+              "inactive": {
+                "type": "boolean"
+              },
+              "fieldOfView": {
+                "type": "number"
+              },
+              "nearPlane": {
+                "type": "number"
+              },
+              "dutch": {
+                "type": "number"
+              },
+              "body": {
+                "type": "string"
+              },
+              "aim": {
+                "type": "string"
+              },
+              "noise": {
+                "type": "boolean"
+              },
+              "follow": {
+                "type": "string"
+              },
+              "lookAt": {
+                "type": "string"
+              },
+              "customBlend": {
+                "type": "boolean"
+              },
+              "live": {
+                "type": "boolean"
+              }
+            },
+            "required": ["entity", "priority", "enabled", "inactive", "fieldOfView", "nearPlane", "dutch", "body", "aim", "noise", "follow", "lookAt", "customBlend", "live"],
+            "additionalProperties": false
+          }
+        },
+        "brains": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "entity": {
+                "type": "object",
+                "properties": {
+                  "id": {
+                    "type": "string"
+                  },
+                  "name": {
+                    "type": "string"
+                  },
+                  "path": {
+                    "type": "string"
+                  }
+                },
+                "required": ["id", "name", "path"],
+                "additionalProperties": false
+              },
+              "defaultBlend": {
+                "type": "string"
+              },
+              "defaultDuration": {
+                "type": "number"
+              },
+              "overrides": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 4294967295
+              }
+            },
+            "required": ["entity", "defaultBlend", "defaultDuration", "overrides"],
+            "additionalProperties": false
+          }
+        },
+        "totalCameras": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 4294967295
+        },
+        "totalBrains": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 4294967295
+        },
+        "impulses": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 4294967295
+        },
+        "_editor": {
+          "type": "object",
+          "properties": {
+            "revision": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "transaction": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "dryRun": {
+              "type": "boolean"
+            },
+            "operations": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "warnings": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          },
+          "required": ["revision", "transaction", "dryRun", "operations", "warnings"],
+          "additionalProperties": false
+        }
+      },
+      "required": ["world", "cameras", "brains", "totalCameras", "totalBrains", "impulses", "_editor"],
+      "additionalProperties": false
+    }
+  },
+  "camera.preview": {
+    "version": 1,
+    "permission": "edit",
+    "mode": "edit",
+    "undoable": false,
+    "readOnly": false,
+    "params": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "type": "object",
+      "properties": {
+        "entity": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "clear": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "dryRun": {
+          "type": "boolean"
+        },
+        "mergeKey": {
+          "type": "string"
+        },
+        "clientToken": {
+          "type": "string"
+        },
+        "expectRevision": {
+          "anyOf": [
+            {
+              "type": "string",
+              "pattern": "^[0-9]+$"
+            },
+            {
+              "type": "integer",
+              "minimum": 0
+            }
+          ]
+        }
+      },
+      "additionalProperties": false
+    },
+    "result": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "type": "object",
+      "properties": {
+        "entity": {
+          "anyOf": [
+            {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string"
+                },
+                "name": {
+                  "type": "string"
+                },
+                "path": {
+                  "type": "string"
+                }
+              },
+              "required": ["id", "name", "path"],
+              "additionalProperties": false
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "_editor": {
+          "type": "object",
+          "properties": {
+            "revision": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "transaction": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "dryRun": {
+              "type": "boolean"
+            },
+            "operations": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "warnings": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          },
+          "required": ["revision", "transaction", "dryRun", "operations", "warnings"],
+          "additionalProperties": false
+        }
+      },
+      "additionalProperties": false,
+      "required": ["_editor"]
+    }
+  },
+  "camera.status": {
+    "version": 1,
+    "permission": "read",
+    "mode": "any",
+    "undoable": false,
+    "readOnly": true,
+    "params": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "type": "object",
+      "properties": {
+        "world": {
+          "type": "string",
+          "enum": ["edit", "play"]
+        }
+      },
+      "additionalProperties": false
+    },
+    "result": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "type": "object",
+      "properties": {
+        "world": {
+          "type": "string"
+        },
+        "live": {
+          "type": "boolean"
+        },
+        "note": {
+          "type": "string"
+        },
+        "brains": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "entity": {
+                "type": "object",
+                "properties": {
+                  "id": {
+                    "type": "string"
+                  },
+                  "name": {
+                    "type": "string"
+                  },
+                  "path": {
+                    "type": "string"
+                  }
+                },
+                "required": ["id", "name", "path"],
+                "additionalProperties": false
+              },
+              "live": {
+                "type": "string"
+              },
+              "from": {
+                "type": "string"
+              },
+              "blending": {
+                "type": "boolean"
+              },
+              "progress": {
+                "type": "number"
+              },
+              "weight": {
+                "type": "number"
+              },
+              "position": {
+                "type": "array",
+                "items": {
+                  "type": "number"
+                },
+                "minItems": 3,
+                "maxItems": 3
+              },
+              "rotation": {
+                "type": "array",
+                "items": {
+                  "type": "number"
+                },
+                "minItems": 3,
+                "maxItems": 3
+              },
+              "fieldOfView": {
+                "type": "number"
+              }
+            },
+            "required": ["entity", "live", "from", "blending", "progress", "weight", "position", "rotation", "fieldOfView"],
+            "additionalProperties": false
+          }
+        },
+        "cameras": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 4294967295
+        },
+        "evaluated": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 4294967295
+        },
+        "_editor": {
+          "type": "object",
+          "properties": {
+            "revision": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "transaction": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "dryRun": {
+              "type": "boolean"
+            },
+            "operations": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "warnings": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          },
+          "required": ["revision", "transaction", "dryRun", "operations", "warnings"],
+          "additionalProperties": false
+        }
+      },
+      "required": ["world", "live", "note", "brains", "cameras", "evaluated", "_editor"],
       "additionalProperties": false
     }
   },

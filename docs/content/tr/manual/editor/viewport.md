@@ -51,7 +51,9 @@ eksenlerdir. Eksenler temanın eksen renklerini kullanır.
 
 **Game** paneli sahneyi ana kamerasından (`Camera` içeren ilk etkin Entity) oyuncunun göreceği gibi gösterir:
 grid, outline ve yalnızca editöre ait Entity'ler olmadan. Sahnede kamera yoksa panel bunu söyler. Editör
-kamerası komutları ve görünüm menüsü yalnızca Scene görünümlerinde çalışır.
+kamerası komutları ve görünüm menüsü yalnızca Scene görünümlerinde çalışır. Bir play oturumunda
+[kamera beyninin](../cameras.md#kamera-beyni) `Camera`'ya yazdığını gösterir; `camera.preview` onu düzenlenen
+sahnenin bir sanal kamerasının içinden baktırır ([Kameralar](../cameras.md#viewportlarda)).
 
 Bir oyun çalışmıyorken Game görünümü game UI'ı da düzenler: UI elemanlarını fareyle seçer, taşır ve
 boyutlandırır, anchor'larını ayarlarsınız. Bkz. [Game görünümünde düzenleme](../ui.md#editing-in-the-game-view).
@@ -106,7 +108,7 @@ Görselleştiriciler kendi görüntüsü olmayan Component'lerin biçimini sahne
 | Görselleştirici | Çizdiği |
 | --- | --- |
 | Lights | Nokta ışıklarının menzil küresi; yönlü ışıkların yönü. |
-| Cameras | Her `Camera`'nın görüş frustum'u, Game görünümünün en-boy oranında. |
+| Cameras | Her `Camera`'nın görüş frustum'u, Game görünümünün en-boy oranında, ve her `VirtualCamera`'nınki; bir play oturumunda canlı olan sarı, bir geçişin başladığı turuncu, seçili olsun olmasın ([Kameralar](../cameras.md#viewportlarda)). |
 | Colliders | Her `Collider`'ın kutusu, küresi, kapsülü, silindiri ya da sınırları; sensörler başka bir renkte. |
 | Characters | Her `CharacterController`'ın kapsülü. |
 | Joints | Her `Joint`'in bağlantı noktası ve ekseni, sınırları ve bağlı gövdeye giden çizgiyle. |
@@ -172,6 +174,7 @@ Pass'in GPU süresi [Profiler](profiler.md#gpu)'dadır.
 | `viewport.create` / `viewport.close` | Ek bir Scene görünümü açar ya da kapatır (`scene-2` ile `scene-4`). |
 | `viewport.set_aspect` | Free, bir en-boy oranı ön ayarı ya da sabit bir `width` ve `height`. |
 | `camera.bookmark_set` / `camera.bookmark_go` | Editör kamerasını 1-9 numaralı yuvaya kaydeder ya da oraya geri götürür. |
+| `camera.preview` | Game görünümlerini düzenlenen sahnenin bir sanal kamerasının içinden baktırır ([Kameralar](../cameras.md#editorde)). |
 | `render.stats` | Bir viewport'un son karesindeki kare sayısı, görünen nesneler, draw call'lar ve üçgenler. |
 | `render.gpu_info` / `render.diagnostics` | GPU ve sürücü; doğrulamanın açık olup olmadığı ve kaç hata bildirdiği. |
 

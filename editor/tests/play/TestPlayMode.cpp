@@ -4,6 +4,7 @@
 #include "core/EditorCoreTestSupport.hpp"
 
 #include <illusion/audio/AudioComponents.hpp>
+#include <illusion/camera/CameraComponents.hpp>
 #include <illusion/core/JobSystem.hpp>
 #include <illusion/core/Module.hpp>
 #include <illusion/ecs/Transform.hpp>
@@ -12,6 +13,7 @@
 #include <illusion/input/InputActionsAsset.hpp>
 #include <illusion/particles/ParticleComponents.hpp>
 #include <illusion/physics/PhysicsComponents.hpp>
+#include <illusion/render/Components.hpp>
 #include <illusion/runtime/GameSession.hpp>
 #include <illusion/runtime/SceneService.hpp>
 #include <illusion/ui/UiWidgets.hpp>
@@ -621,4 +623,58 @@ TEST_CASE("gameui.click drives the UI of the running game through two updates wi
     ok(f.editor(), "play.step");
     CHECK(f.play->gameUi()->events().empty());
     ok(f.editor(), "play.stop");
+}
+
+TEST_CASE("camera.status shows the live camera and the blend of the running game, and camera.list marks the "
+          "live one")
+{
+    PlayFixture f;
+    reflectRenderComponents();
+    ok(f.editor(), "entity.create",
+       R"({"name":"Brain","components":{"illusion.Transform":{},"illusion.Camera":{},)"
+       R"("illusion.CameraBrain":{"defaultBlend":{"style":"Linear","duration":1.0}}}})");
+    ok(f.editor(), "entity.create",
+       R"({"name":"A","components":{"illusion.Transform":{"position":[0,0,0]},"illusion.VirtualCamera":{"priority":5}}})");
+    ok(f.editor(), "entity.create",
+       R"({"name":"B","components":{"illusion.Transform":{"position":[4,0,0]},"illusion.VirtualCamera":{"priority":8}}})");
+    ok(f.editor(), "play.start", R"({"fixedStep":true})");
+    ok(f.editor(), "play.step", R"({"steps":2})");
+
+    const JsonDocument first = ok(f.editor(), "camera.status");
+    CHECK(first.root().find("world").asString() == "play");
+    CHECK(first.root().find("live").asBool() == true);
+    REQUIRE(first.root().find("brains").size() == 1);
+    CHECK(first.root().pointer("/brains/0/entity/path").asString() == "/Brain");
+    CHECK(first.root().pointer("/brains/0/live").asString() == "/B");
+    CHECK(first.root().pointer("/brains/0/blending").asBool() == false);
+    CHECK(first.root().pointer("/brains/0/progress").asF64().value_or(0.0) == doctest::Approx(1.0));
+    CHECK(first.root().pointer("/brains/0/position/0").asF64().value_or(0.0) == doctest::Approx(4.0));
+    CHECK(first.root().find("cameras").asU64() == 2u);
+    CHECK(first.root().find("evaluated").asU64() == 1u);
+    const JsonDocument list = ok(f.editor(), "camera.list");
+    CHECK(list.root().find("world").asString() == "play");
+    CHECK(list.root().pointer("/cameras/0/live").asBool() == false);
+    CHECK(list.root().pointer("/cameras/1/live").asBool() == true);
+
+    // Raising /A in the play World starts a one-second linear blend from /B.
+    ok(f.editor(), "component.set_field",
+       R"({"entity":"/A","type":"illusion.VirtualCamera","path":"priority","value":20})");
+    ok(f.editor(), "play.step", R"({"steps":15})");
+    const JsonDocument blending = ok(f.editor(), "camera.status");
+    CHECK(blending.root().pointer("/brains/0/live").asString() == "/A");
+    CHECK(blending.root().pointer("/brains/0/from").asString() == "/B");
+    CHECK(blending.root().pointer("/brains/0/blending").asBool() == true);
+    const f64 progress = blending.root().pointer("/brains/0/progress").asF64().value_or(-1.0);
+    CHECK(progress > 0.05);
+    CHECK(progress < 0.5);
+    const f64 x = blending.root().pointer("/brains/0/position/0").asF64().value_or(-1.0);
+    CHECK(x > 0.0);
+    CHECK(x < 4.0);
+
+    ok(f.editor(), "play.step", R"({"steps":120})");
+    const JsonDocument settled = ok(f.editor(), "camera.status");
+    CHECK(settled.root().pointer("/brains/0/blending").asBool() == false);
+    CHECK(settled.root().pointer("/brains/0/position/0").asF64().value_or(-1.0) == doctest::Approx(0.0));
+    ok(f.editor(), "play.stop");
+    CHECK(ok(f.editor(), "camera.status").root().find("live").asBool() == false);
 }

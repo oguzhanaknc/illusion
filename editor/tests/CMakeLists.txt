@@ -29,6 +29,7 @@ illusion_add_editor_executable(illusion_editor_tests
     core/TestUiPlacementEdit.cpp
     core/TestAiCommands.cpp
     core/TestAnimationCommands.cpp
+    core/TestCameraCommands.cpp
     core/TestNavCommands.cpp
     core/TestParticleCommands.cpp
     core/TestEditorPrefabs.cpp

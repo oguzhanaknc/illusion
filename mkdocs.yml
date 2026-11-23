@@ -192,6 +192,7 @@ nav:
       - A HUD and a pause menu: tutorials/hud-and-pause-menu.md
       - Animate a character: tutorials/animated-character.md
       - A creature that wanders and chases: tutorials/creature-ai.md
+      - A third-person camera: tutorials/third-person-camera.md
   - Architecture:
       - Overview: architecture/overview.md
       - Editor: architecture/editor.md

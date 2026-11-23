@@ -82,16 +82,28 @@ void ViewState::setBookmark(u32 slot, const ViewportCamera& camera) noexcept
     ++m_version;
 }
 
+bool ViewState::setPreviewCamera(EntityGuid guid) noexcept
+{
+    if (m_previewCamera == guid)
+    {
+        return false;
+    }
+    m_previewCamera = guid;
+    ++m_version;
+    return true;
+}
+
 void ViewState::clear() noexcept
 {
     const bool bookmarks =
         std::any_of(m_bookmarks.begin(), m_bookmarks.end(),
                     [](const std::optional<ViewportCamera>& slot) { return slot.has_value(); });
-    if (!m_hidden.empty() || !m_locked.empty() || bookmarks)
+    if (!m_hidden.empty() || !m_locked.empty() || bookmarks || !m_previewCamera.isNull())
     {
         m_hidden.clear();
         m_locked.clear();
         m_bookmarks.fill(std::nullopt);
+        m_previewCamera = EntityGuid{};
         ++m_version;
     }
 }

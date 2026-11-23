@@ -40,7 +40,7 @@ void randomCommand(EditorContext& editor, std::mt19937& random)
     };
     std::string name;
     std::string params;
-    switch (random() % 21)
+    switch (random() % 22)
     {
     case 0:
     case 1:
@@ -239,6 +239,21 @@ void randomCommand(EditorContext& editor, std::mt19937& random)
         }
         break;
     }
+    case 20:
+        if (coin())
+        {
+            name = "entity.create";
+            const std::string suffix = number(100);
+            const std::string priority = number(30);
+            params = R"({"name":"Cam)" + suffix + R"(","components":{"illusion.Transform":{},)" +
+                     R"("illusion.VirtualCamera":{"priority":)" + priority + "}}}";
+        }
+        else
+        {
+            name = "camera.activate";
+            params = R"({"entity":")" + pick() + R"("})";
+        }
+        break;
     default:
     {
         name = coin() ? "component.remove" : "component.reset";
