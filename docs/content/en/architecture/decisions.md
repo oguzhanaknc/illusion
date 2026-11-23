@@ -70,6 +70,7 @@ records rather than user documentation.
 | [0061](https://github.com/oguzhanaknc/illusion/blob/main/docs/adr/0061-sockets-ik-and-ragdolls.md) | Sockets, look-at, two-bone IK, spring bones and ragdolls as Components evaluated as fixed stages after the animation graph; foot placement raycasts in GameSession |
 | [0062](https://github.com/oguzhanaknc/illusion/blob/main/docs/adr/0062-navigation-and-ai.md) | Navigation and AI: tiled Recast navmeshes baked from colliders in the editor and at run time, a deterministic crowd on the Job System steering CharacterControllers, behaviour trees as `.behavior` assets with typed blackboards, sight and hearing perception, through polled NavService and AiService |
 | [0063](https://github.com/oguzhanaknc/illusion/blob/main/docs/adr/0063-material-shaders.md) | Material shaders: Slang surface functions in `.shader` assets with declared parameters, compiled per pass variant by the pinned slangc at cook time and on hot reload; the player loads cooked SPIR-V |
+| [0064](https://github.com/oguzhanaknc/illusion/blob/main/docs/adr/0064-virtual-cameras.md) | Virtual cameras: saved rigs of body, aim and noise stages; a camera brain on the real camera blends to the highest-priority live one; evaluated after Hierarchy in a GPU-free camera library |
 
 To propose a new decision, copy `docs/adr/0000-template.md` and follow the
 [contributing guide](../contributing.md#architecture-decision-records).
