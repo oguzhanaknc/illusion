@@ -83,6 +83,12 @@ add_executable(illusion_tests
     animation/TestInverseKinematics.cpp
     animation/TestPose.cpp
     animation/TestSpringBones.cpp
+    camera/TestCameraAim.cpp
+    camera/TestCameraBlend.cpp
+    camera/TestCameraBody.cpp
+    camera/TestCameraDamping.cpp
+    camera/TestCameraNoise.cpp
+    camera/TestCameraRig.cpp
     audio/TestAudioEffects.cpp
     audio/TestAudioWorld.cpp
     modules/TestModules.cpp
@@ -135,7 +141,7 @@ add_executable(illusion_tests
 target_include_directories(illusion_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}
     ${PROJECT_SOURCE_DIR}/engine/render/src ${PROJECT_SOURCE_DIR}/engine/player/src)
 target_link_libraries(illusion_tests PRIVATE
-    illusion::core illusion::platform illusion::input illusion::assets illusion::animation illusion::audio
+    illusion::core illusion::platform illusion::input illusion::assets illusion::animation illusion::camera illusion::audio
     illusion::physics illusion::particles illusion::render illusion::modules illusion::runtime illusion::player illusion::store
     illusion::save illusion::text illusion_text_tools illusion::ui illusion::nav illusion::ai illusion::doctest)
 illusion_require_dependency(test_font)

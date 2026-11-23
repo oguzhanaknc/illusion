@@ -1528,10 +1528,17 @@ game code.
 
 - CAM is designed in ADR 0064 (virtual cameras as saved rigs of body/aim/noise stages, a `CameraBrain` that
   blends to the live one, `CameraWorld` in a new GPU-free `engine/camera` after Hierarchy). Four work packages:
-- CAM-1 (`implementer`): Stages without a World. `engine/camera` with the pure stage functions (follow,
-  orbit, spring arm against a query interface, dolly, look-at, composer, noise) and blending. Done: a test per
-  stage and damping against hand-computed values, composer zones, blend curves, determinism, no allocation,
-  benchmark `camera/stages-100`.
+- ✅ CAM-1 (`implementer`): Stages without a World. `engine/camera` (`illusion::camera`, core only) with the
+  pure stage functions over plain settings and state structs: `CameraPose.hpp` (`CameraPose`,
+  `CameraTarget`, `CameraPlacement`), `CameraDamping.hpp` (exact critically damped `smoothDamp()`,
+  `dampFactor()`, `dampRotation()`), `CameraBody.hpp` (`stepCameraFollow()`, `stepCameraOrbit()`,
+  `stepCameraSpringArm()` against `CameraCollisionQuery`, `stepCameraDolly()` on Hermite paths),
+  `CameraAim.hpp` (`stepCameraLookAt()`, `stepCameraComposer()` with dead and soft zones in screen space),
+  `CameraNoise.hpp` (two seeded sines per channel), `CameraBlend.hpp` (cut, linear, ease in/out, cubic
+  Bezier; `blendCameraPoses()`). Done: `tests/camera` (every stage and the damping against hand-computed
+  values, composer zones, blend curves, bit-identical repeated runs, no allocation), benchmark
+  `camera/stages-100`. Open: no SDK target yet (the library joins the player closure when
+  `engine/runtime` links it in CAM-2; a `camera_api` for modules comes with CAM-3).
 - CAM-2 (`implementer`): Runtime. The saved Components, `CameraBrain`, `CameraWorld` in `GameSession` after
   Hierarchy, spring-arm sphere casts through `PhysicsWorld`, impulses and shake, the showcase covering every
   Component. Done: a spring arm keeps out of a wall, a blend between two cameras is continuous, fixed-step
