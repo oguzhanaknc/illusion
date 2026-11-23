@@ -182,7 +182,8 @@ digits, `.`, `-`, `+` or `_` written as `_`.
 
 The Windows installer installs into `Program Files\<Product>`, adds a Start menu shortcut, an uninstaller and the
 game's icon, and removes an older installation first. The result's `package` is the full path of the file; a
-failed export leaves none.
+failed export leaves none. A failed package quotes the last lines of `cpack` in the error; on macOS,
+`hdiutil` finding the disk image busy (`Resource busy`) makes the export run `cpack` again, up to three times.
 
 The packages are made by CPack from the SDK's CMake, which must sit next to its `cpack`. The installers need one
 more tool, and a missing tool fails the validation with an error that names it:

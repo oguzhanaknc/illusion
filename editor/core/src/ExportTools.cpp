@@ -135,6 +135,17 @@ std::vector<std::string> stapleArguments(std::string_view package)
     return {"stapler", "staple", std::string(package)};
 }
 
+bool isTransientPackageFailure(std::string_view output) noexcept
+{
+    // DragNDrop's hdiutil fails with EBUSY when Spotlight or another process holds the image for a moment.
+    if (output.find("hdiutil") == std::string_view::npos)
+    {
+        return false;
+    }
+    return output.find("Resource busy") != std::string_view::npos ||
+           output.find("resource busy") != std::string_view::npos;
+}
+
 std::optional<std::filesystem::path> findMakensis()
 {
     if (std::optional<std::filesystem::path> found = findExecutable("makensis"))
