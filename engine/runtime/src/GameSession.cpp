@@ -8,6 +8,7 @@
 #include <illusion/assets/Animation.hpp>
 #include <illusion/audio/AudioWorldService.hpp>
 #include <illusion/camera/CameraWorld.hpp>
+#include <illusion/camera/CameraWorldService.hpp>
 #include <illusion/core/Assert.hpp>
 #include <illusion/core/Log.hpp>
 #include <illusion/core/Profiler.hpp>
@@ -456,6 +457,7 @@ struct GameSession::Impl
         , ui(world)
         , cameras(world)
         , cameraCollision(world, physics)
+        , cameraService(cameras)
         , physicsService(physics)
         , audioService(audio)
         , particleService(particles)
@@ -701,6 +703,7 @@ struct GameSession::Impl
     UiWorld ui;
     CameraWorld cameras;
     PhysicsCameraCollision cameraCollision;
+    CameraWorldService cameraService;
     UiFrame uiFrame{};
     Vec2 pointerScale{1.0f};
     std::optional<GameUiPointer> uiPointer;
@@ -800,6 +803,7 @@ void GameSession::start()
         services.provide<UiService>(impl.uiService);
         services.provide<NavService>(impl.navigationService);
         services.provide<AiService>(impl.aiService);
+        services.provide<CameraService>(impl.cameraService);
         if (impl.animationService)
         {
             services.provide<AnimationService>(*impl.animationService);

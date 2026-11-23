@@ -156,7 +156,7 @@ player alike.
 `load()` copies the library to a shadow directory and loads the copy, so the build can overwrite the
 original. It then checks the module and returns an error message if anything is wrong:
 
-- the module API version (12; modules built for an older version must be rebuilt, and those built for version
+- the module API version (13; modules built for an older version must be rebuilt, and those built for version
   2 must also move their World work to `start`), the engine version (shared modules must be built against exactly this engine) and the build
   settings (compiler and its version, Debug or Release, asserts);
 - a valid, unique name and a semantic version;

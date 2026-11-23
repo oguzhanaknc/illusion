@@ -1555,9 +1555,19 @@ game code.
   a `BoneAttachment` Entity used as follow or look-at (no joint name on `VirtualCamera`); every brain shows the
   same live camera (no channels for split screen); the orbit and arm read their look actions by name each
   update; `CameraService` and per-source impulse triggering come with CAM-3.
-- CAM-3 (`mechanic`): `CameraService` (`USES camera`, module API version raised by one), the showcase module
-  calls it; the tech demo walker uses a first-person virtual camera with unchanged screenshots. Done: module
-  tests for every function and error.
+- ✅ CAM-3 (`mechanic`): `CameraService` (`USES camera`, `illusion::camera_api`, module API version 13) with
+  its adapter `CameraWorldService`, provided by `GameSession`: `activate()` and `deactivate()` (raise above the
+  others and give the priority back), `setPriority()`, `setFollow()`, `setLookAt()`, `setAngles()` (orbit or
+  spring arm), `swapShoulder()`, `setFieldOfView()`, `shake()`, `playImpulse()`, `liveCamera()` and
+  `blendProgress()`, with `CameraError` (`NoCamera`, `NoBrain`, `NoStage`, `NoImpulse`, `NotActivated` added).
+  The showcase module calls every function; the tech demo walker moves an Eye Point that the First Person
+  virtual camera follows, and the CameraBrain on the Eye shows it (the module no longer writes the Eye). Done:
+  `tests/camera/TestCameraService.cpp` (every function and error against a World), `tests/modules` (a shared
+  module calls every function once and drives a brain through the real service), the showcase test counts the
+  calls, EN/TR `reference/scripting-api.md` and `manual/cameras.md`. Open: `setFieldOfView()` jumps (a module
+  eases it over frames); `activate()`, `setPriority()`, `swapShoulder()` and the target setters write the saved
+  fields of the Components; the walker still writes the Eye Point's Transform, since `CameraFollow` has no
+  pitch input; the forest needs downloaded assets, so its images were not retaken.
 - CAM-4 (`mechanic`): Editor and documentation: `camera.*` commands, frusta in the Scene view, Game view
   preview of a virtual camera, manual page "Cameras" (EN/TR), a tutorial (a third-person camera with
   shoulder swap), `CHANGELOG.md`.

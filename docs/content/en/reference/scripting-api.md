@@ -20,6 +20,7 @@ with `context.service<T>()`. The design is in ADR 0041; the Doxygen group "Scrip
 | `AnimationService` | `animation` | `illusion/animation/AnimationService.hpp` | `AnimationWorldService` over `AnimationWorld` (`illusion::animation`; ADR 0060) |
 | `NavService` | `nav` | `illusion/nav/NavService.hpp` | `NavWorldService` over `NavWorld` (`illusion::nav`; ADR 0062) |
 | `AiService` | `ai` | `illusion/ai/AiService.hpp` | `AiWorldService` over `AiWorld` (`illusion::ai`; ADR 0062) |
+| `CameraService` | `camera` | `illusion/camera/CameraService.hpp` | `CameraWorldService` over `CameraWorld` (`illusion::camera`; ADR 0064) |
 
 ```cmake
 illusion_add_module(tetris SOURCES game/Tetris.cpp USES physics audio input runtime)
@@ -61,7 +62,7 @@ void update(illusion::ModuleContext& context, illusion::f64)
   work there too.
 - **Cost.** A call is one indirect call; the `services/virtual-call` Benchmark keeps it under 10 ns.
 - **Compatibility.** The interfaces are part of the module ABI: adding or changing a function changes
-  `kModuleApiVersion` (12 since `AiService`), and modules must be rebuilt.
+  `kModuleApiVersion` (13 since `CameraService`), and modules must be rebuilt.
 
 ## Coverage
 
@@ -370,3 +371,61 @@ if (illusion::AiService* ai = context.service<illusion::AiService>())
 ```
 
 The manual page [AI](../manual/ai.md#from-a-module) describes the trees, the actions and the perception.
+
+## CameraService
+
+The virtual cameras of the game (ADR 0064). Cameras are Entities with a `VirtualCamera`; the **brain** on the
+real `Camera` shows the one with the highest priority and blends when it changes. Your changes are seen by the
+next Cameras step. A call on an Entity that is not alive or lacks the Component it needs returns an error;
+nothing asserts.
+
+| Function | Purpose |
+| --- | --- |
+| `activate`, `deactivate` | `activate` raises a `VirtualCamera` above every other one (a disabled camera stays disabled) and remembers its priority; `deactivate` gives the priority back |
+| `setPriority` | Sets the priority; this ends an activation |
+| `setFollow`, `setLookAt` | Sets the Entity the body follows or the aim looks at; a null Entity clears it |
+| `setAngles` | Turns the camera's `CameraOrbit` (or else `CameraSpringArm`) to a yaw and a pitch in radians; the pitch limits apply |
+| `swapShoulder` | Swaps the `CameraSpringArm`'s side and returns the new one (-1 left, 1 right); the arm glides over by its `sideDamping` |
+| `setFieldOfView` | Sets the vertical field of view in radians, in (0, pi); ease it over frames for an aim zoom |
+| `shake` | Starts a `CameraShake` (origin, strength, radius, duration) that every live camera within the radius gets |
+| `playImpulse` | Plays the `CameraImpulse` of an Entity once, at its position, whatever its `playOnStart` |
+| `liveCamera` | The virtual camera a `CameraBrain` shows; a null Entity before it shows one |
+| `blendProgress` | How far the brain's blend has come, from 0 to 1; 1 when none runs |
+
+Every function returns an `Expected<..., CameraError>`; `cameraErrorName()` gives the name:
+
+| Error | When |
+| --- | --- |
+| `InvalidArgument` | A value is not finite or out of range: a field of view outside (0, pi), a shake with a non-positive radius or duration, a dead target Entity |
+| `TooManyShakes` | `CameraWorldDesc::maxShakes` shakes run already |
+| `NoCamera` | The Entity is not alive or has no `VirtualCamera` |
+| `NoBrain` | The Entity is not alive or has no `CameraBrain` |
+| `NoStage` | The camera has no `CameraOrbit` or `CameraSpringArm` (no `CameraSpringArm` for `swapShoulder`) |
+| `NoImpulse` | The Entity is not alive or has no `CameraImpulse` |
+| `NotActivated` | `deactivate` on a camera that `activate` did not raise |
+
+`activate` and `setPriority` write the saved `priority` of the `VirtualCamera`, and `swapShoulder`,
+`setFollow`, `setLookAt` and `setFieldOfView` its other fields, as the Components of the World hold them.
+
+```cpp
+if (illusion::CameraService* cameras = context.service<illusion::CameraService>())
+{
+    static_cast<void>(cameras->activate(cutsceneCamera));
+    static_cast<void>(cameras->setLookAt(cutsceneCamera, boss));
+    if (swapPressed)
+    {
+        static_cast<void>(cameras->swapShoulder(shoulderCamera));
+    }
+    static_cast<void>(cameras->setFieldOfView(shoulderCamera, aiming ? 0.7f : 1.05f));
+    if (hit)
+    {
+        static_cast<void>(cameras->shake({.origin = hitPosition, .strength = 0.8f, .radius = 12.0f}));
+    }
+    if (cameras->blendProgress(brain).valueOr(1.0f) >= 1.0f)
+    {
+        static_cast<void>(cameras->deactivate(cutsceneCamera));
+    }
+}
+```
+
+The manual page [Cameras](../manual/cameras.md#from-a-module) describes the shots, the stages and the brain.
