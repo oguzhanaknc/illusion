@@ -25,11 +25,11 @@
 #include <cstring>
 #include <filesystem>
 #include <fstream>
-#include <iterator>
 #include <memory>
 #include <numbers>
 #include <optional>
 #include <span>
+#include <sstream>
 #include <string_view>
 #include <vector>
 
@@ -197,8 +197,9 @@ void golden(std::string_view name, const std::vector<std::byte>& data)
     }
     std::ifstream stream(reference, std::ios::binary);
     REQUIRE_MESSAGE(stream.good(), reference.string());
-    std::string bytes;
-    bytes.assign(std::istreambuf_iterator<char>(stream.rdbuf()), std::istreambuf_iterator<char>());
+    std::ostringstream buffer;
+    buffer << stream.rdbuf();
+    const std::string bytes = buffer.str();
     const auto expected = decodeImage(std::as_bytes(std::span(bytes.data(), bytes.size())), false);
     REQUIRE(expected.has_value());
     CHECK(differingPixels(data, expected->data) <= kSize * kSize / 100);
