@@ -7,6 +7,7 @@
 #include <illusion/ai/AiWorld.hpp>
 #include <illusion/ai/AiWorldService.hpp>
 #include <illusion/assets/AssetStreamer.hpp>
+#include <illusion/camera/CameraComponents.hpp>
 #include <illusion/core/AssetRef.hpp>
 #include <illusion/core/JobSystem.hpp>
 #include <illusion/core/Json.hpp>
@@ -931,6 +932,7 @@ TEST_CASE(
     Fixture f;
     World& world = f.secondWorld;
     registerAiComponents(ComponentRegistry::instance());
+    registerCameraComponents(ComponentRegistry::instance());
     VirtualFileSystem files;
     REQUIRE(files.mount("game", f.directory.path, MountAccess::ReadWrite) == FileError::None);
     REQUIRE(files.writeText("game:/finish.behavior", kFinishTree) == FileError::None);

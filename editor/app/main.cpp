@@ -12,6 +12,7 @@
 #include <illusion/assets/AssetStreamer.hpp>
 #include <illusion/assets/Image.hpp>
 #include <illusion/audio/AudioComponents.hpp>
+#include <illusion/camera/CameraComponents.hpp>
 #include <illusion/core/EventBus.hpp>
 #include <illusion/core/FrameProfiler.hpp>
 #include <illusion/core/JobSystem.hpp>
@@ -578,6 +579,7 @@ int run(const std::vector<std::string>& args)
     registerAnimationComponents(ComponentRegistry::instance());
     registerNavComponents(ComponentRegistry::instance());
     registerAiComponents(ComponentRegistry::instance());
+    registerCameraComponents(ComponentRegistry::instance());
     registerUiComponents();
     registerSaveComponents();
 

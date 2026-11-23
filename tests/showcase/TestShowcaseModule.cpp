@@ -14,6 +14,7 @@
 #include <illusion/audio/AudioComponents.hpp>
 #include <illusion/audio/AudioWorld.hpp>
 #include <illusion/audio/AudioWorldService.hpp>
+#include <illusion/camera/CameraComponents.hpp>
 #include <illusion/core/Hash.hpp>
 #include <illusion/core/JobSystem.hpp>
 #include <illusion/core/Module.hpp>
@@ -76,6 +77,7 @@ void reflectAll()
     registerAnimationComponents(ComponentRegistry::instance());
     registerNavComponents(ComponentRegistry::instance());
     registerAiComponents(ComponentRegistry::instance());
+    registerCameraComponents(ComponentRegistry::instance());
     reflectRenderComponents();
     reflectRuntimeStructs();
     registerUiComponents();

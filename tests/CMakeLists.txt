@@ -89,6 +89,7 @@ add_executable(illusion_tests
     camera/TestCameraDamping.cpp
     camera/TestCameraNoise.cpp
     camera/TestCameraRig.cpp
+    camera/TestCameraWorld.cpp
     audio/TestAudioEffects.cpp
     audio/TestAudioWorld.cpp
     modules/TestModules.cpp
@@ -113,6 +114,7 @@ add_executable(illusion_tests
     render/TestSkyAtmosphere.cpp
     render/TestTextureStreamingPolicy.cpp
     render/TestRendererExtensions.cpp
+    runtime/TestCameraRuntime.cpp
     runtime/TestGameSession.cpp
     runtime/TestProjectSettings.cpp
     save/TestSaveCapture.cpp

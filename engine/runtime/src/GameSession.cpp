@@ -1,3 +1,5 @@
+#include "CharacterBodies.hpp"
+
 #include <illusion/ai/AiWorld.hpp>
 #include <illusion/ai/AiWorldService.hpp>
 #include <illusion/animation/AnimationComponents.hpp>
@@ -5,6 +7,7 @@
 #include <illusion/animation/AnimationWorldService.hpp>
 #include <illusion/assets/Animation.hpp>
 #include <illusion/audio/AudioWorldService.hpp>
+#include <illusion/camera/CameraWorld.hpp>
 #include <illusion/core/Assert.hpp>
 #include <illusion/core/Log.hpp>
 #include <illusion/core/Profiler.hpp>
@@ -34,6 +37,7 @@
 #include <illusion/render/RenderAssets.hpp>
 #include <illusion/runtime/GameLocalization.hpp>
 #include <illusion/runtime/GameSession.hpp>
+#include <illusion/runtime/PhysicsCameraCollision.hpp>
 #include <illusion/runtime/SceneLoaderService.hpp>
 #include <illusion/save/SaveService.hpp>
 #include <illusion/save/SaveSystemService.hpp>
@@ -304,53 +308,6 @@ void followSockets(World& world)
         });
 }
 
-// True if @p entity is @p character, one of its ancestors or one of its descendants: foot placement's rays
-// pass through the character's own bodies.
-[[nodiscard]] bool partOf(const World& world, Entity entity, Entity character)
-{
-    constexpr int kMaxDepth = 64;
-    const auto below = [&world](Entity child, Entity ancestor) {
-        Entity current = child;
-        for (int depth = 0; depth < kMaxDepth && world.isAlive(current); ++depth)
-        {
-            if (current == ancestor)
-            {
-                return true;
-            }
-            const Hierarchy* hierarchy = world.tryGet<Hierarchy>(current);
-            if (hierarchy == nullptr)
-            {
-                return false;
-            }
-            current = hierarchy->parent;
-        }
-        return false;
-    };
-    return below(entity, character) || below(character, entity);
-}
-
-// The body that carries @p character: the nearest of it and its ancestors with a CharacterController or a
-// RigidBody, else the Entity itself.
-[[nodiscard]] Entity carrierOf(const World& world, Entity character)
-{
-    constexpr int kMaxDepth = 64;
-    Entity current = character;
-    for (int depth = 0; depth < kMaxDepth && world.isAlive(current); ++depth)
-    {
-        if (world.has<CharacterController>(current) || world.has<RigidBody>(current))
-        {
-            return current;
-        }
-        const Hierarchy* hierarchy = world.tryGet<Hierarchy>(current);
-        if (hierarchy == nullptr)
-        {
-            break;
-        }
-        current = hierarchy->parent;
-    }
-    return character;
-}
-
 // The lowest height of @p entity's collision shape, from a sphere around it; nullopt for meshes and hulls.
 [[nodiscard]] std::optional<f32> bottomOf(const World& world, Entity entity)
 {
@@ -390,12 +347,12 @@ std::optional<RaycastHit> groundBelow(const World& world, const PhysicsWorld& ph
 {
     constexpr int kMaxSkips = 8;
     constexpr f32 kSkipDistance = 1e-3f;
-    const Entity carrier = carrierOf(world, character);
+    const Entity carrier = detail::carrierOf(world, character);
     for (int i = 0; i < kMaxSkips && length > 0.0f; ++i)
     {
         std::optional<RaycastHit> hit =
             physics.raycast(origin, Vec3(0.0f, -1.0f, 0.0f), length, layerMask, carrier);
-        if (!hit || !partOf(world, hit->entity, character))
+        if (!hit || !detail::partOf(world, hit->entity, character))
         {
             return hit;
         }
@@ -497,6 +454,8 @@ struct GameSession::Impl
         , ai(world, navigation, sessionDesc.streamer)
         , aiService(ai)
         , ui(world)
+        , cameras(world)
+        , cameraCollision(world, physics)
         , physicsService(physics)
         , audioService(audio)
         , particleService(particles)
@@ -509,6 +468,20 @@ struct GameSession::Impl
         ui.setAssets(sessionDesc.uiAssets);
         ui.setLocalization(&localization);
         ui.setGlyphs(&glyphs);
+    }
+
+    // The Cameras step: the look actions in Play mode, the composer's aspect from the UI frame.
+    void updateCameras(f64 step)
+    {
+        CameraWorldUpdate cameraInput;
+        cameraInput.actions = desc.mode == GameSessionMode::Play ? &actions : nullptr;
+        cameraInput.collision = &cameraCollision;
+        if (uiFrame.targetPixels.x > 0 && uiFrame.targetPixels.y > 0)
+        {
+            cameraInput.aspect =
+                static_cast<f32>(uiFrame.targetPixels.x) / static_cast<f32>(uiFrame.targetPixels.y);
+        }
+        cameras.update(static_cast<f32>(step), cameraInput);
     }
 
     [[nodiscard]] GuidGenerator& guids() noexcept
@@ -726,6 +699,8 @@ struct GameSession::Impl
     AiWorld ai;
     AiWorldService aiService;
     UiWorld ui;
+    CameraWorld cameras;
+    PhysicsCameraCollision cameraCollision;
     UiFrame uiFrame{};
     Vec2 pointerScale{1.0f};
     std::optional<GameUiPointer> uiPointer;
@@ -911,6 +886,10 @@ void GameSession::update(f64 deltaSeconds)
         impl.handRagdollPoses();
     }
     updateTransformHierarchy(impl.world, impl.hierarchy, impl.desc.jobs);
+    if (impl.started)
+    {
+        impl.updateCameras(step);
+    }
     impl.localization.applyPendingLocale();
     impl.glyphs.refresh();
     if (impl.desc.mode == GameSessionMode::Play)
@@ -983,6 +962,11 @@ NavWorld& GameSession::navigation() noexcept
 AiWorld& GameSession::ai() noexcept
 {
     return m_impl->ai;
+}
+
+CameraWorld& GameSession::cameras() noexcept
+{
+    return m_impl->cameras;
 }
 
 AudioWorld& GameSession::audio() noexcept

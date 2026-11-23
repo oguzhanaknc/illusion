@@ -1539,10 +1539,22 @@ game code.
   values, composer zones, blend curves, bit-identical repeated runs, no allocation), benchmark
   `camera/stages-100`. Open: no SDK target yet (the library joins the player closure when
   `engine/runtime` links it in CAM-2; a `camera_api` for modules comes with CAM-3).
-- CAM-2 (`implementer`): Runtime. The saved Components, `CameraBrain`, `CameraWorld` in `GameSession` after
-  Hierarchy, spring-arm sphere casts through `PhysicsWorld`, impulses and shake, the showcase covering every
-  Component. Done: a spring arm keeps out of a wall, a blend between two cameras is continuous, fixed-step
-  runs repeat, benchmark of 100 virtual cameras.
+- ✅ CAM-2 (`implementer`): Runtime. `CameraComponents.hpp` (saved `VirtualCamera` with priority, lens, follow
+  and look-at Entities and a blend-in; bodies `CameraFollow`, `CameraOrbit`, `CameraSpringArm`, `CameraDolly`;
+  aims `CameraLookAt`, `CameraComposer`; `CameraNoise`, `CameraImpulse`, `CameraBrain` with a default blend and
+  per-pair `CameraBlendOverride`s; runtime `VirtualCameraState`, `CameraBrainState`, `CameraImpulseState`;
+  `registerCameraComponents()`), `CameraWorld.hpp` (`CameraWorld::update()` picks the live camera, evaluates
+  only it and the one a blend comes from, blends, shakes, writes the brain's Transform and the Camera's lens
+  through reflection; `shake()`; `CameraWorldCollision`), `PhysicsCameraCollision` in `engine/runtime` (sphere
+  casts through `PhysicsWorld::shapeCast()` that pass through the follow target's bodies), the Cameras step of
+  `GameSession` after Hierarchy (`cameras()`), `illusion::camera` in the runtime and player closure. Done:
+  `tests/camera/TestCameraWorld.cpp` (choice, ties, continuous and broken-off blends, pair overrides, stages,
+  shakes, impulses, bit-identical runs, no allocation), `tests/runtime/TestCameraRuntime.cpp` (a spring arm
+  keeps out of a wall, fixed-step sessions repeat), benchmark `camera/world-100`, the showcase's camera rig
+  (every new saved Component), manual page `manual/cameras.md` (short, CAM-4 completes it). Open: a socket is
+  a `BoneAttachment` Entity used as follow or look-at (no joint name on `VirtualCamera`); every brain shows the
+  same live camera (no channels for split screen); the orbit and arm read their look actions by name each
+  update; `CameraService` and per-source impulse triggering come with CAM-3.
 - CAM-3 (`mechanic`): `CameraService` (`USES camera`, module API version raised by one), the showcase module
   calls it; the tech demo walker uses a first-person virtual camera with unchanged screenshots. Done: module
   tests for every function and error.
