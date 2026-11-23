@@ -102,6 +102,13 @@ are within budget, format and docs checks pass, and Doxygen reports nothing.
   Do not throw in engine code.
 - Text shown to players or editor users comes from a string table (`illusion_add_string_table`), never a
   string literal; see `.claude/skills/localization/SKILL.md`. Logs, asserts and agent-facing text stay English.
+- Compiler traps that CI's GCC 13 -O3, Clang 22 and MSVC turn into errors (each has cost a CI round):
+  read a whole file with `std::ostringstream buffer; buffer << file.rdbuf();`, never with
+  `std::istreambuf_iterator` (`-Wnull-dereference`); write fresh vectors with `.at()` or `std::array`, and sort
+  tiny fixed arrays without `std::sort` (`-Warray-bounds`); widen `u16`/`u8` fields before arithmetic
+  (`-Wsign-conversion`); brace-initialise `T x{Vec3(a[0]) / s}` (GCC reads parentheses as a declaration);
+  cast float limits to `f64` before comparing with a double (`-Wdouble-promotion`); give every field in a
+  designated initialiser or none (Clang 22); never put `*` inside a code span of a `///` comment (Doxygen).
 - Platform-specific code is isolated behind a small function in a `.cpp` with `#if defined(ILL_PLATFORM_*)`.
   Include `<windows.h>` only in `.cpp` files.
 
