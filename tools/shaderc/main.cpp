@@ -14,7 +14,7 @@
 #include <cstdio>
 #include <filesystem>
 #include <fstream>
-#include <iterator>
+#include <sstream>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -36,7 +36,9 @@ bool readText(const std::filesystem::path& path, std::string& out)
     {
         return false;
     }
-    out.assign(std::istreambuf_iterator<char>(file.rdbuf()), std::istreambuf_iterator<char>());
+    std::ostringstream buffer;
+    buffer << file.rdbuf();
+    out = buffer.str();
     return true;
 }
 
