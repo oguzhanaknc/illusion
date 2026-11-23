@@ -1,6 +1,6 @@
 ---
 name: game-modules
-description: Write or change illusion game modules and the scripting API - ILL_MODULE entry points, load/start/update/stop/unload, illusion_add_module USES, host service interfaces (PhysicsService, AudioService, ParticleService, InputService, SceneService, StoreService, UiService, SaveService, AnimationService, NavService, AiService) and their adapters, hot reload rules and the module tests. Use whenever code under a module, engine/modules, a *Service.hpp interface or tests/modules changes.
+description: Write or change illusion game modules and the scripting API - ILL_MODULE entry points, load/start/update/stop/unload, illusion_add_module USES, host service interfaces (PhysicsService, AudioService, ParticleService, InputService, SceneService, StoreService, UiService, SaveService, AnimationService, NavService, AiService, CameraService) and their adapters, hot reload rules and the module tests. Use whenever code under a module, engine/modules, a *Service.hpp interface or tests/modules changes.
 ---
 
 # Game modules and the scripting API
@@ -16,7 +16,7 @@ Read first: `docs/adr/0027-module-system-and-hot-reload.md`, `docs/adr/0041-modu
    (`context.world()` asserts; `hasWorld()` tells).
 3. `start`/`stop`: once per Simulation World; spawn entities in `start`. Hot reloads call neither.
 4. `update`: Simulation Worlds only. Keep all game state in Components; globals do not survive a reload.
-5. Build with `illusion_add_module(<target> SOURCES ... USES physics audio particles animation nav ai ui input render runtime store save)`. A shared
+5. Build with `illusion_add_module(<target> SOURCES ... USES physics audio particles animation nav ai camera ui input render runtime store save)`. A shared
    module must not `LINK` an engine library (configure error); `LINK` is for third-party code.
 
 ## Using services
@@ -37,14 +37,14 @@ Read first: `docs/adr/0027-module-system-and-hot-reload.md`, `docs/adr/0041-modu
    values. Never pass a standard container to be filled across the boundary; write into a caller span and
    return the total count.
 3. Add the function to the interface, its adapter (`PhysicsWorldService`, `AudioWorldService`,
-   `InputActionsService`, `SceneLoaderService`, `UiWorldService`, `SaveSystemService`, `AnimationWorldService`, `NavWorldService`, `AiWorldService`; out-of-line in the library's `src/`), the counting proxy in
+   `InputActionsService`, `SceneLoaderService`, `UiWorldService`, `SaveSystemService`, `AnimationWorldService`, `NavWorldService`, `AiWorldService`, `CameraWorldService`; out-of-line in the library's `src/`), the counting proxy in
    `tests/modules/CountingServices.hpp` (one more counter in its `CountingProxy<..., N>`), the call in
    `callServices()` of `tests/modules/TestModule.cpp`, a forwarding check in `tests/modules/TestServices.cpp`,
    and a real use in the showcase module (`samples/showcase/modules/showcase/showcase.cpp`):
    `python tools/check_api_coverage.py` fails until every function of the `scripting_api` group is called
    there, and `tests/showcase/TestShowcaseModule.cpp` counts the calls at run time.
 4. Any change to an interface changes the module ABI: bump `kModuleApiVersion` in
-   `engine/core/include/illusion/core/Module.hpp` (12 since `AiService`)
+   `engine/core/include/illusion/core/Module.hpp` (13 since `CameraService`)
    and say so in the commit.
 5. Update `reference/scripting-api.md` in English and Turkish.
 

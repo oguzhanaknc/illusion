@@ -113,15 +113,27 @@ struct ModuleControl
     bool aiWrite = false; // update() sets aiGuarded's Bool key "alarm", then clears this
     bool aiNoise = false; // update() reports a noise at aiNoisePosition, then clears this
     Vec3 aiNoisePosition{0.0f};
-    Entity aiNoiseSource;        // instigator of that noise
-    bool aiWritten = false;      // the write was accepted
-    bool aiNoiseSent = false;    // the noise was accepted
-    bool aiFinisherDone = false; // aiFinisher's Bool key "done" at the last update
-    u32 aiStarted = 0;           // Started actions seen
-    u32 aiAborted = 0;           // Aborted actions seen
-    u32 aiPerceivedCount = 0;    // what aiGuarded perceives at the last update
-    char aiRunning[32]{};        // runningNode() of aiGuarded at the last update
-    i32 aiError = -1;            // AiError of a write to an Entity without an agent
+    Entity aiNoiseSource;          // instigator of that noise
+    bool aiWritten = false;        // the write was accepted
+    bool aiNoiseSent = false;      // the noise was accepted
+    bool aiFinisherDone = false;   // aiFinisher's Bool key "done" at the last update
+    u32 aiStarted = 0;             // Started actions seen
+    u32 aiAborted = 0;             // Aborted actions seen
+    u32 aiPerceivedCount = 0;      // what aiGuarded perceives at the last update
+    char aiRunning[32]{};          // runningNode() of aiGuarded at the last update
+    i32 aiError = -1;              // AiError of a write to an Entity without an agent
+    Entity cameraBrain;            // the CameraBrain update() reads through the CameraService
+    Entity cameraShot;             // the VirtualCamera update() activates, deactivates, swaps and zooms
+    Entity cameraSource;           // the CameraImpulse update() plays
+    bool cameraActivate = false;   // update() activates cameraShot, then clears this
+    bool cameraDeactivate = false; // update() deactivates cameraShot, then clears this
+    bool cameraSwap = false;       // update() swaps cameraShot's shoulder, then clears this
+    bool cameraShake = false;      // update() sets cameraShot's field of view, shakes and plays cameraSource
+    u32 cameraAccepted = 0;        // calls the camera service accepted
+    f32 cameraSide = 0.0f;         // the side swapShoulder() returned
+    Entity cameraLive;             // liveCamera() of cameraBrain at the last update
+    f32 cameraProgress = -1.0f;    // blendProgress() of cameraBrain at the last update
+    i32 cameraError = -1;          // CameraError of setPriority() on a null Entity
 };
 
 } // namespace illusion::test

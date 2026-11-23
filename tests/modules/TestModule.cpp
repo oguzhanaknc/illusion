@@ -6,9 +6,9 @@
 // 5: changes the layout of LayoutComponent (TEST_MODULE_LAYOUT_V2), which a hot reload migrates.
 // 6: widens the unreflected OpaqueComponent (TEST_MODULE_WIDE_OPAQUE), which a hot reload must reject.
 // Variants 1 to 4 and 6 start a session with two LayoutComponents and an OpaqueComponent.
-// Every variant is built with USES physics audio animation nav ai input render runtime ui save: the API
-// targets give it the headers of those libraries and their service interfaces without their code. update()
-// can call every service function (ModuleControl::callServices) and start() can build a mesh body
+// Every variant is built with USES physics audio animation nav ai camera input render runtime ui save: the
+// API targets give it the headers of those libraries and their service interfaces without their code.
+// update() can call every service function (ModuleControl::callServices) and start() can build a mesh body
 // (ModuleControl::createMesh).
 
 #include "TestModuleShared.hpp"
@@ -18,6 +18,7 @@
 #include <illusion/animation/AnimationService.hpp>
 #include <illusion/audio/AudioComponents.hpp>
 #include <illusion/audio/AudioService.hpp>
+#include <illusion/camera/CameraService.hpp>
 #include <illusion/core/AssetRef.hpp>
 #include <illusion/core/JobSystem.hpp>
 #include <illusion/core/Log.hpp>
@@ -245,6 +246,60 @@ void callServices(ModuleContext& context)
         static_cast<void>(ai->runningNode(e));
         static_cast<void>(ai->restart(e));
     }
+    if (CameraService* cameras = context.service<CameraService>())
+    {
+        static_cast<void>(cameras->activate(e));
+        static_cast<void>(cameras->deactivate(e));
+        static_cast<void>(cameras->setPriority(e, 3));
+        static_cast<void>(cameras->setFollow(e, e));
+        static_cast<void>(cameras->setLookAt(e, e));
+        static_cast<void>(cameras->setAngles(e, 0.5f, 0.1f));
+        static_cast<void>(cameras->swapShoulder(e));
+        static_cast<void>(cameras->setFieldOfView(e, 0.8f));
+        static_cast<void>(cameras->shake({.origin = v, .strength = 0.5f, .radius = 6.0f, .duration = 0.4f}));
+        static_cast<void>(cameras->playImpulse(e));
+        static_cast<void>(cameras->liveCamera(e));
+        static_cast<void>(cameras->blendProgress(e));
+    }
+}
+
+// Does what control.camera* asks for with the CameraService and reads the brain.
+void driveCamera(ModuleContext& context, test::ModuleControl& control)
+{
+    CameraService* cameras = context.service<CameraService>();
+    if (cameras == nullptr || control.cameraBrain.isNull())
+    {
+        return;
+    }
+    if (control.cameraActivate)
+    {
+        control.cameraActivate = false;
+        control.cameraAccepted += cameras->activate(control.cameraShot).hasValue() ? 1u : 0u;
+    }
+    if (control.cameraDeactivate)
+    {
+        control.cameraDeactivate = false;
+        control.cameraAccepted += cameras->deactivate(control.cameraShot).hasValue() ? 1u : 0u;
+    }
+    if (control.cameraSwap)
+    {
+        control.cameraSwap = false;
+        control.cameraSide = cameras->swapShoulder(control.cameraShot).valueOr(0.0f);
+    }
+    if (control.cameraShake)
+    {
+        control.cameraShake = false;
+        control.cameraAccepted += cameras->setFieldOfView(control.cameraShot, 0.8f).hasValue() ? 1u : 0u;
+        control.cameraAccepted +=
+            cameras->shake({.origin = Vec3(0.0f), .strength = 1.0f, .radius = 10.0f, .duration = 1.0f})
+                    .hasValue()
+                ? 1u
+                : 0u;
+        control.cameraAccepted += cameras->playImpulse(control.cameraSource).hasValue() ? 1u : 0u;
+    }
+    control.cameraLive = cameras->liveCamera(control.cameraBrain).valueOr(Entity{});
+    control.cameraProgress = cameras->blendProgress(control.cameraBrain).valueOr(-1.0f);
+    control.cameraError = static_cast<i32>(cameras->setPriority(Entity{}, 1).error());
 }
 
 // Finishes the "bite" actions of control.aiFinisher, writes, reports and reads what the control asks for.
@@ -465,6 +520,7 @@ void updateModule(ModuleContext& context, f64)
     }
     driveNavAgent(context, control);
     driveAi(context, control);
+    driveCamera(context, control);
     ILL_ASSERT(!control.assertInUpdate, "assertion from the test module");
 }
 

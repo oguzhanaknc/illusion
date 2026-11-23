@@ -42,4 +42,7 @@ illusion_ctl --launch illusion_editor --editor-arg --headless --editor-arg --no-
   `assets/locales/en.json` and `tr.json`, in `assets/fonts/Roboto-Regular.ttf` (Apache-2.0, licence beside it).
   The UI needs none of the downloaded assets: `editor/tests/play/TestTechDemo.cpp` and the golden image
   `techdemo-pause-menu` (`editor/tests/gpu/TestTechDemoGpu.cpp`) run the module on it alone in CI.
+- The walker's view: the module moves the `Eye Point` Entity to the player's head (yaw, pitch and bob); the
+  `First Person` virtual camera follows it, and the `CameraBrain` on the `Eye`, the real Camera, shows it with a
+  cut (`build_first_person()`, added last so that every other id stays). The module never writes the `Eye`.
 - `tools/test_tools.py` tests both scripts (CI runs it).

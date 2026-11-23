@@ -1,8 +1,9 @@
 // The game module of the tech demo: walk through a forest clearing from dusk to night and back.
 //
 // - First person: the mouse (or the right stick) looks around, WASD (or the left stick) walks, Shift (or
-//   the left stick's button) runs, Space (or South) jumps. The Player is a CharacterController; the Eye
-//   camera follows its head with a little bob.
+//   the left stick's button) runs, Space (or South) jumps. The Player is a CharacterController; the Eye Point
+//   follows its head with a little bob and the First Person virtual camera follows the Eye Point, so the
+//   CameraBrain on the Eye (the real Camera) shows it: the module never writes the Eye.
 // - Time: the SkyAtmosphere's clock runs a full day in six minutes; hold T (or North) to run it twenty
 //   times faster.
 // - Night: fireflies come out over the clearing, the lanterns brighten, the crickets sing. The campfire's
@@ -67,7 +68,7 @@ struct Player
     bool night = false;                  ///< Fireflies, lanterns and crickets are on.
     bool grounded = false;               ///< The terrain's collider is ready: props were set free.
     Entity body{};
-    Entity eye{};
+    Entity eye{}; ///< The Eye Point the First Person camera follows.
     Entity sky{};
     Entity fireLight{};
     Vec3 fireBase{0.0f}; ///< Where the fire light sits; it dances around this point.
@@ -243,7 +244,7 @@ void startModule(ModuleContext& context)
     World& world = context.world();
     Player player;
     findSaved(world, player);
-    player.eye = findNamed(world, "Eye");
+    player.eye = findNamed(world, "Eye Point");
     player.fireLight = findNamed(world, "Fire Light");
     if (const Transform* fire = component<Transform>(world, player.fireLight))
     {

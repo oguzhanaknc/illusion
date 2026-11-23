@@ -87,3 +87,12 @@ kayıt (boş olan her kamerayla eşleşir), yoksa yeni kameranın `blendIn` değ
 Bir geçiş bir stil (`Cut`, `Linear`, `EaseInOut` ya da kübik Bezier `Curve`) ve bir süredir. Üçüncü bir
 kamerayla kesilen geçiş, Camera'nın bulunduğu yerden devam eder. Camera'yı kendisi hareket ettiren oyun kodu,
 Camera'nın beyni olduğunda bunu bırakmalıdır.
+
+## Bir modülden
+
+Bir oyun modülü `CameraService`'i `context.service<illusion::CameraService>()` ile bulur
+(`illusion_add_module`'de `USES camera`). `activate()` ile bir kamerayı diğerlerinin üstüne çıkarır,
+`deactivate()` ile önceliği geri verir, kameraları hedeflere çevirir, bir orbit'i ya da spring arm'ı
+döndürür, omzu değiştirir, görüş alanıyla zoom yapar, shake'leri ve impulse'ları başlatır, canlı kamerayı
+ve geçişin ilerlemesini okur. [Scripting API referansı](../reference/scripting-api.md#cameraservice) her
+fonksiyonu ve hatalarını listeler.

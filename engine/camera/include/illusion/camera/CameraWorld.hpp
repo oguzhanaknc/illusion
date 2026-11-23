@@ -41,12 +41,40 @@ protected:
     CameraWorldCollision() = default;
 };
 
-/// Why a CameraWorld call failed.
+/// Why a CameraWorld or CameraService call failed.
 enum class CameraError : u8
 {
     InvalidArgument, ///< A value is not finite or out of range.
     TooManyShakes,   ///< CameraWorldDesc::maxShakes shakes run already.
+    NoCamera,        ///< The Entity is not alive or has no VirtualCamera.
+    NoBrain,         ///< The Entity is not alive or has no CameraBrain.
+    NoStage,         ///< The VirtualCamera lacks the CameraOrbit or CameraSpringArm the call needs.
+    NoImpulse,       ///< The Entity is not alive or has no CameraImpulse.
+    NotActivated,    ///< The VirtualCamera was not raised by CameraService::activate().
 };
+
+/// Stable name of @p error, e.g. "NoCamera".
+[[nodiscard]] constexpr std::string_view cameraErrorName(CameraError error) noexcept
+{
+    switch (error)
+    {
+    case CameraError::InvalidArgument:
+        return "InvalidArgument";
+    case CameraError::TooManyShakes:
+        return "TooManyShakes";
+    case CameraError::NoCamera:
+        return "NoCamera";
+    case CameraError::NoBrain:
+        return "NoBrain";
+    case CameraError::NoStage:
+        return "NoStage";
+    case CameraError::NoImpulse:
+        return "NoImpulse";
+    case CameraError::NotActivated:
+        return "NotActivated";
+    }
+    return "InvalidArgument";
+}
 
 /// English description of @p error, for logs and tools.
 [[nodiscard]] std::string_view cameraErrorMessage(CameraError error) noexcept;

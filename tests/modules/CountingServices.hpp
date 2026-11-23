@@ -8,6 +8,7 @@
 #include <illusion/ai/AiService.hpp>
 #include <illusion/animation/AnimationService.hpp>
 #include <illusion/audio/AudioService.hpp>
+#include <illusion/camera/CameraService.hpp>
 #include <illusion/input/InputService.hpp>
 #include <illusion/nav/NavService.hpp>
 #include <illusion/particles/ParticleService.hpp>
@@ -878,6 +879,67 @@ public:
     Void restart(Entity e) override
     {
         return forward<Void>(12, [&](AiService& s) { return s.restart(e); });
+    }
+};
+
+// Counts the calls of every CameraService function.
+class CountingCamera final : public CountingProxy<CameraService, 12>
+{
+public:
+    explicit CountingCamera(CameraService* inner = nullptr) noexcept
+        : CountingProxy(inner)
+    {
+    }
+
+    using Void = Expected<void, CameraError>;
+
+    Void activate(Entity e) override
+    {
+        return forward<Void>(0, [&](CameraService& s) { return s.activate(e); });
+    }
+    Void deactivate(Entity e) override
+    {
+        return forward<Void>(1, [&](CameraService& s) { return s.deactivate(e); });
+    }
+    Void setPriority(Entity e, i32 priority) override
+    {
+        return forward<Void>(2, [&](CameraService& s) { return s.setPriority(e, priority); });
+    }
+    Void setFollow(Entity e, Entity target) override
+    {
+        return forward<Void>(3, [&](CameraService& s) { return s.setFollow(e, target); });
+    }
+    Void setLookAt(Entity e, Entity target) override
+    {
+        return forward<Void>(4, [&](CameraService& s) { return s.setLookAt(e, target); });
+    }
+    Void setAngles(Entity e, f32 yaw, f32 pitch) override
+    {
+        return forward<Void>(5, [&](CameraService& s) { return s.setAngles(e, yaw, pitch); });
+    }
+    Expected<f32, CameraError> swapShoulder(Entity e) override
+    {
+        return forward<Expected<f32, CameraError>>(6, [&](CameraService& s) { return s.swapShoulder(e); });
+    }
+    Void setFieldOfView(Entity e, f32 fovY) override
+    {
+        return forward<Void>(7, [&](CameraService& s) { return s.setFieldOfView(e, fovY); });
+    }
+    Void shake(const CameraShake& shake) override
+    {
+        return forward<Void>(8, [&](CameraService& s) { return s.shake(shake); });
+    }
+    Void playImpulse(Entity e) override
+    {
+        return forward<Void>(9, [&](CameraService& s) { return s.playImpulse(e); });
+    }
+    [[nodiscard]] Expected<Entity, CameraError> liveCamera(Entity e) const override
+    {
+        return forward<Expected<Entity, CameraError>>(10, [&](CameraService& s) { return s.liveCamera(e); });
+    }
+    [[nodiscard]] Expected<f32, CameraError> blendProgress(Entity e) const override
+    {
+        return forward<Expected<f32, CameraError>>(11, [&](CameraService& s) { return s.blendProgress(e); });
     }
 };
 

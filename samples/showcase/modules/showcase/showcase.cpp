@@ -1,8 +1,8 @@
 // The game module of the showcase project. It plays the everything scene through the whole scripting API:
-// every function of ModuleContext and of the eleven host services (PhysicsService, AudioService,
+// every function of ModuleContext and of the twelve host services (PhysicsService, AudioService,
 // InputService, ParticleService, SceneService, StoreService, UiService, SaveService, AnimationService,
-// NavService and AiService) is called from here, which tools/check_api_coverage.py checks and the engine
-// tests count at run time (tests/showcase/TestShowcaseModule.cpp).
+// NavService, AiService and CameraService) is called from here, which tools/check_api_coverage.py checks and
+// the engine tests count at run time (tests/showcase/TestShowcaseModule.cpp).
 //
 // What it does, decided only by the frame number and the input so that fixed-step runs repeat exactly:
 // - start: a floor and a gem from mesh geometry, the Jump and Move actions, a chime made from numbers, the
@@ -32,6 +32,7 @@
 #include <illusion/animation/AnimationService.hpp>
 #include <illusion/audio/AudioService.hpp>
 #include <illusion/audio/AudioTypes.hpp>
+#include <illusion/camera/CameraService.hpp>
 #include <illusion/core/JobSystem.hpp>
 #include <illusion/core/Log.hpp>
 #include <illusion/core/Module.hpp>
@@ -131,6 +132,15 @@ struct Runtime
     u32 aiGreets = 0;         ///< Greet actions the module finished.
     u32 aiPerceived = 0;      ///< What the AI Guard perceived at the last update.
     bool aiBusy = false;      ///< The AI Guard's tree had a running node at the last update.
+    Entity cameraBrain{};     ///< The Camera Brain, whose live camera and blend the module reads.
+    Entity cameraTarget{};    ///< The Camera Target the virtual cameras follow.
+    Entity cameraFollow{};    ///< The Follow Camera, live at first.
+    Entity cameraOrbit{};     ///< The Orbit Camera, disabled in the scene, which gets a target at frame 50.
+    Entity cameraShoulder{};  ///< The Shoulder Camera, raised at frame 30 and lowered at frame 70.
+    Entity cameraShaker{};    ///< The Camera Shaker, whose impulse plays at frame 60.
+    Entity cameraLive{};      ///< The virtual camera the brain showed at the last update.
+    f32 cameraBlend = 1.0f;   ///< The brain's blend progress at the last update.
+    f32 cameraSide = 0.0f;    ///< The Shoulder Camera's side after the swap at frame 35.
     u32 navArrivals = 0;      ///< Arrived events of the Nav Walker so far.
     f32 navPathLength = 0.0f; ///< Length of the path found at frame 5, in m.
     f32 navRemaining = 0.0f;  ///< Distance the Nav Walker had left at the last update.
@@ -204,18 +214,23 @@ constexpr u32 kWalkerSteps = 4;     // the walker achievement unlocks after 4 x 
 constexpr u32 kCountedFrames = 120; // the HUD counts the frames up to this one
 constexpr std::string_view kFramesKey = "showcase.hud.frames";
 constexpr std::string_view kLeanClip = "assets:/models/column.gltf#animation/lean";
-constexpr u32 kBowFrame = 30;        // the Column bows (a trigger of its graph)
-constexpr u32 kCalmFrame = 150;      // and returns to its first state
-constexpr u32 kNavQueryFrame = 5;    // the yard's navmesh is queried
-constexpr u32 kNavGoFrame = 10;      // the Nav Walker is sent to its destination
-constexpr u32 kNavWarpFrame = 200;   // warped back to where it started
-constexpr u32 kNavStopFrame = 280;   // and stopped
-constexpr u32 kNavAgentType = 1;     // the yard's navmesh (the Nav Surface)
-constexpr u32 kAiWriteFrame = 20;    // the AI Sleeper's blackboard is written and read
-constexpr u32 kAiNoiseFrame = 40;    // the hidden intruder makes a noise
-constexpr u32 kAiRestartFrame = 250; // the sleeper's tree starts again
-constexpr u32 kStandFrame = 90;      // the Fallen Strider blends back from its ragdoll to its animation
-constexpr u32 kFallFrame = 200;      // and falls again
+constexpr u32 kBowFrame = 30;         // the Column bows (a trigger of its graph)
+constexpr u32 kCalmFrame = 150;       // and returns to its first state
+constexpr u32 kNavQueryFrame = 5;     // the yard's navmesh is queried
+constexpr u32 kNavGoFrame = 10;       // the Nav Walker is sent to its destination
+constexpr u32 kNavWarpFrame = 200;    // warped back to where it started
+constexpr u32 kNavStopFrame = 280;    // and stopped
+constexpr u32 kNavAgentType = 1;      // the yard's navmesh (the Nav Surface)
+constexpr u32 kAiWriteFrame = 20;     // the AI Sleeper's blackboard is written and read
+constexpr u32 kAiNoiseFrame = 40;     // the hidden intruder makes a noise
+constexpr u32 kAiRestartFrame = 250;  // the sleeper's tree starts again
+constexpr u32 kCameraRaiseFrame = 30; // the Shoulder Camera is raised above the others and turned
+constexpr u32 kCameraSwapFrame = 35;  // its shoulder swaps
+constexpr u32 kCameraOrbitFrame = 50; // the Orbit Camera gets a target, angles and priority
+constexpr u32 kCameraShakeFrame = 60; // a shake and an impulse
+constexpr u32 kCameraLowerFrame = 70; // the Shoulder Camera gives its priority back
+constexpr u32 kStandFrame = 90;       // the Fallen Strider blends back from its ragdoll to its animation
+constexpr u32 kFallFrame = 200;       // and falls again
 
 Quat identity() noexcept
 {
@@ -434,6 +449,12 @@ void startModule(ModuleContext& context)
     runtime.aiSleeper = findNamed(world, "AI Sleeper");
     runtime.aiIntruder = findNamed(world, "AI Intruder");
     runtime.aiHidden = findNamed(world, "AI Hidden Intruder");
+    runtime.cameraBrain = findNamed(world, "Camera Brain");
+    runtime.cameraTarget = findNamed(world, "Camera Target");
+    runtime.cameraFollow = findNamed(world, "Follow Camera");
+    runtime.cameraOrbit = findNamed(world, "Orbit Camera");
+    runtime.cameraShoulder = findNamed(world, "Shoulder Camera");
+    runtime.cameraShaker = findNamed(world, "Camera Shaker");
     if (Animator* animator = world.tryGet<Animator>(runtime.column))
     {
         animator->playing = true; // the scene holds it still for the editor
@@ -979,6 +1000,41 @@ void updateAi(AiService& ai, Runtime& runtime, u32 frame)
     runtime.aiBusy = !ai.runningNode(runtime.aiGuard).valueOr(std::string_view{}).empty();
 }
 
+// The camera rig: the Shoulder Camera is raised, turned, swapped and zoomed, the Orbit Camera gets a target,
+// angles and a priority, a shake and an impulse play, and the brain's live camera and blend are read.
+void updateCameras(CameraService& cameras, Runtime& runtime, u32 frame)
+{
+    if (frame == kCameraRaiseFrame)
+    {
+        static_cast<void>(cameras.activate(runtime.cameraShoulder));
+        static_cast<void>(cameras.setAngles(runtime.cameraShoulder, 0.5f, -0.1f));
+        static_cast<void>(cameras.setFieldOfView(runtime.cameraShoulder, 0.7f));
+    }
+    if (frame == kCameraSwapFrame)
+    {
+        runtime.cameraSide = cameras.swapShoulder(runtime.cameraShoulder).valueOr(0.0f);
+    }
+    if (frame == kCameraOrbitFrame)
+    {
+        static_cast<void>(cameras.setFollow(runtime.cameraOrbit, runtime.cameraTarget));
+        static_cast<void>(cameras.setLookAt(runtime.cameraOrbit, runtime.cameraTarget));
+        static_cast<void>(cameras.setAngles(runtime.cameraOrbit, 0.8f, -0.2f));
+        static_cast<void>(cameras.setPriority(runtime.cameraOrbit, 20));
+    }
+    if (frame == kCameraShakeFrame)
+    {
+        static_cast<void>(cameras.shake(
+            {.origin = Vec3(40.0f, 0.0f, 0.0f), .strength = 0.5f, .radius = 12.0f, .duration = 0.4f}));
+        static_cast<void>(cameras.playImpulse(runtime.cameraShaker));
+    }
+    if (frame == kCameraLowerFrame)
+    {
+        static_cast<void>(cameras.deactivate(runtime.cameraShoulder));
+    }
+    runtime.cameraLive = cameras.liveCamera(runtime.cameraBrain).valueOr(Entity{});
+    runtime.cameraBlend = cameras.blendProgress(runtime.cameraBrain).valueOr(1.0f);
+}
+
 // The HUD: the frame counter, the palette, the focus, the values and the events of the last UI update.
 void updateUi(UiService& ui, SceneService* scenes, Runtime& runtime, u32 frame)
 {
@@ -1067,6 +1123,7 @@ void updateModule(ModuleContext& context, f64 deltaSeconds)
     AnimationService* animation = context.service<AnimationService>();
     NavService* nav = context.service<NavService>();
     AiService* ai = context.service<AiService>();
+    CameraService* cameras = context.service<CameraService>();
     Entity self{};
     world.query<const Stats>().each([&self](Entity entity, const Stats&) { self = entity; });
     if (!world.isAlive(self))
@@ -1122,6 +1179,10 @@ void updateModule(ModuleContext& context, f64 deltaSeconds)
     if (ai != nullptr)
     {
         updateAi(*ai, runtime, stats.frames);
+    }
+    if (cameras != nullptr)
+    {
+        updateCameras(*cameras, runtime, stats.frames);
     }
     ++stats.frames;
 }

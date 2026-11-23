@@ -88,3 +88,11 @@ camera. When another camera becomes live, it blends over the blend of the pair: 
 else `defaultBlend`. A blend is a style (`Cut`, `Linear`, `EaseInOut` or a cubic Bezier `Curve`) and a
 duration. A blend that is broken off by a third camera blends on from where the Camera is. Game code that
 moved the Camera itself must stop when it has a brain.
+
+## From a module
+
+A game module finds the `CameraService` with `context.service<illusion::CameraService>()` (`USES camera` in
+`illusion_add_module`). It raises a camera above the others with `activate()` and gives the priority back
+with `deactivate()`, points cameras at targets, turns an orbit or spring arm, swaps the shoulder, zooms by
+the field of view, starts shakes and impulses, and reads the live camera and the blend progress. The
+[scripting API reference](../reference/scripting-api.md#cameraservice) lists every function and its errors.

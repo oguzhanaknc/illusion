@@ -1,6 +1,7 @@
 // The static game module of the SDK test game (tests/sdk/game): it ends the game in its third update.
 
 #include <illusion/ai/AiService.hpp>
+#include <illusion/camera/CameraService.hpp>
 #include <illusion/core/Log.hpp>
 #include <illusion/core/Module.hpp>
 #include <illusion/nav/NavService.hpp>
@@ -36,6 +37,11 @@ void update(illusion::ModuleContext& context, illusion::f64)
         {
             ILL_LOG_INFO("SdkGame", "AiService: {}",
                          illusion::aiErrorName(ai->runningNode(illusion::Entity{}).error()));
+        }
+        if (illusion::CameraService* cameras = context.service<illusion::CameraService>())
+        {
+            ILL_LOG_INFO("SdkGame", "CameraService: {}",
+                         illusion::cameraErrorName(cameras->liveCamera(illusion::Entity{}).error()));
         }
         if (illusion::SceneService* scenes = context.service<illusion::SceneService>())
         {

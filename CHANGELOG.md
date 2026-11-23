@@ -117,10 +117,13 @@ version changes are in the contributor guide ("Versions and releases"). The vers
   `file:line:column` diagnostics, the cooked `ShaderAsset` in the import cache, `illusion_pack --slangc
   --shaders`, `slangc` and the shader library in the SDK (`slang/`, `share/illusion/shaders`, `"slangc"` and
   `"shaders"` in `illusion-sdk.json`), and the quoted tool output of a failed export cook.
+- Cameras for modules (CAM-3): `CameraService` (activate and deactivate, priority, follow and look-at targets,
+  orbit and arm angles, shoulder swap, field of view, shakes and impulses, the live camera and the blend
+  progress) with the adapter `CameraWorldService`, and the tech demo walker seen through a first-person virtual camera.
 
 ### Changed
 
-- The module API version is 12 (`AiService` was added; version 11 added `NavService`, version 10 added `AnimationService::setRagdoll()`,
+- The module API version is 13 (`CameraService` was added; version 12 added `AiService`, version 11 added `NavService`, version 10 added `AnimationService::setRagdoll()`,
   version 9 `setLookAtTarget()`, `setIkTarget()` and `setIkWeight()`, version 8 `jointTransform()`, version 7
   `AnimationService`, version 6 `UiService`, `SceneService::requestExit()` and `SaveService`, and `UiService`
   gained `playTransition()` and `transitionProgress()`): game modules built for an earlier version must be

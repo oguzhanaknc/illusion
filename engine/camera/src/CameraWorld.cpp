@@ -104,6 +104,16 @@ std::string_view cameraErrorMessage(CameraError error) noexcept
         return "a value is not finite or out of range";
     case CameraError::TooManyShakes:
         return "too many camera shakes run at once";
+    case CameraError::NoCamera:
+        return "the Entity has no VirtualCamera";
+    case CameraError::NoBrain:
+        return "the Entity has no CameraBrain";
+    case CameraError::NoStage:
+        return "the VirtualCamera lacks the stage the call needs";
+    case CameraError::NoImpulse:
+        return "the Entity has no CameraImpulse";
+    case CameraError::NotActivated:
+        return "the VirtualCamera was not activated";
     }
     return "unknown camera error";
 }

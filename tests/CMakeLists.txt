@@ -89,6 +89,7 @@ add_executable(illusion_tests
     camera/TestCameraDamping.cpp
     camera/TestCameraNoise.cpp
     camera/TestCameraRig.cpp
+    camera/TestCameraService.cpp
     camera/TestCameraWorld.cpp
     audio/TestAudioEffects.cpp
     audio/TestAudioWorld.cpp
@@ -193,7 +194,7 @@ add_dependencies(illusion_tests illusion_process_helper)
 # Shared libraries loaded by tests/modules/TestModules.cpp (see TestModule.cpp for the variants).
 foreach(variant 1 2 3 4 5 6)
     illusion_add_module(illusion_test_module_v${variant} SHARED SOURCES modules/TestModule.cpp
-        USES physics audio animation nav ai input render runtime ui save)
+        USES physics audio animation nav ai camera input render runtime ui save)
     target_include_directories(illusion_test_module_v${variant} PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/modules)
     target_compile_definitions(illusion_test_module_v${variant} PRIVATE TEST_MODULE_VARIANT=${variant})
     target_compile_definitions(illusion_tests PRIVATE
@@ -203,7 +204,7 @@ endforeach()
 # The showcase project's game module (samples/showcase/modules/showcase), loaded by tests/showcase.
 illusion_add_module(illusion_showcase_module SHARED
     SOURCES ${PROJECT_SOURCE_DIR}/samples/showcase/modules/showcase/showcase.cpp
-    USES physics audio particles animation nav ai input render runtime store ui save)
+    USES physics audio particles animation nav ai camera input render runtime store ui save)
 target_compile_definitions(illusion_tests PRIVATE
     SHOWCASE_MODULE="$<TARGET_FILE:illusion_showcase_module>"
     ILLUSION_SAMPLES_DIR="${PROJECT_SOURCE_DIR}/samples")
