@@ -482,7 +482,8 @@ struct CameraWorld::Impl
             const f32 envelope = 1.0f - std::clamp(running.elapsed / shake.duration, 0.0f, 1.0f);
             CameraNoiseSettings profile = kShakeProfile;
             profile.amplitudeGain = shake.strength * (1.0f - distance / shake.radius) * envelope * envelope;
-            const CameraNoiseOffset offset = sampleCameraNoise(profile, running.seed, running.elapsed);
+            const CameraNoiseOffset offset =
+                sampleCameraNoise(profile, running.seed, static_cast<f64>(running.elapsed));
             total.position += offset.position;
             total.rotation += offset.rotation;
             any = true;
