@@ -146,6 +146,13 @@ enum class AnimationLayerBlend : u8
     Additive, ///< Adds its difference from the first frame of each clip.
 };
 
+/// Where an Additive layer adds its difference (ADR 0065).
+enum class AnimationAdditiveSpace : u8
+{
+    Local, ///< To each joint's local rotation (addPose()).
+    Model, ///< To each joint's model-space rotation (addPoseInModelSpace()); for aim offsets.
+};
+
 /// One joint of a layer mask; it covers the joint and its descendants (a later entry wins for its subtree).
 struct AnimationMaskJoint
 {

@@ -71,6 +71,7 @@ records rather than user documentation.
 | [0062](https://github.com/oguzhanaknc/illusion/blob/main/docs/adr/0062-navigation-and-ai.md) | Navigation and AI: tiled Recast navmeshes baked from colliders in the editor and at run time, a deterministic crowd on the Job System steering CharacterControllers, behaviour trees as `.behavior` assets with typed blackboards, sight and hearing perception, through polled NavService and AiService |
 | [0063](https://github.com/oguzhanaknc/illusion/blob/main/docs/adr/0063-material-shaders.md) | Material shaders: Slang surface functions in `.shader` assets with declared parameters, compiled per pass variant by the pinned slangc at cook time and on hot reload; the player loads cooked SPIR-V |
 | [0064](https://github.com/oguzhanaknc/illusion/blob/main/docs/adr/0064-virtual-cameras.md) | Virtual cameras: saved rigs of body, aim and noise stages; a camera brain on the real camera blends to the highest-priority live one; evaluated after Hierarchy in a GPU-free camera library |
+| [0065](https://github.com/oguzhanaknc/illusion/blob/main/docs/adr/0065-retargeting-and-aim-layers.md) | Retargeting and aim layers: rig maps cooked with the skeleton, generated at import and corrected in the sidecar; model-space rest-pose corrections bound once per clip and rig; additive aim layers in model space and a procedural Aim stage on the spine |
 
 To propose a new decision, copy `docs/adr/0000-template.md` and follow the
 [contributing guide](../contributing.md#architecture-decision-records).

@@ -1582,6 +1582,59 @@ game code.
 
 ## ANIM-5 — Retargeting and aim layers
 
+- ANIM-5 is designed in ADR 0065 (a rig map of bone names per skeleton, generated at import and corrected in
+  the model's sidecar; clips retargeted at bind time with a model-space rest-pose correction applied per
+  channel and translations scaled by the hips height ratio; aim offsets as Additive layers in model space
+  against a reference pose, plus a procedural `Aim` stage on the spine; joint names resolve through the rig).
+  The two test rigs are generated (`tests/data/gltf/generate.py`), built like the CC0 rigs SHOOTER fetches:
+  `humanoid_a` (Mixamo-style `mixamorig:` names, T-pose, 1.8 m, joint axes along the model axes) and
+  `humanoid_b` (Blender-style `pelvis`, `thigh.L` names, A-pose, 1.2 m, bones along local +y, a `root` joint
+  on the ground, one more spine joint and a twist joint). Four work packages, one PR each:
+- ANIM-5a (`implementer`): Rig maps. `illusion/assets/Rig.hpp` (`generateRigMap()`, `applyRigOverrides()`,
+  `isHumanoidBone()`, `isValidBoneName()`, `retargetTranslationName()`), `Skeleton::rig`,
+  `AnimationClip::skeleton`, model format 7, import settings version 3 with `skins` (parse, merge, write,
+  JSON-path errors), the sidecar as a source of the cooked model. Done: `tests/assets/TestRigMap.cpp`: both
+  test rigs and a rig with names `joint0..N` (topology only) map every required bone, finger chains, a name
+  that says left on the right side is a warning, deterministic output for any joint order of the file;
+  every override error; the round trip of rig and source skin through format 7; a changed sidecar recooks;
+  both test rigs added to `tests/data/gltf/generate.py`; no benchmark (load time only).
+- ANIM-5b (`implementer`): Retargeted playback. `illusion/animation/Retarget.hpp` (`matchJoints()`,
+  `rigHeightRatio()`, `bindRetargetedClip()`, the `sampleClip()` overload, `findRigJoint()`),
+  `GraphBinding::clipRetargets` and the `bindGraph()` overload with `ClipSource`, `AnimationWorld` keeping the
+  source skin of each clip and binding retargeted clips per (skeleton, clip), every joint name (graph masks and
+  root motion, `BoneAttachment`, `LookAt`, `TwoBoneIk`, `FootPlacement`, `SpringBone`, `.ragdoll` profiles,
+  `jointTransform()`) resolved through `findRigJoint()`. Done: `tests/animation/TestRetarget.cpp`: a clip of
+  `humanoid_a` on `humanoid_b` and back gives model-space bone directions of paired bones within 1e-3 rad of
+  the source at sampled frames (T-pose clip on the A-pose rig included), hips height scaled by the ratio, root
+  motion of a walk cycle scaled by it, unpaired joints hold the reference pose; a clip on its own skin is
+  bit-identical to ANIM-1; a graph with bone-name masks and root motion plays on both rigs; fixed-step
+  determinism, no allocation per update (`test::ScopedAllocationCounter`); benchmark `animation/retarget-300x60`
+  (budget from the measurement, ADR target at most 15 % over `animation/world-update-300x60`); the showcase
+  gets a second rig (`make_assets.py`: the Strider's skeleton renamed and rescaled) playing the Strider's clip
+  retargeted, with a socket written as a bone name.
+- ANIM-5c (`implementer`): Aim layers. `.animgraph` version 2 (`reference`, `referenceTime`, `space`; errors
+  with JSON paths; `space` only on Additive layers; version 1 files read and write unchanged),
+  `illusion/animation/Aim.hpp` (`addPoseInModelSpace()`, `aimAngles()`, `solveAim()`), the saved `Aim`
+  Component (`illusion.Aim`, manual anchor `#aim`) and `TwoBoneIk::targetJoint`, the aim stage and parameter
+  writes in `AnimationWorld` in the ADR's stage order, `AnimationService::setAimTarget()`, `setAimWeight()`,
+  `aimAngles()` with `AnimationWorldService` (module API version 14), the showcase module calls them and
+  `build.jsonl` sets every `Aim` field and `targetJoint` to non-default values. Done:
+  `tests/animation/TestAim.cpp`: a nine-pose aim offset over a leaning base aims within 2° in model space and
+  the local-space layer does not (the reason for `Model`); single-frame aim poses against a reference give
+  their offsets; the solver's yaw/pitch split keeps the head level, the weights spread the turn, clamps and a
+  target behind or at the joint give no NaN; aim then off-hand `targetJoint` IK keeps the hand on the grip
+  within 1 mm; both test rigs aim with the same bone-name `Aim`; determinism and no allocation; parser tests
+  for every new error; benchmark `animation/aim-300` (ADR target under 1 ms over
+  `animation/world-graph-300`, budget from the measurement); `tests/modules` calls the three functions.
+- ANIM-5d (`mechanic`): Editor and documentation. Commands `animation.rig`, `animation.map_joint` (through the
+  `asset.set_import_settings` path, undoable) and `animation.retarget`, the additions to `animation.list`, every
+  param validated with fuzz cases, the command reference and `catalog.json`, agent summaries with examples; the
+  Animator card's source-skin line and the dimmed unmapped joints of the Skeletons visualiser (goldens
+  updated); the acceptance transcript `tests/acceptance/animation/retarget.jsonl` (maps a joint, checks the
+  retargeted clip, undoes it); manual sections "Retargeting" and "Aim offsets" in `manual/animation.md` (EN/TR,
+  a complete version 2 `.animgraph` aim example tested like `character.animgraph`), the scripting API
+  reference, the tutorial "Animate a character" gets aiming, `CHANGELOG.md` (module API version 14), ADR 0065
+  Accepted. Done: `mkdocs build --strict`, docs parity, the tutorial's code builds.
 - Humanoid retargeting: a joint map per skeleton (generated by name and topology, editable), clips played
   on any mapped skeleton with rest-pose correction and proportional root motion
 - Aim layers: additive aim offsets from a pitch/yaw blend space on an upper-body mask, so a character aims

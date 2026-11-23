@@ -82,6 +82,27 @@ struct TwoBoneIk
     bool alignToTarget = false;       ///< Also give the end joint the target Entity's rotation.
 };
 
+/// Aims the Entity's Animator at a target (ADR 0065): before the graph steps, the yaw and pitch from the
+/// spine joint to the target go to the graph's aim parameters (an authored aim offset); after the graph and
+/// the spring bones, the spine chain turns until the aim axis of `joint` points at the target. Saved.
+struct Aim
+{
+    std::string joint;              ///< The aim joint (a hand, a weapon joint, the head).
+    Vec3 forward{0.0f, 0.0f, 1.0f}; ///< Its aim axis in its own space.
+    std::string spine;              ///< The top joint of the chain that turns (an ancestor of joint).
+    u32 chainLength = 3;            ///< Joints that share the turn: spine and up to three ancestors (1-4).
+    /// Share of each chain joint, from the lowest up; normalized over the first chainLength.
+    std::array<f32, 4> weights{0.3f, 0.3f, 0.4f, 0.0f};
+    Entity target;              ///< Entity to aim at; null uses point.
+    Vec3 point{0.0f};           ///< World-space point to aim at when target is null.
+    f32 maxYaw = 1.5707964f;    ///< Largest yaw from the character's forward in radians (90°).
+    f32 maxPitch = 1.0471976f;  ///< Largest pitch up or down in radians (60°).
+    f32 weight = 1.0f;          ///< Share of the procedural turn in [0, 1]; 0 only drives the parameters.
+    f32 speed = 6.2831853f;     ///< How fast the aim follows the target, in rad/s.
+    std::string yawParameter;   ///< Graph Float parameter that gets the yaw in radians, or empty.
+    std::string pitchParameter; ///< Graph Float parameter that gets the pitch in radians, or empty.
+};
+
 /// Keeps the feet of the Entity's Animator on the ground (ADR 0061): before each Animation step the session
 /// raycasts below every foot (a TwoBoneIk of the Animator whose chain hangs from the pelvis joint) and moves
 /// the pelvis down to the lowest one. Saved.
