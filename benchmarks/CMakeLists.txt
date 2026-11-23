@@ -7,6 +7,7 @@ add_executable(illusion_benchmarks
     BenchAnimation.cpp
     BenchAssets.cpp
     BenchAudio.cpp
+    BenchCamera.cpp
     BenchCore.cpp
     BenchDebugDraw.cpp
     BenchEcs.cpp
@@ -30,7 +31,7 @@ add_executable(illusion_benchmarks
 target_include_directories(illusion_benchmarks PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}
     ${PROJECT_SOURCE_DIR}/engine/render/src)
 target_link_libraries(illusion_benchmarks PRIVATE
-    illusion::core illusion::input illusion::assets illusion::animation illusion::audio illusion::physics illusion::particles illusion::modules
+    illusion::core illusion::input illusion::assets illusion::animation illusion::camera illusion::audio illusion::physics illusion::particles illusion::modules
     illusion::runtime illusion::text illusion::render illusion::ui illusion::save illusion::nav illusion::ai illusion::nanobench)
 illusion_require_dependency(test_font)
 target_compile_definitions(illusion_benchmarks PRIVATE ILLUSION_TEST_FONT="${ILLUSION_TEST_FONT}")
