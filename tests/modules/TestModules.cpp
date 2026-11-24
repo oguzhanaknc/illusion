@@ -7,6 +7,9 @@
 #include <illusion/ai/AiWorld.hpp>
 #include <illusion/ai/AiWorldService.hpp>
 #include <illusion/assets/AssetStreamer.hpp>
+#include <illusion/camera/CameraComponents.hpp>
+#include <illusion/camera/CameraWorld.hpp>
+#include <illusion/camera/CameraWorldService.hpp>
 #include <illusion/core/AssetRef.hpp>
 #include <illusion/core/JobSystem.hpp>
 #include <illusion/core/Json.hpp>
@@ -825,6 +828,7 @@ TEST_CASE("a shared module calls every function of the service interfaces throug
     test::CountingAnimation animation;
     test::CountingNav nav;
     test::CountingAi ai;
+    test::CountingCamera cameras;
     ServiceSet services;
     services.provide<PhysicsService>(physics);
     services.provide<AudioService>(audio);
@@ -835,6 +839,7 @@ TEST_CASE("a shared module calls every function of the service interfaces throug
     services.provide<AnimationService>(animation);
     services.provide<NavService>(nav);
     services.provide<AiService>(ai);
+    services.provide<CameraService>(cameras);
     f.host->attachWorld(f.secondWorld, WorldRole::Simulation, std::move(services));
     install(TEST_MODULE_V1, f.library);
     REQUIRE_FALSE(f.host->load(f.library));
@@ -851,6 +856,7 @@ TEST_CASE("a shared module calls every function of the service interfaces throug
     CHECK(animation.everyFunctionCalledOnce());
     CHECK(nav.everyFunctionCalledOnce());
     CHECK(ai.everyFunctionCalledOnce());
+    CHECK(cameras.everyFunctionCalledOnce());
     CHECK(f.host->detachWorld(f.secondWorld));
 }
 
@@ -931,6 +937,7 @@ TEST_CASE(
     Fixture f;
     World& world = f.secondWorld;
     registerAiComponents(ComponentRegistry::instance());
+    registerCameraComponents(ComponentRegistry::instance());
     VirtualFileSystem files;
     REQUIRE(files.mount("game", f.directory.path, MountAccess::ReadWrite) == FileError::None);
     REQUIRE(files.writeText("game:/finish.behavior", kFinishTree) == FileError::None);
@@ -986,6 +993,70 @@ TEST_CASE(
     step();
     CHECK(f.control.aiNoiseSent);
     CHECK(f.control.aiPerceivedCount == 1);
+    CHECK(f.host->detachWorld(world));
+}
+
+TEST_CASE("a shared module raises a virtual camera, swaps its shoulder, shakes and reads the brain")
+{
+    Fixture f;
+    World& world = f.secondWorld;
+    registerCameraComponents(ComponentRegistry::instance());
+    CameraBrain brainSettings;
+    brainSettings.defaultBlend = CameraBlend{CameraBlendStyle::Linear, 1.0f, {}, {}};
+    const Entity brain = world.create(Transform{}, brainSettings);
+    VirtualCamera lower;
+    lower.priority = 5;
+    const Entity first = world.create(Transform{}, lower);
+    VirtualCamera higher;
+    higher.priority = 2;
+    const Entity second = world.create(Transform{}, higher, CameraSpringArm{});
+    CameraImpulse impulse;
+    impulse.playOnStart = false;
+    const Entity source = world.create(Transform{}, impulse);
+
+    CameraWorld cameras(world);
+    CameraWorldService cameraService(cameras);
+    ServiceSet services;
+    services.provide<CameraService>(cameraService);
+    f.host->attachWorld(world, WorldRole::Simulation, std::move(services));
+    install(TEST_MODULE_V1, f.library);
+    REQUIRE_FALSE(f.host->load(f.library));
+    f.control.cameraBrain = brain;
+    f.control.cameraShot = second;
+    f.control.cameraSource = source;
+
+    constexpr f64 kStep = 1.0 / 60.0;
+    const auto step = [&] {
+        f.host->update(world, kStep);
+        cameras.update(static_cast<f32>(kStep));
+    };
+    step();
+    step();
+    CHECK(f.control.cameraLive == first);
+    CHECK(f.control.cameraProgress == doctest::Approx(1.0f));
+    CHECK(f.control.cameraError == static_cast<i32>(CameraError::NoCamera));
+
+    f.control.cameraActivate = true;
+    step();
+    step();
+    CHECK(f.control.cameraAccepted == 1);
+    CHECK(f.control.cameraLive == second);
+    CHECK(f.control.cameraProgress > 0.0f);
+    CHECK(f.control.cameraProgress < 1.0f);
+
+    f.control.cameraSwap = true;
+    f.control.cameraShake = true;
+    step();
+    CHECK(f.control.cameraSide == doctest::Approx(-1.0f));
+    CHECK(f.control.cameraAccepted == 4);
+    CHECK(world.get<VirtualCamera>(second).fovY == doctest::Approx(0.8f));
+    CHECK(cameras.statistics().shakes == 2);
+
+    f.control.cameraDeactivate = true;
+    step();
+    step();
+    CHECK(f.control.cameraAccepted == 5);
+    CHECK(f.control.cameraLive == first);
     CHECK(f.host->detachWorld(world));
 }
 

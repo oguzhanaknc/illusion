@@ -10,6 +10,7 @@
 #include <illusion/animation/AnimationComponents.hpp>
 #include <illusion/animation/AnimationWorld.hpp>
 #include <illusion/assets/AssetStreamer.hpp>
+#include <illusion/camera/CameraComponents.hpp>
 #include <illusion/core/AssetRef.hpp>
 #include <illusion/core/JobSystem.hpp>
 #include <illusion/core/Json.hpp>
@@ -96,6 +97,7 @@ inline void reflectEditorTestComponents()
         registerAnimationComponents(ComponentRegistry::instance());
         registerNavComponents(ComponentRegistry::instance());
         registerAiComponents(ComponentRegistry::instance());
+        registerCameraComponents(ComponentRegistry::instance());
         registerUiComponents();
         reflect<editortest::Link>("test.Link")
             .meta({.displayName = "Link", .category = "Test"})

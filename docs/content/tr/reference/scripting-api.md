@@ -21,6 +21,7 @@ uygular ve modüle verir, modül de onu `context.service<T>()` ile bulur. Tasar�
 | `AnimationService` | `animation` | `illusion/animation/AnimationService.hpp` | `AnimationWorld` üzerinde `AnimationWorldService` (`illusion::animation`; ADR 0060) |
 | `NavService` | `nav` | `illusion/nav/NavService.hpp` | `NavWorld` üzerinde `NavWorldService` (`illusion::nav`; ADR 0062) |
 | `AiService` | `ai` | `illusion/ai/AiService.hpp` | `AiWorld` üzerinde `AiWorldService` (`illusion::ai`; ADR 0062) |
+| `CameraService` | `camera` | `illusion/camera/CameraService.hpp` | `CameraWorld` üzerinde `CameraWorldService` (`illusion::camera`; ADR 0064) |
 
 ```cmake
 illusion_add_module(tetris SOURCES game/Tetris.cpp USES physics audio input runtime)
@@ -64,7 +65,7 @@ void update(illusion::ModuleContext& context, illusion::f64)
 - **Maliyet.** Bir çağrı tek bir dolaylı çağrıdır; `services/virtual-call` Benchmark'ı onu 10 ns'nin
   altında tutar.
 - **Uyumluluk.** Arayüzler modül ABI'sinin parçasıdır: bir fonksiyon eklemek veya değiştirmek
-  `kModuleApiVersion`'ı değiştirir (`AiService` ile birlikte 12) ve modüller yeniden Build edilmelidir.
+  `kModuleApiVersion`'ı değiştirir (`CameraService` ile birlikte 13) ve modüller yeniden Build edilmelidir.
 
 ## Kapsam
 
@@ -377,3 +378,61 @@ if (illusion::AiService* ai = context.service<illusion::AiService>())
 ```
 
 [AI](../manual/ai.md#bir-modulden) kılavuz sayfası tree'leri, action'ları ve algılamayı anlatır.
+
+## CameraService
+
+Oyunun sanal kameraları (ADR 0064). Kameralar `VirtualCamera` taşıyan Entity'lerdir; gerçek `Camera`'daki
+**brain** en yüksek önceliklilerini gösterir ve değiştiğinde geçiş yapar. Değişiklikleriniz bir sonraki Cameras
+adımında görülür. Canlı olmayan ya da ihtiyaç duyulan Component'i olmayan bir Entity üzerindeki çağrı hata
+döndürür; hiçbir şey assert etmez.
+
+| Fonksiyon | Amaç |
+| --- | --- |
+| `activate`, `deactivate` | `activate` bir `VirtualCamera`'yı diğer tümlerinin üstüne çıkarır (devre dışı bir kamera devre dışı kalır) ve önceliğini hatırlar; `deactivate` önceliği geri verir |
+| `setPriority` | Önceliği ayarlar; bu bir activate'i sona erdirir |
+| `setFollow`, `setLookAt` | Body'nin izlediği ya da aim'in baktığı Entity'yi ayarlar; null bir Entity onu temizler |
+| `setAngles` | Kameranın `CameraOrbit`'ini (yoksa `CameraSpringArm`'ını) radyan cinsinden bir yaw ve pitch'e çevirir; pitch sınırları geçerlidir |
+| `swapShoulder` | `CameraSpringArm`'ın tarafını değiştirir ve yenisini döndürür (-1 sol, 1 sağ); kol `sideDamping` süresiyle kayar |
+| `setFieldOfView` | Dikey görüş alanını radyan cinsinden, (0, pi) aralığında ayarlar; nişan zoom'u için onu birkaç kareye yayın |
+| `shake` | Yarıçap içindeki her canlı kameranın aldığı bir `CameraShake` (origin, strength, radius, duration) başlatır |
+| `playImpulse` | Bir Entity'nin `CameraImpulse`'unu `playOnStart` değerinden bağımsız olarak konumunda bir kez oynatır |
+| `liveCamera` | Bir `CameraBrain`'in gösterdiği sanal kamera; henüz birini göstermiyorsa null Entity |
+| `blendProgress` | Brain'in geçişinin ne kadar ilerlediği, 0 ile 1 arası; geçiş yoksa 1 |
+
+Her fonksiyon bir `Expected<..., CameraError>` döndürür; `cameraErrorName()` adı verir:
+
+| Hata | Ne zaman |
+| --- | --- |
+| `InvalidArgument` | Bir değer sonlu değil ya da aralık dışı: (0, pi) dışında bir görüş alanı, yarıçapı ya da süresi pozitif olmayan bir shake, canlı olmayan bir hedef Entity |
+| `TooManyShakes` | `CameraWorldDesc::maxShakes` kadar shake zaten çalışıyor |
+| `NoCamera` | Entity canlı değil ya da `VirtualCamera`'sı yok |
+| `NoBrain` | Entity canlı değil ya da `CameraBrain`'i yok |
+| `NoStage` | Kamerada `CameraOrbit` ya da `CameraSpringArm` yok (`swapShoulder` için `CameraSpringArm` yok) |
+| `NoImpulse` | Entity canlı değil ya da `CameraImpulse`'u yok |
+| `NotActivated` | `activate`'in yükseltmediği bir kamerada `deactivate` |
+
+`activate` ve `setPriority`, `VirtualCamera`'nın kayıtlı `priority` değerini; `swapShoulder`, `setFollow`,
+`setLookAt` ve `setFieldOfView` diğer alanlarını World'ün Component'lerinin tuttuğu haliyle yazar.
+
+```cpp
+if (illusion::CameraService* cameras = context.service<illusion::CameraService>())
+{
+    static_cast<void>(cameras->activate(cutsceneCamera));
+    static_cast<void>(cameras->setLookAt(cutsceneCamera, boss));
+    if (swapPressed)
+    {
+        static_cast<void>(cameras->swapShoulder(shoulderCamera));
+    }
+    static_cast<void>(cameras->setFieldOfView(shoulderCamera, aiming ? 0.7f : 1.05f));
+    if (hit)
+    {
+        static_cast<void>(cameras->shake({.origin = hitPosition, .strength = 0.8f, .radius = 12.0f}));
+    }
+    if (cameras->blendProgress(brain).valueOr(1.0f) >= 1.0f)
+    {
+        static_cast<void>(cameras->deactivate(cutsceneCamera));
+    }
+}
+```
+
+[Cameras](../manual/cameras.md#bir-modulden) kılavuz sayfası shot'ları, stage'leri ve brain'i anlatır.

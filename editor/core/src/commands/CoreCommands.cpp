@@ -1018,6 +1018,62 @@ void reflectCoreCommandTypes(StructRegistry& structs)
             .field("agents", &NavDebugResult::agents)
             .field("paths", &NavDebugResult::paths)
             .field("obstacles", &NavDebugResult::obstacles);
+        reflectStruct<CameraListCamera>("editor.CameraListCamera", 1, structs)
+            .field("entity", &CameraListCamera::entity)
+            .field("priority", &CameraListCamera::priority)
+            .field("enabled", &CameraListCamera::enabled)
+            .field("inactive", &CameraListCamera::inactive)
+            .field("fieldOfView", &CameraListCamera::fieldOfView)
+            .field("nearPlane", &CameraListCamera::nearPlane)
+            .field("dutch", &CameraListCamera::dutch)
+            .field("body", &CameraListCamera::body)
+            .field("aim", &CameraListCamera::aim)
+            .field("noise", &CameraListCamera::noise)
+            .field("follow", &CameraListCamera::follow)
+            .field("lookAt", &CameraListCamera::lookAt)
+            .field("customBlend", &CameraListCamera::customBlend)
+            .field("live", &CameraListCamera::live);
+        reflectStruct<CameraListBrain>("editor.CameraListBrain", 1, structs)
+            .field("entity", &CameraListBrain::entity)
+            .field("defaultBlend", &CameraListBrain::defaultBlend)
+            .field("defaultDuration", &CameraListBrain::defaultDuration)
+            .field("overrides", &CameraListBrain::overrides);
+        reflectStruct<CameraListResult>("editor.CameraListResult", 1, structs)
+            .field("world", &CameraListResult::world)
+            .field("cameras", &CameraListResult::cameras)
+            .field("brains", &CameraListResult::brains)
+            .field("totalCameras", &CameraListResult::totalCameras)
+            .field("totalBrains", &CameraListResult::totalBrains)
+            .field("impulses", &CameraListResult::impulses);
+        reflectStruct<CameraStatusBrain>("editor.CameraStatusBrain", 1, structs)
+            .field("entity", &CameraStatusBrain::entity)
+            .field("live", &CameraStatusBrain::live)
+            .field("from", &CameraStatusBrain::from)
+            .field("blending", &CameraStatusBrain::blending)
+            .field("progress", &CameraStatusBrain::progress)
+            .field("weight", &CameraStatusBrain::weight)
+            .field("position", &CameraStatusBrain::position)
+            .field("rotation", &CameraStatusBrain::rotation)
+            .field("fieldOfView", &CameraStatusBrain::fieldOfView);
+        reflectStruct<CameraStatusResult>("editor.CameraStatusResult", 1, structs)
+            .field("world", &CameraStatusResult::world)
+            .field("live", &CameraStatusResult::live)
+            .field("note", &CameraStatusResult::note)
+            .field("brains", &CameraStatusResult::brains)
+            .field("cameras", &CameraStatusResult::cameras)
+            .field("evaluated", &CameraStatusResult::evaluated);
+        reflectStruct<CameraActivateParams>("editor.CameraActivateParams", 1, structs)
+            .field("entity", &CameraActivateParams::entity);
+        reflectStruct<CameraActivateResult>("editor.CameraActivateResult", 1, structs)
+            .field("entity", &CameraActivateResult::entity)
+            .field("previous", &CameraActivateResult::previous)
+            .field("priority", &CameraActivateResult::priority)
+            .field("changed", &CameraActivateResult::changed);
+        reflectStruct<CameraPreviewParams>("editor.CameraPreviewParams", 1, structs)
+            .field("entity", &CameraPreviewParams::entity)
+            .field("clear", &CameraPreviewParams::clear);
+        reflectStruct<CameraPreviewResult>("editor.CameraPreviewResult", 1, structs)
+            .field("entity", &CameraPreviewResult::entity);
         reflectStruct<AiStatusParams>("editor.AiStatusParams", 1, structs)
             .field("entity", &AiStatusParams::entity)
             .field("wait", &AiStatusParams::wait);
@@ -1533,6 +1589,7 @@ void registerCoreCommands(CommandRegistry& registry)
     detail::registerSavesCommands(registry);
     detail::registerModuleCommands(registry);
     detail::registerNavCommands(registry);
+    detail::registerCameraCommands(registry);
     detail::registerAiCommands(registry);
     detail::registerAnimationCommands(registry);
     detail::registerExportCommands(registry);

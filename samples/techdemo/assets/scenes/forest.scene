@@ -9,6 +9,8 @@
     "illusion.AudioSource": 1,
     "illusion.BehaviorAgent": 1,
     "illusion.Camera": 2,
+    "illusion.CameraBrain": 1,
+    "illusion.CameraFollow": 1,
     "illusion.CharacterController": 1,
     "illusion.Collider": 1,
     "illusion.Hierarchy": 1,
@@ -25,6 +27,7 @@
     "illusion.Saved": 1,
     "illusion.SkyAtmosphere": 1,
     "illusion.Transform": 1,
+    "illusion.VirtualCamera": 1,
     "illusion.VolumetricFog": 1,
     "illusion.Wind": 1
   },
@@ -195788,6 +195791,41 @@
       }
     },
     {
+      "id": "8249a061c9a64fa0",
+      "components": {
+        "illusion.CameraFollow": {
+          "offset": [0.0, 0.0, 0.0],
+          "space": "Target",
+          "damping": [0.0, 0.0, 0.0],
+          "rotationDamping": 0.0
+        },
+        "illusion.Name": {
+          "value": "First Person"
+        },
+        "illusion.Transform": {
+          "position": [0.0, 1.7, 7.0],
+          "rotation": [0.0, 0.0, 0.0, 1.0],
+          "scale": [1.0, 1.0, 1.0]
+        },
+        "illusion.VirtualCamera": {
+          "priority": 10,
+          "enabled": true,
+          "follow": "bcff87d2a39d0b0a",
+          "lookAt": null,
+          "fovY": 1.15,
+          "nearPlane": 0.05,
+          "dutch": 0.0,
+          "customBlend": false,
+          "blendIn": {
+            "style": "EaseInOut",
+            "duration": 1.0,
+            "control1": [0.42, 0.0],
+            "control2": [0.58, 1.0]
+          }
+        }
+      }
+    },
+    {
       "id": "824efe85835dd562",
       "components": {
         "illusion.MeshRenderer": {
@@ -269324,6 +269362,19 @@
       }
     },
     {
+      "id": "bcff87d2a39d0b0a",
+      "components": {
+        "illusion.Name": {
+          "value": "Eye Point"
+        },
+        "illusion.Transform": {
+          "position": [0.0, 1.7, 7.0],
+          "rotation": [0.0, 0.0, 0.0, 1.0],
+          "scale": [1.0, 1.0, 1.0]
+        }
+      }
+    },
+    {
       "id": "bd01052ceb8cb03d",
       "components": {
         "illusion.MeshRenderer": {
@@ -277074,6 +277125,15 @@
           "orthoHeight": 10.0,
           "farPlane": 1000.0,
           "priority": 0
+        },
+        "illusion.CameraBrain": {
+          "defaultBlend": {
+            "style": "Cut",
+            "duration": 0.0,
+            "control1": [0.42, 0.0],
+            "control2": [0.58, 1.0]
+          },
+          "blends": []
         },
         "illusion.Name": {
           "value": "Eye"

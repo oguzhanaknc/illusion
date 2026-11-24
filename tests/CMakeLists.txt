@@ -85,6 +85,14 @@ add_executable(illusion_tests
     animation/TestInverseKinematics.cpp
     animation/TestPose.cpp
     animation/TestSpringBones.cpp
+    camera/TestCameraAim.cpp
+    camera/TestCameraBlend.cpp
+    camera/TestCameraBody.cpp
+    camera/TestCameraDamping.cpp
+    camera/TestCameraNoise.cpp
+    camera/TestCameraRig.cpp
+    camera/TestCameraService.cpp
+    camera/TestCameraWorld.cpp
     audio/TestAudioEffects.cpp
     audio/TestAudioWorld.cpp
     modules/TestModules.cpp
@@ -109,6 +117,7 @@ add_executable(illusion_tests
     render/TestSkyAtmosphere.cpp
     render/TestTextureStreamingPolicy.cpp
     render/TestRendererExtensions.cpp
+    runtime/TestCameraRuntime.cpp
     runtime/TestGameSession.cpp
     runtime/TestProjectSettings.cpp
     save/TestSaveCapture.cpp
@@ -137,7 +146,7 @@ add_executable(illusion_tests
 target_include_directories(illusion_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}
     ${PROJECT_SOURCE_DIR}/engine/render/src ${PROJECT_SOURCE_DIR}/engine/player/src)
 target_link_libraries(illusion_tests PRIVATE
-    illusion::core illusion::platform illusion::input illusion::assets illusion::animation illusion::audio
+    illusion::core illusion::platform illusion::input illusion::assets illusion::animation illusion::camera illusion::audio
     illusion::physics illusion::particles illusion::render illusion::modules illusion::runtime illusion::player illusion::store
     illusion::save illusion::text illusion_text_tools illusion::ui illusion::nav illusion::ai illusion::doctest)
 illusion_require_dependency(test_font)
@@ -187,7 +196,7 @@ add_dependencies(illusion_tests illusion_process_helper)
 # Shared libraries loaded by tests/modules/TestModules.cpp (see TestModule.cpp for the variants).
 foreach(variant 1 2 3 4 5 6)
     illusion_add_module(illusion_test_module_v${variant} SHARED SOURCES modules/TestModule.cpp
-        USES physics audio animation nav ai input render runtime ui save)
+        USES physics audio animation nav ai camera input render runtime ui save)
     target_include_directories(illusion_test_module_v${variant} PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/modules)
     target_compile_definitions(illusion_test_module_v${variant} PRIVATE TEST_MODULE_VARIANT=${variant})
     target_compile_definitions(illusion_tests PRIVATE
@@ -197,7 +206,7 @@ endforeach()
 # The showcase project's game module (samples/showcase/modules/showcase), loaded by tests/showcase.
 illusion_add_module(illusion_showcase_module SHARED
     SOURCES ${PROJECT_SOURCE_DIR}/samples/showcase/modules/showcase/showcase.cpp
-    USES physics audio particles animation nav ai input render runtime store ui save)
+    USES physics audio particles animation nav ai camera input render runtime store ui save)
 target_compile_definitions(illusion_tests PRIVATE
     SHOWCASE_MODULE="$<TARGET_FILE:illusion_showcase_module>"
     ILLUSION_SAMPLES_DIR="${PROJECT_SOURCE_DIR}/samples")
@@ -257,6 +266,20 @@ illusion_add_module(illusion_tutorial_creature_module SHARED SOURCES ${tutorial_
 target_compile_definitions(illusion_tests PRIVATE
     TUTORIAL_CREATURE_MODULE="$<TARGET_FILE:illusion_tutorial_creature_module>")
 add_dependencies(illusion_tests illusion_tutorial_creature_module)
+# The same for "A third-person camera".
+set(tutorial_camera_page ${PROJECT_SOURCE_DIR}/docs/content/en/tutorials/third-person-camera.md)
+set(tutorial_camera_source ${CMAKE_CURRENT_BINARY_DIR}/generated/tutorials/third_person_camera.cpp)
+add_custom_command(OUTPUT ${tutorial_camera_source}
+    COMMAND ${CMAKE_COMMAND} -D SOURCE=${tutorial_camera_page} -D OUTPUT=${tutorial_camera_source}
+        -P ${PROJECT_SOURCE_DIR}/cmake/ExtractCppBlocks.cmake
+    DEPENDS ${tutorial_camera_page} ${PROJECT_SOURCE_DIR}/cmake/ExtractCppBlocks.cmake
+    COMMENT "Extracting the code of the A third-person camera tutorial"
+    VERBATIM)
+illusion_add_module(illusion_tutorial_camera_module SHARED SOURCES ${tutorial_camera_source}
+    USES camera input physics runtime)
+target_compile_definitions(illusion_tests PRIVATE
+    TUTORIAL_CAMERA_MODULE="$<TARGET_FILE:illusion_tutorial_camera_module>")
+add_dependencies(illusion_tests illusion_tutorial_camera_module)
 target_compile_definitions(illusion_test_module_v3 PRIVATE TEST_MODULE_WIDE_COUNTER=1)
 target_compile_definitions(illusion_test_module_v5 PRIVATE TEST_MODULE_LAYOUT_V2=1)
 target_compile_definitions(illusion_test_module_v6 PRIVATE TEST_MODULE_WIDE_OPAQUE=1)

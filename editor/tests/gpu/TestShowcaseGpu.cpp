@@ -9,6 +9,7 @@
 #include <illusion/animation/AnimationComponents.hpp>
 #include <illusion/assets/AssetStreamer.hpp>
 #include <illusion/audio/AudioComponents.hpp>
+#include <illusion/camera/CameraComponents.hpp>
 #include <illusion/core/JobSystem.hpp>
 #include <illusion/editor/core/EditorContext.hpp>
 #include <illusion/editor/play/PlaySession.hpp>
@@ -85,6 +86,7 @@ struct ShowcaseGpu
         registerAnimationComponents(ComponentRegistry::instance());
         registerNavComponents(ComponentRegistry::instance());
         registerAiComponents(ComponentRegistry::instance());
+        registerCameraComponents(ComponentRegistry::instance());
         registerUiComponents();
         registerSaveComponents();
         const std::filesystem::path project = directory.path / "showcase";

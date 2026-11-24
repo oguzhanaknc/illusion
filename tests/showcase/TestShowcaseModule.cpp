@@ -14,6 +14,9 @@
 #include <illusion/audio/AudioComponents.hpp>
 #include <illusion/audio/AudioWorld.hpp>
 #include <illusion/audio/AudioWorldService.hpp>
+#include <illusion/camera/CameraComponents.hpp>
+#include <illusion/camera/CameraWorld.hpp>
+#include <illusion/camera/CameraWorldService.hpp>
 #include <illusion/core/Hash.hpp>
 #include <illusion/core/JobSystem.hpp>
 #include <illusion/core/Module.hpp>
@@ -76,6 +79,7 @@ void reflectAll()
     registerAnimationComponents(ComponentRegistry::instance());
     registerNavComponents(ComponentRegistry::instance());
     registerAiComponents(ComponentRegistry::instance());
+    registerCameraComponents(ComponentRegistry::instance());
     reflectRenderComponents();
     reflectRuntimeStructs();
     registerUiComponents();
@@ -256,6 +260,8 @@ TEST_CASE("the showcase module calls every function of the scripting API on the 
     NavWorldService navService(navigation);
     AiWorld ai(world, navigation, &streamer);
     AiWorldService aiService(ai);
+    CameraWorld cameras(world);
+    CameraWorldService cameraService(cameras);
     GuidGenerator guids(3);
     test::CountingPhysics countingPhysics(&physicsService);
     test::CountingAudio countingAudio(&audioService);
@@ -268,6 +274,7 @@ TEST_CASE("the showcase module calls every function of the scripting API on the 
     test::CountingAnimation countingAnimation(&animationService);
     test::CountingNav countingNav(&navService);
     test::CountingAi countingAi(&aiService);
+    test::CountingCamera countingCamera(&cameraService);
     ServiceSet services;
     services.provide<PhysicsService>(countingPhysics);
     services.provide<AudioService>(countingAudio);
@@ -280,6 +287,7 @@ TEST_CASE("the showcase module calls every function of the scripting API on the 
     services.provide<AnimationService>(countingAnimation);
     services.provide<NavService>(countingNav);
     services.provide<AiService>(countingAi);
+    services.provide<CameraService>(countingCamera);
 
     ModuleHostDesc hostDesc;
     hostDesc.shadowDirectory = directory.path / "shadow";
@@ -296,6 +304,7 @@ TEST_CASE("the showcase module calls every function of the scripting API on the 
         ai.update(static_cast<f32>(kStep), &jobs, &physics, true);
         navigation.update(static_cast<f32>(kStep), &jobs, true);
         physics.update(kStep);
+        cameras.update(static_cast<f32>(kStep));
         particles.update(static_cast<f32>(kStep), &jobs);
         audio.update(kStep);
         storeService.update();
@@ -328,6 +337,7 @@ TEST_CASE("the showcase module calls every function of the scripting API on the 
     INFO("uncalled animation functions: " << uncalled(countingAnimation.calls));
     INFO("uncalled navigation functions: " << uncalled(countingNav.calls));
     INFO("uncalled AI functions: " << uncalled(countingAi.calls));
+    INFO("uncalled camera functions: " << uncalled(countingCamera.calls));
     CHECK(countingPhysics.everyFunctionCalled());
     CHECK(countingAudio.everyFunctionCalled());
     CHECK(countingInput.everyFunctionCalled());
@@ -339,6 +349,7 @@ TEST_CASE("the showcase module calls every function of the scripting API on the 
     CHECK(countingAnimation.everyFunctionCalled());
     CHECK(countingNav.everyFunctionCalled());
     CHECK(countingAi.everyFunctionCalled());
+    CHECK(countingCamera.everyFunctionCalled());
     CHECK(sceneService.exitRequested());
 
     // The game ran on the real services: it counted its frames, met contacts and spawned a gem and a lantern.
@@ -346,6 +357,16 @@ TEST_CASE("the showcase module calls every function of the scripting API on the 
     CHECK(statsField(world, "contacts") > 0);
     CHECK(statsField(world, "groundedFrames") > 0);
     CHECK(statsField(world, "spawned") >= 2);
+
+    // The camera rig: the Shoulder Camera was raised, swapped and zoomed, then lowered, so the Follow Camera
+    // shows.
+    const Entity brain = findNamed(world, "Camera Brain");
+    const Entity shoulder = findNamed(world, "Shoulder Camera");
+    CHECK(cameraService.liveCamera(brain).valueOr(Entity{}) == findNamed(world, "Follow Camera"));
+    CHECK(world.get<VirtualCamera>(shoulder).priority == 3);
+    CHECK(world.get<VirtualCamera>(shoulder).fovY == doctest::Approx(0.7f));
+    CHECK(world.get<CameraSpringArm>(shoulder).side == doctest::Approx(1.0f));
+    CHECK(world.get<VirtualCamera>(findNamed(world, "Orbit Camera")).priority == 20);
 
     // Without a store the game kept its achievements and stats in memory and saved its run in user:/cloud.
     CHECK(storeService.isAchievementUnlocked("SHOWCASE_WALKER").valueOr(false));

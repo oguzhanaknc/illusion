@@ -2,6 +2,7 @@
 #include <illusion/animation/AnimationWorld.hpp>
 #include <illusion/assets/AssetStreamer.hpp>
 #include <illusion/audio/AudioComponents.hpp>
+#include <illusion/camera/CameraComponents.hpp>
 #include <illusion/core/JobSystem.hpp>
 #include <illusion/ecs/Component.hpp>
 #include <illusion/ecs/Hierarchy.hpp>
@@ -349,4 +350,61 @@ TEST_CASE("the skeleton visualiser draws posed Animators with their IK targets, 
     draw.clear();
     CHECK(recordVisualisers(world, draw, options).objects == 0);
     CHECK(draw.lines().empty());
+}
+
+TEST_CASE("virtual cameras draw their frusta, and the live and blending ones always, at the brain's pose")
+{
+    World world;
+    const Entity idle = spawn(world, Vec3(0.0f));
+    const Entity live = spawn(world, Vec3(10.0f, 0.0f, 0.0f));
+    const Entity from = spawn(world, Vec3(20.0f, 0.0f, 0.0f));
+    for (const Entity entity : {idle, live, from})
+    {
+        world.set(entity, VirtualCamera{});
+    }
+    const Entity brain = spawn(world, Vec3(30.0f, 0.0f, 0.0f));
+    CameraBrainState state;
+    state.live = live;
+    state.from = from;
+    state.blending = true;
+    world.set(brain, state);
+    VirtualCameraState evaluated;
+    evaluated.evaluated = 1;
+    evaluated.pose.position = Vec3(10.0f, 5.0f, 0.0f);
+    world.set(live, evaluated);
+
+    VisualiserOptions options;
+    options.kinds = only(&ViewportVisualisers::cameras);
+    const VisualiserColors& colors = options.colors;
+    DebugDraw draw(1024);
+    // Nothing selected: only the live and the blending camera.
+    CHECK(recordVisualisers(world, draw, options).objects == 2);
+    CHECK(linesOf(draw, colors.liveCamera) > 0);
+    CHECK(linesOf(draw, colors.blendingCamera) > 0);
+    CHECK(linesOf(draw, colors.virtualCamera) == 0);
+    const bool atBrainPose = std::ranges::any_of(draw.lines(), [&](const DebugLine& line) {
+        return line.color == colors.liveCamera && near(Vec3(line.start), Vec3(10.0f, 5.0f, 0.0f));
+    });
+    CHECK(atBrainPose);
+
+    draw.clear();
+    std::vector<u64> selection(1, u64{1} << idle.index);
+    options.selection = selection;
+    CHECK(recordVisualisers(world, draw, options).objects == 3);
+    CHECK(linesOf(draw, colors.virtualCamera) > 0);
+
+    // The previewed camera is drawn like a live one, at its Transform.
+    draw.clear();
+    options.previewCamera = idle;
+    CHECK(recordVisualisers(world, draw, options).objects == 3);
+    CHECK(linesOf(draw, colors.virtualCamera) == 0);
+
+    // Hidden and Inactive cameras are not drawn.
+    draw.clear();
+    std::vector<u64> hidden(1, u64{1} << live.index);
+    options.hidden = hidden;
+    CHECK(recordVisualisers(world, draw, options).objects == 2);
+    world.emplace<Inactive>(from);
+    draw.clear();
+    CHECK(recordVisualisers(world, draw, options).objects == 1);
 }

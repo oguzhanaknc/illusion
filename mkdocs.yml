@@ -73,6 +73,7 @@ plugins:
             Animation: Animasyon
             Material shaders: Material Shader'ları
             Navigation: Navigasyon
+            Cameras: Kameralar
             AI: AI
             Assets and Models: Asset'ler ve Modeller
             Physics: Fizik
@@ -155,6 +156,7 @@ nav:
       - Rendering: manual/rendering.md
       - Animation: manual/animation.md
       - Material shaders: manual/material-shaders.md
+      - Cameras: manual/cameras.md
       - Navigation: manual/navigation.md
       - AI: manual/ai.md
       - Assets and Models: manual/assets.md
@@ -194,6 +196,7 @@ nav:
       - Animate a character: tutorials/animated-character.md
       - A dissolving surface: tutorials/dissolve-shader.md
       - A creature that wanders and chases: tutorials/creature-ai.md
+      - A third-person camera: tutorials/third-person-camera.md
   - Architecture:
       - Overview: architecture/overview.md
       - Editor: architecture/editor.md

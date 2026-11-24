@@ -747,6 +747,61 @@ TEST_CASE("a selected Camera shows its frustum, icon and picture-in-picture view
     CHECK(gpu.service->stats().visualisers == 0);
 }
 
+TEST_CASE("a virtual camera shows its frustum in the Scene view and camera.preview moves the game view")
+{
+    GpuViewports gpu;
+    buildScene(gpu);
+    EditorContext& editor = gpu.editor();
+    test::ok(
+        editor, "entity.create",
+        R"({"name":"Eye","components":{"illusion.Transform":{"position":[0,0,10]},"illusion.Camera":{}}})");
+    test::ok(editor, "entity.create",
+             R"({"name":"Rig","components":{"illusion.Transform":{"position":[6,0,10]},)"
+             R"("illusion.VirtualCamera":{"priority":10}}})");
+    test::ok(editor, "viewport.set_aspect",
+             R"({"viewport":"game","aspect":"fixed","width":160,"height":90})");
+    test::ok(editor, "viewport.set_mode", R"({"viewport":"game","shading":"unlit"})");
+    test::ok(editor, "viewport.camera_set",
+             R"({"pivot":[3,0,8],"yaw":40,"pitch":-35,"distance":14,"animate":false})");
+    gpu.frame();
+    CHECK(gpu.service->stats().visualisers == 0);
+
+    // Selected, the virtual camera draws a frustum; without the camera visualiser it does not.
+    test::ok(editor, "selection.set", R"({"entities":["/Rig"]})");
+    test::ok(editor, "viewport.set_overlays",
+             R"({"selectionOutline":false,"visualisers":{"cameras":false}})");
+    gpu.frame();
+    CHECK(gpu.service->stats().visualisers == 0);
+    const Image without = gpu.capture();
+    test::ok(editor, "viewport.set_overlays", R"({"visualisers":{"cameras":true}})");
+    gpu.frame();
+    CHECK(gpu.service->stats().visualisers == 1);
+    CHECK(test::compareImages(gpu.capture(), without).differentFraction > 0.0005);
+
+    // The game view looks through the main Camera; the preview moves it to the virtual camera, which stands
+    // 6 m to the side, so the cube at the origin leaves the centre.
+    const auto projectedX = [&] {
+        const JsonDocument doc =
+            test::ok(editor, "viewport.project", R"({"viewport":"game","entity":"/Front"})");
+        return doc.root().find("x").asF64().value_or(-1.0);
+    };
+    CHECK(projectedX() == doctest::Approx(80.0).epsilon(0.02));
+    test::ok(editor, "camera.preview", R"({"entity":"/Rig"})");
+    CHECK(test::ok(editor, "viewport.list").root().pointer("/viewports/1/sceneCamera/path").asString() ==
+          std::optional<std::string_view>("/Rig"));
+    CHECK(projectedX() < 40.0);
+    const JsonDocument shot = gpu.run("viewport.screenshot", R"({"viewport":"game"})");
+    CHECK(shot.root().find("width").asU64() == 160u);
+
+    // The previewed camera needs no main Camera.
+    test::ok(editor, "entity.destroy", R"({"entities":["/Eye"]})");
+    CHECK(gpu.run("viewport.screenshot", R"({"viewport":"game"})").root().find("height").asU64() == 90u);
+    test::ok(editor, "camera.preview", R"({"clear":true})");
+    CHECK(test::fails(editor, "viewport.screenshot", R"({"viewport":"game"})").kind ==
+          ErrorKind::PreconditionFailed);
+    CHECK(test::ok(editor, "render.diagnostics").root().find("validationErrors").asU64() == 0u);
+}
+
 TEST_CASE("mesh bounds follow the scene and drop to ground lands an entity on the floor below it")
 {
     GpuViewports gpu;

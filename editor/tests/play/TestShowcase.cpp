@@ -6,6 +6,7 @@
 #include <illusion/ai/AiComponents.hpp>
 #include <illusion/animation/AnimationComponents.hpp>
 #include <illusion/audio/AudioComponents.hpp>
+#include <illusion/camera/CameraComponents.hpp>
 #include <illusion/ecs/ComponentJson.hpp>
 #include <illusion/nav/NavComponents.hpp>
 #include <illusion/particles/ParticleComponents.hpp>
@@ -43,6 +44,7 @@ struct ShowcaseFixture
         registerAnimationComponents(ComponentRegistry::instance());
         registerNavComponents(ComponentRegistry::instance());
         registerAiComponents(ComponentRegistry::instance());
+        registerCameraComponents(ComponentRegistry::instance());
         registerUiComponents();
         registerSaveComponents();
         const std::filesystem::path project = directory.path / "showcase";

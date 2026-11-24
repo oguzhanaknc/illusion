@@ -8,6 +8,7 @@ add_subdirectory(assets)
 # illusion_shaderc compiles the built-in material shaders of the render library.
 add_subdirectory(${PROJECT_SOURCE_DIR}/tools/shaderc ${PROJECT_BINARY_DIR}/tools/shaderc)
 add_subdirectory(animation)
+add_subdirectory(camera)
 add_subdirectory(physics)
 add_subdirectory(nav)
 add_subdirectory(ai)

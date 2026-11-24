@@ -184,7 +184,9 @@ olmayan karakterler `_` olarak yazılır.
 
 Windows installer'ı `Program Files\<Product>` altına kurar; bir Başlat menüsü kısayolu, bir uninstaller ve oyunun
 icon'unu ekler, eski bir kurulum varsa önce onu kaldırır. Sonucun `package` alanı dosyanın tam yoludur; başarısız
-bir export hiçbir dosya bırakmaz.
+bir export hiçbir dosya bırakmaz. Başarısız bir paketleme, hatada `cpack`'in son satırlarını
+aktarır; macOS'ta `hdiutil` disk image'ını meşgul bulursa (`Resource busy`) export `cpack`'i en fazla üç kez
+yeniden çalıştırır.
 
 Paketleri, SDK'nın CMake'inden CPack üretir; `cpack` onun yanında bulunmalıdır. Installer'lar bir araç daha ister;
 eksik bir araç, onu adlandıran bir hatayla doğrulamayı başarısız kılar:

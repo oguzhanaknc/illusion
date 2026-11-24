@@ -2,7 +2,8 @@
 // (docs/content/en/tutorials/tetris-by-hand.md) as the module illusion_tutorial_tetris_module and those of
 // "A HUD and a pause menu" (hud-and-pause-menu.md) as illusion_tutorial_hud_module and those of
 // "Animate a character" (animated-character.md) as illusion_tutorial_animation_module and those of
-// "A creature that wanders and chases" (creature-ai.md) as illusion_tutorial_creature_module.
+// "A creature that wanders and chases" (creature-ai.md) as illusion_tutorial_creature_module and those of
+// "A third-person camera" (third-person-camera.md) as illusion_tutorial_camera_module.
 
 #include "TestSupport.hpp"
 
@@ -98,6 +99,27 @@ TEST_CASE(
     World world;
     modules.attachWorld(world, WorldRole::Simulation);
     CHECK(world.registry().findByStableName("creature.State") != kInvalidComponentId);
+    for (int frame = 0; frame < 3; ++frame)
+    {
+        modules.update(world, 1.0 / 60.0);
+    }
+    CHECK(modules.detachWorld(world));
+}
+
+TEST_CASE("the module of the third-person camera tutorial loads, reflects its state and updates a World "
+          "without services")
+{
+    test::TempDirectory directory;
+    JobSystem jobs{JobSystemDesc{2, 256}};
+    ModuleHostDesc desc;
+    desc.shadowDirectory = directory.path / "shadow";
+    ModuleHost modules(jobs, desc);
+    const std::optional<std::string> loadError = modules.load(utf8Path(TUTORIAL_CAMERA_MODULE));
+    REQUIRE_MESSAGE(!loadError, loadError.value_or(""));
+
+    World world;
+    modules.attachWorld(world, WorldRole::Simulation);
+    CHECK(world.registry().findByStableName("shoulder.State") != kInvalidComponentId);
     for (int frame = 0; frame < 3; ++frame)
     {
         modules.update(world, 1.0 / 60.0);

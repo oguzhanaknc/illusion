@@ -8,6 +8,7 @@
 #include <illusion/assets/Image.hpp>
 #include <illusion/assets/ShaderLoader.hpp>
 #include <illusion/audio/AudioComponents.hpp>
+#include <illusion/camera/CameraComponents.hpp>
 #include <illusion/core/Assert.hpp>
 #include <illusion/core/EventBus.hpp>
 #include <illusion/core/JobSystem.hpp>
@@ -162,6 +163,7 @@ void reflectEngineTypes()
     registerAnimationComponents(ComponentRegistry::instance());
     registerNavComponents(ComponentRegistry::instance());
     registerAiComponents(ComponentRegistry::instance());
+    registerCameraComponents(ComponentRegistry::instance());
     reflectRenderComponents();
     registerUiComponents();
     registerSaveComponents();

@@ -1950,6 +1950,99 @@ struct NavDebugResult
     bool obstacles = true; ///< NavObstacles.
 };
 
+/// A VirtualCamera in the result of `camera.list`.
+struct CameraListCamera
+{
+    EntitySummary entity;     ///< The Entity.
+    i32 priority = 10;        ///< VirtualCamera::priority.
+    bool enabled = true;      ///< VirtualCamera::enabled.
+    bool inactive = false;    ///< The Entity has the Inactive tag: no brain shows it.
+    f32 fieldOfView = 60.0f;  ///< Vertical field of view in degrees.
+    f32 nearPlane = 0.1f;     ///< Near clip distance in metres.
+    f32 dutch = 0.0f;         ///< Roll about the view axis in degrees.
+    std::string body;         ///< "None", "Follow", "Orbit", "SpringArm" or "Dolly".
+    std::string aim;          ///< "None", "LookAt" or "Composer".
+    bool noise = false;       ///< It has a CameraNoise.
+    std::string follow;       ///< Path of VirtualCamera::follow ("" for none).
+    std::string lookAt;       ///< Path of VirtualCamera::lookAt ("" for none).
+    bool customBlend = false; ///< VirtualCamera::customBlend.
+    bool live = false;        ///< A brain shows it now (a play session).
+};
+
+/// A CameraBrain in the result of `camera.list`.
+struct CameraListBrain
+{
+    EntitySummary entity; ///< The Entity with the Camera.
+    std::string
+        defaultBlend; ///< Style of CameraBrain::defaultBlend: "Cut", "Linear", "EaseInOut" or "Curve".
+    f32 defaultDuration = 1.0f; ///< Seconds of CameraBrain::defaultBlend.
+    u32 overrides = 0;          ///< Per-pair blends of the brain.
+};
+
+/// Result of `camera.list`.
+struct CameraListResult
+{
+    std::string world;                     ///< "edit" or "play".
+    std::vector<CameraListCamera> cameras; ///< The VirtualCameras, in Entity order (at most 200).
+    std::vector<CameraListBrain> brains;   ///< The CameraBrains, in Entity order (at most 50).
+    u32 totalCameras = 0;                  ///< VirtualCameras in the World.
+    u32 totalBrains = 0;                   ///< CameraBrains in the World.
+    u32 impulses = 0;                      ///< CameraImpulse sources in the World.
+};
+
+/// A CameraBrain in the result of `camera.status`.
+struct CameraStatusBrain
+{
+    EntitySummary entity;  ///< The Entity with the Camera.
+    std::string live;      ///< Path of the VirtualCamera it shows ("" before it shows one).
+    std::string from;      ///< Path of the VirtualCamera it blends from ("" when none or a broken-off blend).
+    bool blending = false; ///< A blend runs.
+    f32 progress = 1.0f;   ///< How far the blend has come, 0 to 1; 1 without a blend.
+    f32 weight = 1.0f;     ///< Weight of the live camera in the pose.
+    Vec3 position{0.0f};   ///< World position of the pose written to the Camera.
+    Vec3 rotation{0.0f};   ///< World rotation of that pose as pitch, yaw and roll in degrees.
+    f32 fieldOfView = 60.0f; ///< Vertical field of view of the pose in degrees.
+};
+
+/// Result of `camera.status`.
+struct CameraStatusResult
+{
+    std::string world;                     ///< "edit" or "play".
+    bool live = false;                     ///< Brains are evaluated (a play session); else saved fields only.
+    std::string note;                      ///< What is missing when not live ("" otherwise).
+    std::vector<CameraStatusBrain> brains; ///< The CameraBrains that have shown a camera, in Entity order.
+    u32 cameras = 0;                       ///< VirtualCameras in the World.
+    u32 evaluated = 0; ///< VirtualCameras whose stages ran in the last update (live only).
+};
+
+/// Params of `camera.activate`.
+struct CameraActivateParams
+{
+    std::string entity; ///< Entity reference of an enabled VirtualCamera.
+};
+
+/// Result of `camera.activate`.
+struct CameraActivateResult
+{
+    EntitySummary entity; ///< The VirtualCamera's Entity.
+    i32 previous = 0;     ///< VirtualCamera::priority before.
+    i32 priority = 0;     ///< VirtualCamera::priority now.
+    bool changed = false; ///< The priority differs.
+};
+
+/// Params of `camera.preview`.
+struct CameraPreviewParams
+{
+    std::optional<std::string> entity{}; ///< Entity reference of the VirtualCamera the Game views show.
+    std::optional<bool> clear{};         ///< true: show the scene's main Camera again.
+};
+
+/// Result of `camera.preview`.
+struct CameraPreviewResult
+{
+    std::optional<EntitySummary> entity{}; ///< The VirtualCamera shown, absent for the main Camera.
+};
+
 /// Params of `ai.status`.
 struct AiStatusParams
 {

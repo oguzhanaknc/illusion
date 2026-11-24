@@ -43,6 +43,7 @@ namespace illusion
 class AiWorld;
 class AnimationWorld;
 class AssetStreamer;
+class CameraWorld;
 class GamepadSystem;
 class InputActions;
 class InputState;
@@ -158,17 +159,21 @@ struct GameSessionDesc
 ///    PhysicsWorld::update(), and the ragdoll poses go to AnimationWorld::setRagdollPose() for the next
 ///    Animation step.
 /// 8. **Hierarchy:** updateTransformHierarchy().
-/// 9. **UI:** the UiWorld lays out for the frame of setUiFrame(), handles the pointer and wheel of
+/// 9. **Cameras:** while started, CameraWorld::update() (ADR 0064) moves every CameraBrain's Camera to its
+///    live VirtualCamera, blending and shaking; spring arms cast spheres through physics() that pass through
+///    the follow target's own bodies (PhysicsCameraCollision), orbits and arms read their look actions in
+///    Play mode, and the composer frames for the aspect of setUiFrame() (16:9 while it is empty).
+/// 10. **UI:** the UiWorld lays out for the frame of setUiFrame(), handles the pointer and wheel of
 ///    keyboardMouse() and the actions `ui.navigate`, `ui.submit` and `ui.cancel` (Play mode), and records
 ///    the draw list (ui()). UiGlyph labels come from the actions: the first binding for the device used
 ///    last, through localization().
-/// 10. **Particles and audio:** ParticleWorld::update() and AudioWorld::update().
-/// 11. **Resolvers:** the physics and render asset resolvers turn asset references into runtime Components.
+/// 11. **Particles and audio:** ParticleWorld::update() and AudioWorld::update().
+/// 12. **Resolvers:** the physics and render asset resolvers turn asset references into runtime Components.
 ///
 /// Modules find the services PhysicsService, AudioService, ParticleService, InputService, SceneService,
-/// UiService (over ui() and localization()), NavService (over navigation()), AiService (over ai()), with
-/// GameSessionDesc::streamer AnimationService, with GameSessionDesc::store StoreService and with
-/// GameSessionDesc::saves SaveService.
+/// UiService (over ui() and localization()), NavService (over navigation()), AiService (over ai()),
+/// CameraService (over cameras()), with GameSessionDesc::streamer AnimationService, with
+/// GameSessionDesc::store StoreService and with GameSessionDesc::saves SaveService.
 ///
 /// The session's Localization (localization()) holds the string tables of the project's locale files,
 /// `assets:/locales/*.json`, read by create(): the keys of every file, with the English text of `en.json`
@@ -251,6 +256,9 @@ public:
 
     /// The perception and behaviour trees of the World; without GameSessionDesc::streamer trees never load.
     [[nodiscard]] AiWorld& ai() noexcept;
+
+    /// The virtual cameras of the World and their brains.
+    [[nodiscard]] CameraWorld& cameras() noexcept;
 
     /// Sets the target the UI is laid out for from the next update() on (the host's view size and safe
     /// insets). Starts empty. The cursor of keyboardMouse() times @p pointerScale is the pointer in the

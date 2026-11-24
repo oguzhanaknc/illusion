@@ -117,6 +117,14 @@ version changes are in the contributor guide ("Versions and releases"). The vers
   `file:line:column` diagnostics, the cooked `ShaderAsset` in the import cache, `illusion_pack --slangc
   --shaders`, `slangc` and the shader library in the SDK (`slang/`, `share/illusion/shaders`, `"slangc"` and
   `"shaders"` in `illusion-sdk.json`), and the quoted tool output of a failed export cook.
+- Cameras for modules (CAM-3): `CameraService` (activate and deactivate, priority, follow and look-at targets,
+  orbit and arm angles, shoulder swap, field of view, shakes and impulses, the live camera and the blend
+  progress) with the adapter `CameraWorldService`, and the tech demo walker seen through a first-person virtual camera.
+- Cameras in the editor (CAM-4): the Editor commands `camera.list`, `camera.status`, `camera.activate` (raises a
+  virtual camera above the others, undoable) and `camera.preview` (the Game views look through a virtual camera of
+  the edited scene), the frusta of virtual cameras in the Scene view (the live camera in yellow and the one a blend
+  comes from in orange in a play session), and the manual sections "Rigs", "In the editor" and "Performance" of the
+  page "Cameras".
 - Material shaders in the editor (MAT-4): `.material` files of version 2 with `shader` and `parameters` by name
   (version 1 files read as they are), `ShaderLoader` (builds shaders on a background thread) and
   `RenderAssetCacheDesc::shaders`, the editor recompiling changed `.shader` files without blocking a frame and
@@ -127,7 +135,7 @@ version changes are in the contributor guide ("Versions and releases"). The vers
 
 ### Changed
 
-- The module API version is 12 (`AiService` was added; version 11 added `NavService`, version 10 added `AnimationService::setRagdoll()`,
+- The module API version is 13 (`CameraService` was added; version 12 added `AiService`, version 11 added `NavService`, version 10 added `AnimationService::setRagdoll()`,
   version 9 `setLookAtTarget()`, `setIkTarget()` and `setIkWeight()`, version 8 `jointTransform()`, version 7
   `AnimationService`, version 6 `UiService`, `SceneService::requestExit()` and `SaveService`, and `UiService`
   gained `playTransition()` and `transitionProgress()`): game modules built for an earlier version must be

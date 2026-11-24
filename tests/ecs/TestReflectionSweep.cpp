@@ -4,6 +4,7 @@
 #include <illusion/animation/AnimationComponents.hpp>
 #include <illusion/assets/AssetReflection.hpp>
 #include <illusion/audio/AudioComponents.hpp>
+#include <illusion/camera/CameraComponents.hpp>
 #include <illusion/core/Json.hpp>
 #include <illusion/ecs/ComponentJson.hpp>
 #include <illusion/ecs/Reflection.hpp>
@@ -45,6 +46,7 @@ void reflectEngine()
     registerAnimationComponents(ComponentRegistry::instance());
     registerNavComponents(ComponentRegistry::instance());
     registerAiComponents(ComponentRegistry::instance());
+    registerCameraComponents(ComponentRegistry::instance());
     reflectAssetStructs();
     registerUiComponents();
     registerSaveComponents();

@@ -1562,7 +1562,60 @@ Games have only the `Camera` Component; every sample moves it by hand. A general
 of virtual-camera rigs, so that a third-person, first-person, orbit, rail or cutscene camera is data, not
 game code.
 
-- Virtual cameras as saved Components with priorities; the camera brain on the real `Camera` picks the
+- CAM is designed in ADR 0064 (virtual cameras as saved rigs of body/aim/noise stages, a `CameraBrain` that
+  blends to the live one, `CameraWorld` in a new GPU-free `engine/camera` after Hierarchy). Four work packages:
+- ✅ CAM-1 (`implementer`): Stages without a World. `engine/camera` (`illusion::camera`, core only) with the
+  pure stage functions over plain settings and state structs: `CameraPose.hpp` (`CameraPose`,
+  `CameraTarget`, `CameraPlacement`), `CameraDamping.hpp` (exact critically damped `smoothDamp()`,
+  `dampFactor()`, `dampRotation()`), `CameraBody.hpp` (`stepCameraFollow()`, `stepCameraOrbit()`,
+  `stepCameraSpringArm()` against `CameraCollisionQuery`, `stepCameraDolly()` on Hermite paths),
+  `CameraAim.hpp` (`stepCameraLookAt()`, `stepCameraComposer()` with dead and soft zones in screen space),
+  `CameraNoise.hpp` (two seeded sines per channel), `CameraBlend.hpp` (cut, linear, ease in/out, cubic
+  Bezier; `blendCameraPoses()`). Done: `tests/camera` (every stage and the damping against hand-computed
+  values, composer zones, blend curves, bit-identical repeated runs, no allocation), benchmark
+  `camera/stages-100`. Open: no SDK target yet (the library joins the player closure when
+  `engine/runtime` links it in CAM-2; a `camera_api` for modules comes with CAM-3).
+- ✅ CAM-2 (`implementer`): Runtime. `CameraComponents.hpp` (saved `VirtualCamera` with priority, lens, follow
+  and look-at Entities and a blend-in; bodies `CameraFollow`, `CameraOrbit`, `CameraSpringArm`, `CameraDolly`;
+  aims `CameraLookAt`, `CameraComposer`; `CameraNoise`, `CameraImpulse`, `CameraBrain` with a default blend and
+  per-pair `CameraBlendOverride`s; runtime `VirtualCameraState`, `CameraBrainState`, `CameraImpulseState`;
+  `registerCameraComponents()`), `CameraWorld.hpp` (`CameraWorld::update()` picks the live camera, evaluates
+  only it and the one a blend comes from, blends, shakes, writes the brain's Transform and the Camera's lens
+  through reflection; `shake()`; `CameraWorldCollision`), `PhysicsCameraCollision` in `engine/runtime` (sphere
+  casts through `PhysicsWorld::shapeCast()` that pass through the follow target's bodies), the Cameras step of
+  `GameSession` after Hierarchy (`cameras()`), `illusion::camera` in the runtime and player closure. Done:
+  `tests/camera/TestCameraWorld.cpp` (choice, ties, continuous and broken-off blends, pair overrides, stages,
+  shakes, impulses, bit-identical runs, no allocation), `tests/runtime/TestCameraRuntime.cpp` (a spring arm
+  keeps out of a wall, fixed-step sessions repeat), benchmark `camera/world-100`, the showcase's camera rig
+  (every new saved Component), manual page `manual/cameras.md` (short, CAM-4 completes it). Open: a socket is
+  a `BoneAttachment` Entity used as follow or look-at (no joint name on `VirtualCamera`); every brain shows the
+  same live camera (no channels for split screen); the orbit and arm read their look actions by name each
+  update; `CameraService` and per-source impulse triggering come with CAM-3.
+- ✅ CAM-3 (`mechanic`): `CameraService` (`USES camera`, `illusion::camera_api`, module API version 13) with
+  its adapter `CameraWorldService`, provided by `GameSession`: `activate()` and `deactivate()` (raise above the
+  others and give the priority back), `setPriority()`, `setFollow()`, `setLookAt()`, `setAngles()` (orbit or
+  spring arm), `swapShoulder()`, `setFieldOfView()`, `shake()`, `playImpulse()`, `liveCamera()` and
+  `blendProgress()`, with `CameraError` (`NoCamera`, `NoBrain`, `NoStage`, `NoImpulse`, `NotActivated` added).
+  The showcase module calls every function; the tech demo walker moves an Eye Point that the First Person
+  virtual camera follows, and the CameraBrain on the Eye shows it (the module no longer writes the Eye). Done:
+  `tests/camera/TestCameraService.cpp` (every function and error against a World), `tests/modules` (a shared
+  module calls every function once and drives a brain through the real service), the showcase test counts the
+  calls, EN/TR `reference/scripting-api.md` and `manual/cameras.md`. Open: `setFieldOfView()` jumps (a module
+  eases it over frames); `activate()`, `setPriority()`, `swapShoulder()` and the target setters write the saved
+  fields of the Components; the walker still writes the Eye Point's Transform, since `CameraFollow` has no
+  pitch input; the forest needs downloaded assets, so its images were not retaken.
+- ✅ CAM-4 (`mechanic`): Editor and documentation: the commands `camera.list`, `camera.status`,
+  `camera.activate` (priority one above the others, undoable) and `camera.preview` (`ViewState::previewCamera()`),
+  the frusta of virtual cameras in the Scene view (`VisualiserColors::virtualCamera`, `liveCamera` and
+  `blendingCamera`: the live and the blending camera of a play session are always drawn, at the brain's pose), the
+  Game view looking through the previewed camera, manual sections "Rigs", "In the editor" and "Performance" of
+  "Cameras" (EN/TR), `CHANGELOG.md`. Done: `editor/tests/core/TestCameraCommands.cpp`, the camera commands in the
+  fuzz, dry-run and random-command history tests, `camera.status` of a running game and its blend in
+  `editor/tests/play/TestPlayMode.cpp`, the frusta in `editor/tests/viewport/TestVisualisers.cpp`, the preview and
+  the Scene view frustum in `editor/tests/gpu/TestViewportGpu.cpp`. Tutorial "A third-person camera" (module built by
+  `tests/CMakeLists.txt`, test in `tests/docs/TestTutorials.cpp`). Open: the edit World does not run camera stages, so `camera.preview` shows a camera where its Entity
+  stands.
+- Virtual cameras (scope) as saved Components with priorities; the camera brain on the real `Camera` picks the
   highest live one and blends to it (cut, ease, custom curve, per-pair overrides)
 - Body and aim stages as data: follow with offset and damping, orbit, spring arm with collision against
   physics layers, framing composer (dead and soft zones), look-at with damping, path/dolly tracks
@@ -1573,6 +1626,59 @@ game code.
 
 ## ANIM-5 — Retargeting and aim layers
 
+- ANIM-5 is designed in ADR 0065 (a rig map of bone names per skeleton, generated at import and corrected in
+  the model's sidecar; clips retargeted at bind time with a model-space rest-pose correction applied per
+  channel and translations scaled by the hips height ratio; aim offsets as Additive layers in model space
+  against a reference pose, plus a procedural `Aim` stage on the spine; joint names resolve through the rig).
+  The two test rigs are generated (`tests/data/gltf/generate.py`), built like the CC0 rigs SHOOTER fetches:
+  `humanoid_a` (Mixamo-style `mixamorig:` names, T-pose, 1.8 m, joint axes along the model axes) and
+  `humanoid_b` (Blender-style `pelvis`, `thigh.L` names, A-pose, 1.2 m, bones along local +y, a `root` joint
+  on the ground, one more spine joint and a twist joint). Four work packages, one PR each:
+- ANIM-5a (`implementer`): Rig maps. `illusion/assets/Rig.hpp` (`generateRigMap()`, `applyRigOverrides()`,
+  `isHumanoidBone()`, `isValidBoneName()`, `retargetTranslationName()`), `Skeleton::rig`,
+  `AnimationClip::skeleton`, model format 7, import settings version 3 with `skins` (parse, merge, write,
+  JSON-path errors), the sidecar as a source of the cooked model. Done: `tests/assets/TestRigMap.cpp`: both
+  test rigs and a rig with names `joint0..N` (topology only) map every required bone, finger chains, a name
+  that says left on the right side is a warning, deterministic output for any joint order of the file;
+  every override error; the round trip of rig and source skin through format 7; a changed sidecar recooks;
+  both test rigs added to `tests/data/gltf/generate.py`; no benchmark (load time only).
+- ANIM-5b (`implementer`): Retargeted playback. `illusion/animation/Retarget.hpp` (`matchJoints()`,
+  `rigHeightRatio()`, `bindRetargetedClip()`, the `sampleClip()` overload, `findRigJoint()`),
+  `GraphBinding::clipRetargets` and the `bindGraph()` overload with `ClipSource`, `AnimationWorld` keeping the
+  source skin of each clip and binding retargeted clips per (skeleton, clip), every joint name (graph masks and
+  root motion, `BoneAttachment`, `LookAt`, `TwoBoneIk`, `FootPlacement`, `SpringBone`, `.ragdoll` profiles,
+  `jointTransform()`) resolved through `findRigJoint()`. Done: `tests/animation/TestRetarget.cpp`: a clip of
+  `humanoid_a` on `humanoid_b` and back gives model-space bone directions of paired bones within 1e-3 rad of
+  the source at sampled frames (T-pose clip on the A-pose rig included), hips height scaled by the ratio, root
+  motion of a walk cycle scaled by it, unpaired joints hold the reference pose; a clip on its own skin is
+  bit-identical to ANIM-1; a graph with bone-name masks and root motion plays on both rigs; fixed-step
+  determinism, no allocation per update (`test::ScopedAllocationCounter`); benchmark `animation/retarget-300x60`
+  (budget from the measurement, ADR target at most 15 % over `animation/world-update-300x60`); the showcase
+  gets a second rig (`make_assets.py`: the Strider's skeleton renamed and rescaled) playing the Strider's clip
+  retargeted, with a socket written as a bone name.
+- ANIM-5c (`implementer`): Aim layers. `.animgraph` version 2 (`reference`, `referenceTime`, `space`; errors
+  with JSON paths; `space` only on Additive layers; version 1 files read and write unchanged),
+  `illusion/animation/Aim.hpp` (`addPoseInModelSpace()`, `aimAngles()`, `solveAim()`), the saved `Aim`
+  Component (`illusion.Aim`, manual anchor `#aim`) and `TwoBoneIk::targetJoint`, the aim stage and parameter
+  writes in `AnimationWorld` in the ADR's stage order, `AnimationService::setAimTarget()`, `setAimWeight()`,
+  `aimAngles()` with `AnimationWorldService` (module API version 14), the showcase module calls them and
+  `build.jsonl` sets every `Aim` field and `targetJoint` to non-default values. Done:
+  `tests/animation/TestAim.cpp`: a nine-pose aim offset over a leaning base aims within 2° in model space and
+  the local-space layer does not (the reason for `Model`); single-frame aim poses against a reference give
+  their offsets; the solver's yaw/pitch split keeps the head level, the weights spread the turn, clamps and a
+  target behind or at the joint give no NaN; aim then off-hand `targetJoint` IK keeps the hand on the grip
+  within 1 mm; both test rigs aim with the same bone-name `Aim`; determinism and no allocation; parser tests
+  for every new error; benchmark `animation/aim-300` (ADR target under 1 ms over
+  `animation/world-graph-300`, budget from the measurement); `tests/modules` calls the three functions.
+- ANIM-5d (`mechanic`): Editor and documentation. Commands `animation.rig`, `animation.map_joint` (through the
+  `asset.set_import_settings` path, undoable) and `animation.retarget`, the additions to `animation.list`, every
+  param validated with fuzz cases, the command reference and `catalog.json`, agent summaries with examples; the
+  Animator card's source-skin line and the dimmed unmapped joints of the Skeletons visualiser (goldens
+  updated); the acceptance transcript `tests/acceptance/animation/retarget.jsonl` (maps a joint, checks the
+  retargeted clip, undoes it); manual sections "Retargeting" and "Aim offsets" in `manual/animation.md` (EN/TR,
+  a complete version 2 `.animgraph` aim example tested like `character.animgraph`), the scripting API
+  reference, the tutorial "Animate a character" gets aiming, `CHANGELOG.md` (module API version 14), ADR 0065
+  Accepted. Done: `mkdocs build --strict`, docs parity, the tutorial's code builds.
 - Humanoid retargeting: a joint map per skeleton (generated by name and topology, editable), clips played
   on any mapped skeleton with rest-pose correction and proportional root motion
 - Aim layers: additive aim offsets from a pitch/yaw blend space on an upper-body mask, so a character aims
@@ -1628,6 +1734,22 @@ keeps its behaviour (the tech demo tests must not change).
   saved `Footsteps` Component, replacing the stride counter in the module
 - A shared, pinned asset fetcher (`tools/fetch_assets.py` of the tech demo generalised for SHOOTER: a
   manifest of URLs, sizes and SHA-256, a local override folder, never committed)
+
+Found by checking the SHOOTER plan against the engine (2026-11-23): what a game with missions and a
+settings menu needs and the engine does not offer yet.
+
+- Scene changes: `SceneService::loadScene()` replaces the running scene asynchronously (stream, cook, wait
+  for readiness, swap), keeps Entities marked to persist, reports progress for a loading screen and is the
+  point where saved games restore; today modules can only `instantiate()` into the running scene
+- Settings at run time: modules change window mode, resolution, vsync, frame limit, render scale and
+  quality levels while the game runs and persist them in the user's settings (`user:`), not only through
+  the project's `settings:` files read at start
+- World-space UI: UI elements anchored to an Entity or a world point (objective markers, name plates,
+  health bars, damage numbers) with clamping to the screen edge and distance fading
+- Surface types: a surface type on Colliders and materials (concrete, metal, dirt, wood, flesh) reported by
+  raycasts and contacts, so impacts, decals and footsteps pick their effect and sound
+- Music and mixing: music tracks that cross-fade and loop by section, and mixer snapshots (pause menu,
+  underwater, combat) that blend bus volumes and filters over time
 
 ## SHOOTER — Third-person shooter demo
 

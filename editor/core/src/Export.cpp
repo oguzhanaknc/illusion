@@ -933,6 +933,8 @@ namespace
 {
 
 constexpr usize kQuotedLines = 20;
+// How often the Package stage runs cpack when hdiutil reports a busy disk image.
+constexpr u32 kPackageAttempts = 3;
 
 // One child process of an export.
 struct ToolCommand
@@ -973,6 +975,7 @@ struct ProjectExport::Impl
     std::deque<ToolCommand> queue;
     std::deque<std::string> runningLines; // the last lines of the running process
     u32 archive = 0;                      // the archive the Pack stage writes: 0 assets, 1 settings
+    u32 packageAttempt = 0;               // the cpack run of the Package stage, from 1
     std::unique_ptr<ModuleBuild> build;
     usize buildDiagnostics = 0;
 
@@ -1371,7 +1374,11 @@ struct ProjectExport::Impl
             arguments.push_back("CPACK_NSIS_EXECUTABLE=" + pathText(plan.makensis));
         }
         phase = Phase::Package;
-        spawn(tool(plan.cpack, std::move(arguments), "packaging the game"), Stage::Package);
+        ++packageAttempt;
+        // A failed package quotes what went wrong, such as hdiutil's or makensis's errors.
+        ToolCommand cpack = tool(plan.cpack, std::move(arguments), "packaging the game");
+        cpack.quoteOutput = true;
+        spawn(std::move(cpack), Stage::Package);
     }
 
     void finishPackage()
@@ -1474,14 +1481,24 @@ struct ProjectExport::Impl
         process = Process{};
         if (*exitCode != 0)
         {
-            std::string message = running.what + " failed (exit code " + std::to_string(*exitCode) + ")";
-            if (!runningLines.empty())
+            std::string quoted;
+            for (const std::string& text : runningLines)
             {
-                message += ":";
-                for (const std::string& text : runningLines)
-                {
-                    message += "\n" + text;
-                }
+                quoted += "\n" + text;
+            }
+            if (phase == Phase::Package && packageAttempt < kPackageAttempts &&
+                detail::isTransientPackageFailure(quoted))
+            {
+                output.addUnparsed("hdiutil found the disk image busy; packaging again (attempt " +
+                                   std::to_string(packageAttempt + 1) + " of " +
+                                   std::to_string(kPackageAttempts) + ")");
+                startPackage();
+                return;
+            }
+            std::string message = running.what + " failed (exit code " + std::to_string(*exitCode) + ")";
+            if (!quoted.empty())
+            {
+                message += ":" + quoted;
             }
             fail(std::move(message));
             return;
