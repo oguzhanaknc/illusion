@@ -836,6 +836,71 @@ TEST_CASE("an archive export packages the installed game with CPack and reports 
                                         utf8Path("Space Blocks 2" + std::string(kArchiveExtension))));
 }
 
+TEST_CASE("a busy disk image makes the export package again and succeed")
+{
+    const ExportProject project;
+    // FakeCMake.cpp fails cpack like hdiutil with a busy image this many times.
+    writeFile(project.root / ".illusion" / "export" / std::string(kPlatformName) / "PACKAGE_BUSY", "2");
+    ExportOptions options = project.options();
+    options.package = ExportPackage::Archive;
+    const std::unique_ptr<ProjectExport> exported = start(options);
+    finish(*exported);
+    const std::string tail = exported->outputTail();
+    INFO(tail);
+    REQUIRE(exported->succeeded());
+    CHECK(std::filesystem::is_regular_file(exported->report().package));
+    CHECK(tail.find("hdiutil found the disk image busy; packaging again (attempt 2 of 3)") !=
+          std::string::npos);
+    CHECK(tail.find("hdiutil found the disk image busy; packaging again (attempt 3 of 3)") !=
+          std::string::npos);
+}
+
+TEST_CASE("a disk image that stays busy fails the package stage after three attempts quoting hdiutil")
+{
+    const ExportProject project;
+    writeFile(project.root / ".illusion" / "export" / std::string(kPlatformName) / "PACKAGE_BUSY", "3");
+    ExportOptions options = project.options();
+    options.package = ExportPackage::Archive;
+    const std::unique_ptr<ProjectExport> exported = start(options);
+    finish(*exported);
+    CHECK_FALSE(exported->succeeded());
+    CHECK(exported->stage() == ProjectExport::Stage::Done);
+    const std::string& error = exported->error();
+    CHECK(error.starts_with("packaging the game failed (exit code 1):\n"));
+    CHECK(error.find("hdiutil: couldn't unmount \"disk4\" - Resource busy") != std::string::npos);
+    CHECK(exported->report().package.empty());
+}
+
+TEST_CASE("a packaging failure that is not a busy disk image fails at once and quotes cpack")
+{
+    const ExportProject project;
+    writeFile(project.root / ".illusion" / "export" / std::string(kPlatformName) / "PACKAGE_FAIL", "");
+    ExportOptions options = project.options();
+    options.package = ExportPackage::Archive;
+    const std::unique_ptr<ProjectExport> exported = start(options);
+    finish(*exported);
+    CHECK_FALSE(exported->succeeded());
+    CHECK(
+        exported->error() ==
+        "packaging the game failed (exit code 1):\nCPack Error: Problem copying the package: Space Blocks 2" +
+            std::string(kArchiveExtension) + ": No space left");
+    CHECK(exported->outputTail().find("packaging again") == std::string::npos);
+}
+
+TEST_CASE("only hdiutil's resource busy errors count as a transient packaging failure")
+{
+    using illusion::editor::detail::isTransientPackageFailure;
+    CHECK(isTransientPackageFailure(
+        "CPack Error: Error executing: /usr/bin/hdiutil detach \"/Volumes/Game\"\n"
+        "CPack Error: Output: hdiutil: couldn't unmount \"disk4\" - Resource busy"));
+    CHECK(isTransientPackageFailure("hdiutil: create failed - Resource busy"));
+    CHECK(isTransientPackageFailure("hdiutil: detach failed - resource busy"));
+    CHECK_FALSE(isTransientPackageFailure(""));
+    CHECK_FALSE(isTransientPackageFailure("hdiutil: create failed - No space left on device"));
+    CHECK_FALSE(isTransientPackageFailure("makensis: cannot open file: Resource busy"));
+    CHECK_FALSE(isTransientPackageFailure("CPack Error: Problem running NSIS"));
+}
+
 TEST_CASE("a configure error, such as a macOS SDK machine without MoltenVK, fails the export without a game")
 {
     const ExportProject project;

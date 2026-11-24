@@ -70,6 +70,9 @@ struct MeshData
     std::vector<u32> indices;       ///< Triangle list indices.
     std::vector<Submesh> submeshes; ///< At least one submesh for a valid mesh.
     Aabb bounds;                    ///< Bounds of all vertices.
+    /// Vertex colours (glTF COLOR_0), parallel to vertices: linear RGBA8 with red in the lowest byte. Empty
+    /// for a mesh without colours, which material shaders see as white.
+    std::vector<u32> colors;
     /// Joints and weights per vertex (parallel to vertices) of a skinned mesh; empty for a rigid one.
     std::vector<SkinVertex> skin;
     /// Bind-space bounds of the vertices each joint moves, indexed like the skeleton's joints; empty for a

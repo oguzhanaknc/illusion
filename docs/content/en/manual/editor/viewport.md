@@ -50,7 +50,10 @@ The axes use the theme's axis colours.
 
 The **Game** panel shows the scene through its main camera (the first active entity with a `Camera`), the
 way the player will see it: without the grid, the outline and editor-only entities. When the scene has no
-camera, the panel says so. The editor camera commands and the view menu work only in Scene views.
+camera, the panel says so. The editor camera commands and the view menu work only in Scene views. In a play
+session it shows what the [camera brain](../cameras.md#the-camera-brain) writes to the `Camera`, and
+`camera.preview` makes it look through a virtual camera of the edited scene
+([Cameras](../cameras.md#in-the-viewports)).
 
 While no game runs, the Game view also edits the game UI: you select, move and resize UI elements and set
 their anchors with the mouse. See [Editing in the Game view](../ui.md#editing-in-the-game-view).
@@ -103,7 +106,7 @@ Visualisers draw the shape of Components that have no image of their own, as lin
 | Visualiser | What it draws |
 | --- | --- |
 | Lights | The range sphere of point lights; the direction of directional lights. |
-| Cameras | The view frustum of every `Camera`, in the aspect of the Game view. |
+| Cameras | The view frustum of every `Camera`, in the aspect of the Game view, and of every `VirtualCamera`; in a play session the live one in yellow and the one a blend comes from in orange, selected or not ([Cameras](../cameras.md#in-the-viewports)). |
 | Colliders | The box, sphere, capsule, cylinder or bounds of every `Collider`; sensors in another colour. |
 | Characters | The capsule of every `CharacterController`. |
 | Joints | The anchor and axis of every `Joint`, with its limits and the line to the connected body. |
@@ -169,6 +172,7 @@ time of each pass is in the [Profiler](profiler.md#gpu).
 | `viewport.create` / `viewport.close` | Open or close an extra Scene view (`scene-2` to `scene-4`). |
 | `viewport.set_aspect` | Free, an aspect preset, or a fixed `width` and `height`. |
 | `camera.bookmark_set` / `camera.bookmark_go` | Save the editor camera in slot 1-9, or move it back. |
+| `camera.preview` | Make the Game views look through a virtual camera of the edited scene ([Cameras](../cameras.md#in-the-editor)). |
 | `render.stats` | Frames, visible objects, draw calls and triangles of a viewport's last frame. |
 | `render.gpu_info` / `render.diagnostics` | The GPU and driver; whether validation is on and how many errors it reported. |
 

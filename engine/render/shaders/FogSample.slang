@@ -1,5 +1,5 @@
 // Lookup of the integrated volumetric fog (VolumetricFog, ADR 0050), shared by the fog's apply pass, blended
-// surfaces (ForwardPbr.slang) and particles (ParticlesCommon.slang). The volume is a froxel grid aligned with
+// surfaces (illusion/MaterialPass.slang) and particles (ParticlesCommon.slang). The volume is a froxel grid aligned with
 // the screen whose slices are spaced exponentially in view depth between a near and a far distance; texel z
 // holds the light scattered towards the camera (rgb) and the transmittance (a) from the camera to the far
 // side of slice z. Layouts of `params` must match SceneRenderer.cpp.

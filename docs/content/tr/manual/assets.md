@@ -28,7 +28,8 @@ const std::vector<illusion::Entity> entities = illusion::spawnModel(world, *mode
 ```
 
 - Mesh'ler submesh'lerini (glTF primitive'leri) korur; her birinin kendi Material'i ve sınırlayıcı
-  kutusu vardır. Eksik normaller hesaplanır; tangent'lar varsa okunur, yoksa shader'da türetilir.
+  kutusu vardır. Eksik normaller hesaplanır; tangent'lar varsa okunur, yoksa shader'da türetilir. Vertex
+  renkleri (`COLOR_0`), [material shader'ları](#material-shaderlar) için `MeshData::colors` içinde saklanır.
 - Material'ler base colour, metallic-roughness, normal, occlusion ve emissive Texture'ları, alpha
   modları ve `KHR_materials_emissive_strength` ile metallic-roughness modelini kullanır.
 - Görüntüler (PNG, JPEG) çözülür ve tam mip zincirleri oluşturulur. Renk Texture'ları (base colour,
@@ -311,10 +312,13 @@ varsayılan, çok fazla bayt veya Texture) ilgili alanı aynı biçimde adlandı
 #### Sınırlar
 
 - Bir `.shader` dosyasında `#include` desteklenmez.
-- Renderer sağlayana kadar `SurfaceInput.customData` sıfırdır ve `SurfaceInput.color` beyazdır.
+- `SurfaceInput.color`, Mesh'in vertex rengidir (glTF `COLOR_0`); vertex rengi yoksa beyazdır.
+  `SurfaceInput.customData` şimdilik sıfırdır.
 - `Unlit` dışındaki shading model'ler MAT-3'e kadar `Default` gibi ışıklandırılır.
-- `.material` dosyaları henüz shader adlandırmaz (MAT-2, MAT-4). Surface API'sinin başvuru belgesi MAT-4 ile
-  gelir; o zamana kadar `illusion/Surface.slang` başlık yorumu onu anlatır.
+- `.material` dosyaları henüz shader adlandırmaz (MAT-4); kod, shader'ları Material'lere `RenderResources`
+  üzerinden verir (rendering kılavuzundaki [Material shader'ları](rendering.md#material-shaders) bölümüne
+  bakın). Surface API'sinin başvuru belgesi MAT-4 ile gelir; o zamana kadar `illusion/Surface.slang` başlık
+  yorumu onu anlatır.
 
 Header'lar: `<illusion/assets/ShaderAsset.hpp>`, `<illusion/assets/ShaderCompiler.hpp>`
 

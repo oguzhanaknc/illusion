@@ -115,6 +115,9 @@ struct RenderStats
     /// Skinned instances posed on the GPU (seen by the camera or a shadow view; RenderView::animation).
     u32 skinnedInstances = 0;
     u32 skinnedVertices = 0; ///< Vertices the skinning pass wrote.
+    /// Pipelines of material shaders built this frame: on a shader's first draw in a state, after a hot
+    /// reload (RenderResources::updateShader()) or new shadow settings; 0 in steady state (ADR 0063).
+    u32 pipelinesBuilt = 0;
 };
 
 /// Completed GPU pass measurements in milliseconds, obtained without blocking the graphics queue.

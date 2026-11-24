@@ -1,6 +1,6 @@
-// Bindings of the forward pass shared by ForwardPbr.slang and the material shaders' passes
-// (illusion/MaterialPass.slang): push constants, the view, instances and the frame's lighting resources in
-// space 0. Must match the C++ layouts in SceneRenderer.cpp and RenderResources.cpp.
+// Bindings of the forward passes of material shaders (illusion/MaterialPass.slang): push constants, the view,
+// instances and the frame's lighting resources in space 0. Must match the C++ layouts in SceneRenderer.cpp and
+// RenderResources.cpp.
 
 #pragma once
 

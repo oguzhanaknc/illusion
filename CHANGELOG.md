@@ -120,6 +120,11 @@ version changes are in the contributor guide ("Versions and releases"). The vers
 - Cameras for modules (CAM-3): `CameraService` (activate and deactivate, priority, follow and look-at targets,
   orbit and arm angles, shoulder swap, field of view, shakes and impulses, the live camera and the blend
   progress) with the adapter `CameraWorldService`, and the tech demo walker seen through a first-person virtual camera.
+- Cameras in the editor (CAM-4): the Editor commands `camera.list`, `camera.status`, `camera.activate` (raises a
+  virtual camera above the others, undoable) and `camera.preview` (the Game views look through a virtual camera of
+  the edited scene), the frusta of virtual cameras in the Scene view (the live camera in yellow and the one a blend
+  comes from in orange in a play session), and the manual sections "Rigs", "In the editor" and "Performance" of the
+  page "Cameras".
 
 ### Changed
 

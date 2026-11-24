@@ -914,8 +914,9 @@ Expected<void, std::string> applyRigOverrides(RigMap& rig, const Skeleton& skele
     }
     else
     {
-        result.bones.resize(count);
-        result.translation.resize(count);
+        // Built rather than resized: GCC 13 -O3 reports a false null dereference in vector::resize here.
+        result.bones = std::vector<std::string>(count);
+        result.translation = std::vector<RetargetTranslation>(count, RetargetTranslation::Skeleton);
     }
 
     std::vector<i32> overridden(count, -1); // the bone override of each joint

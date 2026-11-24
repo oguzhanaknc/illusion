@@ -5,38 +5,23 @@
 #include <illusion/assets/Atmosphere.hpp>
 #include <illusion/render/RenderResources.hpp>
 
+#include <array>
+#include <cstddef>
 #include <vector>
 
 namespace illusion
 {
 
-/// GPU layout of a material's constants (must match MaterialConstants in ForwardPbr.slang).
-struct GpuMaterialConstants
-{
-    Vec4 baseColorFactor;
-    Vec4 emissiveFactor; // w: normal scale
-    f32 metallicFactor;
-    f32 roughnessFactor;
-    f32 occlusionStrength;
-    f32 alphaCutoff;   // < 0 disables masking
-    Vec4 wind;         // x: sway, y: flutter (MaterialData::windSway, windFlutter)
-    Vec4 transmission; // rgb: diffuseTransmission * diffuseTransmissionColor, w: diffuseTransmission
-};
-static_assert(sizeof(GpuMaterialConstants) == 80);
-
-/// One material in the bindless material table (must match MaterialRecord in ForwardPbr.slang).
+/// One material in the bindless material table (must match MaterialRecord in illusion/MaterialPass.slang):
+/// its sampler, then its parameter block in the layout of its shader, with the bindless indices of its
+/// textures.
 struct GpuMaterialRecord
 {
-    GpuMaterialConstants constants;
-    u32 baseColorTexture; // indices into the bindless texture table
-    u32 metallicRoughnessTexture;
-    u32 normalTexture;
-    u32 occlusionTexture;
-    u32 emissiveTexture;
-    u32 sampler; // index into the sampler array (wrapU * 3 + wrapV)
-    u32 padding[2];
+    u32 sampler = 0; // index into the sampler array (wrapU * 3 + wrapV)
+    u32 padding[3]{};
+    std::array<std::byte, kMaxShaderParameterBytes> parameters{};
 };
-static_assert(sizeof(GpuMaterialRecord) == 112);
+static_assert(sizeof(GpuMaterialRecord) == 272);
 
 // Meshes live in shared vertex and index pools; offsets are in vertices and indices.
 struct RenderResources::GpuMesh
@@ -80,12 +65,39 @@ static_assert(sizeof(GpuAtmosphere) == 64);
 
 struct RenderResources::GpuMaterial
 {
-    u32 index = 0; // slot in the material table (equals the handle index)
-    nvrhi::BufferHandle constants;
+    u32 index = 0;                 // slot in the material table (equals the handle index)
+    u32 shader = 1;                // slot of its shader (1: the standard shader)
+    nvrhi::BufferHandle constants; // the parameter block of the bound passes
     nvrhi::BindingSetHandle bindingSet;
+    std::array<u32, kMaxShaderTextures> textures{}; // texture slots it binds, by texture field
     AlphaMode alphaMode = AlphaMode::Opaque;
     bool doubleSided = false;
-    bool wind = false; // moves in the wind: its vertices depend on the material, also in shadow maps
+    // Its vertices move (wind, worldOffset()): it draws with its own material in shadow maps too.
+    bool moves = false;
+};
+
+// A material shader on the GPU: its layout and a vertex and fragment shader per variant that exists.
+struct RenderResources::GpuShader
+{
+    ShaderAsset layout; // without SPIR-V
+    // Changes with every createShader() and updateShader(), also when a slot is reused: renderers build again
+    // the pipelines they made for another revision.
+    u64 revision = 0;
+    std::array<nvrhi::ShaderHandle, kShaderPassCount * 3> vertex{};
+    std::array<nvrhi::ShaderHandle, kShaderPassCount * 3> fragment{};
+
+    [[nodiscard]] static constexpr usize variantIndex(ShaderPass pass, AlphaMode mode) noexcept
+    {
+        return static_cast<usize>(pass) * 3 + static_cast<usize>(mode);
+    }
+    [[nodiscard]] nvrhi::IShader* vertexShader(ShaderPass pass, AlphaMode mode) const noexcept
+    {
+        return vertex[variantIndex(pass, mode)];
+    }
+    [[nodiscard]] nvrhi::IShader* fragmentShader(ShaderPass pass, AlphaMode mode) const noexcept
+    {
+        return fragment[variantIndex(pass, mode)];
+    }
 };
 
 } // namespace illusion

@@ -1,4 +1,4 @@
-// Lighting of the forward pass shared by ForwardPbr.slang and the material shaders' passes: Cook-Torrance
+// Lighting of the forward passes of material shaders (illusion/MaterialPass.slang): Cook-Torrance
 // GGX specular, Lambert diffuse with diffuse transmission, and image-based lighting. Needs the bindings of
 // ForwardBindings.slang.
 

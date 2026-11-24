@@ -5,6 +5,8 @@
 
 #include "Surface.slang"
 
+// The view constants of the passes, for the surface API's helpers (windOffset()).
+ConstantBuffer<ViewConstants> g_view : register(b0, space0);
 ConstantBuffer<Parameters> illusionParameters : register(b0, space1);
 Texture2D g_materialTextures[8] : register(t0, space1);
 SamplerState g_materialSampler : register(s0, space1);

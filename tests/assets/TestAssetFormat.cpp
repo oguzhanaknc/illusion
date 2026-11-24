@@ -112,6 +112,20 @@ TEST_CASE("cooked models round-trip exactly and deterministically")
     }
 }
 
+TEST_CASE("cooked models keep vertex colours and reject colours not parallel to the vertices")
+{
+    ModelData model;
+    model.meshes.push_back(makeCube());
+    model.meshes[0].colors.assign(model.meshes[0].vertices.size(), 0x80402010u);
+    const std::optional<ModelData> read = deserializeModel(serializeModel(model));
+    REQUIRE(read.has_value());
+    CHECK(read->meshes[0].colors == model.meshes[0].colors);
+
+    ModelData shorter = model;
+    shorter.meshes[0].colors.pop_back();
+    CHECK_FALSE(deserializeModel(serializeModel(shorter)).has_value());
+}
+
 TEST_CASE("cooked models with out-of-range indices are rejected")
 {
     ModelData model;

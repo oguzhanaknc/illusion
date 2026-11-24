@@ -1503,11 +1503,23 @@ Today games can only set the parameters of the built-in PBR material.
   errors with file/line/column; the pinned `slangc` in the editor CPack component and the SDK. Done: compile,
   cache and error tests on small shaders, a malformed shader never crashes the cooker, export fails with the
   compiler's message.
-- MAT-2 (`implementer`): The renderer. The standard PBR material rewritten as `builtin:/shader/standard` on
+- ✅ MAT-2 (`implementer`): The renderer. The standard PBR material rewritten as `builtin:/shader/standard` on
   the surface API (golden images unchanged), pipelines per (shader, variant, state) built lazily and cached,
   per-material parameter buffers on the bindless path, `worldOffset` in prepass, shadows and motion vectors,
-  the fallback/error material, hot reload swapping pipelines. Done: GPU goldens of a custom emissive and a
-  wind-offset shader, zero validation errors, benchmark of 1,000 materials over 20 shaders.
+  the fallback/error material, hot reload swapping pipelines. Done: `builtin:/shader/standard` and
+  `builtin:/shader/error` compiled at build time by `illusion_shaderc` (`illusion_add_material_shaders()`);
+  `RenderResources::createShader()`/`updateShader()`/`releaseShader()`, `MaterialDesc::shader` with parameters
+  and textures by name, 272-byte material table records in the shader's layout; `SceneRenderer` pipelines per
+  shader, pass, alpha mode and sides built on first draw (`RenderStats::pipelinesBuilt`), rebuilt on a new
+  shader revision; glTF vertex colours (`MeshData::colors`, model format 7) as a second vertex stream; GPU
+  goldens `material-glow` and `material-sway`, tests of the bound and bindless paths, alpha-masked custom
+  shaders, `worldOffset()` in depth, ids, shadows and motion vectors, hot reload keeping parameters by name,
+  released shaders and the error checker, all with zero validation errors; benchmark
+  `render/material-shaders` (10k cubes, 1,000 materials over 20 shaders). Open: `.material` files naming a
+  shader and the editor recompiling changed `.shader` files on a background thread (MAT-4 wires both to
+  `updateShader()`); `SurfaceInput.customData` stays zero until `MeshRenderer` carries it; in the bindless
+  path, alpha-masked and cross-fading batches take the bound prepass per Material (no bindless prepass
+  variant).
 - MAT-3 (`implementer`): Shading models `Unlit`, `Subsurface`, `TwoSidedFoliage`, `ClearCoat` in the
   lighting code. Done: a golden per model, the tech demo foliage on `TwoSidedFoliage` with unchanged images.
 - MAT-4 (`mechanic`): Editor and documentation. `.material` `shader` and typed parameters in the Inspector,
@@ -1568,9 +1580,17 @@ game code.
   eases it over frames); `activate()`, `setPriority()`, `swapShoulder()` and the target setters write the saved
   fields of the Components; the walker still writes the Eye Point's Transform, since `CameraFollow` has no
   pitch input; the forest needs downloaded assets, so its images were not retaken.
-- CAM-4 (`mechanic`): Editor and documentation: `camera.*` commands, frusta in the Scene view, Game view
-  preview of a virtual camera, manual page "Cameras" (EN/TR), a tutorial (a third-person camera with
-  shoulder swap), `CHANGELOG.md`.
+- ✅ CAM-4 (`mechanic`): Editor and documentation: the commands `camera.list`, `camera.status`,
+  `camera.activate` (priority one above the others, undoable) and `camera.preview` (`ViewState::previewCamera()`),
+  the frusta of virtual cameras in the Scene view (`VisualiserColors::virtualCamera`, `liveCamera` and
+  `blendingCamera`: the live and the blending camera of a play session are always drawn, at the brain's pose), the
+  Game view looking through the previewed camera, manual sections "Rigs", "In the editor" and "Performance" of
+  "Cameras" (EN/TR), `CHANGELOG.md`. Done: `editor/tests/core/TestCameraCommands.cpp`, the camera commands in the
+  fuzz, dry-run and random-command history tests, `camera.status` of a running game and its blend in
+  `editor/tests/play/TestPlayMode.cpp`, the frusta in `editor/tests/viewport/TestVisualisers.cpp`, the preview and
+  the Scene view frustum in `editor/tests/gpu/TestViewportGpu.cpp`. Tutorial "A third-person camera" (module built by
+  `tests/CMakeLists.txt`, test in `tests/docs/TestTutorials.cpp`). Open: the edit World does not run camera stages, so `camera.preview` shows a camera where its Entity
+  stands.
 - Virtual cameras (scope) as saved Components with priorities; the camera brain on the real `Camera` picks the
   highest live one and blends to it (cut, ease, custom curve, per-pair overrides)
 - Body and aim stages as data: follow with offset and damping, orbit, spring arm with collision against
@@ -1690,6 +1710,22 @@ keeps its behaviour (the tech demo tests must not change).
   saved `Footsteps` Component, replacing the stride counter in the module
 - A shared, pinned asset fetcher (`tools/fetch_assets.py` of the tech demo generalised for SHOOTER: a
   manifest of URLs, sizes and SHA-256, a local override folder, never committed)
+
+Found by checking the SHOOTER plan against the engine (2026-11-23): what a game with missions and a
+settings menu needs and the engine does not offer yet.
+
+- Scene changes: `SceneService::loadScene()` replaces the running scene asynchronously (stream, cook, wait
+  for readiness, swap), keeps Entities marked to persist, reports progress for a loading screen and is the
+  point where saved games restore; today modules can only `instantiate()` into the running scene
+- Settings at run time: modules change window mode, resolution, vsync, frame limit, render scale and
+  quality levels while the game runs and persist them in the user's settings (`user:`), not only through
+  the project's `settings:` files read at start
+- World-space UI: UI elements anchored to an Entity or a world point (objective markers, name plates,
+  health bars, damage numbers) with clamping to the screen edge and distance fading
+- Surface types: a surface type on Colliders and materials (concrete, metal, dirt, wood, flesh) reported by
+  raycasts and contacts, so impacts, decals and footsteps pick their effect and sound
+- Music and mixing: music tracks that cross-fade and loop by section, and mixer snapshots (pause menu,
+  underwater, combat) that blend bus volumes and filters over time
 
 ## SHOOTER — Third-person shooter demo
 

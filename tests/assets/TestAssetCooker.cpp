@@ -14,9 +14,9 @@ TEST_CASE("cooked assets load from an archive without their sources")
 {
     test::AssetProject project;
     const CookResult result = cookAssets(project.files, "game:/", "cache");
-    // two_nodes.gltf, binary.glb, embedded.gltf, translucent.gltf, rigged.gltf, humanoid_a.gltf,
+    // two_nodes.gltf, binary.glb, embedded.gltf, translucent.gltf, rigged.gltf, colors.gltf, humanoid_a.gltf,
     // humanoid_b.gltf
-    CHECK(result.models == 7);
+    CHECK(result.models == 8);
     CHECK(result.images == 1);        // textures/checker.png
     CHECK(result.errors.size() == 2); // unsupported.gltf and scene/bad_image_uri.gltf are broken on purpose
 
