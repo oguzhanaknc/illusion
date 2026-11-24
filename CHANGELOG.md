@@ -134,11 +134,19 @@ version changes are in the contributor guide ("Versions and releases"). The vers
   `animation/retarget-bind-60`, the Small Strider and its hat in the showcase, and the manual section
   "Retargeting".
 
+- Aim layers (ANIM-5c): the saved `Aim` Component (a spine chain turned until a joint points at a target, with
+  its yaw and pitch written to graph parameters before the graph steps), `.animgraph` version 2 with
+  `reference`, `referenceTime` and `space` on Additive layers (aim offsets in model space,
+  `addPoseInModelSpace()`), `solveAim()` and `aimAngles()`, `TwoBoneIk::targetJoint`, the
+  `AnimationService` functions `setAimTarget()`, `setAimWeight()` and `aimAngles()`, the benchmark
+  `animation/aim-300`, the Small Strider's aim in the showcase, and the manual section "Aim".
+
 ### Changed
 
 - The cooked model format is 7 (a rig map per skin and the source skin of each clip) and the import settings
   sidecar is version 3 (`model.skins`): every model imports again once (ANIM-5a).
-- The module API version is 13 (`CameraService` was added; version 12 added `AiService`, version 11 added `NavService`, version 10 added `AnimationService::setRagdoll()`,
+- The module API version is 14 (`AnimationService::setAimTarget()`, `setAimWeight()` and `aimAngles()` were
+  added; version 13 added `CameraService`, version 12 added `AiService`, version 11 added `NavService`, version 10 added `AnimationService::setRagdoll()`,
   version 9 `setLookAtTarget()`, `setIkTarget()` and `setIkWeight()`, version 8 `jointTransform()`, version 7
   `AnimationService`, version 6 `UiService`, `SceneService::requestExit()` and `SaveService`, and `UiService`
   gained `playTransition()` and `transitionProgress()`): game modules built for an earlier version must be

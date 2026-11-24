@@ -47,6 +47,8 @@ struct GraphBinding
     /// The pose evaluation starts from: the reference pose of the first retargeted clip, or empty for the
     /// skeleton's rest pose.
     std::vector<JointPose> basePose;
+    /// Per layer: index into clips of AnimationLayer::reference (after every state's clips), or -1.
+    std::vector<i32> referenceClips;
     std::vector<u32> firstClip;  ///< Per state, all layers flattened in order: index of its first clip.
     std::vector<u32> firstState; ///< Per layer: index of its first state in the flattened state order.
     /// Per layer: one weight per joint, or empty for a layer without a mask.
@@ -54,7 +56,8 @@ struct GraphBinding
     i32 rootJoint = -1; ///< Joint of AnimationGraph::rootMotion, or -1.
 };
 
-/// Resolves every clip of @p graph with @p findClip (null when missing) and binds it to @p skeleton by name.
+/// Resolves every clip of @p graph (states, then layer references) with @p findClip (null when missing) and
+/// binds it to @p skeleton by name.
 /// Mask and root motion joints are found with findRigJoint(). Fails naming the first clip that is missing, a
 /// mask or root motion joint the skeleton lacks. Allocates.
 [[nodiscard]] Expected<GraphBinding, std::string>
@@ -132,10 +135,11 @@ struct RootMotionDelta
 };
 
 /// Writes the local pose of @p state into @p out (one entry per joint): samples the weighted clips (at most
-/// kMaxActiveClips), blends blend spaces and transitions, applies the layers with their masks and modes. With
-/// a root motion joint and @p root, computes the joint's motion from each clip's time before and after the
-/// last stepGraph() (across a loop wrap), weighted, into @p root, and removes it from the pose. Scratch poses
-/// come from @p scratch, which the caller rewinds. Does not allocate on the heap.
+/// kMaxActiveClips), blends blend spaces and transitions, applies the layers with their masks and modes (an
+/// Additive layer against its reference pose, in local or model space; ADR 0065). With a root motion joint
+/// and @p root, computes the joint's motion from each clip's time before and after the last stepGraph()
+/// (across a loop wrap), weighted, into @p root, and removes it from the pose. Scratch poses come from
+/// @p scratch, which the caller rewinds. Does not allocate on the heap.
 void evaluateGraph(const GraphBinding& binding, const AnimationGraphState& state, LinearAllocator& scratch,
                    std::span<JointPose> out, RootMotionDelta* root) noexcept;
 

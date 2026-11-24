@@ -20,6 +20,7 @@ constexpr std::string_view kFormatName = "illusion.animgraph";
 constexpr std::array<std::string_view, 4> kParameterTypes = {"Float", "Int", "Bool", "Trigger"};
 constexpr std::array<std::string_view, 4> kCompareNames = {"Greater", "Less", "Equal", "NotEqual"};
 constexpr std::array<std::string_view, 2> kBlendNames = {"Override", "Additive"};
+constexpr std::array<std::string_view, 2> kSpaceNames = {"Local", "Model"};
 
 std::string member(const std::string& path, std::string_view key)
 {
@@ -195,6 +196,7 @@ class Parser
 {
 public:
     std::string error;
+    u64 version = kAnimationGraphVersion;
 
     bool fail(const std::string& path, std::string_view message)
     {
@@ -360,10 +362,10 @@ public:
         return true;
     }
 
-    bool clip(JsonValue parent, const std::string& path, AssetRef& out)
+    bool clip(JsonValue parent, const std::string& path, AssetRef& out, std::string_view key = "clip")
     {
         std::string text;
-        if (!string(parent, path, "clip", text, true))
+        if (!string(parent, path, key, text, true))
         {
             return false;
         }
@@ -373,14 +375,14 @@ public:
         if (!parts || parts->fragment != AssetFragment::Animation)
         {
             return fail(
-                member(path, "clip"),
+                member(path, key),
                 std::format("'{}' is not an animation clip path (\"game:/model.glb#animation/<name>\")",
                             text));
         }
         out = AssetRef(*normalized);
         if (out.empty())
         {
-            return fail(member(path, "clip"), std::format("'{}' could not be recorded", text));
+            return fail(member(path, key), std::format("'{}' could not be recorded", text));
         }
         return true;
     }
@@ -669,8 +671,13 @@ public:
 
     bool layer(JsonValue entry, const std::string& path, const AnimationGraph& graph, AnimationLayer& layer)
     {
-        if (!object(entry, path, {"name", "weight", "blend", "mask", "entry", "states", "transitions"}) ||
-            !string(entry, path, "name", layer.name, true) ||
+        const bool keys =
+            version >= 2
+                ? object(entry, path,
+                         {"name", "weight", "blend", "reference", "referenceTime", "space", "mask", "entry",
+                          "states", "transitions"})
+                : object(entry, path, {"name", "weight", "blend", "mask", "entry", "states", "transitions"});
+        if (!keys || !string(entry, path, "name", layer.name, true) ||
             !number(entry, path, "weight", layer.weight, 0.0f, 1.0f))
         {
             return false;
@@ -696,6 +703,10 @@ public:
                             std::format("unknown blend '{}' (Override or Additive)", blend));
             }
             layer.blend = static_cast<AnimationLayerBlend>(found - kBlendNames.begin());
+        }
+        if (!additiveOptions(entry, path, layer))
+        {
+            return false;
         }
         JsonValue list;
         if (!array(entry, path, "mask", list, false, 0))
@@ -766,6 +777,46 @@ public:
                 return false;
             }
             layer.transitions.push_back(std::move(parsed));
+        }
+        return true;
+    }
+
+    // The version 2 keys of a layer: the reference pose and the space of an Additive layer.
+    bool additiveOptions(JsonValue entry, const std::string& path, AnimationLayer& layer)
+    {
+        const bool additive = layer.blend == AnimationLayerBlend::Additive;
+        for (const std::string_view key : {"reference", "referenceTime", "space"})
+        {
+            if (!additive && !entry.find(key).isAbsent())
+            {
+                return fail(member(path, key), "only an Additive layer takes it");
+            }
+        }
+        if (!entry.find("reference").isAbsent() && !clip(entry, path, layer.reference, "reference"))
+        {
+            return false;
+        }
+        if (!entry.find("referenceTime").isAbsent() && layer.reference.empty())
+        {
+            return fail(member(path, "referenceTime"), "needs a reference");
+        }
+        if (!number(entry, path, "referenceTime", layer.referenceTime, 0.0f, 1.0f))
+        {
+            return false;
+        }
+        std::string space;
+        if (!string(entry, path, "space", space, false))
+        {
+            return false;
+        }
+        if (!space.empty())
+        {
+            const auto found = std::find(kSpaceNames.begin(), kSpaceNames.end(), space);
+            if (found == kSpaceNames.end())
+            {
+                return fail(member(path, "space"), std::format("unknown space '{}' (Local or Model)", space));
+            }
+            layer.space = static_cast<AnimationAdditiveSpace>(found - kSpaceNames.begin());
         }
         return true;
     }
@@ -952,6 +1003,7 @@ Expected<AnimationGraph, std::string> parseAnimationGraph(std::string_view json)
                         kAnimationGraphVersion));
     }
     Parser parser;
+    parser.version = *version;
     AnimationGraph graph;
     JsonValue layers;
     if (!parser.object(root, "", {"format", "version", "parameters", "rootMotion", "layers"}) ||
@@ -978,7 +1030,12 @@ std::string writeAnimationGraph(const AnimationGraph& graph)
     JsonMutDocument doc;
     JsonMutValue root = doc.makeObject();
     root.add("format", doc.makeString(kFormatName));
-    root.add("version", doc.makeU64(kAnimationGraphVersion));
+    // A graph without version 2 features is written as version 1, which older builds still read.
+    const bool second = std::ranges::any_of(graph.layers, [](const AnimationLayer& layer) {
+        return !layer.reference.empty() || layer.referenceTime != 0.0f ||
+               layer.space != AnimationAdditiveSpace::Local;
+    });
+    root.add("version", doc.makeU64(second ? kAnimationGraphVersion : 1));
     if (!graph.parameters.empty())
     {
         JsonMutValue parameters = root.addArray("parameters");
@@ -1026,6 +1083,18 @@ std::string writeAnimationGraph(const AnimationGraph& graph)
         if (layer.blend != AnimationLayerBlend::Override)
         {
             entry.add("blend", doc.makeString(kBlendNames.at(static_cast<usize>(layer.blend))));
+        }
+        if (!layer.reference.empty())
+        {
+            entry.add("reference", clipValue(layer.reference));
+        }
+        if (layer.referenceTime != 0.0f)
+        {
+            entry.add("referenceTime", doc.makeF32(layer.referenceTime));
+        }
+        if (layer.space != AnimationAdditiveSpace::Local)
+        {
+            entry.add("space", doc.makeString(kSpaceNames.at(static_cast<usize>(layer.space))));
         }
         if (!layer.mask.empty())
         {

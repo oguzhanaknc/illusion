@@ -100,7 +100,12 @@ void registerAnimationComponents(ComponentRegistry& registry)
                {.description = "The end joint; its parent and grandparent form the chain."})
         .field("target", &TwoBoneIk::target, {.description = "Entity to reach; none uses the point."})
         .field("point", &TwoBoneIk::point,
-               {.description = "World-space target without a target Entity.", .unit = Unit::Meters})
+               {.description = "World-space target without a target Entity, or a point in the target "
+                               "joint's space.",
+                .unit = Unit::Meters})
+        .field("targetJoint", &TwoBoneIk::targetJoint,
+               {.description = "A joint of the same pose that the point moves with (the grip for the off "
+                               "hand); empty uses the target Entity or a world-space point."})
         .field("pole", &TwoBoneIk::pole,
                {.description = "Entity the middle joint bends towards; none uses the pole point."})
         .field("polePoint", &TwoBoneIk::polePoint,
@@ -111,7 +116,60 @@ void registerAnimationComponents(ComponentRegistry& registry)
             {.description = "Share of the IK; 0 turns it off.", .unit = Unit::Ratio, .min = 0.0, .max = 1.0})
         .field("alignToTarget", &TwoBoneIk::alignToTarget,
                {.description = "Also turn the end joint to the target Entity (or, with foot placement, the "
-                               "ground)."});
+                               "ground; with a target joint, keep its animated turn relative to it)."});
+    reflect<Aim>("illusion.Aim", 1, registry)
+        .meta({.displayName = "Aim",
+               .category = "Animation",
+               .icon = "my_location",
+               .description =
+                   "Aims the Animator at a target: drives the graph's aim parameters and turns the "
+                   "spine until the aim joint points at it.",
+               .docsAnchor = "manual/animation.md#aim",
+               .requiredComponents = kRequiresAnimator})
+        .field("joint", &Aim::joint, {.description = "The aim joint (a hand, a weapon joint, the head)."})
+        .field("forward", &Aim::forward, {.description = "The aim joint's aim axis in its own space."})
+        .field("spine", &Aim::spine, {.description = "The top joint of the chain that turns."})
+        .field("chainLength", &Aim::chainLength,
+               {.description = "Joints that share the turn: the spine joint and up to three ancestors.",
+                .min = 1.0,
+                .max = 4.0})
+        .field("weights", &Aim::weights,
+               {.description = "Share of each chain joint, from the lowest up (normalized).",
+                .unit = Unit::Ratio,
+                .min = 0.0,
+                .max = 1.0})
+        .field("target", &Aim::target, {.description = "Entity to aim at; none uses the point."})
+        .field("point", &Aim::point,
+               {.description = "World-space point to aim at without a target Entity.", .unit = Unit::Meters})
+        .field("maxYaw", &Aim::maxYaw,
+               {.description = "Largest yaw from the character's forward.",
+                .unit = Unit::Radians,
+                .displayUnit = Unit::Degrees,
+                .min = 0.0,
+                .max = 3.14159265,
+                .hint = FieldHint::Angle})
+        .field("maxPitch", &Aim::maxPitch,
+               {.description = "Largest pitch up or down.",
+                .unit = Unit::Radians,
+                .displayUnit = Unit::Degrees,
+                .min = 0.0,
+                .max = 1.57079633,
+                .hint = FieldHint::Angle})
+        .field("weight", &Aim::weight,
+               {.description = "Share of the spine turn; 0 only drives the graph's parameters.",
+                .unit = Unit::Ratio,
+                .min = 0.0,
+                .max = 1.0})
+        .field("speed", &Aim::speed,
+               {.description = "How fast the aim follows the target, per second; 0 follows at once.",
+                .unit = Unit::Radians,
+                .displayUnit = Unit::Degrees,
+                .min = 0.0,
+                .hint = FieldHint::Angle})
+        .field("yawParameter", &Aim::yawParameter,
+               {.description = "Graph Float parameter that gets the yaw in radians; empty for none."})
+        .field("pitchParameter", &Aim::pitchParameter,
+               {.description = "Graph Float parameter that gets the pitch in radians; empty for none."});
     reflect<FootPlacement>("illusion.FootPlacement", 1, registry)
         .meta({.displayName = "Foot placement",
                .category = "Animation",

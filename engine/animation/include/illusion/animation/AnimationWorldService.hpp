@@ -51,6 +51,9 @@ public:
                                                const Vec3& point) override;
     Expected<void, AnimationError> setIkWeight(Entity entity, std::string_view joint, f32 weight) override;
     Expected<void, AnimationError> setRagdoll(Entity entity, bool active) override;
+    Expected<void, AnimationError> setAimTarget(Entity entity, const Vec3& point) override;
+    Expected<void, AnimationError> setAimWeight(Entity entity, f32 weight) override;
+    [[nodiscard]] Expected<AimAngles, AnimationError> aimAngles(Entity entity) const override;
     /// @}
 
 private:

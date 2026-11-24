@@ -40,8 +40,9 @@ namespace illusion
 /// File extension of animation graphs.
 inline constexpr std::string_view kAnimationGraphExtension = ".animgraph";
 
-/// Version of the `.animgraph` format that parseAnimationGraph() writes and reads.
-inline constexpr u32 kAnimationGraphVersion = 1;
+/// Newest `.animgraph` version: parseAnimationGraph() reads 1 to it, writeAnimationGraph() writes 1 for a
+/// graph without its layer references and spaces.
+inline constexpr u32 kAnimationGraphVersion = 2;
 
 /// Most clips one Animator samples in an update; the lightest are dropped beyond it.
 inline constexpr u32 kMaxActiveClips = 16;
@@ -143,7 +144,7 @@ struct AnimationTransition
 enum class AnimationLayerBlend : u8
 {
     Override, ///< Replaces them by the layer's weight and mask.
-    Additive, ///< Adds its difference from the first frame of each clip.
+    Additive, ///< Adds its difference from the first frame of each clip (or from AnimationLayer::reference).
 };
 
 /// Where an Additive layer adds its difference (ADR 0065).
@@ -166,10 +167,15 @@ struct AnimationLayer
     std::string name;                                          ///< Unique in the graph.
     f32 weight = 1.0f;                                         ///< In [0, 1].
     AnimationLayerBlend blend = AnimationLayerBlend::Override; ///< How it combines.
-    std::vector<AnimationMaskJoint> mask;                      ///< Empty: every joint at weight 1.
-    u32 entry = 0;                                             ///< Index of the entry state.
-    std::vector<AnimationState> states;                        ///< At least one.
-    std::vector<AnimationTransition> transitions;              ///< In priority order.
+    /// Additive (version 2): the clip whose pose the difference is taken from, instead of each clip's first
+    /// frame; none keeps the first frames.
+    AssetRef reference;
+    f32 referenceTime = 0.0f; ///< Additive (version 2): normalized time of the reference pose in [0, 1].
+    AnimationAdditiveSpace space = AnimationAdditiveSpace::Local; ///< Additive (version 2): where it adds.
+    std::vector<AnimationMaskJoint> mask;                         ///< Empty: every joint at weight 1.
+    u32 entry = 0;                                                ///< Index of the entry state.
+    std::vector<AnimationState> states;                           ///< At least one.
+    std::vector<AnimationTransition> transitions;                 ///< In priority order.
 };
 
 /// The content of a `.animgraph` file.

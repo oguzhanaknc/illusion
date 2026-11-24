@@ -123,7 +123,9 @@ struct Runtime
     bool columnSwings = false; ///< The Column's graph is in its "swing" state.
     f32 columnTop = 0.0f;      ///< World height of the Column's "top" joint (its lamp's socket).
     Entity strider{};
-    Entity fallenStrider{}; ///< Starts as a ragdoll, stands up and falls again.
+    Entity fallenStrider{};     ///< Starts as a ragdoll, stands up and falls again.
+    Entity smallStrider{};      ///< Aims its head at a point the module moves.
+    f32 smallStriderYaw = 0.0f; ///< Yaw of the Small Strider's aim at the last update, in radians.
     Entity walker{};
     Entity aiGuard{};         ///< The AI Guard, whose actions the module carries out.
     Entity aiSleeper{};       ///< The AI Sleeper, whose blackboard the module writes.
@@ -444,6 +446,7 @@ void startModule(ModuleContext& context)
     runtime.column = findNamed(world, "Column");
     runtime.strider = findNamed(world, "Strider");
     runtime.fallenStrider = findNamed(world, "Fallen Strider");
+    runtime.smallStrider = findNamed(world, "Small Strider");
     runtime.walker = findNamed(world, "Nav Walker");
     runtime.aiGuard = findNamed(world, "AI Guard");
     runtime.aiSleeper = findNamed(world, "AI Sleeper");
@@ -897,6 +900,19 @@ void updateAnimation(AnimationService& animation, Runtime& runtime, u32 frame)
             ILL_LOG_INFO("Showcase", "Strider: {}", animationErrorName(weighted.error()));
         }
     }
+    // The Small Strider aims its head at a point that circles it, and lets the turn go half-way at the bow.
+    const f32 circle = 0.02f * static_cast<f32>(frame);
+    static_cast<void>(animation.setAimTarget(
+        runtime.smallStrider, Vec3(-12.0f + 3.0f * std::sin(circle), 1.2f, 17.0f + 3.0f * std::cos(circle))));
+    if (frame == kBowFrame)
+    {
+        const Expected<void, AnimationError> aimed = animation.setAimWeight(runtime.smallStrider, 0.5f);
+        if (!aimed)
+        {
+            ILL_LOG_INFO("Showcase", "Small Strider: {}", animationErrorName(aimed.error()));
+        }
+    }
+    runtime.smallStriderYaw = animation.aimAngles(runtime.smallStrider).valueOr(AimAngles{}).yaw;
     if (frame == kStandFrame || frame == kFallFrame)
     {
         const Expected<void, AnimationError> ragdoll =

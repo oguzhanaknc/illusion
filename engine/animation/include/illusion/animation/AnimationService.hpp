@@ -4,7 +4,7 @@
 /// The animation part of the scripting API (docs/adr/0060-animation-graphs.md): game modules drive the
 /// animation graphs of their Animators with parameters, cross-fade Animators without a graph, read the state
 /// events and joint placements of the last update, and aim look-at and IK
-/// (docs/adr/0061-sockets-ik-and-ragdolls.md).
+/// (docs/adr/0061-sockets-ik-and-ragdolls.md) and aim (docs/adr/0065-retargeting-and-aim-layers.md).
 ///
 /// @code
 /// if (illusion::AnimationService* animation = context.service<illusion::AnimationService>())
@@ -26,6 +26,7 @@
 /// }
 /// @endcode
 
+#include <illusion/animation/Aim.hpp>
 #include <illusion/core/Base.hpp>
 #include <illusion/core/Expected.hpp>
 #include <illusion/core/Math.hpp>
@@ -43,7 +44,7 @@ enum class AnimationError : u8
     NoAnimator, ///< The Entity has no Animator (or is not alive).
     NoGraph, ///< The call needs a graph (jointTransform(): a pose) that the Animator lacks or has not loaded.
     HasGraph,     ///< play() on an Animator whose graph controls it.
-    UnknownName,  ///< No parameter, layer, clip or joint of that name, or no LookAt or TwoBoneIk for it.
+    UnknownName,  ///< No parameter, layer, clip or joint of that name, or no LookAt, TwoBoneIk or Aim for it.
     TypeMismatch, ///< The parameter has another type (setFloat() on a Trigger, ...).
     InvalidValue, ///< A value is not finite or out of range (a negative fade).
 };
@@ -135,6 +136,13 @@ public:
     /// Turns the Ragdoll of @p entity on (the body falls from its current pose and velocity) or off (the pose
     /// blends back to the animation); NoAnimator without an Animator, UnknownName without a Ragdoll.
     virtual Expected<void, AnimationError> setRagdoll(Entity entity, bool active) = 0;
+
+    /// Sets the world-space point the Aim of @p entity aims at (and clears its target Entity).
+    virtual Expected<void, AnimationError> setAimTarget(Entity entity, const Vec3& point) = 0;
+    /// Sets the weight of the Aim of @p entity's procedural turn, clamped to [0, 1].
+    virtual Expected<void, AnimationError> setAimWeight(Entity entity, f32 weight) = 0;
+    /// The yaw and pitch the Aim of @p entity aimed at in the last update (smoothed and clamped, radians).
+    [[nodiscard]] virtual Expected<AimAngles, AnimationError> aimAngles(Entity entity) const = 0;
 
 protected:
     AnimationService() = default;

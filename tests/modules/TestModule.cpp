@@ -210,6 +210,9 @@ void callServices(ModuleContext& context)
         static_cast<void>(animation->setIkTarget(e, "foot_l", Vec3(0.2f, 0.0f, 0.1f)));
         static_cast<void>(animation->setIkWeight(e, "foot_l", 0.5f));
         static_cast<void>(animation->setRagdoll(e, true));
+        static_cast<void>(animation->setAimTarget(e, Vec3(0.0f, 1.4f, 5.0f)));
+        static_cast<void>(animation->setAimWeight(e, 0.75f));
+        static_cast<void>(animation->aimAngles(e));
     }
     if (NavService* nav = context.service<NavService>())
     {

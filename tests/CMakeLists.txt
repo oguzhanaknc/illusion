@@ -73,6 +73,7 @@ add_executable(illusion_tests
     assets/TestShaderAsset.cpp
     assets/TestShaderCompiler.cpp
     assets/TestTextureCompression.cpp
+    animation/TestAim.cpp
     animation/TestAnimationGraph.cpp
     animation/TestAnimationGraphExample.cpp
     animation/TestAnimationGraphState.cpp

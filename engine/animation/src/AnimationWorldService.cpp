@@ -377,4 +377,57 @@ Expected<void, AnimationError> AnimationWorldService::setRagdoll(Entity entity, 
     return {};
 }
 
+Expected<void, AnimationError> AnimationWorldService::setAimTarget(Entity entity, const Vec3& point)
+{
+    if (animatorOf(m_animation, entity) == nullptr)
+    {
+        return unexpected(AnimationError::NoAnimator);
+    }
+    Aim* aim = m_animation.world().tryGet<Aim>(entity);
+    if (aim == nullptr)
+    {
+        return unexpected(AnimationError::UnknownName);
+    }
+    if (!finite(point))
+    {
+        return unexpected(AnimationError::InvalidValue);
+    }
+    aim->point = point;
+    aim->target = Entity{};
+    return {};
+}
+
+Expected<void, AnimationError> AnimationWorldService::setAimWeight(Entity entity, f32 weight)
+{
+    if (animatorOf(m_animation, entity) == nullptr)
+    {
+        return unexpected(AnimationError::NoAnimator);
+    }
+    Aim* aim = m_animation.world().tryGet<Aim>(entity);
+    if (aim == nullptr)
+    {
+        return unexpected(AnimationError::UnknownName);
+    }
+    if (!std::isfinite(weight))
+    {
+        return unexpected(AnimationError::InvalidValue);
+    }
+    aim->weight = std::clamp(weight, 0.0f, 1.0f);
+    return {};
+}
+
+Expected<AimAngles, AnimationError> AnimationWorldService::aimAngles(Entity entity) const
+{
+    if (animatorOf(m_animation, entity) == nullptr)
+    {
+        return unexpected(AnimationError::NoAnimator);
+    }
+    if (!m_animation.world().has<Aim>(entity))
+    {
+        return unexpected(AnimationError::UnknownName);
+    }
+    const std::optional<u32> slot = m_animation.findSlot(entity);
+    return slot ? m_animation.aimAngles(*slot) : AimAngles{};
+}
+
 } // namespace illusion

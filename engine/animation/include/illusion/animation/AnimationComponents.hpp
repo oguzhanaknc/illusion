@@ -73,13 +73,18 @@ struct LookAt
 /// of the Animator's Entity. Saved.
 struct TwoBoneIk
 {
-    std::string joint;                ///< The end joint; its parent and grandparent form the chain.
-    Entity target;                    ///< Entity whose position is the target; null uses point.
-    Vec3 point{0.0f};                 ///< World-space target when target is null.
+    std::string joint; ///< The end joint; its parent and grandparent form the chain.
+    Entity target;     ///< Entity whose position is the target; null uses point.
+    Vec3 point{0.0f};  ///< World-space target when target and targetJoint are empty.
+    /// A joint of the same pose (after the aim stage) whose space point is in, e.g. the grip of a weapon held
+    /// by the other hand; empty uses target or a world-space point (ADR 0065).
+    std::string targetJoint;
     Entity pole;                      ///< Entity the middle joint bends towards; null uses polePoint.
     Vec3 polePoint{0.0f, 0.0f, 1.0f}; ///< Pole in the Animator's model space when pole is null.
     f32 weight = 1.0f;                ///< In [0, 1]; 0 turns the limb's IK off.
-    bool alignToTarget = false;       ///< Also give the end joint the target Entity's rotation.
+    /// Also give the end joint the target Entity's rotation; with targetJoint, keep its animated rotation
+    /// relative to that joint.
+    bool alignToTarget = false;
 };
 
 /// Aims the Entity's Animator at a target (ADR 0065): before the graph steps, the yaw and pitch from the
@@ -162,7 +167,7 @@ struct SpringBone
     std::array<SpringCollider, kMaxSpringColliders> colliders{}; ///< Spheres the chain stays out of.
 };
 
-/// Registers the saved Animator, BoneAttachment, LookAt, TwoBoneIk, FootPlacement and SpringBone (named
+/// Registers the saved Animator, BoneAttachment, LookAt, TwoBoneIk, Aim, FootPlacement and SpringBone (named
 /// `illusion.Animator` and so on) and the runtime AnimationPose and FootPlacementPose with @p registry.
 void registerAnimationComponents(ComponentRegistry& registry);
 

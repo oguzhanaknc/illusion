@@ -202,7 +202,7 @@ A graph file has these keys; an unknown key is an error, so a typo does not go u
 
 | Key | Meaning |
 | --- | --- |
-| `format`, `version` | `"illusion.animgraph"` and `1` |
+| `format`, `version` | `"illusion.animgraph"` and `1` or `2` (version 2 adds [aim offsets](#aim-offsets)) |
 | `parameters` | The inputs of the graph (below); optional |
 | `rootMotion` | The name of the joint whose horizontal motion and yaw drive the Entity; optional |
 | `layers` | One or more layers, evaluated in order |
@@ -216,7 +216,8 @@ A graph file has these keys; an unknown key is an error, so a typo does not go u
 | `Bool` | `true` or `false` (crouching) | `true` or `false`, `false` if missing |
 | `Trigger` | Set once, stays set until a transition consumes it or the update ends | None |
 
-**Layers** are `{"name", "weight", "blend", "mask", "entry", "states", "transitions"}`:
+**Layers** are `{"name", "weight", "blend", "mask", "entry", "states", "transitions"}`, and in version 2 an
+`Additive` layer also takes `reference`, `referenceTime` and `space` (see [Aim offsets](#aim-offsets)):
 
 - `weight` in [0, 1] (default 1) scales the layer; `blend` is `Override` (default), which replaces what the
   layers below it posed, or `Additive`, which adds the difference of its pose from the first frame of each
@@ -559,16 +560,22 @@ and grandparent, for example a knee and a hip:
 | --- | --- |
 | `joint` | The end joint; its parent and grandparent form the chain |
 | `target` | An Entity whose position is the target; none uses `point` |
-| `point` | The world-space target when `target` is none |
+| `point` | The world-space target when `target` is none; with `targetJoint`, a point in that joint's space |
+| `targetJoint` | A joint of the same pose, after the aim stage, whose space `point` is in; none uses `target` or a world-space `point` |
 | `pole` | An Entity the middle joint bends towards; none uses `polePoint` |
 | `polePoint` | The pole in the Animator's model space when `pole` is none (+z: knees bend forward) |
 | `weight` | Share of the IK in [0, 1]; 0 shows the animated limb |
-| `alignToTarget` | Also give the end joint the target Entity's rotation (with foot placement: the ground's) |
+| `alignToTarget` | Also give the end joint the target Entity's rotation (with foot placement: the ground's); with `targetJoint`, keep its animated rotation relative to that joint |
 
 The solution is analytic (the law of cosines): the bones keep their lengths, the middle joint bends in the
 plane of the root, the target and the pole, and a target out of reach stretches the limb straight towards
 it. A pole on the line from the root to the target keeps the bend the animation has. Zero-length bones and
 targets on the root are left without errors.
+
+While `targetJoint` is set, `point` is in that joint's space and the target Entity is ignored, so a hand can
+follow a weapon held by the other hand without the one-update lag of a socket Entity. `setIkTarget()` then
+writes a point in the joint's space. A limb whose target joint is missing is skipped. The joint is read after
+the aim stage, so the grip follows the aimed weapon.
 
 An Entity holds one Component of a kind, so a `TwoBoneIk` acts on the Animator of its own Entity or, without
 one, of its parent: put one limb on the Animator's Entity and the others on its children.
@@ -632,6 +639,134 @@ world.emplace<illusion::FootPlacement>(hero, feet);
   visible at game frame rates. `engine/animation` does not use physics: the session writes the results into
   the runtime `FootPlacementPose` that the next Animation step applies.
 - Without a running session (the editor outside Play mode) the feet keep the animated pose.
+
+## Aim
+
+An `Aim` (`illusion.Aim`, saved, in the Inspector's Animation category) on the Animator's Entity turns a spine
+chain until a joint, usually a hand holding a weapon, points at a target, and gives an authored
+[aim offset](#aim-offsets) the same direction. Angles are stored in radians and shown in degrees in the editor.
+
+| Field | Meaning |
+| --- | --- |
+| `joint` | The aim joint: a hand, a weapon joint, the head |
+| `forward` | The aim axis of `joint` in its own space (+z by default) |
+| `spine` | The top joint of the chain that turns; an ancestor of `joint` |
+| `chainLength` | Joints that share the turn: `spine` and up to three of its ancestors (1 to 4) |
+| `weights` | Share of each chain joint, from the lowest up, normalized over the first `chainLength` (0.3, 0.3, 0.4, 0) |
+| `target` | An Entity to aim at; none uses `point` |
+| `point` | A world-space point to aim at when `target` is none |
+| `maxYaw` | The largest yaw from the character's forward, in radians (90° by default) |
+| `maxPitch` | The largest pitch up or down, in radians (60° by default) |
+| `weight` | Share of the procedural turn in [0, 1]; 0 only drives the graph parameters |
+| `speed` | How fast the aim follows the target, in radians per second; 0 follows at once |
+| `yawParameter` | The Float parameter of the graph that gets the yaw in radians; empty writes none |
+| `pitchParameter` | The Float parameter of the graph that gets the pitch in radians; empty writes none |
+
+```cpp
+illusion::Aim aim;
+aim.joint = "hand_r";
+aim.spine = "upperChest";
+aim.chainLength = 3;
+aim.target = enemy;
+aim.yawParameter = "aimYaw";
+aim.pitchParameter = "aimPitch";
+world.emplace<illusion::Aim>(hero, aim);
+
+// From a module: aim at a point (this clears the target Entity), fade the aim, read what it did.
+static_cast<void>(animation->setAimTarget(hero, illusion::Vec3(2.0f, 1.5f, 6.0f)));
+static_cast<void>(animation->setAimWeight(hero, aiming ? 1.0f : 0.0f));
+const illusion::Expected<illusion::AimAngles, illusion::AnimationError> angles = animation->aimAngles(hero);
+```
+
+- **Yaw and pitch.** Both are measured in the Animator's model space: the yaw about +y from +z towards +x, the
+  pitch above the horizontal plane. The turn applies the yaw about model +y and the pitch about the yawed
+  right axis, so the horizon never rolls.
+- **Smoothing and clamping.** Each update the angles from the top spine joint of the last update's pose to the
+  target are clamped to `maxYaw` and `maxPitch`, then followed at most `speed` radians per second. The
+  result is what `aimAngles()` returns.
+- **Parameters first.** Before the graph steps, the smoothed yaw and pitch are written to `yawParameter` and
+  `pitchParameter`, so an aim offset reacts in the same update. They are written again after a graph restart
+  (a scene load or a reload of the `.animgraph`), so the first pose already aims. A name that is not a Float
+  parameter of the graph is logged once and skipped.
+- **The turn.** After the graph, the spring bones and foot placement, the chain turns by the yaw and pitch
+  that remain between the aim axis of `joint` and the target direction, shared by `weights` and scaled by
+  `weight`, in two passes: the second corrects the offset of `joint` from the spine, such as a hand beside it.
+  With an authored aim offset the stage only removes the rest of the error; without one it does all the aiming.
+  A target on the top spine joint, or a missing joint, leaves the pose alone.
+- **Stage order.** In each Animator's evaluation: graph (with its aim layers), spring bones, foot placement,
+  aim, [look-at](#look-at), [two-bone IK](#two-bone-ik), ragdoll blend. The head therefore looks from the
+  aimed body, and an off-hand on a `targetJoint` grips the aimed weapon.
+
+### Aim offsets
+
+An aim offset is a set of poses authored for a few yaw and pitch values (looking left, right, up and down)
+that the graph blends by the parameters the `Aim` writes. It is an `Additive` layer whose differences are
+taken against a `reference` pose and added to **model-space** rotations (`"space": "Model"`), so it aims the
+same way over a leaning run or a crouch. These keys need `"version": 2`:
+
+| Key | Meaning |
+| --- | --- |
+| `reference` | An animation clip (`model.glb#animation/<name>`) the layer's poses are compared with, instead of the first frame of each clip; only on an `Additive` layer |
+| `referenceTime` | The normalized time in [0, 1] of the reference clip (default 0); needs a `reference` |
+| `space` | `Local` (default): added to local rotations as in version 1. `Model`: added to model-space rotations |
+
+```json
+{
+  "format": "illusion.animgraph",
+  "version": 2,
+  "parameters": [
+    {"name": "aimYaw", "type": "Float"},
+    {"name": "aimPitch", "type": "Float"}
+  ],
+  "layers": [
+    {
+      "name": "base",
+      "states": [{"name": "walk", "clip": "game:/hero.glb#animation/walk", "loop": true}]
+    },
+    {
+      "name": "aim",
+      "blend": "Additive",
+      "space": "Model",
+      "reference": "game:/hero.glb#animation/aim_center",
+      "referenceTime": 0,
+      "mask": [{"joint": "spine", "weight": 1}],
+      "states": [
+        {
+          "name": "aim",
+          "blend2d": {
+            "x": "aimYaw",
+            "y": "aimPitch",
+            "points": [
+              {"x": 0, "y": 0, "clip": "game:/hero.glb#animation/aim_center"},
+              {"x": -1.2, "y": 0, "clip": "game:/hero.glb#animation/aim_left"},
+              {"x": 1.2, "y": 0, "clip": "game:/hero.glb#animation/aim_right"},
+              {"x": 0, "y": -0.8, "clip": "game:/hero.glb#animation/aim_down"},
+              {"x": 0, "y": 0.8, "clip": "game:/hero.glb#animation/aim_up"}
+            ]
+          }
+        }
+      ]
+    }
+  ]
+}
+```
+
+- The points are in radians, like the parameters the `Aim` writes; the layer's `weight` is the weight of the
+  offset. The blend space needs at least three points that do not lie on one line.
+- Version 1 files read unchanged. The writer (`writeAnimationGraph()`) writes version 1 for a graph that uses
+  no version 2 feature, so older builds still read it.
+- `parseAnimationGraph()` names the JSON path of a mistake:
+
+  ```text
+  layers[1]: unknown key 'space'
+  layers[1].space: only an Additive layer takes it
+  layers[1].space: unknown space 'World' (Local or Model)
+  layers[1].referenceTime: needs a reference
+  layers[1].referenceTime: must be in [0, 1]
+  ```
+
+  In a version 1 file `reference`, `referenceTime` and `space` are unknown keys; in a version 2 file they are
+  an error on a layer that is not `Additive`. A version above 2 is not read.
 
 ## Spring bones
 
@@ -894,6 +1029,9 @@ illusion::sampleClip(clip, bound->binding, bound->retarget, skeleton, time, loca
   against 0.37 ms for the same work by name (benchmarks `animation/retarget-300x60` and
   `animation/blend-300x60`; about 11 % for retargeting). Binding one clip to a 60-joint skeleton takes 41 µs
   (benchmark `animation/retarget-bind-60`). Figures are from a development desktop.
+- An aim offset of nine poses plus the aim stage on 300 Animators of 60 joints take 1.17 ms against 0.67 ms
+  for the same graph without them, so 0.50 ms for 300 Animators (benchmarks `animation/aim-300` and
+  `animation/world-graph-300`; development desktop).
 - Skinning runs once per frame, however many passes draw the mesh: 300 instances of 10,240 vertices take
   0.66 ms on an NVIDIA GeForce RTX 4070 SUPER (the GPU test sets a budget of 3 ms).
 - Each visible skinned instance costs 64 bytes of GPU memory per vertex (the posed vertex and its previous

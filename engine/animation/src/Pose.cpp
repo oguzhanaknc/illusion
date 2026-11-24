@@ -11,20 +11,9 @@
 
 namespace illusion
 {
-namespace
+namespace detail
 {
 
-Quat toQuat(Vec4 value) noexcept
-{
-    return Quat(value.w, value.x, value.y, value.z);
-}
-
-Vec4 fromQuat(Quat rotation) noexcept
-{
-    return Vec4(rotation.x, rotation.y, rotation.z, rotation.w);
-}
-
-// Spherical linear interpolation along the shorter of the two arcs between @p a and @p b.
 Quat slerpShortest(Quat a, Quat b, f32 t) noexcept
 {
     f32 cosine = glm::dot(a, b);
@@ -41,6 +30,23 @@ Quat slerpShortest(Quat a, Quat b, f32 t) noexcept
     const f32 angle = std::acos(cosine);
     const f32 sine = std::sin(angle);
     return a * (std::sin((1.0f - t) * angle) / sine) + b * (std::sin(t * angle) / sine);
+}
+
+} // namespace detail
+
+namespace
+{
+
+using detail::slerpShortest;
+
+Quat toQuat(Vec4 value) noexcept
+{
+    return Quat(value.w, value.x, value.y, value.z);
+}
+
+Vec4 fromQuat(Quat rotation) noexcept
+{
+    return Vec4(rotation.x, rotation.y, rotation.z, rotation.w);
 }
 
 bool isConsistent(const AnimationChannel& channel) noexcept
