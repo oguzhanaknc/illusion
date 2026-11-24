@@ -284,7 +284,7 @@ Expected<Mat4, AnimationError> AnimationWorldService::jointTransform(Entity enti
         return unexpected(AnimationError::NoGraph);
     }
     const std::span<const Mat4> joints = m_animation.jointMatrices(*slot);
-    const i32 index = detail::findJoint(*skeleton, joint);
+    const i32 index = findRigJoint(*skeleton, joint);
     if (index < 0 || static_cast<usize>(index) >= joints.size())
     {
         return unexpected(AnimationError::UnknownName);

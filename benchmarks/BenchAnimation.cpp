@@ -5,7 +5,9 @@
 #include <illusion/animation/AnimationWorld.hpp>
 #include <illusion/animation/AnimationWorldService.hpp>
 #include <illusion/animation/Pose.hpp>
+#include <illusion/animation/Retarget.hpp>
 #include <illusion/assets/AssetStreamer.hpp>
+#include <illusion/assets/Rig.hpp>
 #include <illusion/core/JobSystem.hpp>
 #include <illusion/core/Memory.hpp>
 #include <illusion/ecs/Hierarchy.hpp>
@@ -16,6 +18,7 @@
 #include <illusion/render/Components.hpp>
 #include <illusion/render/SceneComponents.hpp>
 
+#include <array>
 #include <cmath>
 #include <cstring>
 #include <filesystem>
@@ -23,6 +26,8 @@
 #include <random>
 #include <string>
 #include <string_view>
+#include <tuple>
+#include <utility>
 #include <vector>
 
 using namespace illusion;
@@ -91,8 +96,10 @@ usize append(std::vector<std::byte>& buffer, const std::vector<T>& values)
 
 // The glTF text of a model of makeSkeleton() with a triangle on every joint and, per name of @p clips, a clip
 // of that name rotating every joint (each with another phase); its buffer is written into @p buffer (the file
-// "rig.bin").
-std::string rigGltf(std::vector<std::byte>& buffer, const std::vector<std::string>& clips)
+// @p bin). @p names renames the joints (empty keeps makeSkeleton()'s) and @p length is every joint's offset.
+std::string rigGltf(std::vector<std::byte>& buffer, const std::vector<std::string>& clips,
+                    const std::vector<std::string>& names = {}, f32 length = 0.1f,
+                    std::string_view bin = "rig.bin")
 {
     const Skeleton skeleton = makeSkeleton();
     std::vector<Vec3> positions;
@@ -149,8 +156,8 @@ std::string rigGltf(std::vector<std::byte>& buffer, const std::vector<std::strin
                 children += std::format("{}{}", children.empty() ? "" : ", ", c);
             }
         }
-        nodes += std::format(R"({{"name": "{}", "translation": [0, 0.1, 0], "children": [{}]}}, )",
-                             skeleton.joints[j].name, children);
+        nodes += std::format(R"({{"name": "{}", "translation": [0, {}, 0], "children": [{}]}}, )",
+                             names.empty() ? skeleton.joints[j].name : names.at(j), length, children);
         skinJoints += std::format("{}{}", j == 0 ? "" : ", ", j);
     }
     std::string animations;
@@ -186,8 +193,52 @@ std::string rigGltf(std::vector<std::byte>& buffer, const std::vector<std::strin
         R"("nodes": [{}{{"name": "body", "mesh": 0, "skin": 0}}], )"
         R"("meshes": [{{"primitives": [{{"attributes": {{"POSITION": 0, "JOINTS_0": 1, "WEIGHTS_0": 2}}, "indices": 3}}]}}], )"
         R"("skins": [{{"joints": [{}]}}], "animations": [{}], )"
-        R"("buffers": [{{"uri": "rig.bin", "byteLength": {}}}], "bufferViews": [{}], "accessors": [{}]}})",
-        kJoints, nodes, skinJoints, animations, buffer.size(), views, accessors);
+        R"("buffers": [{{"uri": "{}", "byteLength": {}}}], "bufferViews": [{}], "accessors": [{}]}})",
+        kJoints, nodes, skinJoints, animations, bin, buffer.size(), views, accessors);
+}
+
+// Humanoid joint names for makeSkeleton()'s tree in one of two naming styles (Mixamo-like with @p mixamo,
+// else Unreal-like), so that both get rig maps: the spine is hips to head, the five limbs are two legs, two
+// arms with two fingers and a tail; joints without a humanoid bone are named alike in both styles and pair by
+// name.
+std::vector<std::string> humanoidNames(bool mixamo)
+{
+    std::vector<std::string> names(kJoints);
+    const auto set = [&](u32 joint, std::string_view a, std::string_view b) {
+        names.at(joint) = mixamo ? "mixamorig:" + std::string(a) : std::string(b);
+    };
+    const std::array<std::pair<std::string_view, std::string_view>, 6> spine{{{"Hips", "pelvis"},
+                                                                              {"Spine", "spine_01"},
+                                                                              {"Spine1", "spine_02"},
+                                                                              {"Spine2", "spine_03"},
+                                                                              {"Neck", "neck_01"},
+                                                                              {"Head", "head"}}};
+    for (u32 j = 0; j < kJoints; ++j)
+    {
+        names.at(j) = std::format("extra_{:02}", j);
+    }
+    for (u32 j = 0; j < spine.size(); ++j)
+    {
+        set(j, spine.at(j).first, spine.at(j).second);
+    }
+    for (const auto& [limb, a, b] : std::array<std::tuple<u32, std::string_view, std::string_view>, 2>{
+             {{10, "Left", "l"}, {20, "Right", "r"}}})
+    {
+        set(limb, std::format("{}UpLeg", a), std::format("thigh_{}", b));
+        set(limb + 1, std::format("{}Leg", a), std::format("calf_{}", b));
+        set(limb + 2, std::format("{}Foot", a), std::format("foot_{}", b));
+        set(limb + 3, std::format("{}ToeBase", a), std::format("ball_{}", b));
+        const u32 arm = limb + 20;
+        set(arm, std::format("{}Shoulder", a), std::format("clavicle_{}", b));
+        set(arm + 1, std::format("{}Arm", a), std::format("upperarm_{}", b));
+        set(arm + 2, std::format("{}ForeArm", a), std::format("lowerarm_{}", b));
+        set(arm + 3, std::format("{}Hand", a), std::format("hand_{}", b));
+        for (u32 i = 0; i < 3; ++i)
+        {
+            set(arm + 4 + i, std::format("{}HandIndex{}", a, i + 1), std::format("index_{:02}_{}", i + 1, b));
+        }
+    }
+    return names;
 }
 
 // rigGltf() as "bench:/rig.gltf" in a temporary directory, with the clips @p clips.
@@ -198,14 +249,23 @@ struct RigFiles
     VirtualFileSystem files;
     bool ready = false;
 
-    explicit RigFiles(const std::vector<std::string>& clips = {"wave"})
+    explicit RigFiles(const std::vector<std::string>& clips = {"wave"},
+                      const std::vector<std::string>& names = {})
     {
         std::filesystem::create_directories(root);
         std::vector<std::byte> buffer;
-        const std::string gltf = rigGltf(buffer, clips);
+        const std::string gltf = rigGltf(buffer, clips, names);
         ready = files.mount("bench", root, MountAccess::ReadWrite) == FileError::None &&
                 files.writeFile("bench:/rig.bin", buffer) == FileError::None &&
                 files.writeText("bench:/rig.gltf", gltf) == FileError::None;
+    }
+    // Writes rigGltf() without clips as "bench:/<name>.gltf" with joint @p names and offset @p length.
+    bool addRig(std::string_view name, const std::vector<std::string>& names, f32 length)
+    {
+        std::vector<std::byte> buffer;
+        const std::string gltf = rigGltf(buffer, {}, names, length, std::format("{}.bin", name));
+        return files.writeFile(std::format("bench:/{}.bin", name), buffer) == FileError::None &&
+               files.writeText(std::format("bench:/{}.gltf", name), gltf) == FileError::None;
     }
     ~RigFiles()
     {
@@ -521,5 +581,116 @@ ILL_BENCHMARK("animation/ik-300", 2'500'000.0)
     bench.run("AnimationWorld::update 300 x 60 joints, a spring chain, look-at and two limbs each", [&] {
         animation.update(1.0f / 60.0f, &jobs, true);
         ankerl::nanobench::doNotOptimizeAway(animation.statistics().joints);
+    });
+}
+
+namespace
+{
+
+// The rig of makeSkeleton() with humanoid names in both styles, every joint mapped by bone or paired by name.
+Skeleton humanoidSkeleton(bool mixamo, f32 length)
+{
+    Skeleton skeleton = makeSkeleton();
+    const std::vector<std::string> names = humanoidNames(mixamo);
+    for (u32 j = 0; j < kJoints; ++j)
+    {
+        skeleton.joints.at(j).name = names.at(j);
+        skeleton.joints.at(j).translation = Vec3(0.0f, length, 0.0f);
+    }
+    skeleton.rig = generateRigMap(skeleton);
+    return skeleton;
+}
+
+// A three-clip 1D blend over the clips c0, c1 and c2 of @p model.
+std::string blendGraph(std::string_view model)
+{
+    return std::format(
+        R"({{"format": "illusion.animgraph", "version": 1, "parameters": [{{"name": "speed", "type": "Float"}}],
+        "layers": [{{"name": "base", "states": [{{"name": "move", "blend1d": {{"parameter": "speed", "points": [
+            {{"value": 0, "clip": "bench:/{0}#animation/c0"}}, {{"value": 1, "clip": "bench:/{0}#animation/c1"}},
+            {{"value": 2, "clip": "bench:/{0}#animation/c2"}}]}}}}]}}]}})",
+        model);
+}
+
+// AnimationWorld::update() of 300 Animators of @p skeleton playing blendGraph() (the clips of rig.gltf), each
+// at another blend position.
+void runBlend(ankerl::nanobench::Bench& bench, std::string_view name, std::string_view skeleton,
+              bool retargeted)
+{
+    reflectRenderComponents();
+    registerAnimationComponents(ComponentRegistry::instance());
+    RigFiles rig({"c0", "c1", "c2"}, humanoidNames(true));
+    if (!rig.ready || !rig.addRig("rig_b", humanoidNames(false), 0.08f) ||
+        rig.files.writeText("bench:/blend.animgraph", blendGraph("rig.gltf")) != FileError::None)
+    {
+        return;
+    }
+    JobSystem jobs;
+    AssetStreamer streamer(rig.files, jobs, AssetStreamerDesc{.cacheMount = ""});
+    World world;
+    AnimationWorld animation(world, streamer);
+    std::vector<Entity> entities;
+    for (u32 i = 0; i < kSkeletons; ++i)
+    {
+        Transform transform;
+        transform.position = Vec3(static_cast<f32>(i % 20), 0.0f, static_cast<f32>(i / 20));
+        Animator animator;
+        animator.skeleton = AssetRef(skeleton);
+        animator.graph = AssetRef("bench:/blend.animgraph");
+        animator.time = 0.01f * static_cast<f32>(i);
+        entities.push_back(world.create(transform, animator));
+    }
+    animation.waitIdle();
+    AnimationWorldService service(animation);
+    for (u32 i = 0; i < kSkeletons; ++i)
+    {
+        (void)service.setFloat(entities[i], "speed",
+                               2.0f * static_cast<f32>(i) / static_cast<f32>(kSkeletons));
+    }
+    const std::optional<u32> slot = animation.findSlot(entities.front());
+    const GraphBinding* binding = slot ? animation.graphBinding(*slot) : nullptr;
+    ILL_CHECK(binding != nullptr && binding->clipRetargets.at(0).active() == retargeted,
+              "the blend benchmark's clips are not bound as intended");
+    bench.run(std::string(name), [&] {
+        animation.update(1.0f / 60.0f, &jobs, true);
+        ankerl::nanobench::doNotOptimizeAway(animation.statistics().joints);
+    });
+}
+
+} // namespace
+
+// Budget: ns per AnimationWorld::update() of 300 graph Animators of 60 joints with the Job System playing a
+// three-clip 1D blend of their own skin's clips (bound by name), the baseline of animation/retarget-300x60,
+// about 8x a desktop result (0.37 ms); see Budget.hpp.
+ILL_BENCHMARK("animation/blend-300x60", 3'000'000.0)
+{
+    runBlend(bench, "AnimationWorld::update 300 blends x 60 joints by name", "bench:/rig.gltf#skin/0", false);
+}
+
+// Budget: ns per AnimationWorld::update() of animation/blend-300x60 with the clips retargeted onto another
+// skin (other joint names, shorter bones; ADR 0065 allows 15 % over the clips bound by name), about 8x a
+// desktop result (0.41 ms, 11 % over animation/blend-300x60); see Budget.hpp.
+ILL_BENCHMARK("animation/retarget-300x60", 3'500'000.0)
+{
+    runBlend(bench, "AnimationWorld::update 300 retargeted blends x 60 joints", "bench:/rig_b.gltf#skin/0",
+             true);
+}
+
+// Budget: ns of one bindRetargetedClip() of a clip moving all three paths of 60 joints between two 60-joint
+// rigs (pairing, reference pose, 180 corrections), done once per clip and skeleton at load, about 8x a
+// desktop result (41 us); see Budget.hpp.
+ILL_BENCHMARK("animation/retarget-bind-60", 350'000.0)
+{
+    const Skeleton source = humanoidSkeleton(true, 0.1f);
+    const Skeleton target = humanoidSkeleton(false, 0.08f);
+    AnimationClip clip = makeClip();
+    for (usize c = 0; c < clip.channels.size(); ++c)
+    {
+        clip.channels[c].joint = source.joints.at(c / 3).name; // three paths per joint
+    }
+    clip.skeleton = 0;
+    bench.run("bindRetargetedClip 60 joints x 3 paths", [&] {
+        Expected<RetargetedClip, RetargetError> bound = bindRetargetedClip(clip, source, target);
+        ankerl::nanobench::doNotOptimizeAway(bound);
     });
 }

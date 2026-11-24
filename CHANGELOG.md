@@ -125,6 +125,14 @@ version changes are in the contributor guide ("Versions and releases"). The vers
   the edited scene), the frusta of virtual cameras in the Scene view (the live camera in yellow and the one a blend
   comes from in orange in a play session), and the manual sections "Rigs", "In the editor" and "Performance" of the
   page "Cameras".
+- Retargeted playback (ANIM-5b): a clip authored on one skin plays on another through the rig maps, retargeted
+  once per clip and target skeleton at bind time (`bindRetargetedClip()`, `sampleClip()` with a
+  `ClipRetarget`, `matchJoints()`, `rigHeightRatio()`, the `Skeleton`, `Scaled` and `Animation` translation
+  modes), the `bindGraph()` overload with a `ClipSource`, `GraphBinding::clipRetargets` and `basePose`, joint
+  names that resolve to rig bones (`findRigJoint()`) in graph masks, `rootMotion`, sockets, `.ragdoll` parts
+  and `jointTransform()`, the benchmarks `animation/blend-300x60`, `animation/retarget-300x60` and
+  `animation/retarget-bind-60`, the Small Strider and its hat in the showcase, and the manual section
+  "Retargeting".
 
 ### Changed
 

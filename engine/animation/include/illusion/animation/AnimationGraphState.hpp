@@ -17,6 +17,7 @@
 
 #include <illusion/animation/AnimationGraph.hpp>
 #include <illusion/animation/Pose.hpp>
+#include <illusion/animation/Retarget.hpp>
 #include <illusion/core/Base.hpp>
 #include <illusion/core/Expected.hpp>
 #include <illusion/core/Math.hpp>
@@ -39,7 +40,13 @@ struct GraphBinding
     const Skeleton* skeleton = nullptr;    ///< The skeleton (outlives the binding).
     /// One clip per clip reference of the graph, state by state and point by point in file order.
     std::vector<const AnimationClip*> clips;
-    std::vector<ClipBinding> clipBindings; ///< bindClip() of each entry of clips.
+    /// The binding of each entry of clips: bindClip(), or the binding of bindRetargetedClip().
+    std::vector<ClipBinding> clipBindings;
+    /// The retargeting of each entry of clips; inactive for a clip bound by name.
+    std::vector<ClipRetarget> clipRetargets;
+    /// The pose evaluation starts from: the reference pose of the first retargeted clip, or empty for the
+    /// skeleton's rest pose.
+    std::vector<JointPose> basePose;
     std::vector<u32> firstClip;  ///< Per state, all layers flattened in order: index of its first clip.
     std::vector<u32> firstState; ///< Per layer: index of its first state in the flattened state order.
     /// Per layer: one weight per joint, or empty for a layer without a mask.
@@ -47,11 +54,18 @@ struct GraphBinding
     i32 rootJoint = -1; ///< Joint of AnimationGraph::rootMotion, or -1.
 };
 
-/// Resolves every clip of @p graph with @p findClip (null when missing) and binds it to @p skeleton.
-/// Fails naming the first clip that is missing, a mask or root motion joint the skeleton lacks. Allocates.
+/// Resolves every clip of @p graph with @p findClip (null when missing) and binds it to @p skeleton by name.
+/// Mask and root motion joints are found with findRigJoint(). Fails naming the first clip that is missing, a
+/// mask or root motion joint the skeleton lacks. Allocates.
 [[nodiscard]] Expected<GraphBinding, std::string>
 bindGraph(const AnimationGraph& graph, const Skeleton& skeleton,
           const std::function<const AnimationClip*(const AssetRef&)>& findClip);
+
+/// As bindGraph(), but @p findClip also returns each clip's source skeleton: a clip with one is bound with
+/// bindRetargetedClip(), one without (or one that cannot be retargeted, logged) by name.
+[[nodiscard]] Expected<GraphBinding, std::string>
+bindGraph(const AnimationGraph& graph, const Skeleton& skeleton,
+          const std::function<ClipSource(const AssetRef&)>& findClip);
 
 /// The machine state of one layer.
 struct GraphLayerState

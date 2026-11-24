@@ -155,15 +155,24 @@ def write_rigged(path):
     path.write_text(json.dumps(gltf, indent=1) + "\n", encoding="utf-8", newline="\n")
 
 
-def write_strider(path):
+STRIDER_NAMES = ["hips", "thigh_l", "shin_l", "foot_l", "thigh_r", "shin_r", "foot_r", "spine", "head"]
+# The second rig's joint names, Mixamo-style: the Strider's clip plays on it retargeted (ADR 0065).
+SMALL_STRIDER_NAMES = ["mixamorig:Hips", "mixamorig:LeftUpLeg", "mixamorig:LeftLeg", "mixamorig:LeftFoot",
+                       "mixamorig:RightUpLeg", "mixamorig:RightLeg", "mixamorig:RightFoot", "mixamorig:Spine",
+                       "mixamorig:Head"]
+
+
+def write_strider(path, names=STRIDER_NAMES, scale=1.0, clip=True):
     """A small two-legged figure for look-at, two-bone IK and foot placement: "hips" (0.9 m up) with the legs
     "thigh_l", "shin_l", "foot_l" and "thigh_r", "shin_r", "foot_r" (ankles 0.08 m above the ground) and
     "spine" and "head" above it, one box per joint, and the clip "idle" swaying the spine 0.2 radians around x
-    and back over two seconds."""
-    names = ["hips", "thigh_l", "shin_l", "foot_l", "thigh_r", "shin_r", "foot_r", "spine", "head"]
+    and back over two seconds. With other `names`, a `scale` and no `clip` it writes the second rig: the same
+    skeleton renamed, every length scaled, without a clip of its own."""
     parents = [-1, 0, 1, 2, 0, 4, 5, 0, 7]
     offsets = [(0, 0.9, 0), (0.15, 0, 0), (0, -0.41, 0), (0, -0.41, 0), (-0.15, 0, 0), (0, -0.41, 0),
                (0, -0.41, 0), (0, 0.15, 0), (0, 0.45, 0)]
+    if scale != 1.0:
+        offsets = [tuple(round(v * scale, 6) + 0.0 for v in offset) for offset in offsets]
     model = []
     for joint, (parent, offset) in enumerate(zip(parents, offsets)):
         base = model[parent] if parent >= 0 else (0, 0, 0)
@@ -174,6 +183,9 @@ def write_strider(path):
              (4, (-0.06, -0.41, -0.06), (0.06, 0, 0.06)), (5, (-0.05, -0.41, -0.05), (0.05, 0, 0.05)),
              (6, (-0.06, -0.08, -0.06), (0.06, 0.02, 0.18)), (7, (-0.18, 0, -0.1), (0.18, 0.45, 0.1)),
              (8, (-0.1, 0, -0.1), (0.1, 0.22, 0.12))]
+    if scale != 1.0:
+        boxes = [(joint, tuple(round(v * scale, 6) + 0.0 for v in low),
+                  tuple(round(v * scale, 6) + 0.0 for v in high)) for joint, low, high in boxes]
     positions, normals, joints, weights, indices = [], [], [], [], []
     for joint, low, high in boxes:
         origin = model[joint]
@@ -214,8 +226,9 @@ def write_strider(path):
                   "WEIGHTS_0": add("4f", weights, 5126, "VEC4")}
     index_accessor = add("H", indices, 5123, "SCALAR")
     inverse_bind = add("16f", inverse_binds, 5126, "MAT4")
-    time_accessor = add("f", times, 5126, "SCALAR", minmax=True)
-    sway = {"input": time_accessor, "output": add("4f", sways, 5126, "VEC4"), "interpolation": "LINEAR"}
+    if clip:
+        time_accessor = add("f", times, 5126, "SCALAR", minmax=True)
+        sway = {"input": time_accessor, "output": add("4f", sways, 5126, "VEC4"), "interpolation": "LINEAR"}
     nodes = []
     for joint, (name, offset) in enumerate(zip(names, offsets)):
         node = {"name": name, "translation": list(offset)}
@@ -231,8 +244,8 @@ def write_strider(path):
         "nodes": nodes,
         "meshes": [{"name": "strider", "primitives": [{"attributes": attributes, "indices": index_accessor}]}],
         "skins": [{"name": "strider", "joints": list(range(len(names))), "inverseBindMatrices": inverse_bind}],
-        "animations": [{"name": "idle", "samplers": [sway],
-                        "channels": [{"sampler": 0, "target": {"node": 7, "path": "rotation"}}]}],
+        **({"animations": [{"name": "idle", "samplers": [sway],
+                            "channels": [{"sampler": 0, "target": {"node": 7, "path": "rotation"}}]}]} if clip else {}),
         "buffers": [{"byteLength": len(data),
                      "uri": "data:application/octet-stream;base64," + base64.b64encode(bytes(data)).decode()}],
         "bufferViews": views,
@@ -461,6 +474,7 @@ if __name__ == "__main__":
     write_model(ROOT / "models" / "blocks.gltf")
     write_rigged(ROOT / "models" / "column.gltf")
     write_strider(ROOT / "models" / "strider.gltf")
+    write_strider(ROOT / "models" / "small_strider.gltf", SMALL_STRIDER_NAMES, 0.75, clip=False)
     write_column_graph(ROOT / "animations" / "column.animgraph")
     write_strider_ragdoll(ROOT / "animations" / "strider.ragdoll")
     write_guard_tree(ROOT / "ai" / "guard.behavior")

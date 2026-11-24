@@ -1,6 +1,7 @@
 #pragma once
 
 #include <illusion/animation/Pose.hpp>
+#include <illusion/animation/Retarget.hpp>
 
 #include <span>
 #include <string_view>
@@ -12,6 +13,12 @@ namespace illusion::detail
 // the bound channels of that joint. Cheaper than sampleClip() when only a few joints are needed.
 [[nodiscard]] JointPose sampleJoint(const AnimationClip& clip, const ClipBinding& binding,
                                     const Skeleton& skeleton, u32 joint, f32 time) noexcept;
+
+// The retargeted local pose of @p joint (the reference pose overwritten by its bound channels through their
+// corrections); sampleJoint() for a @p retarget that is not active.
+[[nodiscard]] JointPose sampleJoint(const AnimationClip& clip, const ClipBinding& binding,
+                                    const ClipRetarget& retarget, const Skeleton& skeleton, u32 joint,
+                                    f32 time) noexcept;
 
 // The index of the joint named @p name in @p skeleton, or -1.
 [[nodiscard]] i32 findJoint(const Skeleton& skeleton, std::string_view name) noexcept;
