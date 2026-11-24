@@ -394,7 +394,10 @@ illusion_add_material_shaders(illusion_gpu_tests
     SHADERS
         glowShader data/shaders/Glow.shader game:/shaders/glow.shader
         glowEditedShader data/shaders/GlowEdited.shader game:/shaders/glow.shader
-        swayShader data/shaders/Sway.shader game:/shaders/sway.shader)
+        swayShader data/shaders/Sway.shader game:/shaders/sway.shader
+        unlitShader data/shaders/Unlit.shader game:/shaders/unlit.shader
+        skinShader data/shaders/Skin.shader game:/shaders/skin.shader
+        coatShader data/shaders/Coat.shader game:/shaders/coat.shader)
 # The exported showcase (samples/CMakeLists.txt) against the golden image of the editor's Play mode.
 if(ILLUSION_BUILD_SAMPLES AND ILLUSION_BUILD_TOOLS)
     target_sources(illusion_gpu_tests PRIVATE gpu/TestShowcaseGame.cpp)

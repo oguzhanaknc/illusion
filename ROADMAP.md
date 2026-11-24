@@ -1520,8 +1520,18 @@ Today games can only set the parameters of the built-in PBR material.
   `updateShader()`); `SurfaceInput.customData` stays zero until `MeshRenderer` carries it; in the bindless
   path, alpha-masked and cross-fading batches take the bound prepass per Material (no bindless prepass
   variant).
-- MAT-3 (`implementer`): Shading models `Unlit`, `Subsurface`, `TwoSidedFoliage`, `ClearCoat` in the
-  lighting code. Done: a golden per model, the tech demo foliage on `TwoSidedFoliage` with unchanged images.
+- ✅ MAT-3 (`implementer`): Shading models `Unlit`, `Subsurface`, `TwoSidedFoliage`, `ClearCoat` in the
+  lighting code. Done: `ForwardLighting.slang` branches on the shader's `ILLUSION_SHADING_MODEL`, a constant of
+  its variants (the `Default` model compiles to the MAT-2 code without the transmission terms); `Subsurface`
+  wraps diffuse light past the terminator by `1 - thickness` in `subsurfaceColor`, `TwoSidedFoliage` is GFX-2d's
+  translucency, `ClearCoat` adds a dielectric GGX lobe along the geometric normal with `clearCoatRoughness`
+  (direct and image-based light); `builtin:/shader/foliage` (`RenderResources::foliageShader()`, the standard
+  surface in `illusion/StandardMaterial.slang` under `TwoSidedFoliage`) draws materials without a shader whose
+  `diffuseTransmission` is above zero, so the tech demo foliage moved onto it; GPU goldens `material-unlit`,
+  `material-subsurface`, `material-clearcoat` and `material-foliage` (captured before the move, byte-identical
+  after), `thickness` 1 and `clearCoat` 0 equal to the standard shader, every model in one frame alike in the
+  bound and bindless paths; existing goldens unchanged, `render/*` benchmarks unchanged. Open: shadows still
+  darken wrapped light (no shadow-map thickness for `Subsurface`); no clear-coat normal map.
 - MAT-4 (`mechanic`): Editor and documentation. `.material` `shader` and typed parameters in the Inspector,
   `material.compile`/`material.validate` commands (diagnostics for agents), the asset browser kind `Shader`,
   the showcase (a custom shader with every parameter type), a tech demo example, the manual "Material
