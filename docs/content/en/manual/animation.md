@@ -94,12 +94,15 @@ scrub it and drive it:
 
 | Command | What it does |
 | --- | --- |
-| `animation.list` | The skins and clips of a model (`path`): for each skin the reference for `Animator::skeleton` and its joint count, for each clip the reference for `Animator::clip`, its duration in seconds and its channel count |
+| `animation.list` | The skins and clips of a model (`path`): for each skin the reference for `Animator::skeleton` and its joint count, for each clip the reference for `Animator::clip`, its duration in seconds, its channel count and the skin it was authored on (`source`), and for each skin whether its rig is `humanoid` |
 | `animation.status` | The Animators of the scene (`entity`, or every Animator up to 100): the saved fields and, in a play session, whether the pose exists, whether the graph has loaded, per layer the current state, its normalized time and the state a running transition fades out, every parameter with its value, and the state events of the last update |
 | `animation.set_parameter` | Sets a `Float`, `Int` or `Bool` parameter of the graph of an Animator in the play session; the value must fit the parameter's type |
 | `animation.trigger` | Sets a `Trigger` of the graph in the play session |
 | `animation.scrub` | Sets `Animator::time` of an Animator of the open scene: an undoable edit of the saved Component, shown at once in the Scene view |
 | `animation.validate` | Parses an `.animgraph` or `.ragdoll` file. The result says `valid`, counts `parameters`, `layers` and `states` (or `parts`), and for a mistake gives `error` and its JSON `errorPath`, e.g. `layers[0].states[2].motion`. A file that does not parse is a result, not a failed command |
+| `animation.rig` | The rig map of one skin (`path`, `skin`): for every joint its bone, its translation mode (`Skeleton`, `Scaled` or `Animation`) and whether the model's sidecar overrides it, `humanoid`, the `missing` required humanoid bones and the `warnings` generation gave |
+| `animation.map_joint` | Writes one override of a skin's rig map (`joint`, `bone` or `translation`, or both; `""` unmaps the joint) into the model's `.import.json` sidecar and reloads the model. Undoable, like `asset.set_import_settings`, which it goes through |
+| `animation.retarget` | How a `clip` plays on a `skeleton`: `retargeted`, or bound by name with the `reason` (`SameSkeleton`, `NoSkeleton`, `NoRig` or `NoPairs`), the channels that found a joint, the `unpaired` ones, the joints of the skeleton that hold the reference pose and the hips `heightRatio` |
 
 ```json
 {"call": "animation.list", "params": {"path": "assets:/models/column.gltf"}}
@@ -119,6 +122,29 @@ layers and parameters at the saved time; without a viewport (a headless editor w
 and `note` says so. Events and running states exist in the play session. Every invalid param is reported with its JSON Pointer (`/name` for a parameter the
 graph does not have, with suggestions, `/value` for a value of the wrong type).
 
+### Rig maps and retargeting in the editor
+
+Inspect a rig, fix a joint and try a retarget with the three commands above (the examples use the showcase's
+two Striders):
+
+```json
+{"call": "animation.rig", "params": {"path": "assets:/models/small_strider.gltf", "skin": 0}}
+{"call": "animation.map_joint", "params": {"path": "assets:/models/small_strider.gltf", "skin": 0, "joint": "mixamorig:Spine", "bone": "chest"}}
+{"call": "animation.retarget", "params": {"clip": "assets:/models/strider.gltf#animation/idle", "skeleton": "assets:/models/small_strider.gltf#skin/0"}}
+```
+
+1. `animation.rig` lists every joint of the skin with its bone. A rig is `humanoid` when every required bone
+   is mapped; otherwise `missing` names the bones without a joint, and `warnings` the ambiguities generation
+   resolved (a name that says left on the right side).
+2. `animation.map_joint` fixes one joint: it gives it a humanoid bone or a custom bone name shared with other
+   rigs, or unmaps it with `""`, and `translation` sets how retargeted clips move it. The override is written
+   into the model's sidecar like `asset.set_import_settings` writes it (the `model.skins` entry of the skin),
+   the model imports again, and one `history.undo` removes it. A bone that another override already uses, a
+   joint the skin lacks (with suggestions) and a skin index out of range are reported with their JSON Pointer.
+3. `animation.retarget` shows the result for a clip and the skeleton it plays on, including a clip of another
+   model. `retargeted: false` with a `reason` means the clip plays by joint name. After a fix, `pairedJoints`,
+   `unpairedJoints` and `heightRatio` show what changed: unmapping the hips of a rig makes `heightRatio` 1.
+
 ### In the Inspector
 
 Select an Entity with an `Animator` and its Inspector card starts with a **Preview** section (**Live** in Play
@@ -134,6 +160,7 @@ mode):
 | One row per layer | The layer's current state with its progress, and the state a running transition fades out |
 | One row per parameter | Its value: disabled outside Play mode (the defaults), editable in Play mode; **Fire** sets a `Trigger` |
 | Events | In Play mode, the last eight state events of the Animator, newest first |
+| Source skin | The skin (`model.gltf#skin/0`) that a retargeted clip was authored on, one row for each such skin of the clip or the graph (up to four); absent while every clip plays on its own skin ([retargeting](#retargeting)) |
 
 Every change goes through a command, as an agent's would: dragging the scrubber runs `animation.scrub` (a drag
 is one undo step, and the Scene view shows the pose while you drag), a parameter runs
@@ -151,6 +178,7 @@ The **Skeletons** visualiser of the Scene view (the Visualisers menu, or `viewpo
 | --- | --- |
 | Bones between joints | `info` |
 | Joints, a small cross at each | `text.primary` |
+| Joints without a bone in the skin's rig map, and the bones to them (only on a skin that has a rig map) | The same colours, dimmed ([rig maps](assets.md#rig-maps)) |
 | `LookAt` and `TwoBoneIk` targets (on the Animator or its children) and the poles of the limbs, each with a line from its joint | `warning` |
 | `SpringBone` chains below their root, their joint radius and their colliders | `success` |
 | `Ragdoll` parts as capsules, from the `.ragdoll` profile or generated from the skeleton | `error` |

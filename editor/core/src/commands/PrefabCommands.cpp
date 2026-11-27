@@ -157,6 +157,16 @@ Expected<Entity, CommandError> placeInstance(CommandContext& context, const std:
         {
             return unexpected(CommandError::invalid("/path", "is not a valid prefab: " + trial.error));
         }
+        // A nested instance that cannot be expanded is an entity outside the instance's hierarchy.
+        for (const Entity entity : trial.entities)
+        {
+            if (const UnresolvedPrefab* nested = scratch.tryGet<UnresolvedPrefab>(entity))
+            {
+                return unexpected(
+                    CommandError::invalid("/path", "is not a valid prefab: its nested prefab '" +
+                                                       nested->prefab + "' cannot be loaded"));
+            }
+        }
     }
     Expected<std::vector<Entity>, CommandError> roots = context.edit().paste(
         illusion::detail::instanceRecordScene(path, EntityGuid{1}), parent, index, source);
@@ -175,21 +185,34 @@ Expected<Entity, CommandError> placeInstance(CommandContext& context, const std:
     return roots->front();
 }
 
+// The subtree of @p root, or @p root alone outside the hierarchy.
+std::vector<Entity> subtreeOf(CommandContext& context, Entity root)
+{
+    const std::span<const Entity> subtree = context.index().hierarchy().subtree(root);
+    return subtree.empty() ? std::vector<Entity>{root} : std::vector<Entity>(subtree.begin(), subtree.end());
+}
+
+// True if an entity of @p entities is an instance of the prefab @p path, at any nesting depth.
+bool containsInstanceOf(const World& world, std::span<const Entity> entities, std::string_view path)
+{
+    for (const Entity entity : entities)
+    {
+        const PrefabInstance* instance = world.tryGet<PrefabInstance>(entity);
+        const UnresolvedPrefab* unresolved = world.tryGet<UnresolvedPrefab>(entity);
+        if ((instance != nullptr && instance->prefab.path() == path) ||
+            (unresolved != nullptr && unresolved->prefab == path))
+        {
+            return true;
+        }
+    }
+    return false;
+}
+
 // The prefab text of the subtree of @p root, its root placed where it is in the world.
 Expected<std::pair<std::string, u32>, CommandError> prefabText(CommandContext& context, Entity root)
 {
     World& world = context.world();
-    const HierarchyIndex& hierarchy = context.index().hierarchy();
-    std::vector<Entity> subset;
-    const std::span<const Entity> subtree = hierarchy.subtree(root);
-    if (subtree.empty())
-    {
-        subset.push_back(root);
-    }
-    else
-    {
-        subset.assign(subtree.begin(), subtree.end());
-    }
+    const std::vector<Entity> subset = subtreeOf(context, root);
     const PrefabSource source = context.editor().prefabSource();
     SceneSaveOptions options;
     options.subset = std::span<const Entity>(subset);
@@ -255,6 +278,11 @@ Expected<PrefabCreateResult, CommandError> prefabCreate(CommandContext& context,
         return unexpected(
             CommandError::make(ErrorKind::AlreadyExists, "'" + params.path + "' exists already"));
     }
+    if (containsInstanceOf(context.world(), subtreeOf(context, *root), params.path))
+    {
+        return unexpected(CommandError::invalid("/entity", "contains an instance of '" + params.path +
+                                                               "'; a prefab cannot contain itself"));
+    }
     Expected<std::pair<std::string, u32>, CommandError> text = prefabText(context, *root);
     if (!text)
     {
@@ -278,11 +306,7 @@ Expected<PrefabCreateResult, CommandError> prefabCreate(CommandContext& context,
     const Hierarchy* placement = world.tryGet<Hierarchy>(*root);
     const std::optional<u32> index =
         placement != nullptr ? std::optional<u32>(placement->order) : std::nullopt;
-    std::vector<Entity> originals(hierarchy.subtree(*root).begin(), hierarchy.subtree(*root).end());
-    if (originals.empty())
-    {
-        originals.push_back(*root);
-    }
+    const std::vector<Entity> originals = subtreeOf(context, *root);
     Expected<Entity, CommandError> instance = placeInstance(context, params.path, text->first, parent, index);
     if (!instance)
     {

@@ -201,6 +201,23 @@ set_tests_properties(acceptance.animation.scrub.project PROPERTIES LABELS "accep
 set_tests_properties(acceptance.animation.scrub PROPERTIES LABELS "acceptance" TIMEOUT 360
     FIXTURES_REQUIRED animation_scrub_project)
 
+# The rig maps and retargeting commands on the showcase's two Striders (tests/acceptance/animation/retarget.jsonl).
+set(animation_retarget_project ${CMAKE_BINARY_DIR}/acceptance/animation/retarget/showcase)
+add_test(NAME acceptance.animation.retarget.project
+    COMMAND ${CMAKE_COMMAND} -DMODE=copy -DSOURCE=${PROJECT_SOURCE_DIR}/samples/showcase
+        -DDESTINATION=${animation_retarget_project} -P ${PROJECT_SOURCE_DIR}/tests/sdk/ExportGame.cmake
+    CONFIGURATIONS Release RelWithDebInfo)
+add_test(NAME acceptance.animation.retarget
+    COMMAND illusion_ctl --launch $<TARGET_FILE:illusion_editor>
+        --editor-arg --headless --editor-arg --no-gpu --editor-arg --deterministic
+        --editor-arg --project --editor-arg ${animation_retarget_project}
+        replay ${PROJECT_SOURCE_DIR}/tests/acceptance/animation/retarget.jsonl
+    CONFIGURATIONS Release RelWithDebInfo)
+set_tests_properties(acceptance.animation.retarget.project PROPERTIES LABELS "acceptance"
+    FIXTURES_SETUP animation_retarget_project)
+set_tests_properties(acceptance.animation.retarget PROPERTIES LABELS "acceptance" TIMEOUT 360
+    FIXTURES_REQUIRED animation_retarget_project)
+
 # The same scenario with a GPU (labels "gpu" and "acceptance"): the C6 rendering checks run, including the
 # game-view golden image tests/acceptance/tetris/golden/board.png. Every configuration, for the gpu CI job.
 add_test(NAME acceptance.tetris.board.gpu

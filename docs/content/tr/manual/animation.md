@@ -96,12 +96,15 @@ bakmasını, onu kaydırmasını ve sürmesini sağlar:
 
 | Komut | Ne yapar |
 | --- | --- |
-| `animation.list` | Bir modelin (`path`) skin'leri ve klipleri: her skin için `Animator::skeleton` referansı ve eklem sayısı, her klip için `Animator::clip` referansı, saniye cinsinden süresi ve kanal sayısı |
+| `animation.list` | Bir modelin (`path`) skin'leri ve klipleri: her skin için `Animator::skeleton` referansı ve eklem sayısı, her klip için `Animator::clip` referansı, saniye cinsinden süresi, kanal sayısı ve yazıldığı skin (`source`), her skin için de rig'inin `humanoid` olup olmadığı |
 | `animation.status` | Sahnedeki Animator'lar (`entity`, ya da en fazla 100 Animator): kayıtlı alanlar ve bir play oturumunda ayrıca pozun var olup olmadığı, grafın yüklenip yüklenmediği, her layer için geçerli state, normalleştirilmiş zamanı ve süren bir geçişin söndürdüğü state, her parametre ve değeri, son update'in state event'leri |
 | `animation.set_parameter` | Play oturumunda bir Animator'ın grafının `Float`, `Int` veya `Bool` parametresini ayarlar; değer parametrenin türüne uymalıdır |
 | `animation.trigger` | Play oturumunda grafın bir `Trigger`'ını ayarlar |
 | `animation.scrub` | Açık sahnedeki bir Animator'ın `Animator::time` değerini ayarlar: kayıtlı Component'in geri alınabilir bir düzenlemesi, Scene görünümünde hemen görünür |
 | `animation.validate` | Bir `.animgraph` ya da `.ragdoll` dosyasını ayrıştırır. Sonuç `valid` der, `parameters`, `layers` ve `states` (ya da `parts`) sayar, bir hata için `error` ve JSON `errorPath` verir, ör. `layers[0].states[2].motion`. Ayrıştırılamayan bir dosya başarısız bir komut değil, bir sonuçtur |
+| `animation.rig` | Bir skin'in rig map'i (`path`, `skin`): her joint için bone'u, translation modu (`Skeleton`, `Scaled` veya `Animation`) ve modelin sidecar'ının onu geçersiz kılıp kılmadığı, `humanoid`, eksik (`missing`) gerekli humanoid bone'ları ve üretimin verdiği `warnings` |
+| `animation.map_joint` | Bir skin'in rig map'inin tek bir geçersiz kılmasını (`joint`, `bone` veya `translation`, ya da ikisi; `""` joint'in eşlemesini kaldırır) modelin `.import.json` sidecar'ına yazar ve modeli yeniden yükler. Üzerinden geçtiği `asset.set_import_settings` gibi geri alınabilir |
+| `animation.retarget` | Bir `clip`'in bir `skeleton` üzerinde nasıl oynadığı: `retargeted`, ya da adla bağlanmış ve `reason` (`SameSkeleton`, `NoSkeleton`, `NoRig` veya `NoPairs`), joint bulan kanallar, eşsiz (`unpaired`) olanlar, skeleton'ın reference pose'u tutan joint'leri ve hips `heightRatio` değeri |
 
 ```json
 {"call": "animation.list", "params": {"path": "assets:/models/column.gltf"}}
@@ -121,6 +124,31 @@ World'ünde `animation.status`, bir Scene görünümü onu pozluyorsa `live` olu
 bir editor) `live` false'tur ve `note` bunu söyler. Event'ler ve çalışan state'ler play oturumunda vardır. Geçersiz her parametre JSON Pointer'ı ile bildirilir
 (grafta olmayan bir parametre için `/name`, öneriler ile; yanlış türde bir değer için `/value`).
 
+### Editor'da rig map'leri ve retargeting
+
+Rig'e bakmak, bir joint'i düzeltmek ve bir retarget denemek için yukarıdaki üç komutu kullanın (örnekler
+showcase'in iki Strider'ını kullanır):
+
+```json
+{"call": "animation.rig", "params": {"path": "assets:/models/small_strider.gltf", "skin": 0}}
+{"call": "animation.map_joint", "params": {"path": "assets:/models/small_strider.gltf", "skin": 0, "joint": "mixamorig:Spine", "bone": "chest"}}
+{"call": "animation.retarget", "params": {"clip": "assets:/models/strider.gltf#animation/idle", "skeleton": "assets:/models/small_strider.gltf#skin/0"}}
+```
+
+1. `animation.rig` skin'in her joint'ini bone'uyla listeler. Gerekli her bone eşlenmişse rig `humanoid`'dir;
+   değilse `missing` joint'i olmayan bone'ları, `warnings` üretimin çözdüğü belirsizlikleri (sağ tarafta sol
+   diyen bir ad) söyler.
+2. `animation.map_joint` bir joint'i düzeltir: ona bir humanoid bone ya da başka rig'lerle paylaşılan özel bir
+   bone adı verir, ya da `""` ile eşlemesini kaldırır; `translation` retarget edilmiş clip'lerin onu nasıl
+   hareket ettireceğini ayarlar. Geçersiz kılma, `asset.set_import_settings`'in yazdığı gibi modelin
+   sidecar'ına (skin'in `model.skins` girdisi) yazılır, model yeniden içe aktarılır ve bir `history.undo` onu
+   kaldırır. Başka bir geçersiz kılmanın zaten kullandığı bir bone, skin'de olmayan bir joint (öneriyle) ve
+   aralık dışı bir skin indeksi JSON Pointer'ıyla bildirilir.
+3. `animation.retarget`, bir clip için ve onun oynadığı skeleton için sonucu gösterir; başka bir modelin
+   clip'i de olabilir. `retargeted: false` ile bir `reason`, clip'in joint adıyla oynadığı anlamına gelir. Bir
+   düzeltmeden sonra `pairedJoints`, `unpairedJoints` ve `heightRatio` neyin değiştiğini gösterir: bir rig'in
+   hips'ini eşlemesiz bırakmak `heightRatio` değerini 1 yapar.
+
 ### Inspector'da
 
 `Animator`'ı olan bir Entity seçin; Inspector kartı bir **Preview** bölümüyle başlar (Play modunda **Live**):
@@ -135,6 +163,7 @@ bir editor) `live` false'tur ve `note` bunu söyler. Event'ler ve çalışan sta
 | Her layer için bir satır | Layer'ın geçerli state'i ve ilerlemesi, ve süren bir geçişin söndürdüğü state |
 | Her parametre için bir satır | Değeri: Play modu dışında devre dışı (varsayılanlar), Play modunda düzenlenebilir; **Fire** bir `Trigger` kurar |
 | Events | Play modunda Animator'ın son sekiz state event'i, en yenisi önce |
+| Source skin | Retarget edilmiş bir klibin üzerinde hazırlandığı skin (`model.gltf#skin/0`); klibin ya da grafın bu tür her skin'i için bir satır (en fazla dört); her klip kendi skin'inde oynadığı sürece görünmez ([retargeting](#retargeting)) |
 
 Her değişiklik, bir ajanınki gibi bir komuttan geçer: kaydırıcıyı sürüklemek `animation.scrub` çalıştırır (bir
 sürükleme tek bir undo adımıdır ve Scene görünümü siz sürüklerken pozu gösterir), bir parametre
@@ -154,6 +183,7 @@ pozlarını çizer:
 | --- | --- |
 | Eklemler arasındaki kemikler | `info` |
 | Eklemler, her birinde küçük bir artı | `text.primary` |
+| Skin'in rig map'inde bone'u olmayan eklemler ve onlara giden kemikler (yalnızca rig map'i olan bir skin'de) | Aynı renkler, soluk ([rig map'leri](assets.md#rig-mapleri)) |
 | `LookAt` ve `TwoBoneIk` hedefleri (Animator'da ya da çocuklarında) ve uzuvların pole'ları, her biri ekleminden bir çizgiyle | `warning` |
 | Kökleri altındaki `SpringBone` zincirleri, eklem yarıçapları ve collider'ları | `success` |
 | `.ragdoll` profilinden ya da iskeletten üretilen kapsüller olarak `Ragdoll` parçaları | `error` |

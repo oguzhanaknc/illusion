@@ -1,6 +1,6 @@
 # 0065. Retargeting and aim layers: rig maps cooked with the skeleton, corrections bound once per clip and rig, aim offsets in model space
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-11-23
 
 ## Context

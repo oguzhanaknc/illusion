@@ -464,3 +464,290 @@ TEST_CASE("animation.validate rejects bad paths and a missing file")
     CHECK(fails(editor, "animation.validate", R"({"path":"assets:/animations/none.ragdoll"})").kind ==
           ErrorKind::NotFound);
 }
+
+namespace
+{
+
+constexpr const char* kRigB = "assets:/models/humanoid_b.gltf";
+
+std::string rigParams()
+{
+    return std::string(R"({"path":")") + kRigB + R"("})";
+}
+
+std::string mapJoint(std::string_view joint, std::string_view fields)
+{
+    return std::string(R"({"path":")") + kRigB + R"(","skin":0,"joint":")" + std::string(joint) + "\"," +
+           std::string(fields) + "}";
+}
+
+JsonValue jointOf(const JsonDocument& rig, std::string_view name)
+{
+    return findNamed(rig.root().find("joints"), name);
+}
+
+bool listHas(const JsonValue& list, std::string_view value)
+{
+    for (usize i = 0; i < list.size(); ++i)
+    {
+        if (list[i].asString() == value)
+        {
+            return true;
+        }
+    }
+    return false;
+}
+
+constexpr const char* kWalkOnB =
+    R"({"clip":"assets:/models/humanoid_a.gltf#animation/walk","skeleton":"assets:/models/humanoid_b.gltf#skin/0"})";
+
+} // namespace
+
+TEST_CASE("animation.list names the source skin of a clip and whether a skin is humanoid")
+{
+    EditorFixture f;
+    EditorContext& editor = *f.editor;
+    installRigAssets(editor);
+    installAnimationAssets(editor);
+    const JsonDocument humanoid =
+        ok(editor, "animation.list", R"({"path":"assets:/models/humanoid_b.gltf"})");
+    CHECK(humanoid.root().pointer("/skins/0/humanoid").asBool() == true);
+    CHECK(humanoid.root().pointer("/clips/0/source").asString() == "assets:/models/humanoid_b.gltf#skin/0");
+    const JsonDocument column = ok(editor, "animation.list", R"({"path":"assets:/models/column.gltf"})");
+    CHECK(column.root().pointer("/skins/0/humanoid").asBool() == false);
+}
+
+TEST_CASE("animation.rig shows the bone and translation mode of every joint of a skin")
+{
+    EditorFixture f;
+    EditorContext& editor = *f.editor;
+    installRigAssets(editor);
+    const JsonDocument rig = ok(editor, "animation.rig", rigParams());
+    CHECK(rig.root().find("ref").asString() == "assets:/models/humanoid_b.gltf#skin/0");
+    CHECK(rig.root().find("humanoid").asBool() == true);
+    CHECK(rig.root().find("generated").asBool() == true);
+    CHECK(rig.root().find("missing").size() == 0);
+    REQUIRE(rig.root().find("joints").size() == 55);
+    const JsonValue pelvis = jointOf(rig, "pelvis");
+    CHECK(pelvis.find("bone").asString() == "hips");
+    CHECK(pelvis.find("translation").asString() == "Scaled");
+    CHECK(pelvis.find("overridden").asBool() == false);
+    CHECK(jointOf(rig, "thigh_l").find("bone").asString() == "leftUpperLeg");
+    CHECK(jointOf(rig, "thigh_l").find("translation").asString() == "Skeleton");
+}
+
+TEST_CASE("animation.rig rejects bad paths and skins")
+{
+    EditorFixture f;
+    EditorContext& editor = *f.editor;
+    installRigAssets(editor);
+    const CommandError path = fails(editor, "animation.rig", R"({"path":"assets:/models/humanoid_b.png"})");
+    CHECK(path.kind == ErrorKind::ValidationFailed);
+    REQUIRE_FALSE(path.errors.empty());
+    CHECK(path.errors[0].pointer == "/path");
+    CHECK(fails(editor, "animation.rig", R"({"path":"assets:/models/none.glb"})").kind ==
+          ErrorKind::NotFound);
+    const CommandError skin =
+        fails(editor, "animation.rig", std::string(R"({"path":")") + kRigB + R"(","skin":1})");
+    CHECK(skin.kind == ErrorKind::ValidationFailed);
+    REQUIRE_FALSE(skin.errors.empty());
+    CHECK(skin.errors[0].pointer == "/skin");
+}
+
+TEST_CASE("animation.rig reports a sidecar that does not parse")
+{
+    EditorFixture f;
+    EditorContext& editor = *f.editor;
+    installRigAssets(editor);
+    writeText(editor, "assets:/models/humanoid_b.gltf.import.json", "not json");
+    CHECK(fails(editor, "animation.rig", rigParams()).kind == ErrorKind::PreconditionFailed);
+}
+
+TEST_CASE("animation.map_joint writes an override into the sidecar, reports the rig and undoes")
+{
+    EditorFixture f;
+    EditorContext& editor = *f.editor;
+    installRigAssets(editor);
+
+    const JsonDocument unmapped = ok(editor, "animation.map_joint", mapJoint("pelvis", R"("bone":"")"));
+    CHECK(unmapped.root().find("changed").asBool() == true);
+    CHECK(unmapped.root().find("bone").asString() == "");
+    CHECK(unmapped.root().find("humanoid").asBool() == false);
+    REQUIRE(unmapped.root().find("missing").size() == 1);
+    CHECK(unmapped.root().pointer("/missing/0").asString() == "hips");
+    CHECK(unmapped.root().find("sidecar").asString() == "assets:/models/humanoid_b.gltf.import.json");
+    CHECK(editor.files().exists("assets:/models/humanoid_b.gltf.import.json"));
+
+    const JsonDocument rig = ok(editor, "animation.rig", rigParams());
+    CHECK(rig.root().find("humanoid").asBool() == false);
+    CHECK(jointOf(rig, "pelvis").find("bone").asString() == "");
+    CHECK(jointOf(rig, "pelvis").find("overridden").asBool() == true);
+    CHECK(jointOf(rig, "head").find("overridden").asBool() == false);
+
+    CHECK(ok(editor, "animation.map_joint", mapJoint("pelvis", R"("bone":"")"))
+              .root()
+              .find("changed")
+              .asBool() == false);
+
+    ok(editor, "history.undo");
+    CHECK_FALSE(editor.files().exists("assets:/models/humanoid_b.gltf.import.json"));
+    CHECK(ok(editor, "animation.rig", rigParams()).root().find("humanoid").asBool() == true);
+    ok(editor, "history.redo");
+    CHECK(ok(editor, "animation.rig", rigParams()).root().find("humanoid").asBool() == false);
+}
+
+TEST_CASE("animation.map_joint gives custom bones and translation modes and keeps earlier overrides")
+{
+    EditorFixture f;
+    EditorContext& editor = *f.editor;
+    installRigAssets(editor);
+    const JsonDocument first =
+        ok(editor, "animation.map_joint", mapJoint("upperarm_twist_01_l", R"("bone":"twistL")"));
+    CHECK(first.root().find("bone").asString() == "twistL");
+    CHECK(first.root().find("humanoid").asBool() == true);
+    const JsonDocument second =
+        ok(editor, "animation.map_joint", mapJoint("upperarm_twist_01_l", R"("translation":"Animation")"));
+    CHECK(second.root().find("translation").asString() == "Animation");
+    CHECK(second.root().find("bone").asString() == "twistL");
+    ok(editor, "animation.map_joint", mapJoint("head", R"("translation":"Scaled")"));
+    const JsonDocument rig = ok(editor, "animation.rig", rigParams());
+    CHECK(jointOf(rig, "upperarm_twist_01_l").find("bone").asString() == "twistL");
+    CHECK(jointOf(rig, "upperarm_twist_01_l").find("translation").asString() == "Animation");
+    CHECK(jointOf(rig, "head").find("translation").asString() == "Scaled");
+    CHECK(jointOf(rig, "head").find("bone").asString() == "head");
+}
+
+TEST_CASE("animation.map_joint moves a bone away from the joint generation gave it to")
+{
+    EditorFixture f;
+    EditorContext& editor = *f.editor;
+    installRigAssets(editor);
+    const JsonDocument mapped = ok(editor, "animation.map_joint", mapJoint("spine_01", R"("bone":"head")"));
+    CHECK(mapped.root().find("bone").asString() == "head");
+    const JsonDocument rig = ok(editor, "animation.rig", rigParams());
+    CHECK(jointOf(rig, "head").find("bone").asString() == "");
+    CHECK(jointOf(rig, "spine_01").find("bone").asString() == "head");
+}
+
+TEST_CASE("animation.map_joint rejects bad params and a bone two overrides would share")
+{
+    EditorFixture f;
+    EditorContext& editor = *f.editor;
+    installRigAssets(editor);
+    const auto pointerOf = [&](const std::string& params) {
+        const CommandError error = fails(editor, "animation.map_joint", params);
+        CHECK(error.kind == ErrorKind::ValidationFailed);
+        return error.errors.empty() ? std::string() : error.errors[0].pointer;
+    };
+    CHECK(pointerOf(std::string(R"({"path":")") + kRigB + R"(","joint":"pelvis"})") == "/bone");
+    CHECK(pointerOf(mapJoint("pelvis", R"("bone":"has space")")) == "/bone");
+    CHECK(pointerOf(mapJoint("pelvis", R"("bone":")" + std::string(65, 'a') + "\"")) == "/bone");
+    CHECK(pointerOf(mapJoint("pelvis", R"("translation":"Fast")")) == "/translation");
+    CHECK(pointerOf(std::string(R"({"path":")") + kRigB + R"(","skin":3,"joint":"pelvis","bone":"x"})") ==
+          "/skin");
+    CHECK(pointerOf(R"({"path":"assets:/models/humanoid_b.png","joint":"pelvis","bone":"x"})") == "/path");
+
+    const CommandError unknown = fails(editor, "animation.map_joint", mapJoint("pelvs", R"("bone":"x")"));
+    CHECK(unknown.kind == ErrorKind::NotFound);
+    REQUIRE_FALSE(unknown.suggestions.empty());
+    CHECK(unknown.suggestions[0] == "pelvis");
+    CHECK(fails(editor, "animation.map_joint", R"({"path":"assets:/models/none.glb","joint":"a","bone":"x"})")
+              .kind == ErrorKind::NotFound);
+
+    ok(editor, "animation.map_joint", mapJoint("thigh_l", R"("bone":"shared")"));
+    CHECK(pointerOf(mapJoint("thigh_r", R"("bone":"shared")")) == "/bone");
+    CHECK(jointOf(ok(editor, "animation.rig", rigParams()), "thigh_r").find("bone").asString() ==
+          "rightUpperLeg");
+}
+
+TEST_CASE("animation.map_joint dry runs write nothing")
+{
+    EditorFixture f;
+    EditorContext& editor = *f.editor;
+    installRigAssets(editor);
+    const JsonDocument result =
+        ok(editor, "animation.map_joint", mapJoint("pelvis", R"("bone":"")"), CommandOptions{.dryRun = true});
+    CHECK(result.root().find("humanoid").asBool() == false);
+    CHECK_FALSE(editor.files().exists("assets:/models/humanoid_b.gltf.import.json"));
+}
+
+TEST_CASE("animation.retarget pairs the channels of a clip with the joints of another skeleton")
+{
+    EditorFixture f;
+    EditorContext& editor = *f.editor;
+    installRigAssets(editor);
+    const JsonDocument result = ok(editor, "animation.retarget", kWalkOnB);
+    CHECK(result.root().find("retargeted").asBool() == true);
+    CHECK(result.root().find("reason").asString() == "");
+    CHECK(result.root().find("source").asString() == "assets:/models/humanoid_a.gltf#skin/0");
+    CHECK(result.root().find("heightRatio").asF64().value_or(0.0) == doctest::Approx(0.8).epsilon(0.01));
+    CHECK(result.root().find("channels").asU64() > 0);
+    CHECK(result.root().find("pairedChannels").asU64() > 0);
+    CHECK(result.root().find("pairedChannels").asU64() <= result.root().find("channels").asU64());
+    CHECK(result.root().find("pairedJoints").asU64() > 0);
+}
+
+TEST_CASE("animation.retarget reports a clip on its own skeleton as bound by name")
+{
+    EditorFixture f;
+    EditorContext& editor = *f.editor;
+    installRigAssets(editor);
+    const JsonDocument result = ok(editor, "animation.retarget",
+                                   R"({"clip":"assets:/models/humanoid_a.gltf#animation/walk",)"
+                                   R"("skeleton":"assets:/models/humanoid_a.gltf#skin/0"})");
+    CHECK(result.root().find("retargeted").asBool() == false);
+    CHECK(result.root().find("reason").asString() == "SameSkeleton");
+    CHECK(result.root().find("pairedChannels").asU64() == result.root().find("channels").asU64());
+    CHECK(result.root().find("unpaired").size() == 0);
+}
+
+TEST_CASE("animation.retarget shows a fix: unmapping the hips changes the height ratio and the pairs")
+{
+    EditorFixture f;
+    EditorContext& editor = *f.editor;
+    installRigAssets(editor);
+    const JsonDocument before = ok(editor, "animation.retarget", kWalkOnB);
+    const u64 pairedBefore = before.root().find("pairedChannels").asU64().value_or(0);
+    ok(editor, "animation.map_joint", mapJoint("pelvis", R"("bone":"")"));
+    const JsonDocument after = ok(editor, "animation.retarget", kWalkOnB);
+    CHECK(after.root().find("heightRatio").asF64().value_or(0.0) == doctest::Approx(1.0));
+    CHECK(after.root().find("pairedChannels").asU64().value_or(0) < pairedBefore);
+    CHECK(listHas(after.root().find("unpaired"), "mixamorig:Hips"));
+    ok(editor, "history.undo");
+    CHECK(ok(editor, "animation.retarget", kWalkOnB).root().find("pairedChannels").asU64() == pairedBefore);
+}
+
+TEST_CASE("animation.retarget rejects bad references and unknown clips")
+{
+    EditorFixture f;
+    EditorContext& editor = *f.editor;
+    installRigAssets(editor);
+    const std::string walk = "assets:/models/humanoid_a.gltf#animation/walk";
+    const std::string skin = "assets:/models/humanoid_b.gltf#skin/0";
+    const auto pointerOf = [&](const std::string& clip, const std::string& skeleton) {
+        const CommandError error = fails(editor, "animation.retarget",
+                                         R"({"clip":")" + clip + R"(","skeleton":")" + skeleton + R"("})");
+        CHECK(error.kind == ErrorKind::ValidationFailed);
+        return error.errors.empty() ? std::string() : error.errors[0].pointer;
+    };
+    CHECK(pointerOf("", skin) == "/clip");
+    CHECK(pointerOf("assets:/models/humanoid_a.gltf", skin) == "/clip");
+    CHECK(pointerOf("assets:/models/humanoid_a.gltf#skin/0", skin) == "/clip");
+    CHECK(pointerOf("assets:/models/humanoid_a.png#animation/walk", skin) == "/clip");
+    CHECK(pointerOf(walk, "") == "/skeleton");
+    CHECK(pointerOf(walk, walk) == "/skeleton");
+    CHECK(pointerOf(walk, "assets:/models/humanoid_b.gltf#skin/9") == "/skeleton");
+
+    const CommandError unknown =
+        fails(editor, "animation.retarget",
+              R"({"clip":"assets:/models/humanoid_a.gltf#animation/wlak","skeleton":")" + skin + R"("})");
+    CHECK(unknown.kind == ErrorKind::NotFound);
+    REQUIRE_FALSE(unknown.suggestions.empty());
+    CHECK(unknown.suggestions[0] == "walk");
+    CHECK(fails(editor, "animation.retarget",
+                R"({"clip":"assets:/models/none.glb#animation/walk","skeleton":")" + skin + R"("})")
+              .kind == ErrorKind::NotFound);
+    CHECK(fails(editor, "animation.retarget",
+                R"({"clip":")" + walk + R"(","skeleton":"assets:/models/none.glb#skin/0"})")
+              .kind == ErrorKind::NotFound);
+}

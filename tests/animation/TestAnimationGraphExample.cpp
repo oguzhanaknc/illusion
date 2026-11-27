@@ -76,9 +76,18 @@ TEST_CASE("the tutorial graph parses and the tutorial pages show it unchanged")
     Expected<AnimationGraph, std::string> graph = parseAnimationGraph(text);
     INFO((graph ? std::string() : graph.error()));
     REQUIRE(graph.hasValue());
-    CHECK(graph->layers.size() == 1);
+    REQUIRE(graph->layers.size() == 2);
     CHECK(graph->findParameter("speed") == 0);
     CHECK(graph->findParameter("jump") == 1);
+    CHECK(graph->findParameter("aimYaw") == 2);
+    CHECK(graph->findParameter("aimPitch") == 3);
+    const AnimationLayer& aim = graph->layers[1];
+    CHECK(aim.blend == AnimationLayerBlend::Additive);
+    CHECK(aim.space == AnimationAdditiveSpace::Model);
+    CHECK(aim.reference.path() == "assets:/models/hero.glb#animation/aim_center");
+    REQUIRE(aim.states.size() == 1);
+    CHECK(aim.states[0].motion.type == AnimationMotionType::Blend2D);
+    CHECK(aim.states[0].motion.points.size() == 9);
     for (const char* language : {"en", "tr"})
     {
         INFO(language);

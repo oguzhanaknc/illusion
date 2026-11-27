@@ -40,7 +40,7 @@ void randomCommand(EditorContext& editor, std::mt19937& random)
     };
     std::string name;
     std::string params;
-    switch (random() % 22)
+    switch (random() % 23)
     {
     case 0:
     case 1:
@@ -254,6 +254,21 @@ void randomCommand(EditorContext& editor, std::mt19937& random)
             params = R"({"entity":")" + pick() + R"("})";
         }
         break;
+    case 21:
+    {
+        // A rig override written into a model's import settings (an undoable file step; some are rejected).
+        constexpr std::string_view joints[] = {"pelvis", "spine_01", "upperarm_twist_01_l", "head",
+                                               "missing"};
+        constexpr std::string_view bones[] = {"hips", "", "twistL", "twistR", "chest"};
+        constexpr std::string_view modes[] = {"Skeleton", "Scaled", "Animation"};
+        name = "animation.map_joint";
+        const std::string_view joint = joints[random() % 5];
+        const std::string_view bone = bones[random() % 5];
+        const std::string_view mode = modes[random() % 3];
+        params = R"({"path":"assets:/models/humanoid_b.gltf","skin":0,"joint":")" + std::string(joint) +
+                 R"(","bone":")" + std::string(bone) + R"(","translation":")" + std::string(mode) + R"("})";
+        break;
+    }
     default:
     {
         name = coin() ? "component.remove" : "component.reset";
@@ -279,6 +294,7 @@ TEST_CASE("undoing 2000 random commands restores the scene byte for byte, and re
     EditorFixture fixture(7);
     fixture.buildScene();
     EditorContext& editor = *fixture.editor;
+    test::installRigAssets(editor);
     const std::string initial = fixture.scene();
     std::mt19937 random(1234);
     for (int i = 0; i < 2000; ++i)

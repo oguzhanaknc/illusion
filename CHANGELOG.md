@@ -140,6 +140,14 @@ version changes are in the contributor guide ("Versions and releases"). The vers
   `addPoseInModelSpace()`), `solveAim()` and `aimAngles()`, `TwoBoneIk::targetJoint`, the
   `AnimationService` functions `setAimTarget()`, `setAimWeight()` and `aimAngles()`, the benchmark
   `animation/aim-300`, the Small Strider's aim in the showcase, and the manual section "Aim".
+- Rig and retargeting commands (ANIM-5d): `animation.rig` (the bone and translation mode of every joint of a
+  skin), `animation.map_joint` (one override written into the model's import settings sidecar, undoable) and
+  `animation.retarget` (how a clip plays on a skeleton), `animation.list` with the source skin of each clip
+  and `humanoid` for each skin, and the acceptance transcript `tests/acceptance/animation/retarget.jsonl`.
+- The tutorial "Animate a character" gets an aiming step (ANIM-5d): a version 2 `hero.animgraph` with a
+  model-space aim layer, an `Aim` on the hero, `setAimTarget()`, `setAimWeight()` and `aimAngles()` in its
+  module and an off-hand `TwoBoneIk` with `targetJoint`; the manual describes the Source skin row and the
+  dimmed unmapped joints.
 
 ### Changed
 

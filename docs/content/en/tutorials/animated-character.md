@@ -4,7 +4,8 @@ This tutorial puts a rigged character into a scene and makes it walk, run and ju
 with clips, describe how the clips blend in an animation graph, give the character a `CharacterController`,
 and write a small C++ game module that sets the graph's `speed` from the input, triggers a jump, plays a
 footstep sound on an animation event, and lets root motion move the character. Then you hang a lantern on
-the hand, turn the head towards a visitor, keep the feet on a step, and let the character fall like a ragdoll.
+the hand, turn the head towards a visitor, keep the feet on a step, let the character fall like a ragdoll, and
+aim with the upper body.
 
 You need a Release build of illusion, the C++ compiler the editor was built with, a rigged glTF model whose
 clips are called `idle`, `walk`, `run` and `jump` (a character from any glTF library works; the clip names are
@@ -16,13 +17,15 @@ module's calls.
 
 - A character that stands in an idle pose, walks when you push the stick half way, runs when you push it
   all the way (or press a movement key), and jumps on the jump button with a short cross-fade.
-- A graph file `assets/animations/hero.animgraph` with one layer: a locomotion state that blends idle, walk
-  and run on the parameter `speed`, and a jump state that a trigger starts.
+- A graph file `assets/animations/hero.animgraph` with two layers: a locomotion state that blends idle, walk
+  and run on the parameter `speed`, and a jump state that a trigger starts; and an aim layer over the upper
+  body that blends nine aim poses by the parameters `aimYaw` and `aimPitch`.
 - Root motion: the feet do not slide, because the clips, not the code, move the character. The
   `CharacterController` gets the horizontal velocity from the animation and keeps its own vertical one.
 - A module that drives the parameters from the input actions and plays a sound on each `footstep` event.
 - A lantern in the right hand (a socket), a head that follows a visitor (look-at), feet that stand on a step
-  (foot placement), and a key that makes the character fall and stand up (a ragdoll).
+  (foot placement), a key that makes the character fall and stand up (a ragdoll), and a button that aims the
+  upper body and the right hand at the visitor (an `Aim`).
 
 ## 2. Create the project and import the model
 
@@ -38,6 +41,15 @@ the Asset Browser shows its meshes, its skin (`hero.glb#skin/0`) and its clips (
 names. The root motion joint of the graph (`hips` below) must be a joint of the skeleton; use the name of
 the pelvis joint of your model.
 
+The aiming step plays nine **aim poses**: single-frame clips of the upper body, authored in your DCC tool and
+exported in `hero.glb` next to the other clips, that show the character aiming straight ahead
+(`aim_center`), left and right by 1.2 rad (about 70°) (`aim_left`, `aim_right`), up and down by 0.8 rad
+(about 46°) (`aim_up`, `aim_down`) and in the four corners (`aim_left_up`, `aim_left_down`, `aim_right_up`,
+`aim_right_down`). Pose the weapon arm and the spine, key one frame of each pose as its own action and
+export them with the model; the clips only need the spine and the arms. If your model has no aim poses, delete
+the `aim` layer and the two aim parameters from the graph below and leave the `yawParameter` and
+`pitchParameter` of step 11 empty: the `Aim` then does all the aiming procedurally.
+
 ## 3. The animation graph
 
 Create `assets/animations/hero.animgraph` in your code editor:
@@ -45,10 +57,12 @@ Create `assets/animations/hero.animgraph` in your code editor:
 ```json
 {
   "format": "illusion.animgraph",
-  "version": 1,
+  "version": 2,
   "parameters": [
     {"name": "speed", "type": "Float"},
-    {"name": "jump", "type": "Trigger"}
+    {"name": "jump", "type": "Trigger"},
+    {"name": "aimYaw", "type": "Float"},
+    {"name": "aimPitch", "type": "Float"}
   ],
   "rootMotion": "hips",
   "layers": [
@@ -81,6 +95,34 @@ Create `assets/animations/hero.animgraph` in your code editor:
         {"from": "locomotion", "to": "jump", "duration": 0.1, "conditions": [{"parameter": "jump"}]},
         {"from": "jump", "to": "locomotion", "duration": 0.2, "exitTime": 0.9}
       ]
+    },
+    {
+      "name": "aim",
+      "blend": "Additive",
+      "space": "Model",
+      "reference": "assets:/models/hero.glb#animation/aim_center",
+      "referenceTime": 0,
+      "mask": [{"joint": "spine", "weight": 1}],
+      "states": [
+        {
+          "name": "aim",
+          "blend2d": {
+            "x": "aimYaw",
+            "y": "aimPitch",
+            "points": [
+              {"x": 0, "y": 0, "clip": "assets:/models/hero.glb#animation/aim_center"},
+              {"x": -1.2, "y": 0, "clip": "assets:/models/hero.glb#animation/aim_left"},
+              {"x": 1.2, "y": 0, "clip": "assets:/models/hero.glb#animation/aim_right"},
+              {"x": 0, "y": 0.8, "clip": "assets:/models/hero.glb#animation/aim_up"},
+              {"x": 0, "y": -0.8, "clip": "assets:/models/hero.glb#animation/aim_down"},
+              {"x": -1.2, "y": 0.8, "clip": "assets:/models/hero.glb#animation/aim_left_up"},
+              {"x": -1.2, "y": -0.8, "clip": "assets:/models/hero.glb#animation/aim_left_down"},
+              {"x": 1.2, "y": 0.8, "clip": "assets:/models/hero.glb#animation/aim_right_up"},
+              {"x": 1.2, "y": -0.8, "clip": "assets:/models/hero.glb#animation/aim_right_down"}
+            ]
+          }
+        }
+      ]
     }
   ]
 }
@@ -98,6 +140,12 @@ Read it from the top:
 - The first transition starts `jump` from `locomotion` when the `jump` trigger is set, with a 0.1 s
   cross-fade. The jump state does not loop; the second transition returns to `locomotion` over 0.2 s once
   the jump is 90 % played (`exitTime`).
+- The file is version 2 because of the `aim` layer. It is an `Additive` layer in `Model` space: each aim pose
+  is compared with the `reference` pose `aim_center` (not with its own first frame, which would give nothing
+  for a one-frame clip) and the difference turns the model-space rotations of `spine` and everything below
+  it, so the aim is the same over a run as over an idle. Its one state blends the nine poses in two
+  dimensions by `aimYaw` and `aimPitch`, in radians: the corners are at 1.2 and 0.8, the largest turn of the
+  `Aim` in step 11. The layer's weight stays 1.
 
 An agent writes the same file with its file tools; the editor checks it when it loads, and a mistake is
 reported with its JSON path (`layers[0].transitions[1].to: ...`).
@@ -127,7 +175,7 @@ graph, and `speed` and `playing` still control how fast the graph runs and wheth
 
 ## 5. Input actions
 
-The module reads three actions; the last one is used in step 10. Create `assets/input/hero.input`:
+The module reads four actions; `hero.fall` is used in step 10 and `hero.aim` in step 11. Create `assets/input/hero.input`:
 
 ```json
 {
@@ -136,7 +184,8 @@ The module reads three actions; the last one is used in step 10. Create `assets/
   "actions": [
     {"name": "hero.move", "type": "Vector2", "bindings": ["Keys.W.S.A.D", "Stick.Left"]},
     {"name": "hero.jump", "type": "Button", "bindings": ["Key.Space", "Gamepad.South"]},
-    {"name": "hero.fall", "type": "Button", "bindings": ["Key.R", "Gamepad.East"]}
+    {"name": "hero.fall", "type": "Button", "bindings": ["Key.R", "Gamepad.East"]},
+    {"name": "hero.aim", "type": "Button", "bindings": ["Mouse.Right", "Gamepad.LeftShoulder"]}
   ]
 }
 ```
@@ -170,6 +219,7 @@ The state of the module is one runtime Component, so that a hot reload keeps it:
 
 #include <algorithm>
 #include <array>
+#include <cmath>
 #include <optional>
 #include <span>
 
@@ -185,6 +235,8 @@ struct State
     AudioClipHandle footstep{};
     ActionId fall = 0;
     bool fallen = false;
+    ActionId aim = 0;
+    bool onTarget = false;
 };
 
 } // namespace hero
@@ -221,12 +273,13 @@ void startHero(ModuleContext& context)
     const std::optional<ActionId> move = input->findAction("hero.move");
     const std::optional<ActionId> jump = input->findAction("hero.jump");
     const std::optional<ActionId> fall = input->findAction("hero.fall");
-    if (!move || !jump || !fall)
+    const std::optional<ActionId> aim = input->findAction("hero.aim");
+    if (!move || !jump || !fall || !aim)
     {
         return;
     }
     const AudioClipHandle footstep = audio->loadClip("assets:/audio/footstep.wav", AudioClipMode::Decode);
-    context.world().create(Name{"Hero State"}, State{*move, *jump, footstep, *fall, false});
+    context.world().create(Name{"Hero State"}, State{*move, *jump, footstep, *fall, false, *aim, false});
 }
 ```
 
@@ -288,8 +341,8 @@ void updateHero(ModuleContext& context, f64)
 } // namespace
 ```
 
-The module is not finished yet: steps 7 to 10 add a lantern, a gaze, foot placement and a ragdoll, and step 11
-registers and builds it.
+The module is not finished yet: steps 7 to 11 add a lantern, a gaze, foot placement, a ragdoll and an aim, and
+step 12 registers and builds it.
 
 ## 7. A lantern in the hand
 
@@ -350,7 +403,7 @@ void updateGaze(ModuleContext& context)
 } // namespace
 ```
 
-`updateGaze` is called from the module's update in step 11. Move the Visitor in the Scene view while the game
+`updateGaze` is called from the module's update in step 12. Move the Visitor in the Scene view while the game
 runs: Hero's head follows it, only as far as `maxAngle`, and returns to the animated direction when the
 Visitor is behind the character.
 
@@ -425,7 +478,101 @@ void updateFall(ModuleContext& context)
 **blendSeconds** blend, and a second press blends the pose back to the animation over the same time. The
 lantern, as a socket, falls with the hand.
 
-## 11. Build and try it
+## 11. Aim with the upper body
+
+An `Aim` points the right hand at a target. It has two halves that work together. Before the graph steps it
+measures the yaw and pitch from the spine to the target and writes them, in radians, to the graph parameters
+`aimYaw` and `aimPitch`: the `aim` layer of step 3 blends its nine poses by them. After the graph it turns the
+spine chain by the little that is left, so the hand points exactly at the target. The command adds it to
+Hero (the angles are in radians; the Inspector shows degrees):
+
+```json
+{"call": "component.add", "params": {"entity": "/Hero", "type": "illusion.Aim", "value": {"joint": "hand_r", "spine": "upperChest", "chainLength": 3, "maxYaw": 1.2, "maxPitch": 0.8, "speed": 8, "yawParameter": "aimYaw", "pitchParameter": "aimPitch"}}}
+```
+
+`joint` is the hand that holds the weapon, `spine` the top joint that turns and `chainLength` 3 shares the
+turn over `upperChest` and the two joints below it. `maxYaw` 1.2 and `maxPitch` 0.8 are the largest turns, the
+corners of the blend space, and `speed` 8 follows the target at 8 rad/s. Without a `target`, the `point` field
+is the aim point; the module sets it every update.
+
+The module holds **hero.aim** (the right mouse button or the left shoulder button) to aim at the Visitor of
+step 8. It calls `setAimTarget()` with the Visitor's position, `setAimWeight()` with 1 while the button is
+held and 0 otherwise, and reads `aimAngles()` (the yaw and pitch of the last update, smoothed and clamped) to
+find out whether the target is inside the cone of `maxYaw` and `maxPitch`, which a game would use to allow a
+shot. The result is kept in the module's `State`:
+
+```cpp
+namespace
+{
+
+constexpr f32 kClampMargin = 0.05f; // radians from the largest turn: the target is inside the cone
+
+void updateAim(ModuleContext& context)
+{
+    InputService* input = context.service<InputService>();
+    AnimationService* animation = context.service<AnimationService>();
+    if (input == nullptr || animation == nullptr || !context.hasWorld())
+    {
+        return;
+    }
+    World& world = context.world();
+    Entity hero{};
+    f32 maxYaw = 0.0f;
+    f32 maxPitch = 0.0f;
+    world.query<const Animator, const Aim>().each([&](Entity entity, const Animator&, const Aim& aim) {
+        hero = entity;
+        maxYaw = aim.maxYaw;
+        maxPitch = aim.maxPitch;
+    });
+    std::optional<Vec3> visitor;
+    world.query<const Name, const Transform>().each([&visitor](Entity, const Name& name, const Transform& transform) {
+        if (name.value == "Visitor")
+        {
+            visitor = transform.position;
+        }
+    });
+    if (!visitor || !world.isAlive(hero))
+    {
+        return;
+    }
+    world.query<State>().each([&](Entity, State& state) {
+        const bool holding = input->isDown(state.aim);
+        static_cast<void>(animation->setAimTarget(hero, *visitor));
+        static_cast<void>(animation->setAimWeight(hero, holding ? 1.0f : 0.0f));
+        const Expected<AimAngles, AnimationError> angles = animation->aimAngles(hero);
+        state.onTarget = holding && angles.hasValue() && maxYaw - std::abs(angles->yaw) > kClampMargin &&
+                         maxPitch - std::abs(angles->pitch) > kClampMargin;
+    });
+}
+
+} // namespace
+```
+
+`setAimWeight()` fades only the procedural turn. The authored `aim` layer keeps following the angles the
+`Aim` writes, so the upper body leans towards the Visitor in either case; to keep it straight while the
+button is up, aim at a point in front of the character instead. A character that plays another rig's clips
+(see the [retargeting](../manual/animation.md#retargeting) section of the manual) keeps its `Aim`: the joint
+names `hand_r` and `upperChest` can also be bone names that every mapped rig answers to.
+
+An off hand that holds the weapon is a `TwoBoneIk` on a child Entity. Its `targetJoint` is the right hand, so
+its `point` is a point in the right hand's space, after the aim, and the left hand follows the weapon without
+lag. The `point` is in the units of the skeleton (centimetres for a Mixamo-style rig, so 30 is a hand length
+ahead of the right hand):
+
+```json
+{"call": "entity.create", "params": {"name": "Off Hand", "parent": "/Hero", "components": {"illusion.TwoBoneIk": {"joint": "hand_l", "targetJoint": "hand_r", "point": [5, -2, 30], "polePoint": [-0.5, -0.5, 0], "alignToTarget": true}}}}
+```
+
+`alignToTarget` keeps the left hand's animated rotation relative to the right hand, so its fingers stay on
+the weapon as the character turns. The limbs of step 9 are the feet; a limb with a `targetJoint` is never one
+of them.
+
+Two parts of the editor show how the rig is mapped. In the **Skeletons** visualiser of the Scene view, joints
+that have no bone in the rig map are drawn dimmed, so a joint you meant to use but that no bone maps shows up
+at once. In the Inspector, the Animator card has a **Source skin** row, one for each skin that a retargeted
+clip of Hero was authored on; the row is absent while all of Hero's clips come from its own model.
+
+## 12. Build and try it
 
 The module calls the new functions from its update. Register the module with it:
 
@@ -438,6 +585,7 @@ void updateAll(ModuleContext& context, f64 deltaSeconds)
     updateHero(context, deltaSeconds);
     updateGaze(context);
     updateFall(context);
+    updateAim(context);
 }
 
 constexpr ModuleApi kHero =
@@ -458,6 +606,9 @@ Press **Play**:
 - Press **Space**: `jump` plays with a 0.1 s cross-fade, the character leaves the ground, and when the clip is
   nearly over the graph fades back to locomotion.
 - The head turns towards the Visitor while it is in front of Hero, and the feet follow the step.
+- Hold the right mouse button: the spine and the right hand turn towards the Visitor, the left hand stays on
+  the weapon, and `onTarget` in the module's `State` is true while the Visitor is inside the aim cone. Move the
+  Visitor around the character: the aim stops at `maxYaw` and `maxPitch`.
 - Press **R**: Hero collapses with the lantern in its hand. Press **R** again: it blends back to the animation
   where its Entity stands (the ragdoll does not move the Entity; the
   [manual](../manual/animation.md#what-is-suspended-while-a-ragdoll-runs) shows how to stand up where the
@@ -468,14 +619,15 @@ Press **Play**:
 An agent starts the game with `play.start`, reads the state of the graph through the module's own logic or
 `play.step`, and sees the pose in `viewport.screenshot`; the graph's parameters are set only by game code.
 
-## 12. The limits
+## 13. The limits
 
 - Root motion moves the character forward along the clips' direction. Turning toward the stick is game
   code: rotate the Entity's `Transform` before the Animation step (a graph with root motion turns the
   Entity by the clip's yaw only).
 - A transition that is running is not interrupted, so a jump pressed during the fade into another state is
   lost: the trigger is cleared at the end of the update. Keep the cross-fades short or press again.
-- Animations of one skeleton are not shared across different joint names; retarget the clips in a DCC tool.
+- A clip plays on another skeleton through the rig maps of both (see
+  [retargeting](../manual/animation.md#retargeting)); without a rig map it plays by joint name only.
 - The live state of the graph is not saved: loading a saved game restarts Hero in `locomotion`.
 - A ragdoll only falls: it has no motors, and it suspends root motion and the `CharacterController`.
   Foot placement and look-at do not show on a simulated character.
@@ -483,7 +635,7 @@ An agent starts the game with `play.start`, reads the state of the graph through
 ## Next steps
 
 - Read the [Animation manual](../manual/animation.md) for blend spaces in two dimensions (strafing),
-  masked layers (aiming with the upper body) and additive layers (breathing).
+  masked layers and additive layers (breathing); its [Aim](../manual/animation.md#aim) section has every field.
 - The showcase project's `Column` and its `assets/animations/column.animgraph` show a graph with a trigger
   and an event; its module calls the whole `AnimationService`.
 - [A HUD and a pause menu](hud-and-pause-menu.md) adds a score display and a menu to the game.
