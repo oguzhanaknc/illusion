@@ -1830,7 +1830,13 @@ bool PhysicsWorld::startRagdoll(Entity entity, const Ragdoll& settings, const Ra
     picked.reserve(profile.parts.size());
     for (const RagdollPart& part : profile.parts)
     {
-        const auto found = std::ranges::find(skeleton.joints, part.joint, &SkeletonJoint::name);
+        // A joint of that name, else the joint with that rig bone (ADR 0065).
+        auto found = std::ranges::find(skeleton.joints, part.joint, &SkeletonJoint::name);
+        if (const i32 bone = skeleton.rig.find(part.joint);
+            found == skeleton.joints.end() && bone >= 0 && static_cast<usize>(bone) < skeleton.joints.size())
+        {
+            found = skeleton.joints.begin() + bone;
+        }
         if (found == skeleton.joints.end())
         {
             ILL_LOG_WARN("Physics",

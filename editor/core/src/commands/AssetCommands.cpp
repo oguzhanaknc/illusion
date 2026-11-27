@@ -1392,7 +1392,9 @@ void registerAssetCommands(CommandRegistry& registry)
             "compression auto|none|bc7|bc5|bc4|bc6h (GPU block compression; auto = as the material asks), "
             "quality fast|normal|high (encoder effort). Model: scale, lodCount (levels of detail per mesh, "
             "0-3; 0 = none), lodReduction (0.1-0.9), compressTextures (compress its images by use), "
-            "textureQuality fast|normal|high. Example: {\"path\": \"assets:/textures/rock_n.png\", "
+            "textureQuality fast|normal|high, skins (one entry per #skin/N: generate, bones = joint to "
+            "bone name or \"\" to unmap, translation = joint to Skeleton|Scaled|Animation; rig maps). "
+            "Example: {\"path\": \"assets:/textures/rock_n.png\", "
             "\"value\": {\"texture\": {\"colorSpace\": \"linear\", \"compression\": \"bc5\", "
             "\"quality\": \"high\"}}}.",
         .category = "Asset",

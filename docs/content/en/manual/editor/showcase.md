@@ -39,7 +39,7 @@ played (`playOnStart` off), and a field of 20,000 fireflies simulated on the GPU
 small two-legged figure (`assets/models/strider.gltf`) behind the camera, covers `LookAt` (it watches the
 pendulum), `TwoBoneIk` (its left foot, and its right foot on the child `Strider Right Leg` with the pole
 `Strider Knee Pole`) and `FootPlacement` ([look-at](../animation.md#look-at),
-[two-bone IK](../animation.md#two-bone-ik), [foot placement](../animation.md#foot-placement)). A `Wind` entity blows the dust
+[two-bone IK](../animation.md#two-bone-ik), [foot placement](../animation.md#foot-placement)). The `Small Strider` beside it (`assets/models/small_strider.gltf`, a renamed, smaller copy of the Strider without clips of its own) plays the Strider's `idle` retargeted ([retargeting](../animation.md#retargeting)); its child `Small Strider Hat` is attached by the bone name `head`, which the small rig does not have as a joint name. A `Wind` entity blows the dust
 (`windFactor`) across the yard. The disabled `Dusk Sky` entity holds a `SkyAtmosphere` at sunset: enable it
 to replace the sky and the sun with a moving one, and the disabled `Film Look` holds `PostEffects` for a
 graded, vignetted image. The disabled `Morning Mist` holds a `VolumetricFog` of low, drifting mist. The `HUD` entity is a game UI

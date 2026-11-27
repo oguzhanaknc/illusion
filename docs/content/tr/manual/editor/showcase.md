@@ -40,6 +40,7 @@ Kameranın arkasındaki küçük iki bacaklı figür `Strider` (`assets/models/s
 izler), `TwoBoneIk`'i (sol ayağı ve pole'ü `Strider Knee Pole` olan `Strider Right Leg` çocuğundaki sağ ayağı)
 ve `FootPlacement`'ı kapsar ([look-at](../animation.md#look-at), [two-bone IK](../animation.md#two-bone-ik),
 [foot placement](../animation.md#foot-placement)).
+Yanındaki `Small Strider` (`assets/models/small_strider.gltf`, Strider'ın kendi clip'i olmayan, yeniden adlandırılmış, daha küçük bir kopyası) Strider'ın `idle` clip'ini retarget ederek oynatır ([retargeting](../animation.md#retargeting)); çocuğu `Small Strider Hat`, küçük rig'de joint adı olarak bulunmayan `head` bone adıyla bağlanır.
 Bir `Wind` Entity'si tozu (`windFactor`) avlunun öbür ucuna savurur. Devre dışı `Dusk Sky`
 Entity'si gün batımında bir `SkyAtmosphere` tutar: gökyüzünü ve güneşi hareketli olanlarla değiştirmek için onu
 etkinleştirin; devre dışı `Film Look` ise derecelendirilmiş, vinyetli bir görüntü için `PostEffects`

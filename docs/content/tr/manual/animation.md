@@ -817,6 +817,64 @@ renderer->render(commands, target, world, view, &jobs);
   `RenderStats::skinnedInstances` ve `skinnedVertices` son karenin işini, `RenderGpuTimings::skinning`
   GPU süresini sayar.
 
+## Kaynak skin'ler ve rig map'leri
+
+Her clip kaynak skin'ini kaydeder: `AnimationClip::skeleton`, channel'larının joint adlarını en çok bulan
+skin'in modeldeki indeksidir (eşitlikte en küçük indeks); yoksa -1. Her skin bir rig map taşır: her joint'in
+bone adı, içe aktarmada üretilir ve modelin sidecar'ı ile düzeltilir (bkz. [rig map'leri](assets.md#rig-mapleri)).
+Oynatma, clip retarget edilmedikçe joint adlarını kullanır; sonraki bölümde anlatılır.
+
+## Retargeting
+
+Başka joint adlarına, başka bir rest pose'a veya başka oranlara sahip bir skeleton'da clip oynatmaya
+retargeting denir. İki skin'de de yukarıdaki rig map'leri gerekir. Clip'in kaynak skin'i
+(`AnimationClip::skeleton`) ile Animator'ın skin'i bone bone eşlenir: aynı bone adına sahip joint'ler ve bone'u
+olmayan bir joint için aynı adlı joint.
+
+```text
+Animator skeleton  assets:/models/small_strider.gltf#skin/0
+Animator clip      assets:/models/strider.gltf#animation/idle   (authored on strider.gltf#skin/0)
+```
+
+- **Clip ve skeleton başına bir kez.** Clip bağlandığında retarget edilir; her clip ve hedef skeleton için bir
+  kez, sonuç onu oynatan tüm Animator'lar arasında paylaşılır. Retarget edilmiş bir clip'i örneklemek,
+  channel başına bir iki rotasyondan fazla kare başına maliyet getirmez.
+- **Reference pose ve rest düzeltmesi.** Hedefin reference pose'u, eşlenmiş her bone'un kaynağın bone
+  yönüne çevrildiği (önce parent) rest pose'udur. Her rotasyon channel'ı ayrıca model uzayında bir düzeltme
+  (`pre * source * post`) alır; böylece T-pose'ta hazırlanmış bir clip, A-pose bir rig'de T-pose olarak oynar.
+  Clip'in animasyon vermediği joint'ler reference pose'ta kalır.
+- **Translation modları.** Rig map her joint'e bir mod verir: `Skeleton` hedefin kendi rest translation'ını
+  korur (hedef oranlarını korur; çoğu joint'in varsayılanı), `Scaled` kaynağın rest'inden hareketini *hips
+  yükseklik oranı* ile ölçekleyip ekler (hedefin hips yüksekliği bölü kaynağınki; iki skeleton'dan birinde
+  `hips` bone'u yoksa 1) ve `Animation` kaynağın translation'ını olduğu gibi kopyalar. Root motion,
+  retarget edilmiş pozdan alınır; bu yüzden mesafesi karakterle ölçeklenir: yarı boyutlu bir karakter yarı
+  kadar yol alır.
+- **Asset'lerde bone adları.** Bir grafın içindeki joint adı (mask joint'leri ve `rootMotion`), bir socket
+  (`BoneAttachment`), bir `.ragdoll` parçası ve `AnimationService::jointTransform()` önce o adlı joint'e,
+  sonra rig bone'u o ad olan joint'e çözülür. Paylaşılan Asset'ler bu yüzden `head` veya `hips` diyebilir ve
+  her rig'de çalışır.
+- **Aynı skin, aynı sonuç.** Kendi skin'inde oynayan bir clip ya da kaynak skin'i olmayan bir clip, eskisi
+  gibi, joint adıyla oynar.
+- **Geri dönüş.** Retarget edilemeyen bir clip (rig map'i olmayan bir skin ya da eşi olan joint'i
+  bulunmayan) ada göre bağlanır ve log'daki bir uyarı clip'i ve nedeni her bağlama için bir kez söyler.
+
+C++ kodu aynısına `illusion/animation/Retarget.hpp` ve graf bağlaması üzerinden ulaşır. Bir `ClipSource`
+(clip ve kaynak skeleton'u) döndüren `bindGraph()` overload'u, kaynağı olan her clip'i retarget eder:
+`GraphBinding::clipRetargets` her clip'in düzeltmesini (ada göre bağlanan clip için etkin değil) ve
+`GraphBinding::basePose` değerlendirmenin başladığı pozu (rest pose için boş) tutar.
+
+```cpp
+// Once, when the graph, the clips and the skeleton are loaded.
+auto binding = illusion::bindGraph(
+    graph, skeleton, std::function<illusion::ClipSource(const illusion::AssetRef&)>(
+                         [&](const illusion::AssetRef& ref) {
+                             return illusion::ClipSource{clips.find(ref), &sourceSkeleton};
+                         }));
+// Without a graph, for one clip:
+auto bound = illusion::bindRetargetedClip(clip, sourceSkeleton, skeleton);
+illusion::sampleClip(clip, bound->binding, bound->retarget, skeleton, time, local);
+```
+
 ## Henüz desteklenmeyenler
 
 - Süren bir geçişi kesmek, alt durum makineleri ve bir grafın canlı durumunu kaydetmek.
@@ -838,6 +896,10 @@ renderer->render(commands, target, world, view, &jobs);
   `animation/world-update`'e yaklaşık 0,17 ms ekler (0,26 ms yerine 0,43 ms).
 - Yirmi ragdoll yaklaşık 0,17 ms'de simüle edilir (Benchmark `physics/ragdolls-20`, bütçe
   1 ms).
+- Retargeting clip bağlanırken yapılır. 60 eklemli 300 Animator'ın retarget edilmiş bir clip oynaması 0,41 ms
+  sürer; aynı işin ada göre yapılması 0,37 ms (Benchmark'lar `animation/retarget-300x60` ve
+  `animation/blend-300x60`; retargeting için yaklaşık %11). Bir clip'i 60 eklemli bir skeleton'a bağlamak
+  41 µs sürer (Benchmark `animation/retarget-bind-60`). Değerler bir geliştirme masaüstündendir.
 - Skinning, Mesh'i kaç pass çizerse çizsin karede bir kez çalışır: 10.240 vertex'lik 300 instance bir
   NVIDIA GeForce RTX 4070 SUPER'da 0,66 ms sürer (GPU testi 3 ms'lik bir bütçe koyar).
 - Görünür her skinned instance vertex başına 64 bayt GPU belleğine (pozlanmış vertex ve önceki konumu) ve

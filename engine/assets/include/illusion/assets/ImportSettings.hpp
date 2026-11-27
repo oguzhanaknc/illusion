@@ -8,7 +8,7 @@
 /// ```json
 /// {
 ///   "format": "illusion.import",
-///   "version": 2,
+///   "version": 3,
 ///   "texture": {"colorSpace": "linear", "maxSize": 1024, "compression": "bc5", "quality": "high"}
 /// }
 /// ```
@@ -19,6 +19,7 @@
 /// the cooked cache finds them without the sidecars.
 
 #include <illusion/assets/Font.hpp>
+#include <illusion/assets/Rig.hpp>
 #include <illusion/assets/TextureCompression.hpp>
 #include <illusion/core/Base.hpp>
 #include <illusion/core/Expected.hpp>
@@ -38,7 +39,7 @@ struct ImageImportSettings;
 inline constexpr std::string_view kImportSettingsSuffix = ".import.json";
 
 /// Version of the sidecar format written by writeImportSettings().
-inline constexpr u32 kImportSettingsVersion = 2;
+inline constexpr u32 kImportSettingsVersion = 3;
 
 /// Which settings an asset has, decided by its extension.
 enum class ImportSettingsKind : u8
@@ -93,6 +94,8 @@ struct ModelImportSettings
     f32 lodReduction = 0.5f;
     bool compressTextures = true; ///< Compress the model's images by their use in its materials.
     TextureQuality textureQuality = TextureQuality::Normal; ///< Encoder effort for the model's images.
+    /// Rig map settings per skin (`#skin/N` is entry N); empty keeps every generated map (version 3).
+    std::vector<SkinImportSettings> skins;
 
     /// Compares every setting.
     friend bool operator==(const ModelImportSettings&, const ModelImportSettings&) = default;
@@ -169,7 +172,8 @@ mergeImportSettings(ImportSettings& settings, const JsonValue& patch, ImportSett
 /// Every setting of @p kind as compact JSON, defaults included, e.g.
 /// `{"texture":{"colorSpace":"auto","generateMips":true,"maxSize":0,"compression":"auto","quality":"normal"}}`
 /// or
-/// `{"model":{"scale":1.0,"lodCount":3,"lodReduction":0.5,"compressTextures":true,"textureQuality":"normal"}}`;
+/// `{"model":{"scale":1.0,"lodCount":3,"lodReduction":0.5,"compressTextures":true,"textureQuality":"normal",
+/// "skins":[]}}`;
 /// "{}" for ImportSettingsKind::None.
 [[nodiscard]] std::string importSettingsValue(const ImportSettings& settings, ImportSettingsKind kind);
 

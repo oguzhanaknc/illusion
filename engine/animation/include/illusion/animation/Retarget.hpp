@@ -7,8 +7,8 @@
 /// applies it per channel. Pure functions; only the binding allocates.
 ///
 /// @code
-/// // Once, when the clip, its source skeleton (the clip's AnimationClip::skeleton) and the target are
-/// loaded. auto bound = illusion::bindRetargetedClip(clip, source, target);
+/// // Once, when the clip, its source skeleton (AnimationClip::skeleton) and the target are loaded.
+/// auto bound = illusion::bindRetargetedClip(clip, source, target);
 /// // Every update.
 /// illusion::sampleClip(clip, bound->binding, bound->retarget, target, time, local);
 /// @endcode
@@ -35,7 +35,8 @@ struct ChannelRetarget
     Quat post{1.0f, 0.0f, 0.0f, 0.0f}; ///< See pre.
     /// Translation channels: how the target joint moves.
     RetargetTranslation translation = RetargetTranslation::Skeleton;
-    /// Translation channels: the hips height ratio times the unit change between the parents' model scales.
+    /// Translation channels: the unit change between the parents' model scales, for Scaled times the hips
+    /// height ratio.
     f32 scale = 1.0f;
     Vec3 sourceRest{0.0f}; ///< The source joint's rest translation or scale (by the channel's path).
     Vec3 targetRest{0.0f}; ///< The target joint's reference translation or scale (by the channel's path).

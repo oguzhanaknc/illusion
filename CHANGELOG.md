@@ -132,9 +132,19 @@ version changes are in the contributor guide ("Versions and releases"). The vers
   kind `Shader`, the commands `material.compile` and `material.validate` (diagnostics with file, line and
   column), the showcase's `pulse.shader`, the manual page "Material shaders" and the tutorial "A dissolving
   surface" (EN/TR).
+- Retargeted playback (ANIM-5b): a clip authored on one skin plays on another through the rig maps, retargeted
+  once per clip and target skeleton at bind time (`bindRetargetedClip()`, `sampleClip()` with a
+  `ClipRetarget`, `matchJoints()`, `rigHeightRatio()`, the `Skeleton`, `Scaled` and `Animation` translation
+  modes), the `bindGraph()` overload with a `ClipSource`, `GraphBinding::clipRetargets` and `basePose`, joint
+  names that resolve to rig bones (`findRigJoint()`) in graph masks, `rootMotion`, sockets, `.ragdoll` parts
+  and `jointTransform()`, the benchmarks `animation/blend-300x60`, `animation/retarget-300x60` and
+  `animation/retarget-bind-60`, the Small Strider and its hat in the showcase, and the manual section
+  "Retargeting".
 
 ### Changed
 
+- The cooked model format is 7 (a rig map per skin and the source skin of each clip) and the import settings
+  sidecar is version 3 (`model.skins`): every model imports again once (ANIM-5a).
 - The module API version is 13 (`CameraService` was added; version 12 added `AiService`, version 11 added `NavService`, version 10 added `AnimationService::setRagdoll()`,
   version 9 `setLookAtTarget()`, `setIkTarget()` and `setIkWeight()`, version 8 `jointTransform()`, version 7
   `AnimationService`, version 6 `UiService`, `SceneService::requestExit()` and `SaveService`, and `UiService`

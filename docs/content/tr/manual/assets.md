@@ -379,7 +379,7 @@ farklıyken vardır ve yalnızca o ayarları tutar:
 ```json
 {
   "format": "illusion.import",
-  "version": 2,
+  "version": 3,
   "texture": {"colorSpace": "linear", "maxSize": 1024}
 }
 ```
@@ -396,6 +396,7 @@ farklıyken vardır ve yalnızca o ayarları tutar:
 | | `lodReduction` | `0.5` | Her seviyenin hedeflediği, önceki seviyenin üçgenlerinin oranı (0.1 ile 0.9 arası). |
 | | `compressTextures` | `true` | Modelin görüntülerini Material'lerindeki kullanımlarına göre sıkıştırır. |
 | | `textureQuality` | `"normal"` | Modelin görüntüleri için encoder eforu: `"fast"`, `"normal"` ya da `"high"`. |
+| | `skins` | yok | Skin başına [rig map](#rig-mapleri) düzeltmeleri (sidecar sürüm 3). |
 | Font (`.ttf`, `.otf`) | `pixelSize` | `48` | Atlas'ta em başına piksel (16 ile 128 arası). |
 | | `spread` | `6` | Alanın bir kenarın her iki yanında kapsadığı atlas pikseli mesafesi (2 ile 16 arası). |
 | | `ranges` | Latin | Bake edilecek code point'ler, `[first, last]` çiftleri olarak, 1 ile 64 aralık. |
@@ -405,7 +406,7 @@ Bir font sidecar'ı:
 ```json
 {
   "format": "illusion.import",
-  "version": 2,
+  "version": 3,
   "font": {"pixelSize": 64, "spread": 8, "ranges": [[32, 126], [160, 383], [1024, 1279]]}
 }
 ```
@@ -415,7 +416,7 @@ Bir font sidecar'ı:
 - Sidecar, önbellek kaydının kaynaklarından biridir: onu düzenlemek, eklemek ya da silmek kaydı eskitir ve
   sonraki yükleme yeniden içe aktarır. Önbellek kayıtları çağıranın istediği ayarlara göre anahtarlanmaya
   devam eder; böylece yalnızca hazırlanmış önbelleği dağıtan bir oyun onları sidecar'lar olmadan bulur.
-- Sidecar'lar sürümlüdür (`"version"`, şu an 2; sürüm 1 dosyalar yine yüklenir) ve doğrulanır: bilinmeyen bir üye, yanlış türden bir bölüm (bir
+- Sidecar'lar sürümlüdür (`"version"`, şu an 3; sürüm 1 ve 2 dosyalar yine yüklenir) ve doğrulanır: bilinmeyen bir üye, yanlış türden bir bölüm (bir
   Texture'ın yanında `"model"`), yanlış bir tip ya da aralık dışı bir değer, içe aktarmayı sidecar'ı ve
   değerin JSON pointer'ını belirten bir hatayla başarısız kılar.
 - `parseImportSettings()`, `mergeImportSettings()` (JSON merge patch: `null` bir ayarı ya da bölümü
@@ -433,6 +434,65 @@ files.writeText(illusion::importSettingsPath("game:/textures/ui.png"), text);
 
 Editörde `asset.set_import_settings` ayarları değiştirir (geri alınabilir) ve `asset.reimport` bir Asset'i
 yeniden içe aktarır; bkz. [editör kılavuzu](editor/index.md#ice-aktarma-ayarlar).
+
+### Rig map'leri
+
+Bir modelin her skin'i içe aktarmada bir rig map alır: her joint'in humanoid bone adı (`hips`, `leftUpperArm`,
+`rightIndexDistal`, ...). Böylece bir skeleton'da hazırlanmış clip, farklı joint adlarına sahip başka bir
+skeleton'da oynayabilir. Map, `Skeleton` ile birlikte cook edilir (`Skeleton::rig`); cook edilmiş model
+formatı 7'dir, bu yüzden her model bir kez yeniden içe aktarılır. Retarget edilmiş oynatma ANIM-5b ile gelir;
+bkz. [Animasyon](animation.md#kaynak-skinler-ve-rig-mapleri).
+
+- **Önce adlar.** Büyük/küçük harf, ayırıcılar ve `mixamorig:`, `Bip01`, `DEF-`, `ORG-` gibi önekler yok
+  sayılır; taraf `left`, `l`, `.L`, `_l` gibi ifadelerden gelir. Yaygın takma adlar bone'a eşlenir (`pelvis`
+  `hips`, `clavicle` bir shoulder, `thigh` `UpperLeg`, `calf` `LowerLeg`, `forearm` `LowerArm` olur). End,
+  twist, roll, IK ve yardımcı joint'ler bone almaz. Hips ile neck arasındaki spine joint'leri sırayla
+  `spine`, `chest` ve `upperChest` olur.
+- **Topoloji yedeği.** Adların bulamadığı zorunlu bir bone için üretici skeleton'ın şekline bakar: hips,
+  iki zincirin aşağı, birinin yukarı gittiği yerdir; taraflar model uzayındaki x'ten gelir; spine, neck,
+  shoulder ve toes buradan çıkar. Parmaklar yalnızca adla eşlenir: parmak adı olmayan bir rig'de parmak
+  bone'u yoktur.
+- **Humanoid.** 15 zorunlu bone'un hepsi eşlendiğinde bir rig humanoid sayılır: `hips`, `spine`, `head`, iki
+  kol (`UpperArm`, `LowerArm`, `Hand`) ve iki bacak (`UpperLeg`, `LowerLeg`, `Foot`). Sağ tarafta sol diyen bir
+  ad uyarıdır ve bone soldaki joint'te kalır.
+- **Translation modları.** Her joint'in ayrıca, retarget edilen clip'lerin translation'ını nasıl hareket
+  ettireceğini belirleyen bir modu vardır: `"Skeleton"` (hedefin kendi rest translation'ı, varsayılan),
+  `"Scaled"` (kaynağın hareketi, hips yükseklik oranıyla ölçeklenir; root, hips ve parent'ı olmayan joint'lerin
+  varsayılanı) ya da `"Animation"` (kaynağın translation'ı olduğu gibi).
+
+Sidecar'ın `model.skins` listesi üretilen map'leri düzeltir; N. girdi, modelin `#skin/N` skin'idir.
+
+| Üye | Varsayılan | Anlamı |
+| --- | --- | --- |
+| `generate` | `true` | `false`, üretilen map yerine boş bir map'ten başlar. |
+| `bones` | yok | Joint adından bone adına: bir humanoid bone, 1 ile 64 harf, rakam, `_`, `-` ve `.` içeren özel bir ad ya da joint'i eşlemeden çıkarmak için `""`. |
+| `translation` | yok | Joint adından `"Skeleton"`, `"Scaled"` ya da `"Animation"` değerine. |
+
+`bones`'un bir joint'e verdiği bone, üretimin onu verdiği joint'ten ayrılır. İki joint aynı bone'u alamaz ve bir
+joint bir kez listelenebilir. Chest'i taşıyan, bir yardımcı joint'i eşlemeden çıkaran, özel bir `tail` bone'u
+ekleyen ve iki translation modunu değiştiren eksiksiz bir sidecar (`skins` sürüm 3 ister; sürüm 1 ve 2
+dosyaları yine yüklenir ama onu tutamaz):
+
+```json
+{
+  "format": "illusion.import",
+  "version": 3,
+  "model": {
+    "scale": 0.01,
+    "skins": [
+      {
+        "generate": true,
+        "bones": {"spine_03": "chest", "head_end": "", "tail_01": "tail"},
+        "translation": {"pelvis": "Animation", "prop_socket": "Skeleton"}
+      }
+    ]
+  }
+}
+```
+
+Bir hata, içe aktarmayı sidecar yolu ve değerin JSON pointer'ı ile başarısız kılar; örneğin
+`models/ship.glb.import.json/model/skins/0/bones/tail: the skin 'body' has no joint 'tail'` ya da
+`models/ship.glb.import.json/model/skins/1: the model has 1 skins`.
 
 ## Texture sıkıştırma
 

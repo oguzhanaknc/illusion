@@ -1634,7 +1634,7 @@ game code.
   `humanoid_a` (Mixamo-style `mixamorig:` names, T-pose, 1.8 m, joint axes along the model axes) and
   `humanoid_b` (Blender-style `pelvis`, `thigh.L` names, A-pose, 1.2 m, bones along local +y, a `root` joint
   on the ground, one more spine joint and a twist joint). Four work packages, one PR each:
-- ANIM-5a (`implementer`): Rig maps. `illusion/assets/Rig.hpp` (`generateRigMap()`, `applyRigOverrides()`,
+- ✅ ANIM-5a (`implementer`): Rig maps. `illusion/assets/Rig.hpp` (`generateRigMap()`, `applyRigOverrides()`,
   `isHumanoidBone()`, `isValidBoneName()`, `retargetTranslationName()`), `Skeleton::rig`,
   `AnimationClip::skeleton`, model format 7, import settings version 3 with `skins` (parse, merge, write,
   JSON-path errors), the sidecar as a source of the cooked model. Done: `tests/assets/TestRigMap.cpp`: both
@@ -1642,7 +1642,7 @@ game code.
   that says left on the right side is a warning, deterministic output for any joint order of the file;
   every override error; the round trip of rig and source skin through format 7; a changed sidecar recooks;
   both test rigs added to `tests/data/gltf/generate.py`; no benchmark (load time only).
-- ANIM-5b (`implementer`): Retargeted playback. `illusion/animation/Retarget.hpp` (`matchJoints()`,
+- ✅ ANIM-5b (`implementer`): Retargeted playback. `illusion/animation/Retarget.hpp` (`matchJoints()`,
   `rigHeightRatio()`, `bindRetargetedClip()`, the `sampleClip()` overload, `findRigJoint()`),
   `GraphBinding::clipRetargets` and the `bindGraph()` overload with `ClipSource`, `AnimationWorld` keeping the
   source skin of each clip and binding retargeted clips per (skeleton, clip), every joint name (graph masks and

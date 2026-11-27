@@ -25,9 +25,9 @@ namespace detail
 
 // Bump an importer's version when its output changes for the same input, to invalidate old caches.
 // Version 2 records the import settings sidecar as a dependency; model version 3 thins foliage cards in its
-// levels of detail.
+// levels of detail; model version 4 adds rig maps (with the sidecar's overrides) and source skins of clips.
 inline constexpr std::string_view kImageImporter = "image:2";
-inline constexpr std::string_view kModelImporter = "gltf:3";
+inline constexpr std::string_view kModelImporter = "gltf:4";
 inline constexpr std::string_view kFontImporter = "font:1";
 inline constexpr std::string_view kShaderImporter = "shader:1";
 

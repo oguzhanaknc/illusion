@@ -368,7 +368,7 @@ only those settings:
 ```json
 {
   "format": "illusion.import",
-  "version": 2,
+  "version": 3,
   "texture": {"colorSpace": "linear", "maxSize": 1024}
 }
 ```
@@ -385,6 +385,7 @@ only those settings:
 | | `lodReduction` | `0.5` | Fraction of the previous level's triangles each level aims for (0.1 to 0.9). |
 | | `compressTextures` | `true` | Compress the model's images by their use in its materials. |
 | | `textureQuality` | `"normal"` | Encoder effort for the model's images: `"fast"`, `"normal"` or `"high"`. |
+| | `skins` | none | The [rig map](#rig-maps) corrections per skin (sidecar version 3). |
 | Font (`.ttf`, `.otf`) | `pixelSize` | `48` | Pixels per em in the atlas (16 to 128). |
 | | `spread` | `6` | Distance in atlas pixels that the field covers on each side of an edge (2 to 16). |
 | | `ranges` | Latin | Code points to bake as `[first, last]` pairs, 1 to 64 ranges. |
@@ -394,7 +395,7 @@ A font sidecar:
 ```json
 {
   "format": "illusion.import",
-  "version": 2,
+  "version": 3,
   "font": {"pixelSize": 64, "spread": 8, "ranges": [[32, 126], [160, 383], [1024, 1279]]}
 }
 ```
@@ -404,7 +405,7 @@ A font sidecar:
 - The sidecar is one of the sources of the cache entry: editing, adding or removing it makes the entry
   stale and the next load imports again. Cache entries stay keyed by the settings the caller asked for,
   so a game that ships only the cooked cache finds them without the sidecars.
-- Sidecars are versioned (`"version"`, currently 2; version 1 files still load) and validated: an unknown member, a section of the wrong kind
+- Sidecars are versioned (`"version"`, currently 3; versions 1 and 2 still load) and validated: an unknown member, a section of the wrong kind
   (`"model"` next to a texture), a wrong type or an out-of-range value fails the import with an error
   that names the sidecar and the JSON pointer of the value.
 - `parseImportSettings()`, `mergeImportSettings()` (JSON merge patch: `null` resets a setting or a
@@ -422,6 +423,66 @@ files.writeText(illusion::importSettingsPath("game:/textures/ui.png"), text);
 
 In the editor, `asset.set_import_settings` changes the settings (with undo) and `asset.reimport` imports
 an asset again; see [the editor manual](editor/index.md#import-settings).
+
+### Rig maps
+
+Every skin of a model gets a rig map at import: the humanoid bone name of each joint (`hips`, `leftUpperArm`,
+`rightIndexDistal`, ...), so that a clip authored on one skeleton can play on another with different joint
+names. The map is cooked with the `Skeleton` (`Skeleton::rig`); the cooked model format is 7, so every model
+imports again once. Retargeted playback arrives with ANIM-5b; see
+[Animation](animation.md#source-skins-and-rig-maps).
+
+- **Names first.** Case, separators and prefixes such as `mixamorig:`, `Bip01`, `DEF-` and `ORG-` are
+  ignored, and the side comes from `left`, `l`, `.L`, `_l` and the like. Common aliases map to the bone
+  (`pelvis` is `hips`, `clavicle` is a shoulder, `thigh` is `UpperLeg`, `calf` is `LowerLeg`, `forearm` is
+  `LowerArm`). End, twist, roll, IK and helper joints get no bone. Spine joints between the hips and the
+  neck become `spine`, `chest` and `upperChest` in order.
+- **Topology fallback.** For a required bone that names did not find, the generator looks at the shape of
+  the skeleton: the hips are where two chains go down and one goes up, sides come from x in model space, and
+  the spine, neck, shoulders and toes follow from there. Fingers are mapped by name only: a rig without
+  finger names has no finger bones.
+- **Humanoid.** A rig counts as humanoid when all 15 required bones are mapped: `hips`, `spine`, `head`,
+  both arms (`UpperArm`, `LowerArm`, `Hand`) and both legs (`UpperLeg`, `LowerLeg`, `Foot`). A name that
+  says left on the right side is a warning, and the joint on the left keeps the bone.
+- **Translation modes.** Each joint also has a mode for how retargeted clips move its translation:
+  `"Skeleton"` (the target's own rest translation, the default), `"Scaled"` (the source's motion, scaled by
+  the hips height ratio; the default of the root, the hips and joints without a parent) or `"Animation"` (the
+  source's translation as it is).
+
+The `model.skins` list of the sidecar corrects the generated maps; entry N is the skin `#skin/N` of the
+model.
+
+| Member | Default | Meaning |
+| --- | --- | --- |
+| `generate` | `true` | `false` starts from an empty map instead of the generated one. |
+| `bones` | none | Joint name to bone name: a humanoid bone, a custom name of 1 to 64 letters, digits, `_`, `-` and `.`, or `""` to unmap the joint. |
+| `translation` | none | Joint name to `"Skeleton"`, `"Scaled"` or `"Animation"`. |
+
+A bone that `bones` gives to a joint leaves the joint that generation gave it to. Two joints cannot be given
+the same bone, and a joint can be listed once. A complete sidecar that moves the chest, unmaps a helper
+joint, adds a custom `tail` bone and changes two translation modes (`skins` needs version 3; version 1 and 2
+files still load but cannot hold it):
+
+```json
+{
+  "format": "illusion.import",
+  "version": 3,
+  "model": {
+    "scale": 0.01,
+    "skins": [
+      {
+        "generate": true,
+        "bones": {"spine_03": "chest", "head_end": "", "tail_01": "tail"},
+        "translation": {"pelvis": "Animation", "prop_socket": "Skeleton"}
+      }
+    ]
+  }
+}
+```
+
+A mistake fails the import with the sidecar path and the JSON pointer of the value, for example
+`models/ship.glb.import.json/model/skins/0/bones/tail: the skin 'body' has no joint 'tail'`, or
+`models/ship.glb.import.json/model/skins/1: the model has 1 skins`.
 
 ## Texture compression
 

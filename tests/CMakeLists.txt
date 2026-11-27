@@ -70,6 +70,7 @@ add_executable(illusion_tests
     assets/TestImportSettings.cpp
     assets/TestMaterialAsset.cpp
     assets/TestMeshLods.cpp
+    assets/TestRigMap.cpp
     assets/TestShaderAsset.cpp
     assets/TestShaderCompiler.cpp
     assets/TestShaderLoader.cpp
@@ -84,6 +85,7 @@ add_executable(illusion_tests
     animation/TestAnimationWorld.cpp
     animation/TestInverseKinematics.cpp
     animation/TestPose.cpp
+    animation/TestRetarget.cpp
     animation/TestSpringBones.cpp
     camera/TestCameraAim.cpp
     camera/TestCameraBlend.cpp
