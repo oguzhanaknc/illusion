@@ -12,11 +12,14 @@ The outputs are committed; rerun only when changing the test data.
 - translucent.gltf: the triangle with a leaf material that requires KHR_materials_diffuse_transmission.
 - scene/bad_image_uri.gltf: the quad with a malformed base64 image data URI (must be rejected).
 - rigged.gltf: a skinned strip with two skins and three animations (see rigged_document()).
+- humanoid_a.gltf, humanoid_b.gltf: humanoid rigs that follow the joint naming and proportions of two common
+  CC0 conventions, for rig maps and retargeting (see humanoid_a_joints() and humanoid_b_joints()).
 - textures/checker.png: 2x2 RGBA checker (red, green / blue, white).
 """
 
 import base64
 import json
+import math
 import os
 import struct
 import zlib
@@ -164,6 +167,8 @@ def main():
     write("scene/bad_image_uri.gltf", (json.dumps(doc, indent=2) + "\n").encode())
 
     write("rigged.gltf", (json.dumps(rigged_document(), indent=2) + "\n").encode())
+    write("humanoid_a.gltf", (json.dumps(humanoid_a_document(), indent=2) + "\n").encode())
+    write("humanoid_b.gltf", (json.dumps(humanoid_b_document(), indent=2) + "\n").encode())
 
 
 class BufferBuilder:
@@ -271,6 +276,229 @@ def rigged_document():
         "bufferViews": b.views,
         "accessors": b.accessors,
     }
+
+
+# --- Humanoid rigs ---------------------------------------------------------------------------------------------
+# Quaternions are (x, y, z, w). Joints are given in model space (position, rotation) and written as local TRS.
+
+def quat_axis(axis, degrees):
+    half = math.radians(degrees) / 2
+    s = math.sin(half)
+    return (axis[0] * s, axis[1] * s, axis[2] * s, math.cos(half))
+
+
+def quat_mul(a, b):
+    ax, ay, az, aw = a
+    bx, by, bz, bw = b
+    return (aw * bx + ax * bw + ay * bz - az * by, aw * by - ax * bz + ay * bw + az * bx,
+            aw * bz + ax * by - ay * bx + az * bw, aw * bw - ax * bx - ay * by - az * bz)
+
+
+def quat_conj(q):
+    return (-q[0], -q[1], -q[2], q[3])
+
+
+def quat_rotate(q, v):
+    x, y, z, _ = quat_mul(quat_mul(q, (v[0], v[1], v[2], 0.0)), quat_conj(q))
+    return (x, y, z)
+
+
+def quat_matrix(q):
+    x, y, z, w = q
+    return [[1 - 2 * (y * y + z * z), 2 * (x * y - z * w), 2 * (x * z + y * w)],
+            [2 * (x * y + z * w), 1 - 2 * (x * x + z * z), 2 * (y * z - x * w)],
+            [2 * (x * z - y * w), 2 * (y * z + x * w), 1 - 2 * (x * x + y * y)]]
+
+
+IDENTITY = (0.0, 0.0, 0.0, 1.0)
+
+
+def rounded(values, digits=6):
+    return [round(v, digits) + 0.0 for v in values]
+
+
+def humanoid_a_joints():
+    """Mixamo-style naming ("mixamorig:" prefix, LeftArm / LeftForeArm / LeftUpLeg, fingers 1 to 4 with an end
+    joint), centimetres under an "Armature" node scaled by 0.01, T-pose, 1.8 m tall, hips at 1 m, identity
+    joint rotations."""
+    joints = []
+
+    def add(name, parent, position, rotation=IDENTITY):
+        joints.append(("mixamorig:" + name, None if parent is None else "mixamorig:" + parent, position, rotation))
+
+    add("Hips", None, (0, 100, 0))
+    add("Spine", "Hips", (0, 110, 0))
+    add("Spine1", "Spine", (0, 122, 0))
+    add("Spine2", "Spine1", (0, 135, 0))
+    add("Neck", "Spine2", (0, 150, 0))
+    add("Head", "Neck", (0, 160, 0))
+    add("HeadTop_End", "Head", (0, 178, 0))
+    add("LeftEye", "Head", (3, 166, 8))
+    add("RightEye", "Head", (-3, 166, 8))
+    for side, s in (("Left", 1), ("Right", -1)):
+        add(side + "Shoulder", "Spine2", (6 * s, 145, 0))
+        add(side + "Arm", side + "Shoulder", (18 * s, 145, 0))
+        add(side + "ForeArm", side + "Arm", (46 * s, 145, 0))
+        add(side + "Hand", side + "ForeArm", (72 * s, 145, 0))
+        for finger, dx, dz in (("Thumb", 2, 4), ("Index", 9, 3), ("Middle", 9.5, 1), ("Ring", 9, -1),
+                               ("Pinky", 8, -3)):
+            parent = side + "Hand"
+            for i in range(1, 5):
+                name = f"{side}Hand{finger}{i}"
+                add(name, parent, ((72 + dx + 3 * (i - 1)) * s, 145, dz))
+                parent = name
+        add(side + "UpLeg", "Hips", (9 * s, 95, 0))
+        add(side + "Leg", side + "UpLeg", (9 * s, 52, 0))
+        add(side + "Foot", side + "Leg", (9 * s, 10, 0))
+        add(side + "ToeBase", side + "Foot", (9 * s, 4, 12))
+        add(side + "Toe_End", side + "ToeBase", (9 * s, 4, 20))
+    return joints
+
+
+def humanoid_b_joints():
+    """Unreal-mannequin-style naming as in CC0 animation libraries (root, pelvis, spine_01 to spine_03,
+    clavicle_l, upperarm_l with a twist joint, thigh_l / calf_l / ball_l, fingers _01 to _03), metres,
+    A-pose (arms 45 degrees down), 1.3 m tall, hips at 0.8 m, joint +x along the bone."""
+    joints = []
+
+    def add(name, parent, position, rotation):
+        joints.append((name, parent, position, rotation))
+
+    up = quat_axis((0, 0, 1), 90)
+    down = quat_axis((0, 0, 1), -90)
+    add("root", None, (0, 0, 0), IDENTITY)
+    add("pelvis", "root", (0, 0.8, 0), up)
+    add("spine_01", "pelvis", (0, 0.88, 0), up)
+    add("spine_02", "spine_01", (0, 0.98, 0), up)
+    add("spine_03", "spine_02", (0, 1.08, 0), up)
+    add("neck_01", "spine_03", (0, 1.18, 0), up)
+    add("head", "neck_01", (0, 1.26, 0), up)
+    c = math.sqrt(0.5)
+    for side, s in (("l", 1), ("r", -1)):
+        along = (c * s, -c, 0)
+        arm = quat_axis((0, 0, 1), -45 if s > 0 else 225)
+
+        def at(base, distance):
+            return (base[0] + along[0] * distance, base[1] + along[1] * distance, base[2])
+
+        shoulder = (0.04 * s, 1.14, 0)
+        upper = (0.14 * s, 1.14, 0)
+        lower = at(upper, 0.22)
+        hand = at(lower, 0.2)
+        add("clavicle_" + side, "spine_03", shoulder, IDENTITY if s > 0 else quat_axis((0, 0, 1), 180))
+        add("upperarm_" + side, "clavicle_" + side, upper, arm)
+        add("upperarm_twist_01_" + side, "upperarm_" + side, at(upper, 0.11), arm)
+        add("lowerarm_" + side, "upperarm_" + side, lower, arm)
+        add("hand_" + side, "lowerarm_" + side, hand, arm)
+        for finger, start, dz in (("thumb", 0.03, 0.03), ("index", 0.08, 0.02), ("middle", 0.085, 0.005),
+                                  ("ring", 0.08, -0.01), ("pinky", 0.07, -0.025)):
+            parent = "hand_" + side
+            for i in range(1, 4):
+                base = at(hand, start + 0.025 * (i - 1))
+                name = f"{finger}_{i:02d}_{side}"
+                add(name, parent, (base[0], base[1], dz), arm)
+                parent = name
+        add("thigh_" + side, "pelvis", (0.09 * s, 0.76, 0), down)
+        add("calf_" + side, "thigh_" + side, (0.09 * s, 0.41, 0), down)
+        add("foot_" + side, "calf_" + side, (0.09 * s, 0.07, 0), down)
+        add("ball_" + side, "foot_" + side, (0.09 * s, 0.02, 0.11), quat_axis((0, 1, 0), -90))
+    return joints
+
+
+def humanoid_document(joints, armature_scale, hips, clip_name, clip_channels):
+    """A rig of `joints` (name, parent, model position, model rotation) under an "Armature" node scaled by
+    `armature_scale`, a triangle skinned to `hips`, and one animation `clip_name` whose channels are
+    (joint, path, times, values)."""
+    b = BufferBuilder()
+    index = {name: i for i, (name, _, _, _) in enumerate(joints)}
+    by_name = {name: (parent, position, rotation) for name, parent, position, rotation in joints}
+
+    nodes = [{"name": "Armature", "scale": [armature_scale] * 3, "children": []}]
+    for name, parent, position, rotation in joints:
+        node = {"name": name}
+        if parent is None:
+            translation, local = position, rotation
+            nodes[0]["children"].append(index[name] + 1)
+        else:
+            _, parent_position, parent_rotation = by_name[parent]
+            inverse = quat_conj(parent_rotation)
+            offset = tuple(position[k] - parent_position[k] for k in range(3))
+            translation, local = quat_rotate(inverse, offset), quat_mul(inverse, rotation)
+        if any(abs(v) > 1e-9 for v in translation):
+            node["translation"] = rounded(translation)
+        if any(abs(v - w) > 1e-9 for v, w in zip(local, IDENTITY)):
+            node["rotation"] = rounded(local)
+        nodes.append(node)
+    for name, parent, _, _ in joints:
+        if parent is not None:
+            nodes[index[parent] + 1].setdefault("children", []).append(index[name] + 1)
+
+    # Inverse binds: inverse(Armature scale * T(position) * R(rotation)) = R^T * T(-position) * S^-1.
+    inverse_binds = []
+    for _, _, position, rotation in joints:
+        r = quat_matrix(rotation)
+        rt = [[r[col][row] for col in range(3)] for row in range(3)]
+        t = [-sum(rt[row][k] * position[k] for k in range(3)) for row in range(3)]
+        columns = []
+        for col in range(3):
+            columns += [rt[row][col] / armature_scale for row in range(3)] + [0.0]
+        columns += t + [1.0]
+        inverse_binds.append(tuple(columns))
+
+    _, hips_position, _ = by_name[hips]
+    x, y, z = (v * armature_scale for v in hips_position)
+    position = b.add("3f", [(x - 0.1, y, z), (x + 0.1, y, z), (x, y + 0.1, z)], 5126, "VEC3", minmax=True)
+    joint = b.add("4B", [(index[hips], 0, 0, 0)] * 3, 5121, "VEC4")
+    weight = b.add("4f", [(1, 0, 0, 0)] * 3, 5126, "VEC4")
+    inverse_bind = b.add("16f", inverse_binds, 5126, "MAT4")
+
+    samplers, channels = [], []
+    for joint_name, path, times, values in clip_channels:
+        fmt, accessor_type = ("4f", "VEC4") if path == "rotation" else ("3f", "VEC3")
+        samplers.append({"input": b.add("f", times, 5126, "SCALAR", minmax=True),
+                         "output": b.add(fmt, values, 5126, accessor_type), "interpolation": "LINEAR"})
+        channels.append({"sampler": len(samplers) - 1, "target": {"node": index[joint_name] + 1, "path": path}})
+
+    body = len(nodes)
+    nodes.append({"name": "body", "mesh": 0, "skin": 0})
+    return {
+        "asset": {"version": "2.0", "generator": "illusion tests"},
+        "scene": 0,
+        "scenes": [{"nodes": [0, body]}],
+        "nodes": nodes,
+        "meshes": [{"name": "body", "primitives": [{"attributes": {"POSITION": position, "JOINTS_0": joint,
+                                                                   "WEIGHTS_0": weight}}]}],
+        "skins": [{"name": "body", "joints": list(range(1, len(joints) + 1)), "inverseBindMatrices": inverse_bind}],
+        "animations": [{"name": clip_name, "samplers": samplers, "channels": channels}],
+        "buffers": [{"uri": "data:application/octet-stream;base64," + base64.b64encode(b.data).decode(),
+                     "byteLength": len(b.data)}],
+        "bufferViews": b.views,
+        "accessors": b.accessors,
+    }
+
+
+def humanoid_a_document():
+    """humanoid_a.gltf: the rig of humanoid_a_joints() with a "walk" clip (hips forward 1 m in a second, legs
+    swinging 25 degrees about x)."""
+    forward = quat_axis((1, 0, 0), 25)
+    back = quat_axis((1, 0, 0), -25)
+    walk = [
+        ("mixamorig:Hips", "translation", [0, 0.5, 1], [(0, 100, 0), (0, 98, 50), (0, 100, 100)]),
+        ("mixamorig:LeftUpLeg", "rotation", [0, 0.5, 1], [forward, back, forward]),
+        ("mixamorig:RightUpLeg", "rotation", [0, 0.5, 1], [back, forward, back]),
+    ]
+    return humanoid_document(humanoid_a_joints(), 0.01, "mixamorig:Hips", "walk", walk)
+
+
+def humanoid_b_document():
+    """humanoid_b.gltf: the rig of humanoid_b_joints() with a "wave" clip (the right upper arm raised 30
+    degrees about z)."""
+    joints = humanoid_b_joints()
+    rotations = {name: rotation for name, _, _, rotation in joints}
+    rest = quat_mul(quat_conj(rotations["clavicle_r"]), rotations["upperarm_r"])
+    raised = quat_mul(rest, quat_axis((0, 0, 1), -30))
+    wave = [("upperarm_r", "rotation", [0, 1], [rest, raised])]
+    return humanoid_document(joints, 1.0, "pelvis", "wave", wave)
 
 
 if __name__ == "__main__":

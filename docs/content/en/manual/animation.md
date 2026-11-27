@@ -815,6 +815,14 @@ renderer->render(commands, target, world, view, &jobs);
   `RenderStats::skinnedInstances` and `skinnedVertices` count the work of the last frame,
   `RenderGpuTimings::skinning` its GPU time.
 
+## Source skins and rig maps
+
+Each clip records its source skin: `AnimationClip::skeleton` is the index of the skin of its model whose joint
+names its channels hit most (the lowest index on ties), or -1. Each skin carries a rig map, the bone name of
+every joint, generated at import and corrected by the model's sidecar (see [rig maps](assets.md#rig-maps)).
+Playback still uses joint names, as above; playing a clip on a skeleton with other joint names through these
+rig maps (retargeting) arrives with ANIM-5b.
+
 ## Not supported yet
 
 - Interrupting a running transition, sub-state machines and saving the live state of a graph.

@@ -128,6 +128,8 @@ version changes are in the contributor guide ("Versions and releases"). The vers
 
 ### Changed
 
+- The cooked model format is 7 (a rig map per skin and the source skin of each clip) and the import settings
+  sidecar is version 3 (`model.skins`): every model imports again once (ANIM-5a).
 - The module API version is 13 (`CameraService` was added; version 12 added `AiService`, version 11 added `NavService`, version 10 added `AnimationService::setRagdoll()`,
   version 9 `setLookAtTarget()`, `setIkTarget()` and `setIkWeight()`, version 8 `jointTransform()`, version 7
   `AnimationService`, version 6 `UiService`, `SceneService::requestExit()` and `SaveService`, and `UiService`

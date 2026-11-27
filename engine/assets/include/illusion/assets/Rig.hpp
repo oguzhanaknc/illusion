@@ -116,6 +116,9 @@ struct RigMap
     [[nodiscard]] i32 find(std::string_view bone) const noexcept;
     /// True when no joint has a bone.
     [[nodiscard]] bool empty() const noexcept;
+
+    /// Compares both lists.
+    friend bool operator==(const RigMap&, const RigMap&) = default;
 };
 
 /// Gives the joint @p joint the bone @p bone in an import settings sidecar (empty unmaps it).
@@ -171,8 +174,9 @@ struct RigMapReport
 /// Deterministic; allocates.
 [[nodiscard]] RigMap generateRigMap(const Skeleton& skeleton, RigMapReport* report = nullptr);
 
-/// Applies the overrides of @p settings to @p rig: fails, changing nothing, for a joint the skeleton lacks,
-/// an invalid bone name, or a bone given to two joints. Allocates.
+/// Applies the overrides of @p settings to @p rig: a bone an override gives moves away from the joint
+/// generation gave it to; fails, changing nothing, for a joint the skeleton lacks, an invalid bone name, a
+/// joint listed twice, or a bone given to two overrides. Allocates.
 [[nodiscard]] Expected<void, std::string> applyRigOverrides(RigMap& rig, const Skeleton& skeleton,
                                                             const SkinImportSettings& settings);
 

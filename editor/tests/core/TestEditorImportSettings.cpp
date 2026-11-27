@@ -153,7 +153,7 @@ TEST_CASE("asset.set_import_settings sets texture compression and the texture se
     CHECK(set.root().pointer("/value/texture/compression").asString() == "bc5");
     CHECK(set.root().pointer("/value/texture/quality").asString() == "high");
     const std::string text = read(editor, kSidecar);
-    CHECK(text.find("\"version\": 2") != std::string::npos);
+    CHECK(text.find("\"version\": 3") != std::string::npos);
     CHECK(text.find("\"compression\": \"bc5\"") != std::string::npos);
     JsonDocument info = ok(editor, "asset.info", R"({"path":"assets:/textures/red.png"})");
     CHECK(info.root().pointer("/importSettings/texture/compression").asString() == "bc5");

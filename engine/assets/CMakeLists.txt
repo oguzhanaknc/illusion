@@ -18,6 +18,7 @@ add_library(illusion_assets STATIC
     src/ImportSettings.cpp
     src/MaterialAsset.cpp
     src/Mesh.cpp
+    src/Rig.cpp
     src/ShaderAsset.cpp
     src/ShaderCompiler.cpp
     src/TextureCompression.cpp
