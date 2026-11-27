@@ -10,6 +10,10 @@ version changes are in the contributor guide ("Versions and releases"). The vers
 
 ### Added
 
+- Decal shaders (DECAL-1): `[Decal("...")]` marks a material shader that writes the decal channels
+  `BaseColor`, `Normal`, `ORM` and `Emission`; `ShaderCompiler` compiles it into the passes `decal` and
+  `decalEmission`, `Decal.slang` provides the decal helpers and `builtin:/shader/decal` is the standard decal.
+  The cooked shader format is now version 2, so shader caches are cooked again.
 - Foundation (M0): CMake presets, pinned dependencies, CI on Windows, Linux and macOS, the core library,
   memory allocators, the Job System, the archetype ECS, Tracy profiling, benchmarks with budgets and the
   English/Turkish documentation site.

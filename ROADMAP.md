@@ -1699,7 +1699,7 @@ Correct indirect light indoors and in shadow until ray tracing (M10) is availabl
   written by the prepass and a material opt-out; a fixed-capacity `DecalPool` behind `DecalService` for decals
   spawned by game code). DECAL-2 needs MAT-4's `.material` `shader` and `parameters`. Four work packages, one PR
   each:
-- DECAL-1 (`implementer`): Decal shaders. The `[Decal(...)]` attribute read from the reflection,
+- ✅ DECAL-1 (`implementer`): Decal shaders. The `[Decal(...)]` attribute read from the reflection,
   `DecalChannels` with `decalChannelsName()`/`parseDecalChannels()`, `ShaderAsset::decalChannels`,
   `ShaderPass::Decal` and `ShaderPass::DecalEmission` (`kShaderPassCount` 8, the cooked shader format version
   raised), `illusion/DecalPass.slang` (box vertex shader from `SV_VertexID`, depth reconstruction, the box,

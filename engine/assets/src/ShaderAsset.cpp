@@ -11,11 +11,16 @@ namespace
 {
 
 constexpr u32 kMagic = 0x44485349; // "ISHD"
-constexpr u32 kVersion = 1;
+// Version 2 added the decal channels (ADR 0066); version 1 shaders read as surface shaders.
+constexpr u32 kVersion = 2;
+constexpr u32 kSurfaceOnlyVersion = 1;
 constexpr u32 kMaxNameBytes = 256;
 
 constexpr std::array<std::string_view, 5> kShadingModelNames = {"Default", "Unlit", "Subsurface",
                                                                 "TwoSidedFoliage", "ClearCoat"};
+
+// In flag order: bit i is kDecalChannelNames[i].
+constexpr std::array<std::string_view, 4> kDecalChannelNames = {"BaseColor", "Normal", "ORM", "Emission"};
 
 template <class Enum>
 bool readEnum(BinaryReader& reader, Enum& out, u8 count) noexcept
@@ -70,10 +75,59 @@ std::optional<ShadingModel> parseShadingModel(std::string_view name) noexcept
     return std::nullopt;
 }
 
+std::string decalChannelsName(DecalChannels channels)
+{
+    std::string names;
+    for (usize i = 0; i < kDecalChannelNames.size(); ++i)
+    {
+        if (hasDecalChannel(channels, static_cast<DecalChannels>(1u << i)))
+        {
+            names += names.empty() ? "" : " ";
+            names += kDecalChannelNames[i];
+        }
+    }
+    return names;
+}
+
+std::optional<DecalChannels> parseDecalChannels(std::string_view names) noexcept
+{
+    DecalChannels channels = DecalChannels::None;
+    usize at = 0;
+    while (at < names.size())
+    {
+        if (names[at] == ' ')
+        {
+            ++at;
+            continue;
+        }
+        const usize end = std::min(names.find(' ', at), names.size());
+        const std::string_view name = names.substr(at, end - at);
+        at = end;
+        const auto found = std::find(kDecalChannelNames.begin(), kDecalChannelNames.end(), name);
+        if (found == kDecalChannelNames.end())
+        {
+            return std::nullopt;
+        }
+        const auto channel =
+            static_cast<DecalChannels>(1u << static_cast<u32>(found - kDecalChannelNames.begin()));
+        if (hasDecalChannel(channels, channel))
+        {
+            return std::nullopt;
+        }
+        channels = channels | channel;
+    }
+    if (channels == DecalChannels::None)
+    {
+        return std::nullopt;
+    }
+    return channels;
+}
+
 std::string_view shaderPassName(ShaderPass pass) noexcept
 {
     constexpr std::array<std::string_view, kShaderPassCount> kNames = {
-        "forward", "forwardBindless", "depthPrepass", "shadowCaster", "motionVectors", "entityIds"};
+        "forward",       "forwardBindless", "depthPrepass", "shadowCaster",
+        "motionVectors", "entityIds",       "decal",        "decalEmission"};
     return kNames[static_cast<usize>(pass)];
 }
 
@@ -173,6 +227,7 @@ std::vector<std::byte> serializeShader(const ShaderAsset& shader)
     writer.write(kVersion);
     writer.writeString(shader.source);
     writer.write(static_cast<u8>(shader.shadingModel));
+    writer.write(static_cast<u8>(shader.decalChannels));
     writer.write(static_cast<u8>(shader.worldOffset ? 1 : 0));
     writer.write(shader.parameterBytes);
     writer.write(shader.libraryHash);
@@ -214,25 +269,34 @@ std::optional<ShaderAsset> deserializeShader(std::span<const std::byte> bytes)
     BinaryReader reader(bytes);
     u32 magic = 0;
     u32 version = 0;
-    if (!reader.read(magic) || magic != kMagic || !reader.read(version) || version != kVersion)
+    if (!reader.read(magic) || magic != kMagic || !reader.read(version) ||
+        (version != kVersion && version != kSurfaceOnlyVersion))
     {
         return std::nullopt;
     }
     ShaderAsset shader;
+    u8 decalChannels = 0;
     u8 worldOffset = 0;
     reader.readString(shader.source);
     readEnum(reader, shader.shadingModel, static_cast<u8>(kShadingModelNames.size()));
+    if (version != kSurfaceOnlyVersion)
+    {
+        reader.read(decalChannels);
+    }
     reader.read(worldOffset);
     reader.read(shader.parameterBytes);
     reader.read(shader.libraryHash);
     reader.readString(shader.compilerVersion);
     u32 parameterCount = 0;
     reader.read(parameterCount);
-    if (!reader.ok() || worldOffset > 1 || shader.parameterBytes > kMaxShaderParameterBytes ||
-        parameterCount > kMaxShaderParameterBytes / 4)
+    const bool decal = decalChannels != 0;
+    if (!reader.ok() || worldOffset > 1 || decalChannels > static_cast<u8>(kAllDecalChannels) ||
+        (decal && (worldOffset != 0 || shader.shadingModel != ShadingModel::Default)) ||
+        shader.parameterBytes > kMaxShaderParameterBytes || parameterCount > kMaxShaderParameterBytes / 4)
     {
         return std::nullopt;
     }
+    shader.decalChannels = static_cast<DecalChannels>(decalChannels);
     shader.worldOffset = worldOffset != 0;
     shader.parameters.resize(parameterCount);
     for (ShaderParameter& parameter : shader.parameters)
@@ -292,7 +356,7 @@ std::optional<ShaderAsset> deserializeShader(std::span<const std::byte> bytes)
         readEnum(reader, variant.alphaMode, 3);
         reader.readVector(variant.spirv);
         if (!reader.ok() || variant.spirv.empty() || variant.spirv.size() % 4 != 0 ||
-            !shaderVariantExists(variant.pass, variant.alphaMode) ||
+            !shaderVariantExists(variant.pass, variant.alphaMode, shader.decalChannels) ||
             (i > 0 && variantOrder(variant) <= variantOrder(shader.variants[i - 1])))
         {
             return std::nullopt;

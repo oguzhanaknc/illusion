@@ -276,6 +276,32 @@ resources.releaseShader(glow); // its materials draw with the standard shader fr
 - Meshes keep glTF vertex colours (`COLOR_0`, `MeshData::colors`) for `SurfaceInput.color`; meshes without
   them read white. `SurfaceInput.customData` is zero for now.
 
+### Decal shader
+
+`builtin:/shader/decal` is the standard [decal shader](assets.md#decal-shaders) (ADR 0066). It writes all four
+channels from one frame of an atlas.
+
+| Field | Default | Meaning |
+| --- | --- | --- |
+| `baseColorFactor` | white | Multiplies the base colour texture, the decal's colour and, in alpha, the opacity. |
+| `emissiveFactor` | black | Multiplies the emissive texture. |
+| `normalScale` | 1 | Strength of the normal map. |
+| `occlusionStrength` | 1 | How much the occlusion in the red channel of `ormTexture` counts (0 to 1). |
+| `roughnessFactor` | 1 | Multiplies the roughness in the green channel of `ormTexture` (0 to 1). |
+| `metallicFactor` | 0 | Multiplies the metallic in the blue channel of `ormTexture` (0 to 1). |
+| `atlasColumns`, `atlasRows` | 1 | Frames of the atlas (1 to 16 each). |
+| `baseColorTexture` | white | Base colour; alpha is the opacity. |
+| `normalTexture` | flat normal | Tangent-space normal map. |
+| `ormTexture` | white | Occlusion, roughness and metallic. |
+| `emissiveTexture` | white | Emission. |
+
+The decal's `variant` picks the atlas frame, numbered row by row from the top left (a 2 by 2 atlas of bullet
+holes is `atlasColumns` 2, `atlasRows` 2 and the variants 0 to 3). `metallicFactor` defaults to 0, so a decal
+does not make a surface metallic unless the Material says so.
+
+The decal passes (`decal` and `decalEmission`) belong to the decal renderer of DECAL-2; until then no pass
+draws a decal shader.
+
 ### Shading models
 
 The `[ShadingModel("...")]` attribute of a shader's `Parameters` picks how the lighting treats its surface. The

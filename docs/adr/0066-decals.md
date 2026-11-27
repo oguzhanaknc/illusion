@@ -109,7 +109,7 @@ receivers (Consequences).
   the jittered inverse view-projection the forward pass uses, moves it into the box (discard outside
   [-1/2, 1/2] on each axis), discards when its receiver mask and the decal's `receiverLayers` share no bit,
   reconstructs the normal from the depth of the four neighbours (on each axis the side with the smaller depth
-  difference, so silhouettes do not bend it), and weights the output by `opacity`, the angle fade (1 up to
+  difference, so silhouettes do not bend it), and weights the output by `opacity`, the record's opacity (`Decal::opacity`), its fade weight, the angle fade (1 up to
   `angleFadeStart` between the receiver normal and the box's +z axis, 0 from `angleFadeEnd`), the depth fade
   (to 0 over the last `depthFade` of the half depth towards the ±z faces) and the distance fade (over the last
   10 % of `drawDistance`).

@@ -58,7 +58,7 @@ inline constexpr u32 kEnvironmentFormatVersion = 2;
 /// @copydoc kImageFormatVersion
 inline constexpr u32 kFontFormatVersion = 1;
 /// @copydoc kImageFormatVersion
-inline constexpr u32 kShaderFormatVersion = 1;
+inline constexpr u32 kShaderFormatVersion = 2;
 
 /// Encodes @p file: magic, container version, type, version, dependencies, payload size and checksum,
 /// payload.

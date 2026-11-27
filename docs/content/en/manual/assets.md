@@ -286,10 +286,59 @@ A parameter without an attribute defaults to zero. A field has at most one defau
 The compiler builds one SPIR-V module per pass and alpha mode: the passes `forward`, `forwardBindless`,
 `depthPrepass`, `shadowCaster`, `motionVectors` and `entityIds`, each for `opaque` and `mask` materials, and
 for `blend` materials only `forward`, `forwardBindless` and `entityIds`. That makes 15 variants for every
-shader. Cooking (`cookAssets()` with a `ShaderCompiler`, or [`illusion_pack`](#shipping-cooked-assets)) writes
+surface shader; [decal shaders](#decal-shaders) get the variants `decal` and `decalEmission` instead. Cooking (`cookAssets()` with a `ShaderCompiler`, or [`illusion_pack`](#shipping-cooked-assets)) writes
 the cooked shader to the import cache. The cache entry (`shader:1`) is valid while the hash of the source, the
 hash of the engine's shader library and the version of `slangc` stored in the file match; any change compiles
-the shader again. A shader that does not compile is not cached.
+the shader again. A shader that does not compile is not cached. The cooked shader format is version 2 (it
+stores the decal channels); caches written by older versions are cooked again.
+
+#### Decal shaders
+
+A decal shader is a material shader for decals (ADR 0066) that changes the
+surface it lands on. Put `[Decal("...")]` on `Parameters` and list the channels the shader writes, separated by
+spaces: `BaseColor`, `Normal`, `ORM` (occlusion, roughness and metallic together) and `Emission`.
+
+```slang
+[Decal("BaseColor Normal ORM Emission")]
+struct Parameters
+{
+    [Color(1, 0.5, 0.25, 1)] float4 tint;
+    [Default(4)] [Range(1, 8)] int columns;
+    [Texture("white", "color")] Texture2DSlot albedo;
+    [Texture("normal", "normal")] Texture2DSlot bumps;
+};
+
+SurfaceOutput surface(SurfaceInput input)
+{
+    const Parameters p = parameters(input);
+    const float2 uv = decalAtlasUv(input.uv, decalVariant(input), uint(p.columns), 2u);
+    const float4 texel = sampleTexture(input, p.albedo, uv);
+    SurfaceOutput output = defaultSurface();
+    output.baseColor = texel.rgb * p.tint.rgb * input.color.rgb;
+    output.normal = unpackNormal(sampleTexture(input, p.bumps, uv * 2.0), 1.0);
+    output.roughness = 0.2 + 0.6 * valueNoise(input.worldPosition * 4.0);
+    output.emission = p.tint.rgb * (1.0 - decalLife(input)) * step(decalAge(input), 2.0);
+    output.opacity = texel.a * p.tint.a;
+    return output;
+}
+```
+
+- The list has at least one channel and names no channel twice; otherwise the compiler reports an error at the
+  attribute.
+- A decal shader has no `[ShadingModel]` (the decal passes do not light anything) and no `worldOffset()`; both
+  are errors.
+- `illusion/Decal.slang` is included automatically. `decalAge(input)` is the seconds since the decal was
+  spawned, `decalLife(input)` how far it is through its lifetime (0 to 1) and `decalVariant(input)` its
+  variant. `decalAtlasUv(uv, frame, columns, rows)` moves a UV into one frame of an atlas.
+- In `surface()`, `input.uv` is the decal box's x and y mapped to 0 to 1, `input.worldPosition` and
+  `input.normal` are the receiving surface's, and `input.color` is the decal's colour. Of `SurfaceOutput` a
+  decal uses `baseColor`, `normal` (in tangent space), `occlusion`, `roughness`, `metallic` and `emission`,
+  each weighted by `opacity`; the other fields are ignored.
+- A decal shader compiles into at most two variants instead of the 15 of a surface shader: `decal` when it
+  writes `BaseColor`, `Normal` or `ORM`, and `decalEmission` when it writes `Emission`. Both are keyed as
+  `blend`.
+- The standard decal, `builtin:/shader/decal`, is described in the
+  [rendering manual](rendering.md#decal-shader).
 
 #### Errors
 
@@ -307,7 +356,8 @@ does not fit its type, too many bytes or textures) name the field they are about
 
 - `#include` in a `.shader` file is not supported.
 - `SurfaceInput.color` is the mesh's vertex colour (glTF `COLOR_0`), white without one;
-  `SurfaceInput.customData` is zero for now.
+  `SurfaceInput.customData` is zero for now (decal shaders read it through `decalAge()` and the other
+  helpers of [Decal shaders](#decal-shaders)).
 - `.material` files do not name shaders yet (MAT-4); code gives shaders to Materials through
   `RenderResources` (see [Material shaders](rendering.md#material-shaders) in the rendering manual). The
   reference of the surface API comes with MAT-4; until then the header comment of `illusion/Surface.slang`

@@ -292,11 +292,60 @@ Attribute'suz bir parametrenin varsayılanı sıfırdır. Bir alanın en fazla b
 Derleyici her Render Pass ve alpha modu için bir SPIR-V modülü üretir: `forward`, `forwardBindless`,
 `depthPrepass`, `shadowCaster`, `motionVectors` ve `entityIds` Render Pass'lerinin her biri `opaque` ve `mask`
 Material'ler için; `blend` Material'ler için yalnızca `forward`, `forwardBindless` ve `entityIds`. Bu, her
-shader için 15 variant eder. Cook (`ShaderCompiler` ile `cookAssets()` veya
+surface shader için 15 variant eder; [decal shader'ları](#decal-shaders) bunun yerine `decal` ve
+`decalEmission` variant'larını alır. Cook (`ShaderCompiler` ile `cookAssets()` veya
 [`illusion_pack`](#hazrlanms-assetleri-dagtma)) cook edilmiş shader'ı import önbelleğine yazar. Önbellek
 girdisi (`shader:1`), dosyada saklanan kaynak hash'i, motorun shader kütüphanesinin hash'i ve `slangc` sürümü
 eşleştiği sürece geçerlidir; herhangi biri değişirse shader yeniden derlenir. Derlenmeyen shader önbelleğe
-yazılmaz.
+yazılmaz. Cook edilmiş shader biçimi 2. sürümdür (decal kanallarını saklar); eski sürümlerin yazdığı
+önbellekler yeniden cook edilir.
+
+#### Decal shaders
+
+Decal shader'ı, indiği yüzeyi değiştiren decal'ler (ADR 0066) için bir material shader'dır. `Parameters`
+üzerine `[Decal("...")]` koyun ve shader'ın yazdığı kanalları boşlukla ayırarak sıralayın: `BaseColor`,
+`Normal`, `ORM` (occlusion, roughness ve metallic birlikte) ve `Emission`.
+
+```slang
+[Decal("BaseColor Normal ORM Emission")]
+struct Parameters
+{
+    [Color(1, 0.5, 0.25, 1)] float4 tint;
+    [Default(4)] [Range(1, 8)] int columns;
+    [Texture("white", "color")] Texture2DSlot albedo;
+    [Texture("normal", "normal")] Texture2DSlot bumps;
+};
+
+SurfaceOutput surface(SurfaceInput input)
+{
+    const Parameters p = parameters(input);
+    const float2 uv = decalAtlasUv(input.uv, decalVariant(input), uint(p.columns), 2u);
+    const float4 texel = sampleTexture(input, p.albedo, uv);
+    SurfaceOutput output = defaultSurface();
+    output.baseColor = texel.rgb * p.tint.rgb * input.color.rgb;
+    output.normal = unpackNormal(sampleTexture(input, p.bumps, uv * 2.0), 1.0);
+    output.roughness = 0.2 + 0.6 * valueNoise(input.worldPosition * 4.0);
+    output.emission = p.tint.rgb * (1.0 - decalLife(input)) * step(decalAge(input), 2.0);
+    output.opacity = texel.a * p.tint.a;
+    return output;
+}
+```
+
+- Listede en az bir kanal bulunur ve hiçbir kanal iki kez yazılmaz; aksi halde derleyici attribute'ta bir hata
+  bildirir.
+- Decal shader'ında `[ShadingModel]` (decal Render Pass'leri bir şeyi aydınlatmaz) ve `worldOffset()` bulunmaz;
+  ikisi de hatadır.
+- `illusion/Decal.slang` otomatik olarak dahil edilir. `decalAge(input)` decal'in doğuşundan beri geçen
+  saniyedir, `decalLife(input)` ömrünün ne kadarının geçtiğidir (0 ile 1) ve `decalVariant(input)` variant'ıdır.
+  `decalAtlasUv(uv, frame, columns, rows)` bir UV'yi bir atlas karesine taşır.
+- `surface()` içinde `input.uv`, decal kutusunun x ve y değerlerinin 0 ile 1 arasına eşlenmiş halidir,
+  `input.worldPosition` ve `input.normal` alıcı yüzeyin değerleridir, `input.color` decal'in rengidir.
+  `SurfaceOutput` içinden decal `baseColor`, `normal` (tangent space'te), `occlusion`, `roughness`, `metallic` ve
+  `emission` alanlarını kullanır, her biri `opacity` ile ağırlıklanır; diğer alanlar yok sayılır.
+- Bir decal shader'ı, surface shader'ının 15 variant'ı yerine en fazla iki variant'a derlenir: `BaseColor`,
+  `Normal` veya `ORM` yazıyorsa `decal`, `Emission` yazıyorsa `decalEmission`. İkisi de `blend` anahtarıyla
+  tutulur.
+- Standart decal olan `builtin:/shader/decal`, [rendering kılavuzunda](rendering.md#decal-shader) anlatılır.
 
 #### Hatalar
 
@@ -314,7 +363,8 @@ varsayılan, çok fazla bayt veya Texture) ilgili alanı aynı biçimde adlandı
 
 - Bir `.shader` dosyasında `#include` desteklenmez.
 - `SurfaceInput.color`, Mesh'in vertex rengidir (glTF `COLOR_0`); vertex rengi yoksa beyazdır.
-  `SurfaceInput.customData` şimdilik sıfırdır.
+  `SurfaceInput.customData` şimdilik sıfırdır (decal shader'ları onu `decalAge()` ve diğer
+  [Decal shaders](#decal-shaders) yardımcılarıyla okur).
 - `.material` dosyaları henüz shader adlandırmaz (MAT-4); kod, shader'ları Material'lere `RenderResources`
   üzerinden verir (rendering kılavuzundaki [Material shader'ları](rendering.md#material-shaders) bölümüne
   bakın). Surface API'sinin başvuru belgesi MAT-4 ile gelir; o zamana kadar `illusion/Surface.slang` başlık

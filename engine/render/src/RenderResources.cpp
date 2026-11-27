@@ -930,7 +930,7 @@ struct RenderResources::Impl
             for (const AlphaMode mode : {AlphaMode::Opaque, AlphaMode::Mask, AlphaMode::Blend})
             {
                 const auto shaderPass = static_cast<ShaderPass>(pass);
-                if (!shaderVariantExists(shaderPass, mode))
+                if (!shaderVariantExists(shaderPass, mode, asset.decalChannels))
                 {
                     continue;
                 }
@@ -962,6 +962,7 @@ struct RenderResources::Impl
         }
         gpu.layout.source = asset.source;
         gpu.layout.shadingModel = asset.shadingModel;
+        gpu.layout.decalChannels = asset.decalChannels;
         gpu.layout.worldOffset = asset.worldOffset;
         gpu.layout.parameterBytes = asset.parameterBytes;
         gpu.layout.parameters = asset.parameters;

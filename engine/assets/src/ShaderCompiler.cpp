@@ -23,6 +23,8 @@ namespace
 constexpr std::string_view kSurfaceFile = "illusion/Surface.slang";
 constexpr std::string_view kInterfaceFile = "illusion/MaterialInterface.slang";
 constexpr std::string_view kPassFile = "illusion/MaterialPass.slang";
+constexpr std::string_view kDecalFile = "illusion/Decal.slang";
+constexpr std::string_view kDecalPassFile = "illusion/DecalPass.slang";
 constexpr std::string_view kInterfaceEntry = "illusionInterface";
 constexpr std::string_view kParametersName = "illusionParameters";
 constexpr u32 kMaxDefaultProcesses = 8;
@@ -187,6 +189,31 @@ usize findWord(std::string_view text, std::string_view word, usize from) noexcep
     return std::string_view::npos;
 }
 
+// True if the identifier at @p offset of @p text opens an attribute: `[` before it, spaces aside.
+bool attributeAt(std::string_view text, usize offset) noexcept
+{
+    while (offset > 0 && (text[offset - 1] == ' ' || text[offset - 1] == '\t'))
+    {
+        --offset;
+    }
+    return offset > 0 && text[offset - 1] == '[';
+}
+
+// True if @p source writes a `[Decal(...)]` attribute, so that it is compiled with the decal helpers
+// (illusion/Decal.slang). The reflection decides whether it is a decal shader.
+bool declaresDecal(std::string_view source) noexcept
+{
+    for (usize at = findWord(source, "Decal", 0); at != std::string_view::npos;
+         at = findWord(source, "Decal", at + 1))
+    {
+        if (attributeAt(source, at))
+        {
+            return true;
+        }
+    }
+    return false;
+}
+
 // Where the source declares Parameters and its fields, for the diagnostics of checks on the reflection.
 class SourceLocator
 {
@@ -211,6 +238,30 @@ public:
     [[nodiscard]] ShaderDiagnostic structError(std::string message) const
     {
         return at(m_struct, std::move(message));
+    }
+
+    // An error at the attribute @p name of Parameters, `[name(...)]` before its declaration (at Parameters
+    // when it cannot be found).
+    [[nodiscard]] ShaderDiagnostic attributeError(std::string_view name, std::string message) const
+    {
+        usize found = std::string_view::npos;
+        for (usize offset = findWord(m_source, name, 0);
+             offset != std::string_view::npos && offset < m_struct;
+             offset = findWord(m_source, name, offset + 1))
+        {
+            if (attributeAt(m_source, offset))
+            {
+                found = offset;
+            }
+        }
+        return at(found == std::string_view::npos ? m_struct : found, std::move(message));
+    }
+
+    // An error at the first use of the identifier @p word (at Parameters when there is none).
+    [[nodiscard]] ShaderDiagnostic wordError(std::string_view word, std::string message) const
+    {
+        const usize found = findWord(m_source, word, 0);
+        return at(found == std::string_view::npos ? m_struct : found, std::move(message));
     }
 
     // An error at the field @p field of Parameters (at Parameters when it cannot be found).
@@ -509,6 +560,55 @@ void readField(const SourceLocator& locator, JsonValue field, ShaderAsset& shade
     shader.parameters.push_back(std::move(result));
 }
 
+// Reads the decal attribute `[Decal("BaseColor Normal ...")]` of Parameters into @p shader.
+void readDecalAttribute(const SourceLocator& locator, JsonValue arguments, ShaderAsset& shader,
+                        std::vector<ShaderDiagnostic>& diagnostics)
+{
+    const std::string_view names = arguments[0].asString().value_or("");
+    DecalChannels channels = DecalChannels::None;
+    usize at = 0;
+    while (at < names.size())
+    {
+        if (names[at] == ' ' || names[at] == '\t')
+        {
+            ++at;
+            continue;
+        }
+        usize end = at;
+        while (end < names.size() && names[end] != ' ' && names[end] != '\t')
+        {
+            ++end;
+        }
+        const std::string_view name = names.substr(at, end - at);
+        at = end;
+        const std::optional<DecalChannels> channel = parseDecalChannels(name);
+        if (!channel)
+        {
+            diagnostics.push_back(locator.attributeError(
+                "Decal",
+                std::format("[Decal]: unknown channel '{}'; the channels are BaseColor, Normal, ORM and "
+                            "Emission",
+                            name)));
+            return;
+        }
+        if (hasDecalChannel(channels, *channel))
+        {
+            diagnostics.push_back(locator.attributeError(
+                "Decal", std::format("[Decal]: the channel '{}' is listed twice", name)));
+            return;
+        }
+        channels = channels | *channel;
+    }
+    if (channels == DecalChannels::None)
+    {
+        diagnostics.push_back(locator.attributeError(
+            "Decal", "[Decal] lists no channel; write one or more of BaseColor, Normal, ORM and Emission, "
+                     "separated by spaces"));
+        return;
+    }
+    shader.decalChannels = channels;
+}
+
 // Fills the layout and shading model of @p shader from the interface compile's reflection.
 void readReflection(std::string_view json, const SourceLocator& locator, ShaderAsset& shader,
                     std::vector<ShaderDiagnostic>& diagnostics)
@@ -534,14 +634,29 @@ void readReflection(std::string_view json, const SourceLocator& locator, ShaderA
         diagnostics.push_back(locator.structError("the compiler's reflection has no struct Parameters"));
         return;
     }
+    bool shadingModel = false;
+    bool decal = false;
     for (const Attribute& attribute : attributesOf(structure))
     {
+        if (attribute.name == "Decal")
+        {
+            if (decal)
+            {
+                diagnostics.push_back(
+                    locator.attributeError("Decal", "Parameters has two [Decal] attributes"));
+                continue;
+            }
+            decal = true;
+            readDecalAttribute(locator, attribute.arguments, shader, diagnostics);
+            continue;
+        }
         if (attribute.name != "ShadingModel")
         {
             diagnostics.push_back(
                 locator.structError(std::format("Parameters: unknown attribute [{}]", attribute.name)));
             continue;
         }
+        shadingModel = true;
         const std::string_view name = attribute.arguments[0].asString().value_or("");
         if (const std::optional<ShadingModel> model = parseShadingModel(name))
         {
@@ -553,6 +668,13 @@ void readReflection(std::string_view json, const SourceLocator& locator, ShaderA
                 "unknown shading model '{}'; use Default, Unlit, Subsurface, TwoSidedFoliage or ClearCoat",
                 name)));
         }
+    }
+    if (decal && shadingModel)
+    {
+        diagnostics.push_back(locator.attributeError(
+            "Decal",
+            "[Decal] and [ShadingModel] cannot be used together: a decal changes the material of the "
+            "surfaces it lands on, which keep their own shading model"));
     }
     u32 size = 0;
     for (const JsonValue field : structure.find("fields").elements())
@@ -677,10 +799,12 @@ std::string escapeLineName(std::string_view text)
     return escaped;
 }
 
-// The source compiled for @p virtualPath: the surface API, the shader under its own name, then @p tail.
+// The source compiled for @p virtualPath: the surface API (with the decal helpers for decal shaders), the
+// shader under its own name, then @p tail.
 std::string wrapSource(std::string_view virtualPath, std::string_view source, std::string_view tail)
 {
-    return std::format("#include \"{}\"\n#line 1 \"{}\"\n{}\n#include \"{}\"\n", kSurfaceFile,
+    const std::string decal = declaresDecal(source) ? std::format("#include \"{}\"\n", kDecalFile) : "";
+    return std::format("#include \"{}\"\n{}#line 1 \"{}\"\n{}\n#include \"{}\"\n", kSurfaceFile, decal,
                        escapeLineName(virtualPath), source, tail);
 }
 
@@ -727,7 +851,8 @@ std::string_view passDefine(ShaderPass pass) noexcept
     constexpr std::array<std::string_view, kShaderPassCount> kDefines = {
         "-DILLUSION_PASS_FORWARD=1",        "-DILLUSION_PASS_FORWARD_BINDLESS=1",
         "-DILLUSION_PASS_DEPTH_PREPASS=1",  "-DILLUSION_PASS_SHADOW_CASTER=1",
-        "-DILLUSION_PASS_MOTION_VECTORS=1", "-DILLUSION_PASS_ENTITY_IDS=1"};
+        "-DILLUSION_PASS_MOTION_VECTORS=1", "-DILLUSION_PASS_ENTITY_IDS=1",
+        "-DILLUSION_PASS_DECAL=1",          "-DILLUSION_PASS_DECAL_EMISSION=1"};
     return kDefines[static_cast<usize>(pass)];
 }
 
@@ -950,8 +1075,7 @@ ShaderCompileResult ShaderCompiler::compile(std::string_view virtualPath, std::s
     const WorkDirectory work(m_desc);
     const std::filesystem::path interfaceFile = work.path() / "interface.slang";
     const std::filesystem::path passFile = work.path() / "pass.slang";
-    if (!work.valid() || !writeFileBytes(interfaceFile, wrapSource(virtualPath, source, kInterfaceFile)) ||
-        !writeFileBytes(passFile, wrapSource(virtualPath, source, kPassFile)))
+    if (!work.valid() || !writeFileBytes(interfaceFile, wrapSource(virtualPath, source, kInterfaceFile)))
     {
         result.diagnostics.push_back(
             error(std::string(virtualPath), 0, 0,
@@ -1008,8 +1132,22 @@ ShaderCompileResult ShaderCompiler::compile(std::string_view virtualPath, std::s
     }
     const SourceLocator locator(virtualPath, source);
     readReflection(reflection, locator, shader, result.diagnostics);
+    const bool decal = shader.decalChannels != DecalChannels::None;
+    if (decal && shader.worldOffset)
+    {
+        result.diagnostics.push_back(locator.wordError(
+            "worldOffset",
+            "a decal shader cannot have worldOffset(): decals do not move the surfaces they land on"));
+    }
     if (hasError(result.diagnostics))
     {
+        return result;
+    }
+    if (!writeFileBytes(passFile, wrapSource(virtualPath, source, decal ? kDecalPassFile : kPassFile)))
+    {
+        result.diagnostics.push_back(
+            error(std::string(virtualPath), 0, 0,
+                  "cannot write the compiler's temporary files in " + pathUtf8(work.path())));
         return result;
     }
 
@@ -1018,7 +1156,7 @@ ShaderCompileResult ShaderCompiler::compile(std::string_view virtualPath, std::s
     {
         for (const AlphaMode mode : {AlphaMode::Opaque, AlphaMode::Mask, AlphaMode::Blend})
         {
-            if (shaderVariantExists(static_cast<ShaderPass>(pass), mode))
+            if (shaderVariantExists(static_cast<ShaderPass>(pass), mode, shader.decalChannels))
             {
                 keys.push_back(VariantKey{.pass = static_cast<ShaderPass>(pass), .alphaMode = mode});
             }
@@ -1028,6 +1166,8 @@ ShaderCompileResult ShaderCompiler::compile(std::string_view virtualPath, std::s
         std::format("-DILLUSION_SHADING_MODEL={}", static_cast<u32>(shader.shadingModel));
     const std::string padding = std::format(
         "-DILLUSION_PARAMETER_PADDING={}", (kMaxShaderParameterBytes - structuredParameterBytes(shader)) / 4);
+    const std::string decalChannels =
+        std::format("-DILLUSION_DECAL_CHANNELS={}", static_cast<u32>(shader.decalChannels));
     std::vector<std::filesystem::path> outputs(keys.size());
     bool compiled = true;
     for (usize first = 0; first < keys.size(); first += m_desc.maxProcesses)
@@ -1058,6 +1198,10 @@ ShaderCompileResult ShaderCompiler::compile(std::string_view virtualPath, std::s
             }
             arguments.push_back(shadingModel);
             arguments.push_back(padding);
+            if (decal)
+            {
+                arguments.push_back(decalChannels);
+            }
             for (const std::string_view argument :
                  {std::string_view("-entry"), kShaderVertexEntry, std::string_view("-stage"),
                   std::string_view("vertex"), std::string_view("-entry"), kShaderFragmentEntry,

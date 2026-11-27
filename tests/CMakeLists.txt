@@ -111,6 +111,7 @@ add_executable(illusion_tests
     physics/TestPhysicsWorld.cpp
     physics/TestRagdoll.cpp
     player/TestPlayerSetup.cpp
+    render/TestBuiltinDecalShader.cpp
     render/TestFrameCapture.cpp
     render/TestPostProcess.cpp
     render/TestRenderComponents.cpp
