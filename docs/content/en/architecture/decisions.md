@@ -72,6 +72,7 @@ records rather than user documentation.
 | [0063](https://github.com/oguzhanaknc/illusion/blob/main/docs/adr/0063-material-shaders.md) | Material shaders: Slang surface functions in `.shader` assets with declared parameters, compiled per pass variant by the pinned slangc at cook time and on hot reload; the player loads cooked SPIR-V |
 | [0064](https://github.com/oguzhanaknc/illusion/blob/main/docs/adr/0064-virtual-cameras.md) | Virtual cameras: saved rigs of body, aim and noise stages; a camera brain on the real camera blends to the highest-priority live one; evaluated after Hierarchy in a GPU-free camera library |
 | [0065](https://github.com/oguzhanaknc/illusion/blob/main/docs/adr/0065-retargeting-and-aim-layers.md) | Retargeting and aim layers: rig maps cooked with the skeleton, generated at import and corrected in the sidecar; model-space rest-pose corrections bound once per clip and rig; additive aim layers in model space and a procedural Aim stage on the spine |
+| [0066](https://github.com/oguzhanaknc/illusion/blob/main/docs/adr/0066-decals.md) | Decals: box-projected decal shaders on the material system write a decal buffer after the depth prepass that the forward pass blends before lighting; receivers chosen by decal layers; a fixed-capacity pool behind DecalService for decals spawned by game code |
 
 To propose a new decision, copy `docs/adr/0000-template.md` and follow the
 [contributing guide](../contributing.md#architecture-decision-records).
