@@ -412,20 +412,14 @@ ILL_BENCHMARK("animation/graph-300", 50'000'000.0)
     });
 }
 
-// Budget: ns per AnimationWorld::update() of 300 graph Animators of 60 joints with the Job System, each with
-// the two layers of animation/graph-300 (a masked Override layer over a base layer cross-fading between a
-// three-clip 2D blend space and a clip), root motion and events, about 8x a desktop result (0.65 ms; ADR 0060
-// asks for less than 3 ms); see Budget.hpp.
-ILL_BENCHMARK("animation/world-graph-300", 5'000'000.0)
+namespace
 {
-    reflectRenderComponents();
-    registerAnimationComponents(ComponentRegistry::instance());
-    RigFiles rig({"c0", "c1", "c2", "c3", "c4"});
-    const bool written = rig.ready && rig.files.writeText("bench:/rig.animgraph", R"({
-        "format": "illusion.animgraph", "version": 1, "rootMotion": "joint00",
-        "parameters": [{"name": "x", "type": "Float"}, {"name": "y", "type": "Float"}, {"name": "go", "type": "Trigger"}],
-        "layers": [
-          {"name": "base", "states": [
+
+// The graph of animation/world-graph-300; with @p aim also an aim offset (an Additive layer in model space
+// over the upper body: a 2D blend space of nine poses against a reference, ADR 0065).
+std::string worldGraph(bool aim)
+{
+    std::string layers = R"({"name": "base", "states": [
              {"name": "move", "blend2d": {"x": "x", "y": "y", "points": [
                 {"x": 0, "y": 0, "clip": "bench:/rig.gltf#animation/c0"}, {"x": 1, "y": 0, "clip": "bench:/rig.gltf#animation/c1"},
                 {"x": 0, "y": 1, "clip": "bench:/rig.gltf#animation/c2"}]},
@@ -434,8 +428,37 @@ ILL_BENCHMARK("animation/world-graph-300", 5'000'000.0)
            "transitions": [{"from": "move", "to": "other", "duration": 0.5, "conditions": [{"parameter": "go"}]},
                            {"from": "other", "to": "move", "duration": 0.5, "conditions": [{"parameter": "go"}]}]},
           {"name": "upper", "weight": 0.8, "mask": [{"joint": "joint10"}],
-           "states": [{"name": "aim", "clip": "bench:/rig.gltf#animation/c4"}]}]})") == FileError::None;
-    if (!written)
+           "states": [{"name": "aim", "clip": "bench:/rig.gltf#animation/c4"}]})";
+    std::string parameters =
+        R"({"name": "x", "type": "Float"}, {"name": "y", "type": "Float"}, {"name": "go", "type": "Trigger"})";
+    if (aim)
+    {
+        parameters += R"(, {"name": "aimYaw", "type": "Float"}, {"name": "aimPitch", "type": "Float"})";
+        std::string points;
+        for (u32 i = 0; i < 9; ++i)
+        {
+            points += std::format(R"({}{{"x": {}, "y": {}, "clip": "bench:/rig.gltf#animation/a{}"}})",
+                                  i == 0 ? "" : ", ", static_cast<i32>(i % 3) - 1,
+                                  0.5f * static_cast<f32>(static_cast<i32>(i / 3) - 1), i);
+        }
+        layers += std::format(R"(,
+          {{"name": "aim", "blend": "Additive", "space": "Model", "reference": "bench:/rig.gltf#animation/a4",
+           "mask": [{{"joint": "joint01"}}],
+           "states": [{{"name": "aim", "blend2d": {{"x": "aimYaw", "y": "aimPitch", "points": [{}]}}}}]}})",
+                              points);
+    }
+    return std::format(R"({{"format": "illusion.animgraph", "version": {}, "rootMotion": "joint00",
+        "parameters": [{}], "layers": [{}]}})",
+                       aim ? 2 : 1, parameters, layers);
+}
+
+// 300 graph Animators of 60 joints playing worldGraph(@p aim), each with an Aim on its spine when @p aim.
+void runWorldGraph(ankerl::nanobench::Bench& bench, std::string_view name, bool aim)
+{
+    reflectRenderComponents();
+    registerAnimationComponents(ComponentRegistry::instance());
+    RigFiles rig({"c0", "c1", "c2", "c3", "c4", "a0", "a1", "a2", "a3", "a4", "a5", "a6", "a7", "a8"});
+    if (!rig.ready || rig.files.writeText("bench:/rig.animgraph", worldGraph(aim)) != FileError::None)
     {
         return;
     }
@@ -454,7 +477,21 @@ ILL_BENCHMARK("animation/world-graph-300", 5'000'000.0)
         animator.skeleton = AssetRef("bench:/rig.gltf#skin/0");
         animator.graph = AssetRef("bench:/rig.animgraph");
         animator.time = 0.01f * static_cast<f32>(i);
-        entities.push_back(world.create(transform, renderer, animator));
+        const Entity entity = world.create(transform, renderer, animator);
+        if (aim)
+        {
+            // The end of the limb hanging from joint03, turned by joint01 to joint03.
+            Aim component;
+            component.joint = "joint39";
+            component.spine = "joint03";
+            component.chainLength = 3;
+            component.point = Vec3(static_cast<f32>(i % 7) - 3.0f, 1.5f, 10.0f);
+            component.speed = 3.0f;
+            component.yawParameter = "aimYaw";
+            component.pitchParameter = "aimPitch";
+            world.emplace<Aim>(entity, component);
+        }
+        entities.push_back(entity);
     }
     animation.waitIdle();
     AnimationWorldService service(animation);
@@ -464,14 +501,40 @@ ILL_BENCHMARK("animation/world-graph-300", 5'000'000.0)
         (void)service.setFloat(entities[i], "y", 0.3f * static_cast<f32>(i % 5) / 4.0f + 0.1f);
     }
     u32 frame = 0;
-    bench.run("AnimationWorld::update 300 graphs x 60 joints", [&] {
+    bench.run(std::string(name), [&] {
         // Staggers the cross-fades, so that every update sees Animators at every point of a fade.
         (void)service.setTrigger(entities[frame % kSkeletons], "go");
         (void)service.setTrigger(entities[(frame + kSkeletons / 2) % kSkeletons], "go");
+        if (aim)
+        {
+            // The targets sweep, so that the aims keep following.
+            const f32 sweep = std::sin(0.05f * static_cast<f32>(frame));
+            (void)service.setAimTarget(entities[frame % kSkeletons], Vec3(8.0f * sweep, 1.5f, 10.0f));
+        }
         ++frame;
         animation.update(1.0f / 60.0f, &jobs, true);
         ankerl::nanobench::doNotOptimizeAway(animation.events().size());
     });
+}
+
+} // namespace
+
+// Budget: ns per AnimationWorld::update() of 300 graph Animators of 60 joints with the Job System, each with
+// the two layers of animation/graph-300 (a masked Override layer over a base layer cross-fading between a
+// three-clip 2D blend space and a clip), root motion and events, about 8x a desktop result (0.65 ms; ADR 0060
+// asks for less than 3 ms); see Budget.hpp.
+ILL_BENCHMARK("animation/world-graph-300", 5'000'000.0)
+{
+    runWorldGraph(bench, "AnimationWorld::update 300 graphs x 60 joints", false);
+}
+
+// Budget: ns per AnimationWorld::update() of animation/world-graph-300 with an aim offset of nine poses in
+// model space over the upper body and the Aim stage (parameters, a three-joint spine turn) on every Animator,
+// about 8x a desktop result (1.17 ms, 0.50 ms over animation/world-graph-300; ADR 0065 asks for under 1 ms
+// more); see Budget.hpp.
+ILL_BENCHMARK("animation/aim-300", 9'000'000.0)
+{
+    runWorldGraph(bench, "AnimationWorld::update 300 aiming graphs x 60 joints", true);
 }
 
 // Budget: ns per AnimationWorld::update() of animation/world-update-300x60 with two Entities attached to

@@ -1,5 +1,6 @@
 #include "PoseDetail.hpp"
 
+#include <illusion/animation/Aim.hpp>
 #include <illusion/animation/AnimationComponents.hpp>
 #include <illusion/animation/AnimationGraph.hpp>
 #include <illusion/animation/AnimationWorld.hpp>
@@ -57,7 +58,7 @@ struct Socket
     u64 mark = 0; // the update that last saw it
 };
 
-// A name resolved to a joint of one skeleton, for a LookAt, a TwoBoneIk or a pelvis.
+// A name resolved to a joint of one skeleton, for a LookAt, a TwoBoneIk, an Aim or a pelvis.
 struct JointName
 {
     std::string name;
@@ -80,6 +81,10 @@ struct Limb
     TwoBoneSolve solve;
     bool align = false; // TwoBoneIk::alignToTarget
     i32 foot = -1;      // its entry in FootPlacementPose::feet, or -1
+    // TwoBoneIk::targetJoint: the joint, the point in its space and the end joint's rotation relative to it.
+    i32 targetJoint = -1;
+    Vec3 targetPoint{0.0f};
+    Quat relative{1.0f, 0.0f, 0.0f, 0.0f};
 };
 
 // Most joints of one SpringBone chain, simulation steps of one update and the step length in seconds.
@@ -228,6 +233,21 @@ struct Slot
     JointName lookJoint;
     Vec3 lookDirection{0.0f, 0.0f, 1.0f}; // the smoothed model-space direction from the head
     bool lookValid = false;
+    // Aim (ADR 0065): the chain parents first, the solve with the target in model space, the graph parameters
+    // and the smoothed angles of the last update.
+    bool aim = false;
+    JointName aimJoint;
+    JointName aimSpine;
+    std::array<u32, kMaxAimChain> aimChain{};
+    std::array<f32, kMaxAimChain> aimWeights{};
+    u32 aimChainLength = 0;
+    AimSolve aimSolve;
+    f32 aimSpeed = 0.0f;
+    i32 aimYawParameter = -1;
+    i32 aimPitchParameter = -1;
+    bool aimParameterReported = false;
+    AimAngles aimAngles;
+    bool aimValid = false;
     std::array<Limb, kMaxLimbs> limbs{};
     u32 limbCount = 0;
     bool limbsReported = false;
@@ -362,8 +382,9 @@ struct AnimationWorld::Impl
     usize arenaBytes = kMinScratchBytes;
     std::vector<Entity> scratch;
     std::vector<u32> posed;
-    std::unordered_map<u64, Socket> sockets;       // by the attached Entity's Entity::toBits()
-    std::unordered_map<u64, JointName> limbJoints; // by the TwoBoneIk Entity's Entity::toBits()
+    std::unordered_map<u64, Socket> sockets;             // by the attached Entity's Entity::toBits()
+    std::unordered_map<u64, JointName> limbJoints;       // by the TwoBoneIk Entity's Entity::toBits()
+    std::unordered_map<u64, JointName> limbTargetJoints; // TwoBoneIk::targetJoint, keyed alike
     // MeshRenderer::mesh, read through reflection: engine/render links this library.
     ComponentId meshRenderer = kInvalidComponentId;
     u32 meshOffset = 0;
@@ -901,6 +922,11 @@ struct AnimationWorld::Impl
         slot.eventCount = 0;
         slot.fadeClip = nullptr;
         slot.lookValid = false;
+        slot.aimValid = false;
+        slot.aimAngles = {};
+        slot.aimParameterReported = false;
+        slot.aimJoint = JointName{};
+        slot.aimSpine = JointName{};
         slot.limbsReported = false;
         slot.lookJoint = JointName{};
         slot.pelvisJoint = JointName{};
@@ -1016,6 +1042,7 @@ struct AnimationWorld::Impl
         {
             slot.fadeClip = nullptr;
             slot.lookValid = false;
+            slot.aimValid = false;
             slot.springValid = false;
             slot.ragdollPose = false;
             slot.ragdollWeight = 0.0f;
@@ -1217,6 +1244,7 @@ struct AnimationWorld::Impl
             slot.lookSpeed = lookAt->speed;
             slot.look = true;
         }
+        prepareAim(entity, slot);
         prepareSpring(entity, slot, seconds, advance);
         prepareRagdoll(slot, seconds, advance);
         const FootPlacement* placement = world->tryGet<FootPlacement>(entity);
@@ -1229,6 +1257,66 @@ struct AnimationWorld::Impl
         {
             feet->footCount = 0;
         }
+    }
+
+    // The Float parameter @p name of @p slot's graph for an Aim, or -1 (logged once when it is not one).
+    i32 aimParameter(Slot& slot, std::string_view name)
+    {
+        if (name.empty() || slot.graph == nullptr)
+        {
+            return -1;
+        }
+        const AnimationGraph& graph = *slot.graph->graph;
+        const i32 index = graph.findParameter(name);
+        if (index >= 0 && graph.parameters[static_cast<usize>(index)].type == AnimationParameterType::Float)
+        {
+            return index;
+        }
+        if (!slot.aimParameterReported)
+        {
+            slot.aimParameterReported = true;
+            ILL_LOG_WARN("Animation", "entity {}: the graph has no Float parameter '{}' for its Aim",
+                         slot.entity.index, name);
+        }
+        return -1;
+    }
+
+    // The Aim of @p slot's Animator for this update: its chain below the spine joint, its target in model
+    // space and the graph parameters it writes.
+    void prepareAim(Entity entity, Slot& slot)
+    {
+        slot.aim = false;
+        const Aim* aim = world->tryGet<Aim>(entity);
+        const i32 joint = aim != nullptr ? resolveJoint(slot.aimJoint, aim->joint, slot) : -1;
+        const i32 spine = joint >= 0 ? resolveJoint(slot.aimSpine, aim->spine, slot) : -1;
+        if (spine < 0)
+        {
+            slot.aimValid = false;
+            slot.aimAngles = {};
+            return;
+        }
+        const u32 length = std::clamp(aim->chainLength, 1u, kMaxAimChain);
+        u32 count = 0;
+        std::array<u32, kMaxAimChain> chain{};
+        for (i32 j = spine; j >= 0 && count < length; j = slot.skeleton->joints[static_cast<usize>(j)].parent)
+        {
+            chain.at(count++) = static_cast<u32>(j);
+        }
+        for (u32 i = 0; i < count; ++i)
+        {
+            slot.aimChain.at(i) = chain.at(count - 1 - i); // parents first
+            slot.aimWeights.at(i) = aim->weights.at(i);
+        }
+        slot.aimChainLength = count;
+        slot.aimSolve.target = Vec3(slot.inverseWorld * Vec4(positionOf(aim->target, aim->point), 1.0f));
+        slot.aimSolve.forward = aim->forward;
+        slot.aimSolve.maxYaw = aim->maxYaw;
+        slot.aimSolve.maxPitch = aim->maxPitch;
+        slot.aimSolve.weight = aim->weight;
+        slot.aimSpeed = aim->speed;
+        slot.aimYawParameter = aimParameter(slot, aim->yawParameter);
+        slot.aimPitchParameter = aimParameter(slot, aim->pitchParameter);
+        slot.aim = true;
     }
 
     // The SpringBone of @p slot's Animator for this update: its chain (built again for another root, skeleton
@@ -1421,6 +1509,13 @@ struct AnimationWorld::Impl
         {
             return;
         }
+        const i32 targetJoint = ik.targetJoint.empty()
+                                    ? -1
+                                    : resolveJoint(limbTargetJoints[entity.toBits()], ik.targetJoint, *slot);
+        if (!ik.targetJoint.empty() && targetJoint < 0)
+        {
+            return;
+        }
         if (slot->limbCount == kMaxLimbs)
         {
             if (!slot->limbsReported)
@@ -1447,6 +1542,12 @@ struct AnimationWorld::Impl
         limb.solve.endRotation = target != nullptr
                                      ? glm::normalize(glm::inverse(slot->worldRotation) * target->rotation)
                                      : Quat{1.0f, 0.0f, 0.0f, 0.0f};
+        limb.targetJoint = targetJoint;
+        limb.targetPoint = ik.point;
+        if (targetJoint >= 0)
+        {
+            limb.solve.alignEnd = ik.alignToTarget;
+        }
     }
 
     // Collects this update's TwoBoneIk limbs into their Animators' slots and picks the feet of each
@@ -1464,6 +1565,10 @@ struct AnimationWorld::Impl
         {
             std::erase_if(limbJoints, [this](const auto& entry) { return entry.second.mark != frame; });
         }
+        if (limbTargetJoints.size() > seen)
+        {
+            std::erase_if(limbTargetJoints, [this](const auto& entry) { return entry.second.mark != frame; });
+        }
         for (const u32 index : posed)
         {
             Slot& slot = slots[index];
@@ -1477,6 +1582,10 @@ struct AnimationWorld::Impl
             for (u32 l = 0; l < slot.limbCount && count < FootPlacementPose::kMaxFeet; ++l)
             {
                 Limb& limb = slot.limbs[l];
+                if (limb.targetJoint >= 0)
+                {
+                    continue;
+                }
                 const i32 middle = slot.skeleton->joints[limb.joint].parent;
                 const i32 root = middle >= 0 ? slot.skeleton->joints[static_cast<usize>(middle)].parent : -1;
                 if (root < 0 || slot.skeleton->joints[static_cast<usize>(root)].parent != pelvis)
@@ -1580,9 +1689,99 @@ struct AnimationWorld::Impl
         static_cast<void>(solveLookAt(skeleton, chain, solve, local));
     }
 
-    // The per-pose stages of ADR 0061 on @p local, before the model-space matrices are composed.
+    // The model-space position of @p joint in the rest pose.
+    [[nodiscard]] static Vec3 restPosition(const Skeleton& skeleton, u32 joint) noexcept
+    {
+        Mat4 matrix(1.0f);
+        for (i32 j = static_cast<i32>(joint); j >= 0; j = skeleton.joints[static_cast<usize>(j)].parent)
+        {
+            const SkeletonJoint& rest = skeleton.joints[static_cast<usize>(j)];
+            Mat4 pose = glm::mat4_cast(rest.rotation);
+            pose[0] *= rest.scale.x;
+            pose[1] *= rest.scale.y;
+            pose[2] *= rest.scale.z;
+            pose[3] = Vec4(rest.translation, 1.0f);
+            matrix = pose * matrix;
+        }
+        return Vec3(skeleton.rootTransform * matrix[3]);
+    }
+
+    // The unit direction of the yaw and pitch @p angles in model space.
+    [[nodiscard]] static Vec3 aimDirection(AimAngles angles) noexcept
+    {
+        const f32 horizontal = std::cos(angles.pitch);
+        return {std::sin(angles.yaw) * horizontal, std::sin(angles.pitch), std::cos(angles.yaw) * horizontal};
+    }
+
+    // The Aim angles of this update, before the graph steps: from the spine joint of the last update's pose
+    // (@p model, or the rest pose without one) to the target, clamped and followed at Aim::speed.
+    void followAim(Slot& slot, std::span<const Mat4> model) const noexcept
+    {
+        const u32 spine = slot.aimChain.at(slot.aimChainLength - 1);
+        const bool previous = !slot.fresh && slot.written + 1 == frame;
+        const Vec3 origin = previous ? Vec3(model[spine][3]) : restPosition(*slot.skeleton, spine);
+        AimAngles wanted = illusion::aimAngles(origin, slot.aimSolve.target);
+        const f32 maxYaw = std::isfinite(slot.aimSolve.maxYaw) ? std::max(slot.aimSolve.maxYaw, 0.0f) : 0.0f;
+        const f32 maxPitch =
+            std::isfinite(slot.aimSolve.maxPitch) ? std::max(slot.aimSolve.maxPitch, 0.0f) : 0.0f;
+        wanted.yaw = std::clamp(wanted.yaw, -maxYaw, maxYaw);
+        wanted.pitch = std::clamp(wanted.pitch, -maxPitch, maxPitch);
+        const f32 step = slot.aimSpeed * slot.stageSeconds;
+        if (!slot.aimValid || slot.stageSeconds < 0.0f || !(slot.aimSpeed > 0.0f) || !std::isfinite(step))
+        {
+            slot.aimAngles = wanted;
+        }
+        else
+        {
+            const f32 yaw = wanted.yaw - slot.aimAngles.yaw;
+            const f32 pitch = wanted.pitch - slot.aimAngles.pitch;
+            const f32 distance = std::sqrt(yaw * yaw + pitch * pitch);
+            const f32 share = distance > step ? step / distance : 1.0f;
+            slot.aimAngles.yaw += yaw * share;
+            slot.aimAngles.pitch += pitch * share;
+        }
+        slot.aimValid = true;
+    }
+
+    static void writeAimParameters(Slot& slot) noexcept
+    {
+        slot.graphState.setValue(slot.aimYawParameter, slot.aimAngles.yaw);
+        slot.graphState.setValue(slot.aimPitchParameter, slot.aimAngles.pitch);
+    }
+
+    // The aim stage: the spine chain turns until the aim joint points along this update's angles from the
+    // spine joint, at the target's distance.
+    static void aimBody(Slot& slot, std::span<JointPose> local) noexcept
+    {
+        const Skeleton& skeleton = *slot.skeleton;
+        const std::span<const u32> chain(slot.aimChain.data(), slot.aimChainLength);
+        const Vec3 origin(detail::jointModelMatrix(skeleton, local, chain.back())[3]);
+        const f32 distance = glm::length(slot.aimSolve.target - origin);
+        if (!(distance > 0.0f) || !std::isfinite(distance))
+        {
+            return;
+        }
+        AimSolve solve = slot.aimSolve;
+        solve.target = origin + aimDirection(slot.aimAngles) * distance;
+        static_cast<void>(solveAim(skeleton, chain,
+                                   std::span<const f32>(slot.aimWeights.data(), chain.size()),
+                                   static_cast<u32>(slot.aimJoint.index), solve, local));
+    }
+
+    // The per-pose stages of ADR 0061 and ADR 0065 on @p local, before the model-space matrices are composed.
     void applyStages(Slot& slot, std::span<JointPose> local) noexcept
     {
+        const Skeleton& skeleton = *slot.skeleton;
+        for (u32 l = 0; l < slot.limbCount; ++l)
+        {
+            Limb& limb = slot.limbs[l];
+            if (limb.targetJoint >= 0 && limb.solve.alignEnd)
+            {
+                limb.relative = glm::normalize(
+                    glm::inverse(detail::jointModelRotation(skeleton, local, limb.targetJoint)) *
+                    detail::jointModelRotation(skeleton, local, static_cast<i32>(limb.joint)));
+            }
+        }
         if (slot.spring)
         {
             swingSprings(slot, local);
@@ -1591,14 +1790,26 @@ struct AnimationWorld::Impl
         {
             placeFeet(slot, local);
         }
+        if (slot.aim && slot.aimSolve.weight > 0.0f)
+        {
+            aimBody(slot, local);
+        }
         if (slot.look)
         {
             turnHead(slot, local);
         }
         for (u32 l = 0; l < slot.limbCount; ++l)
         {
-            static_cast<void>(
-                solveTwoBoneIk(*slot.skeleton, slot.limbs[l].joint, slot.limbs[l].solve, local));
+            Limb& limb = slot.limbs[l];
+            if (limb.targetJoint >= 0)
+            {
+                const auto grip = static_cast<u32>(limb.targetJoint);
+                limb.solve.target =
+                    Vec3(detail::jointModelMatrix(skeleton, local, grip) * Vec4(limb.targetPoint, 1.0f));
+                limb.solve.endRotation = glm::normalize(
+                    detail::jointModelRotation(skeleton, local, limb.targetJoint) * limb.relative);
+            }
+            static_cast<void>(solveTwoBoneIk(skeleton, limb.joint, limb.solve, local));
         }
         if (slot.ragdollWeight > 0.0f)
         {
@@ -1630,12 +1841,25 @@ struct AnimationWorld::Impl
         const std::span<SkinMatrix> skinPose(skins[current()].data() + slot.offset, joints);
         Vec3 rootTranslation(0.0f);
         f32 rootYaw = 0.0f;
+        if (slot.aim)
+        {
+            followAim(slot, modelPose);
+        }
+        const bool aimParameters = slot.aim && slot.graph != nullptr;
+        if (aimParameters)
+        {
+            writeAimParameters(slot);
+        }
         if (slot.graph != nullptr)
         {
             switch (slot.step)
             {
             case GraphStep::Restart:
                 restartGraph(slot, slot.time);
+                if (aimParameters)
+                {
+                    writeAimParameters(slot);
+                }
                 break;
             case GraphStep::Step:
                 slot.eventCount =
@@ -2132,6 +2356,12 @@ f32 AnimationWorld::ragdollWeight(u32 slot) const noexcept
 {
     const Slot* entry = m_impl->slotOf(slot);
     return entry != nullptr ? entry->ragdollWeight : 0.0f;
+}
+
+AimAngles AnimationWorld::aimAngles(u32 slot) const noexcept
+{
+    const Slot* entry = m_impl->slotOf(slot);
+    return entry != nullptr && entry->aim ? entry->aimAngles : AimAngles{};
 }
 
 } // namespace illusion

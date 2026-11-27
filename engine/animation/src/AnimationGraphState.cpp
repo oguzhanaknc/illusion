@@ -1,5 +1,6 @@
 #include "PoseDetail.hpp"
 
+#include <illusion/animation/Aim.hpp>
 #include <illusion/animation/AnimationGraphState.hpp>
 #include <illusion/core/Assert.hpp>
 #include <illusion/core/Log.hpp>
@@ -586,6 +587,22 @@ Expected<GraphBinding, std::string> bindGraph(const AnimationGraph& graph, const
         }
         binding.masks.push_back(std::move(mask));
     }
+    binding.referenceClips.assign(graph.layers.size(), -1);
+    for (usize l = 0; l < graph.layers.size(); ++l)
+    {
+        const AssetRef& reference = graph.layers[l].reference;
+        if (reference.empty())
+        {
+            continue;
+        }
+        const ClipSource source = findClip ? findClip(reference) : ClipSource{};
+        if (source.clip == nullptr)
+        {
+            return unexpected(std::format("layers[{}].reference: clip '{}' not found", l, reference.path()));
+        }
+        binding.referenceClips[l] = static_cast<i32>(binding.clips.size());
+        bindGraphClip(binding, *source.clip, source.skeleton, reference);
+    }
     if (!graph.rootMotion.empty())
     {
         binding.rootJoint = findRigJoint(skeleton, graph.rootMotion);
@@ -659,8 +676,12 @@ usize graphScratchBytes(const GraphBinding& binding) noexcept
     }
     const usize layers = binding.graph->layers.size();
     // Each array may need its alignment in padding.
+    const bool model = std::ranges::any_of(binding.graph->layers, [](const AnimationLayer& layer) {
+        return layer.blend == AnimationLayerBlend::Additive && layer.space == AnimationAdditiveSpace::Model;
+    });
+    const usize modelBytes = model ? binding.skeleton->joints.size() * 3 * sizeof(Quat) + alignof(Quat) : 0;
     return binding.skeleton->joints.size() * 4 * sizeof(JointPose) + alignof(JointPose) +
-           layers * 2 * kMaxStateClips * sizeof(ActiveClip) + alignof(ActiveClip) + layers;
+           layers * 2 * kMaxStateClips * sizeof(ActiveClip) + alignof(ActiveClip) + layers + modelBytes;
 }
 
 u32 stepGraph(const GraphBinding& binding, AnimationGraphState& state, f32 seconds,
@@ -787,7 +808,12 @@ void evaluateGraph(const GraphBinding& binding, const AnimationGraphState& state
     JointPose* poses = scratch.allocateArray<JointPose>(joints * 4);
     ActiveClip* clipMemory = scratch.allocateArray<ActiveClip>(maxClips);
     u8* trimmedMemory = scratch.allocateArray<u8>(layerCount);
-    if (poses == nullptr || clipMemory == nullptr || trimmedMemory == nullptr)
+    const bool modelSpace = std::ranges::any_of(graph.layers, [](const AnimationLayer& layer) {
+        return layer.blend == AnimationLayerBlend::Additive && layer.space == AnimationAdditiveSpace::Model;
+    });
+    Quat* rotations = modelSpace ? scratch.allocateArray<Quat>(joints * 3) : nullptr;
+    if (poses == nullptr || clipMemory == nullptr || trimmedMemory == nullptr ||
+        (modelSpace && rotations == nullptr))
     {
         ILL_ASSERT(false, "evaluateGraph: the scratch allocator is too small");
         scratch.rewind(marker);
@@ -823,6 +849,7 @@ void evaluateGraph(const GraphBinding& binding, const AnimationGraphState& state
     {
         const AnimationLayer& layer = graph.layers[l];
         const bool additive = layer.blend == AnimationLayerBlend::Additive;
+        const i32 referenceClip = l < binding.referenceClips.size() ? binding.referenceClips[l] : -1;
         f32 accumulated = 0.0f;
         RootMotionDelta layerRoot;
         for (; next < count && clips[next].layer == l; ++next)
@@ -839,7 +866,7 @@ void evaluateGraph(const GraphBinding& binding, const AnimationGraphState& state
             {
                 blendPoses(layerPose, samplePose, share, {}, layerPose);
             }
-            if (additive)
+            if (additive && referenceClip < 0)
             {
                 sampleClip(clip, clipBinding, retarget, skeleton, 0.0f,
                            share < 1.0f ? referenceSample : referencePose);
@@ -860,7 +887,19 @@ void evaluateGraph(const GraphBinding& binding, const AnimationGraphState& state
             continue;
         }
         const std::span<const f32> mask = binding.masks[l];
-        if (additive)
+        if (additive && referenceClip >= 0)
+        {
+            const auto index = static_cast<usize>(referenceClip);
+            const AnimationClip& clip = *binding.clips[index];
+            sampleClip(clip, binding.clipBindings[index], binding.clipRetargets[index], skeleton,
+                       clipSeconds(clip, layer.referenceTime, false), referencePose);
+        }
+        if (additive && layer.space == AnimationAdditiveSpace::Model)
+        {
+            addPoseInModelSpace(skeleton, out.first(joints), layerPose, referencePose, layer.weight, mask,
+                                std::span<Quat>(rotations, joints * 3));
+        }
+        else if (additive)
         {
             addPose(out.first(joints), layerPose, referencePose, layer.weight, mask);
         }

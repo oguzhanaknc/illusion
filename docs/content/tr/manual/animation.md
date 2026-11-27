@@ -206,7 +206,7 @@ Bir graf dosyasının anahtarları aşağıdadır; bilinmeyen bir anahtar hatad�
 
 | Anahtar | Anlamı |
 | --- | --- |
-| `format`, `version` | `"illusion.animgraph"` ve `1` |
+| `format`, `version` | `"illusion.animgraph"` ve `1` ya da `2` (sürüm 2 [aim offset'lerini](#aim-offsetleri) ekler) |
 | `parameters` | Grafın girdileri (aşağıda); isteğe bağlı |
 | `rootMotion` | Yatay hareketi ve yaw'ı Entity'yi süren eklemin adı; isteğe bağlı |
 | `layers` | Sırayla değerlendirilen bir ya da daha fazla katman |
@@ -220,7 +220,8 @@ Bir graf dosyasının anahtarları aşağıdadır; bilinmeyen bir anahtar hatad�
 | `Bool` | `true` ya da `false` (çömelme) | `true` ya da `false`, yoksa `false` |
 | `Trigger` | Bir kez kurulur; bir geçiş onu tüketene ya da update bitene kadar kurulu kalır | Yok |
 
-**Katmanlar** `{"name", "weight", "blend", "mask", "entry", "states", "transitions"}` biçimindedir:
+**Katmanlar** `{"name", "weight", "blend", "mask", "entry", "states", "transitions"}` biçimindedir; sürüm 2'de
+bir `Additive` katman ayrıca `reference`, `referenceTime` ve `space` alır ([Aim offset'leri](#aim-offsetleri)):
 
 - [0, 1] aralığındaki `weight` (varsayılan 1) katmanı ölçekler; `blend` ya `Override` (varsayılan) olur ve
   altındaki katmanların pozladığını değiştirir, ya da `Additive` olur ve her klibin ilk karesinden pozunun
@@ -563,15 +564,21 @@ büyük ebeveyniyle, örneğin bir dizle ve bir kalçayla, bir hedefe taşır:
 | --- | --- |
 | `joint` | Uç eklem; ebeveyni ve büyük ebeveyni zinciri oluşturur |
 | `target` | Konumu hedef olan Entity; yoksa `point` kullanılır |
-| `point` | `target` yokken dünya uzayındaki hedef |
+| `point` | `target` yokken dünya uzayındaki hedef; `targetJoint` varsa o eklemin uzayındaki bir nokta |
+| `targetJoint` | Aynı pozun, aim aşamasından sonraki, uzayında `point`'in bulunduğu eklemi; yoksa `target` ya da dünya uzayındaki `point` kullanılır |
 | `pole` | Orta eklemin doğru büküldüğü Entity; yoksa `polePoint` kullanılır |
 | `polePoint` | `pole` yokken Animator'ın model uzayındaki pole (+z: dizler öne bükülür) |
 | `weight` | IK'nin [0, 1] aralığındaki payı; 0 animasyondaki uzvu gösterir |
-| `alignToTarget` | Uç ekleme hedef Entity'nin dönüşünü de ver (foot placement ile: zeminin) |
+| `alignToTarget` | Uç ekleme hedef Entity'nin dönüşünü de ver (foot placement ile: zeminin); `targetJoint` ile animasyondaki dönüşünü o eklemine göre koru |
 
 Çözüm analitiktir (kosinüs teoremi): kemikler boylarını korur, orta eklem kök, hedef ve pole'ün düzleminde
 bükülür ve erişilemeyen bir hedef uzvu ona doğru dümdüz uzatır. Kökten hedefe giden doğru üzerindeki bir pole,
 animasyonun verdiği bükülmeyi korur. Sıfır uzunluklu kemikler ve kök üzerindeki hedefler hatasız bırakılır.
+
+`targetJoint` ayarlıyken `point` o eklemin uzayındadır ve hedef Entity yok sayılır; böylece bir el, socket
+Entity'sinin bir update'lik gecikmesi olmadan, öbür elin tuttuğu bir silahı izleyebilir. `setIkTarget()` bu
+durumda eklemin uzayındaki bir noktayı yazar. Hedef eklemi eksik bir uzuv atlanır. Eklem aim aşamasından sonra
+okunur; böylece tutuş nişan alınmış silahı izler.
 
 Bir Entity bir türden tek bir Component taşır; bu yüzden bir `TwoBoneIk` kendi Entity'sinin Animator'ına, o
 yoksa ebeveyninin Animator'ına etki eder: bir uzvu Animator'ın Entity'sine, ötekileri çocuklarına koyun.
@@ -635,6 +642,135 @@ world.emplace<illusion::FootPlacement>(hero, feet);
   görünmez. `engine/animation` fizik kullanmaz: oturum sonuçları, sonraki Animation adımının uyguladığı
   runtime `FootPlacementPose`'a yazar.
 - Çalışan bir oturum yokken (Play modu dışındaki editör) ayaklar animasyondaki pozu korur.
+
+## Aim
+
+Animator'ın Entity'sindeki bir `Aim` (`illusion.Aim`, kaydedilir, Inspector'ın Animation kategorisinde) bir omurga
+zincirini, bir eklem, genellikle silah tutan bir el, hedefi gösterene kadar döndürür ve elle hazırlanmış bir
+[aim offset](#aim-offsetleri)'ine aynı yönü verir. Açılar radyan olarak saklanır ve editörde derece olarak
+gösterilir.
+
+| Alan | Anlamı |
+| --- | --- |
+| `joint` | Nişan eklemi: bir el, bir silah eklemi, baş |
+| `forward` | `joint`'in kendi uzayındaki nişan ekseni (varsayılan +z) |
+| `spine` | Dönen zincirin üst eklemi; `joint`'in bir atası |
+| `chainLength` | Dönüşü paylaşan eklemler: `spine` ve en fazla üç atası (1 ile 4) |
+| `weights` | Her zincir ekleminin payı, aşağıdan yukarı, ilk `chainLength` üzerinde normalize edilir (0,3, 0,3, 0,4, 0) |
+| `target` | Nişan alınacak bir Entity; yoksa `point` kullanılır |
+| `point` | `target` yokken nişan alınacak dünya uzayındaki nokta |
+| `maxYaw` | Karakterin ileri yönünden en büyük yaw, radyan olarak (varsayılan 90°) |
+| `maxPitch` | Yukarı ya da aşağı en büyük pitch, radyan olarak (varsayılan 60°) |
+| `weight` | Prosedürel dönüşün [0, 1] aralığındaki payı; 0 yalnızca graf parametrelerini sürer |
+| `speed` | Nişanın hedefi saniyede kaç radyanla izlediği; 0 hemen izler |
+| `yawParameter` | Grafın yaw'ı radyan olarak alan Float parametresi; boşsa hiçbiri yazılmaz |
+| `pitchParameter` | Grafın pitch'i radyan olarak alan Float parametresi; boşsa hiçbiri yazılmaz |
+
+```cpp
+illusion::Aim aim;
+aim.joint = "hand_r";
+aim.spine = "upperChest";
+aim.chainLength = 3;
+aim.target = enemy;
+aim.yawParameter = "aimYaw";
+aim.pitchParameter = "aimPitch";
+world.emplace<illusion::Aim>(hero, aim);
+
+// From a module: aim at a point (this clears the target Entity), fade the aim, read what it did.
+static_cast<void>(animation->setAimTarget(hero, illusion::Vec3(2.0f, 1.5f, 6.0f)));
+static_cast<void>(animation->setAimWeight(hero, aiming ? 1.0f : 0.0f));
+const illusion::Expected<illusion::AimAngles, illusion::AnimationError> angles = animation->aimAngles(hero);
+```
+
+- **Yaw ve pitch.** İkisi de Animator'ın model uzayında ölçülür: yaw +y etrafında +z'den +x'e doğru, pitch yatay
+  düzlemin üstünde. Dönüş yaw'ı model +y etrafında, pitch'i yaw'lanmış sağ eksen etrafında uygular; böylece ufuk
+  çizgisi hiç yalpalamaz.
+- **Yumuşatma ve sınırlama.** Her update'te son update'in pozundaki üst omurga ekleminden hedefe giden açılar
+  `maxYaw` ve `maxPitch` ile sınırlanır, sonra saniyede en fazla `speed` radyanla izlenir. Sonuç
+  `aimAngles()`'ın döndürdüğüdür.
+- **Önce parametreler.** Graf adım atmadan önce yumuşatılmış yaw ve pitch `yawParameter` ve `pitchParameter`'a
+  yazılır; böylece bir aim offset aynı update'te tepki verir. Graf yeniden başladıktan sonra (bir sahne yüklemesi
+  ya da `.animgraph`'ın yeniden yüklenmesi) yine yazılırlar; ilk poz zaten nişan almış olur. Grafın Float
+  parametresi olmayan bir ad bir kez loglanır ve atlanır.
+- **Dönüş.** Graftan, spring bone'lardan ve foot placement'tan sonra zincir, `joint`'in nişan ekseni ile hedef
+  yönü arasında kalan yaw ve pitch kadar döner; bu `weights` ile paylaşılır ve `weight` ile ölçeklenir, iki
+  geçişte: ikincisi `joint`'in omurgadan sapmasını, örneğin yanındaki bir eli, düzeltir. Elle hazırlanmış bir aim
+  offset varsa aşama yalnızca hatanın kalanını giderir; yoksa bütün nişanı kendisi yapar. Üst omurga eklemindeki
+  bir hedef ya da eksik bir eklem pozu olduğu gibi bırakır.
+- **Aşama sırası.** Her Animator'ın değerlendirmesinde: graf (aim katmanlarıyla), spring bone'lar, foot
+  placement, aim, [look-at](#look-at), [two-bone IK](#two-bone-ik), ragdoll harmanı. Baş böylece nişan almış
+  gövdeden bakar ve `targetJoint` üzerindeki bir yedek el nişan alınmış silahı tutar.
+
+### Aim offset'leri
+
+Aim offset, birkaç yaw ve pitch değeri (sola, sağa, yukarı ve aşağı bakış) için hazırlanmış, grafın `Aim`'in
+yazdığı parametrelerle harmanladığı bir poz kümesidir. Farkları bir `reference` pozuna göre alınan ve
+**model uzayındaki** rotasyonlara eklenen (`"space": "Model"`) bir `Additive` katmandır; böylece eğilerek
+koşarken ya da çömelirken de aynı yöne nişan alır. Bu anahtarlar `"version": 2` ister:
+
+| Anahtar | Anlamı |
+| --- | --- |
+| `reference` | Katmanın pozlarının, her klibin ilk karesi yerine, karşılaştırıldığı animasyon klibi (`model.glb#animation/<name>`); yalnızca bir `Additive` katmanda |
+| `referenceTime` | Referans klibin [0, 1] aralığındaki normalize zamanı (varsayılan 0); bir `reference` ister |
+| `space` | `Local` (varsayılan): sürüm 1'deki gibi yerel rotasyonlara eklenir. `Model`: model uzayındaki rotasyonlara eklenir |
+
+```json
+{
+  "format": "illusion.animgraph",
+  "version": 2,
+  "parameters": [
+    {"name": "aimYaw", "type": "Float"},
+    {"name": "aimPitch", "type": "Float"}
+  ],
+  "layers": [
+    {
+      "name": "base",
+      "states": [{"name": "walk", "clip": "game:/hero.glb#animation/walk", "loop": true}]
+    },
+    {
+      "name": "aim",
+      "blend": "Additive",
+      "space": "Model",
+      "reference": "game:/hero.glb#animation/aim_center",
+      "referenceTime": 0,
+      "mask": [{"joint": "spine", "weight": 1}],
+      "states": [
+        {
+          "name": "aim",
+          "blend2d": {
+            "x": "aimYaw",
+            "y": "aimPitch",
+            "points": [
+              {"x": 0, "y": 0, "clip": "game:/hero.glb#animation/aim_center"},
+              {"x": -1.2, "y": 0, "clip": "game:/hero.glb#animation/aim_left"},
+              {"x": 1.2, "y": 0, "clip": "game:/hero.glb#animation/aim_right"},
+              {"x": 0, "y": -0.8, "clip": "game:/hero.glb#animation/aim_down"},
+              {"x": 0, "y": 0.8, "clip": "game:/hero.glb#animation/aim_up"}
+            ]
+          }
+        }
+      ]
+    }
+  ]
+}
+```
+
+- Noktalar, `Aim`'in yazdığı parametreler gibi radyandır; katmanın `weight`'i offset'in ağırlığıdır. Blend space
+  tek bir doğru üzerinde olmayan en az üç nokta ister.
+- Sürüm 1 dosyaları değişmeden okunur. Yazıcı (`writeAnimationGraph()`) sürüm 2 özelliği kullanmayan bir graf için
+  sürüm 1 yazar; böylece eski Build'ler de onu okur.
+- `parseAnimationGraph()` bir hatanın JSON yolunu adlandırır:
+
+  ```text
+  layers[1]: unknown key 'space'
+  layers[1].space: only an Additive layer takes it
+  layers[1].space: unknown space 'World' (Local or Model)
+  layers[1].referenceTime: needs a reference
+  layers[1].referenceTime: must be in [0, 1]
+  ```
+
+  Sürüm 1 dosyasında `reference`, `referenceTime` ve `space` bilinmeyen anahtarlardır; sürüm 2 dosyasında
+  `Additive` olmayan bir katmanda hatadır. 2'den büyük bir sürüm okunmaz.
 
 ## Spring bones
 
@@ -900,6 +1036,9 @@ illusion::sampleClip(clip, bound->binding, bound->retarget, skeleton, time, loca
   sürer; aynı işin ada göre yapılması 0,37 ms (Benchmark'lar `animation/retarget-300x60` ve
   `animation/blend-300x60`; retargeting için yaklaşık %11). Bir clip'i 60 eklemli bir skeleton'a bağlamak
   41 µs sürer (Benchmark `animation/retarget-bind-60`). Değerler bir geliştirme masaüstündendir.
+- 60 eklemli 300 Animator üzerinde dokuz pozluk bir aim offset ve aim aşaması 1,17 ms sürer; aynı graf bunlar
+  olmadan 0,67 ms, yani 300 Animator için 0,50 ms fark (Benchmark'lar `animation/aim-300` ve
+  `animation/world-graph-300`; geliştirme masaüstü).
 - Skinning, Mesh'i kaç pass çizerse çizsin karede bir kez çalışır: 10.240 vertex'lik 300 instance bir
   NVIDIA GeForce RTX 4070 SUPER'da 0,66 ms sürer (GPU testi 3 ms'lik bir bütçe koyar).
 - Görünür her skinned instance vertex başına 64 bayt GPU belleğine (pozlanmış vertex ve önceki konumu) ve

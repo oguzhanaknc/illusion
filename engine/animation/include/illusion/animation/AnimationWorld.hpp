@@ -14,6 +14,7 @@
 /// }
 /// @endcode
 
+#include <illusion/animation/Aim.hpp>
 #include <illusion/animation/AnimationGraphState.hpp>
 #include <illusion/animation/AnimationService.hpp>
 #include <illusion/animation/Pose.hpp>
@@ -71,9 +72,16 @@ struct AnimationStatistics
 ///
 /// Before the model-space matrices, each pose goes through the stages of ADR 0061 in its Job: the pelvis
 /// offset and foot targets of a FootPlacement (from its FootPlacementPose, which this class adds and whose
-/// animated placements it writes), the LookAt of the Entity (following its target at LookAt::speed while
-/// advancing, at once otherwise) and the TwoBoneIk limbs on the Entity and its children. Targets are read
-/// when the update starts and turned into model space through the Entity's Transform.
+/// animated placements it writes), the Aim of the Entity (ADR 0065), the LookAt of the Entity (following its
+/// target at LookAt::speed while advancing, at once otherwise) and the TwoBoneIk limbs on the Entity and its
+/// children (a limb with TwoBoneIk::targetJoint reaches a point in that joint's space of the aimed pose).
+/// Targets are read when the update starts and turned into model space through the Entity's Transform.
+///
+/// An Aim turns the yaw and pitch from its spine joint (in the last update's pose) to its target into angles
+/// that follow the target at Aim::speed while advancing (at once otherwise), clamped to Aim::maxYaw and
+/// Aim::maxPitch; they go to the graph's Float parameters Aim::yawParameter and Aim::pitchParameter before
+/// the graph steps (an authored aim offset reacts in the same update), and solveAim() turns the spine chain
+/// towards the point at those angles by Aim::weight.
 ///
 /// A SpringBone on the Entity runs before those stages: the joints below its root (at most 32) swing in world
 /// space with Verlet integration in fixed steps of 1/60 s (at most four per update, the remainder carried to
@@ -162,6 +170,9 @@ public:
 
     /// The weight of the ragdoll pose in @p slot's last update, in [0, 1].
     [[nodiscard]] f32 ragdollWeight(u32 slot) const noexcept;
+    /// The yaw and pitch of @p slot's Aim in the last update (smoothed and clamped, radians); zero without
+    /// one.
+    [[nodiscard]] AimAngles aimAngles(u32 slot) const noexcept;
 
 private:
     struct Impl;

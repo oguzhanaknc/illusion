@@ -680,7 +680,7 @@ public:
 };
 
 // Counts the calls of every AnimationService function.
-class CountingAnimation final : public CountingProxy<AnimationService, 14>
+class CountingAnimation final : public CountingProxy<AnimationService, 17>
 {
 public:
     explicit CountingAnimation(AnimationService* inner = nullptr) noexcept
@@ -752,6 +752,19 @@ public:
     Void setRagdoll(Entity e, bool active) override
     {
         return forward<Void>(13, [&](AnimationService& s) { return s.setRagdoll(e, active); });
+    }
+    Void setAimTarget(Entity e, const Vec3& point) override
+    {
+        return forward<Void>(14, [&](AnimationService& s) { return s.setAimTarget(e, point); });
+    }
+    Void setAimWeight(Entity e, f32 weight) override
+    {
+        return forward<Void>(15, [&](AnimationService& s) { return s.setAimWeight(e, weight); });
+    }
+    [[nodiscard]] Expected<AimAngles, AnimationError> aimAngles(Entity e) const override
+    {
+        return forward<Expected<AimAngles, AnimationError>>(
+            16, [&](AnimationService& s) { return s.aimAngles(e); });
     }
 };
 

@@ -227,7 +227,7 @@ TEST_CASE("parseAnimationGraph names the JSON path of every error")
     const std::vector<Case> cases = {
         {"{", "invalid JSON at line 1"},
         {R"({"version": 1, "layers": []})", "not an animation graph file"},
-        {R"({"format": "illusion.animgraph", "version": 2, "layers": []})",
+        {R"({"format": "illusion.animgraph", "version": 3, "layers": []})",
          "version: unsupported animation graph version"},
         {graphJson("", kOneState, R"("extra": 1, )"), "unknown key 'extra'"},
         {graphJson("", ""), "layers: needs at least 1 entry"},

@@ -4,6 +4,7 @@
 # reflection, so that engine/render can link this library.
 
 add_library(illusion_animation STATIC
+    src/Aim.cpp
     src/AnimationComponents.cpp
     src/AnimationGraph.cpp
     src/AnimationGraphState.cpp

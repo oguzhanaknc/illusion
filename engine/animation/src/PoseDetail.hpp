@@ -20,6 +20,9 @@ namespace illusion::detail
                                     const ClipRetarget& retarget, const Skeleton& skeleton, u32 joint,
                                     f32 time) noexcept;
 
+// Spherical linear interpolation along the shorter of the two arcs between @p a and @p b.
+[[nodiscard]] Quat slerpShortest(Quat a, Quat b, f32 t) noexcept;
+
 // The index of the joint named @p name in @p skeleton, or -1.
 [[nodiscard]] i32 findJoint(const Skeleton& skeleton, std::string_view name) noexcept;
 

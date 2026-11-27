@@ -65,7 +65,7 @@ void update(illusion::ModuleContext& context, illusion::f64)
 - **Maliyet.** Bir çağrı tek bir dolaylı çağrıdır; `services/virtual-call` Benchmark'ı onu 10 ns'nin
   altında tutar.
 - **Uyumluluk.** Arayüzler modül ABI'sinin parçasıdır: bir fonksiyon eklemek veya değiştirmek
-  `kModuleApiVersion`'ı değiştirir (`CameraService` ile birlikte 13) ve modüller yeniden Build edilmelidir.
+  `kModuleApiVersion`'ı değiştirir (`AnimationService::setAimTarget()` ile birlikte 14; 13 `CameraService`'i ekledi) ve modüller yeniden Build edilmelidir.
 
 ## Kapsam
 
@@ -215,6 +215,9 @@ grafı henüz yüklenmemişken `NoGraph` döndürür; bilinmeyen adlar `UnknownN
 | `setLookAtTarget` | Entity'nin [`LookAt`](../manual/animation.md#look-at)'inin baktığı dünya uzayındaki noktayı ayarlar ve hedef Entity'sini temizler (`LookAt` yoksa `UnknownName`) |
 | `setIkTarget` | Animator'ın uç eklemi `joint` olan [`TwoBoneIk`](../manual/animation.md#two-bone-ik)'inin (Entity'de ya da bir çocukta) dünya uzayındaki hedefini ayarlar ve hedef Entity'sini temizler (yoksa `UnknownName`) |
 | `setIkWeight` | O `TwoBoneIk`'in ağırlığını [0, 1] aralığına sıkıştırarak ayarlar; 0 animasyondaki uzvu gösterir |
+| `setAimTarget` | Entity'nin [`Aim`](../manual/animation.md#aim)'inin nişan aldığı dünya uzayındaki noktayı ayarlar ve hedef Entity'sini temizler (`Aim` yoksa `UnknownName`, sonlu olmayan bir nokta için `InvalidValue`) |
+| `setAimWeight` | `Aim`'in prosedürel dönüşünün ağırlığını [0, 1] aralığına sıkıştırarak ayarlar; 0 yalnızca graf parametrelerini bırakır (`Aim` yoksa `UnknownName`, sonlu olmayan bir ağırlık için `InvalidValue`) |
+| `aimAngles` | `Aim`'in son update'te nişan aldığı yaw ve pitch, yumuşatılmış ve sınırlanmış, radyan olarak (`AimAngles`; ilk update'ten önce sıfır; `Aim` yoksa `UnknownName`) |
 | `setRagdoll` | `Ragdoll::active`'i yazarak Entity'nin [`Ragdoll`](../manual/animation.md#ragdolls)'unu açar (mevcut pozundan ve hızından düşer) ya da kapatır (poz animasyona geri harmanlanır) (`Ragdoll` yoksa `UnknownName`) |
 
 Her fonksiyon bir `Expected<..., AnimationError>` döndürür; `animationErrorName()` adı verir:
@@ -224,7 +227,7 @@ Her fonksiyon bir `Expected<..., AnimationError>` döndürür; `animationErrorNa
 | `NoAnimator` | Entity canlı değil ya da `Animator`'ı yok |
 | `NoGraph` | Çağrı bir graf gerektirir ve Animator'ın grafı yok ya da henüz yüklenmedi; `jointTransform()` için poz henüz yüklenmedi |
 | `HasGraph` | Grafı onu yöneten bir Animator'da `play()` |
-| `UnknownName` | O adda parametre, katman, klip ya da eklem yok ya da onun için `LookAt`, `TwoBoneIk` veya `Ragdoll` yok (`model.glb#animation/<name>` olmayan bir `play()` yolu da) |
+| `UnknownName` | O adda parametre, katman, klip ya da eklem yok ya da onun için `LookAt`, `TwoBoneIk`, `Aim` veya `Ragdoll` yok (`model.glb#animation/<name>` olmayan bir `play()` yolu da) |
 | `TypeMismatch` | Parametre başka bir türde (bir Trigger'da `setFloat()`, bir Float'ta `setTrigger()`, ...) |
 | `InvalidValue` | Bir değer sonlu değil, bir Int 2^24'ün ötesinde ya da bir fade negatif |
 

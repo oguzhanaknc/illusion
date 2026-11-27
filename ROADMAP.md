@@ -1642,7 +1642,7 @@ game code.
   (budget from the measurement, ADR target at most 15 % over `animation/world-update-300x60`); the showcase
   gets a second rig (`make_assets.py`: the Strider's skeleton renamed and rescaled) playing the Strider's clip
   retargeted, with a socket written as a bone name.
-- ANIM-5c (`implementer`): Aim layers. `.animgraph` version 2 (`reference`, `referenceTime`, `space`; errors
+- ✅ ANIM-5c (`implementer`): Aim layers. `.animgraph` version 2 (`reference`, `referenceTime`, `space`; errors
   with JSON paths; `space` only on Additive layers; version 1 files read and write unchanged),
   `illusion/animation/Aim.hpp` (`addPoseInModelSpace()`, `aimAngles()`, `solveAim()`), the saved `Aim`
   Component (`illusion.Aim`, manual anchor `#aim`) and `TwoBoneIk::targetJoint`, the aim stage and parameter
