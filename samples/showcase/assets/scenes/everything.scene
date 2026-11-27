@@ -3180,28 +3180,6 @@
       }
     },
     {
-      "id": "19a3c59084763a12",
-      "components": {
-        "illusion.MeshRenderer": {
-          "mesh": "builtin:/mesh/cube",
-          "submesh": 0,
-          "material": "assets:/materials/pulse.material",
-          "layers": 1,
-          "castShadows": true,
-          "visible": true,
-          "lodBias": 1.0
-        },
-        "illusion.Name": {
-          "value": "Shader Cube"
-        },
-        "illusion.Transform": {
-          "position": [40.0, 1.0, -2.0],
-          "rotation": [0.0, 0.0, 0.0, 1.0],
-          "scale": [1.0, 1.0, 1.0]
-        }
-      }
-    },
-    {
       "id": "21af8cfd4c4cbee5",
       "components": {
         "illusion.Name": {
@@ -3626,6 +3604,28 @@
         },
         "illusion.Transform": {
           "position": [-6.0, 0.25, -3.0],
+          "rotation": [0.0, 0.0, 0.0, 1.0],
+          "scale": [1.0, 1.0, 1.0]
+        }
+      }
+    },
+    {
+      "id": "67cae465669e4cc4",
+      "components": {
+        "illusion.MeshRenderer": {
+          "mesh": "builtin:/mesh/cube",
+          "submesh": 0,
+          "material": "assets:/materials/pulse.material",
+          "layers": 1,
+          "castShadows": true,
+          "visible": true,
+          "lodBias": 1.0
+        },
+        "illusion.Name": {
+          "value": "Shader Cube"
+        },
+        "illusion.Transform": {
+          "position": [40.0, 1.0, -2.0],
           "rotation": [0.0, 0.0, 0.0, 1.0],
           "scale": [1.0, 1.0, 1.0]
         }
