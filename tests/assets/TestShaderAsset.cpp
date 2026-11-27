@@ -382,7 +382,15 @@ TEST_CASE("decal shader data that breaks the decal rules is rejected")
     SUBCASE("a decal shader with a surface variant")
     {
         ShaderAsset shader = sampleDecal(kAllDecalChannels);
-        shader.variants.insert(shader.variants.begin(), sampleShader().variants[0]);
+        // Built in order rather than inserted at the front: GCC 13 -O3 reports a false null dereference in
+        // vector::insert here.
+        std::vector<ShaderVariant> variants;
+        variants.push_back(sampleShader().variants.at(0));
+        for (const ShaderVariant& variant : shader.variants)
+        {
+            variants.push_back(variant);
+        }
+        shader.variants = std::move(variants);
         CHECK_FALSE(deserializeShader(serializeShader(shader)).has_value());
     }
     SUBCASE("an emission variant of a decal without Emission")
