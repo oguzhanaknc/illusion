@@ -17,7 +17,6 @@
 #include "MaterialVaryings.slang"
 
 static const uint kMaxMaterialTextures = 8;
-static const uint kShadingModelUnlit = 1; // ShadingModel::Unlit
 
 #if defined(ILLUSION_PASS_SHADOW_CASTER)
 
@@ -251,18 +250,24 @@ float3 shadeSurface(VertexOutput input, SurfaceInput surfaceIn, SurfaceOutput ou
     surface.normal = normalize(surfaceIn.tangent * output.normal.x + surfaceIn.bitangent * output.normal.y +
                                surfaceIn.normal * output.normal.z);
     surface.view = surfaceIn.viewDirection;
-    // Diffuse transmission (thin translucent surfaces): the light a thickness below 1 lets through, tinted by
-    // the subsurface colour.
+    // The thinner the surface, the more light passes to its other side (TwoSidedFoliage) or wraps around it
+    // (Subsurface), tinted by the subsurface colour.
     const float transmission = saturate(1.0 - output.thickness);
     surface.transmission = float4(saturate(output.subsurfaceColor) * transmission, transmission);
-    const bool translucent = transmission > 0.0;
+    surface.scatter = float4(saturate(output.subsurfaceColor), transmission);
+    surface.coat = float4(surfaceIn.normal, saturate(output.clearCoat));
+    surface.coatRoughness = clamp(output.clearCoatRoughness, 0.045, 1.0);
+    // Light reaches translucent surfaces from behind too, which moves their shadow test to the lit side.
+    const bool translucent =
+        (kShadingModel == kShadingModelTwoSidedFoliage || kShadingModel == kShadingModelSubsurface) &&
+        transmission > 0.0;
     float ambientOcclusion = saturate(output.occlusion);
     if ((g_push.flags & 1u) != 0u && g_view.effects.x > 0.5)
     {
         ambientOcclusion *= g_ambientOcclusion.Load(int3(int2(input.position.xy), 0));
     }
     float3 color;
-    if (ILLUSION_SHADING_MODEL == kShadingModelUnlit)
+    if (kShadingModel == kShadingModelUnlit)
     {
         color = baseColor;
     }

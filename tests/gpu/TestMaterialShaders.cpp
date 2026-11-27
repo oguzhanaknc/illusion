@@ -20,6 +20,7 @@
 #include <doctest/doctest.h>
 #include <glm/gtc/packing.hpp>
 
+#include <algorithm>
 #include <cmath>
 #include <cstdlib>
 #include <cstring>
@@ -38,6 +39,9 @@ namespace illusion::test_shaders
 std::span<const std::byte> glowShader() noexcept;
 std::span<const std::byte> glowEditedShader() noexcept;
 std::span<const std::byte> swayShader() noexcept;
+std::span<const std::byte> unlitShader() noexcept;
+std::span<const std::byte> skinShader() noexcept;
+std::span<const std::byte> coatShader() noexcept;
 } // namespace illusion::test_shaders
 
 using namespace illusion;
@@ -225,13 +229,15 @@ MaterialDesc shaded(ShaderHandle shader, std::vector<ShaderParameterValue> param
 
 } // namespace
 
-TEST_CASE("the standard and error shaders are built in and the default material uses the standard one")
+TEST_CASE(
+    "the standard, error and foliage shaders are built in and the default material uses the standard one")
 {
     Fixture fixture;
     RenderResources& resources = *fixture.resources;
-    CHECK(resources.shaderCount() == 2);
+    CHECK(resources.shaderCount() == 3);
     CHECK(resources.isValid(resources.standardShader()));
     CHECK(resources.isValid(resources.errorShader()));
+    CHECK(resources.isValid(resources.foliageShader()));
     CHECK(resources.materialShader(resources.defaultMaterial()) == resources.standardShader());
 
     const ShaderAsset* standard = resources.shaderLayout(resources.standardShader());
@@ -258,11 +264,28 @@ TEST_CASE("the standard and error shaders are built in and the default material 
     CHECK(error->shadingModel == ShadingModel::Unlit);
     CHECK(resources.shaderLayout(ShaderHandle{}) == nullptr);
 
+    // The foliage shader is the standard one in another shading model: the same parameters at the same
+    // offsets.
+    const ShaderAsset* foliage = resources.shaderLayout(resources.foliageShader());
+    REQUIRE(foliage != nullptr);
+    CHECK(foliage->source == "builtin:/shader/foliage");
+    CHECK(foliage->shadingModel == ShadingModel::TwoSidedFoliage);
+    CHECK(foliage->worldOffset);
+    CHECK(foliage->parameterBytes == standard->parameterBytes);
+    REQUIRE(foliage->parameters.size() == standard->parameters.size());
+    for (usize i = 0; i < standard->parameters.size(); ++i)
+    {
+        CHECK(foliage->parameters[i].name == standard->parameters[i].name);
+        CHECK(foliage->parameters[i].offset == standard->parameters[i].offset);
+    }
+    CHECK(foliage->textures.size() == standard->textures.size());
+
 #if ILL_ASSERTS_ENABLED
     test::ScopedAssertCatcher catcher;
     CHECK_THROWS_AS(resources.releaseShader(resources.standardShader()), test::AssertionFailure);
     CHECK_THROWS_AS(resources.releaseShader(resources.errorShader()), test::AssertionFailure);
-    CHECK(resources.shaderCount() == 2);
+    CHECK_THROWS_AS(resources.releaseShader(resources.foliageShader()), test::AssertionFailure);
+    CHECK(resources.shaderCount() == 3);
 #endif
 }
 
@@ -272,7 +295,7 @@ TEST_CASE("a custom emissive shader renders its golden image in the bound and th
     RenderResources& resources = *fixture.resources;
     const ShaderHandle glow = resources.createShader(loadShader(test_shaders::glowShader()), "Glow");
     REQUIRE(resources.isValid(glow));
-    CHECK(resources.shaderCount() == 3);
+    CHECK(resources.shaderCount() == 4);
     const ShaderAsset* layout = resources.shaderLayout(glow);
     REQUIRE(layout != nullptr);
     CHECK(layout->source == "game:/shaders/glow.shader");
@@ -567,4 +590,242 @@ TEST_CASE("vertex colours reach the surface of material shaders, white for meshe
     const std::vector<std::byte> white = fixture.image();
     CHECK(channel(white, 32, 32, 2) > 30);
     CHECK(std::abs(channel(white, 32, 32, 2) - channel(white, 32, 32, 0)) < 8);
+}
+
+TEST_CASE("translucent standard materials draw with the two-sided foliage shader and keep their image")
+{
+    Fixture fixture;
+    RenderResources& resources = *fixture.resources;
+    MaterialDesc leafDesc;
+    leafDesc.parameters.metallicFactor = 0.0f;
+    leafDesc.parameters.roughnessFactor = 0.8f;
+    leafDesc.parameters.baseColorFactor = Vec4(0.35f, 0.6f, 0.2f, 1.0f);
+    leafDesc.parameters.alphaMode = AlphaMode::Mask;
+    leafDesc.parameters.doubleSided = true;
+    leafDesc.parameters.diffuseTransmission = 0.35f;
+    leafDesc.parameters.diffuseTransmissionColor = Vec3(0.9f, 1.0f, 0.55f);
+    const MaterialHandle leaf = resources.createMaterial(leafDesc);
+    CHECK(resources.materialShader(leaf) == resources.foliageShader());
+    // Without transmission the material moves to the standard shader, and back with it.
+    MaterialDesc opaqueDesc = leafDesc;
+    opaqueDesc.parameters.diffuseTransmission = 0.0f;
+    resources.updateMaterial(leaf, opaqueDesc);
+    CHECK(resources.materialShader(leaf) == resources.standardShader());
+    resources.updateMaterial(leaf, leafDesc);
+    CHECK(resources.materialShader(leaf) == resources.foliageShader());
+    // A chosen shader stays, whatever the transmission.
+    MaterialDesc chosen = leafDesc;
+    chosen.shader = resources.standardShader();
+    const MaterialHandle standardLeaf = resources.createMaterial(chosen);
+    CHECK(resources.materialShader(standardLeaf) == resources.standardShader());
+    const MeshHandle quad = resources.createMesh(makePlane(2.0f), "Leaf");
+    const MeshHandle sphere = resources.createMesh(makeSphere(0.8f), "Bush");
+
+    std::vector<std::byte> bound;
+    for (const bool bindless : {false, true})
+    {
+        CAPTURE(bindless);
+        auto renderer = SceneRenderer::create(*fixture.device, resources, description(bindless));
+        REQUIRE(renderer != nullptr);
+        World world;
+        Transform left; // the plane faces +y; turned towards the camera and a little to the side
+        left.position = Vec3(-1.0f, 0.0f, 0.0f);
+        left.rotation = glm::angleAxis(0.4f, Vec3(0.0f, 1.0f, 0.0f)) *
+                        glm::angleAxis(std::numbers::pi_v<f32> / 2.0f, Vec3(1.0f, 0.0f, 0.0f));
+        world.create(left, RenderMesh{quad, 0, leaf});
+        Transform right;
+        right.position = Vec3(1.1f, 0.0f, 0.0f);
+        world.create(right, RenderMesh{sphere, 0, leaf});
+        // The sun from behind and above, shining towards the camera.
+        Transform sun;
+        sun.rotation = glm::quatLookAt(glm::normalize(Vec3(0.3f, -0.5f, 1.0f)), Vec3(0, 1, 0));
+        DirectionalLight light{Vec3(1.0f), 4.0f};
+        light.castShadows = true;
+        world.create(sun, light);
+
+        fixture.render(*renderer, world);
+        fixture.render(*renderer, world);
+        const std::vector<std::byte> image = fixture.image();
+        if (!bindless)
+        {
+            // Captured before the foliage moved from the standard shader to builtin:/shader/foliage: the
+            // TwoSidedFoliage model draws GFX-2d's leaf translucency unchanged.
+            golden("material-foliage", image);
+            bound = image;
+        }
+        else if (renderer->usesBindless())
+        {
+            CHECK(differingPixels(image, bound) <= kSize * kSize / 100);
+        }
+    }
+}
+
+namespace
+{
+
+// A scene of one sphere of radius 1.5 at the origin lit by a sun shining along @p sunDirection (without
+// shadows unless @p shadows); returns the image of the second frame.
+std::vector<std::byte> renderSphere(Fixture& fixture, MaterialHandle material, Vec3 sunDirection,
+                                    bool bindless, bool shadows = false)
+{
+    RenderResources& resources = *fixture.resources;
+    auto renderer = SceneRenderer::create(*fixture.device, resources, description(bindless));
+    REQUIRE(renderer != nullptr);
+    World world;
+    world.create(Transform{}, RenderMesh{resources.createMesh(makeSphere(1.5f), "Sphere"), 0, material});
+    Transform sun;
+    sun.rotation = glm::quatLookAt(glm::normalize(sunDirection), Vec3(0, 1, 0));
+    DirectionalLight light{Vec3(1.0f), 3.0f};
+    light.castShadows = shadows;
+    world.create(sun, light);
+    fixture.render(*renderer, world);
+    fixture.render(*renderer, world);
+    return fixture.image();
+}
+
+// Sum of channel @p c over the columns [@p x0, @p x1) of the middle rows.
+int bandSum(const std::vector<std::byte>& image, u32 x0, u32 x1, u32 c)
+{
+    int sum = 0;
+    for (u32 y = 24; y < 40; ++y)
+    {
+        for (u32 x = x0; x < x1; ++x)
+        {
+            sum += channel(image, x, y, c);
+        }
+    }
+    return sum;
+}
+
+int brightest(const std::vector<std::byte>& image)
+{
+    int result = 0;
+    for (u32 y = 0; y < kSize; ++y)
+    {
+        for (u32 x = 0; x < kSize; ++x)
+        {
+            result =
+                std::max(result, channel(image, x, y, 0) + channel(image, x, y, 1) + channel(image, x, y, 2));
+        }
+    }
+    return result;
+}
+
+} // namespace
+
+TEST_CASE("the Unlit shading model shows its base colour whatever the light")
+{
+    Fixture fixture;
+    RenderResources& resources = *fixture.resources;
+    const ShaderHandle unlit = resources.createShader(loadShader(test_shaders::unlitShader()), "Unlit");
+    REQUIRE(resources.isValid(unlit));
+    CHECK(resources.shaderLayout(unlit)->shadingModel == ShadingModel::Unlit);
+    const MaterialHandle material = resources.createMaterial(shaded(unlit));
+    const std::vector<std::byte> lit =
+        renderSphere(fixture, material, Vec3(-0.5f, -0.4f, -1.0f), false, true);
+    golden("material-unlit", lit);
+    // Lit from behind, the same colours.
+    CHECK(differingPixels(renderSphere(fixture, material, Vec3(0.0f, 0.0f, 1.0f), false), lit) == 0);
+    // The gradient's middle: half of the top colour and half of the bottom one, in sRGB.
+    CHECK(channel(lit, 32, 32, 0) > channel(lit, 32, 32, 1));
+    CHECK(channel(lit, 32, 32, 2) > channel(lit, 32, 32, 1));
+}
+
+TEST_CASE("the Subsurface shading model wraps light past the terminator in its scatter colour")
+{
+    Fixture fixture;
+    RenderResources& resources = *fixture.resources;
+    const ShaderHandle skin = resources.createShader(loadShader(test_shaders::skinShader()), "Skin");
+    REQUIRE(resources.isValid(skin));
+    CHECK(resources.shaderLayout(skin)->shadingModel == ShadingModel::Subsurface);
+    const MaterialHandle thin = resources.createMaterial(shaded(skin));
+    const MaterialHandle thick = resources.createMaterial(shaded(skin, {{"thickness", {1.0f, 0, 0, 0}}}));
+    MaterialDesc standardDesc;
+    standardDesc.parameters.baseColorFactor = Vec4(0.9f, 0.7f, 0.6f, 1.0f);
+    standardDesc.parameters.metallicFactor = 0.0f;
+    standardDesc.parameters.roughnessFactor = 0.6f;
+    const MaterialHandle standard = resources.createMaterial(standardDesc);
+
+    // The sun from the right: the terminator runs down the middle of the sphere.
+    const Vec3 sun(-1.0f, 0.0f, 0.0f);
+    const std::vector<std::byte> wrapped = renderSphere(fixture, thin, sun, false);
+    golden("material-subsurface", wrapped);
+    const std::vector<std::byte> lambert = renderSphere(fixture, thick, sun, false);
+    // The unlit half receives red light; the lit half keeps its colour.
+    CHECK(bandSum(wrapped, 16, 30, 0) > bandSum(lambert, 16, 30, 0) + 2000);
+    CHECK(bandSum(wrapped, 16, 30, 0) - bandSum(lambert, 16, 30, 0) >
+          2 * (bandSum(wrapped, 16, 30, 2) - bandSum(lambert, 16, 30, 2)));
+    // Thickness 1 is the Default model.
+    CHECK(differingPixels(lambert, renderSphere(fixture, standard, sun, false)) <= kSize * kSize / 100);
+}
+
+TEST_CASE("the ClearCoat shading model adds a sharp highlight over a rough base")
+{
+    Fixture fixture;
+    RenderResources& resources = *fixture.resources;
+    const ShaderHandle coat = resources.createShader(loadShader(test_shaders::coatShader()), "Coat");
+    REQUIRE(resources.isValid(coat));
+    CHECK(resources.shaderLayout(coat)->shadingModel == ShadingModel::ClearCoat);
+    const MaterialHandle coated = resources.createMaterial(shaded(coat));
+    const MaterialHandle bare = resources.createMaterial(shaded(coat, {{"coat", {0.0f, 0, 0, 0}}}));
+    MaterialDesc standardDesc;
+    standardDesc.parameters.baseColorFactor = Vec4(0.6f, 0.05f, 0.05f, 1.0f);
+    standardDesc.parameters.metallicFactor = 0.0f;
+    standardDesc.parameters.roughnessFactor = 0.7f;
+    const MaterialHandle standard = resources.createMaterial(standardDesc);
+
+    const Vec3 sun(-0.3f, -0.3f, -1.0f);
+    const std::vector<std::byte> glossy = renderSphere(fixture, coated, sun, false);
+    golden("material-clearcoat", glossy);
+    const std::vector<std::byte> rough = renderSphere(fixture, bare, sun, false);
+    CHECK(brightest(glossy) > brightest(rough) + 150);
+    // Coat 0 is the Default model.
+    CHECK(differingPixels(rough, renderSphere(fixture, standard, sun, false)) <= kSize * kSize / 100);
+}
+
+TEST_CASE("materials of every shading model draw alike in one frame of the bound and the bindless path")
+{
+    Fixture fixture;
+    RenderResources& resources = *fixture.resources;
+    const ShaderHandle unlit = resources.createShader(loadShader(test_shaders::unlitShader()), "Unlit");
+    const ShaderHandle skin = resources.createShader(loadShader(test_shaders::skinShader()), "Skin");
+    const ShaderHandle coat = resources.createShader(loadShader(test_shaders::coatShader()), "Coat");
+    MaterialDesc leafDesc;
+    leafDesc.parameters.metallicFactor = 0.0f;
+    leafDesc.parameters.diffuseTransmission = 0.5f;
+    leafDesc.parameters.doubleSided = true;
+    const std::vector<MaterialHandle> materials = {
+        resources.createMaterial(MaterialDesc{}), resources.createMaterial(leafDesc),
+        resources.createMaterial(shaded(unlit)), resources.createMaterial(shaded(skin)),
+        resources.createMaterial(shaded(coat))};
+    const MeshHandle sphere = resources.createMesh(makeSphere(0.45f), "Sphere");
+
+    std::vector<std::byte> bound;
+    for (const bool bindless : {false, true})
+    {
+        CAPTURE(bindless);
+        auto renderer = SceneRenderer::create(*fixture.device, resources, description(bindless));
+        REQUIRE(renderer != nullptr);
+        World world;
+        for (usize i = 0; i < materials.size(); ++i)
+        {
+            Transform at;
+            at.position = Vec3(-2.0f + static_cast<f32>(i), (i % 2 == 0) ? 0.5f : -0.5f, 0.0f);
+            world.create(at, RenderMesh{sphere, 0, materials[i]});
+        }
+        addLight(world);
+        fixture.render(*renderer, world);
+        CHECK(renderer->stats().pipelinesBuilt > 0);
+        fixture.render(*renderer, world);
+        CHECK(renderer->stats().pipelinesBuilt == 0);
+        const std::vector<std::byte> image = fixture.image();
+        if (!bindless)
+        {
+            bound = image;
+        }
+        else if (renderer->usesBindless())
+        {
+            CHECK(differingPixels(image, bound) <= kSize * kSize / 100);
+        }
+    }
 }
