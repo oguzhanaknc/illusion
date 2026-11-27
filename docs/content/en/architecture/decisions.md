@@ -72,6 +72,7 @@ records rather than user documentation.
 | [0063](https://github.com/oguzhanaknc/illusion/blob/main/docs/adr/0063-material-shaders.md) | Material shaders: Slang surface functions in `.shader` assets with declared parameters, compiled per pass variant by the pinned slangc at cook time and on hot reload; the player loads cooked SPIR-V |
 | [0064](https://github.com/oguzhanaknc/illusion/blob/main/docs/adr/0064-virtual-cameras.md) | Virtual cameras: saved rigs of body, aim and noise stages; a camera brain on the real camera blends to the highest-priority live one; evaluated after Hierarchy in a GPU-free camera library |
 | [0065](https://github.com/oguzhanaknc/illusion/blob/main/docs/adr/0065-retargeting-and-aim-layers.md) | Retargeting and aim layers: rig maps cooked with the skeleton, generated at import and corrected in the sidecar; model-space rest-pose corrections bound once per clip and rig; additive aim layers in model space and a procedural Aim stage on the spine |
+| [0067](https://github.com/oguzhanaknc/illusion/blob/main/docs/adr/0067-cinematic-post-effects.md) | Cinematic post effects: a half-resolution gather depth of field from a thin lens on the camera, tile-based per-object motion blur with a shutter angle, screen-space flares and lens dirt after TAA and before bloom; saved singletons, the lens per shot on virtual cameras, quality levels in the render settings |
 
 To propose a new decision, copy `docs/adr/0000-template.md` and follow the
 [contributing guide](../contributing.md#architecture-decision-records).

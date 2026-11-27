@@ -1690,6 +1690,76 @@ Correct indirect light indoors and in shadow until ray tracing (M10) is availabl
 
 ## POST — Cinematic post effects
 
+- POST is designed in ADR 0067 (after TAA and before bloom: a gather depth of field at half resolution with
+  near and far fields and polygon bokeh, its circle of confusion from a thin lens on `Camera` (focus distance,
+  f-number, sensor height and the field of view); tile-based per-object motion blur from the motion vectors with
+  a shutter angle and a separate camera share; screen-space ghosts and a halo from the bloom chain, and lens dirt
+  on bloom; the effects turned on by the saved singletons `DepthOfField` and `MotionBlur` and the lens fields of
+  `PostEffects`, the lens per shot on `VirtualCamera`; `RenderQuality` in `RenderSettings` sets the sample
+  counts). Five work packages, one PR each:
+- POST-1 (`implementer`): Lens and depth of field. `illusion/render/CinematicEffects.hpp` (`DepthOfField`,
+  `FocusMode`, `RenderQuality`, `PostQualitySettings`, `postQualityOf()`, `depthOfFieldSamples()`, `ThinLens`,
+  `FocusRange`, `focalLengthOf()`, `thinLensOf()`, `circleOfConfusion()`, `focusRange()`; `shutterFraction()` and
+  `motionBlurTileSize()` come with POST-2), `Camera` version 3 (`focusDistance`, `fStop`, `sensorHeight`),
+  `Unit::Millimeters`, `RenderView::lens` and `cameraCut`, `PostProcessSettings::quality`, `RenderSettings::quality`
+  and `depthOfField` applied by the player and the Game view, the ScreenPoint focus, the depth of field passes in
+  the ADR's chain order (exposure metered before them), `RenderStats::cinematicPasses`,
+  `RenderGpuTimings::depthOfField`, `RenderDebugView::CircleOfConfusion`. Done: CPU tests
+  (`tests/render/TestCinematicEffects.cpp`: focal length and circle of confusion against hand-computed thin-lens
+  values, the sign in front of and behind the focus, focus kept beyond the focal length, focus range and the
+  hyperfocal distance, the quality table, the reflection round trip and version 2 cameras loading unchanged); GPU
+  goldens on lavapipe `dof-bokeh` (emissive spheres behind the focus with 0 and 6 blades and an anamorphic aspect)
+  and `dof-near-far` (a near post blurring over an in-focus plane, the far field behind it), in-focus pixels and
+  a scene without `DepthOfField` byte-identical to before, a uniform image unchanged (white furnace), every
+  quality level, the ScreenPoint focus converging to a known depth in fixed steps and snapping on `cameraCut`,
+  repeated frames byte-identical, every test at zero validation errors; GPU benchmarks `render/depth-of-field-1080p`
+  and `render/depth-of-field-4k` (ADR targets 0.45 ms and 1.5 ms at High on the RTX 4070 SUPER, budgets from the
+  measurement), `render/10k-instances` within 1 % without the singleton; `samples/showcase/build.jsonl` gets a
+  `DepthOfField` with every field non-default and the new `Camera` fields; manual section "Depth of field" of
+  `manual/rendering.md` (EN/TR; POST-5 completes it).
+- POST-2 (`implementer`): Motion blur. `MotionBlur` (reflected as "illusion.MotionBlur"), `shutterFraction()`,
+  `motionBlurTileSize()`, `Camera` version 4 (`shutterAngle`), `RenderView::shutterAngle`, `RenderSettings::motionBlur`,
+  the camera share from depth reprojection, tile max, neighbour max and the reconstruction gather after depth of
+  field, skipped on `cameraCut` and without history, `CameraBrainState::cuts` and the hosts setting
+  `RenderView::cameraCut` from it, `RenderGpuTimings::motionBlur`. Done: CPU tests of the shutter fraction and
+  tile size (edges and clamps); GPU goldens on lavapipe `motion-blur-objects` (a moving and a spinning cube and a
+  skinned mesh before a static camera; `cameraBlur` 0 and 1 with a turning camera), a static scene and a scene
+  without `MotionBlur` byte-identical to before, a cut frame unblurred, TAA history unchanged by motion blur
+  (the next frame's TAA output equal with and without it), repeated frames byte-identical, zero validation
+  errors; `tests/runtime` (a brain cut increments `cuts` and the player sets `cameraCut` once); GPU benchmarks
+  `render/motion-blur-1080p` and `render/motion-blur-4k` (ADR targets 0.25 ms and 0.9 ms at High, budgets from
+  the measurement); `build.jsonl` gets a `MotionBlur` with every field non-default and a non-default
+  `shutterAngle`; manual section "Motion blur" (EN/TR).
+- POST-3 (`implementer`): Lens effects. `PostEffects` version 2 (`lensDirt`, `lensDirtIntensity`, `flareIntensity`,
+  `flareThreshold`, `flareGhosts`, `flareGhostSpacing`, `flareHalo`, `flareChromaticShift`), the lens dirt texture
+  resolved through `RenderAssetResolver` (loaded like a material texture, a missing asset logged once and drawn
+  without dirt), the flare pass on bloom level 2 and the tonemap additions, skipped at Low quality and without
+  bloom. Done: GPU golden on lavapipe `lens-flare` (a bright sun disc off centre with ghosts, halo, chromatic
+  shift and a generated dirt texture), version 1 `PostEffects` and zero intensities byte-identical to before, no
+  flares without bloom or at Low, zero validation errors; GPU benchmark `render/lens-flares-1080p` (ADR target
+  0.08 ms, 0.15 ms at 4K, budget from the measurement); `samples/showcase/make_assets.py` generates a dirt texture
+  and `build.jsonl` sets every new `PostEffects` field non-default; manual section "Lens effects" (EN/TR).
+- POST-4 (`implementer`): Lenses of virtual cameras. `illusion/camera/CameraLens.hpp` (`CameraLens`,
+  `blendCameraLenses()`, `focusDistanceTo()`), `CameraPose::lens`, the `VirtualCamera` lens fields (`focusDistance`,
+  `fStop`, `shutterAngle`, `focusTarget`, `focusOffset`, `focusDamping`) and `VirtualCameraState::focusVelocity`,
+  `blendCameraPoses()` blending the lens, `CameraWorld` keeping a focus target in focus and writing the three lens
+  fields of the brain's `Camera` through reflection. Done: `tests/camera` (lens blends in dioptres and stops against
+  hand-computed values, a focus pull between two shots, a focus target followed with damping, a target behind the
+  camera clamped to the near plane, a `Camera` without the lens fields left alone, bit-identical fixed-step runs, no
+  allocation); `tests/runtime` (a brain's Camera carries the shot's lens into `RenderView::lens`); benchmark
+  `camera/world-100` within 3 %; `build.jsonl` sets every new `VirtualCamera` field non-default (the showcase rig
+  focuses on its character).
+- POST-5 (`mechanic`): Scripting API, editor and documentation. `CameraService::setFocusDistance()`,
+  `setFocusTarget()` and `setAperture()` with `CameraWorldService` (module API version raised to the next free),
+  called by the showcase module and `tests/modules`; `ViewportQuality::postQuality`, `depthOfField` and `motionBlur`
+  in `postProcessSettingsOf()` and the Rendering panel; the `CircleOfConfusion` shading mode in the viewport
+  commands; the focus plane and sharp range visualiser (`VisualiserColors::focusPlane`); the command `camera.focus`
+  (Entity, point or distance; undoable; fuzz cases) and the lens in `camera.status`; the command reference and
+  `catalog.json`; the tech demo's cutscene camera pulls focus. Done: `editor/tests/core/TestCameraCommands.cpp`,
+  `editor/tests/viewport/TestVisualisers.cpp`, a viewport GPU test of the shading mode; manual sections "Depth of
+  field", "Motion blur" and "Lens effects" completed with "Quality levels", "Lens and focus" in
+  `manual/cameras.md`, the scripting API reference, the project settings reference (EN/TR), `CHANGELOG.md`, ADR 0067
+  Accepted; `mkdocs build --strict` and docs parity.
 - Depth of field (physically based circle of confusion from focus distance and aperture, bokeh), driven
   by `PostEffects` and by virtual cameras (CAM)
 - Per-object motion blur from the existing motion vectors; lens effects (lens dirt on bloom, flares)
