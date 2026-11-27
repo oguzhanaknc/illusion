@@ -1,4 +1,4 @@
-#include "EditorCoreTestSupport.hpp"
+﻿#include "EditorCoreTestSupport.hpp"
 
 #include <illusion/ecs/Name.hpp>
 #include <illusion/ecs/Prefab.hpp>
@@ -214,6 +214,60 @@ TEST_CASE("prefab.instantiate places linked instances and rejects files that are
     ok(editor, "history.undo");
     ok(editor, "history.undo");
     CHECK(fails(editor, "entity.get", R"({"entity":"/Game/Light"})").kind == ErrorKind::NotFound);
+}
+
+// Regression: overwriting a prefab with a subtree that holds an instance of it was an Internal error.
+TEST_CASE("prefab.create rejects a subtree that contains an instance of the prefab it writes")
+{
+    EditorFixture fixture;
+    fixture.buildScene();
+    EditorContext& editor = *fixture.editor;
+    ok(editor, "prefab.create", R"({"entity":"/Light","path":"assets:/props/light.prefab"})");
+    ok(editor, "hierarchy.set_parent", R"({"entity":"/Light","parent":"/Game"})");
+    const std::string before =
+        std::string(ok(editor, "project.file_read", R"({"path":"assets:/props/light.prefab"})")
+                        .root()
+                        .find("text")
+                        .asString()
+                        .value_or(""));
+    const std::string scene = fixture.scene();
+    for (const char* replace : {"true", "false"})
+    {
+        const CommandError error =
+            fails(editor, "prefab.create",
+                  std::string(R"({"entity":"/Game","path":"assets:/props/light.prefab",)") +
+                      R"("overwrite":true,"replace":)" + replace + "}");
+        CHECK(error.kind == ErrorKind::ValidationFailed);
+        CHECK(error.errors.at(0).pointer == "/entity");
+    }
+
+    // At any depth: a light instance nested in an instance of another prefab.
+    ok(editor, "prefab.create", R"({"entity":"/Game","path":"assets:/props/game.prefab"})");
+    ok(editor, "entity.create", R"({"name":"Holder"})");
+    ok(editor, "hierarchy.set_parent", R"({"entity":"/Game","parent":"/Holder"})");
+    CHECK(fails(editor, "prefab.create",
+                R"({"entity":"/Holder","path":"assets:/props/light.prefab","overwrite":true})")
+              .kind == ErrorKind::ValidationFailed);
+    CHECK(ok(editor, "project.file_read", R"({"path":"assets:/props/light.prefab"})")
+              .root()
+              .find("text")
+              .asString() == std::optional<std::string_view>(before));
+    ok(editor, "history.undo", R"({"steps":3})");
+    CHECK(fixture.scene() == scene);
+}
+
+TEST_CASE("prefab.instantiate rejects a prefab whose nested prefab cannot be loaded")
+{
+    EditorFixture fixture;
+    fixture.buildScene();
+    EditorContext& editor = *fixture.editor;
+    ok(editor, "prefab.create", R"({"entity":"/Light","path":"assets:/props/light.prefab"})");
+    ok(editor, "hierarchy.set_parent", R"({"entity":"/Light","parent":"/Game"})");
+    ok(editor, "prefab.create", R"({"entity":"/Game","path":"assets:/props/game.prefab","replace":false})");
+    ok(editor, "project.file_delete", R"({"path":"assets:/props/light.prefab"})");
+    const CommandError error = fails(editor, "prefab.instantiate", R"({"path":"assets:/props/game.prefab"})");
+    CHECK(error.kind == ErrorKind::ValidationFailed);
+    CHECK(error.errors.at(0).pointer == "/path");
 }
 
 TEST_CASE("prefab.overrides, prefab.revert and prefab.unpack work on any entity of an instance")

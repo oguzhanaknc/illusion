@@ -185,10 +185,11 @@ inline JsonDocument ok(editor::EditorContext& editor, std::string_view name, std
     return parseJson(*result);
 }
 
-/// Writes the showcase's file @p file (relative to its `assets/`) into the project as @p path.
-inline void installShowcaseAsset(editor::EditorContext& editor, std::string_view file, std::string_view path)
+/// Writes the file @p source of the host's file system into the project as @p path.
+inline void installProjectFile(editor::EditorContext& editor, const std::filesystem::path& source,
+                               std::string_view path)
 {
-    std::ifstream in(utf8Path(ILLUSION_SAMPLES_DIR) / "showcase" / "assets" / file, std::ios::binary);
+    std::ifstream in(source, std::ios::binary);
     REQUIRE(in.good());
     std::ostringstream buffer;
     buffer << in.rdbuf();
@@ -201,6 +202,25 @@ inline void installShowcaseAsset(editor::EditorContext& editor, std::string_view
     std::string json;
     REQUIRE(doc.write(json, JsonWriteOptions{.pretty = false}));
     (void)ok(editor, "project.file_write", json);
+}
+
+/// Writes the showcase's file @p file (relative to its `assets/`) into the project as @p path.
+inline void installShowcaseAsset(editor::EditorContext& editor, std::string_view file, std::string_view path)
+{
+    installProjectFile(editor, utf8Path(ILLUSION_SAMPLES_DIR) / "showcase" / "assets" / file, path);
+}
+
+/// Writes the two humanoid test rigs (tests/data/gltf) into the project's assets: mount as
+/// "assets:/models/humanoid_a.gltf" (skin 0, clip walk) and "assets:/models/humanoid_b.gltf" (skin 0, clip
+/// wave).
+inline void installRigAssets(editor::EditorContext& editor)
+{
+    for (const char* name : {"humanoid_a", "humanoid_b"})
+    {
+        installProjectFile(editor,
+                           utf8Path(ILLUSION_ENGINE_TEST_DATA) / "gltf" / (std::string(name) + ".gltf"),
+                           std::string("assets:/models/") + name + ".gltf");
+    }
 }
 
 /// Writes the showcase's skinned column (model, animation graph and ragdoll profile) into the project's
@@ -220,6 +240,11 @@ inline void runSetup(editor::EditorContext& editor, std::string_view setup)
     if (setup == "test.install_animation")
     {
         installAnimationAssets(editor);
+        return;
+    }
+    if (setup == "test.install_rigs")
+    {
+        installRigAssets(editor);
         return;
     }
     if (const usize next = setup.find(" ; "); next != std::string_view::npos)

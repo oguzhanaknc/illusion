@@ -520,15 +520,21 @@ std::optional<PosedSkeleton> posed(const World& world, const AnimationWorld& ani
 
 void recordBones(Recorder& out, const PosedSkeleton& pose, const VisualiserColors& colors) noexcept
 {
+    // A skeleton without a rig map has nothing to tell apart: it is drawn at full strength.
+    const RigMap& rig = pose.skeleton->rig;
+    const bool mapped = !rig.empty() && rig.bones.size() == pose.joints.size();
+    const Vec4 dimmedBone(Vec3(colors.bone), colors.bone.a * colors.unmappedAlpha);
+    const Vec4 dimmedJoint(Vec3(colors.skeletonJoint), colors.skeletonJoint.a * colors.unmappedAlpha);
     for (usize i = 0; i < pose.joints.size(); ++i)
     {
+        const bool dimmed = mapped && rig.bones[i].empty();
         const Vec3 at = pose.position(i);
         const i32 parent = pose.skeleton->joints[i].parent;
         if (parent >= 0)
         {
-            out.line(pose.position(static_cast<usize>(parent)), at, colors.bone);
+            out.line(pose.position(static_cast<usize>(parent)), at, dimmed ? dimmedBone : colors.bone);
         }
-        out.cross(at, pose.marker, colors.skeletonJoint);
+        out.cross(at, pose.marker, dimmed ? dimmedJoint : colors.skeletonJoint);
     }
 }
 

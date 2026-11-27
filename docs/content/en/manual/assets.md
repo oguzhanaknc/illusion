@@ -268,7 +268,8 @@ float3 worldOffset(WorldOffsetInput input)
   `sampleTexture()` and start the result from `defaultSurface()`.
 - `worldOffset()` is optional and moves vertices in world space; it must have exactly the signature above.
 - `[ShadingModel("...")]` on `Parameters` names the shading model: `Default`, `Unlit`, `Subsurface`,
-  `TwoSidedFoliage` or `ClearCoat`. Without it the shader uses `Default`.
+  `TwoSidedFoliage` or `ClearCoat`. Without it the shader uses `Default`. What each model reads from
+  `SurfaceOutput` is in [Shading models](rendering.md#shading-models) of the rendering manual.
 
 | Attribute | On | Meaning |
 | --- | --- | --- |
@@ -307,7 +308,6 @@ does not fit its type, too many bytes or textures) name the field they are about
 - `#include` in a `.shader` file is not supported.
 - `SurfaceInput.color` is the mesh's vertex colour (glTF `COLOR_0`), white without one;
   `SurfaceInput.customData` is zero for now.
-- Shading models other than `Unlit` light like `Default` until MAT-3.
 - `.material` files do not name shaders yet (MAT-4); code gives shaders to Materials through
   `RenderResources` (see [Material shaders](rendering.md#material-shaders) in the rendering manual). The
   reference of the surface API comes with MAT-4; until then the header comment of `illusion/Surface.slang`

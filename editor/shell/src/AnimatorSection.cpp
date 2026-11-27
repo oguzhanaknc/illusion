@@ -15,6 +15,7 @@
 #include <illusion/editor/core/ViewportHost.hpp>
 
 #include <algorithm>
+#include <array>
 #include <charconv>
 #include <cmath>
 #include <cstring>
@@ -83,6 +84,90 @@ f32 progressOf(f32 time, bool loop) noexcept
         return 0.0f;
     }
     return std::clamp(loop ? time - std::floor(time) : time, 0.0f, 1.0f);
+}
+
+// At most this many source skins are listed for a graph.
+constexpr usize kSourceCount = 4;
+
+// The skin @p clip was authored on ("model.gltf#skin/N", in the frame's text), where @p clipRef is its asset
+// path; empty without one or when it is @p skeleton itself (the clip binds by name, ADR 0065).
+std::string_view sourceSkin(ui::FrameText& text, std::string_view clipRef, const AnimationClip& clip,
+                            std::string_view skeleton)
+{
+    if (clip.skeleton < 0 || clipRef.empty())
+    {
+        return {};
+    }
+    const std::string_view model = clipRef.substr(0, clipRef.find('#'));
+    const std::string_view path(
+        text.concat(model, text.concat("#skin/", indexText(text, static_cast<usize>(clip.skeleton)))));
+    return path == skeleton ? std::string_view{} : path;
+}
+
+// The source skins of the retargeted clips of a graph, each once, in the graph's clip order.
+struct SourceSkins
+{
+    std::array<std::string_view, kSourceCount> paths{};
+    usize count = 0;
+
+    void add(std::string_view path) noexcept
+    {
+        if (path.empty() || count == paths.size() ||
+            std::find(paths.begin(), paths.begin() + static_cast<std::ptrdiff_t>(count), path) !=
+                paths.begin() + static_cast<std::ptrdiff_t>(count))
+        {
+            return;
+        }
+        paths[count++] = path;
+    }
+};
+
+// Adds the source skin of clip @p index of @p binding when the binding retargets it.
+void addRetargeted(SourceSkins& out, ui::FrameText& text, const GraphBinding& binding, usize index,
+                   const AssetRef& clipRef, std::string_view skeleton)
+{
+    if (index < binding.clips.size() && index < binding.clipRetargets.size() &&
+        binding.clips[index] != nullptr && binding.clipRetargets[index].active())
+    {
+        out.add(sourceSkin(text, clipRef.path(), *binding.clips[index], skeleton));
+    }
+}
+
+// The source skins of every retargeted clip of @p graph: each state's clips from GraphBinding::firstClip,
+// then the layers' reference clips.
+SourceSkins graphSources(ui::FrameText& text, const AnimationGraph& graph, const GraphBinding& binding,
+                         std::string_view skeleton)
+{
+    SourceSkins out;
+    for (usize layer = 0; layer < graph.layers.size() && layer < binding.firstState.size(); ++layer)
+    {
+        const AnimationLayer& current = graph.layers[layer];
+        for (usize i = 0; i < current.states.size(); ++i)
+        {
+            const usize state = binding.firstState[layer] + i;
+            if (state >= binding.firstClip.size())
+            {
+                break;
+            }
+            const usize first = binding.firstClip[state];
+            const AnimationMotion& motion = current.states[i].motion;
+            if (motion.type == AnimationMotionType::Clip)
+            {
+                addRetargeted(out, text, binding, first, motion.clip, skeleton);
+                continue;
+            }
+            for (usize point = 0; point < motion.points.size(); ++point)
+            {
+                addRetargeted(out, text, binding, first + point, motion.points[point].clip, skeleton);
+            }
+        }
+        if (layer < binding.referenceClips.size() && binding.referenceClips[layer] >= 0)
+        {
+            addRetargeted(out, text, binding, static_cast<usize>(binding.referenceClips[layer]),
+                          current.reference, skeleton);
+        }
+    }
+    return out;
 }
 
 } // namespace
@@ -256,6 +341,23 @@ void AnimatorSection::draw(Impl& shell, ui::UiKit& kit, Entity entity, EntityGui
             text.format(s::kInspectorAnimatorClipSummary,
                         {{"name", std::string_view(clip->name)}, {"seconds", seconds(clip->duration)}}));
         duration = clip->duration;
+    }
+
+    // The skins the clips were authored on, when they play retargeted (ADR 0065).
+    SourceSkins sources;
+    if (hasGraph)
+    {
+        sources = graphSources(text, *graph, *binding, animator->skeleton.path());
+    }
+    else if (clip != nullptr && !skeleton->rig.empty())
+    {
+        sources.add(sourceSkin(text, animator->clip.path(), *clip, animator->skeleton.path()));
+    }
+    for (usize i = 0; i < sources.count; ++i)
+    {
+        ui::propertyLabel(kit, i == 0 ? text.format(s::kInspectorAnimatorSource) : "");
+        ImGui::Selectable(text.verbatim(sources.paths[i],
+                                        text.concat(cardId, text.concat(".source.", indexText(text, i)))));
     }
 
     if (duration > 0.0f && std::isfinite(duration))

@@ -1,9 +1,11 @@
 {
   "format": "illusion.animgraph",
-  "version": 1,
+  "version": 2,
   "parameters": [
     {"name": "speed", "type": "Float"},
-    {"name": "jump", "type": "Trigger"}
+    {"name": "jump", "type": "Trigger"},
+    {"name": "aimYaw", "type": "Float"},
+    {"name": "aimPitch", "type": "Float"}
   ],
   "rootMotion": "hips",
   "layers": [
@@ -35,6 +37,34 @@
       "transitions": [
         {"from": "locomotion", "to": "jump", "duration": 0.1, "conditions": [{"parameter": "jump"}]},
         {"from": "jump", "to": "locomotion", "duration": 0.2, "exitTime": 0.9}
+      ]
+    },
+    {
+      "name": "aim",
+      "blend": "Additive",
+      "space": "Model",
+      "reference": "assets:/models/hero.glb#animation/aim_center",
+      "referenceTime": 0,
+      "mask": [{"joint": "spine", "weight": 1}],
+      "states": [
+        {
+          "name": "aim",
+          "blend2d": {
+            "x": "aimYaw",
+            "y": "aimPitch",
+            "points": [
+              {"x": 0, "y": 0, "clip": "assets:/models/hero.glb#animation/aim_center"},
+              {"x": -1.2, "y": 0, "clip": "assets:/models/hero.glb#animation/aim_left"},
+              {"x": 1.2, "y": 0, "clip": "assets:/models/hero.glb#animation/aim_right"},
+              {"x": 0, "y": 0.8, "clip": "assets:/models/hero.glb#animation/aim_up"},
+              {"x": 0, "y": -0.8, "clip": "assets:/models/hero.glb#animation/aim_down"},
+              {"x": -1.2, "y": 0.8, "clip": "assets:/models/hero.glb#animation/aim_left_up"},
+              {"x": -1.2, "y": -0.8, "clip": "assets:/models/hero.glb#animation/aim_left_down"},
+              {"x": 1.2, "y": 0.8, "clip": "assets:/models/hero.glb#animation/aim_right_up"},
+              {"x": 1.2, "y": -0.8, "clip": "assets:/models/hero.glb#animation/aim_right_down"}
+            ]
+          }
+        }
       ]
     }
   ]

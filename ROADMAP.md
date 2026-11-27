@@ -1520,8 +1520,18 @@ Today games can only set the parameters of the built-in PBR material.
   `updateShader()`); `SurfaceInput.customData` stays zero until `MeshRenderer` carries it; in the bindless
   path, alpha-masked and cross-fading batches take the bound prepass per Material (no bindless prepass
   variant).
-- MAT-3 (`implementer`): Shading models `Unlit`, `Subsurface`, `TwoSidedFoliage`, `ClearCoat` in the
-  lighting code. Done: a golden per model, the tech demo foliage on `TwoSidedFoliage` with unchanged images.
+- ✅ MAT-3 (`implementer`): Shading models `Unlit`, `Subsurface`, `TwoSidedFoliage`, `ClearCoat` in the
+  lighting code. Done: `ForwardLighting.slang` branches on the shader's `ILLUSION_SHADING_MODEL`, a constant of
+  its variants (the `Default` model compiles to the MAT-2 code without the transmission terms); `Subsurface`
+  wraps diffuse light past the terminator by `1 - thickness` in `subsurfaceColor`, `TwoSidedFoliage` is GFX-2d's
+  translucency, `ClearCoat` adds a dielectric GGX lobe along the geometric normal with `clearCoatRoughness`
+  (direct and image-based light); `builtin:/shader/foliage` (`RenderResources::foliageShader()`, the standard
+  surface in `illusion/StandardMaterial.slang` under `TwoSidedFoliage`) draws materials without a shader whose
+  `diffuseTransmission` is above zero, so the tech demo foliage moved onto it; GPU goldens `material-unlit`,
+  `material-subsurface`, `material-clearcoat` and `material-foliage` (captured before the move, byte-identical
+  after), `thickness` 1 and `clearCoat` 0 equal to the standard shader, every model in one frame alike in the
+  bound and bindless paths; existing goldens unchanged, `render/*` benchmarks unchanged. Open: shadows still
+  darken wrapped light (no shadow-map thickness for `Subsurface`); no clear-coat normal map.
 - MAT-4 (`mechanic`): Editor and documentation. `.material` `shader` and typed parameters in the Inspector,
   `material.compile`/`material.validate` commands (diagnostics for agents), the asset browser kind `Shader`,
   the showcase (a custom shader with every parameter type), a tech demo example, the manual "Material
@@ -1600,7 +1610,7 @@ game code.
 - `camera.*` editor commands, a preview of the live and blending cameras in the Scene view, EN/TR docs
 - Determinism with fixed steps; no per-frame allocation; benchmarks of 100 virtual cameras
 
-## ANIM-5 — Retargeting and aim layers
+## ANIM-5 — Retargeting and aim layers ✅
 
 - ANIM-5 is designed in ADR 0065 (a rig map of bone names per skeleton, generated at import and corrected in
   the model's sidecar; clips retargeted at bind time with a model-space rest-pose correction applied per
@@ -1646,7 +1656,7 @@ game code.
   within 1 mm; both test rigs aim with the same bone-name `Aim`; determinism and no allocation; parser tests
   for every new error; benchmark `animation/aim-300` (ADR target under 1 ms over
   `animation/world-graph-300`, budget from the measurement); `tests/modules` calls the three functions.
-- ANIM-5d (`mechanic`): Editor and documentation. Commands `animation.rig`, `animation.map_joint` (through the
+- ✅ ANIM-5d (`mechanic`): Editor and documentation. Commands `animation.rig`, `animation.map_joint` (through the
   `asset.set_import_settings` path, undoable) and `animation.retarget`, the additions to `animation.list`, every
   param validated with fuzz cases, the command reference and `catalog.json`, agent summaries with examples; the
   Animator card's source-skin line and the dimmed unmapped joints of the Skeletons visualiser (goldens
@@ -1654,7 +1664,16 @@ game code.
   retargeted clip, undoes it); manual sections "Retargeting" and "Aim offsets" in `manual/animation.md` (EN/TR,
   a complete version 2 `.animgraph` aim example tested like `character.animgraph`), the scripting API
   reference, the tutorial "Animate a character" gets aiming, `CHANGELOG.md` (module API version 14), ADR 0065
-  Accepted. Done: `mkdocs build --strict`, docs parity, the tutorial's code builds.
+  Accepted. Done: `mkdocs build --strict`, docs parity, the tutorial's code builds; the Inspector's
+  **Source skin** rows (`.source.N`, one per source skin of a retargeted clip, graphs included) and the
+  dimmed joints (`VisualiserColors::unmappedAlpha`) tested on the CPU, the existing goldens unchanged (their
+  rigs are fully mapped and play their own clips); `animation.map_joint` in the random history test exposed
+  `prefab.create` writing a prefab that contains an instance of itself (now rejected, as is a prefab whose
+  nested prefab cannot be loaded). The tutorial "Animate a character" has its aiming step
+  (`hero.animgraph` version 2, tested by `TestAnimationGraphExample.cpp`) and the manual lists the Source skin
+  row and the dimmed joints.
+  Open: setting `Animator.graph` with `component.set_field` on an Animator already posed in the edit World does
+  not show the graph after `waitIdle()` (seen in ANIM-5d, not investigated).
 - Humanoid retargeting: a joint map per skeleton (generated by name and topology, editable), clips played
   on any mapped skeleton with rest-pose correction and proportional root motion
 - Aim layers: additive aim offsets from a pitch/yaw blend space on an upper-body mask, so a character aims

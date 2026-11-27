@@ -55,6 +55,7 @@ struct VisualiserColors
     Vec4 ikTarget{1.0f, 0.7f, 0.2f, 1.0f};         ///< LookAt and TwoBoneIk targets and poles.
     Vec4 spring{0.3f, 0.85f, 0.45f, 1.0f};         ///< SpringBone chains and colliders.
     Vec4 ragdoll{0.95f, 0.4f, 0.4f, 1.0f};         ///< Ragdoll parts.
+    f32 unmappedAlpha = 0.3f; ///< Alpha factor of joints without a bone in their rig map, and of their bones.
 };
 
 /// Finds the parts of a Ragdoll for the skeleton visualiser (the viewports read and cache `.ragdoll` files).

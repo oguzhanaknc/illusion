@@ -274,7 +274,8 @@ float3 worldOffset(WorldOffsetInput input)
 - `worldOffset()` isteğe bağlıdır ve vertex'leri dünya uzayında kaydırır; imzası tam olarak yukarıdaki gibi
   olmalıdır.
 - `Parameters` üzerindeki `[ShadingModel("...")]` shading model'i adlandırır: `Default`, `Unlit`, `Subsurface`,
-  `TwoSidedFoliage` veya `ClearCoat`. Yazılmazsa shader `Default` kullanır.
+  `TwoSidedFoliage` veya `ClearCoat`. Yazılmazsa shader `Default` kullanır. Her modelin `SurfaceOutput`'tan
+  ne okuduğu rendering kılavuzunun [Shading model'leri](rendering.md#shading-models) bölümündedir.
 
 | Attribute | Üzerinde | Anlamı |
 | --- | --- | --- |
@@ -314,7 +315,6 @@ varsayılan, çok fazla bayt veya Texture) ilgili alanı aynı biçimde adlandı
 - Bir `.shader` dosyasında `#include` desteklenmez.
 - `SurfaceInput.color`, Mesh'in vertex rengidir (glTF `COLOR_0`); vertex rengi yoksa beyazdır.
   `SurfaceInput.customData` şimdilik sıfırdır.
-- `Unlit` dışındaki shading model'ler MAT-3'e kadar `Default` gibi ışıklandırılır.
 - `.material` dosyaları henüz shader adlandırmaz (MAT-4); kod, shader'ları Material'lere `RenderResources`
   üzerinden verir (rendering kılavuzundaki [Material shader'ları](rendering.md#material-shaders) bölümüne
   bakın). Surface API'sinin başvuru belgesi MAT-4 ile gelir; o zamana kadar `illusion/Surface.slang` başlık

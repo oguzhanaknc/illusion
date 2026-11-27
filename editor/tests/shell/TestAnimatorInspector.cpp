@@ -93,6 +93,7 @@ TEST_CASE("the Animator's scrubber sets the time through animation.scrub and one
     });
     driver.runFrames(3);
     REQUIRE(driver.find(itemId(".scrub")).has_value());
+    CHECK(driver.find(itemId(".source.0")) == std::nullopt); // the column's clip is its own
     CHECK(columnTime(editor) == doctest::Approx(0.0));
 
     REQUIRE(driver.drag(itemId(".scrub"), Vec2(40.0f, 0.0f), 6));
@@ -156,6 +157,49 @@ TEST_CASE("the Animator's state view shows the running graph's states, sets its 
     driver.runFrames(1);
     CHECK(driver.find(itemId(".event.0")) == std::nullopt);
     editor.setPlay(nullptr);
+}
+
+TEST_CASE("the Animator's card names the source skin of a retargeted clip, also of each clip of a graph")
+{
+    ShellFixture fixture;
+    EditorContext& editor = *fixture.editor;
+    test::installRigAssets(editor);
+    // The walk in a state and twice in a blend space, and the rig's own wave: one source skin.
+    test::ok(editor, "project.file_write",
+             R"({"path":"assets:/animations/hero.animgraph","text":"{\"format\":\"illusion.animgraph\",)"
+             R"(\"version\":1,\"parameters\":[{\"name\":\"speed\",\"type\":\"Float\"}],)"
+             R"(\"layers\":[{\"name\":\"base\",\"entry\":\"wave\",\"states\":[)"
+             R"({\"name\":\"wave\",\"clip\":\"assets:/models/humanoid_b.gltf#animation/wave\"},)"
+             R"({\"name\":\"walk\",\"clip\":\"assets:/models/humanoid_a.gltf#animation/walk\"},)"
+             R"({\"name\":\"move\",\"blend1d\":{\"parameter\":\"speed\",\"points\":[)"
+             R"({\"value\":0,\"clip\":\"assets:/models/humanoid_a.gltf#animation/walk\"},)"
+             R"({\"value\":1,\"clip\":\"assets:/models/humanoid_a.gltf#animation/walk\"}]}}]}]}"})");
+    for (const char* name : {"Hero", "Walker"})
+    {
+        const bool graph = std::string_view(name) == "Walker";
+        test::ok(editor, "entity.create",
+                 std::string(R"({"name":")") + name +
+                     R"(","components":{"illusion.Transform":{},"illusion.Animator":{)"
+                     R"("skeleton":"assets:/models/humanoid_b.gltf#skin/0",)"
+                     R"("clip":"assets:/models/humanoid_a.gltf#animation/walk")" +
+                     (graph ? R"(,"graph":"assets:/animations/hero.animgraph")" : "") + "}}}");
+    }
+    test::ok(editor, "selection.set", R"({"entities":["/Hero"]})");
+    EditPoses poses(editor);
+    poses.animation.waitIdle();
+    ui::UiDriver driver(fixture.context, [&] {
+        poses.animation.update(0.0f, nullptr, false);
+        fixture.frame();
+    });
+    driver.runFrames(3);
+    CHECK(labelOf(driver, itemId(".source.0")).starts_with("assets:/models/humanoid_a.gltf#skin/0###"));
+
+    test::ok(editor, "selection.set", R"({"entities":["/Walker"]})");
+    driver.runFrames(3);
+    REQUIRE(driver.find(itemId(".layer.0")).has_value());
+    CHECK(labelOf(driver, itemId(".source.0")).starts_with("assets:/models/humanoid_a.gltf#skin/0###"));
+    CHECK(driver.find(itemId(".source.1")) == std::nullopt);
+    editor.setViewports(nullptr);
 }
 
 TEST_CASE("an idle shell frame with an Animator in the Inspector does not allocate")

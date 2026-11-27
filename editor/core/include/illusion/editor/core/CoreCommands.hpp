@@ -2084,9 +2084,10 @@ struct AnimationListParams
 /// A skin (skeleton) of a model in the result of `animation.list`.
 struct AnimationListSkin
 {
-    std::string ref;  ///< The reference for Animator::skeleton, e.g. "assets:/models/hero.glb#skin/0".
-    std::string name; ///< The skin's name ("" if it has none).
-    u32 joints = 0;   ///< Joints of its skeleton.
+    std::string ref;       ///< The reference for Animator::skeleton, e.g. "assets:/models/hero.glb#skin/0".
+    std::string name;      ///< The skin's name ("" if it has none).
+    u32 joints = 0;        ///< Joints of its skeleton.
+    bool humanoid = false; ///< Its rig map has every required humanoid bone.
 };
 
 /// A clip of a model in the result of `animation.list`.
@@ -2096,6 +2097,7 @@ struct AnimationListClip
     std::string name;    ///< The clip's name.
     f32 duration = 0.0f; ///< Its length in seconds.
     u32 channels = 0;    ///< Animated properties of joints.
+    std::string source; ///< The skin it was authored on, e.g. "assets:/models/hero.glb#skin/0" ("" for none).
 };
 
 /// Result of `animation.list`.
@@ -2234,6 +2236,86 @@ struct AnimationValidateResult
     u32 layers = 0;        ///< Layers of a valid graph.
     u32 states = 0;        ///< States of a valid graph, over all layers.
     u32 parts = 0;         ///< Parts of a valid ragdoll profile.
+};
+
+/// Params of `animation.rig`.
+struct AnimationRigParams
+{
+    std::string path;          ///< A model of the assets: mount.
+    std::optional<u32> skin{}; ///< Index of its skin (`#skin/N`; default 0).
+};
+
+/// A joint in the result of `animation.rig`.
+struct AnimationRigJoint
+{
+    std::string name;        ///< The joint's name.
+    i32 parent = -1;         ///< Index of its parent joint, or -1.
+    std::string bone;        ///< Its bone ("" for none).
+    std::string translation; ///< How retargeted clips move it: "Skeleton", "Scaled" or "Animation".
+    bool overridden = false; ///< The model's sidecar sets its bone or translation mode.
+};
+
+/// Result of `animation.rig`.
+struct AnimationRigResult
+{
+    std::string path;                      ///< The model.
+    u32 skin = 0;                          ///< The skin.
+    std::string ref;                       ///< Its reference, e.g. "assets:/models/hero.glb#skin/0".
+    std::string name;                      ///< The skin's name ("" if it has none).
+    bool generated = true;                 ///< The map starts from generation (sidecar `generate`).
+    bool humanoid = false;                 ///< Every required humanoid bone is mapped.
+    std::vector<std::string> missing;      ///< Required humanoid bones without a joint.
+    std::vector<std::string> warnings;     ///< Ambiguities generation resolved.
+    std::vector<AnimationRigJoint> joints; ///< Every joint, in skeleton order.
+};
+
+/// Params of `animation.map_joint`.
+struct AnimationMapJointParams
+{
+    std::string path;                         ///< A model of the assets: mount.
+    std::optional<u32> skin{};                ///< Index of its skin (default 0).
+    std::string joint;                        ///< Joint name in the skin.
+    std::optional<std::string> bone{};        ///< Its bone: humanoid, custom, or "" to unmap it.
+    std::optional<std::string> translation{}; ///< "Skeleton", "Scaled" or "Animation".
+};
+
+/// Result of `animation.map_joint`.
+struct AnimationMapJointResult
+{
+    std::string path;                 ///< The model.
+    u32 skin = 0;                     ///< The skin.
+    std::string joint;                ///< The joint.
+    std::string bone;                 ///< Its bone afterwards ("" for none).
+    std::string translation;          ///< Its translation mode afterwards.
+    bool humanoid = false;            ///< The skin's rig is humanoid afterwards.
+    std::vector<std::string> missing; ///< Required humanoid bones without a joint afterwards.
+    std::string sidecar;              ///< The model's sidecar, or "" if every setting is a default.
+    bool changed = false;             ///< The sidecar was written or deleted.
+};
+
+/// Params of `animation.retarget`.
+struct AnimationRetargetParams
+{
+    std::string clip;     ///< A clip, e.g. "assets:/models/hero.glb#animation/walk".
+    std::string skeleton; ///< The skeleton it plays on, e.g. "assets:/models/enemy.glb#skin/0".
+};
+
+/// Result of `animation.retarget`.
+struct AnimationRetargetResult
+{
+    std::string clip;        ///< The clip.
+    std::string skeleton;    ///< The skeleton.
+    std::string source;      ///< The skin the clip was authored on ("" for none).
+    bool retargeted = false; ///< The clip is retargeted; otherwise it is bound by name.
+    std::string reason; ///< Why it is bound by name: "SameSkeleton", "NoSkeleton", "NoRig" or "NoPairs" (""
+                        ///< if retargeted).
+    u32 channels = 0;   ///< Channels of the clip.
+    u32 pairedChannels = 0;            ///< Channels that move a joint of the skeleton.
+    std::vector<std::string> unpaired; ///< Joints of channels without a joint on the skeleton (at most 64).
+    u32 pairedJoints = 0;              ///< Joints of the skeleton with a joint of the source (0 by name).
+    std::vector<std::string>
+        unpairedJoints;     ///< Joints of the skeleton that hold the reference pose (at most 64).
+    f32 heightRatio = 1.0f; ///< Target hips height over source hips height.
 };
 
 /// Result of the `play.*` commands: the state of the play session.

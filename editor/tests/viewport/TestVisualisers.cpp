@@ -352,6 +352,52 @@ TEST_CASE("the skeleton visualiser draws posed Animators with their IK targets, 
     CHECK(draw.lines().empty());
 }
 
+TEST_CASE("the skeleton visualiser dims the joints that the rig map leaves without a bone")
+{
+    registerAnimationComponents(ComponentRegistry::instance());
+    VirtualFileSystem files;
+    REQUIRE(files.mount("assets", utf8Path(ILLUSION_ENGINE_TEST_DATA) / "gltf") == FileError::None);
+    JobSystem jobs;
+    AssetStreamer streamer(files, jobs, AssetStreamerDesc{.cacheMount = ""});
+    World world;
+    AnimationWorld animation(world, streamer);
+    const Entity character = spawn(world, Vec3(0.0f));
+    Animator animator;
+    animator.skeleton = AssetRef("assets:/humanoid_b.gltf#skin/0");
+    world.set(character, animator);
+    animation.waitIdle();
+    const std::optional<u32> slot = animation.findSlot(character);
+    REQUIRE(slot.has_value());
+    const Skeleton* skeleton = animation.skeleton(*slot);
+    REQUIRE(skeleton != nullptr);
+    REQUIRE(skeleton->rig.bones.size() == skeleton->joints.size());
+    usize unmapped = 0;
+    usize unmappedBones = 0;
+    for (usize i = 0; i < skeleton->joints.size(); ++i)
+    {
+        if (skeleton->rig.bones[i].empty())
+        {
+            ++unmapped;
+            unmappedBones += skeleton->joints[i].parent >= 0 ? 1 : 0;
+        }
+    }
+    // The twist joints have no humanoid bone.
+    REQUIRE(unmapped > 0);
+    REQUIRE(unmapped < skeleton->joints.size());
+
+    const VisualiserColors colors;
+    const Vec4 dimmedJoint(Vec3(colors.skeletonJoint), colors.skeletonJoint.a * colors.unmappedAlpha);
+    const Vec4 dimmedBone(Vec3(colors.bone), colors.bone.a * colors.unmappedAlpha);
+    DebugDraw draw(65536);
+    VisualiserOptions options = everything();
+    options.kinds = only(&ViewportVisualisers::skeleton);
+    options.animation = &animation;
+    CHECK(recordVisualisers(world, draw, options).objects == 1);
+    CHECK(linesOf(draw, dimmedJoint) == unmapped * 3);
+    CHECK(linesOf(draw, colors.skeletonJoint) == (skeleton->joints.size() - unmapped) * 3);
+    CHECK(linesOf(draw, dimmedBone) == unmappedBones);
+}
+
 TEST_CASE("virtual cameras draw their frusta, and the live and blending ones always, at the brain's pose")
 {
     World world;

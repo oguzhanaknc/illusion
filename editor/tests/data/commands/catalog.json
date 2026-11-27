@@ -570,9 +570,12 @@
                 "type": "integer",
                 "minimum": 0,
                 "maximum": 4294967295
+              },
+              "humanoid": {
+                "type": "boolean"
               }
             },
-            "required": ["ref", "name", "joints"],
+            "required": ["ref", "name", "joints", "humanoid"],
             "additionalProperties": false
           }
         },
@@ -594,9 +597,12 @@
                 "type": "integer",
                 "minimum": 0,
                 "maximum": 4294967295
+              },
+              "source": {
+                "type": "string"
               }
             },
-            "required": ["ref", "name", "duration", "channels"],
+            "required": ["ref", "name", "duration", "channels", "source"],
             "additionalProperties": false
           }
         },
@@ -630,6 +636,375 @@
         }
       },
       "required": ["path", "skins", "clips", "_editor"],
+      "additionalProperties": false
+    }
+  },
+  "animation.map_joint": {
+    "version": 1,
+    "permission": "files",
+    "mode": "edit",
+    "undoable": true,
+    "readOnly": false,
+    "params": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "type": "object",
+      "properties": {
+        "path": {
+          "type": "string"
+        },
+        "skin": {
+          "anyOf": [
+            {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 4294967295
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "joint": {
+          "type": "string"
+        },
+        "bone": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "translation": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "dryRun": {
+          "type": "boolean"
+        },
+        "mergeKey": {
+          "type": "string"
+        },
+        "clientToken": {
+          "type": "string"
+        },
+        "expectRevision": {
+          "anyOf": [
+            {
+              "type": "string",
+              "pattern": "^[0-9]+$"
+            },
+            {
+              "type": "integer",
+              "minimum": 0
+            }
+          ]
+        }
+      },
+      "required": ["path", "joint"],
+      "additionalProperties": false
+    },
+    "result": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "type": "object",
+      "properties": {
+        "path": {
+          "type": "string"
+        },
+        "skin": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 4294967295
+        },
+        "joint": {
+          "type": "string"
+        },
+        "bone": {
+          "type": "string"
+        },
+        "translation": {
+          "type": "string"
+        },
+        "humanoid": {
+          "type": "boolean"
+        },
+        "missing": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "sidecar": {
+          "type": "string"
+        },
+        "changed": {
+          "type": "boolean"
+        },
+        "_editor": {
+          "type": "object",
+          "properties": {
+            "revision": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "transaction": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "dryRun": {
+              "type": "boolean"
+            },
+            "operations": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "warnings": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          },
+          "required": ["revision", "transaction", "dryRun", "operations", "warnings"],
+          "additionalProperties": false
+        }
+      },
+      "required": ["path", "skin", "joint", "bone", "translation", "humanoid", "missing", "sidecar", "changed", "_editor"],
+      "additionalProperties": false
+    }
+  },
+  "animation.retarget": {
+    "version": 1,
+    "permission": "read",
+    "mode": "edit",
+    "undoable": false,
+    "readOnly": true,
+    "params": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "type": "object",
+      "properties": {
+        "clip": {
+          "type": "string"
+        },
+        "skeleton": {
+          "type": "string"
+        }
+      },
+      "required": ["clip", "skeleton"],
+      "additionalProperties": false
+    },
+    "result": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "type": "object",
+      "properties": {
+        "clip": {
+          "type": "string"
+        },
+        "skeleton": {
+          "type": "string"
+        },
+        "source": {
+          "type": "string"
+        },
+        "retargeted": {
+          "type": "boolean"
+        },
+        "reason": {
+          "type": "string"
+        },
+        "channels": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 4294967295
+        },
+        "pairedChannels": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 4294967295
+        },
+        "unpaired": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "pairedJoints": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 4294967295
+        },
+        "unpairedJoints": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "heightRatio": {
+          "type": "number"
+        },
+        "_editor": {
+          "type": "object",
+          "properties": {
+            "revision": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "transaction": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "dryRun": {
+              "type": "boolean"
+            },
+            "operations": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "warnings": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          },
+          "required": ["revision", "transaction", "dryRun", "operations", "warnings"],
+          "additionalProperties": false
+        }
+      },
+      "required": ["clip", "skeleton", "source", "retargeted", "reason", "channels", "pairedChannels", "unpaired", "pairedJoints", "unpairedJoints", "heightRatio", "_editor"],
+      "additionalProperties": false
+    }
+  },
+  "animation.rig": {
+    "version": 1,
+    "permission": "read",
+    "mode": "edit",
+    "undoable": false,
+    "readOnly": true,
+    "params": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "type": "object",
+      "properties": {
+        "path": {
+          "type": "string"
+        },
+        "skin": {
+          "anyOf": [
+            {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 4294967295
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": ["path"],
+      "additionalProperties": false
+    },
+    "result": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "type": "object",
+      "properties": {
+        "path": {
+          "type": "string"
+        },
+        "skin": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 4294967295
+        },
+        "ref": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        },
+        "generated": {
+          "type": "boolean"
+        },
+        "humanoid": {
+          "type": "boolean"
+        },
+        "missing": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "warnings": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "joints": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "name": {
+                "type": "string"
+              },
+              "parent": {
+                "type": "integer",
+                "minimum": -2147483648,
+                "maximum": 2147483647
+              },
+              "bone": {
+                "type": "string"
+              },
+              "translation": {
+                "type": "string"
+              },
+              "overridden": {
+                "type": "boolean"
+              }
+            },
+            "required": ["name", "parent", "bone", "translation", "overridden"],
+            "additionalProperties": false
+          }
+        },
+        "_editor": {
+          "type": "object",
+          "properties": {
+            "revision": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "transaction": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "dryRun": {
+              "type": "boolean"
+            },
+            "operations": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "warnings": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          },
+          "required": ["revision", "transaction", "dryRun", "operations", "warnings"],
+          "additionalProperties": false
+        }
+      },
+      "required": ["path", "skin", "ref", "name", "generated", "humanoid", "missing", "warnings", "joints", "_editor"],
       "additionalProperties": false
     }
   },

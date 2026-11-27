@@ -269,8 +269,9 @@ resources.releaseShader(glow); // its materials draw with the standard shader fr
 ```
 
 - `createShader()`, tüm varyantlarıyla bir `ShaderAsset` alır; biri eksikse veya GPU onu reddederse log'a bir
-  hata yazar ve boş bir Handle döndürür. `standardShader()` ve `errorShader()` her zaman vardır ve serbest
-  bırakılamaz; shader'ı olmayan bir `MaterialDesc` standart shader'ı kullanır.
+  hata yazar ve boş bir Handle döndürür. `standardShader()`, `errorShader()` ve `foliageShader()` her zaman
+  vardır ve serbest bırakılamaz; shader'ı olmayan bir `MaterialDesc` standart shader'ı, yarı saydam
+  Material'ler için ise foliage shader'ını kullanır ([Shading model'leri](#shading-models) bölümüne bakın).
 - `shaderParameters` ve `shaderTextures`, shader'ın alanlarını adlarıyla ayarlar; dışarıda bıraktıkları alanlar
   shader'ın varsayılanlarını korur, shader'ın bildirmediği adlar yok sayılır; böylece bir Material, shader'ı
   düzenlendikten sonra da yaşar. Standart shader için alanlarını eskisi gibi `parameters` ve beş Texture
@@ -286,6 +287,50 @@ resources.releaseShader(glow); // its materials draw with the standard shader fr
   Vertex'leri hareket etmeyen gölge düşürenler standart shader'la çizilir.
 - Mesh'ler glTF vertex renklerini (`COLOR_0`, `MeshData::colors`) `SurfaceInput.color` için saklar; vertex
   rengi olmayan Mesh'ler beyaz okur. `SurfaceInput.customData` şimdilik sıfırdır.
+
+### Shading model'leri {#shading-models}
+
+Bir shader'ın `Parameters` yapısındaki `[ShadingModel("...")]` attribute'u, aydınlatmanın yüzeyini nasıl
+işleyeceğini seçer. Model shader başına sabittir; bu yüzden her biri kendi Pipeline'larına derlenir ve
+`Default` modelindeki bir Material diğerleri için hiçbir bedel ödemez. Farklı modellerin Material'leri bir
+karede ve bindless yolda serbestçe karışır.
+
+| Model | `SurfaceOutput`'tan okudukları | Aydınlatma |
+| --- | --- | --- |
+| `Default` | base colour, normal, metallic, roughness, occlusion, emission | Yukarıdaki metallic-roughness PBR. |
+| `Unlit` | base colour, emission | Base colour olduğu gibi: ışık, gölge ya da gökyüzü yok. |
+| `Subsurface` | yukarıdakiler, `subsurfaceColor`, `thickness` | Diffuse ışık terminatörün ötesine sarılır; Lambert'inkinin ötesindeki ışığı `subsurfaceColor` renklendirir. 1 olan `thickness` hiç sarmaz (`Default` gibi), 0 ışığı bütün yüzeyin çevresine sarar. |
+| `TwoSidedFoliage` | yukarıdakiler, `subsurfaceColor`, `thickness` | [Yarı saydamlık](#translucency): diffuse ışığın `1 - thickness` kadarı `subsurfaceColor` ile renklenerek öbür tarafa geçer. |
+| `ClearCoat` | yukarıdakiler, `clearCoat`, `clearCoatRoughness` | Tabanın üzerinde, geometrik normal boyunca kendi roughness'ı olan ikinci, dielektrik bir specular lob; taban, kaplamanın yansıttığı ışığı kaybeder. 0 olan `clearCoat`, `Default`'tur. |
+
+Ek alanların varsayılanları yüzeyi olduğu gibi bırakır: `thickness` 1, `clearCoat` 0. Sarılan ışık yalnızca
+bir ışığın yüzeye ulaştığı yere ulaşır: gölgedeki taraf karanlık kalır; bu yüzden saçılma en çok yarı gölgede
+ve gölgesiz ışıklar altında görünür.
+
+```slang
+[ShadingModel("ClearCoat")]
+struct Parameters
+{
+    [Color(0.6, 0.05, 0.05, 1)] float3 paint;
+    [Default(0.08)] [Range(0, 1)] float coatRoughness;
+};
+
+SurfaceOutput surface(SurfaceInput input)
+{
+    const Parameters p = parameters(input);
+    SurfaceOutput output = defaultSurface();
+    output.baseColor = p.paint;
+    output.roughness = 0.7; // the rough paint under the coat
+    output.clearCoat = 1.0; // a full coat
+    output.clearCoatRoughness = p.coatRoughness;
+    return output;
+}
+```
+
+Standart shader `Default` kullanır. Shader'ı olmayan ve `diffuseTransmission` değeri sıfırdan büyük bir
+`MaterialDesc`, aynı yüzeyi `TwoSidedFoliage` modelinde çizen `builtin:/shader/foliage` (`foliageShader()`) ile
+çizilir; böylece yapraklar ve çimenler görünüşlerini korur. `standardShader()`'ı adlandıran bir Material
+`Default` modelinde kalır ve geçirgenliğinin etkisi olmaz.
 
 ### Texture sıkıştırma ve mip streaming {#texture-compression-and-mip-streaming}
 
@@ -406,7 +451,7 @@ illusion::advanceWind(world, deltaSeconds); // GameSession and the editor call t
 Rüzgarın saati çalışma zamanı durumu olan `WindState`'tir; `advanceWind()` onu ekler ve ilerletir.
 `windVelocity()` oyun kodu için bir noktadaki havanın hızını, renderer'ın gösterdiğiyle aynı şekilde verir.
 
-### Yarı saydamlık
+### Yarı saydamlık {#translucency}
 
 Yapraklar, çimen yaprakları, kâğıt ve kumaş gibi ince yüzeyler ışığı geçirir. `diffuseTransmission` (0 ile
 1 arası), bir Material'in diffuse ışığının öbür tarafa geçen payıdır: arka yüze ulaşan ışık ön yüzden
@@ -418,6 +463,9 @@ geçirmez. Bu, glTF'nin `KHR_materials_diffuse_transmission` eklentisidir: onu k
 
 Gölgeler yine geçerlidir: başka bir yaprağın ya da bir gövdenin arkasındaki yaprak karanlık kalır. Yarı
 saydam bir yüzeyin gölge testi ışığın ulaştığı tarafı kullanır, böylece tek bir yaprak kendini gölgelemez.
+Yarı saydam Material'ler, `TwoSidedFoliage` [shading model'i](#shading-models) olan `builtin:/shader/foliage`
+ile çizilir; bir material shader'ı bu modeli adlandırıp `thickness` ve `subsurfaceColor` alanlarını ayarlayarak
+aynı ışığı alır.
 
 ```cpp
 illusion::MaterialData leaf = illusion::MaterialData{};
