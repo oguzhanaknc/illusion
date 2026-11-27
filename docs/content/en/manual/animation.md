@@ -820,8 +820,57 @@ renderer->render(commands, target, world, view, &jobs);
 Each clip records its source skin: `AnimationClip::skeleton` is the index of the skin of its model whose joint
 names its channels hit most (the lowest index on ties), or -1. Each skin carries a rig map, the bone name of
 every joint, generated at import and corrected by the model's sidecar (see [rig maps](assets.md#rig-maps)).
-Playback still uses joint names, as above; playing a clip on a skeleton with other joint names through these
-rig maps (retargeting) arrives with ANIM-5b.
+Playback uses joint names unless a clip is retargeted, as described next.
+
+## Retargeting
+
+Playing a clip on a skeleton with other joint names, another rest pose or other proportions is retargeting. It
+needs the rig maps above on both skins. The clip's source skin (`AnimationClip::skeleton`) and the Animator's
+skin are paired bone by bone: joints with the same bone name, and for a joint without a bone the joint of the
+same name.
+
+```text
+Animator skeleton  assets:/models/small_strider.gltf#skin/0
+Animator clip      assets:/models/strider.gltf#animation/idle   (authored on strider.gltf#skin/0)
+```
+
+- **Once per clip and skeleton.** A clip is retargeted when it is bound, once for each clip and target
+  skeleton, and the result is shared by every Animator that plays it. Sampling a retargeted clip costs
+  nothing per frame beyond a rotation or two per channel.
+- **Reference pose and rest correction.** The target's reference pose is its rest pose with every mapped
+  bone turned to the direction of the source's bone, parent first. Each rotation channel also gets a
+  correction in model space (`pre * source * post`), so a clip authored in a T-pose plays as a T-pose on an
+  A-pose rig. Joints the clip does not animate keep the reference pose.
+- **Translation modes.** The rig map gives each joint a mode: `Skeleton` keeps the target's own rest
+  translation (the target keeps its proportions; the default of most joints), `Scaled` adds the source's
+  motion from its rest, scaled by the *hips height ratio* (the target's hips height over the source's, 1 when
+  either skeleton has no `hips` bone), and `Animation` copies the source's translation as it is. Root motion
+  is taken from the retargeted pose, so its distance scales with the character: a half-size character
+  covers half the ground.
+- **Bone names in assets.** A joint name in a graph (mask joints and `rootMotion`), a socket (`BoneAttachment`),
+  a `.ragdoll` part and `AnimationService::jointTransform()` is resolved to a joint of that name first and then to the joint whose
+  rig bone it is. Shared assets can therefore say `head` or `hips` and work on every rig.
+- **Same skin, same result.** A clip on its own skin, or a clip without a source skin, plays exactly as
+  before, by joint name.
+- **Fallback.** A clip that cannot be retargeted (a skin without a rig map, or no joint with a pair) is bound
+  by name, and a warning in the log names the clip and the reason, once for each binding.
+
+C++ code reaches the same through `illusion/animation/Retarget.hpp` and the graph binding. The `bindGraph()`
+overload with a `ClipSource` (a clip and its source skeleton) retargets each clip that has one:
+`GraphBinding::clipRetargets` holds the correction of each clip (inactive for a clip bound by name) and
+`GraphBinding::basePose` the pose evaluation starts from (empty for the rest pose).
+
+```cpp
+// Once, when the graph, the clips and the skeleton are loaded.
+auto binding = illusion::bindGraph(
+    graph, skeleton, std::function<illusion::ClipSource(const illusion::AssetRef&)>(
+                         [&](const illusion::AssetRef& ref) {
+                             return illusion::ClipSource{clips.find(ref), &sourceSkeleton};
+                         }));
+// Without a graph, for one clip:
+auto bound = illusion::bindRetargetedClip(clip, sourceSkeleton, skeleton);
+illusion::sampleClip(clip, bound->binding, bound->retarget, skeleton, time, local);
+```
 
 ## Not supported yet
 
@@ -841,6 +890,10 @@ rig maps (retargeting) arrives with ANIM-5b.
 - An 8-joint spring chain with a look-at and IK limbs on each of 300 Animators adds about 0.17 ms to
   `animation/world-update` (0.43 ms against 0.26 ms).
 - Twenty ragdolls take about 0.17 ms to simulate (benchmark `physics/ragdolls-20`, budget 1 ms).
+- Retargeting is done when a clip is bound. 300 Animators of 60 joints playing a retargeted clip take 0.41 ms
+  against 0.37 ms for the same work by name (benchmarks `animation/retarget-300x60` and
+  `animation/blend-300x60`; about 11 % for retargeting). Binding one clip to a 60-joint skeleton takes 41 µs
+  (benchmark `animation/retarget-bind-60`). Figures are from a development desktop.
 - Skinning runs once per frame, however many passes draw the mesh: 300 instances of 10,240 vertices take
   0.66 ms on an NVIDIA GeForce RTX 4070 SUPER (the GPU test sets a budget of 3 ms).
 - Each visible skinned instance costs 64 bytes of GPU memory per vertex (the posed vertex and its previous

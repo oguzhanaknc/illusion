@@ -11,6 +11,7 @@ add_library(illusion_animation STATIC
     src/AnimationWorldService.cpp
     src/InverseKinematics.cpp
     src/Pose.cpp
+    src/Retarget.cpp
     src/SpringBones.cpp)
 add_library(illusion::animation ALIAS illusion_animation)
 

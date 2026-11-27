@@ -2991,37 +2991,106 @@
       }
     },
     {
-      "id": "00077ba99ea524f2",
+      "id": "180a2bd6343d01f8",
       "components": {
-        "illusion.Collider": {
-          "shape": "Box",
-          "halfExtents": [1.5, 0.5, 1.5],
-          "radius": 0.5,
-          "halfHeight": 0.5,
-          "offset": [0.0, 0.0, 0.0],
-          "rotation": [0.0, 0.0, 0.0, 1.0],
-          "mesh": "",
-          "meshIndex": 0
+        "illusion.Animator": {
+          "skeleton": "assets:/models/small_strider.gltf#skin/0",
+          "clip": "assets:/models/strider.gltf#animation/idle",
+          "graph": "",
+          "speed": 1.0,
+          "time": 0.0,
+          "loop": true,
+          "playing": true
+        },
+        "illusion.Hierarchy": {
+          "parent": null,
+          "order": 17
+        },
+        "illusion.MeshRenderer": {
+          "mesh": "assets:/models/small_strider.gltf#mesh/0",
+          "submesh": 0,
+          "material": "builtin:/material/default",
+          "layers": 1,
+          "castShadows": true,
+          "visible": true,
+          "lodBias": 1.0
         },
         "illusion.Name": {
-          "value": "Nav Step"
-        },
-        "illusion.RigidBody": {
-          "motionType": "Static",
-          "mass": 0.0,
-          "friction": 0.5,
-          "restitution": 0.0,
-          "linearDamping": 0.05,
-          "angularDamping": 0.05,
-          "gravityFactor": 1.0,
-          "layer": 0,
-          "sensor": false,
-          "allowSleeping": true,
-          "continuousCollision": false
+          "value": "Small Strider"
         },
         "illusion.Transform": {
-          "position": [34.0, 0.5, 4.0],
+          "position": [-12.0, 0.0, 17.0],
+          "rotation": [0.0, 0.3826834, 0.0, 0.9238795],
+          "scale": [1.0, 1.0, 1.0]
+        }
+      }
+    },
+    {
+      "id": "db20290ac13e4a81",
+      "components": {
+        "illusion.BoneAttachment": {
+          "joint": "head",
+          "translation": [0.0, 0.2, 0.0],
           "rotation": [0.0, 0.0, 0.0, 1.0],
+          "scale": [0.15, 0.05, 0.15]
+        },
+        "illusion.Hierarchy": {
+          "parent": "180a2bd6343d01f8",
+          "order": 0
+        },
+        "illusion.LocalTransform": {
+          "position": [20.506096, 0.0, -3.535534],
+          "rotation": [0.0, -0.38268343, 0.0, 0.92387956],
+          "scale": [1.0, 1.0, 1.0]
+        },
+        "illusion.MeshRenderer": {
+          "mesh": "builtin:/mesh/cube",
+          "submesh": 0,
+          "material": "builtin:/material/default",
+          "layers": 1,
+          "castShadows": true,
+          "visible": true,
+          "lodBias": 1.0
+        },
+        "illusion.Name": {
+          "value": "Small Strider Hat"
+        }
+      }
+    },
+    {
+      "id": "00077ba99ea524f2",
+      "components": {
+        "illusion.Animator": {
+          "skeleton": "assets:/models/strider.gltf#skin/0",
+          "clip": "assets:/models/strider.gltf#animation/idle",
+          "graph": "",
+          "speed": 1.0,
+          "time": 0.0,
+          "loop": true,
+          "playing": true
+        },
+        "illusion.MeshRenderer": {
+          "mesh": "assets:/models/strider.gltf#mesh/0",
+          "submesh": 0,
+          "material": "builtin:/material/default",
+          "layers": 1,
+          "castShadows": true,
+          "visible": true,
+          "lodBias": 1.0
+        },
+        "illusion.Name": {
+          "value": "Fallen Strider"
+        },
+        "illusion.Ragdoll": {
+          "profile": "assets:/animations/strider.ragdoll",
+          "active": true,
+          "blendSeconds": 0.4,
+          "mass": 55.0,
+          "layer": 1
+        },
+        "illusion.Transform": {
+          "position": [-17.0, 0.0, 14.0],
+          "rotation": [0.0, -0.3826834, 0.0, 0.9238795],
           "scale": [1.0, 1.0, 1.0]
         }
       }
@@ -3029,16 +3098,17 @@
     {
       "id": "0781577a0f53e5d6",
       "components": {
-        "illusion.AiStimulus": {
-          "team": 1,
-          "offset": [0.0, 0.8, 0.0],
-          "visible": false
+        "illusion.BehaviorAgent": {
+          "tree": "assets:/ai/guard.behavior",
+          "enabled": false,
+          "tickInterval": 0.0,
+          "blackboard": []
         },
         "illusion.Name": {
-          "value": "AI Hidden Intruder"
+          "value": "AI Sleeper"
         },
         "illusion.Transform": {
-          "position": [26.0, 0.0, 3.0],
+          "position": [33.0, 0.0, -4.0],
           "rotation": [0.0, 0.0, 0.0, 1.0],
           "scale": [1.0, 1.0, 1.0]
         }
@@ -3090,36 +3160,20 @@
       }
     },
     {
-      "id": "180a2bd6343d01f8",
+      "id": "19a3c59084763a12",
       "components": {
-        "illusion.Collider": {
-          "shape": "Box",
-          "halfExtents": [2.0, 0.25, 2.0],
-          "radius": 0.5,
-          "halfHeight": 0.5,
-          "offset": [0.0, 0.0, 0.0],
-          "rotation": [0.0, 0.0, 0.0, 1.0],
-          "mesh": "",
-          "meshIndex": 0
+        "illusion.CameraImpulse": {
+          "strength": 0.6,
+          "radius": 8.0,
+          "duration": 0.3,
+          "playOnStart": false,
+          "interval": 4.0
         },
         "illusion.Name": {
-          "value": "Ragdoll Floor"
-        },
-        "illusion.RigidBody": {
-          "motionType": "Static",
-          "mass": 0.0,
-          "friction": 0.5,
-          "restitution": 0.0,
-          "linearDamping": 0.05,
-          "angularDamping": 0.05,
-          "gravityFactor": 1.0,
-          "layer": 0,
-          "sensor": false,
-          "allowSleeping": true,
-          "continuousCollision": false
+          "value": "Camera Shaker"
         },
         "illusion.Transform": {
-          "position": [-17.0, -0.25, 14.0],
+          "position": [41.0, 0.0, 1.0],
           "rotation": [0.0, 0.0, 0.0, 1.0],
           "scale": [1.0, 1.0, 1.0]
         }
@@ -3143,45 +3197,47 @@
     {
       "id": "263346a69dd14426",
       "components": {
-        "illusion.CameraSpringArm": {
-          "shoulderOffset": [0.6, 1.5, 0.2],
-          "side": -1.0,
-          "sideDamping": 0.25,
-          "armLength": 2.5,
-          "collisionRadius": 0.25,
-          "collisionLayers": 3,
-          "pullInSpeed": 8.0,
-          "recoverySpeed": 3.0,
-          "alignToTarget": false,
-          "yaw": 0.3,
-          "pitch": -0.2,
-          "minPitch": -0.9,
-          "maxPitch": 0.9,
-          "lookAction": "camera.look",
-          "lookSpeed": [2.0, 1.0]
+        "illusion.CameraFollow": {
+          "offset": [0.0, 3.0, 6.0],
+          "space": "World",
+          "damping": [0.2, 0.3, 0.2],
+          "rotationDamping": 0.2
+        },
+        "illusion.CameraLookAt": {
+          "targetOffset": [0.0, 1.0, 0.0],
+          "damping": 0.15
+        },
+        "illusion.CameraNoise": {
+          "positionAmplitude": [0.02, 0.02, 0.01],
+          "positionFrequency": [0.8, 0.9, 0.7],
+          "rotationAmplitude": [0.004, 0.006, 0.002],
+          "rotationFrequency": [0.4, 0.6, 0.3],
+          "amplitudeGain": 0.8,
+          "frequencyGain": 1.2,
+          "seed": 7
         },
         "illusion.Name": {
-          "value": "Shoulder Camera"
+          "value": "Follow Camera"
         },
         "illusion.Transform": {
-          "position": [42.0, 2.0, 3.0],
+          "position": [40.0, 3.0, 6.0],
           "rotation": [0.0, 0.0, 0.0, 1.0],
           "scale": [1.0, 1.0, 1.0]
         },
         "illusion.VirtualCamera": {
-          "priority": 3,
+          "priority": 12,
           "enabled": true,
-          "follow": "d909c315b21d8f6c",
-          "lookAt": null,
-          "fovY": 1.0471976,
-          "nearPlane": 0.1,
-          "dutch": 0.0,
-          "customBlend": false,
+          "follow": "62db179ca8487c5a",
+          "lookAt": "62db179ca8487c5a",
+          "fovY": 0.9,
+          "nearPlane": 0.2,
+          "dutch": 0.05,
+          "customBlend": true,
           "blendIn": {
-            "style": "EaseInOut",
-            "duration": 1.0,
-            "control1": [0.42, 0.0],
-            "control2": [0.58, 1.0]
+            "style": "Linear",
+            "duration": 0.4,
+            "control1": [0.2, 0.0],
+            "control2": [0.8, 1.0]
           }
         }
       }
@@ -3234,42 +3290,49 @@
     {
       "id": "2f596652cb9a9f17",
       "components": {
-        "illusion.Camera": {
-          "fovY": 1.0471976,
-          "nearPlane": 0.1,
-          "exposure": 1.0,
-          "projection": "Perspective",
-          "orthoHeight": 10.0,
-          "farPlane": 1000.0,
-          "priority": -2
-        },
-        "illusion.CameraBrain": {
-          "defaultBlend": {
-            "style": "Linear",
-            "duration": 0.8,
-            "control1": [0.25, 0.1],
-            "control2": [0.75, 0.9]
-          },
-          "blends": [
+        "illusion.CameraDolly": {
+          "path": [
             {
-              "from": "e8e6022a79eb517b",
-              "to": "62db179ca8487c5a",
-              "blend": {
-                "style": "Curve",
-                "duration": 1.5,
-                "control1": [0.3, 0.1],
-                "control2": [0.7, 0.9]
-              }
+              "position": [-4.0, 0.0, 0.0],
+              "tangent": [4.0, 0.0, 0.0]
+            },
+            {
+              "position": [0.0, 1.0, -1.0],
+              "tangent": [4.0, 0.5, 0.0]
+            },
+            {
+              "position": [4.0, 0.0, 0.0],
+              "tangent": [4.0, -0.5, 0.0]
             }
-          ]
+          ],
+          "closed": true,
+          "mode": "NearestToTarget",
+          "position": 1.5,
+          "damping": 0.4
         },
         "illusion.Name": {
-          "value": "Camera Brain"
+          "value": "Rail Camera"
         },
         "illusion.Transform": {
-          "position": [40.0, 3.0, 8.0],
+          "position": [40.0, 2.0, 10.0],
           "rotation": [0.0, 0.0, 0.0, 1.0],
           "scale": [1.0, 1.0, 1.0]
+        },
+        "illusion.VirtualCamera": {
+          "priority": 1,
+          "enabled": true,
+          "follow": "62db179ca8487c5a",
+          "lookAt": null,
+          "fovY": 1.0471976,
+          "nearPlane": 0.1,
+          "dutch": 0.0,
+          "customBlend": false,
+          "blendIn": {
+            "style": "EaseInOut",
+            "duration": 1.0,
+            "control1": [0.42, 0.0],
+            "control2": [0.58, 1.0]
+          }
         }
       }
     },
@@ -3374,34 +3437,34 @@
     {
       "id": "4f05f03735c3b951",
       "components": {
-        "illusion.Name": {
-          "value": "Nav Surface"
+        "illusion.Collider": {
+          "shape": "Box",
+          "halfExtents": [8.0, 0.25, 8.0],
+          "radius": 0.5,
+          "halfHeight": 0.5,
+          "offset": [0.0, 0.0, 0.0],
+          "rotation": [0.0, 0.0, 0.0, 1.0],
+          "mesh": "",
+          "meshIndex": 0
         },
-        "illusion.NavMeshSurface": {
-          "size": [16.0, 6.0, 16.0],
-          "agentType": 1,
-          "agentRadius": 0.4,
-          "agentHeight": 1.7,
-          "agentMaxClimb": 0.3,
-          "agentMaxSlope": 0.7,
-          "build": {
-            "cellSize": 0.2,
-            "cellHeight": 0.15,
-            "tileSize": 32,
-            "minRegionArea": 2.0,
-            "mergeRegionArea": 6.0,
-            "maxEdgeLength": 10.0,
-            "maxSimplificationError": 1.1,
-            "detailSampleDistance": 5.0,
-            "detailSampleMaxError": 0.8
-          },
-          "layerMask": 3,
-          "areaCosts": [1.0, 2.0, 4.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0],
-          "data": "assets:/navigation/yard.navmesh",
-          "rebuildAtRuntime": true
+        "illusion.Name": {
+          "value": "Nav Floor"
+        },
+        "illusion.RigidBody": {
+          "motionType": "Static",
+          "mass": 0.0,
+          "friction": 0.5,
+          "restitution": 0.0,
+          "linearDamping": 0.05,
+          "angularDamping": 0.05,
+          "gravityFactor": 1.0,
+          "layer": 0,
+          "sensor": false,
+          "allowSleeping": true,
+          "continuousCollision": false
         },
         "illusion.Transform": {
-          "position": [30.0, 1.0, 0.0],
+          "position": [30.0, -0.25, 0.0],
           "rotation": [0.0, 0.0, 0.0, 1.0],
           "scale": [1.0, 1.0, 1.0]
         }
@@ -3433,54 +3496,13 @@
     {
       "id": "62db179ca8487c5a",
       "components": {
-        "illusion.CameraComposer": {
-          "targetOffset": [0.0, 1.4, 0.0],
-          "screenPosition": [0.1, -0.05],
-          "deadZone": [0.05, 0.08],
-          "softZone": [0.5, 0.4],
-          "damping": [0.3, 0.2]
-        },
-        "illusion.CameraOrbit": {
-          "yaw": 0.5,
-          "pitch": -0.4,
-          "minPitch": -1.0,
-          "maxPitch": 1.0,
-          "limitYaw": true,
-          "minYaw": -2.0,
-          "maxYaw": 2.0,
-          "distance": 6.0,
-          "minDistance": 2.0,
-          "maxDistance": 12.0,
-          "pivotOffset": [0.0, 1.2, 0.0],
-          "damping": 0.08,
-          "lookAction": "camera.look",
-          "lookSpeed": [2.5, 1.5],
-          "zoomAction": "camera.zoom",
-          "zoomSpeed": 3.0
-        },
         "illusion.Name": {
-          "value": "Orbit Camera"
+          "value": "Camera Target"
         },
         "illusion.Transform": {
-          "position": [40.0, 2.0, -6.0],
+          "position": [40.0, 0.0, 0.0],
           "rotation": [0.0, 0.0, 0.0, 1.0],
           "scale": [1.0, 1.0, 1.0]
-        },
-        "illusion.VirtualCamera": {
-          "priority": 5,
-          "enabled": false,
-          "follow": "d909c315b21d8f6c",
-          "lookAt": null,
-          "fovY": 1.0471976,
-          "nearPlane": 0.1,
-          "dutch": 0.0,
-          "customBlend": false,
-          "blendIn": {
-            "style": "EaseInOut",
-            "duration": 1.0,
-            "control1": [0.42, 0.0],
-            "control2": [0.58, 1.0]
-          }
         }
       }
     },
@@ -3636,52 +3658,20 @@
     {
       "id": "764176e3c9cf4b25",
       "components": {
-        "illusion.AiPerception": {
-          "sightRadius": 12.0,
-          "sightAngle": 1.8,
-          "eyeHeight": 1.4,
-          "occluderMask": 3,
-          "hearing": 1.5,
-          "memorySeconds": 4.0,
-          "detectTeams": 2,
-          "targetKey": "target",
-          "positionKey": "lastSeen"
-        },
-        "illusion.BehaviorAgent": {
-          "tree": "assets:/ai/guard.behavior",
-          "enabled": true,
-          "tickInterval": 0.1,
-          "blackboard": [
-            {
-              "key": "home",
-              "number": 0.0,
-              "vector": [28.0, 0.0, -2.0],
-              "entity": null
-            }
-          ]
-        },
         "illusion.Name": {
-          "value": "AI Guard"
+          "value": "Nav Barrel"
         },
-        "illusion.NavAgent": {
-          "agentType": 1,
-          "radius": 0.3,
-          "height": 1.8,
-          "maxSpeed": 3.5,
-          "maxAcceleration": 8.0,
-          "turnSpeed": 6.2831855,
-          "stoppingDistance": 0.1,
-          "avoidance": "Medium",
-          "priority": 50,
-          "separationWeight": 2.0,
-          "areaMask": 4294967295,
-          "drive": "Transform",
-          "faceMovement": true,
-          "speedParameter": "",
-          "destination": null
+        "illusion.NavObstacle": {
+          "shape": "Cylinder",
+          "size": [0.8, 1.0, 0.8],
+          "radius": 0.4,
+          "height": 1.2,
+          "carve": true,
+          "moveThreshold": 0.25,
+          "settleSeconds": 1.0
         },
         "illusion.Transform": {
-          "position": [28.0, 0.0, -2.0],
+          "position": [26.0, 0.5, 3.0],
           "rotation": [0.0, 0.0, 0.0, 1.0],
           "scale": [1.0, 1.0, 1.0]
         }
@@ -3691,27 +3681,20 @@
       "id": "7bc42e82782acb92",
       "components": {
         "illusion.Name": {
-          "value": "Nav Walker"
+          "value": "Nav Ladder"
         },
-        "illusion.NavAgent": {
-          "agentType": 1,
+        "illusion.NavLink": {
+          "end": [2.5, 1.0, 0.0],
+          "kind": "Ladder",
+          "bidirectional": false,
           "radius": 0.4,
-          "height": 1.7,
-          "maxSpeed": 2.5,
-          "maxAcceleration": 6.0,
-          "turnSpeed": 4.0,
-          "stoppingDistance": 0.3,
-          "avoidance": "High",
-          "priority": 20,
-          "separationWeight": 1.5,
-          "areaMask": 65531,
-          "drive": "Transform",
-          "faceMovement": false,
-          "speedParameter": "speed",
-          "destination": [34.0, 1.0, 4.0]
+          "height": 0.5,
+          "seconds": 1.5,
+          "area": 1,
+          "agentTypeMask": 2
         },
         "illusion.Transform": {
-          "position": [25.0, 0.0, -5.0],
+          "position": [31.0, 0.0, 4.0],
           "rotation": [0.0, 0.0, 0.0, 1.0],
           "scale": [1.0, 1.0, 1.0]
         }
@@ -3765,20 +3748,33 @@
       "id": "96bf5d405151ec53",
       "components": {
         "illusion.Name": {
-          "value": "Nav Ladder"
+          "value": "Nav Surface"
         },
-        "illusion.NavLink": {
-          "end": [2.5, 1.0, 0.0],
-          "kind": "Ladder",
-          "bidirectional": false,
-          "radius": 0.4,
-          "height": 0.5,
-          "seconds": 1.5,
-          "area": 1,
-          "agentTypeMask": 2
+        "illusion.NavMeshSurface": {
+          "size": [16.0, 6.0, 16.0],
+          "agentType": 1,
+          "agentRadius": 0.4,
+          "agentHeight": 1.7,
+          "agentMaxClimb": 0.3,
+          "agentMaxSlope": 0.7,
+          "build": {
+            "cellSize": 0.2,
+            "cellHeight": 0.15,
+            "tileSize": 32,
+            "minRegionArea": 2.0,
+            "mergeRegionArea": 6.0,
+            "maxEdgeLength": 10.0,
+            "maxSimplificationError": 1.1,
+            "detailSampleDistance": 5.0,
+            "detailSampleMaxError": 0.8
+          },
+          "layerMask": 3,
+          "areaCosts": [1.0, 2.0, 4.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0],
+          "data": "assets:/navigation/yard.navmesh",
+          "rebuildAtRuntime": true
         },
         "illusion.Transform": {
-          "position": [31.0, 0.0, 4.0],
+          "position": [30.0, 1.0, 0.0],
           "rotation": [0.0, 0.0, 0.0, 1.0],
           "scale": [1.0, 1.0, 1.0]
         }
@@ -3787,20 +3783,46 @@
     {
       "id": "98f30af45f97eca2",
       "components": {
-        "illusion.CameraImpulse": {
-          "strength": 0.6,
-          "radius": 8.0,
-          "duration": 0.3,
-          "playOnStart": false,
-          "interval": 4.0
+        "illusion.CameraSpringArm": {
+          "shoulderOffset": [0.6, 1.5, 0.2],
+          "side": -1.0,
+          "sideDamping": 0.25,
+          "armLength": 2.5,
+          "collisionRadius": 0.25,
+          "collisionLayers": 3,
+          "pullInSpeed": 8.0,
+          "recoverySpeed": 3.0,
+          "alignToTarget": false,
+          "yaw": 0.3,
+          "pitch": -0.2,
+          "minPitch": -0.9,
+          "maxPitch": 0.9,
+          "lookAction": "camera.look",
+          "lookSpeed": [2.0, 1.0]
         },
         "illusion.Name": {
-          "value": "Camera Shaker"
+          "value": "Shoulder Camera"
         },
         "illusion.Transform": {
-          "position": [41.0, 0.0, 1.0],
+          "position": [42.0, 2.0, 3.0],
           "rotation": [0.0, 0.0, 0.0, 1.0],
           "scale": [1.0, 1.0, 1.0]
+        },
+        "illusion.VirtualCamera": {
+          "priority": 3,
+          "enabled": true,
+          "follow": "62db179ca8487c5a",
+          "lookAt": null,
+          "fovY": 1.0471976,
+          "nearPlane": 0.1,
+          "dutch": 0.0,
+          "customBlend": false,
+          "blendIn": {
+            "style": "EaseInOut",
+            "duration": 1.0,
+            "control1": [0.42, 0.0],
+            "control2": [0.58, 1.0]
+          }
         }
       }
     },
@@ -3829,38 +3851,43 @@
     {
       "id": "a2e4fe841f72235e",
       "components": {
-        "illusion.CameraDolly": {
-          "path": [
-            {
-              "position": [-4.0, 0.0, 0.0],
-              "tangent": [4.0, 0.0, 0.0]
-            },
-            {
-              "position": [0.0, 1.0, -1.0],
-              "tangent": [4.0, 0.5, 0.0]
-            },
-            {
-              "position": [4.0, 0.0, 0.0],
-              "tangent": [4.0, -0.5, 0.0]
-            }
-          ],
-          "closed": true,
-          "mode": "NearestToTarget",
-          "position": 1.5,
-          "damping": 0.4
+        "illusion.CameraComposer": {
+          "targetOffset": [0.0, 1.4, 0.0],
+          "screenPosition": [0.1, -0.05],
+          "deadZone": [0.05, 0.08],
+          "softZone": [0.5, 0.4],
+          "damping": [0.3, 0.2]
+        },
+        "illusion.CameraOrbit": {
+          "yaw": 0.5,
+          "pitch": -0.4,
+          "minPitch": -1.0,
+          "maxPitch": 1.0,
+          "limitYaw": true,
+          "minYaw": -2.0,
+          "maxYaw": 2.0,
+          "distance": 6.0,
+          "minDistance": 2.0,
+          "maxDistance": 12.0,
+          "pivotOffset": [0.0, 1.2, 0.0],
+          "damping": 0.08,
+          "lookAction": "camera.look",
+          "lookSpeed": [2.5, 1.5],
+          "zoomAction": "camera.zoom",
+          "zoomSpeed": 3.0
         },
         "illusion.Name": {
-          "value": "Rail Camera"
+          "value": "Orbit Camera"
         },
         "illusion.Transform": {
-          "position": [40.0, 2.0, 10.0],
+          "position": [40.0, 2.0, -6.0],
           "rotation": [0.0, 0.0, 0.0, 1.0],
           "scale": [1.0, 1.0, 1.0]
         },
         "illusion.VirtualCamera": {
-          "priority": 1,
-          "enabled": true,
-          "follow": "d909c315b21d8f6c",
+          "priority": 5,
+          "enabled": false,
+          "follow": "62db179ca8487c5a",
           "lookAt": null,
           "fovY": 1.0471976,
           "nearPlane": 0.1,
@@ -3878,16 +3905,52 @@
     {
       "id": "a3e9bfbbf6c43e6f",
       "components": {
-        "illusion.AiStimulus": {
-          "team": 1,
-          "offset": [0.0, 1.2, 0.0],
-          "visible": true
+        "illusion.AiPerception": {
+          "sightRadius": 12.0,
+          "sightAngle": 1.8,
+          "eyeHeight": 1.4,
+          "occluderMask": 3,
+          "hearing": 1.5,
+          "memorySeconds": 4.0,
+          "detectTeams": 2,
+          "targetKey": "target",
+          "positionKey": "lastSeen"
+        },
+        "illusion.BehaviorAgent": {
+          "tree": "assets:/ai/guard.behavior",
+          "enabled": true,
+          "tickInterval": 0.1,
+          "blackboard": [
+            {
+              "key": "home",
+              "number": 0.0,
+              "vector": [28.0, 0.0, -2.0],
+              "entity": null
+            }
+          ]
         },
         "illusion.Name": {
-          "value": "AI Intruder"
+          "value": "AI Guard"
+        },
+        "illusion.NavAgent": {
+          "agentType": 1,
+          "radius": 0.3,
+          "height": 1.8,
+          "maxSpeed": 3.5,
+          "maxAcceleration": 8.0,
+          "turnSpeed": 6.2831855,
+          "stoppingDistance": 0.1,
+          "avoidance": "Medium",
+          "priority": 50,
+          "separationWeight": 2.0,
+          "areaMask": 4294967295,
+          "drive": "Transform",
+          "faceMovement": true,
+          "speedParameter": "",
+          "destination": null
         },
         "illusion.Transform": {
-          "position": [32.0, 0.0, 2.0],
+          "position": [28.0, 0.0, -2.0],
           "rotation": [0.0, 0.0, 0.0, 1.0],
           "scale": [1.0, 1.0, 1.0]
         }
@@ -3977,19 +4040,16 @@
       "id": "aa3de53fbde4ae5b",
       "components": {
         "illusion.Name": {
-          "value": "Nav Barrel"
+          "value": "Nav Hole"
         },
-        "illusion.NavObstacle": {
-          "shape": "Cylinder",
-          "size": [0.8, 1.0, 0.8],
-          "radius": 0.4,
-          "height": 1.2,
-          "carve": true,
-          "moveThreshold": 0.25,
-          "settleSeconds": 1.0
+        "illusion.NavArea": {
+          "area": 2,
+          "walkable": false,
+          "volume": true,
+          "size": [2.0, 1.0, 2.0]
         },
         "illusion.Transform": {
-          "position": [26.0, 0.5, 3.0],
+          "position": [27.0, 0.0, -3.0],
           "rotation": [0.0, 0.0, 0.0, 1.0],
           "scale": [1.0, 1.0, 1.0]
         }
@@ -4033,17 +4093,34 @@
     {
       "id": "bc73014050141d01",
       "components": {
-        "illusion.Name": {
-          "value": "Nav Hole"
+        "illusion.Collider": {
+          "shape": "Box",
+          "halfExtents": [1.5, 0.5, 1.5],
+          "radius": 0.5,
+          "halfHeight": 0.5,
+          "offset": [0.0, 0.0, 0.0],
+          "rotation": [0.0, 0.0, 0.0, 1.0],
+          "mesh": "",
+          "meshIndex": 0
         },
-        "illusion.NavArea": {
-          "area": 2,
-          "walkable": false,
-          "volume": true,
-          "size": [2.0, 1.0, 2.0]
+        "illusion.Name": {
+          "value": "Nav Step"
+        },
+        "illusion.RigidBody": {
+          "motionType": "Static",
+          "mass": 0.0,
+          "friction": 0.5,
+          "restitution": 0.0,
+          "linearDamping": 0.05,
+          "angularDamping": 0.05,
+          "gravityFactor": 1.0,
+          "layer": 0,
+          "sensor": false,
+          "allowSleeping": true,
+          "continuousCollision": false
         },
         "illusion.Transform": {
-          "position": [27.0, 0.0, -3.0],
+          "position": [34.0, 0.5, 4.0],
           "rotation": [0.0, 0.0, 0.0, 1.0],
           "scale": [1.0, 1.0, 1.0]
         }
@@ -4118,7 +4195,7 @@
       "components": {
         "illusion.Collider": {
           "shape": "Box",
-          "halfExtents": [8.0, 0.25, 8.0],
+          "halfExtents": [2.0, 0.25, 2.0],
           "radius": 0.5,
           "halfHeight": 0.5,
           "offset": [0.0, 0.0, 0.0],
@@ -4127,7 +4204,7 @@
           "meshIndex": 0
         },
         "illusion.Name": {
-          "value": "Nav Floor"
+          "value": "Ragdoll Floor"
         },
         "illusion.RigidBody": {
           "motionType": "Static",
@@ -4143,7 +4220,7 @@
           "continuousCollision": false
         },
         "illusion.Transform": {
-          "position": [30.0, -0.25, 0.0],
+          "position": [-17.0, -0.25, 14.0],
           "rotation": [0.0, 0.0, 0.0, 1.0],
           "scale": [1.0, 1.0, 1.0]
         }
@@ -4152,50 +4229,17 @@
     {
       "id": "d909c315b21d8f6c",
       "components": {
+        "illusion.AiStimulus": {
+          "team": 1,
+          "offset": [0.0, 1.2, 0.0],
+          "visible": true
+        },
         "illusion.Name": {
-          "value": "Camera Target"
+          "value": "AI Intruder"
         },
         "illusion.Transform": {
-          "position": [40.0, 0.0, 0.0],
+          "position": [32.0, 0.0, 2.0],
           "rotation": [0.0, 0.0, 0.0, 1.0],
-          "scale": [1.0, 1.0, 1.0]
-        }
-      }
-    },
-    {
-      "id": "db20290ac13e4a81",
-      "components": {
-        "illusion.Animator": {
-          "skeleton": "assets:/models/strider.gltf#skin/0",
-          "clip": "assets:/models/strider.gltf#animation/idle",
-          "graph": "",
-          "speed": 1.0,
-          "time": 0.0,
-          "loop": true,
-          "playing": true
-        },
-        "illusion.MeshRenderer": {
-          "mesh": "assets:/models/strider.gltf#mesh/0",
-          "submesh": 0,
-          "material": "builtin:/material/default",
-          "layers": 1,
-          "castShadows": true,
-          "visible": true,
-          "lodBias": 1.0
-        },
-        "illusion.Name": {
-          "value": "Fallen Strider"
-        },
-        "illusion.Ragdoll": {
-          "profile": "assets:/animations/strider.ragdoll",
-          "active": true,
-          "blendSeconds": 0.4,
-          "mass": 55.0,
-          "layer": 1
-        },
-        "illusion.Transform": {
-          "position": [-17.0, 0.0, 14.0],
-          "rotation": [0.0, -0.3826834, 0.0, 0.9238795],
           "scale": [1.0, 1.0, 1.0]
         }
       }
@@ -4268,48 +4312,18 @@
     {
       "id": "e8e6022a79eb517b",
       "components": {
-        "illusion.CameraFollow": {
-          "offset": [0.0, 3.0, 6.0],
-          "space": "World",
-          "damping": [0.2, 0.3, 0.2],
-          "rotationDamping": 0.2
-        },
-        "illusion.CameraLookAt": {
-          "targetOffset": [0.0, 1.0, 0.0],
-          "damping": 0.15
-        },
-        "illusion.CameraNoise": {
-          "positionAmplitude": [0.02, 0.02, 0.01],
-          "positionFrequency": [0.8, 0.9, 0.7],
-          "rotationAmplitude": [0.004, 0.006, 0.002],
-          "rotationFrequency": [0.4, 0.6, 0.3],
-          "amplitudeGain": 0.8,
-          "frequencyGain": 1.2,
-          "seed": 7
+        "illusion.AiStimulus": {
+          "team": 1,
+          "offset": [0.0, 0.8, 0.0],
+          "visible": false
         },
         "illusion.Name": {
-          "value": "Follow Camera"
+          "value": "AI Hidden Intruder"
         },
         "illusion.Transform": {
-          "position": [40.0, 3.0, 6.0],
+          "position": [26.0, 0.0, 3.0],
           "rotation": [0.0, 0.0, 0.0, 1.0],
           "scale": [1.0, 1.0, 1.0]
-        },
-        "illusion.VirtualCamera": {
-          "priority": 12,
-          "enabled": true,
-          "follow": "d909c315b21d8f6c",
-          "lookAt": "d909c315b21d8f6c",
-          "fovY": 0.9,
-          "nearPlane": 0.2,
-          "dutch": 0.05,
-          "customBlend": true,
-          "blendIn": {
-            "style": "Linear",
-            "duration": 0.4,
-            "control1": [0.2, 0.0],
-            "control2": [0.8, 1.0]
-          }
         }
       }
     },
@@ -4374,19 +4388,72 @@
       }
     },
     {
-      "id": "fd845ef300ce2d0b",
+      "id": "fd0d1f90df4a692f",
       "components": {
-        "illusion.BehaviorAgent": {
-          "tree": "assets:/ai/guard.behavior",
-          "enabled": false,
-          "tickInterval": 0.0,
-          "blackboard": []
+        "illusion.Camera": {
+          "fovY": 1.0471976,
+          "nearPlane": 0.1,
+          "exposure": 1.0,
+          "projection": "Perspective",
+          "orthoHeight": 10.0,
+          "farPlane": 1000.0,
+          "priority": -2
+        },
+        "illusion.CameraBrain": {
+          "defaultBlend": {
+            "style": "Linear",
+            "duration": 0.8,
+            "control1": [0.25, 0.1],
+            "control2": [0.75, 0.9]
+          },
+          "blends": [
+            {
+              "from": "263346a69dd14426",
+              "to": "a2e4fe841f72235e",
+              "blend": {
+                "style": "Curve",
+                "duration": 1.5,
+                "control1": [0.3, 0.1],
+                "control2": [0.7, 0.9]
+              }
+            }
+          ]
         },
         "illusion.Name": {
-          "value": "AI Sleeper"
+          "value": "Camera Brain"
         },
         "illusion.Transform": {
-          "position": [33.0, 0.0, -4.0],
+          "position": [40.0, 3.0, 8.0],
+          "rotation": [0.0, 0.0, 0.0, 1.0],
+          "scale": [1.0, 1.0, 1.0]
+        }
+      }
+    },
+    {
+      "id": "fd845ef300ce2d0b",
+      "components": {
+        "illusion.Name": {
+          "value": "Nav Walker"
+        },
+        "illusion.NavAgent": {
+          "agentType": 1,
+          "radius": 0.4,
+          "height": 1.7,
+          "maxSpeed": 2.5,
+          "maxAcceleration": 6.0,
+          "turnSpeed": 4.0,
+          "stoppingDistance": 0.3,
+          "avoidance": "High",
+          "priority": 20,
+          "separationWeight": 1.5,
+          "areaMask": 65531,
+          "drive": "Transform",
+          "faceMovement": false,
+          "speedParameter": "speed",
+          "destination": [34.0, 1.0, 4.0]
+        },
+        "illusion.Transform": {
+          "position": [25.0, 0.0, -5.0],
           "rotation": [0.0, 0.0, 0.0, 1.0],
           "scale": [1.0, 1.0, 1.0]
         }

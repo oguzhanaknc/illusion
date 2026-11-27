@@ -342,7 +342,9 @@ TEST_CASE("a changed joint name and a reloaded model resolve the socket again")
     f.animation.waitIdle();
     CHECK(
         near(f.world.get<LocalTransform>(child).position, Vec3(0.0f, 1.5f, 1.0f))); // the clip moves "pelvis"
-    CHECK(f.service.jointTransform(walker, "hips").error() == AnimationError::UnknownName);
+    // The rig still gives "pelvis" the bone "hips", so the old name finds it (ADR 0065).
+    CHECK(f.service.jointTransform(walker, "hips").hasValue());
+    CHECK(f.service.jointTransform(walker, "root2").error() == AnimationError::UnknownName);
 }
 
 TEST_CASE("a missing joint or Animator is logged once and leaves the child where it is")

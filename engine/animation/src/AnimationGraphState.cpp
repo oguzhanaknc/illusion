@@ -2,6 +2,7 @@
 
 #include <illusion/animation/AnimationGraphState.hpp>
 #include <illusion/core/Assert.hpp>
+#include <illusion/core/Log.hpp>
 #include <illusion/core/Memory.hpp>
 #include <illusion/core/Profiler.hpp>
 
@@ -316,11 +317,11 @@ struct RootSample
     f32 yaw = 0.0f;
 };
 
-RootSample sampleRoot(const AnimationClip& clip, const ClipBinding& binding, const Skeleton& skeleton,
-                      u32 root, f32 seconds) noexcept
+RootSample sampleRoot(const AnimationClip& clip, const ClipBinding& binding, const ClipRetarget& retarget,
+                      const Skeleton& skeleton, u32 root, f32 seconds) noexcept
 {
     const auto local = [&](u32 joint) {
-        return detail::sampleJoint(clip, binding, skeleton, joint, seconds);
+        return detail::sampleJoint(clip, binding, retarget, skeleton, joint, seconds);
     };
     const Mat4 model = parentModel(skeleton, root, local) * poseMatrix(local(root));
     return RootSample{Vec3(model[3]), yawOf(model)};
@@ -415,7 +416,11 @@ RootMotionDelta clipRootMotion(const GraphBinding& binding, const ActiveClip& ac
 {
     const AnimationClip& clip = *binding.clips[active.clip];
     const ClipBinding& clipBinding = binding.clipBindings[active.clip];
+    const ClipRetarget& retarget = binding.clipRetargets[active.clip];
     const Skeleton& skeleton = *binding.skeleton;
+    const auto sample = [&](f32 seconds) {
+        return sampleRoot(clip, clipBinding, retarget, skeleton, root, seconds);
+    };
     if (active.time == active.lastTime)
     {
         return {};
@@ -425,26 +430,27 @@ RootMotionDelta clipRootMotion(const GraphBinding& binding, const ActiveClip& ac
     {
         const f32 before = std::clamp(active.lastTime, 0.0f, 1.0f) * duration;
         const f32 after = std::clamp(active.time, 0.0f, 1.0f) * duration;
-        return rootDelta(sampleRoot(clip, clipBinding, skeleton, root, before),
-                         sampleRoot(clip, clipBinding, skeleton, root, after));
+        return rootDelta(sample(before), sample(after));
     }
     // Wrapped: from before to the end, then from the start to after.
-    const RootMotionDelta tail =
-        rootDelta(sampleRoot(clip, clipBinding, skeleton, root, active.lastTime * duration),
-                  sampleRoot(clip, clipBinding, skeleton, root, duration));
-    const RootMotionDelta head =
-        rootDelta(sampleRoot(clip, clipBinding, skeleton, root, 0.0f),
-                  sampleRoot(clip, clipBinding, skeleton, root, active.time * duration));
+    const RootMotionDelta tail = rootDelta(sample(active.lastTime * duration), sample(duration));
+    const RootMotionDelta head = rootDelta(sample(0.0f), sample(active.time * duration));
     return RootMotionDelta{tail.translation + head.translation, wrapAngle(tail.yaw + head.yaw)};
 }
 
-// Moves the root motion joint of @p pose back to the rest pose's horizontal position and yaw in model space.
-void removeRootMotion(const Skeleton& skeleton, u32 root, std::span<JointPose> pose) noexcept
+// Moves the root motion joint of @p pose back to the horizontal position and yaw in model space of @p base,
+// or of the rest pose when it is empty.
+void removeRootMotion(const Skeleton& skeleton, std::span<const JointPose> base, u32 root,
+                      std::span<JointPose> pose) noexcept
 {
     const auto current = [&](u32 joint) {
         return pose[joint];
     };
     const auto rest = [&](u32 joint) {
+        if (joint < base.size())
+        {
+            return base[joint];
+        }
         const SkeletonJoint& j = skeleton.joints[joint];
         return JointPose{j.translation, j.rotation, j.scale};
     };
@@ -461,11 +467,55 @@ void removeRootMotion(const Skeleton& skeleton, u32 root, std::span<JointPose> p
         glm::normalize(glm::inverse(parentRotation) * turn * parentRotation * pose[root].rotation);
 }
 
+// Appends @p clip to @p binding: retargeted from @p source when given and possible, else by name.
+void bindGraphClip(GraphBinding& binding, const AnimationClip& clip, const Skeleton* source,
+                   const AssetRef& ref)
+{
+    const Skeleton& skeleton = *binding.skeleton;
+    binding.clips.push_back(&clip);
+    if (source != nullptr)
+    {
+        for (usize i = 0; i + 1 < binding.clips.size(); ++i)
+        {
+            if (binding.clips[i] == &clip && binding.clipRetargets[i].active())
+            {
+                binding.clipBindings.push_back(binding.clipBindings[i]);
+                binding.clipRetargets.push_back(binding.clipRetargets[i]);
+                return;
+            }
+        }
+        Expected<RetargetedClip, RetargetError> retargeted = bindRetargetedClip(clip, *source, skeleton);
+        if (retargeted)
+        {
+            if (binding.basePose.empty())
+            {
+                binding.basePose = retargeted->retarget.reference;
+            }
+            binding.clipBindings.push_back(std::move(retargeted->binding));
+            binding.clipRetargets.push_back(std::move(retargeted->retarget));
+            return;
+        }
+        ILL_LOG_WARN("Animation", "clip '{}' is bound by name: it cannot be retargeted ({})", ref.path(),
+                     retargetErrorName(retargeted.error()));
+    }
+    binding.clipBindings.push_back(bindClip(clip, skeleton));
+    binding.clipRetargets.emplace_back();
+}
+
 } // namespace
 
 Expected<GraphBinding, std::string>
 bindGraph(const AnimationGraph& graph, const Skeleton& skeleton,
           const std::function<const AnimationClip*(const AssetRef&)>& findClip)
+{
+    return bindGraph(graph, skeleton,
+                     std::function<ClipSource(const AssetRef&)>([&findClip](const AssetRef& ref) {
+                         return ClipSource{findClip ? findClip(ref) : nullptr, nullptr};
+                     }));
+}
+
+Expected<GraphBinding, std::string> bindGraph(const AnimationGraph& graph, const Skeleton& skeleton,
+                                              const std::function<ClipSource(const AssetRef&)>& findClip)
 {
     GraphBinding binding;
     binding.graph = &graph;
@@ -480,13 +530,12 @@ bindGraph(const AnimationGraph& graph, const Skeleton& skeleton,
             const AnimationMotion& motion = layer.states[s].motion;
             binding.firstClip.push_back(static_cast<u32>(binding.clips.size()));
             const auto add = [&](const AssetRef& ref, const std::string& path) -> std::optional<std::string> {
-                const AnimationClip* clip = findClip ? findClip(ref) : nullptr;
-                if (clip == nullptr)
+                const ClipSource source = findClip ? findClip(ref) : ClipSource{};
+                if (source.clip == nullptr)
                 {
                     return std::format("{}: clip '{}' not found", path, ref.path());
                 }
-                binding.clips.push_back(clip);
-                binding.clipBindings.push_back(bindClip(*clip, skeleton));
+                bindGraphClip(binding, *source.clip, source.skeleton, ref);
                 return std::nullopt;
             };
             const std::string statePath = std::format("layers[{}].states[{}]", l, s);
@@ -515,7 +564,7 @@ bindGraph(const AnimationGraph& graph, const Skeleton& skeleton,
             std::vector<u8> subtree(joints, 0);
             for (usize m = 0; m < layer.mask.size(); ++m)
             {
-                const i32 joint = detail::findJoint(skeleton, layer.mask[m].joint);
+                const i32 joint = findRigJoint(skeleton, layer.mask[m].joint);
                 if (joint < 0)
                 {
                     return unexpected(std::format("layers[{}].mask[{}].joint: the skeleton has no joint '{}'",
@@ -539,7 +588,7 @@ bindGraph(const AnimationGraph& graph, const Skeleton& skeleton,
     }
     if (!graph.rootMotion.empty())
     {
-        binding.rootJoint = detail::findJoint(skeleton, graph.rootMotion);
+        binding.rootJoint = findRigJoint(skeleton, graph.rootMotion);
         if (binding.rootJoint < 0)
         {
             return unexpected(std::format("rootMotion: the skeleton has no joint '{}'", graph.rootMotion));
@@ -724,7 +773,14 @@ void evaluateGraph(const GraphBinding& binding, const AnimationGraphState& state
     {
         *root = {};
     }
-    restPose(skeleton, out);
+    if (binding.basePose.size() == joints)
+    {
+        std::copy(binding.basePose.begin(), binding.basePose.end(), out.begin());
+    }
+    else
+    {
+        restPose(skeleton, out);
+    }
     const usize layerCount = std::min(graph.layers.size(), state.layers.size());
     const usize maxClips = layerCount * 2 * kMaxStateClips;
     const LinearAllocator::Marker marker = scratch.mark();
@@ -774,9 +830,10 @@ void evaluateGraph(const GraphBinding& binding, const AnimationGraphState& state
             const ActiveClip& active = clips[next];
             const AnimationClip& clip = *binding.clips[active.clip];
             const ClipBinding& clipBinding = binding.clipBindings[active.clip];
+            const ClipRetarget& retarget = binding.clipRetargets[active.clip];
             const f32 share = active.weight / (accumulated + active.weight);
             accumulated += active.weight;
-            sampleClip(clip, clipBinding, skeleton, clipSeconds(clip, active.time, active.loop),
+            sampleClip(clip, clipBinding, retarget, skeleton, clipSeconds(clip, active.time, active.loop),
                        share < 1.0f ? samplePose : layerPose);
             if (share < 1.0f)
             {
@@ -784,7 +841,8 @@ void evaluateGraph(const GraphBinding& binding, const AnimationGraphState& state
             }
             if (additive)
             {
-                sampleClip(clip, clipBinding, skeleton, 0.0f, share < 1.0f ? referenceSample : referencePose);
+                sampleClip(clip, clipBinding, retarget, skeleton, 0.0f,
+                           share < 1.0f ? referenceSample : referencePose);
                 if (share < 1.0f)
                 {
                     blendPoses(referencePose, referenceSample, share, {}, referencePose);
@@ -827,7 +885,7 @@ void evaluateGraph(const GraphBinding& binding, const AnimationGraphState& state
     }
     if (extract)
     {
-        removeRootMotion(skeleton, rootJoint, out);
+        removeRootMotion(skeleton, binding.basePose, rootJoint, out);
     }
     scratch.rewind(marker);
 }

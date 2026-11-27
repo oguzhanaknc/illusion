@@ -1,6 +1,7 @@
 #include "PoseDetail.hpp"
 
 #include <illusion/animation/Pose.hpp>
+#include <illusion/animation/Retarget.hpp>
 #include <illusion/core/Assert.hpp>
 
 #include <algorithm>
@@ -112,6 +113,51 @@ void applyValue(JointPose& pose, AnimationPath path, Vec4 value) noexcept
     }
 }
 
+// The source / rest ratio of a scale channel, 1 on an axis whose rest scale is zero.
+Vec3 scaleRatio(Vec3 value, Vec3 rest) noexcept
+{
+    Vec3 ratio(1.0f);
+    for (glm::length_t axis = 0; axis < 3; ++axis)
+    {
+        ratio[axis] = std::abs(rest[axis]) > 1e-6f ? value[axis] / rest[axis] : 1.0f;
+    }
+    return ratio;
+}
+
+// Writes @p value of a channel of @p path through its retargeting @p correction into @p pose (ADR 0065).
+void applyRetargeted(JointPose& pose, AnimationPath path, const ChannelRetarget& correction,
+                     Vec4 value) noexcept
+{
+    switch (path)
+    {
+    case AnimationPath::Rotation:
+    {
+        // pre and post are unit rotations, so one normalization after the product suffices.
+        const Quat turned = correction.pre * toQuat(value) * correction.post;
+        const f32 length = glm::length(turned);
+        pose.rotation = length > 0.0f ? turned / length : correction.pre * correction.post;
+        break;
+    }
+    case AnimationPath::Translation:
+        switch (correction.translation)
+        {
+        case RetargetTranslation::Skeleton:
+            break;
+        case RetargetTranslation::Scaled:
+            pose.translation = correction.targetRest +
+                               (correction.pre * (Vec3(value) - correction.sourceRest)) * correction.scale;
+            break;
+        case RetargetTranslation::Animation:
+            pose.translation = (correction.pre * Vec3(value)) * correction.scale;
+            break;
+        }
+        break;
+    case AnimationPath::Scale:
+        pose.scale = correction.targetRest * scaleRatio(Vec3(value), correction.sourceRest);
+        break;
+    }
+}
+
 } // namespace
 
 ClipBinding bindClip(const AnimationClip& clip, const Skeleton& skeleton)
@@ -182,6 +228,38 @@ void sampleClip(const AnimationClip& clip, const ClipBinding& binding, const Ske
         const Vec4 value = sampleChannel(channel, time);
         JointPose& pose = out[static_cast<usize>(joint)];
         applyValue(pose, channel.path, value);
+    }
+}
+
+void sampleClip(const AnimationClip& clip, const ClipBinding& binding, const ClipRetarget& retarget,
+                const Skeleton& target, f32 time, std::span<JointPose> out) noexcept
+{
+    if (!retarget.active())
+    {
+        sampleClip(clip, binding, target, time, out);
+        return;
+    }
+    ILL_ASSERT(out.size() >= target.joints.size() && retarget.reference.size() == target.joints.size(),
+               "sampleClip needs one JointPose per joint and a retarget made for this skeleton");
+    const usize joints = std::min({out.size(), target.joints.size(), retarget.reference.size()});
+    std::copy_n(retarget.reference.begin(), joints, out.begin());
+    const usize channels = std::min({clip.channels.size(), binding.joints.size(), retarget.channels.size()});
+    for (usize c = 0; c < channels; ++c)
+    {
+        const i32 joint = binding.joints[c];
+        if (joint < 0 || static_cast<usize>(joint) >= joints)
+        {
+            continue;
+        }
+        const AnimationChannel& channel = clip.channels[c];
+        const ChannelRetarget& correction = retarget.channels[c];
+        if (channel.path == AnimationPath::Translation &&
+            correction.translation == RetargetTranslation::Skeleton)
+        {
+            continue;
+        }
+        applyRetargeted(out[static_cast<usize>(joint)], channel.path, correction,
+                        sampleChannel(channel, time));
     }
 }
 
@@ -289,6 +367,27 @@ JointPose sampleJoint(const AnimationClip& clip, const ClipBinding& binding, con
         const AnimationChannel& channel = clip.channels[c];
         const Vec4 value = sampleChannel(channel, time);
         applyValue(pose, channel.path, value);
+    }
+    return pose;
+}
+
+JointPose sampleJoint(const AnimationClip& clip, const ClipBinding& binding, const ClipRetarget& retarget,
+                      const Skeleton& skeleton, u32 joint, f32 time) noexcept
+{
+    if (!retarget.active() || joint >= retarget.reference.size())
+    {
+        return sampleJoint(clip, binding, skeleton, joint, time);
+    }
+    JointPose pose = retarget.reference[joint];
+    const usize channels = std::min({clip.channels.size(), binding.joints.size(), retarget.channels.size()});
+    for (usize c = 0; c < channels; ++c)
+    {
+        if (binding.joints[c] != static_cast<i32>(joint))
+        {
+            continue;
+        }
+        const AnimationChannel& channel = clip.channels[c];
+        applyRetargeted(pose, channel.path, retarget.channels[c], sampleChannel(channel, time));
     }
     return pose;
 }

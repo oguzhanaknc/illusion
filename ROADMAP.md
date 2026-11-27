@@ -1628,7 +1628,7 @@ game code.
   that says left on the right side is a warning, deterministic output for any joint order of the file;
   every override error; the round trip of rig and source skin through format 7; a changed sidecar recooks;
   both test rigs added to `tests/data/gltf/generate.py`; no benchmark (load time only).
-- ANIM-5b (`implementer`): Retargeted playback. `illusion/animation/Retarget.hpp` (`matchJoints()`,
+- ✅ ANIM-5b (`implementer`): Retargeted playback. `illusion/animation/Retarget.hpp` (`matchJoints()`,
   `rigHeightRatio()`, `bindRetargetedClip()`, the `sampleClip()` overload, `findRigJoint()`),
   `GraphBinding::clipRetargets` and the `bindGraph()` overload with `ClipSource`, `AnimationWorld` keeping the
   source skin of each clip and binding retargeted clips per (skeleton, clip), every joint name (graph masks and

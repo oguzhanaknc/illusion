@@ -23,6 +23,8 @@
 #include <algorithm>
 #include <array>
 #include <cmath>
+#include <format>
+#include <functional>
 #include <optional>
 #include <string>
 #include <string_view>
@@ -115,6 +117,7 @@ struct ClipEntry
     Status status = Status::Loading;
     AssetId file;
     AnimationClip clip;
+    AssetId source; // the skeleton it was authored on (AnimationClip::skeleton), or none
 };
 
 struct MeshEntry
@@ -154,11 +157,13 @@ enum class GraphStep : u8
     Hold,
 };
 
+// A clip bound to one skeleton: by name, or retargeted from the skeleton it was authored on (ADR 0065).
 struct BindingEntry
 {
-    const Skeleton* skeleton = nullptr;
-    const AnimationClip* clip = nullptr;
+    AssetId skeletonId;
+    AssetId clipId;
     ClipBinding binding;
+    ClipRetarget retarget;
 };
 
 // A model file being loaded for the entries made from it.
@@ -187,7 +192,7 @@ struct Slot
     u32 jointCount = 0;
     const Skeleton* skeleton = nullptr;
     const AnimationClip* clip = nullptr;
-    const ClipBinding* binding = nullptr;
+    const BindingEntry* binding = nullptr;
     const std::vector<Aabb>* jointBounds = nullptr; // null without a skinned mesh
     // Inputs and output of this update's pose.
     f32 time = 0.0f;
@@ -204,7 +209,7 @@ struct Slot
     f32 graphSeconds = 0.0f;
     // The clip faded out after crossFade() (Animators without a graph).
     const AnimationClip* fadeClip = nullptr;
-    const ClipBinding* fadeBinding = nullptr;
+    const BindingEntry* fadeBinding = nullptr;
     f32 fadeTime = 0.0f; // seconds into fadeClip
     f32 fadeSpeed = 1.0f;
     bool fadeLoop = true;
@@ -475,15 +480,54 @@ struct AnimationWorld::Impl
         return entry;
     }
 
-    const ClipBinding& bindingFor(AssetId skeletonId, const Skeleton& skeleton, AssetId clipId,
-                                  const AnimationClip& clip)
+    // The skeleton @p clip was authored on when it is another loaded skeleton than @p skeletonId, else null
+    // (the clip binds by name).
+    const Skeleton* sourceOf(const ClipEntry& clip, AssetId skeletonId) const
+    {
+        if (!clip.source || clip.source == skeletonId)
+        {
+            return nullptr;
+        }
+        const auto found = skeletons.find(clip.source.value);
+        return found != skeletons.end() && found->second.status == Status::Ready ? &found->second.skeleton
+                                                                                 : nullptr;
+    }
+
+    // Binds @p entry's clip to its skeleton: retargeted from the clip's source skeleton when it has another
+    // one, else (or when that fails, logged) by name.
+    void bind(BindingEntry& entry)
+    {
+        const ClipEntry& clip = clips.at(entry.clipId.value);
+        const Skeleton& skeleton = skeletons.at(entry.skeletonId.value).skeleton;
+        entry.retarget = {};
+        if (const Skeleton* source = sourceOf(clip, entry.skeletonId))
+        {
+            Expected<RetargetedClip, RetargetError> retargeted =
+                bindRetargetedClip(clip.clip, *source, skeleton);
+            if (retargeted)
+            {
+                entry.binding = std::move(retargeted->binding);
+                entry.retarget = std::move(retargeted->retarget);
+                return;
+            }
+            ILL_LOG_WARN("Animation", "'{}' is bound to '{}' by name: it cannot be retargeted ({})",
+                         AssetPathTable::instance().path(entry.clipId),
+                         AssetPathTable::instance().path(entry.skeletonId),
+                         retargetErrorName(retargeted.error()));
+        }
+        entry.binding = bindClip(clip.clip, skeleton);
+    }
+
+    const BindingEntry& bindingFor(AssetId skeletonId, AssetId clipId)
     {
         const auto [found, inserted] = bindings.try_emplace(hashCombine(skeletonId.value, clipId.value));
         if (inserted)
         {
-            found->second = BindingEntry{&skeleton, &clip, bindClip(clip, skeleton)};
+            found->second.skeletonId = skeletonId;
+            found->second.clipId = clipId;
+            bind(found->second);
         }
-        return found->second.binding;
+        return found->second;
     }
 
     // Fills the entries of @p file from @p model (null when it failed to load); a reload keeps what it
@@ -493,9 +537,21 @@ struct AnimationWorld::Impl
         const auto filePath = filePaths.find(file.value);
         if (model != nullptr && filePath != filePaths.end())
         {
-            // Every clip of the file is kept, so that crossFade() to another one needs no load.
+            // Every clip of the file is kept, so that crossFade() to another one needs no load, and so is the
+            // skeleton each was authored on, for retargeting.
             for (const AnimationClip& clip : model->animations)
             {
+                if (clip.skeleton >= 0 && static_cast<usize>(clip.skeleton) < model->skins.size())
+                {
+                    const AssetId skin = AssetPathTable::instance().intern(
+                        std::format("{}#skin/{}", filePath->second, clip.skeleton));
+                    const auto [found, inserted] = skeletons.try_emplace(skin.value);
+                    if (inserted)
+                    {
+                        found->second.file = file;
+                        found->second.index = static_cast<u32>(clip.skeleton);
+                    }
+                }
                 const AssetId id =
                     AssetPathTable::instance().intern(filePath->second + "#animation/" + clip.name);
                 if (id)
@@ -541,6 +597,10 @@ struct AnimationWorld::Impl
             {
                 entry.clip = *found;
                 entry.status = Status::Ready;
+                entry.source = found->skeleton >= 0
+                                   ? AssetPathTable::instance().intern(
+                                         std::format("{}#skin/{}", filePaths.at(file.value), found->skeleton))
+                                   : AssetId{};
             }
             else if (!keep)
             {
@@ -579,7 +639,7 @@ struct AnimationWorld::Impl
         {
             for (auto& [key, entry] : bindings)
             {
-                entry.binding = bindClip(*entry.clip, *entry.skeleton);
+                bind(entry);
             }
             ++revision;
         }
@@ -680,12 +740,15 @@ struct AnimationWorld::Impl
         }
         entry.generation = graph.generation;
         entry.revision = revision;
-        Expected<GraphBinding, std::string> bound =
-            bindGraph(graph.graph, skeleton, [this](const AssetRef& ref) -> const AnimationClip* {
+        Expected<GraphBinding, std::string> bound = bindGraph(
+            graph.graph, skeleton, std::function<ClipSource(const AssetRef&)>([&](const AssetRef& ref) {
                 const auto found = clips.find(ref.id.value);
-                return found != clips.end() && found->second.status == Status::Ready ? &found->second.clip
-                                                                                     : nullptr;
-            });
+                if (found == clips.end() || found->second.status != Status::Ready)
+                {
+                    return ClipSource{};
+                }
+                return ClipSource{&found->second.clip, sourceOf(found->second, skeletonId)};
+            }));
         if (!bound)
         {
             entry.binding = {};
@@ -983,9 +1046,7 @@ struct AnimationWorld::Impl
         const bool clipReady = clip != nullptr && clip->status == Status::Ready;
         slot.skeleton = &skeleton.skeleton;
         slot.clip = clipReady ? &clip->clip : nullptr;
-        slot.binding =
-            clipReady ? &bindingFor(animator.skeleton.id, skeleton.skeleton, animator.clip.id, clip->clip)
-                      : nullptr;
+        slot.binding = clipReady ? &bindingFor(animator.skeleton.id, animator.clip.id) : nullptr;
         const u32 offset = slot.offset;
         reserveJoints(slot, joints);
         slot.fresh = slot.fresh || !sameSkeleton || slot.offset != offset;
@@ -1099,7 +1160,7 @@ struct AnimationWorld::Impl
         {
             joint.skeleton = slot.skeleton;
             joint.revision = revision;
-            joint.index = detail::findJoint(*slot.skeleton, joint.name);
+            joint.index = findRigJoint(*slot.skeleton, joint.name);
         }
         if (joint.index < 0 && !joint.reported)
         {
@@ -1593,7 +1654,8 @@ struct AnimationWorld::Impl
         }
         else if (slot.clip != nullptr)
         {
-            sampleClip(*slot.clip, *slot.binding, *slot.skeleton, slot.time, localPose);
+            sampleClip(*slot.clip, slot.binding->binding, slot.binding->retarget, *slot.skeleton, slot.time,
+                       localPose);
             if (slot.fadeClip != nullptr)
             {
                 LinearAllocator& memory = arena();
@@ -1601,7 +1663,8 @@ struct AnimationWorld::Impl
                 JointPose* faded = memory.allocateArray<JointPose>(joints);
                 ILL_CHECK(faded != nullptr, "the animation scratch arena is too small");
                 const std::span<JointPose> fadedPose(faded, joints);
-                sampleClip(*slot.fadeClip, *slot.fadeBinding, *slot.skeleton, slot.fadeTime, fadedPose);
+                sampleClip(*slot.fadeClip, slot.fadeBinding->binding, slot.fadeBinding->retarget,
+                           *slot.skeleton, slot.fadeTime, fadedPose);
                 blendPoses(fadedPose, localPose, slot.fade / slot.fadeDuration, {}, localPose);
                 memory.rewind(marker);
             }
@@ -1699,7 +1762,7 @@ struct AnimationWorld::Impl
         {
             socket.skeleton = slot->skeleton;
             socket.revision = revision;
-            socket.index = detail::findJoint(*slot->skeleton, socket.joint);
+            socket.index = findRigJoint(*slot->skeleton, socket.joint);
         }
         if (socket.index < 0 || static_cast<u32>(socket.index) >= slot->jointCount)
         {

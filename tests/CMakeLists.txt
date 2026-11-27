@@ -83,6 +83,7 @@ add_executable(illusion_tests
     animation/TestAnimationWorld.cpp
     animation/TestInverseKinematics.cpp
     animation/TestPose.cpp
+    animation/TestRetarget.cpp
     animation/TestSpringBones.cpp
     camera/TestCameraAim.cpp
     camera/TestCameraBlend.cpp
