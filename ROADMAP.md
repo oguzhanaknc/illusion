@@ -1684,6 +1684,65 @@ Correct indirect light indoors and in shadow until ray tracing (M10) is availabl
 
 ## DECAL — Decals
 
+- DECAL is designed in ADR 0066 (decal shaders on MAT marked `[Decal("BaseColor Normal ORM Emission")]`; boxes
+  drawn after the depth prepass into a decal buffer of three RGBA8 targets that every forward variant blends
+  into `SurfaceOutput` before lighting, emission added after the sky; receivers chosen by eight decal layers
+  written by the prepass and a material opt-out; a fixed-capacity `DecalPool` behind `DecalService` for decals
+  spawned by game code). DECAL-2 needs MAT-4's `.material` `shader` and `parameters`. Four work packages, one PR
+  each:
+- DECAL-1 (`implementer`): Decal shaders. The `[Decal(...)]` attribute read from the reflection,
+  `DecalChannels` with `decalChannelsName()`/`parseDecalChannels()`, `ShaderAsset::decalChannels`,
+  `ShaderPass::Decal` and `ShaderPass::DecalEmission` (`kShaderPassCount` 8, the cooked shader format version
+  raised), `illusion/DecalPass.slang` (box vertex shader from `SV_VertexID`, depth reconstruction, the box,
+  layer, angle, depth and distance tests, normal reconstruction from four neighbours, `SampleGrad` gradients
+  from the receiver plane) and `illusion/Decal.slang` (`decalAge()`, `decalLife()`, `decalVariant()`,
+  `decalAtlasUv()`), `ShaderCompiler` compiling only the decal variants of decal shaders,
+  `builtin:/shader/decal` built by `illusion_shaderc`. Done: `tests/assets` compile tests of a decal shader per
+  channel set (variants present and absent), errors with line and column for `[Decal]` with `[ShadingModel]`,
+  an unknown or empty channel list and `worldOffset()` in a decal shader, cooked round trip of
+  `decalChannels`, a malformed decal shader never crashes the cooker; surface shaders compile to the same
+  variants as before (only the library hash changes); no GPU test yet.
+- DECAL-2 (`implementer`): The renderer. `Decal` (`DecalComponents.hpp`, reflected as "illusion.Decal"),
+  `RenderDecal` and its resolution in `RenderAssetResolver::update()`, `MeshRenderer::decalLayers` and
+  `RenderMesh::decalLayers` into `InstanceData::extra.w` bits 24 to 31, `MaterialAsset::receiveDecals` and
+  `MaterialDesc::receiveDecals`, the R8_UINT receiver mask in every prepass variant, the DBuffer and decal pass,
+  the DBuffer blend in every forward variant (bound and bindless, every shading model), the emission pass,
+  culling, the ADR's draw order, `kMaxVisibleDecals`, `SceneRendererDesc::decals`, `RenderStats::decals`,
+  `decalDrawCalls`, `decalsDropped` and `RenderGpuTimings::decals`. Done: GPU goldens on lavapipe
+  `decal-channels` (one decal per channel on a lit plane and a cube corner), `decal-layers` (sort orders over
+  material order, receiver layers, a material with `receiveDecals` false, angle and depth fade, a camera inside
+  a box), `decal-moving` (a decal parented to a moving cube, TAA on, no ghost beyond the golden), the bound
+  and bindless paths giving the same image, a frame without decals byte-identical to before, 1,000 decals at
+  1920x1080 with the expected counters, every test at zero validation errors; GPU benchmark `render/decals-1000`
+  (ADR target 0.6 ms for both decal passes and 0.1 ms of DBuffer reads on the RTX 4070 SUPER, budget from the
+  measurement), `render/10k-instances` and `render/material-shaders` within 2 %; `samples/showcase/build.jsonl`
+  gets a `Decal` with every field non-default (on a `builtin:/shader/decal` material), a `MeshRenderer` with
+  non-default `decalLayers` and a material with `receiveDecals` false; a short manual page `manual/decals.md`
+  (EN/TR; DECAL-4 completes it).
+- DECAL-3 (`implementer`): Pooled decals and the scripting API. `DecalPool.hpp` (slots, spawn-order list,
+  eviction of the oldest, generations, fades, attachments, `resolvedMaterial()`), `DecalService.hpp`,
+  `DecalPoolService.hpp`, `RenderAssetResolver::resolveDecals()`, `RenderView::decals` drawn with the scene
+  decals in the ADR's order, the `decals` section of `ProjectSettings`, the Decals step of `GameSession` after
+  Cameras with `GameSession::decals()`, the service provided to modules (module API version: the next free at
+  landing), the player and Play mode passing the pool to the renderer. Done: `tests/render/TestDecalPool.cpp`
+  (every function and error, eviction order with holes and full pools, stale handles after reuse, fade
+  weights at fixed steps against hand-computed values, attachments that move, turn Inactive and are destroyed,
+  bit-identical repeated runs, no allocation per spawn and update with `test::ScopedAllocationCounter`),
+  `tests/modules` (a shared module calls every function once through the real service), GPU golden
+  `decal-pool` on lavapipe (spawned decals fading in and out at fixed steps, zero validation errors);
+  benchmarks `render/decal-pool-update-4096` and `render/decal-spawn` (ADR targets 40 us and 100 ns, budgets from
+  the measurement); the showcase module calls every `DecalService` function (`check_api_coverage.py`).
+- DECAL-4 (`mechanic`): Editor and documentation. The Scene view box and projection arrow of `Decal`
+  (`VisualiserColors::decal`), the commands `decal.list`, `decal.place` (undoable, through `WorldEditor`) and
+  `decal.pool` (Play), every param validated with fuzz cases, the command reference and `catalog.json`, agent
+  summaries with examples; a `.material` decal example in the asset browser templates; manual `manual/decals.md`
+  completed (EN/TR: placing decals, decal shaders with a complete `.shader` tested like the other shader
+  examples, layers and opt-out, sort order, pooled decals, skinned receivers, performance), a "Decal shaders"
+  section in the material shaders manual, the scripting API reference, `CHANGELOG.md` (module API version),
+  ADR 0066 Accepted. Done: `editor/tests/core/TestDecalCommands.cpp`, the commands in the fuzz, dry-run and
+  random-command history tests, `decal.pool` of a running game in `editor/tests/play/TestPlayMode.cpp`, the box
+  in `editor/tests/viewport/TestVisualisers.cpp` and a Scene view golden in `editor/tests/gpu`, `mkdocs build
+  --strict`, docs parity.
 - Deferred-style decals projected onto opaque surfaces in a box (base colour, normal, roughness, emission),
   sorted, layered and culled by mask; decal materials on the MAT system; footprints and impacts from game
   code through a pooled `DecalService`
