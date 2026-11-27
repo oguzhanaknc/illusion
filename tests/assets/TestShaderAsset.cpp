@@ -3,7 +3,9 @@
 
 #include <doctest/doctest.h>
 
+#include <cstddef>
 #include <cstring>
+#include <string_view>
 
 using namespace illusion;
 
@@ -79,6 +81,33 @@ ShaderAsset sampleShader()
     shader.libraryHash = 0x1234'5678'9abc'def0ull;
     shader.compilerVersion = "2026.19";
     return shader;
+}
+
+// A decal shader of the channels @p channels with the variants they need.
+ShaderAsset sampleDecal(DecalChannels channels)
+{
+    ShaderAsset shader = sampleShader();
+    shader.source = "game:/decals/scorch.shader";
+    shader.shadingModel = ShadingModel::Default;
+    shader.worldOffset = false;
+    shader.decalChannels = channels;
+    const std::vector<std::byte> spirv = shader.variants[0].spirv;
+    shader.variants.clear();
+    for (const ShaderPass pass : {ShaderPass::Decal, ShaderPass::DecalEmission})
+    {
+        if (shaderVariantExists(pass, AlphaMode::Blend, channels))
+        {
+            shader.variants.push_back(
+                ShaderVariant{.pass = pass, .alphaMode = AlphaMode::Blend, .spirv = spirv});
+        }
+    }
+    return shader;
+}
+
+// Offset of the decal channels byte in serialized data of a shader whose source is @p source.
+usize decalChannelsOffset(std::string_view source)
+{
+    return 4 + 4 + 4 + source.size() + 1; // magic, version, source length and text, shading model
 }
 
 template <class T>
@@ -241,6 +270,8 @@ TEST_CASE("shader enumerations have stable names")
     CHECK_FALSE(parseShadingModel("unlit").has_value());
     CHECK(shaderPassName(ShaderPass::ForwardBindless) == "forwardBindless");
     CHECK(shaderPassName(ShaderPass::EntityIds) == "entityIds");
+    CHECK(shaderPassName(ShaderPass::Decal) == "decal");
+    CHECK(shaderPassName(ShaderPass::DecalEmission) == "decalEmission");
     CHECK(alphaModeName(AlphaMode::Mask) == "mask");
     CHECK(shaderParameterTypeName(ShaderParameterType::Float3) == "float3");
     CHECK(shaderParameterComponents(ShaderParameterType::Float2) == 2);
@@ -258,4 +289,143 @@ TEST_CASE("cooked shaders are a type of their own in asset files")
     REQUIRE(read.has_value());
     CHECK(read->type == AssetType::Shader);
     CHECK(deserializeShader(read->payload) == sampleShader());
+}
+
+TEST_CASE("decal channels are named and parsed as space-separated lists")
+{
+    CHECK(decalChannelsName(DecalChannels::None).empty());
+    CHECK(decalChannelsName(DecalChannels::ORM) == "ORM");
+    CHECK(decalChannelsName(DecalChannels::Emission | DecalChannels::BaseColor) == "BaseColor Emission");
+    CHECK(decalChannelsName(kAllDecalChannels) == "BaseColor Normal ORM Emission");
+    CHECK(parseDecalChannels("BaseColor") == DecalChannels::BaseColor);
+    CHECK(parseDecalChannels("  Normal   ORM ") == (DecalChannels::Normal | DecalChannels::ORM));
+    CHECK(parseDecalChannels("Emission ORM Normal BaseColor") == kAllDecalChannels);
+    for (const std::string_view invalid :
+         {"", "   ", "Albedo", "basecolor", "BaseColor BaseColor", "ORM,Normal"})
+    {
+        CAPTURE(invalid);
+        CHECK_FALSE(parseDecalChannels(invalid).has_value());
+    }
+    for (u32 bits = 1; bits <= 15; ++bits)
+    {
+        const auto channels = static_cast<DecalChannels>(bits);
+        CHECK(parseDecalChannels(decalChannelsName(channels)) == channels);
+    }
+    CHECK(hasDecalChannel(DecalChannels::Normal | DecalChannels::ORM, DecalChannels::ORM));
+    CHECK_FALSE(hasDecalChannel(DecalChannels::Normal, DecalChannels::BaseColor | DecalChannels::Emission));
+}
+
+TEST_CASE("decal shaders have only the decal variants their channels need, keyed as blended")
+{
+    for (u32 bits = 1; bits <= 15; ++bits)
+    {
+        const auto channels = static_cast<DecalChannels>(bits);
+        CAPTURE(bits);
+        u32 variants = 0;
+        for (u32 pass = 0; pass < kShaderPassCount; ++pass)
+        {
+            for (const AlphaMode mode : {AlphaMode::Opaque, AlphaMode::Mask, AlphaMode::Blend})
+            {
+                variants += shaderVariantExists(static_cast<ShaderPass>(pass), mode, channels) ? 1u : 0u;
+            }
+        }
+        const bool buffer = (bits & 7u) != 0;
+        const bool emission = (bits & 8u) != 0;
+        CHECK(variants == (buffer ? 1u : 0u) + (emission ? 1u : 0u));
+        CHECK(shaderVariantExists(ShaderPass::Decal, AlphaMode::Blend, channels) == buffer);
+        CHECK(shaderVariantExists(ShaderPass::DecalEmission, AlphaMode::Blend, channels) == emission);
+        CHECK_FALSE(shaderVariantExists(ShaderPass::Decal, AlphaMode::Opaque, channels));
+        CHECK_FALSE(shaderVariantExists(ShaderPass::Forward, AlphaMode::Opaque, channels));
+    }
+    for (u32 pass = 0; pass < kShaderPassCount; ++pass)
+    {
+        for (const AlphaMode mode : {AlphaMode::Opaque, AlphaMode::Mask, AlphaMode::Blend})
+        {
+            CHECK(shaderVariantExists(static_cast<ShaderPass>(pass), mode, DecalChannels::None) ==
+                  shaderVariantExists(static_cast<ShaderPass>(pass), mode));
+        }
+    }
+    CHECK_FALSE(shaderVariantExists(ShaderPass::Decal, AlphaMode::Blend));
+    CHECK_FALSE(shaderVariantExists(ShaderPass::DecalEmission, AlphaMode::Blend));
+}
+
+TEST_CASE("a serialized decal shader reads back with its channels")
+{
+    for (const DecalChannels channels : {DecalChannels::BaseColor, DecalChannels::Emission,
+                                         DecalChannels::Normal | DecalChannels::Emission, kAllDecalChannels})
+    {
+        CAPTURE(decalChannelsName(channels));
+        const ShaderAsset shader = sampleDecal(channels);
+        const std::vector<std::byte> bytes = serializeShader(shader);
+        const std::optional<ShaderAsset> read = deserializeShader(bytes);
+        REQUIRE(read.has_value());
+        CHECK(*read == shader);
+        CHECK(read->decalChannels == channels);
+        CHECK(serializeShader(*read) == bytes);
+    }
+}
+
+TEST_CASE("decal shader data that breaks the decal rules is rejected")
+{
+    SUBCASE("a decal shader with worldOffset()")
+    {
+        ShaderAsset shader = sampleDecal(kAllDecalChannels);
+        shader.worldOffset = true;
+        CHECK_FALSE(deserializeShader(serializeShader(shader)).has_value());
+    }
+    SUBCASE("a decal shader with a shading model")
+    {
+        ShaderAsset shader = sampleDecal(kAllDecalChannels);
+        shader.shadingModel = ShadingModel::Unlit;
+        CHECK_FALSE(deserializeShader(serializeShader(shader)).has_value());
+    }
+    SUBCASE("a decal shader with a surface variant")
+    {
+        ShaderAsset shader = sampleDecal(kAllDecalChannels);
+        shader.variants.insert(shader.variants.begin(), sampleShader().variants[0]);
+        CHECK_FALSE(deserializeShader(serializeShader(shader)).has_value());
+    }
+    SUBCASE("an emission variant of a decal without Emission")
+    {
+        ShaderAsset shader = sampleDecal(DecalChannels::BaseColor);
+        shader.variants.push_back(ShaderVariant{.pass = ShaderPass::DecalEmission,
+                                                .alphaMode = AlphaMode::Blend,
+                                                .spirv = shader.variants[0].spirv});
+        CHECK_FALSE(deserializeShader(serializeShader(shader)).has_value());
+    }
+    SUBCASE("a surface shader with a decal variant")
+    {
+        ShaderAsset shader = sampleShader();
+        shader.variants.push_back(ShaderVariant{
+            .pass = ShaderPass::Decal, .alphaMode = AlphaMode::Blend, .spirv = shader.variants[0].spirv});
+        CHECK_FALSE(deserializeShader(serializeShader(shader)).has_value());
+    }
+    SUBCASE("unknown channel bits")
+    {
+        const ShaderAsset shader = sampleDecal(kAllDecalChannels);
+        std::vector<std::byte> bytes = serializeShader(shader);
+        const usize channels = decalChannelsOffset(shader.source);
+        REQUIRE(bytes[channels] == std::byte{15});
+        bytes[channels] = std::byte{16};
+        CHECK_FALSE(deserializeShader(bytes).has_value());
+    }
+}
+
+TEST_CASE("shaders of the first format version read as surface shaders")
+{
+    const ShaderAsset shader = sampleShader();
+    std::vector<std::byte> bytes = serializeShader(shader);
+    const usize channels = decalChannelsOffset(shader.source);
+    REQUIRE(bytes[channels] == std::byte{0});
+    bytes.erase(bytes.begin() + static_cast<std::ptrdiff_t>(channels));
+    const u32 version = 1;
+    std::memcpy(bytes.data() + 4, &version, sizeof(version));
+    const std::optional<ShaderAsset> read = deserializeShader(bytes);
+    REQUIRE(read.has_value());
+    CHECK(*read == shader);
+    CHECK(read->decalChannels == DecalChannels::None);
+
+    const u32 future = 3;
+    std::memcpy(bytes.data() + 4, &future, sizeof(future));
+    CHECK_FALSE(deserializeShader(bytes).has_value());
 }

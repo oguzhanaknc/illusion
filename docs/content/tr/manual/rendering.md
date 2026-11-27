@@ -288,6 +288,32 @@ resources.releaseShader(glow); // its materials draw with the standard shader fr
 - Mesh'ler glTF vertex renklerini (`COLOR_0`, `MeshData::colors`) `SurfaceInput.color` için saklar; vertex
   rengi olmayan Mesh'ler beyaz okur. `SurfaceInput.customData` şimdilik sıfırdır.
 
+### Decal shader {#decal-shader}
+
+`builtin:/shader/decal`, standart [decal shader'ıdır](assets.md#decal-shaders) (ADR 0066). Dört kanalın hepsini
+bir atlasın tek karesinden yazar.
+
+| Alan | Varsayılan | Anlamı |
+| --- | --- | --- |
+| `baseColorFactor` | beyaz | Base color Texture'ını, decal'in rengini ve alpha'da opacity'yi çarpar. |
+| `emissiveFactor` | siyah | Emissive Texture'ını çarpar. |
+| `normalScale` | 1 | Normal map'in gücü. |
+| `occlusionStrength` | 1 | `ormTexture` kırmızı kanalındaki occlusion'ın ne kadar sayılacağı (0 ile 1). |
+| `roughnessFactor` | 1 | `ormTexture` yeşil kanalındaki roughness'ı çarpar (0 ile 1). |
+| `metallicFactor` | 0 | `ormTexture` mavi kanalındaki metallic'i çarpar (0 ile 1). |
+| `atlasColumns`, `atlasRows` | 1 | Atlasın kareleri (her biri 1 ile 16). |
+| `baseColorTexture` | beyaz | Base color; alpha opacity'dir. |
+| `normalTexture` | düz normal | Tangent space normal map. |
+| `ormTexture` | beyaz | Occlusion, roughness ve metallic. |
+| `emissiveTexture` | beyaz | Emission. |
+
+Decal'in `variant` değeri atlas karesini seçer; kareler sol üstten başlayarak satır satır numaralanır (kurşun
+izlerinin 2 x 2 atlası `atlasColumns` 2, `atlasRows` 2 ve 0 ile 3 arası variant'lardır). `metallicFactor`
+varsayılanı 0'dır; Material istemedikçe decal bir yüzeyi metalik yapmaz.
+
+Decal Render Pass'leri (`decal` ve `decalEmission`) DECAL-2'nin decal renderer'ına aittir; o zamana kadar hiçbir
+Render Pass bir decal shader'ını çizmez.
+
 ### Shading model'leri {#shading-models}
 
 Bir shader'ın `Parameters` yapısındaki `[ShadingModel("...")]` attribute'u, aydınlatmanın yüzeyini nasıl

@@ -15,6 +15,7 @@
 #include <cstring>
 #include <fstream>
 #include <iterator>
+#include <sstream>
 #include <string>
 #include <string_view>
 
@@ -63,6 +64,45 @@ SurfaceOutput surface(SurfaceInput input)
     return defaultSurface();
 }
 )";
+
+// A decal shader writing @p channels that uses the decal API.
+std::string decalSource(std::string_view channels)
+{
+    return "[Decal(\"" + std::string(channels) + R"(")]
+struct Parameters
+{
+    [Color(1, 0.5, 0.25, 1)] float4 tint;
+    [Default(4)] [Range(1, 8)] int columns;
+    [Texture("white", "color")] Texture2DSlot albedo;
+    [Texture("normal", "normal")] Texture2DSlot bumps;
+};
+
+SurfaceOutput surface(SurfaceInput input)
+{
+    const Parameters p = parameters(input);
+    const float2 uv = decalAtlasUv(input.uv, decalVariant(input), uint(p.columns), 2u);
+    const float4 texel = sampleTexture(input, p.albedo, uv);
+    SurfaceOutput output = defaultSurface();
+    output.baseColor = texel.rgb * p.tint.rgb * input.color.rgb;
+    output.normal = unpackNormal(sampleTexture(input, p.bumps, uv * 2.0), 1.0);
+    output.roughness = 0.2 + 0.6 * valueNoise(input.worldPosition * 4.0);
+    output.emission = p.tint.rgb * (1.0 - decalLife(input)) * step(decalAge(input), 2.0);
+    output.opacity = texel.a * p.tint.a;
+    return output;
+}
+)";
+}
+
+// The 1-based line and column of the first @p text in @p source.
+std::pair<u32, u32> locate(std::string_view source, std::string_view text)
+{
+    const usize at = source.find(text);
+    REQUIRE(at != std::string_view::npos);
+    const usize lineStart = source.rfind('\n', at);
+    const auto line = static_cast<u32>(
+        std::count(source.begin(), source.begin() + static_cast<std::ptrdiff_t>(at), '\n') + 1);
+    return {line, static_cast<u32>(lineStart == std::string_view::npos ? at + 1 : at - lineStart)};
+}
 
 ShaderCompiler makeCompiler(const std::filesystem::path& library = utf8Path(ILLUSION_TEST_SHADER_LIBRARY))
 {
@@ -621,4 +661,207 @@ TEST_CASE("cooking compiles shaders into an archive that loads without sources o
     CHECK(glow->variants.size() == 15);
     CHECK(database.loadShader("game:/materials/plain.shader", nullptr).has_value());
     CHECK_FALSE(database.loadShader("game:/materials/zbroken.shader", nullptr).has_value());
+}
+
+TEST_CASE("a decal shader compiles into the decal variants of its channels and nothing else")
+{
+    for (u32 bits = 1; bits <= 15; ++bits)
+    {
+        const auto channels = static_cast<DecalChannels>(bits);
+        const std::string names = decalChannelsName(channels);
+        CAPTURE(names);
+        const ShaderCompileResult result =
+            sharedCompiler().compile("game:/decals/scorch.shader", decalSource(names));
+        INFO(describe(result));
+        REQUIRE(result.succeeded());
+        CHECK(errorsOf(result).empty());
+        const ShaderAsset& shader = *result.shader;
+        CHECK(shader.decalChannels == channels);
+        CHECK(shader.shadingModel == ShadingModel::Default);
+        CHECK_FALSE(shader.worldOffset);
+        REQUIRE(shader.parameters.size() == 2);
+        CHECK(shader.parameters[1].name == "columns");
+        REQUIRE(shader.textures.size() == 2);
+        CHECK(shader.textures[1].usage == ShaderTextureUsage::Normal);
+
+        const bool buffer =
+            hasDecalChannel(channels, DecalChannels::BaseColor | DecalChannels::Normal | DecalChannels::ORM);
+        const bool emission = hasDecalChannel(channels, DecalChannels::Emission);
+        CHECK(shader.variants.size() == (buffer ? 1u : 0u) + (emission ? 1u : 0u));
+        CHECK((shader.variant(ShaderPass::Decal, AlphaMode::Blend) != nullptr) == buffer);
+        CHECK((shader.variant(ShaderPass::DecalEmission, AlphaMode::Blend) != nullptr) == emission);
+        CHECK(shader.variant(ShaderPass::Forward, AlphaMode::Opaque) == nullptr);
+        for (const ShaderVariant& variant : shader.variants)
+        {
+            CAPTURE(shaderPassName(variant.pass));
+            REQUIRE(variant.spirv.size() >= 20);
+            u32 magic = 0;
+            std::memcpy(&magic, variant.spirv.data(), sizeof(magic));
+            CHECK(magic == 0x07230203u);
+            const std::string_view text(reinterpret_cast<const char*>(variant.spirv.data()),
+                                        variant.spirv.size());
+            CHECK(text.find(kShaderVertexEntry) != std::string_view::npos);
+            CHECK(text.find(kShaderFragmentEntry) != std::string_view::npos);
+        }
+        const std::optional<ShaderAsset> read = deserializeShader(serializeShader(shader));
+        REQUIRE(read.has_value());
+        CHECK(*read == shader);
+    }
+}
+
+TEST_CASE("the standard decal shader writes every channel from an atlas")
+{
+    const std::filesystem::path path = utf8Path(ILLUSION_TEST_SHADER_LIBRARY) / "illusion" / "Decal.shader";
+    std::ifstream file(path, std::ios::binary);
+    REQUIRE(file.good());
+    std::ostringstream text;
+    text << file.rdbuf();
+    const ShaderCompileResult result = sharedCompiler().compile("builtin:/shader/decal", text.str());
+    INFO(describe(result));
+    REQUIRE(result.succeeded());
+    CHECK(result.diagnostics.empty());
+    const ShaderAsset& shader = *result.shader;
+    CHECK(shader.decalChannels == kAllDecalChannels);
+    CHECK(shader.variants.size() == 2);
+    for (const std::string_view name :
+         {"baseColorFactor", "emissiveFactor", "normalScale", "occlusionStrength", "roughnessFactor",
+          "metallicFactor", "atlasColumns", "atlasRows"})
+    {
+        CAPTURE(name);
+        CHECK(shader.findParameter(name) != nullptr);
+    }
+    REQUIRE(shader.textures.size() == 4);
+    CHECK(shader.textures[0].name == "baseColorTexture");
+    CHECK(shader.textures[1].fallback == ShaderTextureFallback::FlatNormal);
+    CHECK(shader.textures[2].usage == ShaderTextureUsage::Linear);
+}
+
+TEST_CASE("compiling the same decal shader twice gives the same bytes")
+{
+    const std::string source = decalSource("BaseColor Normal ORM Emission");
+    const ShaderCompileResult first = sharedCompiler().compile("game:/decals/scorch.shader", source);
+    const ShaderCompileResult second = sharedCompiler().compile("game:/decals/scorch.shader", source);
+    REQUIRE(first.succeeded());
+    REQUIRE(second.succeeded());
+    CHECK(serializeShader(*first.shader) == serializeShader(*second.shader));
+}
+
+TEST_CASE("decal attribute errors name the attribute's line and column")
+{
+    SUBCASE("[Decal] with [ShadingModel]")
+    {
+        checkError("[Decal(\"BaseColor\")]\n[ShadingModel(\"Unlit\")]\n" + withParameters(""), 1, 2,
+                   "[Decal] and [ShadingModel]");
+    }
+    SUBCASE("[ShadingModel] before [Decal]")
+    {
+        checkError("[ShadingModel(\"Default\")] [Decal(\"ORM\")]\n" + withParameters(""), 1, 28,
+                   "[Decal] and [ShadingModel]");
+    }
+    SUBCASE("an unknown channel")
+    {
+        checkError("// a scorch mark\n[Decal(\"BaseColor Albedo\")]\n" + withParameters(""), 2, 2,
+                   "unknown channel 'Albedo'");
+    }
+    SUBCASE("a channel in the wrong case")
+    {
+        checkError("[ Decal(\"orm\")]\n" + withParameters(""), 1, 3, "unknown channel 'orm'");
+    }
+    SUBCASE("an empty channel list")
+    {
+        checkError("[Decal(\"\")]\n" + withParameters(""), 1, 2, "lists no channel");
+    }
+    SUBCASE("a list of spaces")
+    {
+        checkError("[Decal(\"   \")]\n" + withParameters(""), 1, 2, "lists no channel");
+    }
+    SUBCASE("a channel listed twice")
+    {
+        checkError("[Decal(\"Normal ORM Normal\")]\n" + withParameters(""), 1, 2,
+                   "the channel 'Normal' is listed twice");
+    }
+}
+
+TEST_CASE("a decal shader with worldOffset() is an error at the function")
+{
+    const std::string source =
+        decalSource("BaseColor") +
+        "\nfloat3 worldOffset(WorldOffsetInput input)\n{\n    return float3(0.0, 0.0, 0.0);\n}\n";
+    const auto [line, column] = locate(source, "worldOffset(");
+    checkError(source, line, column, "a decal shader cannot have worldOffset()");
+}
+
+TEST_CASE("surface shaders compile to the same bytes with or without the decal library")
+{
+    test::TempDirectory libraryCopy;
+    std::filesystem::copy(utf8Path(ILLUSION_TEST_SHADER_LIBRARY), libraryCopy.path,
+                          std::filesystem::copy_options::recursive);
+    REQUIRE(std::filesystem::remove(libraryCopy.path / "illusion" / "Decal.slang"));
+    REQUIRE(std::filesystem::remove(libraryCopy.path / "illusion" / "DecalPass.slang"));
+    const ShaderCompiler withoutDecals = makeCompiler(libraryCopy.path);
+    CHECK(withoutDecals.libraryHash() != sharedCompiler().libraryHash());
+
+    for (const std::string_view source : {kGlowShader, kPlainShader})
+    {
+        const ShaderCompileResult with = sharedCompiler().compile("game:/surface.shader", source);
+        const ShaderCompileResult without = withoutDecals.compile("game:/surface.shader", source);
+        INFO(describe(with));
+        REQUIRE(with.succeeded());
+        REQUIRE(without.succeeded());
+        CHECK(with.shader->decalChannels == DecalChannels::None);
+        CHECK(with.shader->variants.size() == 15);
+        CHECK(with.shader->variants == without.shader->variants);
+        CHECK(with.shader->parameters == without.shader->parameters);
+        CHECK(with.shader->textures == without.shader->textures);
+        CHECK(with.shader->variant(ShaderPass::Decal, AlphaMode::Blend) == nullptr);
+    }
+    // A decal shader needs the decal library.
+    CHECK_FALSE(withoutDecals.compile("game:/decal.shader", decalSource("BaseColor")).succeeded());
+}
+
+TEST_CASE("cooked decal shaders load with their channels, and malformed ones never crash the cooker")
+{
+    test::TempDirectory directory;
+    writeText(directory.path / "game" / "decals" / "scorch.shader", decalSource("BaseColor ORM Emission"));
+    const std::vector<std::string> broken = {
+        "[Decal(\"BaseColor\")]\n",
+        "[Decal(\"BaseColor\")]\nstruct Parameters\n{\n};\n",
+        "[Decal(\"Glow\")]\n" + withParameters(""),
+        "[Decal(42)]\n" + withParameters(""),
+        "[Decal]\n" + withParameters(""),
+        "[Decal(\"BaseColor\", \"Normal\")]\n" + withParameters(""),
+        "[Decal(\"BaseColor\")] [Decal(\"ORM\")]\n" + withParameters(""),
+        "[Decal(\"Emission\")]\n[ShadingModel(\"Toon\")]\n" + withParameters(""),
+        "[Decal(\"BaseColor\")]\n" + std::string(kGlowShader),
+        "[Decal(\"" + std::string(300, 'x') + "\")]\n" + withParameters(""),
+    };
+    for (usize i = 0; i < broken.size(); ++i)
+    {
+        writeText(directory.path / "game" / "decals" / ("broken" + std::to_string(i) + ".shader"), broken[i]);
+    }
+    std::filesystem::create_directories(directory.path / "cache");
+    VirtualFileSystem files;
+    REQUIRE(files.mount("game", directory.path / "game") == FileError::None);
+    REQUIRE(files.mount("cache", directory.path / "cache", MountAccess::ReadWrite) == FileError::None);
+
+    const CookResult result = cookAssets(files, "game:/", "cache", &sharedCompiler());
+    CHECK(result.shaders == 1);
+    CHECK(result.errors.size() == broken.size());
+    for (const std::string& error : result.errors)
+    {
+        CHECK(error.find("game:/decals/broken") == 0);
+    }
+
+    const std::filesystem::path archive = directory.path / "cooked.illpak";
+    REQUIRE(packDirectory(directory.path / "cache", archive) == FileError::None);
+    VirtualFileSystem shipped;
+    REQUIRE(shipped.mountArchive("cache", archive) == FileError::None);
+    AssetDatabase database(shipped, "cache", false);
+    std::string error;
+    const std::optional<ShaderAsset> scorch =
+        database.loadShader("game:/decals/scorch.shader", nullptr, nullptr, &error);
+    INFO(error);
+    REQUIRE(scorch.has_value());
+    CHECK(scorch->decalChannels == (DecalChannels::BaseColor | DecalChannels::ORM | DecalChannels::Emission));
+    CHECK(scorch->variants.size() == 2);
 }

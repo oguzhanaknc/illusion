@@ -87,7 +87,8 @@ illusion_add_material_shaders(illusion_render
     SHADERS
         standardShader shaders/illusion/Standard.shader builtin:/shader/standard
         errorShader shaders/illusion/Error.shader builtin:/shader/error
-        foliageShader shaders/illusion/Foliage.shader builtin:/shader/foliage)
+        foliageShader shaders/illusion/Foliage.shader builtin:/shader/foliage
+        decalShader shaders/illusion/Decal.shader builtin:/shader/decal)
 
 illusion_configure_target(illusion_render)
 

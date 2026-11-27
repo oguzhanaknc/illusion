@@ -96,7 +96,8 @@ public:
     [[nodiscard]] u64 libraryHash() const noexcept { return m_libraryHash; }
 
     /// Compiles @p source, the text of the `.shader` file at @p virtualPath (the file named by diagnostics),
-    /// into every variant that shaderVariantExists().
+    /// into every variant that shaderVariantExists() for its decal channels: the material passes of
+    /// illusion/MaterialPass.slang for surface shaders, those of illusion/DecalPass.slang for decal shaders.
     [[nodiscard]] ShaderCompileResult compile(std::string_view virtualPath, std::string_view source) const;
 
 private:

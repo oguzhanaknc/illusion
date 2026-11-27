@@ -2,8 +2,8 @@
 
 /// @file
 /// Cooked material shaders (ADR 0063): the parameter layout that the compiler's reflection gave a `.shader`
-/// file, its shading model, and SPIR-V for every pass and alpha mode it is drawn with. ShaderCompiler.hpp
-/// makes them; the player only loads them (AssetType::Shader).
+/// file, its shading model or decal channels (ADR 0066), and SPIR-V for every pass and alpha mode it is drawn
+/// with. ShaderCompiler.hpp makes them; the player only loads them (AssetType::Shader).
 
 #include <illusion/assets/Model.hpp>
 #include <illusion/core/Base.hpp>
@@ -50,6 +50,46 @@ enum class ShadingModel : u8
 /// The shading model named @p name, if any.
 [[nodiscard]] std::optional<ShadingModel> parseShadingModel(std::string_view name) noexcept;
 
+/// The channels of the decal buffer a decal shader writes (`[Decal("...")]` on its Parameters, ADR 0066); a
+/// set of flags, None for surface shaders.
+enum class DecalChannels : u8
+{
+    None = 0,      ///< Not a decal shader.
+    BaseColor = 1, ///< Base colour.
+    Normal = 2,    ///< Normal.
+    ORM = 4,       ///< Occlusion, roughness and metallic together.
+    Emission = 8,  ///< Emission, added to the HDR colour.
+};
+
+/// Every decal channel.
+inline constexpr DecalChannels kAllDecalChannels = static_cast<DecalChannels>(15);
+
+/// The union of @p a and @p b.
+[[nodiscard]] constexpr DecalChannels operator|(DecalChannels a, DecalChannels b) noexcept
+{
+    return static_cast<DecalChannels>(static_cast<u32>(a) | static_cast<u32>(b));
+}
+
+/// The channels in both @p a and @p b.
+[[nodiscard]] constexpr DecalChannels operator&(DecalChannels a, DecalChannels b) noexcept
+{
+    return static_cast<DecalChannels>(static_cast<u32>(a) & static_cast<u32>(b));
+}
+
+/// True if @p set holds any channel of @p channels.
+[[nodiscard]] constexpr bool hasDecalChannel(DecalChannels set, DecalChannels channels) noexcept
+{
+    return (set & channels) != DecalChannels::None;
+}
+
+/// The channels of @p channels as written in shaders, separated by spaces in flag order ("BaseColor ORM";
+/// "" for none).
+[[nodiscard]] std::string decalChannelsName(DecalChannels channels);
+
+/// The channels of a space-separated list such as "BaseColor Normal"; std::nullopt for an empty list, an
+/// unknown name or a channel listed twice.
+[[nodiscard]] std::optional<DecalChannels> parseDecalChannels(std::string_view names) noexcept;
+
 /// A pass that draws material shaders; each has a variant per alpha mode.
 enum class ShaderPass : u8
 {
@@ -59,10 +99,12 @@ enum class ShaderPass : u8
     ShadowCaster,    ///< Depth into a shadow view.
     MotionVectors,   ///< Depth and motion vectors.
     EntityIds,       ///< Motion vectors and Entity ids (only Entity ids for blended materials).
+    Decal,           ///< A decal box into the decal buffer (decal shaders only).
+    DecalEmission,   ///< A decal box adding its emission to the HDR colour (decal shaders only).
 };
 
 /// Number of ShaderPass values.
-inline constexpr u32 kShaderPassCount = 6;
+inline constexpr u32 kShaderPassCount = 8;
 
 /// Stable lower-case name of @p pass, e.g. "forwardBindless".
 [[nodiscard]] std::string_view shaderPassName(ShaderPass pass) noexcept;
@@ -70,12 +112,37 @@ inline constexpr u32 kShaderPassCount = 6;
 /// Stable lower-case name of @p mode: "opaque", "mask" or "blend".
 [[nodiscard]] std::string_view alphaModeName(AlphaMode mode) noexcept;
 
-/// True if materials with @p mode are drawn in @p pass: blended ones only in the forward passes and for
-/// Entity ids.
+/// True if surface shaders with @p mode are drawn in @p pass: never in the decal passes, and blended ones
+/// only in the forward passes and for Entity ids.
 [[nodiscard]] constexpr bool shaderVariantExists(ShaderPass pass, AlphaMode mode) noexcept
 {
+    if (pass == ShaderPass::Decal || pass == ShaderPass::DecalEmission)
+    {
+        return false;
+    }
     return mode != AlphaMode::Blend || pass == ShaderPass::Forward || pass == ShaderPass::ForwardBindless ||
            pass == ShaderPass::EntityIds;
+}
+
+/// True if a shader with the decal channels @p decal (None: a surface shader) has a variant for @p pass and
+/// @p mode. Decal shaders are keyed as blended and drawn only in ShaderPass::Decal (with a channel other than
+/// Emission) and ShaderPass::DecalEmission (with Emission).
+[[nodiscard]] constexpr bool shaderVariantExists(ShaderPass pass, AlphaMode mode,
+                                                 DecalChannels decal) noexcept
+{
+    if (decal == DecalChannels::None)
+    {
+        return shaderVariantExists(pass, mode);
+    }
+    if (mode != AlphaMode::Blend)
+    {
+        return false;
+    }
+    if (pass == ShaderPass::Decal)
+    {
+        return hasDecalChannel(decal, DecalChannels::BaseColor | DecalChannels::Normal | DecalChannels::ORM);
+    }
+    return pass == ShaderPass::DecalEmission && hasDecalChannel(decal, DecalChannels::Emission);
 }
 
 /// The type of a material parameter.
@@ -161,12 +228,14 @@ struct ShaderVariant
 struct ShaderAsset
 {
     std::string source{};                              ///< Virtual path of the `.shader` file.
-    ShadingModel shadingModel = ShadingModel::Default; ///< Lighting.
-    bool worldOffset = false;                          ///< The shader moves vertices (worldOffset()).
-    u32 parameterBytes = 0;                            ///< Size of the parameter block (at most 256).
-    std::vector<ShaderParameter> parameters{};         ///< In field order.
-    std::vector<ShaderTexture> textures{};             ///< In field order (slot order).
-    std::vector<ShaderVariant> variants{};             ///< Ordered by pass, then alpha mode.
+    ShadingModel shadingModel = ShadingModel::Default; ///< Lighting (Default for decal shaders).
+    DecalChannels decalChannels =
+        DecalChannels::None;  ///< Channels of a decal shader (None: a surface shader).
+    bool worldOffset = false; ///< The shader moves vertices (worldOffset()); never a decal shader.
+    u32 parameterBytes = 0;   ///< Size of the parameter block (at most 256).
+    std::vector<ShaderParameter> parameters{}; ///< In field order.
+    std::vector<ShaderTexture> textures{};     ///< In field order (slot order).
+    std::vector<ShaderVariant> variants{};     ///< Ordered by pass, then alpha mode.
     u64 libraryHash = 0;           ///< Hash of the engine's shader library it was compiled against.
     std::string compilerVersion{}; ///< Version of the slangc that compiled it.
 
@@ -190,9 +259,10 @@ struct ShaderAsset
 /// Serializes @p shader as the payload of a cooked asset (AssetType::Shader).
 [[nodiscard]] std::vector<std::byte> serializeShader(const ShaderAsset& shader);
 
-/// Reads a shader written by serializeShader(); std::nullopt for invalid data (including parameters or
-/// textures outside the block, too many textures, or variants out of order or for passes they do not exist
-/// in).
+/// Reads a shader written by serializeShader() in this or the previous format version (which had no decal
+/// channels); std::nullopt for invalid data (including parameters or textures outside the block, too many
+/// textures, a decal shader with worldOffset() or a shading model, or variants out of order or for passes
+/// they do not exist in).
 [[nodiscard]] std::optional<ShaderAsset> deserializeShader(std::span<const std::byte> bytes);
 
 } // namespace illusion
