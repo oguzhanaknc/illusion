@@ -378,7 +378,7 @@ TEST_CASE("the skeleton visualiser dims the joints that the rig map leaves witho
         if (skeleton->rig.bones[i].empty())
         {
             ++unmapped;
-            unmappedBones += skeleton->joints[i].parent >= 0 ? 1 : 0;
+            unmappedBones += skeleton->joints[i].parent >= 0 ? usize{1} : usize{0};
         }
     }
     // The twist joints have no humanoid bone.
