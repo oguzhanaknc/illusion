@@ -505,9 +505,9 @@ TEST_CASE("addPoseInModelSpace adds model-space deltas by weight and mask and ke
     additive[kChest].rotation = aimRotation(0.8f, 0.0f);
     additive[kChest].translation += Vec3(0.0f, 0.02f, 0.0f);
     std::vector<f32> mask(skeleton.joints.size(), 0.0f);
-    mask[kChest] = 1.0f;
-    mask[kNeck] = 1.0f;
-    mask[kHead] = 1.0f;
+    mask.at(kChest) = 1.0f;
+    mask.at(kNeck) = 1.0f;
+    mask.at(kHead) = 1.0f;
     std::vector<Quat> scratch(skeleton.joints.size() * 3);
     const std::vector<Mat4> before = modelOf(skeleton, base);
 
