@@ -125,6 +125,13 @@ version changes are in the contributor guide ("Versions and releases"). The vers
   the edited scene), the frusta of virtual cameras in the Scene view (the live camera in yellow and the one a blend
   comes from in orange in a play session), and the manual sections "Rigs", "In the editor" and "Performance" of the
   page "Cameras".
+- Material shaders in the editor (MAT-4): `.material` files of version 2 with `shader` and `parameters` by name
+  (version 1 files read as they are), `ShaderLoader` (builds shaders on a background thread) and
+  `RenderAssetCacheDesc::shaders`, the editor recompiling changed `.shader` files without blocking a frame and
+  swapping them in with `updateShader()`, typed parameter widgets for materials in the Asset Browser, the asset
+  kind `Shader`, the commands `material.compile` and `material.validate` (diagnostics with file, line and
+  column), the showcase's `pulse.shader`, the manual page "Material shaders" and the tutorial "A dissolving
+  surface" (EN/TR).
 - Retargeted playback (ANIM-5b): a clip authored on one skin plays on another through the rig maps, retargeted
   once per clip and target skeleton at bind time (`bindRetargetedClip()`, `sampleClip()` with a
   `ClipRetarget`, `matchJoints()`, `rigHeightRatio()`, the `Skeleton`, `Scaled` and `Animation` translation

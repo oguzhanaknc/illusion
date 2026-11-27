@@ -52,6 +52,7 @@
 
 namespace illusion
 {
+class ShaderLoader;
 class LogRingSink;
 } // namespace illusion
 
@@ -343,6 +344,13 @@ public:
     /// The catalog as last brought up to date (by assets() or endFrame()), without scanning. The UI reads
     /// it every frame; watch version() to know when to rebuild what it shows.
     [[nodiscard]] const AssetCatalog& assetCatalog() const noexcept { return m_assets; }
+
+    /// The loader that builds the project's material shaders (`.shader`) on a background thread (ADR 0063).
+    /// It compiles with the `slangc` of the module SDK's toolchain (EditorContextOptions::moduleSdk) and
+    /// loads from the import cache without one. endFrame() asks it to build every `.shader` file that
+    /// changed; viewports hand it to their RenderAssetCache, so that edits swap in without a frame waiting,
+    /// and `material.compile` and `material.validate` report its builds.
+    [[nodiscard]] ShaderLoader& shaders() noexcept { return *m_shaders; }
 
     /// Asks for @p path (an asset file) to be imported again even if neither it nor its import settings
     /// changed: the next endFrame() posts it in the `reimported` list of `asset.changed`, which viewports
@@ -697,6 +705,7 @@ private:
 
     EditorContextOptions m_options;
     VirtualFileSystem m_files;
+    std::unique_ptr<ShaderLoader> m_shaders; // after m_files: its thread reads the files until it ends
     std::optional<Project> m_project;
     World m_world;
     ParticleWorld m_previewParticles{m_world};      // advances the edit World's emitters for the Scene view

@@ -1167,9 +1167,10 @@ struct AssetListParams
 struct AssetEntry
 {
     std::string path; ///< Virtual path.
-    std::string kind; ///< "Folder", "Scene", "Prefab", "Material", "Model", "Texture", "Environment",
-                      ///< "AudioClip", "Font", "AnimationGraph", "RagdollProfile", "BehaviorTree" or "Other".
-    u64 size = 0;     ///< Size in bytes (0 for folders).
+    /// "Folder", "Scene", "Prefab", "Material", "Model", "Texture", "Environment", "AudioClip", "Font",
+    /// "AnimationGraph", "RagdollProfile", "BehaviorTree", "Shader" or "Other".
+    std::string kind;
+    u64 size = 0; ///< Size in bytes (0 for folders).
 };
 
 /// Result of `asset.list`.
@@ -1468,11 +1469,54 @@ struct MaterialCreateParams
     std::optional<bool> overwrite{}; ///< Replace an existing file (default false).
 };
 
+/// A message of the shader compiler (`material.compile`, `material.validate`, `material.get`).
+struct ShaderDiagnosticInfo
+{
+    std::string file; ///< The file the message is about, e.g. "assets:/shaders/glow.shader" ("" for none).
+    u32 line = 0;     ///< 1-based line (0: none).
+    u32 column = 0;   ///< 1-based column (0: none).
+    std::string severity; ///< "error", "warning" or "note".
+    std::string code;     ///< The compiler's code, e.g. "E30015" ("" for none).
+    std::string message;  ///< What is wrong.
+};
+
+/// A parameter or texture that a material shader declares: a name that "parameters" of a `.material` takes.
+struct MaterialParameterInfo
+{
+    std::string name; ///< The field of the shader's Parameters.
+    /// "float", "float2", "float3", "float4", "int", "bool" or "texture".
+    std::string type;
+    bool color = false;           ///< A colour (float3 or float4 with `[Color]`).
+    std::optional<f64> minimum{}; ///< Lowest value the editor offers (`[Range]`).
+    std::optional<f64> maximum{}; ///< Highest value the editor offers (`[Range]`).
+    /// The default, as the file writes it: a number, `true`/`false`, an array of numbers, or the path of the
+    /// default image of a texture ("" for the fallback).
+    JsonText defaultValue;
+    std::string usage; ///< Textures: "color", "linear", "normal" or "mask" ("" for the others).
+};
+
+/// The build state of a material shader and what it declares.
+struct MaterialShaderInfo
+{
+    std::string path; ///< The `.shader` file, or a `builtin:/shader/...` path.
+    /// "ok" (built from the file as it is now), "failed" (the file does not compile), "building" (queued or
+    /// compiling on the background thread), "missing" (no such file) or "builtin".
+    std::string status;
+    std::string shadingModel;                      ///< "Default", "Unlit", ... ("" until it built).
+    bool worldOffset = false;                      ///< The shader moves vertices.
+    std::vector<MaterialParameterInfo> parameters; ///< Parameters, then textures, in field order.
+    std::vector<ShaderDiagnosticInfo> diagnostics; ///< Errors, warnings and notes of the last build.
+    std::string error;                             ///< Why there is no layout ("" when there is one).
+};
+
 /// Result of `material.get`.
 struct MaterialGetResult
 {
     std::string path; ///< The material file.
-    JsonText value;   ///< Every field: {"material": {...}, "textures": {...}}.
+    /// Every field: {"shader": "...", "material": {...}, "textures": {...}, "parameters": {...}}.
+    JsonText value;
+    /// The shader the material names with what it declares (absent for a material of the standard shader).
+    std::optional<MaterialShaderInfo> shader{};
 };
 
 /// Params of `material.set`.
@@ -1487,6 +1531,30 @@ struct MaterialSetResult
 {
     std::string path;     ///< The material file.
     bool changed = false; ///< False if it was already like that.
+};
+
+/// Params of `material.compile`.
+struct MaterialCompileParams
+{
+    std::string path; ///< A `.shader` file of the assets: mount.
+};
+
+/// Params of `material.validate`.
+struct MaterialValidateParams
+{
+    std::string path; ///< A `.material` or `.shader` file of the assets: mount.
+};
+
+/// Result of `material.validate`.
+struct MaterialValidateResult
+{
+    std::string path;      ///< The file.
+    std::string kind;      ///< "Material" or "Shader".
+    bool valid = false;    ///< A material that parses and fits its shader, or a shader that built.
+    std::string error;     ///< The first problem ("" if valid or still building).
+    std::string errorPath; ///< Its JSON Pointer, e.g. "/parameters/glow" ("" if none).
+    /// The shader of the file (for a material, the one it names): its build state and what it declares.
+    std::optional<MaterialShaderInfo> shader{};
 };
 
 // --- log ---------------------------------------------------------------------------------------------------

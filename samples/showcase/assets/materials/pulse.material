@@ -1,0 +1,62 @@
+{
+  "format": "illusion.material",
+  "version": 2,
+  "shader": "assets:/shaders/pulse.shader",
+  "material": {
+    "name": "Pulse",
+    "baseColorFactor": [1.0, 1.0, 1.0, 1.0],
+    "metallicFactor": 1.0,
+    "roughnessFactor": 1.0,
+    "emissiveFactor": [0.0, 0.0, 0.0],
+    "normalScale": 1.0,
+    "occlusionStrength": 1.0,
+    "alphaCutoff": 0.5,
+    "alphaMode": "Opaque",
+    "doubleSided": false,
+    "windSway": 0.0,
+    "windFlutter": 0.0,
+    "diffuseTransmission": 0.0,
+    "diffuseTransmissionColor": [1.0, 1.0, 1.0],
+    "baseColorTexture": {
+      "image": -1,
+      "wrapU": "Repeat",
+      "wrapV": "Repeat"
+    },
+    "metallicRoughnessTexture": {
+      "image": -1,
+      "wrapU": "Repeat",
+      "wrapV": "Repeat"
+    },
+    "normalTexture": {
+      "image": -1,
+      "wrapU": "Repeat",
+      "wrapV": "Repeat"
+    },
+    "occlusionTexture": {
+      "image": -1,
+      "wrapU": "Repeat",
+      "wrapV": "Repeat"
+    },
+    "emissiveTexture": {
+      "image": -1,
+      "wrapU": "Repeat",
+      "wrapV": "Repeat"
+    }
+  },
+  "textures": {
+    "baseColor": "",
+    "metallicRoughness": "",
+    "normal": "",
+    "occlusion": "",
+    "emissive": ""
+  },
+  "parameters": {
+    "tint": [0.2, 0.8, 1, 1],
+    "base": [0.05, 0.1, 0.2],
+    "intensity": 4,
+    "bands": 5,
+    "pulse": false,
+    "scroll": [0.1, 0.4],
+    "mask": "assets:/textures/smoke.png"
+  }
+}

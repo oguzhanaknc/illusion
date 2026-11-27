@@ -1,5 +1,6 @@
 #include <illusion/assets/ImportSettings.hpp>
 #include <illusion/assets/MaterialAsset.hpp>
+#include <illusion/assets/ShaderAsset.hpp>
 #include <illusion/core/Hash.hpp>
 #include <illusion/core/Json.hpp>
 #include <illusion/core/Profiler.hpp>
@@ -266,6 +267,10 @@ std::string_view assetKindOf(std::string_view path, bool isDirectory)
     if (extension == ".behavior")
     {
         return "BehaviorTree";
+    }
+    if (extension == kShaderAssetExtension)
+    {
+        return "Shader";
     }
     return "Other";
 }

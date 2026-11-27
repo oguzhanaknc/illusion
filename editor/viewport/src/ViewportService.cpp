@@ -6,6 +6,7 @@
 #include <illusion/assets/Image.hpp>
 #include <illusion/assets/Mesh.hpp>
 #include <illusion/assets/Model.hpp>
+#include <illusion/assets/ShaderLoader.hpp>
 #include <illusion/audio/AudioComponents.hpp>
 #include <illusion/camera/CameraComponents.hpp>
 #include <illusion/core/JobSystem.hpp>
@@ -293,6 +294,14 @@ detail::GridPass gridPass(const ViewportCamera& camera, const Mat4& viewProjecti
     return pass;
 }
 
+// The editor's cache builds the shaders that material files name on the editor's loader (ADR 0063).
+RenderAssetCacheDesc assetCacheDesc(EditorContext& editor)
+{
+    RenderAssetCacheDesc desc;
+    desc.shaders = &editor.shaders();
+    return desc;
+}
+
 } // namespace
 
 struct ViewportService::Impl
@@ -418,7 +427,7 @@ struct ViewportService::Impl
         , ui(uiRenderer)
         , streamer(editorContext.files(), jobs, AssetStreamerDesc{.cacheMount = ""})
         , resources(renderDevice)
-        , cache(resources, streamer)
+        , cache(resources, streamer, assetCacheDesc(editorContext))
         , resolver(cache)
         , editAnimation(editorContext.world(), streamer)
         , ragdolls(editorContext.files())

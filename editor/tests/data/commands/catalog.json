@@ -12054,6 +12054,154 @@
       "additionalProperties": false
     }
   },
+  "material.compile": {
+    "version": 1,
+    "permission": "read",
+    "mode": "any",
+    "undoable": false,
+    "readOnly": true,
+    "params": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "type": "object",
+      "properties": {
+        "path": {
+          "type": "string"
+        },
+        "world": {
+          "type": "string",
+          "enum": ["edit", "play"]
+        }
+      },
+      "required": ["path"],
+      "additionalProperties": false
+    },
+    "result": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "type": "object",
+      "properties": {
+        "path": {
+          "type": "string"
+        },
+        "status": {
+          "type": "string"
+        },
+        "shadingModel": {
+          "type": "string"
+        },
+        "worldOffset": {
+          "type": "boolean"
+        },
+        "parameters": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "name": {
+                "type": "string"
+              },
+              "type": {
+                "type": "string"
+              },
+              "color": {
+                "type": "boolean"
+              },
+              "minimum": {
+                "anyOf": [
+                  {
+                    "type": "number"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "maximum": {
+                "anyOf": [
+                  {
+                    "type": "number"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "defaultValue": {},
+              "usage": {
+                "type": "string"
+              }
+            },
+            "required": ["name", "type", "color", "defaultValue", "usage"],
+            "additionalProperties": false
+          }
+        },
+        "diagnostics": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "file": {
+                "type": "string"
+              },
+              "line": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 4294967295
+              },
+              "column": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 4294967295
+              },
+              "severity": {
+                "type": "string"
+              },
+              "code": {
+                "type": "string"
+              },
+              "message": {
+                "type": "string"
+              }
+            },
+            "required": ["file", "line", "column", "severity", "code", "message"],
+            "additionalProperties": false
+          }
+        },
+        "error": {
+          "type": "string"
+        },
+        "_editor": {
+          "type": "object",
+          "properties": {
+            "revision": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "transaction": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "dryRun": {
+              "type": "boolean"
+            },
+            "operations": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "warnings": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          },
+          "required": ["revision", "transaction", "dryRun", "operations", "warnings"],
+          "additionalProperties": false
+        }
+      },
+      "required": ["path", "status", "shadingModel", "worldOffset", "parameters", "diagnostics", "error", "_editor"],
+      "additionalProperties": false
+    }
+  },
   "material.create": {
     "version": 1,
     "permission": "files",
@@ -12182,6 +12330,110 @@
           "type": "string"
         },
         "value": {},
+        "shader": {
+          "anyOf": [
+            {
+              "type": "object",
+              "properties": {
+                "path": {
+                  "type": "string"
+                },
+                "status": {
+                  "type": "string"
+                },
+                "shadingModel": {
+                  "type": "string"
+                },
+                "worldOffset": {
+                  "type": "boolean"
+                },
+                "parameters": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "name": {
+                        "type": "string"
+                      },
+                      "type": {
+                        "type": "string"
+                      },
+                      "color": {
+                        "type": "boolean"
+                      },
+                      "minimum": {
+                        "anyOf": [
+                          {
+                            "type": "number"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "maximum": {
+                        "anyOf": [
+                          {
+                            "type": "number"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "defaultValue": {},
+                      "usage": {
+                        "type": "string"
+                      }
+                    },
+                    "required": ["name", "type", "color", "defaultValue", "usage"],
+                    "additionalProperties": false
+                  }
+                },
+                "diagnostics": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "file": {
+                        "type": "string"
+                      },
+                      "line": {
+                        "type": "integer",
+                        "minimum": 0,
+                        "maximum": 4294967295
+                      },
+                      "column": {
+                        "type": "integer",
+                        "minimum": 0,
+                        "maximum": 4294967295
+                      },
+                      "severity": {
+                        "type": "string"
+                      },
+                      "code": {
+                        "type": "string"
+                      },
+                      "message": {
+                        "type": "string"
+                      }
+                    },
+                    "required": ["file", "line", "column", "severity", "code", "message"],
+                    "additionalProperties": false
+                  }
+                },
+                "error": {
+                  "type": "string"
+                }
+              },
+              "required": ["path", "status", "shadingModel", "worldOffset", "parameters", "diagnostics", "error"],
+              "additionalProperties": false
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
         "_editor": {
           "type": "object",
           "properties": {
@@ -12294,6 +12546,183 @@
         }
       },
       "required": ["path", "changed", "_editor"],
+      "additionalProperties": false
+    }
+  },
+  "material.validate": {
+    "version": 1,
+    "permission": "read",
+    "mode": "any",
+    "undoable": false,
+    "readOnly": true,
+    "params": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "type": "object",
+      "properties": {
+        "path": {
+          "type": "string"
+        },
+        "world": {
+          "type": "string",
+          "enum": ["edit", "play"]
+        }
+      },
+      "required": ["path"],
+      "additionalProperties": false
+    },
+    "result": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "type": "object",
+      "properties": {
+        "path": {
+          "type": "string"
+        },
+        "kind": {
+          "type": "string"
+        },
+        "valid": {
+          "type": "boolean"
+        },
+        "error": {
+          "type": "string"
+        },
+        "errorPath": {
+          "type": "string"
+        },
+        "shader": {
+          "anyOf": [
+            {
+              "type": "object",
+              "properties": {
+                "path": {
+                  "type": "string"
+                },
+                "status": {
+                  "type": "string"
+                },
+                "shadingModel": {
+                  "type": "string"
+                },
+                "worldOffset": {
+                  "type": "boolean"
+                },
+                "parameters": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "name": {
+                        "type": "string"
+                      },
+                      "type": {
+                        "type": "string"
+                      },
+                      "color": {
+                        "type": "boolean"
+                      },
+                      "minimum": {
+                        "anyOf": [
+                          {
+                            "type": "number"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "maximum": {
+                        "anyOf": [
+                          {
+                            "type": "number"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "defaultValue": {},
+                      "usage": {
+                        "type": "string"
+                      }
+                    },
+                    "required": ["name", "type", "color", "defaultValue", "usage"],
+                    "additionalProperties": false
+                  }
+                },
+                "diagnostics": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "file": {
+                        "type": "string"
+                      },
+                      "line": {
+                        "type": "integer",
+                        "minimum": 0,
+                        "maximum": 4294967295
+                      },
+                      "column": {
+                        "type": "integer",
+                        "minimum": 0,
+                        "maximum": 4294967295
+                      },
+                      "severity": {
+                        "type": "string"
+                      },
+                      "code": {
+                        "type": "string"
+                      },
+                      "message": {
+                        "type": "string"
+                      }
+                    },
+                    "required": ["file", "line", "column", "severity", "code", "message"],
+                    "additionalProperties": false
+                  }
+                },
+                "error": {
+                  "type": "string"
+                }
+              },
+              "required": ["path", "status", "shadingModel", "worldOffset", "parameters", "diagnostics", "error"],
+              "additionalProperties": false
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "_editor": {
+          "type": "object",
+          "properties": {
+            "revision": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "transaction": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "dryRun": {
+              "type": "boolean"
+            },
+            "operations": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "warnings": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          },
+          "required": ["revision", "transaction", "dryRun", "operations", "warnings"],
+          "additionalProperties": false
+        }
+      },
+      "required": ["path", "kind", "valid", "error", "errorPath", "_editor"],
       "additionalProperties": false
     }
   },

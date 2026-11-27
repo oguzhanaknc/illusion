@@ -6,6 +6,7 @@
 #include <illusion/assets/AssetReflection.hpp>
 #include <illusion/assets/AssetStreamer.hpp>
 #include <illusion/assets/Image.hpp>
+#include <illusion/assets/ShaderLoader.hpp>
 #include <illusion/audio/AudioComponents.hpp>
 #include <illusion/camera/CameraComponents.hpp>
 #include <illusion/core/Assert.hpp>
@@ -331,8 +332,13 @@ int runGame(const PlayerDesc& desc, const PlayerOptions& options, VirtualFileSys
     JobSystem jobs;
     // The cache archive holds the cooked assets; their sources are not shipped, so they are not verified.
     AssetStreamer streamer(files, jobs, AssetStreamerDesc{.cacheMount = "cache", .verifySources = false});
+    // The cooked material shaders of the game load on a thread of their own; the player has no compiler.
+    ShaderLoader shaders(files,
+                         ShaderLoaderDesc{.cacheMount = "cache", .compiler = {}, .verifySources = false});
     RenderResources resources(*device);
-    RenderAssetCache renderAssets(resources, streamer);
+    RenderAssetCacheDesc renderAssetsDesc;
+    renderAssetsDesc.shaders = &shaders;
+    RenderAssetCache renderAssets(resources, streamer, renderAssetsDesc);
     const std::unique_ptr<GamepadSystem> gamepads = GamepadSystem::create(&events);
     SceneRendererDesc rendererDesc;
     rendererDesc.colorFormat = kViewFormat;
