@@ -28,7 +28,6 @@ namespace illusion
 /// Decals spawned by game code in the running game, implemented by the host (DecalPoolService over a
 /// DecalPool) and found by modules with `context.service<DecalService>()`. Spawned decals are drawn from the
 /// next frame and are not saved in saved games. Adding a function changes the module API version.
-/// @ingroup scripting_api
 class DecalService : NonCopyable
 {
 public:

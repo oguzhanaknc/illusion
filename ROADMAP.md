@@ -1719,7 +1719,8 @@ Correct indirect light indoors and in shadow until ray tracing (M10) is availabl
   gets a `Decal` with every field non-default (on a `builtin:/shader/decal` material), a `MeshRenderer` with
   non-default `decalLayers` and a material with `receiveDecals` false; a short manual page `manual/decals.md`
   (EN/TR; DECAL-4 completes it).
-- DECAL-3 (`implementer`): Pooled decals and the scripting API. `DecalPool.hpp` (slots, spawn-order list,
+- DECAL-3 (`implementer`): Pooled decals and the scripting API. `DecalPool.hpp` (slots, spawn-order list, The service joins the scripting API here (`@ingroup scripting_api`, so
+  `tools/check_api_coverage.py` requires the showcase to call it).
   eviction of the oldest, generations, fades, attachments, `resolvedMaterial()`), `DecalService.hpp`,
   `DecalPoolService.hpp`, `RenderAssetResolver::resolveDecals()`, `RenderView::decals` drawn with the scene
   decals in the ADR's order, the `decals` section of `ProjectSettings`, the Decals step of `GameSession` after
